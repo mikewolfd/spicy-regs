@@ -147,7 +147,12 @@ def _assert_upload_safe(
         )
 
 
-def upload_file(local_path: Path, remote_key: str | None = None) -> None:
+def upload_file(
+    local_path: Path,
+    remote_key: str | None = None,
+    *,
+    allow_shrink: bool = False,
+) -> None:
     """Publish a single file to R2 (remote key defaults to the filename).
 
     Before overwriting an existing remote object, checks the current
@@ -172,7 +177,10 @@ def upload_file(local_path: Path, remote_key: str | None = None) -> None:
     logger.info("Uploading {} ({:.1f} MB) to R2...", local_path.name, file_size)
 
     remote_size = _get_remote_size(client, bucket, remote_key)
-    _assert_upload_safe(local_size_bytes, remote_size, remote_key)
+    if allow_shrink:
+        logger.info("Expected-shrink sidecar: bypassing size guard for {}", remote_key)
+    else:
+        _assert_upload_safe(local_size_bytes, remote_size, remote_key)
 
     # Cache-Control policy. Parquet MUST NOT be edge-cached: DuckDB (both the MCP
     # server and the browser DuckDB-WASM UI) reads each file via many byte-range
@@ -185,14 +193,15 @@ def upload_file(local_path: Path, remote_key: str | None = None) -> None:
     configured_cache_control = getenv("R2_CACHE_CONTROL")
     cache_control = configured_cache_control or (
         "public, no-cache, must-revalidate"
-        if remote_key.endswith(".parquet")
+        if remote_key.endswith(".parquet") or remote_key.endswith("/latest.json")
         else "public, max-age=3600, stale-while-revalidate=86400"
     )
+    content_type = "application/json" if remote_key.endswith(".json") else "application/octet-stream"
     client.upload_file(
         str(local_path),
         bucket,
         remote_key,
-        ExtraArgs={"ContentType": "application/octet-stream", "CacheControl": cache_control},
+        ExtraArgs={"ContentType": content_type, "CacheControl": cache_control},
     )
 
     public_url = getenv("R2_PUBLIC_URL", "")
