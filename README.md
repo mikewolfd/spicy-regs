@@ -117,7 +117,7 @@ dictionary documents the scope of each.
 Prerequisites: Python 3.10+ and [uv](https://docs.astral.sh/uv/getting-started/installation/).
 
 ```bash
-git clone https://github.com/civictechdc/spicy-regs.git
+git clone --recurse-submodules https://github.com/civictechdc/spicy-regs.git
 cd spicy-regs
 uv sync                       # install dependencies into .venv
 uv run pytest                 # run the test suite
@@ -129,7 +129,22 @@ run the pipeline against the public Mirrulations mirror. Copy `.env.example` to
 `.env` only if you want to publish output to Cloudflare R2 or ingest a source
 that requires an API key.
 
-## Working with the data locally
+## Managed vocabulary experiment
+
+Spicy Regs is the lookup and product-learning playground for managed
+vocabularies defined by the RefSpec submodule. Development validation now
+covers complete ELSST Versions 5 and 6, reconciliation of current and
+historical Federal Register topic sources, source-grounded open labels, and
+the accepted-output authorization boundary. The
+[active roadmap](RefSpec/plans/managed-vocabulary-experiment-roadmap.md)
+records the evidence and remaining decisions.
+
+This proves the specification and lookup mechanics against real sources. It
+does not claim product accuracy, a sealed holdout, production deployment, or
+real cross-scheme mapping; the selected native sources contain no authored
+SKOS mapping assertions.
+
+### Download the published data locally
 
 Download the published Parquet with the bundled CLI — no credentials:
 
