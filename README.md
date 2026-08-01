@@ -88,17 +88,12 @@ uv run spicy-regs search "climate"     # substring search across files
 uv run spicy-regs agencies             # list every agency code
 ```
 
-<<<<<<< HEAD
-> Don't want to clone? Run it one-shot:
-> `uvx --from "spicy-regs @ git+https://github.com/civictechdc/spicy-regs" spicy-regs download --types comments`
-=======
 The current `spicy-regs search` command is a legacy exploratory surface. It
 still searches dockets and comments and remains available only while its
 consumers migrate; it is not the document-only SpicySearch API.
 
-> Don't have the repo cloned? You can also run it one-shot with
-> `uvx --from "spicy-regs @ git+https://github.com/civictechdc/spicy-regs" spicy-regs download --types comments`.
->>>>>>> a388cd0 (feat(releases): publish immutable document releases)
+> Don't want to clone? Run it one-shot:
+> `uvx --from "spicy-regs @ git+https://github.com/civictechdc/spicy-regs" spicy-regs download --types comments`
 
 For SQL-first exploration, [`docs/querying-python.md`](docs/querying-python.md)
 walks through querying the bucket directly with DuckDB.
