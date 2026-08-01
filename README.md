@@ -4,113 +4,39 @@
 
 # Spicy Regs
 
-**An open, queryable mirror of U.S. federal regulatory data — and the pipeline that builds it.**
-
-<a href="https://www.civictechdc.org/">
-  <img src="assets/civictechdc-logo.png" alt="Civic Tech DC" width="22" height="22" align="top">
-</a>
-&nbsp;A <a href="https://www.civictechdc.org/"><b>Civic Tech DC</b></a> project
-
-[![CI](https://github.com/civictechdc/spicy-regs/actions/workflows/ci.yml/badge.svg)](https://github.com/civictechdc/spicy-regs/actions/workflows/ci.yml)
-[![Integration](https://github.com/civictechdc/spicy-regs/actions/workflows/integration.yml/badge.svg)](https://github.com/civictechdc/spicy-regs/actions/workflows/integration.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
-[![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
-[![Slack](https://img.shields.io/badge/Slack-join%20us-4A154B?logo=slack&logoColor=white)](https://join.slack.com/t/civictechdc/shared_invite/zt-43eotbj04-QLQ_Ria296PtRYJU2EgwxQ)
-
-[Explore the data](https://app.spicy-regs.dev) ·
-[Data dictionary](https://docs.spicy-regs.dev/) ·
-[MCP server](#use-it-from-an-ai-assistant) ·
-[Contributing](CONTRIBUTING.md) ·
-[Changelog](CHANGELOG.md)
-
 </div>
 
----
+SpicyRegs captures public regulatory sources and publishes immutable source
+records, exact document versions, Unicode text representations, structural
+passages, source observations, verified links, and acquisition coverage. It
+provides the source facts that downstream products can reproduce and audit.
 
-Every federal rule that gets proposed generates a public record: a docket, the
-agency's documents, and the comments people file on it. That record is public
-but awkward to work with — paginated APIs, rate limits, no bulk access, and no
-way to join it to the rest of the federal picture.
+## Product boundary
 
-Spicy Regs turns it into files you can query. A nightly pipeline reads
-[regulations.gov](https://www.regulations.gov) data (via the public
-[Mirrulations](https://github.com/MoravianUniversity/mirrulations) mirror) plus a
-dozen complementary federal sources, and publishes the result as Parquet and
-Apache Iceberg on Cloudflare R2 — public, anonymous read, no API key.
+SpicyRegs owns source acquisition and source-addressable document structure.
+It does not own managed vocabulary policy, extracted semantic assertions, or
+search ranking and serving:
 
-**You can query ~25M public comments from a laptop, a browser tab, or an AI
-assistant, without downloading a database or asking anyone for access.**
+- **RefSpec** owns vocabulary releases, concepts, labels, mappings, redirects,
+  and explicit resolution of source terms.
+- **Rulespec Core** owns portable evidence and semantic record shapes;
+  **Rulespec Extrapolator** owns candidate extraction and validation.
+- **SpicySearch** owns query planning, document retrieval, ranking,
+  explanations, search receipts, indexes, and query-time coverage.
 
-This repo is the pipeline, the rollups, and the read-only MCP server. It's a
-[Civic Tech DC](https://www.civictechdc.org/) project and new contributors are
-welcome — see [CONTRIBUTING.md](CONTRIBUTING.md).
+Build the sealed local M1 source release without another repository checkout:
 
-## Contents
-
-- [Try it without installing anything](#try-it-without-installing-anything)
-- [What's in the corpus](#whats-in-the-corpus)
-- [Quickstart](#quickstart)
-- [Working with the data locally](#working-with-the-data-locally)
-- [Running the pipeline yourself](#running-the-pipeline-yourself)
-- [Use it from an AI assistant](#use-it-from-an-ai-assistant)
-- [Project layout](#project-layout)
-- [License](#license)
-- [Contact](#contact)
-- [Acknowledgments](#acknowledgments)
-
-## Try it without installing anything
-
-| I want to… | Go here |
-|---|---|
-| Browse dockets, agencies, and comment activity | **[app.spicy-regs.dev](https://app.spicy-regs.dev)** |
-| Read every column of every published table | **[docs.spicy-regs.dev](https://docs.spicy-regs.dev/)** |
-| Ask an AI assistant questions about the data | **[MCP server](#use-it-from-an-ai-assistant)** (`https://mcp.spicy-regs.dev/mcp`) |
-| Run SQL in a notebook | **[Binder](https://mybinder.org/v2/gh/civictechdc/spicy-regs/HEAD)** or [`docs/querying-python.md`](docs/querying-python.md) |
-
-One line of SQL against the public bucket — no credentials, no download:
-
-```sql
--- DuckDB, anywhere: CLI, notebook, or the browser
-SELECT agency_code, comment_count
-FROM read_parquet('https://data.spicy-regs.dev/agency_stats.parquet')
-ORDER BY comment_count DESC
-LIMIT 10;
+```bash
+uv run build-document-release --output ./output/document-release-m1.json
 ```
 
-## What's in the corpus
+The builder reads repository-local, digest-pinned source and Rulespec Core
+fixtures. It writes canonical JSON and rejects any invalid digest, coordinate,
+classification, projection, or reference.
 
-Everything is published under `https://data.spicy-regs.dev` with public,
-anonymous read. Per-column reference and exact row counts live in the
-[data dictionary](https://docs.spicy-regs.dev/) — it's generated from the
-schemas in this repo and kept in sync by CI, so it never drifts from what's
-actually published.
-
-**Core regulations.gov tables**
-
-| Table | What it is | Scale |
-|---|---|---|
-| `dockets` | Regulatory proceedings | ~276K rows |
-| `documents` | Documents within dockets | ~2.0M rows |
-| `comments` | Public comments (Hive-partitioned Parquet + an Iceberg table) | ~25.4M rows |
-
-**Rollups** — small, denormalized, meant to be read whole: `feed_summary`,
-`agency_stats`, `agency_monthly_volume`, `comments_index`, `docket_search`,
-`rulemaking_lifecycles`, `discovery_signals`, `fr_docket_links`.
-
-**Complementary federal sources** — each ingested from its own API so the
-rulemaking lifecycle, the organizations engaged in it, and its downstream
-context are all joinable in one place:
-
-- *Lifecycle:* `federal_register`, `unified_agenda`, `congress_bills`, `cfr_sections`
-- *Organizations & influence:* `sam_entities`, `lobbying_filings`, `fec_committees`
-- *Outcomes & context:* `usaspending_recipients`, `court_dockets`, `gao_reports`, `crs_reports`
-- *Telecom:* `fcc_proceedings`, `fcc_filings`
-
-Cross-source join keys: **RIN**, **CFR citation**, **UEI**, **`agency_code`**.
-Some sources are deliberately bounded or sampled (e.g. `lobbying_filings` is
-2024+, `usaspending_recipients` is the top 100K by award dollars) — the data
-dictionary documents the scope of each.
+The checked-in M1 release is
+`src/spicy_regs/fixtures/spicyregs-m1-document-release-v1.json`; consumers pin
+its `release_id` and `release_digest`, not a source-tree path.
 
 ## Quickstart
 
@@ -129,13 +55,12 @@ run the pipeline against the public Mirrulations mirror. Copy `.env.example` to
 `.env` only if you want to publish output to Cloudflare R2 or ingest a source
 that requires an API key.
 
-## Managed vocabulary experiment
+## Historical managed-vocabulary incubation
 
-Spicy Regs is the lookup and product-learning playground for managed
-vocabularies defined by the RefSpec submodule. Development validation now
-covers complete ELSST Versions 5 and 6, reconciliation of current and
-historical Federal Register topic sources, source-grounded open labels, and
-the accepted-output authorization boundary. The
+This repository incubated managed-vocabulary and search experiments before the
+four-product boundary above. That evidence remains useful for migration, but
+it is not SpicyRegs runtime authority. RefSpec now owns the managed vocabulary
+capability and SpicySearch owns its search read models. The historical
 [active roadmap](RefSpec/plans/managed-vocabulary-experiment-roadmap.md)
 records the evidence and remaining decisions.
 
@@ -163,8 +88,17 @@ uv run spicy-regs search "climate"     # substring search across files
 uv run spicy-regs agencies             # list every agency code
 ```
 
+<<<<<<< HEAD
 > Don't want to clone? Run it one-shot:
 > `uvx --from "spicy-regs @ git+https://github.com/civictechdc/spicy-regs" spicy-regs download --types comments`
+=======
+The current `spicy-regs search` command is a legacy exploratory surface. It
+still searches dockets and comments and remains available only while its
+consumers migrate; it is not the document-only SpicySearch API.
+
+> Don't have the repo cloned? You can also run it one-shot with
+> `uvx --from "spicy-regs @ git+https://github.com/civictechdc/spicy-regs" spicy-regs download --types comments`.
+>>>>>>> a388cd0 (feat(releases): publish immutable document releases)
 
 For SQL-first exploration, [`docs/querying-python.md`](docs/querying-python.md)
 walks through querying the bucket directly with DuckDB.
