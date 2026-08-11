@@ -41,8 +41,9 @@ land upstream is a force-push that does not exist.
 
 ## 2. The branch reset, as a ref move
 
-Recorded here as an operational step. It is not executed by writing this
-plan.
+Executed 2026-08-11: `archive/local-work-2026-08-09` is a tag, and `main`
+sits on `origin/main` (`f1fcb8c9c883`) plus this plan. The procedure, kept
+for the record:
 
 1. Rename `archive/local-work-2026-08-09` to a tag. An archive that moves is
    not an archive.
