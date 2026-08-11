@@ -102,15 +102,29 @@ against that request's payload:
 
 ## 5. `rkaf_projection.py` boundary freeze
 
-Declared before the train in section 4 ships `ontology/`.
+`tests/test_rkaf_projection_boundary.py` carries the freeze, written
+2026-08-11 against `src/spicy_regs/docpipeline/rkaf_projection.py` at
+`6dbe181ccec7`, before the train in section 4 ships `ontology/`. It runs in
+the default suite: `testpaths = ["tests"]`, no marker, three tests, 0.1s.
 
-Freeze the file's outbound import list — 17 import statements over 13
-distinct modules across four subpackages — as a failing test. With the list
-frozen, the four-way split is priceable at any later date instead of
-re-measurable only.
+The frozen surface, AST-derived from the file: 17 outbound import statements,
+16 naming `spicy_regs` and 1 naming `refspec` at line 2334. The 16 reach 13
+distinct `spicy_regs` modules across four subpackages — `candidate_release`,
+`docpipeline`, `enrichment`, `ontology`. Three statements name
+`spicy_regs.docpipeline.source`, two name `spicy_regs.ontology.common`, and
+the other 11 modules are named once each. Every remaining import in the file
+is standard library; the file carries no relative and no dynamic import.
 
-The test shape already exists at `RefSpec/tests/test_atlas_index.py:490-497`
-and in DocSpec's `tests/test_package_boundary.py`.
+The freeze records module and imported names, not line numbers or file order,
+so imports may move within the file. It records every non-stdlib import, not
+only the packages present today, so a new sibling product or third-party
+dependency fails it too. One added crossing fails two of the three tests; a
+relative or dynamic import fails the third. Each failure states that the list
+is the priced boundary for the four-way split and that moving it is a
+deliberate change to the freeze and to this section together.
+
+The test shape came from `RefSpec/tests/test_atlas_index.py:490-497` and
+DocSpec's `tests/test_package_boundary.py`.
 
 ## 6. The editable-install crossing
 
