@@ -294,6 +294,26 @@ def _draw_documents(manifest: Mapping[str, Any]) -> list[Mapping[str, Any]]:
     return documents
 
 
+def read_draw(path: Path) -> dict[str, Any]:
+    """Read one frozen draw and require its identity to match its content.
+
+    The public reader for a draw.  ``fetch``, ``validate``, and ``v3-selection``
+    all go through the same identity check; a consumer outside this module —
+    the source-catalog producer, for one — gets it here rather than by
+    re-implementing the digest.
+    """
+
+    manifest = _read_json(Path(path))
+    _draw_documents(manifest)
+    return manifest
+
+
+def draw_documents(manifest: Mapping[str, Any]) -> list[Mapping[str, Any]]:
+    """The verified document entries of one draw manifest."""
+
+    return _draw_documents(manifest)
+
+
 def _attachment_metadata(metadata_bytes: bytes, rendition_bytes: bytes, entry: Mapping[str, Any]) -> dict[str, Any]:
     try:
         payload = json.loads(metadata_bytes.decode("utf-8"))
