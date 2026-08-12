@@ -1,0 +1,324 @@
+{
+  "$id": "https://rulespec.org/schemas/releases/source-catalog-release-v1/source-items-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SourceCatalogSourceItem",
+  "description": "One member of the requested universe U, carrying its source-native metadata, the normalized MVP fields, source-observed topics, candidate renditions, and exactly one selection disposition.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "sourceItemId",
+    "documentId",
+    "sourceIssuedVersion",
+    "sourceNativeMetadata",
+    "normalizedMetadata",
+    "sourceObservedTopics",
+    "sourceObservations",
+    "candidateRenditions",
+    "selection"
+  ],
+  "properties": {
+    "sourceItemId": {
+      "description": "Stable identity of this item in the source system. Unique within the release.",
+      "type": "string",
+      "minLength": 1
+    },
+    "documentId": {
+      "description": "Regulatory document identity. For the MVP a selected sourceItemId and documentId map one-to-one.",
+      "type": "string",
+      "minLength": 1
+    },
+    "sourceIssuedVersion": {
+      "description": "The version label the SOURCE issued. Distinct from any later capture digest; a capture never writes back here.",
+      "type": "string",
+      "minLength": 1
+    },
+    "sourceNativeMetadata": {
+      "description": "Exact source-native metadata, carried verbatim and uninterpreted. Open by construction; the normalized block below is the interpreted view.",
+      "type": "object"
+    },
+    "normalizedMetadata": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/normalizedMetadata"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "sourceObservedTopics": {
+      "description": "Topics the SOURCE observed. These are not RefSpec concepts and no consumer may treat them as such.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/observedTopic"
+      }
+    },
+    "sourceObservations": {
+      "description": "Other source-stated key/value observations that the normalized block does not cover.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/observation"
+      }
+    },
+    "candidateRenditions": {
+      "description": "Renditions the source offers for capture. An expected digest appears only when the source supplies enough information to know it before capture.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/candidateRendition"
+      }
+    },
+    "selection": {
+      "$ref": "#/$defs/selectionDisposition"
+    }
+  },
+  "allOf": [
+    {
+      "description": "A selected item must carry the complete normalized MVP field set. A non-selected item may carry null when the source never served usable metadata.",
+      "if": {
+        "type": "object",
+        "required": [
+          "selection"
+        ],
+        "properties": {
+          "selection": {
+            "type": "object",
+            "required": [
+              "disposition"
+            ],
+            "properties": {
+              "disposition": {
+                "const": "selected"
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "normalizedMetadata": {
+            "$ref": "#/$defs/normalizedMetadata"
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "date": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+    },
+    "nullableDate": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/date"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "normalizedMetadata": {
+      "description": "The normalized MVP field set. Every field is present; a field the source does not state is null, never absent, so a consumer never confuses 'not stated' with 'not modeled'.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "title",
+        "agencies",
+        "documentType",
+        "publicationDate",
+        "lastUpdatedDate",
+        "docketIds",
+        "regulationIdentifierNumbers",
+        "commentCloseDate",
+        "language",
+        "sourceUrl"
+      ],
+      "properties": {
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "agencies": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/agency"
+          }
+        },
+        "documentType": {
+          "type": "string",
+          "minLength": 1
+        },
+        "publicationDate": {
+          "$ref": "#/$defs/date"
+        },
+        "lastUpdatedDate": {
+          "$ref": "#/$defs/nullableDate"
+        },
+        "docketIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "regulationIdentifierNumbers": {
+          "description": "Regulation Identifier Numbers in the four-digit agency code plus four-character sequence form.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-[A-Z][A-Z0-9]{3}$"
+          }
+        },
+        "commentCloseDate": {
+          "$ref": "#/$defs/nullableDate"
+        },
+        "language": {
+          "description": "BCP 47 language tag.",
+          "type": "string",
+          "pattern": "^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$"
+        },
+        "sourceUrl": {
+          "type": "string",
+          "pattern": "^https?://[^\\s]+$"
+        }
+      }
+    },
+    "agency": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "agencyId",
+        "agencyName"
+      ],
+      "properties": {
+        "agencyId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "agencyName": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "observedTopic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "observedTopicId",
+        "observedTopicScheme",
+        "label"
+      ],
+      "properties": {
+        "observedTopicId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "observedTopicScheme": {
+          "description": "The scheme the SOURCE published the topic under. A RefSpec concept scheme is not a legal value here.",
+          "type": "string",
+          "minLength": 1
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "observationKey",
+        "observationValue"
+      ],
+      "properties": {
+        "observationKey": {
+          "type": "string",
+          "minLength": 1
+        },
+        "observationValue": {
+          "type": "string"
+        }
+      }
+    },
+    "candidateRendition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "renditionId",
+        "mediaType",
+        "locator",
+        "expectedSha256",
+        "expectedByteSize"
+      ],
+      "properties": {
+        "renditionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "mediaType": {
+          "type": "string",
+          "pattern": "^[a-z]+/[A-Za-z0-9.+-]+$"
+        },
+        "locator": {
+          "type": "string",
+          "pattern": "^https?://[^\\s]+$"
+        },
+        "expectedSha256": {
+          "oneOf": [
+            {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "expectedByteSize": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "selectionDisposition": {
+      "description": "Exactly one disposition per item. It is an object property, not a table, so a second or missing disposition is structurally unrepresentable.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "disposition"
+      ],
+      "properties": {
+        "disposition": {
+          "enum": [
+            "selected",
+            "excluded",
+            "deleted",
+            "unavailable",
+            "failed"
+          ]
+        },
+        "reasonCode": {
+          "description": "Machine-legible reason. Required for every non-selected disposition.",
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9]*(\\.[a-z][a-z0-9-]*)+$"
+        },
+        "reason": {
+          "description": "Human-readable reason. Required for every non-selected disposition.",
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}
