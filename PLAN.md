@@ -4,7 +4,8 @@ Recorded 2026-08-11 against SpicyRegs `6dbe181ccec7` and RefSpec
 `3c1b94ace91f`. This file carries the SpicyRegs-owned work: the two gating
 decisions, the branch reset, the `citations.py` boundary fixes, the upstream
 pull-request train, the `rkaf_projection.py` boundary freeze, the
-editable-install crossing, and the canonical-JSON profile rule.
+editable-install crossing, the canonical-JSON profile rule, and the torn
+applicability policy.
 
 The cross-product ownership boundary and its payload rule are REF-024 in
 `RefSpec/docs/decisions.md`. This plan cites REF-024 by identifier and does
@@ -151,3 +152,19 @@ Name the profiles before merging any implementation — RFC 8785 for artifact
 identity, a float-permitting profile for reports — then converge each behind
 a shared conformance vector set. Deleting `canonical.py:213` as a one-line
 dedup would make eight subsystems raise on any float payload.
+
+## 8. The applicability policy is torn against RefSpec's catalog
+
+`policies/profile-resource-applicability-v0.json` (payload-side; the
+`policies/` tree is not on `main`) pins `refspecResourceCatalog` at
+`sha256:c0bcce7318ac6fedce2e0c51e77186ef32cf5c9d1039aa2170d7b28422de7dbe`,
+while RefSpec's republished `portfolio/resource-catalog-v0.json` states
+`catalogDigest`
+`sha256:a731fef9a49b3af10813febea52a89a8e69c02b43fe6f938695bba98462b3515`.
+The `profileCatalog` half of the policy set agrees; only the RefSpec catalog
+moved. SpicySearch's `test_policy_inputs_cross_repository.py:78` suspends on
+exactly this tear and converts to a pass when it closes.
+
+Regenerate the applicability policy against RefSpec's catalog after the
+validation-cost reset (`RefSpec/plans/validation-cost-reset-plan.md`) stops
+moving that repository; regenerating against a moving catalog re-tears it.
