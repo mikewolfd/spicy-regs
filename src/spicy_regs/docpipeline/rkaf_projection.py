@@ -1,0 +1,3124 @@
+"""Project one source document into a gate-valid Rulespec (RKAF) JSON-LD object.
+
+This is the generalization of the hand-authored
+``docs/evidence/single-document-rulespec-projection-2026-07-28/build_projection.py``:
+same target shape, same offset-verification discipline, but the semantic layer
+is supplied by a model through structured output instead of by an author.
+
+The split is the whole point, and it is not negotiable:
+
+**The deterministic layer mints every identity.** Artifact identity and digests
+come from :mod:`spicy_regs.docpipeline.source` (never re-derived here). Fragment
+coordinates are the stored source field's own ``[start, end)`` code-point
+offsets, and every one of them is proven by re-slicing the stored text and
+comparing the SHA-256 of the slice against the digest baked into the
+carrier-local URN. Canonical CFR/USC/RIN/FR-doc/regs.gov IRIs come from
+:mod:`spicy_regs.ontology.citations`. Relationship assertions are re-serialized
+rows of the published spicy-regs tables — nothing is re-parsed out of prose to
+rediscover an edge a transform already produced.
+
+**The model layer supplies judgments only.** It runs through the existing,
+tested concept-assignment path (:class:`~spicy_regs.docpipeline.tag_task.TagExtractionTask`
+driven by :func:`~spicy_regs.docpipeline.extraction.run_extraction`), which
+already refuses a concept id outside the supplied candidate set, already
+resolves an exact evidence quote to offsets or rejects it, and already writes
+the request and the response for every provider call. This module adds no second
+prompt, no second schema, and no second matcher. It consumes accepted candidate
+rows, re-verifies their offsets against the stored text one more time, and turns
+the survivors into ``rkaf:ConceptAssignment`` nodes. A model-supplied value that
+cannot be verified against source text or a normalized vocabulary row is dropped with
+a recorded reason; it is never repaired.
+
+Text-state convention (load-bearing, and the one place this projection has to
+choose): an RKAF ``rkaf:Artifact`` names ONE immutable state, while a spicy-regs
+artifact spans several stored source fields with independent digests. Each
+profile therefore declares one *projected evidence field*. ``rkaf:hasContentDigest``
+and every fragment coordinate in the emitted document are taken over that field
+alone, offsets in Unicode code points, half-open ``[start, end)``, matching
+rulespec Core §4.2. Evidence landing in any other field is refused rather than
+silently re-based, and the count of such refusals is reported.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import re
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass, replace
+from pathlib import Path
+from typing import Any
+
+from spicy_regs.candidate_release import (
+    CandidateConceptBridge,
+    CandidateReleaseSource,
+)
+
+from spicy_regs.docpipeline.source import (
+    SourceArtifact,
+    build_source_artifact,
+    profile_for_table,
+)
+from spicy_regs.ontology.attestations import (
+    ATTESTOR_KIND_AI_MODEL,
+    DECISION_ENDORSED_FOR_REVIEW,
+    attestation_row,
+)
+from spicy_regs.ontology.citations import (
+    canonical_cfr_iri,
+    canonical_pl_iri,
+    canonical_regsgov_iri,
+    canonical_rin_iri,
+    canonical_usc_iri,
+    docket_reference_as_stated,
+    federal_register_identifier,
+    normalize_docket_reference,
+    parse_authority_citation,
+    parse_cfr_citation,
+)
+from spicy_regs.ontology.common import RunContext, canonical_json, stable_id, text_digest
+from spicy_regs.ontology.llm import resolve_exact_evidence_offsets
+
+# --------------------------------------------------------------------------- #
+# Contract configuration.
+#
+# Six historical contract findings from the hand-authored projection's G1-G6
+# list landed in Rulespec. Every one was a value or switch below rather than a
+# separate code path. The projection no longer hard-codes the historical
+# revision that introduced them: every run must receive and record the exact
+# Rulespec version and constraint digest it actually uses.
+#
+#   G1  921d1ff  prov:wasDerivedFrom class range stated in §2.4
+#                -> already satisfied: every cited row is a typed prov:Entity.
+#   G2  3644803  rkaf:publishedInDocket added
+#                -> EMIT_DOCUMENT_DOCKET_EDGE below, now True.
+#   G3  3c16018  rkaf:deterministicExtraction added to #AssertionOrigin
+#                -> ASSERTION_ORIGIN_DETERMINISTIC below, now that value.
+#   G4  e8794ba  requestContractDigest made conditional on a model extraction
+#                -> REQUEST_CONTRACT_DIGEST_REQUIRED_FOR below, now narrowed.
+#   G5  062fa79  §2.1 decides the direct-edge / reified-assertion pair
+#                -> EMIT_PROFILE_EDGE_PROJECTIONS below, unchanged at True.
+#   G6  361348c  the ten untyped timestamp context terms typed
+#                -> no change here; it is a context fix, and the emitted
+#                   rkaf:attestedAt / rkaf:assertedAt literals are unchanged.
+#                   The vendored context copy the CLI ships carries the fix.
+# --------------------------------------------------------------------------- #
+
+#: G3 — ``#AssertionOrigin`` gained ``rkaf:deterministicExtraction`` (rulespec
+#: 3c16018): a mechanically reproducible derivation, not an interpretive
+#: judgment. It replaces the ``rkaf:imported`` workaround, which said only that
+#: the record came from somewhere else and left the parse method on an OPTIONAL
+#: ``rkaf:hasExtractionProvenance`` edge — droppable, with no gate objecting.
+#:
+#: The value is not free: every compiled target now REQUIRES
+#: ``rkaf:hasExtractionProvenance`` alongside it, so :func:`assemble` refuses to
+#: emit an assertion at this origin that cannot name its activity.
+ASSERTION_ORIGIN_DETERMINISTIC = "rkaf:deterministicExtraction"
+
+#: An unreviewed model candidate. ``#AssertionEnvelope`` requires
+#: ``rkaf:hasAILineage`` alongside it, which is why every model-derived
+#: assignment emits an ``rkaf:AILineage`` node.
+ASSERTION_ORIGIN_MODEL = "rkaf:aiSuggested"
+
+#: G4 — ``rkaf:requestContractDigest`` is conditional on a request-shaped
+#: extraction (rulespec e8794ba, Core §2.4). The field presumes a run that sent
+#: instructions, a schema and a configuration somewhere and got an answer back;
+#: a deterministic table parse sends nothing. The old universal requirement left
+#: one conforming move — define an envelope, hash it, cite the result — which
+#: yields a real digest naming a contract the run never published. That is now
+#: explicitly non-conforming, so the set is narrowed to the one method that
+#: genuinely issues a contract and :func:`_activity_node` emits nothing for the
+#: rest. The other four MAY still carry the digest, but only when the run really
+#: issued the contract it names, which none of this module's do.
+REQUEST_CONTRACT_DIGEST_REQUIRED_FOR = frozenset({"rkaf:modelExtraction"})
+
+#: G2 — ``rkaf:publishedInDocket`` exists (rulespec 3644803, rulemaking §5.3):
+#: Artifact -> Docket, the source-native FR metadata fact. Before it, a document
+#: reached its docket only through a Proceeding, so a producer without a
+#: proceedings model had to mint a surrogate Proceeding or drop the fact.
+#: ``federal_register.docket_ids_json`` is now directly expressible as an edge on
+#: the Artifact.
+#:
+#: §5.3 forbids minting the Docket node from the document alone — an edge to a
+#: container with no ``rkaf:hasDocketIdentifier`` names nothing — so
+#: :func:`_document_docket_iris` emits the edge only for a docket whose identity
+#: some OTHER published row establishes. It is deliberately not reified: §5.3
+#: calls this a source-native fact rather than a derivation, and Core §2.1 makes
+#: a direct edge with no matching assertion legal and explicitly unbacked. It is
+#: therefore not governed by :data:`EMIT_PROFILE_EDGE_PROJECTIONS`, which
+#: projects assertions; turning that flag off must not drop this fact.
+EMIT_DOCUMENT_DOCKET_EDGE = True
+DOCUMENT_DOCKET_PREDICATE = "rkaf:publishedInDocket"
+
+#: G5 — the graph states profile edges twice: once as the profile's plain edge on
+#: the node, once as a reified ``rkaf:RelationshipAssertion``. Rulespec 062fa79
+#: makes the pair normative in Core §2.1 — the direct edge is the queryable
+#: projection, the assertion is the provenance-bearing source of truth, a
+#: consumer seeing both counts ONE statement, and a producer SHOULD emit both for
+#: an affirmed assertion and MUST NOT emit the edge for a denied, superseded, or
+#: retracted one. ``True`` is therefore what §2.1 now prescribes; this projection
+#: emits only affirmed assertions. Setting it to ``False`` emits the reified half
+#: alone, which stays conforming and is what proves no fact lives only in a plain
+#: edge.
+EMIT_PROFILE_EDGE_PROJECTIONS = True
+
+#: A model attesting its own output is not approval. ``rkaf:approved`` would be
+#: a self-grant of exactly the review this record exists to say has not
+#: happened. ``rkaf:advisory`` reads as "take it or leave it" and asks for
+#: nothing. ``rkaf:endorsedForReview`` is the only value in the closed enum that
+#: says both halves honestly: the producer stands behind the candidate AND the
+#: candidate is queued for someone else's decision.
+MODEL_ATTESTATION_DECISION = DECISION_ENDORSED_FOR_REVIEW
+
+#: Unreviewed model candidates may be queued for review and nothing more.
+MODEL_USAGE_ELIGIBILITY = "rkaf:reviewQueueOnly"
+
+#: Records re-serialized from published spicy-regs tables.
+DETERMINISTIC_USAGE_ELIGIBILITY = "rkaf:localOperationalUse"
+
+PROJECTION_SCHEMA_VERSION = "rkaf-document-projection-v2"
+
+#: This path emits diagnostic candidates for review. A selected atlas is an
+#: input, not an accepted-output or deployment decision.
+CANDIDATE_SELECTION_STATE = "notConfigured"
+CANDIDATE_OUTPUT_MODE = "diagnosticReviewQueue"
+
+_RULESPEC_VERSION_PATTERN = re.compile(r"^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$")
+_RULESPEC_REVISION_PATTERN = re.compile(r"^[0-9a-f]{40}$")
+_CONSTRAINT_DIGEST_PATTERN = re.compile(r"^sha256:[0-9a-f]{64}$")
+
+#: The carrier-local fragment URN grammar, Core §4.2. Copied from the compiled
+#: pattern so a test can prove the minted form satisfies it without a validator.
+FRAGMENT_URN_PATTERN = re.compile(
+    r"^urn:rkaf:fragment:([A-Za-z0-9._~-]|%[0-9A-F]{2})+:(0|[1-9][0-9]*):(0|[1-9][0-9]*):sha256-[0-9a-f]{64}$"
+)
+
+#: Only a fragment whose coordinates address an immutable STORED source field
+#: can carry a carrier-local URN: a third party has to be able to re-slice it.
+#: Parser-derived text (a PDF adapter's output) is not in any published table.
+SOURCE_EXACT_EVIDENCE_GRADE = "source-exact"
+
+_SELECTOR_KIND = "oa:TextPositionSelector"
+_COORDINATE_SYSTEM = "rkaf:unicode-codepoint"
+_EVIDENCE_SCHEME = "rkaf:carrier-local-fragment"
+
+
+class ProjectionError(RuntimeError):
+    """The projection cannot be assembled from the inputs it was given."""
+
+
+class OffsetVerificationError(ProjectionError):
+    """A fragment's stored offsets do not slice the text they claim to.
+
+    This aborts. It is never repaired and never downgraded to a rejection row:
+    a fragment whose coordinates lie is not a weaker fragment, it is a false
+    statement about a document, and every digest downstream of it is worthless.
+    """
+
+
+# --------------------------------------------------------------------------- #
+# Carrier-local fragment URNs (Core §4.2).
+# --------------------------------------------------------------------------- #
+
+
+def encode_for_uri(value: str) -> str:
+    """Percent-encode outside the RFC 3986 unreserved set, uppercase hex.
+
+    This is SPARQL's ``ENCODE_FOR_URI``, which is the encoding Core §4.2 names
+    for the artifact component and the encoding
+    ``CarrierLocalFragmentUrnSourceAgreementShape`` compares against.
+    """
+    out: list[str] = []
+    for character in value:
+        if (character.isascii() and character.isalnum()) or character in "-._~":
+            out.append(character)
+        else:
+            out.extend(f"%{byte:02X}" for byte in character.encode("utf-8"))
+    return "".join(out)
+
+
+def fragment_urn(artifact_iri: str, start: int, end: int, region_sha256: str) -> str:
+    """Mint the carrier-local fragment URN for one verified region."""
+    return f"urn:rkaf:fragment:{encode_for_uri(artifact_iri)}:{start}:{end}:sha256-{region_sha256}"
+
+
+@dataclass(frozen=True)
+class ProjectedFragment:
+    """One region of the projected evidence field, proven by re-slicing."""
+
+    key: str
+    source_field: str
+    start: int
+    end: int
+    text: str
+    text_sha256: str
+    urn: str
+
+    @property
+    def selector_iri(self) -> str:
+        return f"{self.urn}#selector"
+
+
+def verify_fragment(
+    artifact: SourceArtifact,
+    *,
+    key: str,
+    source_field: str,
+    start: int,
+    end: int,
+    artifact_iri: str,
+    expected_text: str | None = None,
+) -> ProjectedFragment:
+    """Re-slice the stored field and mint the URN, or abort.
+
+    Every value in the returned fragment is recomputed from
+    ``artifact.raw_fields[source_field]``. Nothing is trusted: not the caller's
+    offsets, not a model's quote, not a gold row's stored digest.
+    """
+    text = artifact.raw_fields.get(source_field)
+    if text is None:
+        raise OffsetVerificationError(f"{key}: the artifact carries no field {source_field!r}")
+    if not (0 <= start <= end <= len(text)):
+        raise OffsetVerificationError(
+            f"{key}: [{start},{end}) is outside {source_field} (length {len(text)} code points)"
+        )
+    region = text[start:end]
+    if expected_text is not None and region != expected_text:
+        raise OffsetVerificationError(
+            f"{key}: {source_field}[{start}:{end}] is {region!r}, not the expected {expected_text!r}"
+        )
+    digest = text_digest(region)
+    urn = fragment_urn(artifact_iri, start, end, digest)
+    if not FRAGMENT_URN_PATTERN.match(urn):
+        raise OffsetVerificationError(f"{key}: minted URN violates the Core §4.2 grammar: {urn}")
+    return ProjectedFragment(
+        key=key,
+        source_field=source_field,
+        start=start,
+        end=end,
+        text=region,
+        text_sha256=digest,
+        urn=urn,
+    )
+
+
+def ground_literal(
+    artifact: SourceArtifact,
+    *,
+    key: str,
+    source_field: str,
+    artifact_iri: str,
+    surface_forms: Sequence[str],
+) -> ProjectedFragment | None:
+    """Locate a citation's own words in the projected field, or give up.
+
+    Grounding reuses :func:`resolve_exact_evidence_offsets`, so a surface form
+    that appears zero times or more than once is not grounded. An assertion
+    whose evidence cannot be pinned to one unambiguous region simply gets no
+    ``rkaf:EvidenceBinding``; it keeps its extraction provenance and says
+    nothing it cannot show.
+    """
+    text = artifact.raw_fields.get(source_field)
+    if not text:
+        return None
+    for form in surface_forms:
+        if not form:
+            continue
+        resolution = resolve_exact_evidence_offsets(text, form, None, None)
+        if resolution is None:
+            continue
+        return verify_fragment(
+            artifact,
+            key=key,
+            source_field=source_field,
+            start=resolution.start,
+            end=resolution.end,
+            artifact_iri=artifact_iri,
+            expected_text=form,
+        )
+    return None
+
+
+# --------------------------------------------------------------------------- #
+# Deterministic facts.
+# --------------------------------------------------------------------------- #
+
+
+@dataclass(frozen=True)
+class ExtractionActivitySpec:
+    """One ``rkaf:ExtractionActivity``: which run produced which candidates."""
+
+    key: str
+    method: str
+    run_id: str
+    actor_id: str
+    version: str
+    instructions: str
+    input_row: Mapping[str, Any]
+    model_ref: str | None = None
+    prompt_ref: str | None = None
+
+
+@dataclass(frozen=True)
+class DeterministicEdge:
+    """One relationship a published spicy-regs table already asserts."""
+
+    key: str
+    subject: str
+    predicate: str
+    object: str
+    table: str
+    record_key: str
+    activity_key: str
+    asserted_at: str
+    surface_forms: tuple[str, ...] = ()
+    claimant_identity: str | None = None
+    profile_edge: tuple[str, str, str] | None = None
+    """``(node IRI, predicate, object IRI)`` — the plain profile edge this
+    assertion reifies, emitted alongside it while :data:`EMIT_PROFILE_EDGE_PROJECTIONS`
+    holds (finding G5)."""
+
+
+@dataclass(frozen=True)
+class ProfileFacts:
+    """Everything a profile contributes that is not the model's business."""
+
+    profile_id: str
+    artifact_iri: str
+    evidence_field: str
+    artifact_identifiers: tuple[str, ...]
+    artifact_schemes: tuple[str, ...]
+    regulatory_identifier: str | None = None
+    regulatory_scheme: str | None = None
+    published_in_proceeding: tuple[str, ...] = ()
+    published_in_docket: tuple[str, ...] = ()
+    """Docket IRIs this document was filed under (rulemaking §5.3). Every one is
+    a Docket whose identity another published row establishes — never one minted
+    from the document alone."""
+    extra_nodes: tuple[Mapping[str, Any], ...] = ()
+    edges: tuple[DeterministicEdge, ...] = ()
+    activities: tuple[ExtractionActivitySpec, ...] = ()
+    claimant_identity: str | None = None
+    notes: tuple[str, ...] = ()
+
+
+def request_contract_digest(spec: ExtractionActivitySpec) -> tuple[str, str]:
+    """Digest the request contract and the input row for one extraction activity.
+
+    Recipe: SHA-256 over the canonical JSON of
+    ``{instructions, actor_id, run_id, input_row}`` with every input value
+    stringified. Returns ``(contract digest, input-row digest)``.
+
+    Since finding G4 landed only the contract digest of a genuinely
+    request-shaped run is emitted (see
+    :data:`REQUEST_CONTRACT_DIGEST_REQUIRED_FOR`); the input-row digest is
+    unconditional, because every activity really does have inputs.
+    """
+    clean = {str(key): (None if value is None else str(value)) for key, value in spec.input_row.items()}
+    contract = {
+        "instructions": spec.instructions,
+        "actor_id": spec.actor_id,
+        "run_id": spec.run_id,
+        "input_row": clean,
+    }
+    return text_digest(canonical_json(contract)), text_digest(canonical_json(clean))
+
+
+def _json_list(value: object) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, (list, tuple)):
+        return [str(item) for item in value]
+    text = str(value).strip()
+    if not text or text in {"None", "null"}:
+        return []
+    try:
+        parsed = json.loads(text)
+    except (TypeError, ValueError):
+        return [text]
+    if isinstance(parsed, list):
+        return [str(item) for item in parsed]
+    return [str(parsed)]
+
+
+def _clean(value: object) -> str:
+    text = "" if value is None else str(value).strip()
+    return "" if text in {"None", "nan", "null"} else text
+
+
+# --------------------------------------------------------------------------- #
+# Published-table access.
+# --------------------------------------------------------------------------- #
+
+
+class PublishedTables:
+    """Read-only view over the published spicy-regs parquet tables.
+
+    Reads go through :func:`~spicy_regs.ontology.common.read_parquet_rows`
+    rather than a query engine: ``spicy_regs.docpipeline`` keeps direct DuckDB
+    use confined to ``retrieval.py``, and these edge tables are small enough
+    that equality filtering in Python is the simpler honest answer.
+    """
+
+    def __init__(self, directory: Path) -> None:
+        self.directory = Path(directory)
+        self._cache: dict[str, list[dict[str, Any]]] = {}
+
+    def rows(self, table: str, **equals: Any) -> list[dict[str, Any]]:
+        """Return the rows of ``table`` whose columns equal every keyword."""
+        from spicy_regs.ontology.common import read_parquet_rows
+
+        if table not in self._cache:
+            self._cache[table] = read_parquet_rows(self.directory / f"{table}.parquet")
+        return [
+            row
+            for row in self._cache[table]
+            if all(_clean(row.get(column)) == _clean(value) for column, value in equals.items())
+        ]
+
+
+# --------------------------------------------------------------------------- #
+# Per-profile deterministic assembly.
+# --------------------------------------------------------------------------- #
+
+_FR_AGENCY_IRI = "https://www.federalregister.gov/agencies/"
+
+_AGENDA_STAGE_BY_RULE_STAGE = {
+    "prerule stage": "rkaf:agendaPrerule",
+    "proposed rule stage": "rkaf:agendaProposed",
+    "final rule stage": "rkaf:agendaFinal",
+    "long-term actions": "rkaf:agendaLongterm",
+    "completed actions": "rkaf:agendaCompleted",
+}
+
+_AGENDA_PRIORITY_BY_CATEGORY = {
+    "economically significant": "rkaf:agendaPriorityEconomicallySignificant",
+    "other significant": "rkaf:agendaPriorityOtherSignificant",
+    "substantive, nonsignificant": "rkaf:agendaPrioritySubstantiveNonsignificant",
+    "routine and frequent": "rkaf:agendaPriorityRoutineFrequent",
+    "info./admin./other": "rkaf:agendaPriorityInfoAdminOther",
+}
+
+_PROCEEDING_STAGE_BY_CURRENT = {
+    "prerule": "rkaf:proceedingPrerule",
+    "proposed": "rkaf:proceedingProposed",
+    "supplemental": "rkaf:proceedingSupplemental",
+    "final": "rkaf:proceedingFinal",
+    "withdrawn": "rkaf:proceedingWithdrawn",
+    "longterm": "rkaf:proceedingLongterm",
+    "long-term": "rkaf:proceedingLongterm",
+    "concluded": "rkaf:proceedingConcluded",
+}
+
+
+def _cfr_iri(row: Mapping[str, Any]) -> str | None:
+    title, part = _clean(row.get("cfr_title")), _clean(row.get("cfr_part"))
+    if not title or not part:
+        return None
+    try:
+        return canonical_cfr_iri(title, part, _clean(row.get("cfr_section")) or None)
+    except ValueError:
+        return None
+
+
+def _authority_iri(row: Mapping[str, Any]) -> str | None:
+    try:
+        if _clean(row.get("authority_type")) == "usc":
+            return canonical_usc_iri(_clean(row.get("usc_title")), _clean(row.get("usc_section")))
+        if _clean(row.get("pl_number")):
+            return canonical_pl_iri(_clean(row.get("pl_number")))
+    except ValueError:
+        return None
+    return None
+
+
+def _document_docket_iris(
+    row: Mapping[str, Any],
+    *,
+    tables: PublishedTables,
+    known_docket_iris: Sequence[str],
+) -> tuple[list[str], list[dict[str, Any]], list[str]]:
+    """Resolve ``federal_register.docket_ids_json`` into Docket IRIs (§5.3).
+
+    Returns ``(iris, docket nodes to add, notes)``.
+
+    Two refusals, both because §5.3 forbids minting the Docket node from the
+    document alone — an edge to a container with no ``rkaf:hasDocketIdentifier``
+    names nothing. A value whose label-stripped remainder is not a syntactically
+    valid regulations.gov identifier is refused, and so is one that no OTHER
+    published row establishes: a docket the proceedings path already
+    materialized, or a ``dockets.parquet`` row carrying that id. The document's
+    own say-so is never enough to bring a Docket into existence.
+    """
+    iris: list[str] = []
+    nodes: list[dict[str, Any]] = []
+    notes: list[str] = []
+    already = set(known_docket_iris)
+    for raw in _json_list(row.get("docket_ids_json")):
+        # The docket-aware cleaning, shared with the fr_docket_links transform
+        # so the two readers of this column agree byte for byte on what states
+        # nothing: it removes the same sentinels _clean does, plus a bare label.
+        stated = docket_reference_as_stated(raw)
+        if not stated:
+            continue
+        identifier = normalize_docket_reference(stated)
+        if identifier is None:
+            notes.append(f"document docket identifier {stated!r} is not expressible in rkaf:us-regsgov")
+            continue
+        docket_iri = canonical_regsgov_iri(identifier)
+        if docket_iri in iris:
+            continue
+        if docket_iri in already:
+            iris.append(docket_iri)
+            continue
+        docket_id = docket_iri.rsplit(":", 1)[-1]
+        if not tables.rows("dockets", docket_id=docket_id):
+            notes.append(
+                f"document docket {docket_id} is stated by the document but no published dockets row "
+                "carries it, so rulemaking §5.3 forbids minting the Docket node and the edge is dropped"
+            )
+            continue
+        iris.append(docket_iri)
+        nodes.append(
+            {
+                "@id": docket_iri,
+                "@type": "rkaf:Docket",
+                "rkaf:hasDocketIdentifier": docket_iri,
+                "rkaf:docketIdentifierScheme": "rkaf:us-regsgov",
+            }
+        )
+    return iris, nodes, notes
+
+
+def _authority_edge(
+    tables: PublishedTables,
+    *,
+    rin: str,
+    rin_iri: str,
+) -> DeterministicEdge | None:
+    rows = tables.rows("authority_edges", rin=rin) if rin else []
+    if not rows:
+        return None
+    row = rows[0]
+    target = _authority_iri(row)
+    if target is None:
+        return None
+    raw = _clean(row.get("authority_raw"))
+    forms = [raw]
+    usc_title, usc_section = _clean(row.get("usc_title")), _clean(row.get("usc_section"))
+    if usc_title and usc_section:
+        forms.extend([f"{usc_title} U.S.C. {usc_section}", f"{usc_title} USC {usc_section}"])
+    return DeterministicEdge(
+        key="authority",
+        subject=rin_iri,
+        # J3 (hand-authored): authority_edges is RIN + agenda-edition keyed with
+        # parse_status often partial, so this asserts the agenda item's cited
+        # authority rather than minting the stronger rkaf:hasAuthority chain.
+        predicate="rkaf:agendaAuthorityCitation",
+        object=target,
+        table="authority_edges",
+        record_key=f"{rin}:{_clean(row.get('agenda_edition'))}",
+        activity_key="authority-parser",
+        asserted_at=_clean(row.get("asserted_at")),
+        surface_forms=tuple(dict.fromkeys(form for form in forms if form)),
+    )
+
+
+def _authority_activity(tables: PublishedTables, *, rin: str) -> ExtractionActivitySpec | None:
+    rows = tables.rows("authority_edges", rin=rin) if rin else []
+    if not rows:
+        return None
+    row = rows[0]
+    return ExtractionActivitySpec(
+        key="authority-parser",
+        method="rkaf:deterministicParse",
+        run_id=_clean(row.get("run_id")),
+        actor_id=_clean(row.get("actor_id")),
+        version="v1",
+        instructions=("spicy-regs deterministic Unified Agenda authority-citation parse (authority_edges.parquet row)"),
+        input_row=row,
+    )
+
+
+def _federal_register_facts(
+    artifact: SourceArtifact,
+    row: Mapping[str, Any],
+    *,
+    tables: PublishedTables,
+    partner: str,
+) -> ProfileFacts:
+    document_number = _clean(row.get("document_number"))
+    artifact_iri = f"https://www.federalregister.gov/d/{document_number}"
+    scheme, regulatory_iri = federal_register_identifier(document_number)
+    notes: list[str] = []
+    extra_nodes: list[dict[str, Any]] = []
+    edges: list[DeterministicEdge] = []
+    activities: list[ExtractionActivitySpec] = []
+
+    agency_slugs = _json_list(row.get("agency_slugs"))
+    claimant = f"{_FR_AGENCY_IRI}{agency_slugs[0]}" if agency_slugs else None
+
+    # The proceedings table is the join: it is the only published row that names
+    # this FR document, and everything else (the RIN, the dockets, the CFR
+    # targets) hangs off it. Nothing is re-parsed out of the document to find it.
+    proceeding_row: Mapping[str, Any] | None = None
+    proceeding_iri: str | None = None
+    rin = ""
+    for proceeding in tables.rows("proceedings"):
+        if document_number in _json_list(proceeding.get("fr_document_numbers_json")):
+            proceeding_row = proceeding
+            proceeding_iri = f"{partner}:proceeding:{_clean(proceeding.get('proceeding_id'))}"
+            rin = _clean(proceeding.get("rin"))
+            break
+    rule_target_rows = tables.rows("rule_targets", rin=rin) if rin else []
+
+    docket_iris: list[str] = []
+    if proceeding_row is not None and proceeding_iri is not None:
+        stage = _PROCEEDING_STAGE_BY_CURRENT.get(_clean(proceeding_row.get("current_stage")).lower())
+        cfr_targets = [
+            value
+            for value in _json_list(proceeding_row.get("cfr_target_iris_json"))
+            if value.startswith("urn:rkaf:us:cfr:")
+        ]
+        for docket_id in _json_list(proceeding_row.get("docket_ids_json")):
+            try:
+                docket_iris.append(canonical_regsgov_iri(docket_id))
+            except ValueError:
+                notes.append(f"docket identifier {docket_id!r} is not expressible in rkaf:us-regsgov")
+        proceeding_node: dict[str, Any] = {
+            "@id": proceeding_iri,
+            "@type": "rkaf:Proceeding",
+            "rkaf:hasProceedingIdentifier": proceeding_iri,
+            "rkaf:proceedingIdentifierScheme": "rkaf:partner-defined",
+        }
+        if stage:
+            proceeding_node["rkaf:proceedingStage"] = stage
+        if EMIT_PROFILE_EDGE_PROJECTIONS and docket_iris:
+            proceeding_node["rkaf:hasDocket"] = list(docket_iris)
+        if EMIT_PROFILE_EDGE_PROJECTIONS and cfr_targets:
+            proceeding_node["rkaf:proceedingAffectsCitation"] = list(cfr_targets)
+        extra_nodes.append(proceeding_node)
+        for docket_iri in docket_iris:
+            extra_nodes.append(
+                {
+                    "@id": docket_iri,
+                    "@type": "rkaf:Docket",
+                    "rkaf:hasDocketIdentifier": docket_iri,
+                    "rkaf:docketIdentifierScheme": "rkaf:us-regsgov",
+                }
+            )
+        activities.append(
+            ExtractionActivitySpec(
+                key="proceedings",
+                method="rkaf:deterministicParse",
+                run_id=_clean(proceeding_row.get("run_id")),
+                actor_id=_clean(proceeding_row.get("actor_id")) or "spicy-regs:proceedings:v1",
+                version="v1",
+                instructions="spicy-regs deterministic proceeding assembly (proceedings.parquet row)",
+                input_row=proceeding_row,
+            )
+        )
+        # The document -> proceeding link is reified too, so turning the profile
+        # edges off (finding G5) never drops the fact — it only moves where it
+        # is stated. Without this the document would be orphaned the moment the
+        # plain edges become derived projections.
+        edges.append(
+            DeterministicEdge(
+                key="published-in-proceeding",
+                subject=artifact_iri,
+                predicate="rkaf:publishedInProceeding",
+                object=proceeding_iri,
+                table="proceedings",
+                record_key=_clean(proceeding_row.get("proceeding_id")),
+                activity_key="proceedings",
+                asserted_at=_clean(proceeding_row.get("asserted_at")),
+                claimant_identity=claimant,
+                profile_edge=(artifact_iri, "rkaf:publishedInProceeding", proceeding_iri),
+            )
+        )
+        for docket_iri, raw_docket in zip(docket_iris, _json_list(proceeding_row.get("docket_ids_json"))):
+            edges.append(
+                DeterministicEdge(
+                    key=f"docket-{raw_docket}",
+                    subject=proceeding_iri,
+                    predicate="rkaf:hasDocket",
+                    object=docket_iri,
+                    table="proceedings",
+                    record_key=_clean(proceeding_row.get("proceeding_id")),
+                    activity_key="proceedings",
+                    asserted_at=_clean(proceeding_row.get("asserted_at")),
+                    surface_forms=(f"Docket No. {raw_docket}", raw_docket),
+                    claimant_identity=claimant,
+                    profile_edge=(proceeding_iri, "rkaf:hasDocket", docket_iri),
+                )
+            )
+
+    if rin:
+        rin_iri = canonical_rin_iri(rin)
+        extra_nodes.append(
+            {
+                "@id": rin_iri,
+                "@type": "rkaf:RegulatoryAgendaItem",
+                "rkaf:hasAgendaItemIdentifier": rin_iri,
+                "rkaf:agendaItemIdentifierScheme": "rkaf:us-rin",
+            }
+        )
+        authority = _authority_edge(tables, rin=rin, rin_iri=rin_iri)
+        if authority is not None:
+            edges.append(replace(authority, claimant_identity=claimant))
+            activity = _authority_activity(tables, rin=rin)
+            if activity is not None:
+                activities.append(activity)
+
+    for candidate in rule_target_rows:
+        target = _cfr_iri(candidate)
+        if target is None or proceeding_iri is None:
+            continue
+        title, part = _clean(candidate.get("cfr_title")), _clean(candidate.get("cfr_part"))
+        edges.append(
+            DeterministicEdge(
+                key=f"cfr-target-{title}-{part}",
+                subject=proceeding_iri,
+                predicate="rkaf:proceedingAffectsCitation",
+                object=target,
+                table="rule_targets",
+                record_key=f"{_clean(candidate.get('docket_id'))}:{_clean(candidate.get('cfr_ref'))}",
+                activity_key="rule-targets",
+                asserted_at=_clean(candidate.get("asserted_at")),
+                surface_forms=(
+                    f"{title} CFR Part {part}",
+                    f"{title} CFR part {part}",
+                    f"{title} CFR {part}",
+                ),
+                claimant_identity=claimant,
+                profile_edge=(proceeding_iri, "rkaf:proceedingAffectsCitation", target),
+            )
+        )
+        activities.append(
+            ExtractionActivitySpec(
+                key="rule-targets",
+                method="rkaf:deterministicParse",
+                run_id=_clean(candidate.get("run_id")),
+                actor_id=_clean(candidate.get("actor_id")),
+                version="v1",
+                instructions=(
+                    "spicy-regs deterministic rule-targets extraction over docket documents "
+                    "and FR metadata (rule_targets.parquet row)"
+                ),
+                input_row=candidate,
+            )
+        )
+        break
+
+    # G2 / rulemaking §5.3: the document's own docket membership. This is the
+    # document -> docket fact the FR record states outright, NOT a restatement of
+    # the proceeding's rkaf:hasDocket: a proceeding may span dockets a given one
+    # of its documents was not filed in, and neither edge implies the other.
+    published_in_docket: tuple[str, ...] = ()
+    if EMIT_DOCUMENT_DOCKET_EDGE:
+        docket_edge_iris, docket_edge_nodes, docket_notes = _document_docket_iris(
+            row, tables=tables, known_docket_iris=docket_iris
+        )
+        published_in_docket = tuple(docket_edge_iris)
+        extra_nodes.extend(docket_edge_nodes)
+        notes.extend(docket_notes)
+    elif _json_list(row.get("docket_ids_json")):
+        notes.append(
+            "finding G2: the document's own docket_ids_json is not directly expressible — "
+            "there is no document->docket predicate, so the docket is reached through the Proceeding"
+        )
+
+    return ProfileFacts(
+        profile_id=artifact.profile_id,
+        artifact_iri=artifact_iri,
+        evidence_field="federal_register.body_html",
+        artifact_identifiers=(artifact_iri,),
+        artifact_schemes=("rkaf:urn-persistent",),
+        regulatory_identifier=regulatory_iri,
+        regulatory_scheme=scheme,
+        published_in_proceeding=(proceeding_iri,) if proceeding_iri else (),
+        published_in_docket=published_in_docket,
+        extra_nodes=tuple(extra_nodes),
+        edges=tuple(edges),
+        activities=tuple({spec.key: spec for spec in activities}.values()),
+        claimant_identity=claimant,
+        notes=tuple(notes),
+    )
+
+
+def _unified_agenda_facts(
+    artifact: SourceArtifact,
+    row: Mapping[str, Any],
+    *,
+    tables: PublishedTables,
+    partner: str,
+) -> ProfileFacts:
+    rin = _clean(row.get("rin"))
+    edition = _clean(row.get("agenda_edition"))
+    rin_iri = canonical_rin_iri(rin)
+    artifact_iri = _clean(row.get("url")) or f"{partner}:agenda-observation:{rin}:{edition}"
+    notes: list[str] = []
+    edges: list[DeterministicEdge] = []
+    activities: list[ExtractionActivitySpec] = []
+
+    affects = []
+    for reference in _json_list(row.get("cfr_references_json")):
+        for citation in parse_cfr_citation(reference):
+            try:
+                affects.append(canonical_cfr_iri(citation.title, citation.part, citation.section))
+            except ValueError:
+                notes.append(f"CFR reference {reference!r} is not expressible in rkaf:us-cfr")
+    authority = []
+    for reference in _json_list(row.get("legal_authority_json")):
+        for citation in parse_authority_citation(reference):
+            try:
+                if citation.authority_type == "usc":
+                    authority.append(canonical_usc_iri(citation.usc_title, citation.usc_section))
+                elif citation.pl_number:
+                    authority.append(canonical_pl_iri(citation.pl_number))
+            except ValueError:
+                notes.append(f"authority reference {reference!r} is not expressible")
+
+    observation: dict[str, Any] = {
+        "@id": artifact_iri,
+        "@type": "rkaf:RegulatoryAgendaObservation",
+        "rkaf:hasArtifactIdentifier": [artifact_iri],
+        "rkaf:artifactIdentifierScheme": ["rkaf:urn-persistent"],
+        "foaf:primaryTopic": rin_iri,
+    }
+    stage = _AGENDA_STAGE_BY_RULE_STAGE.get(_clean(row.get("rule_stage")).lower())
+    if stage:
+        observation["rkaf:agendaStage"] = stage
+    priority = _AGENDA_PRIORITY_BY_CATEGORY.get(_clean(row.get("priority_category")).lower())
+    if priority:
+        observation["rkaf:agendaPriority"] = priority
+    if EMIT_PROFILE_EDGE_PROJECTIONS and affects:
+        observation["rkaf:agendaAffectsCitation"] = list(dict.fromkeys(affects))
+    if EMIT_PROFILE_EDGE_PROJECTIONS and authority:
+        observation["rkaf:agendaAuthorityCitation"] = list(dict.fromkeys(authority))
+
+    extra_nodes: list[dict[str, Any]] = [
+        observation,
+        {
+            "@id": rin_iri,
+            "@type": "rkaf:RegulatoryAgendaItem",
+            "rkaf:hasAgendaItemIdentifier": rin_iri,
+            "rkaf:agendaItemIdentifierScheme": "rkaf:us-rin",
+        },
+    ]
+    # An rkaf:SourceFragment's oa:hasSource is class-ranged to rkaf:Artifact
+    # (compiled/shacl/core/source-fragment.ttl). rkaf:RegulatoryAgendaObservation
+    # is described in the profile as a subclass of rkaf:Artifact but no shape or
+    # context file declares `rdfs:subClassOf`, so RDFS inference cannot reach it.
+    # The observation therefore carries BOTH types, as two nodes on one IRI, so
+    # each dispatches to a real compiled schema at L2 instead of an @type array
+    # that L2 skips silently. See the report's finding list.
+    notes.append(
+        "finding: rkaf:RegulatoryAgendaObservation is documented as a profile subclass of "
+        "rkaf:Artifact but no shapes file declares rdfs:subClassOf, so the observation must "
+        "also be typed rkaf:Artifact for its own fragments to satisfy the oa:hasSource range"
+    )
+
+    edge = _authority_edge(tables, rin=rin, rin_iri=rin_iri)
+    if edge is not None:
+        edges.append(edge)
+        activity = _authority_activity(tables, rin=rin)
+        if activity is not None:
+            activities.append(activity)
+
+    return ProfileFacts(
+        profile_id=artifact.profile_id,
+        artifact_iri=artifact_iri,
+        evidence_field="unified_agenda.abstract",
+        artifact_identifiers=(artifact_iri,),
+        artifact_schemes=("rkaf:urn-persistent",),
+        extra_nodes=tuple(extra_nodes),
+        edges=tuple(edges),
+        activities=tuple(activities),
+        notes=tuple(notes),
+    )
+
+
+def _congress_bill_facts(
+    artifact: SourceArtifact,
+    row: Mapping[str, Any],
+    *,
+    tables: PublishedTables,
+    partner: str,
+) -> ProfileFacts:
+    bill_id = _clean(row.get("bill_id"))
+    artifact_iri = _clean(row.get("url")) or f"urn:spicy-regs:congress-bill:{bill_id}"
+    # #USRegulatoryIdentifierScheme covers cfr / usc / frdoc / regsgov / pl / eo.
+    # A bill that has not been enacted is none of those: it has no public-law
+    # number yet, and there is no us-bill scheme. Recorded as a finding rather
+    # than forced into rkaf:partner-defined regulatory identity, which would
+    # claim a regulatory citation the document does not have.
+    return ProfileFacts(
+        profile_id=artifact.profile_id,
+        artifact_iri=artifact_iri,
+        evidence_field="congress_bills.xml_text",
+        artifact_identifiers=(artifact_iri,),
+        artifact_schemes=("rkaf:urn-persistent",),
+        notes=(
+            "finding: #USRegulatoryIdentifierScheme has no value for a congressional bill "
+            "(cfr/usc/frdoc/regsgov/pl/eo only), so the artifact carries no "
+            "rkaf:hasRegulatoryIdentifier; the bill id survives only as the artifact identifier",
+        ),
+    )
+
+
+_ProfileBuilder = Callable[..., ProfileFacts]
+
+PROFILE_BUILDERS: dict[str, _ProfileBuilder] = {
+    "federal-register-document-v1": _federal_register_facts,
+    "unified-agenda-observation-v1": _unified_agenda_facts,
+    "congress-bill-v1": _congress_bill_facts,
+}
+
+
+# --------------------------------------------------------------------------- #
+# Model judgments.
+# --------------------------------------------------------------------------- #
+
+
+@dataclass(frozen=True)
+class ConceptJudgment:
+    """One accepted concept assignment, with its verified evidence region."""
+
+    concept_id: str
+    concept_iri: str
+    concept_label: str
+    preferred_labels: Mapping[str, str]
+    alternate_labels: Mapping[str, str | tuple[str, ...]]
+    hidden_labels: Mapping[str, str | tuple[str, ...]]
+    definitions: Mapping[str, str | tuple[str, ...]]
+    scheme_iri: str
+    release_iri: str
+    facet: str
+    role: str
+    confidence: float
+    fragment: ProjectedFragment
+    candidate_id: str
+    evidence_text: str
+    alignment_method: str
+    candidate_channels: tuple[str, ...]
+    candidate_rank: int | None
+    candidate_score: float | None
+    candidate_score_state: str
+    indexed_representation_version: str
+    mapping_paths: tuple[Mapping[str, str], ...]
+    selected_channel: str
+    selected_mapping_path: Mapping[str, str] | None
+
+
+@dataclass(frozen=True)
+class ModelLayer:
+    """What the model was asked, what it said, and what survived checking."""
+
+    model_id: str
+    instructions_sha256: str
+    schema_sha256: str
+    input_context_sha256: str
+    run_directory: str
+    receipt_sha256: str
+    selector_version: str
+    vocabulary_sha256: str
+    vocabulary_default_language: str
+    vocabulary_nodes: tuple[Mapping[str, Any], ...]
+    vocabulary_concepts: Mapping[str, "VocabularyConcept"]
+    candidate_concept_count: int
+    judgments: tuple[ConceptJudgment, ...]
+    rejections: tuple[Mapping[str, Any], ...]
+    call_count: int
+    candidate_selection_receipt: Mapping[str, Any] | None = None
+    concept_domain_mapping_sha256: str | None = None
+    candidate_selection_sha256: str = ""
+    candidate_selection_ledger: tuple[Mapping[str, Any], ...] = ()
+    segment_count: int = 0
+    segments_projected: int = 0
+    temperature: float = 0.0
+
+
+@dataclass(frozen=True)
+class VocabularyConcept:
+    """One production concept resolved through normalized authored records."""
+
+    concept_iri: str
+    scheme_iri: str
+    release_iri: str
+    facet: str
+    preferred_labels: Mapping[str, str]
+    alternate_labels: Mapping[str, str | tuple[str, ...]]
+    hidden_labels: Mapping[str, str | tuple[str, ...]]
+    definitions: Mapping[str, str | tuple[str, ...]]
+
+    def display_label(self, default_language: str) -> str:
+        preferred = self.preferred_labels
+        if default_language in preferred:
+            return preferred[default_language]
+        return preferred[sorted(preferred)[0]]
+
+
+@dataclass(frozen=True)
+class NormalizedVocabulary:
+    """Validated normalized tables plus their authoritative JSON-LD manifest."""
+
+    selector_rows: tuple[dict[str, Any], ...]
+    lookup_rows: tuple[dict[str, Any], ...]
+    concepts: Mapping[str, VocabularyConcept]
+    candidate_mappings: tuple[Any, ...]
+    mapping_artifact_sha256_by_id: Mapping[str, str]
+    manifest_nodes: tuple[Mapping[str, Any], ...]
+    content_sha256: str
+    mapping_sha256: str | None
+    default_language: str
+
+
+ASSIGNMENT_ROLE_IRIS: dict[str, str] = {
+    "primary": "rkaf:assignmentPrimary",
+    "substantive": "rkaf:assignmentSubstantive",
+    "mention": "rkaf:assignmentMention",
+    "contextual": "rkaf:assignmentContextual",
+}
+ASSIGNMENT_ROLE_ABSOLUTE_IRIS: dict[str, str] = {
+    name: value.replace(
+        "rkaf:",
+        "https://rulespec.org/ns/v1#",
+    )
+    for name, value in ASSIGNMENT_ROLE_IRIS.items()
+}
+
+
+def verify_candidate_rows(
+    artifact: SourceArtifact,
+    rows: Sequence[Mapping[str, Any]],
+    *,
+    artifact_iri: str,
+    evidence_field: str,
+    vocabulary_concepts: Mapping[str, VocabularyConcept] | None = None,
+    allowed_assignment_role_iris: Sequence[str] | None = None,
+) -> tuple[list[ConceptJudgment], list[dict[str, Any]]]:
+    """Re-verify accepted tag candidates and turn survivors into judgments.
+
+    The tag task already grounded these quotes once. This pass exists because
+    the projection makes a stronger claim than the tag table does: it mints a
+    carrier-local URN whose digest a stranger will recompute. So the offsets are
+    re-sliced against the stored field here, and anything that fails becomes a
+    rejection row rather than a fragment.
+    """
+    judgments: list[ConceptJudgment] = []
+    rejections: list[dict[str, Any]] = []
+    for row in rows:
+        concept_id = _clean(row.get("concept_id"))
+        base = {
+            "candidate_id": _clean(row.get("candidate_id")),
+            "concept_id": concept_id or None,
+            "role": _clean(row.get("role")),
+            "source_field": _clean(row.get("source_field")),
+            "evidence_text": row.get("evidence_text"),
+        }
+        if not concept_id:
+            # The tag task admits a novel concept the model proposes. A novel
+            # concept has no normalized vocabulary row, and this projection never mints
+            # identity, so it is refused here rather than registered.
+            rejections.append(
+                {
+                    **base,
+                    "reason": "model_proposed_concept_not_in_normalized_vocabulary",
+                }
+            )
+            continue
+        if _clean(row.get("source_field")) != evidence_field:
+            rejections.append({**base, "reason": "evidence_outside_projected_text_state"})
+            continue
+        if _clean(row.get("evidence_grade")) != SOURCE_EXACT_EVIDENCE_GRADE:
+            rejections.append({**base, "reason": "evidence_not_source_exact"})
+            continue
+        role = ASSIGNMENT_ROLE_IRIS.get(_clean(row.get("role")))
+        if role is None:
+            rejections.append({**base, "reason": "unknown_assignment_role"})
+            continue
+        absolute_role = ASSIGNMENT_ROLE_ABSOLUTE_IRIS[_clean(row.get("role"))]
+        if allowed_assignment_role_iris is not None and absolute_role not in allowed_assignment_role_iris:
+            rejections.append(
+                {
+                    **base,
+                    "reason": "assignment_role_not_selected",
+                }
+            )
+            continue
+        start, end = int(row.get("source_start_char") or 0), int(row.get("source_end_char") or 0)
+        try:
+            fragment = verify_fragment(
+                artifact,
+                key=f"assignment-{_clean(row.get('candidate_id'))}",
+                source_field=evidence_field,
+                start=start,
+                end=end,
+                artifact_iri=artifact_iri,
+                expected_text=str(row.get("evidence_text") or ""),
+            )
+        except OffsetVerificationError as error:
+            rejections.append({**base, "reason": "offset_verification_failed", "detail": str(error)})
+            continue
+        vocabulary_concept = vocabulary_concepts.get(concept_id) if vocabulary_concepts is not None else None
+        if vocabulary_concepts is not None and vocabulary_concept is None:
+            rejections.append(
+                {
+                    **base,
+                    "reason": "normalized_vocabulary_concept_not_resolved",
+                }
+            )
+            continue
+        if vocabulary_concept is None:
+            # Compatibility for callers that use this verification helper in
+            # isolation. The production model path always supplies normalized
+            # vocabulary metadata and never enters this branch.
+            facet = _clean(row.get("facet")) or _clean(row.get("scheme"))
+            concept_iri = concept_id
+            scheme_iri = f"urn:spicy-regs:unresolved-scheme:{facet}"
+            release_iri = "urn:spicy-regs:unresolved-release"
+            label = _clean(row.get("concept_label"))
+            preferred_labels: Mapping[str, str] = {"und": label}
+            definitions: Mapping[str, str | tuple[str, ...]] = (
+                {"und": _clean(row.get("definition"))} if _clean(row.get("definition")) else {}
+            )
+            alternate_labels: Mapping[str, str | tuple[str, ...]] = {}
+            hidden_labels: Mapping[str, str | tuple[str, ...]] = {}
+        else:
+            facet = vocabulary_concept.facet
+            concept_iri = vocabulary_concept.concept_iri
+            scheme_iri = vocabulary_concept.scheme_iri
+            release_iri = vocabulary_concept.release_iri
+            label = vocabulary_concept.display_label("en")
+            preferred_labels = vocabulary_concept.preferred_labels
+            alternate_labels = vocabulary_concept.alternate_labels
+            hidden_labels = vocabulary_concept.hidden_labels
+            definitions = vocabulary_concept.definitions
+        raw_channels = row.get("candidate_channels")
+        candidate_channels = (
+            tuple(
+                _clean(value)
+                for value in raw_channels
+                if _clean(value)
+            )
+            if isinstance(raw_channels, Sequence)
+            and not isinstance(raw_channels, (str, bytes))
+            else ()
+        )
+        raw_paths = row.get("mapping_paths")
+        mapping_paths = (
+            tuple(
+                {
+                    str(key): str(value)
+                    for key, value in path.items()
+                }
+                for path in raw_paths
+                if isinstance(path, Mapping)
+            )
+            if isinstance(raw_paths, Sequence)
+            and not isinstance(raw_paths, (str, bytes))
+            else ()
+        )
+        raw_rank = row.get("candidate_rank")
+        candidate_rank = (
+            int(raw_rank)
+            if isinstance(raw_rank, int)
+            and not isinstance(raw_rank, bool)
+            and raw_rank > 0
+            else None
+        )
+        raw_score = row.get("candidate_score")
+        candidate_score = (
+            float(raw_score)
+            if isinstance(raw_score, (int, float))
+            and not isinstance(raw_score, bool)
+            else None
+        )
+        raw_selected_path = row.get("selected_mapping_path")
+        selected_mapping_path = (
+            {
+                str(key): str(value)
+                for key, value in raw_selected_path.items()
+            }
+            if isinstance(raw_selected_path, Mapping)
+            else None
+        )
+        judgments.append(
+            ConceptJudgment(
+                concept_id=concept_id,
+                concept_iri=concept_iri,
+                concept_label=label,
+                preferred_labels=preferred_labels,
+                alternate_labels=alternate_labels,
+                hidden_labels=hidden_labels,
+                definitions=definitions,
+                scheme_iri=scheme_iri,
+                release_iri=release_iri,
+                facet=facet,
+                role=role,
+                confidence=float(row.get("confidence") or 0.0),
+                fragment=fragment,
+                candidate_id=_clean(row.get("candidate_id")),
+                evidence_text=str(row.get("evidence_text") or ""),
+                alignment_method=_clean(row.get("evidence_alignment_method")),
+                candidate_channels=candidate_channels,
+                candidate_rank=candidate_rank,
+                candidate_score=candidate_score,
+                candidate_score_state=(
+                    _clean(row.get("candidate_score_state"))
+                    or "notRecorded"
+                ),
+                indexed_representation_version=_clean(
+                    row.get("indexed_representation_version")
+                ),
+                mapping_paths=mapping_paths,
+                selected_channel=_clean(
+                    row.get("selected_channel")
+                ),
+                selected_mapping_path=selected_mapping_path,
+            )
+        )
+    return judgments, rejections
+
+
+# --------------------------------------------------------------------------- #
+# Assembly.
+# --------------------------------------------------------------------------- #
+
+
+@dataclass
+class ProjectionResult:
+    """The emitted JSON-LD document plus the record of how it was produced."""
+
+    document: dict[str, Any]
+    run_record: dict[str, Any]
+    transcript: list[str]
+
+    @property
+    def node_count(self) -> int:
+        return len(self.document.get("@graph", []))
+
+
+@dataclass(frozen=True)
+class ProjectionSettings:
+    """Everything the assembler needs that is not the document itself."""
+
+    corpus_dir: Path
+    tables_dir: Path
+    rulespec_version: str
+    rulespec_constraint_digest: str
+    rulespec_source_revision: str | None = None
+    partner: str = "urn:rkaf:partner:spicy-regs"
+    scope: str = "document-rkaf-projection"
+    context_ref: str = "./rkaf-context.jsonld"
+    asserted_at: str | None = None
+    attestor_id: str = ""
+    migration_vocabulary_directory: Path | None = None
+    migration_vocabulary_manifest_path: Path | None = None
+    vocabulary_default_language: str = "en"
+    prompt_concept_limit: int = 12
+    max_segments: int = 0
+    """Cap on the segments sent to the model; ``0`` means every segment. A cap
+    bounds provider spend on a long document, and it changes what the emitted
+    document can claim, so both the cap and the segment count are recorded."""
+    extra_notes: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not _RULESPEC_VERSION_PATTERN.fullmatch(self.rulespec_version):
+            raise ProjectionError("rulespec_version must be an exact semantic version")
+        if not _CONSTRAINT_DIGEST_PATTERN.fullmatch(self.rulespec_constraint_digest):
+            raise ProjectionError("rulespec_constraint_digest must be sha256:<64 lowercase hex>")
+        if self.rulespec_source_revision is not None and not _RULESPEC_REVISION_PATTERN.fullmatch(
+            self.rulespec_source_revision
+        ):
+            raise ProjectionError(
+                "rulespec_source_revision must be a 40-character Git revision or None for a local candidate"
+            )
+
+
+def load_artifact(
+    profile_id: str,
+    subject_id: str,
+    *,
+    corpus_dir: Path,
+) -> tuple[SourceArtifact, dict[str, Any]]:
+    """Resolve one corpus row into a :class:`SourceArtifact` and its raw row.
+
+    Records come from :func:`~spicy_regs.docpipeline.source.iter_source_records`,
+    so the profile's own reader is used — including the ``documents`` profile's
+    join against ``federal_register`` — and identity, digests, regions and
+    offsets all come from
+    :func:`~spicy_regs.docpipeline.source.build_source_artifact`. This function
+    only finds the record and hands it over.
+    """
+    from spicy_regs.docpipeline.source import iter_source_records
+
+    table = _source_table_for_profile(profile_id)
+    profile = profile_for_table(table)
+    if not (Path(corpus_dir) / f"{table}.parquet").is_file():
+        raise ProjectionError(f"corpus {corpus_dir} has no {table}.parquet")
+    # A profile may key on more than one column (unified_agenda is rin +
+    # agenda_edition, and its subject_id is the canonical JSON of both). Accept
+    # either that JSON form or a bare first-column value, and refuse an
+    # ambiguous match rather than silently taking a row.
+    try:
+        parsed = json.loads(subject_id)
+    except (TypeError, ValueError):
+        parsed = None
+    if isinstance(parsed, Mapping):
+        selectors = {str(key): str(value) for key, value in parsed.items()}
+    else:
+        selectors = {profile.id_columns[0]: subject_id}
+
+    matches = [
+        record
+        for record in iter_source_records(Path(corpus_dir), active_source_tables={table})
+        if all(_clean(record.row.get(column)) == _clean(value) for column, value in selectors.items())
+    ]
+    if not matches:
+        raise ProjectionError(f"{table} has no row for {selectors} in {corpus_dir}")
+    if len(matches) > 1:
+        raise ProjectionError(
+            f"{table} has {len(matches)} rows for {selectors}; name every id column "
+            f"({list(profile.id_columns)}) as a JSON subject id"
+        )
+    record = matches[0]
+    outcome = build_source_artifact(record)
+    if outcome.artifact is None:
+        raise ProjectionError(f"{profile_id}/{subject_id} did not build a source artifact: {outcome.reason}")
+    return outcome.artifact, dict(record.row)
+
+
+def _source_table_for_profile(profile_id: str) -> str:
+    from spicy_regs.docpipeline.source import SOURCE_PROFILES
+
+    for profile in SOURCE_PROFILES:
+        if profile.profile_id == profile_id:
+            return profile.source_table
+    raise ProjectionError(f"unknown profile {profile_id!r}")
+
+
+def build_profile_facts(
+    artifact: SourceArtifact,
+    row: Mapping[str, Any],
+    *,
+    tables: PublishedTables,
+    partner: str,
+) -> ProfileFacts:
+    builder = PROFILE_BUILDERS.get(artifact.profile_id)
+    if builder is None:
+        raise ProjectionError(
+            f"no RKAF profile projection for {artifact.profile_id!r}; known profiles: {sorted(PROFILE_BUILDERS)}"
+        )
+    return builder(artifact, row, tables=tables, partner=partner)
+
+
+def _selector_node(fragment: ProjectedFragment) -> dict[str, Any]:
+    return {
+        "@id": fragment.selector_iri,
+        "@type": _SELECTOR_KIND,
+        "oa:start": fragment.start,
+        "oa:end": fragment.end,
+        "rkaf:coordinateSystem": _COORDINATE_SYSTEM,
+    }
+
+
+def _fragment_node(fragment: ProjectedFragment, *, artifact_iri: str, artifact_digest: str) -> dict[str, Any]:
+    return {
+        "@id": fragment.urn,
+        "@type": "rkaf:SourceFragment",
+        "oa:hasSource": artifact_iri,
+        "oa:hasSelector": fragment.selector_iri,
+        "rkaf:selectorKind": [_SELECTOR_KIND],
+        "rkaf:fragmentIdentityScheme": _EVIDENCE_SCHEME,
+        "rkaf:fragmentContentDigest": f"sha256:{fragment.text_sha256}",
+        "rkaf:sourceArtifactDigest": f"sha256:{artifact_digest}",
+    }
+
+
+def _activity_node(spec: ExtractionActivitySpec, *, partner: str) -> dict[str, Any]:
+    contract, input_digest = request_contract_digest(spec)
+    node: dict[str, Any] = {
+        "@id": f"{partner}:activity:{spec.key}",
+        "@type": "rkaf:ExtractionActivity",
+        "rkaf:extractionMethod": spec.method,
+        "rkaf:extractionRun": f"{partner}:run:{spec.run_id}" if spec.run_id else f"{partner}:run:unknown",
+        "rkaf:extractedBy": f"{partner}:actor:{spec.key}",
+        "rkaf:extractorVersion": spec.version,
+        "rkaf:inputDigest": [f"sha256:{input_digest}"],
+    }
+    if spec.method in REQUEST_CONTRACT_DIGEST_REQUIRED_FOR:
+        node["rkaf:requestContractDigest"] = f"sha256:{contract}"
+    if spec.model_ref:
+        node["rkaf:extractionModelRef"] = spec.model_ref
+    if spec.prompt_ref:
+        node["rkaf:extractionPromptRef"] = spec.prompt_ref
+    return node
+
+
+def assemble(
+    artifact: SourceArtifact,
+    facts: ProfileFacts,
+    *,
+    settings: ProjectionSettings,
+    model_layer: ModelLayer | None = None,
+) -> ProjectionResult:
+    """Turn verified facts and verified judgments into the RKAF document."""
+    partner = settings.partner
+    context = RunContext.resolve(asserted_at=settings.asserted_at, prefix="rkaf-projection")
+    artifact_iri = facts.artifact_iri
+    evidence_field = facts.evidence_field
+    if evidence_field not in artifact.raw_fields:
+        raise ProjectionError(
+            f"{facts.profile_id}: the projected evidence field {evidence_field!r} is absent from this artifact "
+            f"(available: {sorted(artifact.raw_fields)})"
+        )
+    artifact_digest = artifact.field_sha256[evidence_field]
+    transcript: list[str] = [
+        "== Source text state ==",
+        f"profile          : {facts.profile_id}",
+        f"subject_id       : {artifact.subject_id}",
+        f"artifact_id      : {artifact.artifact_id}",
+        f"version digest   : {artifact.content_sha256}  (source.py _content_digest; NOT hasContentDigest)",
+        f"projected field  : {evidence_field}",
+        f"length           : {len(artifact.raw_fields[evidence_field])} Unicode code points",
+        f"sha256(UTF-8)    : {artifact_digest}",
+        "",
+        "== SourceFragment offset verification "
+        "(unicode code points, half-open [start,end), re-sliced from the stored field) ==",
+    ]
+
+    graph: list[dict[str, Any]] = []
+    fragments: dict[str, ProjectedFragment] = {}
+    provenance_records: set[str] = set()
+
+    def note_fragment(fragment: ProjectedFragment) -> None:
+        if fragment.urn in fragments:
+            return
+        fragments[fragment.urn] = fragment
+        transcript.extend(
+            [
+                f"  {fragment.key} [{fragment.start},{fragment.end})",
+                f"     slice: {json.dumps(fragment.text[:160], ensure_ascii=False)}",
+                f"     sha256(region): {fragment.text_sha256}",
+                f"     urn: {fragment.urn}",
+            ]
+        )
+
+    # ------------------------------------------------------------- Artifact
+    artifact_node: dict[str, Any] = {
+        "@id": artifact_iri,
+        "@type": "rkaf:Artifact",
+        "rkaf:hasArtifactIdentifier": list(facts.artifact_identifiers),
+        "rkaf:artifactIdentifierScheme": list(facts.artifact_schemes),
+        "rkaf:hasContentDigest": f"sha256:{artifact_digest}",
+    }
+    if facts.regulatory_identifier and facts.regulatory_scheme:
+        artifact_node["rkaf:hasRegulatoryIdentifier"] = facts.regulatory_identifier
+        artifact_node["rkaf:regulatoryIdentifierScheme"] = facts.regulatory_scheme
+    if EMIT_PROFILE_EDGE_PROJECTIONS and facts.published_in_proceeding:
+        artifact_node["rkaf:publishedInProceeding"] = list(facts.published_in_proceeding)
+    # Not gated on EMIT_PROFILE_EDGE_PROJECTIONS: this edge projects no
+    # assertion, it is the source-native fact itself (rulemaking §5.3), so
+    # turning the assertion projections off must not delete it.
+    if EMIT_DOCUMENT_DOCKET_EDGE and facts.published_in_docket:
+        artifact_node[DOCUMENT_DOCKET_PREDICATE] = list(facts.published_in_docket)
+    graph.append(artifact_node)
+    graph.extend(dict(node) for node in facts.extra_nodes)
+
+    # ------------------------------------------ deterministic relationships
+    activities: dict[str, ExtractionActivitySpec] = {spec.key: spec for spec in facts.activities}
+    edge_records: list[dict[str, Any]] = []
+    for edge in facts.edges:
+        assertion_iri = (
+            f"{partner}:assertion:{stable_id('assertion', edge.subject, edge.predicate, edge.object, length=16)}"
+        )
+        record_iri = f"{partner}:record:{edge.table}:{edge.record_key}"
+        provenance_records.add(record_iri)
+        assertion: dict[str, Any] = {
+            "@id": assertion_iri,
+            "@type": "rkaf:RelationshipAssertion",
+            "rkaf:assertsSubject": edge.subject,
+            "rkaf:assertsPredicate": edge.predicate,
+            "rkaf:assertsObject": edge.object,
+            "rkaf:assertionPolarity": "rkaf:affirmed",
+            "rkaf:assertionOrigin": ASSERTION_ORIGIN_DETERMINISTIC,
+            "rkaf:epistemicBasis": "rkaf:deterministicDerivation",
+            "rkaf:assertedAt": edge.asserted_at or context.asserted_at,
+            "rkaf:usageEligibility": DETERMINISTIC_USAGE_ELIGIBILITY,
+            "prov:wasDerivedFrom": [record_iri],
+        }
+        # Since G3 landed, rkaf:deterministicExtraction REQUIRES
+        # rkaf:hasExtractionProvenance on every compiled target: a claim of
+        # mechanical reproducibility that names no run is not checkable. An edge
+        # whose activity is missing is a projection bug, not a weaker assertion,
+        # so it aborts rather than emitting a non-conforming node.
+        if edge.activity_key not in activities:
+            raise ProjectionError(
+                f"edge {edge.key!r} asserts {ASSERTION_ORIGIN_DETERMINISTIC} but names no extraction "
+                f"activity {edge.activity_key!r}; the contract requires rkaf:hasExtractionProvenance "
+                f"for that origin (known activities: {sorted(activities)})"
+            )
+        assertion["rkaf:hasExtractionProvenance"] = f"{partner}:activity:{edge.activity_key}"
+        grounded = ground_literal(
+            artifact,
+            key=f"edge-{edge.key}",
+            source_field=evidence_field,
+            artifact_iri=artifact_iri,
+            surface_forms=edge.surface_forms,
+        )
+        record = {
+            "key": edge.key,
+            "subject": edge.subject,
+            "predicate": edge.predicate,
+            "object": edge.object,
+            "table": edge.table,
+            "assertion": assertion_iri,
+            "grounded": grounded is not None,
+        }
+        if grounded is not None:
+            note_fragment(grounded)
+            record["evidence"] = grounded.urn
+            graph.append(
+                {
+                    "@id": f"{partner}:binding:{edge.key}",
+                    "@type": "rkaf:EvidenceBinding",
+                    "rkaf:bindsAssertion": assertion_iri,
+                    "rkaf:bindsSourceFragment": [grounded.urn],
+                    "rkaf:evidenceRole": "rkaf:textualEvidence",
+                    "rkaf:evidentiaryFunction": "rkaf:supports",
+                }
+            )
+            if edge.claimant_identity:
+                claimant_iri = f"{partner}:claimant:{edge.key}"
+                assertion["rkaf:hasSourceClaimant"] = claimant_iri
+                graph.append(
+                    {
+                        "@id": claimant_iri,
+                        "@type": "rkaf:SourceClaimant",
+                        "rkaf:claimsAssertion": assertion_iri,
+                        "rkaf:claimantAttribution": "rkaf:claimantIsDocumentIssuer",
+                        "rkaf:claimantIdentity": edge.claimant_identity,
+                        "rkaf:attributedInFragment": [grounded.urn],
+                    }
+                )
+        else:
+            record["reason"] = "no unique verbatim restatement of this citation in the projected field"
+            graph.append(
+                {
+                    "@id": f"{partner}:binding:{edge.key}",
+                    "@type": "rkaf:EvidenceBinding",
+                    "rkaf:bindsAssertion": assertion_iri,
+                    "rkaf:noEvidenceReason": "rkaf:inferred-from-warrant-class",
+                }
+            )
+        edge_records.append(record)
+        graph.append(assertion)
+
+    # -------------------------------------------------- concept assignments
+    judgment_records: list[dict[str, Any]] = []
+    assignment_iris: list[str] = []
+    if model_layer is not None and model_layer.judgments:
+        lineage_iri = f"{partner}:lineage:{settings.scope}"
+        graph.extend(dict(node) for node in model_layer.vocabulary_nodes)
+        graph.append(
+            {
+                "@id": lineage_iri,
+                "@type": "rkaf:AILineage",
+                "rkaf:modelId": model_layer.model_id,
+                "rkaf:modelVersion": model_layer.model_id,
+                "rkaf:promptTemplateRef": f"{partner}:prompt:concept-tags-v1:{model_layer.instructions_sha256[:16]}",
+                # The pinned arms are reasoning-effort models with no sampling
+                # temperature to report; #AILineage requires the field anyway.
+                "rkaf:temperature": model_layer.temperature,
+                "rkaf:inputContextHash": f"sha256:{model_layer.input_context_sha256}",
+            }
+        )
+        graph.append(
+            _activity_node(
+                ExtractionActivitySpec(
+                    key="concept-tags",
+                    method="rkaf:modelExtraction",
+                    run_id=model_layer.run_directory,
+                    actor_id=f"{partner}:actor:concept-tags",
+                    version="concept_tags_v1",
+                    instructions=f"docpipeline concept_tags_v1 @ sha256:{model_layer.instructions_sha256}",
+                    input_row={
+                        "instructions_sha256": model_layer.instructions_sha256,
+                        "schema_sha256": model_layer.schema_sha256,
+                        "input_context_sha256": model_layer.input_context_sha256,
+                        "selector_version": model_layer.selector_version,
+                        "vocabulary_sha256": model_layer.vocabulary_sha256,
+                        "vocabulary_default_language": (model_layer.vocabulary_default_language),
+                        "candidate_selection_sha256": (
+                            model_layer.candidate_selection_sha256
+                        ),
+                        **(
+                            {
+                                "concept_domain_mapping_sha256": (
+                                    model_layer.concept_domain_mapping_sha256
+                                )
+                            }
+                            if model_layer.concept_domain_mapping_sha256
+                            is not None
+                            else {}
+                        ),
+                    },
+                    model_ref=f"{partner}:model:{model_layer.model_id}",
+                    prompt_ref=f"{partner}:prompt:concept-tags-v1:{model_layer.instructions_sha256[:16]}",
+                ),
+                partner=partner,
+            )
+        )
+        for judgment in model_layer.judgments:
+            note_fragment(judgment.fragment)
+            assignment_iri = f"{partner}:assignment:{judgment.candidate_id}"
+            assignment_iris.append(assignment_iri)
+            record_iri = (
+                f"{partner}:record:normalized-vocabulary:"
+                f"{stable_id(judgment.concept_iri, judgment.release_iri, length=20)}"
+            )
+            provenance_records.add(record_iri)
+            graph.append(
+                {
+                    "@id": assignment_iri,
+                    "@type": "rkaf:ConceptAssignment",
+                    "rkaf:assertsSubject": artifact_iri,
+                    "rkaf:assertsPredicate": judgment.role,
+                    "rkaf:assertsObject": judgment.concept_iri,
+                    "rkaf:assertionPolarity": "rkaf:affirmed",
+                    "rkaf:assignedConceptRelease": judgment.release_iri,
+                    "rkaf:assertionOrigin": ASSERTION_ORIGIN_MODEL,
+                    "rkaf:epistemicBasis": "rkaf:statisticalInference",
+                    "rkaf:hasAILineage": lineage_iri,
+                    "rkaf:hasExtractionProvenance": f"{partner}:activity:concept-tags",
+                    "rkaf:assertedAt": context.asserted_at,
+                    "rkaf:usageEligibility": MODEL_USAGE_ELIGIBILITY,
+                    "prov:wasDerivedFrom": [record_iri],
+                }
+            )
+            graph.append(
+                {
+                    "@id": f"{partner}:binding:assignment:{judgment.candidate_id}",
+                    "@type": "rkaf:EvidenceBinding",
+                    "rkaf:bindsAssertion": assignment_iri,
+                    "rkaf:bindsSourceFragment": [judgment.fragment.urn],
+                    "rkaf:evidenceRole": "rkaf:textualEvidence",
+                    "rkaf:evidentiaryFunction": "rkaf:supports",
+                }
+            )
+            judgment_records.append(
+                {
+                    "candidate_id": judgment.candidate_id,
+                    "assignment": assignment_iri,
+                    "concept_id": judgment.concept_id,
+                    "concept_iri": judgment.concept_iri,
+                    "concept_label": judgment.concept_label,
+                    "scheme_iri": judgment.scheme_iri,
+                    "release_iri": judgment.release_iri,
+                    "role": judgment.role,
+                    "evidence_urn": judgment.fragment.urn,
+                    "evidence_text": judgment.evidence_text,
+                    "alignment_method": judgment.alignment_method,
+                    "candidate_channels": list(
+                        judgment.candidate_channels
+                    ),
+                    "candidate_rank": judgment.candidate_rank,
+                    "candidate_score": judgment.candidate_score,
+                    "candidate_score_state": (
+                        judgment.candidate_score_state
+                    ),
+                    "indexed_representation_version": (
+                        judgment.indexed_representation_version
+                    ),
+                    "mapping_paths": [
+                        dict(path) for path in judgment.mapping_paths
+                    ],
+                    "selected_channel": judgment.selected_channel,
+                    "selected_mapping_path": (
+                        dict(judgment.selected_mapping_path)
+                        if judgment.selected_mapping_path is not None
+                        else None
+                    ),
+                    "verified": True,
+                }
+            )
+
+    # ------------------------------------------------- selectors + fragments
+    for fragment in fragments.values():
+        graph.append(_selector_node(fragment))
+        graph.append(_fragment_node(fragment, artifact_iri=artifact_iri, artifact_digest=artifact_digest))
+
+    # ---------------------------------------------------------- activities
+    for spec in activities.values():
+        graph.append(_activity_node(spec, partner=partner))
+
+    # ---------------------------------------------------- provenance records
+    # L3 enforces `sh:class prov:Entity` on every prov:wasDerivedFrom value
+    # (compiled/shacl/core/{assertion,concept-assignment,relationship-assertion}.ttl),
+    # so each cited table row is materialized as a typed node. Finding G1.
+    for record_iri in sorted(provenance_records):
+        graph.append({"@id": record_iri, "@type": "prov:Entity"})
+
+    # --------------------------------------------------------- attestation
+    attestation_record: dict[str, Any] | None = None
+    if model_layer is not None and assignment_iris:
+        scope_iri = f"{partner}:scope:{settings.scope}"
+        attestor = settings.attestor_id or f"{partner}:model:{model_layer.model_id}"
+        rationale = (
+            f"Produced by {model_layer.model_id} through the concept_tags_v1 structured-output contract "
+            f"(instructions sha256:{model_layer.instructions_sha256[:16]}…, schema sha256:{model_layer.schema_sha256[:16]}…). "
+            f"Every assignment's evidence quote was re-sliced from the stored {evidence_field} state "
+            f"(sha256:{artifact_digest}) and its SHA-256 matched the carrier-local URN digest; "
+            f"{len(model_layer.rejections)} judgment(s) were refused and are recorded with reasons. "
+            "This attestation records production and requests review; it is not approval."
+        )
+        attestation_record = attestation_row(
+            attestor_id=attestor,
+            attestor_kind=ATTESTOR_KIND_AI_MODEL,
+            targets=list(assignment_iris),
+            decision=MODEL_ATTESTATION_DECISION,
+            attestation_scope=scope_iri,
+            context=context,
+            rationale=rationale,
+        )
+        graph.append(
+            {
+                "@id": f"{partner}:attestation:{attestation_record['attestation_id']}",
+                "@type": "rkaf:Attestation",
+                "rkaf:attestor": attestation_record["attestor_id"],
+                "rkaf:attestorKind": attestation_record["attestor_kind"],
+                "rkaf:targets": json.loads(attestation_record["target_ids_json"]),
+                "rkaf:decision": attestation_record["decision"],
+                "rkaf:attestationScope": attestation_record["attestation_scope"],
+                "rkaf:attestedAt": attestation_record["attested_at"],
+                "rkaf:rationale": attestation_record["rationale"],
+            }
+        )
+
+    document = {"@context": settings.context_ref, "@graph": graph}
+    candidate_selection = (
+        model_layer.candidate_selection_receipt
+        if model_layer is not None
+        else None
+    )
+    run_record = {
+        "schema_version": PROJECTION_SCHEMA_VERSION,
+        "generated_at": context.asserted_at,
+        "run_id": context.run_id,
+        "inputs": {
+            "profile_id": facts.profile_id,
+            "subject_id": artifact.subject_id,
+            "corpus_dir": str(settings.corpus_dir),
+            "tables_dir": str(settings.tables_dir),
+        },
+        "artifact": {
+            "artifact_id": artifact.artifact_id,
+            "version_digest": f"sha256:{artifact.content_sha256}",
+            "artifact_iri": artifact_iri,
+            "projected_evidence_field": evidence_field,
+            "content_digest": f"sha256:{artifact_digest}",
+            "available_fields": sorted(artifact.raw_fields),
+        },
+        "contract_flags": {
+            "rulespec_version": settings.rulespec_version,
+            "rulespec_source_revision": settings.rulespec_source_revision,
+            "rulespec_constraint_digest": (settings.rulespec_constraint_digest),
+            "rulespec_pin_state": (
+                "callerDeclaredRevision" if settings.rulespec_source_revision is not None else "localCandidate"
+            ),
+            "assertion_origin_deterministic": ASSERTION_ORIGIN_DETERMINISTIC,
+            "request_contract_digest_required_for": sorted(REQUEST_CONTRACT_DIGEST_REQUIRED_FOR),
+            "emit_document_docket_edge": EMIT_DOCUMENT_DOCKET_EDGE,
+            "document_docket_predicate": DOCUMENT_DOCKET_PREDICATE,
+            "emit_profile_edge_projections": EMIT_PROFILE_EDGE_PROJECTIONS,
+            "model_attestation_decision": MODEL_ATTESTATION_DECISION,
+        },
+        "candidate_selection": {
+            "state": (
+                "configured"
+                if candidate_selection is not None
+                else CANDIDATE_SELECTION_STATE
+            ),
+            "mode": CANDIDATE_OUTPUT_MODE,
+            "receipt": candidate_selection,
+            "accepted_output_authorized": False,
+            "usage_ceiling": (
+                "diagnosticCandidateOnly"
+                if candidate_selection is not None
+                else MODEL_USAGE_ELIGIBILITY
+            ),
+        },
+        "deterministic": {
+            "fragments": [
+                {
+                    "key": fragment.key,
+                    "source_field": fragment.source_field,
+                    "start": fragment.start,
+                    "end": fragment.end,
+                    "sha256": fragment.text_sha256,
+                    "urn": fragment.urn,
+                }
+                for fragment in fragments.values()
+            ],
+            "edges": edge_records,
+            "activities": sorted(activities),
+        },
+        "model": None,
+        "judgments": {"accepted": judgment_records, "rejected": []},
+        "attestation": attestation_record,
+        "notes": (
+            list(facts.notes)
+            + list(settings.extra_notes)
+            + (
+                [
+                    "Rulespec source_revision is null; this run names a local "
+                    "candidate and cannot support an immutable conformance claim."
+                ]
+                if settings.rulespec_source_revision is None
+                else []
+            )
+            + (
+                [
+                    "The selected vocabulary asset, exact reference release, "
+                    "facet, assignment role, route, and local lookup index are "
+                    "recorded as diagnostic candidate inputs. They grant no "
+                    "accepted-output or deployment authority."
+                ]
+                if candidate_selection is not None
+                else [
+                    "No published candidate source was selected. Model results "
+                    "are diagnostic review-queue candidates only and cannot "
+                    "enter accepted output."
+                ]
+            )
+        ),
+        "offset_verification": transcript,
+        "node_count": len(graph),
+    }
+    if model_layer is not None:
+        run_record["model"] = {
+            "model_id": model_layer.model_id,
+            "instructions_sha256": model_layer.instructions_sha256,
+            "schema_sha256": model_layer.schema_sha256,
+            "input_context_sha256": model_layer.input_context_sha256,
+            "extraction_run_directory": model_layer.run_directory,
+            "extraction_receipt_sha256": model_layer.receipt_sha256,
+            "candidate_selector_version": model_layer.selector_version,
+            "candidate_vocabulary_sha256": model_layer.vocabulary_sha256,
+            "candidate_vocabulary_default_language": (model_layer.vocabulary_default_language),
+            "candidate_concept_count": model_layer.candidate_concept_count,
+            "candidate_selection_sha256": (
+                model_layer.candidate_selection_sha256
+            ),
+            "candidate_selection_ledger": [
+                dict(record)
+                for record in model_layer.candidate_selection_ledger
+            ],
+            "provider_call_count": model_layer.call_count,
+            "segment_count": model_layer.segment_count,
+            "segments_projected": model_layer.segments_projected,
+        }
+        if model_layer.concept_domain_mapping_sha256 is not None:
+            run_record["model"]["concept_domain_mapping_sha256"] = (
+                model_layer.concept_domain_mapping_sha256
+            )
+        if model_layer.segments_projected < model_layer.segment_count:
+            run_record["notes"].append(
+                f"only {model_layer.segments_projected} of {model_layer.segment_count} segments were sent "
+                "to the model (--max-segments); the concept assignments cover that prefix, not the document"
+            )
+        run_record["judgments"]["rejected"] = [dict(row) for row in model_layer.rejections]
+    transcript.append("")
+    transcript.append(f"assembled {len(graph)} graph nodes")
+    return ProjectionResult(document=document, run_record=run_record, transcript=transcript)
+
+
+# --------------------------------------------------------------------------- #
+# The model layer: one real docpipeline extraction run, projected.
+# --------------------------------------------------------------------------- #
+
+
+_SKOS_TEXT_PROPERTIES = (
+    "skos:prefLabel",
+    "skos:altLabel",
+    "skos:hiddenLabel",
+    "skos:definition",
+    "skos:example",
+    "skos:note",
+    "skos:scopeNote",
+    "skos:changeNote",
+    "skos:editorialNote",
+    "skos:historyNote",
+)
+_RELATION_PROPERTY = {
+    "http://www.w3.org/2004/02/skos/core#broader": "skos:broader",
+    "http://www.w3.org/2004/02/skos/core#narrower": "skos:narrower",
+    "http://www.w3.org/2004/02/skos/core#related": "skos:related",
+}
+
+
+def _language_tag(value: object, *, label: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise ProjectionError(f"{label} is required")
+    tag = value.strip()
+    if tag == "@none":
+        raise ProjectionError(f"{label} must name a language")
+    return tag
+
+
+def _language_map(
+    value: object,
+    *,
+    default_language: str,
+    label: str,
+    one_per_language: bool,
+) -> dict[str, str | list[str]]:
+    """Materialize authored text as a JSON-LD language map.
+
+    A scalar is legal only because the caller declared ``default_language``;
+    the emitted value always carries that language explicitly. Existing maps
+    preserve script subtags such as ``zh-Hant``.
+    """
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            raise ProjectionError(f"{label} must not be empty")
+        return {default_language: text}
+    if not isinstance(value, Mapping) or not value:
+        raise ProjectionError(f"{label} must be a nonempty language map")
+    result: dict[str, str | list[str]] = {}
+    for raw_language, raw_text in value.items():
+        language = _language_tag(raw_language, label=f"{label} language")
+        values = list(raw_text) if isinstance(raw_text, (list, tuple)) else [raw_text]
+        clean = [str(item).strip() for item in values if str(item).strip()]
+        if not clean:
+            raise ProjectionError(f"{label}[{language}] must not be empty")
+        if one_per_language and len(clean) != 1:
+            raise ProjectionError(f"{label}[{language}] must contain exactly one string")
+        result[language] = clean[0] if len(clean) == 1 else clean
+    return result
+
+
+def _one_or_many_map(
+    language_values: Mapping[str, Sequence[str]],
+) -> dict[str, str | tuple[str, ...]]:
+    return {
+        language: values[0] if len(values) == 1 else tuple(values)
+        for language, values in sorted(language_values.items())
+    }
+
+
+def _first_language_value(
+    values: Mapping[str, str | tuple[str, ...]],
+    *,
+    default_language: str,
+) -> str:
+    language = default_language if default_language in values else sorted(values)[0]
+    value = values[language]
+    return value if isinstance(value, str) else value[0]
+
+
+def _facet_name(facet_iri: object) -> str:
+    iri = str(facet_iri or "").strip()
+    if not iri:
+        raise ProjectionError("the vocabulary scheme must declare rkaf:schemeFacet")
+    name = re.split(r"[:/#]", iri)[-1]
+    if not name:
+        raise ProjectionError(f"cannot derive a facet name from {iri!r}")
+    return name
+
+
+def _rows_digest(
+    paths: Sequence[Path],
+    manifest: Mapping[str, Any],
+    *,
+    default_language: str,
+) -> str:
+    inventory = {
+        "files": {path.name: hashlib.sha256(path.read_bytes()).hexdigest() for path in sorted(paths)},
+        "manifest": manifest,
+        "defaultLanguage": default_language,
+    }
+    return hashlib.sha256(canonical_json(inventory).encode("utf-8")).hexdigest()
+
+
+def candidate_release_vocabulary(
+    source: "CandidateReleaseSource",
+    *,
+    default_language: str,
+    concept_domain_bridges: Sequence["CandidateConceptBridge"] = (),
+) -> NormalizedVocabulary:
+    """Build a diagnostic lookup view from a product-local release reader."""
+
+    if not isinstance(source, CandidateReleaseSource):
+        raise ProjectionError(
+            "candidate lookup requires a CandidateReleaseSource"
+        )
+    if source.usage_ceiling not in {
+        "diagnosticCandidateOnly",
+        "candidateUseOnly",  # Explicit managed-release compatibility path.
+    }:
+        raise ProjectionError(
+            "candidate source must retain a diagnostic-only usage ceiling"
+        )
+    default_language = _language_tag(
+        default_language,
+        label="vocabulary_default_language",
+    )
+    selection = source.candidate_selection
+    configured_facet = selection.facet_iri
+    selector_facets = {
+        "urn:ref:facet:general-subject": "subject",
+    }
+    try:
+        selector_facet = selector_facets[configured_facet]
+    except KeyError as error:
+        raise ProjectionError(
+            f"SpicyRegs has no lookup adapter for configured facet {configured_facet!r}"
+        ) from error
+
+    property_roles = {
+        "http://www.w3.org/2004/02/skos/core#prefLabel": "preferred",
+        "http://www.w3.org/2004/02/skos/core#altLabel": "alternate",
+        "http://www.w3.org/2004/02/skos/core#hiddenLabel": "hidden",
+        "http://www.w3.org/2004/02/skos/core#definition": "definition",
+    }
+    expressions_by_member: dict[
+        str,
+        dict[str, dict[str, list[str]]],
+    ] = {}
+    for expression in source.iter_expressions():
+        role = property_roles.get(expression.semantic_property_iri)
+        language = expression.language_tag
+        if role is None or language is None:
+            continue
+        language_values = (
+            expressions_by_member.setdefault(
+                expression.member_iri,
+                {},
+            )
+            .setdefault(role, {})
+            .setdefault(language, [])
+        )
+        if expression.original_literal not in language_values:
+            language_values.append(expression.original_literal)
+
+    concepts: dict[str, VocabularyConcept] = {}
+    selector_rows: list[dict[str, Any]] = []
+    concept_nodes: list[Mapping[str, Any]] = []
+    for member_iri, roles in sorted(expressions_by_member.items()):
+        member = source.lookup_member(member_iri)
+        if member is None:
+            raise ProjectionError(
+                f"candidate expression member {member_iri!r} is not in the exact release"
+            )
+        preferred_values = roles.get("preferred", {})
+        if not preferred_values:
+            continue
+        if any(len(values) != 1 for values in preferred_values.values()):
+            raise ProjectionError(
+                f"{member_iri}: candidate source must carry one preferred label per language"
+            )
+        preferred = {language: values[0] for language, values in sorted(preferred_values.items())}
+        alternate = _one_or_many_map(roles.get("alternate", {}))
+        hidden = _one_or_many_map(roles.get("hidden", {}))
+        definitions = _one_or_many_map(roles.get("definition", {}))
+        concept = VocabularyConcept(
+            concept_iri=member.member_iri,
+            scheme_iri=member.scheme_iri,
+            release_iri=member.release_iri,
+            facet=selector_facet,
+            preferred_labels=preferred,
+            alternate_labels=alternate,
+            hidden_labels=hidden,
+            definitions=definitions,
+        )
+        concepts[member_iri] = concept
+        selector_rows.append(
+            {
+                "concept_id": member.member_iri,
+                "facet": selector_facet,
+                "source_vocabulary": member.scheme_iri,
+                "scheme": selector_facet,
+                "pref_label": concept.display_label(default_language),
+                "alt_labels_json": canonical_json(
+                    [
+                        value
+                        for language in sorted(alternate)
+                        for value in (
+                            [alternate[language]] if isinstance(alternate[language], str) else list(alternate[language])
+                        )
+                    ]
+                ),
+                "definition": (
+                    _first_language_value(
+                        definitions,
+                        default_language=default_language,
+                    )
+                    if definitions
+                    else ""
+                ),
+                "status": "active",
+                "external_ids_json": "[]",
+            }
+        )
+        concept_nodes.append(member.record)
+
+    if not concepts:
+        raise ProjectionError(
+            "candidate source has no language-tagged preferred-label candidates"
+        )
+    lookup_rows = list(selector_rows)
+    candidate_mappings: list[Any] = []
+    mapping_artifact_sha256_by_id: dict[str, str] = {}
+    bridge_pins: list[dict[str, Any]] = []
+    lookup_ids = {str(row["concept_id"]) for row in lookup_rows}
+    for bridge in concept_domain_bridges:
+        if not isinstance(bridge, CandidateConceptBridge):
+            raise ProjectionError(
+                "concept-domain lookup requires a CandidateConceptBridge"
+            )
+        if not bridge.development_only:
+            raise ProjectionError(
+                "the experimental concept-domain bridge must remain "
+                "developmentOnly"
+            )
+        for mapping in bridge.mappings:
+            if (
+                mapping.target_release_iri != bridge.target_release_iri
+                or mapping.target_member_iri not in concepts
+            ):
+                raise ProjectionError(
+                    f"mapping {mapping.mapping_iri!r} does not target the "
+                    "selected candidate release"
+                )
+        for anchor in bridge.source_concepts:
+            if anchor.concept_iri in lookup_ids:
+                raise ProjectionError(
+                    f"concept-domain lookup repeats {anchor.concept_iri!r}"
+                )
+            preferred = dict(anchor.preferred_labels)
+            alternate = dict(anchor.alternate_labels)
+            definitions = dict(anchor.definitions)
+            lookup_rows.append(
+                {
+                    "concept_id": anchor.concept_iri,
+                    "facet": selector_facet,
+                    "source_vocabulary": bridge.source_scheme_iri,
+                    "scheme": selector_facet,
+                    "pref_label": (
+                        preferred[default_language]
+                        if default_language in preferred
+                        else preferred[sorted(preferred)[0]]
+                    ),
+                    "alt_labels_json": canonical_json(
+                        [
+                            value
+                            for language in sorted(alternate)
+                            for value in alternate[language]
+                        ]
+                    ),
+                    "definition": (
+                        definitions[
+                            (
+                                default_language
+                                if default_language in definitions
+                                else sorted(definitions)[0]
+                            )
+                        ][0]
+                        if definitions
+                        else ""
+                    ),
+                    "status": "active",
+                    "external_ids_json": canonical_json(
+                        [
+                            {
+                                "scheme": "sourceConcept",
+                                "value": anchor.concept_iri,
+                                "iri": anchor.evidence_url,
+                            }
+                        ]
+                    ),
+                }
+            )
+            lookup_ids.add(anchor.concept_iri)
+        for mapping in bridge.mappings:
+            if mapping.mapping_iri in mapping_artifact_sha256_by_id:
+                raise ProjectionError(
+                    f"concept-domain mapping {mapping.mapping_iri!r} "
+                    "appears in more than one bridge"
+                )
+            candidate_mappings.append(mapping)
+            mapping_artifact_sha256_by_id[mapping.mapping_iri] = (
+                bridge.artifact_sha256
+            )
+        bridge_pins.append(
+            {
+                "artifactSha256": bridge.artifact_sha256,
+                "sourceRelease": bridge.source_release_iri,
+                "targetRelease": bridge.target_release_iri,
+            }
+        )
+
+    mapping_identity = [
+        {
+            "mapping": mapping.mapping_iri,
+            "relation": mapping.relation_iri,
+            "source": mapping.source_member_iri,
+            "target": mapping.target_member_iri,
+            "sourceRelease": mapping.source_release_iri,
+            "targetRelease": mapping.target_release_iri,
+        }
+        for mapping in sorted(
+            candidate_mappings,
+            key=lambda item: item.mapping_iri,
+        )
+    ]
+    mapping_sha256 = (
+        hashlib.sha256(
+            canonical_json(mapping_identity).encode("utf-8")
+        ).hexdigest()
+        if mapping_identity
+        else None
+    )
+    content_identity = {
+        "sourceAsset": dict(selection.source_asset),
+        "referenceResourceRelease": dict(
+            selection.reference_resource_release
+        ),
+        "lookupIndexManifest": dict(source.lookup_index_manifest),
+        "defaultLanguage": default_language,
+        "facet": configured_facet,
+        "assignmentRole": selection.assignment_role_iri,
+        "resourceRoute": selection.resource_route,
+        "selectorFacet": selector_facet,
+        "conceptDomainBridges": bridge_pins,
+        "mappingSha256": mapping_sha256,
+    }
+    return NormalizedVocabulary(
+        selector_rows=tuple(selector_rows),
+        lookup_rows=tuple(lookup_rows),
+        concepts=concepts,
+        candidate_mappings=tuple(candidate_mappings),
+        mapping_artifact_sha256_by_id=(
+            mapping_artifact_sha256_by_id
+        ),
+        manifest_nodes=tuple(concept_nodes),
+        content_sha256=hashlib.sha256(canonical_json(content_identity).encode("utf-8")).hexdigest(),
+        mapping_sha256=mapping_sha256,
+        default_language=default_language,
+    )
+
+
+# Pre-atlas name retained for explicit compatibility callers.
+managed_release_candidate_vocabulary = candidate_release_vocabulary
+
+
+def load_migration_normalized_vocabulary_directory(
+    directory: Path,
+    *,
+    manifest_path: Path | None = None,
+    default_language: str = "en",
+) -> NormalizedVocabulary:
+    """Load an explicitly migration-only normalized vocabulary directory.
+
+    ``concept_labels``, ``concept_relations``, and
+    ``concept_event_participants`` are the executable storage interfaces. The
+    JSON-LD manifest supplies the governed scheme, concept, exact release, and
+    distribution records that an RKAF assignment must cite. Flat
+    ``registry.parquet`` rows are accepted only by the migration adapter in
+    :mod:`refspec`; this path never reads them.
+    """
+    from refspec import (
+        ConceptEventParticipant,
+        ConceptLabel,
+        ConceptRelation,
+        ReferenceRuntimeError,
+        ReferenceRuntimeStore,
+        assert_managed_vocabulary_row_integrity,
+    )
+
+    directory = Path(directory)
+    resolved_manifest = Path(manifest_path) if manifest_path is not None else directory / "vocabulary-manifest.jsonld"
+    required_paths = (
+        directory / "concept_labels.parquet",
+        directory / "concept_relations.parquet",
+        directory / "concept_event_participants.parquet",
+        resolved_manifest,
+    )
+    missing = [str(path) for path in required_paths if not path.is_file()]
+    if missing:
+        raise ProjectionError("normalized vocabulary input is incomplete; missing " + ", ".join(missing))
+    default_language = _language_tag(
+        default_language,
+        label="vocabulary_default_language",
+    )
+    manifest = json.loads(resolved_manifest.read_text(encoding="utf-8"))
+    raw_graph = manifest.get("@graph") if isinstance(manifest, Mapping) else None
+    if not isinstance(raw_graph, list) or not raw_graph:
+        raise ProjectionError(f"{resolved_manifest} must contain a nonempty @graph")
+    graph = [dict(node) for node in raw_graph if isinstance(node, Mapping)]
+    if len(graph) != len(raw_graph):
+        raise ProjectionError("every vocabulary manifest graph item must be an object")
+    by_id: dict[str, dict[str, Any]] = {}
+    for node in graph:
+        node_id = str(node.get("@id") or "").strip()
+        if not node_id:
+            raise ProjectionError("every vocabulary manifest node needs @id")
+        if node_id in by_id:
+            raise ProjectionError(f"vocabulary manifest repeats node {node_id!r}")
+        if "rkaf:conceptStatus" in node:
+            raise ProjectionError(
+                f"{node_id}: rkaf:conceptStatus is retired; use release membership, lifecycle events, and attestations"
+            )
+        by_id[node_id] = node
+        for property_name in _SKOS_TEXT_PROPERTIES:
+            if property_name not in node:
+                continue
+            node[property_name] = _language_map(
+                node[property_name],
+                default_language=default_language,
+                label=f"{node_id}.{property_name}",
+                one_per_language=(property_name == "skos:prefLabel"),
+            )
+
+    rows = ReferenceRuntimeStore(directory).read_vocabulary_rows()
+    try:
+        labels = tuple(
+            ConceptLabel(
+                label_id=_clean(row.get("label_id")),
+                concept_iri=_clean(row.get("concept_iri")),
+                scheme_iri=_clean(row.get("scheme_iri")),
+                release_iri=_clean(row.get("release_iri")),
+                import_snapshot_id=_clean(row.get("import_snapshot_id")),
+                distribution_artifact_id=_clean(row.get("distribution_artifact_id")),
+                source_property_iri=_clean(row.get("source_property_iri")),
+                label_role=_clean(row.get("label_role")),
+                original_literal=_clean(row.get("original_literal")),
+                language_tag=_clean(row.get("language_tag")),
+                status=_clean(row.get("status")),
+                expression_id=_clean(row.get("expression_id")) or None,
+                migration_only=row.get("migration_only") is True,
+            )
+            for row in rows["concept_labels"]
+        )
+        relations = tuple(
+            ConceptRelation(
+                relation_id=_clean(row.get("relation_id")),
+                release_iri=_clean(row.get("release_iri")),
+                import_snapshot_id=_clean(row.get("import_snapshot_id")),
+                distribution_artifact_id=_clean(row.get("distribution_artifact_id")),
+                subject_concept_iri=_clean(row.get("subject_concept_iri")),
+                subject_scheme_iri=_clean(row.get("subject_scheme_iri")),
+                predicate_iri=_clean(row.get("predicate_iri")),
+                object_concept_iri=_clean(row.get("object_concept_iri")),
+                object_scheme_iri=_clean(row.get("object_scheme_iri")),
+                source_property_or_path=_clean(row.get("source_property_or_path")),
+                migration_only=row.get("migration_only") is True,
+            )
+            for row in rows["concept_relations"]
+        )
+        participants = tuple(
+            ConceptEventParticipant(
+                event_id=_clean(row.get("event_id")),
+                operation=_clean(row.get("operation")),
+                participant_role=_clean(row.get("participant_role")),
+                concept_iri=_clean(row.get("concept_iri")),
+                concept_type_iri=_clean(row.get("concept_type_iri")),
+                release_iri=_clean(row.get("release_iri")),
+                complete_membership=(row.get("complete_membership") is True),
+                ordinal=int(row.get("ordinal") or 0),
+                migration_only=row.get("migration_only") is True,
+            )
+            for row in rows["concept_event_participants"]
+        )
+    except (TypeError, ReferenceRuntimeError) as error:
+        raise ProjectionError(f"normalized vocabulary row is invalid: {error}") from error
+
+    releases = {
+        node_id: node for node_id, node in by_id.items() if node.get("@type") == "rkaf:ReferenceResourceRelease"
+    }
+    release_membership: dict[str, Mapping[str, Any]] = {}
+    for release_iri, release in releases.items():
+        members = release.get("prov:hadMember")
+        member_list = (
+            list(members) if isinstance(members, (list, tuple)) else ([members] if isinstance(members, str) else [])
+        )
+        release_membership[release_iri] = {
+            "completeMembership": (release.get("rkaf:membershipMode") == "rkaf:completeMembership"),
+            "members": member_list,
+        }
+    try:
+        assert_managed_vocabulary_row_integrity(
+            labels,
+            relations,
+            participants,
+            release_membership=release_membership,
+        )
+    except ReferenceRuntimeError as error:
+        raise ProjectionError(f"normalized vocabulary cannot support diagnostic candidate use: {error}") from error
+
+    labels_by_concept: dict[str, list[Any]] = {}
+    for row in labels:
+        labels_by_concept.setdefault(row.concept_iri, []).append(row)
+    relations_by_subject: dict[str, list[Any]] = {}
+    for row in relations:
+        relations_by_subject.setdefault(row.subject_concept_iri, []).append(row)
+
+    concepts: dict[str, VocabularyConcept] = {}
+    selector_rows: list[dict[str, Any]] = []
+    for concept_iri, authored_labels in sorted(labels_by_concept.items()):
+        concept_node = by_id.get(concept_iri)
+        if concept_node is None or concept_node.get("@type") not in {
+            "rkaf:LocalConcept",
+            "rkaf:RegisteredConcept",
+        }:
+            raise ProjectionError(
+                f"{concept_iri}: normalized labels do not resolve to a "
+                "LocalConcept or RegisteredConcept manifest record"
+            )
+        scheme_values = {row.scheme_iri for row in authored_labels}
+        release_values = {row.release_iri for row in authored_labels}
+        if len(scheme_values) != 1 or len(release_values) != 1:
+            raise ProjectionError(f"{concept_iri}: labels disagree on scheme or release")
+        scheme_iri = next(iter(scheme_values))
+        release_iri = next(iter(release_values))
+        if concept_node.get("skos:inScheme") != scheme_iri:
+            raise ProjectionError(f"{concept_iri}: manifest and concept_labels disagree on scheme")
+        release = releases.get(release_iri)
+        if release is None:
+            raise ProjectionError(f"{concept_iri}: release {release_iri!r} is absent from the manifest")
+        membership = release_membership[release_iri]
+        if membership["completeMembership"] is not True or concept_iri not in membership["members"]:
+            raise ProjectionError(f"{concept_iri}: assigned release must carry exact complete membership")
+        scheme = by_id.get(scheme_iri)
+        if scheme is None or scheme.get("@type") != "rkaf:ConceptScheme":
+            raise ProjectionError(f"{concept_iri}: scheme {scheme_iri!r} is absent from the manifest")
+        facet = _facet_name(scheme.get("rkaf:schemeFacet"))
+
+        role_values: dict[str, dict[str, list[str]]] = {
+            "preferred": {},
+            "alternate": {},
+            "hidden": {},
+        }
+        for row in authored_labels:
+            role_values[row.label_role].setdefault(
+                row.language_tag,
+                [],
+            ).append(row.original_literal)
+        preferred = _one_or_many_map(role_values["preferred"])
+        if not preferred or any(not isinstance(value, str) for value in preferred.values()):
+            raise ProjectionError(f"{concept_iri}: one preferred label per language is required")
+        alternate = _one_or_many_map(role_values["alternate"])
+        hidden = _one_or_many_map(role_values["hidden"])
+        concept_node["skos:prefLabel"] = dict(preferred)
+        if alternate:
+            concept_node["skos:altLabel"] = {
+                key: list(value) if isinstance(value, tuple) else value for key, value in alternate.items()
+            }
+        else:
+            concept_node.pop("skos:altLabel", None)
+        if hidden:
+            concept_node["skos:hiddenLabel"] = {
+                key: list(value) if isinstance(value, tuple) else value for key, value in hidden.items()
+            }
+        else:
+            concept_node.pop("skos:hiddenLabel", None)
+
+        for property_name in ("skos:broader", "skos:narrower", "skos:related"):
+            concept_node.pop(property_name, None)
+        for relation in relations_by_subject.get(concept_iri, []):
+            property_name = _RELATION_PROPERTY[relation.predicate_iri]
+            concept_node.setdefault(property_name, []).append(relation.object_concept_iri)
+
+        definition_raw = concept_node.get("skos:definition", {})
+        definitions = (
+            _one_or_many_map(
+                {
+                    language: (tuple(value) if isinstance(value, list) else (str(value),))
+                    for language, value in definition_raw.items()
+                }
+            )
+            if isinstance(definition_raw, Mapping)
+            else {}
+        )
+        vocabulary_concept = VocabularyConcept(
+            concept_iri=concept_iri,
+            scheme_iri=scheme_iri,
+            release_iri=release_iri,
+            facet=facet,
+            preferred_labels={language: str(value) for language, value in preferred.items()},
+            alternate_labels=alternate,
+            hidden_labels=hidden,
+            definitions=definitions,
+        )
+        concepts[concept_iri] = vocabulary_concept
+        status = "deprecated" if all(row.status == "deprecated" for row in authored_labels) else "active"
+        selector_rows.append(
+            {
+                "concept_id": concept_iri,
+                "facet": facet,
+                "source_vocabulary": scheme_iri,
+                "scheme": facet,
+                "pref_label": vocabulary_concept.display_label(default_language),
+                "alt_labels_json": canonical_json(
+                    [
+                        value
+                        for language in sorted(alternate)
+                        for value in (
+                            [alternate[language]] if isinstance(alternate[language], str) else list(alternate[language])
+                        )
+                    ]
+                ),
+                "definition": (
+                    _first_language_value(
+                        definitions,
+                        default_language=default_language,
+                    )
+                    if definitions
+                    else ""
+                ),
+                "status": status,
+                "external_ids_json": "[]",
+            }
+        )
+
+    if not concepts:
+        raise ProjectionError("normalized vocabulary has no authored concepts")
+    return NormalizedVocabulary(
+        selector_rows=tuple(selector_rows),
+        lookup_rows=tuple(selector_rows),
+        concepts=concepts,
+        candidate_mappings=(),
+        mapping_artifact_sha256_by_id={},
+        manifest_nodes=tuple(graph),
+        content_sha256=_rows_digest(
+            required_paths[:3],
+            manifest,
+            default_language=default_language,
+        ),
+        mapping_sha256=None,
+        default_language=default_language,
+    )
+
+
+def run_migration_model_layer(
+    artifact: SourceArtifact,
+    *,
+    model: Any,
+    migration_vocabulary_directory: Path,
+    migration_vocabulary_manifest_path: Path | None,
+    vocabulary_default_language: str,
+    run_directory: Path,
+    evidence_field: str,
+    artifact_iri: str,
+    prompt_concept_limit: int = 12,
+    max_segments: int = 0,
+    allowed_facets: Sequence[str] = ("subject",),
+) -> ModelLayer:
+    """Run the explicitly migration-only directory consumer."""
+
+    vocabulary = load_migration_normalized_vocabulary_directory(
+        migration_vocabulary_directory,
+        manifest_path=migration_vocabulary_manifest_path,
+        default_language=vocabulary_default_language,
+    )
+    return _run_model_layer_with_vocabulary(
+        artifact,
+        model=model,
+        vocabulary=vocabulary,
+        run_directory=run_directory,
+        evidence_field=evidence_field,
+        artifact_iri=artifact_iri,
+        prompt_concept_limit=prompt_concept_limit,
+        max_segments=max_segments,
+        allowed_facets=allowed_facets,
+    )
+
+
+def run_candidate_release_model_layer(
+    artifact: SourceArtifact,
+    *,
+    model: Any,
+    candidate_source: "CandidateReleaseSource",
+    vocabulary_default_language: str,
+    run_directory: Path,
+    evidence_field: str,
+    artifact_iri: str,
+    prompt_concept_limit: int = 12,
+    max_segments: int = 0,
+    concept_domain_bridges: Sequence["CandidateConceptBridge"] = (),
+) -> ModelLayer:
+    """Run lookup through an exact, diagnostic-only candidate source."""
+
+    if (
+        candidate_source.candidate_selection.source_asset.get("type")
+        == "VocabularyAtlasAsset"
+        and concept_domain_bridges
+    ):
+        raise ProjectionError(
+            "atlas candidate lookup does not consume legacy mapping bridges"
+        )
+
+    vocabulary = candidate_release_vocabulary(
+        candidate_source,
+        default_language=vocabulary_default_language,
+        concept_domain_bridges=concept_domain_bridges,
+    )
+    selector_facets = {str(row["facet"]) for row in vocabulary.selector_rows}
+    if len(selector_facets) != 1:
+        raise ProjectionError(
+            "candidate source must resolve to one Spicy selector facet"
+        )
+    return _run_model_layer_with_vocabulary(
+        artifact,
+        model=model,
+        vocabulary=vocabulary,
+        run_directory=run_directory,
+        evidence_field=evidence_field,
+        artifact_iri=artifact_iri,
+        prompt_concept_limit=prompt_concept_limit,
+        max_segments=max_segments,
+        allowed_facets=tuple(selector_facets),
+        allowed_assignment_role_iris=(
+            candidate_source.candidate_selection.assignment_role_iri,
+        ),
+        candidate_selection_receipt={
+            **candidate_source.candidate_selection.to_dict(),
+            "lookupIndexManifest": dict(
+                candidate_source.lookup_index_manifest
+            ),
+        },
+    )
+
+
+def _run_model_layer_with_vocabulary(
+    artifact: SourceArtifact,
+    *,
+    model: Any,
+    vocabulary: NormalizedVocabulary,
+    run_directory: Path,
+    evidence_field: str,
+    artifact_iri: str,
+    prompt_concept_limit: int = 12,
+    max_segments: int = 0,
+    allowed_facets: Sequence[str] = ("subject",),
+    allowed_assignment_role_iris: Sequence[str] | None = None,
+    candidate_selection_receipt: Mapping[str, Any] | None = None,
+) -> ModelLayer:
+    """Ask the model for concept judgments and verify every one of them.
+
+    The call itself is the existing tag path end to end — the same segmenter,
+    the same candidate selector, the same instructions, the same strict schema,
+    the same grounding, and the same provider custody (``request.json`` and
+    ``response.json`` per call under ``extraction/calls/``). Nothing about the
+    prompt or the schema is redefined here.
+
+    This function has no accepted-output mode. It produces Rulespec
+    ``reviewQueueOnly`` candidates for diagnostic review. The selected
+    vocabulary files and local lookup settings are recorded as inputs; they do
+    not authorize accepted output or deployment.
+    """
+    from spicy_regs.docpipeline.extraction import (
+        extraction_plan_facts,
+        plan_extraction_items,
+        run_extraction,
+    )
+    from spicy_regs.docpipeline.runtime import RunPlan
+    from spicy_regs.docpipeline.segments import SegmentSettings, segment_artifact
+    from spicy_regs.docpipeline.tag_task import TagExtractionTask, tag_unit
+    from spicy_regs.enrichment.connected_concepts import (
+        CONNECTED_INDEXED_REPRESENTATION_VERSION,
+        CONNECTED_SELECTOR_VERSION,
+        select_connected_candidate_concepts,
+    )
+    from spicy_regs.ontology.concepts import (
+        ANCHORED_SELECTOR_VERSION,
+        select_candidate_concepts_anchored_v2,
+    )
+    from spicy_regs.ontology.segmentation import TiktokenCounter
+
+    concepts = list(vocabulary.selector_rows)
+    lookup_concepts = list(vocabulary.lookup_rows)
+    vocabulary_sha256 = vocabulary.content_sha256
+    selector_version = (
+        CONNECTED_SELECTOR_VERSION
+        if vocabulary.candidate_mappings
+        else ANCHORED_SELECTOR_VERSION
+    )
+    counter = TiktokenCounter()
+    settings = SegmentSettings.selected(tokenizer_version=counter.version)
+    segmented = segment_artifact(artifact, settings=settings, counter=counter)
+    segments = [
+        segment
+        for segment in segmented.segments
+        if any(slice_.source_field == evidence_field for slice_ in segment.slices)
+    ]
+    if not segments:
+        raise ProjectionError(f"no processing segment covers the projected evidence field {evidence_field!r}")
+    segment_count = len(segments)
+    if max_segments > 0:
+        segments = segments[:max_segments]
+
+    task = TagExtractionTask()
+    units = []
+    candidate_total = 0
+    candidate_selection_ledger: list[dict[str, Any]] = []
+    candidate_selection_by_key: dict[
+        tuple[str, str],
+        dict[str, Any],
+    ] = {}
+    for segment in segments:
+        text = "\n".join(slice_.text for slice_ in segment.slices)
+        candidates = (
+            select_connected_candidate_concepts(
+                text,
+                lookup_concepts=lookup_concepts,
+                output_concepts=concepts,
+                mappings=vocabulary.candidate_mappings,
+                allowed_facets=tuple(allowed_facets),
+                limit=prompt_concept_limit,
+                profile_id=artifact.profile_id,
+            )
+            if vocabulary.candidate_mappings
+            else select_candidate_concepts_anchored_v2(
+                text,
+                concepts,
+                allowed_facets=tuple(allowed_facets),
+                limit=prompt_concept_limit,
+                profile_id=artifact.profile_id,
+            )
+        )
+        if not candidates:
+            continue
+        for rank, candidate in enumerate(candidates, start=1):
+            concept_id = _clean(candidate.get("concept_id"))
+            concept = vocabulary.concepts.get(concept_id)
+            if concept is None:
+                raise ProjectionError(
+                    f"candidate selector returned an unselected concept "
+                    f"{concept_id!r}"
+                )
+            raw_paths = candidate.get("mapping_paths")
+            mapping_paths: list[dict[str, str]] = []
+            if isinstance(raw_paths, Sequence) and not isinstance(
+                raw_paths,
+                (str, bytes),
+            ):
+                for raw_path in raw_paths:
+                    if not isinstance(raw_path, Mapping):
+                        raise ProjectionError(
+                            "candidate mapping path must be an object"
+                        )
+                    path = {
+                        str(key): str(value)
+                        for key, value in raw_path.items()
+                    }
+                    mapping_id = path.get("mapping_iri", "")
+                    artifact_sha256 = (
+                        vocabulary.mapping_artifact_sha256_by_id.get(
+                            mapping_id
+                        )
+                    )
+                    if not artifact_sha256:
+                        raise ProjectionError(
+                            f"candidate mapping {mapping_id!r} lost its "
+                            "RefSpec bridge artifact"
+                        )
+                    path["bridge_artifact_sha256"] = artifact_sha256
+                    if vocabulary.mapping_sha256 is not None:
+                        path["mapping_set_sha256"] = (
+                            "sha256:" + vocabulary.mapping_sha256
+                        )
+                    mapping_paths.append(path)
+            raw_selected_path = candidate.get(
+                "selected_mapping_path"
+            )
+            selected_mapping_path: dict[str, str] | None = None
+            if isinstance(raw_selected_path, Mapping):
+                selected_mapping_id = _clean(
+                    raw_selected_path.get("mapping_iri")
+                )
+                selected_mapping_path = next(
+                    (
+                        path
+                        for path in mapping_paths
+                        if path.get("mapping_iri")
+                        == selected_mapping_id
+                    ),
+                    None,
+                )
+                if selected_mapping_path is None:
+                    raise ProjectionError(
+                        f"selected mapping {selected_mapping_id!r} "
+                        "is absent from the candidate path set"
+                    )
+            raw_channels = candidate.get("candidate_channels")
+            channels = (
+                [
+                    _clean(value)
+                    for value in raw_channels
+                    if _clean(value)
+                ]
+                if isinstance(raw_channels, Sequence)
+                and not isinstance(raw_channels, (str, bytes))
+                else ["lexical"]
+            )
+            raw_score = candidate.get("candidate_score")
+            score = (
+                float(raw_score)
+                if isinstance(raw_score, (int, float))
+                and not isinstance(raw_score, bool)
+                else None
+            )
+            record = {
+                "segment_id": segment.segment_id,
+                "concept_id": concept_id,
+                "scheme_iri": concept.scheme_iri,
+                "release_iri": concept.release_iri,
+                "candidate_channels": channels,
+                "candidate_rank": rank,
+                "candidate_score": score,
+                "candidate_score_state": (
+                    _clean(candidate.get("candidate_score_state"))
+                    or "notProduced"
+                ),
+                "indexed_representation_version": (
+                    _clean(
+                        candidate.get(
+                            "indexed_representation_version"
+                        )
+                    )
+                    or (
+                        CONNECTED_INDEXED_REPRESENTATION_VERSION
+                        if vocabulary.candidate_mappings
+                        else f"{selector_version}:normalized-labels"
+                    )
+                ),
+                "mapping_paths": mapping_paths,
+                "selected_channel": (
+                    _clean(candidate.get("selected_channel"))
+                    or channels[0]
+                ),
+                "selected_mapping_path": selected_mapping_path,
+            }
+            key = (segment.segment_id, concept_id)
+            if key in candidate_selection_by_key:
+                raise ProjectionError(
+                    f"candidate selector repeated {concept_id!r} in "
+                    f"segment {segment.segment_id!r}"
+                )
+            candidate_selection_by_key[key] = record
+            candidate_selection_ledger.append(record)
+        candidate_total += len(candidates)
+        units.append(tag_unit(artifact, segment, candidates))
+    if not units:
+        raise ProjectionError("the candidate selector offered no concepts for any segment")
+    candidate_selection_sha256 = text_digest(
+        canonical_json(candidate_selection_ledger)
+    )
+
+    items = plan_extraction_items(task, model, units)
+    provider = getattr(model, "run_configuration", None)
+    plan = RunPlan(
+        run_id=Path(run_directory).name,
+        mode="diagnostic",
+        steps=("extract",),
+        source_snapshot={
+            "profile_id": artifact.profile_id,
+            "subject_id": artifact.subject_id,
+            "artifact_id": artifact.artifact_id,
+            "content_sha256": artifact.content_sha256,
+        },
+        segmentation=settings.identity(),
+        vocabulary={
+            "vocabulary_sha256": vocabulary_sha256,
+            "vocabulary_default_language": vocabulary.default_language,
+            "candidate_selector": selector_version,
+            "prompt_concept_limit": prompt_concept_limit,
+            **(
+                {
+                    "concept_domain_mapping_sha256": (
+                        vocabulary.mapping_sha256
+                    )
+                }
+                if vocabulary.mapping_sha256 is not None
+                else {}
+            ),
+        },
+        retrieval={
+            "candidate_selection_sha256": (
+                candidate_selection_sha256
+            ),
+            "candidate_selection_ledger": candidate_selection_ledger,
+        },
+        extraction=extraction_plan_facts(task, units),
+        provider=(
+            dict(provider) if isinstance(provider, Mapping) else {"model_id": str(getattr(model, "model_id", ""))}
+        ),
+        required_work=tuple(item.work_id for item in items),
+    )
+    outcome = run_extraction(plan, Path(run_directory), task=task, model=model, units=units)
+    if not outcome.passed:
+        raise ProjectionError(f"the concept-tag extraction run did not pass: {outcome.outcome.final_state}")
+
+    rows = task.candidate_rows(outcome.candidates)
+    for row in rows:
+        concept_id = _clean(row.get("concept_id"))
+        if not concept_id:
+            continue
+        selection = candidate_selection_by_key.get(
+            (_clean(row.get("segment_id")), concept_id)
+        )
+        if selection is None:
+            raise ProjectionError(
+                f"model candidate {concept_id!r} has no recorded "
+                "selection path"
+            )
+        row.update(
+            {
+                "candidate_channels": list(
+                    selection["candidate_channels"]
+                ),
+                "candidate_rank": selection["candidate_rank"],
+                "candidate_score": selection["candidate_score"],
+                "candidate_score_state": selection[
+                    "candidate_score_state"
+                ],
+                "indexed_representation_version": selection[
+                    "indexed_representation_version"
+                ],
+                "mapping_paths": [
+                    dict(path)
+                    for path in selection["mapping_paths"]
+                ],
+                "selected_channel": selection["selected_channel"],
+                "selected_mapping_path": (
+                    dict(selection["selected_mapping_path"])
+                    if selection["selected_mapping_path"]
+                    is not None
+                    else None
+                ),
+            }
+        )
+    judgments, rejections = verify_candidate_rows(
+        artifact,
+        rows,
+        artifact_iri=artifact_iri,
+        evidence_field=evidence_field,
+        vocabulary_concepts=vocabulary.concepts,
+        allowed_assignment_role_iris=allowed_assignment_role_iris,
+    )
+    for row in task.rejection_rows(outcome.candidates):
+        rejections.append(
+            {
+                "candidate_id": None,
+                "concept_id": _clean(row.get("concept_id")) or None,
+                "role": None,
+                "source_field": None,
+                "evidence_text": None,
+                "reason": _clean(row.get("reason")),
+                "detail": _clean(row.get("item_json"))[:400],
+            }
+        )
+    receipt = outcome.outcome.receipt
+    return ModelLayer(
+        model_id=str(getattr(model, "model_id", "")),
+        instructions_sha256=text_digest(task.instructions),
+        schema_sha256=text_digest(canonical_json(task.build_schema(task.build_payload(units[0].input)))),
+        input_context_sha256=text_digest(canonical_json([dict(unit.input) for unit in units])),
+        run_directory=str(run_directory),
+        receipt_sha256=str(receipt.get("receipt_sha256", "")),
+        selector_version=selector_version,
+        vocabulary_sha256=vocabulary_sha256,
+        vocabulary_default_language=vocabulary.default_language,
+        vocabulary_nodes=vocabulary.manifest_nodes,
+        vocabulary_concepts=vocabulary.concepts,
+        candidate_concept_count=candidate_total,
+        judgments=tuple(judgments),
+        rejections=tuple(rejections),
+        call_count=len(units),
+        candidate_selection_receipt=candidate_selection_receipt,
+        concept_domain_mapping_sha256=vocabulary.mapping_sha256,
+        candidate_selection_sha256=candidate_selection_sha256,
+        candidate_selection_ledger=tuple(
+            candidate_selection_ledger
+        ),
+        segment_count=segment_count,
+        segments_projected=len(segments),
+    )
+
+
+def project_document(
+    profile_id: str,
+    subject_id: str,
+    *,
+    settings: ProjectionSettings,
+    model: Any = None,
+    model_run_directory: Path | None = None,
+    candidate_release_source: CandidateReleaseSource | None = None,
+    concept_domain_bridges: Sequence[CandidateConceptBridge] = (),
+) -> ProjectionResult:
+    """Project one document into RKAF diagnostic output.
+
+    Model judgments never leave ``reviewQueueOnly`` on this path. This
+    function deliberately has no accepted-output option.
+    """
+    artifact, row = load_artifact(profile_id, subject_id, corpus_dir=settings.corpus_dir)
+    tables = PublishedTables(settings.tables_dir)
+    facts = build_profile_facts(artifact, row, tables=tables, partner=settings.partner)
+    model_layer: ModelLayer | None = None
+    if model is not None:
+        if concept_domain_bridges and candidate_release_source is None:
+            raise ProjectionError(
+                "concept_domain_bridges require a legacy managed-release "
+                "candidate source"
+            )
+        if candidate_release_source is not None and settings.migration_vocabulary_directory is not None:
+            raise ProjectionError(
+                "choose either a published candidate source or the "
+                "migration-only vocabulary directory"
+            )
+        if candidate_release_source is None and settings.migration_vocabulary_directory is None:
+            raise ProjectionError(
+                "the model layer needs a published candidate source or "
+                "an explicitly migration-only normalized candidate "
+                "vocabulary directory"
+            )
+        if model_run_directory is None:
+            raise ProjectionError("the model layer needs a run directory for provider custody")
+        if candidate_release_source is not None:
+            model_layer = run_candidate_release_model_layer(
+                artifact,
+                model=model,
+                candidate_source=candidate_release_source,
+                vocabulary_default_language=(settings.vocabulary_default_language),
+                run_directory=model_run_directory,
+                evidence_field=facts.evidence_field,
+                artifact_iri=facts.artifact_iri,
+                prompt_concept_limit=settings.prompt_concept_limit,
+                max_segments=settings.max_segments,
+                concept_domain_bridges=concept_domain_bridges,
+            )
+        else:
+            assert settings.migration_vocabulary_directory is not None
+            model_layer = run_migration_model_layer(
+                artifact,
+                model=model,
+                migration_vocabulary_directory=(settings.migration_vocabulary_directory),
+                migration_vocabulary_manifest_path=(settings.migration_vocabulary_manifest_path),
+                vocabulary_default_language=(settings.vocabulary_default_language),
+                run_directory=model_run_directory,
+                evidence_field=facts.evidence_field,
+                artifact_iri=facts.artifact_iri,
+                prompt_concept_limit=settings.prompt_concept_limit,
+                max_segments=settings.max_segments,
+            )
+    elif candidate_release_source is not None or concept_domain_bridges:
+        raise ProjectionError(
+            "candidate sources and concept_domain_bridges are only "
+            "used by the diagnostic model layer"
+        )
+    return assemble(artifact, facts, settings=settings, model_layer=model_layer)
