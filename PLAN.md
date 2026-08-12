@@ -770,6 +770,22 @@ listed ETag and digested: 88,645 verified, 0 failed. `renditionPreference` is
 `["mirrulations-mirror", "source-file-url", "federal-register"]` and rides
 inside `policySha256`.
 
+Independent review on 2026-08-12 found two fail-open paths in the producer
+tools, not in the sealed release. `68cf325` makes the mirror-index tool refuse
+a failed docket listing, a failed or mismatched fetch receipt, an oversized
+object, or an incomplete seal. It also makes the publisher reject an input
+whose source, role, or digest the universe does not declare. The focused
+release suite passes 68 tests; Ruff and `ty` pass over the changed files.
+
+The defects did not change this candidate. The existing draw contains 88,645
+objects, the receipt file contains one successful receipt for each object and
+no errors or duplicates, every document identifier and byte size agrees, and
+no object exceeds the configured limit. The hardened sealer reproduced the
+index byte for byte at
+`sha256:6793aa2c0d0ce52afffdb63900437e1be6091e85420297451dbf2e4270f231c6`.
+No release was rebuilt or re-issued, so the release, policy, `U`, and `S`
+identities below remain unchanged.
+
 Published to
 `output/source-catalog-release-regulations-gov-2021-2025-multi-source/`,
 `releaseStatus` `candidate`, `buildRunId` `source-catalog-2026-08-12-02`,
@@ -936,7 +952,14 @@ endpoints yield documents, which needs a live, probably key-gated call.
 
 Use the multi-source candidate above as the fixed input for DocSpec's first
 complete `DocumentRelease`. Do not expand or re-issue this universe before
-that path works unless independent verification finds a release defect.
+that path works unless a release defect changes its sealed bytes.
+
+The next implementation belongs in DocSpec: admit the wire-format release by
+digest, translate its 2,556,982,433-byte source-item member with bounded
+memory, and preserve every wire disposition in DocSpec's source-item stream.
+The first real-data gate stops after translation and count reconciliation:
+83,928 active, 120 deleted, and 1,908,295 excluded in DocSpec's three-state
+model. It does not authorize capture of 83,928 renditions.
 
 Three follow-on corpus decisions remain outside the current release:
 
