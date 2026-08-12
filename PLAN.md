@@ -685,3 +685,52 @@ Two smaller ones. No row states a topic, so `sourceObservedTopics` is empty
 across the entire release. And `text_extraction_status` is `null` on every
 row of this catalog snapshot, so the extraction state a downstream capture
 would want is not stated anywhere.
+
+The `file_url` scarcity is not an ETL defect. `schemas/regulations.py`
+derives `file_url` as `fileFormats[0].fileUrl`, so a null one means the
+Regulations.gov record served no `fileFormats` at all. `attachments_json`
+*is* partial, though: it and `file_url` come from the same list, yet 37,857
+rows carry a `file_url` with no `attachments_json` against 12,381 carrying
+both. Those 37,857 predate the column, which is why most renditions in this
+release have a `null` `expectedByteSize` — the size lives in the JSON that
+was never backfilled.
+
+### Where the missing locators actually are
+
+Measured 2026-08-12 against the anonymous Mirrulations S3 mirror, sampling
+in-window documents the published catalog gives no `file_url`, and asking
+only whether the mirror holds an object for them:
+
+```
+                                 sampled   with a mirror rendition
+Rule                                  40      39   (98%)
+Proposed Rule                         40      38   (95%)
+Notice                                40      35   (88%)
+Supporting & Related Material         40       0    (0%)
+Other                                 40       0    (0%)
+control: catalog states a file_url    50      30   (60%)
+```
+
+The rendition is `raw-data/<agency>/<docket>/text-<docket>/documents/<documentId>_content.htm`.
+For Supporting & Related Material and Other the zero is real, not a key-shape
+artifact: paginating six of those dockets end to end returns the document's
+metadata JSON and nothing else. The 60% control says the two sources are
+complementary rather than nested — a mirrored object exists for well under
+every document the catalog does give a URL for.
+
+So the corpus-wide answer is that the mirror holds a rendition for most
+*regulatory* documents and none of the supporting material. Projecting the
+per-type rates onto the in-window population, a universe reading both sources
+would find a locator for roughly 115,000 of the 389,148 in-window rows
+(~30%) against 5,381 today — about twenty-one times as many — and its
+selected set would grow from 5,024 into the high tens of thousands.
+
+Two further notes for whoever takes that on. The listing is per docket, not
+per document: 33,760 distinct in-window dockets carry every Rule, Proposed
+Rule, and Notice, so the sizing is tens of thousands of `list_objects_v2`
+calls rather than hundreds of thousands. And `source_catalog/mirrulations.py`
+already produces exactly these renditions with a *verified* `expectedSha256`,
+because it fetches and digests the bytes rather than trusting a listing — the
+one path in this repository that closes gap 1 and its null-digest half at the
+same time. Which source a second universe declares, and whether it declares
+both, is the owner's call and not this section's.
