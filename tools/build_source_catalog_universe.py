@@ -56,6 +56,27 @@ POLICY_VERSION = "1.0"
 #: the release identity.
 SOURCE_SYSTEM_ID = "https://data.spicy-regs.dev/documents.parquet"
 
+#: The two rendition sources the second universe adds, and the composite the
+#: wire carries for all three.  The mirror is pinned by the digest of the
+#: sealed verified index rather than by the bucket, because the bucket is live
+#: and the index is the immutable statement of what was read from it.
+MIRROR_SOURCE_ID = "s3://mirrulations/raw-data"
+FEDERAL_REGISTER_SOURCE_ID = "https://data.spicy-regs.dev/federal_register.parquet"
+COMPOSITE_SOURCE_ID = (
+    "urn:spicy-regs:source-system:regulations-gov-published-catalog+mirrulations-mirror+federal-register"
+)
+
+MULTI_UNIVERSE_ID = "urn:spicy-regs:source-universe:regulations-gov-published-catalog-2021-2025-multi-source"
+MULTI_CATALOG_ID = "urn:spicy-regs:source-catalog:regulations-gov-published-catalog-multi-source"
+MULTI_POLICY_ID = (
+    "urn:spicy-regs:selection-policy:regulations-gov-published-catalog-2021-2025-stratified-sample-multi-source"
+)
+
+#: Best first.  The mirror leads because it is the only family whose digest is
+#: known before capture; the Federal Register trails because it states an
+#: address and never bytes.
+RENDITION_PREFERENCE: tuple[str, ...] = ("mirrulations-mirror", "source-file-url", "federal-register")
+
 #: Every document type the published catalog carries.  Naming them makes the
 #: universe explicit rather than "whatever the table happens to hold".
 DOCUMENT_TYPES: tuple[str, ...] = (
@@ -95,6 +116,45 @@ def agency_names(agency_codes_path: Path) -> dict[str, str]:
             continue
         names[code] = slug
     return dict(sorted(names.items()))
+
+
+def multi_source_document(
+    *,
+    catalog_digest: str,
+    mirror_digest: str,
+    federal_register_digest: str,
+    names: dict[str, str],
+) -> dict[str, Any]:
+    """The universe that reads all three sources, ranked.
+
+    The wire schema Rulespec owns carries one ``sourceSystem`` object, so the
+    release states a composite identity and this list — the thing the composite
+    version digests — rides inside the policy document where a consumer can
+    recover each pin.
+    """
+
+    from spicy_regs.source_catalog.universe import PinnedSource, composite_source_version
+
+    sources = [
+        PinnedSource(source_system_id=MIRROR_SOURCE_ID, source_system_version=mirror_digest, role="rendition"),
+        PinnedSource(source_system_id=SOURCE_SYSTEM_ID, source_system_version=catalog_digest, role="metadata"),
+        PinnedSource(
+            source_system_id=FEDERAL_REGISTER_SOURCE_ID,
+            source_system_version=federal_register_digest,
+            role="rendition",
+        ),
+    ]
+    document = universe_document(source_system_version=catalog_digest, names=names)
+    document["universeId"] = MULTI_UNIVERSE_ID
+    document["catalogId"] = MULTI_CATALOG_ID
+    document["selectionPolicy"] = {"policyId": MULTI_POLICY_ID, "policyVersion": POLICY_VERSION}
+    document["sourceSystem"] = {
+        "sourceSystemId": COMPOSITE_SOURCE_ID,
+        "sourceSystemVersion": composite_source_version(sources),
+    }
+    document["sourceSystems"] = [source.canonical() for source in sources]
+    document["renditionPreference"] = list(RENDITION_PREFERENCE)
+    return document
 
 
 def universe_document(*, source_system_version: str, names: dict[str, str]) -> dict[str, Any]:
@@ -146,10 +206,22 @@ def main(argv: list[str] | None = None) -> int:
         help="The published documents.parquet the release is produced from; its digest becomes sourceSystemVersion.",
     )
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument("--mirror-index", type=Path, default=None, help="Sealed mirror index; declares the mirror.")
+    parser.add_argument("--federal-register", type=Path, default=None, help="Declares the FR fallback source.")
     args = parser.parse_args(argv)
 
     names = agency_names(args.agency_codes)
-    document = universe_document(source_system_version=file_digest(args.catalog), names=names)
+    if (args.mirror_index is None) != (args.federal_register is None):
+        parser.error("--mirror-index and --federal-register are declared together or not at all")
+    if args.mirror_index is not None and args.federal_register is not None:
+        document = multi_source_document(
+            catalog_digest=file_digest(args.catalog),
+            mirror_digest=file_digest(args.mirror_index),
+            federal_register_digest=file_digest(args.federal_register),
+            names=names,
+        )
+    else:
+        document = universe_document(source_system_version=file_digest(args.catalog), names=names)
 
     # Loading it back proves the file the producer will read is one this
     # repository's own model accepts, before anything is written.

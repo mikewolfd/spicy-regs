@@ -42,6 +42,24 @@ def file_digest(path: Path) -> str:
     return f"sha256:{digest.hexdigest()}"
 
 
+def _federal_register_map(path: Path) -> dict[str, dict[str, Any]]:
+    """``{documentNumber: {pdf_url, html_url}}`` from the published FR table.
+
+    Only the two locator columns and the join key are read; the FR table is
+    123 MB and this producer wants three of its twenty-two columns.
+    """
+
+    import pyarrow.parquet as pq
+
+    table = pq.read_table(path, columns=["document_number", "pdf_url", "html_url"])
+    resolved: dict[str, dict[str, Any]] = {}
+    for row in table.to_pylist():
+        number = row.get("document_number")
+        if isinstance(number, str) and number:
+            resolved[number] = {"html_url": row.get("html_url"), "pdf_url": row.get("pdf_url")}
+    return resolved
+
+
 def _normalized(item: Mapping[str, Any]) -> Mapping[str, Any]:
     value = item.get("normalizedMetadata")
     return value if isinstance(value, Mapping) else {}
@@ -61,6 +79,19 @@ def _agency(item: Mapping[str, Any]) -> str:
     if isinstance(agencies, Sequence) and agencies:
         return str(agencies[0].get("agencyId"))
     return str(_native(item).get("agency_code") or "unstated")
+
+
+def _family(rendition_id: str) -> str:
+    """The rendition family a rendition id belongs to.
+
+    Ids within a family are numbered (`mirrulations-mirror-1`) or role-suffixed
+    (`federal-register-pdf`), so the family is the longest declared prefix.
+    """
+
+    for family in ("mirrulations-mirror", "source-file-url", "source-attachment", "federal-register"):
+        if rendition_id == family or rendition_id.startswith(f"{family}-"):
+            return family
+    return rendition_id
 
 
 def _year(item: Mapping[str, Any]) -> str:
@@ -83,6 +114,8 @@ def composition(items: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     selected_agencies: Counter[str] = Counter()
     universe_agencies: set[str] = set()
     renditions = 0
+    families: Counter[str] = Counter()
+    with_digest = 0
 
     for item in items:
         selection = item.get("selection") or {}
@@ -97,7 +130,13 @@ def composition(items: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
             selected_types[_document_type(item)] += 1
             selected_years[_year(item)] += 1
             selected_agencies[_agency(item)] += 1
-            renditions += len(item.get("candidateRenditions") or ())
+            offered = list(item.get("candidateRenditions") or ())
+            renditions += len(offered)
+            # The preference order means one item carries one family, so the
+            # first rendition names which source actually won it.
+            if offered:
+                families[_family(str(offered[0].get("renditionId")))] += 1
+            with_digest += sum(1 for rendition in offered if rendition.get("expectedSha256"))
 
     return {
         "dispositions": dict(sorted(dispositions.items())),
@@ -110,6 +149,8 @@ def composition(items: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
         "selected": {
             "agencyCount": len(selected_agencies),
             "candidateRenditionCount": renditions,
+            "renditionFamilies": dict(sorted(families.items())),
+            "renditionsWithVerifiedDigest": with_digest,
             "documentTypes": dict(sorted(selected_types.items())),
             "publicationYears": dict(sorted(selected_years.items())),
             "topAgencies": dict(sorted(selected_agencies.items(), key=lambda pair: (-pair[1], pair[0]))[:25]),
@@ -126,23 +167,60 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--build-run-id", default=None)
     parser.add_argument("--published-at", default=None, help="UTC instant; defaults to now, truncated to the second.")
     parser.add_argument("--composition", type=Path, default=None, help="Write the composition report here as JSON.")
+    parser.add_argument("--mirror-index", type=Path, default=None, help="Sealed mirror index the universe pins.")
+    parser.add_argument("--federal-register", type=Path, default=None, help="FR table the universe pins.")
     args = parser.parse_args(argv)
 
     from spicy_regs.source_catalog import SourceCatalogError, build_source_catalog_release, load_universe_spec
-    from spicy_regs.source_catalog.published_catalog import discover_published_catalog
+    from spicy_regs.source_catalog.published_catalog import DEFAULT_RENDITION_PREFERENCE, discover_published_catalog
 
     spec = load_universe_spec(args.spec)
-    observed = file_digest(args.catalog)
-    if observed != spec.source_system_version:
-        raise SourceCatalogError(
-            f"the universe was written for sourceSystemVersion {spec.source_system_version}, but "
-            f"{args.catalog} digests {observed}"
-        )
+    supplied = {
+        "https://data.spicy-regs.dev/documents.parquet": args.catalog,
+        "s3://mirrulations/raw-data": args.mirror_index,
+        "https://data.spicy-regs.dev/federal_register.parquet": args.federal_register,
+    }
+    # Every source the universe declares is checked against the bytes handed
+    # to this run before anything is read.  A release produced from bytes its
+    # policy never described would rest on a digest that does not fit it.
+    declared = spec.sources or ()
+    if not declared:
+        observed = file_digest(args.catalog)
+        if observed != spec.source_system_version:
+            raise SourceCatalogError(
+                f"the universe was written for sourceSystemVersion {spec.source_system_version}, but "
+                f"{args.catalog} digests {observed}"
+            )
+    for source in declared:
+        path = supplied.get(source.source_system_id)
+        if path is None:
+            raise SourceCatalogError(f"the universe declares {source.source_system_id} and this run supplies no file")
+        observed = file_digest(path)
+        if observed != source.source_system_version:
+            raise SourceCatalogError(
+                f"{source.source_system_id} is pinned at {source.source_system_version}, but {path} digests {observed}"
+            )
+
+    mirror_index = None
+    if args.mirror_index is not None:
+        # Run as a script, so this file's own directory is already on the path.
+        from build_mirrulations_mirror_index import read_mirror_index
+
+        mirror_index = read_mirror_index(args.mirror_index)
+        print(f"mirror index: {len(mirror_index):,} documents", flush=True)
+    federal_register = _federal_register_map(args.federal_register) if args.federal_register is not None else None
+    if federal_register is not None:
+        print(f"federal register: {len(federal_register):,} documents", flush=True)
 
     published_at = args.published_at or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     bundle = build_source_catalog_release(
         spec,
-        discover_published_catalog(args.catalog),
+        discover_published_catalog(
+            args.catalog,
+            mirror_index=mirror_index,
+            federal_register=federal_register,
+            preference=spec.rendition_preference or DEFAULT_RENDITION_PREFERENCE,
+        ),
         published_at=published_at,
         release_status=args.release_status,
         build_run_id=args.build_run_id,
