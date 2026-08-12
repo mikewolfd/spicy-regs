@@ -21,6 +21,7 @@ import pytest
 
 from spicy_regs.source_catalog import (
     NormalizationPolicy,
+    PinnedSource,
     PublicationWindow,
     SampleCandidate,
     SamplePolicy,
@@ -28,6 +29,7 @@ from spicy_regs.source_catalog import (
     UniverseScope,
     UniverseSpec,
     build_source_catalog_release,
+    composite_source_version,
     load_universe_spec,
     select_source_items,
     verify_bundle_directory,
@@ -36,6 +38,7 @@ from spicy_regs.source_catalog.published_catalog import (
     CATALOG_COLUMNS,
     discover_published_catalog,
     discovered_item,
+    resolve_renditions,
 )
 
 PUBLISHED_AT = "2026-08-12T00:00:00Z"
@@ -414,6 +417,148 @@ def test_the_tracked_universe_produces_a_bundle_that_verifies(tmp_path: Path) ->
     assert content["counts"]["discoveredCount"] == len(rows)
     assert content["coverage"]["unaccountedCount"] == 0
     assert content["selectionPolicy"]["policySha256"] == spec.policy_sha256()
+
+
+# ─── three sources, ranked ─────────────────────────────────────────────
+
+MIRROR_INDEX: dict[str, list[dict[str, Any]]] = {
+    "EPA-2023-0001-0001": [
+        {
+            "key": "raw-data/EPA/EPA-2023-0001/text-EPA-2023-0001/documents/EPA-2023-0001-0001_content.htm",
+            "sha256": "sha256:" + "b" * 64,
+            "size": 4096,
+        }
+    ]
+}
+
+FEDERAL_REGISTER: dict[str, dict[str, Any]] = {
+    "2023-00042": {
+        "html_url": "https://www.federalregister.gov/documents/2023/04/05/2023-00042/a-rule",
+        "pdf_url": "https://www.govinfo.gov/content/pkg/FR-2023-04-05/pdf/2023-00042.pdf",
+    }
+}
+
+
+def _pinned(**overrides: Any) -> UniverseSpec:
+    sources = (
+        PinnedSource(
+            source_system_id="s3://mirrulations/raw-data", source_system_version="sha256:" + "1" * 64, role="rendition"
+        ),
+        PinnedSource(
+            source_system_id="https://data.spicy-regs.dev/documents.parquet",
+            source_system_version="sha256:" + "2" * 64,
+            role="metadata",
+        ),
+    )
+    defaults: dict[str, Any] = {
+        "sources": sources,
+        "source_system_version": composite_source_version(sources),
+        "rendition_preference": ("mirrulations-mirror", "source-file-url", "federal-register"),
+    }
+    return _spec(**(defaults | overrides))
+
+
+def test_the_mirror_outranks_a_locator_whose_bytes_nobody_has_read() -> None:
+    item = discovered_item(_row(fr_doc_num="2023-00042"), mirror_index=MIRROR_INDEX, federal_register=FEDERAL_REGISTER)
+
+    # One family wins outright; the release names the rendition to capture.
+    assert [rendition.rendition_id for rendition in item.renditions] == ["mirrulations-mirror"]
+    rendition = item.renditions[0]
+    assert rendition.expected_sha256 == "sha256:" + "b" * 64
+    assert rendition.expected_byte_size == 4096
+    assert rendition.media_type == "text/html"
+    assert rendition.locator == (
+        "https://mirrulations.s3.amazonaws.com/raw-data/EPA/EPA-2023-0001/"
+        "text-EPA-2023-0001/documents/EPA-2023-0001-0001_content.htm"
+    )
+
+
+def test_the_catalog_locator_is_taken_only_where_the_mirror_holds_nothing() -> None:
+    item = discovered_item(
+        _row(document_id="EPA-2023-0009-0001", fr_doc_num="2023-00042"),
+        mirror_index=MIRROR_INDEX,
+        federal_register=FEDERAL_REGISTER,
+    )
+
+    assert [rendition.rendition_id for rendition in item.renditions] == ["source-file-url"]
+    # The catalog states sizes and never hashes.
+    assert item.renditions[0].expected_sha256 is None
+
+
+def test_the_federal_register_is_reached_only_when_the_first_two_families_miss() -> None:
+    item = discovered_item(
+        _row(document_id="EPA-2023-0009-0001", file_url=None, fr_doc_num="2023-00042"),
+        mirror_index=MIRROR_INDEX,
+        federal_register=FEDERAL_REGISTER,
+    )
+
+    assert [rendition.rendition_id for rendition in item.renditions] == [
+        "federal-register-pdf",
+        "federal-register-html",
+    ]
+    # An address, never bytes: no digest and no declared size.
+    assert all(rendition.expected_sha256 is None for rendition in item.renditions)
+    assert all(rendition.expected_byte_size is None for rendition in item.renditions)
+
+
+def test_an_item_stating_no_federal_register_number_reaches_no_federal_register_document() -> None:
+    """The join is on the document's own number, never through its docket."""
+
+    item = discovered_item(
+        _row(document_id="EPA-2023-0009-0001", file_url=None, fr_doc_num=None),
+        mirror_index=MIRROR_INDEX,
+        federal_register=FEDERAL_REGISTER,
+    )
+
+    assert item.renditions == ()
+
+
+def test_a_family_the_universe_does_not_rank_is_never_offered() -> None:
+    renditions = resolve_renditions(
+        _row(fr_doc_num="2023-00042"),
+        "EPA-2023-0001-0001",
+        mirror_index=MIRROR_INDEX,
+        federal_register=FEDERAL_REGISTER,
+        preference=("source-file-url",),
+    )
+
+    assert [rendition.rendition_id for rendition in renditions] == ["source-file-url"]
+
+
+def test_a_composite_source_version_must_derive_from_the_sources_it_names() -> None:
+    spec = _pinned()
+    assert spec.source_system_version == composite_source_version(spec.sources)
+
+    with pytest.raises(SourceCatalogError, match="declared sourceSystems derive"):
+        _spec(sources=spec.sources, source_system_version="sha256:" + "9" * 64)
+
+
+def test_declaring_sources_and_a_preference_moves_the_policy_digest() -> None:
+    assert _pinned().policy_sha256() != _spec().policy_sha256()
+    assert _pinned().policy_sha256() != _pinned(rendition_preference=("source-file-url",)).policy_sha256()
+    # Each pin is recoverable from the digested document, not merely asserted.
+    document = _pinned().policy_document()
+    assert [source["sourceSystemId"] for source in document["sourceSystems"]] == [
+        "s3://mirrulations/raw-data",
+        "https://data.spicy-regs.dev/documents.parquet",
+    ]
+
+
+def test_the_first_releases_policy_digest_does_not_move_under_the_multi_source_feature() -> None:
+    """The prior candidate stays reproducible.
+
+    Its universe declares one source and ranks nothing, so the two new keys are
+    absent from its policy document and the digest the published release quotes
+    is still the digest this code derives.
+    """
+
+    spec = load_universe_spec(TRACKED_UNIVERSE)
+
+    assert spec.sources == ()
+    assert spec.rendition_preference == ()
+    assert "sourceSystems" not in spec.policy_document()
+    assert "renditionPreference" not in spec.policy_document()
+    assert spec.policy_sha256() == "fd3c1bb706dd3f8f4bfcb725e2ae83be476d200d25d09c096b498311f170bcdb"
 
 
 def test_the_tracked_universe_round_trips_through_its_own_canonical_form() -> None:
