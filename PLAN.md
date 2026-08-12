@@ -439,7 +439,7 @@ Regenerate the applicability policy against RefSpec's catalog after the
 validation-cost reset (`RefSpec/plans/validation-cost-reset-plan.md`) stops
 moving that repository; regenerating against a moving catalog re-tears it.
 
-## 9. The `SourceCatalogRelease` producer, and the universe nobody has named
+## 9. The `SourceCatalogRelease` producer and the two named universes
 
 Landed 2026-08-12 on `main` in `../spicy-regs-landing` as four commits:
 `9293edb` (pinned schema bytes), `09f26dd` (producer), `98d0c88`
@@ -830,6 +830,29 @@ The remaining 238,575 `unavailable` items are Supporting & Related Material
 and Other, which the mirror holds no content object for and the catalog gives
 no locator. That is the same true gap the probe measured before the re-issue.
 
+### Body reachability in the named window
+
+Measured 2026-08-12 over the 389,148 catalog rows posted from 2021 through
+2025, before the universe's sampling and agency-name rules: 85,234 rows
+(21.90%) have at least one body path. The mirror is the only path for 79,853
+of them; 3,211 have both a mirror rendition and `file_url`, and 2,170 have
+only `file_url`. The mirror therefore supplies the only known body for 93.7%
+of the reachable window.
+
+Reachability differs by document type: Rule 88.58%, Proposed Rule 83.56%,
+Notice 59.19%, Supporting & Related Material 0.88%, Other 0.40%, and Public
+Submission 0%. The first three types account for nearly all mirror wins. The
+last three explain the residual `unavailable` set; adding another locator
+fallback does not make their bytes exist.
+
+`documents.text_content` is null on all 1,992,343 catalog rows, so inline
+document text is a measured structural zero. Comments invert that condition:
+11,026,527 of 11,051,664 in-window comments (99.77%) carry inline comment
+text and need no rendition fetch. `federal_register` also differs from the
+document catalog: all 138,384 in-window records have a body locator, but only
+141 in-window catalog rows state the per-document key needed to reach that
+table, and those rows already have `file_url`.
+
 ### Addendum: the other published record kinds
 
 Measured 2026-08-12 against the 21 published parquet files, at the owner's
@@ -908,3 +931,20 @@ attachments, because only `attachments_json` declares a `size` and issuing
 HEAD requests to sample the rest was out of scope; whether 2026's rates are
 steady-state, since 2026 is itself partial; and whether the congress and CRS
 endpoints yield documents, which needs a live, probably key-gated call.
+
+### Next boundary
+
+Use the multi-source candidate above as the fixed input for DocSpec's first
+complete `DocumentRelease`. Do not expand or re-issue this universe before
+that path works unless independent verification finds a release defect.
+
+Three follow-on corpus decisions remain outside the current release:
+
+- re-harvest 2021-2025 locator metadata upstream, which improves the named
+  universe without changing what it requests;
+- publish `federal_register` as its own record kind rather than as a fallback
+  reached through a mostly absent join key; and
+- give comments their own sampling policy before admitting an 11-million-row
+  in-window text corpus.
+
+None of these decisions changes the current `U`, `S`, or their digests.
