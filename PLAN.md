@@ -954,12 +954,16 @@ Use the multi-source candidate above as the fixed input for DocSpec's first
 complete `DocumentRelease`. Do not expand or re-issue this universe before
 that path works unless a release defect changes its sealed bytes.
 
-The next implementation belongs in DocSpec: admit the wire-format release by
-digest, translate its 2,556,982,433-byte source-item member with bounded
-memory, and preserve every wire disposition in DocSpec's source-item stream.
-The first real-data gate stops after translation and count reconciliation:
-83,928 active, 120 deleted, and 1,908,295 excluded in DocSpec's three-state
-model. It does not authorize capture of 83,928 renditions.
+DocSpec completed that first real-data gate in `6088fef`. Its wire reader
+admitted the release by digest, translated the 2,556,982,433-byte source-item
+member with bounded memory, and reconciled 83,928 active, 120 deleted, and
+1,908,295 excluded items in DocSpec's three-state model. The pass fetched no
+rendition and published no `DocumentRelease`.
+
+The next implementation remains in DocSpec: connect this admitted stream to
+Phase 2 capture, extraction, and segmentation through its existing injected
+ports. Keep this release fixed while that path is built. The completed reader
+gate does not by itself start or authorize a full 83,928-rendition capture.
 
 Three follow-on corpus decisions remain outside the current release:
 
