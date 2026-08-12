@@ -23,7 +23,7 @@ import hashlib
 import json
 import math
 import re
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -260,6 +260,64 @@ SAMPLE_STRATUM_KEYS: tuple[tuple[str, ...], ...] = (("agencyId", "publicationYea
 SAMPLE_ORDER_HASHES: tuple[str, ...] = ("md5(documentId:seed)",)
 SAMPLE_ALLOCATIONS: tuple[str, ...] = ("sqrt-proportional",)
 SAMPLE_UNKNOWN_STRATUM_PART = "unknown"
+
+
+#: The roles a declared source may play.  ``metadata`` supplies the normalized
+#: field set; ``rendition`` supplies locators to capture.  One source may do
+#: both, and a universe may declare several of either.
+SOURCE_ROLES: tuple[str, ...] = ("metadata", "rendition")
+
+
+@dataclass(frozen=True)
+class PinnedSource:
+    """One discovery source, named and pinned to the exact bytes it served.
+
+    A universe that reads more than one source has to say which ones, at which
+    versions, or its ``policySha256`` would describe a selection nobody could
+    reproduce.  The wire schema carries a single ``sourceSystem`` object and is
+    owned by Rulespec, so the release states a composite identity there and the
+    per-source pins ride inside the policy document, where this list is what
+    the composite version digests.
+    """
+
+    source_system_id: str
+    source_system_version: str
+    role: str
+
+    def __post_init__(self) -> None:
+        _require_absolute_id(self.source_system_id, field_name="sourceSystems[].sourceSystemId")
+        _require_text(self.source_system_version, field_name="sourceSystems[].sourceSystemVersion")
+        if self.role not in SOURCE_ROLES:
+            raise SourceCatalogError(f"sourceSystems[].role must be one of {list(SOURCE_ROLES)}, got {self.role!r}")
+
+    @classmethod
+    def from_mapping(cls, value: Mapping[str, Any]) -> PinnedSource:
+        if not isinstance(value, Mapping):
+            raise SourceCatalogError("each entry of sourceSystems must be an object")
+        unexpected = sorted(set(value) - {"sourceSystemId", "sourceSystemVersion", "role"})
+        if unexpected:
+            raise SourceCatalogError(f"sourceSystems entry has unknown keys: {unexpected}")
+        for required in ("sourceSystemId", "sourceSystemVersion", "role"):
+            if required not in value:
+                raise SourceCatalogError(f"sourceSystems[].{required} is required")
+        return cls(
+            source_system_id=value["sourceSystemId"],
+            source_system_version=value["sourceSystemVersion"],
+            role=value["role"],
+        )
+
+    def canonical(self) -> dict[str, Any]:
+        return {
+            "role": self.role,
+            "sourceSystemId": self.source_system_id,
+            "sourceSystemVersion": self.source_system_version,
+        }
+
+
+def composite_source_version(sources: Sequence[PinnedSource]) -> str:
+    """The one version string that names a whole set of pinned sources."""
+
+    return f"sha256:{canonical_digest([source.canonical() for source in sources])}"
 
 
 @dataclass(frozen=True)
@@ -517,8 +575,33 @@ class UniverseSpec:
     # Absent means the scope alone decides ``S``: every item the scope admits
     # and the source can supply is selected.
     sample: SamplePolicy | None = None
+    # Empty means the universe reads exactly the one source named above.  When
+    # several are declared, ``source_system_version`` must be the digest over
+    # this list, so the composite the wire carries is checkable rather than
+    # asserted.
+    sources: tuple[PinnedSource, ...] = ()
+    # Rendition families in preference order.  An item takes the highest family
+    # that has anything to offer, and the lower ones are not carried: the
+    # release states the rendition a capture should take, not a menu.
+    rendition_preference: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
+        object.__setattr__(self, "sources", tuple(self.sources))
+        object.__setattr__(self, "rendition_preference", tuple(self.rendition_preference))
+        if self.sources:
+            derived = composite_source_version(self.sources)
+            if self.source_system_version != derived:
+                raise SourceCatalogError(
+                    f"sourceSystem.sourceSystemVersion is {self.source_system_version!r}, but the "
+                    f"{len(self.sources)} declared sourceSystems derive {derived}"
+                )
+        for family in self.rendition_preference:
+            _require_text(family, field_name="renditionPreference[]")
+        if len(set(self.rendition_preference)) != len(self.rendition_preference):
+            raise SourceCatalogError("renditionPreference names one family twice")
+        self._validate_identifiers()
+
+    def _validate_identifiers(self) -> None:
         _require_absolute_id(self.universe_id, field_name="universeId")
         _require_absolute_id(self.catalog_id, field_name="catalogId")
         _require_absolute_id(self.policy_id, field_name="selectionPolicy.policyId")
@@ -535,6 +618,8 @@ class UniverseSpec:
             "catalogId",
             "selectionPolicy",
             "sourceSystem",
+            "sourceSystems",
+            "renditionPreference",
             "scope",
             "sample",
             "normalization",
@@ -573,6 +658,8 @@ class UniverseSpec:
             source_system_version=system["sourceSystemVersion"],
             scope=UniverseScope.from_mapping(value.get("scope")),
             sample=SamplePolicy.from_mapping(value.get("sample")),
+            sources=tuple(PinnedSource.from_mapping(entry) for entry in value.get("sourceSystems") or ()),
+            rendition_preference=tuple(value.get("renditionPreference") or ()),
             normalization=NormalizationPolicy.from_mapping(value.get("normalization")),
         )
 
@@ -585,13 +672,21 @@ class UniverseSpec:
         what lets a consumer notice that only the label moved.
         """
 
-        return {
+        document: dict[str, Any] = {
             "normalization": self.normalization.canonical(),
             "sample": self.sample.canonical() if self.sample is not None else None,
             "scope": self.scope.canonical(),
             "sourceSystem": self.source_system_record(),
             "universeId": self.universe_id,
         }
+        # Added only when declared.  A universe that reads one source and ranks
+        # nothing keeps the document it always had, so its digest — and the
+        # release identity resting on it — does not move under this feature.
+        if self.sources:
+            document["sourceSystems"] = [source.canonical() for source in self.sources]
+        if self.rendition_preference:
+            document["renditionPreference"] = list(self.rendition_preference)
+        return document
 
     def policy_document_bytes(self) -> bytes:
         return canonical_json_bytes(self.policy_document())
@@ -634,6 +729,7 @@ __all__ = [
     "SAMPLE_STRATUM_KEYS",
     "SOURCE_URL_PLACEHOLDER",
     "NormalizationPolicy",
+    "PinnedSource",
     "PublicationWindow",
     "SampleCandidate",
     "SamplePolicy",
@@ -641,5 +737,6 @@ __all__ = [
     "UniverseScope",
     "UniverseSpec",
     "canonical_digest",
+    "composite_source_version",
     "load_universe_spec",
 ]
