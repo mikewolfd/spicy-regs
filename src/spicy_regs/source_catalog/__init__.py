@@ -40,9 +40,15 @@ from spicy_regs.source_catalog.schema_pins import (
     pinned_schemas,
     schema_set_identity,
 )
+from spicy_regs.source_catalog.published_catalog import (
+    discover_published_catalog,
+    discovered_item,
+)
 from spicy_regs.source_catalog.universe import (
     NormalizationPolicy,
     PublicationWindow,
+    SampleCandidate,
+    SamplePolicy,
     SourceCatalogError,
     UniverseScope,
     UniverseSpec,
@@ -65,12 +71,16 @@ __all__ = [
     "Observation",
     "ObservedTopic",
     "PublicationWindow",
+    "SampleCandidate",
+    "SamplePolicy",
     "SourceCatalogBundle",
     "SourceCatalogError",
     "SourceOutcome",
     "UniverseScope",
     "UniverseSpec",
     "build_source_catalog_release",
+    "discover_published_catalog",
+    "discovered_item",
     "load_universe_spec",
     "pinned_schema_bytes",
     "pinned_schemas",
