@@ -537,3 +537,151 @@ The mirror rendition carries an expected SHA-256 because SpicyRegs already
 verified those exact bytes at that locator. The source-declared rendition
 carries the size the record declares and no digest, because the source states
 a size for that URL and never a hash.
+
+### The universe, named
+
+Named 2026-08-12 by the product owner and landed on `main` in
+`../spicy-regs-landing` as five commits: `ebc951a` (sample and source-URL
+declarations), `24a3288` (published-catalog discovery), `885f4a1` (the
+universe file and the tool that writes it), `86ca6cb` (the publish driver),
+`74886e1` (tests).
+
+`src/spicy_regs/universes/regulations-gov-published-catalog-2021-2025.json`
+is the tracked, digested configuration:
+
+- `universeId`
+  `urn:spicy-regs:source-universe:regulations-gov-published-catalog-2021-2025`;
+- `catalogId`
+  `urn:spicy-regs:source-catalog:regulations-gov-published-catalog`;
+- `selectionPolicy`
+  `urn:spicy-regs:selection-policy:regulations-gov-published-catalog-2021-2025-stratified-sample`
+  version `1.0`, digest
+  `fd3c1bb706dd3f8f4bfcb725e2ae83be476d200d25d09c096b498311f170bcdb`;
+- `sourceSystem` `https://data.spicy-regs.dev/documents.parquet` at version
+  `sha256:52dcadee0dd166c138dfb2d21d3e728f6e464109d36fccd346986c1cbc688ef1`
+  — the 54,774,294 bytes served at 2026-08-12T14:02:44Z, digested before the
+  run and re-checked against the file the producer reads;
+- scope: all six document types the catalog carries, publication window
+  2021-01-01..2025-12-31, no agency and no docket restriction;
+- sample: seed `spicy-regs-sample-2026-08-12`, partition by `documentType`,
+  stratify by `agencyId` and `publicationYear`, order by
+  `md5(documentId:seed)`, sqrt-proportional allocation, at most 100,000 per
+  document type;
+- normalization: `language` `en`, `sourceUrlTemplate`
+  `https://www.regulations.gov/document/{documentId}`, and 153 declared
+  agency names.
+
+The sampler is the selection policy rather than a step beside it: it runs
+over the frame the scope admits, before any check on what the source can
+supply, and an item it does not draw is `excluded` with
+`policy.sample-not-drawn`. Its mechanics are pinned inside `policySha256`,
+each as a closed vocabulary of one, so the digest states the method and not a
+label for it. Checked against the DuckDB expression it was proven under, the
+Python draw reproduces the same identifier set exactly over `Rule` (19,955
+frame, 5,000 cap), `Proposed Rule` (12,800 / 3,000) and `Notice` (93,023 /
+20,000).
+
+`agencyNames` comes from `tools/build_agency_crosswalk_artifact.py`'s
+`agency-codes.parquet` (run `agency-crosswalk-2026-08-02`): for a code the
+artifact resolves at tier `confident` or `probable`, the declared name is its
+`primary_slug`. 153 of the catalog's 316 codes qualify — 124 `confident`, 29
+`probable`. The other 163 (140 `unmapped`, 23 `ambiguous`) get no declared
+name.
+
+### The first release
+
+Published 2026-08-12 to
+`output/source-catalog-release-regulations-gov-2021-2025/` (gitignored),
+`releaseStatus` `candidate`, `buildRunId` `source-catalog-2026-08-12-01`,
+`publishedAt` `2026-08-12T00:00:00Z`:
+
+```
+releaseId    urn:spicy-regs:source-catalog-release:v1:
+             e8fac69293a63786eb0b4cec7483e044a2263284545d2afe1a46213399272581
+U digest     sha256:369878a3e734fcd37a91b5bde24cdcaf81eee89e1fbc436faddc9ed2913b6089
+S digest     sha256:2eb2705385f03867f7ebc9e3b631f4b478c0156cfc57d331ac8249e55d44855d
+schemaSetId  urn:spicy:schema-set:v1:cffb8f62a70754beb07aa46886649506487712f7a5efea4e0dcc2021b99f02d6
+```
+
+`data/source-items.json` is 2,540,365,700 bytes over 1,992,343 rows; the
+whole bundle is 2,540,386,320 bytes across four members. The run took 702
+seconds with a 15.1 GB peak memory footprint. Read back off disk,
+`verify_bundle_directory` re-derives the identity, both set digests, the
+counts and the coverage.
+
+Counts and coverage:
+
+```
+discovered   1,992,343      accounted     1,992,343
+selected         5,024      unaccounted           0
+excluded     1,666,441      distinct selected documentIds   5,024
+unavailable    317,479      selected with a rendition       5,024
+failed           3,279
+deleted            120
+```
+
+Every non-selected row names why, by code:
+
+```
+excluded/policy.publication-window-out-of-scope   1,601,071
+unavailable/source.no-candidate-rendition           317,479
+excluded/policy.sample-not-drawn                     63,348
+failed/policy.agency-name-undeclared                  3,279
+excluded/policy.publication-date-unusable             2,022
+deleted/source.withdrawn-after-publication              120
+```
+
+Composition. `U` is the whole published catalog: 1,992,343 rows over 316
+agency codes — Other 726,170, Supporting & Related Material 714,473, Notice
+396,096, Rule 103,451, Proposed Rule 51,780, Public Submission 373. 389,148
+of those rows fall inside the window (2021: 79,670; 2022: 77,264; 2023:
+79,525; 2024: 86,018; 2025: 66,671) and 1,603,195 outside it. The frame the
+draw ran over is 389,130 of those: 18 in-window rows are marked withdrawn,
+which the source settles before the scope is consulted. The draw took 325,782
+and left 63,348 undrawn.
+
+`S` is 5,024 items over 82 agency codes, carrying 5,162 candidate
+renditions — Notice 1,931, Supporting & Related Material 1,308, Rule 751,
+Proposed Rule 621, Other 413, Public Submission 0; by year 2021: 916, 2022:
+1,205, 2023: 1,094, 2024: 1,084, 2025: 725. The largest contributors are
+EERE 995, HHS 499, NARA 483, FMCSA 404, OPM 278, FAR 262, DARS 256.
+
+### What the published catalog cannot supply
+
+Four gaps, each visible in the counts above rather than papered over.
+
+1. **A locator for almost nothing.** `file_url` is stated on 50,238 of
+   1,992,343 rows (2.5%), and on 5,381 of the 389,148 in-window rows (1.4%);
+   `attachments_json` adds no row that `file_url` does not already cover.
+   This, not the sample, is what bounds `S`: of the 325,782 items the draw
+   took, 317,479 are `unavailable` with `source.no-candidate-rendition`, and
+   the 5,024 selected are exactly the drawn items that carried a locator and
+   an agency the universe names — 5,024 of the 5,381 in-window rows that
+   state a `file_url` at all. The catalog
+   states a byte size for an attachment and never a hash, so
+   `expectedSha256` is `null` on all 5,162 renditions and
+   `expectedByteSize` is set only where an attachment record declares one.
+2. **No per-item address.** No column carries a `sourceUrl`, which the schema
+   requires and cannot null. The universe declares the Regulations.gov
+   address form instead of leaving every item unselectable; it is a
+   constructed value, and it is inside `policySha256` where a consumer can
+   see that.
+3. **No agency name, and a crosswalk that resolves to slugs.** The declared
+   name is a Federal Register *slug*, not a display name, because that is
+   what the crosswalk artifact carries. It is also not always the specific
+   agency: 38 codes resolve onto 10 shared department-level slugs, so the 153
+   codes carry 125 distinct names (ACF, CDC, HHS, and NIH all read
+   `health-and-human-services-department`).
+   `agencyId` remains the distinguishing key. The 163 codes with no declared
+   name cost 3,279 in-window items, which take `failed` with
+   `policy.agency-name-undeclared`.
+4. **Dates that cannot be read.** 2,022 rows state a posted date that is not
+   a `YYYY-MM-DDTHH:MM:SSZ` instant over a real calendar date — 2,014 state
+   none at all and 8 state `0000-12-30T00:00:00Z`. They are neither coerced
+   nor dropped: each is `excluded` with `policy.publication-date-unusable`,
+   and the raw string is carried as an `unparsablePostedDate` observation.
+
+Two smaller ones. No row states a topic, so `sourceObservedTopics` is empty
+across the entire release. And `text_extraction_status` is `null` on every
+row of this catalog snapshot, so the extraction state a downstream capture
+would want is not stated anywhere.
