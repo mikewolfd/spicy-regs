@@ -588,7 +588,7 @@ artifact resolves at tier `confident` or `probable`, the declared name is its
 `probable`. The other 163 (140 `unmapped`, 23 `ambiguous`) get no declared
 name.
 
-### The first release
+### The first release (prior candidate, superseded 2026-08-12 by the multi-source re-issue below; its record stands)
 
 Published 2026-08-12 to
 `output/source-catalog-release-regulations-gov-2021-2025/` (gitignored),
@@ -734,3 +734,177 @@ because it fetches and digests the bytes rather than trusting a listing — the
 one path in this repository that closes gap 1 and its null-digest half at the
 same time. Which source a second universe declares, and whether it declares
 both, is the owner's call and not this section's.
+
+### The multi-source re-issue
+
+Owner decision 2026-08-12: read all three sources, ranked, with the mirror
+preferred. Landed as `b238de1` (several pinned sources and a rendition
+ranking), `54a4529` (the three families), `1ef93d1` (the mirror index tool),
+`8ea7c65` (author and publish over three pins), `38adb59` (tests), `94b4680`
+(the universe file).
+
+The wire schema Rulespec owns carries one `sourceSystem` object and refuses
+extra properties, so three sources cannot be three wire objects. The release
+states a composite identity and the per-source pins ride inside the policy
+document as `sourceSystems`, where the composite version is the digest over
+that list and is checked against it at load — derivable, not asserted.
+
+```
+sourceSystem  urn:spicy-regs:source-system:regulations-gov-published-catalog
+              +mirrulations-mirror+federal-register
+              sha256:6b9c4f65389001b4965e2c2b7869a9c1e9b85fd9e087f67b8197f20a16c3acea
+  rendition   s3://mirrulations/raw-data
+              sha256:6793aa2c0d0ce52afffdb63900437e1be6091e85420297451dbf2e4270f231c6
+  metadata    https://data.spicy-regs.dev/documents.parquet
+              sha256:52dcadee0dd166c138dfb2d21d3e728f6e464109d36fccd346986c1cbc688ef1
+  rendition   https://data.spicy-regs.dev/federal_register.parquet
+              sha256:c7ca04b4d8b67e43c7b8a657512eb7068fc66a53a54001a2f6e40b9e53036355
+```
+
+The mirror is pinned by the digest of a sealed verified index rather than by
+the bucket, because a live bucket cannot be pinned. The index is
+`output/mirrulations-mirror-index/mirror-index.json`, 19,679,808 bytes over
+83,064 documents and 88,645 rendition objects. Every object was listed once
+per docket across all 67,011 in-window dockets, then fetched pinned to its
+listed ETag and digested: 88,645 verified, 0 failed. `renditionPreference` is
+`["mirrulations-mirror", "source-file-url", "federal-register"]` and rides
+inside `policySha256`.
+
+Published to
+`output/source-catalog-release-regulations-gov-2021-2025-multi-source/`,
+`releaseStatus` `candidate`, `buildRunId` `source-catalog-2026-08-12-02`,
+`publishedAt` `2026-08-12T00:00:00Z`:
+
+```
+releaseId    urn:spicy-regs:source-catalog-release:v1:
+             3414d0a5812ddc6f0c50af0aa377d891a5a822246876681762bba27b5b2bda27
+policySha256 bd342238d49b7c11e24f86f84f0489b903207f4241ccf8d2d7e383962cf9b55f
+U digest     sha256:369878a3e734fcd37a91b5bde24cdcaf81eee89e1fbc436faddc9ed2913b6089
+S digest     sha256:caa0fd7b20bab57afd6a36241f9a56aca2833298a17e6c76b8084e3d532039ef
+```
+
+`U` is unchanged and its digest is the same string the first release carries:
+the universe requested did not move, only where a rendition may come from.
+`data/source-items.json` is 2,556,982,433 bytes over the same 1,992,343 rows;
+the run took 802 seconds at a 15.7 GB peak footprint. Read back off disk,
+`verify_bundle_directory` re-derives the identity, both set digests, the
+counts and the coverage.
+
+```
+                      first release      multi-source
+selected                     5,024            83,928
+unavailable                317,479           238,575
+excluded                 1,666,441         1,666,441
+failed                       3,279             3,279
+deleted                        120               120
+discovered               1,992,343         1,992,343
+accounted                1,992,343         1,992,343   (unaccounted 0)
+```
+
+Composition of `S`: 83,928 items over 131 agency codes (was 82), carrying
+89,509 candidate renditions of which 87,555 — 97.8% — hold a verified
+`expectedSha256`. By type, Notice 54,138, Rule 17,494, Proposed Rule 10,569,
+Supporting & Related Material 1,313, Other 414, Public Submission 0. By year,
+2021: 17,753; 2022: 16,862; 2023: 17,134; 2024: 18,996; 2025: 13,183. The
+largest contributors are EPA 8,039, FAA 7,865, FDA 4,705, ITA 4,697, FMCSA
+3,436, USCG 2,963, FEMA 2,936.
+
+Which source won each selected item:
+
+```
+mirrulations-mirror    81,974
+source-file-url         1,954
+federal-register            0
+```
+
+The Federal Register contributed nothing, and that is a measured result
+rather than a wiring fault. Only 141 of the 389,148 in-window rows state an
+`frDocNum` at all, and every one of those 141 already carries a `file_url`,
+so tier 3 is never reached. The table itself is rich — 801,240 rows, every
+one with `pdf_url` and `html_url` — but the join key the regulations.gov side
+would need is absent. Reaching an FR document through a shared docket would
+attach a different document's rendition to this one, so the producer does not
+do it and the source stays declared, pinned, and empty.
+
+The remaining 238,575 `unavailable` items are Supporting & Related Material
+and Other, which the mirror holds no content object for and the catalog gives
+no locator. That is the same true gap the probe measured before the re-issue.
+
+### Addendum: the other published record kinds
+
+Measured 2026-08-12 against the 21 published parquet files, at the owner's
+request and without rebuilding anything. This is an inventory for a decision,
+not a plan.
+
+**The locator scarcity is largely a harvest gap, not a fact about the world.**
+`file_url` coverage in `documents.parquet` by posted year:
+
+```
+2021   79,670 rows    1.25%        2024   86,018 rows    1.32%
+2022   77,264 rows    1.73%        2025   66,671 rows    1.14%
+2023   79,525 rows    1.46%        2026   50,598 rows   56.45%
+```
+
+The same cliff appears in comment attachments: of 60,392 attachment-bearing
+comments, 44,340 are 2026. The 2.5% corpus figure is one harvested year
+averaged against five unharvested ones. Re-harvesting locators for 2021-2025
+is a larger lever on `S` than any new record kind, and it would land inside
+the universe already named rather than beside it.
+
+Per kind, for the kinds that represent fetchable source material:
+
+```
+kind                rows        locator%   in-window     adds to S    join key
+federal_register     801,240     100.00%     138,384       138,384    docket_ids_json
+comments          25,545,957       0.236%  11,051,664    13,224 now   docket_id
+lobbying_filings     286,372     100.00%     203,391       203,391    none
+cfr_sections         277,813     100.00%     187,920       see below  none
+congress_bills       192,141     100.00%      14,131        14,131    none
+crs_reports           14,027     100.00%       5,723         5,723    none
+court_dockets          7,677     100.00%       2,681         2,681    none
+unified_agenda         3,954     100.00%       1,440         1,440    rin
+gao_reports               79     100.00%           0             0    none
+sam_entities         885,266      56.86%     380,314        see below none
+dockets              276,326       0%        129,404             0    docket_id
+fr_docket_links      716,756     100.00%     140,877             0    docket_id
+```
+
+`federal_register` is the clear addition: the only kind at 100% locator
+coverage in *every* year, so it carries no backfill gap, and it is almost
+entirely additive — only 139 of its 138,384 in-window records are reachable
+through `documents.fr_doc_num`, which is the same missing join key that made
+the FR fallback contribute zero above. Approached as its own record kind
+rather than as a fallback, it is worth 138,384 items.
+
+Attachments are the largest fetchable population in the corpus and the only
+one whose capture cost is fully declared: every one of the 91,436 attachment
+URLs in `comments.parquet` carries a `size`, totalling 55.4 GiB, of which
+11.65 GiB falls in-window today. Projecting 2026's 4.32% attachment rate
+across the 11.05M in-window comments estimates ~730,400 URLs and ~496 GB —
+an estimate on a measured rate, and contingent on the same 2021-2025
+backfill.
+
+Four kinds need their own policy rather than a join to this universe.
+**Comments** at 25.5M rows is 12.8× the current `U` and would swamp it; note
+96.85% carry inline comment text needing no fetch at all. **`cfr_sections`**
+is a single-edition snapshot — `edition_year` is `'2025'` on all 277,813 rows
+— so its 187,920 "in-window" figure is a crawl timestamp and meaningless as a
+date filter. **`fr_docket_links`** is not a record kind: its 716,756 rows
+resolve to 475,009 distinct document numbers, all already in
+`federal_register`; it is the docket-to-FR join edge and adding it would
+double-count. **`sam_entities`** points at entities' own corporate websites,
+not government records, and would turn capture into third-party web crawling.
+
+`congress_bills` and `crs_reports` are 100% locator-covered but the URL is an
+`api.congress.gov` metadata endpoint rather than the document, so real bytes
+need a second hop nothing in the published data describes. `gao_reports` has
+79 rows and none in-window. Eight files are rollups or registries with no
+per-record artifact (`agency_stats`, `agency_monthly_volume`, `feed_summary`,
+`comments_index`, `discovery_signals`, `rulemaking_lifecycles`,
+`usaspending_recipients`, `fec_committees`).
+
+Not measured: capture bytes for every kind except comments and document
+attachments, because only `attachments_json` declares a `size` and issuing
+HEAD requests to sample the rest was out of scope; whether 2026's rates are
+steady-state, since 2026 is itself partial; and whether the congress and CRS
+endpoints yield documents, which needs a live, probably key-gated call.
