@@ -47,8 +47,9 @@ from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
-#: Objects larger than this are recorded but not fetched; a rendition that big
-#: is not something this producer should pull into a listing pass by surprise.
+#: The fetch phase refuses a draw containing anything larger than this; a
+#: rendition that big must become an explicit policy decision, not disappear
+#: silently from the sealed index.
 MAX_OBJECT_BYTES = 64 * 1024 * 1024
 
 INDEX_SCHEMA_VERSION = "mirrulations-mirror-index-v1"
@@ -58,6 +59,10 @@ INDEX_SCHEMA_VERSION = "mirrulations-mirror-index-v1"
 #: role marker rather than the first underscore, because a document identifier
 #: may hold underscores of its own (`EPA_FRDOC_0001-11807`).
 RENDITION_NAME_RE = re.compile(r"^(?P<document_id>.+?)_(?:content|attachment)[._]")
+
+
+class MirrorIndexError(RuntimeError):
+    """The mirror index cannot prove that it covers the complete frozen draw."""
 
 
 def _canonical_bytes(value: Any) -> bytes:
@@ -95,6 +100,7 @@ def draw(catalog: Path, window: tuple[str, str], output: Path, *, workers: int) 
 
     client = s3_client()
     found: dict[str, list[dict[str, Any]]] = {}
+    failures: list[tuple[str, str, str]] = []
     lock = threading.Lock()
     listed = 0
 
@@ -135,8 +141,9 @@ def draw(catalog: Path, window: tuple[str, str], output: Path, *, workers: int) 
                             },
                         )
                     )
-        except Exception as error:  # noqa: BLE001 - one unreachable docket must not end the pass
+        except Exception as error:  # noqa: BLE001 - report every failed docket after the parallel pass
             with lock:
+                failures.append((agency, docket, str(error)))
                 print(f"draw: {agency}/{docket} listing failed: {error}", flush=True)
             return
         with lock:
@@ -148,6 +155,13 @@ def draw(catalog: Path, window: tuple[str, str], output: Path, *, workers: int) 
 
     with ThreadPoolExecutor(max_workers=workers) as pool:
         list(pool.map(one, dockets))
+
+    if failures:
+        examples = ", ".join(f"{agency}/{docket}" for agency, docket, _ in failures[:5])
+        raise MirrorIndexError(
+            f"draw is incomplete: {len(failures):,} of {len(dockets):,} docket listings failed"
+            f" (first failures: {examples})"
+        )
 
     manifest = {
         "documents": {
@@ -165,32 +179,89 @@ def draw(catalog: Path, window: tuple[str, str], output: Path, *, workers: int) 
     return output
 
 
-def _already_fetched(receipts: Path) -> set[str]:
+def _already_fetched(receipts: Path, expected: Mapping[str, tuple[str, int]] | None = None) -> set[str]:
     if not receipts.exists():
         return set()
     done: set[str] = set()
     with receipts.open(encoding="utf-8") as stream:
         for line in stream:
             try:
-                done.add(str(json.loads(line)["key"]))
-            except (ValueError, KeyError):
+                record = json.loads(line)
+            except ValueError:
                 continue
+            if _valid_success_receipt(record):
+                key = record["key"]
+                if expected is None or expected.get(key) == (record["documentId"], record["size"]):
+                    done.add(key)
     return done
+
+
+def _valid_success_receipt(record: Any) -> bool:
+    """Return whether one JSON line proves the bytes for one drawn object."""
+
+    return (
+        isinstance(record, Mapping)
+        and isinstance(record.get("documentId"), str)
+        and bool(record["documentId"])
+        and isinstance(record.get("key"), str)
+        and bool(record["key"])
+        and isinstance(record.get("sha256"), str)
+        and re.fullmatch(r"[0-9a-f]{64}", record["sha256"]) is not None
+        and isinstance(record.get("size"), int)
+        and not isinstance(record["size"], bool)
+        and record["size"] >= 0
+    )
+
+
+def _drawn_objects(manifest: Any) -> list[tuple[str, Mapping[str, Any]]]:
+    """Validate and flatten the object set frozen by ``draw``."""
+
+    if not isinstance(manifest, Mapping) or manifest.get("schemaVersion") != INDEX_SCHEMA_VERSION:
+        raise MirrorIndexError(f"draw is not a {INDEX_SCHEMA_VERSION} manifest")
+    documents = manifest.get("documents")
+    if not isinstance(documents, Mapping):
+        raise MirrorIndexError("draw.documents must be an object")
+
+    flattened: list[tuple[str, Mapping[str, Any]]] = []
+    seen: set[str] = set()
+    for document_id, records in documents.items():
+        if not isinstance(document_id, str) or not document_id or not isinstance(records, list):
+            raise MirrorIndexError("draw.documents must map document identifiers to object arrays")
+        for record in records:
+            if not isinstance(record, Mapping):
+                raise MirrorIndexError(f"draw record for {document_id} is not an object")
+            key = record.get("key")
+            size = record.get("size")
+            etag = record.get("etag")
+            if not isinstance(key, str) or not key:
+                raise MirrorIndexError(f"draw record for {document_id} has no key")
+            if key in seen:
+                raise MirrorIndexError(f"draw contains object key twice: {key}")
+            if not isinstance(size, int) or isinstance(size, bool) or size < 0:
+                raise MirrorIndexError(f"draw record for {key} has an invalid size")
+            if not isinstance(etag, str) or not etag:
+                raise MirrorIndexError(f"draw record for {key} has no ETag")
+            seen.add(key)
+            flattened.append((document_id, record))
+    return flattened
 
 
 def fetch(draw_path: Path, receipts: Path, *, workers: int) -> Path:
     """Download every drawn object pinned to its ETag and digest the bytes."""
 
+    manifest = json.loads(draw_path.read_text(encoding="utf-8"))
+    pending = _drawn_objects(manifest)
+    oversized = [(document_id, record) for document_id, record in pending if record["size"] > MAX_OBJECT_BYTES]
+    if oversized:
+        first_key = oversized[0][1]["key"]
+        raise MirrorIndexError(
+            f"fetch refuses {len(oversized):,} drawn objects larger than {MAX_OBJECT_BYTES:,} bytes; first: {first_key}"
+        )
+
     from spicy_regs.sources.mirrulations import BUCKET, download_object_bytes, s3_resource
 
-    manifest = json.loads(draw_path.read_text(encoding="utf-8"))
-    pending = [
-        (document_id, record)
-        for document_id, records in manifest["documents"].items()
-        for record in records
-        if record["size"] <= MAX_OBJECT_BYTES
-    ]
-    done = _already_fetched(receipts)
+    expected = {record["key"]: (document_id, record["size"]) for document_id, record in pending}
+    done = _already_fetched(receipts, expected)
     pending = [item for item in pending if item[1]["key"] not in done]
     print(f"fetch: {len(pending):,} objects outstanding ({len(done):,} already verified)", flush=True)
 
@@ -240,6 +311,8 @@ def fetch(draw_path: Path, receipts: Path, *, workers: int) -> Path:
     finally:
         stream.close()
     print(f"fetch: {completed:,} verified, {failed:,} failed -> {receipts}", flush=True)
+    if failed:
+        raise MirrorIndexError(f"fetch is incomplete: {failed:,} objects failed and remain eligible for retry")
     return receipts
 
 
@@ -247,26 +320,56 @@ def seal(draw_path: Path, receipts: Path, output: Path) -> Path:
     """Fold the verified lines into one canonical index and digest it."""
 
     manifest = json.loads(draw_path.read_text(encoding="utf-8"))
+    drawn = _drawn_objects(manifest)
+    expected = {record["key"]: (document_id, record) for document_id, record in drawn}
     verified: dict[str, dict[str, Any]] = {}
-    errors = 0
+    receipt_errors: set[str] = set()
+    problems: list[str] = []
     with receipts.open(encoding="utf-8") as stream:
-        for line in stream:
+        for line_number, line in enumerate(stream, start=1):
             try:
                 record = json.loads(line)
             except ValueError:
+                problems.append(f"receipt line {line_number} is not JSON")
                 continue
-            if "sha256" not in record:
-                errors += 1
+            if not isinstance(record, Mapping) or not isinstance(record.get("key"), str):
+                problems.append(f"receipt line {line_number} has no object key")
                 continue
-            verified[str(record["key"])] = record
+            key = record["key"]
+            if key not in expected:
+                problems.append(f"receipt line {line_number} names an object outside the draw: {key}")
+                continue
+            if not _valid_success_receipt(record):
+                receipt_errors.add(key)
+                continue
+            if key in verified:
+                problems.append(f"receipt contains more than one successful record for {key}")
+                continue
+            document_id, drawn_record = expected[key]
+            if record["documentId"] != document_id:
+                problems.append(f"receipt assigns {key} to {record['documentId']}, not {document_id}")
+                continue
+            if record["size"] != drawn_record["size"]:
+                problems.append(
+                    f"receipt size for {key} is {record['size']:,}, not the drawn size {drawn_record['size']:,}"
+                )
+                continue
+            verified[key] = dict(record)
+
+    missing = sorted(set(expected) - set(verified))
+    unresolved_errors = sorted(receipt_errors - set(verified))
+    if missing:
+        problems.append(f"{len(missing):,} drawn objects have no valid successful receipt; first: {missing[0]}")
+    if unresolved_errors:
+        problems.append(f"{len(unresolved_errors):,} drawn objects have unresolved error receipts")
+    if problems:
+        raise MirrorIndexError("seal refuses an incomplete or inconsistent receipt set: " + "; ".join(problems[:8]))
 
     documents: dict[str, list[dict[str, Any]]] = {}
     for document_id, records in manifest["documents"].items():
         entries = []
         for record in records:
-            confirmed = verified.get(record["key"])
-            if confirmed is None:
-                continue
+            confirmed = verified[record["key"]]
             entries.append(
                 {
                     "key": record["key"],
@@ -288,7 +391,7 @@ def seal(draw_path: Path, receipts: Path, output: Path) -> Path:
     output.write_bytes(payload)
     digest = hashlib.sha256(payload).hexdigest()
     objects = sum(len(entries) for entries in documents.values())
-    print(f"seal: {len(documents):,} documents, {objects:,} verified renditions, {errors:,} unreadable")
+    print(f"seal: {len(documents):,} documents, {objects:,} verified renditions")
     print(f"seal: {output} ({len(payload):,} bytes)")
     print(f"sourceSystemVersion sha256:{digest}")
     return output
@@ -334,7 +437,7 @@ def index_digest(path: Path | str) -> str:
     return f"sha256:{hashlib.sha256(Path(path).read_bytes()).hexdigest()}"
 
 
-__all__ = ["INDEX_SCHEMA_VERSION", "draw", "fetch", "index_digest", "read_mirror_index", "seal"]
+__all__ = ["INDEX_SCHEMA_VERSION", "MirrorIndexError", "draw", "fetch", "index_digest", "read_mirror_index", "seal"]
 
 
 if __name__ == "__main__":  # pragma: no cover - console entry point

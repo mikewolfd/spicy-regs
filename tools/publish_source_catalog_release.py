@@ -32,6 +32,9 @@ from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_SPEC = REPO_ROOT / "src/spicy_regs/universes/regulations-gov-published-catalog-2021-2025.json"
+CATALOG_SOURCE_ID = "https://data.spicy-regs.dev/documents.parquet"
+MIRROR_SOURCE_ID = "s3://mirrulations/raw-data"
+FEDERAL_REGISTER_SOURCE_ID = "https://data.spicy-regs.dev/federal_register.parquet"
 
 
 def file_digest(path: Path) -> str:
@@ -40,6 +43,72 @@ def file_digest(path: Path) -> str:
         for chunk in iter(lambda: stream.read(1 << 20), b""):
             digest.update(chunk)
     return f"sha256:{digest.hexdigest()}"
+
+
+def _validate_source_inputs(
+    spec: Any,
+    *,
+    catalog: Path,
+    mirror_index: Path | None,
+    federal_register: Path | None,
+) -> None:
+    """Prove that every file read by this producer is declared and pinned."""
+
+    from spicy_regs.source_catalog import SourceCatalogError
+
+    supplied = {
+        CATALOG_SOURCE_ID: catalog,
+        MIRROR_SOURCE_ID: mirror_index,
+        FEDERAL_REGISTER_SOURCE_ID: federal_register,
+    }
+    required_roles = {
+        CATALOG_SOURCE_ID: "metadata",
+        MIRROR_SOURCE_ID: "rendition",
+        FEDERAL_REGISTER_SOURCE_ID: "rendition",
+    }
+
+    if not spec.sources:
+        if spec.source_system_id != CATALOG_SOURCE_ID:
+            raise SourceCatalogError(
+                f"this producer reads {CATALOG_SOURCE_ID}, but the universe declares {spec.source_system_id}"
+            )
+        declared = {CATALOG_SOURCE_ID: (spec.source_system_version, {"metadata"})}
+    else:
+        declared_versions: dict[str, str] = {}
+        declared_roles: dict[str, set[str]] = {}
+        for source in spec.sources:
+            previous = declared_versions.setdefault(source.source_system_id, source.source_system_version)
+            if previous != source.source_system_version:
+                raise SourceCatalogError(
+                    f"the universe declares two versions for {source.source_system_id}: "
+                    f"{previous} and {source.source_system_version}"
+                )
+            declared_roles.setdefault(source.source_system_id, set()).add(source.role)
+        declared = {
+            source_id: (version, declared_roles[source_id]) for source_id, version in declared_versions.items()
+        }
+
+    if CATALOG_SOURCE_ID not in declared:
+        raise SourceCatalogError(f"this producer reads {CATALOG_SOURCE_ID}, but the universe does not declare it")
+
+    for source_id, path in supplied.items():
+        if path is not None and source_id not in declared:
+            raise SourceCatalogError(f"this run supplies {source_id}, but the universe does not declare it")
+
+    for source_id, (pinned_version, roles) in declared.items():
+        path = supplied.get(source_id)
+        if path is None:
+            raise SourceCatalogError(f"the universe declares {source_id} and this run supplies no file")
+        required_role = required_roles.get(source_id)
+        if required_role is None:
+            raise SourceCatalogError(f"this producer does not know how to read the declared source {source_id}")
+        if required_role not in roles:
+            raise SourceCatalogError(
+                f"this producer requires {source_id} in role {required_role}, but the universe declares {sorted(roles)}"
+            )
+        observed = file_digest(path)
+        if observed != pinned_version:
+            raise SourceCatalogError(f"{source_id} is pinned at {pinned_version}, but {path} digests {observed}")
 
 
 def _federal_register_map(path: Path) -> dict[str, dict[str, Any]]:
@@ -171,35 +240,19 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--federal-register", type=Path, default=None, help="FR table the universe pins.")
     args = parser.parse_args(argv)
 
-    from spicy_regs.source_catalog import SourceCatalogError, build_source_catalog_release, load_universe_spec
+    from spicy_regs.source_catalog import build_source_catalog_release, load_universe_spec
     from spicy_regs.source_catalog.published_catalog import DEFAULT_RENDITION_PREFERENCE, discover_published_catalog
 
     spec = load_universe_spec(args.spec)
-    supplied = {
-        "https://data.spicy-regs.dev/documents.parquet": args.catalog,
-        "s3://mirrulations/raw-data": args.mirror_index,
-        "https://data.spicy-regs.dev/federal_register.parquet": args.federal_register,
-    }
     # Every source the universe declares is checked against the bytes handed
     # to this run before anything is read.  A release produced from bytes its
     # policy never described would rest on a digest that does not fit it.
-    declared = spec.sources or ()
-    if not declared:
-        observed = file_digest(args.catalog)
-        if observed != spec.source_system_version:
-            raise SourceCatalogError(
-                f"the universe was written for sourceSystemVersion {spec.source_system_version}, but "
-                f"{args.catalog} digests {observed}"
-            )
-    for source in declared:
-        path = supplied.get(source.source_system_id)
-        if path is None:
-            raise SourceCatalogError(f"the universe declares {source.source_system_id} and this run supplies no file")
-        observed = file_digest(path)
-        if observed != source.source_system_version:
-            raise SourceCatalogError(
-                f"{source.source_system_id} is pinned at {source.source_system_version}, but {path} digests {observed}"
-            )
+    _validate_source_inputs(
+        spec,
+        catalog=args.catalog,
+        mirror_index=args.mirror_index,
+        federal_register=args.federal_register,
+    )
 
     mirror_index = None
     if args.mirror_index is not None:
