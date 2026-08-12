@@ -29,7 +29,7 @@ atomic rename.
 from __future__ import annotations
 
 import uuid
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -67,7 +67,13 @@ from spicy_regs.source_catalog.schema_pins import (
     schema_id,
     schema_set_identity,
 )
-from spicy_regs.source_catalog.universe import INSTANT_RE, SourceCatalogError, UniverseSpec
+from spicy_regs.source_catalog.universe import (
+    INSTANT_RE,
+    SampleCandidate,
+    SamplePolicy,
+    SourceCatalogError,
+    UniverseSpec,
+)
 from spicy_regs.source_catalog.validate import validate_bundle_records
 
 
@@ -78,15 +84,22 @@ def select_source_items(spec: UniverseSpec, discovered: Iterable[DiscoveredItem]
     disposition, so every member of ``U`` is accounted for once and only once.
     A non-selected row always carries a machine-legible ``reasonCode`` and a
     human ``reason``.
+
+    A universe that declares a sample runs it here, over the frame the scope
+    admits and before any check on what the source can actually supply.  That
+    order is the one the sampler was proven under: it draws on the stated
+    facts alone, so an item's chance of being drawn does not depend on whether
+    a rendition happens to exist for it.
     """
 
     ordered = sorted(require_unique_source_item_ids(discovered), key=lambda item: item.source_item_id)
+    drawn = _draw(spec, ordered)
     budget = spec.scope.max_items
     selected_document_ids: set[str] = set()
     rows: list[dict[str, Any]] = []
 
     for item in ordered:
-        disposition, reason = _decide(spec, item, budget_remaining=budget)
+        disposition, reason = _decide(spec, item, drawn=drawn, budget_remaining=budget)
         if disposition == "selected":
             if item.document_id in selected_document_ids:
                 # For the MVP one selected sourceItemId maps to one documentId.
@@ -103,8 +116,37 @@ def select_source_items(spec: UniverseSpec, discovered: Iterable[DiscoveredItem]
     return rows
 
 
+def _draw(spec: UniverseSpec, ordered: Sequence[DiscoveredItem]) -> tuple[SamplePolicy, frozenset[str]] | None:
+    """Run the declared sample over the in-scope frame, or ``None`` if undeclared."""
+
+    sample = spec.sample
+    if sample is None:
+        return None
+    frame: list[SampleCandidate] = []
+    for item in ordered:
+        draft = item.normalized
+        if item.outcome is not SourceOutcome.AVAILABLE or draft is None:
+            continue
+        if spec.scope.admits(draft, location_key=item.location_key) is not None:
+            continue
+        frame.append(
+            SampleCandidate(
+                source_item_id=item.source_item_id,
+                document_id=item.document_id,
+                document_type=str(draft.document_type),
+                agency_ids=draft.agency_ids,
+                publication_date=draft.publication_date,
+            )
+        )
+    return sample, sample.draw(frame)
+
+
 def _decide(
-    spec: UniverseSpec, item: DiscoveredItem, *, budget_remaining: int | None
+    spec: UniverseSpec,
+    item: DiscoveredItem,
+    *,
+    drawn: tuple[SamplePolicy, frozenset[str]] | None,
+    budget_remaining: int | None,
 ) -> tuple[str, tuple[str, str] | None]:
     """Return one disposition and, when non-selected, its reason pair."""
 
@@ -120,7 +162,15 @@ def _decide(
     out_of_scope = spec.scope.admits(draft, location_key=item.location_key)
     if out_of_scope is not None:
         return "excluded", out_of_scope
-    missing = draft.missing_required_field()
+    if drawn is not None:
+        sample, taken = drawn
+        if item.source_item_id not in taken:
+            return "excluded", (
+                "policy.sample-not-drawn",
+                f"The universe selects a stratified sample of at most {sample.per_partition_limit} items per "
+                f"{sample.partition_by}; this item is in the frame and the draw did not take it.",
+            )
+    missing = draft.missing_required_field(source_url=spec.normalization.source_url(draft.source_url, item.document_id))
     if missing is not None:
         # The schema admits no null here and this producer invents no
         # placeholder, so the item states its gap instead of hiding it.
@@ -153,7 +203,10 @@ def _normalized_metadata(spec: UniverseSpec, item: DiscoveredItem) -> dict[str, 
     """
 
     draft = item.normalized
-    if draft is None or draft.missing_required_field() is not None:
+    if draft is None:
+        return None
+    source_url = spec.normalization.source_url(draft.source_url, item.document_id)
+    if draft.missing_required_field(source_url=source_url) is not None:
         return None
     agencies, failure = spec.normalization.agencies(draft.agency_ids)
     if failure is not None or agencies is None:
@@ -167,7 +220,7 @@ def _normalized_metadata(spec: UniverseSpec, item: DiscoveredItem) -> dict[str, 
         "lastUpdatedDate": draft.last_updated_date,
         "publicationDate": draft.publication_date,
         "regulationIdentifierNumbers": list(draft.regulation_identifier_numbers),
-        "sourceUrl": draft.source_url,
+        "sourceUrl": source_url,
         "title": draft.title,
     }
 

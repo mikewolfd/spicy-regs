@@ -175,8 +175,14 @@ class NormalizedDraft:
             if RIN_RE.fullmatch(rin) is None:
                 raise SourceCatalogError(f"regulationIdentifierNumbers holds a non-RIN value {rin!r}")
 
-    def missing_required_field(self) -> str | None:
-        """Name the first schema-required field the source did not state."""
+    def missing_required_field(self, *, source_url: str | None = None) -> str | None:
+        """Name the first schema-required field the source did not state.
+
+        ``source_url`` overrides the drafted one when the universe declares a
+        source-URL form for a source whose records omit it; passing ``None``
+        keeps the drafted value, so a caller that declares nothing sees the
+        source's own answer.
+        """
 
         if not isinstance(self.title, str) or not self.title:
             return "title"
@@ -184,7 +190,8 @@ class NormalizedDraft:
             return "documentType"
         if not isinstance(self.publication_date, str):
             return "publicationDate"
-        if not isinstance(self.source_url, str) or HTTP_URL_RE.fullmatch(self.source_url) is None:
+        resolved = source_url if source_url is not None else self.source_url
+        if not isinstance(resolved, str) or HTTP_URL_RE.fullmatch(resolved) is None:
             return "sourceUrl"
         return None
 

@@ -19,12 +19,15 @@ implementation (`PLAN.md` §7).
 
 from __future__ import annotations
 
+import hashlib
 import json
+import math
 import re
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 from spicy_regs.document_release_v3 import DocumentReleaseV3Error, canonical_json_bytes, sha256_bytes
 
@@ -49,6 +52,9 @@ MEDIA_TYPE_RE = re.compile(r"^[a-z]+/[A-Za-z0-9.+-]+$")
 INSTANT_RE = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$")
 
 MAX_JSON_SAFE_INTEGER = (1 << 53) - 1
+
+#: The single placeholder a declared ``sourceUrlTemplate`` may carry.
+SOURCE_URL_PLACEHOLDER = "{documentId}"
 
 
 def canonical_digest(value: Any) -> str:
@@ -222,16 +228,171 @@ class UniverseScope:
                     "policy.docket-out-of-scope",
                     f"The universe covers {list(self.docket_ids)}; this item names {list(draft.docket_ids)}.",
                 )
-        publication_date = draft.publication_date
-        if not isinstance(publication_date, str) or not self.publication_window.admits(publication_date):
-            window = self.publication_window
-            if window.start is not None or window.end is not None:
+        window = self.publication_window
+        if window.start is not None or window.end is not None:
+            publication_date = draft.publication_date
+            if not isinstance(publication_date, str):
+                # A window cannot admit or refuse an item whose publication date
+                # the source never stated in a usable form.  Saying so is not
+                # the same as saying the item fell outside the window, so it
+                # gets its own reason code rather than borrowing that one.
+                return (
+                    "policy.publication-date-unusable",
+                    f"The universe covers {window.start!r}..{window.end!r}; the source states no "
+                    "publication date this policy can read, so the item can be placed neither inside "
+                    "the window nor outside it.",
+                )
+            if not window.admits(publication_date):
                 return (
                     "policy.publication-window-out-of-scope",
                     f"The universe covers {window.start!r}..{window.end!r}; "
                     f"this item was published {publication_date!r}.",
                 )
         return None
+
+
+# The sampler admits exactly the mechanics it implements.  A specification that
+# named a partition, stratum, hash, or allocation this module cannot execute
+# would put a rule inside `policySha256` that no run ever applied, so each is a
+# closed vocabulary of one and a spec naming anything else is refused at load.
+SAMPLE_PARTITION_KEYS: tuple[str, ...] = ("documentType",)
+SAMPLE_STRATUM_KEYS: tuple[tuple[str, ...], ...] = (("agencyId", "publicationYear"),)
+SAMPLE_ORDER_HASHES: tuple[str, ...] = ("md5(documentId:seed)",)
+SAMPLE_ALLOCATIONS: tuple[str, ...] = ("sqrt-proportional",)
+SAMPLE_UNKNOWN_STRATUM_PART = "unknown"
+
+
+@dataclass(frozen=True)
+class SampleCandidate:
+    """One in-scope item, reduced to the facts the sampler reads."""
+
+    source_item_id: str
+    document_id: str
+    document_type: str
+    agency_ids: tuple[str, ...] = ()
+    publication_date: str | None = None
+
+
+@dataclass(frozen=True)
+class SamplePolicy:
+    """A deterministic stratified draw over the items the scope admits.
+
+    The draw is the selection policy, not a convenience: an item the scope
+    admits and this policy does not draw is ``excluded`` with
+    ``policy.sample-not-drawn``, so the frame it was drawn from stays visible
+    in the release rather than being silently narrowed.
+
+    The mechanics are the ones proven against the published corpus:
+
+    * partition the frame by document type and cap each partition;
+    * stratify each partition by agency and publication year;
+    * order within a stratum by ``md5(documentId:seed)``, then by document id;
+    * order the partition by ``rank / sqrt(stratumSize)``, which lets a small
+      stratum contribute early rows without letting a large one crowd it out;
+    * take the first ``perPartitionLimit`` rows.
+
+    Every input is a source-stated fact or a declared constant, so two runs
+    over the same frame draw the same set and a consumer can re-derive it.
+    """
+
+    seed: str
+    per_partition_limit: int
+    partition_by: str = SAMPLE_PARTITION_KEYS[0]
+    stratify_by: tuple[str, ...] = SAMPLE_STRATUM_KEYS[0]
+    order_hash: str = SAMPLE_ORDER_HASHES[0]
+    allocation: str = SAMPLE_ALLOCATIONS[0]
+
+    def __post_init__(self) -> None:
+        _require_text(self.seed, field_name="sample.seed")
+        limit = self.per_partition_limit
+        if isinstance(limit, bool) or not isinstance(limit, int):
+            raise SourceCatalogError("sample.perPartitionLimit must be an integer")
+        if not 0 < limit <= MAX_JSON_SAFE_INTEGER:
+            raise SourceCatalogError("sample.perPartitionLimit must be a positive JSON-safe integer")
+        object.__setattr__(self, "stratify_by", tuple(self.stratify_by))
+        if self.partition_by not in SAMPLE_PARTITION_KEYS:
+            raise SourceCatalogError(f"sample.partitionBy must be one of {list(SAMPLE_PARTITION_KEYS)}")
+        if self.stratify_by not in SAMPLE_STRATUM_KEYS:
+            raise SourceCatalogError(f"sample.stratifyBy must be one of {[list(k) for k in SAMPLE_STRATUM_KEYS]}")
+        if self.order_hash not in SAMPLE_ORDER_HASHES:
+            raise SourceCatalogError(f"sample.orderHash must be one of {list(SAMPLE_ORDER_HASHES)}")
+        if self.allocation not in SAMPLE_ALLOCATIONS:
+            raise SourceCatalogError(f"sample.allocation must be one of {list(SAMPLE_ALLOCATIONS)}")
+
+    @classmethod
+    def from_mapping(cls, value: Mapping[str, Any] | None) -> SamplePolicy | None:
+        if value is None:
+            return None
+        if not isinstance(value, Mapping):
+            raise SourceCatalogError("sample must be an object")
+        known = {"seed", "perPartitionLimit", "partitionBy", "stratifyBy", "orderHash", "allocation"}
+        unexpected = sorted(set(value) - known)
+        if unexpected:
+            raise SourceCatalogError(f"sample has unknown keys: {unexpected}")
+        for required in ("seed", "perPartitionLimit"):
+            if required not in value:
+                raise SourceCatalogError(f"sample.{required} is required")
+        return cls(
+            seed=value["seed"],
+            per_partition_limit=value["perPartitionLimit"],
+            partition_by=value.get("partitionBy", SAMPLE_PARTITION_KEYS[0]),
+            stratify_by=tuple(value.get("stratifyBy") or SAMPLE_STRATUM_KEYS[0]),
+            order_hash=value.get("orderHash", SAMPLE_ORDER_HASHES[0]),
+            allocation=value.get("allocation", SAMPLE_ALLOCATIONS[0]),
+        )
+
+    def canonical(self) -> dict[str, Any]:
+        return {
+            "allocation": self.allocation,
+            "orderHash": self.order_hash,
+            "partitionBy": self.partition_by,
+            "perPartitionLimit": self.per_partition_limit,
+            "seed": self.seed,
+            "stratifyBy": list(self.stratify_by),
+        }
+
+    def order_key(self, document_id: str) -> str:
+        """``md5(documentId:seed)`` — the declared per-item ordering hash."""
+
+        return hashlib.md5(f"{document_id}:{self.seed}".encode(), usedforsecurity=False).hexdigest()
+
+    def stratum(self, candidate: SampleCandidate) -> str:
+        """``agencyId|publicationYear``, with either part ``unknown`` when unstated."""
+
+        agency = "+".join(sorted(candidate.agency_ids)) or SAMPLE_UNKNOWN_STRATUM_PART
+        date = candidate.publication_date
+        year = date[:4] if isinstance(date, str) and len(date) >= 4 else SAMPLE_UNKNOWN_STRATUM_PART
+        return f"{agency}|{year}"
+
+    def draw(self, candidates: Iterable[SampleCandidate]) -> frozenset[str]:
+        """Return the ``sourceItemId`` set this policy draws from one frame."""
+
+        partitions: dict[str, list[SampleCandidate]] = {}
+        for candidate in candidates:
+            partitions.setdefault(candidate.document_type, []).append(candidate)
+
+        drawn: set[str] = set()
+        for members in partitions.values():
+            strata: dict[str, list[SampleCandidate]] = {}
+            order_keys = {candidate.document_id: self.order_key(candidate.document_id) for candidate in members}
+            for candidate in members:
+                strata.setdefault(self.stratum(candidate), []).append(candidate)
+            scored: list[tuple[float, str, str, str]] = []
+            for rows in strata.values():
+                rows.sort(key=lambda candidate: (order_keys[candidate.document_id], candidate.document_id))
+                spread = math.sqrt(len(rows))
+                for rank, candidate in enumerate(rows, start=1):
+                    scored.append(
+                        (
+                            rank / spread,
+                            order_keys[candidate.document_id],
+                            candidate.document_id,
+                            candidate.source_item_id,
+                        )
+                    )
+            scored.sort()
+            drawn.update(entry[3] for entry in scored[: self.per_partition_limit])
+        return frozenset(drawn)
 
 
 @dataclass(frozen=True)
@@ -252,10 +413,20 @@ class NormalizationPolicy:
         requires both.  ``agencyNames`` is the declared crosswalk.  An agency
         code with no declared name is not guessed and not filled with its own
         code: the item takes a non-selected disposition naming the gap.
+
+    ``sourceUrl`` is the third, and only for a source whose records omit it.
+    The schema requires an http(s) URL and admits no null.  A source system
+    that publishes a per-item address but does not restate it inside each
+    record can declare the address form once, here, as
+    ``sourceUrlTemplate`` — one ``{documentId}`` placeholder, filled with the
+    percent-encoded source-stated identifier.  A record that *does* state its
+    own URL keeps it; the template never overwrites an observed value, and a
+    universe that declares none leaves the gap where it is.
     """
 
     language: str
     agency_names: Mapping[str, str] = field(default_factory=dict)
+    source_url_template: str | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.language, str) or LANGUAGE_RE.fullmatch(self.language) is None:
@@ -265,22 +436,48 @@ class NormalizationPolicy:
             _require_text(key, field_name="normalization.agencyNames key")
             _require_text(value, field_name=f"normalization.agencyNames[{key}]")
         object.__setattr__(self, "agency_names", dict(sorted(names.items())))
+        template = self.source_url_template
+        if template is not None:
+            _require_text(template, field_name="normalization.sourceUrlTemplate")
+            if template.count(SOURCE_URL_PLACEHOLDER) != 1:
+                raise SourceCatalogError(
+                    f"normalization.sourceUrlTemplate must hold exactly one {SOURCE_URL_PLACEHOLDER} placeholder"
+                )
+            if HTTP_URL_RE.fullmatch(template) is None:
+                raise SourceCatalogError("normalization.sourceUrlTemplate must be an http(s) URL")
 
     @classmethod
     def from_mapping(cls, value: Mapping[str, Any] | None) -> NormalizationPolicy:
         if not isinstance(value, Mapping):
             raise SourceCatalogError("normalization must be an object declaring at least a language")
-        unexpected = sorted(set(value) - {"language", "agencyNames"})
+        unexpected = sorted(set(value) - {"language", "agencyNames", "sourceUrlTemplate"})
         if unexpected:
             raise SourceCatalogError(f"normalization has unknown keys: {unexpected}")
         if "language" not in value:
             raise SourceCatalogError(
                 "normalization.language is required: the schema admits no null language and no source states one"
             )
-        return cls(language=value["language"], agency_names=value.get("agencyNames") or {})
+        return cls(
+            language=value["language"],
+            agency_names=value.get("agencyNames") or {},
+            source_url_template=value.get("sourceUrlTemplate"),
+        )
 
     def canonical(self) -> dict[str, Any]:
-        return {"agencyNames": dict(self.agency_names), "language": self.language}
+        return {
+            "agencyNames": dict(self.agency_names),
+            "language": self.language,
+            "sourceUrlTemplate": self.source_url_template,
+        }
+
+    def source_url(self, stated: str | None, document_id: str) -> str | None:
+        """The item's source URL: the one the record states, else the declared form."""
+
+        if isinstance(stated, str) and HTTP_URL_RE.fullmatch(stated) is not None:
+            return stated
+        if self.source_url_template is None:
+            return stated
+        return self.source_url_template.replace(SOURCE_URL_PLACEHOLDER, quote(document_id, safe=""))
 
     def agencies(self, agency_ids: Iterable[str]) -> tuple[list[dict[str, str]] | None, tuple[str, str] | None]:
         """Resolve agency codes to the schema's ``{agencyId, agencyName}`` pairs."""
@@ -317,6 +514,9 @@ class UniverseSpec:
     # selected item, and the schema will not accept a null one.
     normalization: NormalizationPolicy
     scope: UniverseScope = field(default_factory=UniverseScope)
+    # Absent means the scope alone decides ``S``: every item the scope admits
+    # and the source can supply is selected.
+    sample: SamplePolicy | None = None
 
     def __post_init__(self) -> None:
         _require_absolute_id(self.universe_id, field_name="universeId")
@@ -336,6 +536,7 @@ class UniverseSpec:
             "selectionPolicy",
             "sourceSystem",
             "scope",
+            "sample",
             "normalization",
         }
         unexpected = sorted(set(value) - known)
@@ -371,6 +572,7 @@ class UniverseSpec:
             source_system_id=system["sourceSystemId"],
             source_system_version=system["sourceSystemVersion"],
             scope=UniverseScope.from_mapping(value.get("scope")),
+            sample=SamplePolicy.from_mapping(value.get("sample")),
             normalization=NormalizationPolicy.from_mapping(value.get("normalization")),
         )
 
@@ -385,6 +587,7 @@ class UniverseSpec:
 
         return {
             "normalization": self.normalization.canonical(),
+            "sample": self.sample.canonical() if self.sample is not None else None,
             "scope": self.scope.canonical(),
             "sourceSystem": self.source_system_record(),
             "universeId": self.universe_id,
@@ -425,8 +628,15 @@ def load_universe_spec(path: Path | str) -> UniverseSpec:
 
 __all__ = [
     "MAX_JSON_SAFE_INTEGER",
+    "SAMPLE_ALLOCATIONS",
+    "SAMPLE_ORDER_HASHES",
+    "SAMPLE_PARTITION_KEYS",
+    "SAMPLE_STRATUM_KEYS",
+    "SOURCE_URL_PLACEHOLDER",
     "NormalizationPolicy",
     "PublicationWindow",
+    "SampleCandidate",
+    "SamplePolicy",
     "SourceCatalogError",
     "UniverseScope",
     "UniverseSpec",
