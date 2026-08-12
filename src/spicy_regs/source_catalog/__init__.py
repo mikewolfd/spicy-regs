@@ -46,12 +46,14 @@ from spicy_regs.source_catalog.published_catalog import (
 )
 from spicy_regs.source_catalog.universe import (
     NormalizationPolicy,
+    PinnedSource,
     PublicationWindow,
     SampleCandidate,
     SamplePolicy,
     SourceCatalogError,
     UniverseScope,
     UniverseSpec,
+    composite_source_version,
     load_universe_spec,
 )
 from spicy_regs.source_catalog.validate import validate_bundle_records
@@ -70,6 +72,7 @@ __all__ = [
     "NormalizedDraft",
     "Observation",
     "ObservedTopic",
+    "PinnedSource",
     "PublicationWindow",
     "SampleCandidate",
     "SamplePolicy",
@@ -79,6 +82,7 @@ __all__ = [
     "UniverseScope",
     "UniverseSpec",
     "build_source_catalog_release",
+    "composite_source_version",
     "discover_published_catalog",
     "discovered_item",
     "load_universe_spec",

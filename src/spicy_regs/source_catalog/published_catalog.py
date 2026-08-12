@@ -29,11 +29,35 @@ coerced, not zeroed, and not dropped: the normalized field stays unstated and
 the raw string is carried as a source observation, so the policy can refuse the
 item by name and a reader can still see what the source actually said.
 
-Renditions are whatever the row offers for capture — its ``file_url`` and any
-attachment URLs, with the sizes the source declares.  No expected digest
-appears: the table states sizes and never hashes, and this producer does not
-guess one.  The body text column is not read; it is a derived capture rather
-than source-native metadata, and the catalog states it separately.
+The body text column is not read; it is a derived capture rather than
+source-native metadata, and the catalog states it separately.
+
+Where a rendition comes from
+----------------------------
+The table states a ``file_url`` for 2.5% of its rows, so a universe that wants
+renditions has to look further than the row.  Three families are available and
+the universe ranks them; an item takes the *highest family that has anything*
+and carries only that one, so ``candidateRenditions`` names the rendition to
+capture rather than a menu:
+
+``mirrulations-mirror``
+    Objects from a sealed mirror index, each with a verified
+    ``expectedSha256`` — the index was built by fetching those exact bytes
+    under their listed ETag and digesting them.  This is the only family whose
+    digest is known before capture, which is why the owner ranks it first.
+
+``source-file-url``
+    The row's own ``file_url`` and attachment URLs, with the sizes the catalog
+    declares and no digest, because the catalog states sizes and never hashes.
+
+``federal-register``
+    The FR ``pdf_url`` and ``html_url`` for a row that states its own
+    ``frDocNum``.  Address only: no digest, no size.  The join is on the
+    document's own number; nothing here reaches an FR document through a
+    shared docket, which would attach another document's rendition to this one.
+
+Passing no index and no FR table leaves the catalog's own locators, so the
+adapter still works against the published table alone.
 """
 
 from __future__ import annotations
@@ -43,6 +67,7 @@ from collections.abc import Iterator, Mapping, Sequence
 from datetime import date
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 from spicy_regs.source_catalog.discovery import (
     CandidateRendition,
@@ -51,12 +76,32 @@ from spicy_regs.source_catalog.discovery import (
     Observation,
     SourceOutcome,
 )
+from spicy_regs.source_catalog.mirrulations import MIRROR_RENDITION_ID, MIRROR_URL_TEMPLATE
 from spicy_regs.source_catalog.universe import INSTANT_RE, RIN_RE, SourceCatalogError
+
+#: The mirror the verified index was built from.  Named here so the locator
+#: this adapter writes and the one ``source_catalog.mirrulations`` writes for
+#: the same object are the same string.
+MIRROR_BUCKET = "mirrulations"
 
 SOURCE_ITEM_ID_PREFIX = "regulations.gov/"
 FILE_RENDITION_ID = "source-file-url"
 ATTACHMENT_RENDITION_ID_PREFIX = "source-attachment-"
+FEDERAL_REGISTER_RENDITION_ID = "federal-register"
 DEFAULT_MEDIA_TYPE = "application/octet-stream"
+
+#: ``{documentId: [{key, sha256, size}, ...]}`` — one sealed mirror index, as
+#: ``tools/build_mirrulations_mirror_index.py`` writes it.
+MirrorIndex = Mapping[str, Sequence[Mapping[str, Any]]]
+
+#: Rendition families, best first.  A universe overrides this by declaring
+#: ``renditionPreference``; it is spelled here so a caller with no universe
+#: still gets the order the owner chose rather than an accident of dict order.
+DEFAULT_RENDITION_PREFERENCE: tuple[str, ...] = (
+    MIRROR_RENDITION_ID,
+    FILE_RENDITION_ID,
+    FEDERAL_REGISTER_RENDITION_ID,
+)
 
 #: The columns this adapter reads.  ``text_content`` is deliberately absent.
 CATALOG_COLUMNS: tuple[str, ...] = (
@@ -170,6 +215,73 @@ def _attachment_urls(row: Mapping[str, Any]) -> set[str]:
     return {url for attachment in _attachments(row) if (url := _text(attachment.get("url"))) is not None}
 
 
+def _mirror_renditions(document_id: str, mirror_index: MirrorIndex | None) -> tuple[CandidateRendition, ...]:
+    """The verified mirror objects held for one document, best family first.
+
+    Every one carries an ``expectedSha256`` because the index was built by
+    fetching those exact bytes under their listed ETag and digesting them —
+    the same discipline ``source_catalog.mirrulations`` applies to a draw, and
+    the reason the mirror outranks a locator whose bytes nobody has read.
+    """
+
+    if mirror_index is None:
+        return ()
+    entries = mirror_index.get(document_id) or ()
+    renditions: list[CandidateRendition] = []
+    for position, entry in enumerate(sorted(entries, key=lambda item: str(item["key"]))):
+        key = str(entry["key"])
+        suffix = f"-{position}" if position else ""
+        renditions.append(
+            CandidateRendition(
+                rendition_id=f"{MIRROR_RENDITION_ID}{suffix}",
+                media_type=_media_type(key),
+                locator=MIRROR_URL_TEMPLATE.format(bucket=MIRROR_BUCKET, key=quote(key, safe="/")),
+                expected_sha256=str(entry["sha256"]),
+                expected_byte_size=int(entry["size"]),
+            )
+        )
+    return tuple(renditions)
+
+
+def _federal_register_renditions(
+    row: Mapping[str, Any], federal_register: Mapping[str, Mapping[str, Any]] | None
+) -> tuple[CandidateRendition, ...]:
+    """The Federal Register locators for a document that states its FR number.
+
+    No digest and no size: the FR table states addresses, not bytes.  The join
+    is on the document's own ``frDocNum``; nothing here reaches an FR document
+    through a shared docket, which would attach another document's rendition
+    to this one.
+    """
+
+    if federal_register is None:
+        return ()
+    number = _text(row.get("fr_doc_num"))
+    if number is None:
+        return ()
+    record = federal_register.get(number)
+    if record is None:
+        return ()
+    renditions: list[CandidateRendition] = []
+    for rendition_id, field_name in (
+        (f"{FEDERAL_REGISTER_RENDITION_ID}-pdf", "pdf_url"),
+        (f"{FEDERAL_REGISTER_RENDITION_ID}-html", "html_url"),
+    ):
+        locator = _text(record.get(field_name))
+        if locator is None:
+            continue
+        renditions.append(
+            CandidateRendition(
+                rendition_id=rendition_id,
+                media_type=_media_type(locator) if field_name == "pdf_url" else "text/html",
+                locator=locator,
+                expected_sha256=None,
+                expected_byte_size=None,
+            )
+        )
+    return tuple(renditions)
+
+
 def _renditions(row: Mapping[str, Any]) -> tuple[CandidateRendition, ...]:
     """Every distinct locator the row offers, with the sizes it declares.
 
@@ -263,7 +375,42 @@ def _source_issued_version(row: Mapping[str, Any], document_id: str) -> str:
     raise SourceCatalogError(f"{document_id}: the published catalog states neither a modify nor a posted date")
 
 
-def discovered_item(row: Mapping[str, Any]) -> DiscoveredItem:
+def resolve_renditions(
+    row: Mapping[str, Any],
+    document_id: str,
+    *,
+    mirror_index: MirrorIndex | None = None,
+    federal_register: Mapping[str, Mapping[str, Any]] | None = None,
+    preference: Sequence[str] = DEFAULT_RENDITION_PREFERENCE,
+) -> tuple[CandidateRendition, ...]:
+    """Take the highest-ranked family that has anything, and only that one.
+
+    The declared order is a preference, not a merge: an item whose bytes the
+    mirror already holds does not also carry a locator nobody has read, so a
+    consumer reading ``candidateRenditions`` sees the rendition to capture
+    rather than a menu it has to re-rank. Every family the universe does not
+    name is skipped entirely, so a source can be switched off by declaration.
+    """
+
+    families: dict[str, tuple[CandidateRendition, ...]] = {
+        MIRROR_RENDITION_ID: _mirror_renditions(document_id, mirror_index),
+        FILE_RENDITION_ID: _renditions(row),
+        FEDERAL_REGISTER_RENDITION_ID: _federal_register_renditions(row, federal_register),
+    }
+    for family in preference:
+        offered = families.get(family)
+        if offered:
+            return offered
+    return ()
+
+
+def discovered_item(
+    row: Mapping[str, Any],
+    *,
+    mirror_index: MirrorIndex | None = None,
+    federal_register: Mapping[str, Mapping[str, Any]] | None = None,
+    preference: Sequence[str] = DEFAULT_RENDITION_PREFERENCE,
+) -> DiscoveredItem:
     """Report one discovery record for one published-catalog row."""
 
     document_id = _text(row.get("document_id"))
@@ -309,7 +456,15 @@ def discovered_item(row: Mapping[str, Any]) -> DiscoveredItem:
         ),
         # A withdrawn document is the source's own settlement, so it offers
         # nothing to capture.
-        renditions=() if withdrawn else _renditions(row),
+        renditions=()
+        if withdrawn
+        else resolve_renditions(
+            row,
+            document_id,
+            mirror_index=mirror_index,
+            federal_register=federal_register,
+            preference=preference,
+        ),
         outcome=SourceOutcome.DELETED if withdrawn else SourceOutcome.AVAILABLE,
         outcome_reason_code="source.withdrawn-after-publication" if withdrawn else None,
         outcome_reason=(
@@ -321,7 +476,14 @@ def discovered_item(row: Mapping[str, Any]) -> DiscoveredItem:
     )
 
 
-def discover_published_catalog(catalog_path: Path | str, *, batch_size: int = 50_000) -> Iterator[DiscoveredItem]:
+def discover_published_catalog(
+    catalog_path: Path | str,
+    *,
+    batch_size: int = 50_000,
+    mirror_index: MirrorIndex | None = None,
+    federal_register: Mapping[str, Mapping[str, Any]] | None = None,
+    preference: Sequence[str] = DEFAULT_RENDITION_PREFERENCE,
+) -> Iterator[DiscoveredItem]:
     """Stream one discovery record per row of the published catalog.
 
     Rows arrive in Parquet order and in batches, so the whole table never has
@@ -344,16 +506,26 @@ def discover_published_catalog(catalog_path: Path | str, *, batch_size: int = 50
 
     for batch in parquet.iter_batches(batch_size=batch_size, columns=list(CATALOG_COLUMNS)):
         for row in batch.to_pylist():
-            yield discovered_item(row)
+            yield discovered_item(
+                row,
+                mirror_index=mirror_index,
+                federal_register=federal_register,
+                preference=preference,
+            )
 
 
 __all__ = [
     "ATTACHMENT_RENDITION_ID_PREFIX",
     "CATALOG_COLUMNS",
+    "DEFAULT_RENDITION_PREFERENCE",
+    "FEDERAL_REGISTER_RENDITION_ID",
+    "MIRROR_BUCKET",
+    "MirrorIndex",
     "FILE_RENDITION_ID",
     "MEDIA_TYPES",
     "OBSERVATION_KEYS",
     "SOURCE_ITEM_ID_PREFIX",
     "discover_published_catalog",
     "discovered_item",
+    "resolve_renditions",
 ]
