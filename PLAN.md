@@ -438,3 +438,102 @@ exactly this tear and converts to a pass when it closes.
 Regenerate the applicability policy against RefSpec's catalog after the
 validation-cost reset (`RefSpec/plans/validation-cost-reset-plan.md`) stops
 moving that repository; regenerating against a moving catalog re-tears it.
+
+## 9. The `SourceCatalogRelease` producer, and the universe nobody has named
+
+Landed 2026-08-12 on `main` in `../spicy-regs-landing` as four commits:
+`9293edb` (pinned schema bytes), `09f26dd` (producer), `98d0c88`
+(Mirrulations discovery), `a2ef0d3` (tests). SpicySearch `PLAN.md`
+"Execution order" step 2 is the contract this answers.
+
+### What exists
+
+`src/spicy_regs/source_catalog/` builds one sealed bundle of six files:
+`release.json`, `manifests/global.json`, `data/source-items.json`, and
+byte-identical copies of the three schemas Rulespec Core owns. Release
+identity is `urn:spicy-regs:source-catalog-release:v1:` over
+SHA-256(canonical(`{format, formatVersion, content}`)); `publishedAt`,
+`releaseStatus`, and `buildRunId` sit in the identity-excluded `annotations`
+envelope, so two publishes of one selection share one identity. Set digests
+are taken over deduplicated sorted `sourceItemId` lists. Publication is one
+atomic rename under the v3 publication lock. Canonical JSON is
+`document_release_v3.canonical_json_bytes`, so section 7's count does not
+move.
+
+The three schema files are pinned under
+`src/spicy_regs/fixtures/rulespec/source-catalog-release-v1/` from `rulespec`
+candidate
+`urn:rulespec:core:2de89ad867a3794cc1006ef4cd0301248d48a719b5cbab1946f62c2c30ac0ec5`
+(`1.0.0-candidate.1`):
+
+- release-root `1b7f0ccdefe52973db97fb145e3893a43bf4b12dcf00630a13af87a3486f4bbf`, 8,764 bytes;
+- member-manifest `c22acd4d8d397d2bd790ee42fc7a44f93fccce3b8ae39e5e378967035b075d4c`, 3,038 bytes;
+- source-items `94c3953f0a615a94d3a6f6489d9095ab8882f82d677c1661a9b79d3642e90702`, 8,818 bytes.
+
+Those three bytes derive
+`urn:spicy:schema-set:v1:cffb8f62a70754beb07aa46886649506487712f7a5efea4e0dcc2021b99f02d6`,
+the identity Rulespec's own sealed fixture carries. `pins.json` records each
+digest, byte size, and `$id`, and `schema_pins.py` re-checks all of them at
+load. The crossing is data only: copied bytes read through a product-local
+reader, following `fixtures/rulespec-core-release-v1.json`. No import, no
+path into the sibling checkout.
+
+`validate.py` gates every bundle before publication — jsonschema Draft
+2020-12 against the pinned bytes, then the rules a JSON Schema cannot state
+(a selected item needs a rendition; a non-selected disposition needs a
+machine-legible reason code and a human reason; identifiers are unique; a
+source-observed topic is not a RefSpec concept; identity, set digests,
+counts, and coverage re-derive from the rows). It is the producer-side gate
+and not the contract authority: cross-product verdict agreement runs
+Rulespec's own validator over shared fixtures at SpicySearch step 7.
+`verify.py` reads a published bundle back off disk and re-derives everything
+it claims.
+
+Measured 2026-08-12 against Rulespec's sealed valid fixture:
+`release_identity`, `set_digest`, `derive_counts`, and `derive_coverage`
+reproduce
+`urn:spicy-regs:source-catalog-release:v1:2bce80ff4f54251a54930ee86a1697d5e946f6f07f6b6b269ecefd0a8bafc8bc`
+and its recorded digests, counts, and coverage exactly. The 21 tests in
+`tests/test_source_catalog_release.py` pass, as do the 92 in
+`tests/test_mirrulations_document_corpus.py`,
+`tests/test_mirrulations_reader.py`, and
+`tests/test_body_retrieval_corpus.py` beside them.
+
+### The universe awaits the owner's naming
+
+`UniverseSpec` is a configuration value: universe identity, catalog identity,
+selection-policy identity and version, source system, the scope facets
+(location prefixes, agencies, dockets, document types, publication window,
+item budget), and the normalization policy. `policy_document()` is its
+canonical form and `policy_sha256()` the digest the release's
+`selectionPolicy` quotes. Nothing in `src/spicy_regs/source_catalog/` names a
+corpus, an agency, a docket, or a date window; the only universe identifiers
+in the tree are the fixture ones in the test module. Naming the corpus
+universe — its identity, its catalog identity, its scope, and its policy
+version — is the product owner's decision and produces a configuration file,
+not a code change.
+
+### What the source cannot supply
+
+Two of the ten normalized MVP fields do not exist in a Regulations.gov
+document record, and the schema admits a null for neither:
+
+- `language`. The record states none. The universe declares it, inside
+  `policySha256`, so a consumer sees that it was chosen rather than observed.
+  A universe that declares no language is refused at load.
+- `agencies[].agencyName`. The record states an agency code and never a name.
+  The universe declares the crosswalk. An item whose agency code the universe
+  does not name takes disposition `failed` with
+  `policy.agency-name-undeclared` — it does not borrow its own code as a name.
+  `tools/build_agency_crosswalk_artifact.py` is where a real crosswalk would
+  come from; wiring it in is not done.
+
+A Regulations.gov document record also carries no topic vocabulary, so
+`sourceObservedTopics` is empty for every item this adapter produces. The
+reader maps an `attributes.topics` array if the source ever serves one, and
+the boundary check against RefSpec concept identifiers runs either way.
+
+The mirror rendition carries an expected SHA-256 because SpicyRegs already
+verified those exact bytes at that locator. The source-declared rendition
+carries the size the record declares and no digest, because the source states
+a size for that URL and never a hash.
