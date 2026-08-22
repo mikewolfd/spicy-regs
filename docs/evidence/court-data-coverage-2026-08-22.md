@@ -223,14 +223,67 @@ docket count suggests. Both facts are load-bearing.
 | APA dockets with no decision at all | 6,939 | 90.1% |
 | clusters sitting on an APA docket | 1,155 | 0.011% of all clusters |
 
-**90% of the APA docket set has no decision attached, and that is a property of
-the upstream data, not of this ingest.** The two halves come from different
-places: `court_dockets` is RECAP, sourced from PACER, and records that a suit
-exists. Opinion clusters are sourced from court-website scrapers and reporters,
-and record that a decision was *published*. A district-court APA challenge that
-settled, was voluntarily dismissed, or ended in an unpublished order leaves a
-docket and no cluster. So the ceiling here is not something more streaming would
-raise.
+**90% of the APA docket set has no decision attached** — and the explanation
+first given for that was substantially wrong, so it is worth reading the
+correction rather than the original.
+
+The original reading: `court_dockets` is RECAP, sourced from PACER, and records
+that a suit exists; opinion clusters are sourced from court-website scrapers and
+reporters, and record that a decision was *published*. A challenge that settled,
+was dismissed, or ended in an unpublished order leaves a docket and no cluster.
+That mechanism is real and accounts for much of the 90%.
+
+What it does not account for is **D.D.C.**
+
+### 2a. The D.D.C. anomaly: same case, two docket records
+
+Once every cluster could say which court decided it (gap 8), the per-court
+decision rates became checkable, and one of them is not like the others:
+
+| Court | APA dockets | With ≥1 decision | Rate |
+|---|---:|---:|---:|
+| `dcd` (D.D.C.) | **1,571** | **0** | **0.0%** |
+| `nysd` (S.D.N.Y.) | 259 | 44 | 17.0% |
+| `cand` (N.D. Cal.) | 351 | 53 | 15.1% |
+
+D.D.C. is the **largest APA venue in the set** — 1,571 of 7,698 dockets, 20.4% —
+and it is the classic forum for agency-review litigation. A genuine 0.0%
+published-decision rate there, while its peers run 15–17%, is not credible.
+
+It is not a broken id, either: 1,516 of those 1,571 docket ids are present in the
+`dockets` dump and agree that the court is `dcd`. And D.D.C. is not missing from
+the corpus — **46,581 clusters sit on a D.D.C. docket.** The decisions exist.
+They are attached to a *different docket record for the same case*.
+
+CourtListener carries duplicate dockets: a RECAP/PACER-sourced one, which is
+what a `nature_of_suit=899` search returns, and a scraper-sourced one, which is
+what the opinion cluster hangs off. For most districts these coincide. For
+D.D.C. they frequently do not:
+
+| Case | RECAP docket | Cluster's docket |
+|---|---:|---:|
+| `HALBIG v. SEBELIUS` | 4,211,989 | 120,436 |
+| `PUBLIC CITIZEN HEALTH RESEARCH GROUP v. ACOSTA` | 14,523,291 | 16,255,289 |
+| `BLUE CROSS AND BLUE SHIELD OF FLORIDA v. DEPT…` | 69,500,499 | 70,282,519 |
+| `NORTH AMERICA'S BUILDING TRADES UNIONS v. DEPT…` | 69,864,612 | 70,284,623 |
+
+**Conservatively, at least 249 of the 6,939 "no decision" APA dockets do have a
+decision in this corpus**, reachable only through a different docket id — 184 of
+them D.D.C. That count requires a distinctive case name (≥30 characters), unique
+on both sides within the court, and a decision not predating the filing. Loosen
+the name match and D.D.C. alone yields 499, so 249 is a floor and not an
+estimate.
+
+*The remedy, not applied here:* the `dockets` dump carries `docket_number`, and
+two docket records for one case share it within a court. A `(court_id,
+docket_number)` join is exact where case-name matching is fuzzy, and capturing
+that column costs nothing extra because the dump is already being read for
+`court_id`. It is **deliberately not** folded into the in-flight APA capture: a
+fuzzy join has no business entering a capture silently, and restarting an
+8.6-hour pass at 10% to add ~250 clusters is a bad trade.
+
+So the ceiling is *partly* an upstream property and *partly* a join this ingest
+cannot yet make. Both halves are real; only the first was recorded before.
 
 Two smaller numbers worth stating rather than rounding away:
 
@@ -452,6 +505,14 @@ and 56 are not, for a reason nothing on this side can fix.
    the APA docket set is emptier than section 2 says. Note also that the first
    250,000 rows yielded 17 — the same 17 the bounded 2026-08-22 run found, from
    the same 1.24 GiB, which is a free reproducibility check on the reader.
+   *A qualification the capture cannot fix:* **the 1,155-cluster target set is an
+   undercount.** It is every cluster reachable from an APA docket *by docket id*,
+   and [2a](#2a-the-ddc-anomaly-same-case-two-docket-records) shows at least 249
+   more APA decisions exist in this corpus behind a duplicate docket record, 184
+   of them D.D.C. The capture's coverage should therefore be read as a fraction
+   of *the clusters the docket-id join can see*, which is what its receipt says,
+   and not as a fraction of APA decisions in the corpus. Widening the target set
+   needs the `(court_id, docket_number)` join described in gap 7.
 
 6. ~~**12,666 ingested opinions (5.1%) name a cluster the cluster dump does not
    contain.**~~ **Closed: there are none.** All 250,000 resolve. The 12,666 was
@@ -460,13 +521,22 @@ and 56 are not, for a reason nothing on this side can fix.
    in [section 2](#2-apa-docket-set-vs-decisions-matched). *No reconciliation
    against the publisher was needed, because there was nothing to reconcile.*
 
-7. **90.1% of APA dockets have no decision.** This is an upstream property, not a
-   coverage failure: RECAP records that a suit exists, opinion clusters record
-   that a decision was published, and most district-court APA suits end without a
-   published opinion.
-   *Cost:* not closable by more streaming. Closing it would mean capturing RECAP
-   *documents* — see gap 4 — and accepting that most of what returns is docket
-   metadata, not opinions.
+7. **90.1% of APA dockets have no decision.** ~~This is an upstream property, not
+   a coverage failure.~~ **Partly wrong — reopened.** The upstream mechanism is
+   real and explains most of the 90%, but not all of it: at least **249 of the
+   6,939** do have a decision in this corpus, attached to a *duplicate docket
+   record for the same case*. D.D.C. is the concentration — 1,571 APA dockets,
+   the largest venue in the set, **0.0%** matched against peers at 15–17% — and
+   its 46,581 clusters are all hanging off scraper-sourced dockets rather than
+   the RECAP ones a nature-of-suit search returns. See
+   [2a](#2a-the-ddc-anomaly-same-case-two-docket-records).
+   *Cost to close:* capture `docket_number` alongside `court_id` in the
+   docket→court map — free, since the dump is already being read for the court —
+   and join on `(court_id, docket_number)`, which is exact where the case-name
+   match used to diagnose this is fuzzy. Not done here, and deliberately kept out
+   of the in-flight capture.
+   *What is still upstream:* the remainder. Most district-court APA suits really
+   do end without a published opinion, and no join recovers those.
 
 8. ~~**Clusters are the whole corpus, not just federal.**~~ **Closed.**
    `court_opinion_clusters` now carries `court_id`, `court_jurisdiction` and
@@ -480,8 +550,42 @@ and 56 are not, for a reason nothing on this side can fix.
    *What it cost:* the `dockets` read is one pass for two columns. Checked
    against the publisher's listing of 46 datasets first: **there is no smaller
    published docket→court map**, so the 4.67 GiB is the cheapest form the answer
-   comes in. Measured at ~0.74 MiB/s while sharing the pipe with the gap-5 pass;
-   alone it is the ~46 minutes predicted.
+   comes in. **Measured: 71,677,647 dockets, 4.67 GiB read, 0 resumes, 111
+   minutes at 0.72 MiB/s** — not the predicted 46, because it shared the bucket's
+   per-client cap with the gap-5 pass the whole way. Output 317.1 MiB.
+   *What it found:*
+
+   | | Clusters | Share |
+   |---|---:|---:|
+   | placed in a court | **10,070,727** | **100.0%** |
+   | in a federal court | **3,397,753** | **33.7%** |
+   | not federal | 6,672,974 | 66.3% |
+   | **no court resolvable** | **0** | **0.0%** |
+
+   Federal splits `F` 1,905,145 / `FD` 1,197,191 / `FS` 216,549 / `FB` 72,078 /
+   `FBP` 6,790. The largest single bucket in the whole corpus is `SA` (state
+   appellate) at 3,719,508, then `S` at 2,473,927 — which is the point: **two
+   thirds of `court_opinion_clusters` is state-court output**, and until now
+   there was no way to say so, let alone exclude it.
+
+   *Zero unresolvable is the number worth pausing on.* Every one of the ten
+   million clusters names a docket, and every one of those dockets is in the
+   71.7M-row `dockets` dump. Given that this same document once reported 12,666
+   phantom orphans on the opinions side, a genuine 100% here was checked rather
+   than assumed, and it holds.
+   *And an independent correctness check fell out of it:* all **1,155** APA
+   clusters classify as `FD`, federal district — 100%, no exceptions. An APA
+   docket set derived from a `nature_of_suit=899` RECAP search *should* be
+   entirely federal district, so a join that placed any of them in a state court
+   would be visibly wrong. None are. Top venues: `cand` 126, `nysd` 75, `mdd` 55,
+   `mad` 50, `txnd` 50. The venue that is *missing* from that list is what opened
+   [2a](#2a-the-ddc-anomaly-same-case-two-docket-records).
+   *Artifacts:* `output/court-data-2026-08-22/court_cluster_scope.parquet` plus
+   `cluster_court_scope_receipt.json`, and the map with its own receipt. Written
+   as a side table rather than folded into `court_opinion_clusters.parquet`
+   because the rewrite needs a second copy of a 3.9 GB file and free space is
+   below the 100 GiB floor — and because another pass is currently digesting
+   that exact file.
    *The design constraint worth recording:* the join happens while each row is
    shaped, not afterwards. A duckdb join of ten million clusters against
    seventy-odd million dockets would rewrite the whole 3.9 GB table, and the
@@ -526,8 +630,19 @@ written. Three of its findings did not survive contact.
 | Was recorded as | Actually |
 |---|---|
 | 12,666 opinions (5.1%) orphaned, cause unexplained | **Zero orphaned.** The figure was a cluster count subtracted from an opinion count; the remainder is exactly the sibling concurrences and dissents |
+| 90.1% of APA dockets have no decision — "an upstream property, not a coverage failure" | **Partly a coverage failure.** At least 249 of the 6,939 have a decision here, behind a duplicate docket record — 184 of them D.D.C., a venue measured at **0.0%** against peers at 15–17% |
 | Pre-2021 unreachable for want of a URL shape | **OT2017–OT2020**: 204 of 260 rows reachable once the volume layout is read, 56 blocked by 404s at the Court's own URLs. **OT2016 and earlier**: no slip index exists — a different source, not a branch |
 | `court_opinions` unpublished | **Three** of the four court tables are unpublished; `court_opinion_clusters` and `court_opinion_bodies` are 404 on R2 too |
+
+The D.D.C. one is the entry that most deserves attention, because of *how* it
+was found. Nobody went looking for it. Gap 8 was closed for an unrelated reason —
+"restrict decisions to federal courts" — and giving every cluster a `court_id`
+made per-court decision rates computable for the first time, at which point a
+0.0% sitting beside two 15–17%s was impossible to miss. The verdict it overturned
+had been reached by reasoning about how the two upstream sources differ, which
+was a correct mechanism applied to a number it did not fully explain. A plausible
+mechanism is not a measurement, and this document had been treating one as the
+other.
 
 Three findings are new, and each is the kind that produces wrong data rather
 than an error:
