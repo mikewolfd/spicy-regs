@@ -342,7 +342,7 @@ def test_generation_receipt_validates_every_manifest_artifact(tmp_path):
         result["metrics"]["ontology_segment_ledger"][
             "declared_profile_policies"
         ]
-            == 17
+            == 19
     )
     assert result["metrics"]["proceedings"]["citation_target_iris"] == 1
     assert result["metrics"]["source_membership"]["cross_posting_links"] == 1

@@ -305,7 +305,7 @@ def test_segmentation_evaluation_build_is_byte_deterministic(tmp_path: Path):
     assert {path.relative_to(first): path.read_bytes() for path in first.rglob("*") if path.is_file()} == {
         path.relative_to(second): path.read_bytes() for path in second.rglob("*") if path.is_file()
     }
-    assert first_receipt["profile_count"] == 17
+    assert first_receipt["profile_count"] == 19
     assert first_receipt["relationship_label_counts"] == {
         "no_declared_relation": 2,
         "related": 2,

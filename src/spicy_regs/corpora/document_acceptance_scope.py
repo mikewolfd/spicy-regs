@@ -162,6 +162,16 @@ PROFILE_ACCEPTANCE_POLICIES = (
         "A court docket identifies a case; an opinion must remain a separate artifact.",
     ),
     ProfileAcceptancePolicy(
+        "court-opinion-cluster-v1",
+        "relationship-context",
+        "A cluster groups the opinions issued in one decision; the opinion text is the artifact.",
+    ),
+    ProfileAcceptancePolicy(
+        "court-opinion-body-v1",
+        "document",
+        "A single judicial opinion is an evaluated legal document in its own right.",
+    ),
+    ProfileAcceptancePolicy(
         "usaspending-recipient-v1",
         "entity-context",
         "A recipient registry row may contextualize awards but is not a document.",
