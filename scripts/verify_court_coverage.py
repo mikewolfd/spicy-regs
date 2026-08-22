@@ -94,7 +94,17 @@ def cluster_coverage(clusters: Path, dockets: Path) -> dict:
 
 
 def body_coverage(bodies: Path, clusters: Path) -> dict:
-    """What the bounded opinion-text slice covers, and what it leaves out."""
+    """What the bounded opinion-text slice covers, and what it leaves out.
+
+    **Opinions and clusters are different units and this function reports both.**
+    An earlier reading of it subtracted the distinct-cluster count from the
+    opinion-row count and recorded the remainder as 12,666 unexplained orphans —
+    opinions naming a cluster the cluster dump did not contain. They were
+    nothing of the kind: they were the sibling concurrences and dissents that
+    share a cluster with the opinion ahead of them, which is exactly the grain
+    this table promises. ``opinions_not_resolving_to_a_cluster`` is the number
+    that measures orphans, and it is a row count on both sides.
+    """
     con = duckdb.connect()
     total = _rows(bodies)
     stats = con.execute(
@@ -104,7 +114,8 @@ def body_coverage(bodies: Path, clusters: Path) -> dict:
             count(*) FILTER (WHERE plain_text IS NOT NULL),
             count(*) FILTER (WHERE html_with_citations IS NOT NULL),
             min(CAST(opinion_id AS BIGINT)),
-            max(CAST(opinion_id AS BIGINT))
+            max(CAST(opinion_id AS BIGINT)),
+            count(DISTINCT cluster_id)
         FROM read_parquet('{bodies}')
         """
     ).fetchone()
@@ -115,6 +126,13 @@ def body_coverage(bodies: Path, clusters: Path) -> dict:
         JOIN read_parquet('{clusters}') c ON c.cluster_id = b.cluster_id
         """
     ).fetchone()[0]
+    resolved_rows = con.execute(
+        f"""
+        SELECT count(*)
+        FROM read_parquet('{bodies}') b
+        WHERE b.cluster_id IN (SELECT cluster_id FROM read_parquet('{clusters}'))
+        """
+    ).fetchone()[0]
     con.close()
     return {
         "opinions_ingested": total,
@@ -123,7 +141,13 @@ def body_coverage(bodies: Path, clusters: Path) -> dict:
         "opinions_with_html_with_citations": stats[2],
         "opinion_id_min": stats[3],
         "opinion_id_max": stats[4],
+        "distinct_clusters_named_by_ingested_opinions": stats[5],
         "clusters_resolved_for_ingested_opinions": joined,
+        # The orphan measure: rows on both sides of the comparison.
+        "opinions_resolving_to_a_cluster": resolved_rows,
+        "opinions_not_resolving_to_a_cluster": total - resolved_rows,
+        # Why the two counts above differ from the two counts before them.
+        "sibling_opinions_sharing_a_cluster": total - stats[5],
     }
 
 
