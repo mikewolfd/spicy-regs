@@ -82,6 +82,8 @@ _SOURCE_CACHE_DOCUMENT_TYPES: dict[str, tuple[str, str, str]] = {
     "cfr-section-v1": ("cfr", "sections", "CFR section"),
     "congress-bill-v1": ("congress", "bills", "Congressional bill"),
     "court-opinion-v1": ("supreme-court", "opinions", "Supreme Court opinion"),
+    "court-opinion-cluster-v1": ("courtlistener", "clusters", "CourtListener opinion cluster"),
+    "court-opinion-body-v1": ("courtlistener", "opinions", "CourtListener opinion"),
     "crs-report-v1": ("congressional-research-service", "reports", "CRS report"),
     "federal-register-document-v1": ("federal-register", "documents", "Federal Register document"),
     "gao-report-v1": ("gao", "reports", "GAO report"),

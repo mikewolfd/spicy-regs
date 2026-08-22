@@ -75,6 +75,8 @@ nav:
       - crs_reports: tables/crs_reports.md
       - court_dockets: tables/court_dockets.md
       - court_opinions: tables/court_opinions.md
+      - court_opinion_clusters: tables/court_opinion_clusters.md
+      - court_opinion_bodies: tables/court_opinion_bodies.md
       - usaspending_recipients: tables/usaspending_recipients.md
       - fcc_proceedings: tables/fcc_proceedings.md
       - fcc_filings: tables/fcc_filings.md

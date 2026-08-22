@@ -65,6 +65,8 @@ EXPECTED_SOURCE_TABLES = (
     "usaspending_recipients",
     "fcc_proceedings",
     "fcc_filings",
+    "court_opinion_clusters",
+    "court_opinion_bodies",
 )
 REGULATORY_LOCAL_TABLES = frozenset(
     {
@@ -331,6 +333,28 @@ SOURCE_SPECS = (
         ("text_data", "express_comment"),
         ("date_submission", "date_received"),
         ("filing_url",),
+        30_000,
+    ),
+    SourceSpec(
+        "court_opinion_clusters",
+        "courtlistener.com",
+        "document_artifact",
+        ("cluster_id",),
+        ("case_name", "case_name_full"),
+        ("syllabus", "summary"),
+        ("date_filed", "date_created"),
+        ("absolute_url",),
+        30_000,
+    ),
+    SourceSpec(
+        "court_opinion_bodies",
+        "courtlistener.com",
+        "document_artifact",
+        ("opinion_id",),
+        ("opinion_type",),
+        ("plain_text", "html_with_citations"),
+        ("date_created", "date_modified"),
+        ("download_url",),
         30_000,
     ),
 )

@@ -54,8 +54,15 @@ SKIPPED = {
     "court_opinions": "Supreme Court opinions are seasonal and have no daily freshness promise",
     # Promote these to DateChecks (date_created / date_received) once the first
     # publish lands — checking before then would 404 the whole freshness query.
+    "court_opinion_clusters": "not yet published to R2; first bulk ingest pending",
+    "court_opinion_bodies": "not yet published to R2; bounded slice of a quarterly dump, no daily promise",
     "fcc_proceedings": "not yet published to R2; first backfill pending",
     "fcc_filings": "not yet published to R2; first backfill pending",
+    # enriched_at is our fetch clock, not the source's — it advances even when
+    # the Library of Congress assigns nothing new, so it cannot be a DateCheck.
+    # Promote to a ROW_CHANGE_BUDGET once the first publish lands: while the
+    # backfill runs, the row count must grow every night, and a flat count is
+    # exactly the stall worth paging on.
 }
 
 

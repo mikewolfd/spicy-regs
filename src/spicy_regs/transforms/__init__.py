@@ -10,6 +10,8 @@ from spicy_regs.transforms.build_concept_assignments import build_concept_assign
 from spicy_regs.transforms.build_concept_events import build_concept_events
 from spicy_regs.transforms.build_concepts import build_concepts
 from spicy_regs.transforms.build_crs_reports import build_crs_reports
+from spicy_regs.transforms.build_court_opinion_bodies import build_court_opinion_bodies
+from spicy_regs.transforms.build_court_opinion_clusters import build_court_opinion_clusters
 from spicy_regs.transforms.build_courtlistener import build_courtlistener
 from spicy_regs.transforms.build_discovery_signals import build_discovery_signals
 from spicy_regs.transforms.build_fcc_ecfs import build_fcc_filings, build_fcc_proceedings
@@ -68,6 +70,8 @@ __all__ = [
     "build_concepts",
     "build_crs_reports",
     "build_courtlistener",
+    "build_court_opinion_clusters",
+    "build_court_opinion_bodies",
     "build_discovery_signals",
     "build_fcc_proceedings",
     "build_fcc_filings",

@@ -690,6 +690,94 @@ tables:
       text_extraction_method: "Extraction implementation identifier, currently `pypdf-embedded-text`."
       text_extraction_version: "Pinned pypdf package version used for extraction."
       pdf_text: "Page-ordered embedded text extracted from the official PDF; not OCR."
+  court_opinion_clusters:
+    summary: >-
+      One row per court *decision* ("opinion cluster" in CourtListener's model),
+      ingested from the quarterly bulk `opinion-clusters` dump by
+      `build_court_opinion_clusters` and topped up between dumps from the keyless
+      `/search/?type=o` API. A cluster is the case-level record that sibling
+      opinions hang off, and it is the join the corpus was missing: `cl_docket_id`
+      matches `court_dockets.cl_docket_id`, so a decision can be traced back to the
+      APA challenge that produced it and onward to the agency named in the docket.
+      Bulk is not an optimization here — the v4 `/clusters/` endpoint answers 401
+      without an API token, so the published dump is the only keyless source.
+      `ingest_source` records which of the two paths produced a row, because the
+      search surface is narrower than the dump and leaves the long prose fields
+      null rather than inventing them. Primary / dedup key is `cluster_id`. All
+      columns are stored as VARCHAR.
+    columns:
+      cluster_id: "CourtListener opinion-cluster id. Primary key / dedup key. Joins `court_opinion_bodies.cluster_id`."
+      cl_docket_id: "CourtListener docket id this decision was issued under. Joins `court_dockets.cl_docket_id`. Null for decisions whose docket is not in CourtListener."
+      case_name: "Case caption as published (for example `Chevron U.S.A. Inc. v. NRDC`)."
+      case_name_short: "Abbreviated caption, when the publisher supplies one."
+      case_name_full: "Full caption including every named party."
+      date_filed: "Date the decision was filed (ISO 8601)."
+      date_filed_is_approximate: "`t` when the publisher marked the filing date as approximate, else `f`."
+      judges: "Judge or panel names as a single publisher-supplied string."
+      nature_of_suit: "Nature-of-suit text carried on the decision, when present. Distinct from the docket's numeric code."
+      precedential_status: "Publication status, for example `Published`, `Unpublished`, `Errata`."
+      citation_count: "Number of later decisions citing this one, as counted by CourtListener."
+      scdb_id: "Supreme Court Database identifier, for decisions matched to SCDB."
+      scdb_decision_direction: "SCDB-coded ideological direction of the decision, when matched."
+      scdb_votes_majority: "SCDB majority vote count, when matched."
+      scdb_votes_minority: "SCDB minority vote count, when matched."
+      source: "CourtListener source code recording which upstream feed supplied the record."
+      procedural_history: "Publisher-supplied procedural history prose."
+      attorneys: "Attorneys of record as a single publisher-supplied string."
+      posture: "Procedural posture prose, when supplied."
+      syllabus: "Official syllabus / headnote summary, when the reporter published one."
+      headnotes: "Reporter headnotes, when published."
+      summary: "Publisher-supplied case summary."
+      disposition: "Disposition prose (for example `Affirmed`, `Reversed and remanded`)."
+      history: "Subsequent-history prose, when supplied."
+      other_dates: "Free-text additional dates supplied by the reporter."
+      cross_reference: "Cross-reference prose supplied by the reporter."
+      correction: "Correction notice text, when the decision was corrected."
+      arguments: "Argument-section text, for decisions whose reporter published one."
+      headmatter: "Reporter headmatter block preceding the opinion text."
+      blocked: "`t` when CourtListener has blocked the decision from search-engine indexing."
+      date_blocked: "Date the decision was blocked, when it was."
+      slug: "URL slug component used on courtlistener.com."
+      absolute_url: "Absolute URL of the decision on courtlistener.com."
+      date_created: "Timestamp CourtListener first created the cluster record."
+      date_modified: "Timestamp the cluster record was last modified upstream."
+      ingest_source: "Which path produced the row: `bulk` (quarterly dump) or `search` (keyless catch-up API, narrower column set)."
+  court_opinion_bodies:
+    summary: >-
+      One row per *opinion* — a single voice within a decision (majority,
+      concurrence, dissent), each with its own author and its own text — ingested
+      from the bulk `opinions` dump by `build_court_opinion_bodies`. `cluster_id`
+      joins `court_opinion_clusters`, and through it `court_dockets`. This is the
+      table the `court-opinion-v1` profile had been forward-declaring:
+      `plain_text` and `html_with_citations` are CourtListener opinion fields that
+      no published table carried until this ingest. **Coverage is partial by
+      construction and the bound is recorded, not implied.** The 2026-06-30
+      `opinions` dump is 50.8 GiB compressed (~422 GiB decompressed) and streams
+      at roughly 1.8 MiB/s, so a full pass is about 8.6 hours and landing it would
+      breach the project's 100 GiB free-space floor; scheduled runs therefore take
+      a bounded slice. See `docs/evidence/court-data-coverage.md` for the exact
+      row counts, id ranges, and named gaps. Primary / dedup key is `opinion_id`.
+      All columns are stored as VARCHAR.
+    columns:
+      opinion_id: "CourtListener opinion id. Primary key / dedup key."
+      cluster_id: "Decision this opinion belongs to. Joins `court_opinion_clusters.cluster_id`."
+      opinion_type: "Opinion role within the decision, for example `010combined`, `020lead`, `030concurrence`, `040dissent`."
+      author_str: "Authoring judge's name as published, when supplied."
+      author_id: "CourtListener people-database id of the authoring judge, when resolved."
+      joined_by_str: "Judges who joined this opinion, as a publisher-supplied string."
+      per_curiam: "`t` when the opinion was issued per curiam."
+      sha1: "CourtListener's SHA-1 of the source document it ingested."
+      page_count: "Page count of the source document, when known."
+      download_url: "Original court-website URL the opinion was downloaded from."
+      local_path: "Path to the archived source file in CourtListener's public storage bucket."
+      extracted_by_ocr: "`t` when the text was produced by OCR rather than embedded extraction."
+      plain_text: "Plain-text body of the opinion as published by CourtListener. Frequently null when the upstream source supplied only a markup rendering — check `available_text_fields` before treating null as missing."
+      html_with_citations: "HTML body with citations marked up as links, as published by CourtListener."
+      available_text_fields: "Comma-separated names of the dump's body columns that were non-empty for this row (`plain_text`, `html`, `html_lawbox`, `html_columbia`, `html_anon_2020`, `html_with_citations`, `xml_harvard`, `xml_scan`). Records which rendering the publisher actually held, so an empty `plain_text` is distinguishable from an opinion with no text at all."
+      text_char_count: "Character length of the longest available body rendering, as a decimal string. Zero means the publisher holds no text for this opinion."
+      date_created: "Timestamp CourtListener first created the opinion record."
+      date_modified: "Timestamp the opinion record was last modified upstream."
+      dump_date: "Date stamp of the bulk dump this row was read from, for example `2026-06-30`."
   usaspending_recipients:
     summary: >-
       One row per federal-award recipient, ingested from the USASpending.gov

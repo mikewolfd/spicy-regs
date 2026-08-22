@@ -1,8 +1,8 @@
 {
   "experimental": true,
   "format": "spicyregs-source-profile-catalog/experimental-v0",
-  "profileCatalogDigest": "sha256:f0ffc8a5f3bbb871c6824d3f7ea1f3f64f51652281ce6819d1404ff2c2f3cec1",
-  "profileCatalogId": "urn:spicy-regs:profile-catalog:f0ffc8a5f3bbb871c6824d3f7ea1f3f64f51652281ce6819d1404ff2c2f3cec1",
+  "profileCatalogDigest": "sha256:690858ab064f4782e0fcf9cde289660361a7bdb7df80da83ddcea45766cdabbb",
+  "profileCatalogId": "urn:spicy-regs:profile-catalog:690858ab064f4782e0fcf9cde289660361a7bdb7df80da83ddcea45766cdabbb",
   "profiles": [
     {
       "access": {
@@ -86,6 +86,62 @@
         "opinion_text",
         "html_text",
         "full_text"
+      ]
+    },
+    {
+      "access": {
+        "basis": "us-federal-public-record",
+        "scope": "public"
+      },
+      "active": true,
+      "allowedSchemes": [
+        "subject",
+        "regulated_entity"
+      ],
+      "idColumns": [
+        "opinion_id"
+      ],
+      "mode": "hierarchical-document",
+      "profileId": "court-opinion-body-v1",
+      "regionAdapterId": "hierarchical-text:source-elements-v2",
+      "sourceTable": "court_opinion_bodies",
+      "subjectType": "court_opinion_body",
+      "textColumns": [
+        "opinion_type",
+        "author_str",
+        "plain_text",
+        "html_with_citations"
+      ]
+    },
+    {
+      "access": {
+        "basis": "us-federal-public-record",
+        "scope": "public"
+      },
+      "active": true,
+      "allowedSchemes": [
+        "subject",
+        "regulated_entity"
+      ],
+      "idColumns": [
+        "cluster_id"
+      ],
+      "mode": "hierarchical-document",
+      "profileId": "court-opinion-cluster-v1",
+      "regionAdapterId": "hierarchical-text:source-elements-v2",
+      "sourceTable": "court_opinion_clusters",
+      "subjectType": "court_opinion_cluster",
+      "textColumns": [
+        "case_name",
+        "case_name_full",
+        "nature_of_suit",
+        "posture",
+        "syllabus",
+        "headnotes",
+        "summary",
+        "disposition",
+        "procedural_history",
+        "headmatter"
       ]
     },
     {
@@ -451,8 +507,8 @@
   ],
   "recordedAt": "2026-08-03T12:00:00Z",
   "summary": {
-    "activeProfileCount": 16,
+    "activeProfileCount": 18,
     "deferredProfileCount": 1,
-    "profileCount": 17
+    "profileCount": 19
   }
 }

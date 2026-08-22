@@ -53,6 +53,8 @@ TABLES = (
     "crs_reports",
     "court_dockets",
     "court_opinions",
+    "court_opinion_clusters",
+    "court_opinion_bodies",
     "usaspending_recipients",
     "fcc_proceedings",
     "fcc_filings",

@@ -1,11 +1,11 @@
 {
-  "applicabilityDigest": "sha256:7fcc3d49e8a1fe4f351e1d40e263ee5665611b451182424083b3467ceb1e35f4",
-  "applicabilityId": "urn:spicy-regs:applicability:7fcc3d49e8a1fe4f351e1d40e263ee5665611b451182424083b3467ceb1e35f4",
+  "applicabilityDigest": "sha256:360eeffddb91bc55e2d8a6a2339df0429e2a2d7ffa6e04141491df684f4747b4",
+  "applicabilityId": "urn:spicy-regs:applicability:360eeffddb91bc55e2d8a6a2339df0429e2a2d7ffa6e04141491df684f4747b4",
   "experimental": true,
   "format": "spicyregs-profile-resource-applicability/experimental-v0",
   "profileCatalog": {
-    "digest": "sha256:f0ffc8a5f3bbb871c6824d3f7ea1f3f64f51652281ce6819d1404ff2c2f3cec1",
-    "id": "urn:spicy-regs:profile-catalog:f0ffc8a5f3bbb871c6824d3f7ea1f3f64f51652281ce6819d1404ff2c2f3cec1"
+    "digest": "sha256:690858ab064f4782e0fcf9cde289660361a7bdb7df80da83ddcea45766cdabbb",
+    "id": "urn:spicy-regs:profile-catalog:690858ab064f4782e0fcf9cde289660361a7bdb7df80da83ddcea45766cdabbb"
   },
   "profiles": [
     {
@@ -98,6 +98,53 @@
       ],
       "knownGap": "Evidence is limited to the declared source-native fields; distribution availability is stated by the pinned RefSpec catalog.",
       "profileId": "court-docket-v1",
+      "resourceRelationships": [
+        {
+          "relationships": [
+            "nativeCodeOrClassification",
+            "nativeIdentifier"
+          ],
+          "resourceId": "court-identifiers-and-controls"
+        },
+        {
+          "relationships": [
+            "nativeCodeOrClassification"
+          ],
+          "resourceId": "nature-of-suit"
+        }
+      ]
+    },
+    {
+      "evidenceFields": [
+        "court identity",
+        "opinion type",
+        "authorship",
+        "case identity",
+        "version"
+      ],
+      "knownGap": "Evidence is limited to the declared source-native fields; distribution availability is stated by the pinned RefSpec catalog.",
+      "profileId": "court-opinion-body-v1",
+      "resourceRelationships": [
+        {
+          "relationships": [
+            "nativeCodeOrClassification",
+            "nativeIdentifier"
+          ],
+          "resourceId": "court-identifiers-and-controls"
+        }
+      ]
+    },
+    {
+      "evidenceFields": [
+        "court identity",
+        "case identity",
+        "date",
+        "precedential status",
+        "citation",
+        "Nature of Suit"
+      ],
+      "knownGap": "Evidence is limited to the declared source-native fields; distribution availability is stated by the pinned RefSpec catalog.",
+      "profileId": "court-opinion-cluster-v1",
       "resourceRelationships": [
         {
           "relationships": [
@@ -556,12 +603,12 @@
   ],
   "recordedAt": "2026-08-03T12:00:00Z",
   "refspecResourceCatalog": {
-    "digest": "sha256:6d0fb2cc7b7ecabb76bfa302f2a3897ffcdb8e14890a36ee0e38d3d6403a51b5",
-    "id": "urn:ref:resource-catalog:6d0fb2cc7b7ecabb76bfa302f2a3897ffcdb8e14890a36ee0e38d3d6403a51b5"
+    "digest": "sha256:13911c5bda7183e68aa08398ea02d90533337d80e4b4c67180210ad1bfb65798",
+    "id": "urn:ref:resource-catalog:13911c5bda7183e68aa08398ea02d90533337d80e4b4c67180210ad1bfb65798"
   },
   "summary": {
-    "profileCount": 17,
+    "profileCount": 19,
     "referencedResourceCount": 26,
-    "resourceRelationshipCount": 44
+    "resourceRelationshipCount": 47
   }
 }

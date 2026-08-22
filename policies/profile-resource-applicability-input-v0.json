@@ -529,6 +529,51 @@
           ]
         }
       ]
+    },
+    {
+      "profileId": "court-opinion-cluster-v1",
+      "evidenceFields": [
+        "court identity",
+        "case identity",
+        "date",
+        "precedential status",
+        "citation",
+        "Nature of Suit"
+      ],
+      "resourceRelationships": [
+        {
+          "resourceId": "court-identifiers-and-controls",
+          "relationships": [
+            "nativeIdentifier",
+            "nativeCodeOrClassification"
+          ]
+        },
+        {
+          "resourceId": "nature-of-suit",
+          "relationships": [
+            "nativeCodeOrClassification"
+          ]
+        }
+      ]
+    },
+    {
+      "profileId": "court-opinion-body-v1",
+      "evidenceFields": [
+        "court identity",
+        "opinion type",
+        "authorship",
+        "case identity",
+        "version"
+      ],
+      "resourceRelationships": [
+        {
+          "resourceId": "court-identifiers-and-controls",
+          "relationships": [
+            "nativeIdentifier",
+            "nativeCodeOrClassification"
+          ]
+        }
+      ]
     }
   ]
 }
