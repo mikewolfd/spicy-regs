@@ -21,7 +21,10 @@ One row per official Supreme Court opinion package listed for an October Term. M
 | `citation` | `VARCHAR` | United States Reports citation shown on the official index. |
 | `opinion_type` | `VARCHAR` | Source package classification; currently `official-opinion-package`. |
 | `source_index_url` | `VARCHAR` | Official Supreme Court term-index URL. |
-| `source_url` | `VARCHAR` | Official Supreme Court PDF URL. |
+| `source_url` | `VARCHAR` | Official Supreme Court PDF URL, with any page fragment removed — this is the document that was fetched. From OT2017 to OT2020 most index rows point into a shared volume PDF, so this URL is not unique per opinion; `source_page_start` says where in it the opinion begins. |
+| `source_document_kind` | `VARCHAR` | Which layout the term index used for this row: `slip-opinion` (its own PDF, OT2021 onward and part of OT2020), `preliminary-print` or `bound-volume` (one PDF holding a whole volume of the U.S. Reports, OT2017-OT2020). |
+| `source_page_start` | `VARCHAR` | 1-based page in `source_url` where this opinion begins, from the index link's `#page=` anchor. Empty for a slip opinion, which is its own document. |
+| `source_page_end` | `VARCHAR` | Last page of this opinion in `source_url`, inferred as the page before the next opinion in the same volume. Empty when the opinion is the last one indexed in its document and runs to the end of the PDF. |
 | `source_etag` | `VARCHAR` | HTTP ETag returned for the fetched PDF, when supplied. |
 | `source_last_modified` | `VARCHAR` | HTTP Last-Modified value returned for the PDF, when supplied. |
 | `source_bytes` | `VARCHAR` | Exact fetched PDF byte count, stored as a decimal string. |
@@ -30,4 +33,4 @@ One row per official Supreme Court opinion package listed for an October Term. M
 | `text_extraction_status` | `VARCHAR` | Embedded-text extraction result; published rows require `ok`. |
 | `text_extraction_method` | `VARCHAR` | Extraction implementation identifier, currently `pypdf-embedded-text`. |
 | `text_extraction_version` | `VARCHAR` | Pinned pypdf package version used for extraction. |
-| `pdf_text` | `VARCHAR` | Page-ordered embedded text extracted from the official PDF; not OCR. |
+| `pdf_text` | `VARCHAR` | Page-ordered embedded text for *this opinion*; not OCR. For a volume document the text is sliced to `source_page_start`..`source_page_end`, so a row carries its own opinion rather than the whole volume that contains it. |

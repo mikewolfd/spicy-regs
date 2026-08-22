@@ -22,6 +22,14 @@ decisions filed after the dump date, mirroring the incremental-merge idiom in
 Rows are written in batches rather than materialized at once: the dump is on the
 order of ten million clusters, and one ``from_pylist`` over that is an
 out-of-memory error, not a table.
+
+**Which court decided it.** The dump has no ``court_id``: it lives on the
+docket, in a different 4.67 GiB file. Without it this table is ten million
+decisions from 3,361 courts with no way to ask for the 397 federal ones, so the
+build resolves ``court_id`` / ``court_jurisdiction`` / ``court_is_federal``
+from a docket→court map (see :mod:`spicy_regs.transforms.court_scope`) while
+each row is shaped. The map costs 46 minutes of streaming and is cached by dump
+date; ``skip_court_scope`` opts out and leaves the three columns NULL.
 """
 
 from __future__ import annotations
@@ -40,6 +48,11 @@ from spicy_regs.sources.courtlistener_bulk import (
     find_dump,
     latest_dump_date,
     list_bulk_dumps,
+)
+from spicy_regs.transforms.court_scope import (
+    CourtScope,
+    build_docket_court_map,
+    court_jurisdictions,
 )
 
 OUTPUT = "court_opinion_clusters.parquet"
@@ -60,6 +73,9 @@ BATCH_ROWS = 25_000
 COLUMNS = (
     "cluster_id",
     "cl_docket_id",
+    "court_id",
+    "court_jurisdiction",
+    "court_is_federal",
     "case_name",
     "case_name_short",
     "case_name_full",
@@ -113,13 +129,20 @@ def _cluster_url(cluster_id: str | None, slug: str | None) -> str | None:
     return f"{CL_BASE_URL}/opinion/{cluster_id}/{slug or ''}".rstrip("/") + "/"
 
 
-def _shape_bulk(row: dict) -> dict:
+def _shape_bulk(row: dict, *, scope: CourtScope | None = None) -> dict:
     """Map one bulk ``opinion-clusters`` CSV row onto the published columns."""
     cluster_id = _s(row.get("id"))
     slug = _s(row.get("slug"))
+    cl_docket_id = _s(row.get("docket_id"))
+    court_id, jurisdiction, federal = (
+        scope.for_docket(cl_docket_id) if scope else (None, None, None)
+    )
     return {
         "cluster_id": cluster_id,
-        "cl_docket_id": _s(row.get("docket_id")),
+        "cl_docket_id": cl_docket_id,
+        "court_id": court_id,
+        "court_jurisdiction": jurisdiction,
+        "court_is_federal": federal,
         "case_name": _s(row.get("case_name")),
         "case_name_short": _s(row.get("case_name_short")),
         "case_name_full": _s(row.get("case_name_full")),
@@ -157,22 +180,35 @@ def _shape_bulk(row: dict) -> dict:
     }
 
 
-def _shape_search(result: dict) -> dict:
+def _shape_search(result: dict, *, scope: CourtScope | None = None) -> dict:
     """Map one ``/search/?type=o`` result onto the published columns.
 
     The search surface is narrower than the dump: it has no syllabus, headnotes,
     or headmatter. Those stay NULL rather than being invented, so a row's
     provenance is legible from ``ingest_source``.
+
+    It is *wider* in exactly one place: it names the court outright, so a
+    catch-up row does not need the docket map to be scoped — but it must be
+    classified by the same rule, or the two halves of the table would disagree
+    about what federal means.
     """
     cluster_id = _s(result.get("cluster_id"))
     absolute = _s(result.get("absolute_url"))
     if absolute and absolute.startswith("/"):
         absolute = f"{CL_BASE_URL}{absolute}"
+    court_id, jurisdiction, federal = (
+        scope.for_court(_s(result.get("court_id")))
+        if scope
+        else (_s(result.get("court_id")), None, None)
+    )
     row = dict.fromkeys(COLUMNS)
     row.update(
         {
             "cluster_id": cluster_id,
             "cl_docket_id": _s(result.get("docket_id")),
+            "court_id": court_id,
+            "court_jurisdiction": jurisdiction,
+            "court_is_federal": federal,
             "case_name": _s(result.get("caseName")),
             "case_name_full": _s(result.get("caseNameFull")),
             "date_filed": _s(result.get("dateFiled")),
@@ -232,8 +268,16 @@ def build_court_opinion_clusters(
     local_file: Path | None = None,
     max_records: int | None = None,
     skip_search_catchup: bool = False,
+    docket_court_map: Path | None = None,
+    skip_court_scope: bool = False,
 ) -> Path:
-    """Build ``court_opinion_clusters.parquet`` (bulk dump + search catch-up)."""
+    """Build ``court_opinion_clusters.parquet`` (bulk dump + search catch-up).
+
+    ``skip_court_scope`` leaves the three court columns NULL and skips the
+    46-minute ``dockets`` read. It is the honest way to build the table without
+    the scope, and it is not the default: a decision table that cannot say which
+    court decided is a table nobody can ask the obvious question of.
+    """
     import duckdb
 
     out_file = output_dir / OUTPUT
@@ -265,22 +309,39 @@ def build_court_opinion_clusters(
         resolved = dump_date
         logger.info("Opinion clusters: reading local dump {}", local_file)
 
-    # 3. Stream the dump into the staging table, batch by batch.
+    # 3. Load the court scope, so every row can say which court decided it.
+    #
+    # The cluster dump has no court_id — that lives on the docket, one join and
+    # a different 4.67 GiB file away. Resolving it *while shaping* rather than
+    # afterwards is what keeps the first build's promote path intact: joining
+    # ten million clusters against seventy-two million dockets in duckdb would
+    # rewrite the whole 3.9 GB table, and the whole reason that path exists is
+    # that this machine cannot afford to hold two copies of it.
+    scope: CourtScope | None = None
+    if not skip_court_scope:
+        map_file = docket_court_map or build_docket_court_map(
+            output_dir, dump_date=resolved
+        )
+        scope = CourtScope.from_map(
+            map_file, court_jurisdictions(dump_date=resolved, local_file=None)
+        )
+
+    # 4. Stream the dump into the staging table, batch by batch.
     writer = _BatchWriter(new_file)
     reader = CourtListenerBulkReader(
         DATASET, dump_date=resolved, local_file=local_file, max_records=max_records
     )
     for row in reader.iter_records():
-        writer.add(_shape_bulk(row))
+        writer.add(_shape_bulk(row, scope=scope))
     bulk_rows = writer.written + len(writer.rows)
 
-    # 4. Search catch-up for decisions filed after the dump was cut.
+    # 5. Search catch-up for decisions filed after the dump was cut.
     search_rows = 0
     if not skip_search_catchup and resolved is not None:
         since = resolved - timedelta(days=OVERLAP_DAYS)
         logger.info("Opinion clusters: search catch-up for decisions filed since {}", since)
         for result in CourtListenerOpinionSearchReader(since=since).iter_records():
-            writer.add(_shape_search(result))
+            writer.add(_shape_search(result, scope=scope))
             search_rows += 1
     writer.close()
     logger.info(
@@ -290,7 +351,7 @@ def build_court_opinion_clusters(
         search_rows,
     )
 
-    # 5. Merge prior + new, dedup on cluster_id preferring the freshest row.
+    # 6. Merge prior + new, dedup on cluster_id preferring the freshest row.
     #
     # A first build has nothing to merge *against*: one dump, whose cluster_id is
     # the publisher's primary key, so the dedup is a no-op. Running the merge

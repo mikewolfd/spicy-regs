@@ -4,6 +4,14 @@ Like ``courtlistener``, this rollup *ingests* an external source rather than
 reading base tables from R2, so ``inputs`` is empty — the bulk read, the search
 catch-up, and the incremental merge with the prior published table all happen
 inside ``build_court_opinion_clusters``.
+
+**A run reads two dumps, not one.** The cluster dump says nothing about which
+court decided; that lives on the docket. So a scheduled run streams the 2.3 GiB
+``opinion-clusters`` dump *and* the 4.67 GiB ``dockets`` dump — about 70 minutes
+at the bucket's observed rate rather than 23. That is the whole price of the
+table being able to answer "what have the federal courts said", which is the
+first question anyone asks of ten million decisions from 3,361 courts. The
+docket map is cached by dump date, so re-running inside one quarter pays once.
 """
 
 from pathlib import Path

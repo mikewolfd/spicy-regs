@@ -702,7 +702,10 @@ tables:
       citation: "United States Reports citation shown on the official index."
       opinion_type: "Source package classification; currently `official-opinion-package`."
       source_index_url: "Official Supreme Court term-index URL."
-      source_url: "Official Supreme Court PDF URL."
+      source_url: "Official Supreme Court PDF URL, with any page fragment removed — this is the document that was fetched. From OT2017 to OT2020 most index rows point into a shared volume PDF, so this URL is not unique per opinion; `source_page_start` says where in it the opinion begins."
+      source_document_kind: "Which layout the term index used for this row: `slip-opinion` (its own PDF, OT2021 onward and part of OT2020), `preliminary-print` or `bound-volume` (one PDF holding a whole volume of the U.S. Reports, OT2017-OT2020)."
+      source_page_start: "1-based page in `source_url` where this opinion begins, from the index link's `#page=` anchor. Empty for a slip opinion, which is its own document."
+      source_page_end: "Last page of this opinion in `source_url`, inferred as the page before the next opinion in the same volume. Empty when the opinion is the last one indexed in its document and runs to the end of the PDF."
       source_etag: "HTTP ETag returned for the fetched PDF, when supplied."
       source_last_modified: "HTTP Last-Modified value returned for the PDF, when supplied."
       source_bytes: "Exact fetched PDF byte count, stored as a decimal string."
@@ -711,7 +714,7 @@ tables:
       text_extraction_status: "Embedded-text extraction result; published rows require `ok`."
       text_extraction_method: "Extraction implementation identifier, currently `pypdf-embedded-text`."
       text_extraction_version: "Pinned pypdf package version used for extraction."
-      pdf_text: "Page-ordered embedded text extracted from the official PDF; not OCR."
+      pdf_text: "Page-ordered embedded text for *this opinion*; not OCR. For a volume document the text is sliced to `source_page_start`..`source_page_end`, so a row carries its own opinion rather than the whole volume that contains it."
   court_opinion_clusters:
     summary: >-
       One row per court *decision* ("opinion cluster" in CourtListener's model),
@@ -730,6 +733,9 @@ tables:
     columns:
       cluster_id: "CourtListener opinion-cluster id. Primary key / dedup key. Joins `court_opinion_bodies.cluster_id`."
       cl_docket_id: "CourtListener docket id this decision was issued under. Joins `court_dockets.cl_docket_id`. Null for decisions whose docket is not in CourtListener."
+      court_id: "CourtListener court that issued the decision (for example `ca9`, `dcd`). Not carried on the cluster dump — resolved from the `dockets` dump via `cl_docket_id`. Null when the docket is absent from that dump."
+      court_jurisdiction: "The publisher's jurisdiction code for `court_id`: `F` appellate, `FD` district, `FB` bankruptcy, `FBP` bankruptcy appellate panel, `FS` special, `S`/`ST`/`SA`/`SS` state, `T*` tribal and territorial, `M*` military. Null when the court is unknown or absent from the `courts` dump."
+      court_is_federal: "`t` when `court_jurisdiction` begins with `F`, else `f`. Null rather than `f` when the court is unknown — this table is the whole CourtListener corpus, of which 397 courts of 3,361 are federal, so absence of evidence is recorded as absence."
       case_name: "Case caption as published (for example `Chevron U.S.A. Inc. v. NRDC`)."
       case_name_short: "Abbreviated caption, when the publisher supplies one."
       case_name_full: "Full caption including every named party."

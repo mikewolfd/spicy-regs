@@ -11,6 +11,9 @@ One row per court *decision* ("opinion cluster" in CourtListener's model), inges
 | --- | --- | --- |
 | `cluster_id` | `VARCHAR` | CourtListener opinion-cluster id. Primary key / dedup key. Joins `court_opinion_bodies.cluster_id`. |
 | `cl_docket_id` | `VARCHAR` | CourtListener docket id this decision was issued under. Joins `court_dockets.cl_docket_id`. Null for decisions whose docket is not in CourtListener. |
+| `court_id` | `VARCHAR` | CourtListener court that issued the decision (for example `ca9`, `dcd`). Not carried on the cluster dump — resolved from the `dockets` dump via `cl_docket_id`. Null when the docket is absent from that dump. |
+| `court_jurisdiction` | `VARCHAR` | The publisher's jurisdiction code for `court_id`: `F` appellate, `FD` district, `FB` bankruptcy, `FBP` bankruptcy appellate panel, `FS` special, `S`/`ST`/`SA`/`SS` state, `T*` tribal and territorial, `M*` military. Null when the court is unknown or absent from the `courts` dump. |
+| `court_is_federal` | `VARCHAR` | `t` when `court_jurisdiction` begins with `F`, else `f`. Null rather than `f` when the court is unknown — this table is the whole CourtListener corpus, of which 397 courts of 3,361 are federal, so absence of evidence is recorded as absence. |
 | `case_name` | `VARCHAR` | Case caption as published (for example `Chevron U.S.A. Inc. v. NRDC`). |
 | `case_name_short` | `VARCHAR` | Abbreviated caption, when the publisher supplies one. |
 | `case_name_full` | `VARCHAR` | Full caption including every named party. |
