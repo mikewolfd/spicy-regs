@@ -27,12 +27,17 @@ TERM_INDEX_URL = SCOTUS_BASE_URL + "/opinions/slipopinion/{term_code}"
 _TIMEOUT = httpx.Timeout(120.0, connect=30.0)
 _MAX_RETRIES = 5
 
-#: Seconds to wait between requests. The Court's site rate-limits: a session
-#: that fetched a few dozen index pages in a couple of minutes started
-#: answering ``403 Access Denied`` to everything, measured 2026-08-22. A full
-#: OT2017-OT2025 run is on the order of 335 requests, which is exactly the
-#: volume that trips it, and there is no reason to hurry a court's web server.
-REQUEST_DELAY_SECONDS = 1.0
+#: Seconds to wait between requests.
+#:
+#: The Court's site blocks. Measured 2026-08-22: roughly 80 requests over 25
+#: minutes — index pages, HEADs, and one PDF — and it began answering ``403
+#: Access Denied`` to everything from this address, across two different user
+#: agents. That is about 3 requests a minute, so **this delay is a mitigation,
+#: not a proof**: the threshold is not published and was not isolated, and it
+#: may not be request rate at all. A full OT2017-OT2025 capture is on the order
+#: of 335 requests, and it has never been run to completion from here. Anyone
+#: raising this number should be prepared to find out why it was lowered.
+REQUEST_DELAY_SECONDS = 2.0
 
 
 def current_term_year(today: date | None = None) -> int:

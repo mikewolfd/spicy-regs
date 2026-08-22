@@ -338,10 +338,18 @@ and 56 are not, for a reason nothing on this side can fix.
    already fetched one term got the **OT2023** index back from the OT2021 URL,
    sixty real opinions about to be stamped `term_year=2021`. That is silent
    mislabelling, not an error, and `parse_term_index` now refuses an index whose
-   decisions fall outside the term's date window. The site also rate-limits
-   (`403 Access Denied` after a few dozen index fetches in a couple of minutes),
-   so requests are now spaced a second apart — a full OT2017–OT2025 run is about
-   335 of them.
+   decisions fall outside the term's date window.
+   *What was not done, and why:* **no end-to-end pre-2021 capture was run.**
+   Partway through measuring, `supremecourt.gov` began answering `403 Access
+   Denied` to this address — after roughly **80 requests over 25 minutes**,
+   about three a minute, across two user agents. Requests are now spaced two
+   seconds apart, but that is a mitigation and not a proof: the threshold is not
+   published, was not isolated, and may not be request rate at all. A full
+   OT2017–OT2025 capture is ~335 requests and **has never been run to
+   completion from this machine** — not before this change either. The parser,
+   the page-range slicing and the document caching are covered by hermetic
+   tests and by anchors checked against the real `591US2PP_web.pdf`; the
+   capture itself is still unproven at scale, and that is the honest state.
 
 4. **RECAP documents are not captured, and are the expensive one.** There is **no
    `recap-documents` bulk dataset** — 46 datasets, and that is not among them —
@@ -461,9 +469,11 @@ than an error:
   one term got the OT2023 index back from `/opinions/slipopinion/21`. The rows
   parse cleanly and `term_year` comes from the caller, so the table would simply
   have said 2021 about sixty OT2023 opinions. Now refused by a date-window check.
-* **The Court's site rate-limits**, answering `403 Access Denied` after a few
-  dozen index fetches in a couple of minutes. A full OT2017–OT2025 run is ~335
-  requests, so they are now spaced.
+* **The Court's site blocks**, answering `403 Access Denied` after ~80 requests
+  in 25 minutes — about three a minute — across two user agents. A full
+  OT2017–OT2025 run is ~335 requests, so a capture at any pace is in doubt until
+  someone runs one. Requests are now spaced two seconds apart as a mitigation,
+  not as a solution.
 * **The bucket's throughput cap is per client, not per connection.** Two
   concurrent streams totalled 1.77 MiB/s, the same as one alone.
 
