@@ -51,7 +51,13 @@ ROW_CHANGE_BUDGETS = {"usaspending_recipients": 14}
 SKIPPED = {
     "unified_agenda": "semiannual edition, not a daily date watermark",
     "sam_entities": "registration_date does not change when an existing entity is refreshed",
-    "court_opinions": "Supreme Court opinions are seasonal and have no daily freshness promise",
+    # Not "seasonal". The table has never been published: the SCOTUS ingest is
+    # implemented, tested, rolled up and wired to a workflow, and R2 answers 404
+    # for court_opinions.parquet, so a freshness query would 404 rather than go
+    # stale. Promote to a DateCheck on date_decided once the first publish lands
+    # — a term's opinions do arrive in bursts, but that is a budget question,
+    # not a reason to skip.
+    "court_opinions": "not yet published to R2; first publish pending (SCOTUS ingest is built and tested)",
     # Promote these to DateChecks (date_created / date_received) once the first
     # publish lands — checking before then would 404 the whole freshness query.
     "court_opinion_clusters": "not yet published to R2; first bulk ingest pending",
