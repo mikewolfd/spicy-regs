@@ -27,6 +27,13 @@ TERM_INDEX_URL = SCOTUS_BASE_URL + "/opinions/slipopinion/{term_code}"
 _TIMEOUT = httpx.Timeout(120.0, connect=30.0)
 _MAX_RETRIES = 5
 
+#: Seconds to wait between requests. The Court's site rate-limits: a session
+#: that fetched a few dozen index pages in a couple of minutes started
+#: answering ``403 Access Denied`` to everything, measured 2026-08-22. A full
+#: OT2017-OT2025 run is on the order of 335 requests, which is exactly the
+#: volume that trips it, and there is no reason to hurry a court's web server.
+REQUEST_DELAY_SECONDS = 1.0
+
 
 def current_term_year(today: date | None = None) -> int:
     """Return the calendar year in which the current October Term began."""
@@ -116,6 +123,38 @@ def _page_anchor(fragment: str, pdf_url: str) -> str:
     return value
 
 
+def _assert_index_is_the_term_requested(
+    records: list[dict[str, str]], *, term_year: int
+) -> None:
+    """Refuse an index page that is not the term it was asked for.
+
+    ``supremecourt.gov`` does not always serve ``/opinions/slipopinion/{code}``
+    the term that code names. Observed 2026-08-22: a client that had already
+    fetched another term got the **OT2023** index back from the OT2021 URL —
+    sixty rows of real opinions, correctly parsed, and every one of them about
+    to be stamped ``term_year=2021`` because the term comes from the caller's
+    loop and not from the page. That is the shape of failure this codebase has
+    already been bitten by once: not an error, a quiet mislabelling.
+
+    Slip rows are checked exactly, by their ``/opinions/{code}pdf/`` path. Volume
+    rows carry no term in their URL, so they are checked against the term's date
+    window instead — the Court decides a term's cases between the September it
+    opens and the end of the following calendar year, which is loose enough
+    never to fire on a real index and tight enough to catch a page that is a
+    whole term out.
+    """
+    opens = f"{term_year}-09-01"
+    closes = f"{term_year + 1}-12-31"
+    for record in records:
+        decided = record["date_decided"]
+        if not opens <= decided <= closes:
+            raise ValueError(
+                f"Supreme Court term index {term_year} returned a decision dated "
+                f"{decided} ({record['case_name']!r}) — the page served is not "
+                f"the term that was requested"
+            )
+
+
 def _assign_page_ends(records: list[dict[str, str]]) -> None:
     """Close each volume opinion's page range against the next one in the volume.
 
@@ -176,6 +215,7 @@ def parse_term_index(html: str, *, term_year: int) -> list[dict[str, str]]:
         raise ValueError(
             f"Supreme Court term index {term_year} contained no opinion rows"
         )
+    _assert_index_is_the_term_requested(records, term_year=term_year)
     _assign_page_ends(records)
     return records
 
@@ -194,6 +234,7 @@ class SupremeCourtOpinionsReader(Reader):
         max_records: int | None = None,
         client: httpx.Client | None = None,
         skip_missing_documents: bool = False,
+        request_delay: float = REQUEST_DELAY_SECONDS,
     ) -> None:
         years = tuple(
             term_years
@@ -217,12 +258,24 @@ class SupremeCourtOpinionsReader(Reader):
         #: problem; setting this makes it a *recorded* problem, so one dead
         #: link cannot cost a whole term.
         self.skip_missing_documents = skip_missing_documents
+        self.request_delay = request_delay
         #: Index rows skipped because their document 404s, in ``(url, rows)``
         #: form. A run that skipped anything must be able to say what.
         self.missing_documents: dict[str, int] = {}
+        self._last_request = 0.0
+
+    def _wait_turn(self) -> None:
+        """Hold the request rate down to what the Court's site tolerates."""
+        if self.request_delay <= 0:
+            return
+        elapsed = time.monotonic() - self._last_request
+        if 0 < elapsed < self.request_delay:
+            time.sleep(self.request_delay - elapsed)
+        self._last_request = time.monotonic()
 
     def _get(self, client: httpx.Client, url: str) -> httpx.Response:
         for attempt in range(1, _MAX_RETRIES + 1):
+            self._wait_turn()
             try:
                 response = client.get(url)
                 if response.status_code == 429 or response.status_code >= 500:

@@ -66,6 +66,7 @@ def _reader_record() -> dict:
                 term_years=(2022,),
                 max_records=1,
                 client=client,
+                request_delay=0,
             ).iter_records()
         )
 
@@ -198,6 +199,33 @@ def test_term_index_still_refuses_everything_it_refused_before():
         )
 
 
+def test_an_index_that_is_not_the_requested_term_is_refused():
+    """The Court's site does not always serve the term the URL names.
+
+    Measured 2026-08-22: a client that had already fetched one term got the
+    **OT2023** index back from ``/opinions/slipopinion/21`` — sixty real
+    opinions, parsed correctly, every one about to be stamped
+    ``term_year=2021``, because the term comes from the caller's loop and not
+    from the page. Nothing errors. The table just quietly says three wrong
+    years, which is the same class of failure as a CSV that desyncs instead of
+    raising.
+
+    A slip row is caught exactly, by its ``/opinions/{code}pdf/`` path. A volume
+    row carries no term at all, so it is caught by the term's date window.
+    """
+    # A volume index whose decisions are a whole term late.
+    later = VOLUME_INDEX_HTML.replace("7/9/20", "7/9/21")
+    with pytest.raises(ValueError, match="not the term that was requested"):
+        parse_term_index(later, term_year=2019)
+
+    # And the same page asked for under its real term still parses.
+    assert len(parse_term_index(later, term_year=2020)) == 3
+
+    # A slip index served under the wrong term is refused by the path guard.
+    with pytest.raises(ValueError, match="unsafe Supreme Court opinion URL"):
+        parse_term_index(INDEX_HTML, term_year=2021)
+
+
 def test_volume_row_stores_its_own_pages_not_the_whole_volume(tmp_path, monkeypatch):
     """A volume PDF under sixty case names would be sixty wrong rows.
 
@@ -227,7 +255,7 @@ def test_volume_row_stores_its_own_pages_not_the_whole_volume(tmp_path, monkeypa
         return httpx.Response(404, request=request)
 
     with httpx.Client(transport=httpx.MockTransport(handler)) as client:
-        reader = SupremeCourtOpinionsReader(term_years=(2019,), client=client)
+        reader = SupremeCourtOpinionsReader(term_years=(2019,), client=client, request_delay=0)
         records = list(reader.iter_records())
 
     rows = {row["case_name"]: _shape(row) for row in records}
@@ -276,7 +304,7 @@ def test_reader_fetches_a_shared_volume_once_and_records_a_dead_link():
 
     with httpx.Client(transport=httpx.MockTransport(handler)) as client:
         records = list(
-            SupremeCourtOpinionsReader(term_years=(2019,), client=client).iter_records()
+            SupremeCourtOpinionsReader(term_years=(2019,), client=client, request_delay=0).iter_records()
         )
     assert len(records) == 3
     assert fetches.count("/opinions/preliminaryprint/591US2PP_web.pdf") == 1
@@ -296,14 +324,14 @@ def test_reader_fetches_a_shared_volume_once_and_records_a_dead_link():
         with pytest.raises(ValueError, match="missing upstream"):
             list(
                 SupremeCourtOpinionsReader(
-                    term_years=(2019,), client=client
+                    term_years=(2019,), client=client, request_delay=0
                 ).iter_records()
             )
 
     # ...and recorded, not silent, when a run is told to survive it.
     with httpx.Client(transport=httpx.MockTransport(missing)) as client:
         reader = SupremeCourtOpinionsReader(
-            term_years=(2019,), client=client, skip_missing_documents=True
+            term_years=(2019,), client=client, skip_missing_documents=True, request_delay=0
         )
         assert list(reader.iter_records()) == []
         assert sum(reader.missing_documents.values()) == 3
