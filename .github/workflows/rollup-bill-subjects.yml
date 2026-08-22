@@ -12,7 +12,7 @@ on:
         default: false
         type: boolean
       max_bills:
-        description: 'Bills to enrich this run; blank uses the pinned per-run cap (5000)'
+        description: "Bills to enrich this run; blank uses the carrier's own cap (5000 keyless, 2000 keyed)"
         required: false
         default: ''
         type: string

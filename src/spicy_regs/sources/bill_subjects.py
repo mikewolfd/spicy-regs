@@ -81,10 +81,16 @@ _MAX_RETRIES = 4
 _SUBJECTS_PER_PAGE = 250
 _MAX_SUBJECT_PAGES = 4
 
-#: Seconds to wait between requests. Both carriers are free public services and
-#: neither publishes a per-second budget, so the default is a deliberate crawl
-#: rather than whatever the pipe allows.
-DEFAULT_DELAY_SECONDS = 0.15
+#: Requests an hour Congress.gov documents for a keyed client. It is a stated
+#: budget, not a guess, and every attempt spends from it — retries included.
+API_HOURLY_BUDGET = 5_000
+
+#: Seconds to wait between requests, per carrier. The API carrier crawls at
+#: 1.33 requests a second, comfortably under the 1.39/s the hourly budget
+#: allows, so a run of retries cannot walk the pipeline into 429s. GPO's bulk
+#: data publishes no budget at all; 0.15s is a deliberate crawl rather than
+#: whatever the pipe happens to allow.
+DELAY_SECONDS = {CARRIER_API: 0.75, CARRIER_BULKDATA: 0.15}
 
 
 class _Absent:
@@ -146,7 +152,7 @@ class BillSubjectsFetcher:
         *,
         api_key: str | None = None,
         carrier: str | None = None,
-        delay: float = DEFAULT_DELAY_SECONDS,
+        delay: float | None = None,
         client: httpx.Client | None = None,
     ) -> None:
         self.api_key = api_key if api_key is not None else _resolve_api_key()
@@ -155,7 +161,7 @@ class BillSubjectsFetcher:
             raise ValueError(
                 f"carrier {CARRIER_API!r} needs an api.data.gov key (set one of {', '.join(API_KEY_ENV_VARS)})"
             )
-        self.delay = delay
+        self.delay = DELAY_SECONDS[self.carrier] if delay is None else delay
         self.counts = FetchCounts()
         self._client = client
         self._owns_client = client is None

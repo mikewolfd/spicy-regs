@@ -34,7 +34,7 @@ on:
         default: ''
         type: string
       bill_subjects_max:
-        description: 'Optional per-run cap on bills enriched with subjects (default 5000)'
+        description: "Optional per-run cap on bills enriched with subjects; blank uses the carrier's own cap"
         required: false
         default: ''
         type: string

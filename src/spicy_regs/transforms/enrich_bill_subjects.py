@@ -48,6 +48,8 @@ from loguru import logger
 
 from spicy_regs.sources import r2
 from spicy_regs.sources.bill_subjects import (
+    CARRIER_API,
+    CARRIER_BULKDATA,
     FIRST_CONGRESS,
     BillSubjectsFetcher,
     FetchCounts,
@@ -56,10 +58,13 @@ from spicy_regs.sources.bill_subjects import (
 OUTPUT = "bill_subjects.parquet"
 BILLS_INPUT = "congress_bills.parquet"
 
-#: Bills to enrich per run. At the fetcher's default crawl delay this lands well
-#: inside the reusable rollup workflow's 30-minute timeout; the archive is
-#: therefore backfilled over successive nightly runs, each resumable.
-MAX_BILLS_PER_RUN = 5_000
+#: Bills to enrich per run, per carrier. Each is what that carrier's crawl rate
+#: fits inside the reusable rollup workflow's 30-minute timeout: GPO's bulk data
+#: answers at ~4.7 bills a second (5,000 in ~18 minutes), while Congress.gov's
+#: documented 5,000-requests-an-hour budget caps the API carrier at 1.33 a
+#: second (2,000 in ~25 minutes). A cap of 5,000 on the API carrier would spend
+#: the whole hourly budget in one run and leave nothing for a retry.
+MAX_BILLS_PER_RUN = {CARRIER_API: 2_000, CARRIER_BULKDATA: 5_000}
 
 #: The published schema: all VARCHAR, keyed by ``bill_id``, joinable straight to
 #: ``congress_bills``. The subject list is a JSON string so the table stays flat
@@ -192,10 +197,14 @@ def _log_coverage(out_file: Path, bills_file: Path) -> None:
 def enrich_bill_subjects(
     output_dir: Path,
     *,
-    max_bills: int = MAX_BILLS_PER_RUN,
+    max_bills: int | None = None,
     fetcher: BillSubjectsFetcher | None = None,
 ) -> Path:
-    """Build ``bill_subjects.parquet`` (bounded, resumable enrichment pass)."""
+    """Build ``bill_subjects.parquet`` (bounded, resumable enrichment pass).
+
+    ``max_bills`` defaults to the chosen carrier's per-run cap, which is what
+    that carrier's crawl rate fits inside the CI timeout.
+    """
     import duckdb
 
     out_file = output_dir / OUTPUT
@@ -218,6 +227,8 @@ def enrich_bill_subjects(
 
     owns_fetcher = fetcher is None
     fetcher = fetcher or BillSubjectsFetcher()
+    if max_bills is None:
+        max_bills = MAX_BILLS_PER_RUN[fetcher.carrier]
     logger.info(
         "Bill subjects: carrier {} (bills from the {}th Congress on), up to {:,} bills this run",
         fetcher.carrier,

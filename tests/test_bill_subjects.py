@@ -16,8 +16,10 @@ import pyarrow.parquet as pq
 import pytest
 
 from spicy_regs.sources.bill_subjects import (
+    API_HOURLY_BUDGET,
     CARRIER_API,
     CARRIER_BULKDATA,
+    DELAY_SECONDS,
     FIRST_CONGRESS,
     BillSubjects,
     BillSubjectsFetcher,
@@ -27,6 +29,7 @@ from spicy_regs.sources.bill_subjects import (
 from spicy_regs.sources.congress_bills import API_KEY_ENV_VARS
 from spicy_regs.transforms.enrich_bill_subjects import (
     COLUMNS,
+    MAX_BILLS_PER_RUN,
     _pending_bills,
     _shape,
     enrich_bill_subjects,
@@ -117,6 +120,21 @@ def test_each_carrier_declares_its_coverage_floor(monkeypatch):
     # own indexing floor at the 93rd.
     assert BillSubjectsFetcher().first_congress == FIRST_CONGRESS[CARRIER_BULKDATA] == 108
     assert FIRST_CONGRESS[CARRIER_API] == 93
+
+
+def test_a_run_cannot_outspend_the_documented_hourly_budget():
+    """Congress.gov states 5,000 requests an hour; a capped run must fit inside it."""
+    per_hour = 3600 / DELAY_SECONDS[CARRIER_API]
+    assert per_hour < API_HOURLY_BUDGET
+    # And the run itself has to finish inside the workflow's 30-minute timeout.
+    assert MAX_BILLS_PER_RUN[CARRIER_API] * DELAY_SECONDS[CARRIER_API] < 30 * 60
+    assert MAX_BILLS_PER_RUN[CARRIER_BULKDATA] * DELAY_SECONDS[CARRIER_BULKDATA] < 30 * 60
+
+
+def test_each_carrier_gets_its_own_crawl_rate(monkeypatch):
+    _keyless(monkeypatch)
+    assert BillSubjectsFetcher().delay == DELAY_SECONDS[CARRIER_BULKDATA]
+    assert BillSubjectsFetcher(api_key="k").delay == DELAY_SECONDS[CARRIER_API]
 
 
 # -- the /subjects page walk -------------------------------------------------

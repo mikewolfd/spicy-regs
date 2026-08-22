@@ -17,14 +17,13 @@ from typing import ClassVar
 
 from spicy_regs.pipelines.rollups.base import RollupPipeline, make_rollup_app
 from spicy_regs.transforms import enrich_bill_subjects
-from spicy_regs.transforms.enrich_bill_subjects import MAX_BILLS_PER_RUN
 
 
-def _int_env(name: str, default: int) -> int:
-    """Read a positive integer override, or fall back to the pinned default."""
+def _int_env(name: str) -> int | None:
+    """Read a positive integer override, or None to use the carrier's own cap."""
     raw = os.environ.get(name, "").strip()
     if not raw:
-        return default
+        return None
     try:
         value = int(raw)
     except ValueError as exc:
@@ -42,10 +41,7 @@ class BillSubjectsRollup(RollupPipeline):
     output: ClassVar[str] = "bill_subjects.parquet"
 
     def build(self, output_dir: Path) -> Path:
-        return enrich_bill_subjects(
-            output_dir,
-            max_bills=_int_env("BILL_SUBJECTS_MAX", MAX_BILLS_PER_RUN),
-        )
+        return enrich_bill_subjects(output_dir, max_bills=_int_env("BILL_SUBJECTS_MAX"))
 
 
 app = make_rollup_app(BillSubjectsRollup)
