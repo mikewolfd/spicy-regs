@@ -9,6 +9,14 @@ This is the verification section the court-data expansion owes. Every number is
 measured, and each check names the denominator it was measured against, because
 a coverage claim is worth exactly what its denominator is worth.
 
+> **Second pass, same day.** Four of the nine gaps below were worked after this
+> document was first written, and working them changed three of its findings.
+> The corrections are folded into the sections they belong to and summarised in
+> [What the second pass changed](#what-the-second-pass-changed) at the end. The
+> largest of them: the 12,666 "unexplained orphans" in section 2 were not
+> unexplained and were not orphans. They were an arithmetic error in this
+> document, and there are zero orphans.
+
 ## Where the denominators come from
 
 | Question | Denominator | Authority |
@@ -42,6 +50,14 @@ is **1.74–1.79 MiB/s on a single connection**, measured three independent ways
 (raw `curl` range read, streamed decompression, and the real ingest). The bucket
 does not go faster for one client; the ingest takes that as given rather than
 opening parallel connections against a service that gives its data away free.
+
+**The cap is per client, not per connection.** Two concurrent streams (the
+`opinions` pass and the `dockets` pass, run side by side on 2026-08-22) settled
+at **1.03 and 0.74 MiB/s — 1.77 MiB/s together**, which is the same number one
+connection gets alone. So parallelism buys nothing here, and the total cost of
+reading two dumps is the sum of their sizes divided by 1.77 MiB/s no matter how
+they are scheduled. That is worth knowing before anyone tries to make the 8.6
+hours shorter by opening sockets.
 
 ## The access facts that shaped every bound
 
@@ -79,7 +95,7 @@ ingest.
 |---|---|---|
 | `court_opinion_clusters` | **full** `opinion-clusters` dump, 2026-06-30, streamed in 23 min | **10,070,727 rows**, 3.94 GB parquet |
 | `court_opinion_bodies` | **250,000 opinions**, read from 1.242 GiB of the 2026-06-30 `opinions` dump | 250,000 rows, 1.74 GB parquet |
-| `courts` (reference read) | full dump | 3,361 courts — 397 federal (127 appellate, 125 district, 95 bankruptcy, 42 special), 2,618 state |
+| `courts` (reference read) | full dump | 3,361 courts — 397 federal (127 `F` appellate, 125 `FD` district, 95 `FB` bankruptcy, 8 `FBP` bankruptcy appellate panel, 42 `FS` special), 2,618 `ST` state |
 
 The `opinions` bound is the honest one to argue about, so here it is precisely.
 250,000 opinions came out of 1.242 GiB of a 50.814 GiB dump, which puts the dump
@@ -181,11 +197,40 @@ Two smaller numbers worth stating rather than rounding away:
   buys you when the target is one part in ten thousand. **Targeting the APA set
   specifically is a `cluster_ids` filter over the same dump**, which the builder
   already supports — the cost is the full 8.6-hour pass, not new code.
-* **237,334** of the 250,000 ingested opinions (94.9%) resolve to a cluster in
-  the cluster table; **12,666 (5.1%) do not**, despite both tables coming from
-  the same 2026-06-30 cut. Those opinions name a `cluster_id` the clusters dump
-  does not contain — most likely blocked or withdrawn clusters that the two
-  exports treat differently. Unexplained, and recorded as unexplained.
+* **All 250,000 ingested opinions resolve to a cluster in the cluster table.
+  There are no orphans.** An earlier draft of this section reported 12,666
+  (5.1%) that did not, "most likely blocked or withdrawn clusters the two
+  exports treat differently", and recorded it as unexplained. That was an error
+  in this document, not a property of the data, and it is worth spelling out
+  because the shape of it is instructive.
+
+  The number came from subtracting **237,334 distinct clusters** from **250,000
+  opinion rows** — a count of clusters taken away from a count of opinions. The
+  two differ because opinions are not one per cluster:
+
+  | Opinions in the cluster | Clusters |
+  |---|---:|
+  | 1 | 226,487 |
+  | 2 | 9,466 |
+  | 3 | 1,061 |
+  | 4 | 229 |
+  | 5 | 73 |
+  | 6 | 11 |
+  | 7 | 5 |
+  | 8 | 2 |
+
+  The siblings beyond the first come to 9,466 + 2,122 + 687 + 292 + 55 + 30 + 14
+  = **12,666 exactly**. They are the separately-authored concurrences and
+  dissents that section 1a two pages up celebrates as "the grain the table
+  promises". The same fact was written down twice, once as a feature and once as
+  a defect.
+
+  Re-measured with rows on both sides: **250,000 of 250,000 opinions (100%)
+  resolve; 0 do not.** `scripts/verify_court_coverage.py` now reports
+  `opinions_not_resolving_to_a_cluster` alongside the distinct-cluster count and
+  names `sibling_opinions_sharing_a_cluster` as the reason they differ, and a
+  test pins both directions — siblings must not read as orphans, and a genuine
+  orphan must still be seen.
 
 ### 3. Supreme Court term index vs captured opinions
 
@@ -206,7 +251,57 @@ has never been published. Coverage against those 319 opinions is therefore **0%
 published**, and the only copies on this machine are 10-row samples inside sealed
 corpus artifacts. This was already visible in the freshness config, where
 `court_opinions` sits in `SKIPPED` for a different stated reason ("seasonal"),
-which masks the real one.
+which masks the real one. That string is now corrected to say the table is
+unpublished.
+
+**And it is not the only one.** Checked against R2 directly on 2026-08-22:
+
+| Table | R2 |
+|---|---|
+| `court_dockets.parquet` | **200**, 1,450,249 B, 7,698 rows |
+| `court_opinions.parquet` | **404** |
+| `court_opinion_clusters.parquet` | **404** |
+| `court_opinion_bodies.parquet` | **404** |
+
+So three of the four court tables are local-only. `court_opinion_clusters` and
+`court_opinion_bodies` at least say so in the freshness config ("not yet
+published to R2"); publishing all three is one decision, and it is not this
+document's to make.
+
+### 3a. The pre-2021 terms, measured rather than assumed
+
+The gap list below said pre-2021 opinions were unreachable because
+`parse_term_index` refused their URL shape. That is true of *some* of them and
+the scope is smaller than it sounds in both directions. Measured against the
+Court's own indexes:
+
+| Term | Index rows | Slip PDFs | Rows pointing into a volume PDF |
+|---|---:|---:|---:|
+| ≤ OT2016 | **no slip index at all** — the URL redirects to `USReports.aspx` | — | — |
+| OT2017 | 56 | 0 | 56 |
+| OT2018 | 73 | 0 | 73 |
+| OT2019 | 63 | 0 | 63 |
+| OT2020 | 68 | **53** | 15 |
+| OT2021+ | 66 | 66 | 0 |
+
+Two corrections fall out of that table.
+
+* **OT2016 and earlier are not a parser gap.** The Court does not publish a slip
+  opinion index for them; the URL redirects to the bound-volume page. Reaching
+  those terms means reading a different source, not adding a branch.
+* **OT2020 was four-fifths parseable already.** 53 of its 68 rows are ordinary
+  `/opinions/20pdf/` slip PDFs. One refused row raised for the whole term, so
+  the term produced nothing and looked wholly unreachable.
+
+The 207 volume rows point into **16 distinct PDFs** totalling 43.7 MiB — a
+preliminary print or bound volume of the *U.S. Reports*, with the opinion
+located by a `#page=N` fragment. Of those 16, **4 answer 404 at the Court's own
+URL** (`584US1PP_final`, `584US2PP_final`, `585US1PP_final`, `585US2PP_final`),
+covering **56 index rows**. That is a broken upstream link, not a fetch that can
+be retried.
+
+**So OT2017–OT2020 holds 260 index rows, of which 204 (78.5%) are reachable**
+and 56 are not, for a reason nothing on this side can fix.
 
 ## Named gaps, and what closing each costs
 
@@ -215,18 +310,38 @@ which masks the real one.
    a machine with ≥160 GiB free, or a partitioned run that publishes per-slice.
    No new code — remove the bound.
 
-2. **`court_opinions` is unpublished.** 319 Supreme Court opinions across
-   OT2021–OT2025 exist upstream and zero are published.
-   *Cost:* one `run-rollup-supreme-court-opinions --no-skip-upload`. Minutes. The
-   `SKIPPED` reason should then be corrected, because "seasonal" is not why the
-   table is absent.
+2. **`court_opinions` is unpublished** — and so are `court_opinion_clusters` and
+   `court_opinion_bodies`. 319 Supreme Court opinions across OT2021–OT2025 exist
+   upstream and zero are published.
+   *Cost:* one `run-rollup-supreme-court-opinions --no-skip-upload`. Minutes.
+   *Status:* **open, deliberately.** Publishing is a decision, not a task; the
+   `SKIPPED` reason string is corrected in the meantime, because "seasonal" read
+   as a policy when the truth was an absence.
 
-3. **OT2020 and earlier cannot be parsed at all.** The term index for those years
-   links preliminary-print PDFs under a different path, and
-   `parse_term_index` rejects the URL outright (`unsafe Supreme Court opinion
-   URL`). The guard is doing its job; the parser has no branch for that layout.
-   *Cost:* a second URL shape plus tests. Half a day. Until then the Court's
-   pre-2021 output is not merely unfetched, it is unreachable.
+3. ~~**OT2020 and earlier cannot be parsed at all.**~~ **Closed for OT2017–OT2020;
+   OT2016 and earlier are a different source, not a parser branch.** See
+   [3a](#3a-the-pre-2021-terms-measured-rather-than-assumed) for the measurements.
+   `parse_term_index` now recognises `/opinions/preliminaryprint/` and
+   `/opinions/boundvolumes/` alongside the slip-opinion path, refusing everything
+   else exactly as before — including a volume link with no usable `#page=`
+   anchor, because a row that names a volume and claims to be one opinion is the
+   failure this branch exists to avoid.
+   *What the URL shape alone would have bought:* a volume of the *U.S. Reports*
+   stored as the text of each of its sixty opinions, each under a different case
+   name and each wrong. So the anchor is carried through as `source_page_start`,
+   closed against the next opinion in the same volume to give `source_page_end`,
+   and the transform slices the text to that range. Anchors were checked against
+   the real `591US2PP_web.pdf`: all twelve land on their opinion's first page,
+   case name matching the index.
+   *Also found while doing it:* the Court's site does not always serve
+   `/opinions/slipopinion/{code}` the term that code names — a client that had
+   already fetched one term got the **OT2023** index back from the OT2021 URL,
+   sixty real opinions about to be stamped `term_year=2021`. That is silent
+   mislabelling, not an error, and `parse_term_index` now refuses an index whose
+   decisions fall outside the term's date window. The site also rate-limits
+   (`403 Access Denied` after a few dozen index fetches in a couple of minutes),
+   so requests are now spaced a second apart — a full OT2017–OT2025 run is about
+   335 of them.
 
 4. **RECAP documents are not captured, and are the expensive one.** There is **no
    `recap-documents` bulk dataset** — 46 datasets, and that is not among them —
@@ -250,12 +365,25 @@ which masks the real one.
    the 1,155 APA cluster ids, which the builder already accepts. It still reads
    the whole 50.8 GiB dump to find them, so 8.6 hours; the *output* is tiny.
    This is the single highest-value follow-up.
+   *Status:* **running.** `scripts/capture_apa_opinion_bodies.py` reproduces the
+   target set (1,155 clusters over 759 dockets, joined from the published
+   `court_dockets`) and streams the pass, writing a receipt with both inputs
+   digest-pinned and coverage stated against the 1,155.
+   Two things had to change before it could start, and neither was the filter.
+   The disk guard charged every unbounded pass the dump's 50.8 GiB, which is the
+   right stand-in when the output is the whole corpus and refuses a run that
+   costs 141 MiB when it is not — the dump is streamed and never landed, so the
+   volume pays for the parquet written. And a socket held open for 8.6 hours
+   gets dropped, which used to end the run with nothing; the reader now resumes
+   from the exact compressed offset with an HTTP `Range` (the bucket answers
+   206, verified) and counts the resumes.
 
-6. **12,666 ingested opinions (5.1%) name a cluster the cluster dump does not
-   contain**, though both come from the same 2026-06-30 cut. Probably blocked or
-   withdrawn clusters the two exports handle differently.
-   *Cost:* unknown until diagnosed — a day of reconciling against the publisher.
-   Recorded as unexplained rather than rounded away.
+6. ~~**12,666 ingested opinions (5.1%) name a cluster the cluster dump does not
+   contain.**~~ **Closed: there are none.** All 250,000 resolve. The 12,666 was
+   this document subtracting a cluster count from an opinion count; the
+   remainder is exactly the sibling concurrences and dissents. The arithmetic is
+   in [section 2](#2-apa-docket-set-vs-decisions-matched). *No reconciliation
+   against the publisher was needed, because there was nothing to reconcile.*
 
 7. **90.1% of APA dockets have no decision.** This is an upstream property, not a
    coverage failure: RECAP records that a suit exists, opinion clusters record
@@ -265,11 +393,30 @@ which masks the real one.
    *documents* — see gap 4 — and accepting that most of what returns is docket
    metadata, not opinions.
 
-8. **Clusters are the whole corpus, not just federal.** The dump has no
-   `court_id`; that lives on the docket. Restricting decisions to the 397 federal
-   courts requires joining the 4.67 GiB `dockets` dump.
-   *Cost:* 46 min of streaming plus a docket→court map. Cheap, and the obvious
-   next step if the table's size becomes a problem.
+8. ~~**Clusters are the whole corpus, not just federal.**~~ **Closed.**
+   `court_opinion_clusters` now carries `court_id`, `court_jurisdiction` and
+   `court_is_federal`, resolved from the `dockets` dump through `cl_docket_id`.
+   Federal means the publisher's jurisdiction code begins with `F`, which
+   reproduces the 397 in the `courts` dump exactly; the raw code is published
+   next to the boolean so a consumer who disagrees can reclassify without
+   re-reading 4.67 GiB, and a court the dump does not describe is NULL rather
+   than `f` — this table is the whole corpus, so absence of evidence is recorded
+   as absence.
+   *What it cost:* the `dockets` read is one pass for two columns. Checked
+   against the publisher's listing of 46 datasets first: **there is no smaller
+   published docket→court map**, so the 4.67 GiB is the cheapest form the answer
+   comes in. Measured at ~0.74 MiB/s while sharing the pipe with the gap-5 pass;
+   alone it is the ~46 minutes predicted.
+   *The design constraint worth recording:* the join happens while each row is
+   shaped, not afterwards. A duckdb join of ten million clusters against
+   seventy-odd million dockets would rewrite the whole 3.9 GB table, and the
+   first build's promote path exists precisely because this machine cannot hold
+   two copies of it. So the map is a dense array — one `unsigned short` per
+   docket id indexing a 3,361-entry court vocabulary, about 150 MB — rather than
+   seventy million Python string keys, which is gigabytes before a single value.
+   *What it costs from now on:* a scheduled cluster run reads two dumps instead
+   of one, about 70 minutes rather than 23. The map is cached by dump date, and
+   `skip_court_scope` opts out and leaves the columns NULL.
 
 9. **The search catch-up did not run.** `CourtListenerOpinionSearchReader` is
    implemented and tested, but a local run was skipped: the window from the
@@ -295,3 +442,51 @@ the data. It surfaced only because duckdb refused to cast
 `'<author id=\"b1326-17\">'` to an opinion id. Fixed in `6c7a654` and pinned by a
 regression test. Worth stating plainly: had the merge step been more forgiving,
 this would have shipped as a coverage number that was merely wrong.
+
+## What the second pass changed
+
+Gaps 3, 5, 6 and 8 were worked on 2026-08-22 after this document was first
+written. Three of its findings did not survive contact.
+
+| Was recorded as | Actually |
+|---|---|
+| 12,666 opinions (5.1%) orphaned, cause unexplained | **Zero orphaned.** The figure was a cluster count subtracted from an opinion count; the remainder is exactly the sibling concurrences and dissents |
+| Pre-2021 unreachable for want of a URL shape | **OT2017–OT2020**: 204 of 260 rows reachable once the volume layout is read, 56 blocked by 404s at the Court's own URLs. **OT2016 and earlier**: no slip index exists — a different source, not a branch |
+| `court_opinions` unpublished | **Three** of the four court tables are unpublished; `court_opinion_clusters` and `court_opinion_bodies` are 404 on R2 too |
+
+Three findings are new, and each is the kind that produces wrong data rather
+than an error:
+
+* **The Court's site serves the wrong term.** A client that had already fetched
+  one term got the OT2023 index back from `/opinions/slipopinion/21`. The rows
+  parse cleanly and `term_year` comes from the caller, so the table would simply
+  have said 2021 about sixty OT2023 opinions. Now refused by a date-window check.
+* **The Court's site rate-limits**, answering `403 Access Denied` after a few
+  dozen index fetches in a couple of minutes. A full OT2017–OT2025 run is ~335
+  requests, so they are now spaced.
+* **The bucket's throughput cap is per client, not per connection.** Two
+  concurrent streams totalled 1.77 MiB/s, the same as one alone.
+
+And one methodological note, because it is the second time the same shape of
+error has bitten this ingest. The `\"` CSV desync corrupted data without
+raising; the 12,666 was a unit mismatch that produced a plausible number without
+raising. Both were caught by something refusing to accept a value, not by a
+check that was looking for them. The coverage script now reports the orphan
+measure with rows on both sides of the comparison, which is the smallest change
+that makes the mistake impossible to repeat by reading.
+
+### Denominator note: how many opinions the dump actually holds
+
+The ~10.23M figure above is extrapolated from the first 1.242 GiB, and rows are
+not uniformly sized through the dump. Measured on the gap-5 pass as it ran:
+
+| Compressed read | Rows scanned | Implied dump total |
+|---:|---:|---:|
+| 0.35 GiB | 50,000 | 7.26M |
+| 0.61 GiB | 100,000 | 8.33M |
+| 1.06 GiB | 200,000 | 9.59M |
+| 1.24 GiB | 250,000 | 10.24M |
+
+The estimate is still climbing at the point the original sample stopped, so
+**10.23M is a floor derived from the first 2.4%, not a measurement**. The
+gap-5 pass reads the whole file and will settle it exactly.
