@@ -35,6 +35,7 @@ TABLES = (
     "fr_docket_links",
     "cfr_sections",
     "congress_bills",
+    "bill_subjects",
     "unified_agenda",
     "federal_register",
     "rule_targets",

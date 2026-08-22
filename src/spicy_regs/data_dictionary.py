@@ -55,6 +55,7 @@ TABLES: tuple[str, ...] = (
     "fr_docket_links",
     "cfr_sections",
     "congress_bills",
+    "bill_subjects",
     "unified_agenda",
     "federal_register",
     "rule_targets",
@@ -96,6 +97,7 @@ MCP_QUERYABLE: frozenset[str] = frozenset(
         "fr_docket_links",
         "cfr_sections",
         "congress_bills",
+        "bill_subjects",
         "unified_agenda",
         "federal_register",
         "rule_targets",
@@ -215,6 +217,17 @@ DERIVED_SCHEMAS: dict[str, list[tuple[str, str]]] = {
         ("latest_action_text", "VARCHAR"),
         ("update_date", "VARCHAR"),
         ("url", "VARCHAR"),
+    ],
+    # Per-bill Library of Congress subject assignment (enrich_bill_subjects),
+    # fetched from the detail endpoints the congress_bills list payload never
+    # carries. Keyed by bill_id; joins straight to congress_bills.
+    "bill_subjects": [
+        ("bill_id", "VARCHAR"),
+        ("policy_area", "VARCHAR"),
+        ("subjects_json", "VARCHAR"),
+        ("subject_count", "VARCHAR"),
+        ("carrier", "VARCHAR"),
+        ("enriched_at", "VARCHAR"),
     ],
     # Ingested from reginfo.gov (build_unified_agenda); all columns are stored as
     # VARCHAR, array fields serialized as JSON strings. Keyed by (rin, agenda_edition).

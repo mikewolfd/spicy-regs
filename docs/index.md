@@ -59,6 +59,7 @@ resolution automatically and never mixes ontology generations.
 | [`federal_register`](tables/federal_register.md) | one row per Federal Register document | `document_number` |
 | [`unified_agenda`](tables/unified_agenda.md) | one row per RIN per agenda edition | `rin` |
 | [`congress_bills`](tables/congress_bills.md) | one row per bill | `bill_id` |
+| [`bill_subjects`](tables/bill_subjects.md) | one row per bill with a fetched subject assignment | `bill_id` |
 | [`cfr_sections`](tables/cfr_sections.md) | one row per CFR granule | `granule_id` |
 | [`fcc_proceedings`](tables/fcc_proceedings.md) | one row per FCC proceeding (docket) | `name` |
 | [`fcc_filings`](tables/fcc_filings.md) | one row per FCC ECFS filing (comment) | `id_submission` |

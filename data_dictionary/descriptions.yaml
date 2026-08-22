@@ -220,6 +220,28 @@ tables:
       latest_action_text: "Text describing the most recent action on the bill."
       update_date: "Date the Congress.gov record was last updated (ISO 8601 string). Incremental window key."
       url: "Congress.gov API URL for the bill's detail resource."
+  bill_subjects:
+    summary: >-
+      One row per congressional bill that a subject carrier has answered for,
+      built by `enrich_bill_subjects`. This is the per-bill detail pass
+      `congress_bills` deliberately omits: the `/bill` list payload carries no
+      subject signal at all, so the Library of Congress assignment — one
+      `policy_area` from a ~33-term controlled list, plus any number of
+      legislative subjects from a large controlled vocabulary — is fetched one
+      bill at a time and published here. Keyed by `bill_id`, so it joins
+      straight to `congress_bills` with a `LEFT JOIN`. The enrichment is
+      bounded and resumable: each run answers for a capped slice of the archive
+      and merges with the prior table, so coverage grows run over run and is
+      always partial by design. A row with a null `policy_area` records that
+      the named carrier was asked and had nothing, not that the fetch failed —
+      failed fetches write no row. All columns are stored as VARCHAR.
+    columns:
+      bill_id: "Synthetic bill key `{congress}-{type}-{number}` (e.g. `118-hr-1234`). Primary key / dedup key, and the join key to `congress_bills.bill_id`."
+      policy_area: "The bill's single Library of Congress policy area (e.g. `Health`, `Armed Forces and National Security`), from a controlled list of ~33 terms. Null when the carrier holds no assignment for the bill."
+      subjects_json: "JSON array of the bill's legislative subject terms (a large controlled vocabulary), in the order the carrier returned them, deduplicated. `[]` when none are assigned."
+      subject_count: "Number of terms in `subjects_json`, so a count query needs no JSON parsing."
+      carrier: "Which publisher supplied the row: `congress-api` (Congress.gov v3 `/bill/{congress}/{type}/{number}/subjects`, back to the 93rd Congress, needs an api.data.gov key) or `govinfo-billstatus` (GPO BILLSTATUS bulk data, keyless, back to the 108th Congress). The terms are identical strings; only the carrier differs."
+      enriched_at: "UTC ISO 8601 timestamp of the run that fetched this row."
   unified_agenda:
     summary: >-
       One row per Regulation Identifier Number (RIN) per agenda edition, ingested

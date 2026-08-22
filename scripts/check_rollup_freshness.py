@@ -63,6 +63,7 @@ SKIPPED = {
     # Promote to a ROW_CHANGE_BUDGET once the first publish lands: while the
     # backfill runs, the row count must grow every night, and a flat count is
     # exactly the stall worth paging on.
+    "bill_subjects": "enriched_at is the fetch clock, not a source watermark; first publish pending",
 }
 
 
