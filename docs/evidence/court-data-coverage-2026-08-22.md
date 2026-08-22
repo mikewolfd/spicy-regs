@@ -429,6 +429,20 @@ and 56 are not, for a reason nothing on this side can fix.
    gets dropped, which used to end the run with nothing; the reader now resumes
    from the exact compressed offset with an HTTP `Range` (the bucket answers
    206, verified) and counts the resumes.
+   *Where it is:* started 12:20 on 2026-08-22, detached, logging to
+   `logs/apa-opinion-bodies-2026-08-22.log`, writing to
+   `output/court-data-apa-2026-08-22/`. On completion it leaves
+   `court_opinion_bodies.parquet` and `apa_opinion_bodies_receipt.json`;
+   `source_pin.json` is already there, written out of band because the process
+   predates the receipt carrying that block.
+   **Read the receipt's `resumes` before trusting the output**: the running
+   process loaded the reader *before* the guard that refuses a resume the
+   server answered with a restarted stream rather than a range. `resumes: 0`
+   makes that moot, and is the expected case. Anything else, rerun.
+   *This slice does not replace the 250,000-row uniform sample* in
+   `output/court-data-2026-08-22/` — they are complementary and deliberately
+   left unmerged, because merging them runs the duckdb sort that already ran the
+   4 GiB budget out of memory once.
 
 6. ~~**12,666 ingested opinions (5.1%) name a cluster the cluster dump does not
    contain.**~~ **Closed: there are none.** All 250,000 resolve. The 12,666 was
