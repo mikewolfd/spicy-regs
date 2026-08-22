@@ -125,8 +125,17 @@ def backfill(
     jurisdictions: Counter[str] = Counter()
     federal = unknown = 0
     written = 0
+    # Scope mode needs two columns out of thirty-six, and the thirty-four it
+    # does not need include syllabus, headmatter and summary — kilobytes of
+    # prose per row. Materializing those as Python objects, 250,000 rows at a
+    # time, is gigabytes of memory to answer a question about docket ids.
+    # Full mode has to carry every column through, so its batches are a tenth
+    # the size for the same peak memory.
+    full = mode == "full"
+    read_columns = None if full else list(SCOPE_COLUMNS[:2])
+    batch_rows = BATCH_ROWS // 10 if full else BATCH_ROWS
     try:
-        for batch in source.iter_batches(batch_size=BATCH_ROWS):
+        for batch in source.iter_batches(batch_size=batch_rows, columns=read_columns):
             rows = batch.to_pylist()
             shaped = []
             for row in rows:
