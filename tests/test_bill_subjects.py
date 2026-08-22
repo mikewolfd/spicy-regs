@@ -126,11 +126,11 @@ def _api_fetcher(monkeypatch, pages):
     fetcher = BillSubjectsFetcher(api_key="test", carrier=CARRIER_API, delay=0)
     calls: list[int] = []
 
-    def fake_get(url, *, params, want_text=False):
+    def fake_get_json(url, *, params):
         calls.append(params["offset"])
         return pages[params["offset"]]
 
-    monkeypatch.setattr(fetcher, "_get", fake_get)
+    monkeypatch.setattr(fetcher, "_get_json", fake_get_json)
     return fetcher, calls
 
 
@@ -201,7 +201,7 @@ def test_a_failed_later_page_publishes_nothing_rather_than_a_truncated_list(monk
 def test_a_404_is_an_answer_not_a_failure(monkeypatch):
     _keyless(monkeypatch)
     fetcher = BillSubjectsFetcher(delay=0)
-    monkeypatch.setattr(fetcher, "_get", lambda url, *, params, want_text=False: _absent())
+    monkeypatch.setattr(fetcher, "_get_text", lambda url: _absent())
     result = fetcher.subjects_for("108", "hr", "1")
     # The carrier answered: it does not hold this bill. Recorded so the next run
     # doesn't ask again.
@@ -218,7 +218,7 @@ def _absent():
 def test_counts_tally_policy_areas_for_the_run_report(monkeypatch):
     _keyless(monkeypatch)
     fetcher = BillSubjectsFetcher(delay=0)
-    monkeypatch.setattr(fetcher, "_get", lambda url, *, params, want_text=False: _BILLSTATUS)
+    monkeypatch.setattr(fetcher, "_get_text", lambda url: _BILLSTATUS)
     fetcher.subjects_for("118", "hr", "1")
     fetcher.subjects_for("118", "hr", "2")
     assert fetcher.counts.with_policy_area == 2

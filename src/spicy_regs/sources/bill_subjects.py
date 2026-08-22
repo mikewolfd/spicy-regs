@@ -87,6 +87,18 @@ _MAX_SUBJECT_PAGES = 4
 DEFAULT_DELAY_SECONDS = 0.15
 
 
+class _Absent:
+    """Sentinel: the carrier answered, and does not hold this bill."""
+
+    __slots__ = ()
+
+    def __repr__(self) -> str:  # pragma: no cover - debugging aid
+        return "<absent>"
+
+
+_ABSENT = _Absent()
+
+
 @dataclass(frozen=True)
 class BillSubjects:
     """One bill's subject assignment, as a carrier actually answered it.
@@ -198,13 +210,12 @@ class BillSubjectsFetcher:
                 "format": "json",
                 "api_key": self.api_key,
             }
-            payload = self._get(url, params=params)
-            if payload is _ABSENT:
+            payload = self._get_json(url, params=params)
+            if isinstance(payload, _Absent):
                 return BillSubjects(None, (), self.carrier)
             if payload is None:
                 # A later page failing must not publish a truncated subject list.
                 return None
-            assert isinstance(payload, dict)
             block = payload.get("subjects") or {}
             policy_area = policy_area or _clean((block.get("policyArea") or {}).get("name"))
             names.extend(
@@ -221,21 +232,37 @@ class BillSubjectsFetcher:
         """One BILLSTATUS XML fetch, parsed for both fields."""
         slug = f"{congress}{str(bill_type).lower()}{bill_number}"
         url = f"{BULKDATA_BASE}/{congress}/{str(bill_type).lower()}/BILLSTATUS-{slug}.xml"
-        text = self._get(url, params=None, want_text=True)
-        if text is _ABSENT:
+        text = self._get_text(url)
+        if isinstance(text, _Absent):
             return BillSubjects(None, (), self.carrier)
         if text is None:
             return None
-        assert isinstance(text, str)
         policy_area, subjects = parse_billstatus_subjects(text)
         return BillSubjects(policy_area, subjects, self.carrier)
 
     # -- transport -----------------------------------------------------------
 
-    def _get(self, url: str, *, params: dict | None, want_text: bool = False) -> object | None:
+    def _get_json(self, url: str, *, params: dict) -> dict | _Absent | None:
+        """Fetch a JSON body. A body that will not parse counts as no answer."""
+        response = self._request(url, params=params)
+        if response is None or isinstance(response, _Absent):
+            return response
+        try:
+            payload = response.json()
+        except ValueError as exc:
+            logger.warning("Bill subjects: unparseable JSON from {}: {}", url, exc)
+            return None
+        return payload if isinstance(payload, dict) else None
+
+    def _get_text(self, url: str) -> str | _Absent | None:
+        """Fetch a text body (BILLSTATUS XML)."""
+        response = self._request(url, params=None)
+        return response if response is None or isinstance(response, _Absent) else response.text
+
+    def _request(self, url: str, *, params: dict | None) -> httpx.Response | _Absent | None:
         """GET with bounded retries + exponential backoff.
 
-        Returns the parsed body, :data:`_ABSENT` on a definitive 404 (the carrier
+        Returns the response, :data:`_ABSENT` on a definitive 404 (the carrier
         does not hold this bill), or ``None`` when no answer was obtained.
         """
         if self._client is None:
@@ -253,8 +280,8 @@ class BillSubjectsFetcher:
                 if resp.status_code == 429 or resp.status_code >= 500:
                     raise httpx.HTTPStatusError("retryable", request=resp.request, response=resp)
                 resp.raise_for_status()
-                return resp.text if want_text else resp.json()
-            except (httpx.HTTPError, ValueError) as exc:
+                return resp
+            except httpx.HTTPError as exc:
                 if attempt == _MAX_RETRIES:
                     logger.error("Bill subjects: giving up on {} after {} attempts: {}", url, attempt, exc)
                     return None
@@ -264,18 +291,6 @@ class BillSubjectsFetcher:
                 )
                 time.sleep(backoff)
         return None
-
-
-class _Absent:
-    """Sentinel: the carrier answered, and does not hold this bill."""
-
-    __slots__ = ()
-
-    def __repr__(self) -> str:  # pragma: no cover - debugging aid
-        return "<absent>"
-
-
-_ABSENT = _Absent()
 
 
 def parse_billstatus_subjects(xml_text: str) -> tuple[str | None, tuple[str, ...]]:
