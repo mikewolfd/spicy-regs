@@ -10,6 +10,7 @@ backfill rather than fill the volume.
 from __future__ import annotations
 
 import bz2
+import io
 from datetime import date
 from pathlib import Path
 
@@ -26,8 +27,11 @@ from spicy_regs.transforms.build_court_opinion_bodies import (
     COLUMNS as BODY_COLUMNS,
 )
 from spicy_regs.transforms.build_court_opinion_bodies import (
+    BYTES_PER_OPINION_ROW,
     DISK_HEADROOM_FLOOR,
+    OPINIONS_PER_CLUSTER_CEILING,
     check_headroom,
+    estimate_output_bytes,
 )
 from spicy_regs.transforms.build_court_opinion_bodies import _shape as shape_body
 from spicy_regs.transforms.build_court_opinion_clusters import (
@@ -211,6 +215,89 @@ def test_reader_handles_embedded_newlines_in_opinion_text(tmp_path: Path):
     assert rows[0]["plain_text"] == "line one\nline two"
 
 
+# -- resuming a long transfer ------------------------------------------------
+
+
+class _FlakyResponse:
+    """Serve bytes from an offset and die once, the way a long socket does."""
+
+    def __init__(self, payload: bytes, *, offset: int, fail_after: int | None) -> None:
+        self._payload = payload
+        self._pos = offset
+        self._served = 0
+        self._fail_after = fail_after
+
+    def read(self, size: int) -> bytes:
+        if self._fail_after is not None and self._served >= self._fail_after:
+            raise OSError("connection reset by peer")
+        chunk = self._payload[self._pos : self._pos + size]
+        self._pos += len(chunk)
+        self._served += len(chunk)
+        return chunk
+
+    def close(self) -> None:
+        return None
+
+
+def test_counting_stream_resumes_a_dropped_transfer_at_the_exact_offset(monkeypatch):
+    """8.6 hours on one socket will be interrupted; the pass must survive it.
+
+    The resumed request must start at the compressed byte already consumed and
+    feed the *same* decompressor — bzip2 wants its bytes in order, not in one
+    connection. If the offset were wrong the failure would not be an error, it
+    would be corrupt text, so this pins the recovered bytes against the original.
+    """
+    from spicy_regs.sources import courtlistener_bulk
+    from spicy_regs.sources.courtlistener_bulk import _CountingStream
+
+    original = ("id,body\n" + "".join(f"{i},row {i}\n" for i in range(4000))).encode()
+    payload = bz2.compress(original)
+    # Read in small bites so the drop lands mid-dump, as a real one would.
+    monkeypatch.setattr(courtlistener_bulk, "_CHUNK", 1024)
+    assert len(payload) > 4096, "test payload must be big enough to interrupt mid-stream"
+
+    ranges: list[int] = []
+
+    def reopen(offset: int):
+        ranges.append(offset)
+        return _FlakyResponse(payload, offset=offset, fail_after=None)
+
+    stream = _CountingStream(
+        _FlakyResponse(payload, offset=0, fail_after=2048), reopen=reopen
+    )
+    recovered = io.BufferedReader(stream).read()
+
+    assert recovered == original
+    assert stream.resumes == 1
+    # Resumed once, from what was actually consumed — not from zero, not a guess.
+    assert ranges == [2048]
+    assert stream.compressed_bytes == len(payload)
+
+
+def test_counting_stream_reads_a_concatenated_bzip2_dump():
+    """``pbzip2`` writes many streams; a plain decompressor stops at the first.
+
+    The publisher's dumps are single-stream today. If that ever changes, a
+    decompressor that raises ``EOFError`` past the first boundary would end a
+    pass early — which is a coverage number that is quietly wrong, the failure
+    mode this ingest most has to avoid.
+    """
+    from spicy_regs.sources.courtlistener_bulk import _CountingStream
+
+    payload = bz2.compress(b"id,body\n1,first\n") + bz2.compress(b"2,second\n")
+    stream = _CountingStream(_FlakyResponse(payload, offset=0, fail_after=None))
+    assert io.BufferedReader(stream).read() == b"id,body\n1,first\n2,second\n"
+
+
+def test_reader_raises_on_a_broken_local_read_rather_than_resuming(tmp_path: Path):
+    """Resume is a network affordance; a local file has no ``Range`` to ask for."""
+    from spicy_regs.sources.courtlistener_bulk import _CountingStream
+
+    stream = _CountingStream(_FlakyResponse(b"anything", offset=0, fail_after=0))
+    with pytest.raises(OSError, match="connection reset"):
+        io.BufferedReader(stream).read()
+
+
 # -- shaping -----------------------------------------------------------------
 
 
@@ -294,6 +381,37 @@ def test_check_headroom_refuses_an_ingest_that_would_cross_the_floor(tmp_path: P
     # The real 2026-06-30 opinions dump does not fit, and must say so.
     with pytest.raises(RuntimeError, match="below the 100 GiB floor"):
         check_headroom(54_561_543_156, path=tmp_path)
+
+
+def test_estimate_output_bytes_charges_a_targeted_pass_for_its_output():
+    """A filtered pass reads 50.8 GiB and writes almost nothing; the guard must know.
+
+    The dump is streamed, never landed, so the disk cost of any pass is the
+    parquet it writes. Charging a 1,155-cluster APA pass the whole dump's size
+    refuses a run that costs tens of megabytes — the guard would be stopping the
+    single highest-value follow-up for a cost it does not incur.
+    """
+    dump = 54_561_543_156
+
+    # No filter: the output is the whole corpus, and the dump size stands in.
+    assert estimate_output_bytes(dump, None) == dump
+
+    # The real APA target set. Well under a gibibyte, so it clears a 7 GiB margin.
+    apa = estimate_output_bytes(dump, {str(i) for i in range(1155)})
+    assert apa < 2**30
+    assert apa == 1155 * OPINIONS_PER_CLUSTER_CEILING * BYTES_PER_OPINION_ROW
+
+    # Still refuses the thing it exists to refuse: filtering on every cluster in
+    # the corpus is a backfill wearing a filter, and must be sized as one.
+    assert estimate_output_bytes(dump, {str(i) for i in range(200_000)}) > 20 * 2**30
+
+    # A filter whose size cannot be known falls back to the conservative number
+    # rather than guessing small.
+    class _Unsized:
+        def __contains__(self, _item: object) -> bool:
+            return True
+
+    assert estimate_output_bytes(dump, _Unsized()) == dump
 
 
 # -- first build promotes rather than merges ---------------------------------

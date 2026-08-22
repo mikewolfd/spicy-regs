@@ -212,19 +212,99 @@ class _CountingStream(io.RawIOBase):
 
     Tracks compressed bytes pulled so a caller can stop on a byte budget without
     waiting for a row count.
+
+    **Resumable.** A full pass over the ``opinions`` dump is 8.6 hours on one
+    socket, and a socket held open that long will occasionally be dropped by
+    something between here and the bucket. Failing at hour seven with nothing to
+    show for it is the difference between this ingest being feasible and not, so
+    a read error reopens the transfer with an HTTP ``Range`` starting at the
+    exact compressed offset already consumed and keeps feeding the *same*
+    decompressor — bzip2 needs its compressed bytes in order, not in one socket.
+    ``reopen`` is the callable that performs that ranged re-request; without one
+    (a local file) a read error still propagates.
+
+    **Multi-stream aware.** ``bzip2`` writes one stream; ``pbzip2`` writes a
+    concatenation of them, and a plain ``BZ2Decompressor`` raises ``EOFError``
+    the moment it is fed a byte past the first stream's end. The publisher's
+    dumps read as single-stream today, but a compressor change upstream would
+    otherwise truncate a pass silently-ish at a stream boundary, so a finished
+    decompressor is replaced and its ``unused_data`` carried over.
     """
 
-    def __init__(self, response, *, max_compressed_bytes: int | None = None) -> None:
+    def __init__(
+        self,
+        response,
+        *,
+        max_compressed_bytes: int | None = None,
+        reopen: Callable[[int], object] | None = None,
+    ) -> None:
         self._response = response
+        self._reopen = reopen
         self._decompressor = bz2.BZ2Decompressor()
         self._buffer = b""
         self._max_compressed_bytes = max_compressed_bytes
         self.compressed_bytes = 0
         self.decompressed_bytes = 0
+        self.resumes = 0
         self._exhausted = False
 
     def readable(self) -> bool:
         return True
+
+    def close(self) -> None:
+        """Close whichever response is current — after a resume it is not the first."""
+        try:
+            self._response.close()
+        except Exception:  # noqa: BLE001, S110 - closing a broken socket
+            pass
+        super().close()
+
+    def _read_chunk(self) -> bytes:
+        """Pull the next compressed chunk, reconnecting mid-stream if need be."""
+        try:
+            return self._response.read(_CHUNK)
+        except Exception as exc:  # noqa: BLE001 - urllib/ssl raise a wide family
+            if self._reopen is None:
+                raise
+            logger.warning(
+                "CourtListener bulk: transfer failed after {:.3f} GiB ({}); resuming",
+                self.compressed_bytes / 2**30,
+                exc,
+            )
+        for attempt in range(1, _MAX_RETRIES + 1):
+            try:
+                self._response.close()
+            except Exception:  # noqa: BLE001, S110 - closing a broken socket
+                pass
+            try:
+                self._response = self._reopen(self.compressed_bytes)
+                self.resumes += 1
+                return self._response.read(_CHUNK)
+            except Exception as exc:  # noqa: BLE001
+                if attempt == _MAX_RETRIES:
+                    raise RuntimeError(
+                        f"CourtListener bulk: could not resume at byte "
+                        f"{self.compressed_bytes} after {attempt} attempts"
+                    ) from exc
+                backoff = min(2**attempt, 60)
+                logger.warning(
+                    "CourtListener bulk: resume attempt {}/{} failed ({}), retrying in {}s",
+                    attempt,
+                    _MAX_RETRIES,
+                    exc,
+                    backoff,
+                )
+                time.sleep(backoff)
+        return b""  # pragma: no cover - the loop either returns or raises
+
+    def _decompress(self, chunk: bytes) -> bytes:
+        """Decompress one chunk, rolling over a concatenated bzip2 stream."""
+        out = self._decompressor.decompress(chunk)
+        while self._decompressor.eof and self._decompressor.unused_data:
+            leftover = self._decompressor.unused_data
+            self._decompressor = bz2.BZ2Decompressor()
+            out += self._decompressor.decompress(leftover)
+        return out
 
     def readinto(self, target) -> int:  # type: ignore[override]
         while not self._buffer and not self._exhausted:
@@ -234,12 +314,12 @@ class _CountingStream(io.RawIOBase):
             ):
                 self._exhausted = True
                 break
-            chunk = self._response.read(_CHUNK)
+            chunk = self._read_chunk()
             if not chunk:
                 self._exhausted = True
                 break
             self.compressed_bytes += len(chunk)
-            self._buffer = self._decompressor.decompress(chunk)
+            self._buffer = self._decompress(chunk)
             self.decompressed_bytes += len(self._buffer)
         if not self._buffer:
             return 0
@@ -285,6 +365,10 @@ class CourtListenerBulkReader(Reader):
         self.decompressed_bytes = 0
         self.stopped_early = False
         self.source_url: str | None = None
+        #: How many times the transfer had to be reconnected mid-dump. Belongs in
+        #: a receipt: a pass that resumed twice read the same bytes as one that
+        #: did not, but it is not the same run and should not be recorded as one.
+        self.resumes = 0
 
     def _stream(self):
         if self.local_file is not None:
@@ -308,8 +392,13 @@ class CourtListenerBulkReader(Reader):
                 )
                 counter = raw.raw  # type: ignore[assignment]
             else:
+                url = self.source_url
                 counter = _CountingStream(
-                    handle, max_compressed_bytes=self.max_compressed_bytes
+                    handle,
+                    max_compressed_bytes=self.max_compressed_bytes,
+                    reopen=lambda offset: _open(
+                        str(url), extra_headers={"Range": f"bytes={offset}-"}
+                    ),
                 )
                 raw = io.BufferedReader(counter)  # type: ignore[arg-type]
             text = io.TextIOWrapper(raw, encoding="utf-8", errors="replace", newline="")
@@ -337,14 +426,17 @@ class CourtListenerBulkReader(Reader):
                 )
             self.compressed_bytes = counter.compressed_bytes
             self.decompressed_bytes = counter.decompressed_bytes
+            self.resumes = counter.resumes
         finally:
             handle.close()
         logger.info(
-            "CourtListener bulk {}: {:,} scanned / {:,} yielded ({:.2f} GiB compressed read)",
+            "CourtListener bulk {}: {:,} scanned / {:,} yielded "
+            "({:.2f} GiB compressed read, {} resume(s))",
             self.dataset,
             self.rows_scanned,
             self.rows_yielded,
             self.compressed_bytes / 2**30,
+            self.resumes,
         )
 
 

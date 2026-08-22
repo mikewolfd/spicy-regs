@@ -36,7 +36,7 @@ APA docket set without keeping the other ~10 million opinions.
 from __future__ import annotations
 
 import shutil
-from collections.abc import Container
+from collections.abc import Container, Sized
 from datetime import date
 from pathlib import Path
 
@@ -58,6 +58,17 @@ DATASET = "opinions"
 #: Free space this project refuses to eat into, in bytes. A bulk ingest that
 #: would cross it is stopped and recorded rather than run.
 DISK_HEADROOM_FLOOR = 100 * 2**30
+
+#: Compressed parquet bytes one opinion row costs, measured on the 250,000-row
+#: 2026-08-22 build: 1,735,931,994 bytes / 250,000 = 6,944 B/row, rounded up.
+BYTES_PER_OPINION_ROW = 8 * 2**10
+
+#: Opinions per cluster, used as a ceiling when sizing a ``cluster_ids`` pass.
+#: The most any single cluster carried in that same 250,000-row build was 8
+#: (majority, concurrences, dissents, and the odd combined rendering); doubling
+#: it keeps the estimate an over-estimate, which is the only direction a disk
+#: guard may err in.
+OPINIONS_PER_CLUSTER_CEILING = 16
 
 #: Rows buffered before each parquet batch write. Opinion bodies are large, so
 #: this batch is much smaller than the cluster builder's.
@@ -124,6 +135,25 @@ def check_headroom(needed_bytes: int, *, path: Path | None = None) -> None:
             f"{DISK_HEADROOM_FLOOR / 2**30:.0f} GiB floor "
             f"(currently {usage.free / 2**30:.1f} GiB free)"
         )
+
+
+def estimate_output_bytes(dump_size: int, cluster_ids: Container[str] | None) -> int:
+    """Bytes on disk an unbounded pass will actually cost.
+
+    The dump is *streamed* — decompressed inline, never landed — so what the
+    volume pays for is the parquet this run writes, not the 50.8 GiB it reads.
+    For an unfiltered pass those are close enough that the dump's compressed size
+    is the right stand-in (the measured output is 45-55 GiB). For a
+    ``cluster_ids`` pass they are nothing alike: the same 8.6 hours of reading
+    produces a table sized by the *targets*, and charging it 50.8 GiB refuses a
+    run that costs megabytes.
+
+    Falling back to the dump size for a filter whose length is unknowable keeps
+    the guard conservative when it cannot do arithmetic.
+    """
+    if cluster_ids is None or not isinstance(cluster_ids, Sized):
+        return dump_size
+    return len(cluster_ids) * OPINIONS_PER_CLUSTER_CEILING * BYTES_PER_OPINION_ROW
 
 
 def _shape(row: dict, *, dump_date: date | None) -> dict:
@@ -223,16 +253,23 @@ def build_court_opinion_bodies(
         if published is None:
             raise RuntimeError(f"CourtListener bulk: no {DATASET} dump for {resolved}")
         logger.info(
-            "Opinion bodies: dump {} is {:.3f} GiB compressed; bound = {} rows / {} bytes",
+            "Opinion bodies: dump {} is {:.3f} GiB compressed; bound = {} rows / "
+            "{} bytes / {} cluster ids",
             published.filename,
             published.size / 2**30,
             max_records or "unbounded",
             max_compressed_bytes or "unbounded",
+            len(cluster_ids) if isinstance(cluster_ids, Sized) else "unbounded",
         )
         # An unbounded pass would stream the whole dump. Check that the *output*
         # it implies still leaves headroom before a single byte moves.
         if max_records is None and max_compressed_bytes is None:
-            check_headroom(published.size, path=output_dir)
+            needed = estimate_output_bytes(published.size, cluster_ids)
+            logger.info(
+                "Opinion bodies: unbounded pass, estimated output {:.3f} GiB",
+                needed / 2**30,
+            )
+            check_headroom(needed, path=output_dir)
     else:
         resolved = dump_date
         logger.info("Opinion bodies: reading local dump {}", local_file)
