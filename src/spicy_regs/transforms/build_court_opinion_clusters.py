@@ -291,6 +291,21 @@ def build_court_opinion_clusters(
     )
 
     # 5. Merge prior + new, dedup on cluster_id preferring the freshest row.
+    #
+    # A first build has nothing to merge *against*: one dump, whose cluster_id is
+    # the publisher's primary key, so the dedup is a no-op. Running the merge
+    # anyway would hold the staged copy and the merged copy on disk at once —
+    # 7.1 GiB rather than 3.6 GiB at the 2026-06-30 dump's size — which is the
+    # difference between fitting inside the project's free-space floor and not.
+    # So the first build promotes the staged file instead, and pays for that with
+    # dump order rather than date order.
+    if not have_prior:
+        new_file.replace(out_file)
+        prior_file.unlink(missing_ok=True)
+        total = pq.ParquetFile(out_file).metadata.num_rows
+        logger.info("Court opinion clusters: {:,} rows (first build, dump order)", total)
+        return out_file
+
     spill_dir = output_dir / ".duckdb_tmp"
     spill_dir.mkdir(exist_ok=True)
     con = duckdb.connect()
