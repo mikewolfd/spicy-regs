@@ -223,8 +223,29 @@ def test_a_404_is_an_answer_not_a_failure(monkeypatch):
     result = fetcher.subjects_for("108", "hr", "1")
     # The carrier answered: it does not hold this bill. Recorded so the next run
     # doesn't ask again.
-    assert result == BillSubjects(None, (), CARRIER_BULKDATA)
-    assert (fetcher.counts.answered, fetcher.counts.absent, fetcher.counts.failed) == (1, 1, 0)
+    assert result == BillSubjects(None, (), CARRIER_BULKDATA, held=False)
+    assert (fetcher.counts.answered, fetcher.counts.not_held, fetcher.counts.failed) == (1, 1, 0)
+
+
+def test_a_held_bill_with_no_terms_is_counted_apart_from_a_404(monkeypatch):
+    """Both publish a null policy_area; only one of them means "never heard of it"."""
+    _keyless(monkeypatch)
+    fetcher = BillSubjectsFetcher(delay=0)
+    monkeypatch.setattr(fetcher, "_get_text", lambda url: "<billStatus><bill/></billStatus>")
+    fetcher.subjects_for("118", "hr", "1")
+    assert (fetcher.counts.unassigned, fetcher.counts.not_held) == (1, 0)
+
+
+def test_every_answer_lands_in_exactly_one_bucket(monkeypatch):
+    _keyless(monkeypatch)
+    fetcher = BillSubjectsFetcher(delay=0)
+    bodies = iter([_BILLSTATUS, "<billStatus><bill/></billStatus>", _absent()])
+    monkeypatch.setattr(fetcher, "_get_text", lambda url: next(bodies))
+    for n in range(3):
+        fetcher.subjects_for("118", "hr", str(n))
+    counts = fetcher.counts
+    buckets = counts.with_policy_area + counts.subjects_only + counts.unassigned + counts.not_held
+    assert buckets == counts.answered == 3
 
 
 def _absent():

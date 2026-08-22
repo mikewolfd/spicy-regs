@@ -109,15 +109,20 @@ _ABSENT = _Absent()
 class BillSubjects:
     """One bill's subject assignment, as a carrier actually answered it.
 
-    An answer of ``policy_area=None, subjects=()`` is a real answer — the bill
-    exists and carries no assignment, or the carrier does not hold it. A carrier
-    that never answered is ``None`` from :meth:`BillSubjectsFetcher.subjects_for`
-    instead, and is left for the next run.
+    An answer of ``policy_area=None, subjects=()`` is a real answer, and it has
+    two distinguishable causes: the carrier holds the bill and no terms were
+    assigned to it (``held=True``), or the carrier has no record of the bill at
+    all (``held=False`` — a 404). Both publish the same null, but a coverage
+    number that cannot tell them apart is a coverage number nobody can read, so
+    the run report counts them separately. A carrier that never answered is
+    ``None`` from :meth:`BillSubjectsFetcher.subjects_for` instead, and is left
+    for the next run.
     """
 
     policy_area: str | None
     subjects: tuple[str, ...]
     carrier: str
+    held: bool = True
 
 
 @dataclass
@@ -126,7 +131,9 @@ class FetchCounts:
 
     answered: int = 0
     with_policy_area: int = 0
-    absent: int = 0
+    subjects_only: int = 0
+    unassigned: int = 0
+    not_held: int = 0
     failed: int = 0
     policy_areas: dict[str, int] = field(default_factory=dict)
 
@@ -134,7 +141,9 @@ class FetchCounts:
         return {
             "answered": self.answered,
             "with_policy_area": self.with_policy_area,
-            "absent": self.absent,
+            "subjects_only": self.subjects_only,
+            "unassigned": self.unassigned,
+            "not_held": self.not_held,
             "failed": self.failed,
         }
 
@@ -194,6 +203,7 @@ class BillSubjectsFetcher:
         return result
 
     def _tally(self, result: BillSubjects | None) -> None:
+        """Sort one answer into exactly one bucket, so the four always sum."""
         if result is None:
             self.counts.failed += 1
             return
@@ -201,8 +211,12 @@ class BillSubjectsFetcher:
         if result.policy_area:
             self.counts.with_policy_area += 1
             self.counts.policy_areas[result.policy_area] = self.counts.policy_areas.get(result.policy_area, 0) + 1
-        elif not result.subjects:
-            self.counts.absent += 1
+        elif result.subjects:
+            self.counts.subjects_only += 1
+        elif result.held:
+            self.counts.unassigned += 1
+        else:
+            self.counts.not_held += 1
 
     def _from_api(self, congress: str, bill_type: str, bill_number: str) -> BillSubjects | None:
         """One ``/subjects`` call (plus offset pages) for both fields."""
@@ -218,7 +232,7 @@ class BillSubjectsFetcher:
             }
             payload = self._get_json(url, params=params)
             if isinstance(payload, _Absent):
-                return BillSubjects(None, (), self.carrier)
+                return BillSubjects(None, (), self.carrier, held=False)
             if payload is None:
                 # A later page failing must not publish a truncated subject list.
                 return None
@@ -240,7 +254,7 @@ class BillSubjectsFetcher:
         url = f"{BULKDATA_BASE}/{congress}/{str(bill_type).lower()}/BILLSTATUS-{slug}.xml"
         text = self._get_text(url)
         if isinstance(text, _Absent):
-            return BillSubjects(None, (), self.carrier)
+            return BillSubjects(None, (), self.carrier, held=False)
         if text is None:
             return None
         policy_area, subjects = parse_billstatus_subjects(text)

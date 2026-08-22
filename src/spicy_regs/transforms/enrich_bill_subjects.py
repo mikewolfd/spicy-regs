@@ -155,12 +155,14 @@ def _log_counts(counts: FetchCounts, *, carrier: str, attempted: int, elapsed: f
     rate = attempted / elapsed if elapsed > 0 else 0.0
     logger.info(
         "Bill subjects: carrier={} attempted={:,} answered={:,} with_policy_area={:,} "
-        "absent={:,} failed={:,} in {:.0f}s ({:.1f} bills/s)",
+        "subjects_only={:,} unassigned={:,} not_held={:,} failed={:,} in {:.0f}s ({:.1f} bills/s)",
         carrier,
         attempted,
         counts.answered,
         counts.with_policy_area,
-        counts.absent,
+        counts.subjects_only,
+        counts.unassigned,
+        counts.not_held,
         counts.failed,
         elapsed,
         rate,
