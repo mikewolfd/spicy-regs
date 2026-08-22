@@ -48,11 +48,20 @@ on:
         required: false
         default: ''
         type: string
+      timeout_minutes:
+        description: >-
+          Job timeout. 30 suits a rollup that reads R2 and writes a table. A
+          rollup that streams a bulk dump is bounded by the publisher's
+          bandwidth, not by our work, and needs its own number — see
+          rollup-court-opinion-clusters.yml.
+        required: false
+        default: 30
+        type: number
 
 jobs:
   rollup:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: ${{ inputs.timeout_minutes }}
 
     steps:
       - name: Checkout
