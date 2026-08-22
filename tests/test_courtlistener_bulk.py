@@ -173,6 +173,30 @@ def test_reader_applies_the_row_filter_before_materializing(tmp_path: Path):
     assert reader.rows_yielded == 2
 
 
+def test_reader_reads_the_dumps_backslash_escaped_quotes(tmp_path: Path):
+    """The dumps escape an embedded quote as ``\\"``, not as the doubled ``""``.
+
+    Read with the stdlib default dialect this does not raise — it *desyncs*, and
+    the prose after the escaped quote becomes the next record's first column.
+    Measured on the real 2026-06-30 opinion-clusters dump that corrupted 1,987 of
+    the first 3,000 rows and dropped ``docket_id`` on two thirds of them, which
+    would have silently destroyed the docket join. A regression here is a data
+    corruption, not a parse error, so it is pinned.
+    """
+    path = _csv_bz2(
+        tmp_path,
+        "opinion-clusters-2026-06-30.csv.bz2",
+        "id,case_name,docket_id",
+        [r'"7290305","Ex parte \"Doe\", Inc.","64278691"', '"7290306","Plain v. Simple","64278692"'],
+    )
+    rows = list(CourtListenerBulkReader("opinion-clusters", local_file=path).iter_records())
+    assert [r["id"] for r in rows] == ["7290305", "7290306"]
+    assert rows[0]["case_name"] == 'Ex parte "Doe", Inc.'
+    # The row after the escaped quote must still be a row, with its join key intact.
+    assert rows[0]["docket_id"] == "64278691"
+    assert rows[1]["docket_id"] == "64278692"
+
+
 def test_reader_handles_embedded_newlines_in_opinion_text(tmp_path: Path):
     """Opinion bodies contain newlines inside quoted fields; a naive line split loses rows."""
     path = _csv_bz2(

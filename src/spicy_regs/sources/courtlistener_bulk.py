@@ -69,6 +69,17 @@ _PROGRESS_EVERY = 50_000
 #: far past the stdlib default. Raise once, at import, to the platform maximum.
 csv.field_size_limit(sys.maxsize)
 
+#: The dumps escape an embedded quote as ``\"``, not as the doubled ``""`` the
+#: stdlib assumes. Reading them with the default dialect does not fail — it
+#: *desyncs*: the reader treats the escaped quote as the end of the field, and
+#: the prose after it becomes the next record's first column. Measured on the
+#: 2026-06-30 ``opinion-clusters`` dump, the default dialect corrupts 1,987 of
+#: the first 3,000 rows and drops ``docket_id`` on two thirds of them, which
+#: would have quietly destroyed the join this whole ingest exists to make. With
+#: ``escapechar`` set, the same 3,000 rows parse clean and every one keeps its
+#: docket. ``doublequote`` stays True so a literal ``""`` empty field still reads.
+CSV_DIALECT: dict[str, object] = {"escapechar": "\\", "doublequote": True}
+
 
 @dataclass(frozen=True)
 class BulkObject:
@@ -302,7 +313,7 @@ class CourtListenerBulkReader(Reader):
                 )
                 raw = io.BufferedReader(counter)  # type: ignore[arg-type]
             text = io.TextIOWrapper(raw, encoding="utf-8", errors="replace", newline="")
-            for row in csv.DictReader(text):
+            for row in csv.DictReader(text, **CSV_DIALECT):  # type: ignore[arg-type]
                 self.rows_scanned += 1
                 if self.rows_scanned % _PROGRESS_EVERY == 0:
                     logger.info(
