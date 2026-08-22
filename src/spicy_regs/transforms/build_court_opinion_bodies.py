@@ -262,6 +262,20 @@ def build_court_opinion_bodies(
         reader.compressed_bytes / 2**30,
     )
 
+    # A first build has no prior table to merge against and one input, whose
+    # opinion_id is the publisher's primary key — so the dedup cannot remove a
+    # row and the whole COPY is a sort. It is an expensive sort: ranking 250,000
+    # rows that each carry kilobytes of opinion text ran the 4 GiB duckdb budget
+    # out of memory, and holding the staged and merged copies at once is 3.5 GiB
+    # of disk against a 100 GiB floor. So promote the staged file instead, and
+    # pay for it in row order.
+    if not have_prior:
+        new_file.replace(out_file)
+        prior_file.unlink(missing_ok=True)
+        total = pq.ParquetFile(out_file).metadata.num_rows
+        logger.info("Court opinion bodies: {:,} rows (first build, dump order)", total)
+        return out_file
+
     spill_dir = output_dir / ".duckdb_tmp"
     spill_dir.mkdir(exist_ok=True)
     con = duckdb.connect()

@@ -13,6 +13,7 @@ import bz2
 from datetime import date
 from pathlib import Path
 
+import pyarrow.parquet as pq
 import pytest
 
 from spicy_regs.sources.courtlistener_bulk import (
@@ -293,3 +294,36 @@ def test_check_headroom_refuses_an_ingest_that_would_cross_the_floor(tmp_path: P
     # The real 2026-06-30 opinions dump does not fit, and must say so.
     with pytest.raises(RuntimeError, match="below the 100 GiB floor"):
         check_headroom(54_561_543_156, path=tmp_path)
+
+
+# -- first build promotes rather than merges ---------------------------------
+
+
+def test_first_build_promotes_the_staged_table_without_merging(tmp_path: Path, monkeypatch):
+    """With no prior table the merge is a sort the machine cannot always afford.
+
+    One dump, whose id column is the publisher's primary key, so the dedup can
+    remove nothing. Running the COPY anyway held the staged and merged copies on
+    disk at once and — on 250,000 rows carrying kilobytes of opinion text each —
+    ran duckdb's memory budget out entirely. The first build promotes instead.
+    """
+    from spicy_regs.sources import r2
+    from spicy_regs.transforms.build_court_opinion_bodies import build_court_opinion_bodies
+
+    monkeypatch.setattr(r2, "download", lambda *_: False)
+    dump = _csv_bz2(
+        tmp_path,
+        "opinions-2026-06-30.csv.bz2",
+        "id,cluster_id,type,plain_text,html_with_citations",
+        ['"11","101","010combined","body one",""', '"12","102","040dissent","","<p>body two</p>"'],
+    )
+    out = build_court_opinion_bodies(tmp_path, dump_date=date(2026, 6, 30), local_file=dump)
+
+    stored = pq.read_table(out).to_pylist()
+    assert [r["opinion_id"] for r in stored] == ["11", "12"]
+    assert set(stored[0]) == set(BODY_COLUMNS)
+    assert stored[0]["plain_text"] == "body one"
+    assert stored[1]["html_with_citations"] == "<p>body two</p>"
+    assert stored[1]["available_text_fields"] == "html_with_citations"
+    # The staged file must not survive as a second copy of the same rows.
+    assert not (tmp_path / "_bodies_new.parquet").exists()
