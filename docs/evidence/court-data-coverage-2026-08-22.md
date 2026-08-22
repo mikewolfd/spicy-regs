@@ -443,6 +443,15 @@ and 56 are not, for a reason nothing on this side can fix.
    `output/court-data-2026-08-22/` — they are complementary and deliberately
    left unmerged, because merging them runs the duckdb sort that already ran the
    4 GiB budget out of memory once.
+   *Predicted result, written down before the pass finished so the receipt can
+   be judged rather than admired:* **roughly 1,200–1,300 opinion rows over close
+   to all 1,155 target clusters.** From the pass in flight, 73 kept out of
+   700,000 scanned at 2.92 GiB; the same ratio over the whole dump is ~1,270,
+   and 1,155 clusters at the measured 1.05 opinions per cluster is ~1,213. A
+   result far below that means the filter or the target set is wrong, not that
+   the APA docket set is emptier than section 2 says. Note also that the first
+   250,000 rows yielded 17 — the same 17 the bounded 2026-08-22 run found, from
+   the same 1.24 GiB, which is a free reproducibility check on the reader.
 
 6. ~~**12,666 ingested opinions (5.1%) name a cluster the cluster dump does not
    contain.**~~ **Closed: there are none.** All 250,000 resolve. The 12,666 was
