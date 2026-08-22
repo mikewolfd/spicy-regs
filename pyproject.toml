@@ -98,6 +98,7 @@ run-rollup-discovery-signals = "spicy_regs.pipelines.rollups.discovery_signals:a
 run-rollup-fr-docket-links = "spicy_regs.pipelines.rollups.fr_docket_links:app"
 run-rollup-cfr-sections = "spicy_regs.pipelines.rollups.cfr_sections:app"
 run-rollup-congress-bills = "spicy_regs.pipelines.rollups.congress_bills:app"
+run-rollup-bill-subjects = "spicy_regs.pipelines.rollups.bill_subjects:app"
 run-rollup-unified-agenda = "spicy_regs.pipelines.rollups.unified_agenda:app"
 run-rollup-federal-register = "spicy_regs.pipelines.rollups.federal_register:app"
 run-rollup-fcc-proceedings = "spicy_regs.pipelines.rollups.fcc_proceedings:app"

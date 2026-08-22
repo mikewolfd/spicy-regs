@@ -27,6 +27,7 @@ from spicy_regs.transforms.build_regulatory_agenda import build_regulatory_agend
 from spicy_regs.transforms.build_rule_targets import build_rule_targets
 from spicy_regs.transforms.build_sam_entities import build_sam_entities
 from spicy_regs.transforms.build_search_index import INDEX_FILENAME, build_search_index
+from spicy_regs.transforms.enrich_bill_subjects import enrich_bill_subjects
 from spicy_regs.transforms.build_supreme_court_opinions import (
     build_supreme_court_opinions,
 )
@@ -63,6 +64,7 @@ __all__ = [
     "build_agency_monthly_volume",
     "build_cfr_sections",
     "build_congress_bills",
+    "enrich_bill_subjects",
     "build_authority_edges",
     "build_comment_periods",
     "build_concept_assignments",

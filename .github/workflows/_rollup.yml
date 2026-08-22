@@ -33,6 +33,11 @@ on:
         required: false
         default: ''
         type: string
+      bill_subjects_max:
+        description: 'Optional per-run cap on bills enriched with subjects (default 5000)'
+        required: false
+        default: ''
+        type: string
       fcc_since:
         description: 'Optional FCC ECFS backfill start date (YYYY-MM-DD)'
         required: false
@@ -87,6 +92,7 @@ jobs:
           LDA_SINCE: ${{ inputs.lda_since }}
           LDA_UNTIL: ${{ inputs.lda_until }}
           CONGRESS_SINCE: ${{ inputs.congress_since }}
+          BILL_SUBJECTS_MAX: ${{ inputs.bill_subjects_max }}
           FCC_SINCE: ${{ inputs.fcc_since }}
           FCC_PROCEEDINGS: ${{ inputs.fcc_proceedings }}
           # Optional: raises the CourtListener API rate limit. The court_dockets
