@@ -46,7 +46,24 @@ COURTS_DATASET = "courts"
 #: Rows buffered per parquet batch. Two narrow columns, so this can be large.
 BATCH_ROWS = 500_000
 
-MAP_COLUMNS = ("cl_docket_id", "court_id")
+#: ``docket_number`` is not needed to answer "which court", and it is captured
+#: anyway because the pass that gets ``court_id`` has the row in hand and a
+#: second pass costs 111 minutes of the publisher's bandwidth.
+#:
+#: It is here for a measured reason. CourtListener carries **two docket records
+#: for one case** — a RECAP/PACER one and a scraper one — and the opinion cluster
+#: hangs off the scraper one while a nature-of-suit search returns the RECAP one.
+#: Measured 2026-08-22, that hides at least 249 APA decisions, 184 of them in
+#: D.D.C., which matched 0.0% of its 1,571 APA dockets against peers at 15-17%.
+#: Two records for one case share a docket number within a court, so
+#: ``(court_id, docket_number)`` is the exact join where matching case-name
+#: prose is a guess.
+MAP_COLUMNS = ("cl_docket_id", "court_id", "docket_number")
+
+#: The columns :class:`CourtScope` actually reads. Named separately so a map
+#: captured before ``docket_number`` existed still loads.
+SCOPE_COLUMNS = ("cl_docket_id", "court_id")
+
 _MAP_SCHEMA = pa.schema([(c, pa.string()) for c in MAP_COLUMNS])
 
 #: CourtListener jurisdiction codes that denote a federal court, as published in
@@ -125,7 +142,7 @@ class CourtScope:
             target = max(position + 1, len(index) * 2)
             index.frombytes(bytes(index.itemsize * (target - len(index))))
 
-        for batch in parquet.iter_batches(batch_size=1_000_000, columns=list(MAP_COLUMNS)):
+        for batch in parquet.iter_batches(batch_size=1_000_000, columns=list(SCOPE_COLUMNS)):
             docket_ids = batch.column("cl_docket_id").to_pylist()
             court_ids = batch.column("court_id").to_pylist()
             for docket_id, court_id in zip(docket_ids, court_ids, strict=True):
@@ -203,11 +220,23 @@ def build_docket_court_map(
     stamp = dump_date.isoformat() if dump_date else "local"
     out_file = output_dir / f"docket_courts-{stamp}.parquet"
     if out_file.exists():
+        cached = pq.ParquetFile(out_file)
+        missing = [c for c in MAP_COLUMNS if c not in cached.schema_arrow.names]
         logger.info(
             "Court scope: reusing cached docket->court map {} ({:,} rows)",
             out_file,
-            pq.ParquetFile(out_file).metadata.num_rows,
+            cached.metadata.num_rows,
         )
+        if missing:
+            # Not rebuilt automatically: that is 111 minutes of someone else's
+            # bandwidth, and it is not this function's call to spend it. Said
+            # loudly instead, because the alternative is a reconciliation that
+            # silently cannot run.
+            logger.warning(
+                "Court scope: cached map predates {} — delete it to recapture. "
+                "Duplicate-docket reconciliation is unavailable without it.",
+                ", ".join(missing),
+            )
         return out_file
 
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -238,7 +267,13 @@ def build_docket_court_map(
             docket_id = row.get("id")
             if not docket_id:
                 continue
-            batch.append({"cl_docket_id": docket_id, "court_id": row.get("court_id")})
+            batch.append(
+                {
+                    "cl_docket_id": docket_id,
+                    "court_id": row.get("court_id"),
+                    "docket_number": row.get("docket_number"),
+                }
+            )
             if len(batch) >= BATCH_ROWS:
                 flush()
         flush()

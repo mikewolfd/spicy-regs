@@ -153,19 +153,22 @@ def test_map_build_streams_two_columns_and_caches_by_dump_date(tmp_path: Path):
     from datetime import date
 
     body = (
-        "id,court_id,case_name,nature_of_suit\n"
-        "1,ca9,Alpha,\n"
-        "2,nc,Beta,899\n"
-        ",dcd,Missing id,\n"
+        "id,court_id,docket_number,case_name,nature_of_suit\n"
+        "1,ca9,1:20-cv-01,Alpha,\n"
+        "2,nc,1:20-cv-02,Beta,899\n"
+        ",dcd,1:20-cv-03,Missing id,\n"
     )
     dump = tmp_path / "dockets-2026-06-30.csv.bz2"
     dump.write_bytes(bz2.compress(body.encode()))
 
     out = build_docket_court_map(tmp_path, dump_date=date(2026, 6, 30), local_file=dump)
     rows = pq.read_table(out).to_pylist()
+    # docket_number rides along free: the pass that reads court_id has the row in
+    # hand, and it is the exact key for the duplicate docket records that hid 249
+    # APA decisions behind a case-name guess.
     assert rows == [
-        {"cl_docket_id": "1", "court_id": "ca9"},
-        {"cl_docket_id": "2", "court_id": "nc"},
+        {"cl_docket_id": "1", "court_id": "ca9", "docket_number": "1:20-cv-01"},
+        {"cl_docket_id": "2", "court_id": "nc", "docket_number": "1:20-cv-02"},
     ]
 
     # A cached map is reused rather than re-streamed...
@@ -179,8 +182,42 @@ def test_map_build_streams_two_columns_and_caches_by_dump_date(tmp_path: Path):
     assert receipt["result"]["dockets"] == 2
     assert receipt["bounds"]["rows_scanned"] == 3  # the row with no id was seen
     assert receipt["bounds"]["resumes"] == 0
-    assert receipt["bounds"]["columns"] == ["cl_docket_id", "court_id"]
+    assert receipt["bounds"]["columns"] == ["cl_docket_id", "court_id", "docket_number"]
     assert receipt["source"]["local_file"] == str(dump)
+
+
+def test_a_map_captured_before_docket_number_still_loads_and_says_so(tmp_path: Path):
+    """111 minutes of the publisher's bandwidth is not this function's to spend.
+
+    A cached map from before ``docket_number`` existed is still a perfectly good
+    docket→court map, so it is used. What it cannot do is the duplicate-docket
+    reconciliation, and a reconciliation that silently cannot run is exactly the
+    failure mode this ingest keeps finding in its own record.
+    """
+    from datetime import date
+
+    legacy = tmp_path / "docket_courts-2026-06-30.parquet"
+    pq.write_table(
+        pa.Table.from_pylist(
+            [{"cl_docket_id": "10", "court_id": "ca9"}],
+            schema=pa.schema([("cl_docket_id", pa.string()), ("court_id", pa.string())]),
+        ),
+        legacy,
+    )
+
+    from loguru import logger
+
+    warnings: list[str] = []
+    sink = logger.add(warnings.append, level="WARNING")
+    try:
+        assert build_docket_court_map(tmp_path, dump_date=date(2026, 6, 30)) == legacy
+    finally:
+        logger.remove(sink)
+    assert any("docket_number" in line for line in warnings), warnings
+
+    # And it still answers the question it was built for.
+    scope = CourtScope.from_map(legacy, _JURISDICTIONS)
+    assert scope.for_docket("10") == ("ca9", "F", "t")
 
 
 def test_courts_dump_reads_the_publisher_s_own_jurisdiction_codes(tmp_path: Path):
