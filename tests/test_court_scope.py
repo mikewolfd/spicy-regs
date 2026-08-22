@@ -16,6 +16,7 @@ different claims and only one of them is supported.
 from __future__ import annotations
 
 import bz2
+import json
 from pathlib import Path
 
 import pyarrow as pa
@@ -171,6 +172,15 @@ def test_map_build_streams_two_columns_and_caches_by_dump_date(tmp_path: Path):
     assert build_docket_court_map(tmp_path, dump_date=date(2026, 6, 30)) == out
     # ...and an interrupted pass never leaves a file that looks cached.
     assert not list(tmp_path.glob("*.partial.parquet"))
+
+    # 46 minutes of someone else's bandwidth is a capture, and a capture that
+    # cannot say what it read is a file.
+    receipt = json.loads((out.with_suffix(".receipt.json")).read_text())
+    assert receipt["result"]["dockets"] == 2
+    assert receipt["bounds"]["rows_scanned"] == 3  # the row with no id was seen
+    assert receipt["bounds"]["resumes"] == 0
+    assert receipt["bounds"]["columns"] == ["cl_docket_id", "court_id"]
+    assert receipt["source"]["local_file"] == str(dump)
 
 
 def test_courts_dump_reads_the_publisher_s_own_jurisdiction_codes(tmp_path: Path):

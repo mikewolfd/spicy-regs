@@ -26,15 +26,19 @@ reclassify without re-reading 4.67 GiB.
 
 from __future__ import annotations
 
+import json
 from array import array
-from datetime import date
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 import pyarrow as pa
 import pyarrow.parquet as pq
 from loguru import logger
 
-from spicy_regs.sources.courtlistener_bulk import CourtListenerBulkReader
+from spicy_regs.sources.courtlistener_bulk import (
+    CourtListenerBulkReader,
+    published_object_pin,
+)
 
 DOCKETS_DATASET = "dockets"
 COURTS_DATASET = "courts"
@@ -257,4 +261,53 @@ def build_docket_court_map(
         reader.resumes,
         out_file.stat().st_size / 2**20,
     )
+    write_map_receipt(out_file, reader=reader, dump_date=dump_date, rows=written)
     return out_file
+
+
+def write_map_receipt(
+    map_file: Path,
+    *,
+    reader: CourtListenerBulkReader,
+    dump_date: date | None,
+    rows: int,
+) -> Path:
+    """Record what the map cost and which published object it came from.
+
+    46 minutes of someone else's bandwidth is a capture, and a capture that
+    cannot say what it read is a file. The object is pinned by the publisher's
+    own byte size and last-modified stamp, so a map built against a re-cut dump
+    is a detectable difference rather than an unexplained one.
+    """
+    receipt: dict[str, object] = {
+        "artifact": map_file.name,
+        "written_at": datetime.now(UTC).isoformat(),
+        "bounds": {
+            "columns": list(MAP_COLUMNS),
+            "max_compressed_bytes": reader.max_compressed_bytes,
+            "rows_scanned": reader.rows_scanned,
+            "rows_written": rows,
+            "compressed_bytes_read": reader.compressed_bytes,
+            "resumes": reader.resumes,
+            "stopped_early": reader.stopped_early,
+        },
+        "result": {"bytes": map_file.stat().st_size, "dockets": rows},
+    }
+    if dump_date is not None and reader.local_file is None:
+        try:
+            receipt["source"] = {
+                "publisher": "CourtListener bulk data",
+                **published_object_pin(DOCKETS_DATASET, dump_date),
+            }
+        except Exception as exc:  # noqa: BLE001 - a receipt must not fail a capture
+            receipt["source"] = {"publisher": "CourtListener bulk data", "error": str(exc)}
+    else:
+        receipt["source"] = {
+            "publisher": "CourtListener bulk data",
+            "local_file": str(reader.local_file) if reader.local_file else None,
+            "dump_date": dump_date.isoformat() if dump_date else None,
+        }
+    path = map_file.with_suffix(".receipt.json")
+    path.write_text(json.dumps(receipt, indent=2) + "\n")
+    logger.info("Court scope: receipt written to {}", path)
+    return path
