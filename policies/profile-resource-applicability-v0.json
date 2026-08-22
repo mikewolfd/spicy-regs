@@ -1,11 +1,11 @@
 {
-  "applicabilityDigest": "sha256:360eeffddb91bc55e2d8a6a2339df0429e2a2d7ffa6e04141491df684f4747b4",
-  "applicabilityId": "urn:spicy-regs:applicability:360eeffddb91bc55e2d8a6a2339df0429e2a2d7ffa6e04141491df684f4747b4",
+  "applicabilityDigest": "sha256:5ecf7f1a81ed3ccbb20cb440b0cfca497f70bf941e27e0609a8c30d47f5336ff",
+  "applicabilityId": "urn:spicy-regs:applicability:5ecf7f1a81ed3ccbb20cb440b0cfca497f70bf941e27e0609a8c30d47f5336ff",
   "experimental": true,
   "format": "spicyregs-profile-resource-applicability/experimental-v0",
   "profileCatalog": {
-    "digest": "sha256:690858ab064f4782e0fcf9cde289660361a7bdb7df80da83ddcea45766cdabbb",
-    "id": "urn:spicy-regs:profile-catalog:690858ab064f4782e0fcf9cde289660361a7bdb7df80da83ddcea45766cdabbb"
+    "digest": "sha256:2ec8efba65adea608c6b2a4b999ceba51a92b4dc3956183605f013d453257f1d",
+    "id": "urn:spicy-regs:profile-catalog:2ec8efba65adea608c6b2a4b999ceba51a92b4dc3956183605f013d453257f1d"
   },
   "profiles": [
     {

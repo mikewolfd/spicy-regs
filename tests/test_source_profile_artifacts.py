@@ -35,11 +35,11 @@ def test_checked_source_profile_artifacts_are_exact_and_closed() -> None:
     )
 
     assert profile_catalog["summary"] == {
-        "activeProfileCount": 16,
+        "activeProfileCount": 18,
         "deferredProfileCount": 1,
-        "profileCount": 17,
+        "profileCount": 19,
     }
-    assert applicability["summary"]["profileCount"] == 17
+    assert applicability["summary"]["profileCount"] == 19
     assert {row["profileId"] for row in applicability["profiles"]} == {
         row["profileId"] for row in profile_catalog["profiles"]
     }

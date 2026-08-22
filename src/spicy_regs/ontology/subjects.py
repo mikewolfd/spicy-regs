@@ -326,8 +326,6 @@ SUBJECT_PROFILES = (
             "date_decided",
             "opinion_type",
             "holding",
-            "html_with_citations",
-            "plain_text",
             "pdf_text",
         ),
         ALL_CONCEPT_SCHEMES,

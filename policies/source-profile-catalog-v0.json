@@ -1,8 +1,8 @@
 {
   "experimental": true,
   "format": "spicyregs-source-profile-catalog/experimental-v0",
-  "profileCatalogDigest": "sha256:690858ab064f4782e0fcf9cde289660361a7bdb7df80da83ddcea45766cdabbb",
-  "profileCatalogId": "urn:spicy-regs:profile-catalog:690858ab064f4782e0fcf9cde289660361a7bdb7df80da83ddcea45766cdabbb",
+  "profileCatalogDigest": "sha256:2ec8efba65adea608c6b2a4b999ceba51a92b4dc3956183605f013d453257f1d",
+  "profileCatalogId": "urn:spicy-regs:profile-catalog:2ec8efba65adea608c6b2a4b999ceba51a92b4dc3956183605f013d453257f1d",
   "profiles": [
     {
       "access": {
@@ -169,8 +169,6 @@
         "date_decided",
         "opinion_type",
         "holding",
-        "html_with_citations",
-        "plain_text",
         "pdf_text"
       ]
     },
