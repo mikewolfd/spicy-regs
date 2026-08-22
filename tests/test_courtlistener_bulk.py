@@ -109,6 +109,58 @@ def test_bulk_object_splits_dataset_from_dump_date():
     assert undated.dataset == "scotus_network"
 
 
+def test_published_object_pin_identifies_what_a_capture_read():
+    """A receipt naming a filename has named a filename, not a thing.
+
+    The publisher's listing carries the object's exact byte size and
+    last-modified stamp, which is what makes two runs comparable and makes "the
+    dump was re-cut under us" a detectable event rather than an unexplained
+    difference in row counts. DocSpec pins the *population* at
+    ``fixtures/courtlistener-bulk-v1/``; this pins the one object a run read,
+    and lets that be checked against DocSpec's before the reading starts.
+    """
+    from spicy_regs.sources.courtlistener_bulk import published_object_pin
+
+    listing = [
+        BulkObject(
+            "bulk-data/opinions-2026-06-30.csv.bz2",
+            54_561_543_156,
+            "2026-06-30T09:56:48.000Z",
+        ),
+        BulkObject("bulk-data/courts-2026-06-30.csv.bz2", 81_180, "2026-06-30T09:00:26.000Z"),
+    ]
+
+    pin = published_object_pin("opinions", date(2026, 6, 30), objects=listing)
+    assert pin["bytes"] == 54_561_543_156
+    assert pin["last_modified"] == "2026-06-30T09:56:48.000Z"
+    assert pin["filename"] == "opinions-2026-06-30.csv.bz2"
+    assert pin["listing_object_count"] == 2
+
+    # Held against an expectation, it is a precondition rather than a note —
+    # which is the only useful place to discover a changed object when reading
+    # it costs 8.6 hours.
+    published_object_pin(
+        "opinions",
+        date(2026, 6, 30),
+        objects=listing,
+        expect_bytes=54_561_543_156,
+        expect_last_modified="2026-06-30T09:56:48.000Z",
+    )
+    with pytest.raises(RuntimeError, match="the publisher's object changed"):
+        published_object_pin(
+            "opinions", date(2026, 6, 30), objects=listing, expect_bytes=1
+        )
+    with pytest.raises(RuntimeError, match="the publisher's object changed"):
+        published_object_pin(
+            "opinions",
+            date(2026, 6, 30),
+            objects=listing,
+            expect_last_modified="2026-07-01T00:00:00.000Z",
+        )
+    with pytest.raises(RuntimeError, match="no opinions dump published"):
+        published_object_pin("opinions", date(2026, 3, 31), objects=listing)
+
+
 def test_latest_dump_date_and_find_dump_pick_one_published_object():
     objects = [
         BulkObject("bulk-data/opinions-2026-03-31.csv.bz2", 54_190_000_000, ""),

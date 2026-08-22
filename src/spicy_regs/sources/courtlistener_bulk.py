@@ -193,6 +193,62 @@ def list_bulk_dumps(prefix: str = BULK_PREFIX) -> list[BulkObject]:
     return found
 
 
+def published_object_pin(
+    dataset: str,
+    dump_date: date,
+    *,
+    objects: list[BulkObject] | None = None,
+    expect_bytes: int | None = None,
+    expect_last_modified: str | None = None,
+) -> dict[str, object]:
+    """Identify the published object a capture read, in receipt form.
+
+    A capture that says "streamed the 2026-06-30 opinions dump" has named a
+    filename, not a thing. The publisher's listing carries the object's exact
+    byte size and last-modified stamp, which is what makes two runs comparable
+    and what makes "the dump changed under us" a detectable event rather than an
+    unexplained difference in row counts.
+
+    **The population itself is DocSpec's to pin**, at
+    ``fixtures/courtlistener-bulk-v1/`` — it captures this listing verbatim,
+    digests it, and distinguishes an object the publisher withdrew from one we
+    declined. This function does not re-derive any of that. It records the one
+    object a run actually read, and ``expect_bytes`` / ``expect_last_modified``
+    let a caller hold that record against DocSpec's pin *before* spending 8.6
+    hours reading it.
+    """
+    listing = objects if objects is not None else list_bulk_dumps()
+    published = find_dump(listing, dataset, dump_date)
+    if published is None:
+        raise RuntimeError(
+            f"CourtListener bulk: no {dataset} dump published for {dump_date}"
+        )
+    if expect_bytes is not None and published.size != expect_bytes:
+        raise RuntimeError(
+            f"CourtListener bulk: {published.filename} is {published.size} bytes, "
+            f"not the pinned {expect_bytes} — the publisher's object changed"
+        )
+    if (
+        expect_last_modified is not None
+        and published.last_modified != expect_last_modified
+    ):
+        raise RuntimeError(
+            f"CourtListener bulk: {published.filename} was last modified "
+            f"{published.last_modified}, not the pinned {expect_last_modified} — "
+            f"the publisher's object changed"
+        )
+    return {
+        "dataset": dataset,
+        "dump_date": dump_date.isoformat(),
+        "filename": published.filename,
+        "url": published.url,
+        "bytes": published.size,
+        "last_modified": published.last_modified,
+        "listing_object_count": len(listing),
+        "listing_host": BULK_LIST_URL,
+    }
+
+
 def latest_dump_date(objects: list[BulkObject], dataset: str) -> date | None:
     """Newest dump date published for ``dataset``, or None if it has none."""
     dates = [o.dump_date for o in objects if o.dataset == dataset and o.dump_date]

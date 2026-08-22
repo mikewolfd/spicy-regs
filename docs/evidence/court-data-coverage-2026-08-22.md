@@ -29,6 +29,50 @@ The publisher's listing is not an index we assembled — it is CourtListener's o
 statement of what exists, which is why it is captured verbatim and pinned rather
 than summarized. Reproduce with `scripts/verify_court_coverage.py`.
 
+### Who owns the population, and who owns the read
+
+Worth stating explicitly, because the two were being conflated:
+
+* **DocSpec owns the population.** `fixtures/courtlistener-bulk-v1/` captures
+  the bucket's listing XML verbatim, digests every page, and — this is the part
+  spicy-regs has no equivalent of — distinguishes an object the publisher
+  *withdrew* (`DELETED`, a tombstone) from one *we* declined (`EXCLUDED`, our
+  decision, reviewable). A population that shrinks without saying so is
+  indistinguishable from a broken capture, and that is the failure DocSpec
+  exists to prevent.
+* **spicy-regs owns the read inside an object.** Streaming a 50.8 GiB bzip2 CSV,
+  the `\"` escape, the row filter, resuming a dropped socket. DocSpec builds
+  catalogs and acquires nothing, so none of that is duplicated.
+
+What *was* being duplicated is the enumeration: spicy-regs re-lists the bucket on
+every build and, until today, recorded none of the object identity it got back.
+A receipt that said "streamed the 2026-06-30 opinions dump" had named a
+filename, not a thing. Captures now pin the object by the publisher's own byte
+size and last-modified stamp, and can be held against DocSpec's capture as a
+*precondition* — which is the useful place to discover a re-cut file when
+reading it costs 8.6 hours.
+
+Checked today, live listing against DocSpec's 04:47Z capture:
+
+| | Live | DocSpec capture |
+|---|---:|---:|
+| objects enumerated | 1,076 | 1,076 |
+| `opinions-2026-06-30.csv.bz2` | 54,561,543,156 B, `2026-06-30T09:56:48Z` | identical |
+| `dockets-2026-06-30.csv.bz2` | 5,014,469,248 B, `2026-06-30T09:03:56Z` | identical |
+| `opinion-clusters-2026-06-30.csv.bz2` | 2,457,231,057 B, `2026-06-30T09:40:19Z` | identical |
+| `courts-2026-06-30.csv.bz2` | 81,180 B, `2026-06-30T09:00:26Z` | identical |
+
+Capture identity
+`urn:docspec:courtlistener-bulk-capture:v1:ccf4cd25…4774d`, pins digest
+`sha256:8c50ed18…a55cb`. The population has not moved since the capture, so the
+8.6-hour pass is reading the object DocSpec pinned.
+
+Two honest limits on that. Agreement here means "the listing has not changed
+since 04:47Z today" — both sides read the same publisher, so it is not
+independent evidence that the publisher is right. And spicy-regs still cannot
+*import* DocSpec; consuming its catalog rather than re-listing the bucket is a
+migration, not a patch, and is not attempted here.
+
 ## What the publisher offers
 
 The listing holds **1,076 objects totalling 1,598.65 GiB across 46 datasets**.

@@ -25,6 +25,15 @@ Inputs are digest-pinned in the receipt: the published ``court_dockets`` table
 (itself the complete result of a ``nature_of_suit=899`` search) and the
 ``court_opinion_clusters`` table built from the 2026-06-30 dump. Change either
 and the target set changes, which is the whole point of pinning them.
+
+**And the object read is pinned too**, by the publisher's own byte size and
+last-modified stamp. A receipt that says "streamed the 2026-06-30 opinions
+dump" has named a filename, not a thing; if the publisher re-cut that file, two
+runs would differ for a reason nothing recorded. ``--expect-bytes`` /
+``--expect-last-modified`` turn that record into a precondition, checked before
+the 8.6 hours start — which is how a run is held against **DocSpec's** pinned
+capture of the population at ``fixtures/courtlistener-bulk-v1/``, without this
+script re-deriving a population DocSpec already owns.
 """
 
 from __future__ import annotations
@@ -40,6 +49,7 @@ import duckdb
 import pyarrow.parquet as pq
 from loguru import logger
 
+from spicy_regs.sources.courtlistener_bulk import published_object_pin
 from spicy_regs.transforms.build_court_opinion_bodies import (
     build_court_opinion_bodies,
     estimate_output_bytes,
@@ -93,9 +103,40 @@ def main() -> None:
         default=None,
         help="Bound the read for a rehearsal; omit for the full targeted pass.",
     )
+    parser.add_argument(
+        "--expect-bytes",
+        type=int,
+        default=None,
+        help="Refuse to start unless the published dump is exactly this many bytes.",
+    )
+    parser.add_argument(
+        "--expect-last-modified",
+        default=None,
+        help="Refuse to start unless the published dump carries this Last-Modified.",
+    )
+    parser.add_argument(
+        "--docspec-capture-id",
+        default=None,
+        help="DocSpec capture URN the expectations came from; recorded in the receipt.",
+    )
     args = parser.parse_args()
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
+    # Identify the object before reading it, not after: a mismatch here is worth
+    # eight and a half hours.
+    source_pin = published_object_pin(
+        "opinions",
+        args.dump_date,
+        expect_bytes=args.expect_bytes,
+        expect_last_modified=args.expect_last_modified,
+    )
+    source_pin["docspec_capture_id"] = args.docspec_capture_id
+    logger.info(
+        "Opinions dump pinned: {} ({:,} bytes, modified {})",
+        source_pin["filename"],
+        source_pin["bytes"],
+        source_pin["last_modified"],
+    )
     targets = apa_cluster_ids(
         args.clusters, args.dockets, temp_dir=args.output_dir / ".duckdb_tmp"
     )
@@ -126,15 +167,7 @@ def main() -> None:
         "captured_at": started_at,
         "finished_at": datetime.now(UTC).isoformat(),
         "elapsed_seconds": round(elapsed, 1),
-        "source": {
-            "publisher": "CourtListener bulk data",
-            "dataset": "opinions",
-            "dump_date": args.dump_date.isoformat(),
-            "url": (
-                "https://storage.courtlistener.com/bulk-data/"
-                f"opinions-{args.dump_date.isoformat()}.csv.bz2"
-            ),
-        },
+        "source": {"publisher": "CourtListener bulk data", **source_pin},
         "inputs": {
             "clusters": {"path": str(args.clusters), "sha256": _sha256(args.clusters)},
             "dockets": {"path": str(args.dockets), "sha256": _sha256(args.dockets)},
