@@ -221,11 +221,19 @@ def test_reader_handles_embedded_newlines_in_opinion_text(tmp_path: Path):
 class _FlakyResponse:
     """Serve bytes from an offset and die once, the way a long socket does."""
 
-    def __init__(self, payload: bytes, *, offset: int, fail_after: int | None) -> None:
+    def __init__(
+        self,
+        payload: bytes,
+        *,
+        offset: int,
+        fail_after: int | None,
+        status: int | None = None,
+    ) -> None:
         self._payload = payload
         self._pos = offset
         self._served = 0
         self._fail_after = fail_after
+        self.status = status if status is not None else (206 if offset else 200)
 
     def read(self, size: int) -> bytes:
         if self._fail_after is not None and self._served >= self._fail_after:
@@ -272,6 +280,30 @@ def test_counting_stream_resumes_a_dropped_transfer_at_the_exact_offset(monkeypa
     # Resumed once, from what was actually consumed — not from zero, not a guess.
     assert ranges == [2048]
     assert stream.compressed_bytes == len(payload)
+
+
+def test_a_resume_that_restarts_the_stream_is_refused_not_spliced(monkeypatch):
+    """A server that ignores Range answers 200 and starts over from byte zero.
+
+    Splicing that onto a transfer already gigabytes in does not raise — the
+    decompressor happily produces garbage that looks like rows. Refusing is the
+    only safe answer, and it has to be checked rather than assumed, because the
+    whole point of the resume is that nobody is watching when it happens.
+    """
+    from spicy_regs.sources import courtlistener_bulk
+    from spicy_regs.sources.courtlistener_bulk import _CountingStream
+
+    payload = bz2.compress(b"id,body\n" + b"".join(b"%d,row\n" % i for i in range(4000)))
+    monkeypatch.setattr(courtlistener_bulk, "_CHUNK", 1024)
+
+    def restart_from_zero(offset: int):  # noqa: ARG001 - the bug being simulated
+        return _FlakyResponse(payload, offset=0, fail_after=None, status=200)
+
+    stream = _CountingStream(
+        _FlakyResponse(payload, offset=0, fail_after=2048), reopen=restart_from_zero
+    )
+    with pytest.raises(RuntimeError, match="not 206"):
+        io.BufferedReader(stream).read()
 
 
 def test_counting_stream_reads_a_concatenated_bzip2_dump():

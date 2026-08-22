@@ -207,6 +207,10 @@ def find_dump(objects: list[BulkObject], dataset: str, dump_date: date) -> BulkO
     return None
 
 
+class _UnrangeableResume(RuntimeError):
+    """A resume the server answered with a whole new stream instead of a range."""
+
+
 class _CountingStream(io.RawIOBase):
     """Adapt an HTTP response to a readable stream, decompressing bzip2 inline.
 
@@ -277,9 +281,26 @@ class _CountingStream(io.RawIOBase):
             except Exception:  # noqa: BLE001, S110 - closing a broken socket
                 pass
             try:
-                self._response = self._reopen(self.compressed_bytes)
+                resumed = self._reopen(self.compressed_bytes)
+                # A server that ignores Range answers 200 and starts over from
+                # byte zero. Feeding that to a decompressor already 30 GiB into
+                # the stream does not fail — it produces garbage rows that look
+                # like data, which is the one outcome worse than the dropped
+                # connection this is recovering from.
+                status = getattr(resumed, "status", None)
+                if self.compressed_bytes and status != 206:
+                    # Not retryable: a server that ignores Range will ignore it
+                    # again, and every retry is another chance to splice.
+                    raise _UnrangeableResume(
+                        f"CourtListener bulk: resume at byte {self.compressed_bytes} "
+                        f"answered {status}, not 206 — refusing to splice a restarted "
+                        f"stream onto a partial one"
+                    )
+                self._response = resumed
                 self.resumes += 1
                 return self._response.read(_CHUNK)
+            except _UnrangeableResume:
+                raise
             except Exception as exc:  # noqa: BLE001
                 if attempt == _MAX_RETRIES:
                     raise RuntimeError(
