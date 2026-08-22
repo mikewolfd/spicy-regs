@@ -23,7 +23,7 @@ from spicy_regs.sources import r2
 from spicy_regs.sources.supreme_court_opinions import (
     SupremeCourtOpinionsReader,
 )
-from spicy_regs.transforms.pdf_text import extract_pdf_text
+from spicy_regs.transforms.pdf_text import PAGE_SEPARATOR, extract_pdf_text
 
 OUTPUT = "court_opinions.parquet"
 
@@ -41,6 +41,9 @@ COLUMNS = (
     "opinion_type",
     "source_index_url",
     "source_url",
+    "source_document_kind",
+    "source_page_start",
+    "source_page_end",
     "source_etag",
     "source_last_modified",
     "source_bytes",
@@ -59,6 +62,35 @@ def _slug(value: object) -> str:
     if not slug:
         raise ValueError("Supreme Court opinion identity component is blank")
     return slug
+
+
+def _opinion_text(
+    extraction: Any, record: dict[str, Any]
+) -> str:
+    """The text of *this* opinion, not of the document that contains it.
+
+    OT2017-OT2020 index rows mostly point into a bound volume or preliminary
+    print — one PDF holding a whole volume, with a ``#page=N`` anchor marking
+    where the opinion starts. Storing that document's full text under each of
+    its opinions would put a volume of the U.S. Reports in sixty rows, each
+    labelled with a different case name and each wrong. So a row that names a
+    page range is sliced to it.
+
+    ``source_page_end`` is empty for the last opinion in a document, which runs
+    to the end of the PDF.
+    """
+    start = str(record.get("source_page_start") or "")
+    if not start:
+        return extraction.text
+    first = int(start)
+    if first > extraction.page_count:
+        raise ValueError(
+            "Supreme Court opinion starts past the end of its document: "
+            f"{record.get('source_url')} page {first} of {extraction.page_count}"
+        )
+    end_value = str(record.get("source_page_end") or "")
+    last = int(end_value) if end_value else extraction.page_count
+    return PAGE_SEPARATOR.join(extraction.pages[first - 1 : last])
 
 
 def _shape(record: dict[str, Any]) -> dict[str, str | None]:
@@ -97,6 +129,9 @@ def _shape(record: dict[str, Any]) -> dict[str, str | None]:
         "opinion_type": "official-opinion-package",
         "source_index_url": str(record.get("source_index_url") or ""),
         "source_url": str(record.get("source_url") or ""),
+        "source_document_kind": str(record.get("source_document_kind") or ""),
+        "source_page_start": str(record.get("source_page_start") or ""),
+        "source_page_end": str(record.get("source_page_end") or ""),
         "source_etag": (
             str(record["etag"]) if record.get("etag") is not None else None
         ),
@@ -111,7 +146,7 @@ def _shape(record: dict[str, Any]) -> dict[str, str | None]:
         "text_extraction_status": extraction.status.value,
         "text_extraction_method": "pypdf-embedded-text",
         "text_extraction_version": version("pypdf"),
-        "pdf_text": extraction.text,
+        "pdf_text": _opinion_text(extraction, record),
     }
 
 
