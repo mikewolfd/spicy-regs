@@ -76,7 +76,7 @@ def _s(value: object) -> str | None:
     return str(value)
 
 
-def _shape(doc: dict) -> dict:
+def shape_federal_register_document(doc: dict) -> dict:
     """Map one raw FR API document onto the published column shape."""
     agencies = doc.get("agencies") or []
     slugs = ",".join(a["slug"] for a in agencies if isinstance(a, dict) and a.get("slug"))
@@ -158,7 +158,7 @@ def build_federal_register(output_dir: Path, *, since: date | None = None) -> Pa
 
     # 3. Fetch + shape into a "new rows" parquet.
     reader = FederalRegisterReader(since=since)
-    rows = [_shape(doc) for doc in reader.iter_records()]
+    rows = [shape_federal_register_document(doc) for doc in reader.iter_records()]
     new_file = output_dir / "_fr_new.parquet"
     table = pa.Table.from_pylist(rows, schema=_SCHEMA) if rows else _SCHEMA.empty_table()
     pq.write_table(table, new_file, compression="zstd")

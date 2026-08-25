@@ -10,6 +10,7 @@ description = "Immutable regulatory source records, exact document versions, and
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "refspec==0.1.0.dev0",
+    "rulespec-conformance==0.2.0rc11",
     "beautifulsoup4>=4.13,<5",
     "boto3",
     "python-dotenv",
@@ -137,6 +138,7 @@ build-document-acceptance-scope = "spicy_regs.corpora.document_acceptance_scope:
 build-document-release = "spicy_regs.document_release:main"
 build-document-release-from-files = "spicy_regs.document_file_pipeline:main"
 build-source-profile-artifacts = "spicy_regs.source_profile_artifacts_cli:main"
+build-source-catalog = "spicy_regs.source_catalog_cli:main"
 validate-document-release-distribution = "spicy_regs.document_file_pipeline:validate_distribution_main"
 segment-document-release = "spicy_regs.docpipeline.document_release_segments:main"
 run-relation-exclusion-evaluation = "spicy_regs.corpora.relation_exclusion_evaluation:main"
@@ -148,6 +150,10 @@ build-backend = "uv_build"
 
 [tool.uv.sources]
 refspec = { path = "RefSpec", editable = true }
+rulespec-conformance = { path = "vendor/rulespec_conformance-0.2.0rc11-py3-none-any.whl" }
+
+[tool.uv]
+override-dependencies = ["rulespec-conformance==0.2.0rc11"]
 
 [tool.pytest.ini_options]
 # Integration tests hit external services (the public Mirrulations S3 mirror)

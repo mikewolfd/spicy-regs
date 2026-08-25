@@ -14,7 +14,7 @@ import pytest
 
 from spicy_regs.sources import federal_register as federal_register_source
 from spicy_regs.sources.federal_register import FederalRegisterReader
-from spicy_regs.transforms.build_federal_register import COLUMNS, _shape
+from spicy_regs.transforms.build_federal_register import COLUMNS, shape_federal_register_document
 
 _RAW_DOC = {
     "document_number": "2024-00001",
@@ -44,13 +44,13 @@ _RAW_DOC = {
 
 
 def test_shape_produces_exact_schema():
-    row = _shape(_RAW_DOC)
+    row = shape_federal_register_document(_RAW_DOC)
     # Every published column present, and nothing extra.
     assert set(row) == set(COLUMNS)
 
 
 def test_shape_maps_and_serializes_fields():
-    row = _shape(_RAW_DOC)
+    row = shape_federal_register_document(_RAW_DOC)
     assert row["document_number"] == "2024-00001"
     assert row["document_type"] == "Proposed Rule"  # API `type` -> document_type
     # Array fields serialize to JSON strings.
@@ -70,7 +70,7 @@ def test_shape_maps_and_serializes_fields():
 
 
 def test_shape_handles_missing_arrays():
-    row = _shape({"document_number": "x"})
+    row = shape_federal_register_document({"document_number": "x"})
     assert row["docket_ids_json"] == "[]"
     assert row["regulation_id_numbers_json"] == "[]"
     assert row["cfr_references_json"] == "[]"

@@ -276,6 +276,66 @@ def test_download_keys_yields_payloads() -> None:
     assert ids == ["EPA-2024-0001", "EPA-2025-0002"]
 
 
+def test_download_keys_bounds_pending_work_for_a_streaming_listing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A large key iterator is consumed only as worker slots become available."""
+    import threading
+    from concurrent.futures import ThreadPoolExecutor
+
+    from spicy_regs.sources import mirrulations
+
+    release = threading.Event()
+    initial_window_filled = threading.Event()
+    consumed = 0
+
+    def keys():
+        nonlocal consumed
+        for index in range(100):
+            consumed += 1
+            if consumed == 8:
+                initial_window_filled.set()
+            if consumed > 8 and not release.is_set():
+                raise AssertionError("download_keys consumed beyond its bounded pending window")
+            yield f"key-{index}"
+
+    def blocked_download(_resource, _bucket, key, _extract):
+        release.wait(timeout=5)
+        return {"key": key}
+
+    monkeypatch.setattr(mirrulations, "download_and_parse", blocked_download)
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        result = executor.submit(
+            lambda: list(mirrulations.download_keys(object(), BUCKET, keys(), workers=4))
+        )
+        assert initial_window_filled.wait(timeout=5)
+        assert consumed == 8
+        release.set()
+        assert len(result.result(timeout=5)) == 100
+
+
+def test_bounded_reader_factory_streams_keys_without_building_a_manifest_list() -> None:
+    from spicy_regs.sources.mirrulations import reader_factory
+
+    resource = _FakeS3Resource(_typed_store())
+    read = reader_factory([DOCUMENT], resource_factory=lambda: resource, bounded=True)
+    reader = read(AGENCY, DOCUMENT)
+
+    assert len(list(reader.iter_records())) == 1
+    assert reader.last_keys == []
+
+
+def test_bounded_reader_preserves_one_in_run_transient_retry() -> None:
+    from spicy_regs.sources.mirrulations import reader_factory
+
+    store = {_docket_key("EPA-2024-0001"): dumps(_docket_payload("EPA-2024-0001")).encode()}
+    resource = _FlakyResource(store, transient_fail=store, fail_once=True)
+    read = reader_factory([DOCKET], resource_factory=lambda: resource, bounded=True)
+
+    assert len(list(read(AGENCY, DOCKET).iter_records())) == 1
+    assert resource._attempts[_docket_key("EPA-2024-0001")] == 2
+
+
 def test_download_and_parse_closes_body_on_read_error() -> None:
     """A failed download raises TransientDownloadError but still closes the body.
 

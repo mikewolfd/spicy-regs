@@ -53,6 +53,7 @@ from spicy_regs.document_release_v3 import (
     sha256_bytes,
     sha256_file,
 )
+from spicy_regs.publication import ImmutablePublicationError, publish_directory_once, write_bytes_once
 
 
 Disposition = Literal["active", "deleted", "excluded", "accepted-failure"]
@@ -746,33 +747,18 @@ def _member_descriptor(
 
 
 def _write_canonical_json(path: Path, value: object) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("xb") as stream:
-        stream.write(canonical_json_bytes(value))
-        stream.flush()
-        os.fsync(stream.fileno())
+    try:
+        write_bytes_once(path, canonical_json_bytes(value))
+    except ImmutablePublicationError as error:
+        raise DocumentReleaseV3Error(str(error)) from error
 
 
 def atomic_publish_directory(work_root: Path, output_dir: Path) -> None:
     """Rename a private build directory under a conditional publication lock."""
-
-    work_root = Path(work_root).resolve()
-    output_dir = Path(output_dir).resolve()
-    lock_path = output_dir.parent / f".{output_dir.name}.publish.lock"
     try:
-        descriptor = os.open(lock_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    except FileExistsError as error:
-        raise DocumentReleaseV3Error(f"publication is already in progress for: {output_dir}") from error
-    try:
-        with os.fdopen(descriptor, "wb") as lock:
-            lock.write(work_root.name.encode("utf-8"))
-            lock.flush()
-            os.fsync(lock.fileno())
-        if output_dir.exists() or output_dir.is_symlink():
-            raise DocumentReleaseV3Error(f"refusing to replace existing output: {output_dir}")
-        os.rename(work_root, output_dir)
-    finally:
-        lock_path.unlink(missing_ok=True)
+        publish_directory_once(work_root, output_dir)
+    except ImmutablePublicationError as error:
+        raise DocumentReleaseV3Error(str(error)) from error
 
 
 def _inventory_digest(dispositions_paths: Sequence[Path], *, temp_directory: Path, memory_limit: str) -> str:

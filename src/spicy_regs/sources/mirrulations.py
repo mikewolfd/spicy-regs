@@ -12,8 +12,8 @@ into schema-shaped records is the job of the
 """
 
 import re
-from collections.abc import Callable, Iterator
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from collections.abc import Callable, Iterable, Iterator, Sized
+from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from dataclasses import dataclass, field
 from datetime import datetime
 from json import loads
@@ -94,7 +94,7 @@ def get_agencies(s3_client: Any, bucket_name: str, prefix: str) -> list[str]:
     return sorted(agencies)
 
 
-def list_json_files(
+def iter_json_files(
     s3_resource: Any,
     bucket_name: str,
     prefix: str,
@@ -104,12 +104,12 @@ def list_json_files(
     processed_keys: Any = None,
     verbose: bool = False,
     since_year: int | None = None,
-) -> list[str]:
-    """List all JSON files for an agency and data type, excluding already processed."""
+) -> Iterator[str]:
+    """Stream matching agency keys without retaining the whole listing."""
     # Match year from docket ID in path: raw-data/{agency}/{agency}-{YYYY}-...
     year_pattern = re.compile(rf"{re.escape(prefix)}/{re.escape(agency)}/{re.escape(agency)}-(\d{{4}})-")
 
-    files = []
+    matched = 0
     skipped = 0
     filtered_by_year = 0
     total_scanned = 0
@@ -127,15 +127,42 @@ def list_json_files(
             if processed_keys and key in processed_keys:
                 skipped += 1
                 continue
-            files.append(key)
+            matched += 1
+            yield key
 
     if verbose:
         year_msg = f", filtered_by_year {filtered_by_year}" if since_year else ""
         tqdm.write(
-            f"    [{agency}] {data_type}: scanned {total_scanned}, skipped {skipped}{year_msg}, new {len(files)}"
+            f"    [{agency}] {data_type}: scanned {total_scanned}, skipped {skipped}{year_msg}, new {matched}"
         )
 
-    return files
+
+def list_json_files(
+    s3_resource: Any,
+    bucket_name: str,
+    prefix: str,
+    agency: str,
+    data_type: str,
+    path_pattern: str,
+    processed_keys: Any = None,
+    verbose: bool = False,
+    since_year: int | None = None,
+) -> list[str]:
+    """Materialize matching keys for callers that need a reusable manifest list."""
+
+    return list(
+        iter_json_files(
+            s3_resource,
+            bucket_name,
+            prefix,
+            agency,
+            data_type,
+            path_pattern,
+            processed_keys,
+            verbose,
+            since_year,
+        )
+    )
 
 
 def list_agency_files_by_type(
@@ -333,19 +360,19 @@ def _record_failure(exc: Exception, key: str, label: str, failures: DownloadFail
 def download_keys(
     s3_resource: Any,
     bucket_name: str,
-    keys: list[str],
+    keys: Iterable[str],
     workers: int = DEFAULT_DOWNLOAD_WORKERS,
     *,
     label: str = "",
     failures: DownloadFailures | None = None,
+    raise_failures: bool = False,
+    transient_retries: int = 0,
 ) -> Iterator[dict]:
     """Concurrently download + parse the given keys, yielding raw payloads.
 
-    The shared download engine for both :class:`MirrulationsReader` (whole
-    agency) and the chunked ingest path (one bounded key-chunk at a time, so a
-    huge agency never buffers all its records at once). Order is not preserved —
-    dedup happens later by key. With ``label`` set, emits a progress line every
-    ``_PROGRESS_EVERY`` files.
+    The shared download engine for both :class:`MirrulationsReader` and the
+    chunked ingest path. It accepts a key stream and keeps at most twice the
+    worker count in flight. Order is not preserved; dedup happens later by key.
 
     When ``failures`` is provided, each key that couldn't be produced is appended
     to it — transient (retryable) vs. parse (deterministic) — instead of being
@@ -353,28 +380,63 @@ def download_keys(
     manifest. ``failures=None`` keeps the historical drop-and-continue behavior
     for callers that don't track keys.
     """
-    total = len(keys)
-    n = max(1, min(workers, total)) if total else 1
+    if transient_retries < 0:
+        raise ValueError("transient_retries cannot be negative")
+
+    def download(key: str) -> dict:
+        for attempt in range(transient_retries + 1):
+            try:
+                return download_and_parse(s3_resource, bucket_name, key, _identity)
+            except TransientDownloadError:
+                if attempt == transient_retries:
+                    raise
+        raise AssertionError("unreachable")
+
+    total = len(keys) if isinstance(keys, Sized) else None
+    n = max(1, min(workers, total)) if total is not None and total else max(1, workers)
     if n <= 1:
         for key in keys:
             try:
-                yield download_and_parse(s3_resource, bucket_name, key, _identity)
+                yield download(key)
             except (TransientDownloadError, PayloadParseError) as exc:
                 _record_failure(exc, key, label, failures)
+                if raise_failures:
+                    raise
         return
 
     done = 0
     with ThreadPoolExecutor(max_workers=n) as executor:
-        # Map future -> key so as_completed can attribute an exception to its key.
-        submitted = {executor.submit(download_and_parse, s3_resource, bucket_name, key, _identity): key for key in keys}
-        for future in as_completed(submitted):
-            done += 1
-            if label and done % _PROGRESS_EVERY == 0:
-                logger.info("{}: downloaded {}/{}", label, done, total)
-            try:
-                yield future.result()
-            except (TransientDownloadError, PayloadParseError) as exc:
-                _record_failure(exc, submitted[future], label, failures)
+        iterator = iter(keys)
+        submitted: dict[Future[dict], str] = {}
+        exhausted = False
+        while submitted or not exhausted:
+            while not exhausted and len(submitted) < 2 * n:
+                try:
+                    key = next(iterator)
+                except StopIteration:
+                    exhausted = True
+                    break
+                future = executor.submit(download, key)
+                submitted[future] = key
+            if not submitted:
+                break
+            completed, _pending = wait(submitted, return_when=FIRST_COMPLETED)
+            for future in completed:
+                key = submitted.pop(future)
+                done += 1
+                if label and done % _PROGRESS_EVERY == 0:
+                    logger.info(
+                        "{}: downloaded {}{}",
+                        label,
+                        done,
+                        f"/{total}" if total is not None else "",
+                    )
+                try:
+                    yield future.result()
+                except (TransientDownloadError, PayloadParseError) as exc:
+                    _record_failure(exc, key, label, failures)
+                    if raise_failures:
+                        raise
 
 
 class MirrulationsReader(Reader):
@@ -396,7 +458,9 @@ class MirrulationsReader(Reader):
         since_year: int | None = None,
         verbose: bool = False,
         download_workers: int = DEFAULT_DOWNLOAD_WORKERS,
-        key_lister: Callable[[], list[str]] | None = None,
+        key_lister: Callable[[], Iterable[str]] | None = None,
+        retain_keys: bool = True,
+        fail_fast: bool = False,
     ) -> None:
         self.s3_resource = s3_resource
         self.bucket = bucket
@@ -410,6 +474,8 @@ class MirrulationsReader(Reader):
         # When set, supplies this record type's keys (e.g. from a shared
         # single-scan listing); otherwise the reader lists them itself.
         self.key_lister = key_lister
+        self.retain_keys = retain_keys
+        self.fail_fast = fail_fast
         self.last_keys: list[str] = []
         # Keys attempted but not consumed, so the caller can keep them out of the
         # manifest (transient) or surface them for replay (parse).
@@ -436,21 +502,30 @@ class MirrulationsReader(Reader):
                 self.verbose,
                 self.since_year,
             )
-        # Populate immediately so a caller inspecting last_keys before the
-        # generator is fully drained still sees the listing; it's narrowed to the
-        # consumed keys once downloading (and the retry pass) completes.
-        self.last_keys = list(keys)
+        if self.retain_keys:
+            keys = list(keys)
+            # Populate immediately so manifest callers see the full listing.
+            self.last_keys = list(keys)
+        else:
+            self.last_keys = []
 
         # Fan the per-file GETs across a thread pool via the shared engine —
         # independent, I/O-bound round trips; order is irrelevant (dedup by key).
         label = f"[{self.agency}] {self.record_type.name}"
         failures = DownloadFailures()
         yield from download_keys(
-            self.s3_resource, self.bucket, keys, self.download_workers, label=label, failures=failures
+            self.s3_resource,
+            self.bucket,
+            keys,
+            self.download_workers,
+            label=label,
+            failures=failures,
+            raise_failures=self.fail_fast,
+            transient_retries=1 if self.fail_fast else 0,
         )
         # One in-run retry pass over transient failures; whatever still fails is
         # left out of last_keys so the next incremental run re-lists it for free.
-        if failures.transient:
+        if failures.transient and not self.fail_fast:
             retry = DownloadFailures()
             yield from download_keys(
                 self.s3_resource,
@@ -467,8 +542,9 @@ class MirrulationsReader(Reader):
         self.parse_failed_keys = list(failures.parse)
         # Transient failures are excluded (retried next run); parse failures stay
         # marked processed — a deterministically corrupt file would retry forever.
-        dropped = set(failures.transient)
-        self.last_keys = [k for k in keys if k not in dropped]
+        if self.retain_keys:
+            dropped = set(failures.transient)
+            self.last_keys = [k for k in keys if k not in dropped]
 
 
 class _AgencyListingCache:
@@ -476,8 +552,8 @@ class _AgencyListingCache:
 
     ``stage_agencies`` builds a reader per (agency, record type) and runs an
     agency's record types sequentially within one worker thread, so the first
-    reader for an agency triggers the scan and the rest read from the cache.
-    Different agencies populate different keys concurrently, guarded by a lock.
+    default reader for an agency triggers the scan and the rest read from the
+    cache. Bounded readers bypass this cache and stream their matching keys.
     """
 
     def __init__(
@@ -522,17 +598,23 @@ def reader_factory(
     verbose: bool = False,
     download_workers: int = DEFAULT_DOWNLOAD_WORKERS,
     resource_factory: Callable[[], Any] | None = None,
+    bounded: bool = False,
 ) -> Callable[[str, RecordType], MirrulationsReader]:
     """Build a ``read(agency, record_type) -> MirrulationsReader`` factory.
 
     The shared options (manifest membership test, year filter, verbosity) are
-    bound once; the orchestrator just supplies the agency and record type. Each
-    reader gets its own S3 resource so the factory is safe to call from worker
-    threads. The full set of ``record_types`` is bound so each agency's prefix
-    is scanned once and the keys bucketed by type, rather than re-scanned per
-    record type.
+    bound once; the caller supplies the agency and record type. Default readers
+    cache one reusable agency listing for manifest-producing ingest. With
+    ``bounded=True``, a reader streams keys, keeps bounded downloads in flight,
+    retries a transient failure once, and then fails closed without retaining a
+    manifest list. Each reader gets its own S3 resource.
     """
-    cache = _AgencyListingCache(record_types, processed_keys=processed_keys, since_year=since_year, verbose=verbose)
+    cache = None if bounded else _AgencyListingCache(
+        record_types,
+        processed_keys=processed_keys,
+        since_year=since_year,
+        verbose=verbose,
+    )
     # Resolve at call time (not as a default arg) so a monkeypatched
     # ``mirrulations.s3_resource`` is honored, and each reader still gets its
     # own resource — safe to call from the staging worker threads. ``s3_resource``
@@ -542,6 +624,29 @@ def reader_factory(
 
     def read(agency: str, record_type: RecordType) -> MirrulationsReader:
         resource = make_resource()
+        if bounded:
+            if record_type.path_pattern is None:
+                raise ValueError(f"{record_type.name!r} has no Mirrulations path pattern")
+
+            def list_keys() -> Iterable[str]:
+                return iter_json_files(
+                    resource,
+                    BUCKET,
+                    PREFIX,
+                    agency,
+                    record_type.name,
+                    record_type.path_pattern,
+                    processed_keys,
+                    verbose,
+                    since_year,
+                )
+
+        else:
+            assert cache is not None
+
+            def list_keys() -> Iterable[str]:
+                return cache.keys_for(resource, agency, record_type)
+
         return MirrulationsReader(
             resource,
             BUCKET,
@@ -552,7 +657,9 @@ def reader_factory(
             since_year=since_year,
             verbose=verbose,
             download_workers=download_workers,
-            key_lister=lambda: cache.keys_for(resource, agency, record_type),
+            key_lister=list_keys,
+            retain_keys=not bounded,
+            fail_fast=bounded,
         )
 
     return read
