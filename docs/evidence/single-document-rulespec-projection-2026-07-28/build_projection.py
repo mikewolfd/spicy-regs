@@ -108,8 +108,8 @@ def main() -> int:
 
     note("== Source text state ==")
     note(f"document_number : {DOCNO}")
-    note(f"stored field    : federal_register.body_html "
-         f"(output/segmented-real-data-evaluation-v2/federal_register.parquet)")
+    note("stored field    : federal_register.body_html "
+         "(output/segmented-real-data-evaluation-v2/federal_register.parquet)")
     note(f"length          : {len(body)} Unicode code points")
     note(f"sha256(UTF-8)   : {body_sha}")
 

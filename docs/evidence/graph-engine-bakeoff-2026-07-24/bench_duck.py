@@ -4,7 +4,9 @@ Q_A  heterogeneous fan-out: everything touching a CFR unit  (RULE-028 #1)
 Q_B  variable-length reachability: uncited-but-related RINs (RULE-027 / RULE-028 #2)
 """
 from __future__ import annotations
-import os, statistics, time
+import os
+import statistics
+import time
 import duckdb
 
 G = os.path.join(os.path.dirname(__file__), "graph")
@@ -28,7 +30,9 @@ def timed(fn, reps=200):
     fn()  # warm
     ts=[]
     for _ in range(reps):
-        t=time.perf_counter(); fn(); ts.append((time.perf_counter()-t)*1000)
+        t=time.perf_counter()
+        fn()
+        ts.append((time.perf_counter()-t)*1000)
     return statistics.median(ts)
 
 # pick a well-connected seed CFR + seed RIN
@@ -82,7 +86,8 @@ EDGE TABLES (
 """)
 
 print("Q_A  everything touching a CFR unit")
-a1 = qa_sql(); a2 = qa_pgq()
+a1 = qa_sql()
+a2 = qa_pgq()
 rins_sql = sorted({r[1] for r in a1 if r[0]=='rin'})
 rins_pgq = sorted({r[0] for r in a2})
 print(f"  plain SQL : {len(a1):>3d} rows total ({len(rins_sql)} RIN hits)  {timed(lambda: qa_sql()):.3f} ms")

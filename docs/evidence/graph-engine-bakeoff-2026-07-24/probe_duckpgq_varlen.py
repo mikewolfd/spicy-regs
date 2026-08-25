@@ -7,12 +7,14 @@ would otherwise cascade into false failures for later candidates.
 Finding: fixed-length MATCH works; quantified variable-length {lo,hi} crashes.
 """
 from __future__ import annotations
-import os, duckdb
+import os
+import duckdb
 
 G = os.path.join(os.path.dirname(__file__), "graph")
 
 def fresh():
-    con = duckdb.connect(); con.execute("INSTALL duckpgq FROM community; LOAD duckpgq;")
+    con = duckdb.connect()
+    con.execute("INSTALL duckpgq FROM community; LOAD duckpgq;")
     for t in ["node_rin", "node_cfr", "edge_targets"]:
         con.execute(f"CREATE TABLE {t} AS SELECT * FROM read_parquet('{G}/{t}.parquet')")
     con.execute("""CREATE PROPERTY GRAPH g
@@ -38,7 +40,8 @@ cands = [
 ]
 for name, sql in cands:
     try:
-        con = fresh(); r = con.execute(sql).fetchall()
+        con = fresh()
+        r = con.execute(sql).fetchall()
         print(f"  OK    {name}: {len(r)} rows")
     except Exception as e:
         print(f"  FAIL  {name}: {type(e).__name__}: {repr(e)[:70]}")

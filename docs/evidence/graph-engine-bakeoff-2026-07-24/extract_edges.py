@@ -4,7 +4,8 @@ Writes node/edge parquet that BOTH DuckDB/DuckPGQ and Kuzu consume identically,
 so the engine comparison is apples-to-apples on the same corpus.
 """
 from __future__ import annotations
-import json, os, sys
+import os
+import sys
 import duckdb
 
 GEN = sys.argv[1] if len(sys.argv) > 1 else "output/mixed-real-data-all-profile-openai-v1"

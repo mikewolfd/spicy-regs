@@ -24,7 +24,6 @@ from pathlib import Path
 
 import pyarrow as pa
 import pyarrow.parquet as pq
-import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 TOOL_PATH = REPO_ROOT / "tools" / "build_date_event_artifact.py"

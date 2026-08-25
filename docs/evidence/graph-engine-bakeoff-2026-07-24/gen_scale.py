@@ -1,7 +1,8 @@
 """Generate clustered bipartite RIN-CFR graphs (mimics rule_targets shape) at
 several scales. Clustering keeps variable-length reachable sets non-trivial but
 bounded (a 'rulemaking topic cluster'), like the real corpus."""
-import os, duckdb
+import os
+import duckdb
 OUT = os.path.join(os.path.dirname(__file__), "scale")
 os.makedirs(OUT, exist_ok=True)
 con = duckdb.connect()

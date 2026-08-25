@@ -1,5 +1,8 @@
 """DuckDB recursive-CTE variable-length reachability across scales."""
-import os, statistics, time, duckdb
+import os
+import statistics
+import time
+import duckdb
 S = os.path.join(os.path.dirname(__file__), "scale")
 MAXD = 6  # bipartite hops = 3 RIN->RIN co-target hops
 print("DuckDB recursive-CTE reachability (seed R0, up to 3 co-target hops)")
@@ -18,6 +21,8 @@ for tag in ("1k","10k","100k","1M"):
     reps = 20 if tag in ("1k","10k") else (8 if tag=="100k" else 3)
     ts=[]
     for _ in range(reps):
-        t=time.perf_counter(); con.execute(sql).fetchone(); ts.append((time.perf_counter()-t)*1000)
+        t=time.perf_counter()
+        con.execute(sql).fetchone()
+        ts.append((time.perf_counter()-t)*1000)
     print(f"{tag:>6} {load:>9.1f} {statistics.median(ts):>14.2f} {n:>13,}")
     con.close()

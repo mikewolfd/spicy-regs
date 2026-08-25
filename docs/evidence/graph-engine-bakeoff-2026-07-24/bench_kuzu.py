@@ -1,13 +1,16 @@
 """Kuzu on the identical extracted graph. Measures load (ETL) + query cost,
 and whether native variable-length traversal works where DuckPGQ crashed."""
 from __future__ import annotations
-import os, statistics, time
+import os
+import statistics
+import time
 import kuzu
 
 G = os.path.join(os.path.dirname(__file__), "graph")
 
 t0 = time.perf_counter()
-db = kuzu.Database(":memory:"); conn = kuzu.Connection(db)
+db = kuzu.Database(":memory:")
+conn = kuzu.Connection(db)
 conn.execute("CREATE NODE TABLE Rin(id STRING, kind STRING, PRIMARY KEY(id))")
 conn.execute("CREATE NODE TABLE Cfr(id STRING, PRIMARY KEY(id))")
 conn.execute("CREATE NODE TABLE Usc(id STRING, PRIMARY KEY(id))")
@@ -30,10 +33,13 @@ def timed(sql, reps=200):
     rows(conn.execute(sql))  # warm
     ts = []
     for _ in range(reps):
-        t = time.perf_counter(); rows(conn.execute(sql)); ts.append((time.perf_counter()-t)*1000)
+        t = time.perf_counter()
+        rows(conn.execute(sql))
+        ts.append((time.perf_counter()-t)*1000)
     return statistics.median(ts)
 
-SEED_CFR = "5-890"; SEED_RIN = "3206-AO48"
+SEED_CFR = "5-890"
+SEED_RIN = "3206-AO48"
 print(f"Kuzu {kuzu.__version__}")
 print(f"schema + COPY load (5 tables): {load_ms:.1f} ms\n")
 
