@@ -9,7 +9,7 @@ resolution-markers = [
 ]
 
 [manifest]
-overrides = [{ name = "rulespec-conformance", path = "vendor/rulespec_conformance-0.2.0rc11-py3-none-any.whl" }]
+overrides = [{ name = "rulespec-conformance", path = "vendor/rulespec_conformance-0.2.0rc12-py3-none-any.whl" }]
 
 [[package]]
 name = "accelerate"
@@ -2570,8 +2570,8 @@ wheels = [
 
 [[package]]
 name = "rulespec-conformance"
-version = "0.2.0rc11"
-source = { path = "vendor/rulespec_conformance-0.2.0rc11-py3-none-any.whl" }
+version = "0.2.0rc12"
+source = { path = "vendor/rulespec_conformance-0.2.0rc12-py3-none-any.whl" }
 dependencies = [
     { name = "jsonschema" },
     { name = "pyshacl" },
@@ -2579,7 +2579,7 @@ dependencies = [
     { name = "rdflib" },
 ]
 wheels = [
-    { filename = "rulespec_conformance-0.2.0rc11-py3-none-any.whl", hash = "sha256:5d9f8b80dd2e49d1097c0b71c0818c84ca896f4fddebfd4a66c8320cd176cdfe" },
+    { filename = "rulespec_conformance-0.2.0rc12-py3-none-any.whl", hash = "sha256:211608dafd34b27d6b1b1adf8c5e82734545f132c704332b542826f301fc12d8" },
 ]
 
 [package.metadata]
@@ -2882,7 +2882,7 @@ requires-dist = [
     { name = "pyyaml" },
     { name = "rdflib", specifier = ">=7.1,<8" },
     { name = "refspec", editable = "RefSpec" },
-    { name = "rulespec-conformance", path = "vendor/rulespec_conformance-0.2.0rc11-py3-none-any.whl" },
+    { name = "rulespec-conformance", path = "vendor/rulespec_conformance-0.2.0rc12-py3-none-any.whl" },
     { name = "scikit-learn", marker = "extra == 'evaluation'", specifier = "==1.7.2" },
     { name = "scipy", marker = "extra == 'evaluation'", specifier = ">=1.15,<2" },
     { name = "sentence-transformers", marker = "extra == 'embed'", specifier = "==5.6.1" },

@@ -18,6 +18,7 @@ import jsonschema
 from rulespec_conformance.platform_artifact import (
     ROOT_OBJECT_KEY,
     SOURCE_CATALOG_ITEM_SCHEMA_ID,
+    CanonicalSetDigester,
     LocalMemberSource,
     MemberManifestReference,
     MemberSource,
@@ -399,25 +400,8 @@ def federal_register_items(reader: Reader) -> Iterator[SourceCatalogItem]:
     _reader_failures(reader)
 
 
-class _SetDigest:
-    def __init__(self) -> None:
-        self._digest = hashlib.sha256()
-        self._digest.update(b"[")
-        self._first = True
-
-    def add(self, value: str) -> None:
-        if not self._first:
-            self._digest.update(b",")
-        self._digest.update(canonical_json_bytes(value))
-        self._first = False
-
-    def finish(self) -> str:
-        self._digest.update(b"]")
-        return "sha256:" + self._digest.hexdigest()
-
-
 def _set_digest(rows: Iterable[tuple[str]]) -> str:
-    digest = _SetDigest()
+    digest = CanonicalSetDigester()
     for (value,) in rows:
         digest.add(value)
     return digest.finish()
@@ -462,8 +446,8 @@ def verify_source_catalog_semantics(artifact: VerifiedArtifact, source: MemberSo
     if _read_bounded(source, SOURCE_SCHEMA_OBJECT_KEY, MAX_SOURCE_SCHEMA_BYTES) != _SOURCE_SCHEMA_BYTES:
         raise SourceCatalogError("source catalog carries a different source-item schema")
 
-    requested = _SetDigest()
-    selected = _SetDigest()
+    requested = CanonicalSetDigester()
+    selected = CanonicalSetDigester()
     previous: str | None = None
     record_count = 0
     with source.open(SOURCE_ITEMS_OBJECT_KEY) as stream:
