@@ -8,6 +8,8 @@ from pathlib import Path
 import polars as pl
 import pytest
 
+from tests.repository_paths import REFSPEC_ROOT, RULESPEC_ROOT
+
 _ISOLATED_PREFIXES = ("R2_", "SPICY_REGS_", "CLOUDFLARE_", "AWS_")
 _ISOLATED_NAMES = frozenset({"AGENCIES", "DATA_GOV_API_KEY", "SAM_API_KEY", "LDA_API_KEY", "COURTLISTENER_API_TOKEN"})
 
@@ -21,11 +23,8 @@ def isolate_env(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch)
             monkeypatch.delenv(name, raising=False)
 
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_RULESPEC_DIR = REPO_ROOT.parent / "rulespec"
-LEGACY_RULESPEC_MANIFEST = (
-    REPO_ROOT / "RefSpec" / "profiles" / "rulespec-dependency.json"
-)
+DEFAULT_RULESPEC_DIR = RULESPEC_ROOT
+LEGACY_RULESPEC_MANIFEST = REFSPEC_ROOT / "profiles" / "rulespec-dependency.json"
 
 
 def _git(path: Path, *arguments: str) -> subprocess.CompletedProcess[str]:

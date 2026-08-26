@@ -165,51 +165,13 @@ def _open_legacy_candidate_source(
     *,
     lookup_index_manifest: dict[str, str],
 ) -> tuple[Any, tuple[Any, ...]]:
-    """Open the explicitly selected pre-atlas compatibility path lazily."""
+    """Reject the retired pre-atlas source with a direct migration message."""
 
-    from refspec import ManagedReleaseError
-    from refspec.registry import (
-        ConceptDomainBridgeError,
-        load_concept_domain_bridge,
+    del args, lookup_index_manifest
+    raise CandidateReleaseError(
+        "managed-release candidate lookup was retired; use "
+        "--vocabulary-atlas-manifest with its exact asset and file digests"
     )
-    from spicy_regs.enrichment.managed_release import (
-        ManagedReleaseCandidateSource,
-        ManagedReleaseConsumerError,
-    )
-
-    try:
-        source = ManagedReleaseCandidateSource.open(
-            args.managed_release_manifest,
-            expected_manifest_digest=(
-                args.managed_release_manifest_digest
-            ),
-            lookup_index_manifest=lookup_index_manifest,
-            permission_facet_iri=(
-                args.managed_release_permission_facet
-            ),
-            permission_assignment_role_iri=(
-                args.managed_release_permission_assignment_role
-            ),
-            permission_resource_route=(
-                args.managed_release_permission_resource_route
-            ),
-        )
-        bridges = ()
-        if args.concept_domain_bridge is not None:
-            bridges = (
-                load_concept_domain_bridge(
-                    args.concept_domain_bridge,
-                    expected_sha256=args.concept_domain_bridge_digest,
-                    target_view=source.view,
-                ),
-            )
-        return source, bridges
-    except (
-        ConceptDomainBridgeError,
-        ManagedReleaseConsumerError,
-        ManagedReleaseError,
-    ) as error:
-        raise CandidateReleaseError(str(error)) from error
 
 
 def _validate_vocabulary_arguments(

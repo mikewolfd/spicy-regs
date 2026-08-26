@@ -117,6 +117,7 @@ def _candidate_only_open_label_profile() -> OutputProfile:
                 "mode": "explicitLanguage",
                 "candidateUse": True,
                 "acceptedOutputUse": False,
+                "usageEligibility": "rkaf:searchOnly",
             },
         ),
         enrichment_profile_record=enrichment,

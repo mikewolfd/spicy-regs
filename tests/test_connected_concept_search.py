@@ -2,33 +2,18 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
-from pathlib import Path
 
 import pytest
 from refspec import ManagedReleaseConceptMapping
-from refspec.registry import (
-    ConceptDomainBridge,
-    ConceptDomainSourceConcept,
-    ConceptDomainSourceSnapshot,
-)
-
-from spicy_regs.docpipeline.rkaf_projection import (
-    managed_release_candidate_vocabulary,
-)
 from spicy_regs.enrichment.connected_concepts import (
     CONNECTED_SELECTOR_VERSION,
     ConnectedConceptSearchError,
     select_connected_candidate_concepts,
 )
-from spicy_regs.enrichment.managed_release import (
-    ManagedReleaseCandidateSource,
-)
 from spicy_regs.ontology.concepts import (
     select_candidate_concepts_anchored_v2,
 )
-from tests.managed_release_support import build_selected_managed_bundle
 
 
 def _concept(
@@ -282,97 +267,6 @@ def test_result_order_is_deterministic():
         "urn:ref:fr:a",
         "urn:ref:fr:b",
     ]
-
-
-@pytest.mark.legacy_rulespec_combined
-def test_managed_release_uses_bridge_concepts_only_as_search_anchors(
-    tmp_path: Path,
-):
-    support, manifest_path = build_selected_managed_bundle(tmp_path)
-    source = ManagedReleaseCandidateSource.open(
-        manifest_path,
-        expected_manifest_digest=(
-            "sha256:" + hashlib.sha256(
-                manifest_path.read_bytes()
-            ).hexdigest()
-        ),
-        lookup_index_manifest={
-            "id": "urn:test:lookup-index:connected-concepts:v1",
-            "digest": "sha256:" + "d" * 64,
-        },
-        permission_facet_iri="urn:ref:facet:general-subject",
-        permission_assignment_role_iri=(
-            "https://rulespec.org/ns/v1#assignmentPrimary"
-        ),
-        permission_resource_route="document",
-    )
-    anchor_id = "https://example.test/thesaurus/poultry-inspection"
-    source_release = "urn:test:source-release:poultry"
-    mapping = ManagedReleaseConceptMapping(
-        mapping_iri="urn:test:mapping:poultry",
-        source_member_iri=anchor_id,
-        relation_iri="skos:closeMatch",
-        target_member_iri=str(support["MEMBER_ID"]),
-        source_release_iri=source_release,
-        target_release_iri=str(support["RELEASE_ID"]),
-        record={},
-    )
-    bridge = ConceptDomainBridge(
-        development_only=True,
-        source_snapshot=ConceptDomainSourceSnapshot(
-            url="https://example.test/source.json",
-            revision="test",
-            sha256="sha256:" + "a" * 64,
-        ),
-        source_scheme_iri="https://example.test/thesaurus",
-        source_release_iri=source_release,
-        target_release_iri=str(support["RELEASE_ID"]),
-        source_concepts=(
-            ConceptDomainSourceConcept(
-                concept_iri=anchor_id,
-                preferred_labels={
-                    "en": "Poultry slaughter inspection"
-                },
-                alternate_labels={
-                    "en": ("broiler dressing",)
-                },
-                definitions={},
-                evidence_url=anchor_id,
-                record={},
-            ),
-        ),
-        mappings=(mapping,),
-        artifact_sha256="sha256:" + "b" * 64,
-        record={},
-    )
-
-    vocabulary = managed_release_candidate_vocabulary(
-        source,
-        default_language="en",
-        concept_domain_bridges=(bridge,),
-    )
-    results = select_connected_candidate_concepts(
-        "Standards for broiler dressing plants.",
-        lookup_concepts=vocabulary.lookup_rows,
-        output_concepts=vocabulary.selector_rows,
-        mappings=vocabulary.candidate_mappings,
-    )
-
-    assert anchor_id in {
-        row["concept_id"] for row in vocabulary.lookup_rows
-    }
-    assert anchor_id not in {
-        row["concept_id"] for row in vocabulary.selector_rows
-    }
-    assert anchor_id not in vocabulary.concepts
-    assert [row["concept_id"] for row in results] == [
-        support["MEMBER_ID"]
-    ]
-    assert "mappedNeighbor" in results[0]["candidate_channels"]
-    assert results[0]["mapping_paths"][0]["mapping_iri"] == (
-        mapping.mapping_iri
-    )
-    assert vocabulary.mapping_sha256 is not None
 
 
 def test_preferred_label_match_outranks_the_same_wording_as_an_alias():

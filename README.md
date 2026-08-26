@@ -6,17 +6,46 @@
 
 </div>
 
-SpicyRegs captures public regulatory sources and publishes immutable source
-records, exact document versions, Unicode text representations, structural
-passages, source observations, verified links, and acquisition coverage. It
-provides the source facts that downstream products can reproduce and audit.
+The greenfield target is for SpicyRegs to capture public regulatory sources and
+publish immutable, versioned source-native records, source observations,
+rendition candidates, and acquisition evidence. DocSpec will select a catalog
+universe, capture exact document bytes, produce representations and passages,
+and publish `DocumentRelease`.
+
+The target also preserves credential-free public bulk access over those
+source-native releases: immutable Parquet generations, queryable range reads,
+source-schema documentation, downloads, and thin read-only data adapters. These
+are access surfaces over the same releases, not a second catalog or document
+model. The artifact store or Iceberg catalog supplies standard generation
+identity and current selection; SpicyRegs defines no table registry or latest
+pointer algorithm. Browser and document search belong to SpicySearch.
+
+Source-specific acquisition includes one explicit current-comments rule:
+select the newest observed Regulations.gov row per `comment_id` by
+`modify_date DESC NULLS LAST`, preserve every pre-collapse source observation as
+acquisition evidence, and receipt the input, published, and discarded counts.
+Distinct rows tied at
+the winning timestamp fail rather than selecting arbitrarily; exact duplicates
+collapse deterministically. The source profile owns and independently verifies
+that rule; the public reader only exposes its result.
+Cross-source Federal Register/docket joins belong to DocSpec's catalog policy,
+not this package.
+
+The current checkout implements the source-native and immutable public-table
+paths locally but still exposes predecessor catalog, document-release, and
+mutable-table paths. Use `PLAN.md` for their replacement and consumer-cutover
+gates. No sentence in this target description claims that a generation has been
+published or deployed.
 
 ## Product boundary
 
-SpicyRegs owns source acquisition and source-addressable document structure.
-It does not own managed vocabulary policy, extracted semantic assertions, or
-search ranking and serving:
+SpicyRegs owns source-specific acquisition and faithful source-native
+publication. It does not own `SourceCatalog`, exact captured document bytes,
+document structure, managed vocabulary policy, extracted semantic assertions,
+or search ranking and serving:
 
+- **DocSpec** owns catalog selection, document capture and processing,
+  representations, passages, and `DocumentRelease`.
 - **RefSpec** owns vocabulary releases, concepts, labels, mappings, redirects,
   and explicit resolution of source terms.
 - **Rulespec Core** owns portable evidence and semantic record shapes;

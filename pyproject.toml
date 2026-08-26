@@ -9,8 +9,7 @@ description = "Immutable regulatory source records, exact document versions, and
 # recorded in docs/evidence/document-segmentation-remeasurement-2026-08-02.md.
 requires-python = ">=3.12,<3.13"
 dependencies = [
-    "refspec==0.1.0.dev0",
-    "rulespec-conformance==0.2.0rc15",
+    "rulespec-artifacts==1.0.0",
     "beautifulsoup4>=4.13,<5",
     "boto3",
     "python-dotenv",
@@ -33,7 +32,6 @@ dependencies = [
     "pymupdf>=1.28,<1.29", # AGPL-3.0 or commercial Artifex licence — a deliberate choice
     "pyyaml", # data dictionary descriptions (src/spicy_regs/data_dictionary.py)
     "jsonschema>=4.23", # strict structured-output and locked-corpus validation
-    "rdflib>=7.1,<8", # file-only RefSpec vocabulary-atlas reader
     "bm25s==0.3.10", # sparse lexical concept retrieval; pinned for reproducible rankings
     "openai", # optional-at-runtime structured-output provider for ontology tagging
     "tiktoken>=0.9,<1", # pinned encoding implementation for ontology segment budgets
@@ -44,6 +42,13 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Reference-backed ontology and evaluation tools are outside the source-native
+# publication path. Keep their package edge explicit instead of making every
+# SpicyRegs installation depend on RefSpec.
+reference = [
+    "refspec==0.1.0.dev0",
+    "rdflib>=7.1,<8", # file-only RefSpec vocabulary-atlas reader
+]
 # Fallback parser for sources with no native XML, HTML, or JSON structure.
 # Optional on purpose: the default environment parses native structure, and the
 # adapter (src/spicy_regs/docpipeline/adapters/docling.py) imports Docling lazily.
@@ -77,6 +82,7 @@ dev = [
     "pre-commit",
     "pyrefly",
     "pytest",
+    "refspec==0.1.0.dev0",
     "ruff",
     "scikit-learn==1.7.2",
     "scipy>=1.15,<2",
@@ -119,6 +125,7 @@ enrich-pdf-text = "spicy_regs.enrich_pdf:main"
 backfill-comment-text = "spicy_regs.backfill_derived_text:main"
 embed = "spicy_regs.vectordb.embed:main"
 spicy-regs = "spicy_regs.cli:main"
+spicy-regs-source-native = "spicy_regs.source_native_cli:main"
 spicy-regs-mcp = "spicy_regs.mcp_server:main"
 spicy-regs-dict = "spicy_regs.data_dictionary:main"
 spicy-regs-ontology-receipt = "spicy_regs.ontology.receipt:main"
@@ -138,7 +145,6 @@ build-document-acceptance-scope = "spicy_regs.corpora.document_acceptance_scope:
 build-document-release = "spicy_regs.document_release:main"
 build-document-release-from-files = "spicy_regs.document_file_pipeline:main"
 build-source-profile-artifacts = "spicy_regs.source_profile_artifacts_cli:main"
-build-source-catalog = "spicy_regs.source_catalog_cli:main"
 validate-document-release-distribution = "spicy_regs.document_file_pipeline:validate_distribution_main"
 segment-document-release = "spicy_regs.docpipeline.document_release_segments:main"
 run-relation-exclusion-evaluation = "spicy_regs.corpora.relation_exclusion_evaluation:main"
@@ -149,11 +155,8 @@ requires = ["uv_build<0.12"]
 build-backend = "uv_build"
 
 [tool.uv.sources]
-refspec = { path = "RefSpec", editable = true }
-rulespec-conformance = { path = "vendor/rulespec_conformance-0.2.0rc15-py3-none-any.whl" }
-
-[tool.uv]
-override-dependencies = ["rulespec-conformance==0.2.0rc15"]
+refspec = { path = "../RefSpec", editable = true }
+rulespec-artifacts = { path = "../rulespec/packages/rulespec-artifacts", editable = true }
 
 [tool.pytest.ini_options]
 # Integration tests hit external services (the public Mirrulations S3 mirror)
@@ -167,7 +170,6 @@ markers = [
 ]
 
 [tool.ruff]
-extend-exclude = ["RefSpec"]
 line-length = 120
 target-version = "py312"
 exclude = [

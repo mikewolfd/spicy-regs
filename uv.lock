@@ -8,9 +8,6 @@ resolution-markers = [
     "sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32'",
 ]
 
-[manifest]
-overrides = [{ name = "rulespec-conformance", path = "vendor/rulespec_conformance-0.2.0rc15-py3-none-any.whl" }]
-
 [[package]]
 name = "accelerate"
 version = "1.14.0"
@@ -2397,7 +2394,7 @@ wheels = [
 [[package]]
 name = "refspec"
 version = "0.1.0.dev0"
-source = { editable = "RefSpec" }
+source = { editable = "../RefSpec" }
 dependencies = [
     { name = "backports-zstd" },
     { name = "duckdb" },
@@ -2415,7 +2412,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "backports-zstd", marker = "python_full_version < '3.14'", specifier = "==1.6.0" },
-    { name = "duckdb", specifier = "==1.5.0" },
+    { name = "duckdb", specifier = ">=1.5.0,<2" },
     { name = "jsonschema", specifier = ">=4.26,<5" },
     { name = "openpyxl", specifier = ">=3.1,<4" },
     { name = "pyarrow", specifier = "==23.0.0" },
@@ -2423,7 +2420,7 @@ requires-dist = [
     { name = "pypdf", specifier = ">=6,<7" },
     { name = "rdflib", specifier = ">=7.1,<8" },
     { name = "referencing", specifier = ">=0.37,<1" },
-    { name = "rulespec-conformance", path = "RefSpec/vendor/rulespec_conformance-0.2.0rc9-py3-none-any.whl" },
+    { name = "rulespec-conformance", path = "../RefSpec/vendor/rulespec_conformance-0.2.0rc15-py3-none-any.whl" },
     { name = "typing-extensions", specifier = ">=4.12,<5" },
 ]
 
@@ -2569,9 +2566,14 @@ wheels = [
 ]
 
 [[package]]
+name = "rulespec-artifacts"
+version = "1.0.0"
+source = { editable = "../rulespec/packages/rulespec-artifacts" }
+
+[[package]]
 name = "rulespec-conformance"
 version = "0.2.0rc15"
-source = { path = "vendor/rulespec_conformance-0.2.0rc15-py3-none-any.whl" }
+source = { path = "../RefSpec/vendor/rulespec_conformance-0.2.0rc15-py3-none-any.whl" }
 dependencies = [
     { name = "pyshacl" },
     { name = "rdfcanon" },
@@ -2812,9 +2814,7 @@ dependencies = [
     { name = "pypdf" },
     { name = "python-dotenv" },
     { name = "pyyaml" },
-    { name = "rdflib" },
-    { name = "refspec" },
-    { name = "rulespec-conformance" },
+    { name = "rulespec-artifacts" },
     { name = "tiktoken" },
     { name = "tqdm" },
 ]
@@ -2835,6 +2835,10 @@ evaluation = [
     { name = "scikit-learn" },
     { name = "scipy" },
 ]
+reference = [
+    { name = "rdflib" },
+    { name = "refspec" },
+]
 
 [package.dev-dependencies]
 dev = [
@@ -2844,6 +2848,7 @@ dev = [
     { name = "pre-commit" },
     { name = "pyrefly" },
     { name = "pytest" },
+    { name = "refspec" },
     { name = "ruff" },
     { name = "scikit-learn" },
     { name = "scipy" },
@@ -2878,9 +2883,9 @@ requires-dist = [
     { name = "pypdf", specifier = ">=6.14,<7" },
     { name = "python-dotenv" },
     { name = "pyyaml" },
-    { name = "rdflib", specifier = ">=7.1,<8" },
-    { name = "refspec", editable = "RefSpec" },
-    { name = "rulespec-conformance", path = "vendor/rulespec_conformance-0.2.0rc15-py3-none-any.whl" },
+    { name = "rdflib", marker = "extra == 'reference'", specifier = ">=7.1,<8" },
+    { name = "refspec", marker = "extra == 'reference'", editable = "../RefSpec" },
+    { name = "rulespec-artifacts", editable = "../rulespec/packages/rulespec-artifacts" },
     { name = "scikit-learn", marker = "extra == 'evaluation'", specifier = "==1.7.2" },
     { name = "scipy", marker = "extra == 'evaluation'", specifier = ">=1.15,<2" },
     { name = "sentence-transformers", marker = "extra == 'embed'", specifier = "==5.6.1" },
@@ -2889,7 +2894,7 @@ requires-dist = [
     { name = "tqdm" },
     { name = "usearch", marker = "extra == 'ann'", specifier = "==2.26.0" },
 ]
-provides-extras = ["docling", "embed", "ann", "evaluation"]
+provides-extras = ["reference", "docling", "embed", "ann", "evaluation"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -2899,6 +2904,7 @@ dev = [
     { name = "pre-commit" },
     { name = "pyrefly" },
     { name = "pytest" },
+    { name = "refspec", editable = "../RefSpec" },
     { name = "ruff" },
     { name = "scikit-learn", specifier = "==1.7.2" },
     { name = "scipy", specifier = ">=1.15,<2" },

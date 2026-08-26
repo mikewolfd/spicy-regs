@@ -1,5 +1,10 @@
 # SpicySearch Product Boundary and Extraction Plan
 
+> **Superseded ownership and implementation plan (2026-08-25):** REF-048 and
+> SpicySearch's greenfield platform-artifact consolidation plan replace this
+> document's SpicyRegs catalog, document-processing, and `DocumentRelease`
+> assignments. Retain it as migration history and behavior evidence only.
+
 - **Date:** 2026-07-31
 - **Status:** Core product boundary and static release flow implemented and
   verified locally; remaining compatibility cutovers and product milestones,

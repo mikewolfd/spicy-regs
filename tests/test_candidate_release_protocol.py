@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import builtins
-import hashlib
 import json
 import subprocess
 import sys
@@ -22,21 +21,18 @@ from spicy_regs.candidate_release import (
 from spicy_regs.docpipeline.rkaf_projection import (
     candidate_release_vocabulary,
 )
+from tests.atlas_candidate_support import (
+    FACET,
+    RELEASE_DIGEST,
+    ROLE,
+    ROUTE,
+    canonical as _canonical,
+    digest as _digest,
+    open_atlas as _open_atlas,
+    write_atlas as _write_atlas,
+)
 
 ASSET_DIGEST = "a" * 64
-RELEASE_DIGEST = "sha256:" + "b" * 64
-FACET = "urn:ref:facet:general-subject"
-ROLE = "https://rulespec.org/ns/v1#assignmentPrimary"
-ROUTE = "document"
-CHECKED_ATLAS_ROOT = (
-    Path(__file__).resolve().parents[1]
-    / "RefSpec"
-    / "bindings"
-    / "atlas"
-    / "1.0"
-    / "examples"
-    / "federal-register-thesaurus-2025"
-)
 
 
 @dataclass(frozen=True)
@@ -197,158 +193,6 @@ def test_candidate_vocabulary_accepts_file_reader_without_importing_refspec(
             "definition": "",
             "status": "active",
             "external_ids_json": "[]",
-        },
-    )
-
-
-def _canonical(value: object) -> bytes:
-    return json.dumps(
-        value,
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-    ).encode("utf-8")
-
-
-def _digest(raw: bytes) -> str:
-    return "sha256:" + hashlib.sha256(raw).hexdigest()
-
-
-def _write_atlas(root: Path) -> dict[str, str]:
-    implementation = {
-        "id": "urn:test:implementation:atlas-reader-fixture",
-        "version": "1.0",
-        "sourceModules": [
-            {
-                "path": "fixture/generator",
-                "digest": "sha256:" + "1" * 64,
-            }
-        ],
-        "runtime": {"fixture": "1"},
-    }
-    inputs = [
-        {
-            "role": "ManagedReleaseView",
-            "manifestDigest": "sha256:" + "2" * 64,
-            "publicationReleaseId": "urn:test:publication:subjects:v1",
-            "rulespecGraph": {
-                "id": "urn:test:rulespec-graph:subjects:v1",
-                "digest": "sha256:" + "3" * 64,
-            },
-        },
-        {
-            "role": "RulespecCoreRelease",
-            "fileDigest": "sha256:" + "4" * 64,
-            "releaseId": "urn:rulespec:core:" + "5" * 64,
-            "releaseDigest": "sha256:" + "5" * 64,
-        },
-    ]
-    policies = {
-        "releaseFacts": "copiedManagedReleaseFactsOnly",
-        "analysis": "replaceableMachineAnalysis",
-        "labelEquality": "clusterOnly",
-        "mappingEligibility": "twoIndependentMachinesSearchOnly",
-        "humanFeedback": "appendOnlyNonAuthorizing",
-    }
-    generation = {
-        "format": "refspec-vocabulary-atlas-nquads-1.0",
-        "inputs": inputs,
-        "implementation": implementation,
-        "policies": policies,
-    }
-    generation_digest = _digest(_canonical(generation))
-    asset_id = "urn:ref:vocabulary-atlas:" + generation_digest.removeprefix("sha256:")
-    release = "urn:test:release:subjects:v1"
-    member = "urn:test:concept:poultry-inspection"
-    scheme = "urn:test:scheme:subjects"
-    release_graph = asset_id + ":release-facts"
-    analysis_graph = asset_id + ":analysis"
-    lines = sorted(
-        [
-            f"<{member}> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <https://rulespec.org/ns/v1#RegisteredConcept> <{release_graph}> .",
-            f"<{member}> <http://www.w3.org/2004/02/skos/core#inScheme> <{scheme}> <{release_graph}> .",
-            f'<{member}> <http://www.w3.org/2004/02/skos/core#prefLabel> "Poultry inspection"@en <{release_graph}> .',
-            f'<{member}> <http://www.w3.org/2004/02/skos/core#altLabel> "Slaughter inspection"@en <{release_graph}> .',
-            f'<{member}> <http://www.w3.org/2004/02/skos/core#hiddenLabel> "Bird inspection"@en <{release_graph}> .',
-            f'<{member}> <http://www.w3.org/2004/02/skos/core#definition> "Inspection of poultry processing."@en <{release_graph}> .',
-            f"<{release}> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <https://rulespec.org/ns/v1#ReferenceResourceRelease> <{release_graph}> .",
-            f'<{release}> <https://rulespec.org/ns/v1#referenceReleaseDigest> "{RELEASE_DIGEST}" <{release_graph}> .',
-            f"<{release}> <http://www.w3.org/ns/prov#hadMember> <{member}> <{release_graph}> .",
-            f"<{member}> <https://refspec.org/ns/vocabulary-atlas/v1#memberOfRelease> <{release}> <{analysis_graph}> .",
-            f"<{analysis_graph}> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <https://refspec.org/ns/vocabulary-atlas/v1#ReplaceableAnalysis> <{analysis_graph}> .",
-            f"<{analysis_graph}> <http://www.w3.org/ns/prov#wasDerivedFrom> <urn:test:publication:subjects:v1> <{analysis_graph}> .",
-        ]
-    )
-    nquads = ("\n".join(lines) + "\n").encode()
-    output_digest = _digest(nquads)
-    manifest: dict[str, Any] = {
-        "id": asset_id,
-        "type": "urn:ref:type:VocabularyAtlasManifest",
-        "schemaVersion": "1.0",
-        "format": "refspec-vocabulary-atlas-nquads-1.0",
-        "generationDigest": generation_digest,
-        "inputs": inputs,
-        "implementation": implementation,
-        "policies": policies,
-        "graphs": [
-            {
-                "role": "releaseFacts",
-                "id": release_graph,
-                "quadCount": 9,
-            },
-            {
-                "role": "analysis",
-                "id": analysis_graph,
-                "quadCount": 3,
-            },
-        ],
-        "output": {
-            "path": "atlas.nq",
-            "mediaType": "application/n-quads",
-            "digest": output_digest,
-            "byteLength": len(nquads),
-            "quadCount": 12,
-        },
-        "counts": {
-            "managedReleases": 1,
-            "releaseFacts": 9,
-            "analysisFacts": 3,
-            "labelClusters": 0,
-            "mappingCandidates": 0,
-            "searchOnlyMappings": 0,
-            "machineValidations": 0,
-            "feedback": 0,
-        },
-    }
-    manifest["canonicalPayloadDigest"] = _digest(_canonical(manifest))
-    manifest_raw = _canonical(manifest) + b"\n"
-    root.mkdir()
-    (root / "atlas.nq").write_bytes(nquads)
-    (root / "atlas-manifest.json").write_bytes(manifest_raw)
-    return {
-        "asset_id": asset_id,
-        "manifest_digest": _digest(manifest_raw),
-        "output_digest": output_digest,
-        "release_id": release,
-        "release_digest": RELEASE_DIGEST,
-        "member_id": member,
-    }
-
-
-def _open_atlas(root: Path, pins: Mapping[str, str]) -> VocabularyAtlasCandidateSource:
-    return VocabularyAtlasCandidateSource.open(
-        root / "atlas-manifest.json",
-        expected_asset_id=pins["asset_id"],
-        expected_manifest_digest=pins["manifest_digest"],
-        expected_output_digest=pins["output_digest"],
-        reference_release_id=pins["release_id"],
-        reference_release_digest=pins["release_digest"],
-        facet_iri=FACET,
-        assignment_role_iri=ROLE,
-        resource_route=ROUTE,
-        lookup_index_manifest={
-            "id": "urn:test:lookup-index:atlas:v1",
-            "digest": "sha256:" + "6" * 64,
         },
     )
 
@@ -514,43 +358,3 @@ assert tuple(vocabulary.concepts) == ({pins["member_id"]!r},)
     )
 
     assert result.returncode == 0, result.stderr
-
-
-def test_checked_complete_atlas_is_a_file_only_candidate_source() -> None:
-    """One complete RefSpec build feeds SpicyRegs without RefSpec code."""
-
-    script = f"""
-import builtins
-original_import = builtins.__import__
-def reject_refspec(name, *args, **kwargs):
-    if name == 'refspec' or name.startswith('refspec.'):
-        raise AssertionError(f'candidate execution imported {{name}}')
-    return original_import(name, *args, **kwargs)
-builtins.__import__ = reject_refspec
-from spicy_regs.candidate_release import VocabularyAtlasCandidateSource
-from spicy_regs.docpipeline.rkaf_projection import candidate_release_vocabulary
-source = VocabularyAtlasCandidateSource.open(
-    {str(CHECKED_ATLAS_ROOT / "atlas-manifest.json")!r},
-    expected_asset_id='urn:ref:vocabulary-atlas:9069a26d36c2695a02edb501dc51011f48aee382d96a0e200cd2c1d3574d7dec',
-    expected_manifest_digest='sha256:956cab4f20477933ef015c2c87647ebb9cc40c4c68247a93b10dab8b113f60f1',
-    expected_output_digest='sha256:8e1eaf2265874863981fe9322e0a0e286c01c43e598b091736b556ea424e830a',
-    reference_release_id='urn:ref:federal-register-thesaurus:2025-04-01:reference-resource-release:v1',
-    reference_release_digest='sha256:30742a82b3e268942aec713a02c5ae4264eadea36aa61b564ffc93eeecfd5fe6',
-    facet_iri={FACET!r},
-    assignment_role_iri={ROLE!r},
-    resource_route={ROUTE!r},
-    lookup_index_manifest={{'id': 'urn:test:checked-atlas-index', 'digest': 'sha256:' + '7' * 64}},
-)
-vocabulary = candidate_release_vocabulary(source, default_language='en')
-print(len(vocabulary.concepts), len(vocabulary.selector_rows), len(vocabulary.candidate_mappings))
-"""
-
-    result = subprocess.run(
-        [sys.executable, "-c", script],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-
-    assert result.returncode == 0, result.stderr
-    assert result.stdout.strip() == "705 705 0"

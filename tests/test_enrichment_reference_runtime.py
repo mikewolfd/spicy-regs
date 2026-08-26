@@ -50,9 +50,10 @@ from spicy_regs.evaluation_boundary import (
     EvaluationBoundaryError,
     partition_leakage_facts,
 )
+from tests.repository_paths import REFSPEC_ROOT
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-REFSPEC_SCHEMA_ROOT = REPO_ROOT / "RefSpec" / "bindings" / "json" / "1.0" / "schemas"
+REFSPEC_SCHEMA_ROOT = REFSPEC_ROOT / "bindings" / "json" / "1.0" / "schemas"
 FUSION_TOOL = REPO_ROOT / "tools" / "fuse_concept_registries.py"
 
 NOW = "2026-07-29T12:00:00Z"
@@ -934,6 +935,7 @@ def output_profile() -> OutputProfile:
                 "requiredImportFeatures": sorted(REQUIRED_IMPORT_FEATURES),
                 "candidateUse": True,
                 "acceptedOutputUse": True,
+                "usageEligibility": "rkaf:publicationAllowed",
             },
             {
                 "facet": OTHER_FACET,
@@ -943,6 +945,7 @@ def output_profile() -> OutputProfile:
                 "requiredImportFeatures": sorted(REQUIRED_IMPORT_FEATURES),
                 "candidateUse": True,
                 "acceptedOutputUse": True,
+                "usageEligibility": "rkaf:publicationAllowed",
             },
         ),
         mapping_permissions=(
@@ -956,6 +959,7 @@ def output_profile() -> OutputProfile:
                 "direction": "sourceToTarget",
                 "candidateUse": True,
                 "acceptedOutputUse": False,
+                "usageEligibility": "rkaf:searchOnly",
             },
         ),
         open_label_permissions=(
@@ -965,6 +969,7 @@ def output_profile() -> OutputProfile:
                 "mode": "explicitLanguage",
                 "candidateUse": True,
                 "acceptedOutputUse": True,
+                "usageEligibility": "rkaf:publicationAllowed",
             },
             {
                 "facet": OTHER_FACET,
@@ -973,6 +978,7 @@ def output_profile() -> OutputProfile:
                 "defaultLanguage": "en",
                 "candidateUse": True,
                 "acceptedOutputUse": True,
+                "usageEligibility": "rkaf:publicationAllowed",
             },
         ),
         enrichment_profile_record=enrichment,

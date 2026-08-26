@@ -13,12 +13,13 @@ from spicy_regs.source_profile_artifacts import (
     load_json,
     validate_source_profile_artifacts,
 )
+from tests.repository_paths import REFSPEC_ROOT
 
 ROOT = Path(__file__).resolve().parents[1]
 INPUT = ROOT / "policies" / "profile-resource-applicability-input-v0.json"
 PROFILE_CATALOG = ROOT / "policies" / "source-profile-catalog-v0.json"
 APPLICABILITY = ROOT / "policies" / "profile-resource-applicability-v0.json"
-REFSPEC_CATALOG = ROOT / "RefSpec" / "portfolio" / "resource-catalog-v0.json"
+REFSPEC_CATALOG = REFSPEC_ROOT / "portfolio" / "resource-catalog-v0.json"
 
 
 def test_checked_source_profile_artifacts_are_exact_and_closed() -> None:

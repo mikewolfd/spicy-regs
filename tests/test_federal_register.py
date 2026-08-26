@@ -12,9 +12,12 @@ from datetime import date
 
 import pytest
 
+from spicy_regs.schemas.federal_register import (
+    FEDERAL_REGISTER_COLUMNS,
+    project_federal_register_document,
+)
 from spicy_regs.sources import federal_register as federal_register_source
 from spicy_regs.sources.federal_register import FederalRegisterReader
-from spicy_regs.transforms.build_federal_register import COLUMNS, shape_federal_register_document
 
 _RAW_DOC = {
     "document_number": "2024-00001",
@@ -44,20 +47,28 @@ _RAW_DOC = {
 
 
 def test_shape_produces_exact_schema():
-    row = shape_federal_register_document(_RAW_DOC)
+    row = project_federal_register_document(_RAW_DOC)
     # Every published column present, and nothing extra.
-    assert set(row) == set(COLUMNS)
+    assert set(row) == set(FEDERAL_REGISTER_COLUMNS)
 
 
 def test_shape_maps_and_serializes_fields():
-    row = shape_federal_register_document(_RAW_DOC)
+    row = project_federal_register_document(_RAW_DOC)
     assert row["document_number"] == "2024-00001"
     assert row["document_type"] == "Proposed Rule"  # API `type` -> document_type
     # Array fields serialize to JSON strings.
-    assert json.loads(row["docket_ids_json"]) == ["EPA-HQ-OAR-2024-0001", "FRL-1234-01-OAR"]
-    assert json.loads(row["regulation_id_numbers_json"]) == ["2060-AV12"]
-    assert json.loads(row["cfr_references_json"])[0]["part"] == 60
-    assert json.loads(row["topics_json"])[0]["name"] == "Air pollution control"
+    docket_ids = row["docket_ids_json"]
+    regulation_ids = row["regulation_id_numbers_json"]
+    cfr_references = row["cfr_references_json"]
+    topics = row["topics_json"]
+    assert docket_ids is not None
+    assert regulation_ids is not None
+    assert cfr_references is not None
+    assert topics is not None
+    assert json.loads(docket_ids) == ["EPA-HQ-OAR-2024-0001", "FRL-1234-01-OAR"]
+    assert json.loads(regulation_ids) == ["2060-AV12"]
+    assert json.loads(cfr_references)[0]["part"] == 60
+    assert json.loads(topics)[0]["name"] == "Air pollution control"
     # agency_slugs is a comma-joined string of slugs, skipping agencies with none.
     assert row["agency_slugs"] == "environmental-protection-agency"
     # Integer scalars stringify (schema is all-VARCHAR).
@@ -70,7 +81,7 @@ def test_shape_maps_and_serializes_fields():
 
 
 def test_shape_handles_missing_arrays():
-    row = shape_federal_register_document({"document_number": "x"})
+    row = project_federal_register_document({"document_number": "x"})
     assert row["docket_ids_json"] == "[]"
     assert row["regulation_id_numbers_json"] == "[]"
     assert row["cfr_references_json"] == "[]"

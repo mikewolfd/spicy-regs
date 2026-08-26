@@ -41,12 +41,11 @@ Nothing here adopts anything. The original 35 were repeatedly inspected and
 are permanently train/development data. The emitted record is ineligible for
 an accuracy or adoption verdict, even when one configuration scores best.
 
-A verified RefSpec managed release is the normal candidate source. The former
+RefSpec retired the managed-release candidate-use API this harness once used.
+The harness now refuses that mode with a migration message. The former
 fused-registry file remains available only behind ``--allow-legacy-registry``
-and ``--allow-legacy-targets`` for migration comparisons. A managed run never
-reads the former resolved target files. It derives its lookup-index identity
-from the physical index and scoring facts actually used, and emits one flat,
-lineage-complete candidate table.
+and ``--allow-legacy-targets`` for historical comparisons until this experiment
+adopts the platform's pinned vocabulary-atlas input.
 """
 
 from __future__ import annotations
@@ -72,12 +71,8 @@ from spicy_regs.docpipeline.adapters.openai import (
     TiktokenCounter,
 )
 from spicy_regs.docpipeline.extraction import ExtractionUnit
-from spicy_regs.docpipeline.rkaf_projection import (
-    managed_release_candidate_vocabulary,
-)
 from spicy_regs.docpipeline.runtime import sha256_file
 from spicy_regs.docpipeline.tag_task import TagExtractionTask
-from spicy_regs.enrichment.managed_release import ManagedReleaseCandidateSource
 from spicy_regs.enrichment.experiment_artifacts import (
     write_experiment_artifacts,
 )
@@ -94,7 +89,6 @@ from spicy_regs.ontology.candidate_channels import (
     CharNgramConceptMapper,
     ConceptMapper,
     KeywordGeneration,
-    concept_embedding_rule,
     generate_segment_keywords,
 )
 from spicy_regs.ontology.common import (
@@ -106,7 +100,6 @@ from spicy_regs.ontology.common import (
 from spicy_regs.ontology.concepts import (
     ANCHOR_CHANNEL_DEPTH,
     ANCHOR_RRF_K,
-    CONCEPT_COLUMNS,
     _anchored_channel,
     _allowed_facet_ranking,
     _apply_source_vocabulary_quotas,
@@ -320,7 +313,7 @@ class CandidateRegistry:
     selector_file: Path
     source_facts: Mapping[str, Any]
     lineage_by_member: Mapping[str, Mapping[str, Any]]
-    managed_source: ManagedReleaseCandidateSource | None
+    managed_source: Any | None
 
 
 def _plain_lineage_value(value: Any) -> Any:
@@ -337,7 +330,7 @@ def _plain_lineage_value(value: Any) -> Any:
 
 
 def _managed_member_lineage(
-    source: ManagedReleaseCandidateSource,
+    source: Any,
 ) -> dict[str, dict[str, Any]]:
     """Preserve release and expression identity after concept-level ranking."""
 
@@ -384,7 +377,7 @@ def load_candidate_registry(
     registry_file: Path | None = None,
     allow_legacy_registry: bool = False,
 ) -> CandidateRegistry:
-    """Load exactly one managed release or an explicitly allowed legacy file."""
+    """Load the explicit legacy input or refuse the retired managed mode."""
 
     managed_requested = managed_release_manifest is not None
     legacy_requested = registry_file is not None or allow_legacy_registry
@@ -393,8 +386,8 @@ def load_candidate_registry(
     if not managed_requested:
         if not allow_legacy_registry:
             raise AblationError(
-                "a managed release is required; pass --allow-legacy-registry "
-                "to opt into the migration-only fused registry"
+                "managed-release mode was retired; pass --allow-legacy-registry "
+                "to run the historical fused-registry comparison"
             )
         legacy_file = Path(registry_file or DEFAULT_REGISTRY)
         rows = tuple(read_parquet_rows(legacy_file))
@@ -414,106 +407,10 @@ def load_candidate_registry(
             managed_source=None,
         )
 
-    if not managed_release_manifest_digest:
-        raise AblationError("managed release manifest digest is required")
-
-    manifest_path = Path(managed_release_manifest)
-    bootstrap_digest = (
-        "sha256:"
-        + hashlib.sha256(
-            canonical_json(
-                {
-                    "schema_version": "managed-release-selector-projection-v1",
-                    "bundle_manifest_digest": managed_release_manifest_digest,
-                    "permission_facet_iri": permission_facet_iri,
-                    "permission_assignment_role_iri": (permission_assignment_role_iri),
-                    "permission_resource_route": (permission_resource_route),
-                    "candidate_default_language": candidate_default_language,
-                }
-            ).encode("utf-8")
-        ).hexdigest()
-    )
-    source = ManagedReleaseCandidateSource.open(
-        manifest_path,
-        expected_manifest_digest=managed_release_manifest_digest,
-        lookup_index_manifest={
-            "id": (f"urn:spicy-regs:lookup-index-plan:{bootstrap_digest.removeprefix('sha256:')}"),
-            "digest": bootstrap_digest,
-        },
-        permission_facet_iri=permission_facet_iri,
-        permission_assignment_role_iri=(permission_assignment_role_iri),
-        permission_resource_route=permission_resource_route,
-    )
-    if source.usage_ceiling != "candidateUseOnly":
-        raise AblationError("managed release source must remain candidateUseOnly")
-    vocabulary = managed_release_candidate_vocabulary(
-        source,
-        default_language=candidate_default_language,
-    )
-    rows = tuple(dict(row) for row in vocabulary.selector_rows)
-    if not rows:
-        raise AblationError("managed release produced no lookup-eligible selector rows")
-    selector_facets = {str(row.get("facet") or "") for row in rows}
-    if len(selector_facets) != 1 or not next(iter(selector_facets)):
-        raise AblationError("managed release must resolve to one Spicy selector facet")
-    selector_facet = next(iter(selector_facets))
-    lineage = _managed_member_lineage(source)
-    missing_lineage = sorted(
-        str(row.get("concept_id") or "") for row in rows if str(row.get("concept_id") or "") not in lineage
-    )
-    if missing_lineage:
-        raise AblationError(f"managed selector rows lost expression lineage for {missing_lineage[:3]!r}")
-
-    output_dir = Path(output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-    selector_file = write_parquet_rows(
-        output_dir / "managed-release-selector-rows.parquet",
-        columns=CONCEPT_COLUMNS,
-        rows=(dict(row) for row in rows),
-    )
-    return CandidateRegistry(
-        rows=rows,
-        selector_file=selector_file,
-        source_facts={
-            "mode": "managedRelease",
-            "usage_ceiling": source.usage_ceiling,
-            "bundle_manifest": str(manifest_path),
-            "bundle_manifest_digest": managed_release_manifest_digest,
-            "publication_release_id": source.view.release_id,
-            "expression_corpus_snapshot": dict(source.expression_corpus_snapshot),
-            "permission_facet_iri": (source.candidate_permission.facet_iri),
-            "permission_assignment_role_iri": (source.candidate_permission.assignment_role_iri),
-            "permission_resource_route": (source.candidate_permission.resource_route),
-            "permission_reference_resource_release": dict(source.candidate_permission.reference_resource_release),
-            "permission_registry_import_snapshot": dict(source.candidate_permission.registry_import_snapshot),
-            "permission_output_profile": {
-                "id": source.candidate_permission.output_profile["id"],
-                "version": source.candidate_permission.output_profile["version"],
-                "digest": source.candidate_permission.output_profile["contentDigest"],
-            },
-            "permission_enrichment_profile": {
-                "id": source.candidate_permission.enrichment_profile["id"],
-                "version": source.candidate_permission.enrichment_profile["version"],
-                "digest": source.candidate_permission.enrichment_profile["contentDigest"],
-            },
-            "permission_coverage_report": {
-                "id": source.candidate_permission.coverage_report["id"],
-                "digest": source.candidate_permission.coverage_report["canonicalPayloadDigest"],
-            },
-            "permission_registry_deployment": {
-                "id": source.candidate_permission.registry_deployment["id"],
-                "digest": source.candidate_permission.registry_deployment["canonicalPayloadDigest"],
-            },
-            "permission_required_import_features": list(source.candidate_permission.required_import_features),
-            "selector_facet": selector_facet,
-            "candidate_default_language": candidate_default_language,
-            "selector_file": str(selector_file),
-            "selector_file_sha256": sha256_file(selector_file),
-            "candidate_member_count": len(rows),
-            "candidate_expression_count": sum(len(value["expressions"]) for value in lineage.values()),
-        },
-        lineage_by_member=lineage,
-        managed_source=source,
+    raise AblationError(
+        "managed-release candidate lookup was retired with RefSpec's "
+        "candidate-use governance; migrate this experiment to a pinned "
+        "vocabulary-atlas artifact"
     )
 
 
@@ -684,63 +581,13 @@ def finalize_candidate_lineage(
 ) -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
     """Bind every managed candidate to the actual derived lookup-index pin."""
 
-    bootstrap = candidate_registry.managed_source
-    if bootstrap is None:
-        return dict(candidate_registry.source_facts), {}
-    source = ManagedReleaseCandidateSource(
-        view=bootstrap.view,
-        lookup_index_manifest=lookup_index_manifest,
-        permission_facet_iri=bootstrap.permission_facet_iri,
-        permission_assignment_role_iri=(bootstrap.permission_assignment_role_iri),
-        permission_resource_route=bootstrap.permission_resource_route,
-    )
-    corpus = dict(source.expression_corpus_snapshot)
-    lookup = dict(source.lookup_index_manifest)
-    lineage = _managed_member_lineage(source)
-    rows_by_id = {str(row.get("concept_id") or ""): row for row in candidate_registry.rows}
-    embedding_rule = concept_embedding_rule(candidate_registry.rows)
-    for value in lineage.values():
-        member_iri = str(value["member_iri"])
-        row = rows_by_id.get(member_iri)
-        if row is None:
-            continue
-        expressions = value["expressions"]
-        value["available_expression_ids"] = [str(expression["expression_id"]) for expression in expressions]
-        value["indexed_expression_ids_by_channel"] = _indexed_expression_ids_by_channel(
-            row=row,
-            expressions=expressions,
-            channels=channels,
-            mapper_facts=mapper_facts,
-            embedding_definition_kept=embedding_rule.keeps_definition(row),
+    del lookup_index_identity, lookup_index_manifest, mapper_facts, channels
+    if candidate_registry.managed_source is not None:
+        raise AblationError(
+            "managed-release lineage finalization was retired; use a pinned "
+            "vocabulary-atlas artifact"
         )
-        value["channel_identities"] = {
-            channel: _channel_identity(
-                channel,
-                mapper_facts=mapper_facts,
-            )
-            for channel in channels
-        }
-        value["reference_resource_release"] = _one_or_many_expression_references(
-            expressions,
-            "reference_resource_release",
-        )
-        value["registry_import_snapshot"] = _one_or_many_expression_references(
-            expressions,
-            "registry_import_snapshot",
-        )
-        value["facet"] = str(row.get("facet") or "")
-        value["managed_release_manifest"] = candidate_registry.source_facts["bundle_manifest"]
-        value["managed_release_manifest_digest"] = candidate_registry.source_facts["bundle_manifest_digest"]
-        value["expression_corpus_snapshot"] = corpus
-        value["lookup_index_manifest"] = lookup
-        value["usage_ceiling"] = source.usage_ceiling
-    source_facts = {
-        **dict(candidate_registry.source_facts),
-        "expression_corpus_snapshot": corpus,
-        "lookup_index_manifest": lookup,
-        "lookup_index_identity": dict(lookup_index_identity),
-    }
-    return source_facts, lineage
+    return dict(candidate_registry.source_facts), {}
 
 
 # --------------------------------------------------------------------------

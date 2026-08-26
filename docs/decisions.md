@@ -846,6 +846,13 @@ numbers remain the currency of this project.
 
 ## 2026-07-31 — Four-product ownership boundary
 
+**Ownership update (2026-08-25):** RefSpec REF-048 supersedes only this
+decision's assignment of exact document renditions, Unicode representations,
+structural passages, and `DocumentRelease` to SpicyRegs. DocSpec now owns
+capture, document processing, and `DocumentRelease`; SpicyRegs retains source
+acquisition and faithful source-native publication. The other rows remain
+accepted.
+
 - **Decision:** SpicyRegs owns acquisition, source-native records, exact
   document versions and renditions, immutable Unicode text representations,
   structural passages, source observations, deterministic source-link

@@ -236,8 +236,19 @@ class DownloadedObject:
 
     content: bytes
     etag: str | None
+    version_id: str | None
     last_modified: datetime | None
     content_length: int | None
+
+
+@dataclass(frozen=True, slots=True)
+class MirrulationsSourceObject:
+    """One exact listed object, pinned through its source-issued metadata."""
+
+    key: str
+    etag: str
+    version_id: str | None
+    content: bytes
 
 
 def download_object_bytes(
@@ -279,6 +290,7 @@ def download_object_bytes(
     return DownloadedObject(
         content=content,
         etag=etag,
+        version_id=response.get("VersionId"),
         last_modified=response.get("LastModified"),
         content_length=content_length,
     )
@@ -482,6 +494,79 @@ class MirrulationsReader(Reader):
         self.failed_keys: list[str] = []
         self.parse_failed_keys: list[str] = []
 
+    def iter_source_objects(
+        self,
+        *,
+        max_bytes: int = 16 * 1024 * 1024,
+    ) -> Iterator[MirrulationsSourceObject]:
+        """Capture exact listing membership and ETag-pinned object bytes.
+
+        This path is deliberately fail-fast: a missing listing ETag, changed
+        object, failed GET, or incomplete body makes the enumeration unusable
+        as complete-snapshot evidence.
+        """
+
+        if self.record_type.path_pattern is None:
+            raise ValueError(
+                f"MirrulationsReader requires a path-addressable record type, "
+                f"but {self.record_type.name!r} has no path_pattern."
+            )
+        if self.processed_keys:
+            raise ValueError(
+                "complete Mirrulations enumeration cannot omit processed keys"
+            )
+        year_pattern = re.compile(
+            rf"{re.escape(self.prefix)}/{re.escape(self.agency)}/"
+            rf"{re.escape(self.agency)}-(\d{{4}})-"
+        )
+        bucket = self.s3_resource.Bucket(self.bucket)
+        previous_key: str | None = None
+        for summary in bucket.objects.filter(Prefix=f"{self.prefix}/{self.agency}/"):
+            key = summary.key
+            if (
+                "/text-" not in key
+                or self.record_type.path_pattern not in key
+                or not key.endswith(".json")
+            ):
+                continue
+            if self.since_year:
+                match = year_pattern.search(key)
+                if match and int(match.group(1)) < self.since_year:
+                    continue
+            if previous_key is not None and key <= previous_key:
+                raise ValueError("Mirrulations listing keys are not strictly ordered")
+            previous_key = key
+            etag = getattr(summary, "e_tag", None)
+            if not isinstance(etag, str) or not etag:
+                raise ValueError(f"Mirrulations listing lacks an ETag for {key}")
+            listed_size = getattr(summary, "size", None)
+            if (
+                listed_size is not None
+                and (
+                    isinstance(listed_size, bool)
+                    or not isinstance(listed_size, int)
+                    or listed_size < 0
+                )
+            ):
+                raise ValueError(f"Mirrulations listing size is invalid for {key}")
+            downloaded = download_object_bytes(
+                self.s3_resource,
+                self.bucket,
+                key,
+                if_match=etag,
+                max_bytes=max_bytes,
+            )
+            if listed_size is not None and listed_size != len(downloaded.content):
+                raise ValueError(
+                    f"Mirrulations listed size differs from bytes for {key}"
+                )
+            yield MirrulationsSourceObject(
+                key=key,
+                etag=etag,
+                version_id=downloaded.version_id,
+                content=downloaded.content,
+            )
+
     def iter_records(self) -> Iterator[dict]:
         if self.record_type.path_pattern is None:
             raise ValueError(
@@ -625,7 +710,8 @@ def reader_factory(
     def read(agency: str, record_type: RecordType) -> MirrulationsReader:
         resource = make_resource()
         if bounded:
-            if record_type.path_pattern is None:
+            path_pattern = record_type.path_pattern
+            if path_pattern is None:
                 raise ValueError(f"{record_type.name!r} has no Mirrulations path pattern")
 
             def list_keys() -> Iterable[str]:
@@ -635,7 +721,7 @@ def reader_factory(
                     PREFIX,
                     agency,
                     record_type.name,
-                    record_type.path_pattern,
+                    path_pattern,
                     processed_keys,
                     verbose,
                     since_year,

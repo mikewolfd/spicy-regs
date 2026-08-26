@@ -53,6 +53,7 @@ from refspec import (
     ReferenceRuntimeStore,
 )
 from spicy_regs.ontology.attestations import DECISION_APPROVED, DECISIONS
+from tests.atlas_candidate_support import open_atlas, write_atlas
 
 # --------------------------------------------------------------------------- #
 # A tiny synthetic corpus. Two profiles, two rows, no network, no real data.
@@ -69,22 +70,6 @@ FR_BODY = (
 BILL_XML = "<bill><title>A bill concerning water quality permits.</title></bill>"
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-ATLAS_EXAMPLE = (
-    REPO_ROOT
-    / "RefSpec"
-    / "bindings"
-    / "atlas"
-    / "1.0"
-    / "examples"
-    / "federal-register-thesaurus-2025"
-)
-ATLAS_REFERENCE_RELEASE = (
-    "urn:ref:federal-register-thesaurus:2025-04-01:"
-    "reference-resource-release:v1"
-)
-ATLAS_REFERENCE_RELEASE_DIGEST = (
-    "sha256:30742a82b3e268942aec713a02c5ae4264eadea36aa61b564ffc93eeecfd5fe6"
-)
 
 
 def _write(path: Path, rows: list[dict[str, Any]]) -> None:
@@ -857,29 +842,9 @@ def _project_with_model(
     )
 
 
-def _atlas_candidate_source() -> VocabularyAtlasCandidateSource:
-    manifest_path = ATLAS_EXAMPLE / "atlas-manifest.json"
-    manifest_raw = manifest_path.read_bytes()
-    manifest = json.loads(manifest_raw)
-    return VocabularyAtlasCandidateSource.open(
-        manifest_path,
-        expected_asset_id=manifest["id"],
-        expected_manifest_digest=(
-            "sha256:" + hashlib.sha256(manifest_raw).hexdigest()
-        ),
-        expected_output_digest=manifest["output"]["digest"],
-        reference_release_id=ATLAS_REFERENCE_RELEASE,
-        reference_release_digest=ATLAS_REFERENCE_RELEASE_DIGEST,
-        facet_iri="urn:ref:facet:general-subject",
-        assignment_role_iri=(
-            "https://rulespec.org/ns/v1#assignmentPrimary"
-        ),
-        resource_route="document",
-        lookup_index_manifest={
-            "id": "urn:test:lookup-index:vocabulary-atlas:v1",
-            "digest": "sha256:" + "c" * 64,
-        },
-    )
+def _atlas_candidate_source(root: Path) -> VocabularyAtlasCandidateSource:
+    pins = write_atlas(root)
+    return open_atlas(root, pins)
 
 
 def test_atlas_release_drives_the_real_model_path_without_output_authority(
@@ -887,11 +852,11 @@ def test_atlas_release_drives_the_real_model_path_without_output_authority(
     tables: Path,
     tmp_path: Path,
 ) -> None:
-    source = _atlas_candidate_source()
+    source = _atlas_candidate_source(tmp_path / "atlas")
     member_iri = next(
         expression.member_iri
         for expression in source.iter_expressions()
-        if expression.original_literal == "Poultry and poultry products"
+        if expression.original_literal == "Poultry inspection"
     )
     model = FakeModel(
         lambda payload: [
@@ -962,7 +927,7 @@ def test_atlas_candidate_source_rejects_legacy_mapping_bridges(
     tables: Path,
     tmp_path: Path,
 ) -> None:
-    source = _atlas_candidate_source()
+    source = _atlas_candidate_source(tmp_path / "atlas")
 
     with pytest.raises(
         ProjectionError,
@@ -984,11 +949,11 @@ def test_atlas_release_rejects_model_role_outside_local_selection(
     tables: Path,
     tmp_path: Path,
 ) -> None:
-    source = _atlas_candidate_source()
+    source = _atlas_candidate_source(tmp_path / "atlas")
     member_iri = next(
         expression.member_iri
         for expression in source.iter_expressions()
-        if expression.original_literal == "Poultry and poultry products"
+        if expression.original_literal == "Poultry inspection"
     )
     model = FakeModel(
         lambda payload: [
