@@ -28,29 +28,43 @@ kind `spicyregs-source-native-release`. Its closed product `spec` has exactly
 `sourceNativeSchemaSetDigest`, and
 `sourceStateDigest`. Source-native releases have no Rulespec logical inputs.
 A successor records the exact superseded logical ID and artifact digest only
-as publication evidence in its receipt. Lineage therefore changes
+as publication evidence in the Rulespec root `supersedes` record. Lineage therefore changes
 `artifactDigest`, not logical identity: a correction or repack with identical
 logical state preserves `logicalId`, while a changed source state moves it. A
-byte-for-byte and evidence-identical no-op does not mint another artifact.
+physical-only rebuild may preserve `logicalId` while moving `artifactDigest`
+because its sealed byte-effect receipt differs. Publication never replaces an
+existing artifact destination.
 
 The release carries one generated `release-schema` bundle, canonical
-`source-native-scopes`, bounded partitioned
-`source-native-records`, their closed `source-native-schema` members, a
-complete `rendition-index` of source-stated locators plus nullable
-source-stated digests and sizes, and one
-`source-publication-receipt`. It also carries one bounded partitioned
-`source-acquisition-ledger` and the immutable source response, page, object,
-or source-issued enumeration bytes it names under role
-`source-acquisition-evidence`; large evidence may use Rulespec `blobRef`. That
-exact evidence is the observation history: the verifier replays every parsed
-pre-collapse row from it, so the release does not duplicate the same bytes in
-an observation-log member. The release performs no DocSpec normalization, join,
-sampling, rendition choice, disposition, capture, or document processing.
+`source-native-scopes`, their closed `source-native-schema` members, one
+`source-publication-receipt`, and fixed-partition external payload members. The
+external payloads are `source-native-records`, the complete `rendition-index`
+of source-stated locators plus nullable source-stated digests and sizes,
+`source-acquisition-ledger`, and the immutable source response, page, object,
+or source-issued enumeration bytes under `source-acquisition-evidence`. Every
+external payload uses a Rulespec `blobRef` in one explicitly injected shared
+content-addressed store; the artifact contains no hidden sibling store.
+
+The partition policy has exactly 64 buckets, numbered `00` through `63`, and
+assigns each UTF-8 identity to the integer value of its SHA-256 digest modulo
+64. Record and acquisition-record identities are `sourceRecordId`; rendition
+identities use their `sourceRecordId` bucket and sort by
+`(sourceRecordId, renditionId)`; acquisition-page identities are
+`traversalIndex:pageIndex`. Empty buckets have no member. Members sort by
+`(partitionKind, partitionId)`, and rows merge into the source profile's stable
+global order. Unchanged buckets therefore retain their exact `blobRef`; a
+changed row writes only payload buckets whose canonical bytes changed. Exact
+evidence bytes are deduplicated by `blobRef` and form the observation history:
+the verifier replays every parsed pre-collapse row from them, so the release
+does not duplicate the same bytes in an observation-log member. The release
+performs no DocSpec normalization, join, sampling, rendition choice,
+disposition, capture, or document processing.
 Its complete product-role vocabulary is `source-native-scopes`,
 `source-native-schema`, `source-native-records`, `rendition-index`,
 `release-schema`, `source-publication-receipt`, `source-acquisition-ledger`,
 and `source-acquisition-evidence`. This is the complete required product-role
-set; any other role fails.
+set; any other role fails. `source-native-records` and `rendition-index` are
+absent only when their corresponding receipt counts are zero.
 The installed SpicyRegs package generates and ships the closed bundle at
 `spicy_regs/schemas/source_native_release/1.0/` from the same typed records
 used by its serializers and parsers. It contains the release, scope,
@@ -83,6 +97,19 @@ unsupported key, incomplete agency set, or unclassified raw field. The
 enumeration evidence is preserved independently from the records selected by
 the release's bounded date scope, so an out-of-scope source object remains
 evidence but contributes no record.
+
+Each Regulations.gov query covers at most 366 inclusive calendar days. The
+adapter rejects a reversed or wider range before it opens the source reader.
+
+SpicyRegs stores that proof in deterministic, bounded ZIP members. Each member
+contains one canonical manifest followed by the listed object bytes in the same
+order. A member carries at most 1,000 objects and 16 MiB of uncompressed object
+bytes; a single object may not exceed 16 MiB. Pack indexes start at zero for
+each agency, increase without gaps, and end with one terminal pack, including
+an empty terminal pack when an agency has no objects. Admission checks the
+closed manifest, exact ZIP membership and order, sizes, source identity facts,
+object bytes, pack sequence, globally sorted distinct keys, and exact requested
+agency set before the release may claim `complete-snapshot`.
 
 A paginated strategy starts at the profile's declared initial request, carries
 every exact response, and records request key, response digest, source cursor,
@@ -207,7 +234,28 @@ exactly `format`, `formatVersion`, `releaseSchemaId`,
 `discoveredRecordCount`,
 `sourceNativeSchemaSetDigest`, `sourceStateDigest`, `verifierId`,
 `verifierVersion`, `verifierImplementationId`, `semanticVerdict`, `warnings`,
-`startedAt`, and `completedAt`. Root `supersedes` carries the one
+`partitionPolicy`, `payloadPartitions`, `byteMeasurements`, `startedAt`, and
+`completedAt`. `partitionPolicy` fixes the algorithm, bucket count, and UTF-8
+identity encoding. `payloadPartitions` is bounded to the four partition kinds
+times 64 buckets and records each nonempty member's kind, bucket, `blobRef`,
+byte size, and record count in strict order. `byteMeasurements` contains
+exactly `payloadBytesRead`, `payloadBytesReused`, `payloadBytesWritten`, and
+`publicationBytesWritten`.
+
+`payloadBytesRead` is the sum of distinct external payload bytes presented to
+the store by this build. `payloadBytesReused` counts payload bytes whose exact
+digest already existed or won a concurrent no-replace race.
+`payloadBytesWritten` counts bytes this build actually wrote to store staging,
+including a losing concurrent write that was discarded after verifying the
+winner. Consequently reused and written bytes are each bounded by read bytes,
+but their sum may exceed read bytes during a race. Existing verified content
+is reused without first writing another pending copy.
+`publicationBytesWritten` is the exact sum of the local scopes, source schema,
+release schema, receipt, manifest, and root bytes. Because the receipt includes
+that total, publication computes the canonical receipt/root fixed point and
+fails if it does not stabilize.
+
+Root `supersedes` carries the one
 platform succession record when this release replaces the current generation;
 the receipt does not repeat it. The counts are non-negative,
 `semanticVerdict` is exactly `pass` for a publishable release; `warnings` is
@@ -260,9 +308,11 @@ schema member or any receipt/root/schema mismatch.
 
 SpicyRegs exposes a separate bounded `SourceNativeReleaseReader`. It performs
 Rulespec structural admission, compares the sealed receipt and verifier pins
-with the root, and then streams closed-schema rows in stable order. It does
-not replay observation collapse or recompute the corpus-wide semantic state
-on consumer open. DocSpec's source-native adapter receives that reader
+with the root, requires an injected Rulespec `BlobSource` for every external
+member, and then streams closed-schema rows in stable order with at most 64
+payload streams open for a row family. It does not replay observation collapse
+or recompute the corpus-wide semantic state on consumer open. DocSpec's
+source-native adapter receives that reader
 through its `SourceNativeRecordSource` port; the DocSpec core imports neither
 SpicyRegs nor a concrete store. Tests prove a changed member or receipt fails
 before the first row and a valid consumer starts after bounded structural and
@@ -277,14 +327,19 @@ The `spicy-regs-source-native` operator command is a thin outer adapter. Its
 `regulations-documents`, `regulations-dockets`, or `regulations-comments`;
 accepts explicit inclusive
 `--since` and `--until` dates, repeated `--agency` values for Regulations.gov,
-an immutable destination, and an implementation identity; and runs the same
-injected publisher and producer verifier. Source-name dispatch exists only at
-this command's composition edge. Its `verify` command requires both expected
-artifact pins and an accepted verifier implementation, then replays the full
-product verifier with the exact selected profile. Each command writes one
-canonical JSON result to standard output, or one canonical JSON error to
-standard error, so automation does not scrape log text. The command defines no
-catalog, selection, join, or document-processing behavior.
+an immutable destination, an explicit persistent `--blob-store`, and an
+implementation identity; and runs the same injected publisher and producer
+verifier. Release and store paths must be distinct and neither may contain the
+other. The store atomically creates digest-addressed files without replacement,
+verifies an existing digest on reuse or `EEXIST`, and retains verified orphan
+blobs after a failed root publication so a later build can recover them. A
+failure exposes no artifact root. Source-name dispatch exists only at this
+command's composition edge. Its `verify` command requires the explicit blob
+store, both expected artifact pins, and an accepted verifier implementation,
+then replays the full product verifier with the exact selected profile. Each
+command writes one canonical JSON result to standard output, or one canonical
+JSON error to standard error, so automation does not scrape log text. The
+command defines no catalog, selection, join, or document-processing behavior.
 
 ## 7. Public publication profile
 
@@ -402,12 +457,19 @@ unrelated pointer replacement, and a byte-for-byte no-op successor. A
 physical-only correction preserves logical identity and moves exact artifact
 identity.
 
+Source-native storage tests prove exact unchanged-bucket `blobRef` reuse,
+changed-bucket-only writes, zero payload writes for a physical rebuild,
+truthful byte accounting, corrupt-`EEXIST` refusal, safe concurrent publication,
+recoverable orphan content, path-containment refusal, no root after failure,
+and the fixed 64-stream reader bound.
+
 A sealed scale run publishes and verifies the accepted 3.9 GB input with peak
 resident memory at most 8 GiB and temporary disk at most 16 GiB. It records
 wall time, output bytes, member count, and rows per member without requiring a
 custom changed-file or row-hash mechanism. Any later incremental optimization
-must use the standard artifact-store or Iceberg identities and reproduce the
-same admitted rows; it cannot introduce a SpicyRegs registry or mutable merge.
+must preserve the standard Rulespec `blobRef`, artifact-store, or Iceberg
+identities and reproduce the same admitted rows; it cannot introduce a
+SpicyRegs registry or mutable merge.
 
 Federal Register tests replay the pinned baseline and prove row and primary-key
 completeness, native-title placement, exact agency and malformed-RIN source
