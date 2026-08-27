@@ -1,6 +1,6 @@
 [project]
 name = "spicy-regs"
-version = "0.1.0"
+version = "0.1.7"
 description = "Immutable regulatory source records, exact document versions, and structural passages"
 # Pinned to one minor. Segmentation reads native markup through a stdlib
 # html.parser subclass whose failure mode is swallowed (source.py::_markup_drafts),
@@ -9,7 +9,7 @@ description = "Immutable regulatory source records, exact document versions, and
 # recorded in docs/evidence/document-segmentation-remeasurement-2026-08-02.md.
 requires-python = ">=3.12,<3.13"
 dependencies = [
-    "rulespec-artifacts==1.0.0",
+    "rulespec-artifacts==1.0.9",
     "beautifulsoup4>=4.13,<5",
     "boto3",
     "python-dotenv",
@@ -156,7 +156,7 @@ build-backend = "uv_build"
 
 [tool.uv.sources]
 refspec = { path = "../RefSpec", editable = true }
-rulespec-artifacts = { path = "../rulespec/packages/rulespec-artifacts", editable = true }
+rulespec-artifacts = { path = "vendor/rulespec_artifacts-1.0.9-py3-none-any.whl" }
 
 [tool.pytest.ini_options]
 # Integration tests hit external services (the public Mirrulations S3 mirror)
