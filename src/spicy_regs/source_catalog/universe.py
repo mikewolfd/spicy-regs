@@ -267,6 +267,14 @@ SAMPLE_UNKNOWN_STRATUM_PART = "unknown"
 #: both, and a universe may declare several of either.
 SOURCE_ROLES: tuple[str, ...] = ("metadata", "rendition")
 
+#: The source-native metadata shape this producer knows how to write.  Older
+#: universe specifications omit this field and retain the original flat,
+#: null-eliding document record byte for byte.  A new universe opts into the
+#: complete, source-scoped shape explicitly so the policy digest records the
+#: release-shape change instead of changing an existing candidate implicitly.
+COMPLETE_NATIVE_METADATA_PROFILE = "complete-source-records-v1"
+NATIVE_METADATA_PROFILES: tuple[str, ...] = (COMPLETE_NATIVE_METADATA_PROFILE,)
+
 
 @dataclass(frozen=True)
 class PinnedSource:
@@ -584,6 +592,10 @@ class UniverseSpec:
     # that has anything to offer, and the lower ones are not carried: the
     # release states the rendition a capture should take, not a menu.
     rendition_preference: tuple[str, ...] = ()
+    # Absent preserves the original flat ``sourceNativeMetadata`` shape.
+    # ``complete-source-records-v1`` carries every metadata column (including
+    # nulls) from the primary document and its exact docket/FR joins.
+    native_metadata_profile: str | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "sources", tuple(self.sources))
@@ -599,6 +611,11 @@ class UniverseSpec:
             _require_text(family, field_name="renditionPreference[]")
         if len(set(self.rendition_preference)) != len(self.rendition_preference):
             raise SourceCatalogError("renditionPreference names one family twice")
+        if self.native_metadata_profile is not None and self.native_metadata_profile not in NATIVE_METADATA_PROFILES:
+            raise SourceCatalogError(
+                f"nativeMetadataProfile must be one of {list(NATIVE_METADATA_PROFILES)}, "
+                f"got {self.native_metadata_profile!r}"
+            )
         self._validate_identifiers()
 
     def _validate_identifiers(self) -> None:
@@ -620,6 +637,7 @@ class UniverseSpec:
             "sourceSystem",
             "sourceSystems",
             "renditionPreference",
+            "nativeMetadataProfile",
             "scope",
             "sample",
             "normalization",
@@ -660,6 +678,7 @@ class UniverseSpec:
             sample=SamplePolicy.from_mapping(value.get("sample")),
             sources=tuple(PinnedSource.from_mapping(entry) for entry in value.get("sourceSystems") or ()),
             rendition_preference=tuple(value.get("renditionPreference") or ()),
+            native_metadata_profile=value.get("nativeMetadataProfile"),
             normalization=NormalizationPolicy.from_mapping(value.get("normalization")),
         )
 
@@ -686,6 +705,8 @@ class UniverseSpec:
             document["sourceSystems"] = [source.canonical() for source in self.sources]
         if self.rendition_preference:
             document["renditionPreference"] = list(self.rendition_preference)
+        if self.native_metadata_profile is not None:
+            document["nativeMetadataProfile"] = self.native_metadata_profile
         return document
 
     def policy_document_bytes(self) -> bytes:
@@ -722,6 +743,7 @@ def load_universe_spec(path: Path | str) -> UniverseSpec:
 
 
 __all__ = [
+    "COMPLETE_NATIVE_METADATA_PROFILE",
     "MAX_JSON_SAFE_INTEGER",
     "SAMPLE_ALLOCATIONS",
     "SAMPLE_ORDER_HASHES",
@@ -729,6 +751,7 @@ __all__ = [
     "SAMPLE_STRATUM_KEYS",
     "SOURCE_URL_PLACEHOLDER",
     "NormalizationPolicy",
+    "NATIVE_METADATA_PROFILES",
     "PinnedSource",
     "PublicationWindow",
     "SampleCandidate",

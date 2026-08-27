@@ -29,8 +29,12 @@ coerced, not zeroed, and not dropped: the normalized field stays unstated and
 the raw string is carried as a source observation, so the policy can refuse the
 item by name and a reader can still see what the source actually said.
 
-The body text column is not read; it is a derived capture rather than
-source-native metadata, and the catalog states it separately.
+The body text column is not read; it is captured document content rather than
+metadata.  The complete metadata profile does carry every other column,
+including null-valued fields, plus the exact docket row and exact Federal
+Register row reached by the document's own identifiers.  Those related rows
+stay source-scoped: a docket ``abstract`` describes the proceeding, while a
+Federal Register ``abstract`` describes that exact Federal Register document.
 
 Where a rendition comes from
 ----------------------------
@@ -77,7 +81,14 @@ from spicy_regs.source_catalog.discovery import (
     SourceOutcome,
 )
 from spicy_regs.source_catalog.mirrulations import MIRROR_RENDITION_ID, MIRROR_URL_TEMPLATE
-from spicy_regs.source_catalog.universe import INSTANT_RE, RIN_RE, SourceCatalogError
+from spicy_regs.source_catalog.universe import (
+    COMPLETE_NATIVE_METADATA_PROFILE,
+    INSTANT_RE,
+    RIN_RE,
+    SourceCatalogError,
+)
+from spicy_regs.schemas.federal_register import FEDERAL_REGISTER_COLUMNS as FEDERAL_REGISTER_SOURCE_COLUMNS
+from spicy_regs.schemas.regulations import DOCKET, DOCUMENT
 
 #: The mirror the verified index was built from.  Named here so the locator
 #: this adapter writes and the one ``source_catalog.mirrulations`` writes for
@@ -93,6 +104,7 @@ DEFAULT_MEDIA_TYPE = "application/octet-stream"
 #: ``{documentId: [{key, sha256, size}, ...]}`` — one sealed mirror index, as
 #: ``tools/build_mirrulations_mirror_index.py`` writes it.
 MirrorIndex = Mapping[str, Sequence[Mapping[str, Any]]]
+MetadataIndex = Mapping[str, Mapping[str, Any]]
 
 #: Rendition families, best first.  A universe overrides this by declaring
 #: ``renditionPreference``; it is spelled here so a caller with no universe
@@ -103,8 +115,22 @@ DEFAULT_RENDITION_PREFERENCE: tuple[str, ...] = (
     FEDERAL_REGISTER_RENDITION_ID,
 )
 
-#: The columns this adapter reads.  ``text_content`` is deliberately absent.
-CATALOG_COLUMNS: tuple[str, ...] = (
+#: The producer classifies the current published source shapes instead of
+#: maintaining a hand-copied subset.  A metadata column added to either local
+#: source schema is therefore captured automatically.  ``text_content`` is the
+#: one document-content field and remains DocSpec's capture input, not catalog
+#: metadata.
+DOCUMENT_CONTENT_COLUMNS: tuple[str, ...] = ("text_content",)
+DOCUMENT_METADATA_COLUMNS: tuple[str, ...] = tuple(
+    column for column in DOCUMENT.schema if column not in DOCUMENT_CONTENT_COLUMNS
+)
+DOCKET_METADATA_COLUMNS: tuple[str, ...] = tuple(DOCKET.schema)
+FEDERAL_REGISTER_METADATA_COLUMNS: tuple[str, ...] = tuple(FEDERAL_REGISTER_SOURCE_COLUMNS)
+
+#: The exact selection used by the first two candidates.  Keep it frozen so an
+#: old universe specification still reproduces the old null-eliding bytes even
+#: if the published source schema later gains a field.
+LEGACY_CATALOG_COLUMNS: tuple[str, ...] = (
     "document_id",
     "docket_id",
     "agency_code",
@@ -122,6 +148,13 @@ CATALOG_COLUMNS: tuple[str, ...] = (
     "additional_rins",
     "text_extraction_status",
 )
+
+#: Backwards-compatible public name used by the original fixture helpers.
+CATALOG_COLUMNS: tuple[str, ...] = LEGACY_CATALOG_COLUMNS
+
+DOCUMENT_METADATA_KEY = "regulationsGovDocument"
+DOCKET_METADATA_KEY = "regulationsGovDocket"
+FEDERAL_REGISTER_METADATA_KEY = "federalRegisterDocument"
 
 #: Extension to media type.  A locator whose extension is not named here gets
 #: ``application/octet-stream``: the source declares a format and never a media
@@ -359,10 +392,76 @@ def _observations(
     return tuple(Observation(observation_key=key, observation_value=value) for key, value in sorted(pairs))
 
 
-def _source_native_metadata(row: Mapping[str, Any]) -> dict[str, Any]:
-    """The row's stated columns, verbatim.  An unstated column is not carried."""
+def _complete_record(
+    row: Mapping[str, Any],
+    columns: Sequence[str],
+    *,
+    omit_absent: bool = False,
+) -> dict[str, Any]:
+    """Return the complete source shape, retaining null-valued fields."""
 
-    return {column: row[column] for column in CATALOG_COLUMNS if row.get(column) is not None}
+    unexpected = sorted(set(row) - set(columns))
+    if unexpected:
+        raise SourceCatalogError(f"source metadata record has unclassified fields: {unexpected}")
+    return {
+        column: row.get(column)
+        for column in columns
+        if not omit_absent or column in row
+    }
+
+
+def _joined_record(
+    index: MetadataIndex | None,
+    source_key: str | None,
+    *,
+    key_column: str,
+    source_name: str,
+) -> Mapping[str, Any] | None:
+    """Resolve one exact source key and reject a mislabeled indexed row."""
+
+    if index is None or source_key is None:
+        return None
+    record = index.get(source_key)
+    if record is None:
+        return None
+    if record.get(key_column) != source_key:
+        raise SourceCatalogError(
+            f"{source_name} metadata index key {source_key!r} points at "
+            f"{key_column}={record.get(key_column)!r}"
+        )
+    return record
+
+
+def _source_native_metadata(
+    row: Mapping[str, Any],
+    *,
+    profile: str | None,
+    docket_record: Mapping[str, Any] | None,
+    federal_register_record: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    """Write the legacy shape or the declared complete source-record shape."""
+
+    if profile is None:
+        # Preserve the first candidate's bytes: flat and null-eliding.
+        return {column: row[column] for column in LEGACY_CATALOG_COLUMNS if row.get(column) is not None}
+    # UniverseSpec refuses this first; this branch protects direct callers.
+    if profile != COMPLETE_NATIVE_METADATA_PROFILE:
+        raise SourceCatalogError(f"unsupported native metadata profile {profile!r}")
+    return {
+        DOCUMENT_METADATA_KEY: _complete_record(row, DOCUMENT_METADATA_COLUMNS),
+        DOCKET_METADATA_KEY: (
+            _complete_record(docket_record, DOCKET_METADATA_COLUMNS) if docket_record is not None else None
+        ),
+        FEDERAL_REGISTER_METADATA_KEY: (
+            _complete_record(
+                federal_register_record,
+                FEDERAL_REGISTER_METADATA_COLUMNS,
+                omit_absent=True,
+            )
+            if federal_register_record is not None
+            else None
+        ),
+    }
 
 
 def _source_issued_version(row: Mapping[str, Any], document_id: str) -> str:
@@ -409,6 +508,9 @@ def discovered_item(
     *,
     mirror_index: MirrorIndex | None = None,
     federal_register: Mapping[str, Mapping[str, Any]] | None = None,
+    docket_metadata: MetadataIndex | None = None,
+    federal_register_metadata: MetadataIndex | None = None,
+    native_metadata_profile: str | None = None,
     preference: Sequence[str] = DEFAULT_RENDITION_PREFERENCE,
 ) -> DiscoveredItem:
     """Report one discovery record for one published-catalog row."""
@@ -423,6 +525,19 @@ def discovered_item(
     conforming_rins, other_rins = _regulation_identifier_numbers(row)
     agency_code = _text(row.get("agency_code"))
     docket_id = _text(row.get("docket_id"))
+    fr_doc_num = _text(row.get("fr_doc_num"))
+    docket_record = _joined_record(
+        docket_metadata,
+        docket_id,
+        key_column="docket_id",
+        source_name="Regulations.gov docket",
+    )
+    federal_register_record = _joined_record(
+        federal_register_metadata,
+        fr_doc_num,
+        key_column="document_number",
+        source_name="Federal Register",
+    )
 
     draft = NormalizedDraft(
         title=_text(row.get("title")),
@@ -441,7 +556,12 @@ def discovered_item(
         source_item_id=f"{SOURCE_ITEM_ID_PREFIX}{document_id}",
         document_id=document_id,
         source_issued_version=_source_issued_version(row, document_id),
-        source_native_metadata=_source_native_metadata(row),
+        source_native_metadata=_source_native_metadata(
+            row,
+            profile=native_metadata_profile,
+            docket_record=docket_record,
+            federal_register_record=federal_register_record,
+        ),
         normalized=draft,
         # A Regulations.gov document record carries no topic vocabulary.
         observed_topics=(),
@@ -482,6 +602,9 @@ def discover_published_catalog(
     batch_size: int = 50_000,
     mirror_index: MirrorIndex | None = None,
     federal_register: Mapping[str, Mapping[str, Any]] | None = None,
+    docket_metadata: MetadataIndex | None = None,
+    federal_register_metadata: MetadataIndex | None = None,
+    native_metadata_profile: str | None = None,
     preference: Sequence[str] = DEFAULT_RENDITION_PREFERENCE,
 ) -> Iterator[DiscoveredItem]:
     """Stream one discovery record per row of the published catalog.
@@ -499,17 +622,32 @@ def discover_published_catalog(
     except (OSError, ValueError) as error:
         raise SourceCatalogError(f"the published catalog is unreadable: {path} ({error})") from error
 
+    read_columns = (
+        DOCUMENT_METADATA_COLUMNS
+        if native_metadata_profile == COMPLETE_NATIVE_METADATA_PROFILE
+        else LEGACY_CATALOG_COLUMNS
+    )
     present = set(parquet.schema_arrow.names)
-    missing = [column for column in CATALOG_COLUMNS if column not in present]
+    missing = [column for column in read_columns if column not in present]
     if missing:
         raise SourceCatalogError(f"the published catalog is missing columns this adapter reads: {missing}")
+    known = set(DOCUMENT_METADATA_COLUMNS) | set(DOCUMENT_CONTENT_COLUMNS)
+    unexpected = sorted(present - known)
+    if native_metadata_profile == COMPLETE_NATIVE_METADATA_PROFILE and unexpected:
+        raise SourceCatalogError(
+            "the published catalog has unclassified columns; classify each as metadata or content "
+            f"before publishing: {unexpected}"
+        )
 
-    for batch in parquet.iter_batches(batch_size=batch_size, columns=list(CATALOG_COLUMNS)):
+    for batch in parquet.iter_batches(batch_size=batch_size, columns=list(read_columns)):
         for row in batch.to_pylist():
             yield discovered_item(
                 row,
                 mirror_index=mirror_index,
                 federal_register=federal_register,
+                docket_metadata=docket_metadata,
+                federal_register_metadata=federal_register_metadata,
+                native_metadata_profile=native_metadata_profile,
                 preference=preference,
             )
 
@@ -517,10 +655,19 @@ def discover_published_catalog(
 __all__ = [
     "ATTACHMENT_RENDITION_ID_PREFIX",
     "CATALOG_COLUMNS",
+    "DOCUMENT_CONTENT_COLUMNS",
+    "DOCUMENT_METADATA_COLUMNS",
+    "DOCUMENT_METADATA_KEY",
     "DEFAULT_RENDITION_PREFERENCE",
+    "DOCKET_METADATA_COLUMNS",
+    "DOCKET_METADATA_KEY",
     "FEDERAL_REGISTER_RENDITION_ID",
+    "FEDERAL_REGISTER_METADATA_COLUMNS",
+    "FEDERAL_REGISTER_METADATA_KEY",
+    "LEGACY_CATALOG_COLUMNS",
     "MIRROR_BUCKET",
     "MirrorIndex",
+    "MetadataIndex",
     "FILE_RENDITION_ID",
     "MEDIA_TYPES",
     "OBSERVATION_KEYS",

@@ -20,6 +20,7 @@ import pyarrow.parquet as pq
 import pytest
 
 from spicy_regs.source_catalog import (
+    COMPLETE_NATIVE_METADATA_PROFILE,
     NormalizationPolicy,
     PinnedSource,
     PublicationWindow,
@@ -36,6 +37,13 @@ from spicy_regs.source_catalog import (
 )
 from spicy_regs.source_catalog.published_catalog import (
     CATALOG_COLUMNS,
+    DOCUMENT_CONTENT_COLUMNS,
+    DOCUMENT_METADATA_COLUMNS,
+    DOCUMENT_METADATA_KEY,
+    DOCKET_METADATA_COLUMNS,
+    DOCKET_METADATA_KEY,
+    FEDERAL_REGISTER_METADATA_COLUMNS,
+    FEDERAL_REGISTER_METADATA_KEY,
     discover_published_catalog,
     discovered_item,
     resolve_renditions,
@@ -45,6 +53,10 @@ PUBLISHED_AT = "2026-08-12T00:00:00Z"
 
 TRACKED_UNIVERSE = (
     Path(__file__).resolve().parents[1] / "src/spicy_regs/universes/regulations-gov-published-catalog-2021-2025.json"
+)
+TRACKED_METADATA_COMPLETE_UNIVERSE = (
+    Path(__file__).resolve().parents[1]
+    / "src/spicy_regs/universes/regulations-gov-published-catalog-2021-2025-metadata-complete.json"
 )
 
 
@@ -144,6 +156,67 @@ def test_the_adapter_reports_a_row_exactly_as_the_catalog_states_it() -> None:
     assert all(rendition.expected_sha256 is None for rendition in item.renditions)
 
 
+def test_the_complete_profile_carries_every_metadata_field_with_its_source_scope() -> None:
+    docket = dict.fromkeys(DOCKET_METADATA_COLUMNS)
+    docket |= {
+        "docket_id": "EPA-2023-0001",
+        "title": "The docket title",
+        "abstract": "Official summary of the whole proceeding.",
+    }
+    federal_register = dict.fromkeys(FEDERAL_REGISTER_METADATA_COLUMNS)
+    federal_register |= {
+        "document_number": "2023-00042",
+        "title": "The Federal Register title",
+        "abstract": "Official summary of this exact Federal Register document.",
+        "html_url": "https://www.federalregister.gov/documents/2023/04/05/2023-00042/a-rule",
+        "pdf_url": "https://www.govinfo.gov/content/pkg/FR-2023-04-05/pdf/2023-00042.pdf",
+    }
+
+    item = discovered_item(
+        _row(fr_doc_num="2023-00042", reason_withdrawn=None),
+        docket_metadata={"EPA-2023-0001": docket},
+        federal_register_metadata={"2023-00042": federal_register},
+        native_metadata_profile=COMPLETE_NATIVE_METADATA_PROFILE,
+    )
+
+    native = dict(item.source_native_metadata)
+    assert set(native) == {DOCUMENT_METADATA_KEY, DOCKET_METADATA_KEY, FEDERAL_REGISTER_METADATA_KEY}
+    document = native[DOCUMENT_METADATA_KEY]
+    assert set(document) == set(DOCUMENT_METADATA_COLUMNS)
+    assert document["reason_withdrawn"] is None
+    assert set(DOCUMENT_CONTENT_COLUMNS).isdisjoint(document)
+    assert native[DOCKET_METADATA_KEY]["abstract"] == "Official summary of the whole proceeding."
+    assert set(native[DOCKET_METADATA_KEY]) == set(DOCKET_METADATA_COLUMNS)
+    assert native[FEDERAL_REGISTER_METADATA_KEY]["abstract"] == (
+        "Official summary of this exact Federal Register document."
+    )
+    assert set(native[FEDERAL_REGISTER_METADATA_KEY]) == set(FEDERAL_REGISTER_METADATA_COLUMNS)
+
+
+def test_the_complete_profile_marks_unmatched_related_records_as_null() -> None:
+    item = discovered_item(
+        _row(fr_doc_num="2023-00042"),
+        docket_metadata={},
+        federal_register_metadata={},
+        native_metadata_profile=COMPLETE_NATIVE_METADATA_PROFILE,
+    )
+
+    assert item.source_native_metadata[DOCKET_METADATA_KEY] is None
+    assert item.source_native_metadata[FEDERAL_REGISTER_METADATA_KEY] is None
+
+
+def test_a_mislabeled_related_metadata_row_is_refused() -> None:
+    docket = dict.fromkeys(DOCKET_METADATA_COLUMNS)
+    docket["docket_id"] = "EPA-WRONG"
+
+    with pytest.raises(SourceCatalogError, match="metadata index key"):
+        discovered_item(
+            _row(),
+            docket_metadata={"EPA-2023-0001": docket},
+            native_metadata_profile=COMPLETE_NATIVE_METADATA_PROFILE,
+        )
+
+
 @pytest.mark.parametrize(
     "posted",
     ["0000-12-30T00:00:00Z", "2023-02-30T00:00:00Z", "2023-04-05", "", None],
@@ -191,6 +264,25 @@ def test_a_catalog_missing_a_column_this_adapter_reads_is_refused(tmp_path: Path
 
     with pytest.raises(SourceCatalogError, match="missing columns"):
         list(discover_published_catalog(path))
+
+
+def test_complete_capture_refuses_an_unclassified_catalog_column(tmp_path: Path) -> None:
+    row = _row()
+    columns = {
+        column: [row.get(column)]
+        for column in (*DOCUMENT_METADATA_COLUMNS, *DOCUMENT_CONTENT_COLUMNS)
+    }
+    columns["future_metadata"] = ["must not disappear silently"]
+    path = tmp_path / "documents.parquet"
+    pq.write_table(pa.table(columns), path)
+
+    with pytest.raises(SourceCatalogError, match="unclassified columns"):
+        list(
+            discover_published_catalog(
+                path,
+                native_metadata_profile=COMPLETE_NATIVE_METADATA_PROFILE,
+            )
+        )
 
 
 # ─── the declared facts no record states ───────────────────────────────
@@ -377,6 +469,21 @@ def test_the_tracked_universe_loads_and_declares_what_no_record_states() -> None
     assert spec.source_system_version.startswith("sha256:")
 
 
+def test_the_tracked_metadata_complete_universe_pins_every_metadata_source() -> None:
+    spec = load_universe_spec(TRACKED_METADATA_COMPLETE_UNIVERSE)
+
+    assert spec.native_metadata_profile == COMPLETE_NATIVE_METADATA_PROFILE
+    assert spec.policy_version == "2.0"
+    assert spec.policy_sha256() == "99345d220401bdede9664febd6ff419e7cc340085c2d6dec696679defd0d19cc"
+    assert [(source.source_system_id, source.role) for source in spec.sources] == [
+        ("s3://mirrulations/raw-data", "rendition"),
+        ("https://data.spicy-regs.dev/documents.parquet", "metadata"),
+        ("https://data.spicy-regs.dev/dockets.parquet", "metadata"),
+        ("https://data.spicy-regs.dev/federal_register.parquet", "metadata"),
+        ("https://data.spicy-regs.dev/federal_register.parquet", "rendition"),
+    ]
+
+
 def test_the_tracked_universe_produces_a_bundle_that_verifies(tmp_path: Path) -> None:
     spec = load_universe_spec(TRACKED_UNIVERSE)
     rows = [
@@ -542,6 +649,15 @@ def test_declaring_sources_and_a_preference_moves_the_policy_digest() -> None:
         "s3://mirrulations/raw-data",
         "https://data.spicy-regs.dev/documents.parquet",
     ]
+
+
+def test_the_complete_metadata_profile_is_explicit_and_moves_the_policy_digest() -> None:
+    complete = _pinned(native_metadata_profile=COMPLETE_NATIVE_METADATA_PROFILE)
+
+    assert complete.policy_sha256() != _pinned().policy_sha256()
+    assert complete.policy_document()["nativeMetadataProfile"] == COMPLETE_NATIVE_METADATA_PROFILE
+    with pytest.raises(SourceCatalogError, match="nativeMetadataProfile"):
+        _pinned(native_metadata_profile="capture-whatever")
 
 
 def test_the_first_releases_policy_digest_does_not_move_under_the_multi_source_feature() -> None:

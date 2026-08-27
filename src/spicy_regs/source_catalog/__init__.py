@@ -45,6 +45,7 @@ from spicy_regs.source_catalog.published_catalog import (
     discovered_item,
 )
 from spicy_regs.source_catalog.universe import (
+    COMPLETE_NATIVE_METADATA_PROFILE,
     NormalizationPolicy,
     PinnedSource,
     PublicationWindow,
@@ -60,6 +61,7 @@ from spicy_regs.source_catalog.validate import validate_bundle_records
 from spicy_regs.source_catalog.verify import verify_bundle_directory
 
 __all__ = [
+    "COMPLETE_NATIVE_METADATA_PROFILE",
     "FORMAT",
     "FORMAT_VERSION",
     "PINNED_SCHEMA_DIR",

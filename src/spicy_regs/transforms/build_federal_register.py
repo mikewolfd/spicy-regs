@@ -30,6 +30,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 from loguru import logger
 
+from spicy_regs.schemas.federal_register import FEDERAL_REGISTER_COLUMNS
 from spicy_regs.sources import r2
 from spicy_regs.sources.federal_register import FR_EPOCH, FederalRegisterReader
 
@@ -41,31 +42,7 @@ OVERLAP_DAYS = 7
 
 # The published schema, all VARCHAR. ``topics_json`` is the FR Thesaurus
 # enrichment used to seed and evaluate the subject-concept facet.
-COLUMNS = (
-    "document_number",
-    "title",
-    "abstract",
-    "document_type",
-    "publication_date",
-    "effective_on",
-    "comments_close_on",
-    "signing_date",
-    "agencies_json",
-    "agency_slugs",
-    "docket_ids_json",
-    "regulation_id_numbers_json",
-    "cfr_references_json",
-    "topics_json",
-    "html_url",
-    "pdf_url",
-    "body_html_url",
-    "volume",
-    "start_page",
-    "end_page",
-    "subtype",
-    "executive_order_number",
-    "modify_date",
-)
+COLUMNS = FEDERAL_REGISTER_COLUMNS
 _SCHEMA = pa.schema([(c, pa.string()) for c in COLUMNS])
 
 

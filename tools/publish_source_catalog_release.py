@@ -2,14 +2,14 @@
 """Publish one sealed SourceCatalogRelease v1 bundle from the published catalog.
 
 Reads the tracked universe specification, streams every row of the published
-``documents.parquet`` through the published-catalog discovery adapter, applies
+``documents.parquet`` through the published-catalog discovery adapter, joins
+the exact pinned docket and Federal Register metadata when declared, applies
 the universe policy, and writes the gated bundle with one atomic rename.
 
-The catalog's digest is checked against the specification's
-``sourceSystem.sourceSystemVersion`` before anything is read.  A universe names
-the exact bytes it was written for; producing it from other bytes would put a
-selection under a policy digest that never described it, so the run refuses
-rather than proceeds.
+Every supplied source digest is checked against the specification's per-source
+pins before anything is read. A universe names the exact bytes it was written
+for; producing it from other bytes would put a selection under a policy digest
+that never described it, so the run refuses rather than proceeds.
 
 Beyond the receipt, this prints the composition of the requested universe ``U``
 and the selected set ``S`` — per disposition, per reason code, per document
@@ -31,8 +31,12 @@ from pathlib import Path
 from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_SPEC = REPO_ROOT / "src/spicy_regs/universes/regulations-gov-published-catalog-2021-2025.json"
+DEFAULT_SPEC = (
+    REPO_ROOT
+    / "src/spicy_regs/universes/regulations-gov-published-catalog-2021-2025-metadata-complete.json"
+)
 CATALOG_SOURCE_ID = "https://data.spicy-regs.dev/documents.parquet"
+DOCKET_SOURCE_ID = "https://data.spicy-regs.dev/dockets.parquet"
 MIRROR_SOURCE_ID = "s3://mirrulations/raw-data"
 FEDERAL_REGISTER_SOURCE_ID = "https://data.spicy-regs.dev/federal_register.parquet"
 
@@ -49,22 +53,25 @@ def _validate_source_inputs(
     spec: Any,
     *,
     catalog: Path,
-    mirror_index: Path | None,
-    federal_register: Path | None,
-) -> None:
+    dockets: Path | None = None,
+    mirror_index: Path | None = None,
+    federal_register: Path | None = None,
+) -> dict[str, frozenset[str]]:
     """Prove that every file read by this producer is declared and pinned."""
 
     from spicy_regs.source_catalog import SourceCatalogError
 
     supplied = {
         CATALOG_SOURCE_ID: catalog,
+        DOCKET_SOURCE_ID: dockets,
         MIRROR_SOURCE_ID: mirror_index,
         FEDERAL_REGISTER_SOURCE_ID: federal_register,
     }
-    required_roles = {
-        CATALOG_SOURCE_ID: "metadata",
-        MIRROR_SOURCE_ID: "rendition",
-        FEDERAL_REGISTER_SOURCE_ID: "rendition",
+    supported_roles = {
+        CATALOG_SOURCE_ID: {"metadata"},
+        DOCKET_SOURCE_ID: {"metadata"},
+        MIRROR_SOURCE_ID: {"rendition"},
+        FEDERAL_REGISTER_SOURCE_ID: {"metadata", "rendition"},
     }
 
     if not spec.sources:
@@ -99,34 +106,104 @@ def _validate_source_inputs(
         path = supplied.get(source_id)
         if path is None:
             raise SourceCatalogError(f"the universe declares {source_id} and this run supplies no file")
-        required_role = required_roles.get(source_id)
-        if required_role is None:
+        supported = supported_roles.get(source_id)
+        if supported is None:
             raise SourceCatalogError(f"this producer does not know how to read the declared source {source_id}")
-        if required_role not in roles:
+        unsupported = roles - supported
+        if unsupported:
             raise SourceCatalogError(
-                f"this producer requires {source_id} in role {required_role}, but the universe declares {sorted(roles)}"
+                f"this producer supports {source_id} in roles {sorted(supported)}, "
+                f"but the universe declares {sorted(roles)}"
             )
         observed = file_digest(path)
         if observed != pinned_version:
             raise SourceCatalogError(f"{source_id} is pinned at {pinned_version}, but {path} digests {observed}")
 
+    return {source_id: frozenset(roles) for source_id, (_, roles) in declared.items()}
 
-def _federal_register_map(path: Path) -> dict[str, dict[str, Any]]:
-    """``{documentNumber: {pdf_url, html_url}}`` from the published FR table.
 
-    Only the two locator columns and the join key are read; the FR table is
-    123 MB and this producer wants three of its twenty-two columns.
-    """
+def _catalog_link_keys(path: Path) -> tuple[set[str], set[str]]:
+    """Collect the exact docket and FR keys the document catalog states."""
 
     import pyarrow.parquet as pq
 
-    table = pq.read_table(path, columns=["document_number", "pdf_url", "html_url"])
+    parquet = pq.ParquetFile(path)
+    required = ("docket_id", "fr_doc_num")
+    missing = [column for column in required if column not in parquet.schema_arrow.names]
+    if missing:
+        from spicy_regs.source_catalog import SourceCatalogError
+
+        raise SourceCatalogError(f"the published catalog is missing link columns: {missing}")
+    dockets: set[str] = set()
+    federal_register: set[str] = set()
+    for batch in parquet.iter_batches(batch_size=50_000, columns=list(required)):
+        for row in batch.to_pylist():
+            docket_id = row.get("docket_id")
+            fr_doc_num = row.get("fr_doc_num")
+            if isinstance(docket_id, str) and docket_id:
+                dockets.add(docket_id)
+            if isinstance(fr_doc_num, str) and fr_doc_num:
+                federal_register.add(fr_doc_num)
+    return dockets, federal_register
+
+
+def _metadata_map(
+    path: Path,
+    *,
+    key_column: str,
+    columns: Sequence[str],
+    include_keys: set[str],
+    source_name: str,
+    reject_unclassified: bool,
+    optional_columns: Sequence[str] = (),
+) -> dict[str, dict[str, Any]]:
+    """Read complete rows for exact keys, with bounded batch memory."""
+
+    import pyarrow.parquet as pq
+
+    from spicy_regs.source_catalog import SourceCatalogError
+
+    try:
+        parquet = pq.ParquetFile(path)
+    except (OSError, ValueError) as error:
+        raise SourceCatalogError(f"the {source_name} table is unreadable: {path} ({error})") from error
+    present = set(parquet.schema_arrow.names)
+    optional = set(optional_columns)
+    missing = [column for column in columns if column not in present and column not in optional]
+    if missing:
+        raise SourceCatalogError(f"the {source_name} table is missing metadata columns: {missing}")
+    unexpected = sorted(present - set(columns))
+    if reject_unclassified and unexpected:
+        raise SourceCatalogError(
+            f"the {source_name} table has unclassified columns; classify them before publishing: {unexpected}"
+        )
+
+    read_columns = tuple(column for column in columns if column in present)
     resolved: dict[str, dict[str, Any]] = {}
-    for row in table.to_pylist():
-        number = row.get("document_number")
-        if isinstance(number, str) and number:
-            resolved[number] = {"html_url": row.get("html_url"), "pdf_url": row.get("pdf_url")}
+    for batch in parquet.iter_batches(batch_size=50_000, columns=list(read_columns)):
+        for row in batch.to_pylist():
+            key = row.get(key_column)
+            if not isinstance(key, str) or not key or key not in include_keys:
+                continue
+            if key in resolved:
+                raise SourceCatalogError(f"the {source_name} table carries duplicate {key_column} {key!r}")
+            # ``to_pylist`` already returns every selected column, including
+            # nulls.  Re-index it to make that closed shape visible in code.
+            resolved[key] = {column: row.get(column) for column in read_columns}
     return resolved
+
+
+def _validate_composition_path(output: Path, composition: Path | None) -> None:
+    """Keep a human report outside the closed sealed bundle membership."""
+
+    if composition is None:
+        return
+    from spicy_regs.source_catalog import SourceCatalogError
+
+    if composition.resolve().is_relative_to(output.resolve()):
+        raise SourceCatalogError(
+            f"the composition report {composition} must sit outside the sealed bundle {output}"
+        )
 
 
 def _normalized(item: Mapping[str, Any]) -> Mapping[str, Any]:
@@ -139,15 +216,23 @@ def _native(item: Mapping[str, Any]) -> Mapping[str, Any]:
     return value if isinstance(value, Mapping) else {}
 
 
+def _document_native(item: Mapping[str, Any]) -> Mapping[str, Any]:
+    """Primary document metadata from either supported source-native shape."""
+
+    native = _native(item)
+    scoped = native.get("regulationsGovDocument")
+    return scoped if isinstance(scoped, Mapping) else native
+
+
 def _document_type(item: Mapping[str, Any]) -> str:
-    return str(_normalized(item).get("documentType") or _native(item).get("document_type") or "unstated")
+    return str(_normalized(item).get("documentType") or _document_native(item).get("document_type") or "unstated")
 
 
 def _agency(item: Mapping[str, Any]) -> str:
     agencies = _normalized(item).get("agencies")
     if isinstance(agencies, Sequence) and agencies:
         return str(agencies[0].get("agencyId"))
-    return str(_native(item).get("agency_code") or "unstated")
+    return str(_document_native(item).get("agency_code") or "unstated")
 
 
 def _family(rendition_id: str) -> str:
@@ -167,7 +252,7 @@ def _year(item: Mapping[str, Any]) -> str:
     published = _normalized(item).get("publicationDate")
     if isinstance(published, str) and len(published) >= 4:
         return published[:4]
-    posted = _native(item).get("posted_date")
+    posted = _document_native(item).get("posted_date")
     return posted[:4] if isinstance(posted, str) and len(posted) >= 4 else "unstated"
 
 
@@ -237,19 +322,28 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--published-at", default=None, help="UTC instant; defaults to now, truncated to the second.")
     parser.add_argument("--composition", type=Path, default=None, help="Write the composition report here as JSON.")
     parser.add_argument("--mirror-index", type=Path, default=None, help="Sealed mirror index the universe pins.")
+    parser.add_argument("--dockets", type=Path, default=None, help="Docket metadata table the universe pins.")
     parser.add_argument("--federal-register", type=Path, default=None, help="FR table the universe pins.")
     args = parser.parse_args(argv)
 
     from spicy_regs.source_catalog import build_source_catalog_release, load_universe_spec
-    from spicy_regs.source_catalog.published_catalog import DEFAULT_RENDITION_PREFERENCE, discover_published_catalog
+    from spicy_regs.source_catalog.published_catalog import (
+        DEFAULT_RENDITION_PREFERENCE,
+        DOCKET_METADATA_COLUMNS,
+        FEDERAL_REGISTER_METADATA_COLUMNS,
+        discover_published_catalog,
+    )
+    from spicy_regs.schemas.federal_register import FEDERAL_REGISTER_OPTIONAL_COLUMNS
 
     spec = load_universe_spec(args.spec)
+    _validate_composition_path(args.output, args.composition)
     # Every source the universe declares is checked against the bytes handed
     # to this run before anything is read.  A release produced from bytes its
     # policy never described would rest on a digest that does not fit it.
-    _validate_source_inputs(
+    roles = _validate_source_inputs(
         spec,
         catalog=args.catalog,
+        dockets=args.dockets,
         mirror_index=args.mirror_index,
         federal_register=args.federal_register,
     )
@@ -261,9 +355,54 @@ def main(argv: list[str] | None = None) -> int:
 
         mirror_index = read_mirror_index(args.mirror_index)
         print(f"mirror index: {len(mirror_index):,} documents", flush=True)
-    federal_register = _federal_register_map(args.federal_register) if args.federal_register is not None else None
-    if federal_register is not None:
-        print(f"federal register: {len(federal_register):,} documents", flush=True)
+    docket_keys, federal_register_keys = (
+        _catalog_link_keys(args.catalog)
+        if args.dockets is not None or args.federal_register is not None
+        else (set(), set())
+    )
+    docket_metadata = None
+    if args.dockets is not None:
+        docket_metadata = _metadata_map(
+            args.dockets,
+            key_column="docket_id",
+            columns=DOCKET_METADATA_COLUMNS,
+            include_keys=docket_keys,
+            source_name="Regulations.gov dockets",
+            reject_unclassified=True,
+        )
+        print(f"docket metadata: {len(docket_metadata):,} exact joins", flush=True)
+
+    federal_register = None
+    federal_register_metadata = None
+    if args.federal_register is not None:
+        federal_register_roles = roles[FEDERAL_REGISTER_SOURCE_ID]
+        columns = (
+            FEDERAL_REGISTER_METADATA_COLUMNS
+            if "metadata" in federal_register_roles
+            else ("document_number", "pdf_url", "html_url")
+        )
+        federal_register = _metadata_map(
+            args.federal_register,
+            key_column="document_number",
+            columns=columns,
+            include_keys=federal_register_keys,
+            source_name="Federal Register",
+            reject_unclassified="metadata" in federal_register_roles,
+            optional_columns=(
+                FEDERAL_REGISTER_OPTIONAL_COLUMNS
+                if "metadata" in federal_register_roles
+                else ()
+            ),
+        )
+        if "metadata" in federal_register_roles:
+            federal_register_metadata = federal_register
+        if "rendition" not in federal_register_roles:
+            federal_register = None
+        print(
+            f"federal register metadata: {len(federal_register_metadata or {}):,} exact joins; "
+            f"rendition joins: {len(federal_register or {}):,}",
+            flush=True,
+        )
 
     published_at = args.published_at or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     bundle = build_source_catalog_release(
@@ -272,6 +411,9 @@ def main(argv: list[str] | None = None) -> int:
             args.catalog,
             mirror_index=mirror_index,
             federal_register=federal_register,
+            docket_metadata=docket_metadata,
+            federal_register_metadata=federal_register_metadata,
+            native_metadata_profile=spec.native_metadata_profile,
             preference=spec.rendition_preference or DEFAULT_RENDITION_PREFERENCE,
         ),
         published_at=published_at,

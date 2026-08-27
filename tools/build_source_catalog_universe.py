@@ -2,10 +2,11 @@
 """Author the universe specification the SourceCatalogRelease producer runs under.
 
 The universe is configuration, not code: identity, catalog identity, selection
-policy identity and version, source system, scope, the stratified sample, and
-the normalization policy that declares the facts no Regulations.gov record
-states.  This tool writes that configuration deterministically so the tracked
-file can be rebuilt and compared byte for byte.
+policy identity and version, source systems, source-native metadata shape,
+scope, the stratified sample, and the normalization policy that declares the
+facts no Regulations.gov record states. This tool writes that configuration
+deterministically so the tracked file can be rebuilt and compared byte for
+byte.
 
 The one part that is derived rather than typed is ``normalization.agencyNames``.
 The published catalog states an agency *code* and never a name, while the wire
@@ -55,6 +56,7 @@ POLICY_VERSION = "1.0"
 #: catalog is a different version, which moves ``policySha256`` and therefore
 #: the release identity.
 SOURCE_SYSTEM_ID = "https://data.spicy-regs.dev/documents.parquet"
+DOCKET_SOURCE_ID = "https://data.spicy-regs.dev/dockets.parquet"
 
 #: The two rendition sources the second universe adds, and the composite the
 #: wire carries for all three.  The mirror is pinned by the digest of the
@@ -70,6 +72,22 @@ MULTI_UNIVERSE_ID = "urn:spicy-regs:source-universe:regulations-gov-published-ca
 MULTI_CATALOG_ID = "urn:spicy-regs:source-catalog:regulations-gov-published-catalog-multi-source"
 MULTI_POLICY_ID = (
     "urn:spicy-regs:selection-policy:regulations-gov-published-catalog-2021-2025-stratified-sample-multi-source"
+)
+
+METADATA_COMPLETE_UNIVERSE_ID = (
+    "urn:spicy-regs:source-universe:regulations-gov-published-catalog-2021-2025-metadata-complete"
+)
+METADATA_COMPLETE_CATALOG_ID = (
+    "urn:spicy-regs:source-catalog:regulations-gov-published-catalog-metadata-complete"
+)
+METADATA_COMPLETE_POLICY_ID = (
+    "urn:spicy-regs:selection-policy:regulations-gov-published-catalog-2021-2025-"
+    "stratified-sample-metadata-complete"
+)
+METADATA_COMPLETE_POLICY_VERSION = "2.0"
+METADATA_COMPLETE_COMPOSITE_SOURCE_ID = (
+    "urn:spicy-regs:source-system:regulations-gov-published-catalog+dockets+"
+    "mirrulations-mirror+federal-register"
 )
 
 #: Best first.  The mirror leads because it is the only family whose digest is
@@ -157,6 +175,59 @@ def multi_source_document(
     return document
 
 
+def metadata_complete_document(
+    *,
+    catalog_digest: str,
+    dockets_digest: str,
+    mirror_digest: str,
+    federal_register_digest: str,
+    names: dict[str, str],
+) -> dict[str, Any]:
+    """A new universe carrying every metadata field from each exact source row.
+
+    The Federal Register appears once per role because ``PinnedSource`` keeps
+    roles atomic.  Both entries pin the same bytes; the publisher groups them
+    and refuses conflicting versions.
+    """
+
+    from spicy_regs.source_catalog.universe import (
+        COMPLETE_NATIVE_METADATA_PROFILE,
+        PinnedSource,
+        composite_source_version,
+    )
+
+    sources = [
+        PinnedSource(source_system_id=MIRROR_SOURCE_ID, source_system_version=mirror_digest, role="rendition"),
+        PinnedSource(source_system_id=SOURCE_SYSTEM_ID, source_system_version=catalog_digest, role="metadata"),
+        PinnedSource(source_system_id=DOCKET_SOURCE_ID, source_system_version=dockets_digest, role="metadata"),
+        PinnedSource(
+            source_system_id=FEDERAL_REGISTER_SOURCE_ID,
+            source_system_version=federal_register_digest,
+            role="metadata",
+        ),
+        PinnedSource(
+            source_system_id=FEDERAL_REGISTER_SOURCE_ID,
+            source_system_version=federal_register_digest,
+            role="rendition",
+        ),
+    ]
+    document = universe_document(source_system_version=catalog_digest, names=names)
+    document["universeId"] = METADATA_COMPLETE_UNIVERSE_ID
+    document["catalogId"] = METADATA_COMPLETE_CATALOG_ID
+    document["selectionPolicy"] = {
+        "policyId": METADATA_COMPLETE_POLICY_ID,
+        "policyVersion": METADATA_COMPLETE_POLICY_VERSION,
+    }
+    document["sourceSystem"] = {
+        "sourceSystemId": METADATA_COMPLETE_COMPOSITE_SOURCE_ID,
+        "sourceSystemVersion": composite_source_version(sources),
+    }
+    document["sourceSystems"] = [source.canonical() for source in sources]
+    document["renditionPreference"] = list(RENDITION_PREFERENCE)
+    document["nativeMetadataProfile"] = COMPLETE_NATIVE_METADATA_PROFILE
+    return document
+
+
 def universe_document(*, source_system_version: str, names: dict[str, str]) -> dict[str, Any]:
     """The universe specification, exactly as it is written to disk."""
 
@@ -207,13 +278,24 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--mirror-index", type=Path, default=None, help="Sealed mirror index; declares the mirror.")
+    parser.add_argument("--dockets", type=Path, default=None, help="Docket table; enables complete metadata capture.")
     parser.add_argument("--federal-register", type=Path, default=None, help="Declares the FR fallback source.")
     args = parser.parse_args(argv)
 
     names = agency_names(args.agency_codes)
     if (args.mirror_index is None) != (args.federal_register is None):
         parser.error("--mirror-index and --federal-register are declared together or not at all")
-    if args.mirror_index is not None and args.federal_register is not None:
+    if args.dockets is not None and (args.mirror_index is None or args.federal_register is None):
+        parser.error("--dockets requires --mirror-index and --federal-register")
+    if args.dockets is not None and args.mirror_index is not None and args.federal_register is not None:
+        document = metadata_complete_document(
+            catalog_digest=file_digest(args.catalog),
+            dockets_digest=file_digest(args.dockets),
+            mirror_digest=file_digest(args.mirror_index),
+            federal_register_digest=file_digest(args.federal_register),
+            names=names,
+        )
+    elif args.mirror_index is not None and args.federal_register is not None:
         document = multi_source_document(
             catalog_digest=file_digest(args.catalog),
             mirror_digest=file_digest(args.mirror_index),

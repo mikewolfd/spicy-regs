@@ -10,8 +10,11 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+import pyarrow as pa
+import pyarrow.parquet as pq
 
 from spicy_regs.source_catalog import (
+    COMPLETE_NATIVE_METADATA_PROFILE,
     NormalizationPolicy,
     PinnedSource,
     SourceCatalogError,
@@ -36,6 +39,7 @@ def _load(name: str):
 
 mirror_tool = _load("build_mirrulations_mirror_index")
 publish_tool = _load("publish_source_catalog_release")
+universe_tool = _load("build_source_catalog_universe")
 
 
 def _manifest(*records: dict[str, Any]) -> dict[str, Any]:
@@ -233,3 +237,116 @@ def test_publish_accepts_exactly_declared_and_pinned_inputs(tmp_path: Path) -> N
         mirror_index=mirror,
         federal_register=federal_register,
     )
+
+
+def test_publish_accepts_every_pinned_metadata_input_and_both_fr_roles(tmp_path: Path) -> None:
+    catalog = tmp_path / "documents.parquet"
+    dockets = tmp_path / "dockets.parquet"
+    mirror = tmp_path / "mirror.json"
+    federal_register = tmp_path / "federal-register.parquet"
+    for path in (catalog, dockets, mirror, federal_register):
+        path.write_bytes(path.name.encode())
+    sources = (
+        PinnedSource(
+            source_system_id=publish_tool.MIRROR_SOURCE_ID,
+            source_system_version=publish_tool.file_digest(mirror),
+            role="rendition",
+        ),
+        PinnedSource(
+            source_system_id=publish_tool.CATALOG_SOURCE_ID,
+            source_system_version=publish_tool.file_digest(catalog),
+            role="metadata",
+        ),
+        PinnedSource(
+            source_system_id=publish_tool.DOCKET_SOURCE_ID,
+            source_system_version=publish_tool.file_digest(dockets),
+            role="metadata",
+        ),
+        PinnedSource(
+            source_system_id=publish_tool.FEDERAL_REGISTER_SOURCE_ID,
+            source_system_version=publish_tool.file_digest(federal_register),
+            role="metadata",
+        ),
+        PinnedSource(
+            source_system_id=publish_tool.FEDERAL_REGISTER_SOURCE_ID,
+            source_system_version=publish_tool.file_digest(federal_register),
+            role="rendition",
+        ),
+    )
+
+    roles = publish_tool._validate_source_inputs(
+        _universe(sources=sources, source_id="urn:test:composite"),
+        catalog=catalog,
+        dockets=dockets,
+        mirror_index=mirror,
+        federal_register=federal_register,
+    )
+
+    assert roles[publish_tool.DOCKET_SOURCE_ID] == {"metadata"}
+    assert roles[publish_tool.FEDERAL_REGISTER_SOURCE_ID] == {"metadata", "rendition"}
+
+
+def test_metadata_map_keeps_null_fields_and_refuses_unclassified_columns(tmp_path: Path) -> None:
+    path = tmp_path / "metadata.parquet"
+    pq.write_table(
+        pa.table(
+            {
+                "record_id": ["A", "B"],
+                "summary": ["A summary", None],
+                "description": [None, "A description"],
+            }
+        ),
+        path,
+    )
+
+    rows = publish_tool._metadata_map(
+        path,
+        key_column="record_id",
+        columns=("record_id", "summary", "description"),
+        include_keys={"A"},
+        source_name="fixture",
+        reject_unclassified=True,
+    )
+
+    assert rows == {"A": {"record_id": "A", "summary": "A summary", "description": None}}
+    with pytest.raises(SourceCatalogError, match="unclassified columns"):
+        publish_tool._metadata_map(
+            path,
+            key_column="record_id",
+            columns=("record_id", "summary"),
+            include_keys={"A"},
+            source_name="fixture",
+            reject_unclassified=True,
+        )
+
+
+def test_composition_report_must_stay_outside_the_sealed_bundle(tmp_path: Path) -> None:
+    bundle = tmp_path / "release"
+
+    publish_tool._validate_composition_path(bundle, tmp_path / "composition.json")
+    with pytest.raises(SourceCatalogError, match="must sit outside"):
+        publish_tool._validate_composition_path(bundle, bundle / "composition.json")
+
+
+def test_metadata_complete_universe_declares_the_new_shape_and_every_source_role() -> None:
+    def digest(character: str) -> str:
+        return "sha256:" + character * 64
+
+    document = universe_tool.metadata_complete_document(
+        catalog_digest=digest("1"),
+        dockets_digest=digest("2"),
+        mirror_digest=digest("3"),
+        federal_register_digest=digest("4"),
+        names={"EPA": "environmental-protection-agency"},
+    )
+
+    spec = UniverseSpec.from_mapping(document)
+    assert spec.native_metadata_profile == COMPLETE_NATIVE_METADATA_PROFILE
+    assert [(source.source_system_id, source.role) for source in spec.sources] == [
+        (universe_tool.MIRROR_SOURCE_ID, "rendition"),
+        (universe_tool.SOURCE_SYSTEM_ID, "metadata"),
+        (universe_tool.DOCKET_SOURCE_ID, "metadata"),
+        (universe_tool.FEDERAL_REGISTER_SOURCE_ID, "metadata"),
+        (universe_tool.FEDERAL_REGISTER_SOURCE_ID, "rendition"),
+    ]
+    assert spec.source_system_version == composite_source_version(spec.sources)
