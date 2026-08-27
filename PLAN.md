@@ -38,8 +38,18 @@ worktree hash, mandatory RefSpec runtime, or DocSpec policy.
   refuses version ties, and accounts for every older observation as discarded.
 - One `spicy-regs-source-native` command publishes or verifies Federal Register,
   Regulations.gov documents, dockets, and comments. It accepts bounded dates,
-  explicit Regulations.gov agencies, injected acquisition adapters, and
-  machine-readable pins without adding catalog semantics.
+  explicit Regulations.gov agencies, one explicit persistent `--blob-store`,
+  injected acquisition adapters, and machine-readable pins without adding
+  catalog semantics or hidden sibling state.
+- Source-native records, renditions, acquisition rows, and evidence use
+  Rulespec external `blobRef` members in an injected shared content-addressed
+  store. Fixed 64-way SHA-256 identity buckets keep unchanged payload refs
+  exact, while the closed receipt accounts for payload bytes read, reused, and
+  actually written plus local publication bytes. Publication verifies
+  `EEXIST`, never replaces a root, and safely reuses verified orphan blobs.
+  Directory-relative file operations keep the store inside its selected root
+  even if an internal path is replaced. Acquisition-page inventories use page
+  identity rather than shared evidence-byte identity.
 - The package base path no longer needs RefSpec, RDFLib, DocSpec, or the former
   Rulespec conformance runtime for source-native publication.
 - One injected public-table producer derives immutable, Rulespec-admitted
@@ -60,26 +70,42 @@ worktree hash, mandatory RefSpec runtime, or DocSpec policy.
    required until this happens; source-native document/comment views also leave
    derived text null, so DocSpec must supply that value before text-dependent
    consumers move.
-2. Prove clean-wheel interoperability through Rulespec admission, the DocSpec
-   source-native adapter, and the SpicySearch task-level fixture. Remove any
-   remaining predecessor path only after the replacement reproduces its named
-   user behavior.
-3. Run the pinned Federal Register baseline comparison and the retained public
+2. Run the pinned Federal Register baseline comparison and the retained public
    data differential, then measure cadence, memory, temporary disk, and changed
    output bytes at the 3.9 GB scale target.
-4. Close the predecessor only after the central roster assigns and verifies the
+3. Close the predecessor only after the central roster assigns and verifies the
    active app, schema-docs site, MCP endpoint, rollups, and complementary source
    tables. Do not pull those cross-source and search surfaces into SpicyRegs just
    to make the old checkout disappear.
 
 ## Current gates
 
-- Verified locally on 2026-08-25: 76 focused source-native tests and 11
-  source-package boundary tests pass; the pinned one-day Federal Register live
-  replay passes; targeted `ty`, repository-wide Ruff, lock consistency, and
-  `git diff --check` pass. A freshly built wheel imports and publishes/verifies
-  from an isolated environment with no RefSpec, RDFLib, Rulespec conformance,
-  DocSpec, or sibling checkout on its import path.
+- Verified locally on 2026-08-26: 95 focused source-native and public-table
+  tests pass, including exact unchanged-bucket reuse, changed-bucket-only
+  writes, physical-only rebuilds, concurrent publication, orphan recovery,
+  descriptor-relative containment guards, identical-evidence page ownership,
+  and the fixed stream bound. Targeted `ty`, repository-wide Ruff, lock
+  consistency, and `git diff --check` pass.
+- Candidate SpicyRegs 0.1.7
+  (`dist/spicy_regs-0.1.7-py3-none-any.whl`, 1,145,559 bytes,
+  `sha256:b8c2f9ea3a7f44dbd1c373f4ba3902371ff1664ac55776d5f01372091f97f3ec`)
+  and vendored Rulespec artifacts 1.0.9
+  (`vendor/rulespec_artifacts-1.0.9-py3-none-any.whl`, 56,820 bytes,
+  `sha256:67cb33bf63c11bc6812ad0e8f0a8b73e89501fa6d4242acf75a7cc6612f5d6c6`)
+  are retained locally. The exact 95 focused tests and static gates pass against
+  Rulespec 1.0.9. A fresh isolated Python 3.12 environment installed those wheel
+  bytes, resolved versions 0.1.7 and 1.0.9, and passed the Federal Register CLI
+  publish and independent-verify smoke test. DocSpec 0.2.5's installed-wheel
+  catalog proof and SpicySearch 0.1.4's three-test installed-package and
+  source-native proof now also pass against this exact SpicyRegs wheel. All of
+  those package bytes and results remain local.
+- Before the final Rulespec 1.0.9 repin, the same SpicyRegs 0.1.7 source passed
+  the configured full suite except for 3 optional-model failures: it reported
+  3,596 passes, 15 skips, 5 deselections, and 2 expected failures because
+  `transformers`, `sentence-transformers`, and `torch` are absent from the base
+  development environment. The final 1.0.9 dependency set is covered by the
+  exact 95-test focused gate and installed-wheel smoke above; rerun the full
+  suite before attributing its complete result to those final package bytes.
 - The focused public-profile gate covers all four stable schemas, bounded
   Parquet/Hive members, newest comments, local DuckDB reads, hermetic anonymous
   HTTP range reads, immutable publication, tamper and duplicate refusal, and an
@@ -88,7 +114,8 @@ worktree hash, mandatory RefSpec runtime, or DocSpec policy.
 - Focused source-native fixtures must cover success, tamper, incomplete
   acquisition, capped-window split, capped-day refusal, source-schema drift,
   exact enumeration, separated document/docket facts, CLI failure, and
-  immutable no-replacement behavior.
+  immutable no-replacement behavior. Small-update fixtures also cover exact
+  partition-ref reuse and truthful store-write accounting.
 - The live Federal Register status check is one bounded day. It verifies current
   source shape and replay only; it does not establish corpus-wide completeness.
 - Run `uv run --frozen ruff check .`, focused `uv run --frozen ty check ...`,

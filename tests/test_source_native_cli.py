@@ -146,6 +146,8 @@ def _publish_args(destination: Path, source: str) -> list[str]:
         *args,
         "--destination",
         str(destination),
+        "--blob-store",
+        str(destination.parent / "blobs"),
         "--implementation-id",
         IMPLEMENTATION_ID,
     ]
@@ -158,6 +160,8 @@ def _verify_args(destination: Path, source: str, published: dict[str, object]) -
         source,
         "--release",
         str(destination),
+        "--blob-store",
+        str(destination.parent / "blobs"),
         "--logical-id",
         str(published["logicalId"]),
         "--artifact-digest",
@@ -165,6 +169,12 @@ def _verify_args(destination: Path, source: str, published: dict[str, object]) -
         "--accepted-verifier-implementation-id",
         IMPLEMENTATION_ID,
     ]
+
+
+def _replace_option(args: list[str], option: str, value: Path) -> list[str]:
+    updated = list(args)
+    updated[updated.index(option) + 1] = str(value)
+    return updated
 
 
 @pytest.mark.parametrize(
@@ -197,6 +207,7 @@ def test_cli_publishes_and_independently_verifies_with_machine_output(
     )
     assert published["artifactDigest"].startswith("sha256:")
     assert published["release"] == str(destination.resolve())
+    assert {path.name for path in tmp_path.iterdir()} == {source, "blobs"}
 
     verify_output = StringIO()
     assert main(
@@ -252,6 +263,72 @@ def test_cli_reports_regulations_reader_failure_without_partial_release(
     assert failure["error"]["code"] == "acquisition-failed"
     assert "source listing failed" in failure["error"]["message"]
     assert not destination.exists()
+
+
+@pytest.mark.parametrize("relationship", ["equal", "destination-parent", "store-parent"])
+def test_cli_refuses_overlapping_release_and_blob_store_before_acquisition(
+    tmp_path: Path,
+    relationship: str,
+) -> None:
+    if relationship == "equal":
+        destination = tmp_path / "shared"
+        blob_store = destination
+    elif relationship == "destination-parent":
+        destination = tmp_path / "release"
+        blob_store = destination / "blobs"
+    else:
+        blob_store = tmp_path / "store"
+        destination = blob_store / "release"
+    args = _replace_option(
+        _publish_args(destination, "federal-register"),
+        "--blob-store",
+        blob_store,
+    )
+    calls: list[str] = []
+    errors = StringIO()
+
+    assert main(
+        args,
+        fetch=lambda url: calls.append(url) or _federal_response(),
+        clock=lambda: FIXED_NOW,
+        stdout=StringIO(),
+        stderr=errors,
+    ) == 1
+
+    failure = json.loads(errors.getvalue())
+    assert failure["error"]["code"] == "release-invalid"
+    assert "must not overlap" in failure["error"]["message"]
+    assert calls == []
+    assert not destination.exists()
+    assert not blob_store.exists()
+
+
+def test_cli_verify_refuses_release_as_blob_store_without_mutation(
+    tmp_path: Path,
+) -> None:
+    destination = tmp_path / "release"
+    output = StringIO()
+    assert main(
+        _publish_args(destination, "federal-register"),
+        fetch=lambda _url: _federal_response(),
+        clock=lambda: FIXED_NOW,
+        stdout=output,
+        stderr=StringIO(),
+    ) == 0
+    published = json.loads(output.getvalue())
+    root_before = (destination / "artifact.json").read_bytes()
+    args = _replace_option(
+        _verify_args(destination, "federal-register", published),
+        "--blob-store",
+        destination,
+    )
+    errors = StringIO()
+
+    assert main(args, stdout=StringIO(), stderr=errors) == 1
+    failure = json.loads(errors.getvalue())
+    assert failure["error"]["code"] == "release-invalid"
+    assert "must not overlap" in failure["error"]["message"]
+    assert (destination / "artifact.json").read_bytes() == root_before
 
 
 @pytest.mark.parametrize(

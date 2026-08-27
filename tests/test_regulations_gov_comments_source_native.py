@@ -7,7 +7,7 @@ import json
 from collections.abc import Iterator
 from copy import deepcopy
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from io import StringIO
 from pathlib import Path
 from typing import Any
@@ -31,6 +31,7 @@ from spicy_regs.source_native import (
     SourceNativeReleaseReader,
 )
 from spicy_regs.source_native_profiles import REGULATIONS_GOV_COMMENT_PROFILE
+from spicy_regs.source_native_store import LocalSourceNativeBlobStore
 from spicy_regs.source_native_cli import main as source_native_main
 
 _IMPLEMENTATION_ID = "git+https://example.test/spicy-regs@" + "a" * 40
@@ -41,6 +42,10 @@ _PRODUCER = Producer(
     verifier_version="1.0",
     verifier_implementation_id=_IMPLEMENTATION_ID,
 )
+
+
+def _completed_at() -> datetime:
+    return datetime(2026, 8, 25, 0, 0, 1, tzinfo=UTC)
 
 
 def _comment(
@@ -164,16 +169,21 @@ def _scope() -> dict[str, object]:
 
 
 def _publish(tmp_path: Path, objects: list[_Object], name: str = "comments"):
-    return SourceNativeReleasePublisher(REGULATIONS_GOV_COMMENT_PROFILE).publish(
+    return SourceNativeReleasePublisher(
+        REGULATIONS_GOV_COMMENT_PROFILE,
+        blob_store=LocalSourceNativeBlobStore(tmp_path / "blobs"),
+        clock=_completed_at,
+    ).publish(
         iter_regulations_gov_comment_pages(
-            lambda agency: _Reader(objects) if agency == "EPA" else pytest.fail(agency),
+            lambda agency: _Reader(sorted(objects, key=lambda item: item.key))
+            if agency == "EPA"
+            else pytest.fail(agency),
             query_scope=_scope(),
         ),
         build=SourceNativeReleaseBuild(
             query_scope=_scope(),
             producer=_PRODUCER,
             started_at="2026-08-25T00:00:00Z",
-            completed_at="2026-08-25T00:00:01Z",
         ),
         destination=tmp_path / name,
     )
@@ -182,6 +192,7 @@ def _publish(tmp_path: Path, objects: list[_Object], name: str = "comments"):
 def _reader(root: Path, pin) -> SourceNativeReleaseReader:
     return SourceNativeReleaseReader(
         LocalMemberSource(root),
+        blob_source=LocalSourceNativeBlobStore(root.parent / "blobs"),
         profile=REGULATIONS_GOV_COMMENT_PROFILE,
         expected_pin=pin,
         accepted_verifier_implementation_ids=frozenset({_IMPLEMENTATION_ID}),
@@ -227,7 +238,8 @@ def test_complete_enumeration_selects_newest_comment_version_and_counts_discard(
     assert receipt["inputObservationCount"] == 2
     assert receipt["publishedRecordCount"] == 1
     assert receipt["discardedObservationCount"] == 1
-    assert len(list(published.root.glob("evidence/traversal-000/page-*.json"))) == 3
+    assert receipt["acquisitionEvidenceCount"] == 1
+    assert not (published.root / "evidence").exists()
 
 
 def test_nonnull_modify_date_wins_and_single_null_version_remains_valid(
@@ -258,12 +270,34 @@ def test_nonnull_modify_date_wins_and_single_null_version_remains_valid(
     assert null_rows[0]["record"]["data"]["attributes"]["modifyDate"] is None
 
 
-def test_equal_comment_version_instants_refuse_a_nondeterministic_tie(
+@pytest.mark.parametrize(
+    ("first_version", "second_version", "first_body", "second_body"),
+    [
+        (
+            "2026-08-25T10:00:00Z",
+            "2026-08-25T10:00:00Z",
+            "identical",
+            "identical",
+        ),
+        (
+            "2026-08-25T10:00:00Z",
+            "2026-08-25T06:00:00-04:00",
+            "first",
+            "second",
+        ),
+        (None, None, "first null", "second null"),
+    ],
+)
+def test_repeated_normalized_comment_versions_always_refuse_a_tie(
     tmp_path: Path,
+    first_version: str | None,
+    second_version: str | None,
+    first_body: str,
+    second_body: str,
 ) -> None:
     identity = "EPA-2026-0001-0001"
-    first = _comment(identity, modify_date="2026-08-25T10:00:00Z", body="first")
-    second = _comment(identity, modify_date="2026-08-25T06:00:00-04:00", body="second")
+    first = _comment(identity, modify_date=first_version, body=first_body)
+    second = _comment(identity, modify_date=second_version, body=second_body)
 
     with pytest.raises(SourceNativeReleaseError, match="source-version tie"):
         _publish(
@@ -333,6 +367,8 @@ def test_comment_profile_is_available_through_the_single_injected_cli(
             "EPA",
             "--destination",
             str(release),
+            "--blob-store",
+            str(tmp_path / "blobs"),
             "--implementation-id",
             _IMPLEMENTATION_ID,
         ],

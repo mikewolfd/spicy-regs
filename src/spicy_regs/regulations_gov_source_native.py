@@ -58,19 +58,20 @@ DOCUMENT_RECORD_STEM: Final = "regulations-gov-document"
 DOCKET_RECORD_STEM: Final = "regulations-gov-docket"
 COMMENT_RECORD_STEM: Final = "regulations-gov-comment"
 DOCUMENT_ACQUISITION_POLICY_ID: Final = (
-    "urn:spicy-regs:acquisition:mirrulations-document-observed-crawl"
+    "urn:spicy-regs:acquisition:mirrulations-document-source-enumeration"
 )
 DOCKET_ACQUISITION_POLICY_ID: Final = (
-    "urn:spicy-regs:acquisition:mirrulations-docket-observed-crawl"
+    "urn:spicy-regs:acquisition:mirrulations-docket-source-enumeration"
 )
 COMMENT_ACQUISITION_POLICY_ID: Final = (
-    "urn:spicy-regs:acquisition:mirrulations-comment-observed-crawl"
+    "urn:spicy-regs:acquisition:mirrulations-comment-source-enumeration"
 )
 ACQUISITION_POLICY_VERSION: Final = "1.0"
 MAX_TRAVERSALS: Final = 1
 MAX_EVIDENCE_PACK_OBJECTS: Final = 1_000
 MAX_EVIDENCE_PACK_RAW_BYTES: Final = 16 * 1024 * 1024
 MAX_OBJECT_BYTES: Final = 16 * 1024 * 1024
+MAX_QUERY_DAYS: Final = 366
 EVIDENCE_PACK_TYPE: Final = "mirrulations-evidence-pack-v1"
 EVIDENCE_PACK_MEDIA_TYPE: Final = "application/zip"
 
@@ -326,7 +327,7 @@ class RegulationsGovPage:
             raise RegulationsGovSourceError("Mirrulations evidence pages are explicit windows")
         if self.source_cursor is not None:
             raise RegulationsGovSourceError(
-                "Mirrulations observed crawl does not use caller-authored cursors"
+                "Mirrulations source enumeration does not use caller-authored cursors"
             )
         if not self.request_key or not self.response_bytes:
             raise RegulationsGovSourceError("Mirrulations evidence must be nonempty")
@@ -370,6 +371,10 @@ def _date_scope(
         raise RegulationsGovSourceError("Regulations.gov query dates are invalid") from error
     if end < start:
         raise RegulationsGovSourceError("Regulations.gov query scope is reversed")
+    if (end - start).days >= MAX_QUERY_DAYS:
+        raise RegulationsGovSourceError(
+            f"Regulations.gov query scope exceeds the {MAX_QUERY_DAYS}-day date bound"
+        )
     return {
         "agencies": list(agencies),
         from_field: start.isoformat(),
@@ -1221,7 +1226,7 @@ class RegulationsGovTraversalCheck:
         if (
             page_index != 0
             or not isinstance(results, list)
-            or not 1 <= len(results) <= MAX_EVIDENCE_PACK_OBJECTS
+            or not 0 <= len(results) <= MAX_EVIDENCE_PACK_OBJECTS
             or response.get("count") != len(results)
         ):
             raise RegulationsGovSourceError("Mirrulations evidence-pack inventory differs")
@@ -1301,7 +1306,7 @@ def parse_mirrulations_request(value: str) -> MirrulationsWindow:
 
 @dataclass(slots=True)
 class MirrulationsAcquisitionCheck:
-    """Validate one bounded, strictly ordered observed crawl."""
+    """Validate one complete, bounded, strictly ordered source enumeration."""
 
     collection: str
     observed_agencies: list[str] = field(default_factory=list)
@@ -1334,16 +1339,16 @@ class MirrulationsAcquisitionCheck:
         agency = page_window.agency
         if agency != self.current_agency:
             if self.current_agency is not None and not self.current_terminal:
-                raise RegulationsGovSourceError("Mirrulations agency crawl lacks a terminal pack")
+                raise RegulationsGovSourceError("Mirrulations agency enumeration lacks a terminal pack")
             if self.observed_agencies and agency <= self.observed_agencies[-1]:
-                raise RegulationsGovSourceError("Mirrulations crawl agencies are not ASCII-sorted")
+                raise RegulationsGovSourceError("Mirrulations enumeration agencies are not ASCII-sorted")
             if page_window.pack_index != 0:
-                raise RegulationsGovSourceError("Mirrulations agency crawl does not start at pack zero")
+                raise RegulationsGovSourceError("Mirrulations agency enumeration does not start at pack zero")
             self.observed_agencies.append(agency)
             self.current_agency = agency
             self.next_pack_index = 0
         elif self.current_terminal:
-            raise RegulationsGovSourceError("Mirrulations agency crawl continues after its terminal pack")
+            raise RegulationsGovSourceError("Mirrulations agency enumeration continues after its terminal pack")
         if page_window.pack_index != self.next_pack_index:
             raise RegulationsGovSourceError("Mirrulations evidence packs are missing or reordered")
         entries = response.get("_objects")
@@ -1360,7 +1365,7 @@ class MirrulationsAcquisitionCheck:
                 and key <= self.previous_key
             ):
                 raise RegulationsGovSourceError(
-                    "Mirrulations observed object keys are not globally sorted and distinct"
+                    "Mirrulations object keys are not globally sorted and distinct"
                 )
             self.previous_key = key
             self.observed_objects += 1
@@ -1370,9 +1375,9 @@ class MirrulationsAcquisitionCheck:
     def finish(self, *, query_scope: Mapping[str, Any]) -> None:
         agencies = query_scope.get("agencies")
         if self.observed_agencies != agencies:
-            raise RegulationsGovSourceError("Mirrulations crawl does not cover exact agencies")
+            raise RegulationsGovSourceError("Mirrulations enumeration does not cover exact agencies")
         if not self.current_terminal:
-            raise RegulationsGovSourceError("Mirrulations crawl is missing a terminal pack")
+            raise RegulationsGovSourceError("Mirrulations enumeration is missing a terminal pack")
 
 
 def _records_included(
@@ -1496,13 +1501,12 @@ def _validate_record_scope(
     page_window: object | None,
     collection: str,
 ) -> None:
-    response = {
-        "results": [record],
-    }
-    if not _records_included(
-        response,
+    if not isinstance(page_window, MirrulationsWindow) or page_window.collection != collection:
+        raise RegulationsGovSourceError("Mirrulations page lacks a validated request")
+    if not _record_in_scope(
+        record,
         query_scope=query_scope,
-        page_window=page_window,
+        agency=page_window.agency,
         collection=collection,
     ):
         raise RegulationsGovSourceError("Regulations.gov record falls outside its query scope")
@@ -1562,10 +1566,11 @@ def _acquisition_policy(
         "evidence": "bounded-zip-packs-of-listed-metadata-and-exact-object-bytes",
         "initialQueryScope": dict(validator(query_scope)),
         "maxObjectsPerEvidencePack": MAX_EVIDENCE_PACK_OBJECTS,
+        "maxQueryDays": MAX_QUERY_DAYS,
         "maxRawBytesPerEvidencePack": MAX_EVIDENCE_PACK_RAW_BYTES,
         "maxObjectBytes": MAX_OBJECT_BYTES,
         "maxTraversals": MAX_TRAVERSALS,
-        "strategy": "single-observed-mirrulations-crawl",
+        "strategy": "complete-mirrulations-source-enumeration",
     }
 
 
@@ -1594,7 +1599,7 @@ def comment_acquisition_policy(query_scope: Mapping[str, Any]) -> dict[str, Any]
     policy["observationSelection"] = {
         "groupBy": "/data/id",
         "orderBy": "/data/attributes/modifyDate DESC NULLS LAST",
-        "tieDisposition": "collapse-identical-digest-otherwise-refuse",
+        "tieDisposition": "refuse-repeated-normalized-instant",
     }
     return policy
 
