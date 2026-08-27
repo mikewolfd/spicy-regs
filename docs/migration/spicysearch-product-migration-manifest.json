@@ -8,8 +8,8 @@
         "spicy-regs search"
       ],
       "current_behavior": "Returns matching dockets, documents, and comments; lowercases the query and source text.",
-      "destination": "SpicySearch document-only search_documents operation",
-      "disposition": "retire",
+      "destination": "SpicySearch local document and comment search after equivalent task proof",
+      "disposition": "retain-until-replacement",
       "known_consumers": [
         "CLI users; exact population not yet measured"
       ],
@@ -21,10 +21,10 @@
       "path": "src/spicy_regs/cli.py",
       "pinned_fixture": "src/spicy_regs/fixtures/spicyregs-m1-document-release-v1.json",
       "published_artifact_locations": [],
-      "replacement_interface": "search_documents over a published SearchSnapshot",
+      "replacement_interface": "Local SpicySearch search over published artifacts with docket, document, and comment result types",
       "scheduled_jobs": [],
       "tests_or_evidence": [
-        "tests/test_document_release.py::test_document_only_classification_fails_closed_and_excludes_dockets_and_comments"
+        "planned: platform local-search cutover fixture must compare docket, document, and comment matches plus case-folding behavior; the existing document-only exclusion test is non-authorizing"
       ]
     },
     {
@@ -144,20 +144,20 @@
       "capability": "Exact source capture, regions, fragments, parser provenance, and source coverage",
       "command_line_entry_points": [],
       "current_behavior": "Builds source artifacts and source fragments with exact Unicode coordinates and fail-closed coverage.",
-      "destination": "SpicyRegs DocumentRelease producer",
-      "disposition": "retain",
+      "destination": "DocSpec capture, representation, segmentation, and DocumentRelease",
+      "disposition": "move",
       "known_consumers": [
         "docpipeline segments, retrieval, extraction, projection, and tests"
       ],
-      "migration_status": "m1-release-records-implemented-adapter-integration-pending",
+      "migration_status": "inventoried-predecessor-behavior-not-yet-moved-to-docspec",
       "nested_or_uncommitted_state": null,
       "notebooks": [],
       "originating_commit": "414964d7ab5a7475f27363b329dff3d9193ed93d",
-      "owning_product": "SpicyRegs",
+      "owning_product": "DocSpec",
       "path": "src/spicy_regs/docpipeline/source.py",
       "pinned_fixture": "src/spicy_regs/fixtures/spicyregs-m1-source-fixture-v1.json",
       "published_artifact_locations": [],
-      "replacement_interface": "src/spicy_regs/document_release.py DocumentRelease JSON",
+      "replacement_interface": "DocSpec captured-file, representation, segment, evidence, and DocumentRelease records",
       "scheduled_jobs": [],
       "tests_or_evidence": [
         "tests/test_docpipeline_source.py",
@@ -426,25 +426,25 @@
       ]
     },
     {
-      "capability": "Repository-independent SpicyRegs M1 source release",
+      "capability": "Repository-independent predecessor M1 document release",
       "command_line_entry_points": [
         "build-document-release"
       ],
       "current_behavior": "Builds and validates canonical DocumentRelease records and the sealed 2026-03227 source fixture without cross-repository imports.",
-      "destination": "SpicyRegs",
-      "disposition": "retain",
+      "destination": "DocSpec DocumentRelease conformance fixture",
+      "disposition": "retire-after-port",
       "known_consumers": [
         "SpicySearch M1 fixture builder and Rulespec Extrapolator release readers"
       ],
-      "migration_status": "implemented-local-not-released",
+      "migration_status": "predecessor-fixture-not-yet-ported-to-docspec",
       "nested_or_uncommitted_state": "new local implementation; not committed, pushed, released, or deployed",
       "notebooks": [],
       "originating_commit": "local uncommitted implementation after 56e5ccf115726596667e9427b937381a5f8b37d1",
-      "owning_product": "SpicyRegs",
+      "owning_product": "DocSpec",
       "path": "src/spicy_regs/document_release.py and src/spicy_regs/fixtures/*.json",
       "pinned_fixture": "src/spicy_regs/fixtures/spicyregs-m1-document-release-v1.json",
       "published_artifact_locations": [],
-      "replacement_interface": "DocumentRelease canonical JSON",
+      "replacement_interface": "DocSpec DocumentRelease fixture in the Rulespec generic container",
       "scheduled_jobs": [],
       "tests_or_evidence": [
         "tests/test_document_release.py"
@@ -453,6 +453,6 @@
   ],
   "manifest_version": "spicysearch-product-migration/v1",
   "retirement_authorized": false,
-  "scope": "Pre-baseline and post-baseline SpicyRegs search, extraction, vocabulary, source-release, scheduled-job, command, notebook, evidence, and published-artifact surfaces.",
-  "status": "inventory-complete-serving-surfaces-retained"
+  "scope": "Historical pre-baseline and post-baseline migration inventory. It is incomplete for the public data, UI, plugin, notebook, command, and workflow surfaces now enumerated by the platform plan's predecessor value ledger.",
+  "status": "historical-inventory-incomplete-requires-platform-value-ledger-reconciliation"
 }

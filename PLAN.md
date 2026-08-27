@@ -1,5 +1,59 @@
 # SpicyRegs plan
 
+> This preamble is the sole archive runbook. The central platform plan and
+> DocSpec specification cite it instead of copying its commands.
+>
+> **Superseded 2026-08-25:** REF-048 and the SpicySearch platform artifact
+> consolidation plan replace this checkout's product boundary and active work.
+> This file now preserves implementation and measurement evidence only.
+> DocSpec owns `SourceCatalog`; SpicyRegs owns source-native publication. Do not
+> implement or publish a successor catalog from this checkout.
+> The platform plan's predecessor value ledger separately retains the public
+> bulk-data, browser, schema, partition, materialized-generation, and MCP user
+> outcomes recorded here. Superseding this checkout does not authorize shutting
+> down those external surfaces before a tested replacement and consumer cutover.
+> The same rule preserves the local `spicy-regs search` task across downloaded
+> dockets, documents, and comments; a metadata-only or document-only successor
+> is not an equivalent replacement.
+> Before retirement, SpicySearch's platform-value validator must reconcile this
+> checkout, the surviving SpicyRegs checkout, the central public-surface roster,
+> and this checkout's historical migration manifest. The manifest is deliberately
+> incomplete and cannot authorize deletion or shutdown by itself.
+> Current uncommitted changes under `src/spicy_regs/source_catalog/`,
+> `tools/build_source_catalog_universe.py`, and
+> `tools/publish_source_catalog_release.py` continue the superseded producer.
+> Preserve the complete Git-visible dirty tree once through a separately
+> authorized archive-only commit whose parent is this worktree's current `HEAD`.
+> Create a temporary directory and use a nonexistent file inside it as
+> `GIT_INDEX_FILE`. From this worktree root, first run
+> `GIT_INDEX_FILE=<temp-index> git read-tree HEAD`; only then run
+> `GIT_INDEX_FILE=<temp-index> git add -A -- .`. Initializing from `HEAD` is
+> mandatory because this checkout has tracked `.log` evidence files that also
+> match `.gitignore`; an empty alternate index would silently omit them. The
+> initialized index stages modifications and deletions to tracked ignored paths
+> while excluding ignored untracked caches, virtual environments, and build
+> output. Require `GIT_INDEX_FILE=<temp-index> git diff --quiet --` and no output
+> from `GIT_INDEX_FILE=<temp-index> git ls-files --others --exclude-standard`,
+> then use that index for `git write-tree` and
+> `git commit-tree <tree> -p HEAD`. Create the archive ref without moving an
+> existing ref. Do not checkout, reset, or write the real index, branch, or dirty
+> worktree. This preserves every tracked change or deletion, every non-ignored
+> untracked entry, file mode, dependency lock, and the broken `RefSpec` symbolic
+> link as mode `120000` plus its target bytes without dereferencing it. Add an
+> isolated detached temporary worktree at the child commit and require
+> `git status --porcelain=v1 --untracked-files=all` to be empty. Retain the commit
+> through the create-only archive ref in the shared SpicyRegs repository; do not
+> merge or publish it as the replacement catalog. Preserve useful output and
+> mutation behavior in DocSpec's focused Git-tracked migration fixtures and one
+> migration result. Do not create
+> a parallel source artifact, file-hash inventory, tree digest, patch digest, or
+> fingerprint corpus around Git; then remove the superseded production path.
+> Final closure means separately authorized removal of this linked worktree
+> after the central retirement gate passes. This checkout shares the surviving
+> `spicy-regs` repository and remote, so closure neither archives nor deletes a
+> separate remote repository. The archive commit, migration fixtures and result,
+> and cutover receipts remain after the worktree is removed.
+
 Recorded 2026-08-11 against SpicyRegs `6dbe181ccec7` and RefSpec
 `3c1b94ace91f`. Sections 1, 3, 3a and 4 rewritten 2026-08-12 against
 `a8938b4`, as records of what was executed and of the owner's decision on how
@@ -948,11 +1002,103 @@ HEAD requests to sample the rest was out of scope; whether 2026's rates are
 steady-state, since 2026 is itself partial; and whether the congress and CRS
 endpoints yield documents, which needs a live, probably key-gated call.
 
+### The metadata-complete successor candidate
+
+Owner decision 2026-08-15: omitting the exact docket and Federal Register
+metadata from `sourceNativeMetadata` is a release defect. The existing
+multi-source candidate stays immutable; a new universe and release carry the
+correction. This changes no document-selection rule and transfers no document
+capture work from DocSpec.
+
+The tracked
+`regulations-gov-published-catalog-2021-2025-metadata-complete.json` opts into
+`nativeMetadataProfile` `complete-source-records-v1` and pins four source
+files/roles:
+
+```text
+rendition   s3://mirrulations/raw-data
+            sha256:6793aa2c0d0ce52afffdb63900437e1be6091e85420297451dbf2e4270f231c6
+metadata    https://data.spicy-regs.dev/documents.parquet
+            sha256:5b9a5023bcb6239f1e369df7e2b78146654112b16dd035db24e50d220166f98c
+metadata    https://data.spicy-regs.dev/dockets.parquet
+            sha256:b14cd488b7898391cff448ac4de19f85936072dcb1aa105da32eea88e6fd7938
+metadata +
+rendition   https://data.spicy-regs.dev/federal_register.parquet
+            sha256:e03c2f992def3dc4df6f6987ddb9d5aed4ad407e13d2d7cf6dbb5851370e30b9
+```
+
+Each item now carries three named source scopes. `regulationsGovDocument`
+contains all 16 metadata columns in the pinned document table, including null
+values. `regulationsGovDocket` contains all seven fields from the exact
+`docket_id` row or null when no row resolves. `federalRegisterDocument`
+contains all 22 fields present in the pinned table from the exact
+`fr_doc_num` row or null. A docket `abstract` describes the proceeding; it is
+not relabeled as a document summary. A Federal Register `abstract` describes
+the exact linked Federal Register document. `text_content` remains excluded:
+it is captured content owned by DocSpec, not catalog metadata. Unknown source
+columns fail the build until classified, so a future metadata field cannot
+disappear silently.
+
+Here “all” means every metadata field on the primary document row and on rows
+reached by an exact source-stated identity. It does not attach Unified Agenda,
+FCC, GAO, or another Federal Register record merely because it shares a RIN or
+docket; those are separate records and need their own catalog items. The
+mirror index's complete per-item key, digest, and byte size already survive
+losslessly in `candidateRenditions`, so the native block does not duplicate
+them.
+
+The exact pinned join coverage is 1,839,459 document items with a docket row,
+1,268,081 with a docket abstract, 4,622 with an exact Federal Register row,
+and 3,740 with an exact Federal Register abstract. Inside 2021–2025 it is
+355,234 / 233,168 docket rows/abstracts and 144 / 143 Federal Register
+rows/abstracts, over 389,149 documents.
+
+The exact downloaded Parquet bytes are retained locally under
+`output/source-catalog-release-regulations-gov-2021-2025-metadata-complete-inputs/`;
+`inputs.json` records their source identifiers, digests, byte sizes, and row
+counts. This makes the local build reproducible after the live R2 keys move. It
+is not an externally published immutable source distribution.
+
+Built locally, not externally published, at
+`output/source-catalog-release-regulations-gov-2021-2025-metadata-complete/`
+with `releaseStatus` `candidate`, `buildRunId`
+`source-catalog-2026-08-15-01`, and `publishedAt`
+`2026-08-15T19:36:08Z`:
+
+```text
+releaseId    urn:spicy-regs:source-catalog-release:v1:
+             db76c44314dc752bfde5b6bc1396f3eddac5b0f50e08d6a45354298d18af6789
+policySha256 99345d220401bdede9664febd6ff419e7cc340085c2d6dec696679defd0d19cc
+U digest     sha256:90532b9cc9c18dbb97e105ff5f4e293a2b7cd9cf6aa8dd570a1cd4c6806a1cc0
+S digest     sha256:1506995ed02980230eacb42cec591f6a359e0ef0b26dcc81f8d11e2226c62b24
+```
+
+`data/source-items.json` is 3,948,345,547 bytes over 1,993,040 rows;
+declared members total 3,948,366,167 bytes. The build took 583.64 seconds at
+21,021,491,200 bytes maximum resident memory. Independent read-back took
+641.90 seconds at 23,232,348,160 bytes maximum resident memory and reproduced
+the identity, counts, coverage, schemas, member digests, and closed file set.
+
+```text
+selected        83,929      unavailable   238,574
+excluded     1,667,133      failed          3,279
+deleted            125      discovered  1,993,040
+accounted     1,993,040      unaccounted          0
+```
+
+The one human composition report sits beside the sealed directory, not inside
+it. The publisher now refuses a report path inside a bundle after read-back
+caught that closed-membership violation during this run.
+
 ### Next boundary
 
-Use the multi-source candidate above as the fixed input for DocSpec's first
-complete `DocumentRelease`. Do not expand or re-issue this universe before
-that path works unless a release defect changes its sealed bytes.
+DocSpec has admitted only the earlier multi-source candidate. The
+metadata-complete successor is implemented, built, and verified locally, but
+it is not committed, pushed, externally published, or admitted by DocSpec.
+Publishing it and moving DocSpec's exact input pin are separate actions that
+need explicit authorization. An external publication also needs a durable home
+for the three pinned source inputs; the live R2 keys are mutable. Until then,
+the earlier candidate remains the only transferred input.
 
 DocSpec completed that first real-data gate in `6088fef`. Its wire reader
 admitted the release by digest, translated the 2,556,982,433-byte source-item
@@ -960,10 +1106,12 @@ member with bounded memory, and reconciled 83,928 active, 120 deleted, and
 1,908,295 excluded items in DocSpec's three-state model. The pass fetched no
 rendition and published no `DocumentRelease`.
 
-The next implementation remains in DocSpec: connect this admitted stream to
+The next implementation remains in DocSpec: connect an admitted stream to
 Phase 2 capture, extraction, and segmentation through its existing injected
-ports. Keep this release fixed while that path is built. The completed reader
-gate does not by itself start or authorize a full 83,928-rendition capture.
+ports. The completed reader gate does not by itself start or authorize a full
+rendition capture. If DocSpec moves to the successor, it must first admit the
+new release by its exact identity and digest; a sibling worktree path is not a
+release exchange.
 
 Three follow-on corpus decisions remain outside the current release:
 
@@ -974,4 +1122,5 @@ Three follow-on corpus decisions remain outside the current release:
 - give comments their own sampling policy before admitting an 11-million-row
   in-window text corpus.
 
-None of these decisions changes the current `U`, `S`, or their digests.
+None of these follow-on decisions changes either sealed candidate's `U`, `S`,
+or digests.
