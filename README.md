@@ -38,10 +38,11 @@
 > owner and consumer cutover. The old implementation is superseded; its user
 > value and external wire constraints are migration requirements.
 >
-> Current uncommitted catalog-universe and release-publisher changes in this
-> checkout are also superseded implementation, not the replacement. Their useful
-> behavior is retained only through the pinned DocSpec oracle before the code is
-> removed; they must not be published as a new catalog authority.
+> The catalog-universe and release-publisher changes in this checkout are
+> committed locally in `d0253ae` but have not been pushed or externally
+> published. They are superseded implementation, not the replacement. Their
+> useful behavior is retained only through the pinned DocSpec oracle before the
+> code is removed; they must not be published as a new catalog authority.
 >
 > Only direct anonymous reads of retained public endpoints are executable
 > examples in this archived README. Do not run `git clone`/`uv sync`, `uv run`,

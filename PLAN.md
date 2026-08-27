@@ -19,28 +19,35 @@
 > checkout, the surviving SpicyRegs checkout, the central public-surface roster,
 > and this checkout's historical migration manifest. The manifest is deliberately
 > incomplete and cannot authorize deletion or shutdown by itself.
-> Current uncommitted changes under `src/spicy_regs/source_catalog/`,
+> The source-catalog changes under `src/spicy_regs/source_catalog/`,
 > `tools/build_source_catalog_universe.py`, and
-> `tools/publish_source_catalog_release.py` continue the superseded producer.
-> Preserve the complete Git-visible dirty tree once through a separately
+> `tools/publish_source_catalog_release.py` are committed locally in `d0253ae`
+> but have not been pushed or externally published. They continue the
+> superseded producer. Preserve the Git-visible dirty tree, excluding only the
+> untracked `RefSpec` symbolic link, once through a separately
 > authorized archive-only commit whose parent is this worktree's current `HEAD`.
 > Create a temporary directory and use a nonexistent file inside it as
 > `GIT_INDEX_FILE`. From this worktree root, first run
 > `GIT_INDEX_FILE=<temp-index> git read-tree HEAD`; only then run
-> `GIT_INDEX_FILE=<temp-index> git add -A -- .`. Initializing from `HEAD` is
-> mandatory because this checkout has tracked `.log` evidence files that also
+> `GIT_INDEX_FILE=<temp-index> git add -A -- . ':(exclude)RefSpec'`. Initializing
+> the alternate index from `HEAD` is mandatory because this checkout has tracked
+> `.log` evidence files that also
 > match `.gitignore`; an empty alternate index would silently omit them. The
 > initialized index stages modifications and deletions to tracked ignored paths
 > while excluding ignored untracked caches, virtual environments, and build
 > output. Require `GIT_INDEX_FILE=<temp-index> git diff --quiet --` and no output
-> from `GIT_INDEX_FILE=<temp-index> git ls-files --others --exclude-standard`,
+> from `GIT_INDEX_FILE=<temp-index> git ls-files --others --exclude-standard --
+> . ':(exclude)RefSpec'`,
 > then use that index for `git write-tree` and
 > `git commit-tree <tree> -p HEAD`. Create the archive ref without moving an
 > existing ref. Do not checkout, reset, or write the real index, branch, or dirty
-> worktree. This preserves every tracked change or deletion, every non-ignored
-> untracked entry, file mode, dependency lock, and the broken `RefSpec` symbolic
-> link as mode `120000` plus its target bytes without dereferencing it. Add an
-> isolated detached temporary worktree at the child commit and require
+> worktree. This preserves every tracked change or deletion, every other
+> non-ignored untracked entry, file mode, and dependency lock. Exclude `RefSpec`
+> because its target beneath `/private/tmp/claude-501/` no longer exists;
+> committing its mode `120000` and target bytes would permanently record a
+> dangling symbolic link. Do not delete it during this procedure; its
+> disposition is a separate decision. Add an isolated detached temporary
+> worktree at the child commit and require
 > `git status --porcelain=v1 --untracked-files=all` to be empty. Retain the commit
 > through the create-only archive ref in the shared SpicyRegs repository; do not
 > merge or publish it as the replacement catalog. Preserve useful output and
@@ -1093,8 +1100,9 @@ caught that closed-membership violation during this run.
 ### Next boundary
 
 DocSpec has admitted only the earlier multi-source candidate. The
-metadata-complete successor is implemented, built, and verified locally, but
-it is not committed, pushed, externally published, or admitted by DocSpec.
+metadata-complete successor is implemented, built, verified, and committed
+locally in `d0253ae`, but it has not been pushed, externally published, or
+admitted by DocSpec.
 Publishing it and moving DocSpec's exact input pin are separate actions that
 need explicit authorization. An external publication also needs a durable home
 for the three pinned source inputs; the live R2 keys are mutable. Until then,
