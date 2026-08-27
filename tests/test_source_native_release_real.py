@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
@@ -15,10 +16,15 @@ from spicy_regs.source_native import (
     SourceNativeReleaseReader,
 )
 from spicy_regs.source_native_profiles import FEDERAL_REGISTER_PROFILE
+from spicy_regs.source_native_store import LocalSourceNativeBlobStore
 
 _SCOPE = {"publishedFrom": "2026-04-13", "publishedThrough": "2026-04-13"}
-_IMPLEMENTATION_ID = "pkg:pypi/spicy-regs@0.1.0?checksum=sha256:" + "a" * 64
-_SOURCE_STATE_DIGEST = "sha256:e294df20c6f1e09c96ebc94d94e26d974f089a7be3c751f5a4b0243fa6b4a6b0"
+_IMPLEMENTATION_ID = "pkg:pypi/spicy-regs@0.1.7?checksum=sha256:" + "a" * 64
+_SOURCE_STATE_DIGEST = "sha256:e170cf3ddf2819b0f33ced07e050e18cef0adc43f57c5dfde51e04535ebf13bc"
+
+
+def _completed_at() -> datetime:
+    return datetime(2026, 8, 25, 0, 0, 1, tzinfo=UTC)
 
 
 @pytest.mark.integration
@@ -41,19 +47,23 @@ def test_pinned_federal_register_day_publishes_and_replays_exactly(tmp_path: Pat
             response.raise_for_status()
             return response.content
 
-        published = SourceNativeReleasePublisher(FEDERAL_REGISTER_PROFILE).publish(
+        published = SourceNativeReleasePublisher(
+            FEDERAL_REGISTER_PROFILE,
+            blob_store=LocalSourceNativeBlobStore(tmp_path / "blobs"),
+            clock=_completed_at,
+        ).publish(
             iter_federal_register_pages(fetch, query_scope=_SCOPE),
             build=SourceNativeReleaseBuild(
                 query_scope=_SCOPE,
                 producer=producer,
                 started_at="2026-08-25T00:00:00Z",
-                completed_at="2026-08-25T00:00:01Z",
             ),
             destination=tmp_path / "release",
         )
 
     reader = SourceNativeReleaseReader(
         LocalMemberSource(published.root),
+        blob_source=LocalSourceNativeBlobStore(tmp_path / "blobs"),
         profile=FEDERAL_REGISTER_PROFILE,
         expected_pin=published.artifact.pin,
         accepted_verifier_implementation_ids=frozenset({_IMPLEMENTATION_ID}),

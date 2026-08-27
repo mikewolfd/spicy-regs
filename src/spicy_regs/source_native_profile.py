@@ -117,6 +117,7 @@ class SourceNativeProfile:
     acquisition_check: Callable[[], AcquisitionCheck]
     page_window: Callable[[str], object] | None = None
     observation_version: ObservationVersion | None = None
+    refuse_equal_observation_versions: bool = False
 
     def __post_init__(self) -> None:
         if not self.name or not self.source_system_id or not self.source_system_version:
@@ -127,6 +128,10 @@ class SourceNativeProfile:
             raise ValueError("source-native profile member identity must be nonempty")
         if self.max_traversals < 1:
             raise ValueError("source-native profile traversal bound must be positive")
+        if self.refuse_equal_observation_versions and self.observation_version is None:
+            raise ValueError(
+                "equal observation versions can be refused only by a versioned profile"
+            )
 
         if (
             self.source_state_scope == "complete-snapshot"

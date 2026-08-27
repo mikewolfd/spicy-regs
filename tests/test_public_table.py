@@ -7,6 +7,7 @@ import json
 import threading
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
@@ -54,6 +55,7 @@ from spicy_regs.source_native import (
 from spicy_regs.source_native import VERIFIER_ID as SOURCE_VERIFIER_ID
 from spicy_regs.source_native import VERIFIER_VERSION as SOURCE_VERIFIER_VERSION
 from spicy_regs.source_native_profiles import REGULATIONS_GOV_COMMENT_PROFILE
+from spicy_regs.source_native_store import LocalSourceNativeBlobStore
 
 _IMPLEMENTATION_ID = "git+https://example.test/spicy-regs@" + "a" * 40
 _SOURCE_PRODUCER = Producer(
@@ -70,6 +72,10 @@ _PUBLIC_PRODUCER = Producer(
     verifier_version=PUBLIC_VERIFIER_VERSION,
     verifier_implementation_id=_IMPLEMENTATION_ID,
 )
+
+
+def _completed_at() -> datetime:
+    return datetime(2026, 8, 25, 0, 0, 1, tzinfo=UTC)
 
 
 def _comment(
@@ -183,7 +189,11 @@ def _source_release(tmp_path: Path) -> SourceNativeReleaseReader:
         "postedFrom": "2026-08-24",
         "postedThrough": "2026-08-24",
     }
-    published = SourceNativeReleasePublisher(REGULATIONS_GOV_COMMENT_PROFILE).publish(
+    published = SourceNativeReleasePublisher(
+        REGULATIONS_GOV_COMMENT_PROFILE,
+        blob_store=LocalSourceNativeBlobStore(tmp_path / "source-blobs"),
+        clock=_completed_at,
+    ).publish(
         iter_regulations_gov_comment_pages(
             lambda agency: _ObjectReader(objects) if agency == "EPA" else pytest.fail(agency),
             query_scope=scope,
@@ -192,12 +202,12 @@ def _source_release(tmp_path: Path) -> SourceNativeReleaseReader:
             query_scope=scope,
             producer=_SOURCE_PRODUCER,
             started_at="2026-08-25T00:00:00Z",
-            completed_at="2026-08-25T00:00:01Z",
         ),
         destination=tmp_path / "source",
     )
     return SourceNativeReleaseReader(
         LocalMemberSource(published.root),
+        blob_source=LocalSourceNativeBlobStore(tmp_path / "source-blobs"),
         profile=REGULATIONS_GOV_COMMENT_PROFILE,
         expected_pin=published.artifact.pin,
         accepted_verifier_implementation_ids=frozenset({_IMPLEMENTATION_ID}),

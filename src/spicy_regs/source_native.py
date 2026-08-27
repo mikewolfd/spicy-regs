@@ -7,22 +7,27 @@ meaning arrives through one injected profile.
 
 from __future__ import annotations
 
+import hashlib
+import heapq
+import os
 import shutil
 import sqlite3
 import tempfile
 from collections.abc import Iterable, Iterator, Mapping, Sequence
+from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from itertools import zip_longest
 from importlib.resources import files
 from pathlib import Path
-from typing import Any, Callable, Final
+from typing import Any, BinaryIO, Callable, Final, cast
 
 from jsonschema import Draft202012Validator
 
 from rulespec_artifacts import (
     ROOT_OBJECT_KEY,
     ArtifactPin,
+    BlobSource,
     FramedSection,
     LocalMemberSource,
     MemberDescriptor,
@@ -34,7 +39,7 @@ from rulespec_artifacts import (
     admit_artifact,
     build_artifact_root,
     canonical_json_bytes,
-    describe_member,
+    describe_member_from_receipt,
     framed_section_digest,
     iter_member_descriptors,
     parse_canonical_json,
@@ -47,7 +52,8 @@ from spicy_regs.source_native_profile import (
     SourceNativeProfile,
     TraversalCheck,
 )
-from spicy_regs.publication import publish_directory_once, write_bytes_once, write_chunks_once
+from spicy_regs.source_native_store import SourceNativeBlobStore
+from spicy_regs.publication import publish_directory_once, write_bytes_once
 
 KIND: Final = "spicyregs-source-native-release"
 FORMAT: Final = "spicyregs-source-native-release"
@@ -57,7 +63,19 @@ VERIFIER_ID: Final = "urn:spicy-regs:source-native-release-verifier"
 VERIFIER_VERSION: Final = "1.0"
 MAX_EVIDENCE_BYTES: Final = 24 * 1024 * 1024
 MAX_ROW_BYTES: Final = 4 * 1024 * 1024
-MAX_RECORDS_PER_MEMBER: Final = 10_000
+PARTITION_BUCKET_COUNT: Final = 64
+PARTITION_ALGORITHM: Final = "sha256-utf8-modulo"
+
+PARTITION_RECORDS: Final = "records"
+PARTITION_RENDITIONS: Final = "renditions"
+PARTITION_LEDGER: Final = "acquisition-records"
+PARTITION_PAGES: Final = "acquisition-pages"
+PARTITION_KINDS: Final = (
+    PARTITION_LEDGER,
+    PARTITION_PAGES,
+    PARTITION_RECORDS,
+    PARTITION_RENDITIONS,
+)
 
 ROLE_SCOPES: Final = "source-native-scopes"
 ROLE_SCHEMA: Final = "source-native-schema"
@@ -67,6 +85,12 @@ ROLE_RELEASE_SCHEMA: Final = "release-schema"
 ROLE_RECEIPT: Final = "source-publication-receipt"
 ROLE_LEDGER: Final = "source-acquisition-ledger"
 ROLE_EVIDENCE: Final = "source-acquisition-evidence"
+PARTITION_ROLES: Final = {
+    PARTITION_RECORDS: ROLE_RECORDS,
+    PARTITION_RENDITIONS: ROLE_RENDITIONS,
+    PARTITION_LEDGER: ROLE_LEDGER,
+    PARTITION_PAGES: ROLE_LEDGER,
+}
 REQUIRED_ROLES: Final = frozenset(
     {
         ROLE_SCOPES,
@@ -79,6 +103,7 @@ REQUIRED_ROLES: Final = frozenset(
         ROLE_EVIDENCE,
     }
 )
+ALWAYS_REQUIRED_ROLES: Final = REQUIRED_ROLES - {ROLE_RECORDS, ROLE_RENDITIONS}
 
 SCOPES_KEY: Final = "records/scopes.jsonl"
 RELEASE_SCHEMA_KEY: Final = "schemas/source-native-release-1.0.json"
@@ -123,6 +148,37 @@ class SourceNativeReleaseBuild:
 class PublishedSourceNativeRelease:
     root: Path
     artifact: VerifiedArtifact
+
+
+@dataclass(slots=True)
+class _ByteAccounting:
+    payload_bytes_read: int = 0
+    payload_bytes_reused: int = 0
+    payload_bytes_written: int = 0
+
+    def add(self, *, byte_size: int, reused: bool, bytes_written: int) -> None:
+        self.payload_bytes_read += byte_size
+        if reused:
+            self.payload_bytes_reused += byte_size
+        self.payload_bytes_written += bytes_written
+
+
+@dataclass(frozen=True, slots=True)
+class _PayloadPartition:
+    partition_kind: str
+    partition_id: str
+    member: MemberDescriptor
+
+    def receipt(self) -> dict[str, object]:
+        if self.member.blob_ref is None or self.member.record_count is None:
+            raise RuntimeError("source-native payload partition is incomplete")
+        return {
+            "blobRef": self.member.blob_ref,
+            "byteSize": self.member.byte_size,
+            "partitionId": self.partition_id,
+            "partitionKind": self.partition_kind,
+            "recordCount": self.member.record_count,
+        }
 
 
 def _utc(value: str, label: str) -> datetime:
@@ -191,7 +247,7 @@ class _ClosedObjectShape:
             raise SourceNativeReleaseError(
                 f"{self.name} structure differs{suffix}: {errors[0].message}"
             )
-        return dict(value)
+        return dict(cast(Mapping[str, Any], value))
 
     def build(self, **values: Any) -> dict[str, Any]:
         return self.parse(values)
@@ -201,13 +257,38 @@ _NULLABLE_TEXT_SCHEMA: Final = {"type": ["string", "null"]}
 _UINT_SCHEMA: Final = {"minimum": 0, "type": "integer"}
 _DIGEST_SCHEMA: Final = {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"}
 
+_BYTE_MEASUREMENTS_SCHEMA: Final = _closed_schema(
+    {
+        "payloadBytesRead": _UINT_SCHEMA,
+        "payloadBytesReused": _UINT_SCHEMA,
+        "payloadBytesWritten": _UINT_SCHEMA,
+        "publicationBytesWritten": _UINT_SCHEMA,
+    }
+)
+_PARTITION_POLICY_SCHEMA: Final = _closed_schema(
+    {
+        "algorithm": {"const": PARTITION_ALGORITHM},
+        "bucketCount": {"const": PARTITION_BUCKET_COUNT},
+        "identityEncoding": {"const": "utf-8"},
+    }
+)
+_PAYLOAD_PARTITION_SCHEMA: Final = _closed_schema(
+    {
+        "blobRef": _DIGEST_SCHEMA,
+        "byteSize": _UINT_SCHEMA,
+        "partitionId": {"pattern": "^[0-9]{2}$", "type": "string"},
+        "partitionKind": {"enum": list(PARTITION_KINDS)},
+        "recordCount": _UINT_SCHEMA,
+    }
+)
+
 _PAGE_SHAPE: Final = _ClosedObjectShape(
     "acquisition page",
     {
         "accepted": {"type": "boolean"},
         "discoveredRecords": {"type": "array"},
         "evidenceMediaType": {"minLength": 1, "type": "string"},
-        "evidenceObjectKey": {"type": "string"},
+        "evidenceBlobRef": _DIGEST_SCHEMA,
         "pageIndex": _UINT_SCHEMA,
         "requestKey": {"type": "string"},
         "recordsIncluded": {"type": "boolean"},
@@ -226,6 +307,7 @@ _RECEIPT_SHAPE: Final = _ClosedObjectShape(
         "acquisitionEvidenceCount": _UINT_SCHEMA,
         "acquisitionLedgerDigest": _DIGEST_SCHEMA,
         "acquisitionPolicyDigest": _DIGEST_SCHEMA,
+        "byteMeasurements": _BYTE_MEASUREMENTS_SCHEMA,
         "completedAt": {"type": "string"},
         "discoveredRecordCount": _UINT_SCHEMA,
         "discardedObservationCount": _UINT_SCHEMA,
@@ -234,6 +316,12 @@ _RECEIPT_SHAPE: Final = _ClosedObjectShape(
         "formatVersion": {"type": "string"},
         "inputObservationCount": _UINT_SCHEMA,
         "inputObservationDigest": _DIGEST_SCHEMA,
+        "partitionPolicy": _PARTITION_POLICY_SCHEMA,
+        "payloadPartitions": {
+            "items": _PAYLOAD_PARTITION_SCHEMA,
+            "maxItems": len(PARTITION_KINDS) * PARTITION_BUCKET_COUNT,
+            "type": "array",
+        },
         "publishedRecordCount": _UINT_SCHEMA,
         "reconciliationDigest": _DIGEST_SCHEMA,
         "reconciliationPassCount": _UINT_SCHEMA,
@@ -299,8 +387,7 @@ def release_schema_bundle() -> dict[str, Mapping[str, Any]]:
         ),
         "acquisition-ledger.schema.json": _closed_schema(
             {
-                "evidenceObjectKey": {"type": "string"},
-                "evidenceSha256": digest,
+                "evidenceBlobRef": digest,
                 "failure": {"type": "null"},
                 "observationRef": {"type": "object"},
                 "sourceRecordId": {"type": "string"},
@@ -355,34 +442,49 @@ def installed_release_schema_bundle() -> dict[str, Mapping[str, Any]]:
     return installed
 
 
-def _write_jsonl(path: Path, values: Iterable[Mapping[str, Any]]) -> int:
-    count = 0
-
-    def chunks() -> Iterator[bytes]:
-        nonlocal count
-        for value in values:
-            payload = canonical_json_bytes(value)
-            if len(payload) > MAX_ROW_BYTES:
-                raise SourceNativeReleaseError(f"source-native row exceeds {MAX_ROW_BYTES} bytes")
-            count += 1
-            yield payload
-            yield b"\n"
-
-    write_chunks_once(path, chunks())
-    return count
+def _jsonl_rows(stream: BinaryIO, *, label: str) -> Iterator[Mapping[str, Any]]:
+    while raw := stream.readline(MAX_ROW_BYTES + 2):
+        if len(raw) > MAX_ROW_BYTES + 1:
+            raise SourceNativeReleaseError(f"{label} contains an oversized row")
+        if not raw.endswith(b"\n"):
+            raise SourceNativeReleaseError(f"{label} contains an unterminated row")
+        value = parse_canonical_json(raw[:-1], path=label)
+        if not isinstance(value, Mapping):
+            raise SourceNativeReleaseError(f"{label} row is not an object")
+        yield value
 
 
 def _read_jsonl(source: MemberSource, object_key: str) -> Iterator[Mapping[str, Any]]:
     with source.open(object_key) as stream:
-        while raw := stream.readline(MAX_ROW_BYTES + 2):
-            if len(raw) > MAX_ROW_BYTES + 1:
-                raise SourceNativeReleaseError(f"{object_key} contains an oversized row")
-            if not raw.endswith(b"\n"):
-                raise SourceNativeReleaseError(f"{object_key} contains an unterminated row")
-            value = parse_canonical_json(raw[:-1], path=object_key)
-            if not isinstance(value, Mapping):
-                raise SourceNativeReleaseError(f"{object_key} row is not an object")
-            yield value
+        yield from _jsonl_rows(stream, label=object_key)
+
+
+@contextmanager
+def _open_descriptor(
+    source: MemberSource,
+    blob_source: BlobSource | None,
+    member: MemberDescriptor,
+) -> Iterator[BinaryIO]:
+    if member.object_key is not None:
+        with source.open(member.object_key) as stream:
+            yield stream
+        return
+    if member.blob_ref is None or blob_source is None:
+        raise SourceNativeReleaseError(
+            "source-native external members require an injected blob source"
+        )
+    with blob_source.open(member.blob_ref) as stream:
+        yield stream
+
+
+def _descriptor_rows(
+    source: MemberSource,
+    blob_source: BlobSource | None,
+    member: MemberDescriptor,
+) -> Iterator[Mapping[str, Any]]:
+    label = member.object_key or member.blob_ref or "external-member"
+    with _open_descriptor(source, blob_source, member) as stream:
+        yield from _jsonl_rows(stream, label=label)
 
 
 def _read_one_json(source: MemberSource, object_key: str, byte_limit: int = MAX_ROW_BYTES) -> Mapping[str, Any]:
@@ -394,6 +496,79 @@ def _read_one_json(source: MemberSource, object_key: str, byte_limit: int = MAX_
     if not isinstance(value, Mapping):
         raise SourceNativeReleaseError(f"{object_key} is not an object")
     return value
+
+
+def _partition_id(identity: str) -> str:
+    if not isinstance(identity, str) or not identity:
+        raise SourceNativeReleaseError("source-native partition identity must be nonempty text")
+    digest = hashlib.sha256(identity.encode("utf-8")).digest()
+    return f"{int.from_bytes(digest, 'big') % PARTITION_BUCKET_COUNT:02d}"
+
+
+def _partition_policy() -> dict[str, object]:
+    return {
+        "algorithm": PARTITION_ALGORITHM,
+        "bucketCount": PARTITION_BUCKET_COUNT,
+        "identityEncoding": "utf-8",
+    }
+
+
+def _file_chunks(path: Path) -> Iterator[bytes]:
+    with path.open("rb") as stream:
+        while block := stream.read(1024 * 1024):
+            yield block
+
+
+def _stage_partition(
+    scratch: Path,
+    *,
+    blob_store: SourceNativeBlobStore,
+    accounting: _ByteAccounting,
+    partition_kind: str,
+    partition_id: str,
+    rows: Iterable[Mapping[str, Any]],
+) -> _PayloadPartition | None:
+    path = scratch / f"{partition_kind}-{partition_id}.jsonl"
+    digest = hashlib.sha256()
+    byte_size = 0
+    record_count = 0
+    try:
+        with path.open("xb") as stream:
+            for value in rows:
+                payload = canonical_json_bytes(value)
+                if len(payload) > MAX_ROW_BYTES:
+                    raise SourceNativeReleaseError(
+                        f"source-native row exceeds {MAX_ROW_BYTES} bytes"
+                    )
+                for chunk in (payload, b"\n"):
+                    stream.write(chunk)
+                    digest.update(chunk)
+                    byte_size += len(chunk)
+                record_count += 1
+            stream.flush()
+            os.fsync(stream.fileno())
+        if record_count == 0:
+            return None
+        blob_ref = "sha256:" + digest.hexdigest()
+        write = blob_store.put_blob(blob_ref, byte_size, _file_chunks(path))
+        accounting.add(
+            byte_size=byte_size,
+            reused=write.reused,
+            bytes_written=write.bytes_written,
+        )
+        return _PayloadPartition(
+            partition_kind,
+            partition_id,
+            describe_member_from_receipt(
+                blob_ref=blob_ref,
+                role=PARTITION_ROLES[partition_kind],
+                media_type="application/x-ndjson",
+                byte_size=byte_size,
+                record_count=record_count,
+            ),
+        )
+    finally:
+        path.unlink(missing_ok=True)
 
 
 def _policy(build: SourceNativeReleaseBuild, profile: SourceNativeProfile) -> dict[str, Any]:
@@ -473,41 +648,56 @@ def _select_observations(
     *,
     profile: SourceNativeProfile,
 ) -> None:
-    """Select one record per source id without loading a source collection."""
+    """Select one record per source id using the disk-backed SQLite index."""
 
     connection.execute("UPDATE observations SET selected = 0")
-    previous_group: tuple[int, str] | None = None
-    previous_version: str | None = None
-    previous_digest: str | None = None
-    selected_ordinals: list[tuple[int, int]] = []
-    for traversal, ordinal, source_record_id, source_version, record_digest in connection.execute(
-        "SELECT traversal, ordinal, source_record_id, source_version, record_digest FROM observations "
-        "ORDER BY traversal, source_record_id, source_version IS NULL, "
-        "source_version DESC, record_digest"
-    ):
-        group = (int(traversal), str(source_record_id))
-        if group != previous_group:
-            selected_ordinals.append((int(traversal), int(ordinal)))
-            previous_group = group
-            previous_version = source_version
-            previous_digest = str(record_digest)
-            continue
-        if profile.observation_version is None:
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS observations_selection "
+        "ON observations (traversal, source_record_id, source_version, record_digest, ordinal)"
+    )
+    if profile.observation_version is None:
+        duplicate = connection.execute(
+            "SELECT traversal, source_record_id FROM observations "
+            "GROUP BY traversal, source_record_id HAVING count(*) > 1 "
+            "ORDER BY traversal, source_record_id LIMIT 1"
+        ).fetchone()
+        if duplicate is not None:
             raise SourceNativeReleaseError(
-                f"{profile.name} traversal repeats {source_record_id!r}"
+                f"{profile.name} traversal repeats {str(duplicate[1])!r}"
             )
-        if source_version == previous_version:
-            if str(record_digest) != previous_digest:
-                raise SourceNativeReleaseError(
-                    f"{profile.name} has an unresolved source-version tie for "
-                    f"{source_record_id!r} at {source_version!r}"
-                )
-            continue
-        previous_version = source_version
-        previous_digest = str(record_digest)
-    connection.executemany(
-        "UPDATE observations SET selected = 1 WHERE traversal = ? AND ordinal = ?",
-        selected_ordinals,
+    else:
+        duplicate_condition = (
+            "count(*) > 1"
+            if profile.refuse_equal_observation_versions
+            else "count(DISTINCT record_digest) > 1"
+        )
+        duplicate = connection.execute(
+            "SELECT traversal, source_record_id, source_version FROM observations "
+            "GROUP BY traversal, source_record_id, source_version HAVING "
+            f"{duplicate_condition} "
+            "ORDER BY traversal, source_record_id, source_version IS NULL, "
+            "source_version DESC LIMIT 1"
+        ).fetchone()
+        if duplicate is not None:
+            raise SourceNativeReleaseError(
+                f"{profile.name} has an unresolved source-version tie for "
+                f"{str(duplicate[1])!r} at {duplicate[2]!r}"
+            )
+
+    # The correlated lookup uses the file-backed index above. It marks the
+    # newest non-null normalized version, or the sole null version, without a
+    # Python collection proportional to the number of source identities.
+    connection.execute(
+        "UPDATE observations AS candidate SET selected = 1 WHERE NOT EXISTS ("
+        "SELECT 1 FROM observations AS preferred "
+        "WHERE preferred.traversal = candidate.traversal "
+        "AND preferred.source_record_id = candidate.source_record_id "
+        "AND ((preferred.source_version IS NOT NULL "
+        "AND (candidate.source_version IS NULL "
+        "OR preferred.source_version > candidate.source_version)) "
+        "OR (preferred.source_version IS candidate.source_version "
+        "AND preferred.record_digest = candidate.record_digest "
+        "AND preferred.ordinal < candidate.ordinal)))"
     )
 
 
@@ -534,18 +724,9 @@ def _accepted_traversal(
     )
 
 
-def _evidence_key(page: SourceNativePage) -> str:
-    suffixes = {
-        "application/json": "json",
-        "application/zip": "zip",
-    }
-    suffix = suffixes.get(page.evidence_media_type)
-    if suffix is None:
+def _validate_evidence_media_type(page: SourceNativePage) -> None:
+    if page.evidence_media_type not in {"application/json", "application/zip"}:
         raise SourceNativeReleaseError("source-native evidence media type is unsupported")
-    return (
-        f"evidence/traversal-{page.traversal_index:03d}/"
-        f"page-{page.page_index:06d}.{suffix}"
-    )
 
 
 def _query_mappings(
@@ -560,12 +741,23 @@ def _query_mappings(
         yield value
 
 
-def _query_renditions(connection: sqlite3.Connection, accepted_traversal: int) -> Iterator[Mapping[str, Any]]:
+def _query_renditions(
+    connection: sqlite3.Connection,
+    accepted_traversal: int,
+    partition_id: str | None = None,
+) -> Iterator[Mapping[str, Any]]:
     query = (
         "SELECT rendition_payload FROM observations "
-        "WHERE traversal = ? AND selected = 1 ORDER BY source_record_id"
+        "WHERE traversal = ? AND selected = 1 "
+        + ("AND partition_id = ? " if partition_id is not None else "")
+        + "ORDER BY source_record_id"
     )
-    for (payload,) in connection.execute(query, (accepted_traversal,)):
+    parameters: tuple[object, ...] = (
+        (accepted_traversal, partition_id)
+        if partition_id is not None
+        else (accepted_traversal,)
+    )
+    for (payload,) in connection.execute(query, parameters):
         values = parse_canonical_json(bytes(payload))
         if not isinstance(values, list):
             raise SourceNativeReleaseError("indexed rendition group is not an array")
@@ -575,54 +767,50 @@ def _query_renditions(connection: sqlite3.Connection, accepted_traversal: int) -
             yield value
 
 
-def _write_partitioned(
-    staging: Path,
-    *,
-    directory: str,
-    stem: str,
-    rows: Iterable[Mapping[str, Any]],
-) -> tuple[list[tuple[str, int]], int]:
-    iterator = iter(rows)
-    members: list[tuple[str, int]] = []
-    total = 0
-    partition = 0
-    while True:
-        batch = []
-        for _ in range(MAX_RECORDS_PER_MEMBER):
-            try:
-                batch.append(next(iterator))
-            except StopIteration:
-                break
-        if not batch:
-            break
-        object_key = f"{directory}/{stem}-{partition:06d}.jsonl"
-        count = _write_jsonl(staging / object_key, batch)
-        members.append((object_key, count))
-        total += count
-        partition += 1
-    if not members:
-        object_key = f"{directory}/{stem}-000000.jsonl"
-        _write_jsonl(staging / object_key, ())
-        members.append((object_key, 0))
-    return members, total
-
+def _ordered_rendition_rows(
+    profile: SourceNativeProfile,
+    record: Mapping[str, Any],
+) -> tuple[Mapping[str, Any], ...]:
+    values = tuple(profile.rendition_rows(record))
+    keys: list[tuple[str, str]] = []
+    for value in values:
+        source_record_id = value.get("sourceRecordId")
+        rendition_id = value.get("renditionId")
+        if (
+            not isinstance(source_record_id, str)
+            or not source_record_id
+            or not isinstance(rendition_id, str)
+            or not rendition_id
+        ):
+            raise SourceNativeReleaseError(
+                f"{profile.name} rendition row lacks its closed identity"
+            )
+        keys.append((source_record_id, rendition_id))
+    if len(set(keys)) != len(keys):
+        raise SourceNativeReleaseError(f"{profile.name} rendition identity is repeated")
+    return tuple(value for _, value in sorted(zip(keys, values, strict=True)))
 
 def _ledger_rows(
     connection: sqlite3.Connection,
     accepted_traversal: int,
+    partition_id: str | None = None,
 ) -> Iterator[Mapping[str, Any]]:
     query = (
-        "SELECT observations.source_record_id, observations.evidence_key, pages.evidence_sha256 "
-        "FROM observations JOIN pages ON pages.evidence_key = observations.evidence_key "
+        "SELECT observations.source_record_id, observations.evidence_ref "
+        "FROM observations "
         "WHERE observations.traversal = ? AND observations.selected = 1 "
+        + ("AND observations.partition_id = ? " if partition_id is not None else "")
+        +
         "ORDER BY observations.source_record_id"
     )
-    for source_record_id, evidence_key, evidence_sha256 in connection.execute(
-        query, (accepted_traversal,)
-    ):
+    parameters: tuple[object, ...] = (
+        (accepted_traversal, partition_id)
+        if partition_id is not None
+        else (accepted_traversal,)
+    )
+    for source_record_id, evidence_ref in connection.execute(query, parameters):
         yield {
-            "evidenceObjectKey": evidence_key,
-            "evidenceSha256": evidence_sha256,
+            "evidenceBlobRef": evidence_ref,
             "failure": None,
             "observationRef": {"sourceRecordId": source_record_id},
             "sourceRecordId": source_record_id,
@@ -634,15 +822,23 @@ def _page_rows(
     accepted_traversal: int,
     *,
     accepted_only: bool = False,
+    partition_id: str | None = None,
 ) -> Iterator[Mapping[str, Any]]:
+    conditions: list[str] = []
+    parameters: list[object] = []
+    if accepted_only:
+        conditions.append("traversal = ?")
+        parameters.append(accepted_traversal)
+    if partition_id is not None:
+        conditions.append("partition_id = ?")
+        parameters.append(partition_id)
     query = (
         "SELECT traversal, page, window_index, window_page, records_included, request_key, "
-        "source_cursor, next_cursor, evidence_key, evidence_media_type, evidence_sha256 "
+        "source_cursor, next_cursor, evidence_ref, evidence_media_type "
         "FROM pages "
-        + ("WHERE traversal = ? " if accepted_only else "")
+        + (("WHERE " + " AND ".join(conditions) + " ") if conditions else "")
         + "ORDER BY traversal, page"
     )
-    parameters = (accepted_traversal,) if accepted_only else ()
     for (
         traversal,
         page,
@@ -652,27 +848,26 @@ def _page_rows(
         request_key,
         source_cursor,
         next_cursor,
-        evidence_key,
+        evidence_ref,
         evidence_media_type,
-        evidence_sha256,
-    ) in connection.execute(query, parameters):
+    ) in connection.execute(query, tuple(parameters)):
         discovered = [
             {"recordDigest": record_digest, "sourceRecordId": source_record_id}
             for source_record_id, record_digest in connection.execute(
                 "SELECT source_record_id, record_digest FROM observations "
-                "WHERE traversal = ? AND evidence_key = ? ORDER BY ordinal",
-                (traversal, evidence_key),
+                "WHERE traversal = ? AND page = ? ORDER BY ordinal",
+                (traversal, page),
             )
         ]
         yield _PAGE_SHAPE.build(
             accepted=traversal == accepted_traversal,
             discoveredRecords=discovered,
             evidenceMediaType=evidence_media_type,
-            evidenceObjectKey=evidence_key,
+            evidenceBlobRef=evidence_ref,
             pageIndex=page,
             requestKey=request_key,
             recordsIncluded=bool(records_included),
-            responseDigest=evidence_sha256,
+            responseDigest=evidence_ref,
             sourceCursor=source_cursor,
             terminal=next_cursor is None,
             traversalIndex=traversal,
@@ -688,9 +883,11 @@ class SourceNativeReleasePublisher:
         self,
         profile: SourceNativeProfile,
         *,
+        blob_store: SourceNativeBlobStore,
         clock: Callable[[], datetime] = _now,
     ) -> None:
         self._profile = profile
+        self._blob_store = blob_store
         self._clock = clock
 
     def publish(
@@ -710,13 +907,17 @@ class SourceNativeReleasePublisher:
         destination.parent.mkdir(parents=True, exist_ok=True)
         staging = Path(tempfile.mkdtemp(prefix=f".{destination.name}.", suffix=".staging", dir=destination.parent))
         scratch = Path(tempfile.mkdtemp(prefix="source-native-index-", dir=destination.parent))
+        accounting = _ByteAccounting()
+        evidence_members: dict[str, MemberDescriptor] = {}
         try:
             connection = sqlite3.connect(scratch / "release.sqlite3")
             try:
                 self._index_pages(
                     connection,
                     pages,
-                    staging,
+                    blob_store=self._blob_store,
+                    accounting=accounting,
+                    evidence_members=evidence_members,
                     query_scope=canonical_scope,
                     profile=profile,
                 )
@@ -735,6 +936,11 @@ class SourceNativeReleasePublisher:
                     accepted_traversal=accepted,
                     traversal_count=traversal_count,
                     profile=profile,
+                    blob_store=self._blob_store,
+                    accounting=accounting,
+                    evidence_descriptors=tuple(
+                        evidence_members[key] for key in sorted(evidence_members)
+                    ),
                 )
             finally:
                 connection.close()
@@ -746,19 +952,21 @@ class SourceNativeReleasePublisher:
     def _index_pages(
         connection: sqlite3.Connection,
         pages: Iterable[SourceNativePage],
-        staging: Path,
         *,
+        blob_store: SourceNativeBlobStore,
+        accounting: _ByteAccounting,
+        evidence_members: dict[str, MemberDescriptor],
         query_scope: Mapping[str, Any],
         profile: SourceNativeProfile,
     ) -> None:
         connection.executescript(
             "CREATE TABLE pages (traversal INTEGER, page INTEGER, window_index INTEGER, window_page INTEGER, "
             "records_included INTEGER, request_key TEXT, source_cursor TEXT, next_cursor TEXT, "
-            "evidence_key TEXT UNIQUE, evidence_media_type TEXT, evidence_sha256 TEXT, "
+            "evidence_ref TEXT, evidence_media_type TEXT, partition_id TEXT, "
             "PRIMARY KEY (traversal, page), UNIQUE (traversal, window_index, window_page));"
-            "CREATE TABLE observations (traversal INTEGER, ordinal INTEGER, source_record_id TEXT, "
+            "CREATE TABLE observations (traversal INTEGER, page INTEGER, ordinal INTEGER, source_record_id TEXT, "
             "source_version TEXT, selected INTEGER NOT NULL DEFAULT 0, record_digest TEXT, "
-            "record_payload BLOB, rendition_payload BLOB, evidence_key TEXT, "
+            "record_payload BLOB, rendition_payload BLOB, evidence_ref TEXT, partition_id TEXT, "
             "PRIMARY KEY (traversal, ordinal));"
         )
         previous: SourceNativePage | None = None
@@ -859,14 +1067,35 @@ class SourceNativeReleasePublisher:
                 next_cursor = profile.next_page(response, seen_urls=seen_urls)
             else:
                 next_cursor = None
-            key = _evidence_key(page)
-            write_bytes_once(staging / key, page.response_bytes)
-            evidence_descriptor = describe_member(
-                LocalMemberSource(staging),
-                object_key=key,
-                role=ROLE_EVIDENCE,
-                media_type=page.evidence_media_type,
-            )
+            _validate_evidence_media_type(page)
+            evidence_ref = "sha256:" + hashlib.sha256(page.response_bytes).hexdigest()
+            evidence_descriptor = evidence_members.get(evidence_ref)
+            if evidence_descriptor is None:
+                write = blob_store.put_blob(
+                    evidence_ref,
+                    len(page.response_bytes),
+                    (page.response_bytes,),
+                )
+                accounting.add(
+                    byte_size=len(page.response_bytes),
+                    reused=write.reused,
+                    bytes_written=write.bytes_written,
+                )
+                evidence_descriptor = describe_member_from_receipt(
+                    blob_ref=evidence_ref,
+                    role=ROLE_EVIDENCE,
+                    media_type=page.evidence_media_type,
+                    byte_size=len(page.response_bytes),
+                    record_count=0,
+                )
+                evidence_members[evidence_ref] = evidence_descriptor
+            elif (
+                evidence_descriptor.byte_size != len(page.response_bytes)
+                or evidence_descriptor.media_type != page.evidence_media_type
+            ):
+                raise SourceNativeReleaseError(
+                    "source-native evidence content has conflicting declarations"
+                )
             connection.execute(
                 "INSERT INTO pages VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
@@ -878,9 +1107,9 @@ class SourceNativeReleasePublisher:
                     page.request_key,
                     page.source_cursor,
                     next_cursor,
-                    key,
+                    evidence_ref,
                     page.evidence_media_type,
-                    evidence_descriptor.sha256,
+                    _partition_id(f"{page.traversal_index}:{page.page_index}"),
                 ),
             )
             for raw_record in response["results"] if records_included else ():
@@ -894,7 +1123,7 @@ class SourceNativeReleasePublisher:
                     record,
                     schema_digest=profile.source_schema_digest(),
                 )
-                renditions = tuple(profile.rendition_rows(record))
+                renditions = _ordered_rendition_rows(profile, record)
                 source_record_id = wrapped.get("sourceRecordId")
                 if not isinstance(source_record_id, str) or not source_record_id:
                     raise SourceNativeReleaseError(
@@ -902,16 +1131,18 @@ class SourceNativeReleasePublisher:
                     )
                 try:
                     connection.execute(
-                        "INSERT INTO observations VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?)",
+                        "INSERT INTO observations VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?)",
                         (
                             page.traversal_index,
+                            page.page_index,
                             ordinal,
                             source_record_id,
                             _observation_version(profile, record),
                             profile.record_digest(record),
                             canonical_json_bytes(wrapped),
                             canonical_json_bytes(renditions),
-                            key,
+                            evidence_ref,
+                            _partition_id(source_record_id),
                         ),
                     )
                 except sqlite3.IntegrityError as error:
@@ -945,6 +1176,9 @@ class SourceNativeReleasePublisher:
         accepted_traversal: int,
         traversal_count: int,
         profile: SourceNativeProfile,
+        blob_store: SourceNativeBlobStore,
+        accounting: _ByteAccounting,
+        evidence_descriptors: tuple[MemberDescriptor, ...],
     ) -> PublishedSourceNativeRelease:
         scopes = [
             {
@@ -955,9 +1189,9 @@ class SourceNativeReleasePublisher:
             }
         ]
         schema_declarations = [profile.source_schema_declaration()]
-        record_query = (
-            "SELECT record_payload FROM observations "
-            "WHERE traversal = ? AND selected = 1 ORDER BY source_record_id"
+        record_query = "SELECT record_payload FROM observations "
+        selected_record_query = (
+            record_query + "WHERE traversal = ? AND selected = 1 ORDER BY source_record_id"
         )
         observation_query = (
             "SELECT record_payload FROM observations WHERE traversal = ? "
@@ -977,7 +1211,7 @@ class SourceNativeReleasePublisher:
         )
 
         def records() -> Iterator[Mapping[str, Any]]:
-            return _query_mappings(connection, record_query, (accepted_traversal,))
+            return _query_mappings(connection, selected_record_query, (accepted_traversal,))
 
         def observations() -> Iterator[Mapping[str, Any]]:
             return _query_mappings(connection, observation_query, (accepted_traversal,))
@@ -986,66 +1220,70 @@ class SourceNativeReleasePublisher:
             return _query_renditions(connection, accepted_traversal)
 
         rendition_count = sum(1 for _ in renditions())
-
-        _write_jsonl(staging / SCOPES_KEY, scopes)
-        write_bytes_once(
-            staging / profile.source_schema_key,
-            canonical_json_bytes(profile.source_schema),
-        )
         release_schemas = installed_release_schema_bundle()
-        write_bytes_once(staging / RELEASE_SCHEMA_KEY, canonical_json_bytes(release_schemas))
-        record_members, written_record_count = _write_partitioned(
-            staging,
-            directory="records",
-            stem=profile.record_stem,
-            rows=records(),
-        )
-        rendition_members, written_rendition_count = _write_partitioned(
-            staging,
-            directory="records",
-            stem="renditions",
-            rows=renditions(),
-        )
-        if (
-            written_record_count != published_record_count
-            or written_rendition_count != rendition_count
-        ):
-            raise SourceNativeReleaseError("partitioned source-native accounting differs")
-
-        source = LocalMemberSource(staging)
-        evidence_descriptors = [
-            describe_member(
-                source,
-                object_key=str(row[0]),
-                role=ROLE_EVIDENCE,
-                media_type=str(row[1]),
-            )
-            for row in connection.execute(
-                "SELECT evidence_key, evidence_media_type FROM pages ORDER BY traversal, page"
-            )
-        ]
         page_count = int(connection.execute("SELECT count(*) FROM pages").fetchone()[0])
         accepted_page_count = int(
             connection.execute(
                 "SELECT count(*) FROM pages WHERE traversal = ?", (accepted_traversal,)
             ).fetchone()[0]
         )
-        ledger_members, written_ledger_count = _write_partitioned(
-            staging,
-            directory="acquisition",
-            stem="records",
-            rows=_ledger_rows(connection, accepted_traversal),
-        )
-        if written_ledger_count != published_record_count:
-            raise SourceNativeReleaseError("partitioned acquisition-ledger accounting differs")
-        page_members, written_page_count = _write_partitioned(
-            staging,
-            directory="acquisition",
-            stem="pages",
-            rows=_page_rows(connection, accepted_traversal),
-        )
-        if written_page_count != page_count:
-            raise SourceNativeReleaseError("acquisition-page accounting differs")
+        partitions: list[_PayloadPartition] = []
+        for partition_id in (f"{index:02d}" for index in range(PARTITION_BUCKET_COUNT)):
+            rows_by_kind: tuple[tuple[str, Iterable[Mapping[str, Any]]], ...] = (
+                (
+                    PARTITION_LEDGER,
+                    _ledger_rows(connection, accepted_traversal, partition_id),
+                ),
+                (
+                    PARTITION_PAGES,
+                    _page_rows(
+                        connection,
+                        accepted_traversal,
+                        partition_id=partition_id,
+                    ),
+                ),
+                (
+                    PARTITION_RECORDS,
+                    _query_mappings(
+                        connection,
+                        record_query
+                        + "WHERE traversal = ? AND selected = 1 AND partition_id = ? "
+                        "ORDER BY source_record_id",
+                        (accepted_traversal, partition_id),
+                    ),
+                ),
+                (
+                    PARTITION_RENDITIONS,
+                    _query_renditions(connection, accepted_traversal, partition_id),
+                ),
+            )
+            for partition_kind, rows in rows_by_kind:
+                partition = _stage_partition(
+                    scratch,
+                    blob_store=blob_store,
+                    accounting=accounting,
+                    partition_kind=partition_kind,
+                    partition_id=partition_id,
+                    rows=rows,
+                )
+                if partition is not None:
+                    partitions.append(partition)
+        partitions.sort(key=lambda value: (value.partition_kind, value.partition_id))
+        partition_counts = {
+            kind: sum(
+                partition.member.record_count or 0
+                for partition in partitions
+                if partition.partition_kind == kind
+            )
+            for kind in PARTITION_KINDS
+        }
+        if (
+            partition_counts[PARTITION_RECORDS] != published_record_count
+            or partition_counts[PARTITION_RENDITIONS] != rendition_count
+            or partition_counts[PARTITION_LEDGER] != published_record_count
+            or partition_counts[PARTITION_PAGES] != page_count
+        ):
+            raise SourceNativeReleaseError("partitioned source-native accounting differs")
 
         schema_set_digest = _digest_records(
             "spicyregs-source-schema-set/1", "schemas", schema_declarations
@@ -1094,99 +1332,6 @@ class SourceNativeReleasePublisher:
         completed_at = _instant(self._clock)
         if _utc(completed_at, "completed_at") < _utc(build.started_at, "started_at"):
             raise SourceNativeReleaseError("publisher completion precedes acquisition start")
-        receipt = _RECEIPT_SHAPE.build(
-            acquisitionEvidenceCount=len(evidence_descriptors),
-            acquisitionLedgerDigest=ledger_digest,
-            acquisitionPolicyDigest=_policy_digest(build, profile),
-            completedAt=completed_at,
-            discoveredRecordCount=input_observation_count,
-            discardedObservationCount=(
-                input_observation_count - published_record_count
-            ),
-            failedRecordCount=0,
-            format=FORMAT,
-            formatVersion=FORMAT_VERSION,
-            inputObservationCount=input_observation_count,
-            inputObservationDigest=input_digest,
-            publishedRecordCount=published_record_count,
-            reconciliationDigest=reconciliation_digest,
-            reconciliationPassCount=traversal_count,
-            releaseSchemaDigest=release_schema_digest,
-            releaseSchemaId=RELEASE_SCHEMA_ID,
-            renditionIndexCount=rendition_count,
-            semanticVerdict="pass",
-            sourceNativeSchemaSetDigest=schema_set_digest,
-            sourceStateDigest=state_digest,
-            sourceStateScope=profile.source_state_scope,
-            sourceSystemId=profile.source_system_id,
-            startedAt=build.started_at,
-            verifierId=build.producer.verifier_id,
-            verifierImplementationId=build.producer.verifier_implementation_id,
-            verifierVersion=build.producer.verifier_version,
-            warnings=[],
-        )
-        write_bytes_once(staging / RECEIPT_KEY, canonical_json_bytes(receipt))
-
-        source = LocalMemberSource(staging)
-        members = evidence_descriptors + [
-            describe_member(source, object_key=SCOPES_KEY, role=ROLE_SCOPES, media_type="application/x-ndjson", record_count=1),
-            describe_member(source, object_key=RECEIPT_KEY, role=ROLE_RECEIPT, media_type="application/json"),
-            describe_member(source, object_key=RELEASE_SCHEMA_KEY, role=ROLE_RELEASE_SCHEMA, media_type="application/schema+json", schema_id=RELEASE_SCHEMA_ID),
-            describe_member(
-                source,
-                object_key=profile.source_schema_key,
-                role=ROLE_SCHEMA,
-                media_type="application/schema+json",
-                schema_id=str(profile.source_schema["$id"]),
-            ),
-        ]
-        members.extend(
-            describe_member(
-                source,
-                object_key=object_key,
-                role=ROLE_LEDGER,
-                media_type="application/x-ndjson",
-                record_count=count,
-            )
-            for object_key, count in ledger_members
-        )
-        members.extend(
-            describe_member(
-                source,
-                object_key=object_key,
-                role=ROLE_LEDGER,
-                media_type="application/x-ndjson",
-                record_count=count,
-            )
-            for object_key, count in page_members
-        )
-        members.extend(
-            describe_member(
-                source,
-                object_key=object_key,
-                role=ROLE_RECORDS,
-                media_type="application/x-ndjson",
-                record_count=count,
-            )
-            for object_key, count in record_members
-        )
-        members.extend(
-            describe_member(
-                source,
-                object_key=object_key,
-                role=ROLE_RENDITIONS,
-                media_type="application/x-ndjson",
-                record_count=count,
-            )
-            for object_key, count in rendition_members
-        )
-        manifest, manifest_bytes = MemberManifestReference.for_members(
-            scope_kind="global",
-            scope_id="source-native",
-            object_key=MANIFEST_KEY,
-            members=members,
-        )
-        write_bytes_once(staging / MANIFEST_KEY, manifest_bytes)
         spec = {
             "acquisitionPolicyDigest": _policy_digest(build, profile),
             "acquisitionPolicyId": profile.acquisition_policy_id,
@@ -1198,20 +1343,144 @@ class SourceNativeReleasePublisher:
             "sourceSystemId": profile.source_system_id,
             "sourceSystemVersion": profile.source_system_version,
         }
-        root = build_artifact_root(
-            kind=KIND,
-            spec=spec,
-            producer=build.producer,
-            manifests=(manifest,),
-            supersedes=build.supersedes,
+        receipt: dict[str, Any] = {
+            "acquisitionEvidenceCount": len(evidence_descriptors),
+            "acquisitionLedgerDigest": ledger_digest,
+            "acquisitionPolicyDigest": _policy_digest(build, profile),
+            "byteMeasurements": {
+                "payloadBytesRead": accounting.payload_bytes_read,
+                "payloadBytesReused": accounting.payload_bytes_reused,
+                "payloadBytesWritten": accounting.payload_bytes_written,
+                "publicationBytesWritten": 0,
+            },
+            "completedAt": completed_at,
+            "discoveredRecordCount": input_observation_count,
+            "discardedObservationCount": (
+                input_observation_count - published_record_count
+            ),
+            "failedRecordCount": 0,
+            "format": FORMAT,
+            "formatVersion": FORMAT_VERSION,
+            "inputObservationCount": input_observation_count,
+            "inputObservationDigest": input_digest,
+            "partitionPolicy": _partition_policy(),
+            "payloadPartitions": [partition.receipt() for partition in partitions],
+            "publishedRecordCount": published_record_count,
+            "reconciliationDigest": reconciliation_digest,
+            "reconciliationPassCount": traversal_count,
+            "releaseSchemaDigest": release_schema_digest,
+            "releaseSchemaId": RELEASE_SCHEMA_ID,
+            "renditionIndexCount": rendition_count,
+            "semanticVerdict": "pass",
+            "sourceNativeSchemaSetDigest": schema_set_digest,
+            "sourceStateDigest": state_digest,
+            "sourceStateScope": profile.source_state_scope,
+            "sourceSystemId": profile.source_system_id,
+            "startedAt": build.started_at,
+            "verifierId": build.producer.verifier_id,
+            "verifierImplementationId": build.producer.verifier_implementation_id,
+            "verifierVersion": build.producer.verifier_version,
+            "warnings": [],
+        }
+        scopes_bytes = b"".join(
+            chunk
+            for value in scopes
+            for chunk in (canonical_json_bytes(value), b"\n")
         )
-        write_bytes_once(staging / ROOT_OBJECT_KEY, canonical_json_bytes(root))
+        source_schema_bytes = canonical_json_bytes(profile.source_schema)
+        release_schema_bytes = canonical_json_bytes(release_schemas)
+        external_members = (
+            *evidence_descriptors,
+            *(partition.member for partition in partitions),
+        )
+        refs = [member.blob_ref for member in external_members]
+        if None in refs or len(set(refs)) != len(refs):
+            raise SourceNativeReleaseError(
+                "source-native external payload members must have distinct content identities"
+            )
+        publication_bytes = -1
+        for _ in range(8):
+            receipt["byteMeasurements"]["publicationBytesWritten"] = max(
+                publication_bytes, 0
+            )
+            receipt = _RECEIPT_SHAPE.parse(receipt)
+            receipt_bytes = canonical_json_bytes(receipt)
+            local_members = (
+                describe_member_from_receipt(
+                    object_key=SCOPES_KEY,
+                    sha256="sha256:" + hashlib.sha256(scopes_bytes).hexdigest(),
+                    role=ROLE_SCOPES,
+                    media_type="application/x-ndjson",
+                    byte_size=len(scopes_bytes),
+                    record_count=1,
+                ),
+                describe_member_from_receipt(
+                    object_key=RECEIPT_KEY,
+                    sha256="sha256:" + hashlib.sha256(receipt_bytes).hexdigest(),
+                    role=ROLE_RECEIPT,
+                    media_type="application/json",
+                    byte_size=len(receipt_bytes),
+                ),
+                describe_member_from_receipt(
+                    object_key=RELEASE_SCHEMA_KEY,
+                    sha256="sha256:" + hashlib.sha256(release_schema_bytes).hexdigest(),
+                    role=ROLE_RELEASE_SCHEMA,
+                    media_type="application/schema+json",
+                    byte_size=len(release_schema_bytes),
+                    schema_id=RELEASE_SCHEMA_ID,
+                ),
+                describe_member_from_receipt(
+                    object_key=profile.source_schema_key,
+                    sha256="sha256:" + hashlib.sha256(source_schema_bytes).hexdigest(),
+                    role=ROLE_SCHEMA,
+                    media_type="application/schema+json",
+                    byte_size=len(source_schema_bytes),
+                    schema_id=str(profile.source_schema["$id"]),
+                ),
+            )
+            manifest, manifest_bytes = MemberManifestReference.for_members(
+                scope_kind="global",
+                scope_id="source-native",
+                object_key=MANIFEST_KEY,
+                members=(*local_members, *external_members),
+            )
+            root = build_artifact_root(
+                kind=KIND,
+                spec=spec,
+                producer=build.producer,
+                manifests=(manifest,),
+                supersedes=build.supersedes,
+            )
+            root_bytes = canonical_json_bytes(root)
+            measured = (
+                len(scopes_bytes)
+                + len(receipt_bytes)
+                + len(release_schema_bytes)
+                + len(source_schema_bytes)
+                + len(manifest_bytes)
+                + len(root_bytes)
+            )
+            if measured == publication_bytes:
+                break
+            publication_bytes = measured
+        else:
+            raise SourceNativeReleaseError(
+                "source-native publication byte accounting did not stabilize"
+            )
+        write_bytes_once(staging / SCOPES_KEY, scopes_bytes)
+        write_bytes_once(staging / profile.source_schema_key, source_schema_bytes)
+        write_bytes_once(staging / RELEASE_SCHEMA_KEY, release_schema_bytes)
+        write_bytes_once(staging / RECEIPT_KEY, receipt_bytes)
+        write_bytes_once(staging / MANIFEST_KEY, manifest_bytes)
+        write_bytes_once(staging / ROOT_OBJECT_KEY, root_bytes)
         artifact = admit_artifact(
             LocalMemberSource(staging),
+            blob_source=blob_store,
             semantic_verifier=lambda artifact, source: verify_source_native_release(
                 artifact,
                 source,
                 profile=profile,
+                blob_source=blob_store,
             ),
             scratch_directory=scratch / "verify",
         )
@@ -1219,66 +1488,218 @@ class SourceNativeReleasePublisher:
         return PublishedSourceNativeRelease(destination, artifact)
 
 
-def _member_index(artifact: VerifiedArtifact, source: MemberSource) -> tuple[dict[str, MemberDescriptor], dict[str, list[MemberDescriptor]]]:
+def _member_index(
+    artifact: VerifiedArtifact,
+    source: MemberSource,
+) -> tuple[
+    dict[str, MemberDescriptor],
+    dict[str, MemberDescriptor],
+    dict[str, list[MemberDescriptor]],
+]:
     by_key: dict[str, MemberDescriptor] = {}
+    by_ref: dict[str, MemberDescriptor] = {}
     by_role: dict[str, list[MemberDescriptor]] = {}
     for member in iter_member_descriptors(artifact, source):
-        if member.object_key is None:
-            raise SourceNativeReleaseError("source-native release does not yet admit external blob members")
-        by_key[member.object_key] = member
+        if member.object_key is not None:
+            by_key[member.object_key] = member
+        elif member.blob_ref is not None:
+            by_ref[member.blob_ref] = member
+        else:
+            raise SourceNativeReleaseError("source-native member has no location")
         by_role.setdefault(member.role, []).append(member)
     roles = frozenset(by_role)
-    if roles != REQUIRED_ROLES:
+    if not ALWAYS_REQUIRED_ROLES <= roles <= REQUIRED_ROLES:
         raise SourceNativeReleaseError(
-            f"source-native roles differ; missing={sorted(REQUIRED_ROLES - roles)}, "
+            f"source-native roles differ; missing={sorted(ALWAYS_REQUIRED_ROLES - roles)}, "
             f"unknown={sorted(roles - REQUIRED_ROLES)}"
         )
-    return by_key, by_role
+    for role in (ROLE_RECORDS, ROLE_RENDITIONS, ROLE_LEDGER, ROLE_EVIDENCE):
+        if any(member.blob_ref is None for member in by_role.get(role, ())):
+            raise SourceNativeReleaseError(
+                f"source-native {role} payload members must use external blobRef locations"
+            )
+    for role in (ROLE_SCOPES, ROLE_SCHEMA, ROLE_RELEASE_SCHEMA, ROLE_RECEIPT):
+        if any(member.object_key is None for member in by_role[role]):
+            raise SourceNativeReleaseError(
+                f"source-native {role} publication members must be local"
+            )
+    return by_key, by_ref, by_role
 
 
-def _role_rows(
-    source: MemberSource,
-    members: Sequence[MemberDescriptor],
-) -> Iterator[Mapping[str, Any]]:
-    selected = sorted(
-        members,
-        key=lambda member: str(member.object_key),
-    )
-    for member in selected:
-        yield from _read_jsonl(source, str(member.object_key))
-
-
-def _partitioned_ledger_members(
-    members: Sequence[MemberDescriptor],
-    *,
-    stem: str,
-) -> tuple[MemberDescriptor, ...]:
-    prefix = f"acquisition/{stem}-"
-    selected = tuple(
-        sorted(
-            (
-                member
-                for member in members
-                if isinstance(member.object_key, str)
-                and member.object_key.startswith(prefix)
-            ),
-            key=lambda member: str(member.object_key),
-        )
-    )
-    expected = [f"{prefix}{index:06d}.jsonl" for index in range(len(selected))]
-    if (
-        not selected
-        or [member.object_key for member in selected] != expected
-        or any(
-            member.media_type != "application/x-ndjson"
-            or member.record_count is None
-            for member in selected
-        )
-    ):
+def _partition_row_identity(
+    partition_kind: str,
+    row: Mapping[str, Any],
+) -> tuple[int, int, int, str, str]:
+    if partition_kind == PARTITION_PAGES:
+        traversal = row.get("traversalIndex")
+        page = row.get("pageIndex")
+        if (
+            isinstance(traversal, bool)
+            or not isinstance(traversal, int)
+            or traversal < 0
+            or isinstance(page, bool)
+            or not isinstance(page, int)
+            or page < 0
+        ):
+            raise SourceNativeReleaseError("acquisition-page partition key is invalid")
+        return (0, traversal, page, "", "")
+    source_record_id = row.get("sourceRecordId")
+    if not isinstance(source_record_id, str) or not source_record_id:
         raise SourceNativeReleaseError(
-            f"source-native {stem} ledger members are missing or unordered"
+            f"source-native {partition_kind} row lacks sourceRecordId"
         )
-    return selected
+    if partition_kind == PARTITION_RENDITIONS:
+        rendition_id = row.get("renditionId")
+        if not isinstance(rendition_id, str) or not rendition_id:
+            raise SourceNativeReleaseError("rendition partition row lacks renditionId")
+        return (1, 0, 0, source_record_id, rendition_id)
+    return (1, 0, 0, source_record_id, "")
+
+
+def _identity_bucket_for_row(partition_kind: str, row: Mapping[str, Any]) -> str:
+    key = _partition_row_identity(partition_kind, row)
+    if partition_kind == PARTITION_PAGES:
+        return _partition_id(f"{key[1]}:{key[2]}")
+    return _partition_id(key[3])
+
+
+def _partition_rows(
+    source: MemberSource,
+    blob_source: BlobSource | None,
+    partitions: Sequence[_PayloadPartition],
+) -> Iterator[Mapping[str, Any]]:
+    if not partitions:
+        return
+    selected = tuple(sorted(partitions, key=lambda value: value.partition_id))
+    partition_kind = selected[0].partition_kind
+    if any(value.partition_kind != partition_kind for value in selected):
+        raise SourceNativeReleaseError("source-native partition stream mixes kinds")
+    with ExitStack() as stack:
+        iterators: list[Iterator[Mapping[str, Any]]] = []
+        heap: list[
+            tuple[tuple[int, int, int, str, str], int, Mapping[str, Any]]
+        ] = []
+        previous_by_partition: list[tuple[int, int, int, str, str] | None] = []
+        for index, partition in enumerate(selected):
+            stream = stack.enter_context(
+                _open_descriptor(source, blob_source, partition.member)
+            )
+            iterator = _jsonl_rows(
+                stream,
+                label=partition.member.blob_ref or "external-member",
+            )
+            iterators.append(iterator)
+            previous_by_partition.append(None)
+            try:
+                row = next(iterator)
+            except StopIteration:
+                if partition.member.record_count != 0:
+                    raise SourceNativeReleaseError(
+                        "source-native partition record count differs"
+                    )
+                continue
+            key = _partition_row_identity(partition_kind, row)
+            if _identity_bucket_for_row(partition_kind, row) != partition.partition_id:
+                raise SourceNativeReleaseError(
+                    "source-native row is assigned to the wrong identity bucket"
+                )
+            previous_by_partition[index] = key
+            heapq.heappush(heap, (key, index, row))
+        observed_counts = [0 for _ in selected]
+        previous_key: tuple[int, int, int, str, str] | None = None
+        while heap:
+            key, index, row = heapq.heappop(heap)
+            if previous_key is not None and key <= previous_key:
+                raise SourceNativeReleaseError(
+                    f"source-native {partition_kind} rows are repeated or unordered"
+                )
+            previous_key = key
+            observed_counts[index] += 1
+            yield row
+            try:
+                next_row = next(iterators[index])
+            except StopIteration:
+                continue
+            next_key = _partition_row_identity(partition_kind, next_row)
+            previous_in_partition = previous_by_partition[index]
+            if previous_in_partition is not None and next_key <= previous_in_partition:
+                raise SourceNativeReleaseError(
+                    f"source-native {partition_kind} partition is unordered"
+                )
+            if _identity_bucket_for_row(partition_kind, next_row) != selected[index].partition_id:
+                raise SourceNativeReleaseError(
+                    "source-native row is assigned to the wrong identity bucket"
+                )
+            previous_by_partition[index] = next_key
+            heapq.heappush(heap, (next_key, index, next_row))
+        for partition, observed in zip(selected, observed_counts, strict=True):
+            if partition.member.record_count != observed:
+                raise SourceNativeReleaseError(
+                    "source-native partition record count differs"
+                )
+
+
+def _payload_partitions(
+    receipt: Mapping[str, Any],
+    by_ref: Mapping[str, MemberDescriptor],
+) -> dict[str, tuple[_PayloadPartition, ...]]:
+    if receipt.get("partitionPolicy") != _partition_policy():
+        raise SourceNativeReleaseError("source-native partition policy differs")
+    raw_partitions = receipt.get("payloadPartitions")
+    if not isinstance(raw_partitions, list):
+        raise SourceNativeReleaseError("source-native payload partitions are absent")
+    result: dict[str, list[_PayloadPartition]] = {kind: [] for kind in PARTITION_KINDS}
+    previous: tuple[str, str] | None = None
+    seen_refs: set[str] = set()
+    for raw in raw_partitions:
+        if not isinstance(raw, Mapping):
+            raise SourceNativeReleaseError("source-native payload partition is not an object")
+        partition = dict(raw)
+        kind = partition.get("partitionKind")
+        partition_id = partition.get("partitionId")
+        blob_ref = partition.get("blobRef")
+        if (
+            not isinstance(kind, str)
+            or kind not in PARTITION_ROLES
+            or not isinstance(partition_id, str)
+            or len(partition_id) != 2
+            or not partition_id.isascii()
+            or not partition_id.isdigit()
+            or int(partition_id) >= PARTITION_BUCKET_COUNT
+            or not isinstance(blob_ref, str)
+        ):
+            raise SourceNativeReleaseError("source-native payload partition identity is invalid")
+        order_key = (kind, partition_id)
+        if previous is not None and order_key <= previous:
+            raise SourceNativeReleaseError(
+                "source-native payload partitions are repeated or unordered"
+            )
+        previous = order_key
+        member = by_ref.get(blob_ref)
+        if (
+            member is None
+            or member.role != PARTITION_ROLES[kind]
+            or member.media_type != "application/x-ndjson"
+            or member.byte_size != partition.get("byteSize")
+            or member.record_count != partition.get("recordCount")
+            or not isinstance(member.record_count, int)
+            or member.record_count <= 0
+            or blob_ref in seen_refs
+        ):
+            raise SourceNativeReleaseError(
+                "source-native payload partition differs from its manifest member"
+            )
+        seen_refs.add(blob_ref)
+        result[kind].append(_PayloadPartition(kind, partition_id, member))
+    partition_roles = {ROLE_RECORDS, ROLE_RENDITIONS, ROLE_LEDGER}
+    manifest_partition_refs = {
+        blob_ref for blob_ref, member in by_ref.items() if member.role in partition_roles
+    }
+    if seen_refs != manifest_partition_refs:
+        raise SourceNativeReleaseError(
+            "source-native receipt does not account for every payload partition"
+        )
+    return {kind: tuple(values) for kind, values in result.items()}
 
 
 def verify_source_native_admission(
@@ -1286,10 +1707,15 @@ def verify_source_native_admission(
     source: MemberSource,
     *,
     profile: SourceNativeProfile,
+    blob_source: BlobSource | None,
 ) -> None:
     """Check bounded receipt/root agreement for consumer open."""
 
-    by_key, by_role = _member_index(artifact, source)
+    by_key, by_ref, by_role = _member_index(artifact, source)
+    if by_ref and blob_source is None:
+        raise SourceNativeReleaseError(
+            "source-native external members require an injected blob source"
+        )
     if artifact.root.get("kind") != KIND:
         raise SourceNativeReleaseError("artifact is not a SpicyRegs source-native release")
     spec = artifact.root.get("spec")
@@ -1319,13 +1745,8 @@ def verify_source_native_admission(
         members = by_role[role]
         if len(members) != 1 or members[0].object_key != object_key:
             raise SourceNativeReleaseError(f"source-native release must carry one {role} member")
-    page_members = _partitioned_ledger_members(by_role[ROLE_LEDGER], stem="pages")
-    record_ledger_members = _partitioned_ledger_members(
-        by_role[ROLE_LEDGER], stem="records"
-    )
-    if len(page_members) + len(record_ledger_members) != len(by_role[ROLE_LEDGER]):
-        raise SourceNativeReleaseError("source-native release has unknown ledger members")
     receipt = _RECEIPT_SHAPE.parse(_read_one_json(source, RECEIPT_KEY))
+    partitions = _payload_partitions(receipt, by_ref)
     for field in (
         "acquisitionPolicyDigest",
         "releaseSchemaDigest",
@@ -1384,6 +1805,52 @@ def verify_source_native_admission(
         != receipt["inputObservationCount"] + receipt["failedRecordCount"]
     ):
         raise SourceNativeReleaseError("source-native receipt count equations differ")
+    partition_counts = {
+        kind: sum(value.member.record_count or 0 for value in partitions[kind])
+        for kind in PARTITION_KINDS
+    }
+    if (
+        partition_counts[PARTITION_RECORDS] != receipt["publishedRecordCount"]
+        or partition_counts[PARTITION_RENDITIONS] != receipt["renditionIndexCount"]
+        or partition_counts[PARTITION_LEDGER] != receipt["publishedRecordCount"]
+        or receipt["acquisitionEvidenceCount"] != len(by_role[ROLE_EVIDENCE])
+    ):
+        raise SourceNativeReleaseError(
+            "source-native receipt counts differ from payload membership"
+        )
+    measurements = receipt["byteMeasurements"]
+    payload_bytes = sum(member.byte_size for member in by_ref.values())
+    if (
+        measurements["payloadBytesRead"] != payload_bytes
+        or measurements["payloadBytesReused"] > payload_bytes
+        or measurements["payloadBytesWritten"] > payload_bytes
+    ):
+        raise SourceNativeReleaseError(
+            "source-native payload byte measurements do not reconcile"
+        )
+    with source.open(ROOT_OBJECT_KEY) as stream:
+        root_bytes = stream.read(MAX_ROW_BYTES + 1)
+    if len(root_bytes) > MAX_ROW_BYTES:
+        raise SourceNativeReleaseError("source-native root exceeds its product limit")
+    publication_roles = {
+        ROLE_SCOPES,
+        ROLE_SCHEMA,
+        ROLE_RELEASE_SCHEMA,
+        ROLE_RECEIPT,
+    }
+    publication_bytes = (
+        sum(
+            member.byte_size
+            for role in publication_roles
+            for member in by_role[role]
+        )
+        + sum(manifest.byte_size for manifest in artifact.manifests)
+        + len(root_bytes)
+    )
+    if measurements["publicationBytesWritten"] != publication_bytes:
+        raise SourceNativeReleaseError(
+            "source-native publication byte measurements do not reconcile"
+        )
     warnings = receipt.get("warnings")
     if not isinstance(warnings, list) or any(
         not isinstance(value, Mapping)
@@ -1421,8 +1888,9 @@ def _replay_acquisition(
     connection: sqlite3.Connection,
     *,
     source: MemberSource,
-    evidence_members: Sequence[MemberDescriptor],
-    page_members: Sequence[MemberDescriptor],
+    blob_source: BlobSource | None,
+    evidence_members: Mapping[str, MemberDescriptor],
+    page_partitions: Sequence[_PayloadPartition],
     query_scope: Mapping[str, Any],
     profile: SourceNativeProfile,
 ) -> tuple[int, int]:
@@ -1431,18 +1899,14 @@ def _replay_acquisition(
     connection.executescript(
         "CREATE TABLE pages (traversal INTEGER, page INTEGER, window_index INTEGER, window_page INTEGER, "
         "records_included INTEGER, accepted INTEGER, request_key TEXT, source_cursor TEXT, next_cursor TEXT, "
-        "evidence_key TEXT UNIQUE, evidence_sha256 TEXT, payload BLOB, PRIMARY KEY (traversal, page), "
+        "evidence_ref TEXT, payload BLOB, PRIMARY KEY (traversal, page), "
         "UNIQUE (traversal, window_index, window_page));"
         "CREATE TABLE observations (traversal INTEGER, ordinal INTEGER, source_record_id TEXT, "
         "source_version TEXT, selected INTEGER NOT NULL DEFAULT 0, record_digest TEXT, "
-        "record_payload BLOB, evidence_key TEXT, PRIMARY KEY (traversal, ordinal));"
+        "record_payload BLOB, evidence_ref TEXT, PRIMARY KEY (traversal, ordinal));"
     )
-    sorted_evidence = sorted(
-        evidence_members,
-        key=lambda member: str(member.object_key),
-    )
-    pages = _role_rows(source, page_members)
-    sentinel = object()
+    pages = _partition_rows(source, blob_source, page_partitions)
+    seen_evidence: set[str] = set()
     previous_traversal = -1
     previous_page = -1
     previous_window = -1
@@ -1454,19 +1918,8 @@ def _replay_acquisition(
     current_check: AcquisitionCheck | None = None
     ordinal = 0
     saw_page = False
-    for raw_page_row, raw_member in zip_longest(
-        pages,
-        sorted_evidence,
-        fillvalue=sentinel,
-    ):
-        if raw_page_row is sentinel or raw_member is sentinel:
-            raise SourceNativeReleaseError(
-                "acquisition pages do not account for exact evidence membership"
-            )
+    for raw_page_row in pages:
         page_row = _PAGE_SHAPE.parse(raw_page_row)
-        if not isinstance(raw_member, MemberDescriptor):
-            raise SourceNativeReleaseError("acquisition evidence descriptor is invalid")
-        member = raw_member
         traversal = page_row.get("traversalIndex")
         page_index = page_row.get("pageIndex")
         window_index = page_row.get("windowIndex")
@@ -1538,16 +1991,19 @@ def _replay_acquisition(
             raise SourceNativeReleaseError(
                 "acquisition continuation request differs from its cursor chain"
             )
-        evidence_key = page_row.get("evidenceObjectKey")
+        evidence_ref = page_row.get("evidenceBlobRef")
         evidence_media_type = page_row.get("evidenceMediaType")
+        member = evidence_members.get(evidence_ref) if isinstance(evidence_ref, str) else None
         if (
-            not isinstance(evidence_key, str)
-            or member.object_key != evidence_key
-            or member.sha256 != page_row.get("responseDigest")
+            member is None
+            or member.blob_ref != evidence_ref
+            or evidence_ref != page_row.get("responseDigest")
             or member.media_type != evidence_media_type
         ):
             raise SourceNativeReleaseError("acquisition page evidence pin differs")
-        with source.open(evidence_key) as stream:
+        assert isinstance(evidence_ref, str)
+        seen_evidence.add(evidence_ref)
+        with _open_descriptor(source, blob_source, member) as stream:
             response_bytes = stream.read(MAX_EVIDENCE_BYTES + 1)
         if len(response_bytes) > MAX_EVIDENCE_BYTES:
             raise SourceNativeReleaseError("acquisition evidence exceeds its product bound")
@@ -1617,7 +2073,7 @@ def _replay_acquisition(
                         _observation_version(profile, classified),
                         digest,
                         canonical_json_bytes(wrapped),
-                        evidence_key,
+                        evidence_ref,
                     ),
                 )
             except sqlite3.IntegrityError as error:
@@ -1628,7 +2084,7 @@ def _replay_acquisition(
         if discovered != expected_discovered:
             raise SourceNativeReleaseError("acquisition page record inventory differs")
         connection.execute(
-            "INSERT INTO pages VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO pages VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 traversal,
                 page_index,
@@ -1639,8 +2095,7 @@ def _replay_acquisition(
                 request_key,
                 source_cursor,
                 next_cursor,
-                evidence_key,
-                member.sha256,
+                evidence_ref,
                 canonical_json_bytes(page_row),
             ),
         )
@@ -1652,6 +2107,10 @@ def _replay_acquisition(
         previous_next = next_cursor if isinstance(next_cursor, str) else None
     if not saw_page or current_check is None:
         raise SourceNativeReleaseError("acquisition has no evidence pages")
+    if seen_evidence != set(evidence_members):
+        raise SourceNativeReleaseError(
+            "acquisition pages do not account for exact evidence membership"
+        )
     current_check.finish(query_scope=query_scope)
     if previous_next is not None:
         raise SourceNativeReleaseError("acquisition traversal has no terminal page")
@@ -1679,15 +2138,22 @@ def verify_source_native_release(
     source: MemberSource,
     *,
     profile: SourceNativeProfile,
+    blob_source: BlobSource | None,
 ) -> None:
     """Recompute the selected source profile at the producer gate."""
 
-    verify_source_native_admission(artifact, source, profile=profile)
-    _, by_role = _member_index(artifact, source)
+    verify_source_native_admission(
+        artifact,
+        source,
+        profile=profile,
+        blob_source=blob_source,
+    )
+    _, by_ref, by_role = _member_index(artifact, source)
     spec = artifact.root["spec"]
     if not isinstance(spec, Mapping):
         raise SourceNativeReleaseError("source-native root spec is not an object")
     receipt = _RECEIPT_SHAPE.parse(_read_one_json(source, RECEIPT_KEY))
+    partitions = _payload_partitions(receipt, by_ref)
     scopes = list(_read_jsonl(source, SCOPES_KEY))
     if len(scopes) != 1 or set(scopes[0]) != {"fields", "scopeId", "scopeKind", "sourceSystemId"}:
         raise SourceNativeReleaseError(f"{profile.name} source scope differs")
@@ -1717,21 +2183,20 @@ def verify_source_native_release(
     schema_set_digest = _digest_records("spicyregs-source-schema-set/1", "schemas", schema_declarations)
     if schema_set_digest != spec["sourceNativeSchemaSetDigest"]:
         raise SourceNativeReleaseError("source-native schema-set digest differs")
-    evidence_members = by_role[ROLE_EVIDENCE]
-    if any(member.object_key is None for member in evidence_members):
-        raise SourceNativeReleaseError("source acquisition evidence must be local")
-    page_members = _partitioned_ledger_members(by_role[ROLE_LEDGER], stem="pages")
-    record_ledger_members = _partitioned_ledger_members(
-        by_role[ROLE_LEDGER], stem="records"
-    )
+    evidence_members = {
+        member.blob_ref: member
+        for member in by_role[ROLE_EVIDENCE]
+        if member.blob_ref is not None
+    }
     with tempfile.TemporaryDirectory(prefix="source-native-verify-") as directory:
         connection = sqlite3.connect(Path(directory) / "replay.sqlite3")
         try:
             accepted, traversal_count = _replay_acquisition(
                 connection,
                 source=source,
+                blob_source=blob_source,
                 evidence_members=evidence_members,
-                page_members=page_members,
+                page_partitions=partitions[PARTITION_PAGES],
                 query_scope=query_scope,
                 profile=profile,
             )
@@ -1768,7 +2233,11 @@ def verify_source_native_release(
                 )
 
             def admitted_records() -> Iterator[Mapping[str, Any]]:
-                return _role_rows(source, by_role[ROLE_RECORDS])
+                return _partition_rows(
+                    source,
+                    blob_source,
+                    partitions[PARTITION_RECORDS],
+                )
 
             def expected_renditions() -> Iterator[Mapping[str, Any]]:
                 for row in replayed_records():
@@ -1777,7 +2246,10 @@ def verify_source_native_release(
                         raise SourceNativeReleaseError(
                             f"published {profile.name} record payload is invalid"
                         )
-                    yield from profile.rendition_rows(profile.classify_record(record))
+                    yield from _ordered_rendition_rows(
+                        profile,
+                        profile.classify_record(record),
+                    )
 
             rendition_count = sum(1 for _ in expected_renditions())
 
@@ -1792,7 +2264,11 @@ def verify_source_native_release(
 
             observed_rendition_count = 0
             for actual, expected in zip_longest(
-                _role_rows(source, by_role[ROLE_RENDITIONS]),
+                _partition_rows(
+                    source,
+                    blob_source,
+                    partitions[PARTITION_RENDITIONS],
+                ),
                 expected_renditions(),
                 fillvalue=sentinel,
             ):
@@ -1804,25 +2280,27 @@ def verify_source_native_release(
 
             def expected_ledger() -> Iterator[Mapping[str, Any]]:
                 query = (
-                    "SELECT observations.source_record_id, observations.evidence_key, "
-                    "pages.evidence_sha256 FROM observations "
-                    "JOIN pages ON pages.evidence_key = observations.evidence_key "
+                    "SELECT observations.source_record_id, observations.evidence_ref "
+                    "FROM observations "
                     "WHERE observations.traversal = ? AND observations.selected = 1 "
                     "ORDER BY observations.source_record_id"
                 )
-                for source_record_id, evidence_key, evidence_sha256 in connection.execute(
+                for source_record_id, evidence_ref in connection.execute(
                     query, (accepted,)
                 ):
                     yield {
-                        "evidenceObjectKey": evidence_key,
-                        "evidenceSha256": evidence_sha256,
+                        "evidenceBlobRef": evidence_ref,
                         "failure": None,
                         "observationRef": {"sourceRecordId": source_record_id},
                         "sourceRecordId": source_record_id,
                     }
 
             def admitted_ledger() -> Iterator[Mapping[str, Any]]:
-                return _role_rows(source, record_ledger_members)
+                return _partition_rows(
+                    source,
+                    blob_source,
+                    partitions[PARTITION_LEDGER],
+                )
 
             observed_ledger_count = 0
             for actual, expected in zip_longest(
@@ -1838,7 +2316,14 @@ def verify_source_native_release(
                 (len(scopes), scopes),
                 (len(schema_declarations), schema_declarations),
                 (published_record_count, admitted_records()),
-                (rendition_count, _role_rows(source, by_role[ROLE_RENDITIONS])),
+                (
+                    rendition_count,
+                    _partition_rows(
+                        source,
+                        blob_source,
+                        partitions[PARTITION_RENDITIONS],
+                    ),
+                ),
             )
             if state_digest != spec["sourceStateDigest"]:
                 raise SourceNativeReleaseError("source-state digest differs")
@@ -1904,6 +2389,7 @@ class SourceNativeReleaseReader:
         self,
         source: MemberSource,
         *,
+        blob_source: BlobSource,
         profile: SourceNativeProfile,
         accepted_verifier_implementation_ids: frozenset[str],
         expected_pin: ArtifactPin | None = None,
@@ -1911,21 +2397,26 @@ class SourceNativeReleaseReader:
         if not accepted_verifier_implementation_ids:
             raise SourceNativeReleaseError("at least one verifier implementation must be accepted")
         self._source = source
+        self._blob_source = blob_source
         self._artifact = admit_artifact(
             source,
+            blob_source=blob_source,
             expected_pin=expected_pin,
             semantic_verifier=lambda artifact, source: verify_source_native_admission(
                 artifact,
                 source,
                 profile=profile,
+                blob_source=blob_source,
             ),
         )
         producer = self._artifact.root["producer"]
         if producer["verifierImplementationId"] not in accepted_verifier_implementation_ids:
             raise SourceNativeReleaseError("source-native verifier implementation is not accepted")
-        _, by_role = _member_index(self._artifact, source)
-        self._record_members = tuple(sorted(by_role[ROLE_RECORDS], key=lambda member: str(member.object_key)))
-        self._rendition_members = tuple(sorted(by_role[ROLE_RENDITIONS], key=lambda member: str(member.object_key)))
+        _, by_ref, _ = _member_index(self._artifact, source)
+        receipt = _RECEIPT_SHAPE.parse(_read_one_json(source, RECEIPT_KEY))
+        partitions = _payload_partitions(receipt, by_ref)
+        self._record_partitions = partitions[PARTITION_RECORDS]
+        self._rendition_partitions = partitions[PARTITION_RENDITIONS]
         spec = self._artifact.root["spec"]
         self.source_state_scope = str(spec["sourceStateScope"])
         self.source_system_id = str(spec["sourceSystemId"])
@@ -1938,12 +2429,18 @@ class SourceNativeReleaseReader:
         return self._artifact.pin
 
     def iter_records(self) -> Iterator[Mapping[str, Any]]:
-        for member in self._record_members:
-            yield from _read_jsonl(self._source, str(member.object_key))
+        yield from _partition_rows(
+            self._source,
+            self._blob_source,
+            self._record_partitions,
+        )
 
     def iter_renditions(self) -> Iterator[Mapping[str, Any]]:
-        for member in self._rendition_members:
-            yield from _read_jsonl(self._source, str(member.object_key))
+        yield from _partition_rows(
+            self._source,
+            self._blob_source,
+            self._rendition_partitions,
+        )
 
 
 __all__ = [

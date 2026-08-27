@@ -6,12 +6,16 @@ import json
 from collections.abc import Iterator
 from copy import deepcopy
 from dataclasses import dataclass
+from datetime import UTC, datetime
+from io import BytesIO
 from pathlib import Path
 from typing import Any
+from zipfile import ZipFile
 
 import pytest
 from rulespec_artifacts import LocalMemberSource, Producer
 
+from spicy_regs import regulations_gov_source_native
 from spicy_regs.regulations_gov_source_native import (
     DOCUMENT_COLLECTION,
     DOCUMENT_SOURCE_SYSTEM_ID,
@@ -39,6 +43,7 @@ from spicy_regs.source_native_profiles import (
     REGULATIONS_GOV_DOCUMENT_PROFILE,
     REGULATIONS_GOV_DOCKET_PROFILE,
 )
+from spicy_regs.source_native_store import LocalSourceNativeBlobStore
 
 _IMPLEMENTATION_ID = "git+https://example.test/spicy-regs@" + "a" * 40
 _PRODUCER = Producer(
@@ -48,6 +53,10 @@ _PRODUCER = Producer(
     verifier_version="1.0",
     verifier_implementation_id=_IMPLEMENTATION_ID,
 )
+
+
+def _completed_at() -> datetime:
+    return datetime(2026, 8, 25, 0, 0, 1, tzinfo=UTC)
 
 
 def _document(identity: str = "EPA-2026-0001-0001", **attributes: object) -> dict[str, Any]:
@@ -203,22 +212,34 @@ def _docket_scope() -> dict[str, object]:
     }
 
 
-def _build(profile, query_scope: dict[str, object]) -> SourceNativeReleaseBuild:
+def _build(query_scope: dict[str, object]) -> SourceNativeReleaseBuild:
     return SourceNativeReleaseBuild(
         query_scope=query_scope,
         producer=_PRODUCER,
         started_at="2026-08-25T00:00:00Z",
-        completed_at="2026-08-25T00:00:01Z",
     )
 
 
 def _reader(root: Path, pin, profile) -> SourceNativeReleaseReader:
     return SourceNativeReleaseReader(
         LocalMemberSource(root),
+        blob_source=LocalSourceNativeBlobStore(root.parent / "blobs"),
         profile=profile,
         expected_pin=pin,
         accepted_verifier_implementation_ids=frozenset({_IMPLEMENTATION_ID}),
     )
+
+
+def _payload_rows(root: Path, partition_kind: str) -> list[dict[str, Any]]:
+    receipt = json.loads((root / "receipts/publication.json").read_bytes())
+    store = LocalSourceNativeBlobStore(root.parent / "blobs")
+    rows: list[dict[str, Any]] = []
+    for partition in receipt["payloadPartitions"]:
+        if partition["partitionKind"] != partition_kind:
+            continue
+        with store.open(partition["blobRef"]) as stream:
+            rows.extend(json.loads(line) for line in stream)
+    return rows
 
 
 def test_document_record_preserves_source_facts_and_join_keys_without_prejoining() -> None:
@@ -269,23 +290,24 @@ def test_document_pages_capture_exact_listing_metadata_and_object_bytes_once() -
     )
 
     assert calls == [("iter", 16 * 1024 * 1024)]
-    assert len(pages) == 2
-    enumeration, exact_object = pages
-    assert exact_object.response_bytes == source_object.content
-    manifest = json.loads(enumeration.response_bytes)
+    assert len(pages) == 1
+    pack = pages[0]
+    window = parse_mirrulations_request(pack.request_key)
+    assert (window.agency, window.pack_index, window.terminal) == ("EPA", 0, True)
+    with ZipFile(BytesIO(pack.response_bytes)) as archive:
+        manifest = json.loads(archive.read("manifest.json"))
+        assert archive.read("objects/000000.json") == source_object.content
     assert manifest["objects"] == [
         {
             "byteSize": len(source_object.content),
+            "entry": "objects/000000.json",
             "etag": source_object.etag,
+            "included": True,
             "key": source_object.key,
             "versionId": source_object.version_id,
         }
     ]
-    object_window = parse_mirrulations_request(exact_object.request_key)
-    assert object_window.key == source_object.key
-    assert object_window.etag == source_object.etag
-    assert object_window.version_id == source_object.version_id
-    assert parse_document_page_response(exact_object.response_bytes)["results"] == [
+    assert parse_document_page_response(pack.response_bytes)["results"] == [
         _document()
     ]
 
@@ -295,12 +317,16 @@ def test_document_release_uses_one_source_enumeration_and_replays_exact_bytes(
 ) -> None:
     source_object = _document_object()
     release = tmp_path / "documents"
-    published = SourceNativeReleasePublisher(REGULATIONS_GOV_DOCUMENT_PROFILE).publish(
+    published = SourceNativeReleasePublisher(
+        REGULATIONS_GOV_DOCUMENT_PROFILE,
+        blob_store=LocalSourceNativeBlobStore(tmp_path / "blobs"),
+        clock=_completed_at,
+    ).publish(
         iter_regulations_gov_document_pages(
             lambda _agency: _Reader([source_object]),
             query_scope=_document_scope(),
         ),
-        build=_build(REGULATIONS_GOV_DOCUMENT_PROFILE, _document_scope()),
+        build=_build(_document_scope()),
         destination=release,
     )
     reader = _reader(
@@ -315,7 +341,8 @@ def test_document_release_uses_one_source_enumeration_and_replays_exact_bytes(
     assert len(list(reader.iter_renditions())) == 3
     receipt = json.loads((release / "receipts/publication.json").read_bytes())
     assert receipt["reconciliationPassCount"] == 1
-    assert len(list(release.glob("evidence/traversal-000/page-*.json"))) == 2
+    assert receipt["acquisitionEvidenceCount"] == 1
+    assert not (release / "evidence").exists()
 
     with pytest.raises(SourceNativeReleaseError, match="unsupported Regulations.gov dockets"):
         _reader(release, published.artifact.pin, REGULATIONS_GOV_DOCKET_PROFILE)
@@ -325,12 +352,16 @@ def test_docket_release_is_separate_and_preserves_docket_source_facts(tmp_path: 
     raw = _docket()
     source_object = _docket_object(value=raw)
     release = tmp_path / "dockets"
-    published = SourceNativeReleasePublisher(REGULATIONS_GOV_DOCKET_PROFILE).publish(
+    published = SourceNativeReleasePublisher(
+        REGULATIONS_GOV_DOCKET_PROFILE,
+        blob_store=LocalSourceNativeBlobStore(tmp_path / "blobs"),
+        clock=_completed_at,
+    ).publish(
         iter_regulations_gov_docket_pages(
             lambda _agency: _Reader([source_object]),
             query_scope=_docket_scope(),
         ),
-        build=_build(REGULATIONS_GOV_DOCKET_PROFILE, _docket_scope()),
+        build=_build(_docket_scope()),
         destination=release,
     )
     reader = _reader(release, published.artifact.pin, REGULATIONS_GOV_DOCKET_PROFILE)
@@ -353,39 +384,57 @@ def test_out_of_scope_objects_remain_evidence_without_becoming_records(tmp_path:
         etag='"older-etag"',
     )
     release = tmp_path / "bounded"
-    published = SourceNativeReleasePublisher(REGULATIONS_GOV_DOCUMENT_PROFILE).publish(
+    published = SourceNativeReleasePublisher(
+        REGULATIONS_GOV_DOCUMENT_PROFILE,
+        blob_store=LocalSourceNativeBlobStore(tmp_path / "blobs"),
+        clock=_completed_at,
+    ).publish(
         iter_regulations_gov_document_pages(
-            lambda _agency: _Reader([out_of_scope, in_scope]),
+            lambda _agency: _Reader([in_scope, out_of_scope]),
             query_scope=_document_scope(),
         ),
-        build=_build(REGULATIONS_GOV_DOCUMENT_PROFILE, _document_scope()),
+        build=_build(_document_scope()),
         destination=release,
     )
     reader = _reader(release, published.artifact.pin, REGULATIONS_GOV_DOCUMENT_PROFILE)
-    pages = [json.loads(line) for line in (release / "acquisition/pages.jsonl").read_text().splitlines()]
+    pages = _payload_rows(release, "acquisition-pages")
 
     assert [row["sourceRecordId"] for row in reader.iter_records()] == [
         "EPA-2026-0001-0001"
     ]
-    assert [row["recordsIncluded"] for row in pages] == [False, True, False]
-    assert len(list(release.glob("evidence/traversal-000/page-*.json"))) == 3
+    assert [row["recordsIncluded"] for row in pages] == [True]
+    store = LocalSourceNativeBlobStore(tmp_path / "blobs")
+    with store.open(pages[0]["evidenceBlobRef"]) as stream:
+        parsed = parse_document_page_response(stream.read())
+    assert [item["included"] for item in parsed["_packedRecords"]] == [True, False]
 
 
-def test_missing_or_changed_enumerated_object_refuses_complete_snapshot(tmp_path: Path) -> None:
+def test_missing_or_changed_enumerated_object_refuses_complete_snapshot(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(regulations_gov_source_native, "MAX_EVIDENCE_PACK_OBJECTS", 1)
     pages = list(
         iter_regulations_gov_document_pages(
-            lambda _agency: _Reader([_document_object()]),
+            lambda _agency: _Reader(
+                [_document_object(), _document_object("EPA-2026-0001-0002")]
+            ),
             query_scope=_document_scope(),
         )
     )
-    with pytest.raises(RegulationsGovSourceError, match="missing object bytes"):
-        SourceNativeReleasePublisher(REGULATIONS_GOV_DOCUMENT_PROFILE).publish(
+    assert len(pages) == 2
+    with pytest.raises(RegulationsGovSourceError, match="missing a terminal pack"):
+        SourceNativeReleasePublisher(
+            REGULATIONS_GOV_DOCUMENT_PROFILE,
+            blob_store=LocalSourceNativeBlobStore(tmp_path / "blobs"),
+            clock=_completed_at,
+        ).publish(
             pages[:1],
-            build=_build(REGULATIONS_GOV_DOCUMENT_PROFILE, _document_scope()),
+            build=_build(_document_scope()),
             destination=tmp_path / "missing",
         )
 
-    changed_request = pages[1].request_key.replace("document-etag", "changed-etag")
+    changed_request = pages[1].request_key.replace("terminal=true", "terminal=false")
     changed_page = RegulationsGovPage(
         traversal_index=0,
         page_index=1,
@@ -395,10 +444,14 @@ def test_missing_or_changed_enumerated_object_refuses_complete_snapshot(tmp_path
         source_cursor=None,
         response_bytes=pages[1].response_bytes,
     )
-    with pytest.raises(RegulationsGovSourceError, match="pinned enumeration"):
-        SourceNativeReleasePublisher(REGULATIONS_GOV_DOCUMENT_PROFILE).publish(
+    with pytest.raises(RegulationsGovSourceError, match="request differs from its evidence"):
+        SourceNativeReleasePublisher(
+            REGULATIONS_GOV_DOCUMENT_PROFILE,
+            blob_store=LocalSourceNativeBlobStore(tmp_path / "blobs"),
+            clock=_completed_at,
+        ).publish(
             [pages[0], changed_page],
-            build=_build(REGULATIONS_GOV_DOCUMENT_PROFILE, _document_scope()),
+            build=_build(_document_scope()),
             destination=tmp_path / "changed",
         )
 

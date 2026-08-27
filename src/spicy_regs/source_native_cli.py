@@ -45,6 +45,7 @@ from spicy_regs.source_native import (
     SourceNativeReleasePublisher,
     verify_source_native_release,
 )
+from spicy_regs.source_native_store import LocalSourceNativeBlobStore
 from spicy_regs.source_native_profile import SourceNativePage, SourceNativeProfile
 from spicy_regs.source_native_profiles import (
     FEDERAL_REGISTER_PROFILE,
@@ -98,6 +99,12 @@ def _parser() -> argparse.ArgumentParser:
         help="Regulations.gov agency code; repeat for multiple agencies",
     )
     publish.add_argument("--destination", type=Path, required=True)
+    publish.add_argument(
+        "--blob-store",
+        type=Path,
+        required=True,
+        help="Explicit persistent content-addressed payload store",
+    )
     publish.add_argument("--implementation-id", required=True)
 
     verify = subparsers.add_parser(
@@ -106,6 +113,12 @@ def _parser() -> argparse.ArgumentParser:
     )
     verify.add_argument("--source", choices=SOURCE_CHOICES, required=True)
     verify.add_argument("--release", type=Path, required=True)
+    verify.add_argument(
+        "--blob-store",
+        type=Path,
+        required=True,
+        help="Explicit persistent content-addressed payload store",
+    )
     verify.add_argument("--logical-id", required=True)
     verify.add_argument("--artifact-digest", required=True)
     verify.add_argument(
@@ -229,6 +242,19 @@ def _emit(stream: TextIO, value: Mapping[str, object]) -> None:
     stream.write(canonical_json_bytes(value).decode("utf-8") + "\n")
 
 
+def _require_separate_paths(left: Path, right: Path, *, labels: tuple[str, str]) -> None:
+    selected_left = Path(left).absolute().resolve(strict=False)
+    selected_right = Path(right).absolute().resolve(strict=False)
+    if (
+        selected_left == selected_right
+        or selected_left.is_relative_to(selected_right)
+        or selected_right.is_relative_to(selected_left)
+    ):
+        raise SourceNativeReleaseError(
+            f"{labels[0]} and {labels[1]} must not overlap"
+        )
+
+
 def _query_scope(args: argparse.Namespace) -> dict[str, Any]:
     if args.source == SOURCE_FEDERAL_REGISTER:
         if args.agency:
@@ -291,6 +317,11 @@ def _publish(
 ) -> dict[str, object]:
     profile = _profile(args.source)
     query_scope = _query_scope(args)
+    _require_separate_paths(
+        args.destination,
+        args.blob_store,
+        labels=("--destination", "--blob-store"),
+    )
     if args.destination.exists() or args.destination.is_symlink():
         raise FileExistsError(f"refusing to replace immutable release: {args.destination}")
     started_at = _instant(clock)
@@ -306,16 +337,25 @@ def _publish(
         producer=producer,
         started_at=started_at,
     )
+    blob_store = LocalSourceNativeBlobStore(args.blob_store)
     if args.source == SOURCE_FEDERAL_REGISTER:
         with _fetcher(fetch) as active_fetch:
-            published = SourceNativeReleasePublisher(profile, clock=clock).publish(
+            published = SourceNativeReleasePublisher(
+                profile,
+                blob_store=blob_store,
+                clock=clock,
+            ).publish(
                 iter_federal_register_pages(active_fetch, query_scope=query_scope),
                 build=build,
                 destination=args.destination,
             )
     else:
         active_reader = read_regulations or _default_regulations_reader
-        published = SourceNativeReleasePublisher(profile, clock=clock).publish(
+        published = SourceNativeReleasePublisher(
+            profile,
+            blob_store=blob_store,
+            clock=clock,
+        ).publish(
             _regulations_pages(args, query_scope, active_reader),
             build=build,
             destination=args.destination,
@@ -331,15 +371,23 @@ def _publish(
 
 def _verify(args: argparse.Namespace) -> dict[str, object]:
     profile = _profile(args.source)
+    _require_separate_paths(
+        args.release,
+        args.blob_store,
+        labels=("--release", "--blob-store"),
+    )
     expected_pin = ArtifactPin(args.logical_id, args.artifact_digest)
     source = LocalMemberSource(args.release)
+    blob_source = LocalSourceNativeBlobStore(args.blob_store, create=False)
     artifact = admit_artifact(
         source,
+        blob_source=blob_source,
         expected_pin=expected_pin,
         semantic_verifier=lambda artifact, source: verify_source_native_release(
             artifact,
             source,
             profile=profile,
+            blob_source=blob_source,
         ),
     )
     accepted = frozenset(args.accepted_verifier_implementation_id)
