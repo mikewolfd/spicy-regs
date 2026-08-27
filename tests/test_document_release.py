@@ -636,7 +636,10 @@ def test_migration_manifest_accounts_for_serving_and_incubated_surfaces_without_
         "tests_or_evidence",
     }
     assert manifest["retirement_authorized"] is False
-    assert manifest["status"] == "inventory-complete-serving-surfaces-retained"
+    assert (
+        manifest["status"]
+        == "historical-inventory-incomplete-requires-platform-value-ledger-reconciliation"
+    )
     assert manifest["items"]
     assert all(set(item) == required_item_fields for item in manifest["items"])
     inventory = canonical_json(manifest)
