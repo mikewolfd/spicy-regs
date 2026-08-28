@@ -1,0 +1,1 @@
+{"$schema":"https://json-schema.org/draft/2020-12/schema","additionalProperties":false,"properties":{"evidenceBlobRef":{"pattern":"^sha256:[0-9a-f]{64}$","type":"string"},"failure":{"type":"null"},"observationRef":{"type":"object"},"sourceRecordId":{"type":"string"}},"required":["evidenceBlobRef","failure","observationRef","sourceRecordId"],"type":"object"}

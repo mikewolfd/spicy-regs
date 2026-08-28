@@ -1,0 +1,1 @@
+{"$schema":"https://json-schema.org/draft/2020-12/schema","additionalProperties":false,"properties":{"fields":{"type":"object"},"scopeId":{"type":"string"},"scopeKind":{"type":"string"},"sourceSystemId":{"type":"string"}},"required":["fields","scopeId","scopeKind","sourceSystemId"],"type":"object"}
