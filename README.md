@@ -4,120 +4,147 @@
 
 # Spicy Regs
 
-**An open, queryable mirror of U.S. federal regulatory data — and the pipeline that builds it.**
-
-<a href="https://www.civictechdc.org/">
-  <img src="assets/civictechdc-logo.png" alt="Civic Tech DC" width="22" height="22" align="top">
-</a>
-&nbsp;A <a href="https://www.civictechdc.org/"><b>Civic Tech DC</b></a> project
-
-[![CI](https://github.com/civictechdc/spicy-regs/actions/workflows/ci.yml/badge.svg)](https://github.com/civictechdc/spicy-regs/actions/workflows/ci.yml)
-[![Integration](https://github.com/civictechdc/spicy-regs/actions/workflows/integration.yml/badge.svg)](https://github.com/civictechdc/spicy-regs/actions/workflows/integration.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
-[![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
-[![Slack](https://img.shields.io/badge/Slack-join%20us-4A154B?logo=slack&logoColor=white)](https://join.slack.com/t/civictechdc/shared_invite/zt-43eotbj04-QLQ_Ria296PtRYJU2EgwxQ)
-
-[Explore the data](https://app.spicy-regs.dev) ·
-[Data dictionary](https://docs.spicy-regs.dev/) ·
-[MCP server](#use-it-from-an-ai-assistant) ·
-[Contributing](CONTRIBUTING.md) ·
-[Changelog](CHANGELOG.md)
-
 </div>
 
----
+The greenfield target is for SpicyRegs to capture public regulatory sources and
+publish immutable, versioned source-native records, source observations,
+rendition candidates, and acquisition evidence. DocSpec will select a catalog
+universe, capture exact document bytes, produce representations and passages,
+and publish `DocumentRelease`.
 
-Every federal rule that gets proposed generates a public record: a docket, the
-agency's documents, and the comments people file on it. That record is public
-but awkward to work with — paginated APIs, rate limits, no bulk access, and no
-way to join it to the rest of the federal picture.
+The target also preserves credential-free public bulk access over those
+source-native releases: immutable Parquet generations, queryable range reads,
+source-schema documentation, downloads, and thin read-only data adapters. These
+are access surfaces over the same releases, not a second catalog or document
+model. The artifact store or Iceberg catalog supplies standard generation
+identity and current selection; SpicyRegs defines no table registry or latest
+pointer algorithm. Browser and document search belong to SpicySearch.
 
-Spicy Regs turns it into files you can query. A nightly pipeline reads
-[regulations.gov](https://www.regulations.gov) data (via the public
-[Mirrulations](https://github.com/MoravianUniversity/mirrulations) mirror) plus a
-dozen complementary federal sources, and publishes the result as Parquet and
-Apache Iceberg on Cloudflare R2 — public, anonymous read, no API key.
+Source-specific acquisition includes one explicit current-comments rule:
+select the newest observed Regulations.gov row per `comment_id` by
+`modify_date DESC NULLS LAST`, preserve every pre-collapse source observation as
+acquisition evidence, and receipt the input, published, and discarded counts.
+Distinct rows tied at
+the winning timestamp fail rather than selecting arbitrarily; exact duplicates
+collapse deterministically. The source profile owns and independently verifies
+that rule; the public reader only exposes its result.
+Cross-source Federal Register/docket joins belong to DocSpec's catalog policy,
+not this package.
 
-**You can query ~25M public comments from a laptop, a browser tab, or an AI
-assistant, without downloading a database or asking anyone for access.**
+The current checkout implements the source-native and immutable public-table
+paths locally but still exposes predecessor catalog, document-release, and
+mutable-table paths. Use `PLAN.md` for their replacement and consumer-cutover
+gates. No sentence in this target description claims that a generation has been
+published or deployed.
 
-This repo is the pipeline, the rollups, and the read-only MCP server. It's a
-[Civic Tech DC](https://www.civictechdc.org/) project and new contributors are
-welcome — see [CONTRIBUTING.md](CONTRIBUTING.md).
+## Product boundary
 
-## Contents
+SpicyRegs owns source-specific acquisition and faithful source-native
+publication. It does not own `SourceCatalog`, exact captured document bytes,
+document structure, managed vocabulary policy, extracted semantic assertions,
+or search ranking and serving:
 
-- [Try it without installing anything](#try-it-without-installing-anything)
-- [What's in the corpus](#whats-in-the-corpus)
-- [Quickstart](#quickstart)
-- [Working with the data locally](#working-with-the-data-locally)
-- [Running the pipeline yourself](#running-the-pipeline-yourself)
-- [Use it from an AI assistant](#use-it-from-an-ai-assistant)
-- [Project layout](#project-layout)
-- [License](#license)
-- [Contact](#contact)
-- [Acknowledgments](#acknowledgments)
+- **DocSpec** owns catalog selection, document capture and processing,
+  representations, passages, and `DocumentRelease`.
+- **RefSpec** owns vocabulary releases, concepts, labels, mappings, redirects,
+  and explicit resolution of source terms.
+- **Rulespec Core** owns portable evidence and semantic record shapes;
+  **Rulespec Extrapolator** owns candidate extraction and validation.
+- **SpicySearch** owns query planning, document retrieval, ranking,
+  explanations, search receipts, indexes, and query-time coverage.
 
-## Try it without installing anything
+SpicyRegs also publishes experimental, digest-pinned source-profile facts in
+[`policies/`](policies/). `source-profile-catalog-v0.json` describes the 17
+source profiles without loading the document pipeline.
+`profile-resource-applicability-v0.json` records only source-native
+relationships to resources in the pinned RefSpec catalog. Search admission,
+facets, expansion, and ranking remain SpicySearch decisions.
 
-| I want to… | Go here |
-|---|---|
-| Browse dockets, agencies, and comment activity | **[app.spicy-regs.dev](https://app.spicy-regs.dev)** |
-| Read every column of every published table | **[docs.spicy-regs.dev](https://docs.spicy-regs.dev/)** |
-| Ask an AI assistant questions about the data | **[MCP server](#use-it-from-an-ai-assistant)** (`https://mcp.spicy-regs.dev/mcp`) |
-| Run SQL in a notebook | **[Binder](https://mybinder.org/v2/gh/civictechdc/spicy-regs/HEAD)** or [`docs/querying-python.md`](docs/querying-python.md) |
+Regenerate the checked files from the selected RefSpec catalog with:
 
-One line of SQL against the public bucket — no credentials, no download:
-
-```sql
--- DuckDB, anywhere: CLI, notebook, or the browser
-SELECT agency_code, comment_count
-FROM read_parquet('https://data.spicy-regs.dev/agency_stats.parquet')
-ORDER BY comment_count DESC
-LIMIT 10;
+```bash
+uv run python tools/generate_source_profile_artifacts.py --write
 ```
 
-## What's in the corpus
+To build the same two artifacts into a caller-selected directory, run:
 
-Everything is published under `https://data.spicy-regs.dev` with public,
-anonymous read. Per-column reference and exact row counts live in the
-[data dictionary](https://docs.spicy-regs.dev/) — it's generated from the
-schemas in this repo and kept in sync by CI, so it never drifts from what's
-actually published.
+```bash
+uv run build-source-profile-artifacts \
+  --applicability-input policies/profile-resource-applicability-input-v0.json \
+  --refspec-catalog RefSpec/portfolio/resource-catalog-v0.json \
+  --output output/source-profile-artifacts
+```
 
-**Core regulations.gov tables**
+Build a release from the checked-in Regulations.gov JSON record and its exact
+four-page PDF:
 
-| Table | What it is | Scale |
-|---|---|---|
-| `dockets` | Regulatory proceedings | ~276K rows |
-| `documents` | Documents within dockets | ~2.0M rows |
-| `comments` | Public comments (Hive-partitioned Parquet + an Iceberg table) | ~25.4M rows |
+```bash
+uv run --frozen build-document-release-from-files \
+  --manifest sample-data/mirrulations/document-release-file-manifest-v1.json \
+  --output-dir ./output/mirrulations-document-release
+```
 
-**Rollups** — small, denormalized, meant to be read whole: `feed_summary`,
-`agency_stats`, `agency_monthly_volume`, `comments_index`, `docket_search`,
-`rulemaking_lifecycles`, `discovery_signals`, `fr_docket_links`.
+The command verifies both source-file digests, extracts embedded PDF text,
+creates page-derived Unicode passages, validates the release, and writes a
+source-complete distribution. `document-release.json` points to
+content-addressed copies of the exact JSON and PDF bytes under `renditions/`
+and to the captured-file manifest under `receipts/`. The Rulespec Core release
+is a pinned dependency, not a copied file in this distribution; a validator
+must receive the matching Core file through `--rulespec-core`. The repository
+default is a fixture, so this command produces a `conformance` release rather
+than production evidence. The source-byte closure check is also available as a
+separate command:
 
-**Complementary federal sources** — each ingested from its own API so the
-rulemaking lifecycle, the organizations engaged in it, and its downstream
-context are all joinable in one place:
+```bash
+uv run --frozen validate-document-release-distribution \
+  --distribution ./output/mirrulations-document-release
+```
 
-- *Lifecycle:* `federal_register`, `unified_agenda`, `congress_bills`, `cfr_sections`
-- *Organizations & influence:* `sam_entities`, `lobbying_filings`, `fec_committees`
-- *Outcomes & context:* `usaspending_recipients`, `court_dockets`, `gao_reports`, `crs_reports`
-- *Telecom:* `fcc_proceedings`, `fcc_filings`
+The same publication path handles exact source-native HTML and XML. This
+checked representative contains one congressional bill and one Code of Federal
+Regulations section:
 
-Cross-source join keys: **RIN**, **CFR citation**, **UEI**, **`agency_code`**.
-Some sources are deliberately bounded or sampled (e.g. `lobbying_filings` is
-2024+, `usaspending_recipients` is the top 100K by award dollars) — the data
-dictionary documents the scope of each.
+```bash
+uv run --frozen build-document-release-from-files \
+  --manifest sample-data/document-files/document-release-representative-manifest-v1.json \
+  --output-dir output/markup-document-release
+```
+
+The local 34-document evaluation cache exercises PDF, HTML, and XML across
+seven source families and four size bands. It remains evaluation input: its
+lock refers to code-defined source specifications and lacks complete
+source-issued version metadata, so the publication command does not accept it.
+This actual-file release path claims only embedded-text PDF and UTF-8 HTML/XML.
+Scanned PDFs without embedded text fail closed; it does not claim optical
+character recognition or Office-document support. HTML semantic isolation
+recognizes a literal single `<main>` plus `<title>`; publisher layouts that use
+another main-content convention need a source-specific capture adapter before
+publication. Malformed HTML that depends on HTML5 implicit tag closing is also
+outside this conformance slice. PDF parsing currently runs in process, so this
+command is for controlled, digest-pinned capture jobs rather than arbitrary
+user uploads; production intake still needs resource limits and process
+isolation.
+
+The synthetic M1 builder remains a small conformance fixture:
+
+```bash
+uv run build-document-release --output ./output/document-release-m1.json
+```
+
+It reads repository-local, digest-pinned source and Rulespec Core fixtures and
+rejects any invalid digest, coordinate, classification, projection, or
+reference. It is not evidence that acquired source files were processed.
+
+The checked-in M1 release is
+`src/spicy_regs/fixtures/spicyregs-m1-document-release-v1.json`; consumers pin
+its `release_id` and `release_digest`, not a source-tree path.
 
 ## Quickstart
 
 Prerequisites: Python 3.10+ and [uv](https://docs.astral.sh/uv/getting-started/installation/).
 
 ```bash
-git clone https://github.com/civictechdc/spicy-regs.git
+git clone --recurse-submodules https://github.com/civictechdc/spicy-regs.git
 cd spicy-regs
 uv sync                       # install dependencies into .venv
 uv run pytest                 # run the test suite
@@ -129,7 +156,21 @@ run the pipeline against the public Mirrulations mirror. Copy `.env.example` to
 `.env` only if you want to publish output to Cloudflare R2 or ingest a source
 that requires an API key.
 
-## Working with the data locally
+## Historical managed-vocabulary incubation
+
+This repository incubated managed-vocabulary and search experiments before the
+four-product boundary above. That evidence remains useful for migration, but
+it is not SpicyRegs runtime authority. RefSpec now owns the managed vocabulary
+capability and SpicySearch owns its search read models. The historical
+[active roadmap](RefSpec/plans/managed-vocabulary-experiment-roadmap.md)
+records the evidence and remaining decisions.
+
+This proves the specification and lookup mechanics against real sources. It
+does not claim product accuracy, a sealed holdout, production deployment, or
+real cross-scheme mapping; the selected native sources contain no authored
+SKOS mapping assertions.
+
+### Download the published data locally
 
 Download the published Parquet with the bundled CLI — no credentials:
 
@@ -147,6 +188,10 @@ uv run spicy-regs sample comments -n 5 # 5 random rows from comments
 uv run spicy-regs search "climate"     # substring search across files
 uv run spicy-regs agencies             # list every agency code
 ```
+
+The current `spicy-regs search` command is a legacy exploratory surface. It
+still searches dockets and comments and remains available only while its
+consumers migrate; it is not the document-only SpicySearch API.
 
 > Don't want to clone? Run it one-shot:
 > `uvx --from "spicy-regs @ git+https://github.com/civictechdc/spicy-regs" spicy-regs download --types comments`
