@@ -32,20 +32,37 @@ class _FakeBody:
     def __init__(self, data: bytes) -> None:
         self._data = data
 
-    def read(self) -> bytes:
-        return self._data
+    def read(self, size: int | None = None) -> bytes:
+        return self._data if size is None else self._data[:size]
 
     def close(self) -> None:
         pass
 
 
 class _FakeObj:
-    def __init__(self, key: str, content: bytes) -> None:
+    def __init__(
+        self,
+        key: str,
+        content: bytes,
+        get_requests: list[tuple[str, dict[str, str]]] | None = None,
+    ) -> None:
         self.key = key
         self._content = content
+        self.e_tag = f'"etag:{key}"'
+        self.size = len(content)
+        self._get_requests = get_requests
 
-    def get(self) -> dict:
-        return {"Body": _FakeBody(self._content)}
+    def get(self, **kwargs: str) -> dict:
+        if self._get_requests is not None:
+            self._get_requests.append((self.key, kwargs))
+        if "IfMatch" in kwargs and kwargs["IfMatch"] != self.e_tag:
+            raise ValueError("precondition failed")
+        return {
+            "Body": _FakeBody(self._content),
+            "ContentLength": len(self._content),
+            "ETag": self.e_tag,
+            "VersionId": f"version:{self.key}",
+        }
 
 
 class _FakeObjects:
@@ -66,12 +83,13 @@ class _FakeBucket:
 class _FakeS3Resource:
     def __init__(self, store: dict[str, bytes]) -> None:
         self._store = store
+        self.get_requests: list[tuple[str, dict[str, str]]] = []
 
     def Bucket(self, name: str) -> _FakeBucket:  # noqa: N802 — mirrors boto3 API
         return _FakeBucket(self._store)
 
     def Object(self, name: str, key: str) -> _FakeObj:  # noqa: N802 — mirrors boto3 API
-        return _FakeObj(key, self._store[key])
+        return _FakeObj(key, self._store[key], self.get_requests)
 
 
 class _RaisingObj:
@@ -140,6 +158,50 @@ def test_iter_records_yields_raw_payloads() -> None:
     assert len(reader.last_keys) == 2
 
 
+def test_exact_source_enumeration_pins_listing_etags_versions_and_bytes() -> None:
+    store = _make_store()
+    resource = _FakeS3Resource(store)
+    reader = MirrulationsReader(resource, BUCKET, PREFIX, AGENCY, DOCKET)
+
+    objects = list(reader.iter_source_objects())
+    expected_keys = [_docket_key("EPA-2024-0001"), _docket_key("EPA-2025-0002")]
+
+    assert [value.key for value in objects] == expected_keys
+    assert [value.content for value in objects] == [store[key] for key in expected_keys]
+    assert [value.etag for value in objects] == [f'"etag:{key}"' for key in expected_keys]
+    assert [value.version_id for value in objects] == [
+        f"version:{key}" for key in expected_keys
+    ]
+    assert resource.get_requests == [
+        (key, {"IfMatch": f'"etag:{key}"'}) for key in expected_keys
+    ]
+
+
+def test_exact_source_enumeration_refuses_changed_object_metadata() -> None:
+    store = {_docket_key("EPA-2024-0001"): b"{}"}
+
+    class _ChangedObject(_FakeObj):
+        def get(self, **kwargs: str) -> dict:
+            response = super().get(**kwargs)
+            response["ETag"] = '"changed-after-listing"'
+            return response
+
+    class _ChangedResource(_FakeS3Resource):
+        def Object(self, name: str, key: str) -> _ChangedObject:  # noqa: N802
+            return _ChangedObject(key, self._store[key], self.get_requests)
+
+    reader = MirrulationsReader(
+        _ChangedResource(store),
+        BUCKET,
+        PREFIX,
+        AGENCY,
+        DOCKET,
+    )
+
+    with pytest.raises(ValueError, match="returned ETag"):
+        list(reader.iter_source_objects())
+
+
 def test_processed_keys_are_skipped() -> None:
     already = {_docket_key("EPA-2024-0001")}
     reader = MirrulationsReader(_FakeS3Resource(_make_store()), BUCKET, PREFIX, AGENCY, DOCKET, processed_keys=already)
@@ -169,9 +231,9 @@ def test_iter_records_downloads_concurrently() -> None:
     barrier = threading.Barrier(n, timeout=5)
 
     class _BarrierObj(_FakeObj):
-        def get(self) -> dict:
+        def get(self, **kwargs: str) -> dict:
             barrier.wait()  # blocks until all N downloads are concurrently in flight
-            return super().get()
+            return super().get(**kwargs)
 
     class _BarrierResource(_FakeS3Resource):
         def Object(self, name: str, key: str) -> _BarrierObj:  # noqa: N802
@@ -274,6 +336,66 @@ def test_download_keys_yields_payloads() -> None:
 
     ids = sorted(p["data"]["id"] for p in payloads)
     assert ids == ["EPA-2024-0001", "EPA-2025-0002"]
+
+
+def test_download_keys_bounds_pending_work_for_a_streaming_listing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A large key iterator is consumed only as worker slots become available."""
+    import threading
+    from concurrent.futures import ThreadPoolExecutor
+
+    from spicy_regs.sources import mirrulations
+
+    release = threading.Event()
+    initial_window_filled = threading.Event()
+    consumed = 0
+
+    def keys():
+        nonlocal consumed
+        for index in range(100):
+            consumed += 1
+            if consumed == 8:
+                initial_window_filled.set()
+            if consumed > 8 and not release.is_set():
+                raise AssertionError("download_keys consumed beyond its bounded pending window")
+            yield f"key-{index}"
+
+    def blocked_download(_resource, _bucket, key, _extract):
+        release.wait(timeout=5)
+        return {"key": key}
+
+    monkeypatch.setattr(mirrulations, "download_and_parse", blocked_download)
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        result = executor.submit(
+            lambda: list(mirrulations.download_keys(object(), BUCKET, keys(), workers=4))
+        )
+        assert initial_window_filled.wait(timeout=5)
+        assert consumed == 8
+        release.set()
+        assert len(result.result(timeout=5)) == 100
+
+
+def test_bounded_reader_factory_streams_keys_without_building_a_manifest_list() -> None:
+    from spicy_regs.sources.mirrulations import reader_factory
+
+    resource = _FakeS3Resource(_typed_store())
+    read = reader_factory([DOCUMENT], resource_factory=lambda: resource, bounded=True)
+    reader = read(AGENCY, DOCUMENT)
+
+    assert len(list(reader.iter_records())) == 1
+    assert reader.last_keys == []
+
+
+def test_bounded_reader_preserves_one_in_run_transient_retry() -> None:
+    from spicy_regs.sources.mirrulations import reader_factory
+
+    store = {_docket_key("EPA-2024-0001"): dumps(_docket_payload("EPA-2024-0001")).encode()}
+    resource = _FlakyResource(store, transient_fail=store, fail_once=True)
+    read = reader_factory([DOCKET], resource_factory=lambda: resource, bounded=True)
+
+    assert len(list(read(AGENCY, DOCKET).iter_records())) == 1
+    assert resource._attempts[_docket_key("EPA-2024-0001")] == 2
 
 
 def test_download_and_parse_closes_body_on_read_error() -> None:
