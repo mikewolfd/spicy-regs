@@ -4,9 +4,9 @@
 The data dictionary has two layers:
 
 * **Schema (source of truth, in code).** Column names and types come from
-  :data:`spicy_regs.schemas.regulations.RECORD_TYPES` for the three core tables
-  and from :data:`DERIVED_SCHEMAS` below for the four rollup tables. This keeps
-  generation deterministic and offline.
+  :data:`spicy_regs.schemas.regulations.RECORD_TYPES` for core tables and from
+  :data:`DERIVED_SCHEMAS` below for rollups. This keeps generation
+  deterministic and offline.
 * **Descriptions (curated prose).** Human descriptions live in
   ``data_dictionary/descriptions.yaml``, keyed by table and column.
 
@@ -31,6 +31,7 @@ from pathlib import Path
 import polars as pl
 from dotenv import load_dotenv
 
+from spicy_regs.published import MATERIALIZED_TABLES, resolve_materialized_table_urls
 from spicy_regs.schemas.regulations import RECORD_TYPES
 
 # Repo layout anchors (this file lives at src/spicy_regs/data_dictionary.py).
@@ -50,16 +51,31 @@ TABLES: tuple[str, ...] = (
     "feed_summary",
     "agency_stats",
     "agency_monthly_volume",
+    "rulemaking_lifecycles",
+    "fr_docket_links",
     "cfr_sections",
     "congress_bills",
+    "bill_subjects",
     "unified_agenda",
     "federal_register",
+    "rule_targets",
+    "authority_edges",
+    "proceedings",
+    "regulatory_agenda_items",
+    "agenda_item_proceedings",
+    "comment_periods",
+    "concepts",
+    "concept_assignments",
+    "concept_events",
     "sam_entities",
     "lobbying_filings",
     "fec_committees",
     "gao_reports",
     "crs_reports",
     "court_dockets",
+    "court_opinions",
+    "court_opinion_clusters",
+    "court_opinion_bodies",
     "usaspending_recipients",
     "fcc_proceedings",
     "fcc_filings",
@@ -77,16 +93,31 @@ MCP_QUERYABLE: frozenset[str] = frozenset(
         "feed_summary",
         "agency_stats",
         "agency_monthly_volume",
+        "rulemaking_lifecycles",
+        "fr_docket_links",
         "cfr_sections",
         "congress_bills",
+        "bill_subjects",
         "unified_agenda",
         "federal_register",
+        "rule_targets",
+        "authority_edges",
+        "proceedings",
+        "regulatory_agenda_items",
+        "agenda_item_proceedings",
+        "comment_periods",
+        "concepts",
+        "concept_assignments",
+        "concept_events",
         "sam_entities",
         "lobbying_filings",
         "fec_committees",
         "gao_reports",
         "crs_reports",
         "court_dockets",
+        "court_opinions",
+        "court_opinion_clusters",
+        "court_opinion_bodies",
         "usaspending_recipients",
         "fcc_proceedings",
         "fcc_filings",
@@ -129,6 +160,34 @@ DERIVED_SCHEMAS: dict[str, list[tuple[str, str]]] = {
         ("document_type", "VARCHAR"),
         ("document_count", "BIGINT"),
     ],
+    "rulemaking_lifecycles": [
+        ("kind", "VARCHAR"),
+        ("docket_id", "VARCHAR"),
+        ("agency_code", "VARCHAR"),
+        ("title", "VARCHAR"),
+        ("proposed_date", "DATE"),
+        ("final_date", "DATE"),
+        ("days", "BIGINT"),
+    ],
+    "fr_docket_links": [
+        ("docket_id", "VARCHAR"),
+        ("docket_key", "VARCHAR"),
+        ("document_number", "VARCHAR"),
+        ("title", "VARCHAR"),
+        ("abstract", "VARCHAR"),
+        ("document_type", "VARCHAR"),
+        ("subtype", "VARCHAR"),
+        ("publication_date", "VARCHAR"),
+        ("effective_on", "VARCHAR"),
+        ("comments_close_on", "VARCHAR"),
+        ("signing_date", "VARCHAR"),
+        ("agency_slugs", "VARCHAR"),
+        ("docket_ids_json", "VARCHAR"),
+        ("regulation_id_numbers_json", "VARCHAR"),
+        ("html_url", "VARCHAR"),
+        ("pdf_url", "VARCHAR"),
+        ("executive_order_number", "VARCHAR"),
+    ],
     # Ingested from GovInfo CFR (build_cfr_sections); section metadata + citations
     # only (not full text). All columns are stored as VARCHAR.
     "cfr_sections": [
@@ -151,12 +210,24 @@ DERIVED_SCHEMAS: dict[str, list[tuple[str, str]]] = {
         ("congress", "VARCHAR"),
         ("bill_type", "VARCHAR"),
         ("bill_number", "VARCHAR"),
+        ("pl_number", "VARCHAR"),
         ("title", "VARCHAR"),
         ("origin_chamber", "VARCHAR"),
         ("latest_action_date", "VARCHAR"),
         ("latest_action_text", "VARCHAR"),
         ("update_date", "VARCHAR"),
         ("url", "VARCHAR"),
+    ],
+    # Per-bill Library of Congress subject assignment (enrich_bill_subjects),
+    # fetched from the detail endpoints the congress_bills list payload never
+    # carries. Keyed by bill_id; joins straight to congress_bills.
+    "bill_subjects": [
+        ("bill_id", "VARCHAR"),
+        ("policy_area", "VARCHAR"),
+        ("subjects_json", "VARCHAR"),
+        ("subject_count", "VARCHAR"),
+        ("carrier", "VARCHAR"),
+        ("enriched_at", "VARCHAR"),
     ],
     # Ingested from reginfo.gov (build_unified_agenda); all columns are stored as
     # VARCHAR, array fields serialized as JSON strings. Keyed by (rin, agenda_edition).
@@ -195,6 +266,7 @@ DERIVED_SCHEMAS: dict[str, list[tuple[str, str]]] = {
         ("docket_ids_json", "VARCHAR"),
         ("regulation_id_numbers_json", "VARCHAR"),
         ("cfr_references_json", "VARCHAR"),
+        ("topics_json", "VARCHAR"),
         ("html_url", "VARCHAR"),
         ("pdf_url", "VARCHAR"),
         ("body_html_url", "VARCHAR"),
@@ -204,6 +276,149 @@ DERIVED_SCHEMAS: dict[str, list[tuple[str, str]]] = {
         ("subtype", "VARCHAR"),
         ("executive_order_number", "VARCHAR"),
         ("modify_date", "VARCHAR"),
+    ],
+    "rule_targets": [
+        ("docket_id", "VARCHAR"),
+        ("cfr_ref", "VARCHAR"),
+        ("cfr_title", "VARCHAR"),
+        ("cfr_part", "VARCHAR"),
+        ("cfr_section", "VARCHAR"),
+        ("rin", "VARCHAR"),
+        ("source", "VARCHAR"),
+        ("evidence_id", "VARCHAR"),
+        ("first_seen", "VARCHAR"),
+        ("last_seen", "VARCHAR"),
+        ("method", "VARCHAR"),
+        ("actor_id", "VARCHAR"),
+        ("run_id", "VARCHAR"),
+        ("asserted_at", "VARCHAR"),
+        ("supersedes_id", "VARCHAR"),
+    ],
+    "authority_edges": [
+        ("rin", "VARCHAR"),
+        ("authority_raw", "VARCHAR"),
+        ("usc_title", "VARCHAR"),
+        ("usc_section", "VARCHAR"),
+        ("usc_section_end", "VARCHAR"),
+        ("pl_number", "VARCHAR"),
+        ("statute_at_large", "VARCHAR"),
+        ("executive_order", "VARCHAR"),
+        ("authority_type", "VARCHAR"),
+        ("parse_status", "VARCHAR"),
+        ("agenda_edition", "VARCHAR"),
+        ("method", "VARCHAR"),
+        ("actor_id", "VARCHAR"),
+        ("run_id", "VARCHAR"),
+        ("asserted_at", "VARCHAR"),
+        ("supersedes_id", "VARCHAR"),
+    ],
+    "proceedings": [
+        ("proceeding_id", "VARCHAR"),
+        ("rin", "VARCHAR"),
+        ("docket_ids_json", "VARCHAR"),
+        ("title", "VARCHAR"),
+        ("agency_code", "VARCHAR"),
+        ("current_stage", "VARCHAR"),
+        ("stage_events_json", "VARCHAR"),
+        ("fr_document_numbers_json", "VARCHAR"),
+        ("cfr_refs_json", "VARCHAR"),
+        ("cfr_target_iris_json", "VARCHAR"),
+        ("authority_refs_json", "VARCHAR"),
+        ("identity_predecessors_json", "VARCHAR"),
+        ("method", "VARCHAR"),
+        ("actor_id", "VARCHAR"),
+        ("run_id", "VARCHAR"),
+        ("asserted_at", "VARCHAR"),
+        ("supersedes_id", "VARCHAR"),
+    ],
+    "regulatory_agenda_items": [
+        ("agenda_item_id", "VARCHAR"),
+        ("rin", "VARCHAR"),
+        ("scope_status", "VARCHAR"),
+        ("scope_basis", "VARCHAR"),
+        ("linked_proceeding_count", "VARCHAR"),
+        ("observation_count", "VARCHAR"),
+        ("latest_agenda_edition", "VARCHAR"),
+        ("first_seen", "VARCHAR"),
+        ("last_seen", "VARCHAR"),
+        ("method", "VARCHAR"),
+        ("actor_id", "VARCHAR"),
+        ("run_id", "VARCHAR"),
+        ("asserted_at", "VARCHAR"),
+        ("supersedes_id", "VARCHAR"),
+    ],
+    "agenda_item_proceedings": [
+        ("relationship_id", "VARCHAR"),
+        ("agenda_item_id", "VARCHAR"),
+        ("rin", "VARCHAR"),
+        ("proceeding_id", "VARCHAR"),
+        ("relationship_role", "VARCHAR"),
+        ("source", "VARCHAR"),
+        ("evidence_id", "VARCHAR"),
+        ("evidence_uri", "VARCHAR"),
+        ("evidence_date", "VARCHAR"),
+        ("method", "VARCHAR"),
+        ("actor_id", "VARCHAR"),
+        ("run_id", "VARCHAR"),
+        ("asserted_at", "VARCHAR"),
+        ("supersedes_id", "VARCHAR"),
+    ],
+    "comment_periods": [
+        ("comment_period_id", "VARCHAR"),
+        ("proceeding_ids_json", "VARCHAR"),
+        ("rins_json", "VARCHAR"),
+        ("docket_ids_json", "VARCHAR"),
+        ("open_date", "VARCHAR"),
+        ("close_date", "VARCHAR"),
+        ("source", "VARCHAR"),
+        ("opened_by_artifact_ids_json", "VARCHAR"),
+        ("evidence_ids_json", "VARCHAR"),
+        ("method", "VARCHAR"),
+        ("actor_id", "VARCHAR"),
+        ("run_id", "VARCHAR"),
+        ("asserted_at", "VARCHAR"),
+        ("supersedes_id", "VARCHAR"),
+    ],
+    "concepts": [
+        ("concept_id", "VARCHAR"),
+        ("facet", "VARCHAR"),
+        ("source_vocabulary", "VARCHAR"),
+        ("scheme", "VARCHAR"),
+        ("pref_label", "VARCHAR"),
+        ("alt_labels_json", "VARCHAR"),
+        ("definition", "VARCHAR"),
+        ("broader_id", "VARCHAR"),
+        ("status", "VARCHAR"),
+        ("replaced_by", "VARCHAR"),
+        ("external_ids_json", "VARCHAR"),
+        ("method", "VARCHAR"),
+        ("actor_id", "VARCHAR"),
+        ("run_id", "VARCHAR"),
+        ("asserted_at", "VARCHAR"),
+        ("supersedes_id", "VARCHAR"),
+    ],
+    "concept_assignments": [
+        ("assignment_id", "VARCHAR"),
+        ("subject_type", "VARCHAR"),
+        ("subject_id", "VARCHAR"),
+        ("concept_id", "VARCHAR"),
+        ("confidence", "VARCHAR"),
+        ("evidence_json", "VARCHAR"),
+        ("method", "VARCHAR"),
+        ("actor_id", "VARCHAR"),
+        ("run_id", "VARCHAR"),
+        ("asserted_at", "VARCHAR"),
+        ("supersedes_id", "VARCHAR"),
+    ],
+    "concept_events": [
+        ("event_id", "VARCHAR"),
+        ("event_type", "VARCHAR"),
+        ("payload_json", "VARCHAR"),
+        ("method", "VARCHAR"),
+        ("actor_id", "VARCHAR"),
+        ("run_id", "VARCHAR"),
+        ("asserted_at", "VARCHAR"),
+        ("supersedes_id", "VARCHAR"),
     ],
     # Ingested from the SAM.gov Entity API v4 (build_sam_entities); list-level
     # fields only, all stored as VARCHAR. Keyed by uei (Unique Entity ID).
@@ -319,6 +534,106 @@ DERIVED_SCHEMAS: dict[str, list[tuple[str, str]]] = {
         ("date_created", "VARCHAR"),
         ("absolute_url", "VARCHAR"),
     ],
+    # Official Supreme Court term-index metadata and embedded text extracted
+    # from the linked government PDF. Keyed by stable opinion package ID.
+    "court_opinions": [
+        ("opinion_id", "VARCHAR"),
+        ("court_id", "VARCHAR"),
+        ("term_year", "VARCHAR"),
+        ("release_number", "VARCHAR"),
+        ("date_decided", "VARCHAR"),
+        ("docket_number", "VARCHAR"),
+        ("case_name", "VARCHAR"),
+        ("holding", "VARCHAR"),
+        ("author_code", "VARCHAR"),
+        ("citation", "VARCHAR"),
+        ("opinion_type", "VARCHAR"),
+        ("source_index_url", "VARCHAR"),
+        ("source_url", "VARCHAR"),
+        ("source_document_kind", "VARCHAR"),
+        ("source_page_start", "VARCHAR"),
+        ("source_page_end", "VARCHAR"),
+        ("source_etag", "VARCHAR"),
+        ("source_last_modified", "VARCHAR"),
+        ("source_bytes", "VARCHAR"),
+        ("pdf_sha256", "VARCHAR"),
+        ("pdf_page_count", "VARCHAR"),
+        ("text_extraction_status", "VARCHAR"),
+        ("text_extraction_method", "VARCHAR"),
+        ("text_extraction_version", "VARCHAR"),
+        ("pdf_text", "VARCHAR"),
+    ],
+    # Ingested from the CourtListener bulk `opinion-clusters` dump
+    # (build_court_opinion_clusters), topped up between dumps by the keyless
+    # /search/?type=o API. One row per decision; `cl_docket_id` joins court_dockets.
+    # All columns stored as VARCHAR. Keyed by cluster_id.
+    "court_opinion_clusters": [
+        ("cluster_id", "VARCHAR"),
+        ("cl_docket_id", "VARCHAR"),
+        ("court_id", "VARCHAR"),
+        ("court_jurisdiction", "VARCHAR"),
+        ("court_is_federal", "VARCHAR"),
+        ("case_name", "VARCHAR"),
+        ("case_name_short", "VARCHAR"),
+        ("case_name_full", "VARCHAR"),
+        ("date_filed", "VARCHAR"),
+        ("date_filed_is_approximate", "VARCHAR"),
+        ("judges", "VARCHAR"),
+        ("nature_of_suit", "VARCHAR"),
+        ("precedential_status", "VARCHAR"),
+        ("citation_count", "VARCHAR"),
+        ("scdb_id", "VARCHAR"),
+        ("scdb_decision_direction", "VARCHAR"),
+        ("scdb_votes_majority", "VARCHAR"),
+        ("scdb_votes_minority", "VARCHAR"),
+        ("source", "VARCHAR"),
+        ("procedural_history", "VARCHAR"),
+        ("attorneys", "VARCHAR"),
+        ("posture", "VARCHAR"),
+        ("syllabus", "VARCHAR"),
+        ("headnotes", "VARCHAR"),
+        ("summary", "VARCHAR"),
+        ("disposition", "VARCHAR"),
+        ("history", "VARCHAR"),
+        ("other_dates", "VARCHAR"),
+        ("cross_reference", "VARCHAR"),
+        ("correction", "VARCHAR"),
+        ("arguments", "VARCHAR"),
+        ("headmatter", "VARCHAR"),
+        ("blocked", "VARCHAR"),
+        ("date_blocked", "VARCHAR"),
+        ("slug", "VARCHAR"),
+        ("absolute_url", "VARCHAR"),
+        ("date_created", "VARCHAR"),
+        ("date_modified", "VARCHAR"),
+        ("ingest_source", "VARCHAR"),
+    ],
+    # Opinion text ingested from the CourtListener bulk `opinions` dump
+    # (build_court_opinion_bodies). One row per opinion (majority, concurrence,
+    # dissent); `cluster_id` joins court_opinion_clusters. Carries the
+    # `plain_text` / `html_with_citations` bodies that court-opinion-v1 declares.
+    # All columns stored as VARCHAR. Keyed by opinion_id.
+    "court_opinion_bodies": [
+        ("opinion_id", "VARCHAR"),
+        ("cluster_id", "VARCHAR"),
+        ("opinion_type", "VARCHAR"),
+        ("author_str", "VARCHAR"),
+        ("author_id", "VARCHAR"),
+        ("joined_by_str", "VARCHAR"),
+        ("per_curiam", "VARCHAR"),
+        ("sha1", "VARCHAR"),
+        ("page_count", "VARCHAR"),
+        ("download_url", "VARCHAR"),
+        ("local_path", "VARCHAR"),
+        ("extracted_by_ocr", "VARCHAR"),
+        ("plain_text", "VARCHAR"),
+        ("html_with_citations", "VARCHAR"),
+        ("available_text_fields", "VARCHAR"),
+        ("text_char_count", "VARCHAR"),
+        ("date_created", "VARCHAR"),
+        ("date_modified", "VARCHAR"),
+        ("dump_date", "VARCHAR"),
+    ],
     # Ingested from the USASpending.gov /api/v2/recipient/ endpoint
     # (build_usaspending_recipients); a federal-award recipient reference
     # dimension bounded to the top-N recipients by all-time award amount, all
@@ -425,8 +740,11 @@ def discover_schemas(source: str, base: str | None = None) -> dict[str, list[tup
         base_url = (base or DEFAULT_R2_BASE_URL).rstrip("/")
         con.execute("INSTALL httpfs")
         con.execute("LOAD httpfs")
+        materialized_urls = resolve_materialized_table_urls(base_url)
 
         def url_for(name: str) -> str:
+            if name in MATERIALIZED_TABLES:
+                return materialized_urls[name]
             return f"{base_url}/{name}.parquet"
 
     elif source == "local":
@@ -543,9 +861,18 @@ def _render_table_page(
     if summary:
         lines += [summary, ""]
     queryable = "Yes" if table in MCP_QUERYABLE else "No (published to R2 only)"
+    parquet_location = (
+        "`materialized/ontology/latest.json` (atomic snapshot manifest)"
+        if table in MATERIALIZED_TABLES
+        else f"`{table}.parquet`"
+    )
     lines += [
-        f"- **Parquet file:** `{table}.parquet`",
-        f"- **Queryable via MCP `query_sql`:** {queryable}",
+        f"- **Parquet file:** {parquet_location}",
+        (
+            f"- **Supported by MCP `query_sql` after first publication:** {queryable}"
+            if table in MATERIALIZED_TABLES
+            else f"- **Queryable via MCP `query_sql`:** {queryable}"
+        ),
     ]
     if pk:
         lines.append(f"- **Primary / dedup key:** `{pk}`")

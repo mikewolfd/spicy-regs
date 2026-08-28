@@ -20,6 +20,7 @@ from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import Icon
 
 from spicy_regs._icon import ICON_DATA_URI
+from spicy_regs.published import MATERIALIZED_TABLES, resolve_materialized_table_urls
 
 DEFAULT_R2_BASE_URL = "https://data.spicy-regs.dev"
 TABLES = (
@@ -30,16 +31,31 @@ TABLES = (
     "feed_summary",
     "agency_stats",
     "agency_monthly_volume",
+    "rulemaking_lifecycles",
+    "fr_docket_links",
     "cfr_sections",
     "congress_bills",
+    "bill_subjects",
     "unified_agenda",
     "federal_register",
+    "rule_targets",
+    "authority_edges",
+    "proceedings",
+    "regulatory_agenda_items",
+    "agenda_item_proceedings",
+    "comment_periods",
+    "concepts",
+    "concept_assignments",
+    "concept_events",
     "sam_entities",
     "lobbying_filings",
     "fec_committees",
     "gao_reports",
     "crs_reports",
     "court_dockets",
+    "court_opinions",
+    "court_opinion_clusters",
+    "court_opinion_bodies",
     "usaspending_recipients",
     "fcc_proceedings",
     "fcc_filings",
@@ -95,6 +111,25 @@ def _resolve_r2_base_url() -> str:
 
 
 R2_BASE_URL = _resolve_r2_base_url()
+
+
+def _published_table_url(
+    name: str,
+    materialized_urls: dict[str, str] | None,
+) -> str | None:
+    """Return a table URL, failing closed for an unresolved atomic dataset."""
+    if name in MATERIALIZED_TABLES:
+        return None if materialized_urls is None else materialized_urls.get(name)
+    return f"{R2_BASE_URL}/{name}.parquet"
+
+
+def _published_table_names() -> tuple[str, ...]:
+    """Return advertised tables, excluding an unresolved atomic generation."""
+    try:
+        resolve_materialized_table_urls(R2_BASE_URL)
+    except RuntimeError:
+        return tuple(name for name in TABLES if name not in MATERIALIZED_TABLES)
+    return TABLES
 
 
 def _resolve_home_directory() -> str:
@@ -217,6 +252,11 @@ def _build_connection() -> duckdb.DuckDBPyConnection:
 
     catalog = _resolve_catalog_config()
     catalog_attached = catalog is not None and _attach_catalog(con, catalog)
+    try:
+        materialized_urls = resolve_materialized_table_urls(R2_BASE_URL)
+    except RuntimeError as exc:
+        logger.warning("materialized ontology manifest unavailable: %s", exc)
+        materialized_urls = None
 
     _apply_security_settings(con)
     for name in TABLES:
@@ -232,7 +272,13 @@ def _build_connection() -> duckdb.DuckDBPyConnection:
                 continue
             except duckdb.Error as exc:
                 logger.warning("comments not available in catalog; falling back to monolith: %s", exc)
-        url = f"{R2_BASE_URL}/{name}.parquet"
+        url = _published_table_url(name, materialized_urls)
+        if url is None:
+            logger.warning(
+                "materialized table %s skipped because no complete ontology generation could be resolved",
+                name,
+            )
+            continue
         try:
             con.execute(f"CREATE VIEW {name} AS SELECT * FROM read_parquet('{url}')")
         except duckdb.Error as exc:
@@ -319,24 +365,30 @@ def _statement_timeout(cursor: duckdb.DuckDBPyConnection) -> Iterator[None]:
 def _register_tools(mcp: FastMCP) -> None:
     @mcp.tool()
     def list_sources() -> dict[str, Any]:
-        """List the logical tables available in the Spicy Regs R2 dataset."""
+        """List the tables currently published in the Spicy Regs R2 dataset."""
         return {
             "source": "r2",
             "base_url": R2_BASE_URL,
-            "tables": list(TABLES),
+            "tables": list(_published_table_names()),
         }
 
     @mcp.tool()
     def describe_table(table: str) -> dict[str, Any]:
         """Return the column schema for one Spicy Regs table.
 
-        Valid tables: dockets, documents, comments, comments_index, feed_summary,
-        agency_stats, agency_monthly_volume.
+        Tables registered in code but awaiting their first complete atomic
+        generation are reported as unavailable.
         """
         if table not in TABLES:
             return {
                 "error": f"Unknown table '{table}'",
-                "available_tables": list(TABLES),
+                "available_tables": list(_published_table_names()),
+            }
+        available_tables = _published_table_names()
+        if table not in available_tables:
+            return {
+                "error": f"Table '{table}' is not currently published",
+                "available_tables": list(available_tables),
             }
         cursor = _get_connection().cursor()
         with _statement_timeout(cursor):
@@ -359,10 +411,9 @@ def _register_tools(mcp: FastMCP) -> None:
     def query_sql(sql: str, max_rows: int = 25) -> dict[str, Any]:
         """Run a SQL query against the Spicy Regs R2 tables and return up to max_rows rows.
 
-        The connection is in-memory and read-only against R2. Available views:
-        dockets, documents, comments, comments_index, feed_summary, agency_stats,
-        agency_monthly_volume. Always include a LIMIT in exploratory queries;
-        results past max_rows are dropped.
+        The connection is in-memory and read-only against R2. Use list_sources
+        for the views currently available. Always include a LIMIT in exploratory
+        queries; results past max_rows are dropped.
         """
         if max_rows <= 0 or max_rows > 500:
             return {"error": "max_rows must be between 1 and 500"}

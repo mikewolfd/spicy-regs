@@ -33,6 +33,11 @@ on:
         required: false
         default: ''
         type: string
+      bill_subjects_max:
+        description: "Optional per-run cap on bills enriched with subjects; blank uses the carrier's own cap"
+        required: false
+        default: ''
+        type: string
       fcc_since:
         description: 'Optional FCC ECFS backfill start date (YYYY-MM-DD)'
         required: false
@@ -43,15 +48,26 @@ on:
         required: false
         default: ''
         type: string
+      timeout_minutes:
+        description: >-
+          Job timeout. 30 suits a rollup that reads R2 and writes a table. A
+          rollup that streams a bulk dump is bounded by the publisher's
+          bandwidth, not by our work, and needs its own number — see
+          rollup-court-opinion-clusters.yml.
+        required: false
+        default: 30
+        type: number
 
 jobs:
   rollup:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: ${{ inputs.timeout_minutes }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          submodules: true
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -85,6 +101,7 @@ jobs:
           LDA_SINCE: ${{ inputs.lda_since }}
           LDA_UNTIL: ${{ inputs.lda_until }}
           CONGRESS_SINCE: ${{ inputs.congress_since }}
+          BILL_SUBJECTS_MAX: ${{ inputs.bill_subjects_max }}
           FCC_SINCE: ${{ inputs.fcc_since }}
           FCC_PROCEEDINGS: ${{ inputs.fcc_proceedings }}
           # Optional: raises the CourtListener API rate limit. The court_dockets
