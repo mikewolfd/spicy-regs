@@ -10,6 +10,9 @@ from __future__ import annotations
 import json
 from datetime import date
 
+import pytest
+
+from spicy_regs.sources import federal_register as federal_register_source
 from spicy_regs.sources.federal_register import FederalRegisterReader
 from spicy_regs.transforms.build_federal_register import COLUMNS, _shape
 
@@ -23,6 +26,7 @@ _RAW_DOC = {
     "docket_ids": ["EPA-HQ-OAR-2024-0001", "FRL-1234-01-OAR"],
     "regulation_id_numbers": ["2060-AV12"],
     "cfr_references": [{"title": 40, "part": 60, "chapter": None, "citation_url": None}],
+    "topics": [{"name": "Air pollution control", "slug": "air-pollution-control"}],
     "agencies": [
         {
             "raw_name": "ENVIRONMENTAL PROTECTION AGENCY",
@@ -53,6 +57,7 @@ def test_shape_maps_and_serializes_fields():
     assert json.loads(row["docket_ids_json"]) == ["EPA-HQ-OAR-2024-0001", "FRL-1234-01-OAR"]
     assert json.loads(row["regulation_id_numbers_json"]) == ["2060-AV12"]
     assert json.loads(row["cfr_references_json"])[0]["part"] == 60
+    assert json.loads(row["topics_json"])[0]["name"] == "Air pollution control"
     # agency_slugs is a comma-joined string of slugs, skipping agencies with none.
     assert row["agency_slugs"] == "environmental-protection-agency"
     # Integer scalars stringify (schema is all-VARCHAR).
@@ -69,6 +74,7 @@ def test_shape_handles_missing_arrays():
     assert row["docket_ids_json"] == "[]"
     assert row["regulation_id_numbers_json"] == "[]"
     assert row["cfr_references_json"] == "[]"
+    assert row["topics_json"] == "[]"
     assert row["agencies_json"] == "[]"
     assert row["agency_slugs"] is None
 
@@ -97,3 +103,49 @@ def test_window_subdivides_on_truncation(monkeypatch):
     # _fetch_window doesn't need the httpx client once _page_window is stubbed.
     got = [d["document_number"] for d in reader._fetch_window(date(2024, 1, 1), date(2024, 1, 2))]
     assert sorted(got) == ["D1", "D2"]
+
+
+def test_single_day_truncation_aborts_instead_of_dropping_documents(monkeypatch):
+    reader = FederalRegisterReader(since=date(2024, 1, 1), until=date(2024, 1, 1))
+    monkeypatch.setattr(
+        reader,
+        "_page_window",
+        lambda gte, lte: ([_doc(1, gte.isoformat())], 2),
+    )
+
+    with pytest.raises(RuntimeError, match="truncated"):
+        list(reader._fetch_window(date(2024, 1, 1), date(2024, 1, 1)))
+
+
+def test_reported_result_cap_subdivides_even_when_visible_rows_are_complete(
+    monkeypatch,
+):
+    reader = FederalRegisterReader(since=date(2024, 1, 1), until=date(2024, 1, 2))
+    monkeypatch.setattr(federal_register_source, "RESULT_CAP", 2)
+
+    def fake_page_window(gte: date, lte: date):
+        if gte == lte:
+            return [_doc(gte.day, gte.isoformat())], 1
+        return [
+            _doc(1, "2024-01-01"),
+            _doc(2, "2024-01-02"),
+        ], 2
+
+    monkeypatch.setattr(reader, "_page_window", fake_page_window)
+
+    got = [d["document_number"] for d in reader._fetch_window(date(2024, 1, 1), date(2024, 1, 2))]
+    assert got == ["D1", "D2"]
+
+
+def test_archive_fetch_uses_bounded_top_level_windows(monkeypatch):
+    reader = FederalRegisterReader(since=date(2024, 1, 1), until=date(2024, 12, 31))
+    windows: list[tuple[date, date]] = []
+
+    def fake_fetch_window(gte: date, lte: date):
+        windows.append((gte, lte))
+        return iter(())
+
+    monkeypatch.setattr(reader, "_fetch_window", fake_fetch_window)
+    assert list(reader.iter_records()) == []
+    assert len(windows) > 1
+    assert all((lte - gte).days < federal_register_source.MAX_WINDOW_DAYS for gte, lte in windows)
