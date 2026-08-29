@@ -1,0 +1,320 @@
+{
+  "$id": "https://rulespec.org/schemas/releases/source-catalog-release-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SourceCatalogRelease",
+  "description": "Root manifest of one sealed SourceCatalogRelease. Rulespec Core owns this schema; SpicyRegs owns the records it carries (REF-024).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "format",
+    "formatVersion",
+    "releaseId",
+    "annotations",
+    "content"
+  ],
+  "properties": {
+    "format": {
+      "const": "spicy-regs-source-catalog-release"
+    },
+    "formatVersion": {
+      "const": "1.0"
+    },
+    "releaseId": {
+      "type": "string",
+      "pattern": "^urn:spicy-regs:source-catalog-release:v1:[0-9a-f]{64}$"
+    },
+    "annotations": {
+      "$ref": "#/$defs/annotations"
+    },
+    "content": {
+      "$ref": "#/$defs/content"
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "hexDigest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "absoluteId": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9+.-]*:[^\\s]+$"
+    },
+    "instant": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    },
+    "count": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "annotations": {
+      "description": "The identity-excluded envelope. Everything here is a fact ABOUT the act of publishing rather than about the selection content, so two publishes of identical content share one identity. `publishedAt` lives here for the same reason DocumentRelease v3 keeps `createdAt` out of its identity preimage: a wall-clock stamp inside identity makes a reproducible build unreproducible. Open to further operator notes.",
+      "type": "object",
+      "required": [
+        "publishedAt"
+      ],
+      "properties": {
+        "publishedAt": {
+          "description": "When this release was published. A publication timestamp, not a source-issued fact — a source-issued date belongs on the item it describes.",
+          "$ref": "#/$defs/instant"
+        },
+        "releaseStatus": {
+          "enum": [
+            "fixture",
+            "candidate",
+            "published"
+          ]
+        },
+        "buildRunId": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "content": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "catalogId",
+        "sourceSystem",
+        "selectionPolicy",
+        "requestedUniverseSetDigest",
+        "selectedSourceSetDigest",
+        "counts",
+        "coverage",
+        "globalManifest",
+        "schemaSet"
+      ],
+      "properties": {
+        "catalogId": {
+          "description": "Stable identity of the catalog this release is one version of.",
+          "$ref": "#/$defs/absoluteId"
+        },
+        "sourceSystem": {
+          "$ref": "#/$defs/sourceSystem"
+        },
+        "selectionPolicy": {
+          "$ref": "#/$defs/selectionPolicy"
+        },
+        "requestedUniverseSetDigest": {
+          "description": "Canonical set digest over the deduplicated sorted sourceItemId list of the requested universe U.",
+          "$ref": "#/$defs/digest"
+        },
+        "selectedSourceSetDigest": {
+          "description": "Canonical set digest over the deduplicated sorted sourceItemId list of the selected set S.",
+          "$ref": "#/$defs/digest"
+        },
+        "counts": {
+          "$ref": "#/$defs/counts"
+        },
+        "coverage": {
+          "$ref": "#/$defs/coverage"
+        },
+        "globalManifest": {
+          "$ref": "#/$defs/manifestReference"
+        },
+        "schemaSet": {
+          "$ref": "#/$defs/schemaSet"
+        }
+      }
+    },
+    "sourceSystem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sourceSystemId",
+        "sourceSystemVersion"
+      ],
+      "properties": {
+        "sourceSystemId": {
+          "$ref": "#/$defs/absoluteId"
+        },
+        "sourceSystemVersion": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "selectionPolicy": {
+      "description": "The policy that decided membership of S within U. The digest pins the exact policy bytes; this release does not carry them.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "policyId",
+        "policyVersion",
+        "policySha256"
+      ],
+      "properties": {
+        "policyId": {
+          "$ref": "#/$defs/absoluteId"
+        },
+        "policyVersion": {
+          "type": "string",
+          "minLength": 1
+        },
+        "policySha256": {
+          "$ref": "#/$defs/hexDigest"
+        }
+      }
+    },
+    "counts": {
+      "description": "Diagnostics derived from the members. A count is never the proof of membership; the set digests are.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "discoveredCount",
+        "selectedCount",
+        "excludedCount",
+        "deletedCount",
+        "unavailableCount",
+        "failedCount",
+        "memberCount",
+        "totalMemberByteSize"
+      ],
+      "properties": {
+        "discoveredCount": {
+          "$ref": "#/$defs/count"
+        },
+        "selectedCount": {
+          "$ref": "#/$defs/count"
+        },
+        "excludedCount": {
+          "$ref": "#/$defs/count"
+        },
+        "deletedCount": {
+          "$ref": "#/$defs/count"
+        },
+        "unavailableCount": {
+          "$ref": "#/$defs/count"
+        },
+        "failedCount": {
+          "$ref": "#/$defs/count"
+        },
+        "memberCount": {
+          "$ref": "#/$defs/count"
+        },
+        "totalMemberByteSize": {
+          "$ref": "#/$defs/count"
+        }
+      }
+    },
+    "coverage": {
+      "description": "The accounting proof that every member of U carries exactly one recognized disposition and that every selected item is capturable.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "accountedCount",
+        "unaccountedCount",
+        "selectedWithCandidateRenditionCount",
+        "distinctSelectedDocumentIdCount"
+      ],
+      "properties": {
+        "accountedCount": {
+          "$ref": "#/$defs/count"
+        },
+        "unaccountedCount": {
+          "$ref": "#/$defs/count"
+        },
+        "selectedWithCandidateRenditionCount": {
+          "$ref": "#/$defs/count"
+        },
+        "distinctSelectedDocumentIdCount": {
+          "$ref": "#/$defs/count"
+        }
+      }
+    },
+    "manifestReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "manifestId",
+        "scopeKind",
+        "scopeId",
+        "objectKey",
+        "byteSize",
+        "sha256"
+      ],
+      "properties": {
+        "manifestId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "scopeKind": {
+          "const": "global"
+        },
+        "scopeId": {
+          "const": "global"
+        },
+        "objectKey": {
+          "type": "string",
+          "minLength": 1
+        },
+        "byteSize": {
+          "$ref": "#/$defs/count"
+        },
+        "sha256": {
+          "$ref": "#/$defs/hexDigest"
+        }
+      }
+    },
+    "schemaSet": {
+      "description": "The schema bytes this release was verified against, carried inside the release so a consumer needs no Rulespec checkout.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaSetId",
+        "schemas"
+      ],
+      "properties": {
+        "schemaSetId": {
+          "type": "string",
+          "pattern": "^urn:spicy:schema-set:v1:[0-9a-f]{64}$"
+        },
+        "schemas": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": {
+            "$ref": "#/$defs/schemaDescriptor"
+          }
+        }
+      }
+    },
+    "schemaDescriptor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaId",
+        "schemaSha256",
+        "roles"
+      ],
+      "properties": {
+        "schemaId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "schemaSha256": {
+          "$ref": "#/$defs/hexDigest"
+        },
+        "roles": {
+          "description": "Schema roles, not member roles. Each role resolves to exactly one schema in the set.",
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1,
+          "items": {
+            "enum": [
+              "release-root",
+              "member-manifest",
+              "source-items"
+            ]
+          }
+        }
+      }
+    }
+  }
+}
