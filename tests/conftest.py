@@ -1,6 +1,8 @@
-"""Shared fixtures for pipeline tests."""
+"""Shared fixtures and explicit compatibility-test quarantine."""
 
+import json
 import os
+import subprocess
 from pathlib import Path
 
 import polars as pl
@@ -19,9 +21,86 @@ def isolate_env(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch)
             monkeypatch.delenv(name, raising=False)
 
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_RULESPEC_DIR = REPO_ROOT.parent / "rulespec"
+LEGACY_RULESPEC_MANIFEST = (
+    REPO_ROOT / "RefSpec" / "profiles" / "rulespec-dependency.json"
+)
+
+
+def _git(path: Path, *arguments: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["git", *arguments],
+        cwd=path,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+
+def _legacy_rulespec_skip_reason() -> str | None:
+    """Explain why the retired combined proof cannot run in this checkout."""
+
+    configured = os.environ.get("RULESPEC_LEGACY_DIR") or os.environ.get(
+        "RULESPEC_DIR"
+    )
+    selected = (
+        Path(configured) if configured else DEFAULT_RULESPEC_DIR
+    ).resolve()
+    inside = _git(selected, "rev-parse", "--is-inside-work-tree")
+    if inside.returncode or inside.stdout.strip() != "true":
+        return f"legacy combined Rulespec checkout is unavailable: {selected}"
+
+    manifest = json.loads(
+        LEGACY_RULESPEC_MANIFEST.read_text(encoding="utf-8")
+    )
+    expected = manifest.get("evidenceRevision")
+    if expected is None:
+        # RefSpec 9166862 retired the revision pin from the dependency
+        # manifest, so the combined proof has no exact revision to anchor to.
+        return (
+            "legacy combined RefSpec/Rulespec proof has no evidenceRevision "
+            "pin in rulespec-dependency.json; the anchor was retired upstream"
+        )
+    head = _git(selected, "rev-parse", "HEAD")
+    actual = head.stdout.strip()
+    if head.returncode or actual != expected:
+        return (
+            "legacy combined RefSpec/Rulespec proof requires exact Rulespec "
+            f"revision {expected}; selected checkout is "
+            f"{actual or 'unreadable'}"
+        )
+    status = _git(selected, "status", "--porcelain")
+    if status.returncode or status.stdout.strip():
+        return (
+            "legacy combined RefSpec/Rulespec proof requires a clean exact "
+            "Rulespec checkout"
+        )
+    return None
+
+
+def pytest_collection_modifyitems(
+    config: pytest.Config,
+    items: list[pytest.Item],
+) -> None:
+    """Run pre-split compatibility tests only against their exact dependency."""
+
+    del config
+    reason = _legacy_rulespec_skip_reason()
+    if reason is None:
+        return
+    skip = pytest.mark.skip(reason=reason)
+    for item in items:
+        if item.get_closest_marker("legacy_rulespec_combined") is not None:
+            item.add_marker(skip)
+
+
 @pytest.fixture
-def tmp_output(tmp_path: Path) -> Path:
-    """Return a temporary output directory."""
+def tmp_output(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Return an offline temporary output directory."""
+    # Unit pipelines must not inherit a developer's production R2 endpoint from
+    # .env. Tests that exercise remote priming set this variable explicitly.
+    monkeypatch.delenv("R2_PUBLIC_URL", raising=False)
     out = tmp_path / "output"
     out.mkdir()
     return out

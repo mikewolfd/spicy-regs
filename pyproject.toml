@@ -1,13 +1,21 @@
 [project]
 name = "spicy-regs"
 version = "0.1.0"
-description = "Regulations Data Analysis Tools"
-requires-python = ">=3.10"
+description = "Immutable regulatory source records, exact document versions, and structural passages"
+# Pinned to one minor. Segmentation reads native markup through a stdlib
+# html.parser subclass whose failure mode is swallowed (source.py::_markup_drafts),
+# so an interpreter change can silently alter the element stream and move segment
+# boundaries. That is the leading explanation for the 1,302 -> 1,296 divergence
+# recorded in docs/evidence/document-segmentation-remeasurement-2026-08-02.md.
+requires-python = ">=3.12,<3.13"
 dependencies = [
+    "refspec==0.1.0.dev0",
+    "beautifulsoup4>=4.13,<5",
     "boto3",
     "python-dotenv",
     "polars",
     "pyarrow",
+    "numpy>=2,<3",
     "tqdm",
     "httpx",
     "duckdb>=1.4", # >=1.4 required to ATTACH an Iceberg REST catalog and MERGE INTO it
@@ -15,25 +23,62 @@ dependencies = [
     "cyclopts",
     "loguru",
     "mcp>=1.10.0",
-    "pypdf",
-    "pyyaml",  # data dictionary descriptions (src/spicy_regs/data_dictionary.py)
+    "pypdf>=6.14,<7", # incumbent PDF parser; representations sealed under it stay sealed
+    # Adopted 2026-08-02 on docs/evidence/extraction-tooling-bakeoff-2026-08-02.md:
+    # +0.07% text and 2.5x faster than pypdf across 18 real PDFs, with per-word
+    # bounding boxes pypdf cannot provide. Local, model-free, no network, no
+    # per-document cost. Pinned to one minor because a parser change moves
+    # extracted text, and extracted text is sealed.
+    "pymupdf>=1.28,<1.29", # AGPL-3.0 or commercial Artifex licence — a deliberate choice
+    "pyyaml", # data dictionary descriptions (src/spicy_regs/data_dictionary.py)
+    "jsonschema>=4.23", # strict structured-output and locked-corpus validation
+    "rdflib>=7.1,<8", # file-only RefSpec vocabulary-atlas reader
+    "bm25s==0.3.10", # sparse lexical concept retrieval; pinned for reproducible rankings
+    "openai", # optional-at-runtime structured-output provider for ontology tagging
+    "tiktoken>=0.9,<1", # pinned encoding implementation for ontology segment budgets
+    # optional-at-runtime provider for the native, enforced structured-output
+    # arm (src/spicy_regs/docpipeline/adapters/anthropic.py). >=0.120 is where
+    # `output_config.format` json_schema is the GA schema-enforcement surface.
+    "anthropic>=0.120,<1",
 ]
 
 [project.optional-dependencies]
+# Fallback parser for sources with no native XML, HTML, or JSON structure.
+# Optional on purpose: the default environment parses native structure, and the
+# adapter (src/spicy_regs/docpipeline/adapters/docling.py) imports Docling lazily.
+docling = [
+    "docling==2.115.0",
+]
 embed = [
-    "sentence-transformers",
-    "torch",
+    "sentence-transformers==5.6.1",
+    "torch==2.10.0",
+]
+# Approximate nearest-neighbour serving for the dense concept channel. Optional
+# on purpose: the exact brute-force search in
+# src/spicy_regs/ontology/candidate_channels.py remains the implemented channel,
+# and src/spicy_regs/ontology/ann_index.py imports USearch lazily. Pinned
+# because HNSW construction is a property of the library build, so an
+# unpinned upgrade would silently change a measured recall number.
+ann = [
+    "usearch==2.26.0",
+]
+evaluation = [
+    "ir-measures==0.4.3",
+    "scikit-learn==1.7.2",
+    "scipy>=1.15,<2",
 ]
 
 [dependency-groups]
 dev = [
     "ipykernel",
+    "ir-measures==0.4.3",
     "matplotlib",
     "pre-commit",
     "pyrefly",
     "pytest",
     "ruff",
-    "scikit-learn",
+    "scikit-learn==1.7.2",
+    "scipy>=1.15,<2",
     "seaborn",
     "textblob",
     "ty",
@@ -63,25 +108,53 @@ run-rollup-fec-committees = "spicy_regs.pipelines.rollups.fec_committees:app"
 run-rollup-gao-reports = "spicy_regs.pipelines.rollups.gao_reports:app"
 run-rollup-crs-reports = "spicy_regs.pipelines.rollups.crs_reports:app"
 run-rollup-courtlistener = "spicy_regs.pipelines.rollups.courtlistener:app"
+run-rollup-supreme-court-opinions = "spicy_regs.pipelines.rollups.supreme_court_opinions:app"
 run-rollup-usaspending-recipients = "spicy_regs.pipelines.rollups.usaspending_recipients:app"
+materialize-ontology = "spicy_regs.pipelines.ontology_dataset:app"
 enrich-pdf-text = "spicy_regs.enrich_pdf:main"
 backfill-comment-text = "spicy_regs.backfill_derived_text:main"
 embed = "spicy_regs.vectordb.embed:main"
 spicy-regs = "spicy_regs.cli:main"
 spicy-regs-mcp = "spicy_regs.mcp_server:main"
 spicy-regs-dict = "spicy_regs.data_dictionary:main"
+spicy-regs-ontology-receipt = "spicy_regs.ontology.receipt:main"
+spicy-regs-evaluate-tags = "spicy_regs.evaluate_tag_quality:main"
+build-mixed-real-data-corpus = "spicy_regs.corpora.mixed_real_data:main"
+build-ontology-profile-eval = "spicy_regs.corpora.profile_evaluation:main"
+build-segmentation-evaluation = "spicy_regs.corpora.segmentation_evaluation:main"
+build-body-retrieval-corpus = "spicy_regs.corpora.body_retrieval_corpus:main"
+run-segmentation-experiment = "spicy_regs.corpora.segmentation_experiment:main"
+audit-segmentation-embeddings = "spicy_regs.corpora.segmentation_embedding_audit:main"
+run-segmentation-rerank = "spicy_regs.corpora.segmentation_rerank:main"
+run-segmentation-sparse-retrieval = "spicy_regs.corpora.segmentation_sparse_retrieval:main"
+run-segmentation-tagging = "spicy_regs.corpora.segmentation_tagging:main"
+run-rulespec-testbed-tags = "spicy_regs.rulespec_testbed:main"
+run-artifact-retrieval-baseline = "spicy_regs.corpora.artifact_retrieval_baseline:main"
+build-document-acceptance-scope = "spicy_regs.corpora.document_acceptance_scope:main"
+build-document-release = "spicy_regs.document_release:main"
+build-document-release-from-files = "spicy_regs.document_file_pipeline:main"
+build-source-profile-artifacts = "spicy_regs.source_profile_artifacts_cli:main"
+validate-document-release-distribution = "spicy_regs.document_file_pipeline:validate_distribution_main"
+segment-document-release = "spicy_regs.docpipeline.document_release_segments:main"
+run-relation-exclusion-evaluation = "spicy_regs.corpora.relation_exclusion_evaluation:main"
+validate-relation-exclusion-v2 = "spicy_regs.corpora.relation_exclusion_evaluation_v2:main"
 
 [build-system]
-requires = ["uv_build"]
+requires = ["uv_build<0.12"]
 build-backend = "uv_build"
+
+[tool.uv.sources]
+refspec = { path = "RefSpec", editable = true }
 
 [tool.pytest.ini_options]
 # Integration tests hit external services (the public Mirrulations S3 mirror)
 # and are excluded from the default run so the unit suite stays hermetic. The
 # dedicated "Integration (live data)" workflow runs them via `-m integration`.
 addopts = "-m 'not integration'"
+testpaths = ["tests"]
 markers = [
     "integration: live test against external data (anonymous Mirrulations S3); run in the Integration CI workflow, not the default suite",
+    "legacy_rulespec_combined: pre-Core/Extrapolator compatibility proof; requires the exact clean historical Rulespec checkout",
 ]
 
 [tool.ruff]
