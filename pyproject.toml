@@ -144,7 +144,7 @@ requires = ["uv_build<0.12"]
 build-backend = "uv_build"
 
 [tool.uv.sources]
-refspec = { path = "RefSpec", editable = true }
+refspec = { path = "../RefSpec", editable = true }
 
 [tool.pytest.ini_options]
 # Integration tests hit external services (the public Mirrulations S3 mirror)

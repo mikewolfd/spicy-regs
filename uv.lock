@@ -774,6 +774,15 @@ wheels = [
 ]
 
 [[package]]
+name = "html5rdf"
+version = "1.2.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/4c/55/1b839c43f5ed8207e17a9a02d8b395179520b8b4f00c00a41e113bc205ca/html5rdf-1.2.1.tar.gz", hash = "sha256:ace9b420ce52995bb4f05e7425eedf19e433c981dfe7a831ab391e2fa2e1a195", size = 287899 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/7d/c9/f6e1e8567660bc5b0aba281f2b0017b2a7665fcad6bf3ed67286a0c72cd4/html5rdf-1.2.1-py2.py3-none-any.whl", hash = "sha256:1f519121bc366af3e485310dc8041d2e86e5173c1a320fac3dc9d2604069b83e", size = 109765 },
+]
+
+[[package]]
 name = "httpcore"
 version = "1.0.9"
 source = { registry = "https://pypi.org/simple" }
@@ -1677,6 +1686,18 @@ wheels = [
 ]
 
 [[package]]
+name = "owlrl"
+version = "7.1.4"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "rdflib" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/d1/fc/ce12482d096d65fff01af58f555a6f25e9dbf416fad5d99f91eaab0e11ca/owlrl-7.1.4.tar.gz", hash = "sha256:60bd4067e346b9111f0a2924565afe97ac6595b98b2bbe953928b5113971daf7", size = 44420 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/de/78/f857ff1a7207e967dc5e8414bbcc15e0aa5cf45f693b1d2ebe2afb3eb1ce/owlrl-7.1.4-py3-none-any.whl", hash = "sha256:e78b46020169783345636da93a467d318f18700c483184dd15e885850cf64775", size = 51981 },
+]
+
+[[package]]
 name = "packaging"
 version = "25.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1837,6 +1858,18 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/8e/22/2de9408ac81acbb8a7d05d4cc064a152ccf33b3d480ebe0cd292153db239/pre_commit-4.6.0.tar.gz", hash = "sha256:718d2208cef53fdc38206e40524a6d4d9576d103eb16f0fec11c875e7716e9d9", size = 198525 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/80/6e/4b28b62ecb6aae56769c34a8ff1d661473ec1e9519e2d5f8b2c150086b26/pre_commit-4.6.0-py2.py3-none-any.whl", hash = "sha256:e2cf246f7299edcabcf15f9b0571fdce06058527f0a06535068a86d38089f29b", size = 226472 },
+]
+
+[[package]]
+name = "prettytable"
+version = "3.18.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "wcwidth" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/81/74/ba08d81e668ccfe8658d7520a307e63c19862c08eb4ccb26f356c5239a7a/prettytable-3.18.0.tar.gz", hash = "sha256:439217116152244369caf3d9f1caf2f9fe29b03bd79e88d2928c8e718c95d680", size = 76373 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/fe/be/2e6798ace5cc036f5d05d36b7b2fd85346f1a708c87060890b070d0ec607/prettytable-3.18.0-py3-none-any.whl", hash = "sha256:b3346e0e6f79180833aebaac088ae926340586cf6d7d991b9eb125b65f72313a", size = 37357 },
 ]
 
 [[package]]
@@ -2115,6 +2148,21 @@ wheels = [
 ]
 
 [[package]]
+name = "pyshacl"
+version = "0.31.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "owlrl" },
+    { name = "packaging" },
+    { name = "prettytable" },
+    { name = "rdflib", extra = ["html"] },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/61/2d/8eaada41b9b57c028a54494688e45cfeefd6756098a6bf1bfa2dd9470cdf/pyshacl-0.31.0.tar.gz", hash = "sha256:327950875a5bb0d1a15c246a8a272b2dbf6bc9b96e28cfa8fdbfa4d73aadc0ba", size = 1406151 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/3f/3b/ebd7c9595fcdf176555aaf2fd2254f4d890658334ca3556b611e579f8294/pyshacl-0.31.0-py3-none-any.whl", hash = "sha256:5cae2184401d956b67deebb00e3c78ab7052784741a730e52e309e33c8a0b9a5", size = 1297210 },
+]
+
+[[package]]
 name = "pytest"
 version = "9.0.2"
 source = { registry = "https://pypi.org/simple" }
@@ -2300,15 +2348,33 @@ wheels = [
 ]
 
 [[package]]
+name = "rdfcanon"
+version = "1.0.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "rdflib" },
+    { name = "sortedcontainers" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/89/68/b3036862e7292684607c9ff5e8d11c09d4a34a7b792870d19ed4035bc7ab/rdfcanon-1.0.0.tar.gz", hash = "sha256:adc75fa9bd936761d2a5de4a0299ab658446454437ecfb4886c6bf55ee9ddaa1", size = 10483 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/df/9b/31d254f4ebaf166d055deb921211f9a2c5b9a5d63085f7c03f1501c64acd/rdfcanon-1.0.0-py3-none-any.whl", hash = "sha256:100a48239044f9cc5342e1d16ccfb806d47bb1bb5cc577ebefd20a81117bf14c", size = 11825 },
+]
+
+[[package]]
 name = "rdflib"
-version = "7.6.0"
+version = "7.5.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "pyparsing" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/98/f5/18bb77b7af9526add0c727a3b2048959847dc5fb030913e2918bf384fec3/rdflib-7.6.0.tar.gz", hash = "sha256:6c831288d5e4a5a7ece85d0ccde9877d512a3d0f02d7c06455d00d6d0ea379df", size = 4943826 }
+sdist = { url = "https://files.pythonhosted.org/packages/ec/1b/4cd9a29841951371304828d13282e27a5f25993702c7c87dcb7e0604bd25/rdflib-7.5.0.tar.gz", hash = "sha256:663083443908b1830e567350d72e74d9948b310f827966358d76eebdc92bf592", size = 4903859 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/10/c2/6604a71269e0c1bd75656d5a001432d16f2cc5b8c057140ec797155c295e/rdflib-7.6.0-py3-none-any.whl", hash = "sha256:30c0a3ebf4c0e09215f066be7246794b6492e054e782d7ac2a34c9f70a15e0dd", size = 615416 },
+    { url = "https://files.pythonhosted.org/packages/b9/20/35d2baebacf357b562bd081936b66cd845775442973cb033a377fd639a84/rdflib-7.5.0-py3-none-any.whl", hash = "sha256:b011dfc40d0fc8a44252e906dcd8fc806a7859bc231be190c37e9568a31ac572", size = 587215 },
+]
+
+[package.optional-dependencies]
+html = [
+    { name = "html5rdf" },
 ]
 
 [[package]]
@@ -2328,7 +2394,7 @@ wheels = [
 [[package]]
 name = "refspec"
 version = "0.1.0.dev0"
-source = { editable = "RefSpec" }
+source = { editable = "../RefSpec" }
 dependencies = [
     { name = "backports-zstd" },
     { name = "duckdb" },
@@ -2339,13 +2405,14 @@ dependencies = [
     { name = "pypdf" },
     { name = "rdflib" },
     { name = "referencing" },
+    { name = "rulespec-conformance" },
     { name = "typing-extensions" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "backports-zstd", marker = "python_full_version < '3.14'", specifier = "==1.6.0" },
-    { name = "duckdb", specifier = "==1.5.0" },
+    { name = "duckdb", specifier = ">=1.5.0,<2" },
     { name = "jsonschema", specifier = ">=4.26,<5" },
     { name = "openpyxl", specifier = ">=3.1,<4" },
     { name = "pyarrow", specifier = "==23.0.0" },
@@ -2353,14 +2420,20 @@ requires-dist = [
     { name = "pypdf", specifier = ">=6,<7" },
     { name = "rdflib", specifier = ">=7.1,<8" },
     { name = "referencing", specifier = ">=0.37,<1" },
+    { name = "rulespec-conformance", path = "../RefSpec/vendor/rulespec_conformance-0.2.0rc15-py3-none-any.whl" },
     { name = "typing-extensions", specifier = ">=4.12,<5" },
 ]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "numpy", specifier = ">=1.26,<3" },
+    { name = "owlrl", specifier = "==7.1.4" },
+    { name = "pyoxigraph", specifier = "==0.5.9" },
+    { name = "pyshacl", specifier = "==0.31.0" },
     { name = "pytest", specifier = ">=8,<9" },
-    { name = "ruff", specifier = ">=0.12,<1" },
-    { name = "sssom", specifier = ">=0.4,<1" },
+    { name = "pytest-xdist", specifier = ">=3.6,<4" },
+    { name = "ruff", specifier = "==0.16.0" },
+    { name = "scipy", specifier = ">=1.11,<2" },
 ]
 
 [[package]]
@@ -2490,6 +2563,26 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/f6/58/ac864a75067dcbd3b95be5ab4eb2b601d7fbc3d3d736a27e391a4f92a5c1/ruff-0.15.1-py3-none-win32.whl", hash = "sha256:660975d9cb49b5d5278b12b03bb9951d554543a90b74ed5d366b20e2c57c2098", size = 10462555 },
     { url = "https://files.pythonhosted.org/packages/e0/5e/d4ccc8a27ecdb78116feac4935dfc39d1304536f4296168f91ed3ec00cd2/ruff-0.15.1-py3-none-win_amd64.whl", hash = "sha256:c820fef9dd5d4172a6570e5721704a96c6679b80cf7be41659ed439653f62336", size = 11599956 },
     { url = "https://files.pythonhosted.org/packages/2a/07/5bda6a85b220c64c65686bc85bd0bbb23b29c62b3a9f9433fa55f17cda93/ruff-0.15.1-py3-none-win_arm64.whl", hash = "sha256:5ff7d5f0f88567850f45081fac8f4ec212be8d0b963e385c3f7d0d2eb4899416", size = 10874604 },
+]
+
+[[package]]
+name = "rulespec-conformance"
+version = "0.2.0rc15"
+source = { path = "../RefSpec/vendor/rulespec_conformance-0.2.0rc15-py3-none-any.whl" }
+dependencies = [
+    { name = "pyshacl" },
+    { name = "rdfcanon" },
+    { name = "rdflib" },
+]
+wheels = [
+    { filename = "rulespec_conformance-0.2.0rc15-py3-none-any.whl", hash = "sha256:37cf3f866bd4fe429137eccf876693193eb8ca3de62bf335101d992661c68681" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "pyshacl", specifier = ">=0.31.0" },
+    { name = "rdfcanon", specifier = "==1.0.0" },
+    { name = "rdflib", specifier = ">=7.0.0" },
 ]
 
 [[package]]
@@ -2675,6 +2768,15 @@ wheels = [
 ]
 
 [[package]]
+name = "sortedcontainers"
+version = "2.4.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/e8/c4/ba2f8066cceb6f23394729afe52f3bf7adec04bf9ed2c820b39e19299111/sortedcontainers-2.4.0.tar.gz", hash = "sha256:25caa5a06cc30b6b83d11423433f65d1f9d76c4c6a0c90e3379eaa43b9bfdb88", size = 30594 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/32/46/9cb0e58b2deb7f82b84065f37f3bffeb12413f947f9388e4cac22c4621ce/sortedcontainers-2.4.0-py2.py3-none-any.whl", hash = "sha256:a163dcaede0f1c021485e957a39245190e74249897e2ae4b2aa38595db237ee0", size = 29575 },
+]
+
+[[package]]
 name = "soupsieve"
 version = "2.9.1"
 source = { registry = "https://pypi.org/simple" }
@@ -2773,7 +2875,7 @@ requires-dist = [
     { name = "python-dotenv" },
     { name = "pyyaml" },
     { name = "rdflib", specifier = ">=7.1,<8" },
-    { name = "refspec", editable = "RefSpec" },
+    { name = "refspec", editable = "../RefSpec" },
     { name = "scikit-learn", marker = "extra == 'evaluation'", specifier = "==1.7.2" },
     { name = "scipy", marker = "extra == 'evaluation'", specifier = ">=1.15,<2" },
     { name = "sentence-transformers", marker = "extra == 'embed'", specifier = "==5.6.1" },

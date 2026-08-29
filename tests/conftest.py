@@ -24,7 +24,7 @@ def isolate_env(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch)
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_RULESPEC_DIR = REPO_ROOT.parent / "rulespec"
 LEGACY_RULESPEC_MANIFEST = (
-    REPO_ROOT / "RefSpec" / "profiles" / "rulespec-dependency.json"
+    REPO_ROOT / ".." / "RefSpec" / "profiles" / "rulespec-dependency.json"
 )
 
 
