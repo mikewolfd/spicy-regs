@@ -19,6 +19,7 @@ from spicy_regs.transforms.build_comment_periods import build_comment_periods
 from spicy_regs.transforms.build_proceedings import build_proceedings
 from spicy_regs.transforms.build_regulatory_agenda import build_regulatory_agenda
 from spicy_regs.transforms.build_rule_targets import build_rule_targets
+from spicy_regs.transforms.enrich_bill_subjects import enrich_bill_subjects
 from spicy_regs.transforms.build_gao_reports import build_gao_reports
 from spicy_regs.transforms.build_lobbying_filings import build_lobbying_filings
 from spicy_regs.transforms.build_rulemaking_lifecycles import build_rulemaking_lifecycles
@@ -74,6 +75,7 @@ __all__ = [
     "build_proceedings",
     "build_regulatory_agenda",
     "build_rule_targets",
+    "enrich_bill_subjects",
     "build_gao_reports",
     "build_lobbying_filings",
     "build_unified_agenda",
