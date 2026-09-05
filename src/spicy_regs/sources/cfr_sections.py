@@ -22,9 +22,9 @@ Scope — SECTION METADATA + CITATIONS ONLY, *not* full section text.
 
 API key.
     GovInfo's ``api.govinfo.gov`` requires an api.data.gov key. We resolve it
-    from the environment with a fallback chain (see :func:`_resolve_api_key`):
-    ``DATA_GOV_API_KEY`` → ``GOVINFO_API_KEY`` → ``REGULATIONS_GOV_API_KEY``
-    (the same api.data.gov key powers all three). With **no** key configured the
+    from the environment in the order of :data:`API_KEY_ENV_VARS`, the shared
+    api.data.gov key first (see :func:`_resolve_api_key`); one api.data.gov key
+    serves every name in that tuple. With **no** key configured the
     reader logs a clear warning and yields nothing, so a keyless CI run is a
     no-op rather than a crash.
 
@@ -86,11 +86,7 @@ _PROGRESS_EVERY = 5_000
 
 
 def _resolve_api_key() -> str | None:
-    """Resolve the api.data.gov key from the environment fallback chain.
-
-    Returns the first non-empty value among ``DATA_GOV_API_KEY``,
-    ``GOVINFO_API_KEY``, ``REGULATIONS_GOV_API_KEY``, or ``None`` if none is set.
-    """
+    """Return the first non-empty value among :data:`API_KEY_ENV_VARS`, in order, or ``None``."""
     for name in API_KEY_ENV_VARS:
         value = os.environ.get(name)
         if value and value.strip():
