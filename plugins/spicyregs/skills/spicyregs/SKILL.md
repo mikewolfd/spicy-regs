@@ -72,9 +72,10 @@ Use the helper script's `--describe` output for the exact schema. In this repo, 
 
 Complementary federal sources (all queryable by name; see the Data Dictionary for columns):
 
-- Rulemaking lifecycle: `federal_register` (published rules; RIN + CFR refs), `unified_agenda` (planned actions, keyed by `rin`), `congress_bills`, `cfr_sections`
+- Rulemaking lifecycle: `federal_register` (published rules; RIN + CFR refs), `unified_agenda` (planned actions, keyed by `rin`), `congress_bills`, `bill_subjects` (policy area + subjects per bill), `cfr_sections`
+- Rulemaking join surface (one atomic generation, resolved from `materialized/rulemaking/latest.json`): `rule_targets`, `proceedings` (keyed by `proceeding_id`; one row per evidenced action), `regulatory_agenda_items`, `agenda_item_proceedings`, `comment_periods`
 - Organizations & influence: `sam_entities` (entity registry, keyed by `uei`), `lobbying_filings`, `fec_committees`, `org_committee_links` (commenter org names name-matched to FEC committees; filter on `confidence`)
-- Outcomes & context: `usaspending_recipients` (keyed by `uei`), `court_dockets`, `gao_reports`, `crs_reports`
+- Outcomes & context: `usaspending_recipients` (keyed by `uei`), `court_dockets`, `court_opinion_clusters` (one row per decision, keyed by `cluster_id`), `court_opinion_bodies` (opinion text, keyed by `opinion_id`), `gao_reports`, `crs_reports`
 
 Join keys across sources: `rin` (unified_agenda ↔ federal_register), CFR citations (↔ cfr_sections), `uei` (sam_entities ↔ usaspending_recipients ↔ commenter orgs), and `agency_code`.
 

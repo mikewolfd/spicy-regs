@@ -25,6 +25,7 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 from spicy_regs._icon import ICON_DATA_URI
+from spicy_regs.published import MATERIALIZED_TABLES, resolve_materialized_table_urls
 
 DEFAULT_R2_BASE_URL = "https://data.spicy-regs.dev"
 TABLES = (
@@ -40,8 +41,14 @@ TABLES = (
     "discovery_signals",
     "cfr_sections",
     "congress_bills",
+    "bill_subjects",
     "unified_agenda",
     "federal_register",
+    "rule_targets",
+    "proceedings",
+    "regulatory_agenda_items",
+    "agenda_item_proceedings",
+    "comment_periods",
     "sam_entities",
     "lobbying_filings",
     "fec_committees",
@@ -49,6 +56,8 @@ TABLES = (
     "gao_reports",
     "crs_reports",
     "court_dockets",
+    "court_opinion_clusters",
+    "court_opinion_bodies",
     "usaspending_recipients",
     "fcc_proceedings",
     "fcc_filings",
@@ -104,6 +113,22 @@ def _resolve_r2_base_url() -> str:
 
 
 R2_BASE_URL = _resolve_r2_base_url()
+
+
+def _published_table_url(name: str, materialized_urls: dict[str, str] | None) -> str | None:
+    """Return a table's URL; None for a materialized table with no resolved generation."""
+    if name in MATERIALIZED_TABLES:
+        return None if materialized_urls is None else materialized_urls.get(name)
+    return f"{R2_BASE_URL}/{name}.parquet"
+
+
+def _published_table_names() -> tuple[str, ...]:
+    """Return the tables a caller can query now: all of TABLES, minus a dataset with no resolvable generation."""
+    try:
+        resolve_materialized_table_urls(R2_BASE_URL)
+    except RuntimeError:
+        return tuple(name for name in TABLES if name not in MATERIALIZED_TABLES)
+    return TABLES
 
 
 def _resolve_home_directory() -> str:
@@ -259,6 +284,11 @@ def _build_connection() -> duckdb.DuckDBPyConnection:
 
     catalog = _resolve_catalog_config()
     catalog_attached = catalog is not None and _attach_catalog(con, catalog)
+    try:
+        materialized_urls = resolve_materialized_table_urls(R2_BASE_URL)
+    except RuntimeError as exc:
+        logger.warning("materialized dataset manifest unavailable: %s", exc)
+        materialized_urls = None
 
     _apply_security_settings(con)
     for name in TABLES:
@@ -274,7 +304,10 @@ def _build_connection() -> duckdb.DuckDBPyConnection:
                 continue
             except duckdb.Error as exc:
                 logger.warning("comments not available in catalog; falling back to monolith: %s", exc)
-        url = f"{R2_BASE_URL}/{name}.parquet"
+        url = _published_table_url(name, materialized_urls)
+        if url is None:
+            logger.warning("materialized table %s skipped: no complete generation could be resolved", name)
+            continue
         try:
             con.execute(f"CREATE VIEW {name} AS SELECT * FROM read_parquet('{url}')")
         except duckdb.Error as exc:
@@ -283,7 +316,7 @@ def _build_connection() -> duckdb.DuckDBPyConnection:
 
 
 # Building a connection is the expensive part of a tool call — install httpfs +
-# iceberg, attach the R2 catalog over REST, and CREATE VIEW over all 23 tables
+# iceberg, attach the R2 catalog over REST, and CREATE VIEW over every table
 # (each reads a parquet footer over HTTPS), ~35s on a cold serverless instance.
 # The query that follows is milliseconds. So we build once and reuse: Fluid
 # Compute keeps a warmed instance's module state across invocations, and the
@@ -365,7 +398,7 @@ def _register_tools(mcp: FastMCP) -> None:
         return {
             "source": "r2",
             "base_url": R2_BASE_URL,
-            "tables": list(TABLES),
+            "tables": list(_published_table_names()),
         }
 
     @mcp.tool()
@@ -375,10 +408,11 @@ def _register_tools(mcp: FastMCP) -> None:
         Call list_sources for the set of valid table names; an unknown name
         returns them in the error payload.
         """
-        if table not in TABLES:
+        available_tables = _published_table_names()
+        if table not in available_tables:
             return {
-                "error": f"Unknown table '{table}'",
-                "available_tables": list(TABLES),
+                "error": f"Table '{table}' is not currently published",
+                "available_tables": list(available_tables),
             }
         cursor = _get_connection().cursor()
         with _statement_timeout(cursor):

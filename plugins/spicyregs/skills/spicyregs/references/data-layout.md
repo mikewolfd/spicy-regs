@@ -27,9 +27,13 @@ Core regulations.gov tables + rollups:
 
 Complementary federal sources (each also queryable by name via the MCP server):
 
-- Rulemaking lifecycle: `federal_register.parquet`, `unified_agenda.parquet`, `congress_bills.parquet`, `cfr_sections.parquet`
+- Rulemaking lifecycle: `federal_register.parquet`, `unified_agenda.parquet`, `congress_bills.parquet`, `bill_subjects.parquet`, `cfr_sections.parquet`
 - Organizations & influence: `sam_entities.parquet`, `lobbying_filings.parquet`, `fec_committees.parquet`, `org_committee_links.parquet`
-- Outcomes & context: `usaspending_recipients.parquet`, `court_dockets.parquet`, `gao_reports.parquet`, `crs_reports.parquet`
+- Outcomes & context: `usaspending_recipients.parquet`, `court_dockets.parquet`, `court_opinion_clusters.parquet`, `court_opinion_bodies.parquet`, `gao_reports.parquet`, `crs_reports.parquet`
+
+Rulemaking join surface, published as one atomic generation rather than flat files:
+
+- `materialized/rulemaking/latest.json` points at the current snapshot; its manifest lists `rule_targets.parquet`, `proceedings.parquet`, `regulatory_agenda_items.parquet`, `agenda_item_proceedings.parquet`, `comment_periods.parquet` under `materialized/rulemaking/snapshots/<snapshot_id>/`. The MCP server resolves the pointer for you; a direct reader should too (`spicy_regs.published.resolve_materialized_table_urls`), because `<name>.parquet` at the bucket root does not exist for these five.
 
 See the [Data Dictionary](https://civictechdc.github.io/spicy-regs/) for each table's columns, keys, and coverage/scope notes.
 

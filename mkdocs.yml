@@ -51,8 +51,14 @@ nav:
       - discovery_signals: tables/discovery_signals.md
       - cfr_sections: tables/cfr_sections.md
       - congress_bills: tables/congress_bills.md
+      - bill_subjects: tables/bill_subjects.md
       - unified_agenda: tables/unified_agenda.md
       - federal_register: tables/federal_register.md
+      - rule_targets: tables/rule_targets.md
+      - proceedings: tables/proceedings.md
+      - regulatory_agenda_items: tables/regulatory_agenda_items.md
+      - agenda_item_proceedings: tables/agenda_item_proceedings.md
+      - comment_periods: tables/comment_periods.md
       - sam_entities: tables/sam_entities.md
       - lobbying_filings: tables/lobbying_filings.md
       - fec_committees: tables/fec_committees.md
@@ -60,6 +66,8 @@ nav:
       - gao_reports: tables/gao_reports.md
       - crs_reports: tables/crs_reports.md
       - court_dockets: tables/court_dockets.md
+      - court_opinion_clusters: tables/court_opinion_clusters.md
+      - court_opinion_bodies: tables/court_opinion_bodies.md
       - usaspending_recipients: tables/usaspending_recipients.md
       - fcc_proceedings: tables/fcc_proceedings.md
       - fcc_filings: tables/fcc_filings.md

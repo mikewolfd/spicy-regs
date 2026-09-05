@@ -53,7 +53,13 @@ is queryable through the MCP server (`list_sources` / `describe_table` /
 | --- | --- | --- |
 | [`federal_register`](tables/federal_register.md) | one row per Federal Register document | `document_number` |
 | [`unified_agenda`](tables/unified_agenda.md) | one row per RIN per agenda edition | `rin` |
+| [`rule_targets`](tables/rule_targets.md) | one row per docket / CFR target / RIN / evidence source | composite |
+| [`proceedings`](tables/proceedings.md) | one row per independently evidenced regulatory action | `proceeding_id` |
+| [`regulatory_agenda_items`](tables/regulatory_agenda_items.md) | one durable agenda item per RIN | `agenda_item_id` |
+| [`agenda_item_proceedings`](tables/agenda_item_proceedings.md) | one evidence-qualified agenda-item-to-proceeding relationship | `relationship_id` |
+| [`comment_periods`](tables/comment_periods.md) | one row per continuous or reopened comment window | `comment_period_id` |
 | [`congress_bills`](tables/congress_bills.md) | one row per bill | `bill_id` |
+| [`bill_subjects`](tables/bill_subjects.md) | one row per bill with a fetched subject assignment | `bill_id` |
 | [`cfr_sections`](tables/cfr_sections.md) | one row per CFR granule | `granule_id` |
 | [`fcc_proceedings`](tables/fcc_proceedings.md) | one row per FCC proceeding (docket) | `name` |
 | [`fcc_filings`](tables/fcc_filings.md) | one row per FCC ECFS filing (comment) | `id_submission` |
@@ -73,6 +79,8 @@ is queryable through the MCP server (`list_sources` / `describe_table` /
 | --- | --- | --- |
 | [`usaspending_recipients`](tables/usaspending_recipients.md) | one row per federal-award recipient | `recipient_id` |
 | [`court_dockets`](tables/court_dockets.md) | one row per federal-court docket | `cl_docket_id` |
+| [`court_opinion_clusters`](tables/court_opinion_clusters.md) | one row per court decision (CourtListener opinion cluster) | `cluster_id` |
+| [`court_opinion_bodies`](tables/court_opinion_bodies.md) | one row per opinion within a decision, with its text | `opinion_id` |
 | [`gao_reports`](tables/gao_reports.md) | one row per GAO report | `report_id` |
 | [`crs_reports`](tables/crs_reports.md) | one row per CRS report | `report_id` |
 

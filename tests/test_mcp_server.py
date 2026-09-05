@@ -582,3 +582,28 @@ def test_app_serves_landing_page_and_mcp_endpoint():
         )
         assert handshake.status_code == 200
         assert b'"spicy-regs"' in handshake.content
+
+
+def test_materialized_table_url_fails_closed_without_manifest():
+    assert mcp_server._published_table_url("proceedings", None) is None
+    assert mcp_server._published_table_url("proceedings", {}) is None
+    assert mcp_server._published_table_url("dockets", None) == f"{mcp_server.R2_BASE_URL}/dockets.parquet"
+
+
+def test_advertised_tables_fail_closed_without_materialized_manifest(monkeypatch):
+    def unavailable(base_url):
+        raise RuntimeError("no generation")
+
+    monkeypatch.setattr(mcp_server, "resolve_materialized_table_urls", unavailable)
+    advertised = set(mcp_server._published_table_names())
+    assert advertised == set(mcp_server.TABLES) - mcp_server.MATERIALIZED_TABLES
+    assert "dockets" in advertised
+
+
+def test_advertised_tables_include_complete_materialized_generation(monkeypatch):
+    monkeypatch.setattr(
+        mcp_server,
+        "resolve_materialized_table_urls",
+        lambda base_url: {name: f"{base_url}/x/{name}.parquet" for name in mcp_server.MATERIALIZED_TABLES},
+    )
+    assert mcp_server._published_table_names() == mcp_server.TABLES
