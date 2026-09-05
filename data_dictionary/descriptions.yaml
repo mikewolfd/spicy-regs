@@ -29,7 +29,10 @@ tables:
     summary: >-
       One row per document posted to a docket — proposed rules, final rules,
       notices, supporting analyses, and public-submission stubs. Joins to
-      `dockets` on `docket_id`.
+      `dockets` on `docket_id`. Two payload fields are not carried: `comment`
+      (the inline submission body) and `restrictReasonType` (why a document is
+      withheld). Read those from the acquisition source, the raw Mirrulations
+      payload or spicy-docs' source-native release, not from this table.
     columns:
       document_id: "Unique document identifier. Primary key / dedup key."
       docket_id: "Parent docket this document belongs to. Foreign key to `dockets.docket_id`."
