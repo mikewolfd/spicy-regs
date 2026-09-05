@@ -102,9 +102,10 @@ actually published.
 rulemaking lifecycle, the organizations engaged in it, and its downstream
 context are all joinable in one place:
 
-- *Lifecycle:* `federal_register`, `unified_agenda`, `congress_bills`, `cfr_sections`
+- *Lifecycle:* `federal_register`, `unified_agenda`, `congress_bills`, `bill_subjects`, `cfr_sections`
+- *Rulemaking join surface (one atomic generation):* `rule_targets`, `proceedings`, `regulatory_agenda_items`, `agenda_item_proceedings`, `comment_periods`
 - *Organizations & influence:* `sam_entities`, `lobbying_filings`, `fec_committees`, `org_committee_links`
-- *Outcomes & context:* `usaspending_recipients`, `court_dockets`, `gao_reports`, `crs_reports`
+- *Outcomes & context:* `usaspending_recipients`, `court_dockets`, `court_opinion_clusters`, `court_opinion_bodies`, `gao_reports`, `crs_reports`
 - *Telecom:* `fcc_proceedings`, `fcc_filings`
 
 Cross-source join keys: **RIN**, **CFR citation**, **UEI**, **`agency_code`**.

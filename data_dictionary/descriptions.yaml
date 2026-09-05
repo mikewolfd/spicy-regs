@@ -567,3 +567,235 @@ tables:
       total_page_count: "Total page count across the filing's attached documents, as a numeric string."
       documents_json: "JSON array of attached documents as `{filename, src}` objects, where `src` is the fcc.gov download URL."
       filing_url: "Canonical fcc.gov URL for the filing (`https://www.fcc.gov/ecfs/filing/<id_submission>`)."
+
+  bill_subjects:
+    summary: >-
+      One row per congressional bill that a subject carrier has answered for,
+      built by `enrich_bill_subjects`. This is the per-bill detail pass
+      `congress_bills` deliberately omits: the `/bill` list payload carries no
+      subject signal at all, so the Library of Congress assignment — one
+      `policy_area` from a ~33-term controlled list, plus any number of
+      legislative subjects from a large controlled vocabulary — is fetched one
+      bill at a time and published here. Keyed by `bill_id`, so it joins
+      straight to `congress_bills` with a `LEFT JOIN`. The enrichment is
+      bounded and resumable: each run answers for a capped slice of the archive
+      and merges with the prior table, so coverage grows run over run and is
+      always partial by design. A row with a null `policy_area` records that
+      the named carrier was asked and had nothing, not that the fetch failed —
+      failed fetches write no row. All columns are stored as VARCHAR.
+    columns:
+      bill_id: "Synthetic bill key `{congress}-{type}-{number}` (e.g. `118-hr-1234`). Primary key / dedup key, and the join key to `congress_bills.bill_id`."
+      policy_area: "The bill's single Library of Congress policy area (e.g. `Health`, `Armed Forces and National Security`), from a controlled list of ~33 terms. Null when the carrier holds no assignment for the bill."
+      subjects_json: "JSON array of the bill's legislative subject terms (a large controlled vocabulary), in the order the carrier returned them, deduplicated. `[]` when none are assigned."
+      subject_count: "Number of terms in `subjects_json`, so a count query needs no JSON parsing."
+      carrier: "Which publisher supplied the row: `congress-api` (Congress.gov v3 `/bill/{congress}/{type}/{number}/subjects`, back to the 93rd Congress, needs an api.data.gov key) or `govinfo-billstatus` (GPO BILLSTATUS bulk data, keyless, back to the 108th Congress). The terms are identical strings; only the carrier differs."
+      enriched_at: "UTC ISO 8601 timestamp of the run that fetched this row."
+
+  rule_targets:
+    summary: >-
+      Action-specific docket evidence: one row per docket, normalized CFR
+      target, optional RIN, and source. Unified Agenda CFR values stay on their
+      editioned agenda observations and are never projected through RIN
+      equality. Corroborating sources remain separate rows. All columns are
+      VARCHAR.
+    columns:
+      docket_id: "Subject regulations.gov docket."
+      cfr_ref: "Compact CFR key `<title>-<part>[.<section>]`; null on RIN-only edges."
+      cfr_title: "Decomposed CFR title number."
+      cfr_part: "Decomposed CFR part number."
+      cfr_section: "Decomposed CFR section, usually null for FR part-level metadata."
+      rin: "Regulation Identifier Number associated with the edge, when known."
+      source: "Action-evidence path: `fr_cfr_ref`, `docket_rin`, `document_rin`, or `document_fr_doc`."
+      evidence_id: "A concrete source row justifying the edge: FR document number, docket id, or document id."
+      first_seen: "Earliest publication/action timestamp among folded evidence for this logical edge."
+      last_seen: "Latest publication/action timestamp among folded evidence for this logical edge."
+      method: "Derivation method; `deterministic` in v1."
+      actor_id: "Versioned ruleset that produced the assertion."
+      run_id: "Pipeline run identifier."
+      asserted_at: "UTC timestamp when the row was asserted."
+      supersedes_id: "Prior assertion revised by this row; null for deterministic v1 spine rows."
+
+  proceedings:
+    summary: >-
+      One row per independently evidenced rulemaking action. Dockets and
+      Federal Register artifacts establish identity; a RIN never groups rows.
+      One FR artifact may explicitly connect several source-backed dockets.
+      Docket-less action artifacts receive provisional document-based
+      identities.
+    columns:
+      proceeding_id: "Stable opaque proceeding id. Primary key."
+      rin: "The sole action-evidenced RIN when exactly one is observed; null for zero or multiple RINs. Compatibility/query aid only, never identity."
+      docket_ids_json: "JSON array of associated regulations.gov dockets; may contain multiple ids."
+      title: "Most recent available docket, regulations.gov document, or Federal Register title; Unified Agenda titles are excluded."
+      agency_code: "Most frequently observed issuing agency code."
+      current_stage: "Latest evidenced stage: `prerule`, `proposed`, `supplemental`, `final`, `withdrawn`, or `longterm`; null when no stage evidence exists."
+      stage_events_json: "Ordered JSON stage-event history with date, source, evidence id, and Rulespec event kind."
+      fr_document_numbers_json: "JSON array of Federal Register documents published in the proceeding."
+      cfr_refs_json: "JSON array of compact CFR targets from `rule_targets`."
+      cfr_target_iris_json: "JSON array of Rulespec `rkaf:us-cfr` citation IRIs projected from valid rule-target components."
+      authority_refs_json: "Reserved JSON array for future action-specific authority evidence. Unified Agenda authority is not copied here."
+      identity_predecessors_json: "JSON array of distinct prior-generation proceeding ids whose evidence overlaps this component; records semantic merge/split continuity and excludes the current reused id."
+      method: "Derivation method; `deterministic`."
+      actor_id: "Versioned proceeding-assembly ruleset."
+      run_id: "Pipeline run identifier."
+      asserted_at: "UTC assertion timestamp."
+      supersedes_id: "The same stable proceeding id when this row replaces its prior-generation assertion; null for a newly assigned id."
+
+  regulatory_agenda_items:
+    summary: >-
+      One durable registry item per RIN. Scope is an evidence-state
+      classification, not identity: official `Routine and Frequent` priority
+      supports `recurring`; exactly one linked action supports
+      `single_observed`; every other case remains `unresolved`.
+    columns:
+      agenda_item_id: "Canonical agenda-item IRI `urn:rkaf:us:rin:<RIN>`. Primary key."
+      rin: "Regulation Identifier Number identifying this durable agenda item."
+      scope_status: "`recurring`, `single_observed`, or `unresolved`."
+      scope_basis: "Explicit rule that produced `scope_status`; multiplicity alone never proves recurrence."
+      linked_proceeding_count: "Count of distinct independently identified Proceedings with direct action evidence for this RIN."
+      observation_count: "Count of edition-specific Unified Agenda observations in the source snapshot."
+      latest_agenda_edition: "Lexically latest `YYYYMM` Unified Agenda edition observed for the item."
+      first_seen: "Earliest dated agenda or action evidence observed for the RIN."
+      last_seen: "Latest dated agenda or action evidence observed for the RIN."
+      method: "Derivation method; `deterministic`."
+      actor_id: "Versioned agenda-item classification ruleset."
+      run_id: "Pipeline run identifier."
+      asserted_at: "UTC assertion timestamp."
+      supersedes_id: "Prior assertion revised by this row, when applicable."
+
+  agenda_item_proceedings:
+    summary: >-
+      Qualified, provenance-bearing links from durable RIN agenda items to
+      independently identified Proceedings. Rows exist only when a docket,
+      regulations.gov document, or Federal Register artifact directly reports
+      the RIN; Unified Agenda equality cannot manufacture a link.
+    columns:
+      relationship_id: "Stable opaque relationship id. Primary key."
+      agenda_item_id: "Canonical agenda-item IRI; joins to `regulatory_agenda_items.agenda_item_id`."
+      rin: "Denormalized RIN for convenient filtering."
+      proceeding_id: "Independently assembled action; joins to `proceedings.proceeding_id`."
+      relationship_role: "Fixed local role `agenda_tracks_proceeding`, mapped to Rulespec `rkaf:agendaTracksProceeding`."
+      source: "`docket_rin`, `document_rin`, or `federal_register_rin`."
+      evidence_id: "Source docket id, regulations.gov document id, or FR document number supporting the relationship."
+      evidence_uri: "Permanent source URL for the evidence artifact or registry record."
+      evidence_date: "Best available source date for the relationship evidence."
+      method: "Derivation method; `deterministic`."
+      actor_id: "Versioned relationship-assembly ruleset."
+      run_id: "Pipeline run identifier."
+      asserted_at: "UTC assertion timestamp."
+      supersedes_id: "Prior assertion revised by this row, when applicable."
+
+  comment_periods:
+    summary: >-
+      One row per continuous public-comment interval anchored to one or more
+      proceedings or regulations.gov dockets. Overlapping deadline extensions
+      coalesce; a closed gap creates a separate reopening row. Docket-only rows
+      preserve known intervals while proceeding identity remains unresolved.
+    columns:
+      comment_period_id: "Stable opaque id based on the proceeding/docket anchor set and opening date. Primary key."
+      proceeding_ids_json: "JSON array of uniquely resolved proceeding ids; empty when the interval is retained through docket anchors only."
+      rins_json: "JSON array of valid RIN evidence associated with the interval; evidence only, not an identity assertion."
+      docket_ids_json: "Non-empty JSON array of source-backed regulations.gov docket ids unless `proceeding_ids_json` supplies the sole anchor."
+      open_date: "Inclusive first calendar day comments were accepted in the deadline's governing timezone."
+      close_date: "Inclusive last calendar day comments were accepted in the deadline's governing timezone; never earlier than `open_date`."
+      source: "`documents.comment_end_date`, `federal_register.comments_close_on`, or a `+`-joined corroboration."
+      opened_by_artifact_ids_json: "JSON array of canonical permanent URLs for source Artifacts that opened the interval; extension-only Artifacts are excluded."
+      evidence_ids_json: "Non-empty JSON array of source document ids or FR document numbers supporting the interval and extensions."
+      method: "Derivation method; `deterministic`."
+      actor_id: "Versioned comment-period assembly ruleset."
+      run_id: "Pipeline run identifier."
+      asserted_at: "UTC assertion timestamp."
+      supersedes_id: "Prior interval assertion revised by this row, when applicable."
+
+  court_opinion_clusters:
+    summary: >-
+      One row per court *decision* ("opinion cluster" in CourtListener's model),
+      ingested from the quarterly bulk `opinion-clusters` dump by
+      `build_court_opinion_clusters` and topped up between dumps from the keyless
+      `/search/?type=o` API. A cluster is the case-level record that sibling
+      opinions hang off, and it is the join the corpus was missing: `cl_docket_id`
+      matches `court_dockets.cl_docket_id`, so a decision can be traced back to the
+      APA challenge that produced it and onward to the agency named in the docket.
+      Bulk is not an optimization here — the v4 `/clusters/` endpoint answers 401
+      without an API token, so the published dump is the only keyless source.
+      `ingest_source` records which of the two paths produced a row, because the
+      search surface is narrower than the dump and leaves the long prose fields
+      null rather than inventing them. Primary / dedup key is `cluster_id`. All
+      columns are stored as VARCHAR.
+    columns:
+      cluster_id: "CourtListener opinion-cluster id. Primary key / dedup key. Joins `court_opinion_bodies.cluster_id`."
+      cl_docket_id: "CourtListener docket id this decision was issued under. Joins `court_dockets.cl_docket_id`. Null for decisions whose docket is not in CourtListener."
+      court_id: "CourtListener court that issued the decision (for example `ca9`, `dcd`). Not carried on the cluster dump — resolved from the `dockets` dump via `cl_docket_id`. Null when the docket is absent from that dump."
+      court_jurisdiction: "The publisher's jurisdiction code for `court_id`: `F` appellate, `FD` district, `FB` bankruptcy, `FBP` bankruptcy appellate panel, `FS` special, `S`/`ST`/`SA`/`SS` state, `T*` tribal and territorial, `M*` military. Null when the court is unknown or absent from the `courts` dump."
+      court_is_federal: "`t` when `court_jurisdiction` begins with `F`, else `f`. Null rather than `f` when the court is unknown — this table is the whole CourtListener corpus, of which 397 courts of 3,361 are federal, so absence of evidence is recorded as absence."
+      case_name: "Case caption as published (for example `Chevron U.S.A. Inc. v. NRDC`)."
+      case_name_short: "Abbreviated caption, when the publisher supplies one."
+      case_name_full: "Full caption including every named party."
+      date_filed: "Date the decision was filed (ISO 8601)."
+      date_filed_is_approximate: "`t` when the publisher marked the filing date as approximate, else `f`."
+      judges: "Judge or panel names as a single publisher-supplied string."
+      nature_of_suit: "Nature-of-suit text carried on the decision, when present. Distinct from the docket's numeric code."
+      precedential_status: "Publication status, for example `Published`, `Unpublished`, `Errata`."
+      citation_count: "Number of later decisions citing this one, as counted by CourtListener."
+      scdb_id: "Supreme Court Database identifier, for decisions matched to SCDB."
+      scdb_decision_direction: "SCDB-coded ideological direction of the decision, when matched."
+      scdb_votes_majority: "SCDB majority vote count, when matched."
+      scdb_votes_minority: "SCDB minority vote count, when matched."
+      source: "CourtListener source code recording which upstream feed supplied the record."
+      procedural_history: "Publisher-supplied procedural history prose."
+      attorneys: "Attorneys of record as a single publisher-supplied string."
+      posture: "Procedural posture prose, when supplied."
+      syllabus: "Official syllabus / headnote summary, when the reporter published one."
+      headnotes: "Reporter headnotes, when published."
+      summary: "Publisher-supplied case summary."
+      disposition: "Disposition prose (for example `Affirmed`, `Reversed and remanded`)."
+      history: "Subsequent-history prose, when supplied."
+      other_dates: "Free-text additional dates supplied by the reporter."
+      cross_reference: "Cross-reference prose supplied by the reporter."
+      correction: "Correction notice text, when the decision was corrected."
+      arguments: "Argument-section text, for decisions whose reporter published one."
+      headmatter: "Reporter headmatter block preceding the opinion text."
+      blocked: "`t` when CourtListener has blocked the decision from search-engine indexing."
+      date_blocked: "Date the decision was blocked, when it was."
+      slug: "URL slug component used on courtlistener.com."
+      absolute_url: "Absolute URL of the decision on courtlistener.com."
+      date_created: "Timestamp CourtListener first created the cluster record."
+      date_modified: "Timestamp the cluster record was last modified upstream."
+      ingest_source: "Which path produced the row: `bulk` (quarterly dump) or `search` (keyless catch-up API, narrower column set)."
+
+  court_opinion_bodies:
+    summary: >-
+      One row per *opinion* — a single voice within a decision (majority,
+      concurrence, dissent), each with its own author and its own text — ingested
+      from the bulk `opinions` dump by `build_court_opinion_bodies`. `cluster_id`
+      joins `court_opinion_clusters`, and through it `court_dockets`. This is the
+      table the `court-opinion-v1` profile had been forward-declaring:
+      `plain_text` and `html_with_citations` are CourtListener opinion fields that
+      no published table carried until this ingest. **Coverage is partial by
+      construction and the bound is recorded, not implied.** The 2026-06-30
+      `opinions` dump is 50.8 GiB compressed (~422 GiB decompressed) and streams
+      at roughly 1.8 MiB/s, so a full pass is about 8.6 hours and landing it would
+      breach the project's 100 GiB free-space floor; scheduled runs therefore take
+      a bounded slice. See `docs/evidence/court-data-coverage.md` for the exact
+      row counts, id ranges, and named gaps. Primary / dedup key is `opinion_id`.
+      All columns are stored as VARCHAR.
+    columns:
+      opinion_id: "CourtListener opinion id. Primary key / dedup key."
+      cluster_id: "Decision this opinion belongs to. Joins `court_opinion_clusters.cluster_id`."
+      opinion_type: "Opinion role within the decision, for example `010combined`, `020lead`, `030concurrence`, `040dissent`."
+      author_str: "Authoring judge's name as published, when supplied."
+      author_id: "CourtListener people-database id of the authoring judge, when resolved."
+      joined_by_str: "Judges who joined this opinion, as a publisher-supplied string."
+      per_curiam: "`t` when the opinion was issued per curiam."
+      sha1: "CourtListener's SHA-1 of the source document it ingested."
+      page_count: "Page count of the source document, when known."
+      download_url: "Original court-website URL the opinion was downloaded from."
+      local_path: "Path to the archived source file in CourtListener's public storage bucket."
+      extracted_by_ocr: "`t` when the text was produced by OCR rather than embedded extraction."
+      plain_text: "Plain-text body of the opinion as published by CourtListener. Frequently null when the upstream source supplied only a markup rendering — check `available_text_fields` before treating null as missing."
+      html_with_citations: "HTML body with citations marked up as links, as published by CourtListener."
+      available_text_fields: "Comma-separated names of the dump's body columns that were non-empty for this row (`plain_text`, `html`, `html_lawbox`, `html_columbia`, `html_anon_2020`, `html_with_citations`, `xml_harvard`, `xml_scan`). Records which rendering the publisher actually held, so an empty `plain_text` is distinguishable from an opinion with no text at all."
+      text_char_count: "Character length of the longest available body rendering, as a decimal string. Zero means the publisher holds no text for this opinion."
+      date_created: "Timestamp CourtListener first created the opinion record."
+      date_modified: "Timestamp the opinion record was last modified upstream."
+      dump_date: "Date stamp of the bulk dump this row was read from, for example `2026-06-30`."

@@ -31,6 +31,7 @@ from pathlib import Path
 import polars as pl
 from dotenv import load_dotenv
 
+from spicy_regs.published import MATERIALIZED_TABLES, materialized_dataset, resolve_materialized_table_urls
 from spicy_regs.schemas.regulations import RECORD_TYPES
 
 # Repo layout anchors (this file lives at src/spicy_regs/data_dictionary.py).
@@ -55,8 +56,14 @@ TABLES: tuple[str, ...] = (
     "discovery_signals",
     "cfr_sections",
     "congress_bills",
+    "bill_subjects",
     "unified_agenda",
     "federal_register",
+    "rule_targets",
+    "proceedings",
+    "regulatory_agenda_items",
+    "agenda_item_proceedings",
+    "comment_periods",
     "sam_entities",
     "lobbying_filings",
     "fec_committees",
@@ -64,6 +71,8 @@ TABLES: tuple[str, ...] = (
     "gao_reports",
     "crs_reports",
     "court_dockets",
+    "court_opinion_clusters",
+    "court_opinion_bodies",
     "usaspending_recipients",
     "fcc_proceedings",
     "fcc_filings",
@@ -86,8 +95,14 @@ MCP_QUERYABLE: frozenset[str] = frozenset(
         "discovery_signals",
         "cfr_sections",
         "congress_bills",
+        "bill_subjects",
         "unified_agenda",
         "federal_register",
+        "rule_targets",
+        "proceedings",
+        "regulatory_agenda_items",
+        "agenda_item_proceedings",
+        "comment_periods",
         "sam_entities",
         "lobbying_filings",
         "fec_committees",
@@ -95,6 +110,8 @@ MCP_QUERYABLE: frozenset[str] = frozenset(
         "gao_reports",
         "crs_reports",
         "court_dockets",
+        "court_opinion_clusters",
+        "court_opinion_bodies",
         "usaspending_recipients",
         "fcc_proceedings",
         "fcc_filings",
@@ -444,6 +461,172 @@ DERIVED_SCHEMAS: dict[str, list[tuple[str, str]]] = {
         ("documents_json", "VARCHAR"),
         ("filing_url", "VARCHAR"),
     ],
+    # Per-bill Library of Congress subject assignment (enrich_bill_subjects),
+    # fetched from the detail endpoints the congress_bills list payload never
+    # carries. Keyed by bill_id; joins straight to congress_bills.
+    "bill_subjects": [
+        ("bill_id", "VARCHAR"),
+        ("policy_area", "VARCHAR"),
+        ("subjects_json", "VARCHAR"),
+        ("subject_count", "VARCHAR"),
+        ("carrier", "VARCHAR"),
+        ("enriched_at", "VARCHAR"),
+    ],
+    "rule_targets": [
+        ("docket_id", "VARCHAR"),
+        ("cfr_ref", "VARCHAR"),
+        ("cfr_title", "VARCHAR"),
+        ("cfr_part", "VARCHAR"),
+        ("cfr_section", "VARCHAR"),
+        ("rin", "VARCHAR"),
+        ("source", "VARCHAR"),
+        ("evidence_id", "VARCHAR"),
+        ("first_seen", "VARCHAR"),
+        ("last_seen", "VARCHAR"),
+        ("method", "VARCHAR"),
+        ("actor_id", "VARCHAR"),
+        ("run_id", "VARCHAR"),
+        ("asserted_at", "VARCHAR"),
+        ("supersedes_id", "VARCHAR"),
+    ],
+    "proceedings": [
+        ("proceeding_id", "VARCHAR"),
+        ("rin", "VARCHAR"),
+        ("docket_ids_json", "VARCHAR"),
+        ("title", "VARCHAR"),
+        ("agency_code", "VARCHAR"),
+        ("current_stage", "VARCHAR"),
+        ("stage_events_json", "VARCHAR"),
+        ("fr_document_numbers_json", "VARCHAR"),
+        ("cfr_refs_json", "VARCHAR"),
+        ("cfr_target_iris_json", "VARCHAR"),
+        ("authority_refs_json", "VARCHAR"),
+        ("identity_predecessors_json", "VARCHAR"),
+        ("method", "VARCHAR"),
+        ("actor_id", "VARCHAR"),
+        ("run_id", "VARCHAR"),
+        ("asserted_at", "VARCHAR"),
+        ("supersedes_id", "VARCHAR"),
+    ],
+    "regulatory_agenda_items": [
+        ("agenda_item_id", "VARCHAR"),
+        ("rin", "VARCHAR"),
+        ("scope_status", "VARCHAR"),
+        ("scope_basis", "VARCHAR"),
+        ("linked_proceeding_count", "VARCHAR"),
+        ("observation_count", "VARCHAR"),
+        ("latest_agenda_edition", "VARCHAR"),
+        ("first_seen", "VARCHAR"),
+        ("last_seen", "VARCHAR"),
+        ("method", "VARCHAR"),
+        ("actor_id", "VARCHAR"),
+        ("run_id", "VARCHAR"),
+        ("asserted_at", "VARCHAR"),
+        ("supersedes_id", "VARCHAR"),
+    ],
+    "agenda_item_proceedings": [
+        ("relationship_id", "VARCHAR"),
+        ("agenda_item_id", "VARCHAR"),
+        ("rin", "VARCHAR"),
+        ("proceeding_id", "VARCHAR"),
+        ("relationship_role", "VARCHAR"),
+        ("source", "VARCHAR"),
+        ("evidence_id", "VARCHAR"),
+        ("evidence_uri", "VARCHAR"),
+        ("evidence_date", "VARCHAR"),
+        ("method", "VARCHAR"),
+        ("actor_id", "VARCHAR"),
+        ("run_id", "VARCHAR"),
+        ("asserted_at", "VARCHAR"),
+        ("supersedes_id", "VARCHAR"),
+    ],
+    "comment_periods": [
+        ("comment_period_id", "VARCHAR"),
+        ("proceeding_ids_json", "VARCHAR"),
+        ("rins_json", "VARCHAR"),
+        ("docket_ids_json", "VARCHAR"),
+        ("open_date", "VARCHAR"),
+        ("close_date", "VARCHAR"),
+        ("source", "VARCHAR"),
+        ("opened_by_artifact_ids_json", "VARCHAR"),
+        ("evidence_ids_json", "VARCHAR"),
+        ("method", "VARCHAR"),
+        ("actor_id", "VARCHAR"),
+        ("run_id", "VARCHAR"),
+        ("asserted_at", "VARCHAR"),
+        ("supersedes_id", "VARCHAR"),
+    ],
+    # Ingested from the CourtListener bulk `opinion-clusters` dump
+    # (build_court_opinion_clusters), topped up between dumps by the keyless
+    # /search/?type=o API. One row per decision; `cl_docket_id` joins court_dockets.
+    # All columns stored as VARCHAR. Keyed by cluster_id.
+    "court_opinion_clusters": [
+        ("cluster_id", "VARCHAR"),
+        ("cl_docket_id", "VARCHAR"),
+        ("court_id", "VARCHAR"),
+        ("court_jurisdiction", "VARCHAR"),
+        ("court_is_federal", "VARCHAR"),
+        ("case_name", "VARCHAR"),
+        ("case_name_short", "VARCHAR"),
+        ("case_name_full", "VARCHAR"),
+        ("date_filed", "VARCHAR"),
+        ("date_filed_is_approximate", "VARCHAR"),
+        ("judges", "VARCHAR"),
+        ("nature_of_suit", "VARCHAR"),
+        ("precedential_status", "VARCHAR"),
+        ("citation_count", "VARCHAR"),
+        ("scdb_id", "VARCHAR"),
+        ("scdb_decision_direction", "VARCHAR"),
+        ("scdb_votes_majority", "VARCHAR"),
+        ("scdb_votes_minority", "VARCHAR"),
+        ("source", "VARCHAR"),
+        ("procedural_history", "VARCHAR"),
+        ("attorneys", "VARCHAR"),
+        ("posture", "VARCHAR"),
+        ("syllabus", "VARCHAR"),
+        ("headnotes", "VARCHAR"),
+        ("summary", "VARCHAR"),
+        ("disposition", "VARCHAR"),
+        ("history", "VARCHAR"),
+        ("other_dates", "VARCHAR"),
+        ("cross_reference", "VARCHAR"),
+        ("correction", "VARCHAR"),
+        ("arguments", "VARCHAR"),
+        ("headmatter", "VARCHAR"),
+        ("blocked", "VARCHAR"),
+        ("date_blocked", "VARCHAR"),
+        ("slug", "VARCHAR"),
+        ("absolute_url", "VARCHAR"),
+        ("date_created", "VARCHAR"),
+        ("date_modified", "VARCHAR"),
+        ("ingest_source", "VARCHAR"),
+    ],
+    # Opinion text ingested from the CourtListener bulk `opinions` dump
+    # (build_court_opinion_bodies). One row per opinion (majority, concurrence,
+    # dissent); `cluster_id` joins court_opinion_clusters. Carries the
+    # `plain_text` / `html_with_citations` bodies that court-opinion-v1 declares.
+    # All columns stored as VARCHAR. Keyed by opinion_id.
+    "court_opinion_bodies": [
+        ("opinion_id", "VARCHAR"),
+        ("cluster_id", "VARCHAR"),
+        ("opinion_type", "VARCHAR"),
+        ("author_str", "VARCHAR"),
+        ("author_id", "VARCHAR"),
+        ("joined_by_str", "VARCHAR"),
+        ("per_curiam", "VARCHAR"),
+        ("sha1", "VARCHAR"),
+        ("page_count", "VARCHAR"),
+        ("download_url", "VARCHAR"),
+        ("local_path", "VARCHAR"),
+        ("extracted_by_ocr", "VARCHAR"),
+        ("plain_text", "VARCHAR"),
+        ("html_with_citations", "VARCHAR"),
+        ("available_text_fields", "VARCHAR"),
+        ("text_char_count", "VARCHAR"),
+        ("date_created", "VARCHAR"),
+        ("date_modified", "VARCHAR"),
+        ("dump_date", "VARCHAR"),
+    ],
 }
 
 # Polars dtype -> DuckDB type label, so core-table types line up with what a
@@ -496,8 +679,11 @@ def discover_schemas(source: str, base: str | None = None) -> dict[str, list[tup
         base_url = (base or DEFAULT_R2_BASE_URL).rstrip("/")
         con.execute("INSTALL httpfs")
         con.execute("LOAD httpfs")
+        materialized_urls = resolve_materialized_table_urls(base_url)
 
         def url_for(name: str) -> str:
+            if name in MATERIALIZED_TABLES:
+                return materialized_urls[name]
             return f"{base_url}/{name}.parquet"
 
     elif source == "local":
@@ -614,10 +800,14 @@ def _render_table_page(
     if summary:
         lines += [summary, ""]
     queryable = "Yes" if table in MCP_QUERYABLE else "No (published to R2 only)"
-    lines += [
-        f"- **Parquet file:** `{table}.parquet`",
-        f"- **Queryable via MCP `query_sql`:** {queryable}",
-    ]
+    dataset = materialized_dataset(table)
+    if dataset is None:
+        lines.append(f"- **Parquet file:** `{table}.parquet`")
+    else:
+        lines.append(
+            f"- **Parquet file:** `{table}.parquet` inside the current `materialized/{dataset}/latest.json` snapshot"
+        )
+    lines.append(f"- **Queryable via MCP `query_sql`:** {queryable}")
     if pk:
         lines.append(f"- **Primary / dedup key:** `{pk}`")
     lines += ["", "| Column | Type | Description |", "| --- | --- | --- |"]
