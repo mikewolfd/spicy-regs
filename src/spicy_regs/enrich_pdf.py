@@ -24,10 +24,12 @@ so each has its own URL extractor; both feed the same generic core.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from collections.abc import Callable, Mapping
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from threading import Lock
 
 import polars as pl
 from dotenv import load_dotenv
@@ -101,28 +103,48 @@ def pdf_urls_for_comment(attachments_json: str | None) -> list[str]:
     return _dedupe(urls)
 
 
-def _extract_combined_text(urls: list[str], fetch: FetchFn, extract: ExtractFn) -> tuple[str | None, str]:
-    """Fetch + extract every PDF for one row and combine into a single result.
+def _extract_unique(
+    urls: list[str], fetch: FetchFn, extract: ExtractFn, max_workers: int
+) -> dict[str, tuple[str | None, str]]:
+    """Fetch each URL once and extract each distinct byte string once.
 
-    Returns ``(text_or_None, status)``. A row can have more than one PDF
-    rendition; their texts are concatenated. The combined status is ``ok`` if
-    any PDF yielded text, otherwise ``error`` > ``encrypted`` > ``empty`` in
-    that order of informativeness.
+    Returns ``{url: (text_or_None, status)}``. Rows routinely share a rendition
+    (a docket's notice attached to every submission), and the same bytes can
+    sit behind two URLs; before this every row paid its own fetch and
+    extraction. The digest cache lives for one call, so extractor changes need
+    no version key.
     """
-    texts: list[str] = []
-    statuses: list[str] = []
-    for url in urls:
+    by_digest: dict[str, PdfTextResult] = {}
+    lock = Lock()
+
+    def _one(url: str) -> tuple[str, tuple[str | None, str]]:
         data = fetch(url)
         if data is None:
-            statuses.append(PdfTextStatus.ERROR.value)
-            continue
-        result = extract(data)
-        statuses.append(result.status.value)
-        if result.text:
-            texts.append(result.text)
+            return url, (None, PdfTextStatus.ERROR.value)
+        digest = hashlib.sha256(data).hexdigest()
+        with lock:
+            result = by_digest.get(digest)
+        if result is None:
+            result = extract(data)
+            with lock:
+                result = by_digest.setdefault(digest, result)
+        return url, (result.text or None, result.status.value)
 
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        return dict(executor.map(_one, urls))
+
+
+def _combine(results: list[tuple[str | None, str]]) -> tuple[str | None, str]:
+    """Combine one row's per-PDF results into ``(text_or_None, status)``.
+
+    A row can have more than one PDF rendition; their texts are concatenated.
+    The combined status is ``ok`` if any PDF yielded text, otherwise ``error``
+    > ``encrypted`` > ``empty`` in that order of informativeness.
+    """
+    texts = [text for text, _ in results if text]
     if texts:
         return PAGE_SEPARATOR.join(texts), PdfTextStatus.OK.value
+    statuses = [status for _, status in results]
     for candidate in (PdfTextStatus.ERROR.value, PdfTextStatus.ENCRYPTED.value, PdfTextStatus.EMPTY.value):
         if candidate in statuses:
             return None, candidate
@@ -172,22 +194,21 @@ def _pdf_text_updates(
         logger.info("No PDF attachments to enrich")
         return empty, stats
 
-    logger.info("Enriching {} rows with PDF text ({} workers)...", len(work), max_workers)
-
-    def _process(item: tuple[str, list[str]]) -> tuple[str, str | None, str]:
-        row_id, urls = item
-        text, status = _extract_combined_text(urls, fetch, extract)
-        return row_id, text, status
+    unique_urls = sorted({url for _, urls in work for url in urls})
+    logger.info(
+        "Enriching {} rows with PDF text: {} distinct URLs ({} workers)...", len(work), len(unique_urls), max_workers
+    )
+    per_url = _extract_unique(unique_urls, fetch, extract, max_workers)
 
     ids: list[str] = []
     texts: list[str | None] = []
     statuses: list[str] = []
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        for row_id, text, status in executor.map(_process, work):
-            ids.append(row_id)
-            texts.append(text)
-            statuses.append(status)
-            stats[status] = stats.get(status, 0) + 1
+    for row_id, urls in work:
+        text, status = _combine([per_url[url] for url in urls])
+        ids.append(row_id)
+        texts.append(text)
+        statuses.append(status)
+        stats[status] = stats.get(status, 0) + 1
 
     updates = pl.DataFrame(
         {id_col: ids, "_new_text": texts, "_new_status": statuses},
@@ -440,7 +461,12 @@ def _enrich_comment_agency_in_catalog(
 
     logger.info(
         "catalog[{}]: PDF-enriched {} row(s) (ok={}, empty={}, encrypted={}, error={})",
-        agency, stats["selected"], stats["ok"], stats["empty"], stats["encrypted"], stats["error"],
+        agency,
+        stats["selected"],
+        stats["ok"],
+        stats["empty"],
+        stats["encrypted"],
+        stats["error"],
     )
     return stats
 
