@@ -108,6 +108,7 @@ _API_KEY_PLACEHOLDER = "REPLACE_WITH_API_KEY"
 # bare 404 here if it isn't SAM-authorized.
 API_KEY_ENV_VARS = (
     "SAM_API_KEY",
+    "API_GOV",  # the shared api.data.gov key, under the name RefSpec/.env uses
     "DATA_GOV_API_KEY",
     "REGULATIONS_GOV_API_KEY",
 )

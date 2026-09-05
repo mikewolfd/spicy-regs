@@ -7,7 +7,7 @@ import polars as pl
 import pytest
 
 _ISOLATED_PREFIXES = ("R2_", "SPICY_REGS_", "CLOUDFLARE_", "AWS_")
-_ISOLATED_NAMES = frozenset({"AGENCIES", "DATA_GOV_API_KEY", "SAM_API_KEY", "LDA_API_KEY", "COURTLISTENER_API_TOKEN"})
+_ISOLATED_NAMES = frozenset({"AGENCIES", "API_GOV", "DATA_GOV_API_KEY", "SAM_API_KEY", "LDA_API_KEY", "COURTLISTENER_API_TOKEN"})
 
 
 @pytest.fixture(autouse=True)

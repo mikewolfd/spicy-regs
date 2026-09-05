@@ -75,7 +75,8 @@ COLLECTION = "CFR"
 PAGE_SIZE = 100
 
 # api.data.gov env var fallback chain — the same key powers all three services.
-API_KEY_ENV_VARS = ("DATA_GOV_API_KEY", "GOVINFO_API_KEY", "REGULATIONS_GOV_API_KEY")
+# API_GOV is the shared api.data.gov key under the name RefSpec/.env uses.
+API_KEY_ENV_VARS = ("API_GOV", "DATA_GOV_API_KEY", "GOVINFO_API_KEY", "REGULATIONS_GOV_API_KEY")
 
 # Transport hygiene: bound every request and retry transient failures with
 # backoff so a flaky page fails slow-then-recovers rather than dropping granules.
