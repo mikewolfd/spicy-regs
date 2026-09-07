@@ -191,3 +191,25 @@ def test_committed_catalog_is_up_to_date():
     fresh = dd.build_catalog(dd.load_descriptions(), dd.expected_schemas())
     committed = json.loads(dd.DEFAULT_CATALOG_PATH.read_text(encoding="utf-8"))
     assert committed == fresh, "catalog.json is stale; run 'uv run spicy-regs-dict catalog'"
+
+
+def test_catalog_digest_sidecar_matches_the_committed_bytes():
+    """A vendored contract is pinned by digest, so the sidecar must track the file.
+
+    The digest is a sidecar rather than a field inside the document on purpose:
+    a digest carried by the thing it certifies proves nothing.
+    """
+    import hashlib
+
+    payload = dd.DEFAULT_CATALOG_PATH.read_bytes()
+    recorded = dd.DEFAULT_CATALOG_DIGEST_PATH.read_text(encoding="utf-8").split()[0]
+    assert hashlib.sha256(payload).hexdigest() == recorded, (
+        "catalog.json.sha256 is stale; run 'uv run spicy-regs-dict catalog'"
+    )
+
+
+def test_catalog_bytes_are_the_one_canonical_form():
+    """One document, one byte string, or the digest pin is meaningless."""
+    document = dd.build_catalog(dd.load_descriptions(), dd.expected_schemas())
+    assert dd.catalog_bytes(document) == dd.catalog_bytes(document)
+    assert dd.catalog_bytes(document) == dd.DEFAULT_CATALOG_PATH.read_bytes()
