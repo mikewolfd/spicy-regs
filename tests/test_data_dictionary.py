@@ -99,3 +99,26 @@ def test_mcp_queryable_matches_mcp_server():
     from spicy_regs import mcp_server
 
     assert dd.MCP_QUERYABLE == set(mcp_server.TABLES)
+
+
+def test_every_table_has_a_display_label():
+    """The catalog names a class by this label, so no table may go unnamed."""
+    descriptions = dd.load_descriptions()
+    labels = dd.table_labels(descriptions)
+    assert set(labels) == set(dd.TABLES)
+    unnamed = [t for t, label in labels.items() if not label.strip()]
+    assert not unnamed, f"tables with no display label: {unnamed}"
+
+
+def test_check_detects_a_missing_label():
+    descriptions = dd.load_descriptions()
+    broken = {t: dict(entry) for t, entry in descriptions.items()}
+    broken["congress_bills"].pop("label")
+    errors = dd.check_descriptions(dd.expected_schemas(), broken)
+    assert any("missing a 'label'" in e for e in errors)
+
+
+def test_generated_page_carries_the_label():
+    descriptions = dd.load_descriptions()
+    page = dd.DEFAULT_DOCS_TABLES_DIR / "congress_bills.md"
+    assert f"**{descriptions['congress_bills']['label']}**" in page.read_text()

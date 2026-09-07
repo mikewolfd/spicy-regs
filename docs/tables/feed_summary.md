@@ -2,6 +2,8 @@
 
 # `feed_summary`
 
+**Docket summaries**
+
 A pre-computed rollup with one row per docket, joining docket metadata to comment counts and comment-period dates. Powers feed/timeline views without scanning the full comments dataset. Built by `build_feed_summary`, sorted by `modify_date` descending.
 
 - **Parquet file:** `feed_summary.parquet`

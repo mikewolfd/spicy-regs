@@ -2,6 +2,8 @@
 
 # `congress_bills`
 
+**Congressional bills**
+
 One row per congressional bill, ingested from the Congress.gov v3 REST API (`/bill` list endpoint) by `build_congress_bills`. The legislative record complementary to the regulations.gov `dockets`/`documents` view — the bills that authorize the rulemakings this dataset tracks. Scope is deliberately list-level only (no per-bill detail fetches), so every column comes from the list payload. Incremental by `update_date`, deduped on `bill_id`. All columns are stored as VARCHAR.
 
 - **Parquet file:** `congress_bills.parquet`

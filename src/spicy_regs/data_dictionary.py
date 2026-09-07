@@ -567,6 +567,8 @@ def check_descriptions(
         entry = descriptions[table] or {}
         if not (entry.get("summary") or "").strip():
             errors.append(f"[{table}] missing a 'summary' in descriptions.yaml")
+        if not (entry.get("label") or "").strip():
+            errors.append(f"[{table}] missing a 'label' in descriptions.yaml")
         desc_cols = list((entry.get("columns") or {}).keys())
         errors.extend(_reconcile_columns(table, "schema", schema_cols, "descriptions.yaml", desc_cols))
         for col in schema_cols:
@@ -598,6 +600,17 @@ _GENERATED_BANNER = (
 )
 
 
+def table_labels(descriptions: dict) -> dict[str, str]:
+    """Return ``{table: short display label}``.
+
+    The label names the collection for someone deciding whether it holds court
+    cases, bills or comments. It lives here, beside the summary the table pages
+    already render, so a catalog and a docs page cannot name the same class two
+    different ways.
+    """
+    return {table: (entry or {}).get("label", "") for table, entry in descriptions.items()}
+
+
 def _render_table_page(
     table: str,
     columns: list[tuple[str, str]],
@@ -610,7 +623,10 @@ def _render_table_page(
     if rt is not None:
         pk = rt.dedup_key
 
+    label = (entry.get("label") or "").strip()
     lines = [_GENERATED_BANNER, "", f"# `{table}`", ""]
+    if label:
+        lines += [f"**{label}**", ""]
     if summary:
         lines += [summary, ""]
     queryable = "Yes" if table in MCP_QUERYABLE else "No (published to R2 only)"

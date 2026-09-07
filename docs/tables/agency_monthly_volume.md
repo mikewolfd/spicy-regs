@@ -2,6 +2,8 @@
 
 # `agency_monthly_volume`
 
+**Agency monthly volume**
+
 Per-agency monthly document volume, broken out by document type — one row per (agency, year, month, document_type). Feeds activity sparklines and profile activity panels. Built by `build_agency_rollups` from document `posted_date`.
 
 - **Parquet file:** `agency_monthly_volume.parquet`

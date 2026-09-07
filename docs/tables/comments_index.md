@@ -2,6 +2,8 @@
 
 # `comments_index`
 
+**Public comment counts**
+
 A tiny per-partition row-count index for the partitioned comments. It maps each `comments/` partition to its row count so consumers can compute comment totals and discover partitions without scanning the full comments dataset. Maintained by `update_comments_index`.
 
 - **Parquet file:** `comments_index.parquet`

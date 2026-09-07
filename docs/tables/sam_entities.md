@@ -2,6 +2,8 @@
 
 # `sam_entities`
 
+**Federal entity registry**
+
 One row per registered federal entity, ingested from the SAM.gov Entity Management API v4 (`/entities` list endpoint) by `build_sam_entities`. The authoritative federal entity registry — the directory of organizations registered to do business with or receive assistance from the U.S. government — keyed by the Unique Entity ID (`uei`). This anchors organization/entity resolution across the corpus: the same UEI ties a commenting organization to its registered identity. Filtered to public active registrations (`registrationStatus=A`). Scope is deliberately list-level only (no per-entity detail fetches). Coverage: the published table is the union of scheduled runs, each walking one rotating `registrationDate` year window (unbounded within the window unless `SAM_MAX_RECORDS` is set), deduped on `uei`; on 2026-09-05 it held 885,266 rows with registration dates 1949-12-14 to 2026-07-04, against an active public registry of roughly the same size. The file is written in 50,000-row groups, so a reader that stops after the first row group sees exactly 50,000 rows, which is a reader limit, not the table's. All columns are stored as VARCHAR.
 
 - **Parquet file:** `sam_entities.parquet`
