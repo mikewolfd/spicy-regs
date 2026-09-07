@@ -222,12 +222,16 @@ skipped unless you pass `--overwrite`. Document text isn't published to
 
 ```bash
 uv run spicy-regs-dict check        # verify descriptions match the schema
-uv run spicy-regs-dict generate     # regenerate docs/tables/*.md
+uv run spicy-regs-dict generate     # regenerate docs/tables/*.md + catalog.json
 uv run --group docs mkdocs serve    # preview at 127.0.0.1:8000
 ```
 
-Edit descriptions in `data_dictionary/descriptions.yaml`. CI fails if they drift
-from the schema.
+Edit descriptions in `data_dictionary/descriptions.yaml`. Every table needs a
+`label`, a `coverage` statement opening with its kind, and a `measured_on`
+date; `check` fails on a missing or malformed one. `generate` also rewrites
+`data_dictionary/catalog.json` and its digest — the machine-readable class
+declaration other repos vendor — so regenerating the pages keeps that in step.
+CI fails if any of it drifts from the schema.
 
 ## Use it from an AI assistant
 

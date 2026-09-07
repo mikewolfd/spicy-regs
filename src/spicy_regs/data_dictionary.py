@@ -889,6 +889,17 @@ def cmd_generate(args: argparse.Namespace) -> int:
     print(f"✓ Wrote {len(written)} table page(s) to {out_dir} (source={args.source}).")
     for path in written:
         print(f"  - {path.relative_to(REPO_ROOT) if path.is_relative_to(REPO_ROOT) else path}")
+    # The catalog is the same derivation from the same two inputs, and two tests
+    # require the committed copy to equal a fresh build. Writing it here means a
+    # contributor who edits descriptions.yaml and regenerates cannot leave it
+    # stale by not knowing a third command exists.
+    if out_dir == DEFAULT_DOCS_TABLES_DIR:
+        payload = catalog_bytes(build_catalog(descriptions, schemas))
+        DEFAULT_CATALOG_PATH.write_bytes(payload)
+        DEFAULT_CATALOG_DIGEST_PATH.write_text(
+            f"{hashlib.sha256(payload).hexdigest()}  {DEFAULT_CATALOG_PATH.name}\n", encoding="utf-8"
+        )
+        print(f"  - {DEFAULT_CATALOG_PATH.relative_to(REPO_ROOT)} (+ .sha256)")
     return 0
 
 
