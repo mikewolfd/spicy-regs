@@ -6,6 +6,10 @@
 
 One row per public comment submitted to a docket — the largest table (tens of millions of rows). On R2 it is also published as Hive-partitioned files under `comments/agency/agency_code=.../part-0.parquet`, one file per agency, rebuilt daily — this is what `spicy-regs-ui` reads for scoped queries. (An older `comments/agency_code=.../docket_id=.../year=.../month=...` tree was abandoned when comments moved onto the Iceberg catalog and carried a reduced set of columns; prefer the per-agency tree.) Joins to `dockets` on `docket_id`.
 
+**Coverage.** True range, floored. Posted dates are stated from 1990-01-01 to 2026-09-06 rather than from the raw minimum of year 0000, on the same publisher defect as `documents`. See the data-quality note.
+
+**Data quality.** 33,373 rows carry a `posted_date` before 1990, the same publisher defect as `documents`. Filter on the date when recency matters.
+
 - **Parquet file:** `comments.parquet`
 - **Queryable via MCP `query_sql`:** Yes
 - **Primary / dedup key:** `comment_id`

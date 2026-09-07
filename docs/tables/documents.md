@@ -6,6 +6,10 @@
 
 One row per document posted to a docket — proposed rules, final rules, notices, supporting analyses, and public-submission stubs. Joins to `dockets` on `docket_id`. Two payload fields are not carried: `comment` (the inline submission body) and `restrictReasonType` (why a document is withheld). Read those from the acquisition source, the raw Mirrulations payload or spicy-docs' source-native release, not from this table.
 
+**Coverage.** True range, floored. Posted dates are stated from 1990-01-01 to the present rather than from the raw minimum, which is the year 0000. See the data-quality note: the raw ends are a publisher defect, not coverage.
+
+**Data quality.** 52,699 rows (2.6%) carry a `posted_date` before 1990, including eight in the year 0000 and one dated in the future. These are publisher values carried through faithfully, not parse errors on our side. Filter on the date when recency matters.
+
 - **Parquet file:** `documents.parquet`
 - **Queryable via MCP `query_sql`:** Yes
 - **Primary / dedup key:** `document_id`

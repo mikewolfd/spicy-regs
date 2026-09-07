@@ -13,6 +13,11 @@
 tables:
   dockets:
     label: "Rulemaking dockets"
+    coverage: >-
+      True range. Dockets as mirrored from regulations.gov, with
+      modification dates from 2006-09-26 to 2026-09-06. The date records
+      when a docket last changed, not when it opened, so it is a freshness
+      axis rather than a coverage one.
     summary: >-
       One row per regulations.gov docket. A docket is the top-level folder a
       federal agency opens for a rulemaking or other action; it groups the
@@ -28,6 +33,16 @@ tables:
 
   documents:
     label: "Docket documents"
+    coverage: >-
+      True range, floored. Posted dates are stated from 1990-01-01 to the
+      present rather than from the raw minimum, which is the year 0000. See
+      the data-quality note: the raw ends are a publisher defect, not
+      coverage.
+    data_quality: >-
+      52,699 rows (2.6%) carry a `posted_date` before 1990, including eight
+      in the year 0000 and one dated in the future. These are publisher
+      values carried through faithfully, not parse errors on our side.
+      Filter on the date when recency matters.
     summary: >-
       One row per document posted to a docket — proposed rules, final rules,
       notices, supporting analyses, and public-submission stubs. Joins to
@@ -56,6 +71,13 @@ tables:
 
   comments:
     label: "Public comments"
+    coverage: >-
+      True range, floored. Posted dates are stated from 1990-01-01 to
+      2026-09-06 rather than from the raw minimum of year 0000, on the same
+      publisher defect as `documents`. See the data-quality note.
+    data_quality: >-
+      33,373 rows carry a `posted_date` before 1990, the same publisher
+      defect as `documents`. Filter on the date when recency matters.
     summary: >-
       One row per public comment submitted to a docket — the largest table
       (tens of millions of rows). On R2 it is also published as Hive-partitioned
@@ -85,6 +107,9 @@ tables:
 
   comments_index:
     label: "Public comment counts"
+    coverage: >-
+      Derived. Per-partition counts over `comments`; it covers exactly what
+      that table covers and adds no rows of its own.
     summary: >-
       A tiny per-partition row-count index for the partitioned comments. It maps
       each `comments/` partition to its row count so consumers can compute
@@ -99,6 +124,9 @@ tables:
 
   feed_summary:
     label: "Docket summaries"
+    coverage: >-
+      Derived. One row per docket over `dockets`, `documents` and
+      `comments`; it covers exactly what those cover.
     summary: >-
       A pre-computed rollup with one row per docket, joining docket metadata to
       comment counts and comment-period dates. Powers feed/timeline views
@@ -117,6 +145,9 @@ tables:
 
   agency_stats:
     label: "Agency totals"
+    coverage: >-
+      Derived. Totals over `dockets`, `documents` and `comments`; it covers
+      exactly what those cover.
     summary: >-
       A per-agency dimension table — one row per agency with docket, document,
       and comment counts. Powers agency directory and profile pages. Built by
@@ -129,6 +160,9 @@ tables:
 
   agency_monthly_volume:
     label: "Agency monthly volume"
+    coverage: >-
+      Derived. Monthly counts over `documents`; it covers exactly what that
+      table covers, including its pre-1990 date defect.
     summary: >-
       Per-agency monthly document volume, broken out by document type — one row
       per (agency, year, month, document_type). Feeds activity sparklines and
@@ -143,6 +177,9 @@ tables:
 
   rulemaking_lifecycles:
     label: "Rulemaking timelines"
+    coverage: >-
+      Derived. Proposed-to-final pairs over `documents`; it covers exactly
+      what that table covers.
     summary: >-
       Proposed→final rulemaking arcs, one row per docket, discriminated by
       `kind`: `pair` rows are completed rulemakings (earliest Proposed Rule
@@ -163,6 +200,11 @@ tables:
 
   fr_docket_links:
     label: "Federal Register to docket links"
+    coverage: >-
+      Derived, and bounded by its inputs. Links between `federal_register`
+      and `dockets`, so it inherits the Federal Register table's 2000 floor:
+      a rule published before 2000 has no link here because the document is
+      not in that table.
     summary: >-
       The Federal Register ↔ docket bridge: each `federal_register` row's
       `docket_ids_json` array exploded to one row per (docket_id, FR document),
@@ -191,6 +233,10 @@ tables:
 
   discovery_signals:
     label: "Agency activity spikes"
+    coverage: >-
+      Not a range. A current-state signal recomputed relative to each run
+      date, so every row turns over on every rebuild. It is not a time
+      series and cannot be asked about the past.
     summary: >-
       Per-agency document-output spike signal that powers the feed's discovery
       panel — agencies whose document count in the trailing 30 days is at least
@@ -206,6 +252,10 @@ tables:
 
   cfr_sections:
     label: "Code of Federal Regulations sections"
+    coverage: >-
+      Window. The 2025 and 2026 annual editions only, out of the Code's full
+      publication history. This is the Code roughly as it stands now, not a
+      record of how a section changed.
     summary: >-
       One row per Code of Federal Regulations *section* (a GovInfo CFR granule),
       ingested from the GovInfo API by `build_cfr_sections`. This is the codified,
@@ -231,6 +281,10 @@ tables:
       url: "Canonical GovInfo details/link URL for the granule."
   congress_bills:
     label: "Congressional bills"
+    coverage: >-
+      True range. Bills with latest actions from 1799-12-16 (the 6th
+      Congress) to 2026-09-04, complete on identifier, type and date for
+      every row.
     summary: >-
       One row per congressional bill, ingested from the Congress.gov v3 REST API
       (`/bill` list endpoint) by `build_congress_bills`. The legislative record
@@ -252,6 +306,10 @@ tables:
       url: "Congress.gov API URL for the bill's detail resource."
   unified_agenda:
     label: "Planned agency actions"
+    coverage: >-
+      Window. The 202510 edition alone, a single semiannual snapshot rather
+      than a history of editions, so an agenda item cannot be compared
+      against how it read in an earlier edition.
     summary: >-
       One row per Regulation Identifier Number (RIN) per agenda edition, ingested
       from the OIRA/OMB Unified Agenda published at reginfo.gov by
@@ -281,6 +339,10 @@ tables:
       url: "URL of the entry's detail page on reginfo.gov."
   federal_register:
     label: "Federal Register documents"
+    coverage: >-
+      True range, with a boundary worth stating. Documents published from
+      2000-01-03 to 2026-09-04. Federal Register documents published before
+      2000 are not in this table at all.
     summary: >-
       One row per Federal Register document, ingested from the federalregister.gov
       REST API by `build_federal_register`. The authoritative rule-publication
@@ -313,6 +375,11 @@ tables:
       modify_date: "Processing/modification date carried from the prior published table; null for rows freshly ingested via the REST API (which does not expose it)."
   sam_entities:
     label: "Federal entity registry"
+    coverage: >-
+      True range with a density caveat. Registration dates run 1949-12-14 to
+      2026-07-04, and the ends are real, but a scheduled run walks one
+      rotating registration-year window, so the interior is uneven and a
+      given year may be thinner than its neighbours.
     summary: >-
       One row per registered federal entity, ingested from the SAM.gov Entity
       Management API v4 (`/entities` list endpoint) by `build_sam_entities`. The
@@ -352,6 +419,11 @@ tables:
       entity_url: "Entity's self-reported website URL (`coreData.entityInformation.entityURL`). Often null."
   lobbying_filings:
     label: "Lobbying disclosure filings"
+    coverage: >-
+      True range with a density caveat. Filing years span 2000 to 2026, but
+      286,369 of 287,246 rows are 2023 or later; earlier years are a tail of
+      a few hundred rows each and should not be read as coverage of that
+      period.
     summary: >-
       One row per federal lobbying-disclosure filing, ingested from the U.S.
       Senate Lobbying Disclosure Act (LDA) REST API (`lda.senate.gov`) by
@@ -378,6 +450,10 @@ tables:
       url: "URL of the filing's printable document page on lda.senate.gov (`filing_document_url`)."
   fec_committees:
     label: "Political committees"
+    coverage: >-
+      Not a range. The table carries no date column: it is the committee
+      registry as of the most recent run, with no history and no way to ask
+      what it held before.
     summary: >-
       One row per Federal Election Commission committee/PAC, ingested from the
       OpenFEC `/committees` endpoint by `build_fec_committees`. A reference
@@ -408,6 +484,11 @@ tables:
       candidate_ids_json: "JSON array of OpenFEC candidate IDs associated with the committee (e.g. `[\"P00008052\"]`). Often `[]`."
   org_committee_links:
     label: "Commenter organizations matched to committees"
+    coverage: >-
+      Derived, and bounded by a small input. Name matches between commenter
+      organizations and FEC committees, reachable only for the small share
+      of comments that carry an `organization` value at all, so absence of a
+      link is not evidence that a commenter has none.
     summary: >-
       One row per (commenter organization name, FEC committee) name match,
       derived by `build_org_committee_links`. Materializes the organization-name
@@ -447,6 +528,10 @@ tables:
       last_comment_date: "Latest `posted_date` across this organization's comments (ISO 8601 string)."
   gao_reports:
     label: "Government Accountability Office reports"
+    coverage: >-
+      Window. 105 reports published 2026-07-13 to 2026-09-04, a
+      fifty-three-day slice taken from the publisher's recent-items feed. It
+      grows as the daily job runs and is not GAO's archive.
     summary: >-
       One row per U.S. Government Accountability Office (GAO) product, ingested
       from the public GAO reports RSS feed by `build_gao_reports`. The federal
@@ -468,6 +553,9 @@ tables:
       url: "Canonical gao.gov URL for the product."
   crs_reports:
     label: "Congressional Research Service reports"
+    coverage: >-
+      True range. Reports published 1993-10-22 to 2026-09-04, running about
+      1,100 to 1,300 a year in recent years.
     summary: >-
       One row per Congressional Research Service (CRS) report, ingested from the
       Congress.gov v3 REST API (`/crsreport` list endpoint) by
@@ -488,6 +576,11 @@ tables:
       url: "Congress.gov API URL for the report's detail resource."
   court_dockets:
     label: "Federal court dockets"
+    coverage: >-
+      True range with a density caveat. Dockets filed 1992-08-26 to
+      2026-09-04 across 95 courts, but 7,743 rows over that span is a
+      bounded slice of federal court activity rather than the full docket
+      record.
     summary: >-
       One row per federal court docket challenging agency action under the
       Administrative Procedure Act, ingested from the CourtListener v4 search API
@@ -525,6 +618,11 @@ tables:
       absolute_url: "Absolute URL of the docket page on courtlistener.com."
   usaspending_recipients:
     label: "Federal award recipients"
+    coverage: >-
+      Not a range. No date column: the table is the top recipients by
+      all-time award amount, so it cannot be asked about a period, and a
+      recipient below that cut is absent rather than absent from the awards
+      data.
     summary: >-
       One row per federal-award recipient, ingested from the USASpending.gov
       `/api/v2/recipient/` endpoint by `build_usaspending_recipients`. A
@@ -545,6 +643,8 @@ tables:
       total_award_amount: "All-time federal award dollars for the recipient at this level, as a numeric string (e.g. `63465270734.15`). The bounding sort key (top-N by amount)."
   fcc_proceedings:
     label: "FCC proceedings"
+    coverage: >-
+      True range. Proceedings created 1991-10-22 to 2026-09-02.
     summary: >-
       One row per FCC proceeding (the FCC's docket equivalent, e.g. `17-108`),
       ingested from the FCC ECFS public API (`/proceedings`) by
@@ -572,6 +672,10 @@ tables:
       filed_by: "ECFS account that created the proceeding. An internal FCC username; occasionally useful for spotting bureau conventions."
   fcc_filings:
     label: "FCC filings"
+    coverage: >-
+      Window. Filings received 2026-06-30 to 2026-09-04, a sixty-seven-day
+      slice. The rollup merges incrementally, so this is the history
+      accumulated so far and not the ECFS archive.
     summary: >-
       One row per FCC ECFS filing — the FCC's comment equivalent: comments,
       reply comments, ex-parte notices, letters, and other submissions —

@@ -6,6 +6,8 @@
 
 One row per U.S. Government Accountability Office (GAO) product, ingested from the public GAO reports RSS feed by `build_gao_reports`. The federal oversight layer over the rulemakings this dataset tracks — GAO's audits, evaluations, and recommendations on how agencies implement laws and rules. GAO's bulk/search surfaces are bot-blocked, so the RSS feed (a ~25-item recent-products window) is the only anonymous machine-readable source; the table is therefore an **append-only accumulator** that grows into a rolling history over successive daily runs. Deduped on `report_id`. All columns are stored as VARCHAR.
 
+**Coverage.** Window. 105 reports published 2026-07-13 to 2026-09-04, a fifty-three-day slice taken from the publisher's recent-items feed. It grows as the daily job runs and is not GAO's archive.
+
 - **Parquet file:** `gao_reports.parquet`
 - **Queryable via MCP `query_sql`:** Yes
 

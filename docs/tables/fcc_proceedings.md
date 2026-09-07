@@ -6,6 +6,8 @@
 
 One row per FCC proceeding (the FCC's docket equivalent, e.g. `17-108`), ingested from the FCC ECFS public API (`/proceedings`) by `build_fcc_proceedings`. The FCC does not participate in regulations.gov — its rulemaking dockets and public comments live in ECFS — so this table extends the dataset's docket universe to the FCC. Requires an api.data.gov key (`DATA_GOV_API_KEY`). Incremental by `date_created`, deduped on `name`. Proceedings with no created date are unreachable through the API's date-range queries and are not included (legacy shells with no filing activity). All columns are stored as VARCHAR.
 
+**Coverage.** True range. Proceedings created 1991-10-22 to 2026-09-02.
+
 - **Parquet file:** `fcc_proceedings.parquet`
 - **Queryable via MCP `query_sql`:** Yes
 

@@ -122,3 +122,43 @@ def test_generated_page_carries_the_label():
     descriptions = dd.load_descriptions()
     page = dd.DEFAULT_DOCS_TABLES_DIR / "congress_bills.md"
     assert f"**{descriptions['congress_bills']['label']}**" in page.read_text()
+
+
+def test_every_table_has_a_coverage_statement():
+    """The boundary sentence a user reads comes from here, so none may be blank."""
+    descriptions = dd.load_descriptions()
+    coverage = dd.table_coverage(descriptions)
+    assert set(coverage) == set(dd.TABLES)
+    missing = [t for t, e in coverage.items() if not e["coverage"].strip()]
+    assert not missing, f"tables with no coverage statement: {missing}"
+
+
+def test_every_coverage_statement_names_its_kind():
+    """A range, a window and a derived table are different claims; each says which."""
+    kinds = ("True range", "Window", "Derived", "Not a range")
+    bad = [
+        t for t, e in dd.table_coverage(dd.load_descriptions()).items() if not e["coverage"].strip().startswith(kinds)
+    ]
+    assert not bad, f"coverage statements that do not open by naming their kind: {bad}"
+
+
+def test_check_detects_a_missing_coverage_statement():
+    descriptions = dd.load_descriptions()
+    broken = {t: dict(entry) for t, entry in descriptions.items()}
+    broken["gao_reports"].pop("coverage")
+    errors = dd.check_descriptions(dd.expected_schemas(), broken)
+    assert any("missing a 'coverage'" in e for e in errors)
+
+
+def test_check_detects_an_empty_data_quality_note():
+    descriptions = dd.load_descriptions()
+    broken = {t: dict(entry) for t, entry in descriptions.items()}
+    broken["documents"]["data_quality"] = "   "
+    errors = dd.check_descriptions(dd.expected_schemas(), broken)
+    assert any("empty 'data_quality'" in e for e in errors)
+
+
+def test_generated_page_carries_coverage_and_data_quality():
+    page = (dd.DEFAULT_DOCS_TABLES_DIR / "documents.md").read_text()
+    assert "**Coverage.**" in page
+    assert "**Data quality.**" in page

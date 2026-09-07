@@ -569,6 +569,10 @@ def check_descriptions(
             errors.append(f"[{table}] missing a 'summary' in descriptions.yaml")
         if not (entry.get("label") or "").strip():
             errors.append(f"[{table}] missing a 'label' in descriptions.yaml")
+        if not (entry.get("coverage") or "").strip():
+            errors.append(f"[{table}] missing a 'coverage' statement in descriptions.yaml")
+        if "data_quality" in entry and not (entry.get("data_quality") or "").strip():
+            errors.append(f"[{table}] has an empty 'data_quality' note in descriptions.yaml")
         desc_cols = list((entry.get("columns") or {}).keys())
         errors.extend(_reconcile_columns(table, "schema", schema_cols, "descriptions.yaml", desc_cols))
         for col in schema_cols:
@@ -611,6 +615,32 @@ def table_labels(descriptions: dict) -> dict[str, str]:
     return {table: (entry or {}).get("label", "") for table, entry in descriptions.items()}
 
 
+def table_coverage(descriptions: dict) -> dict[str, dict[str, str]]:
+    """Return ``{table: {label, coverage, data_quality, summary}}`` for a catalog.
+
+    ``coverage`` is a written statement, not a computed min/max, because a
+    computed range lies for three of these classes in three different ways: a
+    fifty-three-day ingest window reads as a coverage claim about the
+    publisher's archive, a rotating-window ingest reads as even density it does
+    not have, and two tables carry publisher dates in the year 0000. Each
+    statement opens by naming which kind it is.
+
+    This describes what spicy-regs *publishes*. Whether a class is in a search
+    index is that consumer's fact, not ours, and must not be inferred from
+    anything here — ``MCP_QUERYABLE`` in particular is every published table,
+    so reading it as "searchable" would advertise classes no index holds.
+    """
+    return {
+        table: {
+            "label": (entry or {}).get("label", ""),
+            "coverage": (entry or {}).get("coverage", ""),
+            "data_quality": (entry or {}).get("data_quality", ""),
+            "summary": (entry or {}).get("summary", ""),
+        }
+        for table, entry in descriptions.items()
+    }
+
+
 def _render_table_page(
     table: str,
     columns: list[tuple[str, str]],
@@ -629,6 +659,12 @@ def _render_table_page(
         lines += [f"**{label}**", ""]
     if summary:
         lines += [summary, ""]
+    coverage = (entry.get("coverage") or "").strip()
+    if coverage:
+        lines += [f"**Coverage.** {coverage}", ""]
+    data_quality = (entry.get("data_quality") or "").strip()
+    if data_quality:
+        lines += [f"**Data quality.** {data_quality}", ""]
     queryable = "Yes" if table in MCP_QUERYABLE else "No (published to R2 only)"
     lines += [
         f"- **Parquet file:** `{table}.parquet`",

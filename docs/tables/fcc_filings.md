@@ -6,6 +6,8 @@
 
 One row per FCC ECFS filing — the FCC's comment equivalent: comments, reply comments, ex-parte notices, letters, and other submissions — ingested from the FCC ECFS public API (`/filings`) by `build_fcc_filings`. Requires an api.data.gov key (`DATA_GOV_API_KEY`). Incremental by `date_received`, deduped on `id_submission`. Because ECFS holds tens of millions of filings, a first run with no prior table is bounded to the trailing 30 days; deeper history is backfilled in slices via `FCC_SINCE` and/or scoped to specific proceedings via `FCC_PROCEEDINGS`. All columns are stored as VARCHAR, array fields serialized as JSON strings.
 
+**Coverage.** Window. Filings received 2026-06-30 to 2026-09-04, a sixty-seven-day slice. The rollup merges incrementally, so this is the history accumulated so far and not the ECFS archive.
+
 - **Parquet file:** `fcc_filings.parquet`
 - **Queryable via MCP `query_sql`:** Yes
 

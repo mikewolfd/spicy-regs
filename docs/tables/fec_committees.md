@@ -6,6 +6,8 @@
 
 One row per Federal Election Commission committee/PAC, ingested from the OpenFEC `/committees` endpoint by `build_fec_committees`. A reference dimension of the political committees — PACs, party committees, and campaign committees — that money and endorsements flow through, used to resolve commenters and co-filers against the dashboard's ally/opposition (stance) map. Scope is deliberately committees-only: itemized contributions (hundreds of millions of rows) are out of scope for this pass and could follow as a future bounded-by-organization contributions table keyed on `committee_id`. All columns are stored as VARCHAR; array-valued fields are JSON strings.
 
+**Coverage.** Not a range. The table carries no date column: it is the committee registry as of the most recent run, with no history and no way to ask what it held before.
+
 - **Parquet file:** `fec_committees.parquet`
 - **Queryable via MCP `query_sql`:** Yes
 

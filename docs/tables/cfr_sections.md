@@ -6,6 +6,8 @@
 
 One row per Code of Federal Regulations *section* (a GovInfo CFR granule), ingested from the GovInfo API by `build_cfr_sections`. This is the codified, subject-organized body of federal regulations — `cfr_ref`/`title`/`part`/ `section` are the join keys back to Federal Register `cfr_references_json` and, transitively, to regulations.gov activity. Scope is section METADATA + CITATIONS only — the full regulatory *text* of each section is deliberately out of scope for this pass (it is far heavier). Requires an api.data.gov key (`DATA_GOV_API_KEY`); a keyless ingest run is a no-op. All columns are stored as VARCHAR. NOTE: the GovInfo traversal + field mapping await live validation with a key.
 
+**Coverage.** Window. The 2025 and 2026 annual editions only, out of the Code's full publication history. This is the Code roughly as it stands now, not a record of how a section changed.
+
 - **Parquet file:** `cfr_sections.parquet`
 - **Queryable via MCP `query_sql`:** Yes
 

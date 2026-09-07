@@ -6,6 +6,8 @@
 
 One row per Federal Register document, ingested from the federalregister.gov REST API by `build_federal_register`. The authoritative rule-publication record — proposed rules, final rules, and notices — complementary to the regulations.gov `dockets`/`documents` view. `regulation_id_numbers_json` (RIN) and `cfr_references_json` are the join keys to the Unified Agenda and the CFR. All columns are stored as VARCHAR; array-valued fields are JSON.
 
+**Coverage.** True range, with a boundary worth stating. Documents published from 2000-01-03 to 2026-09-04. Federal Register documents published before 2000 are not in this table at all.
+
 - **Parquet file:** `federal_register.parquet`
 - **Queryable via MCP `query_sql`:** Yes
 
