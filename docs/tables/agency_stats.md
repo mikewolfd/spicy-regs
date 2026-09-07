@@ -2,6 +2,8 @@
 
 # `agency_stats`
 
+**Agency totals**
+
 A per-agency dimension table — one row per agency with docket, document, and comment counts. Powers agency directory and profile pages. Built by `build_agency_rollups`, sorted by comment then document count descending.
 
 - **Parquet file:** `agency_stats.parquet`

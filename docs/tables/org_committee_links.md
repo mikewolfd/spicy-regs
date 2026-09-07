@@ -2,6 +2,8 @@
 
 # `org_committee_links`
 
+**Commenter organizations matched to committees**
+
 One row per (commenter organization name, FEC committee) name match, derived by `build_org_committee_links`. Materializes the organization-name bridge between the regulations.gov corpus and `fec_committees` — the join the data model always described but left to each query author, so every consumer normalized names differently. `organization` is the raw string as filed, joining straight back to `comments.organization`; `committee_id` joins to `fec_committees`. Coverage is inherently small: `comments.organization` is populated on only ~0.08% of comments (~20.7K of ~25.8M), and most commenting organizations do not run a federal PAC, so a few hundred organizations resolving is the correct answer rather than a matcher to tune harder. Matching runs in three tiers (`exact`, `core`, `prefix`) and every row carries `match_method`, `confidence`, and `committee_match_count` so consumers pick their own precision bar instead of trusting an opaque score. A high `committee_match_count` is usually a real affiliate network (Planned Parenthood matches ~90 state committees), not an error — which is why such rows are labelled rather than dropped.
 
 - **Parquet file:** `org_committee_links.parquet`

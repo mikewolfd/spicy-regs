@@ -2,6 +2,8 @@
 
 # `federal_register`
 
+**Federal Register documents**
+
 One row per Federal Register document, ingested from the federalregister.gov REST API by `build_federal_register`. The authoritative rule-publication record — proposed rules, final rules, and notices — complementary to the regulations.gov `dockets`/`documents` view. `regulation_id_numbers_json` (RIN) and `cfr_references_json` are the join keys to the Unified Agenda and the CFR. All columns are stored as VARCHAR; array-valued fields are JSON.
 
 - **Parquet file:** `federal_register.parquet`

@@ -2,6 +2,8 @@
 
 # `dockets`
 
+**Rulemaking dockets**
+
 One row per regulations.gov docket. A docket is the top-level folder a federal agency opens for a rulemaking or other action; it groups the documents the agency posts and the public comments it receives.
 
 - **Parquet file:** `dockets.parquet`

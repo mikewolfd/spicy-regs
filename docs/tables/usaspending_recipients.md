@@ -2,6 +2,8 @@
 
 # `usaspending_recipients`
 
+**Federal award recipients**
+
 One row per federal-award recipient, ingested from the USASpending.gov `/api/v2/recipient/` endpoint by `build_usaspending_recipients`. A keyless (no API key) org-resolution reference dimension keyed by UEI and name — the organizations that receive federal money — complementary to the SAM entity registry and the `fec_committees` table for resolving and enriching the organizations that comment on rulemakings by their federal funding. Scope is deliberately bounded to the top-N recipients by all-time federal award amount (the endpoint reports ~18M recipients, too many for a daily full walk); the transform merges each run's top-N with the prior table so coverage stays monotonic. All columns are stored as VARCHAR.
 
 - **Parquet file:** `usaspending_recipients.parquet`

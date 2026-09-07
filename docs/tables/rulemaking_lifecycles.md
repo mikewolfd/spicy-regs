@@ -2,6 +2,8 @@
 
 # `rulemaking_lifecycles`
 
+**Rulemaking timelines**
+
 Proposed→final rulemaking arcs, one row per docket, discriminated by `kind`: `pair` rows are completed rulemakings (earliest Proposed Rule matched to the earliest subsequent Rule in the same docket, with elapsed `days`); `stuck` rows are Proposed Rules with no matching Rule, where `final_date` and `days` are NULL. Bounded to `proposed_date >= 2010-01-01`. Built by `build_rulemaking_lifecycles` from `documents`. Note that pairing is per docket, so a docket carrying several RINs across successive rulemakings collapses to a single arc.
 
 - **Parquet file:** `rulemaking_lifecycles.parquet`

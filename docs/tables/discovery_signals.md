@@ -2,6 +2,8 @@
 
 # `discovery_signals`
 
+**Agency activity spikes**
+
 Per-agency document-output spike signal that powers the feed's discovery panel — agencies whose document count in the trailing 30 days is at least 2× their prior-year monthly mean, requiring ≥24 documents in the prior year to suppress tiny-denominator noise. Recomputed relative to the run date, so rows turn over on every rebuild; it is a current-state signal, not a time series. Built by `build_discovery_signals` from `documents`.
 
 - **Parquet file:** `discovery_signals.parquet`

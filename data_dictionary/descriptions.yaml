@@ -12,6 +12,7 @@
 
 tables:
   dockets:
+    label: "Rulemaking dockets"
     summary: >-
       One row per regulations.gov docket. A docket is the top-level folder a
       federal agency opens for a rulemaking or other action; it groups the
@@ -26,6 +27,7 @@ tables:
       rin: "Regulation Identifier Number tying the docket to the Unified Agenda. Often null."
 
   documents:
+    label: "Docket documents"
     summary: >-
       One row per document posted to a docket — proposed rules, final rules,
       notices, supporting analyses, and public-submission stubs. Joins to
@@ -53,6 +55,7 @@ tables:
       text_extraction_status: "Outcome of PDF text extraction: `ok`, `empty` (no extractable text, e.g. scanned/image-only PDFs — OCR is out of scope), `encrypted` (password-protected), or `error`. Null before extraction has been attempted."
 
   comments:
+    label: "Public comments"
     summary: >-
       One row per public comment submitted to a docket — the largest table
       (tens of millions of rows). On R2 it is also published as Hive-partitioned
@@ -81,6 +84,7 @@ tables:
       text_extraction_status: "Outcome of attachment text extraction: `ok` (text was filled, from derived-data or PDF extraction), `empty` (no extractable text, e.g. scanned/image-only PDFs — OCR is out of scope), `encrypted` (password-protected), or `error`. Null when no text has been filled yet."
 
   comments_index:
+    label: "Public comment counts"
     summary: >-
       A tiny per-partition row-count index for the partitioned comments. It maps
       each `comments/` partition to its row count so consumers can compute
@@ -94,6 +98,7 @@ tables:
       row_count: "Number of comment rows in that partition file."
 
   feed_summary:
+    label: "Docket summaries"
     summary: >-
       A pre-computed rollup with one row per docket, joining docket metadata to
       comment counts and comment-period dates. Powers feed/timeline views
@@ -111,6 +116,7 @@ tables:
       date_created: "Earliest document `posted_date` on the docket, used as a creation date. Null when unknown."
 
   agency_stats:
+    label: "Agency totals"
     summary: >-
       A per-agency dimension table — one row per agency with docket, document,
       and comment counts. Powers agency directory and profile pages. Built by
@@ -122,6 +128,7 @@ tables:
       comment_count: "Total comments received by the agency, summed from `comments_index`."
 
   agency_monthly_volume:
+    label: "Agency monthly volume"
     summary: >-
       Per-agency monthly document volume, broken out by document type — one row
       per (agency, year, month, document_type). Feeds activity sparklines and
@@ -135,6 +142,7 @@ tables:
       document_count: "Number of documents the agency posted of that type in that month."
 
   rulemaking_lifecycles:
+    label: "Rulemaking timelines"
     summary: >-
       Proposed→final rulemaking arcs, one row per docket, discriminated by
       `kind`: `pair` rows are completed rulemakings (earliest Proposed Rule
@@ -154,6 +162,7 @@ tables:
       days: "Calendar days from `proposed_date` to `final_date`. NULL when `kind` is `stuck`."
 
   fr_docket_links:
+    label: "Federal Register to docket links"
     summary: >-
       The Federal Register ↔ docket bridge: each `federal_register` row's
       `docket_ids_json` array exploded to one row per (docket_id, FR document),
@@ -181,6 +190,7 @@ tables:
       executive_order_number: "Executive order number, for presidential documents."
 
   discovery_signals:
+    label: "Agency activity spikes"
     summary: >-
       Per-agency document-output spike signal that powers the feed's discovery
       panel — agencies whose document count in the trailing 30 days is at least
@@ -195,6 +205,7 @@ tables:
       ratio: "`recent_30d` divided by `baseline` — the spike multiple."
 
   cfr_sections:
+    label: "Code of Federal Regulations sections"
     summary: >-
       One row per Code of Federal Regulations *section* (a GovInfo CFR granule),
       ingested from the GovInfo API by `build_cfr_sections`. This is the codified,
@@ -219,6 +230,7 @@ tables:
       last_modified: "GovInfo last-modified timestamp for the granule. Drives incremental freshness alongside `edition_year`."
       url: "Canonical GovInfo details/link URL for the granule."
   congress_bills:
+    label: "Congressional bills"
     summary: >-
       One row per congressional bill, ingested from the Congress.gov v3 REST API
       (`/bill` list endpoint) by `build_congress_bills`. The legislative record
@@ -239,6 +251,7 @@ tables:
       update_date: "Date the Congress.gov record was last updated (ISO 8601 string). Incremental window key."
       url: "Congress.gov API URL for the bill's detail resource."
   unified_agenda:
+    label: "Planned agency actions"
     summary: >-
       One row per Regulation Identifier Number (RIN) per agenda edition, ingested
       from the OIRA/OMB Unified Agenda published at reginfo.gov by
@@ -267,6 +280,7 @@ tables:
       next_action_date: "Date of the next planned timetable action, when derivable. Often null."
       url: "URL of the entry's detail page on reginfo.gov."
   federal_register:
+    label: "Federal Register documents"
     summary: >-
       One row per Federal Register document, ingested from the federalregister.gov
       REST API by `build_federal_register`. The authoritative rule-publication
@@ -298,6 +312,7 @@ tables:
       executive_order_number: "Executive order number, for presidential EO documents. Null otherwise."
       modify_date: "Processing/modification date carried from the prior published table; null for rows freshly ingested via the REST API (which does not expose it)."
   sam_entities:
+    label: "Federal entity registry"
     summary: >-
       One row per registered federal entity, ingested from the SAM.gov Entity
       Management API v4 (`/entities` list endpoint) by `build_sam_entities`. The
@@ -336,6 +351,7 @@ tables:
       purpose_of_registration_desc: "Purpose-of-registration description (e.g. `Federal Assistance Awards`, `All Awards`)."
       entity_url: "Entity's self-reported website URL (`coreData.entityInformation.entityURL`). Often null."
   lobbying_filings:
+    label: "Lobbying disclosure filings"
     summary: >-
       One row per federal lobbying-disclosure filing, ingested from the U.S.
       Senate Lobbying Disclosure Act (LDA) REST API (`lda.senate.gov`) by
@@ -361,6 +377,7 @@ tables:
       government_entities_json: "JSON array of the distinct government entities lobbied (`{id, name}`) — the agencies and chambers (e.g. `HOUSE OF REPRESENTATIVES`, `SENATE`) named across the filing's activities."
       url: "URL of the filing's printable document page on lda.senate.gov (`filing_document_url`)."
   fec_committees:
+    label: "Political committees"
     summary: >-
       One row per Federal Election Commission committee/PAC, ingested from the
       OpenFEC `/committees` endpoint by `build_fec_committees`. A reference
@@ -390,6 +407,7 @@ tables:
       cycles_json: "JSON array of election-cycle years the committee was active in (e.g. `[2018, 2020, 2022]`)."
       candidate_ids_json: "JSON array of OpenFEC candidate IDs associated with the committee (e.g. `[\"P00008052\"]`). Often `[]`."
   org_committee_links:
+    label: "Commenter organizations matched to committees"
     summary: >-
       One row per (commenter organization name, FEC committee) name match,
       derived by `build_org_committee_links`. Materializes the organization-name
@@ -428,6 +446,7 @@ tables:
       first_comment_date: "Earliest `posted_date` across this organization's comments (ISO 8601 string)."
       last_comment_date: "Latest `posted_date` across this organization's comments (ISO 8601 string)."
   gao_reports:
+    label: "Government Accountability Office reports"
     summary: >-
       One row per U.S. Government Accountability Office (GAO) product, ingested
       from the public GAO reports RSS feed by `build_gao_reports`. The federal
@@ -448,6 +467,7 @@ tables:
       topics_json: "Reserved JSON array of topics/subjects. The RSS feed carries no structured topic tags, so this is `[]` pending a future enrichment source."
       url: "Canonical gao.gov URL for the product."
   crs_reports:
+    label: "Congressional Research Service reports"
     summary: >-
       One row per Congressional Research Service (CRS) report, ingested from the
       Congress.gov v3 REST API (`/crsreport` list endpoint) by
@@ -467,6 +487,7 @@ tables:
       version: "Version number of the report as returned by the list endpoint."
       url: "Congress.gov API URL for the report's detail resource."
   court_dockets:
+    label: "Federal court dockets"
     summary: >-
       One row per federal court docket challenging agency action under the
       Administrative Procedure Act, ingested from the CourtListener v4 search API
@@ -503,6 +524,7 @@ tables:
       date_created: "Timestamp CourtListener first indexed the docket (ISO 8601 string, from the search-result `meta.date_created`)."
       absolute_url: "Absolute URL of the docket page on courtlistener.com."
   usaspending_recipients:
+    label: "Federal award recipients"
     summary: >-
       One row per federal-award recipient, ingested from the USASpending.gov
       `/api/v2/recipient/` endpoint by `build_usaspending_recipients`. A
@@ -522,6 +544,7 @@ tables:
       recipient_level: "Recipient rollup level: `P` (parent), `C` (child), or `R` (standalone recipient with no parent). The same UEI can appear at multiple levels."
       total_award_amount: "All-time federal award dollars for the recipient at this level, as a numeric string (e.g. `63465270734.15`). The bounding sort key (top-N by amount)."
   fcc_proceedings:
+    label: "FCC proceedings"
     summary: >-
       One row per FCC proceeding (the FCC's docket equivalent, e.g. `17-108`),
       ingested from the FCC ECFS public API (`/proceedings`) by
@@ -548,6 +571,7 @@ tables:
       reply_comment_end_date: "End of the reply-comment window, when ECFS records one. Often null."
       filed_by: "ECFS account that created the proceeding. An internal FCC username; occasionally useful for spotting bureau conventions."
   fcc_filings:
+    label: "FCC filings"
     summary: >-
       One row per FCC ECFS filing — the FCC's comment equivalent: comments,
       reply comments, ex-parte notices, letters, and other submissions —

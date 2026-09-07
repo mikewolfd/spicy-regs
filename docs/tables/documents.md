@@ -2,6 +2,8 @@
 
 # `documents`
 
+**Docket documents**
+
 One row per document posted to a docket — proposed rules, final rules, notices, supporting analyses, and public-submission stubs. Joins to `dockets` on `docket_id`. Two payload fields are not carried: `comment` (the inline submission body) and `restrictReasonType` (why a document is withheld). Read those from the acquisition source, the raw Mirrulations payload or spicy-docs' source-native release, not from this table.
 
 - **Parquet file:** `documents.parquet`
