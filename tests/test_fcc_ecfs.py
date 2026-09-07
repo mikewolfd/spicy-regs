@@ -11,6 +11,8 @@ from __future__ import annotations
 import json
 from datetime import date
 
+import httpx
+
 from spicy_regs.sources.fcc_ecfs import (
     API_KEY_ENV_VARS,
     MAX_RESULT_WINDOW,
@@ -268,3 +270,63 @@ def test_scoped_filings_reader_walks_each_proceeding():
     # each walk returns the same 3 records).
     assert len(records) == 6
     assert len(reader.window_calls) == 2
+
+
+def test_api_key_never_enters_the_request_url(monkeypatch):
+    """A credential in a query string is rendered by httpx into HTTPStatusError.
+
+    Both error handlers in ``_get`` log the exception, and the retry handler
+    fires on every attempt rather than only the last, so a key in the URL
+    reaches the log on any 4xx. Keeping it on a header makes that impossible
+    rather than merely unlikely: this asserts the URL, not the log text, so a
+    future scrubber cannot be mistaken for the fix.
+    """
+    seen: list[str] = []
+
+    class _CapturingClient:
+        def __init__(self, *args, **kwargs):
+            self.headers = kwargs.get("headers", {})
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def get(self, url, params=None):
+            request = httpx.Request("GET", url, params=params)
+            seen.append(str(request.url))
+            return httpx.Response(200, json={"filing": []}, request=request)
+
+    monkeypatch.setattr(httpx, "Client", _CapturingClient)
+    monkeypatch.setenv("FCC_API_KEY", "SUPERSECRETKEY")
+    reader = FccEcfsFilingsReader(since=date(2026, 1, 1), until=date(2026, 1, 2))
+    list(reader.iter_records())
+
+    assert seen, "no request was made"
+    for url in seen:
+        assert "SUPERSECRETKEY" not in url, f"key leaked into the request URL: {url}"
+        assert "api_key" not in url
+
+
+def test_the_key_is_sent_as_a_header(monkeypatch):
+    captured: dict[str, str] = {}
+
+    class _HeaderClient:
+        def __init__(self, *args, **kwargs):
+            captured.update(kwargs.get("headers") or {})
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def get(self, url, params=None):
+            request = httpx.Request("GET", url, params=params)
+            return httpx.Response(200, json={"filing": []}, request=request)
+
+    monkeypatch.setattr(httpx, "Client", _HeaderClient)
+    monkeypatch.setenv("FCC_API_KEY", "SUPERSECRETKEY")
+    list(FccEcfsFilingsReader(since=date(2026, 1, 1), until=date(2026, 1, 2)).iter_records())
+    assert captured.get("X-Api-Key") == "SUPERSECRETKEY"
