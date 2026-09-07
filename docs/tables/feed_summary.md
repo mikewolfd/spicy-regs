@@ -6,7 +6,7 @@
 
 A pre-computed rollup with one row per docket, joining docket metadata to comment counts and comment-period dates. Powers feed/timeline views without scanning the full comments dataset. Built by `build_feed_summary`, sorted by `modify_date` descending.
 
-**Coverage.** Derived. One row per docket over `dockets`, `documents` and `comments`; it covers exactly what those cover.
+**Coverage.** Derived. One row per docket over `dockets`, `documents` and `comments`; it covers exactly what those cover. *(measured 2026-09-06)*
 
 - **Parquet file:** `feed_summary.parquet`
 - **Queryable via MCP `query_sql`:** Yes

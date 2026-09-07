@@ -27,9 +27,11 @@ import argparse
 import hashlib
 import json
 import sys
+from datetime import date
 import tempfile
 from pathlib import Path
 
+import duckdb
 import polars as pl
 from dotenv import load_dotenv
 
@@ -44,7 +46,7 @@ DEFAULT_CATALOG_DIGEST_PATH = REPO_ROOT / "data_dictionary" / "catalog.json.sha2
 
 #: Bumped when the catalog document's shape changes, so a reader can refuse a
 #: shape it does not know rather than guess at a missing field.
-CATALOG_FORMAT_VERSION = 2
+CATALOG_FORMAT_VERSION = 3
 
 #: The four kinds a coverage statement can be, as machine-readable tokens,
 #: keyed by the prose prefix so the two cannot disagree.
@@ -604,6 +606,14 @@ def check_descriptions(
             errors.append(f"[{table}] missing a 'label' in descriptions.yaml")
         if not (entry.get("coverage") or "").strip():
             errors.append(f"[{table}] missing a 'coverage' statement in descriptions.yaml")
+        measured_on = str(entry.get("measured_on") or "").strip()
+        if not measured_on:
+            errors.append(f"[{table}] missing 'measured_on' beside its coverage statement")
+        else:
+            try:
+                date.fromisoformat(measured_on)
+            except ValueError:
+                errors.append(f"[{table}] 'measured_on' is not an ISO date: {measured_on!r}")
         if "data_quality" in entry and not (entry.get("data_quality") or "").strip():
             errors.append(f"[{table}] has an empty 'data_quality' note in descriptions.yaml")
         desc_cols = list((entry.get("columns") or {}).keys())
@@ -667,6 +677,7 @@ def table_coverage(descriptions: dict) -> dict[str, dict[str, str]]:
         table: {
             "label": (entry or {}).get("label", ""),
             "coverage": (entry or {}).get("coverage", ""),
+            "measured_on": str((entry or {}).get("measured_on", "")),
             "data_quality": (entry or {}).get("data_quality", ""),
             "summary": (entry or {}).get("summary", ""),
         }
@@ -694,7 +705,9 @@ def _render_table_page(
         lines += [summary, ""]
     coverage = (entry.get("coverage") or "").strip()
     if coverage:
-        lines += [f"**Coverage.** {coverage}", ""]
+        measured_on = str(entry.get("measured_on") or "").strip()
+        stamp = f" *(measured {measured_on})*" if measured_on else ""
+        lines += [f"**Coverage.** {coverage}{stamp}", ""]
     data_quality = (entry.get("data_quality") or "").strip()
     if data_quality:
         lines += [f"**Data quality.** {data_quality}", ""]
@@ -740,6 +753,14 @@ def _schemas_for_source(source: str, base: str | None) -> dict[str, list[tuple[s
     return discover_schemas(source, base)
 
 
+#: Exit code for "the live source could not be read", distinct from drift.
+#: A caller gating on this check needs to tell a transient unreachable bucket
+#: from a real disagreement between what we declare and what we publish;
+#: collapsing both into 1 makes the check either fail on outages or, with a
+#: `|| true`, unable to fail at all.
+EXIT_SOURCE_UNREACHABLE = 3
+
+
 def cmd_check(args: argparse.Namespace) -> int:
     descriptions = load_descriptions(Path(args.descriptions))
     errors: list[str] = []
@@ -747,7 +768,14 @@ def cmd_check(args: argparse.Namespace) -> int:
     if args.source == "schema":
         errors += check_descriptions(expected_schemas(), descriptions)
     else:
-        live = discover_schemas(args.source, args.base)
+        try:
+            live = discover_schemas(args.source, args.base)
+        except (duckdb.IOException, duckdb.HTTPException, OSError) as exc:
+            # Only the "could not read it" failures. A malformed parquet or a
+            # bad query is a real problem and must not be reported as an outage.
+            print(f"! Could not read the live {args.source} schema: {exc}", file=sys.stderr)
+            print("  Drift was NOT checked. This is not a pass.", file=sys.stderr)
+            return EXIT_SOURCE_UNREACHABLE
         # Descriptions must cover the live schema, and the in-code registry the
         # docs are generated from must match the live schema too.
         errors += check_descriptions(live, descriptions)
@@ -780,6 +808,11 @@ def build_catalog(descriptions: dict, schemas: dict[str, list[tuple[str, str]]])
     coverage is not a check. ``MCP_QUERYABLE`` is every published table, so it
     is not that fact either and is not exported here.
 
+    ``measured_on`` is when the coverage statement was last checked against the
+    published data. It does not update itself and nothing here claims it is
+    current; it exists so a stale statement is *detectable* rather than
+    indistinguishable from a fresh one.
+
     ``kind`` is the coverage statement's kind as a token. The prose still opens
     by naming it for a person, but a consumer must not have to parse a sentence
     to branch on it: the opening word carries a trailing period or comma
@@ -797,6 +830,7 @@ def build_catalog(descriptions: dict, schemas: dict[str, list[tuple[str, str]]])
                 "summary": coverage[table]["summary"],
                 "coverage": coverage[table]["coverage"],
                 "kind": coverage_kind(coverage[table]["coverage"]),
+                "measured_on": coverage[table]["measured_on"],
                 "data_quality": coverage[table]["data_quality"] or None,
                 "columns": [name for name, _ in schemas[table]],
             }

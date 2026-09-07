@@ -52,9 +52,21 @@ jobs:
         run: uv sync --group docs
 
       - name: Reconcile in-code schema against live R2 parquet
-        # Non-blocking: surfaces drift without failing the deploy if R2 is
-        # briefly unavailable. Remove `|| true` to make it a hard gate.
-        run: uv run spicy-regs-dict check --source r2 || true
+        # A gate on drift, not on the network. `|| true` used to swallow both:
+        # an unreachable bucket and a real disagreement between what we declare
+        # and what we publish returned success alike, so the check could not
+        # fail. The CLI now exits 3 when it could not read the source, which is
+        # a warning, and 1 on drift, which fails the deploy.
+        run: |
+          set +e
+          uv run spicy-regs-dict check --source r2
+          code=$?
+          set -e
+          if [ "$code" -eq 3 ]; then
+            echo "::warning::R2 unreachable; schema drift was not checked."
+            exit 0
+          fi
+          exit "$code"
 
       - name: Generate table pages
         run: uv run spicy-regs-dict generate
