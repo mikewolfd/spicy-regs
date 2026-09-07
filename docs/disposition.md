@@ -25,22 +25,41 @@ document. The pins:
 
 ## Open questions
 
-Three decisions are Mike's, not blocked on work. Elsewhere this document
-describes them in the past tense, which reads as settled; they are not.
+Four decisions are Mike's, none blocked on work. Elsewhere this document
+describes them in the past tense, which reads as settled; they are not. The
+credential pair is first because it is the only one with a live secret in it.
 
-1. **The eight-table registration branch.** `feat/register-eight-tables` on the
+1. **Whether the FCC credential fix goes upstream, and whether the key is
+   rotated.** Two questions, one secret. `c6695e0` moves the api.data.gov key
+   out of the request URL and onto an `X-Api-Key` header: the key was a query
+   parameter, httpx renders the full URL into `HTTPStatusError`, and both
+   error handlers log the exception — the retry handler on every attempt, so a
+   429 from FCC wrote it repeatedly. Verified both directions rather than
+   assumed: a constructed 404 does render the key, and the API answers
+   `API_KEY_INVALID` to a bad header where it answers `API_KEY_MISSING` to
+   none, so the credential can leave the URL rather than be scrubbed out of an
+   error string. It is committed locally and pushed nowhere, because origin is
+   civictechdc and Eugene owns `main`. Separately: the same key leaked into
+   `supply-2026-09-02/receipts/crs-summaries-2026-09-07.jsonl` through a
+   congress.gov 404 and was redacted in place 2026-09-07. Re-grepped after,
+   not merely recorded as fixed: zero occurrences in that file, in all five
+   repos, in every corpora `.log`, and in every corpora receipts tree, with
+   the key's length asserted at 40 first so an unset variable could not match
+   everything. The ~404 GB of blobs and parquet is unscanned. A fix closes the
+   mechanism; only rotation closes the exposure, and that is his.
+2. **The eight-table registration branch.** `feat/register-eight-tables` on the
    fork, unmerged, no PR. It registers the five rulemaking tables, two court
    tables and bill subjects in the data dictionary and MCP server, and carries
    the generation-aware reader those five need. Held because none of the eight
    objects exists in the bucket until #194, #195 and #196 merge upstream and
    their workflows run. Verified 404 on all eight, 2026-09-06.
-2. **Whether the `documents` table should carry `comment` and
+3. **Whether the `documents` table should carry `comment` and
    `restrictReasonType`.** A schema revision. The payload has both; the
    published table has neither. Measured: `comment` is populated on 410,329
    documents, 94.7% of them documentType "Other", overlapping the comments
    table by 157 rows. The route decides the cost — cheap from spicy-docs'
    source-native capture, a re-ingest of about 2M payloads from this side.
-3. **The nine `corpora/` scripts no evidence file cites.** They stay on the
+4. **The nine `corpora/` scripts no evidence file cites.** They stay on the
    fork unless someone names a run. Six of the fifteen are cited by an in-tree
    evidence or receipt file; these nine are cited by none:
    `artifact_retrieval_baseline`, `body_retrieval_corpus`,
