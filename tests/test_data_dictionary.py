@@ -9,6 +9,7 @@ Hermetic (no network): everything here runs against the in-code schema
 from __future__ import annotations
 
 import json
+from datetime import date
 
 from spicy_regs import data_dictionary as dd
 from spicy_regs.schemas.regulations import RECORD_TYPES
@@ -226,3 +227,31 @@ def test_catalog_bytes_are_the_one_canonical_form():
     document = dd.build_catalog(dd.load_descriptions(), dd.expected_schemas())
     assert dd.catalog_bytes(document) == dd.catalog_bytes(document)
     assert dd.catalog_bytes(document) == dd.DEFAULT_CATALOG_PATH.read_bytes()
+
+
+def test_every_coverage_statement_carries_a_measurement_date():
+    """A statement with no date cannot be told from a fresh one by a reader."""
+    coverage = dd.table_coverage(dd.load_descriptions())
+    assert set(coverage) == set(dd.TABLES)
+    for table, entry in coverage.items():
+        assert entry["measured_on"].strip(), table
+        date.fromisoformat(entry["measured_on"])
+
+
+def test_check_detects_a_missing_or_malformed_measurement_date():
+    descriptions = dd.load_descriptions()
+    missing = {t: dict(e) for t, e in descriptions.items()}
+    missing["gao_reports"].pop("measured_on")
+    assert any("missing 'measured_on'" in e for e in dd.check_descriptions(dd.expected_schemas(), missing))
+
+    malformed = {t: dict(e) for t, e in descriptions.items()}
+    malformed["gao_reports"]["measured_on"] = "last Tuesday"
+    assert any("not an ISO date" in e for e in dd.check_descriptions(dd.expected_schemas(), malformed))
+
+
+def test_unreachable_source_is_not_reported_as_a_pass():
+    """The gate must tell an outage from drift; collapsing them is why it could not fail."""
+    parser = dd.build_parser()
+    args = parser.parse_args(["check", "--source", "r2", "--base", "https://nonexistent.invalid"])
+    assert args.func(args) == dd.EXIT_SOURCE_UNREACHABLE
+    assert dd.EXIT_SOURCE_UNREACHABLE not in (0, 1)
