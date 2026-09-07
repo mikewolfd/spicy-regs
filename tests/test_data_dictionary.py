@@ -8,6 +8,8 @@ Hermetic (no network): everything here runs against the in-code schema
 
 from __future__ import annotations
 
+import json
+
 from spicy_regs import data_dictionary as dd
 from spicy_regs.schemas.regulations import RECORD_TYPES
 
@@ -162,3 +164,30 @@ def test_generated_page_carries_coverage_and_data_quality():
     page = (dd.DEFAULT_DOCS_TABLES_DIR / "documents.md").read_text()
     assert "**Coverage.**" in page
     assert "**Data quality.**" in page
+
+
+def test_catalog_declares_every_published_class():
+    """The consumer cannot import this package, so the file is the interface."""
+    descriptions = dd.load_descriptions()
+    document = dd.build_catalog(descriptions, dd.expected_schemas())
+    assert document["format_version"] == dd.CATALOG_FORMAT_VERSION
+    assert [c["table"] for c in document["classes"]] == list(dd.TABLES)
+    for entry in document["classes"]:
+        assert entry["label"].strip(), entry["table"]
+        assert entry["coverage"].strip(), entry["table"]
+        assert entry["columns"], entry["table"]
+
+
+def test_catalog_does_not_claim_searchability():
+    """Searchable is the serving side's fact; a catalog certifying itself is not a check."""
+    document = dd.build_catalog(dd.load_descriptions(), dd.expected_schemas())
+    blob = json.dumps(document).lower()
+    for claim in ("queryable", "searchable", "indexed", "mcp_queryable"):
+        assert claim not in blob, f"catalog must not assert {claim!r}"
+
+
+def test_committed_catalog_is_up_to_date():
+    """Same discipline as the table pages: the committed file equals a fresh build."""
+    fresh = dd.build_catalog(dd.load_descriptions(), dd.expected_schemas())
+    committed = json.loads(dd.DEFAULT_CATALOG_PATH.read_text(encoding="utf-8"))
+    assert committed == fresh, "catalog.json is stale; run 'uv run spicy-regs-dict catalog'"
