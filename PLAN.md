@@ -23,9 +23,23 @@ Mike's.
 
 ## State
 
-Local `main` at `bf62ac9`, clean, one worktree, suite 1,027 passing.
-**18 commits ahead of `fork/main` (`909633a`), pushed nowhere.**
-`origin/main` untouched at `1f02a7f`.
+Two fixed points, and one command for everything that moves. The first draft of
+this section quoted a commit and a count; the commit that added the section
+made both wrong within the hour, which is the trap named at the bottom of this
+file arriving in the file itself.
+
+- **`origin/main` is `1f02a7f`** and every commit on it is Eugene's. It moves
+  only when he pushes; nothing here has ever written to it.
+- **`fork/main` is `909633a`.** Local `main` is ahead of it and **has been
+  pushed nowhere**. That is the invariant: the delta between local `main` and
+  `fork/main` is work Mike has not sent anywhere yet.
+
+```bash
+git fetch origin fork --prune
+git log --oneline fork/main..main      # what is unpushed
+git status --porcelain                 # expect empty
+uv run pytest -q                       # 1,027 passing as of 2026-09-07
+```
 
 Nine PRs are open on `origin`: ours are #181, #182, #183, #193, #194, #195,
 #196; #95 and #144 are Eugene's and conflict with main.
@@ -49,10 +63,16 @@ Stated in full, with the measurement that makes each answerable, at the top of
 
 **Add `full_text_xml_url` to the Federal Register ingest.** A person cannot
 search inside a rule today, and whoever builds that first will take the pointer
-we publish — which is the HTML body, measured over 993 documents to carry
-publisher boilerplate on 993 of 993 with a 135-character median passage,
-against XML's 0 of 993 and 610. Publishing the wrong pointer exports the defect
-downstream.
+we publish — which is the HTML body. Publishing the wrong pointer exports the
+defect downstream.
+
+The case for XML is a measurement I did not take and have not re-derived: over
+993 real Federal Register documents, HTML bodies carry publisher boilerplate on
+993 of 993 with a 135-character median passage, XML on 0 of 993 with a median
+of 610. It lives in
+`~/Work/corpora/_preserved-2026-08-10/body-retrieval-corpus-2026-08-02/`
+(`measurement.json` and `measurement-xml.json`); I confirmed both files exist
+and carry those figures, nothing more.
 
 **Fetch it; do not derive it.** The `html`→`xml` swap on `body_html_url` looks
 right and is wrong: tested against the publisher's API across six eras it
