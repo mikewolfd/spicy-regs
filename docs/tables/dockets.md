@@ -6,6 +6,8 @@
 
 One row per regulations.gov docket. A docket is the top-level folder a federal agency opens for a rulemaking or other action; it groups the documents the agency posts and the public comments it receives.
 
+**Coverage.** True range. Dockets as mirrored from regulations.gov, with modification dates from 2006-09-26 to 2026-09-06. The date records when a docket last changed, not when it opened, so it is a freshness axis rather than a coverage one.
+
 - **Parquet file:** `dockets.parquet`
 - **Queryable via MCP `query_sql`:** Yes
 - **Primary / dedup key:** `docket_id`

@@ -6,6 +6,8 @@
 
 One row per federal lobbying-disclosure filing, ingested from the U.S. Senate Lobbying Disclosure Act (LDA) REST API (`lda.senate.gov`) by `build_lobbying_filings`. Registrants file quarterly reports naming the clients they lobby for, the money involved, the issues raised, and the government entities (agencies/chambers) lobbied — so this table links the comment campaigns in `comments`/`dockets` to the same organizations' *direct* agency lobbying. Primary / dedup key is `filing_uuid`. All columns are stored as VARCHAR; nested/array fields are JSON strings.
 
+**Coverage.** True range with a density caveat. Filing years span 2000 to 2026, but 286,369 of 287,246 rows are 2023 or later; earlier years are a tail of a few hundred rows each and should not be read as coverage of that period.
+
 - **Parquet file:** `lobbying_filings.parquet`
 - **Queryable via MCP `query_sql`:** Yes
 

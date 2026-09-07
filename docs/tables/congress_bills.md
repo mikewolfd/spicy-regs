@@ -6,6 +6,8 @@
 
 One row per congressional bill, ingested from the Congress.gov v3 REST API (`/bill` list endpoint) by `build_congress_bills`. The legislative record complementary to the regulations.gov `dockets`/`documents` view — the bills that authorize the rulemakings this dataset tracks. Scope is deliberately list-level only (no per-bill detail fetches), so every column comes from the list payload. Incremental by `update_date`, deduped on `bill_id`. All columns are stored as VARCHAR.
 
+**Coverage.** True range. Bills with latest actions from 1799-12-16 (the 6th Congress) to 2026-09-04, complete on identifier, type and date for every row.
+
 - **Parquet file:** `congress_bills.parquet`
 - **Queryable via MCP `query_sql`:** Yes
 

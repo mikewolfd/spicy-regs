@@ -6,6 +6,8 @@
 
 A tiny per-partition row-count index for the partitioned comments. It maps each `comments/` partition to its row count so consumers can compute comment totals and discover partitions without scanning the full comments dataset. Maintained by `update_comments_index`.
 
+**Coverage.** Derived. Per-partition counts over `comments`; it covers exactly what that table covers and adds no rows of its own.
+
 - **Parquet file:** `comments_index.parquet`
 - **Queryable via MCP `query_sql`:** Yes
 

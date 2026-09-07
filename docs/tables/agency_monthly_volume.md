@@ -6,6 +6,8 @@
 
 Per-agency monthly document volume, broken out by document type — one row per (agency, year, month, document_type). Feeds activity sparklines and profile activity panels. Built by `build_agency_rollups` from document `posted_date`.
 
+**Coverage.** Derived. Monthly counts over `documents`; it covers exactly what that table covers, including its pre-1990 date defect.
+
 - **Parquet file:** `agency_monthly_volume.parquet`
 - **Queryable via MCP `query_sql`:** Yes
 

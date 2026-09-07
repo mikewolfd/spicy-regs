@@ -6,6 +6,8 @@
 
 One row per federal court docket challenging agency action under the Administrative Procedure Act, ingested from the CourtListener v4 search API (`courtlistener.com`, RECAP dockets with nature-of-suit 899) by `build_courtlistener`. When an agency finalizes a rule it is frequently sued; these are those suits — the litigation counterpart to the rulemakings in `dockets`/`documents`. There is no machine RIN/FR key on a court docket, so it links to the corpus by name and topic: the defendant agency appears in `case_name` and `parties_json` (joinable by name to `agency_stats` / the FR `agency_slugs`), and `cause` names the statute invoked. Primary / dedup key is `cl_docket_id`. All columns are stored as VARCHAR; array fields are JSON strings.
 
+**Coverage.** True range with a density caveat. Dockets filed 1992-08-26 to 2026-09-04 across 95 courts, but 7,743 rows over that span is a bounded slice of federal court activity rather than the full docket record.
+
 - **Parquet file:** `court_dockets.parquet`
 - **Queryable via MCP `query_sql`:** Yes
 
