@@ -27,10 +27,12 @@ calls the per-granule ``/summary`` endpoint (the only place ``cfrTitle`` /
 ``cfrPart`` / ``heading`` live), which would be an N+1 fetch across thousands of
 granules per package. CFR title comes from the ``title(\\d+)`` token in the
 package/granule ID, edition year from the ``CFR-(\\d{4})`` token, and part /
-section from the ``part(\\d+)`` / ``sec(…)`` tokens on the granule ID (both
-nullable — section granularity varies by CFR title, so ``section`` is often
-null; some titles express sections as ``CONTENT`` granules with no ``part``
-token, leaving ``part`` null too).
+section from the ``part(\\d+)`` / ``sec(…)`` tokens on the granule ID. A
+section-level granule carries no ``part`` token; its ``sec`` token fuses the two
+(``…-sec100-1`` is 10 CFR 100.1), so the part is split back out of it and
+``cfr_ref`` is a section-level citation. Both stay nullable: structural granules
+(``NODE``, ``TOC``) have no section, and a handful of malformed publisher ids
+have no recoverable part.
 """
 
 from __future__ import annotations
@@ -89,6 +91,15 @@ _EDITION_RE = re.compile(r"CFR-(\d{4})")
 _TITLE_RE = re.compile(r"title(\d+)")
 _PART_RE = re.compile(r"part(\d+)")
 _SECTION_RE = re.compile(r"sec([\w.-]+)")
+# A section-level granule carries no ``part`` token, but its ``sec`` token is the
+# part and the section fused: ``…-sec100-1`` is 10 CFR 100.1, not section "100-1".
+# Split on the first hyphen to recover the part. Measured over the whole
+# published table (302,756 rows, 2026-09-06): of the 241,985 CONTENT rows with a
+# section and no part token, 241,936 match this (99.98%). The 49 that do not are
+# malformed publisher ids in title 14 volume 4 — ``secSec-1-1``, ``secSection1``
+# — with no part to recover, so they keep a null part. The part may carry a
+# letter suffix: 5 CFR 5b and 45 CFR 1203a are real parts, not typos.
+_FUSED_PART_SECTION_RE = re.compile(r"^(\d+[A-Za-z]*)-(.+)$")
 
 
 def _first(pattern: re.Pattern[str], text: str | None) -> str | None:
@@ -121,6 +132,10 @@ def _shape(granule: dict) -> dict:
     # Part / section from the granule id (both nullable — see module docstring).
     part = _first(_PART_RE, granule_id)
     section = _first(_SECTION_RE, granule_id)
+    if part is None and section is not None:
+        fused = _FUSED_PART_SECTION_RE.match(section)
+        if fused:
+            part, section = fused.group(1), fused.group(2)
 
     return {
         "granule_id": granule_id,
