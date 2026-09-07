@@ -44,7 +44,32 @@ DEFAULT_CATALOG_DIGEST_PATH = REPO_ROOT / "data_dictionary" / "catalog.json.sha2
 
 #: Bumped when the catalog document's shape changes, so a reader can refuse a
 #: shape it does not know rather than guess at a missing field.
-CATALOG_FORMAT_VERSION = 1
+CATALOG_FORMAT_VERSION = 2
+
+#: The four kinds a coverage statement can be, as machine-readable tokens,
+#: keyed by the prose prefix so the two cannot disagree.
+COVERAGE_KINDS: dict[str, str] = {
+    "True range": "true_range",
+    "Window": "window",
+    "Derived": "derived",
+    "Not a range": "not_a_range",
+}
+
+
+def coverage_kind(coverage: str) -> str | None:
+    """Return the machine-readable kind for a coverage statement, or None.
+
+    Matches on the prose prefix, not the first whitespace-delimited token: the
+    token carries a trailing period or comma depending on the sentence
+    ("Derived." and "Derived," both occur), so a consumer splitting on a space
+    would match neither.
+    """
+    text = coverage.strip()
+    for prefix, kind in COVERAGE_KINDS.items():
+        if text.startswith(prefix):
+            return kind
+    return None
+
 
 DEFAULT_R2_BASE_URL = "https://data.spicy-regs.dev"
 
@@ -754,6 +779,12 @@ def build_catalog(descriptions: dict, schemas: dict[str, list[tuple[str, str]]])
     index rather than trusting this document — a catalog that certifies its own
     coverage is not a check. ``MCP_QUERYABLE`` is every published table, so it
     is not that fact either and is not exported here.
+
+    ``kind`` is the coverage statement's kind as a token. The prose still opens
+    by naming it for a person, but a consumer must not have to parse a sentence
+    to branch on it: the opening word carries a trailing period or comma
+    depending on the phrasing, so a whitespace split fails on seven of the
+    twenty-four classes.
     """
     coverage = table_coverage(descriptions)
     return {
@@ -765,6 +796,7 @@ def build_catalog(descriptions: dict, schemas: dict[str, list[tuple[str, str]]])
                 "label": coverage[table]["label"],
                 "summary": coverage[table]["summary"],
                 "coverage": coverage[table]["coverage"],
+                "kind": coverage_kind(coverage[table]["coverage"]),
                 "data_quality": coverage[table]["data_quality"] or None,
                 "columns": [name for name, _ in schemas[table]],
             }

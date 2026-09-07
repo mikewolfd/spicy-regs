@@ -137,11 +137,24 @@ def test_every_table_has_a_coverage_statement():
 
 def test_every_coverage_statement_names_its_kind():
     """A range, a window and a derived table are different claims; each says which."""
-    kinds = ("True range", "Window", "Derived", "Not a range")
-    bad = [
-        t for t, e in dd.table_coverage(dd.load_descriptions()).items() if not e["coverage"].strip().startswith(kinds)
-    ]
+    bad = [t for t, e in dd.table_coverage(dd.load_descriptions()).items() if dd.coverage_kind(e["coverage"]) is None]
     assert not bad, f"coverage statements that do not open by naming their kind: {bad}"
+
+
+def test_kind_is_readable_without_parsing_the_sentence():
+    """The consumer branches on `kind`, never on the prose's first token.
+
+    The prose opens with the kind followed by a period or a comma depending on
+    the phrasing, so a whitespace split returns "Derived." or "Derived," and
+    matches neither. This asserts the consumer's access pattern rather than the
+    author's, which is why the earlier startswith test passed while a consumer
+    would have failed.
+    """
+    document = dd.build_catalog(dd.load_descriptions(), dd.expected_schemas())
+    for entry in document["classes"]:
+        assert entry["kind"] in set(dd.COVERAGE_KINDS.values()), entry["table"]
+        assert dd.coverage_kind(entry["coverage"]) == entry["kind"], entry["table"]
+    assert {e["kind"] for e in document["classes"]} == set(dd.COVERAGE_KINDS.values())
 
 
 def test_check_detects_a_missing_coverage_statement():
