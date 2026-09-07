@@ -24,6 +24,7 @@ Usage::
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 import tempfile
 from pathlib import Path
@@ -37,6 +38,11 @@ from spicy_regs.schemas.regulations import RECORD_TYPES
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_DESCRIPTIONS = REPO_ROOT / "data_dictionary" / "descriptions.yaml"
 DEFAULT_DOCS_TABLES_DIR = REPO_ROOT / "docs" / "tables"
+DEFAULT_CATALOG_PATH = REPO_ROOT / "data_dictionary" / "catalog.json"
+
+#: Bumped when the catalog document's shape changes, so a reader can refuse a
+#: shape it does not know rather than guess at a missing field.
+CATALOG_FORMAT_VERSION = 1
 
 DEFAULT_R2_BASE_URL = "https://data.spicy-regs.dev"
 
@@ -734,6 +740,53 @@ def cmd_check(args: argparse.Namespace) -> int:
     return 0
 
 
+def build_catalog(descriptions: dict, schemas: dict[str, list[tuple[str, str]]]) -> dict:
+    """Return the catalog document: one entry per published class, in TABLES order.
+
+    This is the declaration side of a readable catalog, and it exists as a file
+    because the consumer cannot import this package. It says what spicy-regs
+    publishes, in words a person can read without knowing an identifier.
+
+    It deliberately does **not** say whether a class is searchable. That is the
+    serving side's fact, and a reader must derive it by aggregating over its own
+    index rather than trusting this document — a catalog that certifies its own
+    coverage is not a check. ``MCP_QUERYABLE`` is every published table, so it
+    is not that fact either and is not exported here.
+    """
+    coverage = table_coverage(descriptions)
+    return {
+        "format_version": CATALOG_FORMAT_VERSION,
+        "declares": "what spicy-regs publishes; not what any index serves",
+        "classes": [
+            {
+                "table": table,
+                "label": coverage[table]["label"],
+                "summary": coverage[table]["summary"],
+                "coverage": coverage[table]["coverage"],
+                "data_quality": coverage[table]["data_quality"] or None,
+                "columns": [name for name, _ in schemas[table]],
+            }
+            for table in TABLES
+        ],
+    }
+
+
+def cmd_catalog(args: argparse.Namespace) -> int:
+    descriptions = load_descriptions(Path(args.descriptions))
+    schemas = _schemas_for_source(args.source, args.base)
+    errors = check_descriptions(schemas, descriptions)
+    if errors:
+        print("✗ Refusing to write a catalog that disagrees with the schema.", file=sys.stderr)
+        for err in errors:
+            print(f"  - {err}", file=sys.stderr)
+        return 1
+    out = Path(args.out) if args.out else DEFAULT_CATALOG_PATH
+    document = build_catalog(descriptions, schemas)
+    out.write_text(json.dumps(document, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    print(f"✓ Wrote {len(document['classes'])} class declaration(s) to {out}.")
+    return 0
+
+
 def cmd_generate(args: argparse.Namespace) -> int:
     descriptions = load_descriptions(Path(args.descriptions))
     schemas = _schemas_for_source(args.source, args.base)
@@ -788,6 +841,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_gen.add_argument("--base", default=None, help="R2 base URL or local parquet dir")
     p_gen.add_argument("--out-dir", default=None, help=f"Output dir (default: {DEFAULT_DOCS_TABLES_DIR})")
     p_gen.set_defaults(func=cmd_generate)
+
+    p_cat = sub.add_parser("catalog", help="Write the machine-readable class declaration (catalog.json)")
+    p_cat.add_argument("--source", choices=["schema", "r2", "local"], default="schema")
+    p_cat.add_argument("--base", default=None, help="R2 base URL or local parquet dir")
+    p_cat.add_argument("--out", default=None, help=f"Output path (default: {DEFAULT_CATALOG_PATH})")
+    p_cat.set_defaults(func=cmd_catalog)
     return parser
 
 
