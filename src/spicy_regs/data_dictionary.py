@@ -24,6 +24,7 @@ Usage::
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import sys
 import tempfile
@@ -39,6 +40,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_DESCRIPTIONS = REPO_ROOT / "data_dictionary" / "descriptions.yaml"
 DEFAULT_DOCS_TABLES_DIR = REPO_ROOT / "docs" / "tables"
 DEFAULT_CATALOG_PATH = REPO_ROOT / "data_dictionary" / "catalog.json"
+DEFAULT_CATALOG_DIGEST_PATH = REPO_ROOT / "data_dictionary" / "catalog.json.sha256"
 
 #: Bumped when the catalog document's shape changes, so a reader can refuse a
 #: shape it does not know rather than guess at a missing field.
@@ -771,6 +773,17 @@ def build_catalog(descriptions: dict, schemas: dict[str, list[tuple[str, str]]])
     }
 
 
+def catalog_bytes(document: dict) -> bytes:
+    """Serialize the catalog to its one canonical byte form.
+
+    A vendored contract is pinned by digest, so there must be exactly one byte
+    string for a given document. Key order is insertion order, which follows
+    ``TABLES``; indent and separators are fixed here rather than at the call
+    site so the digest cannot move because someone passed a different flag.
+    """
+    return json.dumps(document, indent=2, ensure_ascii=False).encode("utf-8") + b"\n"
+
+
 def cmd_catalog(args: argparse.Namespace) -> int:
     descriptions = load_descriptions(Path(args.descriptions))
     schemas = _schemas_for_source(args.source, args.base)
@@ -782,8 +795,16 @@ def cmd_catalog(args: argparse.Namespace) -> int:
         return 1
     out = Path(args.out) if args.out else DEFAULT_CATALOG_PATH
     document = build_catalog(descriptions, schemas)
-    out.write_text(json.dumps(document, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    payload = catalog_bytes(document)
+    out.write_bytes(payload)
+    digest = hashlib.sha256(payload).hexdigest()
+    digest_path = Path(args.digest) if args.digest else DEFAULT_CATALOG_DIGEST_PATH
+    # Sidecar, not a field inside the document: a digest carried by the thing it
+    # certifies proves nothing. A consumer verifies the bytes against this.
+    digest_path.write_text(f"{digest}  {out.name}\n", encoding="utf-8")
     print(f"✓ Wrote {len(document['classes'])} class declaration(s) to {out}.")
+    print(f"  sha256 {digest}")
+    print(f"  digest recorded in {digest_path}")
     return 0
 
 
@@ -846,6 +867,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_cat.add_argument("--source", choices=["schema", "r2", "local"], default="schema")
     p_cat.add_argument("--base", default=None, help="R2 base URL or local parquet dir")
     p_cat.add_argument("--out", default=None, help=f"Output path (default: {DEFAULT_CATALOG_PATH})")
+    p_cat.add_argument("--digest", default=None, help=f"Digest sidecar (default: {DEFAULT_CATALOG_DIGEST_PATH})")
     p_cat.set_defaults(func=cmd_catalog)
     return parser
 
