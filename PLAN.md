@@ -95,6 +95,16 @@ the serving side's fact.
 
 ## Source-provider work for dataset experiments
 
+### Retained FEC committee records
+
+- [x] Reuse the existing committee mapping for caller-supplied OpenFEC rows,
+  writing bounded batches and keeping an existing output intact on failure.
+  The default API builder uses the same writer; published columns are unchanged.
+- [ ] Connect a complete, verified FEC distribution to the existing rollup.
+  A local selected-record table is not the full committee population or a
+  published release. Bulk masters omit some API fields, and unverified-filer
+  references require separate source status rather than invented values.
+
 These open tasks own only SpicyRegs changes. They coordinate with DocSpec's
 dataset workflow and SpicyDocs' source work, using planning sources DocSpec
 `3e3e43e` and SpicyDocs `40921d3`. SpicyRegs remains independently usable for

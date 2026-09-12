@@ -200,6 +200,20 @@ uv run run-rollup-federal-register    # ingests an external API → its own Parq
 Each defaults to `--skip-upload`. See [CONTRIBUTING.md](CONTRIBUTING.md) for the
 full list and for what adding a new external source touches.
 
+### Retained FEC input
+
+`write_fec_committee_rows(records, destination, batch_size=2000)` in
+`spicy_regs.transforms.build_fec_committees` accepts an iterator of raw OpenFEC
+committee dictionaries. It reuses the existing column mapping, writes bounded
+batches and replaces the destination only after the iterator finishes. It makes
+no network request, preserves row order and duplicates, and publishes nothing.
+Use a separate destination for a selected slice; the default rollup still merges
+and deduplicates its full API input with the prior published table.
+
+The caller verifies retained input bytes and keeps source references and coverage
+alongside the output. Bulk master rows use different column names and omit some
+API fields; they cannot be passed directly or treated as a complete replacement.
+
 ### Backfilling comment text
 
 The ETL fills `text_content` inline only for comments it processes fresh — the
