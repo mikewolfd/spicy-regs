@@ -67,10 +67,11 @@ byte ranges and source fields preserve spelling, dates, blank values and both
 targets when committee and candidate IDs coexist. Other filing versions remain
 available through SpicyDocs' literal reader without an assumed relationship map.
 
-The current [qualification and coverage](/Users/mikewolfd/Documents/Codex/fec-data-research-2026-09-11/integration/relationships.md)
-covers all selected 2024/2026 bulk relationship rows, the complete current
-cycle-filtered committee census and retained gap observations, plus every
-relationship record in the selected original statements. Full historical
+The [repaired selected output and verification](/Users/mikewolfd/Documents/Codex/fec-handoff-fixes/integration/fixes-2026-09-12/README.md)
+cover the selected bulk relationship rows, current cycle-filtered census and
+retained gap observations, plus the selected original statements. Required input
+membership and independent source-role/state checks now qualify that output.
+Full historical
 statement/profile acquisition, immutable distribution admission and publication
 remain separate work. The retained committee-history dump stops at 2022; its
 recent object date does not make it a substitute for the selected cycles.
