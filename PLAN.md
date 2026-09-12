@@ -95,6 +95,20 @@ the serving side's fact.
 
 ## Source-provider work for dataset experiments
 
+### BILLSTATUS subject acquisition
+
+- [x] Replace the local bulk XML downloader/parser with the SpicyDocs 0.3.0
+  wheel; qualify source identity, malformed/access failures, and table behavior.
+  Keep Congress API selection and the six-column subject transform unchanged.
+- [x] Validate the installed wheel and frozen lock on Python 3.12; provider
+  revision is in [vendor/README.md](vendor/README.md), with wheel digests in
+  `uv.lock`. Full suite: 1,040 passed; base-wheel CLI/MCP imports also qualified.
+
+This is source reuse only: the subject table retains carrier and enrichment
+time, not exact BILLSTATUS XML or text-version links. SpicyDocs returns those
+captures to callers that need to retain them; this transform publishes its
+existing subject fields. Dataset catalogs and processing remain outside it.
+
 These open tasks own only SpicyRegs changes. They coordinate with DocSpec's
 dataset workflow and SpicyDocs' source work, using planning sources DocSpec
 `3e3e43e` and SpicyDocs `40921d3`. SpicyRegs remains independently usable for

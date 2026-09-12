@@ -14,7 +14,7 @@
 [![CI](https://github.com/civictechdc/spicy-regs/actions/workflows/ci.yml/badge.svg)](https://github.com/civictechdc/spicy-regs/actions/workflows/ci.yml)
 [![Integration](https://github.com/civictechdc/spicy-regs/actions/workflows/integration.yml/badge.svg)](https://github.com/civictechdc/spicy-regs/actions/workflows/integration.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/)
 [![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
 [![Slack](https://img.shields.io/badge/Slack-join%20us-4A154B?logo=slack&logoColor=white)](https://join.slack.com/t/civictechdc/shared_invite/zt-43eotbj04-QLQ_Ria296PtRYJU2EgwxQ)
 
@@ -114,7 +114,7 @@ dictionary documents the scope of each.
 
 ## Quickstart
 
-Prerequisites: Python 3.10+ and [uv](https://docs.astral.sh/uv/getting-started/installation/).
+Prerequisites: Python 3.12 and [uv](https://docs.astral.sh/uv/getting-started/installation/).
 
 ```bash
 git clone https://github.com/civictechdc/spicy-regs.git
@@ -123,6 +123,9 @@ uv sync                       # install dependencies into .venv
 uv run pytest                 # run the test suite
 uv run ruff check .           # lint
 ```
+
+The default checkout `bill-sources` group installs the pinned wheels in `vendor/`
+for BILLSTATUS acquisition. This feature is optional for CLI and MCP installs.
 
 No credentials are needed to run the tests, download the published Parquet, or
 run the pipeline against the public Mirrulations mirror. Copy `.env.example` to

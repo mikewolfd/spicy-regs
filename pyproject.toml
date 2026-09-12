@@ -2,7 +2,7 @@
 name = "spicy-regs"
 version = "0.1.0"
 description = "Regulations Data Analysis Tools"
-requires-python = ">=3.10"
+requires-python = ">=3.12,<3.13"
 dependencies = [
     "boto3",
     "python-dotenv",
@@ -14,18 +14,27 @@ dependencies = [
     "pandas",
     "cyclopts",
     "loguru",
-    "mcp>=1.10.0",
+    "mcp>=1.10.0,<2", # FastMCP imports use the 1.x API
     "pypdf",
     "pyyaml",  # data dictionary descriptions (src/spicy_regs/data_dictionary.py)
 ]
 
 [project.optional-dependencies]
+bill-sources = [
+    "spicy-docs[acquisition]==0.3.0",
+    "rulespec-artifacts==1.0.12",
+]
 embed = [
     "sentence-transformers",
     "torch",
 ]
 
 [dependency-groups]
+# Checkout pipelines use the pinned source wheels; base CLI/MCP installs do not.
+bill-sources = [
+    "spicy-docs[acquisition]==0.3.0",
+    "rulespec-artifacts==1.0.12",
+]
 dev = [
     "ipykernel",
     "matplotlib",
@@ -79,6 +88,13 @@ spicy-regs-dict = "spicy_regs.data_dictionary:main"
 [build-system]
 requires = ["uv_build"]
 build-backend = "uv_build"
+
+[tool.uv.sources]
+spicy-docs = { path = "vendor/spicy_docs-0.3.0-py3-none-any.whl" }
+rulespec-artifacts = { path = "vendor/rulespec_artifacts-1.0.12-py3-none-any.whl" }
+
+[tool.uv]
+default-groups = ["dev", "bill-sources"]
 
 [tool.pytest.ini_options]
 # Integration tests hit external services (the public Mirrulations S3 mirror)
