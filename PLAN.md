@@ -107,12 +107,18 @@ the serving side's fact.
   Local handoff fixes emit every missing/null/empty sponsor-list state, keep
   source entity codes/labels with identifier roles, and retain exact array
   elements with parent pointers instead of copying whole arrays per row.
-  Existing retained outputs require a new materialization and independent
-  source-role/state verification before those fixes qualify an output.
+  The selected rebuilt output passes independent source-role/state verification;
+  earlier output files retain their original qualification limits.
   See [inputs, use and limits](docs/fec-relationships.md).
+- [x] Qualify the selected current committee census from an admitted SpicyDocs
+  release through the existing committee writer and a DocSpec metadata catalog.
+  The [installed-wheel delivery](/Users/mikewolfd/Documents/Codex/fec-handoff-fixes/integration/census-delivery-2026-09-12.md)
+  preserves complete metadata companions and source evidence and checks every
+  mapped field. No new SpicyRegs runtime dependency or default API switch was needed.
 - [ ] Connect a complete, verified FEC distribution to the existing rollup.
   A local selected-record table is not the full committee population or a
-  published release. Bulk masters omit some API fields, and unverified-filer
+  globally published table. The local census release does not include the bulk,
+  gap-status, historical or original-filing populations. Bulk masters omit some API fields, and unverified-filer
   references require separate source status rather than invented values.
 
 These open tasks own only SpicyRegs changes. They coordinate with DocSpec's

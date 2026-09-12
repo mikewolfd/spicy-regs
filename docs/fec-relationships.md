@@ -71,7 +71,10 @@ The [repaired selected output and verification](/Users/mikewolfd/Documents/Codex
 cover the selected bulk relationship rows, current cycle-filtered census and
 retained gap observations, plus the selected original statements. Required input
 membership and independent source-role/state checks now qualify that output.
-Full historical
-statement/profile acquisition, immutable distribution admission and publication
-remain separate work. The retained committee-history dump stops at 2022; its
+The [selected census delivery](/Users/mikewolfd/Documents/Codex/fec-handoff-fixes/integration/census-delivery-2026-09-12.md)
+now admits current API metadata through a local SpicyDocs release, the existing
+committee writer and a complete DocSpec metadata catalog. Typed relationships,
+bulk/gap companions and original statements still need their own immutable delivery;
+full historical acquisition and remote publication remain separate work.
+The retained committee-history dump stops at 2022; its
 recent object date does not make it a substitute for the selected cycles.
