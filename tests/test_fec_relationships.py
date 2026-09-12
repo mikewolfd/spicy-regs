@@ -1,5 +1,6 @@
 """Reported relationships retain ambiguity, source roles and reversible evidence."""
 
+import copy
 import json
 
 import pyarrow.parquet as pq
@@ -57,6 +58,142 @@ def test_empty_observations_are_not_edges(field, value, status):
     assert actual["value_status"] == status
     assert all(r["value_status"] == "missing_field" for r in rows if r is not actual)
     assert json.loads(actual["source_fields_json"])[field] == value
+
+
+@pytest.mark.parametrize("field", ["candidate_ids", "sponsor_candidate_ids", "sponsor_candidate_list"])
+@pytest.mark.parametrize("state", ["missing_field", "null", "empty_list"])
+def test_every_source_array_has_an_explicit_absence_observation(field, state):
+    source = {"committee_id": "C00812388"}
+    if state != "missing_field":
+        source[field] = None if state == "null" else []
+    rows = list(api_relationships(source, evidence=REF))
+    assert len(rows) == 4
+    (actual,) = [r for r in rows if json.loads(r["source_locator_json"]).get("array_field") == field]
+    locator = json.loads(actual["source_locator_json"])
+    fields = json.loads(actual["source_fields_json"])
+    assert actual["value_status"] == state
+    assert actual["object_id"] is None and actual["object_name"] is None
+    assert actual["object_id_status"] == "not_reported"
+    assert locator["array_index"] is None
+    assert (field in fields) == (state != "missing_field")
+    if state != "missing_field":
+        assert fields[field] == source[field]
+
+
+@pytest.mark.parametrize("reverse", [False, True])
+def test_sponsor_arrays_are_independent_assertions_with_exact_elements(reverse):
+    sponsors = [
+        {"sponsor_candidate_id": "S6OH00379", "sponsor_candidate_name": "First", "extra": {"literal": 1}},
+        {"sponsor_candidate_id": "H2AK01158", "sponsor_candidate_name": "Second"},
+        {"sponsor_candidate_name": "Unresolved"},
+        {"sponsor_candidate_id": None, "sponsor_candidate_name": "Unresolved"},
+        None,
+        {},
+        {"sponsor_candidate_name": " NONE "},
+        {"sponsor_candidate_name": ""},
+    ]
+    if reverse:
+        sponsors[:2] = reversed(sponsors[:2])
+    source = {
+        "committee_id": "C00812388",
+        "sponsor_candidate_ids": ["S6OH00379", "H2AK01158", "S6OH00379"],
+        "sponsor_candidate_list": sponsors,
+    }
+    original = copy.deepcopy(source)
+    rows = list(api_relationships(source, evidence=REF))
+    ids = [r for r in rows if json.loads(r["source_locator_json"]).get("array_field") == "sponsor_candidate_ids"]
+    listed = [r for r in rows if json.loads(r["source_locator_json"]).get("array_field") == "sponsor_candidate_list"]
+    assert [r["object_id"] for r in ids] == ["S6OH00379", "H2AK01158", "S6OH00379"]
+    assert [r["object_id"] for r in listed] == (
+        ["H2AK01158", "S6OH00379"] if reverse else ["S6OH00379", "H2AK01158"]
+    ) + [None] * 6
+    assert [r["object_name"] for r in listed] == (["Second", "First"] if reverse else ["First", "Second"]) + [
+        "Unresolved",
+        "Unresolved",
+        None,
+        None,
+        " NONE ",
+        "",
+    ]
+    assert [r["value_status"] for r in listed] == [
+        "reported",
+        "reported",
+        "reported",
+        "reported",
+        "null",
+        "null",
+        "reported_none",
+        "empty_string",
+    ]
+    for index, actual in enumerate(listed):
+        assert json.loads(actual["source_fields_json"])["sponsor_candidate_list"] == sponsors[index]
+        assert json.loads(actual["source_locator_json"])["array_index"] == index
+        assert actual["relationship_type"] == "leadership_pac_sponsor"
+    assert source == original
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        {
+            "committee_id": "C00872283",
+            "committee_type": "I",
+            "committee_type_full": "Independent expenditure filer (not a committee)",
+        },
+        {"committee_id": "C00894162", "organization_type": "I", "organization_type_full": None},
+    ],
+)
+def test_identifier_role_preserves_source_entity_qualifier_and_missing_labels(source):
+    rows = list(api_relationships(source, evidence=REF))
+    for actual in rows:
+        assert actual["subject_type"] == "committee"  # Source field role, not entity status.
+        assert actual["subject_id_status"] == "source_id_shape"
+        assert json.loads(actual["source_fields_json"]) == source
+    without_label = {key: value for key, value in source.items() if key != "organization_type_full"}
+    assert "organization_type_full" not in json.loads(
+        next(api_relationships(without_label, evidence=REF))["source_fields_json"]
+    )
+
+
+def test_api_array_context_grows_linearly_and_keeps_parent_locator():
+    def build(size):
+        source = {
+            "committee_id": "C00812388",
+            "candidate_ids": ["H2AK01158"] * size,
+            "cycles": list(range(size)),
+            "affiliated_committee_name": "Literal",
+        }
+        ref = {**REF, "locator": {"json_pointer": "/results/7"}}
+        rows = list(api_relationships(source, evidence=ref))
+        members = [r for r in rows if r["relationship_type"] == "committee_candidate"]
+        for index, actual in enumerate(members):
+            locator = json.loads(actual["source_locator_json"])
+            fields = json.loads(actual["source_fields_json"])
+            assert locator["json_pointer"] == "/results/7"
+            assert locator["array_field"] == "candidate_ids" and locator["array_index"] == index
+            assert fields == {"committee_id": "C00812388", "candidate_ids": "H2AK01158"}
+        assert len(members) == size
+        scalar = rows[0]
+        assert "array_field" not in json.loads(scalar["source_locator_json"])
+        return sum(len(r["source_fields_json"].encode()) for r in members), scalar
+
+    small_cost, small_scalar = build(16)
+    large_cost, large_scalar = build(32)
+    assert large_cost == 2 * small_cost  # Selected field bytes, not disk, time or memory.
+    assert small_scalar == large_scalar  # Unrelated scalar does not copy either array.
+
+
+@pytest.mark.parametrize("field", ["candidate_ids", "sponsor_candidate_ids", "sponsor_candidate_list"])
+@pytest.mark.parametrize("value", ["unexpected scalar", 0, {}])
+def test_malformed_source_arrays_refuse(field, value):
+    with pytest.raises(ValueError, match="array"):
+        list(api_relationships({"committee_id": "C00812388", field: value}, evidence=REF))
+
+
+@pytest.mark.parametrize("value", [["not an object"], [{"sponsor_candidate_id": []}]])
+def test_malformed_sponsor_elements_refuse(value):
+    with pytest.raises(ValueError, match="source"):
+        list(api_relationships({"committee_id": "C00812388", "sponsor_candidate_list": value}, evidence=REF))
 
 
 def test_bulk_role_codes_and_election_year_are_source_values():

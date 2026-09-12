@@ -166,62 +166,67 @@ def bulk_relationships(family: str, row: dict, *, evidence: dict, cycle: int):
 
 
 def api_relationships(row: dict, *, evidence: dict):
-    """Keep API-only sponsor IDs and literal affiliation names as current facts.
+    """Preserve current source assertions and exact array elements, not an ontology.
 
-    candidate_ids does not say authorization, nor prove a historical association
-    in each listed cycle. Do not multiply current fields across the cycles array.
+    Type columns name source identifier/field roles. Source codes and labels qualify
+    them; a C-prefixed filer need not be a committee. The pinned parent record keeps
+    complete arrays, including cycles: current fields do not establish history or
+    authorization. An array locator selects the literal element stored inline.
     """
-    common = ("committee_id", "cycles", "last_f1_date", "last_file_date", "designation")
+    common = (
+        "committee_id",
+        "last_f1_date",
+        "last_file_date",
+        "designation",
+        "committee_type",
+        "committee_type_full",
+        "organization_type",
+        "organization_type_full",
+    )
+    context = {field: row[field] for field in common if field in row}
     for field, relation, kind in (
         ("affiliated_committee_name", "affiliated_committee_or_connected_organization", "unresolved"),
         ("candidate_ids", "committee_candidate", "candidate"),
         ("sponsor_candidate_ids", "leadership_pac_sponsor", "candidate"),
+        ("sponsor_candidate_list", "leadership_pac_sponsor", "candidate"),
     ):
         value = row.get(field)
+        is_array = field != "affiliated_committee_name"
+        if is_array and value is not None and not isinstance(value, list):
+            raise ValueError("expected source relationship array")
         status = "missing_field" if field not in row else "null" if value is None else None
-        if field.endswith("_ids"):
-            if value is not None and not isinstance(value, list):
-                raise ValueError("expected source ID array")
-            if value == []:
-                status = "empty_list"
-            values = value if value else [None]
-        else:
-            values = [value]
-        for index, item in enumerate(values):
-            if item is not None and not isinstance(item, str):
+        if is_array and value == []:
+            status = "empty_list"
+        populated = is_array and bool(value)
+        for index, item in enumerate(value if populated else [None if is_array else value]):
+            if field == "sponsor_candidate_list":
+                if item is not None and not isinstance(item, dict):
+                    raise ValueError("expected source sponsor object")
+                target = {
+                    "object_id": (item or {}).get("sponsor_candidate_id"),
+                    "name": (item or {}).get("sponsor_candidate_name"),
+                }
+            else:
+                target = {"object_id" if is_array else "name": item}
+            if any(v is not None and not isinstance(v, str) for v in target.values()):
                 raise ValueError("expected source relationship text")
-            ref = {
-                **evidence,
-                "locator": {**evidence["locator"], "array_index": index if isinstance(value, list) and value else None},
-            }
+            locator = {**evidence["locator"], "array_index": index if populated else None}
+            if is_array:
+                locator["array_field"] = field
+            source = {**context, **({field: item if populated else value} if field in row else {})}
             yield _observation(
-                row,
-                ref,
+                source,
+                {**evidence, "locator": locator},
                 "committee_api_current",
                 None,
                 row["committee_id"],
                 "committee",
                 relation,
                 kind,
-                **{"object_id" if field.endswith("_ids") else "name": item},
+                **target,
                 fields=(*common, field),
                 value_status=status,
             )
-    for index, sponsor in enumerate(row.get("sponsor_candidate_list") or []):
-        ref = {**evidence, "locator": {**evidence["locator"], "array_index": index}}
-        yield _observation(
-            row,
-            ref,
-            "committee_api_current",
-            None,
-            row["committee_id"],
-            "committee",
-            "leadership_pac_sponsor",
-            "candidate",
-            object_id=sponsor.get("sponsor_candidate_id"),
-            name=sponsor.get("sponsor_candidate_name"),
-            fields=(*common, "sponsor_candidate_list"),
-        )
 
 
 def statement_relationships(record: dict, *, version: str, evidence: dict):

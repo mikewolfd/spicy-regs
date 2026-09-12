@@ -104,6 +104,11 @@ the serving side's fact.
   into one local, source-cited table. Preserve name-only targets, blanks, explicit
   NONE, source ID shape errors and conflicting statements. API observations keep
   their capture date rather than becoming facts for each cycle in `cycles`.
+  Local handoff fixes emit every missing/null/empty sponsor-list state, keep
+  source entity codes/labels with identifier roles, and retain exact array
+  elements with parent pointers instead of copying whole arrays per row.
+  Existing retained outputs require a new materialization and independent
+  source-role/state verification before those fixes qualify an output.
   See [inputs, use and limits](docs/fec-relationships.md).
 - [ ] Connect a complete, verified FEC distribution to the existing rollup.
   A local selected-record table is not the full committee population or a

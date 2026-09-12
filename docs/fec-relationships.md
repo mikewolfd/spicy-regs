@@ -20,15 +20,41 @@ that the relationship is true or identify a name-only target. `reported_none`,
 `empty_string`, `empty_list`, `null` and `missing_field` are observations, not
 relationship edges. `source_id_shape` validates syntax only. Invalid candidate
 IDs remain in their source role; a committee-shaped value is not retyped as a
-committee. No name matcher runs and no row enters `org_committee_links`.
+committee. The `subject_type` and `object_type` columns name the source field's
+identifier or target role, not a legal entity classification. In particular,
+`committee` covers FEC's C-prefixed filer role, including independent-expenditure
+filers whose source label explicitly says "not a committee". API observations
+retain `committee_type`, `committee_type_full`, `organization_type` and
+`organization_type_full` when present, including a raw code with a null label.
+Keep these qualifications with the observation. No name matcher runs and no row
+enters `org_committee_links`.
 
 Bulk cycle and candidate election year remain separate. Current API rows have
-`cycle=NULL`; the original `cycles`, dates and source fields remain in
-`source_fields_json`. Candidate IDs alone are labeled `committee_candidate`;
+`cycle=NULL`; `cycles` stays in the complete source record, alongside fields
+outside this narrow table. Candidate IDs alone are labeled `committee_candidate`;
 authorization requires an explicit source designation or statement role.
 Each reported array element and duplicate survives, including separate sponsor
-ID and sponsor-name assertions. There is no deduplication or latest-wins policy
-across different sources or amendments.
+ID and sponsor-name assertions. These arrays are independent: neither position
+nor a null entry authorizes pairing or filling from the other array. Missing,
+null and empty lists each emit an explicit observation for all three API arrays.
+There is no deduplication or latest-wins policy across sources or amendments.
+
+For API arrays, `source_locator_json.array_field` names the array and
+`array_index` selects the element within the exact parent JSON Pointer.
+`source_fields_json[array_field]` contains that literal element, including all
+keys in a sponsor object. A null element retains its nonnull index; missing,
+null or empty parent arrays have `array_index=null` and retain their original
+absence/value state. Scalar observations have no `array_field`. This differs
+from the earlier local output, which repeated the entire array on every row.
+The top-level table columns are unchanged.
+
+The original digest plus parent pointer locates the complete record. Keep its
+complete metadata companion with the delivery so consumers can join directly to
+`cycles`, detailed attributes and complete arrays. Do not treat the relationship
+table as a complete entity record. The mapper copies selected array elements
+once, for linear selected-field bytes as array length grows; it does not copy
+`cycles` into every observation. It does not itself verify or package companions:
+input completeness and their admission remain the caller's responsibility.
 
 For statements, the supported versions are **8.3 and 8.4**. The positions come
 from the FEC's `FEC_Format_v8.3.xlsx` and `FEC_Format_v8.4.xlsx` in the official
