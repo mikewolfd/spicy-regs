@@ -95,11 +95,16 @@ the serving side's fact.
 
 ## Source-provider work for dataset experiments
 
-### Retained FEC committee records
+### Retained FEC committee records and reported relationships
 
 - [x] Reuse the existing committee mapping for caller-supplied OpenFEC rows,
   writing bounded batches and keeping an existing output intact on failure.
   The default API builder uses the same writer; published columns are unchanged.
+- [x] Map selected bulk, current API and original-statement relationship fields
+  into one local, source-cited table. Preserve name-only targets, blanks, explicit
+  NONE, source ID shape errors and conflicting statements. API observations keep
+  their capture date rather than becoming facts for each cycle in `cycles`.
+  See [inputs, use and limits](docs/fec-relationships.md).
 - [ ] Connect a complete, verified FEC distribution to the existing rollup.
   A local selected-record table is not the full committee population or a
   published release. Bulk masters omit some API fields, and unverified-filer

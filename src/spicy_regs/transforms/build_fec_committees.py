@@ -17,9 +17,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Iterable
-from itertools import islice
 from pathlib import Path
-from tempfile import TemporaryDirectory
 
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -27,6 +25,7 @@ from loguru import logger
 
 from spicy_regs.sources import r2
 from spicy_regs.sources.fec_committees import FecCommitteesReader
+from spicy_regs.transforms.parquet_rows import write_rows
 
 OUTPUT = "fec_committees.parquet"
 
@@ -86,16 +85,7 @@ def write_fec_committee_rows(records: Iterable[dict], destination: Path, *, batc
     This preserves source order and duplicates; the default builder deduplicates
     after combining its fresh rows with the prior table.
     """
-    if type(batch_size) is not int or batch_size <= 0:
-        raise ValueError("batch_size must be a positive integer")
-    shaped = (_shape(doc) for doc in records)
-    with TemporaryDirectory(dir=destination.parent) as scratch:
-        temporary = Path(scratch) / "rows.parquet"
-        with pq.ParquetWriter(temporary, _SCHEMA, compression="zstd") as writer:
-            while batch := list(islice(shaped, batch_size)):
-                writer.write_table(pa.Table.from_pylist(batch, schema=_SCHEMA))
-        temporary.replace(destination)
-    return destination
+    return write_rows((_shape(doc) for doc in records), destination, _SCHEMA, batch_size=batch_size)
 
 
 def build_fec_committees(output_dir: Path) -> Path:
