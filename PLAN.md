@@ -184,6 +184,24 @@ establish that a capability is supported or that upstream work has been accepted
   proposed upstream work and accepted upstream work; follow this plan's existing
   authorization rules for publication and upstream submission.
 
+<a id="sr04"></a>
+
+- [ ] **SR04 — Adopt the faithful CourtListener bulk reader.**
+  **Owner: SpicyRegs; selected handoff under SR03.** SpicyDocs F05 is complete
+  at `5a9c4e9`, with the qualified 0.6.0 wheel. SpicyRegs still pins 0.3.0 and
+  uses its own [raw reader](src/spicy_regs/sources/courtlistener_bulk.py) from
+  court-scope, opinion-cluster and opinion-body transforms. Replace that copy
+  with the public provider reader after checking its callers.
+
+  **Done when:** installed-wheel checks preserve quoted empty strings, nulls,
+  literal backslashes, record/byte limits, resume behavior and failure cleanup.
+  Audit each table transform's empty-value normalization separately: preserve
+  raw distinctions and document any deliberate table conversion. Qualify the
+  existing BILLSTATUS consumer against the upgraded wheel, remove the replaced
+  reader, and retain input pins plus before/after table evidence. An upstream
+  parser fix alone does not complete this receiving task; data backfill and
+  publication remain separate operations.
+
 ## How to run anything
 
 Everything goes through `uv run`, never a binary from `PATH`. The gate:
