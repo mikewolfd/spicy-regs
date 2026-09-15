@@ -47,6 +47,7 @@ import pyarrow.parquet as pq
 from loguru import logger
 
 from spicy_regs.sources import r2
+from spicy_regs.transforms._courtlistener_writer import CourtListenerTableWriter
 
 
 OUTPUT = "court_opinion_bodies.parquet"
@@ -183,47 +184,6 @@ def _shape(row: dict, *, dump_date: date | None) -> dict:
     }
 
 
-class _BatchWriter:
-    """Append shaped rows to a parquet file in bounded batches."""
-
-    def __init__(self, path: Path) -> None:
-        self.path = path
-        self.rows: list[dict] = []
-        self.written = 0
-        self._writer: pq.ParquetWriter | None = None
-
-    def add(self, row: dict) -> None:
-        self.rows.append(row)
-        if len(self.rows) >= BATCH_ROWS:
-            self.flush()
-
-    def flush(self) -> None:
-        if not self.rows:
-            return
-        table = pa.Table.from_pylist(self.rows, schema=_SCHEMA)
-        if self._writer is None:
-            self._writer = pq.ParquetWriter(self.path, _SCHEMA, compression="zstd")
-        self._writer.write_table(table)
-        self.written += len(self.rows)
-        self.rows.clear()
-
-    def close(self) -> None:
-        self.flush()
-        if self._writer is None:
-            pq.write_table(_SCHEMA.empty_table(), self.path, compression="zstd")
-        else:
-            self._writer.close()
-
-    def abort(self) -> None:
-        """Close without flushing and discard this failed attempt's staging file."""
-        try:
-            if self._writer is not None:
-                self._writer.close()
-        finally:
-            self.rows.clear()
-            self.path.unlink(missing_ok=True)
-
-
 def build_court_opinion_bodies(
     output_dir: Path,
     *,
@@ -293,7 +253,7 @@ def build_court_opinion_bodies(
         def row_filter(row: dict) -> bool:  # noqa: F811
             return (row.get("cluster_id") or "") in cluster_ids
 
-    writer = _BatchWriter(new_file)
+    writer = CourtListenerTableWriter(new_file, schema=_SCHEMA, batch_size=BATCH_ROWS)
     reader = CourtListenerBulkReader(
         DATASET,
         dump_date=resolved,

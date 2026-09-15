@@ -45,6 +45,7 @@ import pyarrow.parquet as pq
 from loguru import logger
 
 from spicy_regs.sources import r2
+from spicy_regs.transforms._courtlistener_writer import CourtListenerTableWriter
 from spicy_regs.sources.courtlistener import CourtListenerOpinionSearchReader
 from spicy_regs.transforms.court_scope import (
     CourtScope,
@@ -222,47 +223,6 @@ def _shape_search(result: dict, *, scope: CourtScope | None = None) -> dict:
     return row
 
 
-class _BatchWriter:
-    """Append shaped rows to a parquet file in bounded batches."""
-
-    def __init__(self, path: Path) -> None:
-        self.path = path
-        self.rows: list[dict] = []
-        self.written = 0
-        self._writer: pq.ParquetWriter | None = None
-
-    def add(self, row: dict) -> None:
-        self.rows.append(row)
-        if len(self.rows) >= BATCH_ROWS:
-            self.flush()
-
-    def flush(self) -> None:
-        if not self.rows:
-            return
-        table = pa.Table.from_pylist(self.rows, schema=_SCHEMA)
-        if self._writer is None:
-            self._writer = pq.ParquetWriter(self.path, _SCHEMA, compression="zstd")
-        self._writer.write_table(table)
-        self.written += len(self.rows)
-        self.rows.clear()
-
-    def close(self) -> None:
-        self.flush()
-        if self._writer is None:
-            pq.write_table(_SCHEMA.empty_table(), self.path, compression="zstd")
-        else:
-            self._writer.close()
-
-    def abort(self) -> None:
-        """Close without flushing and discard this failed attempt's staging file."""
-        try:
-            if self._writer is not None:
-                self._writer.close()
-        finally:
-            self.rows.clear()
-            self.path.unlink(missing_ok=True)
-
-
 def build_court_opinion_clusters(
     output_dir: Path,
     *,
@@ -332,7 +292,7 @@ def build_court_opinion_clusters(
         scope = CourtScope.from_map(map_file, court_jurisdictions(dump_date=resolved, local_file=None))
 
     # 4. Stream the dump into the staging table, batch by batch.
-    writer = _BatchWriter(new_file)
+    writer = CourtListenerTableWriter(new_file, schema=_SCHEMA, batch_size=BATCH_ROWS)
     reader = CourtListenerBulkReader(DATASET, dump_date=resolved, local_file=local_file, max_records=max_records)
     try:
         with closing(cast(Generator[dict, None, None], reader.iter_records())) as source_rows:

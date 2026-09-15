@@ -275,7 +275,7 @@ def test_receiving_failure_closes_source_iterator(tmp_path, monkeypatch, kind, f
     if failure == "shape":
         monkeypatch.setattr(module, "_shape_bulk" if kind == "clusters" else "_shape", fail)
     else:
-        monkeypatch.setattr(module._BatchWriter, "add", fail)
+        monkeypatch.setattr(module.CourtListenerTableWriter, "add", fail)
     kwargs = {"skip_search_catchup": True, "skip_court_scope": True} if kind == "clusters" else {}
     with pytest.raises(ValueError, match="shaping failed"):
         getattr(module, f"build_court_opinion_{kind}")(tmp_path, local_file=tmp_path / "unused", **kwargs)
@@ -380,29 +380,24 @@ def test_docket_receipt_uses_shared_listing_pin_including_exact_etag(tmp_path, m
 
 
 @pytest.mark.parametrize("kind", ["bodies", "clusters"])
-def test_local_table_build_matches_frozen_mapping_by_id(tmp_path, monkeypatch, kind):
+@pytest.mark.parametrize("row_count", [0, 1, 3])
+def test_local_table_build_matches_frozen_mapping_by_id(tmp_path, monkeypatch, kind, row_count):
     module = importlib.import_module(f"spicy_regs.transforms.build_court_opinion_{kind}")
     monkeypatch.setattr(module.r2, "download", lambda *_: False)
-    raw = _encode_records(
-        [
-            {
-                "id": "11",
-                "cluster_id": "101",
-                "docket_id": "71",
-                "case_name": "Doe",
-                "plain_text": "",
-                "syllabus": None,
-            },
-            {
-                "id": "12",
-                "cluster_id": "102",
-                "docket_id": "72",
-                "case_name": "Roe",
-                "plain_text": "line one\nline two",
-                "syllabus": "",
-            },
-        ]
-    )
+    monkeypatch.setattr(module, "BATCH_ROWS", 2)
+    records = [
+        {"id": "11", "cluster_id": "101", "docket_id": "71", "case_name": "Doe", "plain_text": "", "syllabus": None},
+        {
+            "id": "12",
+            "cluster_id": "102",
+            "docket_id": "72",
+            "case_name": "Roe",
+            "plain_text": "line one\nline two",
+            "syllabus": "",
+        },
+    ]
+    records.append({**records[0], "id": "13", "cluster_id": "103", "docket_id": "73"})
+    raw = _encode_records(records[:row_count]) if row_count else (",".join(records[0]) + "\n").encode()
     kwargs = {"skip_search_catchup": True, "skip_court_scope": True} if kind == "clusters" else {}
     output = getattr(module, f"build_court_opinion_{kind}")(
         tmp_path,
@@ -413,3 +408,7 @@ def test_local_table_build_matches_frozen_mapping_by_id(tmp_path, monkeypatch, k
     expected = [old_cluster(row) if kind == "clusters" else old_body(row, dump_date=DUMP_DATE) for row in old_rows(raw)]
     key = "cluster_id" if kind == "clusters" else "opinion_id"
     assert {row[key]: row for row in pq.read_table(output).to_pylist()} == {row[key]: row for row in expected}
+    parquet = pq.ParquetFile(output)
+    assert parquet.schema_arrow == module._SCHEMA
+    assert parquet.metadata.num_rows == row_count
+    assert parquet.metadata.num_row_groups == max(1, (row_count + 1) // 2)
