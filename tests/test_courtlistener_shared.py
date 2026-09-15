@@ -9,13 +9,14 @@ import subprocess
 import sys
 from collections.abc import Generator
 from datetime import date
+from email.message import Message
 from hashlib import sha256
 from pathlib import Path
 from typing import cast
 
 import pyarrow.parquet as pq
 import pytest
-from spicy_docs.sources import courtlistener_bulk as owner
+from spicy_docs.sources import courtlistener_http as owner_http
 from spicy_docs.sources.courtlistener_bulk import CourtListenerBulkReader
 from spicy_docs.sources.courtlistener_csv import CourtListenerCsvError
 
@@ -129,19 +130,31 @@ def test_strict_source_refusals_replace_lossy_old_admission(tmp_path, body):
 
 
 class _Response(io.BytesIO):
-    def __init__(self, body: bytes, *, offset=0, fail_after=None, status=200):
+    def __init__(self, body: bytes, *, url: str, offset=0, fail_after=None, status=200):
         super().__init__(body)
         self.seek(offset)
         self.fail_after = fail_after
         self.status = status
+        self.bytes_read = 0
+        self.url = url
+        self.headers = Message()
+        self.headers["ETag"] = f'"{sha256(body).hexdigest()}"'
+        self.headers["Content-Length"] = str(len(body) - offset)
+        if status == 206:
+            self.headers["Content-Range"] = f"bytes {offset}-{len(body) - 1}/{len(body)}"
+
+    def geturl(self):
+        return self.url
 
     def read(self, size=-1):
         if self.fail_after is not None and self.tell() >= self.fail_after:
             raise OSError("connection reset")
-        return super().read(min(size, 1024) if size >= 0 else 1024)
+        result = super().read(min(size, 1024) if size >= 0 else 1024)
+        self.bytes_read += len(result)
+        return result
 
 
-def _network(monkeypatch, payload, *, fail_after=None, resume_status=206):
+def _network(monkeypatch, payload, *, fail_after=None, resume_status=206, resume_mutation=None):
     handles = []
     ranges = []
 
@@ -149,17 +162,24 @@ def _network(monkeypatch, payload, *, fail_after=None, resume_status=206):
         header = request.get_header("Range")
         offset = int(header.removeprefix("bytes=").removesuffix("-")) if header else 0
         ranges.append(offset)
+        assert request.get_header("Accept-encoding") == "identity"
+        assert request.get_header("If-match") == (f'"{sha256(payload).hexdigest()}"' if header else None)
         response = _Response(
             payload,
+            url=request.full_url,
             offset=offset,
             fail_after=fail_after if not header else None,
             status=resume_status if header else 200,
         )
+        if header and resume_mutation == "etag":
+            response.headers.replace_header("ETag", '"changed-object"')
+        if header and resume_mutation == "range":
+            response.headers.replace_header("Content-Range", f"bytes {offset + 1}-{len(payload) - 1}/{len(payload)}")
         handles.append(response)
         return response
 
-    monkeypatch.setattr(owner.urllib.request, "urlopen", urlopen)
-    monkeypatch.setattr(owner.time, "sleep", lambda _: None)
+    monkeypatch.setattr(owner_http.urllib.request, "urlopen", urlopen)
+    monkeypatch.setattr(owner_http.time, "sleep", lambda _: None)
     return handles, ranges
 
 
@@ -366,7 +386,7 @@ def test_docket_receipt_uses_shared_listing_pin_including_exact_etag(tmp_path, m
         requests.append(request.full_url)
         return io.BytesIO(listing)
 
-    monkeypatch.setattr(owner.urllib.request, "urlopen", urlopen)
+    monkeypatch.setattr(owner_http.urllib.request, "urlopen", urlopen)
     path = tmp_path / "map.parquet"
     path.write_bytes(b"local map result")
     reader = CourtListenerBulkReader("dockets", dump_date=DUMP_DATE)
@@ -412,3 +432,34 @@ def test_local_table_build_matches_frozen_mapping_by_id(tmp_path, monkeypatch, k
     assert parquet.schema_arrow == module._SCHEMA
     assert parquet.metadata.num_rows == row_count
     assert parquet.metadata.num_row_groups == max(1, (row_count + 1) // 2)
+
+
+@pytest.mark.parametrize("mutation,match", [("etag", "ETag differs"), ("range", "exact remaining bytes")])
+def test_resumed_object_change_refuses_before_accepting_more_bytes(monkeypatch, mutation, match):
+    payload = bz2.compress(_encode_records([{"id": str(i), "notes": f"row {i}"} for i in range(4000)]))
+    handles, ranges = _network(monkeypatch, payload, fail_after=2048, resume_mutation=mutation)
+    with pytest.raises(owner_http.BulkTransferError, match=match):
+        list(CourtListenerBulkReader("courts", dump_date=DUMP_DATE).iter_records())
+    assert ranges == [0, 2048]
+    assert handles[-1].bytes_read == 0  # The refused response body was not read.
+    assert all(handle.closed for handle in handles)
+
+
+@pytest.mark.parametrize("status", [401, 403])
+def test_access_refusal_closes_without_retry(monkeypatch, status):
+    from urllib.error import HTTPError
+    from spicy_docs.transport.credentials import CredentialRefusedError
+
+    body = io.BytesIO(b"access refused")
+    calls = []
+
+    def urlopen(request, **kwargs):
+        calls.append(request.full_url)
+        raise HTTPError(request.full_url, status, "access refused", Message(), body)
+
+    monkeypatch.setattr(owner_http.urllib.request, "urlopen", urlopen)
+    monkeypatch.setattr(owner_http.time, "sleep", lambda _: pytest.fail("retried access refusal"))
+    with pytest.raises(CredentialRefusedError, match=f"HTTP {status}"):
+        list(CourtListenerBulkReader("courts", dump_date=DUMP_DATE).iter_records())
+    assert len(calls) == 1
+    assert body.closed

@@ -1850,14 +1850,14 @@ wheels = [
 
 [[package]]
 name = "spicy-docs"
-version = "0.17.0"
-source = { path = "vendor/spicy_docs-0.17.0-py3-none-any.whl" }
+version = "0.18.0"
+source = { path = "vendor/spicy_docs-0.18.0-py3-none-any.whl" }
 dependencies = [
     { name = "jsonschema" },
     { name = "rulespec-artifacts" },
 ]
 wheels = [
-    { filename = "spicy_docs-0.17.0-py3-none-any.whl", hash = "sha256:917ca1ce62f139a2bae12e3cae6e3ef526118d533f0c71ebbc583daad4f337d2" },
+    { filename = "spicy_docs-0.18.0-py3-none-any.whl", hash = "sha256:594a2f01f689c10f8c3b133a70b2e8ee9f644dd9234788a957b4f731e6d1c7e3" },
 ]
 
 [package.optional-dependencies]
@@ -1893,7 +1893,7 @@ provides-extras = ["acquisition", "pdf", "pdf-apple", "pdf-gemini", "pdf-mlx", "
 
 [[package]]
 name = "spicy-regs"
-version = "0.1.5"
+version = "0.1.6"
 source = { editable = "." }
 dependencies = [
     { name = "boto3" },
@@ -1959,7 +1959,7 @@ requires-dist = [
     { name = "pyyaml" },
     { name = "rulespec-artifacts", marker = "extra == 'source-readers'", path = "vendor/rulespec_artifacts-1.0.12-py3-none-any.whl" },
     { name = "sentence-transformers", marker = "extra == 'embed'" },
-    { name = "spicy-docs", extras = ["acquisition", "pdf-pypdf"], marker = "extra == 'source-readers'", path = "vendor/spicy_docs-0.17.0-py3-none-any.whl" },
+    { name = "spicy-docs", extras = ["acquisition", "pdf-pypdf"], marker = "extra == 'source-readers'", path = "vendor/spicy_docs-0.18.0-py3-none-any.whl" },
     { name = "torch", marker = "extra == 'embed'" },
     { name = "tqdm" },
 ]
@@ -1982,7 +1982,7 @@ docs = [{ name = "mkdocs-material" }]
 source-readers = [
     { name = "pypdf", specifier = "==6.14.2" },
     { name = "rulespec-artifacts", path = "vendor/rulespec_artifacts-1.0.12-py3-none-any.whl" },
-    { name = "spicy-docs", extras = ["acquisition", "pdf-pypdf"], path = "vendor/spicy_docs-0.17.0-py3-none-any.whl" },
+    { name = "spicy-docs", extras = ["acquisition", "pdf-pypdf"], path = "vendor/spicy_docs-0.18.0-py3-none-any.whl" },
 ]
 
 [[package]]

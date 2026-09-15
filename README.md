@@ -139,6 +139,10 @@ CourtListener dump listing, source pins and CSV reading come from SpicyDocs.
 The reader preserves quoted empty strings separately from nulls and refuses
 invalid UTF-8 or malformed rows. Opinion tables deliberately map empty text to
 null; the docket map preserves quoted empties in `court_id` and `docket_number`.
+Resumed downloads require the original strong ETag, exact byte range and object
+length; access refusals stop immediately. A missing strong ETag permits an
+uninterrupted download but prevents a resume. These HTTP checks describe the
+publisher's response, not independent proof of authenticity.
 A failed read closes its source and discards staging output. Existing cached maps
 and published tables change only when explicitly rebuilt.
 
