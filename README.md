@@ -227,6 +227,11 @@ uv run backfill-comment-text --upload            # republish to R2 (needs creden
 It's incremental and re-runnable — rows with a `text_extraction_status` are
 skipped unless you pass `--overwrite`. Document text isn't published to
 `derived-data`; backfill those with `uv run enrich-pdf-text --target documents`.
+PDF extraction uses the `source-readers` extra (installed by default in a checkout).
+For a package install, use `spicy-regs[source-readers]`. A page that fails to read
+marks that PDF as `error`, with no partial text; blank pages remain valid.
+The shared reader refuses inputs over 64 MiB before parsing; this does not
+bound decompression, output size, or processing time.
 
 ### Working on the data dictionary
 

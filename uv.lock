@@ -1850,14 +1850,14 @@ wheels = [
 
 [[package]]
 name = "spicy-docs"
-version = "0.12.0"
-source = { path = "vendor/spicy_docs-0.12.0-py3-none-any.whl" }
+version = "0.15.0"
+source = { path = "vendor/spicy_docs-0.15.0-py3-none-any.whl" }
 dependencies = [
     { name = "jsonschema" },
     { name = "rulespec-artifacts" },
 ]
 wheels = [
-    { filename = "spicy_docs-0.12.0-py3-none-any.whl", hash = "sha256:a231f4975b9cb07e4ca0dd80dc6fb9c94db43bc61004d9384f62f3b0936b7ac6" },
+    { filename = "spicy_docs-0.15.0-py3-none-any.whl", hash = "sha256:deb8d5cfbdc426effcfecc008b43d9b819c3014f8a5d6b87539a72d651b2df0f" },
 ]
 
 [package.optional-dependencies]
@@ -1866,6 +1866,9 @@ acquisition = [
     { name = "httpx" },
     { name = "loguru" },
     { name = "tqdm" },
+]
+pdf-pypdf = [
+    { name = "pypdf" },
 ]
 
 [package.metadata]
@@ -1881,15 +1884,16 @@ requires-dist = [
     { name = "polars", marker = "extra == 'public-table'" },
     { name = "pyarrow", marker = "extra == 'public-table'" },
     { name = "pymupdf", marker = "extra == 'pdf'", specifier = ">=1.28,<2" },
+    { name = "pypdf", marker = "extra == 'pdf-pypdf'", specifier = ">=6,<7" },
     { name = "rapidocr-onnxruntime", marker = "extra == 'pdf-rapidocr'", specifier = ">=1.4.4,<2" },
     { name = "rulespec-artifacts", specifier = "==1.0.12" },
     { name = "tqdm", marker = "extra == 'acquisition'" },
 ]
-provides-extras = ["acquisition", "pdf", "pdf-apple", "pdf-gemini", "pdf-mlx", "pdf-rapidocr", "public-table"]
+provides-extras = ["acquisition", "pdf", "pdf-apple", "pdf-gemini", "pdf-mlx", "pdf-pypdf", "pdf-rapidocr", "public-table"]
 
 [[package]]
 name = "spicy-regs"
-version = "0.1.1"
+version = "0.1.2"
 source = { editable = "." }
 dependencies = [
     { name = "boto3" },
@@ -1901,7 +1905,6 @@ dependencies = [
     { name = "pandas" },
     { name = "polars" },
     { name = "pyarrow" },
-    { name = "pypdf" },
     { name = "python-dotenv" },
     { name = "pyyaml" },
     { name = "tqdm" },
@@ -1914,7 +1917,7 @@ embed = [
 ]
 source-readers = [
     { name = "rulespec-artifacts" },
-    { name = "spicy-docs", extra = ["acquisition"] },
+    { name = "spicy-docs", extra = ["acquisition", "pdf-pypdf"] },
 ]
 
 [package.dev-dependencies]
@@ -1935,7 +1938,7 @@ docs = [
 ]
 source-readers = [
     { name = "rulespec-artifacts" },
-    { name = "spicy-docs", extra = ["acquisition"] },
+    { name = "spicy-docs", extra = ["acquisition", "pdf-pypdf"] },
 ]
 
 [package.metadata]
@@ -1949,12 +1952,11 @@ requires-dist = [
     { name = "pandas" },
     { name = "polars" },
     { name = "pyarrow" },
-    { name = "pypdf" },
     { name = "python-dotenv" },
     { name = "pyyaml" },
     { name = "rulespec-artifacts", marker = "extra == 'source-readers'", path = "vendor/rulespec_artifacts-1.0.12-py3-none-any.whl" },
     { name = "sentence-transformers", marker = "extra == 'embed'" },
-    { name = "spicy-docs", extras = ["acquisition"], marker = "extra == 'source-readers'", path = "vendor/spicy_docs-0.12.0-py3-none-any.whl" },
+    { name = "spicy-docs", extras = ["acquisition", "pdf-pypdf"], marker = "extra == 'source-readers'", path = "vendor/spicy_docs-0.15.0-py3-none-any.whl" },
     { name = "torch", marker = "extra == 'embed'" },
     { name = "tqdm" },
 ]
@@ -1976,7 +1978,7 @@ dev = [
 docs = [{ name = "mkdocs-material" }]
 source-readers = [
     { name = "rulespec-artifacts", path = "vendor/rulespec_artifacts-1.0.12-py3-none-any.whl" },
-    { name = "spicy-docs", extras = ["acquisition"], path = "vendor/spicy_docs-0.12.0-py3-none-any.whl" },
+    { name = "spicy-docs", extras = ["acquisition", "pdf-pypdf"], path = "vendor/spicy_docs-0.15.0-py3-none-any.whl" },
 ]
 
 [[package]]

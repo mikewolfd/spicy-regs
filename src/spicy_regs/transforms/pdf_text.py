@@ -18,12 +18,8 @@ Scope notes (matching the issue):
 
 from __future__ import annotations
 
-import io
 from dataclasses import dataclass
 from enum import Enum
-
-from pypdf import PdfReader
-from pypdf.errors import PyPdfError
 
 # Pages are joined with a blank line so the boundary survives in the stored
 # text without inventing structure the source PDF didn't have.
@@ -64,38 +60,32 @@ class PdfTextResult:
 def extract_pdf_text(data: bytes) -> PdfTextResult:
     """Extract embedded text from PDF ``data``.
 
-    Never raises: every failure mode is mapped to a :class:`PdfTextResult`
-    carrying a non-OK :class:`PdfTextStatus`.
+    Source and backend failures return a non-OK status. A failed page refuses
+    the whole PDF so partial text cannot be mistaken for successful extraction.
     """
     if not data:
         return PdfTextResult(PdfTextStatus.ERROR, "", 0, error="empty input")
 
     try:
-        reader = PdfReader(io.BytesIO(data))
-    except (PyPdfError, OSError, ValueError) as exc:
-        return PdfTextResult(PdfTextStatus.ERROR, "", 0, error=str(exc))
+        from spicy_docs.extraction.pypdf import PdfEncryptedError, PdfPageError, PdfReadError, PypdfReader
+    except ImportError:
+        return PdfTextResult(
+            PdfTextStatus.ERROR, "", 0,
+            error="PDF extraction requires spicy-regs[source-readers]",
+        )
 
-    if reader.is_encrypted:
-        # Many regulations.gov PDFs are "encrypted" only with an empty owner
-        # password (encrypted for permissions, not secrecy); try to open them.
-        try:
-            if reader.decrypt("") == 0:  # 0 == PasswordType.NOT_DECRYPTED
-                return PdfTextResult(PdfTextStatus.ENCRYPTED, "", 0, error="password required")
-        except (PyPdfError, NotImplementedError) as exc:
-            return PdfTextResult(PdfTextStatus.ENCRYPTED, "", 0, error=str(exc))
-
+    page_count = 0
     try:
-        pages = reader.pages
-        page_count = len(pages)
-        parts: list[str] = []
-        for page in pages:
-            # One bad page shouldn't sink the whole document.
-            try:
-                parts.append(page.extract_text() or "")
-            except Exception:  # noqa: BLE001 - pypdf raises a wide variety here
-                parts.append("")
-    except (PyPdfError, OSError, ValueError) as exc:
-        return PdfTextResult(PdfTextStatus.ERROR, "", 0, error=str(exc))
+        # Preserve the established empty-password attempt for permissions-only PDFs.
+        with PypdfReader().open(data, password="") as document:
+            page_count = document.page_count
+            parts = [document.read_page(page) or "" for page in range(1, page_count + 1)]
+    except PdfEncryptedError as exc:
+        return PdfTextResult(PdfTextStatus.ENCRYPTED, "", 0, error=str(exc))
+    except PdfPageError as exc:
+        return PdfTextResult(PdfTextStatus.ERROR, "", page_count, error=f"page {exc.page}: {exc}")
+    except (PdfReadError, ValueError) as exc:
+        return PdfTextResult(PdfTextStatus.ERROR, "", page_count, error=str(exc))
 
     text = PAGE_SEPARATOR.join(p.strip() for p in parts).strip()
     if not text:

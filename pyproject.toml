@@ -1,6 +1,6 @@
 [project]
 name = "spicy-regs"
-version = "0.1.1"
+version = "0.1.2"
 description = "Regulations Data Analysis Tools"
 requires-python = ">=3.12,<3.13"
 dependencies = [
@@ -15,13 +15,12 @@ dependencies = [
     "cyclopts",
     "loguru",
     "mcp>=1.10.0,<2", # FastMCP imports use the 1.x API
-    "pypdf",
     "pyyaml",  # data dictionary descriptions (src/spicy_regs/data_dictionary.py)
 ]
 
 [project.optional-dependencies]
 source-readers = [
-    "spicy-docs[acquisition]==0.12.0",
+    "spicy-docs[acquisition,pdf-pypdf]==0.15.0",
     "rulespec-artifacts==1.0.12",
 ]
 embed = [
@@ -32,7 +31,7 @@ embed = [
 [dependency-groups]
 # Checkout pipelines use the pinned source wheels; base CLI/MCP installs do not.
 source-readers = [
-    "spicy-docs[acquisition]==0.12.0",
+    "spicy-docs[acquisition,pdf-pypdf]==0.15.0",
     "rulespec-artifacts==1.0.12",
 ]
 dev = [
@@ -90,7 +89,7 @@ requires = ["uv_build"]
 build-backend = "uv_build"
 
 [tool.uv.sources]
-spicy-docs = { path = "vendor/spicy_docs-0.12.0-py3-none-any.whl" }
+spicy-docs = { path = "vendor/spicy_docs-0.15.0-py3-none-any.whl" }
 rulespec-artifacts = { path = "vendor/rulespec_artifacts-1.0.12-py3-none-any.whl" }
 
 [tool.uv]
