@@ -124,8 +124,15 @@ uv run pytest                 # run the test suite
 uv run ruff check .           # lint
 ```
 
-The default checkout `bill-sources` group installs the pinned wheels in `vendor/`
-for BILLSTATUS acquisition. This feature is optional for CLI and MCP installs.
+The default checkout `source-readers` group installs the pinned wheels in `vendor/`
+for BILLSTATUS and Unified Agenda acquisition. Package installs opt in with
+`spicy-regs[source-readers]`; base CLI and MCP installs remain independent.
+
+The Unified Agenda reader uses SpicyDocs to fetch XML and read its fields;
+SpicyRegs still chooses table columns and derives timetable dates. An unavailable,
+malformed, or mismatched edition raises before yielding any of that edition's
+rows. The two malformed 2004 exports require a separately approved correction;
+this reader does not repair them.
 
 No credentials are needed to run the tests, download the published Parquet, or
 run the pipeline against the public Mirrulations mirror. Copy `.env.example` to

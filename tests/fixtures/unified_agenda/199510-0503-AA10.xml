@@ -1,0 +1,72 @@
+<RIN_INFO>
+        <RIN>0503-AA10</RIN>
+        <PUBLICATION>
+            <PUBLICATION_ID>199510</PUBLICATION_ID>
+            <PUBLICATION_TITLE>The Regulatory Plan and the Unified Agenda of Federal Regulations</PUBLICATION_TITLE>
+        </PUBLICATION>
+        <AGENCY>
+            <CODE>0503</CODE>
+            <NAME>Office of the Secretary</NAME>
+            <ACRONYM>AgSEC</ACRONYM>
+        </AGENCY>
+        <PARENT_AGENCY>
+            <CODE>0500</CODE>
+            <NAME>Department of Agriculture</NAME>
+            <ACRONYM>USDA</ACRONYM>
+        </PARENT_AGENCY>
+        <RULE_TITLE>Grants and Agreements With Institutions of Higher Education, Hospitals and Other Non-Profit Organizations</RULE_TITLE>
+        <ABSTRACT><![CDATA[This regulation establishes the administrative requirements for Federal grants and agreements to institutions of higher education, hospitals and non-profit organizations.]]></ABSTRACT>
+        <PRIORITY_CATEGORY>Substantive, Nonsignificant</PRIORITY_CATEGORY>
+        <RIN_STATUS>Previously Published in The Unified Agenda</RIN_STATUS>
+        <RULE_STAGE>Final Rule Stage</RULE_STAGE>
+        <CFR_LIST>
+            <CFR>7 CFR 3019</CFR>
+        </CFR_LIST>
+        <LEGAL_AUTHORITY_LIST>
+            <LEGAL_AUTHORITY>31 USC 1111</LEGAL_AUTHORITY>
+        </LEGAL_AUTHORITY_LIST>
+        <RPLAN_ENTRY>No</RPLAN_ENTRY>
+        <TIMETABLE_LIST>
+            <TIMETABLE>
+                <TTBL_ACTION>Final Action</TTBL_ACTION>
+                <TTBL_DATE>10/00/1995</TTBL_DATE>
+            </TIMETABLE>
+        </TIMETABLE_LIST>
+        <RFA_REQUIRED>Yes</RFA_REQUIRED>
+        <SMALL_ENTITY_LIST>
+            <SMALL_ENTITY>Organizations</SMALL_ENTITY>
+        </SMALL_ENTITY_LIST>
+        <GOVT_LEVEL_LIST>
+            <GOVT_LEVEL>None</GOVT_LEVEL>
+        </GOVT_LEVEL_LIST>
+        <PRINT_PAPER>NA</PRINT_PAPER>
+        <INTERNATIONAL_INTEREST>Not Collected</INTERNATIONAL_INTEREST>
+        <RELATED_RIN_LIST>
+            <RELATED_RIN>
+                <RIN>0503-AA17</RIN>
+                <RIN_RELATION>Previously reported as</RIN_RELATION>
+            </RELATED_RIN>
+        </RELATED_RIN_LIST>
+        <AGENCY_CONTACT_LIST>
+            <CONTACT>
+                <FIRST_NAME>Annie</FIRST_NAME>
+                <LAST_NAME>Walker-Bradley</LAST_NAME>
+                <TITLE>Acting Director Planning and Accountability</TITLE>
+                <AGENCY>
+                    <CODE>0503</CODE>
+                    <NAME>Office of the Secretary</NAME>
+                    <ACRONYM>AgSEC</ACRONYM>
+                </AGENCY>
+                <PHONE>202 720-9983</PHONE>
+                <FAX>202 690-3561</FAX>
+                <EMAIL>abradley@cfo.usda.gov</EMAIL>
+                <MAILING_ADDRESS>
+                    <STREET_ADDRESS>Room 4632 South Building, 1400 Independence Avenue SW,</STREET_ADDRESS>
+                    <CITY>Washington</CITY>
+                    <STATE>DC</STATE>
+                    <ZIP>20250</ZIP>
+                </MAILING_ADDRESS>
+            </CONTACT>
+        </AGENCY_CONTACT_LIST>
+        <REINVENT_GOVT>No</REINVENT_GOVT>
+    </RIN_INFO>

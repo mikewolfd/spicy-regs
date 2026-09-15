@@ -2,18 +2,18 @@
 
 Covers the two pieces with real logic: parsing the reginfo.gov
 ``REGINFO_RIN_DATA`` XML export into normalized RIN dicts
-(``UnifiedAgendaReader._fetch_edition`` / ``_normalize``) and mapping those onto
+(``UnifiedAgendaReader.iter_records`` / ``_normalize``) and mapping those onto
 the published 17-column schema (``_shape``, including timetable-date derivation
-and the deterministic per-RIN URL). The reader's HTTP download is monkeypatched
-so no network is touched.
+and the deterministic per-RIN URL). The HTTP transport returns fixtures without network access.
 """
 
 from __future__ import annotations
 
 import json
-from unittest.mock import patch
 
+import httpx
 import pytest
+from spicy_docs.sources.unified_agenda import UnifiedAgendaSourceError
 from loguru import logger
 
 from spicy_regs.sources import unified_agenda
@@ -96,18 +96,12 @@ _FIXTURE_XML = b"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 
 
 def _read_fixture(edition: str = "202510") -> list[dict]:
-    """Run the reader over the inline fixture with the network download stubbed."""
-    reader = UnifiedAgendaReader(editions=(edition,))
+    def respond(request: httpx.Request) -> httpx.Response:
+        assert request.url.params["f"] == f"REGINFO_RIN_DATA_{edition}.xml"
+        return httpx.Response(200, stream=httpx.ByteStream(_FIXTURE_XML), headers={"content-type": "application/xml"})
 
-    def fake_download(self, ed):
-        assert ed == edition
-        return _FIXTURE_XML
-
-    # Patch the bound method on the class so iter_records exercises the real
-    # iterparse + _normalize path against the fixture bytes. The stubbed
-    # _download ignores the HTTP client, so none needs to be set.
-    with patch.object(UnifiedAgendaReader, "_download", fake_download):
-        return list(reader._fetch_edition(edition))
+    reader = UnifiedAgendaReader(editions=(edition,), transport=httpx.MockTransport(respond))
+    return list(reader.iter_records())
 
 
 def test_reader_parses_records_and_stamps_edition():
@@ -226,25 +220,14 @@ def test_shape_drops_impossible_dates_without_fabricating_a_neighbour():
     assert json.loads(row["timetable_json"])[0]["date"] == "02/30/2024"
 
 
-def test_download_rejects_non_xml_body(monkeypatch):
-    """A non-XML body (e.g. the old eAgendaXmlReport HTML page) yields nothing."""
-
-    class _Resp:
-        status_code = 200
-        content = b"<!DOCTYPE html><html><body>listing page</body></html>"
-
-        def raise_for_status(self):
-            return None
-
-    reader = UnifiedAgendaReader(editions=("202510",))
-
-    class _Client:
-        def get(self, url, params=None):
-            return _Resp()
-
-    monkeypatch.setattr(reader, "_client", _Client())
-    assert reader._download("202510") is None
-    assert list(reader._fetch_edition("202510")) == []
+def test_download_rejects_non_xml_body():
+    transport = httpx.MockTransport(
+        lambda request: httpx.Response(
+            200, stream=httpx.ByteStream(b"<html>listing page</html>"), headers={"content-type": "text/html"}
+        )
+    )
+    with pytest.raises(UnifiedAgendaSourceError):
+        list(UnifiedAgendaReader(editions=("202510",), transport=transport).iter_records())
 
 
 def test_default_edition_is_yyyymm():

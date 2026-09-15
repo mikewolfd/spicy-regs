@@ -1,0 +1,46 @@
+[
+  {
+    "file": "199510-0503-AA10.xml",
+    "source_file": "REGINFO_RIN_DATA_199510.xml",
+    "source_sha256": "863fbf2204ab12f622fc4cb7504c4a763f280c78a577edaf5d24a9c4795fc1f2",
+    "record_sha256": "846eb385e1cb01e2db4c287d5c49281c3ee659cc5ea53a4267a516f4e02065e7",
+    "byte_start": 251,
+    "byte_end": 3346,
+    "edition": "199510",
+    "rin": "0503-AA10",
+    "contains_invalid_control": false
+  },
+  {
+    "file": "202510-0503-AA90.xml",
+    "source_file": "REGINFO_RIN_DATA_202510.xml",
+    "source_sha256": "4dc85fe08251eed1499dee5f2a2f7e3fcf4717baf468409c1f884dd68782b75f",
+    "record_sha256": "cc03762375a82cb3704a8ec76979c5ae5b75782d072389fc68e432ecd75b8a19",
+    "byte_start": 256,
+    "byte_end": 3546,
+    "edition": "202510",
+    "rin": "0503-AA90",
+    "contains_invalid_control": false
+  },
+  {
+    "file": "200404-1084-AA00.xml",
+    "source_file": "REGINFO_RIN_DATA_200404.xml",
+    "source_sha256": "df0cc8d24c544b3a2d9a0b025cb91973cf598e7cfa9181efa6af4494bbc24562",
+    "record_sha256": "e93926ffdc07ff76e82ad1429a646472ea0b90ff73923b9fb318dff973dfad90",
+    "byte_start": 7119253,
+    "byte_end": 7122553,
+    "edition": "200404",
+    "rin": "1084-AA00",
+    "contains_invalid_control": true
+  },
+  {
+    "file": "200410-1010-AD16.xml",
+    "source_file": "REGINFO_RIN_DATA_200410.xml",
+    "source_sha256": "8f780d499359754ed24dc9aca9f954d7ea4e0df4f772b4e26e59d8a766a48cb5",
+    "record_sha256": "8a294c1fbff7968cd897f77044ebe0573361eb86efc9a098d4168fd54f8d19f7",
+    "byte_start": 6095142,
+    "byte_end": 6098643,
+    "edition": "200410",
+    "rin": "1010-AD16",
+    "contains_invalid_control": true
+  }
+]
