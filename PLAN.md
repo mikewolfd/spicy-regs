@@ -202,7 +202,13 @@ establish that a capability is supported or that upstream work has been accepted
   SpicyRegs explicitly qualifies pypdf 6.14.2 because newer backend recovery
   changes malformed-page outcomes. The failed 0.1.4 installation remains evidence.
   Source commits: `3bdb468`, `83ed49b`. No data backfill or publication occurred.
-  SpicyDocs' access-refusal and resumed-transfer checks remain separate PAR10 work.
+  **PAR10 follow-up complete locally:** `dc4a33f` shares the two opinion-table
+  writers; `b6cb3f1` (0.1.6) adopts SpicyDocs 0.18's guarded transfers.
+  Eligible read exceptions resume only after matching the original HTTP object
+  and byte range; access refusals and incomplete EOF stop immediately.
+  All 1,176 source tests and 221 installed tests pass. Real local HTTP checks
+  preserve all 3,361 retained courts after interruption; independent review approves.
+  [Follow-up evidence](</Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/parsing-consolidation-2026-09-14/par10/delivery.md>).
   [Delivery and evidence](</Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/parsing-consolidation-2026-09-14/sr04/delivery.md>).
 
 ## How to run anything
