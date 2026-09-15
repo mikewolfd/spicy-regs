@@ -50,6 +50,7 @@ def _extract_comment(d: dict) -> dict:
         # the backfill for attachments not yet extracted upstream.
         "text_content": None,
         "text_extraction_status": None,
+        "pdf_extraction_results_json": None,
     }
 
 
@@ -85,6 +86,7 @@ def _extract_document(d: dict) -> dict:
         # (spicy_regs.enrich_pdf); the raw JSON has no text layer.
         "text_content": None,
         "text_extraction_status": None,
+        "pdf_extraction_results_json": None,
     }
 
 
@@ -136,6 +138,8 @@ DOCUMENT = RecordType(
         # of that extraction ("ok"/"empty"/"encrypted"/"error"/None if not yet run).
         "text_content": pl.Utf8,
         "text_extraction_status": pl.Utf8,
+        # Latest per-URL PDF attempt; independent of retained or derived text.
+        "pdf_extraction_results_json": pl.Utf8,
     },
     dedup_key="document_id",
     extract=_extract_document,
@@ -164,6 +168,7 @@ COMMENT = RecordType(
         # ("ok"/"empty"/"encrypted"/"error"/None if not yet run).
         "text_content": pl.Utf8,
         "text_extraction_status": pl.Utf8,
+        "pdf_extraction_results_json": pl.Utf8,
     },
     dedup_key="comment_id",
     extract=_extract_comment,

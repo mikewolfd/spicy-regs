@@ -78,6 +78,7 @@ def test_intentional_correction_failed_pages_are_not_successful_blank_pages(text
     assert not actual.ok
     assert actual.text == ""
     assert actual.page_count == len(texts)
+    assert actual.error is not None
     assert f"page {broken_page}" in actual.error
 
 
@@ -96,6 +97,7 @@ def test_backend_version_mismatch_refuses_before_parsing(monkeypatch):
     monkeypatch.setattr(pypdf, "PdfReader", lambda *a, **kw: pytest.fail("parsed with unidentified backend"))
     result = extract_pdf_text(make_pdf(["Text"]))
     assert result.status is PdfTextStatus.ERROR
+    assert result.error is not None
     assert "version differs" in result.error
 
 
@@ -104,6 +106,7 @@ def test_new_input_cap_refuses_before_backend_construction(monkeypatch):
     monkeypatch.setattr(pypdf, "PdfReader", lambda *a, **kw: pytest.fail("parsed oversized input"))
     result = extract_pdf_text(source)
     assert result.status is PdfTextStatus.ERROR
+    assert result.error is not None
     assert "max_input_bytes" in result.error
 
 

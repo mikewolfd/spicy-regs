@@ -1,6 +1,6 @@
 [project]
 name = "spicy-regs"
-version = "0.1.2"
+version = "0.1.3"
 description = "Regulations Data Analysis Tools"
 requires-python = ">=3.12,<3.13"
 dependencies = [
@@ -10,7 +10,7 @@ dependencies = [
     "pyarrow",
     "tqdm",
     "httpx",
-    "duckdb>=1.4", # >=1.4 required to ATTACH an Iceberg REST catalog and MERGE INTO it
+    "duckdb>=1.5.3", # Iceberg ALTER TABLE support for the nullable PDF diagnostics field
     "pandas",
     "cyclopts",
     "loguru",

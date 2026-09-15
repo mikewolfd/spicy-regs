@@ -233,6 +233,26 @@ marks that PDF as `error`, with no partial text; blank pages remain valid.
 The shared reader refuses inputs over 64 MiB before parsing; this does not
 bound decompression, output size, or processing time.
 
+Each PDF attempt also saves `pdf_extraction_results_json`: an ordered entry for
+every selected URL with its observed-byte SHA-256, status, page count, and error.
+A row can be `ok` while one attachment failed; inspect this field before treating
+its text as complete. A fetch that returned no bytes has a null digest/page count
+and the generic error `fetch returned no bytes`. No response body is archived by
+this enrichment step.
+
+These are the latest PDF-attempt diagnostics. `--overwrite` replaces them; a
+failed overwrite can leave older `text_content` intact, and derived-data backfill
+preserves the PDF diagnostics while supplying text independently. Skipped rows
+keep their prior results. Selection and aggregate counts remain per row.
+
+Catalog setup adds this nullable field to existing document/comment tables and
+refuses an incompatible column type. This requires DuckDB 1.5.3 or later. Setup
+reopens the connection after adding the field so Iceberg writes see its current
+schema. A conflicting schema update stops the run before data writes; rerunning
+uses the current schema. The upgrade does not re-fetch files or publish the
+public mirror; use the existing enrichment and publication commands for those
+operations.
+
 ### Working on the data dictionary
 
 ```bash

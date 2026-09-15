@@ -5,12 +5,10 @@ Catalog** — a managed Iceberg REST catalog built into the same R2 bucket the
 project already publishes Parquet to, so no separate metastore (Glue/Nessie/
 Postgres) has to be stood up.
 
-Everything is driven through DuckDB's ``iceberg`` + ``httpfs`` extensions:
-DuckDB >= 1.4 can ``ATTACH`` a REST catalog and run ``MERGE INTO``, which lets
-us reuse the exact DuckDB merge idiom already proven in
-:mod:`spicy_regs.transforms.merge_staging_files` (dedup by primary key, keep the
-row with the most recent ``modify_date``) — only now it's a *row-level* upsert
-into a versioned table instead of a whole-file rewrite.
+DuckDB's ``iceberg`` and ``httpfs`` extensions provide catalog access. Version
+1.5.3 or later supports the nullable-column addition used by PDF diagnostics.
+The current upsert implementation uses DELETE + INSERT, keeping the row with
+the most recent ``modify_date`` for each primary key.
 
 This module is the "Iceberg load" stage only, mirroring the thin-wrapper style
 of :mod:`spicy_regs.sources.r2`:
@@ -94,16 +92,15 @@ def _connect():
     # pulls in `avro` to read Iceberg manifests and otherwise auto-installs it
     # lazily during LOAD, a nested install that fails in sandboxes without a
     # writable home directory. Provisioning it on the top-level path avoids that.
-    # Best-effort: older DuckDB (<1.5) has no separate avro extension, so ignore
-    # the error there and let iceberg use its bundled Avro path.
     try:
         con.execute("INSTALL avro; LOAD avro;")
-    except duckdb.Error as avro_exc:
-        logger.info("avro not separately provisioned ({}); using iceberg's bundled path", avro_exc)
-    con.execute("INSTALL iceberg; LOAD iceberg;")
-    con.execute("INSTALL httpfs; LOAD httpfs;")
-    con.execute(f"CREATE OR REPLACE SECRET r2_catalog_secret (TYPE ICEBERG, TOKEN '{_sql_str(token)}');")
-    con.execute(f"ATTACH '{_sql_str(warehouse)}' AS {_CATALOG_ALIAS} (TYPE ICEBERG, ENDPOINT '{_sql_str(uri)}');")
+        con.execute("INSTALL iceberg; LOAD iceberg;")
+        con.execute("INSTALL httpfs; LOAD httpfs;")
+        con.execute(f"CREATE OR REPLACE SECRET r2_catalog_secret (TYPE ICEBERG, TOKEN '{_sql_str(token)}');")
+        con.execute(f"ATTACH '{_sql_str(warehouse)}' AS {_CATALOG_ALIAS} (TYPE ICEBERG, ENDPOINT '{_sql_str(uri)}');")
+    except Exception:
+        con.close()
+        raise
     return con
 
 
@@ -112,16 +109,71 @@ def _qualified(record_type: RecordType) -> str:
     return f'{_schema_ref()}."{record_type.name}"'
 
 
-def _ensure_table(con, record_type: RecordType) -> None:
+def _ensure_table(con, record_type: RecordType) -> bool:
     """Create the namespace + table (all columns VARCHAR) if they don't exist.
 
     The schema mirrors the published Parquet: every column is a UTF-8 string
     (see :mod:`spicy_regs.schemas.regulations`), so a flat ``VARCHAR`` table is
-    a faithful representation and keeps ``MERGE``/export trivially type-safe.
+    a faithful representation and keeps upserts/export type-safe. Returns whether
+    the PDF diagnostic column was added to an existing table. Iceberg callers
+    must reopen after that change; :func:`_connect_for_table` handles this.
     """
     columns = ", ".join(f'"{col}" VARCHAR' for col in record_type.schema)
     con.execute(f"CREATE SCHEMA IF NOT EXISTS {_schema_ref()};")
     con.execute(f"CREATE TABLE IF NOT EXISTS {_qualified(record_type)} ({columns});")
+    return _ensure_pdf_results_column(con, record_type)
+
+
+_PDF_RESULTS_COLUMN = "pdf_extraction_results_json"
+
+
+def _pdf_results_column_type(con, record_type: RecordType) -> str | None:
+    existing = {row[0]: row[1] for row in con.execute(f"DESCRIBE {_qualified(record_type)}").fetchall()}
+    return existing.get(_PDF_RESULTS_COLUMN)
+
+
+def _ensure_pdf_results_column(con, record_type: RecordType) -> bool:
+    """Add the one nullable PDF-attempt field to current document/comment tables."""
+    column = _PDF_RESULTS_COLUMN
+    if record_type.name not in ("documents", "comments") or column not in record_type.schema:
+        return False
+    table = _qualified(record_type)
+    existing_type = _pdf_results_column_type(con, record_type)
+    if existing_type is None:
+        con.execute(f'ALTER TABLE {table} ADD COLUMN "{column}" VARCHAR;')
+        return True
+    if existing_type != "VARCHAR":
+        raise ValueError(f"{table}.{column} must be VARCHAR, found {existing_type}")
+    return False
+
+
+def _connect_for_table(record_type: RecordType):
+    """Prepare the table and return a connection with its current schema.
+
+    DuckDB's Iceberg catalog caches the pre-ALTER schema on the connection.
+    Reopen only after this migration, then verify the field without issuing
+    another ALTER. A failed reopen leaves the completed DDL for the next run.
+    """
+    con = _connect()
+    try:
+        changed = _ensure_table(con, record_type)
+    except Exception:
+        con.close()
+        raise
+    if changed:
+        con.close()
+        con = _connect()
+        try:
+            existing_type = _pdf_results_column_type(con, record_type)
+            if existing_type != "VARCHAR":
+                raise ValueError(
+                    f"{_qualified(record_type)}.{_PDF_RESULTS_COLUMN} must be VARCHAR after migration, "
+                    f"found {existing_type or 'missing'}"
+                )
+        except Exception:
+            con.close()
+            raise
+    return con
 
 
 def _staging_files(staging_dir: Path, record_type: RecordType) -> list[Path]:
@@ -135,11 +187,8 @@ def _staging_files(staging_dir: Path, record_type: RecordType) -> list[Path]:
 def _merge(con, staging_files: list[Path], record_type: RecordType) -> None:
     """Row-level upsert of the staged rows into the Iceberg table.
 
-    Expressed as ``DELETE`` + ``INSERT`` rather than ``MERGE INTO``: the R2 Data
-    Catalog is an Iceberg table, and DuckDB's iceberg engine raises
-    ``NotImplementedException`` for ``MERGE INTO``/``ON CONFLICT`` — only plain
-    ``DELETE``/``INSERT`` are supported (the same DML :func:`seed_comments_from_parquet`
-    uses).
+    Uses the existing tested ``DELETE`` + ``INSERT`` sequence, also used by
+    :func:`seed_comments_from_parquet`.
 
     Mirrors the dedup semantics of ``transforms.merge_staging_files``: collapse
     the staging rows to one per key (latest ``modify_date`` wins), keep only the
@@ -415,17 +464,19 @@ def upsert_comment_text(con, record_type: RecordType, agency: str, updates) -> N
 
     Shared helper for the durable text-fill paths (derived-data backfill and PDF
     enrichment). ``updates`` is a polars DataFrame with columns
-    ``comment_id, _new_text, _new_status``; every row whose ``comment_id`` matches
+    ``comment_id, _new_text, _new_status``. PDF enrichment also supplies
+    ``_new_pdf_results``; derived-data updates preserve prior PDF attempts.
+    Every row whose ``comment_id`` matches
     the agency's rows gets ``text_content`` / ``text_extraction_status`` refreshed
     (``COALESCE`` keeps the existing value when the incoming column is NULL). The
     upsert is scoped to a single ``agency_code`` so it never touches the whole
-    tens-of-millions-row table, and is expressed as DELETE+INSERT because DuckDB's
-    Iceberg engine has no ``MERGE INTO`` (see :func:`_merge`). No-ops on an empty
+    tens-of-millions-row table, using the existing DELETE+INSERT sequence
+    (see :func:`_merge`). No-ops on an empty
     frame; the caller is expected to have handled that case already.
 
     CRITICAL — self-contained temp table: the INSERT reads from an independent
     ``_uct_replacement`` temp table (a full snapshot of the affected rows with the
-    two columns overridden in place), **never** from a projection over the live
+    requested columns overridden in place), **never** from a projection over the live
     catalog table. An earlier version projected the overrides straight off
     ``{tbl} t JOIN updates`` in the INSERT's SELECT; on the R2 Data Catalog that
     dropped column writes — ``text_content`` landed but ``text_extraction_status``
@@ -441,6 +492,11 @@ def upsert_comment_text(con, record_type: RecordType, agency: str, updates) -> N
     tbl = _qualified(record_type)
     ag = _sql_str(agency)
     col_list = ", ".join(f'"{c}"' for c in record_type.schema)
+    pdf_assignment = (
+        ", pdf_extraction_results_json = COALESCE(u._new_pdf_results, r.pdf_extraction_results_json)"
+        if "_new_pdf_results" in updates.columns
+        else ""
+    )
 
     con.register("_uct_updates_src", updates.to_arrow())
     try:
@@ -455,10 +511,10 @@ def upsert_comment_text(con, record_type: RecordType, agency: str, updates) -> N
         """
     )
     con.execute(
-        """
+        f"""
         UPDATE _uct_replacement AS r
         SET text_content = COALESCE(u._new_text, r.text_content),
-            text_extraction_status = COALESCE(u._new_status, r.text_extraction_status)
+            text_extraction_status = COALESCE(u._new_status, r.text_extraction_status){pdf_assignment}
         FROM _uct_updates u
         WHERE r.comment_id = u.comment_id;
         """
@@ -485,9 +541,8 @@ def merge_comments(staging_dir: Path, output_dir: Path, record_type: RecordType)
         logger.info("iceberg: no staging files for {}; skipping merge", record_type.name)
         return None
 
-    con = _connect()
+    con = _connect_for_table(record_type)
     try:
-        _ensure_table(con, record_type)
         logger.info(
             "iceberg: MERGE {} staging file(s) into {}",
             len(staging_files),
@@ -520,7 +575,7 @@ def export_public_comments(output_dir: Path, record_type: RecordType) -> dict[st
     :func:`spicy_regs.transforms.partition_comments`. Returns the written paths
     keyed ``"comments"`` and ``"index"``.
     """
-    con = _connect()
+    con = _connect_for_table(record_type)
     try:
         # Full-table export of tens of millions of rows. Cap memory and disable
         # insertion-order preservation so the sort in _export_parquet spills to
@@ -528,7 +583,6 @@ def export_public_comments(output_dir: Path, record_type: RecordType) -> dict[st
         # writable dir here — this never runs on the read-only serverless host).
         con.execute("SET preserve_insertion_order=false")
         con.execute("SET memory_limit='6GB'")
-        _ensure_table(con, record_type)
         total = con.execute(f"SELECT count(*) FROM {_qualified(record_type)}").fetchone()[0]
         logger.info("iceberg: exporting {:,} catalog rows to the public comments mirror", total)
         monolith = _export_parquet(con, record_type, output_dir)
@@ -693,9 +747,8 @@ def merge_and_export(staging_dir: Path, output_dir: Path, record_type: RecordTyp
         logger.info("iceberg: no staging files for {}; skipping merge", record_type.name)
         return None
 
-    con = _connect()
+    con = _connect_for_table(record_type)
     try:
-        _ensure_table(con, record_type)
         logger.info(
             "iceberg: MERGE {} staging file(s) into {}",
             len(staging_files),

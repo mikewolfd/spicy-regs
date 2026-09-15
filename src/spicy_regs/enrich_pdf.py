@@ -28,6 +28,7 @@ import hashlib
 import json
 from collections.abc import Callable, Mapping
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
 from pathlib import Path
 from threading import Lock
 
@@ -47,6 +48,29 @@ from spicy_regs.transforms.pdf_text import (
 FetchFn = Callable[[str], bytes | None]
 ExtractFn = Callable[[bytes], PdfTextResult]
 UrlsFn = Callable[[Mapping[str, object]], list[str]]
+
+
+@dataclass(frozen=True)
+class _PdfAttempt:
+    source_sha256: str | None
+    extraction: PdfTextResult | None
+
+    @property
+    def text(self) -> str | None:
+        return None if self.extraction is None else self.extraction.text or None
+
+    @property
+    def status(self) -> str:
+        return self.extraction.status.value if self.extraction is not None else PdfTextStatus.ERROR.value
+
+    def diagnostic(self, url: str) -> dict[str, object]:
+        return {
+            "url": url,
+            "source_sha256": self.source_sha256,
+            "status": self.status,
+            "page_count": self.extraction.page_count if self.extraction is not None else None,
+            "error": self.extraction.error if self.extraction is not None else "fetch returned no bytes",
+        }
 
 
 def _is_pdf(url: str | None, fmt: str | None) -> bool:
@@ -103,24 +127,20 @@ def pdf_urls_for_comment(attachments_json: str | None) -> list[str]:
     return _dedupe(urls)
 
 
-def _extract_unique(
-    urls: list[str], fetch: FetchFn, extract: ExtractFn, max_workers: int
-) -> dict[str, tuple[str | None, str]]:
-    """Fetch each URL once and extract each distinct byte string once.
+def _extract_unique(urls: list[str], fetch: FetchFn, extract: ExtractFn, max_workers: int) -> dict[str, _PdfAttempt]:
+    """Fetch each URL once and reuse extraction results by source digest.
 
-    Returns ``{url: (text_or_None, status)}``. Rows routinely share a rendition
-    (a docket's notice attached to every submission), and the same bytes can
-    sit behind two URLs; before this every row paid its own fetch and
-    extraction. The digest cache lives for one call, so extractor changes need
-    no version key.
+    Retains each URL's source digest and complete extraction result. Concurrent
+    equal-byte downloads can both extract before the cache is filled; they keep
+    the first cached result. The cache lasts one call, so it needs no version key.
     """
     by_digest: dict[str, PdfTextResult] = {}
     lock = Lock()
 
-    def _one(url: str) -> tuple[str, tuple[str | None, str]]:
+    def _one(url: str) -> tuple[str, _PdfAttempt]:
         data = fetch(url)
         if data is None:
-            return url, (None, PdfTextStatus.ERROR.value)
+            return url, _PdfAttempt(None, None)
         digest = hashlib.sha256(data).hexdigest()
         with lock:
             result = by_digest.get(digest)
@@ -128,23 +148,23 @@ def _extract_unique(
             result = extract(data)
             with lock:
                 result = by_digest.setdefault(digest, result)
-        return url, (result.text or None, result.status.value)
+        return url, _PdfAttempt(digest, result)
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         return dict(executor.map(_one, urls))
 
 
-def _combine(results: list[tuple[str | None, str]]) -> tuple[str | None, str]:
+def _combine(results: list[_PdfAttempt]) -> tuple[str | None, str]:
     """Combine one row's per-PDF results into ``(text_or_None, status)``.
 
     A row can have more than one PDF rendition; their texts are concatenated.
     The combined status is ``ok`` if any PDF yielded text, otherwise ``error``
     > ``encrypted`` > ``empty`` in that order of informativeness.
     """
-    texts = [text for text, _ in results if text]
+    texts = [result.text for result in results if result.text]
     if texts:
         return PAGE_SEPARATOR.join(texts), PdfTextStatus.OK.value
-    statuses = [status for _, status in results]
+    statuses = [result.status for result in results]
     for candidate in (PdfTextStatus.ERROR.value, PdfTextStatus.ENCRYPTED.value, PdfTextStatus.EMPTY.value):
         if candidate in statuses:
             return None, candidate
@@ -166,7 +186,7 @@ def _pdf_text_updates(
     """Fetch + extract PDF text for a frame's candidate rows.
 
     Returns ``(updates, stats)`` where ``updates`` is an
-    ``(id_col, _new_text, _new_status)`` frame of every row processed (including
+    ``(id_col, _new_text, _new_status, _new_pdf_results)`` frame of every row processed (including
     empty/encrypted/error, so a re-run skips them). Shared core of both write
     paths: :func:`_enrich_with_pdf_text` joins it onto the whole frame; the
     catalog path upserts exactly these rows. Requires ``text_extraction_status``
@@ -189,7 +209,8 @@ def _pdf_text_updates(
         work = work[:limit]
 
     stats = {"selected": len(work), "ok": 0, "empty": 0, "encrypted": 0, "error": 0}
-    empty = pl.DataFrame(schema={id_col: pl.Utf8, "_new_text": pl.Utf8, "_new_status": pl.Utf8})
+    update_schema = {id_col: pl.Utf8, "_new_text": pl.Utf8, "_new_status": pl.Utf8, "_new_pdf_results": pl.Utf8}
+    empty = pl.DataFrame(schema=update_schema)
     if not work:
         logger.info("No PDF attachments to enrich")
         return empty, stats
@@ -203,16 +224,18 @@ def _pdf_text_updates(
     ids: list[str] = []
     texts: list[str | None] = []
     statuses: list[str] = []
+    diagnostics: list[str] = []
     for row_id, urls in work:
         text, status = _combine([per_url[url] for url in urls])
         ids.append(row_id)
         texts.append(text)
         statuses.append(status)
+        diagnostics.append(json.dumps([per_url[url].diagnostic(url) for url in urls]))
         stats[status] = stats.get(status, 0) + 1
 
     updates = pl.DataFrame(
-        {id_col: ids, "_new_text": texts, "_new_status": statuses},
-        schema={id_col: pl.Utf8, "_new_text": pl.Utf8, "_new_status": pl.Utf8},
+        {id_col: ids, "_new_text": texts, "_new_status": statuses, "_new_pdf_results": diagnostics},
+        schema=update_schema,
     )
     logger.info(
         "PDF enrichment: {} ok, {} empty, {} encrypted, {} error",
@@ -243,7 +266,7 @@ def _enrich_with_pdf_text(
     that already have a ``text_extraction_status`` are skipped, so repeated runs
     are incremental.
     """
-    for col in ("text_content", "text_extraction_status"):
+    for col in ("text_content", "text_extraction_status", "pdf_extraction_results_json"):
         if col not in df.columns:
             df = df.with_columns(pl.lit(None, dtype=pl.Utf8).alias(col))
 
@@ -266,8 +289,9 @@ def _enrich_with_pdf_text(
         .with_columns(
             text_content=pl.coalesce(["_new_text", "text_content"]),
             text_extraction_status=pl.coalesce(["_new_status", "text_extraction_status"]),
+            pdf_extraction_results_json=pl.coalesce(["_new_pdf_results", "pdf_extraction_results_json"]),
         )
-        .drop("_new_text", "_new_status")
+        .drop("_new_text", "_new_status", "_new_pdf_results")
     )
     return enriched, stats
 
@@ -491,9 +515,8 @@ def enrich_comments_catalog(
     """
     from spicy_regs.sources import iceberg
 
-    con = iceberg._connect()
+    con = iceberg._connect_for_table(record_type)
     try:
-        iceberg._ensure_table(con, record_type)
         tbl = iceberg._qualified(record_type)
         if agencies:
             agency_list = [a.strip().upper() for a in agencies if a.strip()]
