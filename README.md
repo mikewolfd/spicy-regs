@@ -125,7 +125,8 @@ uv run ruff check .           # lint
 ```
 
 The default checkout `source-readers` group installs the pinned wheels in `vendor/`
-for BILLSTATUS and Unified Agenda acquisition. Package installs opt in with
+for BILLSTATUS, Unified Agenda, CourtListener bulk reads and PDF extraction.
+Package installs opt in with
 `spicy-regs[source-readers]`; base CLI and MCP installs remain independent.
 
 The Unified Agenda reader uses SpicyDocs to fetch XML and read its fields;
@@ -133,6 +134,13 @@ SpicyRegs still chooses table columns and derives timetable dates. An unavailabl
 malformed, or mismatched edition raises before yielding any of that edition's
 rows. The two malformed 2004 exports require a separately approved correction;
 this reader does not repair them.
+
+CourtListener dump listing, source pins and CSV reading come from SpicyDocs.
+The reader preserves quoted empty strings separately from nulls and refuses
+invalid UTF-8 or malformed rows. Opinion tables deliberately map empty text to
+null; the docket map preserves quoted empties in `court_id` and `docket_number`.
+A failed read closes its source and discards staging output. Existing cached maps
+and published tables change only when explicitly rebuilt.
 
 No credentials are needed to run the tests, download the published Parquet, or
 run the pipeline against the public Mirrulations mirror. Copy `.env.example` to

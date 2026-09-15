@@ -1,0 +1,415 @@
+"""SR04: installed source reader, table policies and failed-attempt cleanup."""
+
+from __future__ import annotations
+
+import bz2
+import importlib
+import io
+import subprocess
+import sys
+from collections.abc import Generator
+from datetime import date
+from hashlib import sha256
+from pathlib import Path
+from typing import cast
+
+import pyarrow.parquet as pq
+import pytest
+from spicy_docs.sources import courtlistener_bulk as owner
+from spicy_docs.sources.courtlistener_bulk import CourtListenerBulkReader
+from spicy_docs.sources.courtlistener_csv import CourtListenerCsvError
+
+from tests._courtlistener_oracle import old_body, old_cluster, old_rows
+from spicy_regs.transforms.build_court_opinion_bodies import _shape as shape_body
+from spicy_regs.transforms.build_court_opinion_clusters import _shape_bulk
+from spicy_regs.transforms.court_scope import CourtScope, build_docket_court_map, court_jurisdictions
+
+FIXTURE = Path(__file__).parent / "fixtures/courtlistener_bulk/courts-2026-06-30.csv.bz2"
+DUMP_DATE = date(2026, 6, 30)
+
+
+def _dump(tmp_path: Path, body: bytes) -> Path:
+    path = tmp_path / "dump.csv.bz2"
+    path.write_bytes(bz2.compress(body))
+    return path
+
+
+def _encode_cell(value: str | None) -> str:
+    # Independent publisher-dialect re-encoder, not a second source decoder.
+    return "" if value is None else '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def _encode_records(records: list[dict]) -> bytes:
+    return (
+        ",".join(records[0])
+        + "\n"
+        + "".join(",".join(_encode_cell(value) for value in row.values()) + "\n" for row in records)
+    ).encode()
+
+
+def test_retained_courts_exact_bytes_and_all_jurisdictions():
+    compressed = FIXTURE.read_bytes()
+    original = bz2.decompress(compressed)
+    assert sha256(compressed).hexdigest() == "d5a7a5aa902cb4cdb1b99eb3e6a160867a77ce4b2401682291081499537ea8be"
+    assert sha256(original).hexdigest() == "110a1578a24788b73a9d351992051b40cb8fcf1e95dee72dd5a42054f413e757"
+    reader = CourtListenerBulkReader("courts", local_file=FIXTURE)
+    rows = list(reader.iter_records())
+    assert len(rows) == 3361
+    assert all(len(row) == 20 for row in rows)
+    assert sum(value is None for row in rows for value in row.values()) == 16096
+    assert sum(value == "" for row in rows for value in row.values()) == 11808
+    assert _encode_records(rows) == original
+    assert reader.compressed_bytes == 81180
+    assert reader.decompressed_bytes == 765809
+    assert not reader.stopped_early
+    previous = {row["id"]: row.get("jurisdiction") or "" for row in old_rows(original) if row.get("id")}
+    assert court_jurisdictions(local_file=FIXTURE) == previous
+
+
+@pytest.mark.parametrize("empty", [None, ""])
+def test_body_and_cluster_table_null_policy_matches_frozen_mapping(tmp_path, empty):
+    records = [
+        {
+            "id": "11",
+            "cluster_id": "101",
+            "docket_id": "71",
+            "type": "010combined",
+            "plain_text": empty,
+            "html_with_citations": '<p>Opinion \\"text\\"</p>',
+            "case_name": "Doe, Inc.",
+            "slug": "doe",
+            "syllabus": empty,
+        }
+    ]
+    body = _encode_records(records)
+    [old] = old_rows(body)
+    [new] = CourtListenerBulkReader("opinions", local_file=_dump(tmp_path, body)).iter_records()
+    assert new == records[0]
+    assert shape_body(new, dump_date=DUMP_DATE) == old_body(old, dump_date=DUMP_DATE)
+    assert _shape_bulk(new) == old_cluster(old)
+    assert shape_body(new, dump_date=None)["plain_text"] is None
+    assert _shape_bulk(new)["syllabus"] is None
+
+
+def test_docket_map_preserves_quoted_empty_source_fields(tmp_path):
+    body = b'id,court_id,docket_number\n"1","",""\n"2",,\n"3","dcd",""\n"","dcd","ignored"\n'
+    previous = old_rows(body)
+    assert previous[0]["court_id"] is None and previous[0]["docket_number"] is None
+    out = build_docket_court_map(tmp_path, dump_date=DUMP_DATE, local_file=_dump(tmp_path, body))
+    assert pq.read_table(out).to_pylist() == [
+        {"cl_docket_id": "1", "court_id": "", "docket_number": ""},
+        {"cl_docket_id": "2", "court_id": None, "docket_number": None},
+        {"cl_docket_id": "3", "court_id": "dcd", "docket_number": ""},
+    ]
+    scope = CourtScope.from_map(out, {"dcd": "FD"})
+    assert scope.for_docket("1") == scope.for_docket("2") == (None, None, None)
+    assert scope.for_docket("3") == ("dcd", "FD", "t")
+
+
+def test_literal_unquoted_backslash_is_a_named_source_correction(tmp_path):
+    body = b'id,notes\n"1",\\N\n'
+    assert old_rows(body)[0]["notes"] == "N"
+    [row] = CourtListenerBulkReader("courts", local_file=_dump(tmp_path, body)).iter_records()
+    assert row["notes"] == "\\N"
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        b'id,notes\n"1",\xff\n',
+        b'id,notes\n"1",a,discarded\n',
+        b'id,id\n"1","2"\n',
+        b'id,notes\n"1","unfinished',
+    ],
+)
+def test_strict_source_refusals_replace_lossy_old_admission(tmp_path, body):
+    assert old_rows(body)  # Old decoding admitted a row after replacement or silent loss.
+    with pytest.raises(CourtListenerCsvError):
+        list(CourtListenerBulkReader("courts", local_file=_dump(tmp_path, body)).iter_records())
+
+
+class _Response(io.BytesIO):
+    def __init__(self, body: bytes, *, offset=0, fail_after=None, status=200):
+        super().__init__(body)
+        self.seek(offset)
+        self.fail_after = fail_after
+        self.status = status
+
+    def read(self, size=-1):
+        if self.fail_after is not None and self.tell() >= self.fail_after:
+            raise OSError("connection reset")
+        return super().read(min(size, 1024) if size >= 0 else 1024)
+
+
+def _network(monkeypatch, payload, *, fail_after=None, resume_status=206):
+    handles = []
+    ranges = []
+
+    def urlopen(request, **kwargs):
+        header = request.get_header("Range")
+        offset = int(header.removeprefix("bytes=").removesuffix("-")) if header else 0
+        ranges.append(offset)
+        response = _Response(
+            payload,
+            offset=offset,
+            fail_after=fail_after if not header else None,
+            status=resume_status if header else 200,
+        )
+        handles.append(response)
+        return response
+
+    monkeypatch.setattr(owner.urllib.request, "urlopen", urlopen)
+    monkeypatch.setattr(owner.time, "sleep", lambda _: None)
+    return handles, ranges
+
+
+def test_public_reader_resumes_exact_compressed_offset_and_closes(monkeypatch):
+    records = [{"id": str(i), "notes": f"row {i}"} for i in range(4000)]
+    body = _encode_records(records)
+    payload = bz2.compress(body)
+    assert len(payload) > 4096
+    handles, ranges = _network(monkeypatch, payload, fail_after=2048)
+    reader = CourtListenerBulkReader("courts", dump_date=DUMP_DATE)
+    assert list(reader.iter_records()) == records
+    assert ranges == [0, 2048]
+    assert reader.resumes == 1 and reader.compressed_bytes == len(payload)
+    assert all(handle.closed for handle in handles)
+
+
+def test_public_reader_refuses_incorrect_resume_and_closes(monkeypatch):
+    payload = bz2.compress(_encode_records([{"id": str(i), "notes": f"row {i}"} for i in range(4000)]))
+    handles, _ = _network(monkeypatch, payload, fail_after=2048, resume_status=200)
+    with pytest.raises(RuntimeError, match="not 206"):
+        list(CourtListenerBulkReader("courts", dump_date=DUMP_DATE).iter_records())
+    assert all(handle.closed for handle in handles)
+
+
+@pytest.mark.parametrize("mode", ["record", "compressed", "malformed", "consumer"])
+def test_public_reader_bounds_and_failure_close_the_source(monkeypatch, mode):
+    body = b'id,notes\n"1","one"\n"2","two"\n'
+    if mode == "malformed":
+        body += b'"3",extra,column\n'
+    payload = bz2.compress(body)
+    handles, _ = _network(monkeypatch, payload)
+    reader = CourtListenerBulkReader(
+        "courts",
+        dump_date=DUMP_DATE,
+        max_record_characters=8 if mode == "record" else 1024,
+        max_compressed_bytes=len(payload) // 2 if mode == "compressed" else None,
+    )
+    iterator = cast(Generator[dict, None, None], reader.iter_records())
+    if mode in {"record", "malformed"}:
+        with pytest.raises(CourtListenerCsvError):
+            list(iterator)
+    elif mode == "consumer":
+        assert next(iterator)["id"] == "1"
+        iterator.close()
+    else:
+        assert list(iterator) == []
+        assert reader.compressed_bytes == len(payload) // 2
+    assert reader.stopped_early
+    assert handles and all(handle.closed for handle in handles)
+
+
+def test_concatenated_members_and_truncated_archive(tmp_path):
+    path = tmp_path / "dump.bz2"
+    path.write_bytes(bz2.compress(b'id,notes\n"1","one"\n') + bz2.compress(b'"2","two"\n'))
+    assert [row["id"] for row in CourtListenerBulkReader("courts", local_file=path).iter_records()] == ["1", "2"]
+    path.write_bytes(path.read_bytes()[:-8])
+    with pytest.raises(EOFError, match="incomplete bzip2"):
+        list(CourtListenerBulkReader("courts", local_file=path).iter_records())
+
+
+@pytest.mark.parametrize("kind", ["bodies", "clusters"])
+@pytest.mark.parametrize("cleanup_failure", [False, True])
+def test_source_failure_after_flush_preserves_output_and_original_error(tmp_path, monkeypatch, kind, cleanup_failure):
+    module = importlib.import_module(f"spicy_regs.transforms.build_court_opinion_{kind}")
+    monkeypatch.setattr(module, "BATCH_ROWS", 1)
+    monkeypatch.setattr(module.r2, "download", lambda *_: False)
+    output = tmp_path / module.OUTPUT
+    output.write_bytes(b"previous output stays untouched")
+    dump = _dump(tmp_path, b'id,cluster_id,docket_id,plain_text\n"1","10","20","body"\n"2",bad,row,extra,column\n')
+    closed = []
+    original_writer = module.pq.ParquetWriter
+
+    class Writer:
+        def __init__(self, *args, **kwargs):
+            self.writer = original_writer(*args, **kwargs)
+
+        def write_table(self, table):
+            self.writer.write_table(table)
+
+        def close(self):
+            self.writer.close()
+            closed.append(True)
+            if cleanup_failure:
+                raise OSError("cleanup also failed")
+
+    monkeypatch.setattr(module.pq, "ParquetWriter", Writer)
+    kwargs = {"skip_search_catchup": True, "skip_court_scope": True} if kind == "clusters" else {}
+    with pytest.raises(CourtListenerCsvError, match="expected 4 columns, got 5"):
+        getattr(module, f"build_court_opinion_{kind}")(tmp_path, local_file=dump, **kwargs)
+    assert closed == [True]
+    assert output.read_bytes() == b"previous output stays untouched"
+    assert not (tmp_path / f"_{kind}_new.parquet").exists()
+
+
+@pytest.mark.parametrize("kind", ["bodies", "clusters"])
+@pytest.mark.parametrize("failure", ["shape", "write"])
+def test_receiving_failure_closes_source_iterator(tmp_path, monkeypatch, kind, failure):
+    module = importlib.import_module(f"spicy_regs.transforms.build_court_opinion_{kind}")
+    monkeypatch.setattr(module.r2, "download", lambda *_: False)
+    closed = []
+
+    def records(self):
+        try:
+            yield {"id": "1"}
+            yield {"id": "2"}
+        finally:
+            closed.append(True)
+
+    def fail(*args, **kwargs):
+        raise ValueError("shaping failed")
+
+    monkeypatch.setattr(CourtListenerBulkReader, "iter_records", records)
+    if failure == "shape":
+        monkeypatch.setattr(module, "_shape_bulk" if kind == "clusters" else "_shape", fail)
+    else:
+        monkeypatch.setattr(module._BatchWriter, "add", fail)
+    kwargs = {"skip_search_catchup": True, "skip_court_scope": True} if kind == "clusters" else {}
+    with pytest.raises(ValueError, match="shaping failed"):
+        getattr(module, f"build_court_opinion_{kind}")(tmp_path, local_file=tmp_path / "unused", **kwargs)
+    assert closed == [True]
+    assert not (tmp_path / module.OUTPUT).exists()
+    assert not (tmp_path / f"_{kind}_new.parquet").exists()
+
+
+def test_base_imports_do_not_require_source_readers():
+    script = """
+import importlib.abc
+import sys
+class NoSourceReaders(importlib.abc.MetaPathFinder):
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname == "spicy_docs" or fullname.startswith("spicy_docs."):
+            raise ModuleNotFoundError("source-readers deliberately absent", name=fullname)
+sys.meta_path.insert(0, NoSourceReaders())
+import spicy_regs.cli
+import spicy_regs.mcp_server
+import spicy_regs.transforms
+import spicy_regs.pipelines.rollups.court_opinion_bodies
+import spicy_regs.pipelines.rollups.court_opinion_clusters
+assert not any(name == "spicy_docs" or name.startswith("spicy_docs.") for name in sys.modules)
+"""
+    result = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.parametrize("cleanup_failure", [False, True])
+def test_docket_map_failure_after_flush_discards_only_failed_attempt(tmp_path, monkeypatch, cleanup_failure):
+    module = importlib.import_module("spicy_regs.transforms.court_scope")
+    monkeypatch.setattr(module, "BATCH_ROWS", 1)
+    previous = tmp_path / "docket_courts-2026-03-31.parquet"
+    previous.write_bytes(b"prior map")
+    dump = _dump(tmp_path, b'id,court_id,docket_number\n"1","dcd","20"\n"2",bad,row,extra\n')
+    original_writer = module.pq.ParquetWriter
+    closed = []
+
+    class Writer:
+        def __init__(self, *args, **kwargs):
+            self.writer = original_writer(*args, **kwargs)
+
+        def write_table(self, table):
+            self.writer.write_table(table)
+
+        def close(self):
+            self.writer.close()
+            closed.append(True)
+            if cleanup_failure:
+                raise OSError("footer also failed")
+
+    monkeypatch.setattr(module.pq, "ParquetWriter", Writer)
+    with pytest.raises(CourtListenerCsvError, match="expected 3 columns, got 4"):
+        build_docket_court_map(tmp_path, dump_date=DUMP_DATE, local_file=dump)
+    assert closed == [True]
+    assert previous.read_bytes() == b"prior map"
+    assert not (tmp_path / "docket_courts-2026-06-30.parquet").exists()
+    assert not list(tmp_path.glob("*.partial.parquet"))
+
+
+def test_large_source_field_matches_old_reader_and_restores_test_limit(tmp_path):
+    import csv
+
+    original_limit = csv.field_size_limit(1024)
+    try:
+        body = _encode_records([{"id": "1", "notes": "large body " * 20000}])
+        old = old_rows(body)
+        assert csv.field_size_limit() == 1024
+        reader = CourtListenerBulkReader("opinions", local_file=_dump(tmp_path, body))
+        assert list(reader.iter_records()) == old
+    finally:
+        csv.field_size_limit(original_limit)
+
+
+def test_docket_receipt_uses_shared_listing_pin_including_exact_etag(tmp_path, monkeypatch):
+    from spicy_regs.transforms.court_scope import write_map_receipt
+    import json
+
+    listing = b"""<ListBucketResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+<Name>com-courtlistener-storage</Name><Prefix>bulk-data/</Prefix>
+<IsTruncated>false</IsTruncated><Contents>
+<Key>bulk-data/dockets-2026-06-30.csv.bz2</Key><Size>123</Size>
+<ETag>"publisher-etag"</ETag><LastModified>2026-06-30T09:00:00Z</LastModified>
+</Contents></ListBucketResult>"""
+    requests = []
+
+    def urlopen(request, **kwargs):
+        requests.append(request.full_url)
+        return io.BytesIO(listing)
+
+    monkeypatch.setattr(owner.urllib.request, "urlopen", urlopen)
+    path = tmp_path / "map.parquet"
+    path.write_bytes(b"local map result")
+    reader = CourtListenerBulkReader("dockets", dump_date=DUMP_DATE)
+    receipt = json.loads(write_map_receipt(path, reader=reader, dump_date=DUMP_DATE, rows=1).read_text())
+    assert len(requests) == 1
+    assert requests[0].startswith("https://com-courtlistener-storage.s3.amazonaws.com/?")
+    assert receipt["source"]["bytes"] == 123
+    assert receipt["source"]["etag"] == '"publisher-etag"'
+    assert receipt["source"]["last_modified"] == "2026-06-30T09:00:00Z"
+    assert receipt["source"]["listing_object_count"] == 1
+
+
+@pytest.mark.parametrize("kind", ["bodies", "clusters"])
+def test_local_table_build_matches_frozen_mapping_by_id(tmp_path, monkeypatch, kind):
+    module = importlib.import_module(f"spicy_regs.transforms.build_court_opinion_{kind}")
+    monkeypatch.setattr(module.r2, "download", lambda *_: False)
+    raw = _encode_records(
+        [
+            {
+                "id": "11",
+                "cluster_id": "101",
+                "docket_id": "71",
+                "case_name": "Doe",
+                "plain_text": "",
+                "syllabus": None,
+            },
+            {
+                "id": "12",
+                "cluster_id": "102",
+                "docket_id": "72",
+                "case_name": "Roe",
+                "plain_text": "line one\nline two",
+                "syllabus": "",
+            },
+        ]
+    )
+    kwargs = {"skip_search_catchup": True, "skip_court_scope": True} if kind == "clusters" else {}
+    output = getattr(module, f"build_court_opinion_{kind}")(
+        tmp_path,
+        local_file=_dump(tmp_path, raw),
+        dump_date=DUMP_DATE,
+        **kwargs,
+    )
+    expected = [old_cluster(row) if kind == "clusters" else old_body(row, dump_date=DUMP_DATE) for row in old_rows(raw)]
+    key = "cluster_id" if kind == "clusters" else "opinion_id"
+    assert {row[key]: row for row in pq.read_table(output).to_pylist()} == {row[key]: row for row in expected}
