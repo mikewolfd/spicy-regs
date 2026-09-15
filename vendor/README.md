@@ -12,6 +12,8 @@ Base CLI and MCP installs do not require them.
   lock together, then run receiver tests against the installed wheel.
 
 PDF enrichment uses the narrow `pdf-pypdf` provider extra through `source-readers`.
+SpicyRegs additionally pins pypdf `6.14.2` and checks that version before parsing;
+package installs and checkouts therefore use the same qualified PDF behavior.
 
 CourtListener listing, pins and raw rows use the shared provider directly. Run
 `uv run pytest tests/test_courtlistener_bulk.py tests/test_courtlistener_shared.py tests/test_court_scope.py tests/test_cluster_court_scope_backfill.py`

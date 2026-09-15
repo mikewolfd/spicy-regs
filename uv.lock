@@ -1893,7 +1893,7 @@ provides-extras = ["acquisition", "pdf", "pdf-apple", "pdf-gemini", "pdf-mlx", "
 
 [[package]]
 name = "spicy-regs"
-version = "0.1.4"
+version = "0.1.5"
 source = { editable = "." }
 dependencies = [
     { name = "boto3" },
@@ -1916,6 +1916,7 @@ embed = [
     { name = "torch" },
 ]
 source-readers = [
+    { name = "pypdf" },
     { name = "rulespec-artifacts" },
     { name = "spicy-docs", extra = ["acquisition", "pdf-pypdf"] },
 ]
@@ -1937,6 +1938,7 @@ docs = [
     { name = "mkdocs-material" },
 ]
 source-readers = [
+    { name = "pypdf" },
     { name = "rulespec-artifacts" },
     { name = "spicy-docs", extra = ["acquisition", "pdf-pypdf"] },
 ]
@@ -1952,6 +1954,7 @@ requires-dist = [
     { name = "pandas" },
     { name = "polars" },
     { name = "pyarrow" },
+    { name = "pypdf", marker = "extra == 'source-readers'", specifier = "==6.14.2" },
     { name = "python-dotenv" },
     { name = "pyyaml" },
     { name = "rulespec-artifacts", marker = "extra == 'source-readers'", path = "vendor/rulespec_artifacts-1.0.12-py3-none-any.whl" },
@@ -1977,6 +1980,7 @@ dev = [
 ]
 docs = [{ name = "mkdocs-material" }]
 source-readers = [
+    { name = "pypdf", specifier = "==6.14.2" },
     { name = "rulespec-artifacts", path = "vendor/rulespec_artifacts-1.0.12-py3-none-any.whl" },
     { name = "spicy-docs", extras = ["acquisition", "pdf-pypdf"], path = "vendor/spicy_docs-0.17.0-py3-none-any.whl" },
 ]

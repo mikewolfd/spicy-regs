@@ -238,6 +238,11 @@ skipped unless you pass `--overwrite`. Document text isn't published to
 PDF extraction uses the `source-readers` extra (installed by default in a checkout).
 For a package install, use `spicy-regs[source-readers]`. A page that fails to read
 marks that PDF as `error`, with no partial text; blank pages remain valid.
+SpicyRegs pins and checks pypdf `6.14.2` before parsing to reproduce its qualified
+text and diagnostics. Backend recovery can change: `6.18.1` returns blank text
+for the malformed `/Resources` fixture that raised on `6.14.2`. This is a
+version-dependent recovery decision, not a claim that the newer backend is broken.
+The reader is not a PDF conformance validator.
 The shared reader refuses inputs over 64 MiB before parsing; this does not
 bound decompression, output size, or processing time.
 

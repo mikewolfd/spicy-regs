@@ -1,6 +1,6 @@
 [project]
 name = "spicy-regs"
-version = "0.1.4"
+version = "0.1.5"
 description = "Regulations Data Analysis Tools"
 requires-python = ">=3.12,<3.13"
 dependencies = [
@@ -21,6 +21,7 @@ dependencies = [
 [project.optional-dependencies]
 source-readers = [
     "spicy-docs[acquisition,pdf-pypdf]==0.17.0",
+    "pypdf==6.14.2", # Qualified PDF text and failure behavior
     "rulespec-artifacts==1.0.12",
 ]
 embed = [
@@ -32,6 +33,7 @@ embed = [
 # Checkout pipelines use the pinned source wheels; base CLI/MCP installs do not.
 source-readers = [
     "spicy-docs[acquisition,pdf-pypdf]==0.17.0",
+    "pypdf==6.14.2", # Qualified PDF text and failure behavior
     "rulespec-artifacts==1.0.12",
 ]
 dev = [
