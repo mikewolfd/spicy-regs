@@ -109,6 +109,32 @@ time, not exact BILLSTATUS XML or text-version links. SpicyDocs returns those
 captures to callers that need to retain them; this transform publishes its
 existing subject fields. Dataset catalogs and processing remain outside it.
 
+### Retained FEC committee records and reported relationships
+
+- [x] Reuse the existing committee mapping for caller-supplied OpenFEC rows,
+  writing bounded batches and keeping an existing output intact on failure.
+  The default API builder uses the same writer; published columns are unchanged.
+- [x] Map selected bulk, current API and original-statement relationship fields
+  into one local, source-cited table. Preserve name-only targets, blanks, explicit
+  NONE, source ID shape errors and conflicting statements. API observations keep
+  their capture date rather than becoming facts for each cycle in `cycles`.
+  Local handoff fixes emit every missing/null/empty sponsor-list state, keep
+  source entity codes/labels with identifier roles, and retain exact array
+  elements with parent pointers instead of copying whole arrays per row.
+  The selected rebuilt output passes independent source-role/state verification;
+  earlier output files retain their original qualification limits.
+  See [inputs, use and limits](docs/fec-relationships.md).
+- [x] Qualify the selected current committee census from an admitted SpicyDocs
+  release through the existing committee writer and a DocSpec metadata catalog.
+  The [installed-wheel delivery](/Users/mikewolfd/Documents/Codex/fec-handoff-fixes/integration/census-delivery-2026-09-12.md)
+  preserves complete metadata companions and source evidence and checks every
+  mapped field. No new SpicyRegs runtime dependency or default API switch was needed.
+- [ ] Connect a complete, verified FEC distribution to the existing rollup.
+  A local selected-record table is not the full committee population or a
+  globally published table. The local census release does not include the bulk,
+  gap-status, historical or original-filing populations. Bulk masters omit some API fields, and unverified-filer
+  references require separate source status rather than invented values.
+
 These open tasks own only SpicyRegs changes. They coordinate with DocSpec's
 dataset workflow and SpicyDocs' source work, using planning sources DocSpec
 `3e3e43e` and SpicyDocs `40921d3`. SpicyRegs remains independently usable for
