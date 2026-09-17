@@ -16,9 +16,9 @@ from typing import cast
 
 import pyarrow.parquet as pq
 import pytest
-from spicy_docs.sources import courtlistener_http as owner_http
-from spicy_docs.sources.courtlistener_bulk import CourtListenerBulkReader
-from spicy_docs.sources.courtlistener_csv import CourtListenerCsvError
+from spicy_docs.sources.courtlistener import http as owner_http
+from spicy_docs.sources.courtlistener.bulk import CourtListenerBulkReader
+from spicy_docs.sources.courtlistener.csv import CourtListenerCsvError
 
 from tests._courtlistener_oracle import old_body, old_cluster, old_rows
 from spicy_regs.transforms.build_court_opinion_bodies import _shape as shape_body

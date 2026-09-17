@@ -16,7 +16,7 @@ from loguru import logger
 from spicy_regs.sources.base import Reader
 
 if TYPE_CHECKING:
-    from spicy_docs.sources.unified_agenda_records import UnifiedAgendaField, UnifiedAgendaRecordObservation
+    from spicy_docs.sources.unified_agenda.records import UnifiedAgendaField, UnifiedAgendaRecordObservation
 
 DEFAULT_EDITION = "202510"
 
@@ -44,7 +44,7 @@ class UnifiedAgendaReader(Reader):
                 UnifiedAgendaBudget,
                 UnifiedAgendaEdition,
             )
-            from spicy_docs.sources.unified_agenda_records import scan_unified_agenda_records
+            from spicy_docs.sources.unified_agenda.records import scan_unified_agenda_records
         except ModuleNotFoundError as error:
             if error.name == "spicy_docs":
                 raise RuntimeError(

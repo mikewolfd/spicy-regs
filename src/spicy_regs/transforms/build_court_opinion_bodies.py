@@ -201,7 +201,7 @@ def build_court_opinion_bodies(
     """
     import duckdb
 
-    from spicy_docs.sources.courtlistener_bulk import (
+    from spicy_docs.sources.courtlistener.bulk import (
         CourtListenerBulkReader,
         find_dump,
         latest_dump_date,

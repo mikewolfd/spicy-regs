@@ -20,7 +20,7 @@ dependencies = [
 
 [project.optional-dependencies]
 source-readers = [
-    "spicy-docs[acquisition,pdf-pypdf]==0.18.0",
+    "spicy-docs[acquisition,pdf-pypdf]==0.20.0",
     "pypdf==6.14.2", # Qualified PDF text and failure behavior
     "rulespec-artifacts==1.0.12",
 ]
@@ -32,7 +32,7 @@ embed = [
 [dependency-groups]
 # Checkout pipelines use the pinned source wheels; base CLI/MCP installs do not.
 source-readers = [
-    "spicy-docs[acquisition,pdf-pypdf]==0.18.0",
+    "spicy-docs[acquisition,pdf-pypdf]==0.20.0",
     "pypdf==6.14.2", # Qualified PDF text and failure behavior
     "rulespec-artifacts==1.0.12",
 ]
@@ -91,7 +91,7 @@ requires = ["uv_build"]
 build-backend = "uv_build"
 
 [tool.uv.sources]
-spicy-docs = { path = "vendor/spicy_docs-0.18.0-py3-none-any.whl" }
+spicy-docs = { path = "vendor/spicy_docs-0.20.0-py3-none-any.whl" }
 rulespec-artifacts = { path = "vendor/rulespec_artifacts-1.0.12-py3-none-any.whl" }
 
 [tool.uv]
