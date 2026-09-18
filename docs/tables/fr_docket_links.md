@@ -2,7 +2,11 @@
 
 # `fr_docket_links`
 
+**Federal Register to docket links**
+
 The Federal Register ↔ docket bridge: each `federal_register` row's `docket_ids_json` array exploded to one row per (docket_id, FR document), carrying the FR display columns. Use this instead of an `ILIKE` scan over `federal_register.docket_ids_json` — it is sorted by `docket_id`, so `WHERE docket_id = ?` prunes row groups. This is the practical join from regulations.gov to the Federal Register, since `documents.fr_doc_num` is populated on only ~1% of rules. Built by `build_fr_docket_links`.
+
+**Coverage.** Derived, and bounded by its inputs. Links between `federal_register` and `dockets`, so it inherits the Federal Register table's 2000 floor: a rule published before 2000 has no link here because the document is not in that table. *(measured 2026-09-06)*
 
 - **Parquet file:** `fr_docket_links.parquet`
 - **Queryable via MCP `query_sql`:** Yes

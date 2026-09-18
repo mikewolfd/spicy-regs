@@ -24,10 +24,14 @@ Usage::
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 import sys
+from datetime import date
 import tempfile
 from pathlib import Path
 
+import duckdb
 import polars as pl
 from dotenv import load_dotenv
 
@@ -37,6 +41,37 @@ from spicy_regs.schemas.regulations import RECORD_TYPES
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_DESCRIPTIONS = REPO_ROOT / "data_dictionary" / "descriptions.yaml"
 DEFAULT_DOCS_TABLES_DIR = REPO_ROOT / "docs" / "tables"
+DEFAULT_CATALOG_PATH = REPO_ROOT / "data_dictionary" / "catalog.json"
+DEFAULT_CATALOG_DIGEST_PATH = REPO_ROOT / "data_dictionary" / "catalog.json.sha256"
+
+#: Bumped when the catalog document's shape changes, so a reader can refuse a
+#: shape it does not know rather than guess at a missing field.
+CATALOG_FORMAT_VERSION = 3
+
+#: The four kinds a coverage statement can be, as machine-readable tokens,
+#: keyed by the prose prefix so the two cannot disagree.
+COVERAGE_KINDS: dict[str, str] = {
+    "True range": "true_range",
+    "Window": "window",
+    "Derived": "derived",
+    "Not a range": "not_a_range",
+}
+
+
+def coverage_kind(coverage: str) -> str | None:
+    """Return the machine-readable kind for a coverage statement, or None.
+
+    Matches on the prose prefix, not the first whitespace-delimited token: the
+    token carries a trailing period or comma depending on the sentence
+    ("Derived." and "Derived," both occur), so a consumer splitting on a space
+    would match neither.
+    """
+    text = coverage.strip()
+    for prefix, kind in COVERAGE_KINDS.items():
+        if text.startswith(prefix):
+            return kind
+    return None
+
 
 DEFAULT_R2_BASE_URL = "https://data.spicy-regs.dev"
 
@@ -567,6 +602,20 @@ def check_descriptions(
         entry = descriptions[table] or {}
         if not (entry.get("summary") or "").strip():
             errors.append(f"[{table}] missing a 'summary' in descriptions.yaml")
+        if not (entry.get("label") or "").strip():
+            errors.append(f"[{table}] missing a 'label' in descriptions.yaml")
+        if not (entry.get("coverage") or "").strip():
+            errors.append(f"[{table}] missing a 'coverage' statement in descriptions.yaml")
+        measured_on = str(entry.get("measured_on") or "").strip()
+        if not measured_on:
+            errors.append(f"[{table}] missing 'measured_on' beside its coverage statement")
+        else:
+            try:
+                date.fromisoformat(measured_on)
+            except ValueError:
+                errors.append(f"[{table}] 'measured_on' is not an ISO date: {measured_on!r}")
+        if "data_quality" in entry and not (entry.get("data_quality") or "").strip():
+            errors.append(f"[{table}] has an empty 'data_quality' note in descriptions.yaml")
         desc_cols = list((entry.get("columns") or {}).keys())
         errors.extend(_reconcile_columns(table, "schema", schema_cols, "descriptions.yaml", desc_cols))
         for col in schema_cols:
@@ -598,6 +647,44 @@ _GENERATED_BANNER = (
 )
 
 
+def table_labels(descriptions: dict) -> dict[str, str]:
+    """Return ``{table: short display label}``.
+
+    The label names the collection for someone deciding whether it holds court
+    cases, bills or comments. It lives here, beside the summary the table pages
+    already render, so a catalog and a docs page cannot name the same class two
+    different ways.
+    """
+    return {table: (entry or {}).get("label", "") for table, entry in descriptions.items()}
+
+
+def table_coverage(descriptions: dict) -> dict[str, dict[str, str]]:
+    """Return ``{table: {label, coverage, data_quality, summary}}`` for a catalog.
+
+    ``coverage`` is a written statement, not a computed min/max, because a
+    computed range lies for three of these classes in three different ways: a
+    fifty-three-day ingest window reads as a coverage claim about the
+    publisher's archive, a rotating-window ingest reads as even density it does
+    not have, and two tables carry publisher dates in the year 0000. Each
+    statement opens by naming which kind it is.
+
+    This describes what spicy-regs *publishes*. Whether a class is in a search
+    index is that consumer's fact, not ours, and must not be inferred from
+    anything here — ``MCP_QUERYABLE`` in particular is every published table,
+    so reading it as "searchable" would advertise classes no index holds.
+    """
+    return {
+        table: {
+            "label": (entry or {}).get("label", ""),
+            "coverage": (entry or {}).get("coverage", ""),
+            "measured_on": str((entry or {}).get("measured_on", "")),
+            "data_quality": (entry or {}).get("data_quality", ""),
+            "summary": (entry or {}).get("summary", ""),
+        }
+        for table, entry in descriptions.items()
+    }
+
+
 def _render_table_page(
     table: str,
     columns: list[tuple[str, str]],
@@ -610,9 +697,20 @@ def _render_table_page(
     if rt is not None:
         pk = rt.dedup_key
 
+    label = (entry.get("label") or "").strip()
     lines = [_GENERATED_BANNER, "", f"# `{table}`", ""]
+    if label:
+        lines += [f"**{label}**", ""]
     if summary:
         lines += [summary, ""]
+    coverage = (entry.get("coverage") or "").strip()
+    if coverage:
+        measured_on = str(entry.get("measured_on") or "").strip()
+        stamp = f" *(measured {measured_on})*" if measured_on else ""
+        lines += [f"**Coverage.** {coverage}{stamp}", ""]
+    data_quality = (entry.get("data_quality") or "").strip()
+    if data_quality:
+        lines += [f"**Data quality.** {data_quality}", ""]
     queryable = "Yes" if table in MCP_QUERYABLE else "No (published to R2 only)"
     lines += [
         f"- **Parquet file:** `{table}.parquet`",
@@ -655,6 +753,14 @@ def _schemas_for_source(source: str, base: str | None) -> dict[str, list[tuple[s
     return discover_schemas(source, base)
 
 
+#: Exit code for "the live source could not be read", distinct from drift.
+#: A caller gating on this check needs to tell a transient unreachable bucket
+#: from a real disagreement between what we declare and what we publish;
+#: collapsing both into 1 makes the check either fail on outages or, with a
+#: `|| true`, unable to fail at all.
+EXIT_SOURCE_UNREACHABLE = 3
+
+
 def cmd_check(args: argparse.Namespace) -> int:
     descriptions = load_descriptions(Path(args.descriptions))
     errors: list[str] = []
@@ -662,7 +768,14 @@ def cmd_check(args: argparse.Namespace) -> int:
     if args.source == "schema":
         errors += check_descriptions(expected_schemas(), descriptions)
     else:
-        live = discover_schemas(args.source, args.base)
+        try:
+            live = discover_schemas(args.source, args.base)
+        except (duckdb.IOException, duckdb.HTTPException, OSError) as exc:
+            # Only the "could not read it" failures. A malformed parquet or a
+            # bad query is a real problem and must not be reported as an outage.
+            print(f"! Could not read the live {args.source} schema: {exc}", file=sys.stderr)
+            print("  Drift was NOT checked. This is not a pass.", file=sys.stderr)
+            return EXIT_SOURCE_UNREACHABLE
         # Descriptions must cover the live schema, and the in-code registry the
         # docs are generated from must match the live schema too.
         errors += check_descriptions(live, descriptions)
@@ -679,6 +792,85 @@ def cmd_check(args: argparse.Namespace) -> int:
         )
         return 1
     print(f"✓ Data dictionary check passed ({len(descriptions)} tables, source={args.source}).")
+    return 0
+
+
+def build_catalog(descriptions: dict, schemas: dict[str, list[tuple[str, str]]]) -> dict:
+    """Return the catalog document: one entry per published class, in TABLES order.
+
+    This is the declaration side of a readable catalog, and it exists as a file
+    because the consumer cannot import this package. It says what spicy-regs
+    publishes, in words a person can read without knowing an identifier.
+
+    It deliberately does **not** say whether a class is searchable. That is the
+    serving side's fact, and a reader must derive it by aggregating over its own
+    index rather than trusting this document — a catalog that certifies its own
+    coverage is not a check. ``MCP_QUERYABLE`` is every published table, so it
+    is not that fact either and is not exported here.
+
+    ``measured_on`` is when the coverage statement was last checked against the
+    published data. It does not update itself and nothing here claims it is
+    current; it exists so a stale statement is *detectable* rather than
+    indistinguishable from a fresh one.
+
+    ``kind`` is the coverage statement's kind as a token. The prose still opens
+    by naming it for a person, but a consumer must not have to parse a sentence
+    to branch on it: the opening word carries a trailing period or comma
+    depending on the phrasing, so a whitespace split fails on seven of the
+    twenty-four classes.
+    """
+    coverage = table_coverage(descriptions)
+    return {
+        "format_version": CATALOG_FORMAT_VERSION,
+        "declares": "what spicy-regs publishes; not what any index serves",
+        "classes": [
+            {
+                "table": table,
+                "label": coverage[table]["label"],
+                "summary": coverage[table]["summary"],
+                "coverage": coverage[table]["coverage"],
+                "kind": coverage_kind(coverage[table]["coverage"]),
+                "measured_on": coverage[table]["measured_on"],
+                "data_quality": coverage[table]["data_quality"] or None,
+                "columns": [name for name, _ in schemas[table]],
+            }
+            for table in TABLES
+        ],
+    }
+
+
+def catalog_bytes(document: dict) -> bytes:
+    """Serialize the catalog to its one canonical byte form.
+
+    A vendored contract is pinned by digest, so there must be exactly one byte
+    string for a given document. Key order is insertion order, which follows
+    ``TABLES``; indent and separators are fixed here rather than at the call
+    site so the digest cannot move because someone passed a different flag.
+    """
+    return json.dumps(document, indent=2, ensure_ascii=False).encode("utf-8") + b"\n"
+
+
+def cmd_catalog(args: argparse.Namespace) -> int:
+    descriptions = load_descriptions(Path(args.descriptions))
+    schemas = _schemas_for_source(args.source, args.base)
+    errors = check_descriptions(schemas, descriptions)
+    if errors:
+        print("✗ Refusing to write a catalog that disagrees with the schema.", file=sys.stderr)
+        for err in errors:
+            print(f"  - {err}", file=sys.stderr)
+        return 1
+    out = Path(args.out) if args.out else DEFAULT_CATALOG_PATH
+    document = build_catalog(descriptions, schemas)
+    payload = catalog_bytes(document)
+    out.write_bytes(payload)
+    digest = hashlib.sha256(payload).hexdigest()
+    digest_path = Path(args.digest) if args.digest else DEFAULT_CATALOG_DIGEST_PATH
+    # Sidecar, not a field inside the document: a digest carried by the thing it
+    # certifies proves nothing. A consumer verifies the bytes against this.
+    digest_path.write_text(f"{digest}  {out.name}\n", encoding="utf-8")
+    print(f"✓ Wrote {len(document['classes'])} class declaration(s) to {out}.")
+    print(f"  sha256 {digest}")
+    print(f"  digest recorded in {digest_path}")
     return 0
 
 
@@ -736,6 +928,13 @@ def build_parser() -> argparse.ArgumentParser:
     p_gen.add_argument("--base", default=None, help="R2 base URL or local parquet dir")
     p_gen.add_argument("--out-dir", default=None, help=f"Output dir (default: {DEFAULT_DOCS_TABLES_DIR})")
     p_gen.set_defaults(func=cmd_generate)
+
+    p_cat = sub.add_parser("catalog", help="Write the machine-readable class declaration (catalog.json)")
+    p_cat.add_argument("--source", choices=["schema", "r2", "local"], default="schema")
+    p_cat.add_argument("--base", default=None, help="R2 base URL or local parquet dir")
+    p_cat.add_argument("--out", default=None, help=f"Output path (default: {DEFAULT_CATALOG_PATH})")
+    p_cat.add_argument("--digest", default=None, help=f"Digest sidecar (default: {DEFAULT_CATALOG_DIGEST_PATH})")
+    p_cat.set_defaults(func=cmd_catalog)
     return parser
 
 
