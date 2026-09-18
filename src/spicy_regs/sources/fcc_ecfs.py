@@ -50,7 +50,8 @@ from spicy_regs.sources.base import Reader
 API_BASE = "https://publicapi.fcc.gov/ecfs"
 
 # Env vars consulted for the api.data.gov key, in order.
-API_KEY_ENV_VARS = ("DATA_GOV_API_KEY", "FCC_API_KEY", "REGULATIONS_GOV_API_KEY")
+# API_GOV is the shared api.data.gov key under the name RefSpec/.env uses.
+API_KEY_ENV_VARS = ("API_GOV", "DATA_GOV_API_KEY", "FCC_API_KEY", "REGULATIONS_GOV_API_KEY")
 
 # Page size. The API accepts more, but 250 keeps individual responses small
 # enough that a retry after a mid-transfer failure is cheap.

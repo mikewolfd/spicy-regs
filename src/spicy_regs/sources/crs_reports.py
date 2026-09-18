@@ -45,6 +45,7 @@ PER_PAGE = 250
 # Env vars checked in order for the api.data.gov key (one key works across
 # regulations.gov, Congress.gov, and GovInfo).
 API_KEY_ENV_VARS = (
+    "API_GOV",  # the shared api.data.gov key, under the name RefSpec/.env uses
     "DATA_GOV_API_KEY",
     "CONGRESS_GOV_API_KEY",
     "REGULATIONS_GOV_API_KEY",

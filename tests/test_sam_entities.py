@@ -137,7 +137,7 @@ def test_resolve_api_key_prefers_sam_specific_key(monkeypatch):
 
 def test_api_key_env_var_precedence_order():
     # Explicit contract: SAM-specific first, generic data.gov next, regs last.
-    assert API_KEY_ENV_VARS == ("SAM_API_KEY", "DATA_GOV_API_KEY", "REGULATIONS_GOV_API_KEY")
+    assert API_KEY_ENV_VARS == ("SAM_API_KEY", "API_GOV", "DATA_GOV_API_KEY", "REGULATIONS_GOV_API_KEY")
 
 
 def test_resolve_api_key_falls_back_in_order(monkeypatch):
