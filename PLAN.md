@@ -13,14 +13,16 @@ Mike's.
 - **Do not push to `origin` unless Mike names the branch.** Local `main`
   deliberately tracks `fork/main`, not `origin/main`, so a bare `git push`
   cannot reach Eugene's trunk.
-- Two older branches still track `origin/main` rather than a namesake
-  (`fix/r2-publish-preflight`, `feat/source-domain-drift-gate-revived`). A bare
-  push from either is *addressed at* Eugene's trunk and is refused only because
-  `push.default` is unset and therefore `simple`. That is safe by
-  configuration, not by intent — name the remote and branch explicitly.
-- Three pushes have reached `origin`: `docs/disposition` (PR #193) and
-  `feat/court-opinions` (PR #195), both on Mike's instruction, and local
-  `main` itself on 2026-09-17, pushed by Mike.
+- One older branch still tracks `origin/main` rather than a namesake
+  (`feat/source-domain-drift-gate-revived`). A bare push from it is
+  *addressed at* Eugene's trunk and is refused only because `push.default` is
+  unset and therefore `simple`. That is safe by configuration, not by intent —
+  name the remote and branch explicitly.
+- Two pushes have reached `origin` on Mike's instruction: `docs/disposition`
+  (PR #193) and `feat/court-opinions` (PR #195). A third, local `main` to
+  `origin/main` on 2026-09-17, was a mistake; Mike force-reset `origin/main`
+  to Eugene's `1f02a7f`. While the commits were on `main`, GitHub marked our
+  seven PRs merged (#181–#183, #193–#196); their content is not on origin.
 
 ## State
 
@@ -29,25 +31,27 @@ this section quoted a commit and a count; the commit that added the section
 made both wrong within the hour, which is the trap named at the bottom of this
 file arriving in the file itself.
 
-- **`origin/main` is `8737a26`.** On 2026-09-17 Mike pushed local `main`
-  straight to origin — a fast-forward of 93 commits over Eugene's `1f02a7f`,
-  the owner's own exception to the rule above. Before that, every commit on
-  it was Eugene's.
-- **`fork/main` is `8737a26`.** Local `main`, `fork/main` and `origin/main`
-  point at the same commit; there is no unpushed delta in any direction.
+- **`origin/main` is Eugene's `1f02a7f`** (2026-09-02), restored by the
+  force-reset above. Every commit on it is Eugene's.
+- **`fork/main` is the squashed history: 20 commits above `1f02a7f`**,
+  rewritten 2026-09-18 from the 94-commit history that preceded it. The tree
+  is byte-identical; the old history is preserved as
+  `archive/pre-squash-2026-09-18` on the fork, and each squashed commit's body
+  lists the original commits it absorbed. Commits 1–7 are the seven PRs, one
+  each, in their original order; none depends on another.
 
 ```bash
 git fetch origin fork --prune
 git log --oneline fork/main..main      # expect empty
 git status --porcelain                 # expect empty
-uv run pytest -q                       # 1,230 passing as of 8737a26 (2026-09-17)
+uv run pytest -q                       # 1,230 passing on this tree (2026-09-17)
 ```
 
-Nine PRs were open on `origin` before the 2026-09-17 direct push (ours: #181,
-#182, #183, #193, #194, #195, #196; #95 and #144 are Eugene's and conflict
-with main). The push landed two weeks of merged work directly, so those PRs
-may overlap what origin already carries — reconcile before opening anything
-new.
+The seven PRs must be re-created. Cut each from its squashed commit as a
+single-commit branch off `origin/main`, then open the follow-ups (dictionary
+contract, SpicyDocs reader adoption, FEC retained inputs) after those merge,
+and the eight-table registration last. Eugene's #95 and #144 remain open on
+origin and conflict with main.
 
 ## Waiting on Mike — four decisions, none blocked on work
 
@@ -55,14 +59,24 @@ Stated in full, with the measurement that makes each answerable, at the top of
 `docs/disposition.md`. In short:
 
 1. **The FCC credential fix upstream, and key rotation.** Two questions, one
-   secret. `c6695e0` is committed locally and pushed nowhere. Rotation is
-   settled by no code change.
+   secret. The fix is squashed commit 14 on `fork/main` (`fix(fcc-ecfs): send
+   the api.data.gov key as a header`) and reaches origin only through a
+   re-created PR. Rotation is settled by no code change.
 2. **The eight-table registration PR.** `feat/register-eight-tables`
-   (`2854262`) is on the fork, unmerged, no PR. Eugene merging #194/#195/#196
-   unblocks it; opening the PR is still Mike's call.
+   (`2854262`) is on the fork, unmerged, no PR, and based on the pre-squash
+   history; rebase its one commit onto `main` first. It is unblocked only when
+   the re-created #194/#195/#196 merge and their workflows publish the eight
+   objects — check `materialized/rulemaking/latest.json` answers 200 before
+   opening. Opening the PR is still Mike's call.
 3. **`comment` and `restrictReasonType` on the `documents` table.** A schema
-   revision; its cost depends on which lane sources it.
-4. **Nine uncited `corpora/` scripts.** Default is they stay on the fork.
+   revision; its cost depends on which lane sources it. The table's own
+   catalog entry already states both are not carried and points readers at
+   spicy-docs' source-native release, which captures both.
+4. **Nine uncited `corpora/` scripts.** They live in `src/spicy_regs/corpora/`
+   on the archive branches, never on `main` or origin. Two produced outputs
+   the plan relies on: the 993-document body-retrieval corpus and its HTML/XML
+   measurement, and the mixed-real-data corpus, both under
+   `~/Work/corpora/_preserved-2026-08-10/`. Default is they stay where they are.
 
 ## Next actionable work
 
