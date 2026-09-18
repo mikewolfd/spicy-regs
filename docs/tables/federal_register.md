@@ -28,7 +28,7 @@ One row per Federal Register document, ingested from the federalregister.gov RES
 | `cfr_references_json` | `VARCHAR` | JSON array of CFR citations as `{title, part, chapter, citation_url}` objects. The join key to the CFR. |
 | `html_url` | `VARCHAR` | URL of the document's HTML page on federalregister.gov. |
 | `pdf_url` | `VARCHAR` | URL of the document's PDF rendition. |
-| `body_html_url` | `VARCHAR` | URL of the document's full-text HTML body. |
+| `body_html_url` | `VARCHAR` | URL of the document's full-text HTML body. This is the only body pointer this table carries, and it is the worse of the two the publisher offers: measured over 993 real documents, the HTML body carries publisher boilerplate on 993 of 993 and yields a median passage of 135 characters with 40.8% under 100, while the XML body carries it on 0 of 993 with a median of 610 and 6.8% fragments. The publisher's API returns `full_text_xml_url` and `raw_text_url` for the same document (verified 2026-09-07); this ingest does not request either. Anyone extracting bodies from this column takes the boilerplate-carrying route by construction — fetch the XML instead, or add the pointer here first. |
 | `volume` | `VARCHAR` | Federal Register volume number. |
 | `start_page` | `VARCHAR` | First FR page of the document. |
 | `end_page` | `VARCHAR` | Last FR page of the document. |
