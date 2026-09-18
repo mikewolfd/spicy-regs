@@ -2,7 +2,11 @@
 
 Written 2026-09-04. One record of what the program built, what each piece gives
 a user of the platform, and where each piece now lives. Decisions were taken
-2026-09-04 by the platform owner; this document records them.
+2026-09-04 by the platform owner and completed 2026-09-05; this document records
+them. Two were revised after the first draft and are recorded as revised: the
+table publisher's home is spicy-docs, not spicy-regs, and the document-AI
+orchestration's home is spicy-docs (ruled 2026-09-05). Three of the spicy-regs
+pieces have shipped; the *Order of work* section says where.
 
 Every claim below was checked against a pinned commit, not read from a
 document. The pins:
@@ -17,6 +21,9 @@ document. The pins:
 | spicy-docs | `main` | `9f8c7ee` |
 | RefSpec | `main` | `da4fe055` |
 | rulespec | `main` | `a87d839` |
+| spicy-docs | `main`, for the 2026-09-05 pricing | `86e8416` |
+| rulespec | `main`, for the 2026-09-05 pricing | `a519d06` |
+| RefSpec | `main`, for the 2026-09-05 pricing | `00f22e9c` |
 
 ## What the program was
 
@@ -59,8 +66,10 @@ four earlier snapshots whose tip trees are copies of one or the other:
 `bc8f534`, `feat/rkaf-boundary-freeze` `a8938b4`. Everything has a remote.
 
 Fifteen `src/` files exist on both branches with different content. Two matter:
-`sources/supreme_court_opinions.py` and `transforms/build_supreme_court_opinions.py`,
-when the courts PR is cut. The rest belong to pieces that ship from one branch
+`sources/supreme_court_opinions.py` and `transforms/build_supreme_court_opinions.py`.
+The `8d9e7a2` versions are the fuller ones — `9a79569` stripped the measured
+403 rate-limit guard and the bound-volume page-range logic — so `8d9e7a2` is
+the branch to cut from. The rest belong to pieces that ship from one branch
 only.
 
 Neither branch has PRs #181, #182, or #183. Both carry the earlier
@@ -73,7 +82,8 @@ corrected versions are on their own branches, and the PRs below cut from
 Each of these becomes one PR cut from `integrate/payload-prereqs` (or
 `archive/landing-final` where noted) onto `origin/main`, with the same
 treatment as #181: rebase, gate through `uv run`, validate against real data,
-one-paragraph description. In this order.
+one-paragraph description. Items 1–3 shipped on 2026-09-04 as PRs #194, #195,
+#196 — open on civictechdc, merged on the fork; see *Order of work*.
 
 ### 1. The rulemaking join surface
 
@@ -95,12 +105,19 @@ This is the product the platform was built to be.
 
 ### 2. Courts
 
-`sources/courtlistener_bulk.py`, `transforms/build_court_opinion_bodies.py`
-(356 lines), `build_court_opinion_clusters.py` (410), `court_scope.py` (348),
-`pipelines/court_opinion_{bodies,clusters}.py`, `sources/supreme_court_opinions.py`,
-`transforms/build_supreme_court_opinions.py`, `pipelines/supreme_court_opinions.py`,
-`transforms/pdf_text_pymupdf.py` (171). Ten files, about 2,000 lines, on
-`integrate`. A real run exists: `output/court-data-2026-08-22/`, 5.7 GB.
+Two sub-clusters, on `integrate`. **CourtListener** — `sources/courtlistener_bulk.py`,
+`transforms/build_court_opinion_bodies.py` (356 lines),
+`build_court_opinion_clusters.py` (410), `court_scope.py` (348),
+`pipelines/rollups/court_opinion_{bodies,clusters}.py`,
+`scripts/backfill_cluster_court_scope.py`, plus 84 additive lines in
+`sources/courtlistener.py`. Shipped as PR #195. **Supreme Court** —
+`sources/supreme_court_opinions.py`, `transforms/build_supreme_court_opinions.py`,
+`pipelines/rollups/supreme_court_opinions.py` — held back: its source imports
+`bs4`, which `origin/main` does not carry and no other source uses, so that
+dependency is a separate PR and a separate decision. `transforms/pdf_text_pymupdf.py`
+is not courts at all: it is imported by `docpipeline/source.py`, and it is
+AGPL; it goes with the document-AI producer, where the licence choice is made
+explicitly. A real run exists: `output/court-data-2026-08-22/`, 5.7 GB.
 
 **What a user gets.** Court opinions cite statutes, not CFR parts, so a user
 asking "which cases touch this rule" gets nothing today. These pipelines bring
@@ -127,21 +144,7 @@ statute citation.
 
 Ships whole, same reasoning as courts.
 
-### 4. The table publisher
-
-`public_table.py`, `public_table_profiles.py`, `publication.py`. 1,230 lines
-on `integrate`.
-
-**What a user gets.** Everything a user touches — the Parquet files at
-`data.spicy-regs.dev`, the MCP server, the app — is a table something built.
-Today that something is 21 hand-written scrapers. This is the path that builds
-the same tables from verified, digest-pinned source-native releases instead: an
-admitted release goes in, faithful Parquet/DuckDB/Iceberg views come out, and
-the provenance of every row is the release it came from. spicy-docs' supply
-rule already treats these tables as its first rung of acquisition and captures
-them; this is what makes them.
-
-### 5. The document-AI producer
+### 4. The document-AI producer
 
 `docpipeline/rkaf_projection.py` (3,124 lines), `docpipeline/{extraction,runtime,tag_task,relation_task,executor}.py`,
 `docpipeline/adapters/` (Anthropic, OpenAI, OpenAI-compatible, Codex CLI,
@@ -171,9 +174,132 @@ they must trust.
 
 Rulespec's own spec (`spec/rulespec-releases.md` §7, 2026-08-04) recorded
 these duties as parked with no owner and assigned the decision to the platform
-owner. Decided 2026-09-04: spicy-regs owns them. One line changes on the way
-in — `rkaf_projection.py:2334` imports `refspec` directly; it takes a vendored
-wheel instead, the pattern spicysearch uses.
+owner. Decided 2026-09-04 as a split; ruled complete 2026-09-05. The split is from
+the call graph of `rkaf_projection.py` at `8d9e7a2`, which corrects the first
+draft's count: `project_document` was listed as deterministic, but it calls the
+model layer, so it belongs to the orchestration. Both receiving lanes reproduced
+every count below by AST on 2026-09-05 and added the seams recorded here.
+
+- **The deterministic layer** — 21 functions, 1,307 lines of
+  `rkaf_projection.py`, plus 12 of its 13 data classes (209 lines;
+  `NormalizedVocabulary` serves only the model path and stays). Roots:
+  `assemble` (476), `verify_candidate_rows` (191), `_federal_register_facts`
+  (204), `_unified_agenda_facts` (91), `verify_fragment`, `load_artifact`, and
+  the IRI and fragment helpers under them. It becomes
+  `rulespec/packages/rulespec-projection`, beside `rulespec-artifacts`, the
+  only package there today: the format owner ships the reference producer next
+  to its verifier and fifteen conformance bundles. Priced against rulespec at
+  `a519d06` (`rulespec-artifacts`, `pyshacl`, `rdflib`, `rdfcanon`): zero new
+  dependencies. The functions themselves import nothing outside the standard
+  library. What they reach is copied at the name, not the module, because the
+  host modules import pyarrow and loguru at the top:
+  - `ontology.citations`: ten parser and IRI functions. The module is 1,025
+    lines of standard library and can move whole.
+  - `ontology.attestations`: `attestation_row` and `ATTESTOR_KIND_AI_MODEL`,
+    which close over about 100 lines, plus `OntologyInvariantError` from
+    `invariants`. Not the 544-line module.
+  - `ontology.common`: `canonical_json`, `stable_id`, `text_digest`,
+    `RunContext`; or `rulespec_artifacts.canonical_json_bytes` and
+    `sha256_digest` for the first two.
+  - `ontology.llm`: `resolve_exact_evidence_offsets` with its
+    `EvidenceOffsetResolution` dataclass, 50 lines, no imports.
+
+  Two seams stay with the caller as a Protocol or an injected mapping:
+  `PublishedTables`, whose cache fills through `read_parquet_rows` (the one
+  pyarrow path in the set), and `_source_table_for_profile`, which reads
+  `SOURCE_PROFILES`. `SourceArtifact`, a 34-line dataclass, becomes the input
+  contract, filled from DocSpec's DocumentRelease 2.0, with `AccessScope` and
+  docling's default size limit inlined; IRIs come from RefSpec's `iri_minting`.
+
+- **The orchestration** — the 13 functions only the model path uses, 1,150
+  lines of `rkaf_projection.py` (`_run_model_layer_with_vocabulary` 355, the
+  two vocabulary loaders 552, `project_document` 71), plus the six provider
+  adapters (6,932 lines), `extraction` (954), `runtime` (1,792), `tag_task`
+  (961), `relation_task` (2,102), and `executor` (536). Its home is
+  **spicy-docs**, ruled 2026-09-05: it sits beside the source-native releases
+  it reads and the table publisher it feeds, so one install runs the whole
+  path. It depends on `rulespec-projection` for the 13 functions both layers
+  share (878 lines).
+
+  *The constraint that shapes it.* spicy-docs' read and verify path is
+  contractually thin. DocSpec installs the spicy-docs wheel with `--no-deps`
+  (`tests/test_source_catalog_installed_wheel.py:911` at `20fcb24`) and imports
+  five of its modules, and spicy-docs' `tests/test_reader_closure.py` at
+  `86e8416` fails if `polars`, `httpx`, `boto3`, `botocore`, `loguru`, or
+  `tqdm` sit in `sys.modules` after importing `source_native` and
+  `source_native_profiles`. That guard is the enforcement for this port; it
+  gains the seven model names (`anthropic`, `openai`, `sentence_transformers`,
+  `torch`, `docling`, `tiktoken`, `transformers`) in its one tuple. It named
+  two of the five modules DocSpec imports; spicy-docs `160dbe9` (local `main`,
+  2026-09-05) probes all five, together and each alone, because a batch probe
+  cannot tell a clean module from one shadowed by a sibling that imported
+  first. All five were already clean. An orchestration guard, if the port adds
+  one, mirrors the per-module probe. Import direction, after spicysearch's `AGENTS.md` table
+  (`f97b904:100`):
+
+  | From | Read/verify | Acquisition/publish | Orchestration | Experiments |
+  |---|---|---|---|---|
+  | Read/verify | Yes | No | No | No |
+  | Acquisition/publish | Yes | Yes | No | No |
+  | Orchestration | Yes | Yes | Yes | No |
+  | Experiments | Yes | Yes | Yes | Yes |
+  | Tests | Yes | Yes | Yes | Yes |
+
+  Model output is nondeterministic by construction and spicy-docs' releases are
+  byte-reproducible; the table keeps them apart in the direction that matters.
+
+  *Dependencies*, priced against spicy-docs at `86e8416` (`rulespec-artifacts`,
+  `boto3`, `httpx`, `jsonschema`, `loguru`, `polars`, `tqdm`; `pyarrow` as the
+  `public-table` extra). Present: `jsonschema`, `loguru`, `pyarrow`. Absent at
+  runtime: `anthropic`, `openai`, `tiktoken` (the model adapters);
+  `sentence_transformers` and `torch` (the embedding adapter); `docling` (the
+  layout adapter, imported lazily); `refspec` (the vocabulary loader); `rdflib`
+  (through `candidate_release`); `numpy` and `scikit-learn` (through
+  `ontology.concepts`, lazily). One extra per adapter, copying all four
+  properties of `public-table`: the extra, the reason in the module docstring,
+  a lazy CLI import that reports the missing dependency instead of crashing,
+  and presence in the dev group so the default suite tests it. The embedding
+  extra's note states its size: `pyarrow` is one wheel, `torch` is gigabytes.
+  Test-only and absent: `docling_core`, `python-docx`, `openpyxl`,
+  `python-pptx` (the real-Docling test); `refspec` and `duckdb` (the projection
+  test). spicy-docs has no model or adapter code at `86e8416`, so nothing
+  collides.
+
+  *Seams.* The cost is the first-party closure, 20 modules and 19,209 lines
+  before adapters, not the packages. Each module below is touched at a few
+  names, and a module touched at a few names is a contract to define, not code
+  to move:
+
+  | module | lines | names the orchestration uses |
+  |---|---|---|
+  | `docpipeline/source.py` | 3,593 | 5: `SourceArtifact`, `build_source_artifact`, `profile_for_table`, `SOURCE_PROFILES`, `iter_source_records` |
+  | `ontology/concepts.py` | 1,407 | 4 |
+  | `docpipeline/segments.py` | 1,163 | 3 |
+  | `ontology/llm.py` | 1,036 | 7: the prompt constants, the tag schema, the resolver |
+  | `candidate_release.py` | 705 | 2 |
+  | `document_release_v3.py` | 678 | 6: digest and key helpers |
+  | `ontology/common.py` | 226 | 6: `canonical_json` alone from ten call sites |
+  | `connected_concepts`, `ontology/segmentation`, `concept_dimensions` | 856 | 7 |
+
+- **`corpora/`** — 16 modules, 23,798 lines of experiment scripts, over half
+  the producer by volume. Experiments may import everything and nothing imports
+  them, so they sequence last and defer at no cost. Registration and
+  last-touched dates say someone declared them, not that anyone runs them:
+  all 15 were last touched 2026-08-28 and 13 are console scripts at `8d9e7a2`.
+  The basis that decides it is whether an in-tree evidence or receipt file
+  cites the script. Six do (`segmentation_experiment` four times;
+  `document_acceptance_scope`, `embedding_audit`,
+  `segmentation_embedding_audit`, `segmentation_rerank`,
+  `segmentation_tagging` once each; same nine files on `9a79569`). Nine are
+  cited by none: `artifact_retrieval_baseline`, `body_retrieval_corpus`,
+  `mirrulations_document_corpus`, `mixed_real_data`, `profile_evaluation`,
+  both `relation_exclusion_evaluation` scripts, `segmentation_evaluation`,
+  `segmentation_sparse_retrieval`. Runs whose outputs never entered the tree
+  are invisible to this count. The six move per module, when the evidence that
+  cites one needs re-running, under an `experiments` extra (`transformers`,
+  `scipy`, `ir_measures`, `pypdf`, `python-dotenv`, `duckdb`); the nine stay
+  on the fork unless someone names a run. None moves in the same change as
+  the adapters.
 
 ## Ships to spicy-docs
 
@@ -194,6 +320,60 @@ spicy-docs is the acquisition product — "spicy-docs gets; it does not
 interpret" — and already carries `source_domains.py`, the documented-vs-observed
 drift gate. Populations are the same kind of thing: acquisition metadata. It
 goes through spicy-docs' own intake, commit-never-push.
+
+### The table publisher
+
+`public_table.py` (1,000 lines), `public_table_profiles.py` (165),
+`publication.py` (65), and `tests/test_public_table.py`. Ruled 2026-09-04
+afternoon: **canonical home spicy-docs**, superseding the morning's assignment
+to spicy-regs. **Landed on spicy-docs `main` at `2bb1dcf`** the same evening:
+`publication.py` was not copied because an identical module already existed
+there; `SUPPORTED_PRODUCER_PRODUCTS` was reused rather than re-hardcoded;
+`pyarrow` — a runtime import of the module, which spicy-docs did not carry and
+this record's first version did not name — was added as an optional extra plus
+a dev entry; the eight-ref provenance is in the commit.
+
+**What a user gets.** Everything a user touches — the Parquet files at
+`data.spicy-regs.dev`, the MCP server, the app — is a table something built.
+Today that something is 21 hand-written scrapers. This is the path that builds
+the same tables from verified, digest-pinned source-native releases instead: an
+admitted release goes in, faithful Parquet/DuckDB/Iceberg views come out, and
+the provenance of every row is the release it came from. Its own docstring
+draws the line — "Rulespec owns the artifact root, member manifests, digests,
+and admission; [the product] owns only the faithful flat source view" — and a
+faithful flat view is no interpretation.
+
+**Why spicy-docs.** `public_table_profiles.py` imports thirteen names from the
+source-native readers spicy-docs owns, and every one resolves at spicy-docs
+`9f8c7ee`; the publisher and `publication.py` import nineteen names from
+`rulespec_artifacts`, every one present in 1.0.11; the six release schemas are
+byte-identical between `8d9e7a2` and spicy-docs, so it reads what spicy-docs
+emits today. Its CLI entry, `spicy-regs-source-native`, is already spicy-docs'
+`source_native_cli.py`. `duckdb` is test-only — zero imports in the three
+modules, one in the test, proving the "DuckDB reads the declared members
+directly" claim; it stays a test dependency and the claim stays proven.
+
+**Provenance and the rule that keeps one implementation.** The four files
+exist on no live line — zero on `origin/main`, zero on `fork/main`, zero on
+`archive/landing-final`. They exist on eight refs, all history:
+`integrate/payload-prereqs` @ `8d9e7a2` on both civictechdc and the fork,
+`archive/integrate-payload-prereqs-pre-reorg`, `archive/pre-strip-2026-08-26`,
+`snapshots/pre-strip-2026-08-26`, and the fork's copies of those. spicy-docs
+copies from `8d9e7a2` and becomes the only implementation. **No spicy-regs
+branch re-cuts these modules.** There is nothing to delete and nothing to
+freeze on a live line; the archived branches are the record, not a rival. The
+lesson the landing taught: a port brief must list every *runtime* third-party
+import per module against the target's actual dependency closure, not only
+the test's — the first version of this record named `duckdb` and missed
+`pyarrow`, and the module would not import until it was added.
+
+One thing for spicy-docs' supply-precedence rule, recorded where the rule
+lives: once spicy-docs both produces the public tables and captures them as its
+first rung, "capture the pinned upstream artifact" and "capture our own output"
+are the same operation for this one source. Benign — it is how every source is
+treated — but a rule that appears to defer to an upstream authority must say
+that here the upstream is itself, or it reads as corroboration when it is a
+self-reference.
 
 ## Ships to RefSpec
 
@@ -280,23 +460,40 @@ layout.
 
 ## Order of work
 
-1. Tell Eugene. Six PRs from a collaborator he has not heard from in five days
-   now sit in his repo, one of them this document.
-2. Merge #183 (changes no row of live data), then #181 (stops a full rebuild
-   publishing 1% of the Federal Register as complete), watch one nightly, then
-   #182 (stops a half-finished publish from retiring work it never uploaded).
-3. Reset local `main` to `origin/main`. The archived `main` is
-   `archive/landing-final` on the fork.
-4. PRs to spicy-regs in the order above: join surface, courts, bills, table
-   publisher, document-AI with corpora.
-5. Document populations to spicy-docs through its intake.
+1. Tell Eugene. Seven PRs from a collaborator he has not heard from in five
+   days now sit in his repo, one of them this document.
+2. **Done 2026-09-04, on the fork and the local checkout only.** By the
+   platform owner's ruling the seven PRs stay open on civictechdc and were
+   merged onto `fork/main` and local `main` as merge commits, each gated
+   through `uv run` before the next:
+   `1918409` #181 (639 passed) → `1374f90` #182 (645) → `64aa35d` #183 (657)
+   → `abd229f` #193 (657) → `a3dc1b6` #194 (941) → `4b041c0` #195 (979)
+   → `765815a` #196 (1,005 passed, 3 deselected; baseline 634).
+   After the seven merges `fork/main` = local `main` = `765815a`; this
+   document's revisions were merged on top. `origin/main` untouched at `1f02a7f`.
+3. **Done.** Local `main` was reset to `origin/main` before the merges; the
+   archived `main` is `archive/landing-final` on the fork at `9a79569`.
+4. PRs to spicy-regs: join surface (#194), CourtListener (#195), bill subjects
+   (#196) — **done**, each validated against live data before opening. The
+   Supreme Court sub-cluster waits on the `bs4` decision. The document-AI
+   producer is split, priced, and ruled above; the brief went to the spicy-docs
+   and rulespec lanes 2026-09-05.
+5. The table publisher to spicy-docs through its intake (ruled afternoon
+   2026-09-04; see *Ships to spicy-docs*). Document populations likewise.
 6. The publish gate to RefSpec as a local commit; the minter to whoever holds
    `iri_minting.py`.
-7. Delete `integrate/payload-prereqs` from civictechdc once step 4 has cut from
-   it. It stays on the fork at `8d9e7a2`.
-8. Remove the worktrees for closed PRs; delete the local branches that are on
-   the fork. What remains: one checkout tracking `origin/main`, a worktree per
-   open PR.
+7. **Done 2026-09-05.** `integrate/payload-prereqs` deleted from civictechdc
+   after spicy-docs landed the publisher at `2bb1dcf`; the fork holds it at
+   `8d9e7a2`. A file-deletion PR was not the shape: `origin/main` has none of
+   the files.
+8. Register the eight new tables — five from #194, two from #195, one from
+   #196 — in the data dictionary and MCP server as one follow-up PR, the way
+   #175 exposed the lifecycle rollups after they existed. The first
+   `materialize-rulemaking` run needs `--allow-bootstrap` via
+   `workflow_dispatch`.
+9. **Done 2026-09-05.** The nine worktrees for merged and closed PRs are
+   removed. What remains: one checkout on `main` with the merges on top of
+   `origin/main`, and a local branch per open PR, each at its PR head.
 
 ## Supersedes
 
