@@ -34,21 +34,19 @@ date; ``skip_court_scope`` opts out and leaves the three columns NULL.
 
 from __future__ import annotations
 
+from collections.abc import Generator
+from contextlib import closing
 from datetime import date, timedelta
 from pathlib import Path
+from typing import cast
 
 import pyarrow as pa
 import pyarrow.parquet as pq
 from loguru import logger
 
 from spicy_regs.sources import r2
+from spicy_regs.transforms._courtlistener_writer import CourtListenerTableWriter
 from spicy_regs.sources.courtlistener import CourtListenerOpinionSearchReader
-from spicy_regs.sources.courtlistener_bulk import (
-    CourtListenerBulkReader,
-    find_dump,
-    latest_dump_date,
-    list_bulk_dumps,
-)
 from spicy_regs.transforms.court_scope import (
     CourtScope,
     build_docket_court_map,
@@ -115,7 +113,7 @@ _SCHEMA = pa.schema([(c, pa.string()) for c in COLUMNS])
 
 
 def _s(value: object) -> str | None:
-    """Coerce a scalar to str, preserving NULL."""
+    """Table policy: empty strings and missing values are both NULL."""
     if value is None:
         return None
     text = str(value)
@@ -225,38 +223,6 @@ def _shape_search(result: dict, *, scope: CourtScope | None = None) -> dict:
     return row
 
 
-class _BatchWriter:
-    """Append shaped rows to a parquet file in bounded batches."""
-
-    def __init__(self, path: Path) -> None:
-        self.path = path
-        self.rows: list[dict] = []
-        self.written = 0
-        self._writer: pq.ParquetWriter | None = None
-
-    def add(self, row: dict) -> None:
-        self.rows.append(row)
-        if len(self.rows) >= BATCH_ROWS:
-            self.flush()
-
-    def flush(self) -> None:
-        if not self.rows:
-            return
-        table = pa.Table.from_pylist(self.rows, schema=_SCHEMA)
-        if self._writer is None:
-            self._writer = pq.ParquetWriter(self.path, _SCHEMA, compression="zstd")
-        self._writer.write_table(table)
-        self.written += len(self.rows)
-        self.rows.clear()
-
-    def close(self) -> None:
-        self.flush()
-        if self._writer is None:
-            pq.write_table(_SCHEMA.empty_table(), self.path, compression="zstd")
-        else:
-            self._writer.close()
-
-
 def build_court_opinion_clusters(
     output_dir: Path,
     *,
@@ -275,6 +241,13 @@ def build_court_opinion_clusters(
     court decided is a table nobody can ask the obvious question of.
     """
     import duckdb
+
+    from spicy_docs.sources.courtlistener_bulk import (
+        CourtListenerBulkReader,
+        find_dump,
+        latest_dump_date,
+        list_bulk_dumps,
+    )
 
     out_file = output_dir / OUTPUT
     prior_file = output_dir / "_clusters_prior.parquet"
@@ -319,21 +292,30 @@ def build_court_opinion_clusters(
         scope = CourtScope.from_map(map_file, court_jurisdictions(dump_date=resolved, local_file=None))
 
     # 4. Stream the dump into the staging table, batch by batch.
-    writer = _BatchWriter(new_file)
+    writer = CourtListenerTableWriter(new_file, schema=_SCHEMA, batch_size=BATCH_ROWS)
     reader = CourtListenerBulkReader(DATASET, dump_date=resolved, local_file=local_file, max_records=max_records)
-    for row in reader.iter_records():
-        writer.add(_shape_bulk(row, scope=scope))
-    bulk_rows = writer.written + len(writer.rows)
+    try:
+        with closing(cast(Generator[dict, None, None], reader.iter_records())) as source_rows:
+            for row in source_rows:
+                writer.add(_shape_bulk(row, scope=scope))
 
-    # 5. Search catch-up for decisions filed after the dump was cut.
-    search_rows = 0
-    if not skip_search_catchup and resolved is not None:
-        since = resolved - timedelta(days=OVERLAP_DAYS)
-        logger.info("Opinion clusters: search catch-up for decisions filed since {}", since)
-        for result in CourtListenerOpinionSearchReader(since=since).iter_records():
-            writer.add(_shape_search(result, scope=scope))
-            search_rows += 1
-    writer.close()
+        bulk_rows = writer.written + len(writer.rows)
+
+        # 5. Search catch-up for decisions filed after the dump was cut.
+        search_rows = 0
+        if not skip_search_catchup and resolved is not None:
+            since = resolved - timedelta(days=OVERLAP_DAYS)
+            logger.info("Opinion clusters: search catch-up for decisions filed since {}", since)
+            for result in CourtListenerOpinionSearchReader(since=since).iter_records():
+                writer.add(_shape_search(result, scope=scope))
+                search_rows += 1
+        writer.close()
+    except BaseException:
+        try:
+            writer.abort()
+        except Exception:
+            logger.exception("Could not finish cleaning up failed CourtListener staging output")
+        raise
     logger.info(
         "Opinion clusters: staged {:,} rows ({:,} bulk + {:,} search)",
         writer.written,

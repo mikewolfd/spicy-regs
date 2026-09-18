@@ -10,14 +10,13 @@ backfill rather than fill the volume.
 from __future__ import annotations
 
 import bz2
-import io
 from datetime import date
 from pathlib import Path
 
 import pyarrow.parquet as pq
 import pytest
 
-from spicy_regs.sources.courtlistener_bulk import (
+from spicy_docs.sources.courtlistener_bulk import (
     BulkObject,
     CourtListenerBulkReader,
     find_dump,
@@ -96,7 +95,9 @@ def _csv_bz2(tmp_path: Path, name: str, header: str, rows: list[str]) -> Path:
 
 def test_bulk_object_splits_dataset_from_dump_date():
     """Coverage is checked per dataset per dump, so both must parse out of the key."""
-    obj = BulkObject("bulk-data/opinion-clusters-2026-06-30.csv.bz2", 2_457_231_057, "2026-06-30T04:11:47.000Z")
+    obj = BulkObject(
+        "bulk-data/opinion-clusters-2026-06-30.csv.bz2", 2_457_231_057, '"fixture-etag"', "2026-06-30T04:11:47.000Z"
+    )
     assert obj.dataset == "opinion-clusters"
     assert obj.dump_date == date(2026, 6, 30)
     assert obj.filename == "opinion-clusters-2026-06-30.csv.bz2"
@@ -104,7 +105,7 @@ def test_bulk_object_splits_dataset_from_dump_date():
 
     # The bucket also holds undated one-off exports; those must not masquerade
     # as a dated dump of some dataset.
-    undated = BulkObject("bulk-data/scotus_network.csv", 7_000, "2024-04-04T00:00:00.000Z")
+    undated = BulkObject("bulk-data/scotus_network.csv", 7_000, '"fixture-etag"', "2024-04-04T00:00:00.000Z")
     assert undated.dump_date is None
     assert undated.dataset == "scotus_network"
 
@@ -119,15 +120,16 @@ def test_published_object_pin_identifies_what_a_capture_read():
     ``fixtures/courtlistener-bulk-v1/``; this pins the one object a run read,
     and lets that be checked against DocSpec's before the reading starts.
     """
-    from spicy_regs.sources.courtlistener_bulk import published_object_pin
+    from spicy_docs.sources.courtlistener_bulk import published_object_pin
 
     listing = [
         BulkObject(
             "bulk-data/opinions-2026-06-30.csv.bz2",
             54_561_543_156,
+            '"fixture-etag"',
             "2026-06-30T09:56:48.000Z",
         ),
-        BulkObject("bulk-data/courts-2026-06-30.csv.bz2", 81_180, "2026-06-30T09:00:26.000Z"),
+        BulkObject("bulk-data/courts-2026-06-30.csv.bz2", 81_180, '"fixture-etag"', "2026-06-30T09:00:26.000Z"),
     ]
 
     pin = published_object_pin("opinions", date(2026, 6, 30), objects=listing)
@@ -161,9 +163,9 @@ def test_published_object_pin_identifies_what_a_capture_read():
 
 def test_latest_dump_date_and_find_dump_pick_one_published_object():
     objects = [
-        BulkObject("bulk-data/opinions-2026-03-31.csv.bz2", 54_190_000_000, ""),
-        BulkObject("bulk-data/opinions-2026-06-30.csv.bz2", 54_561_543_156, ""),
-        BulkObject("bulk-data/courts-2026-06-30.csv.bz2", 81_180, ""),
+        BulkObject("bulk-data/opinions-2026-03-31.csv.bz2", 54_190_000_000, '"fixture-etag"', "2026-06-30T09:00:00Z"),
+        BulkObject("bulk-data/opinions-2026-06-30.csv.bz2", 54_561_543_156, '"fixture-etag"', "2026-06-30T09:00:00Z"),
+        BulkObject("bulk-data/courts-2026-06-30.csv.bz2", 81_180, '"fixture-etag"', "2026-06-30T09:00:00Z"),
     ]
     assert latest_dump_date(objects, "opinions") == date(2026, 6, 30)
     assert latest_dump_date(objects, "nonexistent") is None
@@ -176,19 +178,18 @@ def test_latest_dump_date_and_find_dump_pick_one_published_object():
 # -- streaming reader --------------------------------------------------------
 
 
-def test_reader_streams_rows_and_normalizes_blanks(tmp_path: Path):
+def test_reader_preserves_source_nulls_and_quoted_empty_strings(tmp_path: Path):
     path = _csv_bz2(
         tmp_path,
         "courts-2026-06-30.csv.bz2",
         "id,short_name,jurisdiction,notes",
-        ["ca9,Ninth Circuit,F,", "scotus,Supreme Court,F,seat of last resort"],
+        ["ca9,Ninth Circuit,F,", 'scotus,Supreme Court,F,""'],
     )
     rows = list(CourtListenerBulkReader("courts", local_file=path).iter_records())
     assert [r["id"] for r in rows] == ["ca9", "scotus"]
-    # An empty CSV field is absence, not the empty string — downstream NULL
-    # handling depends on that being decided here rather than per-transform.
+    # PostgreSQL CSV distinguishes an unquoted NULL from a quoted empty string.
     assert rows[0]["notes"] is None
-    assert rows[1]["notes"] == "seat of last resort"
+    assert rows[1]["notes"] == ""
 
 
 def test_reader_honors_the_record_bound_and_reports_it(tmp_path: Path):
@@ -263,117 +264,6 @@ def test_reader_handles_embedded_newlines_in_opinion_text(tmp_path: Path):
     rows = list(CourtListenerBulkReader("opinions", local_file=path).iter_records())
     assert len(rows) == 2
     assert rows[0]["plain_text"] == "line one\nline two"
-
-
-# -- resuming a long transfer ------------------------------------------------
-
-
-class _FlakyResponse:
-    """Serve bytes from an offset and die once, the way a long socket does."""
-
-    def __init__(
-        self,
-        payload: bytes,
-        *,
-        offset: int,
-        fail_after: int | None,
-        status: int | None = None,
-    ) -> None:
-        self._payload = payload
-        self._pos = offset
-        self._served = 0
-        self._fail_after = fail_after
-        self.status = status if status is not None else (206 if offset else 200)
-
-    def read(self, size: int) -> bytes:
-        if self._fail_after is not None and self._served >= self._fail_after:
-            raise OSError("connection reset by peer")
-        chunk = self._payload[self._pos : self._pos + size]
-        self._pos += len(chunk)
-        self._served += len(chunk)
-        return chunk
-
-    def close(self) -> None:
-        return None
-
-
-def test_counting_stream_resumes_a_dropped_transfer_at_the_exact_offset(monkeypatch):
-    """8.6 hours on one socket will be interrupted; the pass must survive it.
-
-    The resumed request must start at the compressed byte already consumed and
-    feed the *same* decompressor — bzip2 wants its bytes in order, not in one
-    connection. If the offset were wrong the failure would not be an error, it
-    would be corrupt text, so this pins the recovered bytes against the original.
-    """
-    from spicy_regs.sources import courtlistener_bulk
-    from spicy_regs.sources.courtlistener_bulk import _CountingStream
-
-    original = ("id,body\n" + "".join(f"{i},row {i}\n" for i in range(4000))).encode()
-    payload = bz2.compress(original)
-    # Read in small bites so the drop lands mid-dump, as a real one would.
-    monkeypatch.setattr(courtlistener_bulk, "_CHUNK", 1024)
-    assert len(payload) > 4096, "test payload must be big enough to interrupt mid-stream"
-
-    ranges: list[int] = []
-
-    def reopen(offset: int):
-        ranges.append(offset)
-        return _FlakyResponse(payload, offset=offset, fail_after=None)
-
-    stream = _CountingStream(_FlakyResponse(payload, offset=0, fail_after=2048), reopen=reopen)
-    recovered = io.BufferedReader(stream).read()
-
-    assert recovered == original
-    assert stream.resumes == 1
-    # Resumed once, from what was actually consumed — not from zero, not a guess.
-    assert ranges == [2048]
-    assert stream.compressed_bytes == len(payload)
-
-
-def test_a_resume_that_restarts_the_stream_is_refused_not_spliced(monkeypatch):
-    """A server that ignores Range answers 200 and starts over from byte zero.
-
-    Splicing that onto a transfer already gigabytes in does not raise — the
-    decompressor happily produces garbage that looks like rows. Refusing is the
-    only safe answer, and it has to be checked rather than assumed, because the
-    whole point of the resume is that nobody is watching when it happens.
-    """
-    from spicy_regs.sources import courtlistener_bulk
-    from spicy_regs.sources.courtlistener_bulk import _CountingStream
-
-    payload = bz2.compress(b"id,body\n" + b"".join(b"%d,row\n" % i for i in range(4000)))
-    monkeypatch.setattr(courtlistener_bulk, "_CHUNK", 1024)
-
-    def restart_from_zero(offset: int):  # noqa: ARG001 - the bug being simulated
-        return _FlakyResponse(payload, offset=0, fail_after=None, status=200)
-
-    stream = _CountingStream(_FlakyResponse(payload, offset=0, fail_after=2048), reopen=restart_from_zero)
-    with pytest.raises(RuntimeError, match="not 206"):
-        io.BufferedReader(stream).read()
-
-
-def test_counting_stream_reads_a_concatenated_bzip2_dump():
-    """``pbzip2`` writes many streams; a plain decompressor stops at the first.
-
-    The publisher's dumps are single-stream today. If that ever changes, a
-    decompressor that raises ``EOFError`` past the first boundary would end a
-    pass early — which is a coverage number that is quietly wrong, the failure
-    mode this ingest most has to avoid.
-    """
-    from spicy_regs.sources.courtlistener_bulk import _CountingStream
-
-    payload = bz2.compress(b"id,body\n1,first\n") + bz2.compress(b"2,second\n")
-    stream = _CountingStream(_FlakyResponse(payload, offset=0, fail_after=None))
-    assert io.BufferedReader(stream).read() == b"id,body\n1,first\n2,second\n"
-
-
-def test_reader_raises_on_a_broken_local_read_rather_than_resuming(tmp_path: Path):
-    """Resume is a network affordance; a local file has no ``Range`` to ask for."""
-    from spicy_regs.sources.courtlistener_bulk import _CountingStream
-
-    stream = _CountingStream(_FlakyResponse(b"anything", offset=0, fail_after=0))
-    with pytest.raises(OSError, match="connection reset"):
-        io.BufferedReader(stream).read()
 
 
 # -- shaping -----------------------------------------------------------------

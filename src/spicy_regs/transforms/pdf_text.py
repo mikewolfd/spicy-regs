@@ -77,7 +77,7 @@ def extract_pdf_text(data: bytes) -> PdfTextResult:
     page_count = 0
     try:
         # Preserve the established empty-password attempt for permissions-only PDFs.
-        with PypdfReader().open(data, password="") as document:
+        with PypdfReader(expected_backend_version="6.14.2").open(data, password="") as document:
             page_count = document.page_count
             parts = [document.read_page(page) or "" for page in range(1, page_count + 1)]
     except PdfEncryptedError as exc:

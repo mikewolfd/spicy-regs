@@ -129,3 +129,37 @@ assert 'spicy-regs[source-readers]' in result.error
 """
     result = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
+
+
+def test_unqualified_backend_refuses_before_pdf_construction(monkeypatch):
+    source = make_pdf(["Text"])
+    monkeypatch.setattr("spicy_docs.extraction.pypdf.version", lambda _: "6.18.1")
+    monkeypatch.setattr(pypdf, "__version__", "6.18.1")
+    monkeypatch.setattr(pypdf, "PdfReader", lambda *a, **kw: pytest.fail("parsed with unqualified backend"))
+    result = extract_pdf_text(source)
+    assert result.status is PdfTextStatus.ERROR
+    assert result.text == ""
+    assert result.page_count == 0
+    assert result.error is not None
+    assert "expected_backend_version" in result.error
+
+
+def test_backend_exception_aborts_without_partial_text(monkeypatch):
+    source = make_pdf(["First", "Second", "Third"])
+    original = pypdf.PageObject.extract_text
+    pages = []
+
+    def fail_second_page(page):
+        pages.append(len(pages) + 1)
+        if len(pages) == 2:
+            raise ValueError("backend page failure")
+        return original(page)
+
+    monkeypatch.setattr(pypdf.PageObject, "extract_text", fail_second_page)
+    result = extract_pdf_text(source)
+    assert pages == [1, 2]
+    assert result.status is PdfTextStatus.ERROR
+    assert result.text == ""
+    assert result.page_count == 3
+    assert result.error is not None
+    assert "page 2" in result.error and "backend page failure" in result.error

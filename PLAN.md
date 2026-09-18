@@ -186,21 +186,30 @@ establish that a capability is supported or that upstream work has been accepted
 
 <a id="sr04"></a>
 
-- [ ] **SR04 — Adopt the faithful CourtListener bulk reader.**
-  **Owner: SpicyRegs; selected handoff under SR03.** SpicyDocs F05 is complete
-  at `5a9c4e9`, with the qualified 0.6.0 wheel. SpicyRegs still pins 0.3.0 and
-  uses its own [raw reader](src/spicy_regs/sources/courtlistener_bulk.py) from
-  court-scope, opinion-cluster and opinion-body transforms. Replace that copy
-  with the public provider reader after checking its callers.
+- [x] **SR04 — Adopt the faithful CourtListener bulk reader.**
+  SpicyRegs 0.1.5 uses SpicyDocs 0.17.0 directly in court-scope, opinion-cluster
+  and opinion-body transforms; the 519-line duplicate reader is removed.
+  All 3,361 retained court IDs and 397 federal classifications are preserved.
+  The shared reader retains 11,808 quoted empty strings previously lost as null;
+  independent CSV decoding confirms every value. Opinion tables deliberately
+  retain their existing empty-to-null rule; docket maps preserve the distinction.
+  Failed builds close the source and discard staging while preserving the error.
 
-  **Done when:** installed-wheel checks preserve quoted empty strings, nulls,
-  literal backslashes, record/byte limits, resume behavior and failure cleanup.
-  Audit each table transform's empty-value normalization separately: preserve
-  raw distinctions and document any deliberate table conversion. Qualify the
-  existing BILLSTATUS consumer against the upgraded wheel, remove the replaced
-  reader, and retain input pins plus before/after table evidence. An upstream
-  parser fix alone does not complete this receiving task; data backfill and
-  publication remain separate operations.
+  **Qualified locally (2026-09-15):** 1,167 source tests and 213 ordinary
+  installed-wheel tests pass, including BILLSTATUS, Agenda and PDF consumers.
+  The base install imports CLI/MCP without source-reader dependencies. Package
+  files match the wheel and committed source; independent review approves.
+  SpicyRegs explicitly qualifies pypdf 6.14.2 because newer backend recovery
+  changes malformed-page outcomes. The failed 0.1.4 installation remains evidence.
+  Source commits: `3bdb468`, `83ed49b`. No data backfill or publication occurred.
+  **PAR10 follow-up complete locally:** `dc4a33f` shares the two opinion-table
+  writers; `b6cb3f1` (0.1.6) adopts SpicyDocs 0.18's guarded transfers.
+  Eligible read exceptions resume only after matching the original HTTP object
+  and byte range; access refusals and incomplete EOF stop immediately.
+  All 1,176 source tests and 221 installed tests pass. Real local HTTP checks
+  preserve all 3,361 retained courts after interruption; independent review approves.
+  [Follow-up evidence](</Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/parsing-consolidation-2026-09-14/par10/delivery.md>).
+  [Delivery and evidence](</Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/parsing-consolidation-2026-09-14/sr04/delivery.md>).
 
 ## How to run anything
 

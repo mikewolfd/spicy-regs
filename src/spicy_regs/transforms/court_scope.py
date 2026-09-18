@@ -28,17 +28,19 @@ from __future__ import annotations
 
 import json
 from array import array
+from collections.abc import Generator
+from contextlib import closing
 from datetime import UTC, date, datetime
 from pathlib import Path
+from typing import TYPE_CHECKING, cast
 
 import pyarrow as pa
 import pyarrow.parquet as pq
 from loguru import logger
 
-from spicy_regs.sources.courtlistener_bulk import (
-    CourtListenerBulkReader,
-    published_object_pin,
-)
+if TYPE_CHECKING:
+    from spicy_docs.sources.courtlistener_bulk import CourtListenerBulkReader
+
 
 DOCKETS_DATASET = "dockets"
 COURTS_DATASET = "courts"
@@ -85,6 +87,8 @@ def court_jurisdictions(*, dump_date: date | None = None, local_file: Path | Non
     The ``courts`` dump is 81 KB, so this is read whole and held in memory —
     3,361 rows is a dict, not a table.
     """
+    from spicy_docs.sources.courtlistener_bulk import CourtListenerBulkReader
+
     reader = CourtListenerBulkReader(COURTS_DATASET, dump_date=dump_date, local_file=local_file)
     codes = {row["id"]: (row.get("jurisdiction") or "") for row in reader.iter_records() if row.get("id")}
     federal = sum(1 for code in codes.values() if is_federal(code))
@@ -209,6 +213,8 @@ def build_docket_court_map(
     dump, so a second local build in the same quarter costs nothing rather than
     46 minutes. Delete the file to force a re-read.
     """
+    from spicy_docs.sources.courtlistener_bulk import CourtListenerBulkReader
+
     stamp = dump_date.isoformat() if dump_date else "local"
     out_file = output_dir / f"docket_courts-{stamp}.parquet"
     if out_file.exists():
@@ -255,28 +261,39 @@ def build_docket_court_map(
         batch.clear()
 
     try:
-        for row in reader.iter_records():
-            docket_id = row.get("id")
-            if not docket_id:
-                continue
-            batch.append(
-                {
-                    "cl_docket_id": docket_id,
-                    "court_id": row.get("court_id"),
-                    "docket_number": row.get("docket_number"),
-                }
-            )
-            if len(batch) >= BATCH_ROWS:
-                flush()
+        with closing(cast(Generator[dict, None, None], reader.iter_records())) as source_rows:
+            for row in source_rows:
+                docket_id = row.get("id")
+                if not docket_id:
+                    continue
+                # These source fields preserve quoted empty strings separately from NULL.
+                batch.append(
+                    {
+                        "cl_docket_id": docket_id,
+                        "court_id": row.get("court_id"),
+                        "docket_number": row.get("docket_number"),
+                    }
+                )
+                if len(batch) >= BATCH_ROWS:
+                    flush()
         flush()
-    finally:
         if writer is not None:
             writer.close()
-        elif staging.exists():
-            staging.unlink()
+        else:
+            pq.write_table(_MAP_SCHEMA.empty_table(), staging, compression="zstd")
+    except BaseException:
+        try:
+            if writer is not None:
+                writer.close()
+        except Exception:
+            logger.exception("Could not close failed docket-map staging writer")
+        finally:
+            try:
+                staging.unlink(missing_ok=True)
+            except OSError:
+                logger.exception("Could not remove failed docket-map staging output")
+        raise
 
-    if writer is None:
-        pq.write_table(_MAP_SCHEMA.empty_table(), staging, compression="zstd")
     # Only name the file after the pass that filled it finished, so an
     # interrupted 46-minute stream cannot be mistaken for a cached complete map.
     staging.replace(out_file)
@@ -320,6 +337,8 @@ def write_map_receipt(
         "result": {"bytes": map_file.stat().st_size, "dockets": rows},
     }
     if dump_date is not None and reader.local_file is None:
+        from spicy_docs.sources.courtlistener_bulk import published_object_pin
+
         try:
             receipt["source"] = {
                 "publisher": "CourtListener bulk data",

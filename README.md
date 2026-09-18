@@ -125,7 +125,8 @@ uv run ruff check .           # lint
 ```
 
 The default checkout `source-readers` group installs the pinned wheels in `vendor/`
-for BILLSTATUS and Unified Agenda acquisition. Package installs opt in with
+for BILLSTATUS, Unified Agenda, CourtListener bulk reads and PDF extraction.
+Package installs opt in with
 `spicy-regs[source-readers]`; base CLI and MCP installs remain independent.
 
 The Unified Agenda reader uses SpicyDocs to fetch XML and read its fields;
@@ -133,6 +134,17 @@ SpicyRegs still chooses table columns and derives timetable dates. An unavailabl
 malformed, or mismatched edition raises before yielding any of that edition's
 rows. The two malformed 2004 exports require a separately approved correction;
 this reader does not repair them.
+
+CourtListener dump listing, source pins and CSV reading come from SpicyDocs.
+The reader preserves quoted empty strings separately from nulls and refuses
+invalid UTF-8 or malformed rows. Opinion tables deliberately map empty text to
+null; the docket map preserves quoted empties in `court_id` and `docket_number`.
+Resumed downloads require the original strong ETag, exact byte range and object
+length; access refusals stop immediately. A missing strong ETag permits an
+uninterrupted download but prevents a resume. These HTTP checks describe the
+publisher's response, not independent proof of authenticity.
+A failed read closes its source and discards staging output. Existing cached maps
+and published tables change only when explicitly rebuilt.
 
 No credentials are needed to run the tests, download the published Parquet, or
 run the pipeline against the public Mirrulations mirror. Copy `.env.example` to
@@ -230,6 +242,11 @@ skipped unless you pass `--overwrite`. Document text isn't published to
 PDF extraction uses the `source-readers` extra (installed by default in a checkout).
 For a package install, use `spicy-regs[source-readers]`. A page that fails to read
 marks that PDF as `error`, with no partial text; blank pages remain valid.
+SpicyRegs pins and checks pypdf `6.14.2` before parsing to reproduce its qualified
+text and diagnostics. Backend recovery can change: `6.18.1` returns blank text
+for the malformed `/Resources` fixture that raised on `6.14.2`. This is a
+version-dependent recovery decision, not a claim that the newer backend is broken.
+The reader is not a PDF conformance validator.
 The shared reader refuses inputs over 64 MiB before parsing; this does not
 bound decompression, output size, or processing time.
 
