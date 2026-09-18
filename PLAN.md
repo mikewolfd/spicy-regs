@@ -18,8 +18,9 @@ Mike's.
   push from either is *addressed at* Eugene's trunk and is refused only because
   `push.default` is unset and therefore `simple`. That is safe by
   configuration, not by intent — name the remote and branch explicitly.
-- Two branches have been pushed to `origin`, both on Mike's instruction:
-  `docs/disposition` (PR #193) and `feat/court-opinions` (PR #195).
+- Three pushes have reached `origin`: `docs/disposition` (PR #193) and
+  `feat/court-opinions` (PR #195), both on Mike's instruction, and local
+  `main` itself on 2026-09-17, pushed by Mike.
 
 ## State
 
@@ -28,21 +29,25 @@ this section quoted a commit and a count; the commit that added the section
 made both wrong within the hour, which is the trap named at the bottom of this
 file arriving in the file itself.
 
-- **`origin/main` is `1f02a7f`** and every commit on it is Eugene's. It moves
-  only when he pushes; nothing here has ever written to it.
-- **`fork/main` is `909633a`.** Local `main` is ahead of it and **has been
-  pushed nowhere**. That is the invariant: the delta between local `main` and
-  `fork/main` is work Mike has not sent anywhere yet.
+- **`origin/main` is `8737a26`.** On 2026-09-17 Mike pushed local `main`
+  straight to origin — a fast-forward of 93 commits over Eugene's `1f02a7f`,
+  the owner's own exception to the rule above. Before that, every commit on
+  it was Eugene's.
+- **`fork/main` is `8737a26`.** Local `main`, `fork/main` and `origin/main`
+  point at the same commit; there is no unpushed delta in any direction.
 
 ```bash
 git fetch origin fork --prune
-git log --oneline fork/main..main      # what is unpushed
+git log --oneline fork/main..main      # expect empty
 git status --porcelain                 # expect empty
-uv run pytest -q                       # 1,027 passing as of 2026-09-07
+uv run pytest -q                       # 1,230 passing as of 8737a26 (2026-09-17)
 ```
 
-Nine PRs are open on `origin`: ours are #181, #182, #183, #193, #194, #195,
-#196; #95 and #144 are Eugene's and conflict with main.
+Nine PRs were open on `origin` before the 2026-09-17 direct push (ours: #181,
+#182, #183, #193, #194, #195, #196; #95 and #144 are Eugene's and conflict
+with main). The push landed two weeks of merged work directly, so those PRs
+may overlap what origin already carries — reconcile before opening anything
+new.
 
 ## Waiting on Mike — four decisions, none blocked on work
 
