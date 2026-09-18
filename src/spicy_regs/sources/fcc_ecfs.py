@@ -138,7 +138,16 @@ class _EcfsReader(Reader):
             self.since,
             self.until,
         )
-        with httpx.Client(timeout=_TIMEOUT, headers={"Accept": "application/json"}) as client:
+        # The key travels as a header, never as a query parameter. httpx renders
+        # the full request URL into HTTPStatusError, and both handlers below log
+        # the exception, so a key in the query string reaches the log on any 4xx
+        # — and the retry handler fires on every attempt, not just the last.
+        # A credential that never enters a URL cannot be rendered by an
+        # exception. Verified 2026-09-07 that the API reads this header: sending
+        # it with a bad value answers API_KEY_INVALID, where sending nothing
+        # answers API_KEY_MISSING.
+        headers = {"Accept": "application/json", "X-Api-Key": self.api_key or ""}
+        with httpx.Client(timeout=_TIMEOUT, headers=headers) as client:
             self._client = client
             yield from self._fetch_window(self.since, self.until)
         logger.info("ECFS {}: yielded {:,} records", self.endpoint, self._seen)
@@ -218,13 +227,17 @@ class _EcfsReader(Reader):
                 return records, False
 
     def _get(self, params: dict[str, str]) -> dict | None:
-        """GET with the api_key attached, bounded retries + exponential backoff."""
+        """GET with bounded retries + exponential backoff.
+
+        The api.data.gov key is on the client's ``X-Api-Key`` header, not in
+        ``params``: everything passed here ends up in a URL that an httpx
+        exception will print into the log.
+        """
         assert self._client is not None
         url = f"{API_BASE}/{self.endpoint}"
-        query = {**params, "api_key": self.api_key}
         for attempt in range(1, _MAX_RETRIES + 1):
             try:
-                resp = self._client.get(url, params=query)
+                resp = self._client.get(url, params=params)
                 if resp.status_code == 429 or resp.status_code >= 500:
                     raise httpx.HTTPStatusError("retryable", request=resp.request, response=resp)
                 resp.raise_for_status()
