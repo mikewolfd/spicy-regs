@@ -15,6 +15,7 @@ from spicy_regs.enrich_pdf import (
     pdf_urls_for_document,
 )
 from spicy_regs.schemas import COMMENT
+from spicy_regs.transforms.pdf_text import extract_pdf_text
 from spicy_regs.sources import iceberg
 
 
@@ -217,14 +218,22 @@ def test_catalog_pdf_enrich_upserts_extracted_text_in_place() -> None:
         _seed_catalog(
             con,
             [
-                {"comment_id": "ACF-1", "docket_id": "ACF-2025-0001", "agency_code": "ACF",
-                 "attachments_json": _pdf_attach("https://x/c1.pdf"), "comment": "See attached file(s)"},
+                {
+                    "comment_id": "ACF-1",
+                    "docket_id": "ACF-2025-0001",
+                    "agency_code": "ACF",
+                    "attachments_json": _pdf_attach("https://x/c1.pdf"),
+                    "comment": "See attached file(s)",
+                },
                 # attachment but the download fails → status recorded (error), text stays NULL
-                {"comment_id": "ACF-2", "docket_id": "ACF-2025-0001", "agency_code": "ACF",
-                 "attachments_json": _pdf_attach("https://x/c2.pdf")},
+                {
+                    "comment_id": "ACF-2",
+                    "docket_id": "ACF-2025-0001",
+                    "agency_code": "ACF",
+                    "attachments_json": _pdf_attach("https://x/c2.pdf"),
+                },
                 # no attachment → never a candidate
-                {"comment_id": "ACF-3", "docket_id": "ACF-2025-0001", "agency_code": "ACF",
-                 "attachments_json": None},
+                {"comment_id": "ACF-3", "docket_id": "ACF-2025-0001", "agency_code": "ACF", "attachments_json": None},
             ],
         )
 
@@ -259,3 +268,40 @@ def test_catalog_pdf_enrich_upserts_extracted_text_in_place() -> None:
         assert again == {"selected": 0, "ok": 0, "empty": 0, "encrypted": 0, "error": 0}
     finally:
         con.close()
+
+
+def test_enrich_fetches_each_url_once_and_extracts_each_pdf_once() -> None:
+    """Two rows sharing a URL cost one fetch; two URLs with the same bytes cost one extraction."""
+    shared = make_pdf(["Shared notice"])
+    frame = pl.DataFrame(
+        {
+            "document_id": ["D-1", "D-2", "D-3"],
+            "attachments_json": [
+                json.dumps([{"url": "https://x/a.pdf", "format": "pdf"}]),
+                json.dumps([{"url": "https://x/a.pdf", "format": "pdf"}]),
+                json.dumps([{"url": "https://x/b.pdf", "format": "pdf"}]),
+            ],
+            "file_url": [None, None, None],
+            "text_content": [None, None, None],
+            "text_extraction_status": [None, None, None],
+        },
+        schema=_docs_frame().schema,
+    )
+    fetches: list[str] = []
+    extractions: list[bytes] = []
+
+    def fetch(url: str) -> bytes:
+        fetches.append(url)
+        return shared
+
+    def extract(data: bytes):
+        extractions.append(data)
+        return extract_pdf_text(data)
+
+    # One worker so the digest cache is consulted in sequence, not raced.
+    enriched, stats = enrich_documents_with_pdf_text(frame, fetch=fetch, extract=extract, max_workers=1)
+
+    assert sorted(fetches) == ["https://x/a.pdf", "https://x/b.pdf"]
+    assert len(extractions) == 1
+    assert all(r["text_extraction_status"] == "ok" for r in enriched.iter_rows(named=True))
+    assert stats == {"selected": 3, "ok": 3, "empty": 0, "encrypted": 0, "error": 0}

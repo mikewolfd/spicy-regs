@@ -13,7 +13,7 @@ into schema-shaped records is the job of the
 
 import re
 from collections.abc import Callable, Iterator
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from dataclasses import dataclass, field
 from json import loads
 from threading import Lock
@@ -315,16 +315,32 @@ def download_keys(
 
     done = 0
     with ThreadPoolExecutor(max_workers=n) as executor:
-        # Map future -> key so as_completed can attribute an exception to its key.
-        submitted = {executor.submit(download_and_parse, s3_resource, bucket_name, key, _identity): key for key in keys}
-        for future in as_completed(submitted):
-            done += 1
-            if label and done % _PROGRESS_EVERY == 0:
-                logger.info("{}: downloaded {}/{}", label, done, total)
-            try:
-                yield future.result()
-            except (TransientDownloadError, PayloadParseError) as exc:
-                _record_failure(exc, submitted[future], label, failures)
+        # Keep at most 2n downloads in flight and drop each future once yielded.
+        # Submitting every key up front held one decoded payload per key until
+        # the consumer drained the whole list: 1,000 live payloads on a
+        # 1,000-key probe, against 8 with this window.
+        pending: dict[Future[dict], str] = {}
+        remaining = iter(keys)
+        exhausted = False
+        while pending or not exhausted:
+            while not exhausted and len(pending) < 2 * n:
+                key = next(remaining, None)
+                if key is None:
+                    exhausted = True
+                    break
+                pending[executor.submit(download_and_parse, s3_resource, bucket_name, key, _identity)] = key
+            if not pending:
+                break
+            completed, _ = wait(pending, return_when=FIRST_COMPLETED)
+            for future in completed:
+                key = pending.pop(future)
+                done += 1
+                if label and done % _PROGRESS_EVERY == 0:
+                    logger.info("{}: downloaded {}/{}", label, done, total)
+                try:
+                    yield future.result()
+                except (TransientDownloadError, PayloadParseError) as exc:
+                    _record_failure(exc, key, label, failures)
 
 
 class MirrulationsReader(Reader):
