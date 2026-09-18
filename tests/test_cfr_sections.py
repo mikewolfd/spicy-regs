@@ -120,9 +120,11 @@ def test_shape_parses_section_granule():
     # CFR title number parsed from the id, not the (heading) ``title`` field.
     assert row["title"] == "40"
     assert row["edition_year"] == "2024"
-    # This title expresses sections as CONTENT granules with no ``part`` token.
-    assert row["part"] is None
-    assert row["section"] == "1-1"
+    # No ``part`` token on a section granule: the ``sec`` token fuses part and
+    # section, so ``sec1-1`` is 40 CFR 1.1 and the part is split back out.
+    assert row["part"] == "1"
+    assert row["section"] == "1"
+    assert row["cfr_ref"] == "40-1.1"
     assert row["heading"] == "Definitions."
     assert row["structure_level"] == "CONTENT"
     # last_modified comes from the enclosing package stamp.
@@ -199,3 +201,35 @@ def test_shape_handles_missing_fields():
     assert row["heading"] is None
     # No package id -> no canonical url.
     assert row["url"] is None
+
+
+# A section granule whose part carries a letter suffix (5 CFR 5b is a real part).
+_LETTERED_PART_GRANULE = {
+    "granuleId": "CFR-2025-title5-vol3-sec5b-11",
+    "granuleClass": "CONTENT",
+    "title": "Safeguarding personal information.",
+    "_package_id": "CFR-2025-title5-vol3",
+}
+
+# A malformed publisher id: the word "Sec" repeats and no part is recoverable.
+_MALFORMED_SECTION_GRANULE = {
+    "granuleId": "CFR-2025-title14-vol4-secSec-1-1",
+    "granuleClass": "CONTENT",
+    "title": "Applicability.",
+    "_package_id": "CFR-2025-title14-vol4",
+}
+
+
+def test_shape_splits_a_lettered_part_out_of_the_section():
+    row = _shape(_LETTERED_PART_GRANULE)
+    assert row["part"] == "5b"
+    assert row["section"] == "11"
+    assert row["cfr_ref"] == "5-5b.11"
+
+
+def test_shape_leaves_a_malformed_section_id_unsplit():
+    """No recoverable part, so part stays null rather than inventing one."""
+    row = _shape(_MALFORMED_SECTION_GRANULE)
+    assert row["part"] is None
+    assert row["section"] == "Sec-1-1"
+    assert row["cfr_ref"] is None
