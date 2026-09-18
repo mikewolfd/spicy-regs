@@ -39,7 +39,7 @@ import pyarrow.parquet as pq
 from loguru import logger
 
 if TYPE_CHECKING:
-    from spicy_docs.sources.courtlistener_bulk import CourtListenerBulkReader
+    from spicy_docs.sources.courtlistener.bulk import CourtListenerBulkReader
 
 
 DOCKETS_DATASET = "dockets"
@@ -87,7 +87,7 @@ def court_jurisdictions(*, dump_date: date | None = None, local_file: Path | Non
     The ``courts`` dump is 81 KB, so this is read whole and held in memory —
     3,361 rows is a dict, not a table.
     """
-    from spicy_docs.sources.courtlistener_bulk import CourtListenerBulkReader
+    from spicy_docs.sources.courtlistener.bulk import CourtListenerBulkReader
 
     reader = CourtListenerBulkReader(COURTS_DATASET, dump_date=dump_date, local_file=local_file)
     codes = {row["id"]: (row.get("jurisdiction") or "") for row in reader.iter_records() if row.get("id")}
@@ -213,7 +213,7 @@ def build_docket_court_map(
     dump, so a second local build in the same quarter costs nothing rather than
     46 minutes. Delete the file to force a re-read.
     """
-    from spicy_docs.sources.courtlistener_bulk import CourtListenerBulkReader
+    from spicy_docs.sources.courtlistener.bulk import CourtListenerBulkReader
 
     stamp = dump_date.isoformat() if dump_date else "local"
     out_file = output_dir / f"docket_courts-{stamp}.parquet"
@@ -337,7 +337,7 @@ def write_map_receipt(
         "result": {"bytes": map_file.stat().st_size, "dockets": rows},
     }
     if dump_date is not None and reader.local_file is None:
-        from spicy_docs.sources.courtlistener_bulk import published_object_pin
+        from spicy_docs.sources.courtlistener.bulk import published_object_pin
 
         try:
             receipt["source"] = {

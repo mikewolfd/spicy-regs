@@ -13,7 +13,7 @@ from unittest.mock import patch
 import httpx
 import pytest
 from spicy_docs.sources.unified_agenda import UnifiedAgendaSourceError
-from spicy_docs.sources.unified_agenda_records import scan_unified_agenda_records
+from spicy_docs.sources.unified_agenda.records import scan_unified_agenda_records
 
 from spicy_regs.sources.unified_agenda import UnifiedAgendaReader, _normalize
 from spicy_regs.transforms.build_unified_agenda import _shape

@@ -16,7 +16,7 @@ from pathlib import Path
 import pyarrow.parquet as pq
 import pytest
 
-from spicy_docs.sources.courtlistener_bulk import (
+from spicy_docs.sources.courtlistener.bulk import (
     BulkObject,
     CourtListenerBulkReader,
     find_dump,
@@ -120,7 +120,7 @@ def test_published_object_pin_identifies_what_a_capture_read():
     ``fixtures/courtlistener-bulk-v1/``; this pins the one object a run read,
     and lets that be checked against DocSpec's before the reading starts.
     """
-    from spicy_docs.sources.courtlistener_bulk import published_object_pin
+    from spicy_docs.sources.courtlistener.bulk import published_object_pin
 
     listing = [
         BulkObject(

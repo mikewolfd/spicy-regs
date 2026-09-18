@@ -5,7 +5,7 @@ The optional `source-readers` extra enables the same readers for package install
 its wheels must be supplied explicitly until they are published in a registry.
 Base CLI and MCP installs do not require them.
 
-- `spicy_docs-0.18.0`: built from SpicyDocs commit `1e8cab407490dadd02d3e291fa09efab7a52d17a`.
+- `spicy_docs-0.20.0`: built from SpicyDocs commit `b96e083805019302fcf5b96bae962521b8a5ad7a` (tag v0.20.0). Address sweep to sources/uscode/*, spicy_docs.reading.* and sources/courtlistener/* in the same commit; receivers re-qualified below.
   SHA-256: `594a2f01f689c10f8c3b133a70b2e8ee9f644dd9234788a957b4f731e6d1c7e3`.
 - `rulespec_artifacts-1.0.12`: unchanged from the prior source-reader pin.
 - `uv.lock` records both wheel SHA-256 values. Replace the wheel and refresh the
