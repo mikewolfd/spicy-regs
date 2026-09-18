@@ -11,9 +11,13 @@ from __future__ import annotations
 
 import json
 
+import httpx
+
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
+from spicy_docs.sources.congress.bill_acquisition import BillAcquirer, BillAcquisitionBudget
+from spicy_docs.transport.credentials import CredentialRefusedError
 
 from spicy_regs.sources.bill_subjects import (
     API_HOURLY_BUDGET,
@@ -23,7 +27,6 @@ from spicy_regs.sources.bill_subjects import (
     FIRST_CONGRESS,
     BillSubjects,
     BillSubjectsFetcher,
-    parse_billstatus_subjects,
     resolve_carrier,
 )
 from spicy_regs.sources.congress_bills import API_KEY_ENV_VARS
@@ -40,16 +43,18 @@ from spicy_regs.transforms.enrich_bill_subjects import (
 # repeat across containers.
 _BILLSTATUS = """<?xml version="1.0" encoding="UTF-8"?>
 <billStatus>
+  <version>3.0.0</version>
   <bill>
+    <number>1</number>
+    <title>Synthetic bill for subject receiver tests</title>
     <congress>118</congress>
     <type>HR</type>
     <policyArea><name>Environmental Protection</name></policyArea>
     <subjects>
       <legislativeSubjects>
         <item><name>Air quality</name></item>
-        <item><name>Congressional oversight</name></item>
+        <item><name>  Congressional  oversight </name></item>
         <item><name>Air quality</name></item>
-        <item><name>  </name></item>
       </legislativeSubjects>
       <policyArea>
         <name>Environmental Protection</name>
@@ -73,23 +78,101 @@ def _write_bills(path, rows):
     pq.write_table(pa.Table.from_pylist([dict(zip(columns, r)) for r in rows], schema=schema), path)
 
 
-# -- BILLSTATUS parse --------------------------------------------------------
+@pytest.fixture
+def bulk_fetcher(monkeypatch):
+    """Exercise the installed source API with exact synthetic HTTP bodies."""
+    _keyless(monkeypatch)
+    acquirers = []
+
+    def create(*actions, max_requests=1):
+        responses = iter(actions)
+        calls = []
+
+        def respond(request):
+            calls.append(request)
+            action = next(responses)
+            if isinstance(action, Exception):
+                raise action
+            status, body = action if isinstance(action, tuple) else (200, action)
+            return httpx.Response(
+                status,
+                stream=httpx.ByteStream(body.encode() if isinstance(body, str) else body),
+                headers={"content-type": "application/xml"},
+            )
+
+        acquirer = BillAcquirer(
+            budget=BillAcquisitionBudget(
+                max_requests=max_requests,
+                max_status_bytes=16 * 1024,
+                max_text_bytes=16 * 1024,
+                timeout_seconds=1,
+                min_request_interval_seconds=0,
+            ),
+            transport=httpx.MockTransport(respond),
+        )
+        acquirers.append(acquirer)
+        return BillSubjectsFetcher(carrier=CARRIER_BULKDATA, delay=0, bill_acquirer=acquirer), calls
+
+    yield create
+    for acquirer in acquirers:
+        acquirer.close()
 
 
-def test_parse_billstatus_reads_policy_area_and_subjects():
-    policy_area, subjects = parse_billstatus_subjects(_BILLSTATUS)
-    assert policy_area == "Environmental Protection"
-    # Repeated terms collapse, whitespace-only names are dropped, order is kept.
-    assert subjects == ("Air quality", "Congressional oversight")
+def test_bulkdata_preserves_table_cleanup_and_uses_the_shared_source(bulk_fetcher):
+    fetcher, calls = bulk_fetcher(_BILLSTATUS)
+    result = fetcher.subjects_for("118", "HR", "1")
+    assert result == BillSubjects(
+        "Environmental Protection", ("Air quality", "Congressional oversight"), CARRIER_BULKDATA
+    )
+    assert [str(call.url) for call in calls] == [
+        "https://www.govinfo.gov/bulkdata/BILLSTATUS/118/hr/BILLSTATUS-118hr1.xml"
+    ]
+    assert fetcher.counts.with_policy_area == 1
 
 
-def test_parse_billstatus_survives_malformed_xml():
-    # A truncated download must degrade to "no answer here", not raise.
-    assert parse_billstatus_subjects("<billStatus><bill>") == (None, ())
+@pytest.mark.parametrize("bill_type,number", [("hr", "bad"), ("hr", "0"), ("hr", "-1"), ("unsupported", "1")])
+def test_bulkdata_invalid_input_skips_the_row_before_http_and_continues(bulk_fetcher, bill_type, number):
+    fetcher, calls = bulk_fetcher(_BILLSTATUS)
+    assert fetcher.subjects_for("118", bill_type, number) is None
+    assert len(calls) == 0
+    assert fetcher.counts.failed == 1
+    assert fetcher.subjects_for("118", "hr", "1") is not None
+    assert len(calls) == 1
+    assert fetcher.counts.answered == 1
 
 
-def test_parse_billstatus_handles_a_bill_with_no_assignment():
-    assert parse_billstatus_subjects("<billStatus><bill/></billStatus>") == (None, ())
+@pytest.mark.parametrize(
+    "body",
+    [
+        "<billStatus><bill>",
+        "<html>not a bill</html>",
+        '<billStatus version="3.0.0"><bill/></billStatus>',
+        _BILLSTATUS.replace("<number>1</number>", "<number>2</number>"),
+    ],
+)
+def test_bulkdata_malformed_or_wrong_bill_is_failed_not_unassigned(bulk_fetcher, body):
+    fetcher, calls = bulk_fetcher(body)
+    assert fetcher.subjects_for("118", "hr", "1") is None
+    assert (fetcher.counts.failed, fetcher.counts.answered, fetcher.counts.unassigned) == (1, 0, 0)
+    assert len(calls) == 1
+
+
+@pytest.mark.parametrize("status", [401, 403])
+def test_bulkdata_access_refusal_stops_without_an_empty_result_or_retry(bulk_fetcher, status):
+    fetcher, calls = bulk_fetcher((status, b"refused"), max_requests=2)
+    with pytest.raises(CredentialRefusedError):
+        fetcher.subjects_for("118", "hr", "1")
+    assert len(calls) == 1
+    assert fetcher.counts.answered == 0
+
+
+@pytest.mark.parametrize("action", [(503, b"unavailable"), httpx.ConnectError("private transport detail")])
+def test_bulkdata_exhausted_transport_leaves_the_bill_for_retry(bulk_fetcher, action):
+    fetcher, calls = bulk_fetcher(action)
+    assert fetcher.subjects_for("118", "hr", "1") is None
+    assert fetcher.counts.failed == 1
+    assert fetcher.counts.answered == 0
+    assert len(calls) == 1
 
 
 # -- carrier selection -------------------------------------------------------
@@ -216,52 +299,56 @@ def test_a_failed_later_page_publishes_nothing_rather_than_a_truncated_list(monk
 # -- the three outcomes ------------------------------------------------------
 
 
-def test_a_404_is_an_answer_not_a_failure(monkeypatch):
-    _keyless(monkeypatch)
-    fetcher = BillSubjectsFetcher(delay=0)
-    monkeypatch.setattr(fetcher, "_get_text", lambda url: _absent())
-    result = fetcher.subjects_for("108", "hr", "1")
-    # The carrier answered: it does not hold this bill. Recorded so the next run
-    # doesn't ask again.
+@pytest.mark.parametrize("status", [404, 410])
+def test_bulkdata_explicit_unavailability_is_counted_apart_from_failure(bulk_fetcher, status):
+    fetcher, calls = bulk_fetcher((status, b"unavailable"))
+    result = fetcher.subjects_for("118", "hr", "1")
     assert result == BillSubjects(None, (), CARRIER_BULKDATA, held=False)
     assert (fetcher.counts.answered, fetcher.counts.not_held, fetcher.counts.failed) == (1, 1, 0)
+    assert len(calls) == 1
 
 
-def test_a_held_bill_with_no_terms_is_counted_apart_from_a_404(monkeypatch):
-    """Both publish a null policy_area; only one of them means "never heard of it"."""
-    _keyless(monkeypatch)
-    fetcher = BillSubjectsFetcher(delay=0)
-    monkeypatch.setattr(fetcher, "_get_text", lambda url: "<billStatus><bill/></billStatus>")
-    fetcher.subjects_for("118", "hr", "1")
+_NO_TERMS = """<billStatus><version>3.0.0</version><bill>
+<number>1</number><congress>118</congress><type>HR</type><title>Synthetic unassigned bill</title>
+</bill></billStatus>"""
+
+
+def test_a_validated_bill_with_no_terms_is_counted_apart_from_a_404(bulk_fetcher):
+    fetcher, _ = bulk_fetcher(_NO_TERMS)
+    assert fetcher.subjects_for("118", "hr", "1") == BillSubjects(None, (), CARRIER_BULKDATA)
     assert (fetcher.counts.unassigned, fetcher.counts.not_held) == (1, 0)
 
 
-def test_every_answer_lands_in_exactly_one_bucket(monkeypatch):
-    _keyless(monkeypatch)
-    fetcher = BillSubjectsFetcher(delay=0)
-    bodies = iter([_BILLSTATUS, "<billStatus><bill/></billStatus>", _absent()])
-    monkeypatch.setattr(fetcher, "_get_text", lambda url: next(bodies))
-    for n in range(3):
-        fetcher.subjects_for("118", "hr", str(n))
+def test_every_answer_lands_in_exactly_one_bucket(bulk_fetcher):
+    fetcher, _ = bulk_fetcher(_BILLSTATUS, _NO_TERMS, (404, b""))
+    for _ in range(3):
+        fetcher.subjects_for("118", "hr", "1")
     counts = fetcher.counts
     buckets = counts.with_policy_area + counts.subjects_only + counts.unassigned + counts.not_held
     assert buckets == counts.answered == 3
 
 
-def _absent():
-    from spicy_regs.sources.bill_subjects import _ABSENT
-
-    return _ABSENT
-
-
-def test_counts_tally_policy_areas_for_the_run_report(monkeypatch):
-    _keyless(monkeypatch)
-    fetcher = BillSubjectsFetcher(delay=0)
-    monkeypatch.setattr(fetcher, "_get_text", lambda url: _BILLSTATUS)
+def test_counts_tally_policy_areas_for_the_run_report(bulk_fetcher):
+    fetcher, _ = bulk_fetcher(_BILLSTATUS, _BILLSTATUS.replace("<number>1</number>", "<number>2</number>"))
     fetcher.subjects_for("118", "hr", "1")
     fetcher.subjects_for("118", "hr", "2")
     assert fetcher.counts.with_policy_area == 2
     assert fetcher.counts.policy_areas == {"Environmental Protection": 2}
+
+
+def test_injected_bill_acquirer_remains_owned_by_the_caller(bulk_fetcher):
+    fetcher, calls = bulk_fetcher(_BILLSTATUS)
+    acquirer = fetcher._bill_acquirer
+    fetcher.close()
+    assert fetcher._bill_acquirer is acquirer
+    assert fetcher.subjects_for("118", "hr", "1") is not None
+    assert len(calls) == 1
+
+
+def test_bulkdata_injection_cannot_silently_use_the_api_client(monkeypatch):
+    _keyless(monkeypatch)
+    with httpx.Client() as client, pytest.raises(ValueError, match="bill_acquirer"):
+        BillSubjectsFetcher(client=client)
 
 
 # -- the published shape -----------------------------------------------------

@@ -14,7 +14,7 @@
 [![CI](https://github.com/civictechdc/spicy-regs/actions/workflows/ci.yml/badge.svg)](https://github.com/civictechdc/spicy-regs/actions/workflows/ci.yml)
 [![Integration](https://github.com/civictechdc/spicy-regs/actions/workflows/integration.yml/badge.svg)](https://github.com/civictechdc/spicy-regs/actions/workflows/integration.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/)
 [![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
 [![Slack](https://img.shields.io/badge/Slack-join%20us-4A154B?logo=slack&logoColor=white)](https://join.slack.com/t/civictechdc/shared_invite/zt-43eotbj04-QLQ_Ria296PtRYJU2EgwxQ)
 
@@ -114,7 +114,7 @@ dictionary documents the scope of each.
 
 ## Quickstart
 
-Prerequisites: Python 3.10+ and [uv](https://docs.astral.sh/uv/getting-started/installation/).
+Prerequisites: Python 3.12 and [uv](https://docs.astral.sh/uv/getting-started/installation/).
 
 ```bash
 git clone https://github.com/civictechdc/spicy-regs.git
@@ -123,6 +123,16 @@ uv sync                       # install dependencies into .venv
 uv run pytest                 # run the test suite
 uv run ruff check .           # lint
 ```
+
+The default checkout `source-readers` group installs the pinned wheels in `vendor/`
+for BILLSTATUS and Unified Agenda acquisition. Package installs opt in with
+`spicy-regs[source-readers]`; base CLI and MCP installs remain independent.
+
+The Unified Agenda reader uses SpicyDocs to fetch XML and read its fields;
+SpicyRegs still chooses table columns and derives timetable dates. An unavailable,
+malformed, or mismatched edition raises before yielding any of that edition's
+rows. The two malformed 2004 exports require a separately approved correction;
+this reader does not repair them.
 
 No credentials are needed to run the tests, download the published Parquet, or
 run the pipeline against the public Mirrulations mirror. Copy `.env.example` to
@@ -217,6 +227,31 @@ uv run backfill-comment-text --upload            # republish to R2 (needs creden
 It's incremental and re-runnable — rows with a `text_extraction_status` are
 skipped unless you pass `--overwrite`. Document text isn't published to
 `derived-data`; backfill those with `uv run enrich-pdf-text --target documents`.
+PDF extraction uses the `source-readers` extra (installed by default in a checkout).
+For a package install, use `spicy-regs[source-readers]`. A page that fails to read
+marks that PDF as `error`, with no partial text; blank pages remain valid.
+The shared reader refuses inputs over 64 MiB before parsing; this does not
+bound decompression, output size, or processing time.
+
+Each PDF attempt also saves `pdf_extraction_results_json`: an ordered entry for
+every selected URL with its observed-byte SHA-256, status, page count, and error.
+A row can be `ok` while one attachment failed; inspect this field before treating
+its text as complete. A fetch that returned no bytes has a null digest/page count
+and the generic error `fetch returned no bytes`. No response body is archived by
+this enrichment step.
+
+These are the latest PDF-attempt diagnostics. `--overwrite` replaces them; a
+failed overwrite can leave older `text_content` intact, and derived-data backfill
+preserves the PDF diagnostics while supplying text independently. Skipped rows
+keep their prior results. Selection and aggregate counts remain per row.
+
+Catalog setup adds this nullable field to existing document/comment tables and
+refuses an incompatible column type. This requires DuckDB 1.5.3 or later. Setup
+reopens the connection after adding the field so Iceberg writes see its current
+schema. A conflicting schema update stops the run before data writes; rerunning
+uses the current schema. The upgrade does not re-fetch files or publish the
+public mirror; use the existing enrichment and publication commands for those
+operations.
 
 ### Working on the data dictionary
 

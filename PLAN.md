@@ -93,6 +93,115 @@ It declares only what this repo *publishes* — it carries no searchability
 field, and a test forbids even the words, because whether a class is indexed is
 the serving side's fact.
 
+## Source-provider work for dataset experiments
+
+### BILLSTATUS subject acquisition
+
+- [x] Replace the local bulk XML downloader/parser with the SpicyDocs 0.3.0
+  wheel; qualify source identity, malformed/access failures, and table behavior.
+  Keep Congress API selection and the six-column subject transform unchanged.
+- [x] Validate the installed wheel and frozen lock on Python 3.12; provider
+  revision is in [vendor/README.md](vendor/README.md), with wheel digests in
+  `uv.lock`. Full suite: 1,040 passed; base-wheel CLI/MCP imports also qualified.
+
+This is source reuse only: the subject table retains carrier and enrichment
+time, not exact BILLSTATUS XML or text-version links. SpicyDocs returns those
+captures to callers that need to retain them; this transform publishes its
+existing subject fields. Dataset catalogs and processing remain outside it.
+
+These open tasks own only SpicyRegs changes. They coordinate with DocSpec's
+dataset workflow and SpicyDocs' source work, using planning sources DocSpec
+`3e3e43e` and SpicyDocs `40921d3`. SpicyRegs remains independently usable for
+public-data users. Retaining SpicyDocs separately is valid; none of these tasks
+requires moving that package into SpicyRegs. Adding the backlog does not
+establish that a capability is supported or that upstream work has been accepted.
+
+<a id="sr01"></a>
+
+- [ ] **SR01 — Select SpicyRegs capabilities to reuse and local duplication to remove.**
+  **Owner: SpicyRegs.** Review actual source connectors, strict parsers, table
+  and Iceberg publication, CourtListener handling, documented-value diagnostics,
+  public imports and optional dependencies. Coordinate the local inventory with
+  [SpicyDocs S11](../spicy-docs/docs/simplification-todo.md#s11), its
+  [ownership decision S25](../spicy-docs/docs/simplification-todo.md#s25), and
+  [DocSpec D41](../DocSpec/docs/dataset-experiments-todo.md#d41).
+  **Done when:** each candidate names its current callers, exact implementation,
+  beneficiary, supported or required use, KEEP/SHARE/REMOVE/DEFER decision and
+  reason. Every selected reuse names the provider's public wheel capability and
+  the copy or maintenance step it replaces; justified differences remain
+  explicit. No DocSpec or search caller is required to justify independently
+  useful source publication. [SR03](#sr03) owns selected SpicyRegs changes;
+  [SpicyDocs S13](../spicy-docs/docs/simplification-todo.md#s13),
+  [S14](../spicy-docs/docs/simplification-todo.md#s14),
+  [S15](../spicy-docs/docs/simplification-todo.md#s15) and
+  [S16](../spicy-docs/docs/simplification-todo.md#s16) own their local dispositions;
+  [DocSpec D42](../DocSpec/docs/dataset-experiments-todo.md#d42) owns its adapter
+  changes. Only the relevant ownership decision gates each handoff.
+
+<a id="sr02"></a>
+
+- [ ] **SR02 — Provide supported retained public-comment/table input facts.**
+  **Owner: SpicyRegs.** Identify a bounded retained input and expose its supported
+  public interface for [DocSpec D52](../DocSpec/docs/dataset-experiments-todo.md#d52),
+  using the intake interface in [D06](../DocSpec/docs/dataset-experiments-todo.md#d06).
+  Document source-qualified record identity, retained-input identity, field
+  provenance, available comment text or candidate document locators, rejected
+  rows and missing fields. State the observed scope and coverage assumptions,
+  including how this table differs from other Regulations.gov representations;
+  use explicit unavailable values where the input supplies no evidence.
+  **Done when:** the selected reader/API and a bounded retained fixture are usable
+  through the provider's installed wheel, with exact source facts and clear
+  coverage limits. Any necessary source-schema/API change is explicit and
+  qualified; table availability alone does not establish complete comment or
+  document coverage. DocSpec owns catalog selection and inspection in
+  [D07](../DocSpec/docs/dataset-experiments-todo.md#d07), its adapter/example in
+  [D52](../DocSpec/docs/dataset-experiments-todo.md#d52), and broader experiment
+  qualification in [D38](../DocSpec/docs/dataset-experiments-todo.md#d38).
+  Source data remains usable without a DocSpec processing run or a recreated
+  public-data pipeline inside DocSpec.
+
+<a id="sr03"></a>
+
+- [ ] **SR03 — Implement selected local source improvements and consumer handoffs.**
+  **Owner: SpicyRegs.** Implement only the SpicyRegs changes selected in
+  [SR01](#sr01), plus source changes needed for [SR02](#sr02). Link each change
+  to its applicable [SpicyDocs S13](../spicy-docs/docs/simplification-todo.md#s13),
+  [S14](../spicy-docs/docs/simplification-todo.md#s14),
+  [S15](../spicy-docs/docs/simplification-todo.md#s15) or
+  [S25](../spicy-docs/docs/simplification-todo.md#s25) handoff. Preserve exact
+  source values, provenance, strict parsing and pagination/refusal behavior,
+  bounded operation, and the distinct guarantees of raw, native and table output.
+  Expose the smallest selected public wheel API; keep optional dependencies
+  optional and the provider independent of DocSpec.
+  **Done when:** selected local changes have focused source fixtures and an
+  installed-wheel handoff recording source revision, package version, wheel
+  digest and consumer requirements; replaced local code/dependencies are removed
+  after the selected consumers switch. DocSpec owns its integration and
+  qualification in [D42](../DocSpec/docs/dataset-experiments-todo.md#d42) and
+  [D46](../DocSpec/docs/dataset-experiments-todo.md#d46); SpicyDocs owns its local
+  switch/removal in [S16](../spicy-docs/docs/simplification-todo.md#s16) and S25.
+  Record deferred changes separately. Distinguish local preparation, commits,
+  proposed upstream work and accepted upstream work; follow this plan's existing
+  authorization rules for publication and upstream submission.
+
+<a id="sr04"></a>
+
+- [ ] **SR04 — Adopt the faithful CourtListener bulk reader.**
+  **Owner: SpicyRegs; selected handoff under SR03.** SpicyDocs F05 is complete
+  at `5a9c4e9`, with the qualified 0.6.0 wheel. SpicyRegs still pins 0.3.0 and
+  uses its own [raw reader](src/spicy_regs/sources/courtlistener_bulk.py) from
+  court-scope, opinion-cluster and opinion-body transforms. Replace that copy
+  with the public provider reader after checking its callers.
+
+  **Done when:** installed-wheel checks preserve quoted empty strings, nulls,
+  literal backslashes, record/byte limits, resume behavior and failure cleanup.
+  Audit each table transform's empty-value normalization separately: preserve
+  raw distinctions and document any deliberate table conversion. Qualify the
+  existing BILLSTATUS consumer against the upgraded wheel, remove the replaced
+  reader, and retain input pins plus before/after table evidence. An upstream
+  parser fix alone does not complete this receiving task; data backfill and
+  publication remain separate operations.
+
 ## How to run anything
 
 Everything goes through `uv run`, never a binary from `PATH`. The gate:

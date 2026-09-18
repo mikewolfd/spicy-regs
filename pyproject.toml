@@ -1,8 +1,8 @@
 [project]
 name = "spicy-regs"
-version = "0.1.0"
+version = "0.1.3"
 description = "Regulations Data Analysis Tools"
-requires-python = ">=3.10"
+requires-python = ">=3.12,<3.13"
 dependencies = [
     "boto3",
     "python-dotenv",
@@ -10,22 +10,30 @@ dependencies = [
     "pyarrow",
     "tqdm",
     "httpx",
-    "duckdb>=1.4", # >=1.4 required to ATTACH an Iceberg REST catalog and MERGE INTO it
+    "duckdb>=1.5.3", # Iceberg ALTER TABLE support for the nullable PDF diagnostics field
     "pandas",
     "cyclopts",
     "loguru",
-    "mcp>=1.10.0",
-    "pypdf",
+    "mcp>=1.10.0,<2", # FastMCP imports use the 1.x API
     "pyyaml",  # data dictionary descriptions (src/spicy_regs/data_dictionary.py)
 ]
 
 [project.optional-dependencies]
+source-readers = [
+    "spicy-docs[acquisition,pdf-pypdf]==0.15.0",
+    "rulespec-artifacts==1.0.12",
+]
 embed = [
     "sentence-transformers",
     "torch",
 ]
 
 [dependency-groups]
+# Checkout pipelines use the pinned source wheels; base CLI/MCP installs do not.
+source-readers = [
+    "spicy-docs[acquisition,pdf-pypdf]==0.15.0",
+    "rulespec-artifacts==1.0.12",
+]
 dev = [
     "ipykernel",
     "matplotlib",
@@ -79,6 +87,13 @@ spicy-regs-dict = "spicy_regs.data_dictionary:main"
 [build-system]
 requires = ["uv_build"]
 build-backend = "uv_build"
+
+[tool.uv.sources]
+spicy-docs = { path = "vendor/spicy_docs-0.15.0-py3-none-any.whl" }
+rulespec-artifacts = { path = "vendor/rulespec_artifacts-1.0.12-py3-none-any.whl" }
+
+[tool.uv]
+default-groups = ["dev", "source-readers"]
 
 [tool.pytest.ini_options]
 # Integration tests hit external services (the public Mirrulations S3 mirror)

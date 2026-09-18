@@ -406,9 +406,8 @@ def backfill_comments_catalog(
     """
     from spicy_regs.sources import iceberg
 
-    con = iceberg._connect()
+    con = iceberg._connect_for_table(record_type)
     try:
-        iceberg._ensure_table(con, record_type)
         tbl = iceberg._qualified(record_type)
         if agencies:
             agency_list = [a.strip().upper() for a in agencies if a.strip()]

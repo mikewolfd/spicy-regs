@@ -143,15 +143,7 @@ def test_merge_keeps_existing_when_incoming_is_older(tmp_path, local_catalog) ->
 
 
 def test_merge_upserts_without_merge_into(tmp_path) -> None:
-    """The R2 Data Catalog (Iceberg) rejects ``MERGE INTO`` — DuckDB raises
-    ``NotImplementedException`` against an iceberg table — so ``_merge`` must
-    express the upsert as ``DELETE`` + ``INSERT`` (the DML the seed loader uses).
-
-    The in-memory test catalog is a native DuckDB table that *does* accept
-    ``MERGE INTO`` (which is exactly why the original bug escaped the suite), so
-    this asserts on the emitted SQL rather than the row result. The
-    ``local_catalog`` behavior tests above cover the upsert semantics.
-    """
+    """Keep the tested DELETE + INSERT sequence; other tests prove row semantics."""
     _write_staging(tmp_path / "s", "EPA", [_docket("EPA-1", "EPA", "T", "2025-01-01")])
     files = iceberg._staging_files(tmp_path / "s", DOCKET)
 
@@ -171,7 +163,7 @@ def test_merge_upserts_without_merge_into(tmp_path) -> None:
     iceberg._merge(_RecordingCon(), files, DOCKET)
 
     sql = " ".join(executed).upper()
-    assert "MERGE INTO" not in sql, "Iceberg catalog does not support MERGE INTO"
+    assert "MERGE INTO" not in sql, "preserve the tested DELETE + INSERT sequence"
     assert "DELETE FROM" in sql
     assert "INSERT INTO" in sql
 

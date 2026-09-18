@@ -23,14 +23,10 @@ assignments, and the reader picks whichever the environment can actually reach:
     for the rare bill that carries more.
 
 ``govinfo-billstatus``
-    GPO's BILLSTATUS bulk data serves the same assignments as XML with **no key
-    and no rate limit**: ``<policyArea><name>`` and
-    ``<subjects><legislativeSubjects><item><name>``. The terms are identical
-    strings; only the carrier differs — the same equivalence
-    ``tools/fuse_concept_registries.py`` already relies on to read these two
-    vocabularies. Its coverage floor is the **108th Congress** (2003); anything
-    earlier 404s, which is why the transform records the floor rather than
-    walking bills the carrier cannot answer for.
+    SpicyDocs acquires bounded BILLSTATUS XML and validates the requested bill
+    identity. This consumer cleans and deduplicates the returned policy area
+    and subjects for its existing table. No API key is needed. The transform's
+    configured coverage floor remains the 108th Congress (2003).
 
 Without a key the keyless carrier is chosen automatically, so a CI run is never
 a no-op — it just enriches a shallower slice of the archive.
@@ -40,20 +36,22 @@ a no-op — it just enriches a shallower slice of the archive.
 assignments"), and ``None`` when it did not (timeout, 5xx, exhausted retries).
 The transform writes a row only for an answer, so a network wobble leaves the
 bill un-enriched for the next run instead of pinning an empty answer to it.
+Malformed or wrong-bill XML also leaves no row; credential refusal aborts the
+bulk operation. The subject table retains carrier/time, not captured XML bytes.
 """
 
 from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
-from xml.etree import ElementTree
+from typing import TYPE_CHECKING
 
 import httpx
 from loguru import logger
-
 from spicy_regs.sources.congress_bills import API_BASE, API_KEY_ENV_VARS, _resolve_api_key
 
-BULKDATA_BASE = "https://www.govinfo.gov/bulkdata/BILLSTATUS"
+if TYPE_CHECKING:
+    from spicy_docs.sources.congress.bill_acquisition import BillAcquirer
 
 #: Carrier names, stored verbatim in ``bill_subjects.carrier`` so a reader can
 #: tell which publisher supplied a row (and the transform can re-ask a bill the
@@ -163,6 +161,7 @@ class BillSubjectsFetcher:
         carrier: str | None = None,
         delay: float | None = None,
         client: httpx.Client | None = None,
+        bill_acquirer: BillAcquirer | None = None,
     ) -> None:
         self.api_key = api_key if api_key is not None else _resolve_api_key()
         self.carrier = carrier or (CARRIER_API if self.api_key else CARRIER_BULKDATA)
@@ -171,9 +170,15 @@ class BillSubjectsFetcher:
                 f"carrier {CARRIER_API!r} needs an api.data.gov key (set one of {', '.join(API_KEY_ENV_VARS)})"
             )
         self.delay = DELAY_SECONDS[self.carrier] if delay is None else delay
+        if self.carrier == CARRIER_BULKDATA and client is not None:
+            raise ValueError("Use bill_acquirer to inject the BILLSTATUS client")
+        if self.carrier == CARRIER_API and bill_acquirer is not None:
+            raise ValueError("bill_acquirer is only valid for the BILLSTATUS carrier")
         self.counts = FetchCounts()
         self._client = client
         self._owns_client = client is None
+        self._bill_acquirer = bill_acquirer
+        self._owns_bill_acquirer = bill_acquirer is None
 
     @property
     def first_congress(self) -> int:
@@ -190,6 +195,9 @@ class BillSubjectsFetcher:
         if self._client is not None and self._owns_client:
             self._client.close()
             self._client = None
+        if self._bill_acquirer is not None and self._owns_bill_acquirer:
+            self._bill_acquirer.close()
+            self._bill_acquirer = None
 
     # -- fetch ---------------------------------------------------------------
 
@@ -249,15 +257,50 @@ class BillSubjectsFetcher:
         return BillSubjects(policy_area, _dedup(names), self.carrier)
 
     def _from_bulkdata(self, congress: str, bill_type: str, bill_number: str) -> BillSubjects | None:
-        """One BILLSTATUS XML fetch, parsed for both fields."""
-        slug = f"{congress}{str(bill_type).lower()}{bill_number}"
-        url = f"{BULKDATA_BASE}/{congress}/{str(bill_type).lower()}/BILLSTATUS-{slug}.xml"
-        text = self._get_text(url)
-        if isinstance(text, _Absent):
-            return BillSubjects(None, (), self.carrier, held=False)
-        if text is None:
+        """Use the shared source operation; keep table-specific cleanup here."""
+        try:
+            from spicy_docs.sources.congress.bill_acquisition import (
+                BillAcquirer,
+                BillAcquisitionBudget,
+                BillSourceUnavailableError,
+            )
+        except ModuleNotFoundError as error:
+            if error.name == "spicy_docs":
+                raise RuntimeError(
+                    "BILLSTATUS acquisition requires the pinned source wheels. "
+                    "Run `uv sync --frozen` in a SpicyRegs checkout."
+                ) from None
+            raise
+        from spicy_docs.sources.congress.bill_status import BillIdentity, BillSourceError
+        from spicy_docs.transport.credentials import CredentialRefusedError
+
+        try:
+            identity = BillIdentity(congress=int(congress), bill_type=str(bill_type).lower(), number=int(bill_number))
+        except (ValueError, TypeError) as error:
+            logger.warning("BILLSTATUS input identity is invalid: {}", type(error).__name__)
             return None
-        policy_area, subjects = parse_billstatus_subjects(text)
+        if self._bill_acquirer is None:
+            self._bill_acquirer = BillAcquirer(
+                budget=BillAcquisitionBudget(
+                    max_requests=_MAX_RETRIES,
+                    max_status_bytes=24 * 1024 * 1024,
+                    max_text_bytes=24 * 1024 * 1024,
+                    timeout_seconds=60,
+                    min_request_interval_seconds=self.delay,
+                )
+            )
+        try:
+            acquired = self._bill_acquirer.acquire_status(identity)
+        except CredentialRefusedError:
+            raise
+        except BillSourceUnavailableError:
+            return BillSubjects(None, (), self.carrier, held=False)
+        except (BillSourceError, httpx.HTTPError, ConnectionError) as error:
+            # Do not make malformed/wrong-bill XML look like an unassigned bill.
+            logger.warning("BILLSTATUS acquisition failed for {}: {}", identity, type(error).__name__)
+            return None
+        policy_area = _clean(acquired.status.policy_area)
+        subjects = _dedup([name for value in acquired.status.subjects if (name := _clean(value))])
         return BillSubjects(policy_area, subjects, self.carrier)
 
     # -- transport -----------------------------------------------------------
@@ -273,11 +316,6 @@ class BillSubjectsFetcher:
             logger.warning("Bill subjects: unparseable JSON from {}: {}", url, exc)
             return None
         return payload if isinstance(payload, dict) else None
-
-    def _get_text(self, url: str) -> str | _Absent | None:
-        """Fetch a text body (BILLSTATUS XML)."""
-        response = self._request(url, params=None)
-        return response if response is None or isinstance(response, _Absent) else response.text
 
     def _request(self, url: str, *, params: dict | None) -> httpx.Response | _Absent | None:
         """GET with bounded retries + exponential backoff.
@@ -311,33 +349,6 @@ class BillSubjectsFetcher:
                 )
                 time.sleep(backoff)
         return None
-
-
-def parse_billstatus_subjects(xml_text: str) -> tuple[str | None, tuple[str, ...]]:
-    """Read ``(policy_area, legislative_subjects)`` out of one BILLSTATUS record.
-
-    ``<policyArea>`` appears twice in a BILLSTATUS document — once as a direct
-    child of ``<bill>`` and once inside ``<subjects>`` — carrying the same name,
-    so the first non-empty one wins. **No subject -> policy-area hierarchy is
-    derived**: the two are sibling assertions about the bill, never a parent and
-    its children (the reasoning ``tools/fuse_concept_registries.py`` sets out at
-    length). Malformed XML yields an empty answer rather than raising.
-    """
-    try:
-        root = ElementTree.fromstring(xml_text)
-    except ElementTree.ParseError:
-        return (None, ())
-    policy_area = next(
-        (name for element in root.iter("policyArea") if (name := _clean(element.findtext("name")))),
-        None,
-    )
-    subjects = [
-        name
-        for container in root.iter("legislativeSubjects")
-        for item in container.iter("item")
-        if (name := _clean(item.findtext("name")))
-    ]
-    return (policy_area, _dedup(subjects))
 
 
 def _clean(value: object) -> str | None:

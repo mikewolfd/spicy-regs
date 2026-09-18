@@ -9,7 +9,7 @@ If you find this project useful, please consider giving it a star on GitHub — 
 
 ## Getting started
 
-Prerequisites: **Python 3.10+** and [**uv**](https://docs.astral.sh/uv/getting-started/installation/).
+Prerequisites: **Python 3.12** and [**uv**](https://docs.astral.sh/uv/getting-started/installation/).
 
 1. Fork the repo on GitHub, then clone your fork:
    ```bash

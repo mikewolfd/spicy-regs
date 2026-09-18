@@ -1,0 +1,72 @@
+<RIN_INFO>
+        <RIN>1084-AA00</RIN>
+        <PUBLICATION>
+            <PUBLICATION_ID>200404</PUBLICATION_ID>
+            <PUBLICATION_TITLE>Unified Agenda of Federal Regulatory and Deregulatory Actions</PUBLICATION_TITLE>
+        </PUBLICATION>
+        <AGENCY>
+            <CODE>1084</CODE>
+            <NAME>Office of Acquisition and Property Management</NAME>
+            <ACRONYM>OAPM</ACRONYM>
+        </AGENCY>
+        <PARENT_AGENCY>
+            <CODE>1000</CODE>
+            <NAME>Department of the Interior</NAME>
+            <ACRONYM>DOI</ACRONYM>
+        </PARENT_AGENCY>
+        <RULE_TITLE>Woody Biomass Utilization</RULE_TITLE>
+        <ABSTRACT><![CDATA[The Department of the Interior proposes to include an option for allowing service contractors the option to remove woody biomass generated as a result of land management service contracts wherever ecologically appropriate and in accordance with the law.  A new clause added to the Departments acquisition regulations would specify a contract clause to be used for this purpose.  No other changes in specifications are proposed.]]></ABSTRACT>
+        <PRIORITY_CATEGORY>Substantive, Nonsignificant</PRIORITY_CATEGORY>
+        <RIN_STATUS>First Time Published in The Unified Agenda</RIN_STATUS>
+        <RULE_STAGE>Proposed Rule Stage</RULE_STAGE>
+        <MAJOR>Undetermined</MAJOR>
+        <UNFUNDED_MANDATE_LIST>
+            <UNFUNDED_MANDATE>No</UNFUNDED_MANDATE>
+        </UNFUNDED_MANDATE_LIST>
+        <CFR_LIST>
+            <CFR>48 CFR 14</CFR>
+        </CFR_LIST>
+        <LEGAL_AUTHORITY_LIST>
+            <LEGAL_AUTHORITY>30 USC 601 to 604</LEGAL_AUTHORITY>
+            <LEGAL_AUTHORITY>30 USC 611</LEGAL_AUTHORITY>
+            <LEGAL_AUTHORITY>16 USC 668dd</LEGAL_AUTHORITY>
+            <LEGAL_AUTHORITY>16 USC 1</LEGAL_AUTHORITY>
+            <LEGAL_AUTHORITY>25 USC 3101 et seq</LEGAL_AUTHORITY>
+            <LEGAL_AUTHORITY>43 USC 1701 et seq</LEGAL_AUTHORITY>
+        </LEGAL_AUTHORITY_LIST>
+        <LEGAL_DLINE_LIST/>
+        <RPLAN_ENTRY>No</RPLAN_ENTRY>
+        <TIMETABLE_LIST>
+            <TIMETABLE>
+                <TTBL_ACTION>NPRM</TTBL_ACTION>
+                <TTBL_DATE>07/00/2004</TTBL_DATE>
+            </TIMETABLE>
+        </TIMETABLE_LIST>
+        <RFA_REQUIRED>No</RFA_REQUIRED>
+        <SMALL_ENTITY_LIST>
+            <SMALL_ENTITY>No</SMALL_ENTITY>
+        </SMALL_ENTITY_LIST>
+        <GOVT_LEVEL_LIST>
+            <GOVT_LEVEL>None</GOVT_LEVEL>
+        </GOVT_LEVEL_LIST>
+        <FEDERALISM>No</FEDERALISM>
+        <PRINT_PAPER>NA</PRINT_PAPER>
+        <INTERNATIONAL_INTEREST>Not Collected</INTERNATIONAL_INTEREST>
+        <AGENCY_CONTACT_LIST>
+            <CONTACT>
+                <FIRST_NAME>John</FIRST_NAME>
+                <LAST_NAME>Stewart</LAST_NAME>
+                <TITLE>Office of Wildland Fire Coordination</TITLE>
+                <AGENCY>
+                    <CODE>1084</CODE>
+                </AGENCY>
+                <PHONE>202 606-0504</PHONE>
+                <MAILING_ADDRESS>
+                    <STREET_ADDRESS>1849 C Street NW.,</STREET_ADDRESS>
+                    <CITY>Washington</CITY>
+                    <STATE>DC</STATE>
+                    <ZIP>20240</ZIP>
+                </MAILING_ADDRESS>
+            </CONTACT>
+        </AGENCY_CONTACT_LIST>
+    </RIN_INFO>
