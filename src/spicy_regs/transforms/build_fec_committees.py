@@ -1,36 +1,22 @@
-"""Transform: build ``fec_committees.parquet`` from the OpenFEC API.
+"""Build the FEC committee reference table using one shared row mapping.
 
-Produces a pinned 16-column all-VARCHAR schema keyed on ``committee_id`` (e.g.
-``C00684373``) — the Federal Election Commission committee/PAC **reference
-dimension** that sits alongside the regulations.gov corpus. Downstream this
-feeds the dashboard's ally/opposition (stance) map, giving commenter and
-co-filer names a set of political committees to resolve against.
+The fixed all-VARCHAR columns describe committees, not transactions or proven
+organization affiliations. Candidate IDs and cycles remain JSON strings.
 
-Scope is deliberately committees-only. Itemized contributions
-(``/schedules/schedule_a``) run into the hundreds of millions of rows and are
-out of scope for this pass; a future bounded-by-organization contributions pass
-could follow, keyed on the ``committee_id`` this table establishes.
+The default builder fetches the OpenFEC committee list, merges it with the prior
+R2 table and prefers fresh rows for matching committee IDs. Keeping prior rows
+preserves observed coverage through smaller source responses and the existing
+publication shrink guard; it does not prove the new traversal is complete.
 
-Incremental by design. Committees are a reference dimension, not a time series,
-so there is no watermark: each run walks the full committee list and merges it
-with the prior published table. A full re-fetch that produced *fewer* rows than
-before (e.g. a truncated run) would trip the R2 catastrophic-shrink guard, so
-merging against the prior table both preserves coverage and keeps the row count
-monotonic. Concretely we:
-
-1. Best-effort download the prior ``fec_committees.parquet`` from R2.
-2. Walk every page of ``/committees`` and shape the rows.
-3. Dedup the union on ``committee_id``, preferring the freshly fetched row.
-
-With no prior table (first run) step 3 is just the fresh fetch.
-
-Array fields (``cycles``, ``candidate_ids``) are serialized to JSON strings so
-the whole schema stays flat VARCHAR, matching the other external-source tables.
+Call ``write_fec_committee_rows`` for an explicit retained-record slice. Its caller
+owns input verification, provenance and coverage. That path makes no HTTP request
+or publication and does not merge an independently moving prior table.
 """
 
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable
 from pathlib import Path
 
 import pyarrow as pa
@@ -39,12 +25,10 @@ from loguru import logger
 
 from spicy_regs.sources import r2
 from spicy_regs.sources.fec_committees import FecCommitteesReader
+from spicy_regs.transforms.parquet_rows import write_rows
 
 OUTPUT = "fec_committees.parquet"
 
-# The published schema: 16 columns, all VARCHAR, in a fixed order.
-# ``committee_id`` is the primary / dedup key. Array fields are serialized to
-# JSON strings (``*_json``).
 COLUMNS = (
     "committee_id",
     "name",
@@ -93,6 +77,17 @@ def _shape(doc: dict) -> dict:
     }
 
 
+def write_fec_committee_rows(records: Iterable[dict], destination: Path, *, batch_size: int = 2_000) -> Path:
+    """Map selected raw OpenFEC rows; replace the output only after full consumption.
+
+    Memory grows with one batch of source rows. Use the fixed Arrow schema
+    directly: the ontology writer's scalar coercion would change type handling.
+    This preserves source order and duplicates; the default builder deduplicates
+    after combining its fresh rows with the prior table.
+    """
+    return write_rows((_shape(doc) for doc in records), destination, _SCHEMA, batch_size=batch_size)
+
+
 def build_fec_committees(output_dir: Path) -> Path:
     """Build ``fec_committees.parquet`` (full walk merged with the prior table)."""
     import duckdb
@@ -100,22 +95,16 @@ def build_fec_committees(output_dir: Path) -> Path:
     out_file = output_dir / OUTPUT
     prior_file = output_dir / "_fec_prior.parquet"
 
-    # 1. Pull the prior table (best effort — absence just means a clean build).
     have_prior = prior_file.exists() or r2.download(OUTPUT, prior_file)
     if have_prior:
         logger.info("FEC committees: merging against prior table {}", prior_file)
     else:
         logger.info("FEC committees: no prior table found — clean build")
 
-    # 2. Fetch + shape into a "new rows" parquet.
     reader = FecCommitteesReader()
-    rows = [_shape(doc) for doc in reader.iter_records()]
-    new_file = output_dir / "_fec_new.parquet"
-    table = pa.Table.from_pylist(rows, schema=_SCHEMA) if rows else _SCHEMA.empty_table()
-    pq.write_table(table, new_file, compression="zstd")
-    logger.info("FEC committees: fetched {:,} committees this run", len(rows))
+    new_file = write_fec_committee_rows(reader.iter_records(), output_dir / "_fec_new.parquet")
+    logger.info("FEC committees: fetched {:,} committees this run", pq.ParquetFile(new_file).metadata.num_rows)
 
-    # 3. Merge prior + new, dedup on committee_id preferring the new row.
     spill_dir = output_dir / ".duckdb_tmp"
     spill_dir.mkdir(exist_ok=True)
     con = duckdb.connect()

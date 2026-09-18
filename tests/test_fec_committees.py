@@ -9,6 +9,10 @@ short page — that was the bug that truncated the backfill at ~26K of ~89K).
 from __future__ import annotations
 
 import json
+import importlib
+
+import pyarrow.parquet as pq
+import pytest
 
 from spicy_regs.sources.fec_committees import (
     API_KEY_ENV_VARS,
@@ -17,6 +21,7 @@ from spicy_regs.sources.fec_committees import (
     _resolve_api_key,
 )
 from spicy_regs.transforms.build_fec_committees import COLUMNS, _shape
+from spicy_regs.transforms.build_fec_committees import write_fec_committee_rows
 
 _RAW_COMMITTEE = {
     "committee_id": "C00684373",
@@ -40,6 +45,86 @@ _RAW_COMMITTEE = {
     "affiliated_committee_name": "NONE",
     "designated_agent_name": "DOE, JANE",
 }
+
+
+def test_retained_rows_use_bounded_batches_and_existing_shape(tmp_path, monkeypatch):
+    module = importlib.import_module("spicy_regs.transforms.build_fec_committees")
+    real_writer = module.pq.ParquetWriter
+    written = []
+
+    class ObservedWriter:
+        def __init__(self, *args, **kwargs):
+            self.writer = real_writer(*args, **kwargs)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *error):
+            self.writer.close()
+
+        def write_table(self, table):
+            written.append(table.num_rows)
+            self.writer.write_table(table)
+
+    monkeypatch.setattr(module.pq, "ParquetWriter", ObservedWriter)
+
+    def records():
+        for index in range(5):
+            if index >= 2:
+                assert sum(written) >= (index // 2) * 2
+            yield {**_RAW_COMMITTEE, "committee_id": f"C{index:08}"}
+
+    target = write_fec_committee_rows(records(), tmp_path / "selected.parquet", batch_size=2)
+    assert written == [2, 2, 1]
+    table = pq.read_table(target)
+    assert table.column_names == list(COLUMNS)
+    assert table.to_pylist() == [_shape({**_RAW_COMMITTEE, "committee_id": f"C{i:08}"}) for i in range(5)]
+
+
+def test_failed_retained_input_preserves_previous_output(tmp_path):
+    target = write_fec_committee_rows([_RAW_COMMITTEE], tmp_path / "selected.parquet")
+    prior = target.read_bytes()
+
+    def failed():
+        yield {**_RAW_COMMITTEE, "name": "CHANGED BEFORE FAILURE"}
+        raise RuntimeError("retained input failed verification")
+
+    with pytest.raises(RuntimeError, match="failed verification"):
+        write_fec_committee_rows(failed(), target, batch_size=1)
+    assert target.read_bytes() == prior
+    assert list(tmp_path.iterdir()) == [target]
+
+
+def test_empty_retained_input_keeps_schema_and_duplicate_rows_survive(tmp_path):
+    target = write_fec_committee_rows(iter(()), tmp_path / "empty.parquet")
+    assert pq.read_table(target).column_names == list(COLUMNS)
+    assert pq.ParquetFile(target).metadata.num_rows == 0
+    write_fec_committee_rows([_RAW_COMMITTEE, _RAW_COMMITTEE], target)
+    assert pq.read_table(target).to_pylist() == [_shape(_RAW_COMMITTEE)] * 2
+
+
+@pytest.mark.parametrize("value", [0, -1, True])
+def test_retained_input_rejects_invalid_batch_bound(tmp_path, value):
+    with pytest.raises(ValueError, match="batch_size"):
+        write_fec_committee_rows([], tmp_path / "unused.parquet", batch_size=value)
+
+
+def test_default_builder_uses_the_shared_row_writer(tmp_path, monkeypatch):
+    module = importlib.import_module("spicy_regs.transforms.build_fec_committees")
+    monkeypatch.setattr(module.r2, "download", lambda *a: False)
+    monkeypatch.setattr(module.FecCommitteesReader, "iter_records", lambda self: iter([_RAW_COMMITTEE]))
+    real_write = module.write_fec_committee_rows
+    calls = []
+
+    def write(records, destination):
+        calls.append(destination.name)
+        return real_write(records, destination, batch_size=1)
+
+    monkeypatch.setattr(module, "write_fec_committee_rows", write)
+    monkeypatch.setenv("FEC_API_KEY", "test-key")
+    result = module.build_fec_committees(tmp_path)
+    assert calls == ["_fec_new.parquet"]
+    assert pq.read_table(result).to_pylist() == [_shape(_RAW_COMMITTEE)]
 
 
 def test_shape_produces_exact_schema():
