@@ -12,6 +12,8 @@ from spicy_regs.transforms.build_fec_committees import build_fec_committees
 from spicy_regs.transforms.build_federal_register import build_federal_register
 from spicy_regs.transforms.build_feed_summary import build_feed_summary
 from spicy_regs.transforms.build_fr_docket_links import build_fr_docket_links
+from spicy_regs.transforms.build_court_opinion_bodies import build_court_opinion_bodies
+from spicy_regs.transforms.build_court_opinion_clusters import build_court_opinion_clusters
 from spicy_regs.transforms.build_org_committee_links import build_org_committee_links
 from spicy_regs.transforms.build_comment_periods import build_comment_periods
 from spicy_regs.transforms.build_proceedings import build_proceedings
@@ -65,6 +67,8 @@ __all__ = [
     "build_sam_entities",
     "build_federal_register",
     "build_fr_docket_links",
+    "build_court_opinion_bodies",
+    "build_court_opinion_clusters",
     "build_org_committee_links",
     "build_comment_periods",
     "build_proceedings",
