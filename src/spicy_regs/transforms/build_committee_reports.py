@@ -9,11 +9,22 @@ acquirer and a pacing budget:
   text, each carrying the header pattern that fired as its provenance.
 * **CHRG** (hearing transcripts) fills ``hearing_transcripts``.
 
-Report text goes through ``extraction.gpo_normalize`` before block parsing:
-GPO text carries line numbers, VerDate footers and small-caps artifacts that
-otherwise land inside a block's body. The cleanup record is processing
-provenance and is not published here — ``bill_versions`` is the table that
-carries it, for the printings where it changes the text people read.
+Report text comes from ``extraction.body_text``, which owns one derivation per
+rendition: the markup reader for ``htm`` and ``xml``, the shared cleanup for
+``txt``, and extraction plus ``gpo_normalize`` for ``pdf``. Measured
+2026-09-19 (spicy-docs ``docs/sources/govinfo-bodies.md``), CRPT and CHRG offer
+only ``htm`` and ``pdf``, the ``htm`` *is* GPO's text inside a ``<pre>``
+wrapper, and no GovInfo body of any rendition carries a ``[[Page N]]`` marker
+or a form feed. So a committee report is read as HTML and states no page
+boundaries at all — ``page_count`` is NULL for it, and only the PDF branch,
+which an extractor paginates, fills one.
+
+The derivation name ``body_text`` returns has no column on either contract, so
+it is logged with the refusals rather than published. ``format`` is the column
+that says which rendition was read, and the shape function fills it from the
+fetched body itself. The PDF cleanup record is processing provenance and is not
+published here — ``bill_versions`` is the table that carries it, for the
+printings where it changes the text people read.
 
 ``bill_id`` is a preserved NULL on both package tables. A package-keyed report
 is fillable today; joining it to the bill it reports on is not, and the
@@ -37,13 +48,14 @@ from __future__ import annotations
 
 import hashlib
 import os
-from collections.abc import Callable, Iterator, Sequence
+from collections import Counter
+from collections.abc import Callable, Iterator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Protocol
 
 from loguru import logger
-from spicy_docs.extraction.gpo_normalize import normalize_gpo_pages
+from spicy_docs.extraction.body_text import BodyText, body_text
 from spicy_docs.reading.paged_json import PagedJsonBudget
 from spicy_docs.schemas.committee_report_tables import (
     shape_committee_report,
@@ -66,9 +78,14 @@ class PackageDiscoverySource(Protocol):
 
 
 class PackageBodySource(Protocol):
-    """What this transform needs of a GovInfo package-body acquirer."""
+    """What this transform needs of a GovInfo package-body acquirer.
 
-    def acquire(self, package_id: str, *, prefer: Sequence[str] = ..., max_bytes: int | None = ...) -> Any: ...
+    No ``prefer``: the rendition order is the acquirer's sealed default
+    (``sources.govinfo.bodies.BODY_PREFERENCE`` — XML, HTML, text, then PDF),
+    so this transform neither passes one nor needs a seam that accepts one.
+    """
+
+    def acquire(self, package_id: str, *, max_bytes: int | None = ...) -> Any: ...
 
 
 DISCOVERY_BUDGET = PagedJsonBudget(
@@ -99,9 +116,6 @@ OVERLAP_HOURS = 24
 MAX_PACKAGES_PER_RUN = 200
 
 MAX_PAGES = 40
-
-#: GPO text separates pages with a form feed.
-PAGE_BREAK = "\f"
 
 
 def _prior_watermark(prior_file: Path) -> datetime | None:
@@ -167,12 +181,16 @@ def _package_ids(reader: PackageDiscoverySource, collection: str, since: str, li
     return ids[:limit]
 
 
-def _body_text(package: Any) -> tuple[str, tuple[str, ...]]:
-    """Decode a captured package body and normalize its GPO pages."""
-    raw = package.body_capture.body.decode("utf-8", errors="replace")
-    pages = tuple(raw.split(PAGE_BREAK))
-    normalized, _cleanup = normalize_gpo_pages(pages)
-    return "\n".join(normalized), normalized
+def _read_body(acquirer: PackageBodySource, package_id: str) -> tuple[Any, BodyText]:
+    """One package's fetched body and the one text derivation for its rendition.
+
+    Takes the narrow Protocol rather than the concrete acquirer, the way the
+    bill family's ``_version_captures`` does: what this transform depends on is
+    the three facts ``body_text`` reads off a fetched body, and the rendition
+    it was fetched in is the body's own, never this caller's guess.
+    """
+    package = acquirer.acquire(package_id)
+    return package, body_text(package)
 
 
 def build_committee_reports(
@@ -207,6 +225,7 @@ def build_committee_reports(
     report_rows: list[dict] = []
     section_rows: list[dict] = []
     hearing_rows: list[dict] = []
+    renditions: Counter[str] = Counter()
     refused = unchanged = 0
 
     for collection, table, rows, shape in (
@@ -222,21 +241,24 @@ def build_committee_reports(
                 unchanged += 1
                 continue
             try:
-                package = acquirer.acquire(package_id, prefer=("txt", "htm", "xml"))
+                package, derived = _read_body(acquirer, package_id)
             except Exception as error:  # noqa: BLE001 — a package refusal is counted, not fatal
                 refused += 1
                 logger.warning("{}: {} refused: {}", collection, package_id, error)
                 continue
-            text, pages = _body_text(package)
+            renditions[derived.rendition] += 1
             rows.append(
                 shape(
                     package,
-                    page_count=len(pages),
-                    text_sha256="sha256:" + hashlib.sha256(text.encode("utf-8")).hexdigest(),
+                    # NULL rather than 1: a rendition that states no page
+                    # boundary has no page count, and calling the whole body
+                    # one page would be a measurement nothing made.
+                    page_count=None if derived.pages is None else len(derived.pages),
+                    text_sha256="sha256:" + hashlib.sha256(derived.text.encode("utf-8")).hexdigest(),
                 )
             )
             if collection == "CRPT":
-                for seq, block in enumerate(parse_agency_blocks(text)):
+                for seq, block in enumerate(parse_agency_blocks(derived.text)):
                     section_rows.append(
                         shape_report_section(
                             block,
@@ -254,6 +276,10 @@ def build_committee_reports(
         unchanged,
         refused,
     )
+    if renditions:
+        # Which rendition each package was actually read in. Neither contract
+        # has a column for the derivation name, so this is where it is stated.
+        logger.info("Committee reports: renditions read — {}", dict(renditions))
     return (
         merge_contract_table(
             output_dir, "committee_reports", report_rows, prior_present=have_prior["committee_reports"]
