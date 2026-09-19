@@ -80,6 +80,22 @@ Stated in full, with the measurement that makes each answerable, at the top of
 
 ## Next actionable work
 
+**Name both Congresses on the cron across a Congress boundary.** The four
+Congress-scoped index rollups and the Record-issue walk take their scope from
+`current_congress`, so from 3 January of an odd year the outgoing Congress
+drops out: its published rows survive the merge but stop updating, and a
+late correction to a December Record issue is never re-read (the index
+review, 2026-09-19). The workflows already expose the scope as a dispatch
+input; set it to both Congresses on the cron for the first weeks of a new
+Congress, or derive the overlap in `congress_scope`, and say which.
+
+**Host the document-to-RIN links as their own table.** `federal_register.rin`
+is the first RIN of `regulation_id_numbers_json`; 1,499 documents carry two or
+more (max 41), so a communication whose RIN is not the first never joins.
+The repository already hosts one-to-many links as `fr_docket_links`; an
+`fr_document_rins` rollup in that shape completes the regulatory bridge in
+both directions and retires the unnest caveat in the dictionary.
+
 **Bound the per-request retry class on every Congress.gov consumer.** The
 listing reader's `max_requests` is a per-request retry bound, not a run cap:
 the budget resets on every `capture_validated`, and spicy-docs's retry waits

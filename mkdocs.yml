@@ -84,6 +84,12 @@ nav:
       - committee_reports: tables/committee_reports.md
       - report_sections: tables/report_sections.md
       - hearing_transcripts: tables/hearing_transcripts.md
+      # A5/A7/A10 (Congress.gov index tables)
+      - house_communications: tables/house_communications.md
+      - committee_meetings: tables/committee_meetings.md
+      - record_issues: tables/record_issues.md
+      - treaties: tables/treaties.md
+      - nominations: tables/nominations.md
       # A8/A9 (laws and rosters)
       - laws: tables/laws.md
       - law_code_sections: tables/law_code_sections.md
