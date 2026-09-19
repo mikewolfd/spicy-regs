@@ -267,6 +267,44 @@ hosted; the public surface went from 24 tables to 45.
   table, kept literal so the MCP server stays installable without the
   `source-readers` group.
 
+**2026-09-19, branch `hosting-a11-backfill` (worktree `spicy-regs-wt-a11`).**
+Gap A11 (spicy-docs' `closing-the-gaps-2026-09-19.md` §2): bills before the
+108th have no BILLSTATUS bulk, so the family never reached them. Landed: the
+rollup splits its one scope input on the publisher's own floor
+(`BULK_STATUS_FLOOR` = 108) — a named Congress at or above it fills from the
+zips as always; one below it is backfilled from the API `bill` route, newest
+Congress first, under the same per-run cap, one detail request per bill not
+already filled. The default scope (the current Congress) is unaffected: the
+backfill walks only when a pre-108th Congress is named.
+
+- [x] The walk reuses the `congress-bills` reader seam
+  (`sources/congress_bills.py::listing_reader`, `bill_detail`) — no second
+  reader of the route. A `401`/`403` aborts the run; any other detail refusal
+  is that one bill's gap, retried next run; a list walk that refuses fails
+  the run loudly.
+- [x] Resume state beside `bill_family_archives`:
+  `bill_family_backfills` (per filled bill, the list stamp it was filled
+  under — the skip comparison) and `bill_family_backfill_congresses` (per
+  Congress, the route's declared total against what was actually walked, so a
+  capped or refused walk cannot read as an empty Congress). Both are
+  published outputs (dictionary + MCP), all VARCHAR.
+- [x] Provenance: the detail record states laws, sponsors and the latest
+  action but only sub-route *counts* for actions, committees, titles,
+  subjects, summaries and text versions — so the backfilled `congress_bills`
+  row NULLs every column a zero would lie about
+  (`BACKFILL_UNSUBSTANTIATED`), and its NULL `schema_version` marks it as the
+  detail route's; the consumer's test is `congress < 108`, where no BILLSTATUS
+  exists. Said in the `congress_bills` dictionary entry.
+- [x] Proof — receipt
+  `~/Work/corpora/supply-2026-09-02/receipts/a11-pre-108th-backfill-2026-09-19/`:
+  declared counts for all 26 candidate Congresses (the 92nd smallest at 767);
+  the 92nd walked end to end against its declared total (767 of 767, 4 pages,
+  `completed: true`); 50 retained detail records built through the real code
+  path offline (50 rows, every unsubstantiated count NULL, the resume
+  re-requesting nothing). 82 keyed requests of the 120 budget; the key only
+  ever an `X-Api-Key` header; `verify_credentials.py` re-scans everything
+  retained.
+
 **Every rollup is incremental where its source allows.** The pattern is
 `build_congress_bills`': take a watermark from the prior published table, ask
 the publisher only for what changed since, cap the window so a deep backfill
