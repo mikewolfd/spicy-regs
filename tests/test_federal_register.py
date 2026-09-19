@@ -172,15 +172,19 @@ def test_request_exhaustion_aborts_instead_of_returning_partial_data(monkeypatch
         reader._get("https://example.test/documents.json", None)
 
 
-def test_rin_is_derived_for_every_row_including_a_prior_that_predates_it(tmp_path):
+@pytest.mark.parametrize("prior_width", ["fetched", "published"], ids=["migration-prior", "steady-state-prior"])
+def test_rin_is_derived_for_every_row_whatever_the_priors_width(tmp_path, prior_width):
     """The join key is a projection of the array, filled on prior rows and fresh rows alike.
 
-    The prior is written at the pre-``rin`` width, as the live table was on
-    2026-09-19, so this is the migration case as well as the steady one.
+    Two priors: the pre-``rin`` width the live table had on 2026-09-19 (the
+    migration case), and the published width carrying a ``rin`` that disagrees
+    with its array (the steady-state case), which must be recomputed rather
+    than read back -- the column is derived every run, never stored as a fact.
     """
     import pyarrow as pa
     import pyarrow.parquet as pq
 
+    columns = FETCHED_COLUMNS if prior_width == "fetched" else COLUMNS
     prior_rows = [
         {
             "document_number": "P-two",
@@ -190,9 +194,12 @@ def test_rin_is_derived_for_every_row_including_a_prior_that_predates_it(tmp_pat
         {"document_number": "P-none", "publication_date": "2024-01-01", "regulation_id_numbers_json": "[]"},
         {"document_number": "P-null", "publication_date": "2024-01-01", "regulation_id_numbers_json": None},
     ]
-    schema = pa.schema([(c, pa.string()) for c in FETCHED_COLUMNS])
+    if prior_width == "published":
+        for row in prior_rows:
+            row["rin"] = "9999-ZZ99"  # stale: must not survive the merge
+    schema = pa.schema([(c, pa.string()) for c in columns])
     pq.write_table(
-        pa.Table.from_pylist([{c: None for c in FETCHED_COLUMNS} | r for r in prior_rows], schema=schema),
+        pa.Table.from_pylist([{c: None for c in columns} | r for r in prior_rows], schema=schema),
         tmp_path / "_fr_prior.parquet",
     )
     fresh = [dict(_RAW_DOC, document_number="F-one", publication_date="2024-03-01")]

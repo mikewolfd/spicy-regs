@@ -210,6 +210,58 @@ def test_a_detail_naming_another_record_is_refused_not_shaped(tmp_path):
     assert by_id["119-ec-4752"]["abstract"] is None, "nothing of 4751's detail reached 4752's row"
 
 
+def test_a_transport_failure_on_the_detail_is_that_rows_refusal_not_the_runs(tmp_path):
+    """``ConnectionError`` is what the reader raises once its retries are spent; the run goes on."""
+
+    class Down(FixtureReader):
+        def records(self, route, url, *, max_pages=1):
+            if "limit=1" in url and "4752" in url:
+                self.urls.append(url)
+                raise ConnectionError("down")
+            yield from super().records(route, url, max_pages=max_pages)
+
+    rows, reader = _run(tmp_path, "house_communications", reader=Down())
+    by_id = {row["communication_id"]: row for row in rows}
+    assert by_id["119-ec-4752"]["committees_json"] is None, "indexed list-only, retried next run"
+    assert by_id["119-ec-4751"]["committees_json"] is not None, "the run went on"
+    assert len(reader.details) == 3
+
+
+def test_a_list_record_the_detail_route_cannot_address_is_that_rows_refusal(tmp_path):
+    """A publisher value the query builder cannot spell (a non-numeric number) must not abort the table."""
+
+    class Misspelt(FixtureReader):
+        def records(self, route, url, *, max_pages=1):
+            for page in super().records(route, url, max_pages=max_pages):
+                if "limit=1" not in url:
+                    records = tuple(dict(r, number="4752A") if r["number"] == 4752 else r for r in page.records)
+                    page = SimpleNamespace(records=records, declared_count=page.declared_count)
+                yield page
+
+    rows, reader = _run(tmp_path, "house_communications", reader=Misspelt())
+    by_id = {row["communication_id"]: row for row in rows}
+    assert by_id["119-ec-4752A"]["committees_json"] is None, "indexed list-only; no request was made for it"
+    assert "house-communication/119/ec/4752A" not in " ".join(reader.details)
+    assert by_id["119-ec-4751"]["committees_json"] is not None, "the run went on to the next newest"
+
+
+def test_a_prior_without_the_marker_column_reads_as_unread(tmp_path):
+    """A renamed contract column is a re-read of every row, not a refusal to run."""
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    from spicy_regs.transforms.table_merge import prior_scratch_path
+
+    narrow = pa.Table.from_pylist(
+        [{"congress": "119", "communication_type": "ec", "number": "4752", "update_date": "2026-09-18"}],
+        schema=pa.schema([(c, pa.string()) for c in ("congress", "communication_type", "number", "update_date")]),
+    )
+    pq.write_table(narrow, prior_scratch_path(tmp_path, "house_communications"))
+    rows, reader = _run(tmp_path, "house_communications", max_details=10)
+    assert "house-communication/119/ec/4752" in reader.details
+    assert next(row for row in rows if row["communication_id"] == "119-ec-4752")["committees_json"] is not None
+
+
 def test_a_credential_refusal_aborts_the_run(tmp_path):
     class Refusing(FixtureReader):
         def records(self, route, url, *, max_pages=1):

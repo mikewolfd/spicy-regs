@@ -463,6 +463,23 @@ def test_a_hearing_detail_for_another_jacket_is_refused_not_read(tmp_path, monke
     assert any("identity differs from the requested jacket" in m for m in messages)
 
 
+def test_a_transport_failure_on_the_hearing_detail_leaves_event_id_null_and_the_run_completes(tmp_path, monkeypatch):
+    """``ConnectionError`` is what the reader raises once its retries are spent: this row's refusal, not the run's."""
+    monkeypatch.delenv("COMMITTEE_REPORTS_SINCE", raising=False)
+
+    class Down(StubHearings):
+        def records(self, route, url, *, max_pages=1):
+            self.requested.append(url)
+            raise ConnectionError("down")
+            yield  # pragma: no cover
+
+    rows, messages, hearings = _hearing_rows(tmp_path, Down())
+    assert len(rows) == 2, "both transcripts still publish"
+    assert all(row["event_id"] is None for row in rows.values())
+    assert len(hearings.requested) == 2
+    assert any("hearing details by outcome — {'refused': 2}" in m for m in messages)
+
+
 def test_a_credential_refusal_on_the_hearing_detail_aborts_the_run(tmp_path, monkeypatch):
     from spicy_docs.transport.credentials import CredentialRefusedError
 

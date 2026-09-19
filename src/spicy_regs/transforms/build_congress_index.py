@@ -239,7 +239,16 @@ def _held_rows(prior: Path | None, spec: IndexSpec, identity: tuple[str, ...], v
         return {}
     import duckdb
 
-    columns = ", ".join((*identity, version, f"{spec.detail_marker} IS NOT NULL"))
+    published = {str(row[0]) for row in duckdb.sql(f"DESCRIBE SELECT * FROM read_parquet('{prior}')").fetchall()}
+    if spec.detail_marker in published:
+        read = f"{spec.detail_marker} IS NOT NULL"
+    else:
+        # A prior without the marker column (a renamed contract column, or a
+        # table published before it) cannot say a detail was read, so none was:
+        # every row is re-read rather than the run refusing on the column.
+        read = "FALSE"
+        logger.warning("{}: prior table lacks {!r}; every row reads as unread", spec.table, spec.detail_marker)
+    columns = ", ".join((*identity, version, read))
     rows = duckdb.sql(f"SELECT {columns} FROM read_parquet('{prior}')").fetchall()
     held = {tuple(row[: len(identity)]): _Held(row[len(identity)], bool(row[len(identity) + 1])) for row in rows}
     logger.info(
@@ -299,24 +308,42 @@ def _walk(
             repeated,
             unkeyable,
         )
+        if repeated and declared is not None:
+            # Declared equal to walked is a row count, not an identity count:
+            # each repeat displaced a record this walk never delivered. The
+            # next whole walk delivers it, which is why the list is never
+            # short-circuited.
+            logger.info(
+                "{}: {} — {:,} distinct records delivered of {:,} declared; the {:,} not delivered"
+                " are recovered by the next whole walk",
+                spec.table,
+                label,
+                declared - repeated,
+                declared,
+                repeated,
+            )
     return list(listed.values())
 
 
-def _detail(reader: ListingSource, spec: IndexSpec, entry: _Listed, identity: tuple[str, ...]) -> Mapping[str, Any]:
+def _detail(
+    reader: ListingSource, spec: IndexSpec, entry: _Listed, query: Mapping[str, Any], identity: tuple[str, ...]
+) -> Mapping[str, Any]:
     """The one detail record for ``entry``, proven to name the same identity the list row did.
 
     Raises one of :data:`_REFUSALS` for anything short of that, and lets a
     credential refusal through untouched.
     """
-    assert spec.detail_route is not None and spec.detail_query is not None
-    query = spec.detail_query(entry.row)
-    if query is None:
-        raise ValueError("the row has no addressable detail")
+    assert spec.detail_route is not None
     url = list_route_url(spec.detail_route, limit=1, **query)
     page = next(iter(reader.records(spec.detail_route, url, max_pages=1)))
     if len(page.records) != 1:
         raise PagedJsonSourceError(f"{spec.detail_route.name} answered {len(page.records)} records, not one")
     detail = page.records[0]
+    # Shaped here on its own, and again by the caller with the list row: this
+    # pass reads the identity the *detail* states, through the same shaper
+    # that keyed the list row, so the comparison is key-spelling to
+    # key-spelling; the caller's pass is the row that is published. The cost
+    # is one dict build per detail request, nothing against the request.
     stated = spec.shape(detail, detail)
     if tuple(str(stated[column]) for column in identity) != entry.key:
         raise PagedJsonSourceError(f"{spec.detail_route.name} identity differs from the requested record")
@@ -348,8 +375,16 @@ def build_index_table(
     listed = _walk(reader, spec, congresses, identity)
 
     rows: list[Row] = []
-    queue: list[_Listed] = []
+    queue: list[tuple[_Listed, Mapping[str, Any]]] = []
     outcomes: Counter[str] = Counter()
+
+    def refuse(entry: _Listed, state: _Held | None, error: Exception) -> None:
+        """One row's refusal: counted, logged scrubbed, and a new record still indexed list-only."""
+        outcomes["refused"] += 1
+        logger.warning("{}: {} refused: {}", spec.table, "-".join(entry.key), scrub_credential(str(error), ""))
+        if state is None:
+            rows.append(entry.row)
+
     for entry in listed:
         if spec.detail_route is None:
             rows.append(entry.row)
@@ -360,20 +395,28 @@ def build_index_table(
             outcomes["held"] += 1
             continue
         assert spec.detail_query is not None
-        if spec.detail_query(entry.row) is None:
+        try:
+            # Built once here, under the same refusal rule as the request it
+            # addresses: a publisher value the builder cannot spell (a
+            # non-numeric number, say) is this row's refusal, not the run's.
+            query = spec.detail_query(entry.row)
+        except (ValueError, TypeError) as error:
+            refuse(entry, state, error)
+            continue
+        if query is None:
             # No route addresses this detail; the list row is the whole fact.
             outcomes["list_only"] += 1
             if state is None or state.stamp != stamp:
                 rows.append(entry.row)
             continue
-        queue.append(entry)
+        queue.append((entry, query))
 
     # Newest first, so a bounded run advances from the present; the identity
     # breaks ties so a re-run over the same listing asks in the same order.
-    queue.sort(key=lambda entry: (entry.row[version] or "", entry.key), reverse=True)
+    queue.sort(key=lambda item: (item[0].row[version] or "", item[0].key), reverse=True)
     if len(queue) > max_details:
         logger.warning("{}: {:,} details wanted, taking the newest {:,}", spec.table, len(queue), max_details)
-    for position, entry in enumerate(queue):
+    for position, (entry, query) in enumerate(queue):
         state = held.get(entry.key)
         if position >= max_details:
             # Not reached this run: a new record is indexed list-only so the
@@ -385,14 +428,11 @@ def build_index_table(
                 outcomes["stale"] += 1
             continue
         try:
-            detail = _detail(reader, spec, entry, identity)
+            detail = _detail(reader, spec, entry, query, identity)
         except CredentialRefusedError:
             raise
         except _REFUSALS as error:
-            outcomes["refused"] += 1
-            logger.warning("{}: {} refused: {}", spec.table, "-".join(entry.key), scrub_credential(str(error), ""))
-            if state is None:
-                rows.append(entry.row)
+            refuse(entry, state, error)
             continue
         rows.append(spec.shape(entry.record, detail))
         outcomes["read"] += 1
