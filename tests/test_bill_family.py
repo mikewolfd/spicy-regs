@@ -27,6 +27,7 @@ import shutil
 from datetime import UTC, datetime
 from pathlib import Path
 
+import httpx
 import pyarrow.parquet as pq
 import pytest
 from loguru import logger
@@ -35,10 +36,16 @@ from spicy_docs.sources.congress.bill_status import BillIdentity, parse_bill_sta
 from spicy_docs.sources.congress.bill_status import BillSourceError
 from spicy_docs.sources.congress.bulk_status import BulkListingEntry
 from spicy_docs.transport.captured import CapturedBodyResponse
+from spicy_docs.transport.credentials import CredentialRefusedError
 
 from spicy_regs.transforms.build_bill_family import (
     ARCHIVE_COLUMNS,
     ARCHIVES_TABLE,
+    BACKFILL_COLUMNS,
+    BACKFILL_CONGRESS_COLUMNS,
+    BACKFILL_CONGRESSES_TABLE,
+    BACKFILLS_TABLE,
+    BACKFILL_UNSUBSTANTIATED,
     FAMILY_TABLES,
     VOTE_REFERENCE_COLUMNS,
     VOTE_REFERENCES_TABLE,
@@ -237,17 +244,22 @@ def family(tmp_path, monkeypatch):
     return {path.stem: path for path in paths}
 
 
-OWN_TABLES = {ARCHIVES_TABLE: ARCHIVE_COLUMNS, VOTE_REFERENCES_TABLE: VOTE_REFERENCE_COLUMNS}
+OWN_TABLES = {
+    ARCHIVES_TABLE: ARCHIVE_COLUMNS,
+    VOTE_REFERENCES_TABLE: VOTE_REFERENCE_COLUMNS,
+    BACKFILLS_TABLE: BACKFILL_COLUMNS,
+    BACKFILL_CONGRESSES_TABLE: BACKFILL_CONGRESS_COLUMNS,
+}
 
 
 def test_every_family_table_is_published(family):
     expected = {contract for contract, _ in FAMILY_TABLES} | {"public_activity_events", *OWN_TABLES}
     assert set(family) == expected
-    assert len(family) == 15
+    assert len(family) == 17
 
 
 def test_each_published_table_matches_its_contract_schema_or_its_own(family):
-    """The thirteen contracts are spicy-docs'; the last two are this transform's."""
+    """The thirteen contracts are spicy-docs'; the last four are this transform's."""
     for name, columns in OWN_TABLES.items():
         assert pq.read_table(family[name]).schema.names == list(columns), name
 
@@ -811,3 +823,239 @@ def test_a_pdf_only_pair_is_refused_by_name_not_silently_skipped(pdf_family):
     refusals = [line for line in messages if "refusals by table" in line]
     assert refusals, "the refusal must be reported, not left as an empty table"
     assert "section_diffs" in refusals[0]
+
+
+# --------------------------------------------------------------------------- #
+# The pre-BILLSTATUS backfill (gap A11): the 82nd-107th Congresses from the
+# API ``bill`` route, hermetically — a stubbed walk, no key, no network.
+# --------------------------------------------------------------------------- #
+
+#: A detail record shaped like the retained 92nd-Congress response the A11
+#: receipt kept (``detail-bill-92-hr-2185.json``): laws and the latest action
+#: inline, every other BILLSTATUS-rich field a sub-route count with no items.
+_DETAIL_92_HR_2185 = {
+    "actions": {"count": 7, "url": "https://api.congress.gov/v3/bill/92/hr/2185/actions?format=json"},
+    "committees": {"count": 2, "url": "https://api.congress.gov/v3/bill/92/hr/2185/committees?format=json"},
+    "congress": 92,
+    "introducedDate": "1971-01-25",
+    "latestAction": {"actionDate": "1972-09-29", "text": "Became Public Law No. 92-441"},
+    "laws": [{"number": "92-441", "type": "Public Law"}],
+    "legislationUrl": "https://www.congress.gov/bill/92th-congress/house-bill/2185",
+    "number": "2185",
+    "originChamber": "House",
+    "originChamberCode": "H",
+    "textVersions": {"count": 1, "url": "https://api.congress.gov/v3/bill/92/hr/2185/text?format=json"},
+    "title": "An Act to declare that certain federally owned land is held by the United States in trust",
+    "titles": {"count": 3, "url": "https://api.congress.gov/v3/bill/92/hr/2185/titles?format=json"},
+    "type": "HR",
+    "updateDate": "2026-09-08T18:09:59Z",
+    "updateDateIncludingText": "2026-09-08T18:09:59Z",
+}
+
+
+class _Page:
+    """One list page: its records, the route's declared total, a capture."""
+
+    def __init__(self, records, declared_count):
+        self.records = tuple(records)
+        self.declared_count = declared_count
+        self.capture = _capture("https://api.congress.gov/v3/bill/92?format=json", b"{}")
+
+
+class StubListSource:
+    """Pages and details from fixtures, recording everything the walk asked for.
+
+    ``detail_error`` is a callable the stub consults before answering: an
+    exception it returns is raised for that bill, so a test can refuse one
+    bill's detail with a transport error and let the rest through.
+    """
+
+    def __init__(self, pages_by_congress, details_by_key, *, detail_error=None):
+        self._pages = pages_by_congress
+        self._details = details_by_key
+        self._detail_error = detail_error
+        self.paged: list[int] = []
+        self.requested: list[BillIdentity] = []
+
+    def __enter__(self) -> "StubListSource":
+        return self
+
+    def __exit__(self, *_error: object) -> None:
+        return None
+
+    def pages(self, congress: int):
+        self.paged.append(congress)
+        return iter(self._pages[congress])
+
+    def detail(self, identity: BillIdentity):
+        self.requested.append(identity)
+        if self._detail_error is not None:
+            error = self._detail_error(identity)
+            if error is not None:
+                raise error
+        return self._details[(identity.congress, identity.bill_type, identity.number)], OBSERVED_AT
+
+
+def _stub_source(records: list[dict], *, detail_error=None) -> StubListSource:
+    """One page declaring every record, one detail per record."""
+    details = {}
+    for record in records:
+        details[(92, str(record["type"]).lower(), int(str(record["number"])))] = record
+    return StubListSource(
+        {92: [_Page(records, len(records))]},
+        details,
+        detail_error=detail_error,
+    )
+
+
+def _two_bills() -> list[dict]:
+    second = {**_DETAIL_92_HR_2185, "number": "2190", "title": "A second act"}
+    return [dict(_DETAIL_92_HR_2185), second]
+
+
+def test_a_backfilled_bill_publishes_what_the_detail_record_states(tmp_path, monkeypatch):
+    monkeypatch.setenv("BILL_FAMILY_CONGRESSES", "92")
+    paths = build_bill_family(
+        tmp_path, list_source=_stub_source([dict(_DETAIL_92_HR_2185)]), download_prior=_no_prior
+    )
+    assert {path.stem for path in paths} >= {BACKFILLS_TABLE, BACKFILL_CONGRESSES_TABLE}
+    row = pq.read_table(tmp_path / "congress_bills.parquet").to_pylist()[0]
+    assert row["bill_id"] == "92-hr-2185"
+    assert row["title"] == _DETAIL_92_HR_2185["title"]
+    assert row["latest_action_text"] == "Became Public Law No. 92-441"
+    assert row["public_law_number"] == "92-441"
+    assert row["law_type"] == "Public Law"
+    assert row["signed_date_rule"] == "public_law_without_became_law_action"
+    assert row["update_date_including_text"] == "2026-09-08T18:09:59Z"
+    assert row["url"] == _DETAIL_92_HR_2185["legislationUrl"]
+    # No actions are in the record, so the stage is the vocabulary's default
+    # with its honest marker: no rule fired.
+    assert row["stage"] == "introduced"
+    assert row["stage_rule"] is None
+    # A count the record states only as a sub-route count is NULL, not zero —
+    # the route declared seven actions, and a published zero would deny that.
+    for column in BACKFILL_UNSUBSTANTIATED:
+        assert row[column] is None, column
+    assert row["cosponsor_count"] is None  # the record named no sponsors array
+    state = pq.read_table(tmp_path / f"{BACKFILLS_TABLE}.parquet").to_pylist()
+    assert state == [
+        {
+            "congress": "92",
+            "bill_type": "hr",
+            "number": "2185",
+            "list_update_date_including_text": "2026-09-08T18:09:59Z",
+            "observed_at": OBSERVED_AT,
+        }
+    ]
+    walks = pq.read_table(tmp_path / f"{BACKFILL_CONGRESSES_TABLE}.parquet").to_pylist()
+    assert walks == [
+        {
+            "congress": "92",
+            "declared_count": "1",
+            "records_walked": "1",
+            "pages_walked": "1",
+            "list_completed": "true",
+            "backfilled_count": "1",
+            "observed_at": OBSERVED_AT,
+        }
+    ]
+
+
+def test_a_record_with_sponsors_keeps_the_publishers_arithmetic(tmp_path, monkeypatch):
+    monkeypatch.setenv("BILL_FAMILY_CONGRESSES", "92")
+    record = {**_DETAIL_92_HR_2185, "sponsors": [{"bioguideId": "B000001", "fullName": "One Sponsor"}]}
+    build_bill_family(tmp_path, list_source=_stub_source([record]), download_prior=_no_prior)
+    row = pq.read_table(tmp_path / "congress_bills.parquet").to_pylist()[0]
+    assert row["sponsor_bioguide_id"] == "B000001"
+    assert row["cosponsor_count"] == "0"  # one sponsor, no cosponsors — substantiated this time
+
+
+def test_the_cap_stops_the_walk_and_the_next_run_fills_the_rest(tmp_path, monkeypatch):
+    monkeypatch.setenv("BILL_FAMILY_CONGRESSES", "92")
+    first = _stub_source(_two_bills())
+    build_bill_family(tmp_path, list_source=first, max_version_fetches=1, download_prior=_no_prior)
+    assert [identity.number for identity in first.requested] == [2185]
+    walk = pq.read_table(tmp_path / f"{BACKFILL_CONGRESSES_TABLE}.parquet").to_pylist()[0]
+    assert walk["records_walked"] == "2" and walk["backfilled_count"] == "1"
+    assert walk["list_completed"] == "false"
+
+    # The second run fetches only the bill without a matching state row — the
+    # previously unsuccessful one retried, the filled one skipped.
+    second = _stub_source(_two_bills())
+    build_bill_family(tmp_path, list_source=second, download_prior=_prior_from(tmp_path))
+    assert [identity.number for identity in second.requested] == [2190]
+    bills = pq.read_table(tmp_path / "congress_bills.parquet").to_pylist()
+    assert sorted(row["bill_id"] for row in bills) == ["92-hr-2185", "92-hr-2190"]
+    walk = pq.read_table(tmp_path / f"{BACKFILL_CONGRESSES_TABLE}.parquet").to_pylist()[0]
+    assert walk["backfilled_count"] == "2" and walk["list_completed"] == "true"
+
+
+def test_a_capped_run_records_declared_versus_walked(tmp_path, monkeypatch):
+    """A cap that stops the walk early must not let it read as an empty Congress."""
+    monkeypatch.setenv("BILL_FAMILY_CONGRESSES", "92")
+    build_bill_family(tmp_path, list_source=_stub_source(_two_bills()), max_version_fetches=0, download_prior=_no_prior)
+    assert pq.read_table(tmp_path / f"{BACKFILLS_TABLE}.parquet").to_pylist() == []
+    walk = pq.read_table(tmp_path / f"{BACKFILL_CONGRESSES_TABLE}.parquet").to_pylist()[0]
+    assert walk["declared_count"] == "2"
+    assert walk["records_walked"] == "1"  # the cap stopped the walk on the first unfilled record
+    assert walk["list_completed"] == "false"
+    assert walk["backfilled_count"] == "0"
+
+
+def test_a_credential_refusal_aborts_the_run(tmp_path, monkeypatch):
+    monkeypatch.setenv("BILL_FAMILY_CONGRESSES", "92")
+    with pytest.raises(CredentialRefusedError):
+        build_bill_family(
+            tmp_path,
+            list_source=_stub_source(
+                [dict(_DETAIL_92_HR_2185)], detail_error=lambda _identity: CredentialRefusedError("401")
+            ),
+            download_prior=_no_prior,
+        )
+
+
+def test_a_transport_failure_is_not_a_record(tmp_path, monkeypatch):
+    """A connection that fails fills nothing: no row, no state row, retried next run."""
+    monkeypatch.setenv("BILL_FAMILY_CONGRESSES", "92")
+    source = _stub_source(
+        _two_bills(),
+        detail_error=lambda identity: httpx.ConnectError("connection reset") if identity.number == 2185 else None,
+    )
+    build_bill_family(tmp_path, list_source=source, download_prior=_no_prior)
+    bills = pq.read_table(tmp_path / "congress_bills.parquet").to_pylist()
+    assert [row["bill_id"] for row in bills] == ["92-hr-2190"]
+    state = pq.read_table(tmp_path / f"{BACKFILLS_TABLE}.parquet").to_pylist()
+    assert [row["number"] for row in state] == ["2190"]
+
+
+def test_a_pre_floor_congress_never_reaches_the_bulk_acquirer(tmp_path, monkeypatch):
+    """One scope input, two routes: the split is on the publisher's floor."""
+    monkeypatch.setenv("BILL_FAMILY_CONGRESSES", "92,119")
+    monkeypatch.setenv("BILL_FAMILY_BILL_TYPES", "hr")
+    bulk = StubBulkAcquirer()
+    build_bill_family(
+        tmp_path,
+        bulk_acquirer=bulk,
+        list_source=_stub_source([dict(_DETAIL_92_HR_2185)]),
+        download_prior=_no_prior,
+    )
+    # The bulk half is asked for the 119th only — never for a Congress below the floor.
+    assert bulk.calls == [(119, "hr")]
+    assert bulk.zip_downloads == [(119, "hr")]
+    bills = pq.read_table(tmp_path / "congress_bills.parquet").to_pylist()
+    assert {row["bill_id"] for row in bills} == {"92-hr-2185", "119-hr-6028"}  # both routes, one table
+
+
+def test_a_congress_below_the_route_floor_is_refused(tmp_path, monkeypatch):
+    """The route reaches the 82nd and nothing older; an empty walk would read as absence."""
+    monkeypatch.setenv("BILL_FAMILY_CONGRESSES", "81")
+    with pytest.raises(ValueError, match="82nd"):
+        build_bill_family(tmp_path, list_source=StubListSource({}, {}), download_prior=_no_prior)
+
+
+def test_a_completed_congress_costs_no_list_requests_on_the_next_run(tmp_path, monkeypatch):
+    monkeypatch.setenv("BILL_FAMILY_CONGRESSES", "92")
+    build_bill_family(tmp_path, list_source=_stub_source([dict(_DETAIL_92_HR_2185)]), download_prior=_no_prior)
+    second = _stub_source([dict(_DETAIL_92_HR_2185)])
+    build_bill_family(tmp_path, list_source=second, download_prior=_prior_from(tmp_path))
+    assert second.paged == [] and second.requested == []

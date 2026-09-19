@@ -152,6 +152,8 @@ TABLES: tuple[str, ...] = (
     # DERIVED_SCHEMAS and their prose is inline in descriptions.yaml.
     "bill_family_archives",
     "bill_vote_references",
+    "bill_family_backfills",
+    "bill_family_backfill_congresses",
 )
 
 # Tables the MCP server (list_sources / describe_table / query_sql) exposes.
@@ -185,6 +187,8 @@ MCP_QUERYABLE: frozenset[str] = frozenset(
         "fcc_filings",
         "bill_family_archives",
         "bill_vote_references",
+        "bill_family_backfills",
+        "bill_family_backfill_congresses",
         *CONTRACT_TABLES,
     }
 )
@@ -562,6 +566,29 @@ DERIVED_SCHEMAS: dict[str, list[tuple[str, str]]] = {
         ("url", "VARCHAR"),
         ("date", "VARCHAR"),
         ("full_action_name", "VARCHAR"),
+        ("observed_at", "VARCHAR"),
+    ],
+    # The bill family's pre-BILLSTATUS backfill state (build_bill_family):
+    # per filled bill, the list stamp the walk that filled it saw — the skip
+    # comparison that lets the next named run reach only the unfilled bills —
+    # and, per Congress walked, the route's declared total against what was
+    # reached, so a capped or refused walk cannot read as an empty Congress.
+    # Pinned to the transform's BACKFILL_COLUMNS / BACKFILL_CONGRESS_COLUMNS
+    # by test_hosted_rollups, like the two entries above.
+    "bill_family_backfills": [
+        ("congress", "VARCHAR"),
+        ("bill_type", "VARCHAR"),
+        ("number", "VARCHAR"),
+        ("list_update_date_including_text", "VARCHAR"),
+        ("observed_at", "VARCHAR"),
+    ],
+    "bill_family_backfill_congresses": [
+        ("congress", "VARCHAR"),
+        ("declared_count", "VARCHAR"),
+        ("records_walked", "VARCHAR"),
+        ("pages_walked", "VARCHAR"),
+        ("list_completed", "VARCHAR"),
+        ("backfilled_count", "VARCHAR"),
         ("observed_at", "VARCHAR"),
     ],
 }

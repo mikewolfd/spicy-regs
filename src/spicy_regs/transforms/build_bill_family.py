@@ -34,6 +34,25 @@ nothing, exactly the failure ``build_congress_bills`` documents.
 ``MAX_VERSION_FETCHES`` bounds the printings; the status-derived tables still
 cover every bill in scope, and the coverage statement says which is which.
 
+**The pre-BILLSTATUS backfill.** BILLSTATUS bulk begins at the 108th Congress
+(``BULK_STATUS_FLOOR``); below it the same ``BILL_FAMILY_CONGRESSES`` input is
+filled from the API ``bill`` route instead — one page-walk per Congress over
+the same reader seam the ``congress-bills`` rollup uses (there is no second
+implementation of that walk), and one detail request per bill not already
+filled, under the same per-run cap, newest Congress first. It resumes from the
+two state tables this adds beside ``bill_family_archives``:
+``bill_family_backfills`` holds, per filled bill, the list stamp it was filled
+under (a stamp that matches costs no request; a missing row — unattempted or
+previously unsuccessful — is fetched again), and
+``bill_family_backfill_congresses`` holds each Congress's declared total
+against what a run actually walked, so a capped or refused walk never reads as
+an empty Congress. The detail record states a count for its actions,
+committees, titles, subjects, summaries and text-version sub-routes but not
+their items, so the backfilled ``congress_bills`` row carries what the record
+actually states and NULLs the count columns a zero would lie with; its NULL
+``schema_version`` is what marks the row as the detail route's rather than a
+BILLSTATUS document's.
+
 **The model seams.** ``classify`` and ``summarize`` are wired only when a
 Gemini key is in the environment; without one they are ``None`` and the three
 model tables come back empty, which is what a keyless CI run does. Nothing
@@ -48,13 +67,14 @@ never dropped silently and never published as a row with invented values.
 from __future__ import annotations
 
 import functools
+import httpx
 import os
 from collections import Counter
-from collections.abc import Callable, Collection, Mapping, Sequence
-from dataclasses import dataclass
+from collections.abc import Callable, Collection, Iterator, Mapping, Sequence
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, Protocol, Self
 
 from loguru import logger
 from spicy_docs.extraction.body_text import body_text
@@ -62,7 +82,10 @@ from spicy_docs.interpretation.bill_family import (
     BillFamilyCapture,
     BillFamilyTables,
     BillVersionCapture,
+    BillSummarizer,
+    DiffSummarizer,
     EngineStamp,
+    SectionClassifier,
     installed_engine_stamp,
 )
 from spicy_docs.interpretation.bill_family import build_bill_family as build_family
@@ -76,8 +99,17 @@ from spicy_docs.interpretation.vote_matching import (
 )
 from spicy_docs.schemas import TABLE_CONTRACTS
 from spicy_docs.schemas.tables import bill_id as bill_key, text
+from spicy_docs.reading.paged_json import PagedJsonSourceError
 from spicy_docs.schemas.activity_events import activity_events, snapshot_from_rows
-from spicy_docs.sources.congress.bill_status import bill_package_id_from_url
+from spicy_docs.sources.congress.bill_status import (
+    BillAction,
+    BillIdentity,
+    BillLaw,
+    BillSponsor,
+    BillSourceError,
+    BillStatus,
+    bill_package_id_from_url,
+)
 from spicy_docs.sources.congress.bill_tree import engine_available, parse_bill_tree
 from spicy_docs.sources.congress.bill_versions import (
     DEFAULT_FORMAT_PREFERENCE,
@@ -92,9 +124,16 @@ from spicy_docs.sources.congress.bulk_status import (
     bulk_status_locator,
 )
 from spicy_docs.sources.govinfo.body_acquisition import GovInfoBodyAcquirer, GovInfoBodyBudget
+from spicy_docs.transport.credentials import CredentialRefusedError
 
 from spicy_regs.sources import r2
-from spicy_regs.sources.congress_bills import API_KEY_ENV_VARS, _resolve_api_key
+from spicy_regs.sources.congress_bills import (
+    API_KEY_ENV_VARS,
+    _MAX_PAGES,
+    _resolve_api_key,
+    bill_detail,
+    listing_reader,
+)
 from spicy_regs.transforms.congress_scope import bill_types_from_env, congresses_from_env
 from spicy_regs.transforms.model_call import DEFAULT_MODEL, model_call, resolve_gemini_key
 from spicy_regs.transforms.table_merge import merge_contract_table, merge_table, published_table
@@ -181,6 +220,83 @@ VOTE_REFERENCE_COLUMNS: tuple[str, ...] = (
 #: would have ``merge_table`` drop the row rather than publish it.
 VOTE_REFERENCE_IDENTITY: tuple[str, ...] = ("bill_id", "chamber", "congress", "session", "roll_number", "action_index")
 
+#: The Congress where BILLSTATUS bulk begins (spicy-docs'
+#: ``docs/research/closing-the-gaps-2026-09-19.md`` §2, row A11: bulk is
+#: 108-119). A scope Congress at or above it is filled from the zips as
+#: always; one below it is filled from the API ``bill`` route instead. Which
+#: route fills a Congress is a fact of the publisher, not a second scope knob.
+BULK_STATUS_FLOOR = 108
+
+#: The oldest Congress the ``bill`` list route reaches (measured:
+#: ``bill/{congress}?format=json&limit=1`` answers a declared count for every
+#: Congress from the 82nd on — the A11 receipt's ``declared-counts.json``).
+#: Naming an older one refuses the run rather than walking into an empty
+#: success that would read as absence.
+LIST_ROUTE_FLOOR = 82
+
+#: The backfill's own retained state, beside ``bill_family_archives``: per
+#: filled bill, the list stamp it was filled under, so the next walk skips it
+#: for one comparison and refetches a bill whose stamp moved — and, per
+#: Congress, the route's declared total against what was walked.
+BACKFILLS_TABLE = "bill_family_backfills"
+BACKFILL_CONGRESSES_TABLE = "bill_family_backfill_congresses"
+
+#: The stamp a state row keeps is the list record's own
+#: ``updateDateIncludingText`` exactly as that walk saw it — compared as a
+#: string, because both walks read the same route shape, and an old Congress's
+#: list records truncate the instant to a date while its detail records do not.
+BACKFILL_COLUMNS: tuple[str, ...] = (
+    "congress",
+    "bill_type",
+    "number",
+    "list_update_date_including_text",
+    "observed_at",
+)
+
+#: One row per filled bill; the bill is what a walk looks it up by.
+BACKFILL_IDENTITY: tuple[str, ...] = ("congress", "bill_type", "number")
+
+BACKFILL_CONGRESS_COLUMNS: tuple[str, ...] = (
+    "congress",
+    "declared_count",
+    "records_walked",
+    "pages_walked",
+    "list_completed",
+    "backfilled_count",
+    "observed_at",
+)
+
+#: One row per Congress walked this run, rewritten each walk (fresh
+#: ``observed_at`` wins the merge); a Congress already complete is not walked
+#: and keeps its prior row.
+BACKFILL_CONGRESS_IDENTITY: tuple[str, ...] = ("congress",)
+
+#: The ``congress_bills`` columns a backfilled row NULLs after ``shape_bill``:
+#: each of the counts is stated by the detail record only as a sub-route
+#: ``count`` — the items are the sub-route's own requests, which the backfill
+#: does not walk — and a published zero where the publisher declared a positive
+#: count would be a false statement, not a smaller one. ``schema_version`` has
+#: no detail counterpart at all, so its NULL is also the provenance marker: a
+#: row for a Congress below the bulk floor (where no BILLSTATUS exists) with
+#: these columns NULL came from the API detail route, and the dictionary prose
+#: pins that reading beside the column.
+BACKFILL_UNSUBSTANTIATED: tuple[str, ...] = (
+    "schema_version",
+    "action_count",
+    "committee_count",
+    "version_count",
+    "subject_count",
+    "subjects_json",
+    "related_bill_count",
+    "related_bills_json",
+)
+
+#: The backfill reader's request bound: a backstop against a runaway walk,
+#: never an expected limit (the enforced per-run cap is ``max_version_fetches``,
+#: shared with the bulk printings). One page-walk of all of the 82nd-107th is
+#: about nine hundred pages; a capped run walks far fewer.
+BACKFILL_MAX_REQUESTS = 4 * MAX_VERSION_FETCHES
+
 #: The three tables ``public_activity_events`` compares between runs.
 SNAPSHOT_TABLES = ("congress_bills", "bill_versions", "bill_summaries")
 
@@ -235,6 +351,58 @@ class PackageBodySource(Protocol):
     """
 
     def acquire(self, package_id: str, *, max_bytes: int | None = ...) -> Any: ...
+
+
+class ListBackfillSource(Protocol):
+    """What the pre-BILLSTATUS backfill needs of the ``bill`` route.
+
+    Structural on purpose: :class:`CongressListBackfill` satisfies it with
+    spicy-docs' reader over the seam ``sources.congress_bills`` owns, and the
+    hermetic test stubs it with retained pages. ``pages`` yields the reader's
+    page objects (``records``, ``declared_count``, a capture carrying
+    ``observed_at``) to the walk's terminal page or refusal; ``detail``
+    returns one bill's detail mapping beside the instant it was captured at.
+    """
+
+    def __enter__(self) -> Self: ...
+
+    def __exit__(self, *_error: object) -> None: ...
+
+    def pages(self, congress: int) -> Iterator[Any]: ...
+
+    def detail(self, identity: BillIdentity) -> tuple[Mapping[str, Any], str]: ...
+
+
+class CongressListBackfill:
+    """The production :class:`ListBackfillSource`: one reader instance for the run.
+
+    ``listing_reader`` and ``bill_detail`` are the only constructor and the
+    only single-request primitive this repository has for spicy-docs'
+    ``CongressListingReader`` (see ``sources.congress_bills``); this class
+    composes them into the two calls the backfill loop makes, so the backfill
+    is not a second reader of the route. The reader's request bound is the run
+    backstop (:data:`BACKFILL_MAX_REQUESTS`), not the per-run cap — that is
+    the transform's shared ``max_version_fetches`` budget.
+    """
+
+    def __init__(self, api_key: str, transport: httpx.BaseTransport | None = None) -> None:
+        self._reader = listing_reader(api_key, transport, max_requests=BACKFILL_MAX_REQUESTS)
+
+    def __enter__(self) -> Self:
+        self._reader.__enter__()
+        return self
+
+    def __exit__(self, *_error: object) -> None:
+        self._reader.__exit__(*_error)
+
+    def pages(self, congress: int) -> Iterator[Any]:
+        from spicy_docs.sources.congress.listing import bill_list_url
+
+        return self._reader.bills(bill_list_url(congress=congress), max_pages=_MAX_PAGES)
+
+    def detail(self, identity: BillIdentity) -> tuple[Mapping[str, Any], str]:
+        record, capture = bill_detail(self._reader, identity)
+        return record, str(capture.observed_at)
 
 
 def engine_stamp() -> EngineStamp:
@@ -392,7 +560,10 @@ class PriorIndex:
 
 def _download_prior(output_dir: Path, download_prior: Callable[[str, Path], bool]) -> dict[str, Path | None]:
     """Fetch each prior table this run reads before merging, to the path the merge reuses in place."""
-    return {name: published_table(output_dir, name, download_prior) for name in (*SNAPSHOT_TABLES, ARCHIVES_TABLE)}
+    return {
+        name: published_table(output_dir, name, download_prior)
+        for name in (*SNAPSHOT_TABLES, ARCHIVES_TABLE, BACKFILLS_TABLE, BACKFILL_CONGRESSES_TABLE)
+    }
 
 
 def _prior_index(paths: Mapping[str, Path | None]) -> PriorIndex:
@@ -656,22 +827,361 @@ def _prior_snapshot(paths: Mapping[str, Path | None], bill_ids: Collection[str])
     return snapshot_from_rows(**{_SNAPSHOT_ARG[name]: rows[name] for name in SNAPSHOT_TABLES})
 
 
+# --------------------------------------------------------------------------- #
+# The pre-BILLSTATUS backfill: the 82nd-107th from the API ``bill`` route.
+# --------------------------------------------------------------------------- #
+
+
+def _detail_str(value: Any) -> str | None:
+    """A detail field as text: ``None`` stays ``None``, a number spells as the publisher wrote it.
+
+    The reader parses JSON numbers as decimals, so ``str`` keeps ``2185`` from
+    ever becoming ``2185.0`` on the way into a VARCHAR column.
+    """
+    return None if value is None else str(value)
+
+
+def backfill_status(identity: BillIdentity, record: Mapping[str, Any]) -> BillStatus:
+    """One bill's status from its detail record: what the route states, nothing else.
+
+    ``latestAction`` (date and text only — the coded fields live in the
+    actions sub-route, not the record), ``laws`` and ``sponsors`` arrive in
+    the record itself; the actions, committees, titles, subjects, summaries
+    and text versions arrive only as sub-route counts, so those status fields
+    come back empty rather than invented, and the shaper's zero counts are
+    NULLed downstream (:data:`BACKFILL_UNSUBSTANTIATED`). ``schema_version``
+    names the BILLSTATUS schema and the detail route states none, so it is
+    empty here and NULL in the published row.
+    """
+    latest = record.get("latestAction")
+    latest_action = None
+    if isinstance(latest, Mapping) and (latest.get("actionDate") is not None or latest.get("text") is not None):
+        latest_action = BillAction(
+            text=_detail_str(latest.get("text")),
+            action_date=_detail_str(latest.get("actionDate")),
+            action_time=_detail_str(latest.get("actionTime")),
+            action_code=None,
+            action_type=None,
+            source_system_code=None,
+            source_system_name=None,
+        )
+    title = _detail_str(record.get("title"))
+    if not title:
+        raise ValueError(f"{identity.congress}/{identity.bill_type}/{identity.number} detail record states no title")
+    policy_area = record.get("policyArea")
+    return BillStatus(
+        identity=identity,
+        schema_version="",
+        title=title,
+        origin_chamber=_detail_str(record.get("originChamber")),
+        introduced_date=_detail_str(record.get("introducedDate")),
+        update_date=_detail_str(record.get("updateDate")),
+        update_date_including_text=_detail_str(record.get("updateDateIncludingText")),
+        legislation_url=_detail_str(record.get("legislationUrl")),
+        latest_action=latest_action,
+        policy_area=_detail_str(policy_area.get("name")) if isinstance(policy_area, Mapping) else None,
+        subjects=(),
+        summaries=(),
+        actions=(),
+        sponsors=tuple(
+            BillSponsor(_detail_str(entry.get("bioguideId")), _detail_str(entry.get("fullName")))
+            for entry in record.get("sponsors") or ()
+            if isinstance(entry, Mapping)
+        ),
+        text_versions=(),
+        laws=tuple(
+            BillLaw(_detail_str(entry.get("number")), _detail_str(entry.get("type")))
+            for entry in record.get("laws") or ()
+            if isinstance(entry, Mapping)
+        ),
+    )
+
+
+def _backfill_identity(congress: int, record: Mapping[str, Any]) -> BillIdentity | None:
+    """The identity a list record names, or ``None`` when it names nothing walkable.
+
+    A type outside the sealed vocabulary or a number that is not a positive
+    integer cannot address a detail request at all; refusing it here is one
+    counted record, and the Congress row's walked-versus-backfilled delta is
+    where that count is explained.
+    """
+    try:
+        bill_type = str(record["type"]).lower()
+        number = int(str(record["number"]))
+        return BillIdentity(congress=congress, bill_type=bill_type, number=number)
+    except (KeyError, TypeError, ValueError, BillSourceError):
+        return None
+
+
+def _backfill_bill_row(row: Any, record: Mapping[str, Any]) -> Any:
+    """NULL what this row cannot substantiate, then prove it still satisfies the contract.
+
+    :data:`BACKFILL_UNSUBSTANTIATED` names the columns; ``cosponsor_count``
+    joins them only when the record named no ``sponsors`` array at all — with
+    one, ``len(sponsors) - 1`` is the publisher's own arithmetic, without one
+    it would publish a zero the record never stated.
+    """
+    adjusted: dict[str, Any] = dict(row)
+    for column in BACKFILL_UNSUBSTANTIATED:
+        adjusted[column] = None
+    if "sponsors" not in record:
+        adjusted["cosponsor_count"] = None
+    return TABLE_CONTRACTS["congress_bills"].checked(adjusted)
+
+
+def _held_backfills(path: Path | None) -> dict[tuple[str, str, str], str]:
+    """``(congress, type, number)`` -> the list stamp the walk that filled it saw.
+
+    A row is a success record: the bill's ``congress_bills`` row is published,
+    and this stamp is what the list stated when it was. A record whose stamp
+    differs is a bill that moved; a missing row is unattempted or previously
+    unsuccessful — both are fetched again, which is the resume rule.
+    """
+    if path is None or not _has_columns(path, BACKFILL_COLUMNS):
+        return {}
+    import duckdb
+
+    columns = ", ".join(BACKFILL_COLUMNS)
+    held: dict[tuple[str, str, str], str] = {}
+    for row in duckdb.sql(f"SELECT {columns} FROM read_parquet('{path}')").to_arrow_table().to_pylist():
+        held[(str(row["congress"]), str(row["bill_type"]), str(row["number"]))] = str(
+            row["list_update_date_including_text"] or ""
+        )
+    logger.info("Bill family backfill: {:,} filled bills retained from the last run", len(held))
+    return held
+
+
+def _backfilled_counts(path: Path | None) -> Counter[str]:
+    """Per Congress, how many bills the retained state says are filled."""
+    if path is None or not _has_columns(path, BACKFILL_COLUMNS):
+        return Counter()
+    import duckdb
+
+    rows = duckdb.sql(f"SELECT congress, count(*) AS filled FROM read_parquet('{path}') GROUP BY congress").fetchall()
+    return Counter({str(congress): int(filled) for congress, filled in rows})
+
+
+def _prior_congress_walks(path: Path | None) -> dict[str, dict[str, Any]]:
+    """Per Congress, the walk record the last run left: declared total, completion."""
+    if path is None or not _has_columns(path, BACKFILL_CONGRESS_COLUMNS):
+        return {}
+    import duckdb
+
+    columns = ", ".join(BACKFILL_CONGRESS_COLUMNS)
+    return {
+        str(row["congress"]): row
+        for row in duckdb.sql(f"SELECT {columns} FROM read_parquet('{path}')").to_arrow_table().to_pylist()
+    }
+
+
+def _int_or_zero(value: Any) -> int:
+    """A retained count as an integer; unreadable state counts as nothing filled."""
+    try:
+        return int(str(value))
+    except (TypeError, ValueError):
+        return 0
+
+
+@dataclass(frozen=True, slots=True)
+class _BackfillOutcome:
+    """What one backfill pass over the named pre-floor Congresses produced."""
+
+    families: list[BillFamilyTables]
+    touched: set[str]
+    state_rows: list[dict[str, Any]]
+    congress_rows: list[dict[str, Any]]
+    refused: int
+
+
+class _CapReached(Exception):
+    """Internal: the run's shared fetch budget ran out mid-backfill."""
+
+
+def _run_backfill(
+    list_source: ListBackfillSource,
+    congresses: Sequence[int],
+    *,
+    held: Mapping[tuple[str, str, str], str],
+    prior_ok: Mapping[str, int],
+    prior_walks: Mapping[str, Mapping[str, Any]],
+    remaining: list[int],
+    engine: EngineStamp,
+    classify: SectionClassifier | None,
+    summarize: BillSummarizer | None,
+    summarize_diff: DiffSummarizer | None,
+) -> _BackfillOutcome:
+    """Walk the named Congresses newest-first, one detail request per unfilled bill.
+
+    The budget is the rollup's own per-run cap (``remaining``, shared with the
+    bulk printings): when it runs out the walk stops mid-Congress, the
+    Congress row records how far it got, and the run breaks there — later
+    Congresses keep their order for the next run. Resume is the retained
+    state: a bill whose state row still matches the list stamp costs no
+    request, and every bill without a matching row — unattempted, previously
+    unsuccessful, or moved since — is fetched again. A ``401``/``403`` raises
+    :class:`CredentialRefusedError` and aborts the run; any other detail
+    refusal is that one bill's gap, never a fabricated row. A list walk that
+    refuses (a changed declared count, a repeated continuation) propagates
+    and fails the run loudly: a walk asked for and not received must never
+    read as a completed one — which is also why the Congress row states the
+    route's declared total beside what this run actually walked.
+    """
+    families: list[BillFamilyTables] = []
+    touched: set[str] = set()
+    state_rows: list[dict[str, Any]] = []
+    congress_rows: list[dict[str, Any]] = []
+    refused = 0
+    with list_source:
+        for congress in congresses:
+            prior_row = prior_walks.get(str(congress))
+            prior_count = prior_ok.get(str(congress), 0)
+            if (
+                prior_row is not None
+                and str(prior_row.get("list_completed")) == "true"
+                and prior_count >= _int_or_zero(prior_row.get("declared_count"))
+            ):
+                logger.info(
+                    "Bill family backfill: {} walked complete and every bill filled — no list requests", congress
+                )
+                continue
+            declared: int | None = None
+            walked = pages = filled = 0
+            completed = False
+            observed_at = ""
+            try:
+                for page in list_source.pages(congress):
+                    pages += 1
+                    observed_at = str(getattr(page.capture, "observed_at", "") or "")
+                    if declared is None and page.declared_count is not None:
+                        declared = int(page.declared_count)
+                    for record in page.records:
+                        walked += 1
+                        identity = _backfill_identity(congress, record)
+                        if identity is None:
+                            refused += 1
+                            logger.warning("Bill family backfill: {} list record names no walkable bill", congress)
+                            continue
+                        stamp = _detail_str(record.get("updateDateIncludingText")) or ""
+                        if held.get((str(congress), identity.bill_type, str(identity.number))) == stamp:
+                            continue
+                        if remaining[0] <= 0:
+                            raise _CapReached
+                        remaining[0] -= 1
+                        try:
+                            detail, detail_at = list_source.detail(identity)
+                        except CredentialRefusedError:
+                            raise
+                        except (PagedJsonSourceError, httpx.HTTPError) as error:
+                            refused += 1
+                            logger.warning(
+                                "Bill family backfill: {} {} {} detail refused: {}",
+                                congress,
+                                identity.bill_type,
+                                identity.number,
+                                error,
+                            )
+                            continue
+                        try:
+                            status = backfill_status(identity, detail)
+                            built = build_family(
+                                BillFamilyCapture(status=status, versions=(), observed_at=detail_at),
+                                engine=engine,
+                                classify=classify,
+                                summarize=summarize,
+                                summarize_diff=summarize_diff,
+                            )
+                            if not built.bills:
+                                raise ValueError("the shaper produced no bills row")
+                            row = _backfill_bill_row(built.bills[0], detail)
+                        except Exception as error:  # noqa: BLE001 — one bill's refusal is not the walk's
+                            refused += 1
+                            logger.warning(
+                                "Bill family backfill: {} {} {} refused: {}",
+                                congress,
+                                identity.bill_type,
+                                identity.number,
+                                error,
+                            )
+                            continue
+                        families.append(replace(built, bills=(row,)))
+                        touched.add(bill_key(status.identity))
+                        state_rows.append(
+                            {
+                                "congress": text(congress),
+                                "bill_type": text(identity.bill_type),
+                                "number": text(identity.number),
+                                "list_update_date_including_text": text(stamp),
+                                "observed_at": text(detail_at),
+                            }
+                        )
+                        filled += 1
+            except _CapReached:
+                logger.warning(
+                    "Bill family backfill: the per-run cap was reached in Congress {} — the next run resumes on "
+                    "the bills this one did not reach, because a filled bill is skipped by its retained stamp",
+                    congress,
+                )
+            else:
+                completed = True
+            congress_rows.append(
+                {
+                    "congress": text(congress),
+                    "declared_count": text(declared),
+                    "records_walked": text(walked),
+                    "pages_walked": text(pages),
+                    "list_completed": text(completed),
+                    "backfilled_count": text(prior_count + filled),
+                    "observed_at": text(observed_at),
+                }
+            )
+            logger.info(
+                "Bill family backfill: {} — declared {:,}, walked {:,} on {} page(s), {:,} filled this run, {:,} retained",
+                congress,
+                declared or 0,
+                walked,
+                pages,
+                filled,
+                prior_count,
+            )
+            if not completed:
+                break
+    return _BackfillOutcome(
+        families=families, touched=touched, state_rows=state_rows, congress_rows=congress_rows, refused=refused
+    )
+
+
 def build_bill_family(
     output_dir: Path,
     *,
     bulk_acquirer: BulkStatusSource | None = None,
     body_acquirer: PackageBodySource | None = None,
+    list_source: ListBackfillSource | None = None,
     max_version_fetches: int = MAX_VERSION_FETCHES,
     download_prior: Callable[[str, Path], bool] = r2.download,
 ) -> tuple[Path, ...]:
-    """Build all fifteen bill-family outputs; returns one path per table."""
+    """Build all seventeen bill-family outputs; returns one path per table."""
     congresses = congresses_from_env()
     bill_types = bill_types_from_env()
     logger.info("Bill family: Congresses {}, bill types {}", congresses, bill_types)
 
+    # One scope input, two routes: BILLSTATUS bulk serves nothing below its
+    # floor and the ``bill`` list route nothing below its own, so the named
+    # Congresses split on the publisher's fact, and the backfill walks newest
+    # first. A name neither route reaches refuses the run rather than walking
+    # an empty success that would read as absence.
+    bulk_congresses = [congress for congress in congresses if congress >= BULK_STATUS_FLOOR]
+    backfill_congresses = sorted((congress for congress in congresses if congress < BULK_STATUS_FLOOR), reverse=True)
+    unreachable = [congress for congress in backfill_congresses if congress < LIST_ROUTE_FLOOR]
+    if unreachable:
+        raise ValueError(
+            f"BILL_FAMILY_CONGRESSES names {unreachable}: the bill list route reaches no older Congress than "
+            f"the {LIST_ROUTE_FLOOR}nd (LIST_ROUTE_FLOOR; measured: the A11 receipt's declared-counts.json). "
+            "Nothing below it can be walked, and an empty walk would read as absence."
+        )
+
+    api_key = _resolve_api_key()
     bulk_acquirer = bulk_acquirer or BulkStatusAcquirer(budget=BULK_BUDGET)
     if body_acquirer is None:
-        api_key = _resolve_api_key()
         if api_key:
             body_acquirer = GovInfoBodyAcquirer(budget=BODY_BUDGET, api_key=api_key)
         else:
@@ -711,7 +1221,7 @@ def build_bill_family(
     archive_rows: list[dict] = []
     vote_rows: list[dict] = []
     bills = unchanged = skipped = archives_skipped = votes_refused = 0
-    for congress in congresses:
+    for congress in bulk_congresses:
         for bill_type in bill_types:
             acquisition = _acquire_archive(
                 bulk_acquirer, congress, bill_type, held_archives.get((str(congress), bill_type))
@@ -781,9 +1291,45 @@ def build_bill_family(
                 touched.add(identifier)
                 bills += 1
 
+    # 2b. The pre-BILLSTATUS backfill: same scope input, the route the
+    # publisher serves below the bulk floor, the same per-run cap.
+    backfill_state: list[dict[str, Any]] = []
+    backfill_congress_state: list[dict[str, Any]] = []
+    if backfill_congresses:
+        source = list_source
+        if source is None and api_key:
+            source = CongressListBackfill(api_key)
+        if source is not None:
+            outcome = _run_backfill(
+                source,
+                backfill_congresses,
+                held=_held_backfills(prior_paths.get(BACKFILLS_TABLE)),
+                prior_ok=_backfilled_counts(prior_paths.get(BACKFILLS_TABLE)),
+                prior_walks=_prior_congress_walks(prior_paths.get(BACKFILL_CONGRESSES_TABLE)),
+                remaining=remaining,
+                engine=stamp,
+                classify=classify,
+                summarize=summarize,
+                summarize_diff=summarize_diff_call,
+            )
+            families.extend(outcome.families)
+            touched.update(outcome.touched)
+            backfill_state = outcome.state_rows
+            backfill_congress_state = outcome.congress_rows
+            if outcome.refused:
+                logger.warning("Bill family backfill: {:,} records refused", outcome.refused)
+        else:
+            logger.warning(
+                "Bill family backfill: Congresses {} named below the bulk floor but no api.data.gov key ({}) — "
+                "publishing no backfill rows",
+                backfill_congresses,
+                ", ".join(API_KEY_ENV_VARS),
+            )
+
     folded = BillFamilyTables.concat(families)
     logger.info(
-        "Bill family: {:,} bills rebuilt, {:,} unchanged and skipped, {:,} printings fetched of {:,} allowed",
+        "Bill family: {:,} bills rebuilt, {:,} unchanged and skipped, {:,} status fetches (printings and backfill "
+        "details) of {:,} allowed",
         bills,
         unchanged,
         max_version_fetches - remaining[0],
@@ -791,14 +1337,14 @@ def build_bill_family(
     )
     if remaining[0] == 0:
         logger.warning(
-            "Bill family: the per-run printing cap was reached — the next run resumes on the "
-            "printings this one did not reach, because already-published printings are skipped"
+            "Bill family: the per-run cap was reached — the next run resumes on what this one did not reach: "
+            "bulk printings are skipped by their published stamp and backfilled bills by their retained state"
         )
     if archives_skipped:
         logger.info(
             "Bill family: {:,} of {:,} folder zips proved unchanged and were not downloaded",
             archives_skipped,
-            len(congresses) * len(bill_types),
+            len(bulk_congresses) * len(bill_types),
         )
     if skipped:
         logger.warning("Bill family: {:,} archive entries the reader refused", skipped)
@@ -858,6 +1404,37 @@ def build_bill_family(
             rows=vote_rows,
             remote_key=f"{VOTE_REFERENCES_TABLE}.parquet",
             download_prior=download_prior,
+        )
+    )
+    # The backfill's own retained state, beside the archives table: what was
+    # filled under which list stamp, and, per Congress walked, the route's
+    # declared total against what was reached. Both merge like the archives —
+    # this run's rows win on a repeated identity, and an empty run republishes
+    # the prior state untouched.
+    paths.append(
+        merge_table(
+            output_dir,
+            name=BACKFILLS_TABLE,
+            columns=BACKFILL_COLUMNS,
+            identity=BACKFILL_IDENTITY,
+            version_column="observed_at",
+            rows=backfill_state,
+            remote_key=f"{BACKFILLS_TABLE}.parquet",
+            download_prior=download_prior,
+            prior_present=prior_paths.get(BACKFILLS_TABLE) is not None,
+        )
+    )
+    paths.append(
+        merge_table(
+            output_dir,
+            name=BACKFILL_CONGRESSES_TABLE,
+            columns=BACKFILL_CONGRESS_COLUMNS,
+            identity=BACKFILL_CONGRESS_IDENTITY,
+            version_column="observed_at",
+            rows=backfill_congress_state,
+            remote_key=f"{BACKFILL_CONGRESSES_TABLE}.parquet",
+            download_prior=download_prior,
+            prior_present=prior_paths.get(BACKFILL_CONGRESSES_TABLE) is not None,
         )
     )
     return tuple(paths)
