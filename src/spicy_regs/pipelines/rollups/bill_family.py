@@ -18,11 +18,12 @@ for the same reason every other output is — something reads them back from R2:
   ``roll_call_votes.bill_id``. It is emitted here because the BILLSTATUS
   document is already parsed in this pass; reaching the same fields inside that
   rollup would mean re-acquiring every scoped bill's status.
-* ``bill_family_backfills`` and ``bill_family_backfill_congresses`` are the
-  pre-BILLSTATUS backfill's own retained state (which bill was filled under
-  which list stamp; per Congress walked, the route's declared total against
-  what was reached), the resume record that lets the next named run skip every
-  bill already filled for one comparison apiece.
+* ``bill_family_backfills`` and ``bill_family_backfill_walks`` are the
+  pre-BILLSTATUS backfill's own retained state (per attempted bill, the list
+  stamp and whether it was filled or refused; per ``(congress, bill_type)``
+  walked, the route's declared total against what was reached), the resume
+  record that lets the next named run retry every refusal directly and skip
+  every filled bill for one comparison apiece.
 
 Scope comes from the workflow inputs ``BILL_FAMILY_CONGRESSES`` and
 ``BILL_FAMILY_BILL_TYPES``, defaulting to the current Congress and all eight
@@ -36,7 +37,7 @@ from spicy_regs.pipelines.rollups.base import RollupPipeline, make_rollup_app
 from spicy_regs.transforms.build_bill_family import (
     ARCHIVES_TABLE,
     BACKFILLS_TABLE,
-    BACKFILL_CONGRESSES_TABLE,
+    BACKFILL_WALKS_TABLE,
     FAMILY_TABLES,
     VOTE_REFERENCES_TABLE,
     build_bill_family,
@@ -53,7 +54,7 @@ class BillFamilyRollup(RollupPipeline):
         f"{ARCHIVES_TABLE}.parquet",
         f"{VOTE_REFERENCES_TABLE}.parquet",
         f"{BACKFILLS_TABLE}.parquet",
-        f"{BACKFILL_CONGRESSES_TABLE}.parquet",
+        f"{BACKFILL_WALKS_TABLE}.parquet",
     )
 
     def build(self, output_dir: Path) -> tuple[Path, ...]:

@@ -153,7 +153,7 @@ TABLES: tuple[str, ...] = (
     "bill_family_archives",
     "bill_vote_references",
     "bill_family_backfills",
-    "bill_family_backfill_congresses",
+    "bill_family_backfill_walks",
 )
 
 # Tables the MCP server (list_sources / describe_table / query_sql) exposes.
@@ -188,7 +188,7 @@ MCP_QUERYABLE: frozenset[str] = frozenset(
         "bill_family_archives",
         "bill_vote_references",
         "bill_family_backfills",
-        "bill_family_backfill_congresses",
+        "bill_family_backfill_walks",
         *CONTRACT_TABLES,
     }
 )
@@ -569,25 +569,30 @@ DERIVED_SCHEMAS: dict[str, list[tuple[str, str]]] = {
         ("observed_at", "VARCHAR"),
     ],
     # The bill family's pre-BILLSTATUS backfill state (build_bill_family):
-    # per filled bill, the list stamp the walk that filled it saw — the skip
-    # comparison that lets the next named run reach only the unfilled bills —
-    # and, per Congress walked, the route's declared total against what was
-    # reached, so a capped or refused walk cannot read as an empty Congress.
-    # Pinned to the transform's BACKFILL_COLUMNS / BACKFILL_CONGRESS_COLUMNS
-    # by test_hosted_rollups, like the two entries above.
+    # per attempted bill, the list stamp it was attempted under and whether
+    # it was filled or refused — a filled row whose stamp matches is skipped,
+    # a refused row is retried first next run — and, per (congress, bill_type)
+    # walked, the route's declared total against what was reached, so a capped
+    # or refused walk cannot read as an empty unit. Pinned to the transform's
+    # BACKFILL_COLUMNS / BACKFILL_WALK_COLUMNS by test_hosted_rollups, like
+    # the two entries above.
     "bill_family_backfills": [
         ("congress", "VARCHAR"),
         ("bill_type", "VARCHAR"),
         ("number", "VARCHAR"),
         ("list_update_date_including_text", "VARCHAR"),
+        ("refusal", "VARCHAR"),
         ("observed_at", "VARCHAR"),
     ],
-    "bill_family_backfill_congresses": [
+    "bill_family_backfill_walks": [
         ("congress", "VARCHAR"),
+        ("bill_type", "VARCHAR"),
         ("declared_count", "VARCHAR"),
         ("records_walked", "VARCHAR"),
         ("pages_walked", "VARCHAR"),
         ("list_completed", "VARCHAR"),
+        ("unwalkable_count", "VARCHAR"),
+        ("repeated_count", "VARCHAR"),
         ("backfilled_count", "VARCHAR"),
         ("observed_at", "VARCHAR"),
     ],
