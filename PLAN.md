@@ -80,6 +80,18 @@ Stated in full, with the measurement that makes each answerable, at the top of
 
 ## Next actionable work
 
+**Bound the per-request retry class on every Congress.gov consumer.** The
+listing reader's `max_requests` is a per-request retry bound, not a run cap:
+the budget resets on every `capture_validated`, and spicy-docs's retry waits
+with jitter up to 60 seconds between attempts. The bill reader passes 500
+(`sources/congress_bills.py`), the roll-call rollup 500 and the amendments
+rollup 2,000, so one request that keeps failing can hold a run for hours
+before it dies. The A11 review found this through the backfill's own 2,400
+override, which is removed; the three pre-existing bounds are the repo's
+convention and stand until measured. Pick one bound from a measured retry
+distribution, or make the reader's cap a run cap, and say which in the
+decision record.
+
 **Add `full_text_xml_url` to the Federal Register ingest.** A person cannot
 search inside a rule today, and whoever builds that first will take the pointer
 we publish — which is the HTML body. Publishing the wrong pointer exports the
@@ -308,7 +320,7 @@ backfill walks only when a pre-108th Congress is named.
   the 92nd walked end to end against its declared total (767 of 767, 4 pages,
   `completed: true`); the 767 retained records replayed through the real
   code path offline per type (declared totals summing to 767, every unit
-  settled, the 50 retained details filled, the 717 not retained recorded as
+  settled, the 50 retained details filled, the 716 not retained recorded as
   refusals), then resumed under a budget of 2 with no list request and
   exactly the first two refusals retried. 82 keyed requests of the 120
   budget; the key only ever an `X-Api-Key` header; `verify_credentials.py`
