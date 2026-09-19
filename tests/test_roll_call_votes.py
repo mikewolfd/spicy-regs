@@ -90,9 +90,13 @@ class StubListingReader:
     """Serves each ``house-vote`` record on the session its own path addresses.
 
     The transform walks one URL per session of the Congress, so a stub that
-    ignored the path would serve every record twice and invent a disagreement
-    between a record and itself. The served rows are held under a different
-    name than the Protocol's ``records`` method, which they would shadow.
+    ignored the path would serve every record on both walks. A duplicated
+    record names the same bill as itself and so cannot conflict with itself —
+    but it does duplicate any *genuine* disagreement, because the listing
+    reference that loses to a recorded vote then loses to it twice, and
+    ``conflict_count`` reads 2 where the input stated one disagreement. The
+    served rows are held under a different name than the Protocol's ``records``
+    method, which they would shadow.
     """
 
     def __init__(self, listed=()):

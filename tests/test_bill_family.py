@@ -562,6 +562,10 @@ def test_a_retained_entry_naming_another_file_does_not_wedge_the_rollup(tmp_path
 # --------------------------------------------------------------------------- #
 # Recorded votes: the fifteenth output, read off the bill's own actions.
 # --------------------------------------------------------------------------- #
+#: chamber, session, roll number, date, url, and the optional seventh field.
+#: The Senate entry carries a `<fullActionName>`; the House one does not, which
+#: is the pair the publisher's own measurement found (absent on 58 of 58 JSON
+#: entries, documented by the BILLSTATUS guide, so both states are real).
 RECORDED_VOTES = {
     # The Senate action (index 0 in the fixture) and the House floor action (index 1).
     "Received in the Senate.": (
@@ -570,6 +574,7 @@ RECORDED_VOTES = {
         "00312",
         "2026-06-09T20:14:02Z",
         "https://www.senate.gov/legislative/LIS/roll_call_votes/vote1192/vote_119_2_00312.xml",
+        "MOTION TO CONSIDER",
     ),
     "Motion to reconsider laid on the table Agreed to without objection.": (
         "House",
@@ -577,6 +582,7 @@ RECORDED_VOTES = {
         "306",
         "2026-06-08T19:48:09Z",
         "https://clerk.house.gov/evs/2026/roll306.xml",
+        None,
     ),
 }
 
@@ -591,10 +597,11 @@ def _voted_status() -> bytes:
     both URL grammars and both chamber spellings are exercised.
     """
     raw = (FIXTURES / "status-119hr6028.xml").read_text()
-    for action_text, (chamber, session, roll, date, url) in RECORDED_VOTES.items():
+    for action_text, (chamber, session, roll, date, url, full_name) in RECORDED_VOTES.items():
+        named = "" if full_name is None else f"<fullActionName>{full_name}</fullActionName>"
         block = (
             f"<text>{action_text}</text>\n        <recordedVotes><recordedVote>"
-            f"<chamber>{chamber}</chamber><congress>119</congress><date>{date}</date>"
+            f"<chamber>{chamber}</chamber><congress>119</congress><date>{date}</date>{named}"
             f"<rollNumber>{roll}</rollNumber><sessionNumber>{session}</sessionNumber><url>{url}</url>"
             f"</recordedVote></recordedVotes>"
         )
@@ -628,7 +635,13 @@ def test_recorded_votes_on_a_bills_actions_are_published_as_references(tmp_path,
     for row in rows:
         assert row["bill_id"] == "119-hr-6028"
         assert row["url"] and row["date"] and row["observed_at"] == OBSERVED_AT
-        assert row["full_action_name"] is None, "absent on every entry measured, carried because the guide documents it"
+
+    # The optional seventh field, both ways: `_full_action_name` finds the entry
+    # again on its action by the key the reference states, so a publisher that
+    # resumes sending it is carried rather than silently dropped, and one that
+    # does not send it yields NULL rather than a guess.
+    assert by_action["0"]["full_action_name"] == "MOTION TO CONSIDER"
+    assert by_action["1"]["full_action_name"] is None
 
 
 def test_references_are_keyed_by_action_so_one_roll_call_on_two_actions_is_two_rows(tmp_path, scoped):
@@ -636,7 +649,7 @@ def test_references_are_keyed_by_action_so_one_roll_call_on_two_actions_is_two_r
     house = RECORDED_VOTES["Motion to reconsider laid on the table Agreed to without objection."]
     same_on_both = {text: house for text in RECORDED_VOTES}
     raw = (FIXTURES / "status-119hr6028.xml").read_text()
-    for action_text, (chamber, session, roll, date, url) in same_on_both.items():
+    for action_text, (chamber, session, roll, date, url, _full_name) in same_on_both.items():
         block = (
             f"<text>{action_text}</text><recordedVotes><recordedVote><chamber>{chamber}</chamber>"
             f"<congress>119</congress><date>{date}</date><rollNumber>{roll}</rollNumber>"

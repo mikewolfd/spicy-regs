@@ -23,15 +23,25 @@ Two steps, from two different publishers, because neither alone is enough:
    one keyless request per roll call. BillTrax published zeroes in these four
    columns; they are real here or they are NULL.
 
-**Scope is still House only, and the references do not widen it.** The Senate's
-roll calls live on the Senate LIS menu, which ``listing.py`` has no index route
-for, so no Senate row is published rather than a Senate row with a NULL tally.
-``bill_vote_references`` does carry Senate roll calls — 6 of the 34 in the
-measured sample — but a set of keys reached from bills is not an index of a
-session's roll calls, and publishing only the Senate votes that happen to sit
-on a scoped bill's actions would state a coverage this has not got. So the
-fetch set stays exactly what the House listing names; the Senate references sit
-in the index unused until a Senate index route lands, and cost nothing.
+**Scope is House only, and what is fetched is the House half of the union.**
+The fetch set is every House roll call in the index — the listing's own walk,
+plus any House roll call a bill's action names that the listing has not
+indexed yet. It is a superset of the listing, never a subset, so the coverage
+claim this table makes ("every House roll call the publisher's index names,
+under the per-run cap") stays true, and a vote that arrives on a bill's action
+first is published a cron early rather than missed. Such a row is not partial:
+the Clerk file is addressable from the roll-call key alone, so it carries the
+same tally and member positions as any other, or it is counted as refused.
+
+The Senate half of that union is **not** fetched, and the asymmetry is the
+point. For the House the references can only add to a complete enumeration.
+For the Senate there is no enumeration at all — ``listing.py`` has no Senate
+index route, and the LIS menu is not a reader this repository has — so the
+Senate rows would *be* whatever the scoped bills happened to reference: 6 of
+the 34 roll calls in the measured sample, a biased sample that would read as a
+Senate vote table. Publishing that would state a coverage this has not got, so
+no Senate row is published at all, and the Senate references sit in the index
+unused until a Senate index route lands. They cost nothing.
 
 **Why the references are read rather than re-derived.** Reaching the same six
 fields inside this rollup would mean re-acquiring every scoped bill's
@@ -182,6 +192,14 @@ def _recorded_vote_references(
     Scoped in DuckDB rather than read whole: the table grows one row per
     recorded vote per action across every Congress the family has run, and this
     rollup only ever matches the ones its own listing walk reached.
+
+    ``ORDER BY`` makes the first-wins tie-break a stated rule rather than the
+    scan's accident. ``index_vote_references`` keeps the first reference it
+    sees for a vote, so when one roll call is named by two of a bill's actions
+    — the ordinary case, since the publisher records a passage vote on both the
+    passage action and the motion to reconsider — the winner is the lowest
+    ``action_index``, which is the earlier action. Ordering by the identity
+    columns makes that reproducible across runs.
     """
     path = published_table(output_dir, VOTE_REFERENCES_TABLE, download_prior)
     if path is None:
@@ -194,8 +212,10 @@ def _recorded_vote_references(
 
     columns = ", ".join(REFERENCE_COLUMNS)
     rows = duckdb.sql(
-        f"SELECT {columns} FROM read_parquet('{path}') WHERE congress IN (SELECT UNNEST(?))",
-        params=[[str(congress) for congress in congresses]],
+        f"SELECT {columns} FROM read_parquet('{path}') "
+        "WHERE congress IN (SELECT UNNEST(?)) "
+        "ORDER BY congress, chamber, session, roll_number, action_index, bill_id",
+        params=[[str(congress) for congress in sorted(congresses)]],
     ).fetchall()
     path.unlink(missing_ok=True)
 
