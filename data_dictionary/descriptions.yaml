@@ -302,19 +302,40 @@ tables:
       appends — the publisher facts the list endpoint discards, the stage, signing
       and money-bill findings, and their provenance — are filled only for the
       Congresses that rollup has covered, and are NULL on every other row until it
-      reaches them. Once filled they stay filled: the two rollups that write this
-      table merge column-wise, so the archive-wide walk updates the ten columns it
-      owns without clearing the thirty-eight it does not.
+      reaches them; for the 82nd through the 107th it reaches them through the API
+      detail route rather than a BILLSTATUS zip, and the count columns it cannot
+      substantiate from that route stay NULL there. Once filled they stay filled:
+      the two rollups that write this table merge column-wise, so the archive-wide
+      walk updates the ten columns it owns without clearing the thirty-eight it
+      does not.
     measured_on: "2026-09-19"
     summary: >-
-      One row per bill or resolution, as one BILLSTATUS document states it. Two
-      rollups write this table: `congress-bills` walks the Congress.gov list
-      endpoint for the ten-column prefix across the whole archive, and `bill-family`
-      fills the full contract for the Congresses it is scoped to. The first ten
-      columns keep the exact order and spelling they have always had, because other
-      repositories pin that prefix by digest; every new column is appended after
-      them. Because two rollups write it, this is the one table merged column-wise:
-      neither writer's NULL can erase the other's value. All columns are stored as
+      One row per bill or resolution. Two rollups write this table:
+      `congress-bills` walks the Congress.gov list endpoint for the ten-column
+      prefix across the whole archive, and `bill-family` fills the full contract
+      for the Congresses it is scoped to — from a BILLSTATUS document for the
+      108th onward, and from the API bill detail route for the 82nd through the
+      107th, where no BILLSTATUS bulk exists. A consumer tells the two family
+      routes apart by Congress and by the NULLs: a row for a Congress below the
+      108th is the detail route's, its `schema_version` is NULL because the
+      detail record states no BILLSTATUS schema, and its `action_count`,
+      `committee_count`, `version_count`, `subject_count`, `subjects_json`,
+      `related_bill_count` and `related_bills_json` are NULL because the detail
+      record states those only as sub-route counts the backfill does not walk —
+      a zero would contradict the count the publisher declared. `cosponsor_count`
+      is the one count the record does state, as its `cosponsors` sub-route's
+      count, and is published from there (NULL when the record states no such
+      sub-route, as the 92nd's do not); it is never the sponsor-list arithmetic
+      the BILLSTATUS shaper uses. `stage` and `signed_date_rule` are NULL on
+      these rows too: the record carries no actions, so no stage rule ran and no
+      became-law action was looked for, and the shaper's default rung
+      ("introduced") or the rule name "public law without a became-law action"
+      would each be a statement about the bill that nothing examined. The first
+      ten columns keep the
+      exact order and spelling they have always had, because other repositories
+      pin that prefix by digest; every new column is appended after them. Because
+      two rollups write it, this is the one table merged column-wise: neither
+      writer's NULL can erase the other's value. All columns are stored as
       VARCHAR.
     columns_from: spicy_docs
 
@@ -1248,3 +1269,84 @@ tables:
       date: "The instant the entry states for the vote."
       full_action_name: "The guide's seventh field, absent on every entry measured; NULL where the publisher sends none."
       observed_at: "When the bill-family run that read this entry captured the BILLSTATUS document."
+  bill_family_backfills:
+    label: "Bill-family backfill state"
+    coverage: >-
+      Not a range. Processing state, not published data: one row per bill the
+      `bill-family` rollup has attempted from the API detail route for a Congress
+      below the 108th. None yet — the first run that names a pre-108th Congress
+      fills it. It describes this pipeline's own runs, not the publisher's
+      corpus, so no coverage range applies to it.
+    measured_on: "2026-09-19"
+    data_quality: >-
+      A row with `refusal` NULL is a success record — the bill's `congress_bills`
+      row is published and the stamp is what the `bill/{congress}/{type}` list
+      stated when it was — and a row with `refusal` set is a recorded failure,
+      which the next named run retries first, directly and without a list walk,
+      one request each; that is the resume rule (the CRS summaries pattern: skip
+      only a success, retry every failure). A list record whose stamp differs
+      from its success row means the bill moved and is fetched again. The stamp
+      is the publisher's own `updateDateIncludingText` exactly as the list stated
+      it, compared as a string: an old Congress's list records truncate the
+      instant to a date while its detail records do not, so only list-to-list
+      comparison is exact. `refusal` is the error's class name only, never its
+      message. All columns are stored as VARCHAR.
+    summary: >-
+      One row per bill the pre-BILLSTATUS backfill has attempted, carrying the
+      list stamp it was attempted under and whether it was filled or refused —
+      the retained state that lets the next run retry every refusal and skip
+      every filled bill for one comparison apiece. All columns are stored as
+      VARCHAR.
+    columns:
+      congress: "The numbered Congress whose backfill walk attempted this bill."
+      bill_type: "The publisher's lowercase bill type (hr, s, hjres, sjres, hconres, sconres, hres, sres)."
+      number: "The bill's number as the list record states it."
+      list_update_date_including_text: "The bill's `updateDateIncludingText` exactly as the list record stated it when this attempt was made; the value the next walk compares against."
+      refusal: "NULL when the bill was filled; otherwise the class name of the error that refused the detail attempt (`_RetryableTransportError` after the reader's retries, `PagedJsonSourceError` for a refused response), which marks the row for retry."
+      observed_at: "When the detail request that filled the bill was captured, or when the refusal was recorded."
+
+  bill_family_backfill_walks:
+    label: "Bill-family backfill walks"
+    coverage: >-
+      Not a range. Processing state, not published data: one row per
+      (pre-108th Congress, bill type) a `bill-family` run actually walked on
+      the `bill/{congress}/{type}` route, rewritten each walk. None yet — the
+      first run that names a pre-108th Congress fills it. A unit walked complete
+      with every record filled, refused or unwalkable is settled and not walked
+      again; it keeps its prior row. It describes this pipeline's own runs, not
+      the publisher's corpus, so no coverage range applies to it.
+    measured_on: "2026-09-19"
+    data_quality: >-
+      `list_completed` is true only when the walk reached the route's terminal
+      page with declared and observed counts agreeing (the reader refuses
+      otherwise); a run that hit the per-run cap mid-unit records how far it got
+      and `list_completed` false, and the next run walks the unit again, pages
+      charged to the cap, because only a walk can reach the records it did not.
+      An empty success is not absence: `declared_count` is the route's own
+      declared total for that query on that day, recorded beside
+      `records_walked` even when the walk stopped early, so a capped walk can
+      never read as an empty unit; a declared 0 is the publisher's statement
+      that the Congress has no bills of that type. The declared total counts
+      list entries, and the route can list one bill twice across a page
+      boundary (`repeated_count`); whether that repeat also displaced another
+      bill off the walk is not knowable from one walk, and a settled unit is
+      not walked again to find out. A settled unit's bills are likewise not
+      re-checked for a moved stamp; the archive-wide `congress-bills` rollup
+      keeps the ten-column prefix current regardless. All columns are stored
+      as VARCHAR.
+    summary: >-
+      One row per (Congress, bill type) the pre-BILLSTATUS backfill walked,
+      recording the route's declared total against what the walk reached and
+      filled. All columns are stored as VARCHAR.
+    columns:
+      congress: "The numbered Congress this walk record describes."
+      bill_type: "The publisher's lowercase bill type the walk was addressed at; with `congress`, the unit's identity."
+      declared_count: "The bill total the `bill/{congress}/{type}` route declared for this query, from the walk's first page."
+      records_walked: "List records this run actually walked — the whole declared total when the walk completed, fewer when the per-run cap stopped it."
+      pages_walked: "List pages fetched this run for this unit."
+      list_completed: "Whether the walk reached the route's terminal page this run; false when the cap stopped it early."
+      unwalkable_count: "List records that named no bill this walk could address (a type other than the one walked, or a number that is not a positive integer); counted so the unit can settle, since no identity exists to retry."
+      repeated_count: "List entries repeating a bill already listed earlier in this walk. The route's `updateDate desc` order repeats a bill across a page boundary when its stamp ties (measured on the 92nd: hr 4634 twice, identical, in a walk whose declared and observed counts agreed at 767), so the declared total counts entries, not bills; a repeat is counted so the unit can settle and is never requested twice."
+      backfilled_count: "Bills of this unit filled as of the end of this walk, from the retained state; never re-counted for a bill re-fetched because its stamp moved."
+      observed_at: "When this walk's last captured list page was observed."
+

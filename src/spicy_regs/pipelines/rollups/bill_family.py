@@ -7,7 +7,7 @@ because one expensive pass — the BILLSTATUS archives, the GovInfo printings an
 the model calls — fills all thirteen. Thirteen rollups would repeat that pass
 thirteen times.
 
-Two further outputs ride along, neither a contract table and both published
+Four further outputs ride along, none a contract table and all published
 for the same reason every other output is — something reads them back from R2:
 
 * ``bill_family_archives`` is the rollup's own processing state, the BILLSTATUS
@@ -18,6 +18,12 @@ for the same reason every other output is — something reads them back from R2:
   ``roll_call_votes.bill_id``. It is emitted here because the BILLSTATUS
   document is already parsed in this pass; reaching the same fields inside that
   rollup would mean re-acquiring every scoped bill's status.
+* ``bill_family_backfills`` and ``bill_family_backfill_walks`` are the
+  pre-BILLSTATUS backfill's own retained state (per attempted bill, the list
+  stamp and whether it was filled or refused; per ``(congress, bill_type)``
+  walked, the route's declared total against what was reached), the resume
+  record that lets the next named run retry every refusal directly and skip
+  every filled bill for one comparison apiece.
 
 Scope comes from the workflow inputs ``BILL_FAMILY_CONGRESSES`` and
 ``BILL_FAMILY_BILL_TYPES``, defaulting to the current Congress and all eight
@@ -30,6 +36,8 @@ from typing import ClassVar
 from spicy_regs.pipelines.rollups.base import RollupPipeline, make_rollup_app
 from spicy_regs.transforms.build_bill_family import (
     ARCHIVES_TABLE,
+    BACKFILLS_TABLE,
+    BACKFILL_WALKS_TABLE,
     FAMILY_TABLES,
     VOTE_REFERENCES_TABLE,
     build_bill_family,
@@ -45,6 +53,8 @@ class BillFamilyRollup(RollupPipeline):
         "public_activity_events.parquet",
         f"{ARCHIVES_TABLE}.parquet",
         f"{VOTE_REFERENCES_TABLE}.parquet",
+        f"{BACKFILLS_TABLE}.parquet",
+        f"{BACKFILL_WALKS_TABLE}.parquet",
     )
 
     def build(self, output_dir: Path) -> tuple[Path, ...]:

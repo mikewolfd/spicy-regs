@@ -86,6 +86,12 @@ TABLES = (
     # have to reach past the server to answer it.
     "bill_family_archives",
     "bill_vote_references",
+    # The pre-BILLSTATUS backfill's retained state, published for the same
+    # reason: it is on the bucket either way, and "which bills has the
+    # backfill filled or refused, under what list stamp" is answerable
+    # without reaching past the server.
+    "bill_family_backfills",
+    "bill_family_backfill_walks",
 )
 STATEMENT_TIMEOUT = os.environ.get("SPICY_REGS_STATEMENT_TIMEOUT", "790s")
 

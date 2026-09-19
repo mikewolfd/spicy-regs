@@ -80,6 +80,18 @@ Stated in full, with the measurement that makes each answerable, at the top of
 
 ## Next actionable work
 
+**Bound the per-request retry class on every Congress.gov consumer.** The
+listing reader's `max_requests` is a per-request retry bound, not a run cap:
+the budget resets on every `capture_validated`, and spicy-docs's retry waits
+with jitter up to 60 seconds between attempts. The bill reader passes 500
+(`sources/congress_bills.py`), the roll-call rollup 500 and the amendments
+rollup 2,000, so one request that keeps failing can hold a run for hours
+before it dies. The A11 review found this through the backfill's own 2,400
+override, which is removed; the three pre-existing bounds are the repo's
+convention and stand until measured. Pick one bound from a measured retry
+distribution, or make the reader's cap a run cap, and say which in the
+decision record.
+
 **Add `full_text_xml_url` to the Federal Register ingest.** A person cannot
 search inside a rule today, and whoever builds that first will take the pointer
 we publish — which is the HTML body. Publishing the wrong pointer exports the
@@ -266,6 +278,55 @@ hosted; the public surface went from 24 tables to 45.
   inline `columns:` is refused at load. One `mcp_server.py` `TABLES` line per
   table, kept literal so the MCP server stays installable without the
   `source-readers` group.
+
+**2026-09-19, branch `hosting-a11-backfill` (worktree `spicy-regs-wt-a11`).**
+Gap A11 (spicy-docs' `closing-the-gaps-2026-09-19.md` §2): bills before the
+108th have no BILLSTATUS bulk, so the family never reached them. Landed: the
+rollup splits its one scope input on the publisher's own floor
+(`BULK_STATUS_FLOOR` = 108) — a named Congress at or above it fills from the
+zips as always; one below it is backfilled from the API `bill` route, newest
+Congress first, under the same per-run cap, one detail request per bill not
+already filled. The default scope (the current Congress) is unaffected: the
+backfill walks only when a pre-108th Congress is named.
+
+- [x] The walk reuses the `congress-bills` reader seam
+  (`sources/congress_bills.py::listing_reader`, `bill_detail`) — no second
+  reader of the route. A `401`/`403` aborts the run; any other detail refusal
+  is that one bill's gap, retried next run; a list walk that refuses fails
+  the run loudly.
+- [x] Resume state beside `bill_family_archives`, on the CRS summaries
+  pattern AGENTS.md points at (skip only a success, retry every failure):
+  `bill_family_backfills` (per attempted bill, the list stamp and whether it
+  was filled or refused — a refusal is retried first next run, one request,
+  without a walk) and `bill_family_backfill_walks` (per `(congress,
+  bill_type)`, the route's declared total against what was actually walked;
+  a unit walked complete with every record filled, refused or unwalkable is
+  settled and never re-walked, so a permanent gap costs one request a run,
+  not a page walk). Every page and every detail is charged to the same cap.
+  Both are published outputs (dictionary + MCP), all VARCHAR.
+- [x] Provenance: the detail record states laws, sponsors, the latest action
+  and a `cosponsors.count`, but only sub-route *counts* for actions,
+  committees, titles, subjects, summaries and text versions — so the
+  backfilled `congress_bills` row publishes `cosponsor_count` from the
+  sub-route count (never the sponsor arithmetic), NULLs every count a zero
+  would lie about, NULLs `stage` and `signed_date_rule` (no action was
+  examined, so neither the default rung nor the no-became-law-action rule is
+  a finding), and carries a NULL `schema_version` as the marker that it is
+  the detail route's; the consumer's test is `congress < 108`. Said in the
+  `congress_bills` dictionary entry.
+- [x] Proof — receipt
+  `~/Work/corpora/supply-2026-09-02/receipts/a11-pre-108th-backfill-2026-09-19/`:
+  declared counts for all 26 candidate Congresses (the 92nd smallest at 767);
+  the 92nd walked end to end against its declared total (767 of 767, 4 pages,
+  `completed: true`); the 767 retained records replayed through the real
+  code path offline per type (declared totals summing to 767, every unit
+  settled, the 50 retained details filled, the 716 not retained recorded as
+  refusals), then resumed under a budget of 2 with no list request and
+  exactly the first two refusals retried. 82 keyed requests of the 120
+  budget; the key only ever an `X-Api-Key` header; `verify_credentials.py`
+  re-scans everything retained. Review round one (cosponsor arithmetic,
+  the default stage, the per-request budget misread as a run backstop, the
+  uncharged pages, the double count) fixed in the follow-up commits.
 
 **Every rollup is incremental where its source allows.** The pattern is
 `build_congress_bills`': take a watermark from the prior published table, ask
