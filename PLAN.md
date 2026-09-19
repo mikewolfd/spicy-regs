@@ -113,16 +113,18 @@ re-vendor, so bump `CATALOG_FORMAT_VERSION` when the shape changes and say so.
 BillTrax-derived tables took the catalog from 24 classes to 45 and
 `congress_bills` from 10 columns to 48.
 `spicysearch/vendor/spicy-regs-catalog-dictionary.json` is still the 24-class
-copy (`01c77a4a…`, verified 2026-09-19) and no longer matches
-`catalog.json.sha256`, which is now `b3fc84ae…` over 47 classes.
-**The `d08822d8…` this section first recorded had already gone stale twice
-before the linkage work below**, and attributing the whole drift to that work
-would be wrong: `4458d1f` wrote `d08822d8…`, `2eaffe0` moved it to `76ae36ac…`
-wiring the sealed body preference, `473966f` moved it to `8f24e437…` correcting
-the coverage statements, and only then did the linkage work take it to
-`b3fc84ae…` by adding `bill_vote_references`. A consumer re-vendoring reads the
-current file; the chain matters only because it shows the digest moves with
-ordinary work and a note quoting one is stale as soon as it is written.
+copy (`01c77a4a…`, verified 2026-09-19) and no longer matches the 47-class
+catalog this repository publishes. **The current digest is whatever
+`data_dictionary/catalog.json.sha256` holds** — read the file; it moves
+whenever the dictionary does, which is often, and a value quoted here is stale
+by the next `generate`. This paragraph quoted one twice and was wrong both
+times: it recorded `d08822d8…`, which `2eaffe0` had already moved by wiring the
+sealed body preference and `473966f` again by correcting coverage statements;
+the linkage work below moved it again by adding `bill_vote_references`; and the
+commit that wrote "a note quoting one is stale as soon as it is written" quoted
+one, which the very next `generate` in the same review round invalidated. The
+commit chain is the durable part, because those are facts that do not move — a
+consumer re-vendoring reads the file.
 `CATALOG_FORMAT_VERSION` stays `3` on
 purpose — no field changed shape, so a reader that only reads fields keeps
 working — but the `kind` vocabulary gained a fifth value, `sampled`, which a
@@ -799,14 +801,22 @@ hosted tables. None of the three added a publisher request to any run.
 
   **Both measurements are retained**, 146 requests with every raw response, at
   `~/Work/corpora/supply-2026-09-02/receipts/report-bill-linkage-2026-09-19/`.
-  Re-running them for the receipt corrected two figures an exploratory pass had
-  produced over a different slice (11 hearings carrying mentions, not 18; 12
-  with a meeting, not 6) — which is the argument for retaining one.
+  **The hearing figures were corrected twice, and the receipt is why.** An
+  exploratory pass over a different slice had said 18 hearings carried
+  mentions, "up to 25 on one", and 6 had a meeting. Re-running it under
+  retention gave 11, 38 entries and 12. Then the retained rows showed the
+  `hearing/119` route is not stably ordered across offsets and had served two
+  hearings twice, so 52 fetches covered **50 distinct hearings** — counting
+  packages rather than fetches gives the 10 and 31 above, recomputed offline
+  from what was already retained rather than by asking again. The two
+  load-bearing figures never moved at any stage: 12 of 12 agreement on reports,
+  and no hearing stating a `PRIMARY` bill. That is the argument for a receipt —
+  a count over a source with duplicates in it looks exactly like a correct one.
 
   **`hearing_transcripts.bill_id` is NULL by measurement, not omission.** Over
-  52 hearings of the 119th, **no CHRG MODS carried a `PRIMARY` bill**; 11
-  carried `BODY`/`COVER` mentions, 38 entries in all, and of the 12 whose
-  detail named a committee meeting, **none** of those meetings'
+  50 distinct hearings of the 119th, **no CHRG MODS carried a `PRIMARY`
+  bill**; 10 carried `BODY`/`COVER` mentions, 31 entries in all, and of the 12
+  whose detail named a committee meeting, **none** of those meetings'
   `relatedItems.bills` named a bill. So the `hearing → meeting → bill` chain
   the gap doc names buys nothing at two keyed requests per hearing, and a
   mention is never promoted to a linkage — publishing H.R. 1 as the subject of

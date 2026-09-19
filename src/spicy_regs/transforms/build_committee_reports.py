@@ -35,21 +35,21 @@ GovInfo MODS names the bills a package relates to as
 ``<extension><bill congress type number context/>``, and ``context`` is the
 publisher's own statement of how: ``PRIMARY`` is the measure a report
 accompanies, ``OTHER``, ``COVER`` and ``BODY`` are measures it mentions.
-Only ``PRIMARY`` fills the column. Measured live 2026-09-19 on the first
-twelve reports the Congress.gov ``committee-report/119`` route lists, the
+Only ``PRIMARY`` fills the column. Measured live 2026-09-19 on the twelve
+newest reports the Congress.gov ``committee-report/119`` route lists, the
 MODS ``PRIMARY`` bill agreed with the route's own ``associatedBill[0]`` on 12
 of 12 — the same edge the legislative data map resolved 17 of 17 — at one
-keyed detail request per report that this design does not make. Over 52
-hearings from the ``hearing/119`` route, no CHRG MODS carried a ``PRIMARY``
-bill (11 carried ``BODY``/``COVER`` mentions, 38 entries in all), and of the 12
-whose detail named a committee meeting none of those meetings'
+keyed detail request per report that this design does not make. Over 50
+distinct hearings from the ``hearing/119`` route, no CHRG MODS carried a
+``PRIMARY`` bill (10 carried ``BODY``/``COVER`` mentions, 31 entries in all),
+and of the 12 whose detail named a committee meeting none of those meetings'
 ``relatedItems.bills`` named a bill, so ``hearing_transcripts.bill_id`` is NULL
 in practice and the ``hearing -> meeting -> bill`` chain, at two keyed
-requests per hearing, is not walked. Both measurements are retained with every
-request and raw response at
-``~/Work/corpora/supply-2026-09-02/receipts/report-bill-linkage-2026-09-19/``. A mention is never promoted to a
-linkage: publishing H.R. 1 as the bill of a hearing that cites it would be a
-guess dressed as a fact. The mentions are counted in the run log.
+requests per hearing, is not walked. A mention is never promoted to a linkage:
+publishing H.R. 1 as the bill of a hearing that cites it would be a guess
+dressed as a fact. The mentions are counted in the run log. Both measurements
+are retained with every request and raw response at
+``~/Work/corpora/supply-2026-09-02/receipts/report-bill-linkage-2026-09-19/``.
 
 **Two things requested from spicy-docs**, neither added here, because this
 repository does not restate a published shape or a source rule it does not

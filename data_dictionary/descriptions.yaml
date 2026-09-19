@@ -1012,8 +1012,17 @@ tables:
       `bill_number_in_excerpt` is a match; `match_rule = unmatched` with a NULL
       `bill_id` means the matcher ran and no published bill was named; an all-NULL
       `match_rule` means no matching pass ran at all, because no `congress_bills`
-      table was published when the rollup ran. The Senate feed carries no item
-      description, so a Senate release can only ever match on its title.
+      table was published when the rollup ran, or none was published for that
+      release's Congress, or the release states no readable `pub_date` to scope by.
+      The Senate feed carries no item description, so a Senate release can only ever
+      match on its title.
+      One consequence worth knowing before relying on these four columns: a run that
+      cannot read `congress_bills` republishes the whole live window with NULL match
+      columns, because this table merges row-wise and a fresh row wins whole. The
+      next run that can read it re-derives them for every release still in the feed,
+      so the gap normally lasts one cycle — but a release that rotates off the feed
+      during that cycle keeps the NULL permanently. The other publisher columns are
+      unaffected; only these four degrade.
     columns_from: spicy_docs
 
   roll_call_votes:
@@ -1027,7 +1036,12 @@ tables:
       re-read in case the publisher corrected them. The Senate's roll calls are not
       published at all rather than published with empty tallies — there is no Senate
       index route in the reader this rollup uses, and a set of Senate roll calls
-      reached from bills is not an index of a session's roll calls.
+      reached from bills is not an index of a session's roll calls. A House roll
+      call that a bill's own action names can be published a cron before the
+      Congress.gov vote index lists it, since the two linkage sources are read
+      independently and the Clerk file is addressable from the roll-call key alone;
+      such a row carries the same tally and member positions as any other, so this
+      widens timeliness rather than the coverage claim.
     measured_on: "2026-09-19"
     summary: >-
       One row per roll call: the publisher's own tally, and the bill it refers to.
@@ -1153,9 +1167,9 @@ tables:
     data_quality: >-
       `bill_id` is filled from the package's MODS `PRIMARY` bill, exactly as on
       `committee_reports`, but a hearing does not accompany a measure the way a
-      report does: measured 2026-09-19 over 52 hearings of the 119th Congress, no
-      CHRG MODS carried a `PRIMARY` bill at all. Eleven carried `BODY` or `COVER`
-      mentions — bills the transcript cites, 38 entries in all — and those are not
+      report does: measured 2026-09-19 over 50 distinct hearings of the 119th
+      Congress, no CHRG MODS carried a `PRIMARY` bill at all. Ten carried `BODY` or
+      `COVER` mentions — bills the transcript cites, 31 entries in all — and those are not
       promoted to a linkage, because publishing a cited bill as the hearing's
       subject would be a guess stated as a fact. Of the twelve hearings whose
       Congress.gov detail named a committee meeting, none of those meetings listed a

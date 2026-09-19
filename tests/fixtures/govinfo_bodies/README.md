@@ -28,11 +28,12 @@ the `context` attribute is the publisher's own statement of *how*:
   12**.
 - `CHRG-119hhrg63127` (the House Homeland Security hearing *Worldwide Threats
   to the Homeland*) lists H.R. 1 and H.R. 5371, both as `BODY`: bills the
-  transcript mentions, not a bill the hearing was held on. Over 52 hearings of
-  the `hearing/119` route, **no CHRG MODS carried a `PRIMARY` bill** — 11
-  carried `BODY` or `COVER` mentions, 38 entries in all, the most on any one
-  hearing being 11 — and of the 12 hearings whose detail named a committee
-  meeting, **none** of those meetings' `relatedItems.bills` named a bill. So
+  transcript mentions, not a bill the hearing was held on. Over 50 distinct
+  hearings of the `hearing/119` route, **no CHRG MODS carried a `PRIMARY`
+  bill** — 10 carried `BODY` or `COVER` mentions, 31 entries in all, the most
+  on any one hearing being 11 — and of the 12 hearings whose detail named a
+  committee meeting, **none** of those meetings' `relatedItems.bills` named a
+  bill. So
   `hearing_transcripts.bill_id` stays NULL, and this fixture is the case that
   proves a mention is not promoted to a linkage.
 

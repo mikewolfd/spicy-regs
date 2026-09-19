@@ -104,8 +104,16 @@ def test_a_soft_input_is_an_ingest_output_its_writer_produces_first(rollup, soft
     repository, so a stale copy costs one cron's lag rather than racing — and
     forbids reading a derived rollup's. Both halves are checked here rather
     than asserted in prose: the writer ingests (declares no ``inputs``), and
-    this rollup's cron fires after the writer's on the same day, so a steady
-    run reads the output that morning's writer produced.
+    this rollup's cron **fires after** the writer's on the same day.
+
+    Start order is all this asserts, and all a cron can give. It is not a
+    guarantee that the writer has *finished*: the bill family's workflow
+    budgets 180 minutes and these readers start 20 and 60 minutes after it, so
+    a long family run is still writing when they begin, and they read the
+    previous run's output. That is the ordering preference the rollup contract
+    describes, not a barrier — which is exactly why both reads are
+    ``soft_inputs``, tolerant of an absent or older table, rather than
+    ``inputs``.
     """
     writers = _writers_of(soft_input)
     assert writers, f"{soft_input} is declared a soft input but no rollup publishes it"
