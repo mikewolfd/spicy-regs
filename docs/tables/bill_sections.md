@@ -6,7 +6,7 @@
 
 One row per content-bearing node of one bill version, in document order. All columns are stored as VARCHAR.
 
-**Coverage.** Sampled, and accumulating. No run has been measured yet, so this states the weakest true claim rather than a range it has not established; each run adds to what is published rather than replacing it, because a bill the publisher has not touched since the last run is skipped and its rows stand. One row per content-bearing node of the printings whose XML was fetched and parsed, which is a subset of `bill_versions` — a printing offered only as PDF, or not yet reached by the per-run fetch cap, has no rows here. *(measured 2026-09-19)*
+**Coverage.** Sampled, and accumulating. No run has been measured yet, so this states the weakest true claim rather than a range it has not established; each run adds to what is published rather than replacing it, because a bill the publisher has not touched since the last run is skipped and its rows stand. One row per content-bearing node of the printings whose XML was fetched and parsed, which is a subset of `bill_versions` — a printing offered only as PDF, or not yet reached by the per-run fetch cap, has no rows here. That is most of the older corpus: bills before the 113th Congress offer only HTML and PDF, no XML (measured 2026-09-19), so the section tree is absent for all of them however many times they are fetched. *(measured 2026-09-19)*
 
 - **Parquet file:** `bill_sections.parquet`
 - **Queryable via MCP `query_sql`:** Yes

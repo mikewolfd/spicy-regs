@@ -263,7 +263,7 @@ converges over runs instead of timing out, and let the merge accumulate.
 
 | Rollup | What a steady-state run fetches | What bounds a catch-up |
 | --- | --- | --- |
-| `bill-family` | The 8 bulk archives, then only bills whose `updateDateIncludingText` differs from the published row, and of those only printings not already captured (plus a new printing's neighbour, so the consecutive-pair diff still happens) | `MAX_VERSION_FETCHES` printings/run; skipping what is held means the next run resumes on new ground rather than re-walking the same prefix |
+| `bill-family` | The 8 folder listings, then only the archives whose zip has moved since the entry retained last run, then only bills whose `updateDateIncludingText` differs from the published row, and of those only printings not already captured (plus a new printing's neighbour, so the consecutive-pair diff still happens) | `MAX_VERSION_FETCHES` printings/run; skipping what is held means the next run resumes on new ground rather than re-walking the same prefix |
 | `amendments` | The `updateDate` window from the prior max minus `OVERLAP_DAYS`, server-side via `fromDateTime`/`toDateTime` | `MAX_WINDOW_DAYS` (90); `AMENDMENTS_SINCE`/`AMENDMENTS_UNTIL` drive a chunk |
 | `roll-call-votes` | The index walk, then Clerk files only for roll calls not already published with a tally, plus the newest `OVERLAP_VOTES` re-read for corrections | `MAX_VOTES_PER_RUN`, newest first |
 | `committee-reports` | GovInfo packages modified since the prior max `last_modified` minus `OVERLAP_HOURS`; packages already published are not re-fetched | `MAX_PACKAGES_PER_RUN`; 30 days is the cold-start window only |
@@ -277,13 +277,14 @@ requested.
 Three limits worth knowing, each a property of the source rather than a
 shortcut taken here:
 
-1. **Bulk archives are not skipped by last-modified.** The reviewer's condition
-   was "where spicy-docs's bulk listing exposes each zip's
-   `formattedLastModifiedTime`" — it does not. `BulkStatusAcquirer` takes a
-   congress and a bill type and returns the parsed archive; neither it nor
-   `listing.py` surfaces a per-zip modification time, and `CapturedBodyResponse`
-   keeps no `Last-Modified`. It costs 8 requests against ~600 printing fetches,
-   so the saving would be marginal; filling it means a reader change upstream.
+1. ~~**Bulk archives are not skipped by last-modified.**~~ **Filled by
+   SpicyDocs 0.21.1** (see the entry below). The reviewer's condition was
+   "where spicy-docs's bulk listing exposes each zip's
+   `formattedLastModifiedTime`"; it now does, through
+   `BulkStatusAcquirer.list_archives`, and `bill-family` retains each folder's
+   entry and passes it back as `unchanged_since`. The saving is not the 8
+   requests — it is up to 52 MB of zip per run, 32 MB of it the H.R. folder
+   alone.
 2. **The roll-call index walk is not short-circuited.** The `house-vote` route
    declares `sort_honored=False`, so the publisher's order is not guaranteed
    monotonic in roll number and stopping on a page of already-held votes could
@@ -329,6 +330,70 @@ shortcut taken here:
    the behavioral pin: it seeds a 48-column prior, runs the narrow writer's own
    merge, and asserts both the published schema and that a family-only `stage`
    survives.
+
+**2026-09-19, same branch, third part.** SpicyDocs 0.21.1 is released and
+adopted: `vendor/spicy_docs-0.21.1-py3-none-any.whl` (commit `6f8d20e`, tag
+v0.21.1, sha256 `c519e231…68a6`, 1,025,308 bytes, verified after the copy and
+recorded identically in `uv.lock`), 0.21.0 deleted, both `source-readers` pins
+and `[tool.uv.sources]` moved together. The resolve is clean in one line —
+`Updated spicy-docs v0.21.0 -> v0.21.1` — with no refusal: 0.21.1 pins the same
+`rulespec-artifacts==1.0.13` and the same DeltaTrack commit through its
+`bill-diff` extra, so both fixes 0.21.0 needed still hold.
+
+- [x] **The sealed body preference is the default now**, in both spellings:
+  `bodies.BODY_PREFERENCE = ("xml", "htm", "txt", "pdf")` on
+  `GovInfoBodyAcquirer.acquire` and `bill_versions.DEFAULT_FORMAT_PREFERENCE =
+  ("xml", "html", "txt", "pdf")` on `choose_format`. `build_bill_family`'s local
+  `BODY_PREFERENCE = ("xml", "txt")` is deleted and
+  `build_committee_reports`' `prefer=("txt", "htm", "xml")` with it; no
+  `acquire(..., prefer=...)` call remains in `src/`. This was not cosmetic:
+  bills before the 113th Congress offer no XML at all
+  ([`docs/research/pdf-only-corpus-2026-09-19.md`](../spicy-docs/docs/research/pdf-only-corpus-2026-09-19.md)),
+  so the old local order yielded them no body whatsoever, and CRPT/CHRG had no
+  PDF fallback.
+- [x] **`extraction.body_text` owns the text derivation.** In the bill family,
+  a printing fetched as PDF goes through it and the resulting
+  `GpoCleanupRecord` fills `BillVersionCapture.cleanup` — the `cleanup_*`
+  columns and `cleanup_json`, which `bill_version_tables._page_cleanup` already
+  serializes including 0.21.1's new `running_footer_lines` and `content_lines`.
+  In committee reports it replaces `_body_text`, which decoded UTF-8 with
+  replacement, split on a form feed **no GovInfo body of any rendition
+  contains**, and ran the PDF normalizer over raw HTML. `page_count` is NULL
+  wherever the rendition states no page boundary, which is every HTML body;
+  before, every report published `page_count = 1`, a count of the separator's
+  absence.
+- [x] **The bulk-listing skip**, which is limit 1 above, now filled. Each
+  `bill-family` run retains every BILLSTATUS folder's own `BulkListingEntry`
+  and the next passes it as `unchanged_since`, so an unmoved zip costs one
+  small listing request instead of up to 32 MB. Skipping a folder loses
+  nothing: an unmoved zip cannot hold a changed bill, and every bill in it
+  would have matched its published `updateDateIncludingText` and been skipped
+  anyway. Skipped folders are counted in the run log.
+- [x] **Where the entries live: `bill_family_archives`**, a fourteenth rollup
+  output written through `merge_table`, keyed `(congress, bill_type)`. Not a
+  JSON manifest — `manifest.py` is a Bloom filter of source keys and cannot
+  hold a structured per-folder row — and not a contract table, because nothing
+  in `spicy_docs.schemas` shapes it; the dictionary documents it as this
+  rollup's processing state, with its columns in `DERIVED_SCHEMAS` and its
+  prose inline. Only the four fields `acquire` compares are retained; the other
+  six the publisher's listing states are left empty rather than guessed at. A
+  retained entry naming a different file is refused upstream on purpose and
+  falls back here to a cold download, so one stale row cannot wedge the rollup.
+- [x] **Columns with no home, stated rather than invented.**
+  `BodyText.derivation` has none on `bill_versions`, `committee_reports` or
+  `hearing_transcripts`; the renditions actually read are logged instead.
+  `rendition` needs none — `bill_versions.format_name` and the package tables'
+  `format` already say which one, filled from the fetched body itself.
+- [x] **Coverage statements.** `bill_versions`, `bill_sections`,
+  `committee_reports`, `report_sections` and `hearing_transcripts` now name the
+  rendition order, say that bills before the 113th Congress have no XML so the
+  section tree is absent for them, and say why `page_count` is NULL on a
+  non-PDF rendition. 46 tables, `check` and `generate` clean.
+
+The stub in `tests/test_bill_family.py` reproduces `BulkStatusAcquirer`'s
+`unchanged_since` contract rather than recording the argument, so the
+second-run assertion is discriminating: the cold run still downloads, a zip
+whose size moved still downloads, and only the unchanged folder does not.
 
 **[SR01](#sr01) is untouched by all of this.** It owns the `congress_bills`
 reader replacement (adopting SpicyDocs' `listing.py` in place of the local

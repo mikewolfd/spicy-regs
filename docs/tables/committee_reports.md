@@ -6,7 +6,7 @@
 
 One row per captured GovInfo committee report package. `bill_id` is a preserved NULL: a package-keyed report is fillable today, the bill linkage is not. All columns are stored as VARCHAR.
 
-**Coverage.** Window, advancing. GovInfo CRPT packages by last-modified date: the window starts at the watermark this table already reached, so each run asks for what changed since the last one and a revision of an older report is still picked up. Thirty days is the cold-start window only. A package already published is not fetched again, and a per-run package cap bounds a catch-up. *(measured 2026-09-19)*
+**Coverage.** Window, advancing. GovInfo CRPT packages by last-modified date: the window starts at the watermark this table already reached, so each run asks for what changed since the last one and a revision of an older report is still picked up. Thirty days is the cold-start window only. A package already published is not fetched again, and a per-run package cap bounds a catch-up. Each package is read in the first rendition it offers of XML, HTML, text, then PDF, and `format` says which one. Measured 2026-09-19, committee reports offer only HTML and PDF, and the HTML is the text rendition, so in practice every row is read from HTML with PDF as the fallback. No GovInfo body of any rendition states a page boundary, so `page_count` is NULL except on the PDF fallback, which an extractor paginates. *(measured 2026-09-19)*
 
 - **Parquet file:** `committee_reports.parquet`
 - **Queryable via MCP `query_sql`:** Yes
