@@ -22,6 +22,13 @@ builds several from a single expensive pass (e.g. the bill family, which would
 otherwise re-run its acquisition and model calls once per table) declares
 ``outputs`` instead and returns a tuple of paths from ``build()`` — each still
 goes through the same per-file shrink guard on upload.
+
+Two notes on that per-file upload, both intentional rather than gaps: it is
+not transactional across a multi-output rollup — if a later file trips the
+shrink guard, an earlier file in the same ``build()`` result has already
+published — and each file's remote key is its own basename, so a transform
+that renames what it writes changes what gets published under, with no
+separate mapping to keep in sync.
 """
 
 from abc import abstractmethod

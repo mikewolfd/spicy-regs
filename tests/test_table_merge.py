@@ -35,7 +35,7 @@ def _never_called(remote_key: str, local_path: Path) -> bool:
     raise AssertionError("download_prior must not be called when the prior is already on disk")
 
 
-def _merge(tmp_path: Path, rows: list[dict], *, download_prior=_never_called) -> Path:
+def _merge(tmp_path: Path, rows: list[dict], *, download_prior=_never_called, prior_present=None) -> Path:
     return merge_table(
         tmp_path,
         name=NAME,
@@ -45,6 +45,7 @@ def _merge(tmp_path: Path, rows: list[dict], *, download_prior=_never_called) ->
         rows=rows,
         remote_key=REMOTE_KEY,
         download_prior=download_prior,
+        prior_present=prior_present,
     )
 
 
@@ -113,3 +114,42 @@ def test_merge_refuses_null_identity_rows(tmp_path):
     out = _merge(tmp_path, fresh, download_prior=lambda remote_key, local_path: False)
 
     assert [row["id"] for row in _read(out)] == ["1"]
+
+
+class _CountingDownload:
+    """Counts calls; returns False (no prior found) without writing a file."""
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def __call__(self, remote_key: str, local_path: Path) -> bool:
+        self.calls += 1
+        return False
+
+
+def test_merge_skips_download_prior_on_a_known_cold_start(tmp_path):
+    """``prior_present=False`` is the caller saying "I already tried, and there's
+    nothing there" — a cold-start regression: without it, a caller that already
+    downloaded (and got nothing) pays for the same failed request twice, once for
+    itself and once inside merge_table.
+    """
+    download_prior = _CountingDownload()
+    fresh = [{"id": "1", "name": "a", "version": "2024-01-01"}]
+
+    out = _merge(tmp_path, fresh, download_prior=download_prior, prior_present=False)
+
+    assert download_prior.calls == 0
+    assert _read(out) == fresh
+
+
+def test_merge_still_asks_download_prior_when_presence_is_unknown(tmp_path):
+    """The default (``prior_present`` omitted) is unchanged: no file on disk and
+    no claim from the caller means merge_table asks ``download_prior`` itself.
+    """
+    download_prior = _CountingDownload()
+    fresh = [{"id": "1", "name": "a", "version": "2024-01-01"}]
+
+    out = _merge(tmp_path, fresh, download_prior=download_prior)
+
+    assert download_prior.calls == 1
+    assert _read(out) == fresh

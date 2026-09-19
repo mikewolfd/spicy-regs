@@ -2,7 +2,12 @@
 
 Covers the pieces with real logic: the raw-bill → published-schema mapping
 (``_shape`` / ``_bill_id``), the API-key resolution fallback chain, the
-offset/limit pagination, and the request params that bound the fetch window.
+offset/limit pagination, the request params that bound the fetch window, and
+(at the bottom) an end-to-end ``build_congress_bills()`` run against a seeded
+prior table and a stubbed fetch — the thing that actually proves the
+``table_merge.merge_table`` refactor preserved this table's merge behavior;
+the unit tests above it never call ``build_congress_bills()`` or read the
+merged Parquet, so they cannot make that claim on their own.
 
 The params tests are regression cover for the 510-day freeze: ``sort`` has to
 reach the API as ``updateDate+desc`` (a space, which httpx form-encodes to
@@ -12,8 +17,11 @@ reach the API as ``updateDate+desc`` (a space, which httpx form-encodes to
 from __future__ import annotations
 
 from datetime import date, timedelta
+from importlib import import_module
 
 import httpx
+import pyarrow as pa
+import pyarrow.parquet as pq
 import pytest
 
 from spicy_regs.sources.congress_bills import (
@@ -29,6 +37,14 @@ from spicy_regs.transforms.build_congress_bills import (
     _bounded_until,
     _shape,
 )
+
+# spicy_regs.transforms/__init__.py does `from .build_congress_bills import
+# build_congress_bills`, which rebinds the *package* attribute
+# `spicy_regs.transforms.build_congress_bills` to that function — so
+# `import spicy_regs.transforms.build_congress_bills as bcb` would silently
+# bind `bcb` to the function, not the submodule. import_module() reads
+# sys.modules directly and is not fooled by that shadowing.
+bcb = import_module("spicy_regs.transforms.build_congress_bills")
 
 _RAW_BILL = {
     "congress": 118,
@@ -248,3 +264,110 @@ def test_backwards_window_is_rejected():
 def test_full_backfill_has_no_upper_bound():
     """No prior table means no watermark to window from."""
     assert _bounded_until(None, None) is None
+
+
+# -- end-to-end merge (build_congress_bills) ----------------------------------
+
+_PRIOR_ROWS = [
+    {
+        "bill_id": "118-hr-1",
+        "congress": "118",
+        "bill_type": "hr",
+        "bill_number": "1",
+        "title": "Old Title",
+        "origin_chamber": "House",
+        "latest_action_date": "2024-01-01",
+        "latest_action_text": "Old action",
+        "update_date": "2024-01-01",
+        "url": "https://api.congress.gov/v3/bill/118/hr/1?format=json",
+    },
+    {
+        "bill_id": "118-s-2",
+        "congress": "118",
+        "bill_type": "s",
+        "bill_number": "2",
+        "title": "Prior Only",
+        "origin_chamber": "Senate",
+        "latest_action_date": "2024-01-02",
+        "latest_action_text": "Prior action",
+        "update_date": "2024-01-02",
+        "url": "https://api.congress.gov/v3/bill/118/s/2?format=json",
+    },
+]
+
+_FRESH_RAW = [
+    # Repeats 118-hr-1's identity with a later update_date — must win over the
+    # seeded prior row.
+    {
+        "congress": 118,
+        "type": "HR",
+        "number": 1,
+        "title": "New Title",
+        "originChamber": "House",
+        "latestAction": {"actionDate": "2024-03-01", "text": "New action"},
+        "updateDate": "2024-03-01",
+        "url": "https://api.congress.gov/v3/bill/118/hr/1?format=json",
+    },
+    # A bill absent from the prior table entirely.
+    {
+        "congress": 119,
+        "type": "HR",
+        "number": 99,
+        "title": "Brand New",
+        "originChamber": "House",
+        "latestAction": {"actionDate": "2024-02-01", "text": "Introduced"},
+        "updateDate": "2024-02-01",
+        "url": "https://api.congress.gov/v3/bill/119/hr/99?format=json",
+    },
+]
+
+
+class _FakeReader:
+    """Stands in for CongressBillsReader: no network, no API key needed."""
+
+    def __init__(self, *, since=None, until=None):
+        self.since = since
+        self.until = until
+
+    def iter_records(self):
+        return iter(_FRESH_RAW)
+
+
+def test_build_congress_bills_merges_prior_and_fresh_rows(tmp_path, monkeypatch):
+    """Seed a prior Parquet, stub the fetch and the R2 download, and assert on
+    the actual merged output — fresh wins on a repeated ``bill_id``, a
+    prior-only row survives, and the result is ordered by ``update_date`` then
+    ``bill_id``. This is the behavior-preservation proof for routing
+    ``build_congress_bills`` through ``table_merge.merge_table``: the unit
+    tests above never call ``build_congress_bills()`` or read merged Parquet,
+    so only this test actually exercises the SQL end to end.
+    """
+
+    def fake_download(remote_key, local_path):
+        assert remote_key == bcb.OUTPUT
+        schema = pa.schema([(c, pa.string()) for c in COLUMNS])
+        table = pa.Table.from_pylist(_PRIOR_ROWS, schema=schema)
+        pq.write_table(table, local_path)
+        return True
+
+    monkeypatch.setattr(bcb.r2, "download", fake_download)
+    monkeypatch.setattr(bcb, "CongressBillsReader", _FakeReader)
+
+    out_path = bcb.build_congress_bills(tmp_path)
+
+    rows = pq.read_table(out_path).to_pylist()
+    by_id = {row["bill_id"]: row for row in rows}
+
+    # Fresh wins on the repeated identity: title/update_date come from the
+    # freshly fetched row, not the seeded prior one.
+    assert by_id["118-hr-1"]["title"] == "New Title"
+    assert by_id["118-hr-1"]["update_date"] == "2024-03-01"
+
+    # The prior-only row survives the merge untouched.
+    assert by_id["118-s-2"]["title"] == "Prior Only"
+
+    # The fresh-only row is present too.
+    assert "119-hr-99" in by_id
+
+    # Ordered by update_date DESC, then bill_id.
+    assert [row["bill_id"] for row in rows] == ["118-hr-1", "119-hr-99", "118-s-2"]

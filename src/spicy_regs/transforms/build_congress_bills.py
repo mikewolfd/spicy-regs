@@ -159,7 +159,9 @@ def build_congress_bills(output_dir: Path, *, since: date | None = None, until: 
     rows = [_shape(doc) for doc in reader.iter_records()]
     logger.info("Congress bills: fetched {:,} bills this run", len(rows))
 
-    # 4. Merge prior + new, dedup on bill_id preferring the new row.
+    # 4. Merge prior + new, dedup on bill_id preferring the new row. prior_present
+    # carries what step 1 already found, so a cold start (no prior on R2) doesn't
+    # ask download_prior to retry the same failed download.
     return merge_table(
         output_dir,
         name=NAME,
@@ -168,4 +170,5 @@ def build_congress_bills(output_dir: Path, *, since: date | None = None, until: 
         version_column="update_date",
         rows=rows,
         remote_key=OUTPUT,
+        prior_present=have_prior,
     )

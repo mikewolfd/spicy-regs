@@ -171,7 +171,7 @@ SpicyDocs 0.21.0: [`docs/research/table-contracts-2026-09-19.md`](../spicy-docs/
 - [x] `RollupPipeline` grew `outputs: ClassVar[tuple[str, ...]]`. `output`
   stays a plain string on every existing rollup (Python resolves that
   attribute from the subclass, so it shadows the base's new `output` property
-  entirely — none of the twenty existing rollups changed behavior). A rollup
+  entirely — every existing rollup is unchanged). A rollup
   that declares `outputs` instead picks up the property (`outputs[0]`) and can
   return a tuple of paths from `build()`; `run()` uploads each through the
   same shrink guard. This is for the bill family: one acquisition + model pass
@@ -179,11 +179,19 @@ SpicyDocs 0.21.0: [`docs/research/table-contracts-2026-09-19.md`](../spicy-docs/
 - [x] `transforms/table_merge.py::merge_table` — the prior-download-plus-DuckDB-merge
   half of `build_congress_bills.py` (~135-210), lifted and parameterised over
   `columns`/`identity`/`version_column` so a table keyed on more than
-  `bill_id` doesn't copy the SQL. `build_congress_bills` now calls it;
-  `tests/test_congress_bills.py` (21 tests, unchanged) is the
-  behavior-preservation proof, and `tests/test_table_merge.py` covers the
-  helper directly (fresh-wins-on-repeat, prior-only rows kept, version
-  ordering, missing-prior tolerance, null-identity refusal).
+  `bill_id` doesn't copy the SQL, plus a `prior_present` flag so a caller that
+  already checked for (and didn't find) a prior table doesn't pay for the same
+  failed R2 download twice. `build_congress_bills` now calls it; the
+  behavior-preservation proof is one new end-to-end test —
+  `test_build_congress_bills_merges_prior_and_fresh_rows` in
+  `tests/test_congress_bills.py`, which seeds a prior Parquet, stubs the fetch
+  and the R2 download, and asserts on the merged output. (The other 21 tests
+  in that file are unchanged, but they only ever covered `_shape`, `_bill_id`
+  and windowing — they don't call `build_congress_bills()` and can't prove
+  this on their own.) `tests/test_table_merge.py` covers the helper directly
+  (fresh-wins-on-repeat, prior-only rows kept, version ordering, missing-prior
+  tolerance, null-identity refusal, and the `prior_present=False` cold-start
+  case with a call-counting stub).
 - [x] `.github/workflows/_rollup.yml` gained `bill_family_congresses` /
   `bill_family_bill_types` inputs and a `GEMINI_API_KEY` secret placeholder
   (named, no value — the bill family's `classify_sections`/`summarize_bill`
