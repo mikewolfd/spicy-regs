@@ -489,3 +489,61 @@ def test_fetch_does_not_retry_a_non_drift_refusal(tmp_path, monkeypatch):
 
     # A single attempt: no retry pause for a permanent, non-drift refusal.
     assert calls["n"] == 1
+
+
+# --------------------------------------------------------------------------- #
+# bill_detail: one detail record through the same reader, proven to be the bill
+# asked for (the bill family's pre-BILLSTATUS backfill builds status from it).
+# --------------------------------------------------------------------------- #
+
+
+def _detail_reader(body: dict):
+    from spicy_regs.sources.congress_bills import listing_reader
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/v3/bill/92/hr/2185"
+        assert request.headers["X-Api-Key"] == "test-key"
+        assert "api_key" not in request.url.params
+        return httpx.Response(
+            200, stream=httpx.ByteStream(json.dumps(body).encode()), headers={"content-type": "application/json"}
+        )
+
+    return listing_reader("test-key", httpx.MockTransport(respond))
+
+
+def test_bill_detail_returns_the_record_and_its_capture():
+    from spicy_docs.sources.congress.bill_status import BillIdentity
+
+    from spicy_regs.sources.congress_bills import bill_detail, bill_detail_url
+
+    identity = BillIdentity(congress=92, bill_type="hr", number=2185)
+    record = {"congress": 92, "type": "HR", "number": "2185", "title": "An Act", "laws": []}
+    with _detail_reader({"bill": record, "request": {"format": "json"}}) as reader:
+        bill, capture = bill_detail(reader, identity)
+    assert dict(bill) == record
+    assert capture.status_code == 200
+    assert capture.requested_url == bill_detail_url(identity)
+    assert "api_key" not in capture.requested_url
+
+
+def test_bill_detail_refuses_a_200_for_a_different_bill():
+    """A success naming another bill is not this bill's record — refused, never shaped."""
+    from spicy_docs.sources.congress.bill_status import BillIdentity
+
+    from spicy_regs.sources.congress_bills import bill_detail
+
+    identity = BillIdentity(congress=92, bill_type="hr", number=2185)
+    other = {"congress": 92, "type": "HR", "number": "2186", "title": "Another act"}
+    with _detail_reader({"bill": other}) as reader, pytest.raises(PagedJsonSourceError, match="identity differs"):
+        bill_detail(reader, identity)
+
+
+def test_bill_detail_refuses_an_empty_success():
+    """An empty ``200`` is not absence and not a record: it omits the bill object, so it is refused."""
+    from spicy_docs.sources.congress.bill_status import BillIdentity
+
+    from spicy_regs.sources.congress_bills import bill_detail
+
+    identity = BillIdentity(congress=92, bill_type="hr", number=2185)
+    with _detail_reader({}) as reader, pytest.raises(PagedJsonSourceError, match="omitted its bill object"):
+        bill_detail(reader, identity)
