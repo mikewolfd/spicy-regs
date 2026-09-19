@@ -17,7 +17,6 @@ from pathlib import Path
 
 import pyarrow as pa
 import pyarrow.parquet as pq
-import pytest
 from spicy_docs.schemas import TABLE_CONTRACTS
 from spicy_docs.sources.congress.press_releases import PRESS_RELEASE_FEEDS, parse_press_release_feed
 from spicy_docs.transport.captured import CapturedBodyResponse
@@ -40,15 +39,14 @@ class _Acquisition:
 
 
 class StubAcquirer:
-    """Serves each chamber's captured feed, with one optional byte-level edit."""
+    """Serves each chamber's captured feed, with optional byte-level edits."""
 
-    def __init__(self, edits: dict[str, tuple[str, str]] | None = None):
+    def __init__(self, edits: dict[str, list[tuple[str, str]]] | None = None):
         self.edits = edits or {}
 
     def acquire_press_releases(self, feed):
         body = (FIXTURES / FEED_FILES[feed.chamber]).read_bytes()
-        if feed.chamber in self.edits:
-            old, new = self.edits[feed.chamber]
+        for old, new in self.edits.get(feed.chamber, ()):
             assert old.encode() in body, f"the fixture no longer carries {old!r}"
             body = body.replace(old.encode(), new.encode(), 1)
         capture = CapturedBodyResponse(
@@ -85,12 +83,7 @@ def _rows(output_dir: Path, acquirer=None) -> list[dict]:
     return pq.read_table(path).to_pylist()
 
 
-@pytest.fixture
-def scoped(monkeypatch):
-    monkeypatch.setenv("BILL_FAMILY_CONGRESSES", "119")
-
-
-def test_a_house_item_naming_a_bill_is_linked_on_its_title(tmp_path, scoped):
+def test_a_house_item_naming_a_bill_is_linked_on_its_title(tmp_path):
     _seed_bills(tmp_path)
     rows = _rows(tmp_path)
     assert len(rows) == 25, "ten House items and fifteen Senate items"
@@ -115,7 +108,7 @@ def test_a_house_item_naming_a_bill_is_linked_on_its_title(tmp_path, scoped):
     assert all(row["matched_field"] is None and row["matched_text"] is None for row in unmatched)
 
 
-def test_a_senate_item_can_only_match_on_its_title(tmp_path, scoped):
+def test_a_senate_item_can_only_match_on_its_title(tmp_path):
     """The Senate feed carries no description, so a match there is a title match by construction.
 
     As captured, no Senate title names a bill; one is edited to, which is the
@@ -123,7 +116,7 @@ def test_a_senate_item_can_only_match_on_its_title(tmp_path, scoped):
     second synthetic feed.
     """
     _seed_bills(tmp_path)
-    edit = {"senate": ("Senator Murray on Passage of CR", "Senator Murray on Passage of S. 2503")}
+    edit = {"senate": [("Senator Murray on Passage of CR", "Senator Murray on Passage of S. 2503")]}
     rows = _rows(tmp_path, StubAcquirer(edit))
 
     senate = [row for row in rows if row["chamber"] == "senate"]
@@ -136,16 +129,80 @@ def test_a_senate_item_can_only_match_on_its_title(tmp_path, scoped):
     assert linked[0]["matched_text"] == "S. 2503"
 
 
-def test_only_bills_in_the_congresses_in_scope_are_matched_against(tmp_path, monkeypatch):
-    """The scope rule bounds the matcher's releases-times-bills cost, and is the same one the family uses."""
-    monkeypatch.setenv("BILL_FAMILY_CONGRESSES", "118")
+def test_a_release_is_scoped_by_its_own_publication_date(tmp_path):
+    """The January case: a December release still matches the outgoing Congress's bills.
+
+    A feed is a rotating window roughly two months deep, so through January it
+    carries both sides of the flip. Here one House item is moved to December
+    2026 (the 119th) and another to January 2027 (the 120th); both are retitled
+    to name H.R. 6500, and only the 119th has published bills. A run-wide scope
+    could serve at most one of them — and on the wrong side of the flip it
+    would serve neither, while still stamping `unmatched` over what an earlier
+    run had correctly published.
+    """
     _seed_bills(tmp_path)
+    edits = {
+        "house": [
+            (
+                "<title>Cole Remarks at Hearing on Funding Lapses: Analyzing Shutdown Reform</title>",
+                "<title>Cole Remarks on H.R. 6500 in December</title>",
+            ),
+            (
+                "<pubDate>Wed, 22 Jul 2026 14:20:44 +0000</pubDate>",
+                "<pubDate>Tue, 15 Dec 2026 14:20:44 +0000</pubDate>",
+            ),
+            (
+                "<title>Joyce Remarks at Oversight Hearing on the Economy Act</title>",
+                "<title>Joyce Remarks on H.R. 6500 in January</title>",
+            ),
+            (
+                "<pubDate>Tue, 15 Sep 2026 14:00:15 +0000</pubDate>",
+                "<pubDate>Fri, 15 Jan 2027 14:00:15 +0000</pubDate>",
+            ),
+        ]
+    }
+    rows = {row["title"]: row for row in _rows(tmp_path, StubAcquirer(edits))}
+
+    december = rows["Cole Remarks on H.R. 6500 in December"]
+    assert december["bill_id"] == "119-hr-6500", "the 119th's bills are what a December release names"
+    assert december["match_rule"] == "bill_number_in_title"
+
+    january = rows["Joyce Remarks on H.R. 6500 in January"]
+    assert january["bill_id"] is None
+    assert january["match_rule"] is None, (
+        "the 120th has no published bills, so no pass ran for it — this must not read as `unmatched`"
+    )
+
+
+def test_a_congress_with_no_published_bills_never_asserts_unmatched(tmp_path):
+    """The blocker: an empty-but-present bill set must not be published as a measurement.
+
+    `compile_bill_patterns([])` is `()`, which is truthy-distinct from None, so
+    an empty scope used to run the matcher against zero patterns and stamp
+    every release `unmatched` — a false claim, and one that overwrote the
+    correct `bill_id` an earlier run had published, because this table merges
+    row-wise and a fresh row wins whole.
+    """
+    # A real table, with bills — but none in the Congress the releases fall in.
+    _seed_bills(tmp_path, [("118", "hr", "6500")])
     rows = _rows(tmp_path)
+    assert len(rows) == 25
     assert all(row["bill_id"] is None for row in rows)
-    assert {row["match_rule"] for row in rows} == {"unmatched"}, "the pass ran; there was simply nothing to match"
+    assert all(row["match_rule"] is None for row in rows), "no bills for this Congress means no pass ran"
 
 
-def test_no_published_bills_means_no_matching_pass_not_a_false_unmatched(tmp_path, scoped):
+def test_a_release_with_no_readable_pub_date_is_not_matched_against_a_guess(tmp_path):
+    """Nothing scopes it, so nothing matches it; the columns say so rather than naming a Congress for it."""
+    _seed_bills(tmp_path)
+    edits = {"house": [("<pubDate>Tue, 01 Sep 2026 16:27:43 +0000</pubDate>", "")]}
+    rows = _rows(tmp_path, StubAcquirer(edits))
+    undated = [row for row in rows if row["pub_date"] is None]
+    assert len(undated) == 1
+    assert "H.R. 6500" in undated[0]["title"], "the text names a bill; only the date is missing"
+    assert undated[0]["bill_id"] is None and undated[0]["match_rule"] is None
+
+
+def test_no_published_bills_means_no_matching_pass_not_a_false_unmatched(tmp_path):
     """NULL and `unmatched` are different claims: the first says no pass ran, the second that one found nothing."""
     rows = _rows(tmp_path)
     assert len(rows) == 25
@@ -153,14 +210,14 @@ def test_no_published_bills_means_no_matching_pass_not_a_false_unmatched(tmp_pat
     assert not prior_scratch_path(tmp_path, "congress_bills").exists()
 
 
-def test_the_bills_scratch_file_is_not_left_beside_the_outputs(tmp_path, scoped):
+def test_the_bills_scratch_file_is_not_left_beside_the_outputs(tmp_path):
     _seed_bills(tmp_path)
     _rows(tmp_path)
     assert not prior_scratch_path(tmp_path, "congress_bills").exists()
     assert (tmp_path / "press_releases.parquet").exists()
 
 
-def test_the_prior_table_is_merged_with_the_match_columns_kept(tmp_path, scoped):
+def test_the_prior_table_is_merged_with_the_match_columns_kept(tmp_path):
     """A release seen again takes the fresh row, match and all; one that rotated off keeps its old one."""
     _seed_bills(tmp_path)
     first = _rows(tmp_path)
@@ -181,7 +238,7 @@ def test_the_prior_table_is_merged_with_the_match_columns_kept(tmp_path, scoped)
     assert sum(1 for row in second if row["bill_id"]) == sum(1 for row in first if row["bill_id"])
 
 
-def test_every_feed_is_still_asked_for(tmp_path, scoped):
+def test_every_feed_is_still_asked_for(tmp_path):
     """The linkage is a merge-time join; it changes nothing about what is fetched."""
     asked: list[str] = []
 
@@ -194,7 +251,7 @@ def test_every_feed_is_still_asked_for(tmp_path, scoped):
     assert asked == list(PRESS_RELEASE_FEEDS)
 
 
-def test_the_seeded_prior_is_read_through_download_prior_when_absent_locally(tmp_path, scoped):
+def test_the_seeded_prior_is_read_through_download_prior_when_absent_locally(tmp_path):
     """The transform asks R2 for the bills table the way it asks for its own prior: once, best effort."""
     source = tmp_path / "remote"
     source.mkdir()
