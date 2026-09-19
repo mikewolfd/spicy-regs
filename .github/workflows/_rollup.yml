@@ -48,6 +48,11 @@ on:
         required: false
         default: ''
         type: string
+      committee_reports_since:
+        description: 'Optional GovInfo CRPT/CHRG last-modified start (YYYY-MM-DD); blank uses a 30-day window'
+        required: false
+        default: ''
+        type: string
       fcc_since:
         description: 'Optional FCC ECFS backfill start date (YYYY-MM-DD)'
         required: false
@@ -109,10 +114,12 @@ jobs:
           BILL_FAMILY_CONGRESSES: ${{ inputs.bill_family_congresses }}
           BILL_FAMILY_BILL_TYPES: ${{ inputs.bill_family_bill_types }}
           # Gemini API key for the bill-family rollup's model-backed tables
-          # (section_classifications, bill_summaries — spicy_docs.interpretation's
-          # classify_sections/summarize_bill). A keyless run skips those tables
-          # rather than failing; the other nine bill-family tables still publish.
+          # (section_classifications, bill_summaries, diff_summaries —
+          # spicy_docs.interpretation's classify_sections/summarize_bill/
+          # summarize_diff). A keyless run skips those three rather than
+          # failing; the other ten bill-family tables still publish.
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          COMMITTEE_REPORTS_SINCE: ${{ inputs.committee_reports_since }}
           FCC_SINCE: ${{ inputs.fcc_since }}
           FCC_PROCEEDINGS: ${{ inputs.fcc_proceedings }}
           # Optional: raises the CourtListener API rate limit. The court_dockets

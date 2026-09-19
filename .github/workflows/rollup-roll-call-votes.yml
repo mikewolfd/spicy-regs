@@ -1,0 +1,28 @@
+name: Rollup — roll_call_votes
+on:
+  schedule:
+    # 03:00 UTC — one Clerk request per roll call, capped per run.
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+    inputs:
+      skip_upload:
+        description: 'Skip R2 upload (dry run)'
+        required: false
+        default: false
+        type: boolean
+      congresses:
+        description: 'Comma-separated Congress numbers (e.g. 118,119); blank uses the current Congress'
+        required: false
+        default: ''
+        type: string
+jobs:
+  run:
+    uses: ./.github/workflows/_rollup.yml
+    secrets: inherit
+    with:
+      command: run-rollup-roll-call-votes
+      skip_upload: ${{ github.event_name == 'workflow_dispatch' && inputs.skip_upload || false }}
+      bill_family_congresses: ${{ inputs.congresses || '' }}
+      # MAX_VOTES_PER_RUN (1,500) at ~2 roll calls/second is ~13 minutes; the
+      # headroom covers a full-Congress first pass.
+      timeout_minutes: 60
