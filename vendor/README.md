@@ -20,16 +20,18 @@ Base CLI and MCP installs do not require them.
     it carried. `bills` is a required field of the dataclass, so the test that
     built a `PackageModsIdentity` by hand now runs `validate_package_mods` over
     the fixture bytes, the same parse the acquirer runs.
-  - **Thirty-two table contracts** (was twenty-two; 617 columns). The ten new
-    ones — `house_communications`, `committee_meetings`, `record_issues`,
-    `treaties`, `nominations`, `laws`, `law_code_sections`, `table3_records`,
-    `committees`, `committee_assignments` — have no rollup here and are **not
-    hosted**: `data_dictionary.CONTRACT_TABLES` enumerates the hosted tables by
-    hand, and `tests/test_contract_tables.py::UNHOSTED_CONTRACTS` names the
-    ten so a later wheel cannot add one silently. Two hosted contracts moved:
-    `hearing_transcripts` appends `event_id` as its twentieth column (NULL
-    here — the transform does not walk the Congress.gov hearing detail that
-    states it), and `congress_bills.statutes_at_large_cite`'s prose now says
+  - **Thirty-two table contracts** (was twenty-two; 617 columns). Of the ten
+    new ones, five — `house_communications`, `committee_meetings`,
+    `record_issues`, `treaties`, `nominations` — are hosted by the rollups in
+    `pipelines/rollups/congress_index.py` (branch `hosting-rollups-index`); the
+    other five — `laws`, `law_code_sections`, `table3_records`, `committees`,
+    `committee_assignments` — have no rollup here and are **not hosted**:
+    `data_dictionary.CONTRACT_TABLES` enumerates the hosted tables by hand,
+    and `tests/test_contract_tables.py::UNHOSTED_CONTRACTS` names the rest so
+    a later wheel cannot add one silently. Two hosted contracts moved:
+    `hearing_transcripts` appends `event_id` as its twentieth column (read
+    from the Congress.gov `hearing-detail` route by `build_committee_reports`
+    since the same branch), and `congress_bills.statutes_at_large_cite`'s prose now says
     the host fills it by joining `laws` at merge time, a join this repository
     does not perform because it hosts no `laws` table; the column stays NULL
     and the dictionary prints the wheel's sentence verbatim.
