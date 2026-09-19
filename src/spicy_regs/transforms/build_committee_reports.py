@@ -73,6 +73,22 @@ vocabulary, since only a linkage needs a key. (The other request, the MODS
 accessors, landed in 0.21.2 and replaced the interim parse this module
 carried.)
 
+**``event_id`` is read from the Congress.gov hearing detail**, one keyed
+request per CHRG package fetched in the run: ``hearing/{congress}/{chamber}/{jacket}``
+answers a bare ``hearing`` object whose ``associatedMeeting.eventId`` is the
+key ``committee_meetings`` is keyed on (spicy-docs ``listing.py``'s
+``hearing-detail`` route, measured on jacket 64431 -> event 119003). The
+chamber is the package id's own letter (``hhrg``, ``shrg``, ``jhrg``), and the
+detail must name the jacket and Congress asked for or it is refused. Three
+outcomes stay distinct in the run log and none invents a value: the detail
+named a meeting; the detail named none (jacket 63127 is the retained case);
+the detail was refused -- a ``404`` for a jacket Congress.gov does not hold, a
+malformed page, a transport failure after the reader's retries -- which is
+counted and leaves the column NULL. A ``401``/``403`` aborts the run. Only
+packages fetched in the run are asked about: a row published before this
+column was read keeps its NULL until the package is modified and re-fetched,
+which is what the dictionary's data-quality note says.
+
 **Incremental.** The window starts at the prior published table's max
 ``last_modified`` minus a short overlap, so a steady-state run asks GovInfo for
 the packages changed since the last run rather than a fixed thirty days of
@@ -97,6 +113,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Protocol
 
+import httpx
 from loguru import logger
 from spicy_docs.extraction.body_text import BodyText, body_text
 from spicy_docs.reading.paged_json import PagedJsonBudget
@@ -109,10 +126,14 @@ from spicy_docs.schemas.tables import natural_key
 from spicy_docs.sources.agency_reports.report_blocks import parse_agency_blocks
 from spicy_docs.sources.govinfo.bodies import ModsBill
 from spicy_docs.sources.govinfo.body_acquisition import GovInfoBodyAcquirer, GovInfoBodyBudget
+from spicy_docs.reading.paged_json import PagedJsonSourceError
+from spicy_docs.schemas.tables import text
+from spicy_docs.sources.congress.listing import LIST_ROUTES, list_route_url
 from spicy_docs.sources.govinfo.discovery import GovInfoDiscoveryReader, collection_url
+from spicy_docs.transport.credentials import CredentialRefusedError, scrub_credential
 
 from spicy_regs.sources import r2
-from spicy_regs.sources.congress_bills import API_KEY_ENV_VARS, _resolve_api_key
+from spicy_regs.sources.congress_bills import API_KEY_ENV_VARS, _resolve_api_key, listing_reader
 from spicy_regs.transforms.table_merge import merge_contract_table, published_table
 
 
@@ -131,6 +152,12 @@ class PackageBodySource(Protocol):
     """
 
     def acquire(self, package_id: str, *, max_bytes: int | None = ...) -> Any: ...
+
+
+class HearingDetailSource(Protocol):
+    """What this transform needs of a Congress.gov listing reader: the ``hearing-detail`` route."""
+
+    def records(self, route: Any, url: str, *, max_pages: int = ...) -> Iterator[Any]: ...
 
 
 DISCOVERY_BUDGET = PagedJsonBudget(
@@ -268,21 +295,65 @@ def _bill_key(package_id: str, bill: ModsBill) -> str | None:
     return natural_key(bill.congress, bill.normalized_bill_type, int(bill.number))
 
 
+#: A CHRG package id spells its chamber in the first letter of its document
+#: type (``hhrg``, ``shrg``, ``jhrg``); the hearing detail route wants the word.
+_CHAMBER_OF_DOCUMENT_TYPE = {"h": "house", "s": "senate", "j": "joint"}
+
+#: What one hearing-detail request can refuse with, short of a credential
+#: refusal, which propagates: the reader's own refusals (``404`` included), a
+#: transport failure after its retries, and a record not shaped as expected.
+_HEARING_REFUSALS = (PagedJsonSourceError, httpx.HTTPError, ConnectionError, ValueError, TypeError, KeyError)
+
+
+def _event_id(hearings: HearingDetailSource, package: Any) -> tuple[str | None, str]:
+    """``(event_id, outcome)`` for one CHRG package from its Congress.gov hearing detail.
+
+    ``outcome`` is ``meeting``, ``no_meeting`` or ``refused``, so the run log
+    can count the three apart. The detail must name the jacket and Congress
+    the package id spells, or it is refused rather than read.
+    """
+    identity = package.identity
+    chamber = _CHAMBER_OF_DOCUMENT_TYPE.get(str(identity.document_type)[:1])
+    route = LIST_ROUTES["hearing-detail"]
+    try:
+        if chamber is None:
+            raise ValueError(f"document type {identity.document_type!r} names no chamber")
+        url = list_route_url(route, congress=identity.congress, chamber=chamber, number=int(identity.number), limit=1)
+        page = next(iter(hearings.records(route, url, max_pages=1)))
+        if len(page.records) != 1:
+            raise PagedJsonSourceError(f"hearing-detail answered {len(page.records)} records, not one")
+        record = page.records[0]
+        if str(record["jacketNumber"]) != str(int(identity.number)) or str(record["congress"]) != str(
+            identity.congress
+        ):
+            raise PagedJsonSourceError("hearing-detail identity differs from the requested jacket")
+    except CredentialRefusedError:
+        raise
+    except _HEARING_REFUSALS as error:
+        logger.warning("CHRG: {} hearing detail refused: {}", identity.package_id, scrub_credential(str(error), ""))
+        return None, "refused"
+    meeting = record.get("associatedMeeting")
+    event_id = text(meeting.get("eventId")) if isinstance(meeting, dict) else None
+    return event_id, "meeting" if event_id is not None else "no_meeting"
+
+
 def build_committee_reports(
     output_dir: Path,
     *,
     reader: PackageDiscoverySource | None = None,
     acquirer: PackageBodySource | None = None,
+    hearings: HearingDetailSource | None = None,
     max_packages: int = MAX_PACKAGES_PER_RUN,
     download_prior: Callable[[str, Path], bool] = r2.download,
 ) -> tuple[Path, Path, Path]:
     """Build the two committee-report tables and the hearing-transcript table."""
-    if reader is None or acquirer is None:
+    if reader is None or acquirer is None or hearings is None:
         api_key = _resolve_api_key()
         if not api_key:
             raise RuntimeError(f"Committee reports need an api.data.gov key (set one of {', '.join(API_KEY_ENV_VARS)})")
         reader = reader or GovInfoDiscoveryReader(budget=DISCOVERY_BUDGET, api_key=api_key)
         acquirer = acquirer or GovInfoBodyAcquirer(budget=BODY_BUDGET, api_key=api_key)
+        hearings = hearings or listing_reader(api_key)
 
     prior_files = {
         name: published_table(output_dir, name, download_prior) for name in ("committee_reports", "hearing_transcripts")
@@ -299,6 +370,7 @@ def build_committee_reports(
     hearing_rows: list[dict] = []
     renditions: Counter[str] = Counter()
     mentions: Counter[str] = Counter()
+    meetings: Counter[str] = Counter()
     refused = unchanged = linked = 0
 
     for collection, table, rows, shape in (
@@ -327,6 +399,12 @@ def build_committee_reports(
             # Counted whatever the type is spelled: a mention needs no key, only
             # a linkage does, so ``_bill_key``'s vocabulary check does not gate it.
             mentions.update(entry.context for entry in package.mods.bills if entry.context != PRIMARY_BILL_CONTEXT)
+            linkage: dict[str, Any] = {}
+            if collection == "CHRG":
+                # One keyed request, only for a package fetched this run.
+                event_id, outcome = _event_id(hearings, package)
+                meetings[outcome] += 1
+                linkage["event_id"] = event_id
             rows.append(
                 shape(
                     package,
@@ -336,6 +414,7 @@ def build_committee_reports(
                     # one page would be a measurement nothing made.
                     page_count=None if derived.pages is None else len(derived.pages),
                     text_sha256="sha256:" + hashlib.sha256(derived.text.encode("utf-8")).hexdigest(),
+                    **linkage,
                 )
             )
             if collection == "CRPT":
@@ -362,6 +441,10 @@ def build_committee_reports(
         linked,
         dict(mentions),
     )
+    if meetings:
+        # The three outcomes of the hearing-detail read, kept apart: a NULL
+        # event_id is either a detail that names no meeting or one not read.
+        logger.info("Committee reports: hearing details by outcome — {}", dict(meetings))
     if renditions:
         # Which rendition each package was actually read in. Neither contract
         # has a column for the derivation name, so this is where it is stated.

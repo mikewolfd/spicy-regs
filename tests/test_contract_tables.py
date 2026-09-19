@@ -29,7 +29,8 @@ from spicy_regs.transforms.table_merge import merge_contract_table
 
 CONTRACT_NAMES = sorted(TABLE_CONTRACTS)
 
-#: Contracts spicy-docs 0.21.2 ships that no rollup here writes yet, so they
+#: Contracts spicy-docs 0.21.2 ships that no rollup here writes yet (the five
+#: Congress.gov index tables have theirs in pipelines/rollups/congress_index.py), so they
 #: are not hosted, queryable or described: ``data_dictionary.CONTRACT_TABLES``
 #: enumerates the hosted tables by hand on purpose, and each of these needs
 #: its own reader before it joins that tuple. Listed rather than computed so a
@@ -37,15 +38,10 @@ CONTRACT_NAMES = sorted(TABLE_CONTRACTS)
 UNHOSTED_CONTRACTS = frozenset(
     {
         "committee_assignments",
-        "committee_meetings",
         "committees",
-        "house_communications",
         "law_code_sections",
         "laws",
-        "nominations",
-        "record_issues",
         "table3_records",
-        "treaties",
     }
 )
 

@@ -1,0 +1,30 @@
+{
+  "dailyCongressionalRecord": [
+    {
+      "congress": 119,
+      "issueDate": "2026-01-02T05:00:00Z",
+      "issueNumber": "219",
+      "sessionNumber": 1,
+      "updateDate": "2026-01-12T15:44:50Z",
+      "url": "https://api.congress.gov/v3/daily-congressional-record/171/219?format=json",
+      "volumeNumber": 171
+    },
+    {
+      "congress": 119,
+      "issueDate": "2026-01-03T05:00:00Z",
+      "issueNumber": "220",
+      "sessionNumber": 1,
+      "updateDate": "2026-01-05T18:09:02Z",
+      "url": "https://api.congress.gov/v3/daily-congressional-record/171/220?format=json",
+      "volumeNumber": 171
+    }
+  ],
+  "pagination": {
+    "count": 219
+  },
+  "request": {
+    "contentType": "application/json",
+    "format": "json",
+    "volumeNumber": "171"
+  }
+}

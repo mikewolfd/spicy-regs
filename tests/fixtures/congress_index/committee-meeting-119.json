@@ -1,0 +1,47 @@
+{
+  "committeeMeetings": [
+    {
+      "chamber": "Senate",
+      "congress": 119,
+      "eventId": "338774",
+      "updateDate": "2026-09-19T22:08:26Z",
+      "url": "https://api.congress.gov/v3/committee-meeting/119/senate/338774?format=json"
+    },
+    {
+      "chamber": "Senate",
+      "congress": 119,
+      "eventId": "338765",
+      "updateDate": "2026-09-18T22:08:19Z",
+      "url": "https://api.congress.gov/v3/committee-meeting/119/senate/338765?format=json"
+    },
+    {
+      "chamber": "House",
+      "congress": 119,
+      "eventId": "119569",
+      "updateDate": "2026-09-18T21:34:11Z",
+      "url": "https://api.congress.gov/v3/committee-meeting/119/house/119569?format=json"
+    },
+    {
+      "chamber": "House",
+      "congress": 119,
+      "eventId": "119565",
+      "updateDate": "2026-09-18T19:11:42Z",
+      "url": "https://api.congress.gov/v3/committee-meeting/119/house/119565?format=json"
+    },
+    {
+      "chamber": "House",
+      "congress": 119,
+      "eventId": "119517",
+      "updateDate": "2026-09-18T19:03:43Z",
+      "url": "https://api.congress.gov/v3/committee-meeting/119/house/119517?format=json"
+    }
+  ],
+  "pagination": {
+    "count": 2754
+  },
+  "request": {
+    "congress": "119",
+    "contentType": "application/json",
+    "format": "json"
+  }
+}

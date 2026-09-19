@@ -87,3 +87,19 @@ def sessions_of(congress: int, today: date | None = None) -> tuple[int, ...]:
     day = today or date.today()
     first_year = FIRST_CONGRESS_YEAR + 2 * (congress - 1)
     return tuple(session for session in (1, 2) if day.year >= first_year + session - 1)
+
+
+#: The daily Congressional Record numbers one volume per calendar year, and
+#: the API addresses it by that volume: ``volume = year - 1854``, pinned by
+#: volume 172 being 2026 (spicy-docs fixture
+#: ``congress-daily-congressional-record-detail.json``, issue 172/148 dated
+#: 2026-09-18) and by volume 141 being 1995, the first year the API serves.
+#: The rule does not hold for the 19th-century volumes, which ran several to
+#: a Congress; nothing here scopes a Congress that old.
+RECORD_VOLUME_OFFSET = 1854
+
+
+def record_volumes(congress: int, today: date | None = None) -> tuple[int, ...]:
+    """The Record volumes of ``congress``'s sessions that have begun by ``today``, oldest first."""
+    first_year = FIRST_CONGRESS_YEAR + 2 * (congress - 1)
+    return tuple(first_year + session - 1 - RECORD_VOLUME_OFFSET for session in sessions_of(congress, today))

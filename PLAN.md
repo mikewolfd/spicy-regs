@@ -855,6 +855,62 @@ reports in `vectordb/embed.py` appear only with the `embed` extra installed
 checkout the gate has been run on. Not pushed — local commits on
 `hosting-adopt-0.21.2`, per instruction.
 
+**2026-09-19, branch `hosting-rollups-index` (worktree `spicy-regs-wt-index`),
+sixth part.** Gaps A5, A7 and A10 of the
+[spicy-docs gap register](../spicy-docs/docs/research/closing-the-gaps-2026-09-19.md):
+the five Congress.gov index contracts 0.21.2 shipped unhosted are hosted, and
+the two joins the register left to this repository are made. Fifty-four
+tables; the sibling branch hosting A8/A9 (`laws`, `law_code_sections`,
+`table3_records`, `committees`, `committee_assignments`) edits the same
+registries in its own trailing block. Built by a subagent; review pending.
+
+- [x] **Five rollups over one walk.** `transforms/build_congress_index.py::build_index_table`
+  serves five `IndexSpec` entries (`house_communications`, `committee_meetings`,
+  `record_issues`, `treaties`, `nominations`); the rollups are five classes in
+  `pipelines/rollups/congress_index.py`, each with its own console script and
+  06:00–06:40 UTC cron, so a refusal on one route fails one table's run. Every
+  run walks the **whole** list (none of the five routes honours `sort`, and a
+  date window is measured only on two of them), collapses the publisher's
+  repeats across page boundaries by identity, and reads details only for rows
+  the published table does not hold: the contract's own NULL-versus-`[]` rule
+  is the resume marker (`committees_json`, `sections_json`, `titles_json`),
+  with `update_date` as the stamp. Newest first, `MAX_DETAILS_PER_RUN` (1,000)
+  a run; a new row beyond the cap is indexed list-only now and read next run;
+  a held row at a stale stamp keeps its detail until re-read, because a
+  list-only replacement would erase it. `401`/`403` aborts; a `404`, a
+  malformed page, a transport failure or a detail naming another record is
+  that row's refusal, counted and retried. The RIN is
+  `rin_from_report_nature` at shape time on the detail only. A partitioned
+  treaty is list-only by construction (no suffixed route in `LIST_ROUTES`).
+  `record_issues` walks by session volume, `year - 1854`
+  (`congress_scope.record_volumes`, pinned by 172 = 2026).
+- [x] **A5's join: `federal_register.rin`**, the first RIN of
+  `regulation_id_numbers_json`, derived in the merge for every row (so the
+  696,679 pre-ingest rows and the prior's width are filled on the next run,
+  not left NULL). Measured on the public table: 96,060 one-RIN documents,
+  1,499 with two or more (max 41). The FR transform's merge is still its own
+  copy of `merge_table`'s SQL; folding it in would need a computed-column
+  hook for one caller, so it was left as the smaller change.
+- [x] **A7's join: `hearing_transcripts.event_id`**, read by
+  `build_committee_reports` from the Congress.gov `hearing-detail` route
+  through the shared `listing_reader`, one keyed request per CHRG package
+  fetched in the run, the detail proven to name the jacket asked for; three
+  outcomes counted apart (meeting, no meeting, refused). Only packages fetched
+  in the run are asked about; earlier rows keep NULL until re-fetched, and
+  the dictionary says so.
+- [x] **Proof — receipt `~/Work/corpora/supply-2026-09-02/receipts/rollups-index-2026-09-19/`:**
+  one live run per rollup through the real reader at a cap of three details,
+  scoped to the 119th: 56 keyed requests (1 spent on a receipt-transport bug,
+  55 productive), every walk's declared count equal to its walked count
+  (4,975 communications on 20 pages, 2,754 meetings across all chambers on
+  12, 2,208 nominations on 9, 219 + 144 Record issues, 2 treaties), 15 and 4
+  publisher repeats collapsed, and the resume assumption checked: the
+  detail's `updateDate` equalled the list row's on 11 of 11. The retained
+  pages are the fixtures in `tests/fixtures/congress_index/`
+  (`tests/test_congress_index.py`); the hearing fixtures are copies of two
+  earlier captures (`tests/fixtures/congress_hearings/`). Coverage statements
+  say "none yet; the first run fills it" until D1.
+
 ## How to run anything
 
 Everything goes through `uv run`, never a binary from `PATH`. The gate:

@@ -1,0 +1,26 @@
+name: Rollup — record_issues
+on:
+  schedule:
+    # 06:00 UTC — one page per Record volume, then one detail per issue not yet read, capped.
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+    inputs:
+      skip_upload:
+        description: 'Skip R2 upload (dry run)'
+        required: false
+        default: false
+        type: boolean
+      congresses:
+        description: 'Comma-separated Congress numbers (e.g. 118,119); blank uses the current Congress'
+        required: false
+        default: ''
+        type: string
+jobs:
+  run:
+    uses: ./.github/workflows/_rollup.yml
+    secrets: inherit
+    with:
+      command: run-rollup-record-issues
+      skip_upload: ${{ github.event_name == 'workflow_dispatch' && inputs.skip_upload || false }}
+      bill_family_congresses: ${{ inputs.congresses || '' }}
+      timeout_minutes: 30
