@@ -341,6 +341,8 @@ converges over runs instead of timing out, and let the merge accumulate.
 | `committee-reports` | GovInfo packages modified since the prior max `last_modified` minus `OVERLAP_HOURS`; packages already published are not re-fetched | `MAX_PACKAGES_PER_RUN`; 30 days is the cold-start window only |
 | `press-releases` | Both feeds, whole — the feed *is* the delta, and the merge accumulates what rotates off | n/a |
 | `members` | Both roster files, whole — one small JSON each, with no partial-fetch route | n/a |
+| `laws` | The `law/{congress}` list, whole (one page), then PLAW USLM files only for laws not yet `captured` or whose list `update_date` moved (`unavailable` — the bulk lag — is retried every run); the classification index and each session table it links, whole, replacing that session's rows; Table III pages only for acts not yet published, oldest first, stopping at the first act the table does not hold | `MAX_USLM_PER_RUN` and `MAX_TABLE3_PER_RUN`, PLAW newest first; pinned in `tests/test_laws.py` |
+| `committee-rosters` | The `committee/{congress}` list, whole (one page; the route over-declares and `walk_route` publishes what it served), then details only for committees not yet folded or whose list `update_date` moved; both chamber files, whole, each replacing its chamber's seats for the current Congress | `MAX_DETAILS_PER_RUN`, newest `update_date` first; pinned in `tests/test_committee_rosters.py` |
 
 `tests/test_incremental_rollups.py` pins each of these with a counting stub
 rather than a docstring: a seeded prior plus an assertion on what was actually
@@ -854,6 +856,92 @@ reports in `vectordb/embed.py` appear only with the `embed` extra installed
 (`uv sync --all-extras`) and are absent on the plain `uv sync --frozen`
 checkout the gate has been run on. Not pushed — local commits on
 `hosting-adopt-0.21.2`, per instruction.
+
+**2026-09-19, branch `hosting-rollups-laws-rosters` (worktree
+`spicy-regs-wt-laws`, from `billtrax-hosting-prep` at `f198b6e`).** Gaps A8
+and A9 of spicy-docs' `closing-the-gaps-2026-09-19.md` §2: the spicy-regs side
+of the five contracts the 0.21.2 wheel ships for them. Twenty-seven tables are
+now hosted; the public surface is 54 tables. A sibling branch hosts the other
+five 0.21.2 contracts (A5/A7/A10); every shared-registry edit here sits in an
+`A8/A9` block at the end of its list so the two merge trivially.
+
+- [x] **`laws` rollup** (`transforms/build_laws.py`, three outputs): the
+  `law/{congress}` route walked whole per scoped Congress (108 for the 119th,
+  one page), one row per `laws[]` entry through `shape_law`; the PLAW USLM
+  file per law through `UslmAcquirer`, newest first under `MAX_USLM_PER_RUN`,
+  with `uslm_outcome` saying why a citation is NULL — `unavailable` only for a
+  `404`/`410` from the exact locator, `not_requested` for a cap or a transport
+  failure, never absence from a failure. A law already `captured` is left
+  standing unless its list row's `update_date` moved (no fresh row, so the
+  row-wise merge keeps it); a held law the cap does not reach keeps its prior
+  row; a `401`/`403` from any publisher aborts. `law_code_sections` from the
+  OLRC classification index and each public-law-order session table it links
+  for a scoped Congress (the code-order twin holds the same lines under
+  colliding positions), each page replacing its session's rows;
+  `table3_records` one act page per public law, oldest first under
+  `MAX_TABLE3_PER_RUN`, stopping at the first act Table III does not yet hold
+  so the lag costs one request a run.
+- [x] **`committee-rosters` rollup** (`transforms/build_committee_rosters.py`,
+  two outputs): the `committee/{congress}` route walked whole with no `sort`;
+  the detail folded through `shape_committee` newest `update_date` first under
+  `MAX_DETAILS_PER_RUN`, a folded row left standing unless its list row moved,
+  a held row never overwritten by a list-only one. `committee_assignments`
+  from the House Clerk's `MemberData.xml` (its Congress proved by the reader)
+  and the Senate's `cvc_member_data.xml` (states none; `congress_basis` =
+  `caller`), current Congress only, each capture replacing its chamber's seats
+  for that Congress through `table_merge.retire_prior_rows`, so a seat the file
+  no longer lists is gone; an earlier Congress keeps its last capture.
+- [x] **The route over-declares, and it is recorded.** `committee/119`
+  declared 238 and served 236 on its one terminal page (no continuation), which
+  spicy-docs' reader refuses. `transforms/congress_walk.py::walk_route` reads
+  past exactly that terminal-page count refusal — matched on the reader's
+  traversal context and its observed count equalling what was served — logs
+  both numbers at WARNING, and lets every other refusal fail the run. The
+  `ListingSource` Protocol the amendments and roll-call transforms each carried
+  moved there too.
+- [x] **The statutes join landed.** `congress_bills.statutes_at_large_cite`
+  is filled at that table's merge, as its column sentence promises:
+  `merge_contract_table` calls `fill_statutes_at_large_cite` after the
+  coalescing merge (`COALESCED_TABLES` unchanged), LEFT-joining the published
+  `laws` on `bill_id` and taking the law's citation where one is published,
+  keeping the one already there where `laws` has none — nothing is ever
+  cleared, since `laws` never publishes a captured citation as NULL. Both
+  writers (`congress-bills`, `bill-family`) declare `laws.parquet` in
+  `soft_inputs`, and the laws cron (01:00 UTC) fires before both (02:00,
+  20:15). The `congress_bills` dictionary clause saying this host does not
+  join is replaced by what it now does.
+- [x] **Registries, dictionary, docs.** `CONTRACT_TABLES` (+5, so `TABLES`
+  and `MCP_QUERYABLE` follow), `mcp_server.TABLES` (+5, literal),
+  `descriptions.yaml` (five entries, coverage "Sampled. None yet; the first
+  run fills it" until D1 measures), `mkdocs.yml` nav, two `run-rollup-*`
+  scripts, two workflows (01:00 and 01:40 UTC), `UNHOSTED_CONTRACTS` down to
+  the sibling's five, `HOSTED_ROLLUPS` +2. `spicy-regs-dict check` passes (54
+  tables); `generate` wrote exactly the five new pages, `congress_bills.md`
+  and the catalog.
+- [x] **Proof — receipt
+  `~/Work/corpora/supply-2026-09-02/receipts/rollups-laws-rosters-2026-09-19/`.**
+  One capped live run per rollup, cold start, scope 119, every acquirer at
+  `max_requests=1` so no retry could exceed the budget, request lists per
+  acquirer (method, scrubbed URL, status) in the manifests: **laws** 1 keyed
+  and 8 keyless — the PLAW cap of 4, newest first, met exactly the four
+  lagging laws (119-103, -104, -109, -110, all `404` → `unavailable`), 104
+  `not_requested`; both session tables (583 and 3,049 rows, the 1st session's
+  a new count); Table III `119-1`, 8 records. **rosters** 4 keyed and 2
+  keyless — 236 of 238 declared, 3 details folded, 2,516 House and 450 Senate
+  seats over 532 members. Five keyed and ten keyless in all, against the
+  brief's 60 and 10. Tests run on byte-identical copies of the wheel's own
+  fixtures (`tests/fixtures/congress_laws/`, `congress_rosters/`, each README
+  pinning the spicy-docs commit and digest), never re-fetched;
+  `verify_credentials.py` counts the key across the receipt, the staged diff
+  and untracked files.
+
+1,563 tests pass; `ruff check .`, `spicy-regs-dict check` clean; `ty check`
+clean but for the two pre-existing `vectordb/embed.py` diagnostics under
+`--all-extras`. Not pushed, per instruction. Limits stated in the dictionary
+rather than hidden: a Table III page is read once (a later status edit is
+not picked up); a folded committee's counts are that day's, re-read only when
+its list row moves; the classification index links the current Congress
+only, so an earlier Congress gets no `law_code_sections`.
 
 ## How to run anything
 
