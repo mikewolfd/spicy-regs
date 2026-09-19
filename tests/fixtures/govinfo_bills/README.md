@@ -13,8 +13,10 @@ the family transform end to end with a stubbed acquirer and no network.
 
 `ih` and `eh` are consecutive printings of one bill, which is why this pair and
 not a single file: it is the smallest input that exercises `bill_sections`,
-`section_diffs`, `section_diff_items` and `financial_changes` as well as the
-status-derived tables.
+`section_diffs` and `section_diff_items` as well as the status-derived tables.
+It does **not** exercise `financial_changes`: the pair changes no dollar
+figure, so that table comes back empty, and a case for it would need a
+different fixture.
 
 **Provenance and what these do not establish.** spicy-docs retrieved all three
 from GovInfo with unauthenticated GET on 2026-09-12; they are U.S. government

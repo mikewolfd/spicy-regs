@@ -164,6 +164,20 @@ def test_sections_are_parsed_and_every_parent_exists(family):
         assert (row["bill_id"], row["version_code"], row["source"]) in parents
 
 
+def test_the_consecutive_pair_is_actually_compared(family):
+    """The reason the fixture is a pair: the diff tables must be non-empty.
+
+    ``financial_changes`` is deliberately not asserted here — this pair changes
+    no dollar figure, so it yields none, and asserting it would be asserting
+    the fixture rather than the transform.
+    """
+    diffs = pq.read_table(family["section_diffs"]).to_pylist()
+    assert len(diffs) == 1, "one consecutive pair means one comparison"
+    assert diffs[0]["bill_id"] == "119-hr-6028"
+    assert diffs[0]["engine_revision"], "every diff row names the engine that produced it"
+    assert pq.read_table(family["section_diff_items"]).to_pylist(), "the comparison must settle items"
+
+
 def test_the_model_tables_are_empty_without_a_key(family):
     for name in ("section_classifications", "bill_summaries", "diff_summaries"):
         assert pq.read_table(family[name]).to_pylist() == [], name
@@ -218,3 +232,119 @@ def test_the_engine_stamp_carries_the_vendored_revision():
     assert stamp.name == "deltatrack"
     assert stamp.version
     assert len(stamp.revision) == 40, "the pinned DeltaTrack commit belongs in every diff row"
+
+
+# --------------------------------------------------------------------------- #
+# Incremental behavior: a steady-state run must not re-fetch what it holds.
+# --------------------------------------------------------------------------- #
+def _seed_prior(output_dir: Path, table: str, rows: list[dict]) -> None:
+    """Write a prior published table where the merge and the index will find it."""
+    import pyarrow as pa
+    from spicy_regs.transforms.table_merge import prior_scratch_path
+
+    contract = TABLE_CONTRACTS[table]
+    filled = [{c: None for c in contract.columns} | row for row in rows]
+    pq.write_table(
+        pa.Table.from_pylist(filled, schema=pa.schema([(c, pa.string()) for c in contract.columns])),
+        prior_scratch_path(output_dir, table),
+    )
+
+
+def _status_text_date() -> str | None:
+    from spicy_docs.sources.congress.bill_status import parse_bill_status
+
+    body = (FIXTURES / "status-119hr6028.xml").read_bytes()
+    return parse_bill_status(body, identity=IDENTITY).update_date_including_text
+
+
+@pytest.fixture
+def scoped(monkeypatch):
+    monkeypatch.setenv("BILL_FAMILY_CONGRESSES", "119")
+    monkeypatch.setenv("BILL_FAMILY_BILL_TYPES", "hr")
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+
+
+def test_an_unchanged_bill_costs_no_requests(tmp_path, scoped):
+    """The steady state: the publisher's text stamp is unchanged, so nothing is fetched."""
+    _seed_prior(
+        tmp_path,
+        "congress_bills",
+        [{"bill_id": "119-hr-6028", "update_date_including_text": _status_text_date()}],
+    )
+    body = StubBodyAcquirer()
+    build_bill_family(tmp_path, bulk_acquirer=StubBulkAcquirer(), body_acquirer=body, download_prior=_no_prior)
+    assert body.requested == [], "an unchanged bill must not fetch a single printing"
+
+
+def test_a_changed_bill_is_rebuilt(tmp_path, scoped):
+    """A different text stamp means the publisher changed something; re-read it."""
+    _seed_prior(
+        tmp_path,
+        "congress_bills",
+        [{"bill_id": "119-hr-6028", "update_date_including_text": "1999-01-01T00:00:00Z"}],
+    )
+    body = StubBodyAcquirer()
+    build_bill_family(tmp_path, bulk_acquirer=StubBulkAcquirer(), body_acquirer=body, download_prior=_no_prior)
+    assert len(body.requested) == 2
+
+
+def test_printings_already_held_are_not_refetched(tmp_path, scoped):
+    """Both printings published: a changed bill re-reads its status, not its bodies."""
+    _seed_prior(
+        tmp_path,
+        "congress_bills",
+        [{"bill_id": "119-hr-6028", "update_date_including_text": "1999-01-01T00:00:00Z"}],
+    )
+    _seed_prior(
+        tmp_path,
+        "bill_versions",
+        [
+            {"bill_id": "119-hr-6028", "version_code": code, "source": "govinfo", "sha256": "sha256:x"}
+            for code in ("introduced-in-house", "engrossed-in-house")
+        ],
+    )
+    body = StubBodyAcquirer()
+    paths = {
+        p.stem: p
+        for p in build_bill_family(
+            tmp_path, bulk_acquirer=StubBulkAcquirer(), body_acquirer=body, download_prior=_no_prior
+        )
+    }
+    assert body.requested == [], "a held printing needs no second fetch"
+    # And the published rows are the prior ones, not degraded re-emissions.
+    versions = pq.read_table(paths["bill_versions"]).to_pylist()
+    assert len(versions) == 2
+    assert all(row["sha256"] == "sha256:x" for row in versions), "a held row must not be overwritten with NULLs"
+
+
+def test_a_new_printing_pulls_its_neighbour_so_the_diff_still_happens(tmp_path, scoped):
+    """Only the predecessor is held; a diff needs both sides, so both are fetched."""
+    _seed_prior(
+        tmp_path,
+        "congress_bills",
+        [{"bill_id": "119-hr-6028", "update_date_including_text": "1999-01-01T00:00:00Z"}],
+    )
+    _seed_prior(
+        tmp_path,
+        "bill_versions",
+        [{"bill_id": "119-hr-6028", "version_code": "introduced-in-house", "source": "govinfo"}],
+    )
+    body = StubBodyAcquirer()
+    paths = {
+        p.stem: p
+        for p in build_bill_family(
+            tmp_path, bulk_acquirer=StubBulkAcquirer(), body_acquirer=body, download_prior=_no_prior
+        )
+    }
+    assert set(body.requested) == {"BILLS-119hr6028ih", "BILLS-119hr6028eh"}
+    assert pq.read_table(paths["section_diffs"]).to_pylist(), "the new pair must still be compared"
+
+
+def test_needed_printings_picks_the_unheld_and_their_neighbours():
+    from spicy_regs.transforms.build_bill_family import _needed_printings
+
+    codes = ["a", "b", "c", "d"]
+    assert _needed_printings(codes, held=set(codes)) == set()
+    assert _needed_printings(codes, held={"a", "b", "c"}) == {2, 3}
+    assert _needed_printings(codes, held=()) == {0, 1, 2, 3}
