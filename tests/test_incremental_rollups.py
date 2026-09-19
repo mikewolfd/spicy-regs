@@ -286,6 +286,13 @@ def test_committee_reports_skips_packages_it_holds(tmp_path, monkeypatch):
             raise LookupError("stub: no body in a hermetic test")
 
     acquirer = CountingAcquirer()
-    module.build_committee_reports(tmp_path, reader=Reader(), acquirer=acquirer, download_prior=no_download)
+
+    class NoHearings:
+        def records(self, route, url, *, max_pages=1):
+            raise AssertionError("no package body was read, so no hearing detail may be asked for")
+
+    module.build_committee_reports(
+        tmp_path, reader=Reader(), acquirer=acquirer, hearings=NoHearings(), download_prior=no_download
+    )
     assert "CRPT-119hrpt1" not in acquirer.requested, "a held package must not be re-fetched"
     assert "CRPT-119hrpt2" in acquirer.requested

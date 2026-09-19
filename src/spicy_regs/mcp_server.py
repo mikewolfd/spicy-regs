@@ -84,6 +84,12 @@ TABLES = (
     "table3_records",
     "committees",
     "committee_assignments",
+    # The Congress.gov index tables (gaps A5, A7, A10).
+    "house_communications",
+    "committee_meetings",
+    "record_issues",
+    "treaties",
+    "nominations",
     # Processing state, not a contract table: the bill-family rollup retains one
     # BILLSTATUS folder listing entry per folder so the next run can prove a zip
     # unchanged without downloading it. Queryable for the same reason every

@@ -433,6 +433,15 @@ tables:
       subtype: "FR document subtype, when set. Often null."
       executive_order_number: "Executive order number, for presidential EO documents. Null otherwise."
       modify_date: "Processing/modification date carried from the prior published table; null for rows freshly ingested via the REST API (which does not expose it)."
+      rin: >-
+        The first Regulation Identifier Number in `regulation_id_numbers_json`,
+        derived in the merge for every row: the scalar join key to
+        `house_communications.rin` (the regulatory bridge, gap A5). NULL where
+        the array is `[]` or absent. Measured on the published table
+        2026-09-19 (803,996 rows): 96,060 documents state one RIN, 1,499 state
+        two or more (up to 41), 9,758 state none and 696,679 rows from before
+        the in-repo ingest carry no array; a consumer wanting every RIN of a
+        multi-RIN document unnests the array.
   sam_entities:
     label: "Federal entity registry"
     coverage: >-
@@ -1209,9 +1218,15 @@ tables:
       related bill either. So expect this column to be NULL. The measurement is
       retained with every request and raw response under
       `~/Work/corpora/supply-2026-09-02/receipts/report-bill-linkage-2026-09-19/`.
-      `event_id` is NULL here too: the transform does not read the Congress.gov
-      hearing detail record that states the `associatedMeeting`, and the package
-      itself does not carry it.
+      `event_id` is read from the Congress.gov hearing detail
+      (`hearing/{congress}/{chamber}/{jacket}`, one keyed request per CHRG package
+      fetched in the run) and joins `committee_meetings.event_id`. It is NULL in
+      three cases the run log counts apart: the detail names no meeting (jacket
+      63127, retained), the detail was refused (a jacket Congress.gov does not
+      hold, or a transport failure), or the row was published before this
+      column was read -- only a package fetched in the run is asked about, so a
+      row from an earlier run keeps its NULL until the package is modified and
+      re-fetched.
     columns_from: spicy_docs
 
   bill_family_archives:
@@ -1499,4 +1514,125 @@ tables:
       One row per member per committee or subcommittee seat a chamber roster
       file lists today, from the House Clerk's MemberData.xml and the Senate's
       cvc_member_data.xml. All columns are stored as VARCHAR.
+    columns_from: spicy_docs
+
+  # The Congress.gov index tables (gaps A5, A7, A10), each written by its own
+  # rollup in pipelines/rollups/congress_index.py over one walk
+  # (transforms/build_congress_index.py).
+  house_communications:
+    label: "House executive communications"
+    coverage: >-
+      Sampled, and accumulating. None yet: no run has been measured, and the first
+      run fills it. Each run walks the whole `house-communication/{congress}` list
+      for the Congresses in scope (4,975 records, 20 pages, for the 119th on
+      2026-09-19) and reads the detail of every communication the table does not
+      yet hold, newest `updateDate` first, at most 1,000 a run; the index is
+      complete after the first run and the details converge over the following
+      ones.
+    measured_on: "2026-09-19"
+    summary: >-
+      One row per House executive communication, as the Congress.gov
+      house-communication list and detail routes state it, keyed on the
+      publisher's own address. The regulatory bridge: `is_rulemaking`, the cited
+      `legal_authority`, the committee referral, the matching House requirement
+      and the RIN read from `report_nature`, which joins `federal_register.rin`.
+      All columns are stored as VARCHAR.
+    data_quality: >-
+      A row whose `committees_json` is NULL is list-only: its detail has not been
+      read yet (not reached under the cap, or refused), and every detail-only
+      column is NULL with it, including the three RIN columns, because the rule
+      was not run. A row whose detail was read states `[]` where the detail lists
+      none. The RIN is an interpretation: `rin_rule` names the rule that fired
+      (`report_nature_rin_label`) or `unmatched`, and `rin_matched_text` is the
+      exact text, so a false positive is readable from the row. The publisher
+      repeats a record across a page boundary (15 of 4,975 on the 119th); the
+      table holds each identity once.
+    columns_from: spicy_docs
+
+  committee_meetings:
+    label: "Committee meetings"
+    coverage: >-
+      Sampled, and accumulating. None yet: no run has been measured, and the first
+      run fills it. Each run walks the whole `committee-meeting/{congress}` list
+      across all three chambers for the Congresses in scope (2,754 records, 12
+      pages, for the 119th on 2026-09-19) and reads the detail of every meeting
+      the table does not yet hold, newest `updateDate` first, at most 1,000 a
+      run.
+    measured_on: "2026-09-19"
+    summary: >-
+      One row per scheduled committee meeting, as the Congress.gov
+      committee-meeting list and detail routes state it, keyed `(congress,
+      chamber, event_id)`. The detail carries the hearing transcript jackets
+      (`hearing_transcripts` joins on `event_id`), the related bills, the
+      witnesses and every document URL. All columns are stored as VARCHAR.
+    data_quality: >-
+      A row whose `committees_json` is NULL is list-only: its detail has not been
+      read yet, and every detail-only column is NULL with it; a read detail
+      states `[]` where it lists none. Event ids are keyed with their chamber
+      because their uniqueness across chambers is unmeasured (spicy-docs'
+      contract note); the 119th's House ids sit near 119,000 and its Senate ids
+      near 338,000.
+    columns_from: spicy_docs
+
+  record_issues:
+    label: "Daily Congressional Record issues"
+    coverage: >-
+      Sampled, and accumulating. None yet: no run has been measured, and the first
+      run fills it. Each run walks the whole `daily-congressional-record/{volume}`
+      list for each session volume of the Congresses in scope (volumes 171 and
+      172 for the 119th: 219 and 144 issues, one page each, on 2026-09-19) and
+      reads the detail of every issue the table does not yet hold, newest
+      `updateDate` first, at most 1,000 a run.
+    measured_on: "2026-09-19"
+    summary: >-
+      One row per daily Congressional Record issue, keyed `(volume, issue)`, the
+      publisher's own identity. The detail's section names give `chambers`, the
+      legislative-day calendar (which chambers sat), and the whole-issue link's
+      stem gives the GovInfo CREC `package_id`. The volume is the year minus
+      1854 (volume 172 is 2026). All columns are stored as VARCHAR.
+    data_quality: >-
+      A row whose `sections_json` is NULL is list-only: its detail has not been
+      read yet, so `chambers`, `package_id` and every other detail-only column
+      are NULL with it. A read detail with no chamber section (a Daily Digest
+      only) states an empty `chambers`, distinct from NULL.
+    columns_from: spicy_docs
+
+  treaties:
+    label: "Treaty documents"
+    coverage: >-
+      Sampled, and accumulating. None yet: no run has been measured, and the first
+      run fills it. Each run walks the whole `treaty/{congress}` list for the
+      Congresses in scope (2 for the 119th on 2026-09-19, both detailed in the
+      bounded proof run) and reads the detail of every unpartitioned treaty the
+      table does not yet hold, newest `updateDate` first, at most 1,000 a run.
+    measured_on: "2026-09-19"
+    summary: >-
+      One row per treaty document, as the Congress.gov treaty list and detail
+      routes state it, keyed `(congress_received, number, suffix)`. `package_id`
+      is the GovInfo CDOC id by the `CDOC-{congress}tdoc{number}` rule on an
+      unpartitioned treaty. All columns are stored as VARCHAR.
+    data_quality: >-
+      A row whose `titles_json` is NULL is list-only. A partitioned treaty (a
+      non-empty `suffix`) is always list-only: the publisher's suffixed detail
+      address has no route in spicy-docs' `LIST_ROUTES`, so its detail is never
+      asked for and its `package_id` is NULL by the contract's own rule.
+    columns_from: spicy_docs
+
+  nominations:
+    label: "Nominations"
+    coverage: >-
+      Sampled, and accumulating. None yet: no run has been measured, and the first
+      run fills it. Each run walks the whole `nomination/{congress}` list for the
+      Congresses in scope (2,208 records, 9 pages, for the 119th on 2026-09-19);
+      there is no detail route, so every row is complete from the list and is
+      republished each run, the fresh row winning.
+    measured_on: "2026-09-19"
+    summary: >-
+      One row per nomination or part, as the Congress.gov nomination list route
+      states it, keyed `(congress, citation)`; the citation carries the part
+      number. All columns are stored as VARCHAR.
+    data_quality: >-
+      The publisher repeats a record across a page boundary (4 of 2,208 on the
+      119th); the table holds each citation once. The list carries the latest
+      action only, not the action history.
     columns_from: spicy_docs

@@ -1,0 +1,44 @@
+{
+    "hearing": {
+        "associatedMeeting": {
+            "eventId": "119003",
+            "url": "https://api.congress.gov/v3/committee-meeting/119/house/119003?format=json"
+        },
+        "chamber": "House",
+        "citation": "H.Hrg.119",
+        "committees": [
+            {
+                "name": "House Government Reform Committee",
+                "systemCode": "hsgo00",
+                "url": "https://api.congress.gov/v3/committee/house/hsgo00?format=json"
+            }
+        ],
+        "congress": 119,
+        "dates": [
+            {
+                "date": "2026-03-04"
+            }
+        ],
+        "formats": [
+            {
+                "type": "Formatted Text",
+                "url": "https://congress.gov/119/chrg/CHRG-119hhrg64431/generated/CHRG-119hhrg64431.htm"
+            },
+            {
+                "type": "PDF",
+                "url": "https://congress.gov/119/chrg/CHRG-119hhrg64431/CHRG-119hhrg64431.pdf"
+            }
+        ],
+        "jacketNumber": 64431,
+        "libraryOfCongressIdentifier": "LC75947",
+        "title": "[ERRATA] OVERSIGHT OF FRAUD AND MISUSE OF FEDERAL FUNDS IN MINNESOTA: PART II",
+        "updateDate": "2026-09-18T19:55:55Z"
+    },
+    "request": {
+        "chamber": "house",
+        "congress": "119",
+        "contentType": "application/json",
+        "format": "json",
+        "jacketNumber": "64431"
+    }
+}

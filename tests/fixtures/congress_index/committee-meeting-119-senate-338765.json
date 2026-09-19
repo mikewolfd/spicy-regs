@@ -1,0 +1,80 @@
+{
+    "committeeMeeting": {
+        "chamber": "Senate",
+        "committees": [
+            {
+                "name": "Senate Indian Affairs",
+                "systemCode": "slia00",
+                "url": "https://api.congress.gov/v3/committee/senate/slia00?format=json"
+            }
+        ],
+        "congress": 119,
+        "date": "2026-09-23T18:30:00Z",
+        "eventId": "338765",
+        "location": {
+            "building": "Dirksen Senate Office Building",
+            "room": "628"
+        },
+        "meetingDocuments": [
+            {
+                "description": "A bill to reauthorize the Native American Housing Assistance and Self-Determination Act of 1996.",
+                "documentType": "Bills and Resolutions"
+            }
+        ],
+        "meetingStatus": "Scheduled",
+        "relatedItems": {
+            "bills": [
+                {
+                    "congress": 119,
+                    "number": "226",
+                    "type": "HR",
+                    "url": "https://api.congress.gov/v3/bill/119/hr/226?format=json"
+                },
+                {
+                    "congress": 119,
+                    "number": "1750",
+                    "type": "S",
+                    "url": "https://api.congress.gov/v3/bill/119/s/1750?format=json"
+                },
+                {
+                    "congress": 119,
+                    "number": "3859",
+                    "type": "S",
+                    "url": "https://api.congress.gov/v3/bill/119/s/3859?format=json"
+                },
+                {
+                    "congress": 119,
+                    "number": "4053",
+                    "type": "S",
+                    "url": "https://api.congress.gov/v3/bill/119/s/4053?format=json"
+                },
+                {
+                    "congress": 119,
+                    "number": "5354",
+                    "type": "S",
+                    "url": "https://api.congress.gov/v3/bill/119/s/5354?format=json"
+                }
+            ]
+        },
+        "title": "Business meeting to consider S.5354, to reauthorize the Native American Housing Assistance and Self-Determination Act of 1996; to be immediately followed by hearings to examine S.1750, to reaffirm the applicability of the Indian Reorganization Act to the Poarch Band of Creek Indians, S.3859, to amend the Catawba Indian Tribe of South Carolina Land Claims Settlement Act of 1993 with respect to future membership in the Catawba Indian Nation, S.4053, to take certain land in the State of California into trust for the benefit of the Pechanga Band of Indians, and H.R.226, to take certain Federal lands in Tennessee into trust for the benefit of the Eastern Band of Cherokee Indians.",
+        "type": "Open Business Meeting",
+        "updateDate": "2026-09-18T22:08:19Z",
+        "videos": [
+            {
+                "name": "Business meeting to consider S.5354, to reauthorize the Native American Housing Assistance and Self-Determination Act of 1996; to be immediately followed by hearings to examine S.1750, to reaffirm the applicability of the Indian Reorganization Act to the Poarch Band of Creek Indians, S.3859, to amend the Catawba Indian Tribe of South Carolina Land Claims Settlement Act of 1993 with respect to future membership in the Catawba Indian Nation, S.4053, to take certain land in the State of California into trust for the benefit of the Pechanga Band of Indians, and H.R.226, to take certain Federal lands in Tennessee into trust for the benefit of the Eastern Band of Cherokee Indians.",
+                "url": "https://www.congress.gov/event/119th-Congress/senate-event/338765"
+            },
+            {
+                "name": "Business meeting to consider S.5354, to reauthorize the Native American Housing Assistance and Self-Determination Act of 1996; to be immediately followed by hearings to examine S.1750, to reaffirm the applicability of the Indian Reorganization Act to the Poarch Band of Creek Indians, S.3859, to amend the Catawba Indian Tribe of South Carolina Land Claims Settlement Act of 1993 with respect to future membership in the Catawba Indian Nation, S.4053, to take certain land in the State of California into trust for the benefit of the Pechanga Band of Indians, and H.R.226, to take certain Federal lands in Tennessee into trust for the benefit of the Eastern Band of Cherokee Indians.",
+                "url": "https://www.senate.gov/isvp/?comm=indian&filename=indian092326"
+            }
+        ]
+    },
+    "request": {
+        "chamber": "senate",
+        "congress": "119",
+        "contentType": "application/json",
+        "eventId": "338765",
+        "format": "json"
+    }
+}

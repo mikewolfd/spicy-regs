@@ -15,7 +15,7 @@ import pytest
 
 from spicy_regs.sources import federal_register as federal_register_source
 from spicy_regs.sources.federal_register import FederalRegisterReader
-from spicy_regs.transforms.build_federal_register import COLUMNS, _shape
+from spicy_regs.transforms.build_federal_register import COLUMNS, FETCHED_COLUMNS, _shape, build_federal_register
 
 _RAW_DOC = {
     "document_number": "2024-00001",
@@ -45,8 +45,9 @@ _RAW_DOC = {
 
 def test_shape_produces_exact_schema():
     row = _shape(_RAW_DOC)
-    # Every published column present, and nothing extra.
-    assert set(row) == set(COLUMNS)
+    # Every fetched column present, and nothing extra; ``rin`` is derived in the merge.
+    assert set(row) == set(FETCHED_COLUMNS)
+    assert COLUMNS == (*FETCHED_COLUMNS, "rin")
 
 
 def test_shape_maps_and_serializes_fields():
@@ -169,3 +170,47 @@ def test_request_exhaustion_aborts_instead_of_returning_partial_data(monkeypatch
 
     with pytest.raises(RuntimeError, match="request failed after 1 attempts"):
         reader._get("https://example.test/documents.json", None)
+
+
+@pytest.mark.parametrize("prior_width", ["fetched", "published"], ids=["migration-prior", "steady-state-prior"])
+def test_rin_is_derived_for_every_row_whatever_the_priors_width(tmp_path, prior_width):
+    """The join key is a projection of the array, filled on prior rows and fresh rows alike.
+
+    Two priors: the pre-``rin`` width the live table had on 2026-09-19 (the
+    migration case), and the published width carrying a ``rin`` that disagrees
+    with its array (the steady-state case), which must be recomputed rather
+    than read back -- the column is derived every run, never stored as a fact.
+    """
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    columns = FETCHED_COLUMNS if prior_width == "fetched" else COLUMNS
+    prior_rows = [
+        {
+            "document_number": "P-two",
+            "publication_date": "2024-01-01",
+            "regulation_id_numbers_json": '["1111-AA11", "2222-BB22"]',
+        },
+        {"document_number": "P-none", "publication_date": "2024-01-01", "regulation_id_numbers_json": "[]"},
+        {"document_number": "P-null", "publication_date": "2024-01-01", "regulation_id_numbers_json": None},
+    ]
+    if prior_width == "published":
+        for row in prior_rows:
+            row["rin"] = "9999-ZZ99"  # stale: must not survive the merge
+    schema = pa.schema([(c, pa.string()) for c in columns])
+    pq.write_table(
+        pa.Table.from_pylist([{c: None for c in columns} | r for r in prior_rows], schema=schema),
+        tmp_path / "_fr_prior.parquet",
+    )
+    fresh = [dict(_RAW_DOC, document_number="F-one", publication_date="2024-03-01")]
+
+    out = build_federal_register(
+        tmp_path, since=date(2024, 3, 1), documents=lambda start: iter(fresh), download_prior=lambda k, p: False
+    )
+    table = pq.read_table(out)
+    assert table.schema.names == list(COLUMNS)
+    by_number = {row["document_number"]: row for row in table.to_pylist()}
+    assert by_number["F-one"]["rin"] == "2060-AV12"
+    assert by_number["P-two"]["rin"] == "1111-AA11", "the first of several; the array keeps the rest"
+    assert by_number["P-none"]["rin"] is None
+    assert by_number["P-null"]["rin"] is None

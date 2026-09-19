@@ -35,3 +35,4 @@ One row per Federal Register document, ingested from the federalregister.gov RES
 | `subtype` | `VARCHAR` | FR document subtype, when set. Often null. |
 | `executive_order_number` | `VARCHAR` | Executive order number, for presidential EO documents. Null otherwise. |
 | `modify_date` | `VARCHAR` | Processing/modification date carried from the prior published table; null for rows freshly ingested via the REST API (which does not expose it). |
+| `rin` | `VARCHAR` | The first Regulation Identifier Number in `regulation_id_numbers_json`, derived in the merge for every row: the scalar join key to `house_communications.rin` (the regulatory bridge, gap A5). NULL where the array is `[]` or absent. Measured on the published table 2026-09-19 (803,996 rows): 96,060 documents state one RIN, 1,499 state two or more (up to 41), 9,758 state none and 696,679 rows from before the in-repo ingest carry no array; a consumer wanting every RIN of a multi-RIN document unnests the array. |

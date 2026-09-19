@@ -1,4 +1,4 @@
-"""Wiring tests for the six rollups that publish the contract-hosted tables.
+"""Wiring tests for the rollups that publish the contract-hosted tables.
 
 Nothing here runs a rollup: these assert the wiring that is easy to get subtly
 wrong and that no other test would catch until a cron failed at 02:00 — the
@@ -22,6 +22,13 @@ from spicy_regs.pipelines.rollups.amendments import AmendmentsRollup
 from spicy_regs.pipelines.rollups.base import RollupPipeline
 from spicy_regs.pipelines.rollups.bill_family import BillFamilyRollup
 from spicy_regs.pipelines.rollups.committee_reports import CommitteeReportsRollup
+from spicy_regs.pipelines.rollups.congress_index import (
+    CommitteeMeetingsRollup,
+    HouseCommunicationsRollup,
+    NominationsRollup,
+    RecordIssuesRollup,
+    TreatiesRollup,
+)
 from spicy_regs.pipelines.rollups.congress_bills import CongressBillsRollup
 from spicy_regs.pipelines.rollups.members import MembersRollup
 from spicy_regs.pipelines.rollups.press_releases import PressReleasesRollup
@@ -63,6 +70,12 @@ HOSTED_ROLLUPS = (
     # A8/A9 (laws and rosters)
     LawsRollup,
     CommitteeRostersRollup,
+    # The Congress.gov index tables (gaps A5, A7, A10).
+    HouseCommunicationsRollup,
+    CommitteeMeetingsRollup,
+    RecordIssuesRollup,
+    TreatiesRollup,
+    NominationsRollup,
 )
 
 

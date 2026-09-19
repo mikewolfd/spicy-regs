@@ -1,0 +1,72 @@
+{
+    "committeeMeeting": {
+        "chamber": "House",
+        "committees": [
+            {
+                "name": "House Budget",
+                "systemCode": "hsbu00",
+                "url": "https://api.congress.gov/v3/committee/house/hsbu00?format=json"
+            }
+        ],
+        "congress": 119,
+        "date": "2026-09-21T18:00:00Z",
+        "eventId": "119569",
+        "location": {
+            "address": "{\"building_name\": \"Old Parkland\", \"street-address\": \"3819 Maple Ave\", \"city\": \"Dallas\", \"state\": \"TX\", \"postal_code\": \"75219\"}"
+        },
+        "meetingDocuments": [
+            {
+                "description": "Field Hearing Notice",
+                "documentType": "Support Document",
+                "format": "PDF",
+                "name": "Field Hearing Notice",
+                "url": "https://www.congress.gov/119/meeting/house/119569/documents/HHRG-119-BU00-20260921-SD001.pdf"
+            }
+        ],
+        "meetingStatus": "Scheduled",
+        "title": "America's Fiscal Future: Examining the Need for a Fiscal Commission",
+        "type": "Hearing",
+        "updateDate": "2026-09-18T21:34:11Z",
+        "witnessDocuments": [
+            {
+                "documentType": "Witness Statement",
+                "format": "PDF",
+                "url": "https://www.congress.gov/119/meeting/house/119569/witnesses/HHRG-119-BU00-Wstate-PanettaL-20260921.pdf"
+            },
+            {
+                "documentType": "Witness Statement",
+                "format": "PDF",
+                "url": "https://www.congress.gov/119/meeting/house/119569/witnesses/HHRG-119-BU00-Wstate-PortmanR-20260921.pdf"
+            },
+            {
+                "documentType": "Witness Statement",
+                "format": "PDF",
+                "url": "https://www.congress.gov/119/meeting/house/119569/witnesses/HHRG-119-BU00-Wstate-ManchinJ-20260921.pdf"
+            }
+        ],
+        "witnesses": [
+            {
+                "name": "The Honorable Leon Panetta",
+                "organization": "Former U.S. Representative for California, Budget Committee Chairman, Secretary of Defense, and White House Chief of Staff",
+                "position": "Chairman, The Panetta Institute for Public Policy"
+            },
+            {
+                "name": "The Honorable Rob Portman",
+                "organization": "Former U.S. Senator and Representative for Ohio, Former Director of the Office of Management and Budget",
+                "position": "Founder, The Portman Center for Policy Solutions"
+            },
+            {
+                "name": "The Honorable Joe Manchin",
+                "organization": "Former Governor of West Virginia",
+                "position": "Former U.S. Senator for West Virginia"
+            }
+        ]
+    },
+    "request": {
+        "chamber": "house",
+        "congress": "119",
+        "contentType": "application/json",
+        "eventId": "119569",
+        "format": "json"
+    }
+}

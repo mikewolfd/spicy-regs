@@ -1,0 +1,57 @@
+{
+  "dailyCongressionalRecord": [
+    {
+      "congress": 119,
+      "issueDate": "2026-09-18T04:00:00Z",
+      "issueNumber": "148",
+      "sessionNumber": 2,
+      "updateDate": "2026-09-19T10:33:17Z",
+      "url": "https://api.congress.gov/v3/daily-congressional-record/172/148?format=json",
+      "volumeNumber": 172
+    },
+    {
+      "congress": 119,
+      "issueDate": "2026-09-17T04:00:00Z",
+      "issueNumber": "147",
+      "sessionNumber": 2,
+      "updateDate": "2026-09-18T12:29:16Z",
+      "url": "https://api.congress.gov/v3/daily-congressional-record/172/147?format=json",
+      "volumeNumber": 172
+    },
+    {
+      "congress": 119,
+      "issueDate": "2026-09-15T04:00:00Z",
+      "issueNumber": "145",
+      "sessionNumber": 2,
+      "updateDate": "2026-09-16T20:44:38Z",
+      "url": "https://api.congress.gov/v3/daily-congressional-record/172/145?format=json",
+      "volumeNumber": 172
+    },
+    {
+      "congress": 119,
+      "issueDate": "2026-09-14T04:00:00Z",
+      "issueNumber": "144",
+      "sessionNumber": 2,
+      "updateDate": "2026-09-16T12:54:31Z",
+      "url": "https://api.congress.gov/v3/daily-congressional-record/172/144?format=json",
+      "volumeNumber": 172
+    },
+    {
+      "congress": 119,
+      "issueDate": "2026-09-10T04:00:00Z",
+      "issueNumber": "143",
+      "sessionNumber": 2,
+      "updateDate": "2026-09-11T09:59:22Z",
+      "url": "https://api.congress.gov/v3/daily-congressional-record/172/143?format=json",
+      "volumeNumber": 172
+    }
+  ],
+  "pagination": {
+    "count": 144
+  },
+  "request": {
+    "contentType": "application/json",
+    "format": "json",
+    "volumeNumber": "172"
+  }
+}

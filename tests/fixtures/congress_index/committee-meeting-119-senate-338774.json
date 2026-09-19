@@ -1,0 +1,30 @@
+{
+    "committeeMeeting": {
+        "chamber": "Senate",
+        "committees": [
+            {
+                "name": "Senate Armed Services",
+                "systemCode": "ssas00",
+                "url": "https://api.congress.gov/v3/committee/senate/ssas00?format=json"
+            }
+        ],
+        "congress": 119,
+        "date": "2026-09-24T13:30:00Z",
+        "eventId": "338774",
+        "location": {
+            "building": "Capitol Visitor Center (Senate side",
+            "room": "217"
+        },
+        "meetingStatus": "Scheduled",
+        "title": "To receive a closed briefing on an update on the budget of the Department of Defense.",
+        "type": "Closed Hearing",
+        "updateDate": "2026-09-19T22:08:26Z"
+    },
+    "request": {
+        "chamber": "senate",
+        "congress": "119",
+        "contentType": "application/json",
+        "eventId": "338774",
+        "format": "json"
+    }
+}

@@ -1,0 +1,59 @@
+{
+    "issue": {
+        "congress": 119,
+        "fullIssue": {
+            "articles": {
+                "count": 10,
+                "url": "https://api.congress.gov/v3/daily-congressional-record/172/148/articles?format=json"
+            },
+            "entireIssue": [
+                {
+                    "part": "1",
+                    "type": "PDF",
+                    "url": "https://www.congress.gov/119/crec/2026/09/18/172/148/CREC-2026-09-18.pdf"
+                }
+            ],
+            "sections": [
+                {
+                    "endPage": "D920",
+                    "name": "Daily Digest",
+                    "startPage": "D919",
+                    "text": [
+                        {
+                            "type": "Formatted Text",
+                            "url": "https://www.congress.gov/119/crec/2026/09/18/d18se6-1.htm"
+                        },
+                        {
+                            "type": "PDF",
+                            "url": "https://www.congress.gov/119/crec/2026/09/18/172/148/CREC-2026-09-18-dailydigest.pdf"
+                        }
+                    ]
+                },
+                {
+                    "endPage": "S4837",
+                    "name": "Senate Section",
+                    "startPage": "S4837",
+                    "text": [
+                        {
+                            "part": "1",
+                            "type": "PDF",
+                            "url": "https://www.congress.gov/119/crec/2026/09/18/172/148/CREC-2026-09-18-senate.pdf"
+                        }
+                    ]
+                }
+            ]
+        },
+        "issueDate": "2026-09-18T04:00:00Z",
+        "issueNumber": "148",
+        "sessionNumber": 2,
+        "updateDate": "2026-09-19T10:33:17Z",
+        "url": "https://api.congress.gov/v3/daily-congressional-record/172/148?format=json",
+        "volumeNumber": 172
+    },
+    "request": {
+        "contentType": "application/json",
+        "format": "json",
+        "issueNumber": "148",
+        "volumeNumber": "172"
+    }
+}
