@@ -146,10 +146,12 @@ TABLES: tuple[str, ...] = (
     # The hosted tables, minus congress_bills — it predates them and keeps its
     # position above, so appending CONTRACT_TABLES wholesale would list it twice.
     *(name for name in CONTRACT_TABLES if name != "congress_bills"),
-    # Published, but not a contract table: the bill-family rollup's own
-    # processing state. Its columns are this repository's, so they live in
-    # DERIVED_SCHEMAS and its prose is inline in descriptions.yaml.
+    # Published, but not contract tables: the bill-family rollup's own
+    # processing state, and the vote references the roll-call rollup joins
+    # against. Their columns are this repository's, so they live in
+    # DERIVED_SCHEMAS and their prose is inline in descriptions.yaml.
     "bill_family_archives",
+    "bill_vote_references",
 )
 
 # Tables the MCP server (list_sources / describe_table / query_sql) exposes.
@@ -182,6 +184,7 @@ MCP_QUERYABLE: frozenset[str] = frozenset(
         "fcc_proceedings",
         "fcc_filings",
         "bill_family_archives",
+        "bill_vote_references",
         *CONTRACT_TABLES,
     }
 )
@@ -543,6 +546,22 @@ DERIVED_SCHEMAS: dict[str, list[tuple[str, str]]] = {
         ("size", "VARCHAR"),
         ("congress", "VARCHAR"),
         ("bill_type", "VARCHAR"),
+        ("observed_at", "VARCHAR"),
+    ],
+    # The bill family's second non-contract output (build_bill_family): the
+    # roll calls each bill's own actions record, which the roll-call rollup
+    # reads back as a linkage index. Pinned to the transform's own
+    # VOTE_REFERENCE_COLUMNS by test_hosted_rollups, like the entry above.
+    "bill_vote_references": [
+        ("bill_id", "VARCHAR"),
+        ("chamber", "VARCHAR"),
+        ("congress", "VARCHAR"),
+        ("session", "VARCHAR"),
+        ("roll_number", "VARCHAR"),
+        ("action_index", "VARCHAR"),
+        ("url", "VARCHAR"),
+        ("date", "VARCHAR"),
+        ("full_action_name", "VARCHAR"),
         ("observed_at", "VARCHAR"),
     ],
 }

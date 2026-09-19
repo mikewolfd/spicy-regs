@@ -42,6 +42,24 @@ def prior_scratch_path(output_dir: Path, name: str) -> Path:
     return output_dir / f"_{name}_prior.parquet"
 
 
+def published_table(
+    output_dir: Path, name: str, download_prior: Callable[[str, Path], bool] = r2.download
+) -> Path | None:
+    """The published ``name`` table, downloaded to :func:`prior_scratch_path` unless already there.
+
+    ``None`` when nothing is published yet, which every caller treats as a cold
+    start rather than an error. This is the one idiom behind every "read a
+    published table before merging" — a transform's own prior, for a watermark
+    or a held-set, and the two merge-time joins against another rollup's
+    published output (``press_releases`` against ``congress_bills``,
+    ``roll_call_votes`` against ``bill_vote_references``). Pass the result's
+    presence on to :func:`merge_table` as ``prior_present`` when the table is
+    the caller's own, so a known-absent prior is not asked for twice.
+    """
+    path = prior_scratch_path(output_dir, name)
+    return path if (path.exists() or download_prior(f"{name}.parquet", path)) else None
+
+
 def merge_table(
     output_dir: Path,
     *,

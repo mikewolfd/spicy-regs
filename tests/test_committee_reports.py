@@ -5,11 +5,13 @@ No network: the discovery reader and the body acquirer are stubbed, and the
 plain text inside ``<html><title>..</title><body><pre>``, measured
 2026-09-19 in spicy-docs ``docs/sources/govinfo-bodies.md``.
 
-What this establishes is the two things the 0.21.1 adoption changed here: the
+What this establishes is the two things the 0.21.1 adoption changed here — the
 text comes from ``extraction.body_text`` rather than a local decoder, and a
 rendition that states no page boundary publishes a NULL ``page_count`` instead
-of a count invented from a separator that never occurs. The window arithmetic
-is covered in ``test_incremental_rollups.py``.
+of a count invented from a separator that never occurs — and the bill linkage:
+``bill_id`` is read from the package's own MODS, the real one for each package
+(``tests/fixtures/govinfo_bodies/README.md``), and only a ``PRIMARY`` bill
+fills it. The window arithmetic is covered in ``test_incremental_rollups.py``.
 """
 
 from __future__ import annotations
@@ -30,7 +32,13 @@ from spicy_docs.transport.captured import CapturedBodyResponse
 from spicy_regs.transforms.build_committee_reports import build_committee_reports
 from tests.pdf_fixtures import make_pdf
 
+FIXTURES = Path(__file__).parent / "fixtures" / "govinfo_bodies"
 OBSERVED_AT = "2026-09-19T00:00:00Z"
+
+#: The CRPT package's report accompanies H. Res. 53 (`PRIMARY`); the CHRG
+#: package's transcript merely mentions H.R. 1 and H.R. 5371 (`BODY`).
+CRPT_ID = "CRPT-119hrpt1"
+CHRG_ID = "CHRG-119hhrg63127"
 
 #: One agency header the report parser matches, so `report_sections` is reached.
 REPORT_HTML = b"""<html><title>Committee Report</title><body><pre>
@@ -67,6 +75,15 @@ def _package(package_id: str, *, fmt: str = "htm", media_type: str = "text/html"
         observed_at=OBSERVED_AT,
         body=body,
     )
+    mods_url = f"https://api.govinfo.gov/packages/{package_id}/mods"
+    mods_capture = CapturedBodyResponse(
+        requested_url=mods_url,
+        resolved_url=mods_url,
+        status_code=200,
+        content_type="application/xml",
+        observed_at=OBSERVED_AT,
+        body=(FIXTURES / f"mods-{package_id}.xml").read_bytes(),
+    )
     return GovInfoPackageBody(
         identity=identity,
         format=fmt,
@@ -96,7 +113,7 @@ def _package(package_id: str, *, fmt: str = "htm", media_type: str = "text/html"
             byte_size=len(body),
         ),
         summary_capture=capture,
-        mods_capture=capture,
+        mods_capture=mods_capture,
         body_capture=capture,
         request_count=3,
         budget=BUDGET,
@@ -111,7 +128,7 @@ class _Page:
 class StubDiscovery:
     """One CRPT package and one CHRG package, the smallest input reaching all three tables."""
 
-    IDS = {"CRPT": ["CRPT-119hrpt1"], "CHRG": ["CHRG-119hhrg64242"]}
+    IDS = {"CRPT": [CRPT_ID], "CHRG": [CHRG_ID]}
 
     def packages(self, url: str, *, max_pages: int = 1):
         collection = next(name for name in self.IDS if f"/{name}/" in url or url.endswith(name))
@@ -166,7 +183,44 @@ def test_the_text_is_the_markup_readers_text_not_the_raw_html(reports):
     sections = pq.read_table(reports["report_sections"]).to_pylist()
     assert sections, "the agency header must produce a block"
     assert all("<pre>" not in (row["body"] or "") for row in sections)
-    assert all(row["package_id"] == "CRPT-119hrpt1" for row in sections)
+    assert all(row["package_id"] == CRPT_ID for row in sections)
+
+
+def test_a_report_is_linked_to_the_bill_its_mods_marks_primary(reports):
+    """The MODS the acquirer already fetched names four bills; the one marked PRIMARY is the linkage.
+
+    H. Res. 53 appears twice in the fixture, once as OTHER and once as
+    PRIMARY, beside S. 5 and H.R. 471 as OTHER, so "first bill listed" would
+    have answered S. 5 — the resolution the report provides for considering,
+    not the one it accompanies. Measured live 2026-09-19, the PRIMARY bill
+    agreed with Congress.gov's own `associatedBill[0]` on 12 of 12 reports.
+    """
+    rows = pq.read_table(reports["committee_reports"]).to_pylist()
+    assert rows[0]["package_id"] == CRPT_ID
+    assert rows[0]["bill_id"] == "119-hres-53"
+
+
+def test_a_hearing_that_only_mentions_bills_is_not_linked_to_one(reports):
+    """`BODY` is a mention, not a subject: the Worldwide Threats hearing is not "about" H.R. 1."""
+    rows = pq.read_table(reports["hearing_transcripts"]).to_pylist()
+    assert rows[0]["package_id"] == CHRG_ID
+    assert rows[0]["bill_id"] is None
+
+
+def test_the_mentions_are_counted_by_context_in_the_run_log(tmp_path, monkeypatch):
+    """What the column does not carry is still stated: the OTHER and BODY mentions, by context."""
+    from loguru import logger
+
+    monkeypatch.delenv("COMMITTEE_REPORTS_SINCE", raising=False)
+    messages: list[str] = []
+    sink = logger.add(messages.append, level="INFO", format="{message}")
+    try:
+        build_committee_reports(tmp_path, reader=StubDiscovery(), acquirer=StubBodyAcquirer(), download_prior=_no_prior)
+    finally:
+        logger.remove(sink)
+    line = next(m for m in messages if "PRIMARY bill" in m)
+    assert line.startswith("Committee reports: 1 packages name a PRIMARY bill")
+    assert "'OTHER': 3" in line and "'BODY': 2" in line
 
 
 def test_the_acquirer_is_asked_with_no_preference(tmp_path, monkeypatch):
@@ -174,7 +228,7 @@ def test_the_acquirer_is_asked_with_no_preference(tmp_path, monkeypatch):
     monkeypatch.delenv("COMMITTEE_REPORTS_SINCE", raising=False)
     acquirer = StubBodyAcquirer()
     build_committee_reports(tmp_path, reader=StubDiscovery(), acquirer=acquirer, download_prior=_no_prior)
-    assert acquirer.requested == ["CRPT-119hrpt1", "CHRG-119hhrg64242"]
+    assert acquirer.requested == [CRPT_ID, CHRG_ID]
 
 
 class StubPdfAcquirer:

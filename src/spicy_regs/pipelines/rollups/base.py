@@ -14,10 +14,31 @@ re-run or backfilled on its own, and a failure is isolated to a single artifact.
     3. Load  — publish each artifact to R2 (shrink-guarded per file), off by
        default while vetting.
 
-**Contract:** a rollup reads only the ETL's *published base tables*
-(``dockets``, ``documents``, ``comments_index``, ``federal_register``) — never
-another rollup's output — so pipelines stay independently schedulable with no
-cross-pipeline race. Most rollups build one artifact (``output``); one that
+**Contract:** a rollup reads only tables that no other rollup *derives* — the
+ETL's published base tables (``dockets``, ``documents``, ``comments_index``)
+and the published output of an **ingest** rollup, which fetches from a
+publisher and has no upstream dependency inside this repository. Reading a
+derived rollup's output is what stays forbidden, because that is the read
+that makes two pipelines race: an ingest table's content comes from outside,
+so the worst a stale copy costs is one cron's lag, which the offsets already
+handle.
+
+The rule was first written as "never another rollup's output" and listed
+``federal_register`` among the base tables; four rollups have since read an
+ingest output for the reason above, each recording it —
+``fr_docket_links`` (``federal_register``), ``bill_subjects``
+(``congress_bills``), ``org_committee_links`` (``fec_committees``) and now
+``press-releases`` and ``roll-call-votes``, which join at merge time against
+``congress_bills`` and ``bill_vote_references`` to fill a bill linkage the
+publisher states but their own source does not carry. The wording here now
+says what those four do and what the race argument actually permits; nothing
+about the guarantee changed.
+
+A merge-time join of this kind is read **best-effort**, not declared in
+``inputs``: ``inputs`` is for a table whose absence should fail the run,
+and a linkage input's absence must instead leave the linkage columns NULL so
+the rollup still publishes everything its own source establishes. Most rollups
+build one artifact (``output``); one that
 builds several from a single expensive pass (e.g. the bill family, which would
 otherwise re-run its acquisition and model calls once per table) declares
 ``outputs`` instead and returns a tuple of paths from ``build()`` — each still

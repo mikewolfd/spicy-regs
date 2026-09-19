@@ -4,9 +4,11 @@
 
 **Appropriations press releases**
 
-One row per item in one appropriations committee press-release feed capture. `bill_id` and the match columns are preserved NULLs: linking a release to a bill is an interpretation seam this rollup does not yet drive. All columns are stored as VARCHAR.
+One row per item in one appropriations committee press-release feed capture. `bill_id` names the bill a release mentions, where one of the published bills in scope was named in the title or the description text. All columns are stored as VARCHAR.
 
 **Coverage.** Window. Each feed is a rotating window the publisher trims, so a single capture is only what was live that day; the table accumulates across runs and keeps every release ever captured. It does not reach back before the first capture. *(measured 2026-09-19)*
+
+**Data quality.** The bill linkage is a pattern match over the release's own words, not a publisher statement, so `matched_field` and `matched_text` carry what was matched and where: a false positive is readable from the row rather than only by re-running the matcher. One pattern is compiled per published bill in the Congresses in scope, bounded on both sides and built from the bill's own type, so a bare number matches nothing. Three states are distinct and must not be read as one: a `bill_id` with `match_rule = bill_number_in_title` or `bill_number_in_excerpt` is a match; `match_rule = unmatched` with a NULL `bill_id` means the matcher ran and no published bill was named; an all-NULL `match_rule` means no matching pass ran at all, because no `congress_bills` table was published when the rollup ran. The Senate feed carries no item description, so a Senate release can only ever match on its title.
 
 - **Parquet file:** `press_releases.parquet`
 - **Queryable via MCP `query_sql`:** Yes

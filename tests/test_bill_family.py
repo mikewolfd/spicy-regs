@@ -40,6 +40,8 @@ from spicy_regs.transforms.build_bill_family import (
     ARCHIVE_COLUMNS,
     ARCHIVES_TABLE,
     FAMILY_TABLES,
+    VOTE_REFERENCE_COLUMNS,
+    VOTE_REFERENCES_TABLE,
     build_bill_family,
     engine_stamp,
 )
@@ -235,23 +237,32 @@ def family(tmp_path, monkeypatch):
     return {path.stem: path for path in paths}
 
 
+OWN_TABLES = {ARCHIVES_TABLE: ARCHIVE_COLUMNS, VOTE_REFERENCES_TABLE: VOTE_REFERENCE_COLUMNS}
+
+
 def test_every_family_table_is_published(family):
-    expected = {contract for contract, _ in FAMILY_TABLES} | {"public_activity_events", ARCHIVES_TABLE}
+    expected = {contract for contract, _ in FAMILY_TABLES} | {"public_activity_events", *OWN_TABLES}
     assert set(family) == expected
-    assert len(family) == 14
+    assert len(family) == 15
 
 
 def test_each_published_table_matches_its_contract_schema_or_its_own(family):
-    """The thirteen contracts are spicy-docs'; the fourteenth is this transform's."""
-    assert pq.read_table(family[ARCHIVES_TABLE]).schema.names == list(ARCHIVE_COLUMNS)
+    """The thirteen contracts are spicy-docs'; the last two are this transform's."""
+    for name, columns in OWN_TABLES.items():
+        assert pq.read_table(family[name]).schema.names == list(columns), name
 
 
 def test_each_published_table_matches_its_contract_schema(family):
     for name, path in family.items():
-        if name == ARCHIVES_TABLE:
+        if name in OWN_TABLES:
             continue
         contract = TABLE_CONTRACTS[name]
         assert pq.read_table(path).schema.names == list(contract.columns), name
+
+
+def test_a_bill_with_no_recorded_votes_publishes_no_references(family):
+    """The fixture bill's two actions record no roll call, so the table is empty rather than absent."""
+    assert pq.read_table(family[VOTE_REFERENCES_TABLE]).to_pylist() == []
 
 
 def test_the_bill_and_its_printings_are_there(family):
@@ -546,6 +557,104 @@ def test_a_retained_entry_naming_another_file_does_not_wedge_the_rollup(tmp_path
     assert renamed.listings == [(119, "hr")], "and the folder listing is read exactly once"
     rows = pq.read_table(paths[ARCHIVES_TABLE]).to_pylist()
     assert {row["name"] for row in rows} == {"BILLSTATUS-119-hr.zip"}, "and the bad row is replaced"
+
+
+# --------------------------------------------------------------------------- #
+# Recorded votes: the fifteenth output, read off the bill's own actions.
+# --------------------------------------------------------------------------- #
+RECORDED_VOTES = {
+    # The Senate action (index 0 in the fixture) and the House floor action (index 1).
+    "Received in the Senate.": (
+        "Senate",
+        "2",
+        "00312",
+        "2026-06-09T20:14:02Z",
+        "https://www.senate.gov/legislative/LIS/roll_call_votes/vote1192/vote_119_2_00312.xml",
+    ),
+    "Motion to reconsider laid on the table Agreed to without objection.": (
+        "House",
+        "2",
+        "306",
+        "2026-06-08T19:48:09Z",
+        "https://clerk.house.gov/evs/2026/roll306.xml",
+    ),
+}
+
+
+def _voted_status() -> bytes:
+    """The fixture bill with one recorded vote on each of its two actions.
+
+    Derived from the fixture rather than committed beside it, the way the
+    PDF-only status is: only a `<recordedVotes>` block is added under each
+    action's `<text>`, in the guide's own element spelling, so the parser
+    reads it exactly as it reads a real BILLSTATUS. One vote per chamber, so
+    both URL grammars and both chamber spellings are exercised.
+    """
+    raw = (FIXTURES / "status-119hr6028.xml").read_text()
+    for action_text, (chamber, session, roll, date, url) in RECORDED_VOTES.items():
+        block = (
+            f"<text>{action_text}</text>\n        <recordedVotes><recordedVote>"
+            f"<chamber>{chamber}</chamber><congress>119</congress><date>{date}</date>"
+            f"<rollNumber>{roll}</rollNumber><sessionNumber>{session}</sessionNumber><url>{url}</url>"
+            f"</recordedVote></recordedVotes>"
+        )
+        assert f"<text>{action_text}</text>" in raw
+        raw = raw.replace(f"<text>{action_text}</text>", block, 1)
+    return raw.encode()
+
+
+def test_recorded_votes_on_a_bills_actions_are_published_as_references(tmp_path, scoped):
+    """Each `recordedVotes` entry becomes one row naming the bill, the roll call and the action it sat on."""
+    paths = {
+        p.stem: p
+        for p in build_bill_family(
+            tmp_path,
+            bulk_acquirer=StubBulkAcquirer(status=_voted_status()),
+            body_acquirer=StubBodyAcquirer(),
+            download_prior=_no_prior,
+        )
+    }
+    rows = pq.read_table(paths[VOTE_REFERENCES_TABLE]).to_pylist()
+    # Keyed by the action each entry sat on, because the merge publishes in
+    # identity order (chamber sorts before session), not publisher order.
+    by_action = {row["action_index"]: row for row in rows}
+    assert [
+        (by_action[i]["chamber"], by_action[i]["congress"], by_action[i]["session"], by_action[i]["roll_number"])
+        for i in ("0", "1")
+    ] == [
+        ("senate", "119", "2", "312"),
+        ("house", "119", "2", "306"),
+    ], "chamber lowercased, numbers read as integers (the Senate's leading zeros go)"
+    for row in rows:
+        assert row["bill_id"] == "119-hr-6028"
+        assert row["url"] and row["date"] and row["observed_at"] == OBSERVED_AT
+        assert row["full_action_name"] is None, "absent on every entry measured, carried because the guide documents it"
+
+
+def test_references_are_keyed_by_action_so_one_roll_call_on_two_actions_is_two_rows(tmp_path, scoped):
+    """The publisher attaches a passage vote to every floor action it settled; both are kept."""
+    house = RECORDED_VOTES["Motion to reconsider laid on the table Agreed to without objection."]
+    same_on_both = {text: house for text in RECORDED_VOTES}
+    raw = (FIXTURES / "status-119hr6028.xml").read_text()
+    for action_text, (chamber, session, roll, date, url) in same_on_both.items():
+        block = (
+            f"<text>{action_text}</text><recordedVotes><recordedVote><chamber>{chamber}</chamber>"
+            f"<congress>119</congress><date>{date}</date><rollNumber>{roll}</rollNumber>"
+            f"<sessionNumber>{session}</sessionNumber><url>{url}</url></recordedVote></recordedVotes>"
+        )
+        raw = raw.replace(f"<text>{action_text}</text>", block, 1)
+    paths = {
+        p.stem: p
+        for p in build_bill_family(
+            tmp_path,
+            bulk_acquirer=StubBulkAcquirer(status=raw.encode()),
+            body_acquirer=StubBodyAcquirer(),
+            download_prior=_no_prior,
+        )
+    }
+    rows = pq.read_table(paths[VOTE_REFERENCES_TABLE]).to_pylist()
+    assert sorted(r["action_index"] for r in rows) == ["0", "1"]
+    assert {r["roll_number"] for r in rows} == {"306"}
 
 
 # --------------------------------------------------------------------------- #

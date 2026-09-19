@@ -13,6 +13,16 @@ A fourteenth output, ``bill_family_archives``, is not a table of the family: it
 is this rollup's own processing state, one row per BILLSTATUS folder holding
 the listing entry the next run compares against (see ``ARCHIVES_TABLE``).
 
+A fifteenth, ``bill_vote_references``, is the family's own statement of which
+roll calls each bill's actions record — the ``recordedVotes`` entries, read by
+``spicy_docs.interpretation.vote_matching.recorded_vote_references`` and
+published one row per reference (see ``VOTE_REFERENCES_TABLE``). It is
+emitted here because the BILLSTATUS document is already in hand, and read by
+the ``roll-call-votes`` rollup at merge time to fill ``roll_call_votes.bill_id``
+and its match columns: that rollup joins against a published ingest output,
+which the rollup contract allows, rather than re-acquiring every bill's status
+to reach the same six fields.
+
 **Acquisition, and why it is bounded.** Bills come from the BILLSTATUS bulk
 archive — one keyless zip per ``(congress, bill_type)``, so the whole scope
 costs eight requests, and a folder whose zip has not moved since the last run
@@ -58,6 +68,12 @@ from spicy_docs.interpretation.bill_family import (
 from spicy_docs.interpretation.bill_family import build_bill_family as build_family
 from spicy_docs.interpretation.bill_summaries import summarize_bill, summarize_diff
 from spicy_docs.interpretation.section_classification import classify_sections
+from spicy_docs.interpretation.vote_matching import (
+    VoteMatchError,
+    VoteReference,
+    read_vote_key,
+    recorded_vote_references,
+)
 from spicy_docs.schemas import TABLE_CONTRACTS
 from spicy_docs.schemas.tables import bill_id as bill_key, text
 from spicy_docs.schemas.activity_events import activity_events, snapshot_from_rows
@@ -81,7 +97,7 @@ from spicy_regs.sources import r2
 from spicy_regs.sources.congress_bills import API_KEY_ENV_VARS, _resolve_api_key
 from spicy_regs.transforms.congress_scope import bill_types_from_env, congresses_from_env
 from spicy_regs.transforms.model_call import DEFAULT_MODEL, model_call, resolve_gemini_key
-from spicy_regs.transforms.table_merge import merge_contract_table, merge_table, prior_scratch_path
+from spicy_regs.transforms.table_merge import merge_contract_table, merge_table, published_table
 
 #: The DeltaTrack commit the vendored wheel was built from. ``installed_engine_stamp``
 #: reads a revision out of ``direct_url.json``, which only a git install writes;
@@ -135,6 +151,35 @@ ARCHIVE_COLUMNS: tuple[str, ...] = (
 
 #: One entry per folder, and the folder is what a run looks it up by.
 ARCHIVE_IDENTITY: tuple[str, ...] = ("congress", "bill_type")
+
+#: The roll calls each bill's own actions record, one row per ``recordedVotes``
+#: entry. Not a contract table — nothing in ``spicy_docs.schemas`` shapes it —
+#: but a published output all the same, because the votes rollup reads it.
+VOTE_REFERENCES_TABLE = "bill_vote_references"
+
+#: The six sealed fields of a recorded vote (``vote_matching.RECORDED_VOTE_FIELDS``)
+#: as the reference carries them, the action they sat on, the seventh field
+#: the guide documents and the publisher may resume sending, and the capture.
+VOTE_REFERENCE_COLUMNS: tuple[str, ...] = (
+    "bill_id",
+    "chamber",
+    "congress",
+    "session",
+    "roll_number",
+    "action_index",
+    "url",
+    "date",
+    "full_action_name",
+    "observed_at",
+)
+
+#: One row per recorded vote per action. The publisher attaches the same roll
+#: call to each floor action it settled (measured: a passage vote sits on both
+#: "On passage" and "Motion to reconsider"), so the action is part of the key.
+#: ``url``, ``date`` and ``full_action_name`` are values, not key parts:
+#: ``full_action_name`` is NULL on every entry measured, and a NULL key part
+#: would have ``merge_table`` drop the row rather than publish it.
+VOTE_REFERENCE_IDENTITY: tuple[str, ...] = ("bill_id", "chamber", "congress", "session", "roll_number", "action_index")
 
 #: The three tables ``public_activity_events`` compares between runs.
 SNAPSHOT_TABLES = ("congress_bills", "bill_versions", "bill_summaries")
@@ -347,11 +392,7 @@ class PriorIndex:
 
 def _download_prior(output_dir: Path, download_prior: Callable[[str, Path], bool]) -> dict[str, Path | None]:
     """Fetch each prior table this run reads before merging, to the path the merge reuses in place."""
-    paths: dict[str, Path | None] = {}
-    for name in (*SNAPSHOT_TABLES, ARCHIVES_TABLE):
-        path = prior_scratch_path(output_dir, name)
-        paths[name] = path if (path.exists() or download_prior(f"{name}.parquet", path)) else None
-    return paths
+    return {name: published_table(output_dir, name, download_prior) for name in (*SNAPSHOT_TABLES, ARCHIVES_TABLE)}
 
 
 def _prior_index(paths: Mapping[str, Path | None]) -> PriorIndex:
@@ -406,6 +447,57 @@ def _archive_row(entry: BulkListingEntry, *, congress: int, bill_type: str, obse
         "bill_type": text(bill_type),
         "observed_at": text(observed_at),
     }
+
+
+def _vote_reference_row(reference: VoteReference, *, full_action_name: str | None, observed_at: str | None) -> dict:
+    """One ``bill_vote_references`` row from one reference the bill's own actions carry."""
+    return {
+        "bill_id": bill_key(reference.bill),
+        "chamber": text(reference.vote.chamber),
+        "congress": text(reference.vote.congress),
+        "session": text(reference.vote.session),
+        "roll_number": text(reference.vote.roll_number),
+        "action_index": text(reference.action_index),
+        "url": text(reference.url),
+        "date": text(reference.date),
+        "full_action_name": text(full_action_name),
+        "observed_at": text(observed_at),
+    }
+
+
+def _full_action_name(action: Any, reference: VoteReference) -> str | None:
+    """The seventh, optional field of the entry ``reference`` was read from.
+
+    ``VoteReference`` carries the six sealed fields and not this one, so the
+    entry is found again on its action by the same key the reference states.
+    """
+    for entry in getattr(action, "recorded_votes", ()):
+        try:
+            if read_vote_key(entry) == reference.vote:
+                return getattr(entry, "full_action_name", None)
+        except VoteMatchError:  # an entry the reader refused has no name to give
+            continue
+    return None
+
+
+def vote_reference_rows(status: Any, *, observed_at: str | None) -> tuple[list[dict], int]:
+    """Every recorded vote on one bill's actions as rows, and how many entries were refused.
+
+    A refused entry — one missing any of the six sealed fields — costs that
+    entry, not the bill; the count is what the run log reports.
+    """
+    references = recorded_vote_references(status.identity, status.actions)
+    rows = [
+        _vote_reference_row(
+            reference,
+            full_action_name=_full_action_name(status.actions[reference.action_index], reference)
+            if reference.action_index is not None
+            else None,
+            observed_at=observed_at,
+        )
+        for reference in references.references
+    ]
+    return rows, len(references.refusals)
 
 
 def _comparison_entry(row: Mapping[str, Any]) -> BulkListingEntry | None:
@@ -572,7 +664,7 @@ def build_bill_family(
     max_version_fetches: int = MAX_VERSION_FETCHES,
     download_prior: Callable[[str, Path], bool] = r2.download,
 ) -> tuple[Path, ...]:
-    """Build all fourteen bill-family outputs; returns one path per table."""
+    """Build all fifteen bill-family outputs; returns one path per table."""
     congresses = congresses_from_env()
     bill_types = bill_types_from_env()
     logger.info("Bill family: Congresses {}, bill types {}", congresses, bill_types)
@@ -617,7 +709,8 @@ def build_bill_family(
     refusals: Counter[str] = Counter()
     touched: set[str] = set()
     archive_rows: list[dict] = []
-    bills = unchanged = skipped = archives_skipped = 0
+    vote_rows: list[dict] = []
+    bills = unchanged = skipped = archives_skipped = votes_refused = 0
     for congress in congresses:
         for bill_type in bill_types:
             acquisition = _acquire_archive(
@@ -682,6 +775,9 @@ def build_bill_family(
                 families.append(tables)
                 for refusal in tables.refusals:
                     refusals[refusal.table] += 1
+                rows, refused = vote_reference_rows(member.status, observed_at=observed_at)
+                vote_rows.extend(rows)
+                votes_refused += refused
                 touched.add(identifier)
                 bills += 1
 
@@ -708,6 +804,9 @@ def build_bill_family(
         logger.warning("Bill family: {:,} archive entries the reader refused", skipped)
     if refusals:
         logger.warning("Bill family: refusals by table — {}", dict(refusals))
+    logger.info("Bill family: {:,} recorded-vote references on this run's bills", len(vote_rows))
+    if votes_refused:
+        logger.warning("Bill family: {:,} recordedVotes entries refused for a missing sealed field", votes_refused)
 
     # 3. The thirteenth table: what changed since the last published run,
     # compared over this run's bills only — the rest cannot have changed.
@@ -734,8 +833,8 @@ def build_bill_family(
 
     paths = [publish(contract, getattr(folded, attr)) for contract, attr in FAMILY_TABLES]
     paths.append(publish("public_activity_events", events))
-    # The fourteenth output is this rollup's own processing state, not a
-    # contract table, so it goes through the same merge helper one level down.
+    # The last two outputs are this repository's own tables, not contracts, so
+    # they go through the same merge helper one level down.
     paths.append(
         merge_table(
             output_dir,
@@ -747,6 +846,18 @@ def build_bill_family(
             remote_key=f"{ARCHIVES_TABLE}.parquet",
             download_prior=download_prior,
             prior_present=prior_paths.get(ARCHIVES_TABLE) is not None,
+        )
+    )
+    paths.append(
+        merge_table(
+            output_dir,
+            name=VOTE_REFERENCES_TABLE,
+            columns=VOTE_REFERENCE_COLUMNS,
+            identity=VOTE_REFERENCE_IDENTITY,
+            version_column="observed_at",
+            rows=vote_rows,
+            remote_key=f"{VOTE_REFERENCES_TABLE}.parquet",
+            download_prior=download_prior,
         )
     )
     return tuple(paths)

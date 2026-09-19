@@ -7,11 +7,17 @@ because one expensive pass — the BILLSTATUS archives, the GovInfo printings an
 the model calls — fills all thirteen. Thirteen rollups would repeat that pass
 thirteen times.
 
-A fourteenth output, ``bill_family_archives``, rides along: it is the rollup's
-own processing state — the BILLSTATUS folder listing entry each run retains so
-the next one can prove a zip unchanged without downloading it — and it is
-published for the same reason every other output is, because the next run reads
-it back from R2.
+Two further outputs ride along, neither a contract table and both published
+for the same reason every other output is — something reads them back from R2:
+
+* ``bill_family_archives`` is the rollup's own processing state, the BILLSTATUS
+  folder listing entry each run retains so the next one can prove a zip
+  unchanged without downloading it.
+* ``bill_vote_references`` is the roll calls each bill's actions record, which
+  the ``roll-call-votes`` rollup joins against at merge time to fill
+  ``roll_call_votes.bill_id``. It is emitted here because the BILLSTATUS
+  document is already parsed in this pass; reaching the same fields inside that
+  rollup would mean re-acquiring every scoped bill's status.
 
 Scope comes from the workflow inputs ``BILL_FAMILY_CONGRESSES`` and
 ``BILL_FAMILY_BILL_TYPES``, defaulting to the current Congress and all eight
@@ -22,7 +28,12 @@ from pathlib import Path
 from typing import ClassVar
 
 from spicy_regs.pipelines.rollups.base import RollupPipeline, make_rollup_app
-from spicy_regs.transforms.build_bill_family import ARCHIVES_TABLE, FAMILY_TABLES, build_bill_family
+from spicy_regs.transforms.build_bill_family import (
+    ARCHIVES_TABLE,
+    FAMILY_TABLES,
+    VOTE_REFERENCES_TABLE,
+    build_bill_family,
+)
 
 
 class BillFamilyRollup(RollupPipeline):
@@ -33,6 +44,7 @@ class BillFamilyRollup(RollupPipeline):
     outputs: ClassVar[tuple[str, ...]] = tuple(f"{contract}.parquet" for contract, _ in FAMILY_TABLES) + (
         "public_activity_events.parquet",
         f"{ARCHIVES_TABLE}.parquet",
+        f"{VOTE_REFERENCES_TABLE}.parquet",
     )
 
     def build(self, output_dir: Path) -> tuple[Path, ...]:

@@ -24,7 +24,16 @@ from spicy_regs.pipelines.rollups.committee_reports import CommitteeReportsRollu
 from spicy_regs.pipelines.rollups.members import MembersRollup
 from spicy_regs.pipelines.rollups.press_releases import PressReleasesRollup
 from spicy_regs.pipelines.rollups.roll_call_votes import RollCallVotesRollup
-from spicy_regs.transforms.build_bill_family import ARCHIVE_COLUMNS, ARCHIVES_TABLE
+from spicy_regs.transforms.build_bill_family import (
+    ARCHIVE_COLUMNS,
+    ARCHIVES_TABLE,
+    VOTE_REFERENCE_COLUMNS,
+    VOTE_REFERENCES_TABLE,
+)
+
+#: The bill family's two published outputs that are not contract tables, each
+#: with the column tuple its transform writes.
+OWN_TABLES = {ARCHIVES_TABLE: ARCHIVE_COLUMNS, VOTE_REFERENCES_TABLE: VOTE_REFERENCE_COLUMNS}
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 WORKFLOWS = REPO_ROOT / ".github" / "workflows"
@@ -56,16 +65,17 @@ def test_an_ingesting_rollup_reads_no_base_table(rollup):
     assert rollup.inputs == ()
 
 
-def test_the_bill_family_declares_all_thirteen_plus_its_own_state():
-    assert len(BillFamilyRollup.outputs) == 14
+def test_the_bill_family_declares_all_thirteen_plus_its_own_two():
+    assert len(BillFamilyRollup.outputs) == 15
     assert BillFamilyRollup.outputs[0] == "congress_bills.parquet"
-    assert BillFamilyRollup.outputs[-1] == f"{ARCHIVES_TABLE}.parquet"
+    assert set(BillFamilyRollup.outputs[-2:]) == {f"{name}.parquet" for name in OWN_TABLES}
     # The property the freshness checker uses resolves to the first key.
     assert BillFamilyRollup(output_dir=None).output == "congress_bills.parquet"
 
 
-def test_the_archive_state_table_is_declared_once_in_each_place_that_needs_it():
-    """Its columns are this repository's, so three lists state them and none may drift.
+@pytest.mark.parametrize("table", sorted(OWN_TABLES), ids=str)
+def test_a_non_contract_output_is_declared_once_in_each_place_that_needs_it(table):
+    """Their columns are this repository's, so three lists state them and none may drift.
 
     The transform owns the tuple it writes; ``DERIVED_SCHEMAS`` is what the
     dictionary reconciles descriptions against; the MCP server lists it
@@ -74,11 +84,11 @@ def test_the_archive_state_table_is_declared_once_in_each_place_that_needs_it():
     """
     from spicy_regs import mcp_server
 
-    assert [column for column, _ in dd.DERIVED_SCHEMAS[ARCHIVES_TABLE]] == list(ARCHIVE_COLUMNS)
-    assert all(kind == "VARCHAR" for _, kind in dd.DERIVED_SCHEMAS[ARCHIVES_TABLE])
-    assert ARCHIVES_TABLE in dd.TABLES
-    assert ARCHIVES_TABLE in mcp_server.TABLES
-    assert ARCHIVES_TABLE not in dd.CONTRACT_TABLES, "it is processing state, not a hosted contract"
+    assert [column for column, _ in dd.DERIVED_SCHEMAS[table]] == list(OWN_TABLES[table])
+    assert all(kind == "VARCHAR" for _, kind in dd.DERIVED_SCHEMAS[table])
+    assert table in dd.TABLES
+    assert table in mcp_server.TABLES
+    assert table not in dd.CONTRACT_TABLES, "it is this repository's own table, not a hosted contract"
 
 
 def test_every_hosted_table_has_exactly_one_writer():
@@ -92,8 +102,8 @@ def test_every_hosted_table_has_exactly_one_writer():
         for key in _declared_keys(rollup):
             written.setdefault(key.removesuffix(".parquet"), []).append(rollup.name)
 
-    assert set(written) == set(dd.CONTRACT_TABLES) | {ARCHIVES_TABLE}, (
-        "every contract, plus the bill family's own archive state, must be published by exactly one rollup"
+    assert set(written) == set(dd.CONTRACT_TABLES) | set(OWN_TABLES), (
+        "every contract, plus the bill family's own two tables, must be published by exactly one rollup"
     )
     doubled = {table: names for table, names in written.items() if len(names) > 1}
     assert not doubled, f"tables with more than one writer: {doubled}"
