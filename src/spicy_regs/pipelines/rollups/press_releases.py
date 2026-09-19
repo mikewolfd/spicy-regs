@@ -1,4 +1,11 @@
-"""Rollup pipeline: press_releases.parquet (House and Senate appropriations feeds)."""
+"""Rollup pipeline: press_releases.parquet (House and Senate appropriations feeds).
+
+Reads the published ``congress_bills`` table best-effort at merge time to fill
+the bill linkage the feeds themselves do not carry — a ``soft_input``, so a
+run with no bills table still publishes every release with NULL match columns
+rather than failing or asserting a false ``unmatched``. Its cron runs twenty
+minutes after the bill family's for that reason.
+"""
 
 from pathlib import Path
 from typing import ClassVar
@@ -12,6 +19,7 @@ class PressReleasesRollup(RollupPipeline):
 
     name: ClassVar[str] = "press-releases"
     inputs: ClassVar[tuple[str, ...]] = ()
+    soft_inputs: ClassVar[tuple[str, ...]] = ("congress_bills.parquet",)
     output: ClassVar[str] = "press_releases.parquet"
 
     def build(self, output_dir: Path) -> Path:

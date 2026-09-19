@@ -1,0 +1,576 @@
+{
+ "source": "spicy-docs docs/research/billtrax-raw-data-2026-09-19.json, sources.rollCallReferences",
+ "observed_at": "2026-09-19T09:06:51.465165+00:00",
+ "congress": 119,
+ "bills_sampled": 20,
+ "url_hosts": {
+  "clerk.house.gov": 49,
+  "www.senate.gov": 9
+ },
+ "bills": [
+  {
+   "bill": "hr3424",
+   "votes": [
+    {
+     "chamber": "House",
+     "congress": 119,
+     "date": "2025-09-08T22:56:43Z",
+     "rollNumber": 240,
+     "sessionNumber": 1,
+     "url": "https://clerk.house.gov/evs/2025/roll240.xml"
+    },
+    {
+     "chamber": "House",
+     "congress": 119,
+     "date": "2025-09-08T22:56:43Z",
+     "rollNumber": 240,
+     "sessionNumber": 1,
+     "url": "https://clerk.house.gov/evs/2025/roll240.xml"
+    }
+   ]
+  },
+  {
+   "bill": "hr5348",
+   "votes": [
+    {
+     "chamber": "House",
+     "congress": 119,
+     "date": "2025-12-01T23:58:16Z",
+     "rollNumber": 306,
+     "sessionNumber": 1,
+     "url": "https://clerk.house.gov/evs/2025/roll306.xml"
+    },
+    {
+     "chamber": "House",
+     "congress": 119,
+     "date": "2025-12-01T23:58:16Z",
+     "rollNumber": 306,
+     "sessionNumber": 1,
+     "url": "https://clerk.house.gov/evs/2025/roll306.xml"
+    }
+   ]
+  },
+  {
+   "bill": "hr3425",
+   "votes": [
+    {
+     "chamber": "House",
+     "congress": 119,
+     "date": "2025-09-08T23:02:53Z",
+     "rollNumber": 241,
+     "sessionNumber": 1,
+     "url": "https://clerk.house.gov/evs/2025/roll241.xml"
+    },
+    {
+     "chamber": "House",
+     "congress": 119,
+     "date": "2025-09-08T23:02:53Z",
+     "rollNumber": 241,
+     "sessionNumber": 1,
+     "url": "https://clerk.house.gov/evs/2025/roll241.xml"
+    }
+   ]
+  },
+  {
+   "bill": "hr36",
+   "votes": [
+    {
+     "chamber": "House",
+     "congress": 119,
+     "date": "2025-05-05T22:59:03Z",
+     "rollNumber": 116,
+     "sessionNumber": 1,
+     "url": "https://clerk.house.gov/evs/2025/roll116.xml"
+    },
+    {
+     "chamber": "House",
+     "congress": 119,
+     "date": "2025-05-05T22:59:03Z",
+     "rollNumber": 116,
+     "sessionNumber": 1,
+     "url": "https://clerk.house.gov/evs/2025/roll116.xml"
+    }
+   ]
+  },
+  {
+   "bill": "hr276",
+   "votes": [
+    {
+     "chamber": "House",
+     "congress": 119,
+     "date": "2025-05-08T14:45:14Z",
+     "rollNumber": 122,
+     "sessionNumber": 1,
+     "url": "https://clerk.house.gov/evs/2025/roll122.xml"
+    },
+    {
+     "chamber": "House",
+     "congress": 119,
+     "date": "2025-05-08T14:45:14Z",
+     "rollNumber": 122,
+     "sessionNumber": 1,
+     "url": "https://clerk.house.gov/evs/2025/roll122.xml"
+    },
+    {
+     "chamber": "House",
+     "congress": 119,
+     "date": "2025-05-08T14:37:49Z",
+     "rollNumber": 121,
+     "sessionNumber": 1,
+     "url": "https://clerk.house.gov/evs/2025/roll121.xml"
+    }
+   ]
+  },
+  {
+   "bill": "sjres18",
+   "votes": [
+    {
+     "chamber": "House",
+     "congress": 119,
+     "date": "2025-04-09T20:26:08Z",
+     "rollNumber": 96,
+     "sessionNumber": 1,
+     "url": "https://clerk.house.gov/evs/2025/roll096.xml"
+    },
+    {
+     "chamber": "House",
+     "congress": 119,
+     "date": "2025-04-09T20:26:08Z",
+     "rollNumber": 96,
+     "sessionNumber": 1,
+     "url": "https://clerk.house.gov/evs/2025/roll096.xml"
+    },
+    {
+     "chamber": "Senate",
+     "congress": 119,
+     "date": "2025-03-27T16:22:12Z",
+     "rollNumber": 153,
+     "sessionNumber": 1,
+     "url": "https://www.senate.gov/legislative/LIS/roll_call_votes/vote1191/vote_119_1_00153.xml"
+    },
+    {
+     "chamber": "Senate",
+     "congress": 119,
+     "date": "2025-03-27T16:22:12Z",
+     "rollNumber": 153,
+     "sessionNumber": 1,
+     "url": "https://www.senate.gov/legislative/LIS/roll_call_votes/vote1191/vote_119_1_00153.xml"
+    },
+    {
+     "chamber": "Senate",
+     "congress": 119,
+     "date": "2025-03-27T01:09:46Z",
+     "rollNumber": 152,
+     "sessionNumber": 1,
+     "url": "https://www.senate.gov/legislative/LIS/roll_call_votes/vote1191/vote_119_1_00152.xml"
+    }
+   ]
+  },
+  {
+   "bill": "hr4423",
+   "votes": [
+    {
+     "chamber": "House",
+     "congress": 119,
+     "date": "2025-12-02T00:05:22Z",
+     "rollNumber": 307,
+     "sessionNumber": 1,
+     "url": "https://clerk.house.gov/evs/2025/roll307.xml"
+    },
+    {
+     "chamber": "House",
+     "congress": 119,
+     "date": "2025-12-02T00:05:22Z",
+     "rollNumber": 307,
+     "sessionNumber": 1,
+     "url": "https://clerk.house.gov/evs/2025/roll307.xml"
+    }
+   ]
+  },
+  {
+   "bill": "hres1075",
+   "votes": [
+    {
+     "chamber": "House",
+     "congress": 119,
+     "date": "2026-02-24T19:19:19Z",
+     "rollNumber": 74,
+     "sessionNumber": 2,
+     "url": "https://clerk.house.gov/evs/2026/roll074.xml"
+    },
+    {
+     "chamber": "House",
+     "congress": 119,
+     "date": "2026-02-24T19:19:19Z",
+     "rollNumber": 74,
+     "sessionNumber": 2,
+     "url": "https://clerk.house.gov/evs/2026/roll074.xml"
+    },
+    {
+     "chamber": "House",
+     "congress": 119,
+     "date": "2026-02-24T19:11:58Z",
+     "rollNumber": 73,
+     "sessionNumber": 2,
+     "url": "https://clerk.house.gov/evs/2026/roll073.xml"
+    }
+   ]
+  },
+  {
+   "bill": "s2503",
+   "votes": [
+    {
+     "chamber": "House",
+     "congress": 119,
+     "date": "2026-02-24T19:05:16Z",
+     "rollNumber": 72,
+     "sessionNumber": 2,
+     "url": "https://clerk.house.gov/evs/2026/roll072.xml"
+    },
+    {
+     "chamber": "House",
+     "congress": 119,
+     "date": "2026-02-24T19:05:16Z",
+     "rollNumber": 72,
+     "sessionNumber": 2,
+     "url": "https://clerk.house.gov/evs/2026/roll072.xml"
+    }
+   ]
+  },
+  {
+   "bill": "hres682",
+   "votes": [
+    {
+     "chamber": "House",
+     "congress": 119,
+     "date": "2025-09-09T18:10:39Z",
+     "rollNumber": 243,
+     "sessionNumber": 1,
+     "url": "https://clerk.house.gov/evs/2025/roll243.xml"
+    },
+    {
+     "chamber": "House",
+     "congress": 119,
+     "date": "2025-09-09T18:10:39Z",
+     "rollNumber": 243,
+     "sessionNumber": 1,
+     "url": "https://clerk.house.gov/evs/2025/roll243.xml"
+    },
+    {
+     "chamber": "House",
+     "congress": 119,
+     "date": "2025-09-09T18:01:40Z",
+     "rollNumber": 242,
+     "sessionNumber": 1,
+     "url": "https://clerk.house.gov/evs/2025/roll242.xml"
+    }
+   ]
+  },
+  {
+   "bill": "hr6329",
+   "votes": [
+    {
+     "chamber": "House",
+     "congress": 119,
+     "date": "2026-02-24T18:57:49Z",
+     "rollNumber": 71,
+     "sessionNumber": 2,
+     "url": "https://clerk.house.gov/evs/2026/roll071.xml"
+    },
+    {
+     "chamber": "House",
+     "congress": 119,
+     "date": "2026-02-24T18:57:49Z",
+     "rollNumber": 71,
+     "sessionNumber": 2,
+     "url": "https://clerk.house.gov/evs/2026/roll071.xml"
+    }
+   ]
+  },
+  {
+   "bill": "hres916",
+   "votes": [
+    {
+     "chamber": "House",
+     "congress": 119,
+     "date": "2025-12-02T20:02:08Z",
+     "rollNumber": 309,
+     "sessionNumber": 1,
+     "url": "https://clerk.house.gov/evs/2025/roll309.xml"
+    },
+    {
+     "chamber": "House",
+     "congress": 119,
+     "date": "2025-12-02T20:02:08Z",
+     "rollNumber": 309,
+     "sessionNumber": 1,
+     "url": "https://clerk.house.gov/evs/2025/roll309.xml"
+    },
+    {
+     "chamber": "House",
+     "congress": 119,
+     "date": "2025-12-02T19:00:27Z",
+     "rollNumber": 308,
+     "sessionNumber": 1,
+     "url": "https://clerk.house.gov/evs/2025/roll308.xml"
+    }
+   ]
+  },
+  {
+   "bill": "hr4758",
+   "votes": [
+    {
+     "chamber": "House",
+     "congress": 119,
+     "date": "2026-02-25T15:40:38Z",
+     "rollNumber": 78,
+     "sessionNumber": 2,
+     "url": "https://clerk.house.gov/evs/2026/roll078.xml"
+    },
+    {
+     "chamber": "House",
+     "congress": 119,
+     "date": "2026-02-25T15:40:38Z",
+     "rollNumber": 78,
+     "sessionNumber": 2,
+     "url": "https://clerk.house.gov/evs/2026/roll078.xml"
+    },
+    {
+     "chamber": "House",
+     "congress": 119,
+     "date": "2026-02-25T15:29:02Z",
+     "rollNumber": 77,
+     "sessionNumber": 2,
+     "url": "https://clerk.house.gov/evs/2026/roll077.xml"
+    }
+   ]
+  },
+  {
+   "bill": "hconres14",
+   "votes": [
+    {
+     "chamber": "House",
+     "congress": 119,
+     "date": "2025-04-10T15:11:09Z",
+     "rollNumber": 100,
+     "sessionNumber": 1,
+     "url": "https://clerk.house.gov/evs/2025/roll100.xml"
+    },
+    {
+     "chamber": "House",
+     "congress": 119,
+     "date": "2025-04-10T15:11:09Z",
+     "rollNumber": 100,
+     "sessionNumber": 1,
+     "url": "https://clerk.house.gov/evs/2025/roll100.xml"
+    },
+    {
+     "chamber": "Senate",
+     "congress": 119,
+     "date": "2025-04-05T06:38:29Z",
+     "rollNumber": 191,
+     "sessionNumber": 1,
+     "url": "https://www.senate.gov/legislative/LIS/roll_call_votes/vote1191/vote_119_1_00191.xml"
+    },
+    {
+     "chamber": "Senate",
+     "congress": 119,
+     "date": "2025-04-05T06:38:29Z",
+     "rollNumber": 191,
+     "sessionNumber": 1,
+     "url": "https://www.senate.gov/legislative/LIS/roll_call_votes/vote1191/vote_119_1_00191.xml"
+    },
+    {
+     "chamber": "Senate",
+     "congress": 119,
+     "date": "2025-04-03T23:27:59Z",
+     "rollNumber": 169,
+     "sessionNumber": 1,
+     "url": "https://www.senate.gov/legislative/LIS/roll_call_votes/vote1191/vote_119_1_00169.xml"
+    },
+    {
+     "chamber": "House",
+     "congress": 119,
+     "date": "2025-02-26T01:22:05Z",
+     "rollNumber": 50,
+     "sessionNumber": 1,
+     "url": "https://clerk.house.gov/evs/2025/roll050.xml"
+    },
+    {
+     "chamber": "House",
+     "congress": 119,
+     "date": "2025-02-26T01:22:05Z",
+     "rollNumber": 50,
+     "sessionNumber": 1,
+     "url": "https://clerk.house.gov/evs/2025/roll050.xml"
+    }
+   ]
+  },
+  {
+   "bill": "hr22",
+   "votes": [
+    {
+     "chamber": "House",
+     "congress": 119,
+     "date": "2025-04-10T15:23:50Z",
+     "rollNumber": 102,
+     "sessionNumber": 1,
+     "url": "https://clerk.house.gov/evs/2025/roll102.xml"
+    },
+    {
+     "chamber": "House",
+     "congress": 119,
+     "date": "2025-04-10T15:23:50Z",
+     "rollNumber": 102,
+     "sessionNumber": 1,
+     "url": "https://clerk.house.gov/evs/2025/roll102.xml"
+    },
+    {
+     "chamber": "House",
+     "congress": 119,
+     "date": "2025-04-10T15:17:00Z",
+     "rollNumber": 101,
+     "sessionNumber": 1,
+     "url": "https://clerk.house.gov/evs/2025/roll101.xml"
+    }
+   ]
+  },
+  {
+   "bill": "hjres78",
+   "votes": [
+    {
+     "chamber": "House",
+     "congress": 119,
+     "date": "2025-05-01T14:22:45Z",
+     "rollNumber": 113,
+     "sessionNumber": 1,
+     "url": "https://clerk.house.gov/evs/2025/roll113.xml"
+    },
+    {
+     "chamber": "House",
+     "congress": 119,
+     "date": "2025-05-01T14:22:45Z",
+     "rollNumber": 113,
+     "sessionNumber": 1,
+     "url": "https://clerk.house.gov/evs/2025/roll113.xml"
+    }
+   ]
+  },
+  {
+   "bill": "hjres88",
+   "votes": [
+    {
+     "chamber": "Senate",
+     "congress": 119,
+     "date": "2025-05-22T15:11:45Z",
+     "rollNumber": 277,
+     "sessionNumber": 1,
+     "url": "https://www.senate.gov/legislative/LIS/roll_call_votes/vote1191/vote_119_1_00277.xml"
+    },
+    {
+     "chamber": "Senate",
+     "congress": 119,
+     "date": "2025-05-22T15:11:45Z",
+     "rollNumber": 277,
+     "sessionNumber": 1,
+     "url": "https://www.senate.gov/legislative/LIS/roll_call_votes/vote1191/vote_119_1_00277.xml"
+    },
+    {
+     "chamber": "Senate",
+     "congress": 119,
+     "date": "2025-05-22T03:37:31Z",
+     "rollNumber": 276,
+     "sessionNumber": 1,
+     "url": "https://www.senate.gov/legislative/LIS/roll_call_votes/vote1191/vote_119_1_00276.xml"
+    },
+    {
+     "chamber": "House",
+     "congress": 119,
+     "date": "2025-05-01T14:39:11Z",
+     "rollNumber": 114,
+     "sessionNumber": 1,
+     "url": "https://clerk.house.gov/evs/2025/roll114.xml"
+    },
+    {
+     "chamber": "House",
+     "congress": 119,
+     "date": "2025-05-01T14:39:11Z",
+     "rollNumber": 114,
+     "sessionNumber": 1,
+     "url": "https://clerk.house.gov/evs/2025/roll114.xml"
+    }
+   ]
+  },
+  {
+   "bill": "hr530",
+   "votes": [
+    {
+     "chamber": "House",
+     "congress": 119,
+     "date": "2025-05-05T22:52:14Z",
+     "rollNumber": 115,
+     "sessionNumber": 1,
+     "url": "https://clerk.house.gov/evs/2025/roll115.xml"
+    },
+    {
+     "chamber": "House",
+     "congress": 119,
+     "date": "2025-05-05T22:52:14Z",
+     "rollNumber": 115,
+     "sessionNumber": 1,
+     "url": "https://clerk.house.gov/evs/2025/roll115.xml"
+    }
+   ]
+  },
+  {
+   "bill": "hres377",
+   "votes": [
+    {
+     "chamber": "House",
+     "congress": 119,
+     "date": "2025-05-06T18:02:52Z",
+     "rollNumber": 118,
+     "sessionNumber": 1,
+     "url": "https://clerk.house.gov/evs/2025/roll118.xml"
+    },
+    {
+     "chamber": "House",
+     "congress": 119,
+     "date": "2025-05-06T18:02:52Z",
+     "rollNumber": 118,
+     "sessionNumber": 1,
+     "url": "https://clerk.house.gov/evs/2025/roll118.xml"
+    },
+    {
+     "chamber": "House",
+     "congress": 119,
+     "date": "2025-05-06T17:55:17Z",
+     "rollNumber": 117,
+     "sessionNumber": 1,
+     "url": "https://clerk.house.gov/evs/2025/roll117.xml"
+    }
+   ]
+  },
+  {
+   "bill": "hr1503",
+   "votes": [
+    {
+     "chamber": "House",
+     "congress": 119,
+     "date": "2025-05-07T21:27:00Z",
+     "rollNumber": 119,
+     "sessionNumber": 1,
+     "url": "https://clerk.house.gov/evs/2025/roll119.xml"
+    },
+    {
+     "chamber": "House",
+     "congress": 119,
+     "date": "2025-05-07T21:27:00Z",
+     "rollNumber": 119,
+     "sessionNumber": 1,
+     "url": "https://clerk.house.gov/evs/2025/roll119.xml"
+    }
+   ]
+  }
+ ]
+}

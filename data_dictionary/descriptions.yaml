@@ -998,9 +998,31 @@ tables:
     measured_on: "2026-09-19"
     summary: >-
       One row per item in one appropriations committee press-release feed capture.
-      `bill_id` and the match columns are preserved NULLs: linking a release to a
-      bill is an interpretation seam this rollup does not yet drive. All columns are
+      `bill_id` names the bill a release mentions, where one of the published bills
+      in scope was named in the title or the description text. All columns are
       stored as VARCHAR.
+    data_quality: >-
+      The bill linkage is a pattern match over the release's own words, not a
+      publisher statement, so `matched_field` and `matched_text` carry what was
+      matched and where: a false positive is readable from the row rather than only
+      by re-running the matcher. One pattern is compiled per published bill in the
+      Congresses in scope, bounded on both sides and built from the bill's own type,
+      so a bare number matches nothing. Three states are distinct and must not be
+      read as one: a `bill_id` with `match_rule = bill_number_in_title` or
+      `bill_number_in_excerpt` is a match; `match_rule = unmatched` with a NULL
+      `bill_id` means the matcher ran and no published bill was named; an all-NULL
+      `match_rule` means no matching pass ran at all, because no `congress_bills`
+      table was published when the rollup ran, or none was published for that
+      release's Congress, or the release states no readable `pub_date` to scope by.
+      The Senate feed carries no item description, so a Senate release can only ever
+      match on its title.
+      One consequence worth knowing before relying on these four columns: a run that
+      cannot read `congress_bills` republishes the whole live window with NULL match
+      columns, because this table merges row-wise and a fresh row wins whole. The
+      next run that can read it re-derives them for every release still in the feed,
+      so the gap normally lasts one cycle — but a release that rotates off the feed
+      during that cycle keeps the NULL permanently. The other publisher columns are
+      unaffected; only these four degrade.
     columns_from: spicy_docs
 
   roll_call_votes:
@@ -1013,17 +1035,30 @@ tables:
       so a steady-state run reads only new ones plus the newest few, which are
       re-read in case the publisher corrected them. The Senate's roll calls are not
       published at all rather than published with empty tallies — there is no Senate
-      route in the reader this rollup uses. The bill linkage comes from the
-      Congress.gov `house-vote` route alone: the other source the design names, the
-      `recordedVotes` entries on a bill's actions, would reach Senate votes and
-      per-action linkage but arrives with BILLSTATUS, which belongs to a different
-      rollup, and a rollup may not read another's output — so it is not wired and
-      `match_rule` never carries that rule.
+      index route in the reader this rollup uses, and a set of Senate roll calls
+      reached from bills is not an index of a session's roll calls. A House roll
+      call that a bill's own action names can be published a cron before the
+      Congress.gov vote index lists it, since the two linkage sources are read
+      independently and the Clerk file is addressable from the roll-call key alone;
+      such a row carries the same tally and member positions as any other, so this
+      widens timeliness rather than the coverage claim.
     measured_on: "2026-09-19"
     summary: >-
       One row per roll call: the publisher's own tally, and the bill it refers to.
       The four tally columns are the publisher's own counts or they are NULL; they
       are never zero-filled. All columns are stored as VARCHAR.
+    data_quality: >-
+      The bill linkage has two publisher sources and `match_rule` says which one
+      answered. `bill_action_recorded_vote` is a `recordedVotes` entry on the bill's
+      own action, read from `bill_vote_references`; `house_vote_legislation` is the
+      `house-vote` listing's own `legislationType`/`legislationNumber`. The first
+      wins a disagreement, because a recorded vote sits on the bill's own action
+      while the listing states a fact about the roll call from outside it.
+      `conflict_count` is per roll call, not per run: it counts the later references
+      that named a different bill for *this* roll call, and they are kept rather
+      than dropped. `match_action_index` is set only on a recorded-vote match, since
+      a listing reference sits on no action. With no bill-family run published, the
+      listing linkage alone fills these columns.
     columns_from: spicy_docs
 
   member_votes:
@@ -1085,9 +1120,21 @@ tables:
       which an extractor paginates.
     measured_on: "2026-09-19"
     summary: >-
-      One row per captured GovInfo committee report package. `bill_id` is a
-      preserved NULL: a package-keyed report is fillable today, the bill linkage is
-      not. All columns are stored as VARCHAR.
+      One row per captured GovInfo committee report package. `bill_id` is the
+      measure the report accompanies, read from the package's own MODS metadata. All
+      columns are stored as VARCHAR.
+    data_quality: >-
+      `bill_id` is the publisher's own statement, not a guess from the title: a
+      GovInfo MODS names each related bill with a `context` attribute, and only
+      `PRIMARY` — the measure a report accompanies — fills this column. `OTHER`,
+      `COVER` and `BODY` are mentions and are deliberately not published, so a
+      report that merely discusses a bill is not linked to it; the column that would
+      carry them does not exist in the contract. Measured 2026-09-19 over the twelve
+      newest reports of the 119th Congress, the MODS `PRIMARY` bill agreed with
+      Congress.gov's own `associatedBill[0]` on 12 of 12, with every request and raw
+      response retained under
+      `~/Work/corpora/supply-2026-09-02/receipts/report-bill-linkage-2026-09-19/`.
+      A report whose MODS names no `PRIMARY` bill publishes a NULL.
     columns_from: spicy_docs
 
   report_sections:
@@ -1114,8 +1161,21 @@ tables:
       body states a page boundary, so only the PDF fallback has one.
     measured_on: "2026-09-19"
     summary: >-
-      One row per captured GovInfo hearing transcript package. `bill_id` is a
-      preserved NULL for the same reason. All columns are stored as VARCHAR.
+      One row per captured GovInfo hearing transcript package. `bill_id` is read the
+      same way as on `committee_reports` and is NULL in practice. All columns are
+      stored as VARCHAR.
+    data_quality: >-
+      `bill_id` is filled from the package's MODS `PRIMARY` bill, exactly as on
+      `committee_reports`, but a hearing does not accompany a measure the way a
+      report does: measured 2026-09-19 over 50 distinct hearings of the 119th
+      Congress, no CHRG MODS carried a `PRIMARY` bill at all. Ten carried `BODY` or
+      `COVER` mentions — bills the transcript cites, 31 entries in all — and those are not
+      promoted to a linkage, because publishing a cited bill as the hearing's
+      subject would be a guess stated as a fact. Of the twelve hearings whose
+      Congress.gov detail named a committee meeting, none of those meetings listed a
+      related bill either. So expect this column to be NULL. The measurement is
+      retained with every request and raw response under
+      `~/Work/corpora/supply-2026-09-02/receipts/report-bill-linkage-2026-09-19/`.
     columns_from: spicy_docs
 
   bill_family_archives:
@@ -1148,3 +1208,43 @@ tables:
       congress: "The numbered Congress whose folder this entry describes."
       bill_type: "The publisher's lowercase bill-type folder name (hr, s, hjres, sjres, hconres, sconres, hres, sres)."
       observed_at: "When this run captured the listing the entry was read from."
+
+  bill_vote_references:
+    label: "Bill vote references"
+    coverage: >-
+      Not a range. A linkage index, not published data about roll calls: one row per
+      `recordedVotes` entry on the actions of each bill the `bill-family` rollup
+      rebuilt, so it covers exactly the bills that rollup is scoped to and reaches
+      back only as far as its runs have. The publisher attaches the same roll call to
+      every floor action it settled, so the same roll call appears on several rows of
+      one bill; measured over 20 bills of the 119th Congress on 2026-09-19, 58
+      entries resolved to 34 distinct roll calls. It describes what bills state about
+      votes, not the population of votes, so no coverage range applies to it.
+    measured_on: "2026-09-19"
+    data_quality: >-
+      Every row is a publisher statement copied without interpretation: the six
+      fields a `recordedVotes` entry carries, plus the position of the action it sat
+      on. An entry missing any of the six is refused and counted in the run log
+      rather than published with a hole in it. `full_action_name` is a seventh field
+      the BILLSTATUS user guide documents that the publisher was not sending on any
+      of the 58 entries measured; it is carried because the publisher may resume
+      sending it. Both chambers appear here — 6 of the 34 measured roll calls were
+      Senate — even though `roll_call_votes` publishes House roll calls only, so a
+      Senate row here is a linkage for a vote this pipeline does not yet host. All
+      columns are stored as VARCHAR.
+    summary: >-
+      One row per recorded vote on one bill action: which roll call the bill's own
+      actions say settled it. Read by the `roll-call-votes` rollup to fill
+      `roll_call_votes.bill_id` and its match columns. All columns are stored as
+      VARCHAR.
+    columns:
+      bill_id: "The bill whose action carried this entry, keyed as every bill table keys it."
+      chamber: "The chamber that took the roll call, lowercased (house, senate)."
+      congress: "The numbered Congress the roll call belongs to."
+      session: "The session number within that Congress, from the entry's sessionNumber."
+      roll_number: "The roll-call number within that session, from the entry's rollNumber."
+      action_index: "Position of the action this entry sat on, in the publisher's own action order."
+      url: "The publisher's URL for the roll call: a House Clerk EVS file or a Senate LIS vote page."
+      date: "The instant the entry states for the vote."
+      full_action_name: "The guide's seventh field, absent on every entry measured; NULL where the publisher sends none."
+      observed_at: "When the bill-family run that read this entry captured the BILLSTATUS document."

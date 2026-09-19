@@ -19,12 +19,23 @@ import yaml
 
 from spicy_regs import data_dictionary as dd
 from spicy_regs.pipelines.rollups.amendments import AmendmentsRollup
+from spicy_regs.pipelines.rollups.base import RollupPipeline
 from spicy_regs.pipelines.rollups.bill_family import BillFamilyRollup
 from spicy_regs.pipelines.rollups.committee_reports import CommitteeReportsRollup
+from spicy_regs.pipelines.rollups.congress_bills import CongressBillsRollup
 from spicy_regs.pipelines.rollups.members import MembersRollup
 from spicy_regs.pipelines.rollups.press_releases import PressReleasesRollup
 from spicy_regs.pipelines.rollups.roll_call_votes import RollCallVotesRollup
-from spicy_regs.transforms.build_bill_family import ARCHIVE_COLUMNS, ARCHIVES_TABLE
+from spicy_regs.transforms.build_bill_family import (
+    ARCHIVE_COLUMNS,
+    ARCHIVES_TABLE,
+    VOTE_REFERENCE_COLUMNS,
+    VOTE_REFERENCES_TABLE,
+)
+
+#: The bill family's two published outputs that are not contract tables, each
+#: with the column tuple its transform writes.
+OWN_TABLES = {ARCHIVES_TABLE: ARCHIVE_COLUMNS, VOTE_REFERENCES_TABLE: VOTE_REFERENCE_COLUMNS}
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 WORKFLOWS = REPO_ROOT / ".github" / "workflows"
@@ -51,21 +62,90 @@ def test_every_output_is_a_published_table(rollup):
 
 
 @pytest.mark.parametrize("rollup", HOSTED_ROLLUPS, ids=lambda r: r.name)
-def test_an_ingesting_rollup_reads_no_base_table(rollup):
-    """These fetch from a publisher; reading another rollup's output would race it."""
+def test_an_ingesting_rollup_primes_no_base_table(rollup):
+    """These fetch from a publisher, so nothing is primed and nothing is fatal on absence.
+
+    This says only that the rollup declares no hard ``inputs``. It deliberately
+    does **not** stand in for "reads nothing else": two of these do read a
+    published table at merge time, and they satisfy an ``inputs == ()``
+    assertion by construction while doing it. What makes those reads safe is
+    checked in ``test_a_soft_input_is_an_ingest_output_its_writer_produces_first``,
+    against the ``soft_inputs`` they must declare.
+    """
     assert rollup.inputs == ()
 
 
-def test_the_bill_family_declares_all_thirteen_plus_its_own_state():
-    assert len(BillFamilyRollup.outputs) == 14
+#: Every rollup that publishes a table, so a soft input can be traced to its writer.
+ALL_ROLLUPS = (*HOSTED_ROLLUPS, CongressBillsRollup)
+
+
+def _cron_minutes(workflow: Path) -> int:
+    """The daily minute-of-day the workflow's schedule fires at."""
+    crons = re.findall(r"cron: '(\d+) (\d+) \* \* \*'", workflow.read_text())
+    assert len(crons) == 1, f"{workflow.name} declares {len(crons)} daily crons, expected 1"
+    minute, hour = (int(part) for part in crons[0])
+    return hour * 60 + minute
+
+
+def _writers_of(remote_key: str) -> list[type[RollupPipeline]]:
+    return [rollup for rollup in ALL_ROLLUPS if remote_key in (rollup.outputs or (rollup.output,))]
+
+
+@pytest.mark.parametrize(
+    ("rollup", "soft_input"),
+    [(rollup, key) for rollup in HOSTED_ROLLUPS for key in rollup.soft_inputs],
+    ids=lambda value: value if isinstance(value, str) else value.name,
+)
+def test_a_soft_input_is_an_ingest_output_its_writer_produces_first(rollup, soft_input):
+    """The two things that make a merge-time read of a published table safe.
+
+    The rollup contract (``pipelines/rollups/base.py``) permits reading an
+    *ingest* rollup's output — one with no upstream dependency inside this
+    repository, so a stale copy costs one cron's lag rather than racing — and
+    forbids reading a derived rollup's. Both halves are checked here rather
+    than asserted in prose: the writer ingests (declares no ``inputs``), and
+    this rollup's cron **fires after** the writer's on the same day.
+
+    Start order is all this asserts, and all a cron can give. It is not a
+    guarantee that the writer has *finished*: the bill family's workflow
+    budgets 180 minutes and these readers start 20 and 60 minutes after it, so
+    a long family run is still writing when they begin, and they read the
+    previous run's output. That is the ordering preference the rollup contract
+    describes, not a barrier — which is exactly why both reads are
+    ``soft_inputs``, tolerant of an absent or older table, rather than
+    ``inputs``.
+    """
+    writers = _writers_of(soft_input)
+    assert writers, f"{soft_input} is declared a soft input but no rollup publishes it"
+
+    reader_at = _cron_minutes(WORKFLOWS / f"rollup-{rollup.name}.yml")
+    earlier = []
+    for writer in writers:
+        assert writer.inputs == (), (
+            f"{soft_input} is written by {writer.name}, which reads base tables — "
+            "a derived rollup's output may not be a soft input"
+        )
+        writer_at = _cron_minutes(WORKFLOWS / f"rollup-{writer.name}.yml")
+        if writer_at < reader_at:
+            earlier.append((writer.name, reader_at - writer_at))
+
+    assert earlier, (
+        f"rollup-{rollup.name} reads {soft_input} but every writer of it "
+        f"({[w.name for w in writers]}) fires later in the day, so it always reads yesterday's"
+    )
+
+
+def test_the_bill_family_declares_all_thirteen_plus_its_own_two():
+    assert len(BillFamilyRollup.outputs) == 15
     assert BillFamilyRollup.outputs[0] == "congress_bills.parquet"
-    assert BillFamilyRollup.outputs[-1] == f"{ARCHIVES_TABLE}.parquet"
+    assert set(BillFamilyRollup.outputs[-2:]) == {f"{name}.parquet" for name in OWN_TABLES}
     # The property the freshness checker uses resolves to the first key.
     assert BillFamilyRollup(output_dir=None).output == "congress_bills.parquet"
 
 
-def test_the_archive_state_table_is_declared_once_in_each_place_that_needs_it():
-    """Its columns are this repository's, so three lists state them and none may drift.
+@pytest.mark.parametrize("table", sorted(OWN_TABLES), ids=str)
+def test_a_non_contract_output_is_declared_once_in_each_place_that_needs_it(table):
+    """Their columns are this repository's, so three lists state them and none may drift.
 
     The transform owns the tuple it writes; ``DERIVED_SCHEMAS`` is what the
     dictionary reconciles descriptions against; the MCP server lists it
@@ -74,11 +154,11 @@ def test_the_archive_state_table_is_declared_once_in_each_place_that_needs_it():
     """
     from spicy_regs import mcp_server
 
-    assert [column for column, _ in dd.DERIVED_SCHEMAS[ARCHIVES_TABLE]] == list(ARCHIVE_COLUMNS)
-    assert all(kind == "VARCHAR" for _, kind in dd.DERIVED_SCHEMAS[ARCHIVES_TABLE])
-    assert ARCHIVES_TABLE in dd.TABLES
-    assert ARCHIVES_TABLE in mcp_server.TABLES
-    assert ARCHIVES_TABLE not in dd.CONTRACT_TABLES, "it is processing state, not a hosted contract"
+    assert [column for column, _ in dd.DERIVED_SCHEMAS[table]] == list(OWN_TABLES[table])
+    assert all(kind == "VARCHAR" for _, kind in dd.DERIVED_SCHEMAS[table])
+    assert table in dd.TABLES
+    assert table in mcp_server.TABLES
+    assert table not in dd.CONTRACT_TABLES, "it is this repository's own table, not a hosted contract"
 
 
 def test_every_hosted_table_has_exactly_one_writer():
@@ -92,8 +172,8 @@ def test_every_hosted_table_has_exactly_one_writer():
         for key in _declared_keys(rollup):
             written.setdefault(key.removesuffix(".parquet"), []).append(rollup.name)
 
-    assert set(written) == set(dd.CONTRACT_TABLES) | {ARCHIVES_TABLE}, (
-        "every contract, plus the bill family's own archive state, must be published by exactly one rollup"
+    assert set(written) == set(dd.CONTRACT_TABLES) | set(OWN_TABLES), (
+        "every contract, plus the bill family's own two tables, must be published by exactly one rollup"
     )
     doubled = {table: names for table, names in written.items() if len(names) > 1}
     assert not doubled, f"tables with more than one writer: {doubled}"

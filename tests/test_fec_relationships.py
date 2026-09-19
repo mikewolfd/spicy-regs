@@ -63,7 +63,9 @@ def test_empty_observations_are_not_edges(field, value, status):
 @pytest.mark.parametrize("field", ["candidate_ids", "sponsor_candidate_ids", "sponsor_candidate_list"])
 @pytest.mark.parametrize("state", ["missing_field", "null", "empty_list"])
 def test_every_source_array_has_an_explicit_absence_observation(field, state):
-    source = {"committee_id": "C00812388"}
+    # Not dict[str, str]: the point of this case is the three shapes an array
+    # field arrives in — absent, null and empty — so the value type is a union.
+    source: dict[str, object] = {"committee_id": "C00812388"}
     if state != "missing_field":
         source[field] = None if state == "null" else []
     rows = list(api_relationships(source, evidence=REF))

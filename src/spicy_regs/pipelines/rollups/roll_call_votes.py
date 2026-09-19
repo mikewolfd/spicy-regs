@@ -3,6 +3,12 @@
 Two outputs from one pass: the roll calls and the per-member positions come
 out of the same House Clerk walk, so splitting them into two rollups would
 fetch every roll call twice.
+
+Reads the bill family's published ``bill_vote_references`` best-effort at
+merge time for the second of its two linkage sources — a ``soft_input``, so a
+run with no family output still publishes every roll call the House listing
+names, linked by the listing's own statement. Its cron runs an hour after the
+family's for that reason.
 """
 
 from pathlib import Path
@@ -17,6 +23,7 @@ class RollCallVotesRollup(RollupPipeline):
 
     name: ClassVar[str] = "roll-call-votes"
     inputs: ClassVar[tuple[str, ...]] = ()
+    soft_inputs: ClassVar[tuple[str, ...]] = ("bill_vote_references.parquet",)
     outputs: ClassVar[tuple[str, ...]] = ("roll_call_votes.parquet", "member_votes.parquet")
 
     def build(self, output_dir: Path) -> tuple[Path, ...]:

@@ -29,9 +29,37 @@ itself. The PDF cleanup record is processing provenance and is not
 published here — ``bill_versions`` is the table that carries it, for the
 printings where it changes the text people read.
 
-``bill_id`` is a preserved NULL on both package tables. A package-keyed report
-is fillable today; joining it to the bill it reports on is not, and the
-contract says so rather than guessing from a title.
+**``bill_id`` is read from the package's own MODS**, which the acquirer already
+fetches to prove the package's identity, so the linkage costs no request. A
+GovInfo MODS names the bills a package relates to as
+``<extension><bill congress type number context/>``, and ``context`` is the
+publisher's own statement of how: ``PRIMARY`` is the measure a report
+accompanies, ``OTHER``, ``COVER`` and ``BODY`` are measures it mentions.
+Only ``PRIMARY`` fills the column. Measured live 2026-09-19 on the twelve
+newest reports the Congress.gov ``committee-report/119`` route lists, the
+MODS ``PRIMARY`` bill agreed with the route's own ``associatedBill[0]`` on 12
+of 12 — the same edge the legislative data map resolved 17 of 17 — at one
+keyed detail request per report that this design does not make. Over 50
+distinct hearings from the ``hearing/119`` route, no CHRG MODS carried a
+``PRIMARY`` bill (10 carried ``BODY``/``COVER`` mentions, 31 entries in all),
+and of the 12 whose detail named a committee meeting none of those meetings'
+``relatedItems.bills`` named a bill, so ``hearing_transcripts.bill_id`` is NULL
+in practice and the ``hearing -> meeting -> bill`` chain, at two keyed
+requests per hearing, is not walked. A mention is never promoted to a linkage:
+publishing H.R. 1 as the bill of a hearing that cites it would be a guess
+dressed as a fact. The mentions are counted in the run log. Both measurements
+are retained with every request and raw response at
+``~/Work/corpora/supply-2026-09-02/receipts/report-bill-linkage-2026-09-19/``.
+
+**Two things requested from spicy-docs**, neither added here, because this
+repository does not restate a published shape or a source rule it does not
+own. First, the MODS accessors noted above ``PRIMARY_BILL_CONTEXT``, so the
+rule lives beside the parser. Second, a column on both package tables —
+``associated_bills_json``, an array whose every entry keeps **both** the bill
+key and that bill's own ``context`` — so the mentions this column drops have a
+home. Bare bill ids would not do: dropping ``context`` discards exactly the
+distinction that makes ``bill_id`` trustworthy, and a consumer could no longer
+tell the measure a report accompanies from one its text happens to cite.
 
 **Incremental.** The window starts at the prior published table's max
 ``last_modified`` minus a short overlap, so a steady-state run asks GovInfo for
@@ -52,26 +80,30 @@ from __future__ import annotations
 import hashlib
 import os
 from collections import Counter
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Sequence
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Protocol
 
 from loguru import logger
 from spicy_docs.extraction.body_text import BodyText, body_text
+from spicy_docs.interpretation.vote_matching import VoteMatchError, bill_type_of
 from spicy_docs.reading.paged_json import PagedJsonBudget
 from spicy_docs.schemas.committee_report_tables import (
     shape_committee_report,
     shape_hearing_transcript,
     shape_report_section,
 )
+from spicy_docs.schemas.tables import bill_id as bill_key
 from spicy_docs.sources.agency_reports.report_blocks import parse_agency_blocks
+from spicy_docs.sources.congress.bill_status import BillIdentity, BillSourceError
 from spicy_docs.sources.govinfo.body_acquisition import GovInfoBodyAcquirer, GovInfoBodyBudget
 from spicy_docs.sources.govinfo.discovery import GovInfoDiscoveryReader, collection_url
+from spicy_docs.sources.govinfo.mods import GovInfoModsError, parse_govinfo_mods
 
 from spicy_regs.sources import r2
 from spicy_regs.sources.congress_bills import API_KEY_ENV_VARS, _resolve_api_key
-from spicy_regs.transforms.table_merge import merge_contract_table, prior_scratch_path
+from spicy_regs.transforms.table_merge import merge_contract_table, published_table
 
 
 class PackageDiscoverySource(Protocol):
@@ -201,6 +233,46 @@ def _read_body(acquirer: PackageBodySource, package_id: str) -> tuple[Any, BodyT
     return package, body_text(package)
 
 
+#: The one MODS ``context`` that states a package is *about* a bill, as
+#: opposed to mentioning it (``OTHER``, ``COVER``, ``BODY``).
+PRIMARY_BILL_CONTEXT = "PRIMARY"
+
+
+def _mods_bills(package: Any) -> tuple[tuple[str, str], ...]:
+    """``(context, bill_id)`` for every ``<bill>`` the package's MODS extension states, in publisher order.
+
+    The MODS bytes are the ones the acquirer already proved the package by;
+    ``parse_govinfo_mods`` maps them without narrowing, and ``fields`` walks
+    ``extension/bill`` by expanded name. A bill the publisher spells in a type
+    the vocabulary lacks, or with a number that is not one, is skipped with a
+    warning rather than published as a key with a hole in it.
+    """
+    try:
+        record = parse_govinfo_mods(package.mods_capture.body).package
+    except GovInfoModsError as error:
+        logger.warning("{}: MODS unreadable, no bill linkage: {}", package.identity.package_id, error)
+        return ()
+    stated: list[tuple[str, str]] = []
+    for element in record.fields("extension", "bill"):
+        context = element.attribute("context") or ""
+        try:
+            identity = BillIdentity(
+                congress=int(element.attribute("congress") or ""),
+                bill_type=bill_type_of(element.attribute("type")),
+                number=int(element.attribute("number") or ""),
+            )
+        except (ValueError, VoteMatchError, BillSourceError) as error:
+            logger.warning("{}: MODS bill entry skipped: {}", package.identity.package_id, error)
+            continue
+        stated.append((context, bill_key(identity)))
+    return tuple(stated)
+
+
+def _primary_bill(bills: Sequence[tuple[str, str]]) -> str | None:
+    """The one bill the publisher marks ``PRIMARY``, or NULL; a mention is not a linkage."""
+    return next((bill for context, bill in bills if context == PRIMARY_BILL_CONTEXT), None)
+
+
 def build_committee_reports(
     output_dir: Path,
     *,
@@ -218,23 +290,21 @@ def build_committee_reports(
         acquirer = acquirer or GovInfoBodyAcquirer(budget=BODY_BUDGET, api_key=api_key)
 
     prior_files = {
-        "committee_reports": prior_scratch_path(output_dir, "committee_reports"),
-        "hearing_transcripts": prior_scratch_path(output_dir, "hearing_transcripts"),
+        name: published_table(output_dir, name, download_prior) for name in ("committee_reports", "hearing_transcripts")
     }
-    have_prior = {
-        name: (path.exists() or download_prior(f"{name}.parquet", path)) for name, path in prior_files.items()
-    }
+    have_prior = {name: path is not None for name, path in prior_files.items()}
     # The watermark comes from the reports table: both collections are walked on
     # the same window, and it is the one with the longer history.
-    since = _since(prior_files["committee_reports"] if have_prior["committee_reports"] else None)
-    held = {name: (_held_packages(path) if have_prior[name] else {}) for name, path in prior_files.items()}
+    since = _since(prior_files["committee_reports"])
+    held = {name: ({} if path is None else _held_packages(path)) for name, path in prior_files.items()}
     logger.info("Committee reports: packages modified since {}", since)
 
     report_rows: list[dict] = []
     section_rows: list[dict] = []
     hearing_rows: list[dict] = []
     renditions: Counter[str] = Counter()
-    refused = unchanged = 0
+    mentions: Counter[str] = Counter()
+    refused = unchanged = linked = 0
 
     for collection, table, rows, shape in (
         ("CRPT", "committee_reports", report_rows, shape_committee_report),
@@ -255,9 +325,15 @@ def build_committee_reports(
                 logger.warning("{}: {} refused: {}", collection, package_id, error)
                 continue
             renditions[derived.rendition] += 1
+            bills = _mods_bills(package)
+            bill = _primary_bill(bills)
+            if bill is not None:
+                linked += 1
+            mentions.update(context for context, _ in bills if context != PRIMARY_BILL_CONTEXT)
             rows.append(
                 shape(
                     package,
+                    bill_id=bill,
                     # NULL rather than 1: a rendition that states no page
                     # boundary has no page count, and calling the whole body
                     # one page would be a measurement nothing made.
@@ -283,6 +359,11 @@ def build_committee_reports(
         len(hearing_rows),
         unchanged,
         refused,
+    )
+    logger.info(
+        "Committee reports: {:,} packages name a PRIMARY bill; other mentions by MODS context — {}",
+        linked,
+        dict(mentions),
     )
     if renditions:
         # Which rendition each package was actually read in. Neither contract

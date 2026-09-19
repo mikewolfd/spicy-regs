@@ -85,6 +85,7 @@ TABLES = (
     # reader asking "when did this pipeline last see the H.R. zip" should not
     # have to reach past the server to answer it.
     "bill_family_archives",
+    "bill_vote_references",
 )
 STATEMENT_TIMEOUT = os.environ.get("SPICY_REGS_STATEMENT_TIMEOUT", "790s")
 

@@ -1,0 +1,173 @@
+<mods xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://www.loc.gov/mods/v3" version="3.3" xsi:schemaLocation="http://www.loc.gov/mods/v3 http://www.loc.gov/standards/mods/v3/mods-3-3.xsd" ID="P0b002ee1cf656aaa">
+    <name type="corporate">
+         <namePart>United States Government Publishing Office</namePart>
+         <role>
+              <roleTerm authority="marcrelator" type="text">publisher</roleTerm>
+              <roleTerm authority="marcrelator" type="code">pbl</roleTerm>
+        </role>
+         <role>
+              <roleTerm authority="marcrelator" type="text">distributor</roleTerm>
+              <roleTerm authority="marcrelator" type="code">dst</roleTerm>
+        </role>
+    </name>
+    <name type="corporate">
+         <namePart>United States</namePart>
+         <namePart>Congress</namePart>
+         <namePart>House of Representatives</namePart>
+         <role>
+              <roleTerm authority="marcrelator" type="text">author</roleTerm>
+              <roleTerm authority="marcrelator" type="code">aut</roleTerm>
+        </role>
+         <description>Government Organization</description>
+    </name>
+    <typeOfResource>text</typeOfResource>
+    <genre authority="marcgt">government publication</genre>
+    <language>
+         <languageTerm type="code" authority="iso639-2b">eng</languageTerm>
+    </language>
+    <extension>
+         <collectionCode>CRPT</collectionCode>
+         <category>Congressional Committee Materials</category>
+         <waisDatabaseName>119_cong_reports</waisDatabaseName>
+         <branch>legislative</branch>
+         <dateIngested>2025-01-22</dateIngested>
+    </extension>
+    <titleInfo>
+         <title>PROVIDING FOR CONSIDERATION OF THE BILL (H.R. 471) TO EXPEDITE UNDER THE NATIONAL ENVIRONMENTAL POLICY ACT OF 1969 AND IMPROVE FOREST MANAGEMENT ACTIVITIES ON NATIONAL FOREST SYSTEM LANDS, ON PUBLIC LANDS UNDER THE JURISDICTION OF THE BUREAU OF LAND MANAGEMENT, AND ON TRIBAL LANDS TO RETURN RESILIENCE TO OVERGROWN, FIRE-PRONE FORESTED LANDS, AND FOR OTHER PURPOSES, AND PROVIDING FOR CONSIDERATION OF THE BILL (S. 5) TO REQUIRE THE SECRETARY OF HOMELAND SECURITY TO TAKE INTO CUSTODY ALIENS WHO HAVE BEEN CHARGED IN THE UNITED STATES WITH THEFT, AND FOR OTHER PURPOSES</title>
+    </titleInfo>
+    <originInfo>
+         <publisher>U.S. Government Publishing Office</publisher>
+         <dateIssued encoding="w3cdtf">2025-01-21</dateIssued>
+         <issuance>monographic</issuance>
+    </originInfo>
+    <physicalDescription>
+         <note type="source content type">deposited</note>
+         <digitalOrigin>born digital</digitalOrigin>
+         <extent>4 digital object pages</extent>
+    </physicalDescription>
+    <classification authority="sudocs">Y 1.1/8:119-1</classification>
+    <identifier type="uri">https://www.govinfo.gov/app/details/CRPT-119hrpt1</identifier>
+    <identifier type="local">P0b002ee1cf656aaa</identifier>
+    <identifier type="ILS system id">001445851</identifier>
+    <identifier type="former package identifier">f:hr001.119.txt</identifier>
+    <recordInfo>
+         <recordContentSource authority="marcorg">DGPO</recordContentSource>
+         <recordCreationDate encoding="w3cdtf">2025-01-22</recordCreationDate>
+         <recordChangeDate encoding="w3cdtf">2025-01-23</recordChangeDate>
+         <recordIdentifier source="DGPO">CRPT-119hrpt1</recordIdentifier>
+         <recordOrigin>machine generated</recordOrigin>
+         <languageOfCataloging>
+              <languageTerm type="code" authority="iso639-2b">eng</languageTerm>
+        </languageOfCataloging>
+    </recordInfo>
+    <accessCondition type="GPO scope determination">fdlp</accessCondition>
+    <extension>
+         <subtitle>Report to accompany H. Res. 53</subtitle>
+         <docClass>HRPT</docClass>
+         <accessId>CRPT-119hrpt1</accessId>
+         <chamber>HOUSE</chamber>
+         <congress years="2025-2026">119</congress>
+         <number>1</number>
+         <session>1</session>
+         <isConferenceReport>false</isConferenceReport>
+         <isSerialSet>true</isSerialSet>
+    </extension>
+    <location>
+         <url displayLabel="Content Detail" access="object in context">https://www.govinfo.gov/app/details/CRPT-119hrpt1</url>
+         <url displayLabel="HTML rendition" access="raw object">https://www.govinfo.gov/content/pkg/CRPT-119hrpt1/html/CRPT-119hrpt1.htm</url>
+         <url displayLabel="PDF rendition" access="raw object">https://www.govinfo.gov/content/pkg/CRPT-119hrpt1/pdf/CRPT-119hrpt1.pdf</url>
+    </location>
+    <identifier type="preferred citation">H. Rept. 119-1</identifier>
+    <abstract>The Committee on Rules, having had under consideration House Resolution 53, by a record vote of 9 to 3, report the same to the House with the recommendation that the resolution be adopted.</abstract>
+    <extension>
+         <searchTitle>PROVIDING FOR CONSIDERATION OF THE BILL (H.R. 471) TO EXPEDITE UNDER THE NATIONAL ENVIRONMENTAL POLICY ACT OF 1969 AND IMPROVE FOREST MANAGEMENT ACTIVITIES ON NATIONAL FOREST SYSTEM LANDS, ON PUBLIC LANDS UNDER THE JURISDICTION OF THE BUREAU OF LAND MANAGEMENT, AND ON TRIBAL LANDS TO RETURN RESILIENCE TO OVERGROWN, FIRE-PRONE FORESTED LANDS, AND FOR OTHER PURPOSES, AND PROVIDING FOR CONSIDERATION OF THE BILL (S. 5) TO REQUIRE THE SECRETARY OF HOMELAND SECURITY TO TAKE INTO CUSTODY ALIENS WHO HAVE BEEN CHARGED IN THE UNITED STATES WITH THEFT, AND FOR OTHER PURPOSES;H. Rept. 119-1</searchTitle>
+         <legislativeHistory>Referred to the House Calendar and ordered to be printed</legislativeHistory>
+         <granuleClass>FIRSTPART</granuleClass>
+         <accessId>CRPT-119hrpt1</accessId>
+         <action date="2025-01-21">Referred to the House Calendar and ordered to be printed</action>
+         <session>1</session>
+         <recommendation>The Committee on Rules, having had under consideration House Resolution 53, by a record vote of 9 to 3, report the same to the House with the recommendation that the resolution be adopted.</recommendation>
+         <submittedStatement>Mr. Austin Scott of Georgia, from the Committee on Rules, submitted the following</submittedStatement>
+         <bill congress="119" context="OTHER" number="5" type="S"></bill>
+         <bill congress="119" context="OTHER" number="53" type="HRES"></bill>
+         <bill congress="119" context="PRIMARY" number="53" type="HRES"></bill>
+         <bill congress="119" context="OTHER" number="471" type="HR"></bill>
+         <congCommittee authorityId="hsru00" chamber="H" congress="119" type="S">
+                                    
+              <name type="authority-standard">Committee on Rules</name>
+                                    
+              <name type="authority-short">Rules</name>
+                                
+        </congCommittee>
+         <congMember bioGuideId="S001189" chamber="H" congress="119" party="R" role="SUBMITTEDBY" state="GA">
+                                    
+              <name type="parsed">Mr. Austin Scott of Georgia</name>
+                                    
+              <name type="authority-fnf">Austin Scott</name>
+                                    
+              <name type="authority-lnf">Scott, Austin</name>
+                                
+        </congMember>
+         <associatedBills>H. Res. 53, 119th</associatedBills>
+    </extension>
+    <name type="personal">
+         <namePart>Austin Scott</namePart>
+         <affiliation>United States House of Representatives</affiliation>
+         <role>
+              <roleTerm authority="marcrelator" type="text">sponsor</roleTerm>
+              <roleTerm authority="marcrelator" type="code">spn</roleTerm>
+        </role>
+         <description>United States Congress Member</description>
+    </name>
+    <name type="corporate">
+         <namePart>United States</namePart>
+         <namePart>Congress</namePart>
+         <namePart>House of Representatives</namePart>
+         <namePart>Committee on Rules</namePart>
+         <role>
+              <roleTerm authority="marcrelator" type="text">associated name</roleTerm>
+              <roleTerm authority="marcrelator" type="code">asn</roleTerm>
+        </role>
+         <description>Government Organization</description>
+    </name>
+    <relatedItem type="isReferencedBy">
+         <titleInfo>
+              <title>United States Senate Bill 5 (119th Congress)</title>
+        </titleInfo>
+         <identifier type="Congressional Bill citation">S. 5</identifier>
+         <extension>
+              <congress>119</congress>
+              <context>OTHER</context>
+        </extension>
+    </relatedItem>
+    <relatedItem type="isReferencedBy">
+         <titleInfo>
+              <title>United States House Resolution 53 (119th Congress)</title>
+        </titleInfo>
+         <identifier type="Congressional Bill citation">H. Res. 53</identifier>
+         <extension>
+              <congress>119</congress>
+              <context>OTHER</context>
+        </extension>
+    </relatedItem>
+    <relatedItem type="isReferencedBy">
+         <titleInfo>
+              <title>United States House Resolution 53 (119th Congress)</title>
+        </titleInfo>
+         <identifier type="Congressional Bill citation">H. Res. 53</identifier>
+         <extension>
+              <congress>119</congress>
+              <context>PRIMARY</context>
+        </extension>
+    </relatedItem>
+    <relatedItem type="isReferencedBy">
+         <titleInfo>
+              <title>United States House Bill 471 (119th Congress)</title>
+        </titleInfo>
+         <identifier type="Congressional Bill citation">H.R. 471</identifier>
+         <extension>
+              <congress>119</congress>
+              <context>OTHER</context>
+        </extension>
+    </relatedItem>
+</mods>

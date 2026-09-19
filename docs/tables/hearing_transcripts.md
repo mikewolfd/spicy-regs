@@ -4,9 +4,11 @@
 
 **Hearing transcripts**
 
-One row per captured GovInfo hearing transcript package. `bill_id` is a preserved NULL for the same reason. All columns are stored as VARCHAR.
+One row per captured GovInfo hearing transcript package. `bill_id` is read the same way as on `committee_reports` and is NULL in practice. All columns are stored as VARCHAR.
 
 **Coverage.** Window, advancing. GovInfo CHRG packages on the same last-modified watermark and per-run cap as `committee_reports`, read in the same rendition order — XML, HTML, text, then PDF — and, like committee reports, offering only HTML and PDF in practice. `page_count` is NULL for the same reason: no GovInfo body states a page boundary, so only the PDF fallback has one. *(measured 2026-09-19)*
+
+**Data quality.** `bill_id` is filled from the package's MODS `PRIMARY` bill, exactly as on `committee_reports`, but a hearing does not accompany a measure the way a report does: measured 2026-09-19 over 50 distinct hearings of the 119th Congress, no CHRG MODS carried a `PRIMARY` bill at all. Ten carried `BODY` or `COVER` mentions — bills the transcript cites, 31 entries in all — and those are not promoted to a linkage, because publishing a cited bill as the hearing's subject would be a guess stated as a fact. Of the twelve hearings whose Congress.gov detail named a committee meeting, none of those meetings listed a related bill either. So expect this column to be NULL. The measurement is retained with every request and raw response under `~/Work/corpora/supply-2026-09-02/receipts/report-bill-linkage-2026-09-19/`.
 
 - **Parquet file:** `hearing_transcripts.parquet`
 - **Queryable via MCP `query_sql`:** Yes
