@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+<!DOCTYPE bill PUBLIC "-//US Congress//DTDs/bill.dtd//EN" "bill.dtd">
+<bill xmlns:dc="http://purl.org/dc/elements/1.1/" bill-stage="Engrossed-in-House" dms-id="H6E1B48BF2A844216A1936402045871B0" public-private="public" key="H" bill-type="olc" stage-count="1">
+  <metadata>
+    <dublinCore>
+      <dc:title>119 HR 6028 EH: Legislative Branch Agencies Clarification Act</dc:title>
+    </dublinCore>
+  </metadata>
+  <form>
+    <congress display="yes">119th CONGRESS</congress>
+    <legis-num display="yes">H. R. 6028</legis-num>
+  </form>
+  <legis-body display-enacting-clause="yes-display-enacting-clause" style="OLC" id="HE3B40AFB2ABE4E848C46F87B99968243">
+    <section id="H8B26AEE1D4AB4E99A5A0FE22A14CEC3A" section-type="section-one">
+      <enum>1.</enum>
+      <header>Short title</header>
+      <text display-inline="no-display-inline">This Act may be cited as the <quote>
+          <short-title>Legislative Branch Agencies Clarification Act</short-title>
+        </quote>.</text>
+    </section>
+  </legis-body>
+</bill>

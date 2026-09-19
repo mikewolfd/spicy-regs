@@ -1,0 +1,115 @@
+<?xml version='1.0' encoding='utf-8'?>
+<billStatus xmlns:dc="http://purl.org/dc/elements/1.1/">
+  <version>3.0.0</version>
+  <bill>
+    <number>6028</number>
+    <updateDate>2026-09-09T17:31:22Z</updateDate>
+    <updateDateIncludingText>2026-09-09T17:31:22Z</updateDateIncludingText>
+    <originChamber>House</originChamber>
+    <type>HR</type>
+    <introducedDate>2025-11-12</introducedDate>
+    <congress>119</congress>
+    <legislationUrl>https://www.congress.gov/bill/119th-congress/house-bill/6028</legislationUrl>
+    <actions>
+      <item>
+        <actionDate>2026-06-09</actionDate>
+        <sourceSystem>
+          <name>Senate</name>
+        </sourceSystem>
+        <text>Received in the Senate.</text>
+        <type>IntroReferral</type>
+      </item>
+      <item>
+        <actionDate>2026-06-08</actionDate>
+        <actionTime>15:48:09</actionTime>
+        <text>Motion to reconsider laid on the table Agreed to without objection.</text>
+        <type>Floor</type>
+        <actionCode>H38310</actionCode>
+        <sourceSystem>
+          <code>2</code>
+          <name>House floor actions</name>
+        </sourceSystem>
+      </item>
+    </actions>
+    <sponsors>
+      <item>
+        <bioguideId>G000568</bioguideId>
+        <fullName>Rep. Griffith, H. Morgan [R-VA-9]</fullName>
+        <firstName>H.</firstName>
+        <lastName>Griffith</lastName>
+        <party>R</party>
+        <state>VA</state>
+        <middleName>Morgan</middleName>
+        <district>9</district>
+        <isByRequest>N</isByRequest>
+      </item>
+    </sponsors>
+    <policyArea>
+      <name>Congress</name>
+    </policyArea>
+    <subjects>
+      <legislativeSubjects>
+        <item>
+          <name>Congressional agencies</name>
+          <updateDate>2026-03-17T12:39:47Z</updateDate>
+        </item>
+        <item>
+          <name>Congressional operations and organization</name>
+          <updateDate>2026-03-17T12:40:03Z</updateDate>
+        </item>
+      </legislativeSubjects>
+      <policyArea>
+        <name>Congress</name>
+        <updateDate>2026-06-10T17:18:26Z</updateDate>
+      </policyArea>
+    </subjects>
+    <summaries>
+      <summary>
+        <versionCode>00</versionCode>
+        <actionDate>2025-11-12</actionDate>
+        <actionDesc>Introduced in House</actionDesc>
+        <updateDate>2025-11-19T19:19:53Z</updateDate>
+        <text>&lt;p&gt;&lt;strong&gt;Legislative Branch Agencies Clarification Act&lt;/strong&gt;&lt;/p&gt;</text>
+      </summary>
+      <summary>
+        <versionCode>53</versionCode>
+        <actionDate>2026-06-08</actionDate>
+        <actionDesc>Passed House</actionDesc>
+        <updateDate>2026-06-12T20:14:08Z</updateDate>
+        <text>&lt;p&gt;&lt;strong&gt;Legislative Branch Agencies Clarification Act&lt;/strong&gt;&lt;/p&gt;</text>
+      </summary>
+    </summaries>
+    <title>Legislative Branch Agencies Clarification Act</title>
+    <textVersions>
+      <item>
+        <type>Engrossed in House</type>
+        <date>2026-06-08T04:00:00Z</date>
+        <formats>
+          <item>
+            <url>https://www.govinfo.gov/content/pkg/BILLS-119hr6028eh/xml/BILLS-119hr6028eh.xml</url>
+          </item>
+        </formats>
+      </item>
+      <item>
+        <type>Introduced in House</type>
+        <date>2025-11-12T05:00:00Z</date>
+        <formats>
+          <item>
+            <url>https://www.govinfo.gov/content/pkg/BILLS-119hr6028ih/xml/BILLS-119hr6028ih.xml</url>
+          </item>
+        </formats>
+      </item>
+    </textVersions>
+    <latestAction>
+      <actionDate>2026-06-09</actionDate>
+      <text>Received in the Senate.</text>
+    </latestAction>
+  </bill>
+  <dublinCore>
+    <dc:format>text/xml</dc:format>
+    <dc:language>EN</dc:language>
+    <dc:rights>Pursuant to Title 17 Section 105 of the United States Code, this file is not subject to copyright protection and is in the public domain.</dc:rights>
+    <dc:contributor>Congressional Research Service, Library of Congress</dc:contributor>
+    <dc:description>This file contains bill summaries and statuses for federal legislation. A bill summary describes the most significant provisions of a piece of legislation and details the effects the legislative text may have on current law and federal programs. Bill summaries are authored by the Congressional Research Service (CRS) of the Library of Congress. As stated in Public Law 91-510 (2 USC 166 (d)(6)), one of the duties of CRS is "to prepare summaries and digests of bills and resolutions of a public general nature introduced in the Senate or House of Representatives". For more information, refer to the User Guide that accompanies this file.</dc:description>
+  </dublinCore>
+</billStatus>
