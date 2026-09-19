@@ -385,3 +385,29 @@ def test_a_recaptured_citation_in_laws_wins_over_the_one_already_here(tmp_path):
     )
     out = merge_contract_table(tmp_path, "congress_bills", [], download_prior=_no_download, prior_present=True)
     assert pq.read_table(out).to_pylist()[0]["statutes_at_large_cite"] == "139 Stat. 3"
+
+
+@pytest.mark.parametrize(
+    "laws_file",
+    ["truncated", "column_short"],
+)
+def test_a_laws_table_that_cannot_be_read_leaves_congress_bills_as_merged(tmp_path, laws_file):
+    """The soft-input promise: a bad ``laws`` file is logged, not a failed congress-bills or bill-family run."""
+    from spicy_regs.transforms.table_merge import merge_contract_table, prior_scratch_path
+
+    laws_path = prior_scratch_path(tmp_path, "laws")
+    if laws_file == "truncated":
+        laws_path.write_bytes(b"PAR1 not a parquet file")
+    else:
+        # A laws table that predates the citation column: the binder cannot find it.
+        pq.write_table(
+            pa.Table.from_pylist([{"bill_id": "119-s-5"}], schema=pa.schema([("bill_id", pa.string())])), laws_path
+        )
+    fresh = _contract_rows(
+        "congress_bills", [{"bill_id": "119-s-5", "congress": "119", "update_date": "2026-09-01", "title": "as merged"}]
+    )
+    out = merge_contract_table(tmp_path, "congress_bills", fresh, download_prior=_no_download)
+    row = pq.read_table(out).to_pylist()[0]
+    assert (row["title"], row["statutes_at_large_cite"]) == ("as merged", None)
+    assert not laws_path.exists(), "the unreadable scratch copy is removed either way"
+    assert not (tmp_path / "_congress_bills_cited.parquet").exists()

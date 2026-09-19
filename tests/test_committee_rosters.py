@@ -39,6 +39,9 @@ OBSERVED_AT = "2026-09-19T00:00:00Z"
 LISTED = [*LIST_PAGE["committees"], HSJU00]
 #: Newest ``updateDate`` first, which is the order details are asked for.
 NEWEST_FIRST = ["hsbu00", "slet00", "sssb00", "hsju00"]
+#: The measured over-declaration, at the stub's size: ``committee/119`` declared
+#: 238 and served 236, two entries the count includes and the list omits.
+DECLARED = len(LISTED) + (LIST_PAGE["pagination"]["count"] - 236)
 
 
 class _Page:
@@ -57,12 +60,12 @@ class StubListingReader:
         self.detail_codes: list[str] = []
 
     def _walk(self):
-        yield _Page(self.listed, LIST_PAGE["pagination"]["count"])
+        yield _Page(self.listed, DECLARED)
         if self.walk_refusal is not None:
             error = PagedJsonSourceError(f"Congress.gov {self.walk_refusal}")
             error.__dict__[TRAVERSAL_CONTEXT] = {
                 "operation": "traversal",
-                "declaredCount": LIST_PAGE["pagination"]["count"],
+                "declaredCount": DECLARED,
                 "observedCount": len(self.listed),
             }
             raise error

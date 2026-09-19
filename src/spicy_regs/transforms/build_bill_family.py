@@ -1198,7 +1198,9 @@ class _Backfill:
                     identity = _backfill_identity(congress, bill_type, record)
                     if identity is None:
                         unwalkable += 1
-                        logger.warning("Bill family backfill: {} {} list record names no walkable bill", congress, bill_type)
+                        logger.warning(
+                            "Bill family backfill: {} {} list record names no walkable bill", congress, bill_type
+                        )
                         continue
                     stamp = _detail_str(record.get("updateDateIncludingText")) or ""
                     key: BackfillKey = (str(congress), bill_type, str(identity.number))
@@ -1468,7 +1470,9 @@ def build_bill_family(
             backfill_state = outcome.state_rows
             backfill_walk_state = outcome.walk_rows
             if outcome.refused:
-                logger.warning("Bill family backfill: {:,} detail attempts refused (retried first next run)", outcome.refused)
+                logger.warning(
+                    "Bill family backfill: {:,} detail attempts refused (retried first next run)", outcome.refused
+                )
         else:
             logger.warning(
                 "Bill family backfill: Congresses {} named below the bulk floor but no api.data.gov key ({}) — "

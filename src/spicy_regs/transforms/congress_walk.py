@@ -18,6 +18,16 @@ a repeated continuation, a count that changed mid-walk, the page bound, a
 ``401``/``403`` — propagates and fails the run, as the A11 backfill's list
 walk does. The two numbers are logged at WARNING so a run that met the
 over-declaration says so.
+
+The guard is narrow in kind *and* in size. The refusal's own context always
+carries the served count, so "1 served of 238" would satisfy a kind-only
+predicate exactly as 236 of 238 does; :data:`MAX_OVER_DECLARATION` bounds
+the shortfall to a handful of entries, which is the shape of the measured
+finding (a count that includes what the list omits) and not the shape of a
+page missing from the walk.
+
+:class:`PerRunCap` sits here because both walkers bound their per-record leg
+the same way: a cap that says once, at WARNING, when it stopped that leg.
 """
 
 from __future__ import annotations
@@ -41,11 +51,34 @@ class ListingSource(Protocol):
     def records(self, route: Any, url: str, *, max_pages: int = ...) -> Iterator[Any]: ...
 
 
+class PerRunCap:
+    """A per-run request cap for one leg of a rollup, saying once when it stopped that leg."""
+
+    def __init__(self, limit: int, label: str) -> None:
+        self.remaining = limit
+        self.label = label
+        self.exhausted_logged = False
+
+    def take(self) -> bool:
+        if self.remaining <= 0:
+            if not self.exhausted_logged:
+                logger.warning("{}: per-run cap reached — the next run resumes where this one stopped", self.label)
+                self.exhausted_logged = True
+            return False
+        self.remaining -= 1
+        return True
+
+
 #: The reader attaches its traversal context under this key
 #: (``spicy_docs.reading.paged_json.PagedJsonReader``'s ``context_key``).
 TRAVERSAL_CONTEXT = "paged_json_acquisition"
 #: The one terminal-page refusal read past; the reader's own wording.
 COUNT_MISMATCH = "declared and observed record counts differ"
+#: How far the declared total may exceed what the terminal page served before
+#: the walk is read as short rather than over-declared. The measured delta is
+#: 2 of 238; a handful of entries the count includes and the list omits is
+#: that finding, and a page's worth (``MAX_LIMIT`` is 250) is not.
+MAX_OVER_DECLARATION = 8
 
 
 @dataclass(frozen=True, slots=True)
@@ -59,18 +92,21 @@ class RouteWalk:
     over_declared: bool
 
 
-def _terminal_count_mismatch(error: PagedJsonSourceError, served: int) -> bool:
+def _terminal_over_declaration(error: PagedJsonSourceError, served: int) -> bool:
     context = error.__dict__.get(TRAVERSAL_CONTEXT)
-    return (
+    if not (
         isinstance(context, Mapping)
         and context.get("operation") == "traversal"
         and str(error).endswith(COUNT_MISMATCH)
         and context.get("observedCount") == served
-    )
+    ):
+        return False
+    declared = context.get("declaredCount")
+    return isinstance(declared, int) and 0 < declared - served <= MAX_OVER_DECLARATION
 
 
 def walk_route(reader: ListingSource, route: Any, url: str, *, max_pages: int, label: str) -> RouteWalk:
-    """Every page of one list query, or a refusal — except the over-declaration, which is recorded."""
+    """Every page of one list query, or a refusal — except a bounded over-declaration, which is recorded."""
     records: list[Mapping[str, Any]] = []
     declared: int | None = None
     try:
@@ -79,7 +115,7 @@ def walk_route(reader: ListingSource, route: Any, url: str, *, max_pages: int, l
                 declared = page.declared_count
             records.extend(page.records)
     except PagedJsonSourceError as error:
-        if not _terminal_count_mismatch(error, len(records)):
+        if not _terminal_over_declaration(error, len(records)):
             raise
         logger.warning(
             "{}: the route declared {} records and served {:,} on its terminal page — publishing what it served",

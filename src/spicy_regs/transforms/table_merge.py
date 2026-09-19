@@ -259,6 +259,116 @@ def merge_table(
 #: NULL from one of its writers means "not mine", never "now empty".
 COALESCED_TABLES: frozenset[str] = frozenset({"congress_bills"})
 
+#: ``congress_bills.statutes_at_large_cite`` is filled from ``laws`` at this
+#: table's merge — the contract's own sentence for the column — and from
+#: nowhere else: the bill family sees one BILLSTATUS document, and the
+#: citation lives in the PLAW USLM file the laws rollup captures once per law.
+STATUTES_JOIN_TARGET = "congress_bills"
+STATUTES_JOIN_SOURCE = "laws"
+STATUTES_JOIN_COLUMN = "statutes_at_large_cite"
+STATUTES_JOIN_KEY = "bill_id"
+
+
+def _duckdb_session(output_dir: Path):
+    """A connection with the bounds every merge here runs under: 4 GB, two threads, spilling beside the outputs."""
+    import duckdb
+
+    spill_dir = output_dir / ".duckdb_tmp"
+    spill_dir.mkdir(exist_ok=True)
+    con = duckdb.connect()
+    con.execute("SET memory_limit='4GB'")
+    con.execute("SET preserve_insertion_order=false")
+    con.execute("SET threads=2")
+    con.execute(f"SET temp_directory='{spill_dir}'")
+    return con
+
+
+def fill_statutes_at_large_cite(
+    output_dir: Path,
+    out_file: Path,
+    version_column: str | None,
+    identity: tuple[str, ...],
+    download_prior: Callable[[str, Path], bool] = r2.download,
+) -> int:
+    """Fill ``statutes_at_large_cite`` on a merged ``congress_bills`` from the published ``laws`` table.
+
+    A merge-time join of the kind ``pipelines/rollups/base.py`` permits: ``laws``
+    is an ingest rollup's output, read best-effort, and both writers of
+    ``congress_bills`` declare it in ``soft_inputs``. Runs *after* the
+    column-wise merge so the coalesce semantics that protect the two writers'
+    columns are untouched, and takes the law's citation where ``laws`` states
+    one, keeping a citation already here where it does not — ``laws`` never
+    publishes a captured citation as NULL, so nothing is ever cleared. One law
+    per bill: where the route lists two law entries for one bill (measured 0
+    of 108 on the 119th), the larger ``update_date`` wins, then the key.
+
+    Best-effort end to end, which is the ``soft_inputs`` promise: an absent
+    ``laws`` table, and equally a corrupt, truncated or column-short one,
+    leaves ``out_file`` exactly as :func:`merge_table` wrote it, with the
+    failure logged, rather than failing a ``congress-bills`` or
+    ``bill-family`` run after its own merge has already succeeded. The
+    scratch copy of ``laws`` is removed either way. Returns how many rows
+    now carry a citation.
+    """
+    import duckdb
+    from spicy_docs.transport.credentials import scrub_credential
+
+    laws = published_table(output_dir, STATUTES_JOIN_SOURCE, download_prior)
+    if laws is None:
+        logger.info(
+            "{}: no published {} table — {} left as merged",
+            STATUTES_JOIN_TARGET,
+            STATUTES_JOIN_SOURCE,
+            STATUTES_JOIN_COLUMN,
+        )
+        return 0
+    filled_file = output_dir / f"_{STATUTES_JOIN_TARGET}_cited.parquet"
+    order_by = f"{version_column} DESC, {', '.join(identity)}" if version_column else ", ".join(identity)
+    con = None
+    try:
+        con = _duckdb_session(output_dir)
+        con.execute(
+            f"""
+            COPY (
+                SELECT b.* REPLACE (COALESCE(l.{STATUTES_JOIN_COLUMN}, b.{STATUTES_JOIN_COLUMN}) AS {STATUTES_JOIN_COLUMN})
+                FROM read_parquet('{out_file}') b
+                LEFT JOIN (
+                    SELECT {STATUTES_JOIN_KEY}, {STATUTES_JOIN_COLUMN} FROM read_parquet('{laws}')
+                    WHERE {STATUTES_JOIN_KEY} IS NOT NULL AND {STATUTES_JOIN_COLUMN} IS NOT NULL
+                    QUALIFY ROW_NUMBER() OVER (PARTITION BY {STATUTES_JOIN_KEY} ORDER BY update_date DESC, law_id) = 1
+                ) l USING ({STATUTES_JOIN_KEY})
+                ORDER BY {order_by}
+            ) TO '{filled_file}' (FORMAT PARQUET, COMPRESSION ZSTD, ROW_GROUP_SIZE 50000);
+            """
+        )
+        cited = con.execute(
+            f"SELECT count(*) FROM read_parquet('{filled_file}') WHERE {STATUTES_JOIN_COLUMN} IS NOT NULL"
+        ).fetchone()
+        count = int(cited[0]) if cited else 0
+        filled_file.replace(out_file)
+    except (duckdb.Error, OSError) as error:
+        logger.warning(
+            "{}: joining {} failed — {} left as merged: {}",
+            STATUTES_JOIN_TARGET,
+            STATUTES_JOIN_SOURCE,
+            STATUTES_JOIN_COLUMN,
+            scrub_credential(str(error), ""),
+        )
+        filled_file.unlink(missing_ok=True)
+        return 0
+    finally:
+        if con is not None:
+            con.close()
+        laws.unlink(missing_ok=True)
+    logger.info(
+        "{}: {:,} rows carry a {} after joining {}",
+        STATUTES_JOIN_TARGET,
+        count,
+        STATUTES_JOIN_COLUMN,
+        STATUTES_JOIN_SOURCE,
+    )
+    return count
+
 
 def merge_contract_table(
     output_dir: Path,
@@ -298,82 +408,6 @@ def merge_contract_table(
     if contract_name == STATUTES_JOIN_TARGET:
         fill_statutes_at_large_cite(output_dir, out_file, contract.version_column, contract.identity, download_prior)
     return out_file
-
-
-#: ``congress_bills.statutes_at_large_cite`` is filled from ``laws`` at this
-#: table's merge — the contract's own sentence for the column — and from
-#: nowhere else: the bill family sees one BILLSTATUS document, and the
-#: citation lives in the PLAW USLM file the laws rollup captures once per law.
-STATUTES_JOIN_TARGET = "congress_bills"
-STATUTES_JOIN_SOURCE = "laws"
-STATUTES_JOIN_COLUMN = "statutes_at_large_cite"
-STATUTES_JOIN_KEY = "bill_id"
-
-
-def fill_statutes_at_large_cite(
-    output_dir: Path,
-    out_file: Path,
-    version_column: str | None,
-    identity: tuple[str, ...],
-    download_prior: Callable[[str, Path], bool] = r2.download,
-) -> int:
-    """Fill ``statutes_at_large_cite`` on a merged ``congress_bills`` from the published ``laws`` table.
-
-    A merge-time join of the kind ``pipelines/rollups/base.py`` permits: ``laws``
-    is an ingest rollup's output, read best-effort, and both writers of
-    ``congress_bills`` declare it in ``soft_inputs``. Runs *after* the
-    column-wise merge so the coalesce semantics that protect the two writers'
-    columns are untouched, and takes the law's citation where ``laws`` states
-    one, keeping a citation already here where it does not — ``laws`` never
-    publishes a captured citation as NULL, so nothing is ever cleared. One law
-    per bill: where the route lists two law entries for one bill (measured 0
-    of 108 on the 119th), the larger ``update_date`` wins, then the key.
-    With no ``laws`` table published the column stays as it was. Returns how
-    many rows now carry a citation.
-    """
-    import duckdb
-
-    laws = published_table(output_dir, STATUTES_JOIN_SOURCE, download_prior)
-    if laws is None:
-        logger.info(
-            "{}: no published {} table — {} left as merged",
-            STATUTES_JOIN_TARGET,
-            STATUTES_JOIN_SOURCE,
-            STATUTES_JOIN_COLUMN,
-        )
-        return 0
-    filled_file = output_dir / f"_{STATUTES_JOIN_TARGET}_cited.parquet"
-    order_by = f"{version_column} DESC, {', '.join(identity)}" if version_column else ", ".join(identity)
-    con = duckdb.connect()
-    con.execute(
-        f"""
-        COPY (
-            SELECT b.* REPLACE (COALESCE(l.{STATUTES_JOIN_COLUMN}, b.{STATUTES_JOIN_COLUMN}) AS {STATUTES_JOIN_COLUMN})
-            FROM read_parquet('{out_file}') b
-            LEFT JOIN (
-                SELECT {STATUTES_JOIN_KEY}, {STATUTES_JOIN_COLUMN} FROM read_parquet('{laws}')
-                WHERE {STATUTES_JOIN_KEY} IS NOT NULL AND {STATUTES_JOIN_COLUMN} IS NOT NULL
-                QUALIFY ROW_NUMBER() OVER (PARTITION BY {STATUTES_JOIN_KEY} ORDER BY update_date DESC, law_id) = 1
-            ) l USING ({STATUTES_JOIN_KEY})
-            ORDER BY {order_by}
-        ) TO '{filled_file}' (FORMAT PARQUET, COMPRESSION ZSTD, ROW_GROUP_SIZE 50000);
-        """
-    )
-    cited = con.execute(
-        f"SELECT count(*) FROM read_parquet('{filled_file}') WHERE {STATUTES_JOIN_COLUMN} IS NOT NULL"
-    ).fetchone()
-    con.close()
-    filled_file.replace(out_file)
-    laws.unlink(missing_ok=True)
-    count = int(cited[0]) if cited else 0
-    logger.info(
-        "{}: {:,} rows carry a {} after joining {}",
-        STATUTES_JOIN_TARGET,
-        count,
-        STATUTES_JOIN_COLUMN,
-        STATUTES_JOIN_SOURCE,
-    )
-    return count
 
 
 def retire_prior_rows(prior_file: Path, **scope: str) -> int:

@@ -106,16 +106,8 @@ def merge_comments_partitioned(
         multi-file read, not a single-file one). This lets incremental runs
         merge old partitions into the evolved schema instead of breaking.
         """
-        present = {
-            row[0]
-            for row in con.execute(
-                f"DESCRIBE SELECT * FROM read_parquet('{sql_path(path)}')"
-            ).fetchall()
-        }
-        return ", ".join(
-            f'"{c}"' if c in present else f'CAST(NULL AS VARCHAR) AS "{c}"'
-            for c in target_columns
-        )
+        present = {row[0] for row in con.execute(f"DESCRIBE SELECT * FROM read_parquet('{sql_path(path)}')").fetchall()}
+        return ", ".join(f'"{c}"' if c in present else f'CAST(NULL AS VARCHAR) AS "{c}"' for c in target_columns)
 
     for agency, docket, year, month in partitions:
         partition_file = (

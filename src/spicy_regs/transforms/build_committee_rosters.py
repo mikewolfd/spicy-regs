@@ -72,7 +72,7 @@ from spicy_docs.transport.credentials import scrub_credential
 from spicy_regs.sources import r2
 from spicy_regs.sources.congress_bills import API_KEY_ENV_VARS, _resolve_api_key
 from spicy_regs.transforms.congress_scope import congresses_from_env, current_congress
-from spicy_regs.transforms.congress_walk import ListingSource, walk_route
+from spicy_regs.transforms.congress_walk import ListingSource, PerRunCap, walk_route
 from spicy_regs.transforms.table_merge import merge_contract_table, published_table, retire_prior_rows
 
 
@@ -177,7 +177,7 @@ def _committee_rows(
 ) -> list[dict]:
     rows: list[dict] = []
     unchanged = deferred = folded = 0
-    remaining = max_details
+    cap = PerRunCap(max_details, "Committees: details")
     for record in listed:
         code = str(record.get("systemCode"))
         update_date = text(record.get("updateDate"))
@@ -185,13 +185,7 @@ def _committee_rows(
         if prior is not None and prior.detail_captured == TRUE and prior.update_date == update_date:
             unchanged += 1
             continue
-        detail = None
-        if remaining > 0:
-            remaining -= 1
-            detail = _detail(reader, record)
-        elif remaining == 0:
-            logger.warning("Committees: per-run detail cap reached — the next run resumes where this one stopped")
-            remaining = -1
+        detail = _detail(reader, record) if cap.take() else None
         try:
             row = shape_committee(record, detail) if detail is not None else None
         except TableContractError as error:

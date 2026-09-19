@@ -109,7 +109,7 @@ def _writers_of(remote_key: str) -> list[type[RollupPipeline]]:
 
 @pytest.mark.parametrize(
     ("rollup", "soft_input"),
-    [(rollup, key) for rollup in HOSTED_ROLLUPS for key in rollup.soft_inputs],
+    [(rollup, key) for rollup in ALL_ROLLUPS for key in rollup.soft_inputs],
     ids=lambda value: value if isinstance(value, str) else value.name,
 )
 def test_a_soft_input_is_an_ingest_output_its_writer_produces_first(rollup, soft_input):

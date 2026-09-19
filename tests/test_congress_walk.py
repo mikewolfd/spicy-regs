@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from spicy_docs.reading.paged_json import PagedJsonSourceError
 
-from spicy_regs.transforms.congress_walk import COUNT_MISMATCH, TRAVERSAL_CONTEXT, walk_route
+from spicy_regs.transforms.congress_walk import COUNT_MISMATCH, MAX_OVER_DECLARATION, TRAVERSAL_CONTEXT, walk_route
 
 
 class _Page:
@@ -51,6 +51,9 @@ def test_a_walk_whose_counts_agree_is_not_over_declared():
         _refusal("declared count changed during the traversal", declared=6, observed=4),
         # The right words, but the observed count is not what this walk served: not this walk's terminal page.
         _refusal(COUNT_MISMATCH, declared=6, observed=3),
+        # The right words and the served count, but a page's worth short: a short walk, not the over-declaration.
+        _refusal(COUNT_MISMATCH, declared=238, observed=4),
+        _refusal(COUNT_MISMATCH, declared=4 + MAX_OVER_DECLARATION + 1, observed=4),
         PagedJsonSourceError(f"Congress.gov {COUNT_MISMATCH}"),  # no traversal context at all
     ],
 )
@@ -58,3 +61,17 @@ def test_every_other_refusal_propagates(refusal):
     reader = Reader([_Page([{"a": 1}] * 4, 6)], refusal)
     with pytest.raises(PagedJsonSourceError):
         walk_route(reader, object(), "u", max_pages=5, label="t")
+
+
+def test_the_shortfall_bound_is_inclusive_and_the_measured_delta_is_inside_it():
+    served = [{"a": 1}] * 4
+    at_bound = 4 + MAX_OVER_DECLARATION
+    walk = walk_route(
+        Reader([_Page(served, at_bound)], _refusal(COUNT_MISMATCH, declared=at_bound, observed=4)),
+        object(),
+        "u",
+        max_pages=5,
+        label="t",
+    )
+    assert (walk.declared, walk.over_declared, len(walk.records)) == (at_bound, True, 4)
+    assert 238 - 236 <= MAX_OVER_DECLARATION, "the 2026-09-19 committee/119 finding must stay inside the bound"

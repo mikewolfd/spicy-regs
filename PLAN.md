@@ -341,7 +341,7 @@ converges over runs instead of timing out, and let the merge accumulate.
 | `committee-reports` | GovInfo packages modified since the prior max `last_modified` minus `OVERLAP_HOURS`; packages already published are not re-fetched | `MAX_PACKAGES_PER_RUN`; 30 days is the cold-start window only |
 | `press-releases` | Both feeds, whole — the feed *is* the delta, and the merge accumulates what rotates off | n/a |
 | `members` | Both roster files, whole — one small JSON each, with no partial-fetch route | n/a |
-| `laws` | The `law/{congress}` list, whole (one page), then PLAW USLM files only for laws not yet `captured` or whose list `update_date` moved (`unavailable` — the bulk lag — is retried every run); the classification index and each session table it links, whole, replacing that session's rows; Table III pages only for acts not yet published, oldest first, stopping at the first act the table does not hold | `MAX_USLM_PER_RUN` and `MAX_TABLE3_PER_RUN`, PLAW newest first; pinned in `tests/test_laws.py` |
+| `laws` | The `law/{congress}` list, whole (one page), then PLAW USLM files only for laws not yet `captured` or whose list `update_date` moved (`unavailable` — the bulk lag — is retried every run); the classification index and each session table it links, whole, replacing that session's rows; Table III pages only for acts not yet published, oldest first, a refused act stepped past and three consecutive refusals ending the Congress's walk | `MAX_USLM_PER_RUN` and `MAX_TABLE3_PER_RUN`, PLAW newest first; pinned in `tests/test_laws.py` |
 | `committee-rosters` | The `committee/{congress}` list, whole (one page; the route over-declares and `walk_route` publishes what it served), then details only for committees not yet folded or whose list `update_date` moved; both chamber files, whole, each replacing its chamber's seats for the current Congress | `MAX_DETAILS_PER_RUN`, newest `update_date` first; pinned in `tests/test_committee_rosters.py` |
 
 `tests/test_incremental_rollups.py` pins each of these with a counting stub
@@ -879,8 +879,9 @@ five 0.21.2 contracts (A5/A7/A10); every shared-registry edit here sits in an
   for a scoped Congress (the code-order twin holds the same lines under
   colliding positions), each page replacing its session's rows;
   `table3_records` one act page per public law, oldest first under
-  `MAX_TABLE3_PER_RUN`, stopping at the first act Table III does not yet hold
-  so the lag costs one request a run.
+  `MAX_TABLE3_PER_RUN`; a refused act is stepped past and three consecutive
+  refusals (`TABLE3_STOP_AFTER`) are the lag, so it costs three requests a
+  run and no act the table never serves blocks the ones behind it.
 - [x] **`committee-rosters` rollup** (`transforms/build_committee_rosters.py`,
   two outputs): the `committee/{congress}` route walked whole with no `sort`;
   the detail folded through `shape_committee` newest `update_date` first under

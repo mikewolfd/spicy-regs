@@ -211,9 +211,10 @@ def test_table_iii_reads_unread_acts_oldest_first_and_stops_at_the_lag(tmp_path,
     olrc = StubOlrc()
     _, _, table3 = _build(tmp_path, olrc=olrc)
 
-    # Newest Congress first; within it the oldest unread act, which Table III
-    # does not hold yet, stops that Congress's walk; the 111th's act is read.
-    assert olrc.acts == ["119-1", "111-226"]
+    # Newest Congress first; within it the oldest unread acts, which Table III
+    # does not hold yet, refuse three in a row and stop that Congress's walk
+    # short of 119-110; the 111th's act is read.
+    assert olrc.acts == ["119-1", "119-104", "119-109", "111-226"]
     rows = _rows(table3)
     assert {r["act_key"] for r in rows} == {"111-226"} and len(rows) == 4
     assert rows[0]["release_point"] == "119-73" and rows[0]["observed_at"] == OBSERVED_AT
@@ -233,7 +234,8 @@ def test_table_iii_skips_acts_already_published_and_private_laws(tmp_path, monke
     seed(tmp_path, "table3_records", [{"act_key": "111-226", "seq": "0", "observed_at": "2026-09-01"}])
     olrc = StubOlrc()
     _, _, table3 = _build(tmp_path, olrc=olrc)
-    assert olrc.acts == ["119-1"], "a held act is not re-read and a private law is never requested"
+    # The 119th's three lagging acts are the stop; the held 111th act is not re-read and the private law never requested.
+    assert olrc.acts == ["119-1", "119-104", "119-109"]
     assert len(_rows(table3)) == 1, "the held act's prior rows stand"
 
 
@@ -241,6 +243,43 @@ def test_table_iii_honours_its_own_cap(tmp_path, scoped):
     olrc = StubOlrc()
     _build(tmp_path, olrc=olrc, max_table3=0)
     assert olrc.acts == []
+
+
+def test_table_iii_steps_past_one_refused_act_and_reads_the_next(tmp_path, monkeypatch):
+    monkeypatch.setenv("BILL_FAMILY_CONGRESSES", "111")
+    seed(
+        tmp_path,
+        "laws",
+        [
+            {"law_id": "111-public-225", "congress": "111", "law_type": "public", "number": "225"},
+            {"law_id": "111-public-226", "congress": "111", "law_type": "public", "number": "226"},
+        ],
+    )
+    olrc = StubOlrc()  # holds 111-226 only: 111-225 refuses forever
+    _, _, table3 = _build(tmp_path, olrc=olrc)
+    assert olrc.acts == ["111-225", "111-226"]
+    assert {r["act_key"] for r in _rows(table3)} == {"111-226"}, "the refused act blocks nothing behind it"
+
+
+def test_the_citation_reaches_congress_bills_from_a_law_the_run_captured(tmp_path, scoped):
+    """End to end: the laws rollup captures 119-1's PLAW, and the next congress_bills merge carries its citation."""
+    from spicy_docs.schemas import TABLE_CONTRACTS
+
+    from spicy_regs.transforms.table_merge import merge_contract_table, prior_scratch_path
+
+    laws, _, _ = _build(tmp_path)
+    assert _by_law(laws)["119-public-1"]["statutes_at_large_cite"] == "139 Stat. 3"
+    # The published laws table is what the next congress_bills writer downloads.
+    laws.rename(prior_scratch_path(tmp_path, "laws"))
+    bill = {c: None for c in TABLE_CONTRACTS["congress_bills"].columns}
+    bill.update(
+        {"bill_id": "119-s-5", "congress": "119", "bill_type": "s", "bill_number": "5", "update_date": "2026-09-01"}
+    )
+    lagging = dict(bill, bill_id="119-s-307", bill_number="307")
+    out = merge_contract_table(tmp_path, "congress_bills", [bill, lagging], download_prior=no_download)
+    rows = {r["bill_id"]: r for r in pq.read_table(out).to_pylist()}
+    assert rows["119-s-5"]["statutes_at_large_cite"] == "139 Stat. 3"
+    assert rows["119-s-307"]["statutes_at_large_cite"] is None, "119-110's PLAW lagged; nothing is guessed"
 
 
 def test_a_captured_law_is_not_re_read_unless_its_list_row_moved(tmp_path, scoped):
