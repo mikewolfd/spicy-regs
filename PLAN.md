@@ -114,7 +114,9 @@ BillTrax-derived tables took the catalog from 24 classes to 45 and
 `congress_bills` from 10 columns to 48.
 `spicysearch/vendor/spicy-regs-catalog-dictionary.json` is still the 24-class
 copy (`01c77a4a…`, verified 2026-09-19) and no longer matches
-`catalog.json.sha256` (`d08822d8…`). `CATALOG_FORMAT_VERSION` stays `3` on
+`catalog.json.sha256`, which is now `b3fc84ae…` over 47 classes — the linkage
+work below added `bill_vote_references` and moved the digest off the
+`d08822d8…` this section first recorded. `CATALOG_FORMAT_VERSION` stays `3` on
 purpose — no field changed shape, so a reader that only reads fields keeps
 working — but the `kind` vocabulary gained a fifth value, `sampled`, which a
 consumer branching on `kind` must handle before it re-vendors. This is a
@@ -439,14 +441,11 @@ side can land first.
 
 - **Senate roll calls.** `listing.py` has a `house-vote` route and no Senate
   equivalent, and the Senate LIS menu is not a reader this repository has. No
-  Senate row is published rather than one with a NULL tally.
-- **`recordedVotes` as a second vote-linkage source.** It would reach Senate
-  votes and per-action linkage, but it arrives with BILLSTATUS, and a rollup
-  may not read another rollup's output — wiring it means re-acquiring every
-  bill's status inside the votes rollup.
-- **`press_releases.bill_id`** and its match columns, and
-  **`committee_reports.bill_id` / `hearing_transcripts.bill_id`**: preserved
-  NULLs. The contract states the columns; the linkage seams are not driven.
+  Senate row is published rather than one with a NULL tally. ~~**`recordedVotes`
+  as a second vote-linkage source.**~~ and ~~**`press_releases.bill_id`**,
+  **`committee_reports.bill_id` / `hearing_transcripts.bill_id`**~~ — **all
+  three wired 2026-09-19, fifth part below.** `hearing_transcripts.bill_id`
+  stays NULL in practice, but by measurement now rather than by omission.
 - **Coverage statements are honest, not flattering.** Sixteen of the new
   entries open "Sampled" — a fifth `COVERAGE_KINDS` entry added for this —
   because no run has been measured. Promoting one to "Window" or "True range"
@@ -627,3 +626,128 @@ them stale by not knowing a third command exists.
   ends in a commit. `set -o pipefail`; zsh does not word-split unquoted `$var`.
 - **State the population before quoting a rate**, and state a scan's reach:
   "clean everywhere I could reach" is a measurement, "clean" is a reassurance.
+
+**2026-09-19, same branch, fifth part.** The three linkage gaps the
+[spicy-docs gap register](../spicy-docs/docs/research/closing-the-gaps-2026-09-19.md)
+lists as A1, A2 and A3 — the columns whose contracts exist and whose seams
+nothing drove. All three are now driven, with 1,458 tests passing and 47
+hosted tables. None of the three added a publisher request to any run.
+
+- [x] **A1 — `press_releases.bill_id` and its three match columns.**
+  `build_press_releases` reads the published `congress_bills` table for the
+  Congresses in scope, compiles one pattern per bill through
+  `release_matching.compile_bill_patterns`, and runs `match_releases` over the
+  run's items. Three row states stay distinct and the dictionary says so: a
+  match; `match_rule = unmatched`, meaning the pass ran and named nothing; and
+  an all-NULL `match_rule`, meaning no bills were published so no pass ran.
+  `tests/test_press_releases.py` runs both captured feeds end to end — the
+  House feed's four bill-naming items match on `title`, and the Senate branch
+  is reached by editing one captured title, because as captured no Senate title
+  names a bill and the Senate feed carries no description at all, so a Senate
+  match can only ever be a title match.
+
+- [x] **A2 — `committee_reports.bill_id` and `hearing_transcripts.bill_id`,
+  from the MODS already in hand.** The gap doc proposed walking the
+  Congress.gov `committee-report/{congress}` list route and indexing each
+  report's CRPT package id from its text-format URL stem. Measuring first
+  found a cheaper and stricter source: the package's **own MODS**, which
+  `GovInfoBodyAcquirer` already fetches to prove identity before any body byte,
+  carries `<extension><bill congress type number context/>`, and `context`
+  states *how* the package relates to the bill. Only `PRIMARY` fills the
+  column. Measured live on the twelve newest reports of the 119th, the MODS
+  `PRIMARY` bill agreed with the route's own `associatedBill[0]` **12 of 12**,
+  at zero additional requests against the route's one keyed detail call per
+  report. First-listed would have been wrong: `CRPT-119hrpt1` lists S. 5 before
+  the H. Res. 53 it actually accompanies.
+
+  **`hearing_transcripts.bill_id` is NULL by measurement, not omission.** Over
+  52 hearings of the 119th, **no CHRG MODS carried a `PRIMARY` bill**; 18
+  carried `BODY`/`COVER` mentions, up to 25 on one hearing, and of the 6 whose
+  detail named a committee meeting, **none** of those meetings'
+  `relatedItems.bills` named a bill. So the `hearing → meeting → bill` chain
+  the gap doc names buys nothing at two keyed requests per hearing, and a
+  mention is never promoted to a linkage — publishing H.R. 1 as the subject of
+  a hearing that merely cites it is a guess dressed as a fact. The mentions are
+  counted by context in the run log.
+
+  **A column to request in spicy-docs.** The contract has no home for the
+  non-`PRIMARY` mentions. If they are wanted, the ask is one column on both
+  package tables — `associated_bills_json`, each entry carrying the bill key
+  *and its `context`* — because a list of bare bill ids would lose the very
+  distinction that makes `bill_id` trustworthy. Not added here: this repository
+  does not restate a published shape it does not own.
+
+- [x] **A3 — `recordedVotes` as the second vote linkage, and the contract
+  question it turned on.** The bill family emits a fifteenth output,
+  `bill_vote_references` (bill, chamber, congress, session, roll number, the
+  action index, url, date, `full_action_name`, `observed_at`; keyed on all but
+  the last three), written through `merge_table`. The `roll-call-votes` rollup
+  reads that published table at merge time, indexes it **before** the
+  `house-vote` listing's own references so a bill's own action wins a
+  disagreement, and fills `bill_id`, `match_rule`, `match_action_index`,
+  `match_url` and `conflict_count`.
+
+  **The choice: read the published table.** The brief allowed either that or,
+  if `pipelines/rollups/base.py` forbade it outright, a second walk of bill
+  actions inside the votes rollup under a cap. The contract's *prose* did
+  forbid it — "never another rollup's output" — but its stated *reason* is "so
+  pipelines stay independently schedulable with no cross-pipeline race", and
+  three landed rollups already read a published **ingest** rollup's output for
+  exactly that reason, each recording it: `fr_docket_links`
+  (`federal_register`), `bill_subjects` (`congress_bills`) and
+  `org_committee_links` (`fec_committees`), whose docstring argues the general
+  case — an ingest table has no upstream dependency inside this repository, so
+  reading it is an ordering preference the crons already honour, not a race.
+  The prose was written before those three and had gone stale. Re-deriving
+  instead would mean re-acquiring every scoped bill's BILLSTATUS — up to ~52 MB
+  of bulk zip per run — to recompute what the family parsed an hour earlier.
+  So: read it, and **amend the contract paragraph to say what its own reason
+  implies and what four rollups now do**, rather than add a fourth silent
+  violation. A *derived* rollup's output stays forbidden. A linkage input is
+  read best-effort and is deliberately **not** declared in `inputs`, because
+  `inputs` fails the run on absence and a missing linkage must instead leave
+  the columns NULL.
+
+  **`conflict_count` was wrong and is now per roll call.** It had been
+  `len(index.conflicts)` — one run-wide number stamped on every row, which says
+  every roll call was contested whenever any one was. With a single source a
+  conflict was nearly unreachable, so nothing exposed it; with two sources it
+  is reachable, and the contract's own sentence ("how many later references
+  disagreed with the one that won") is a fact about one vote.
+  `test_a_conflict_is_counted_on_the_row_it_belongs_to` pins it.
+
+  **Scope did not widen.** The references carry Senate roll calls — 6 of the 34
+  measured — but a set of keys reached from bills is not an index of a
+  session's roll calls, so the fetch set stays exactly what the House listing
+  names and Senate references sit unused until a Senate index route lands.
+
+  **The proof is the measured sample, not a synthetic one.** The 58
+  `recordedVotes` entries spicy-docs read off 20 bills of the 119th are copied
+  into `tests/fixtures/congress_votes/recorded-votes-119-sample.json` with
+  provenance, and resolve to **34 distinct roll calls with zero conflicts**
+  through this transform's own reading path. The 58-to-34 collapse is the
+  publisher's shape — one roll call recorded on both the passage action and the
+  motion to reconsider — which is why the table is keyed by action index.
+
+**Two things done along the way, neither an A-item.**
+
+- `table_merge.published_table` replaces the "download the prior table unless
+  it is already on disk" idiom that four transforms spelled out and these two
+  linkage joins would have made six.
+- `ty check` is clean for the first time: the pre-existing
+  `tests/test_fec_relationships.py` diagnostic (gap E3) is fixed by annotating
+  the dict the case deliberately puts three value shapes into, and
+  `build_press_releases` gained the narrow `PressReleaseSource` Protocol its
+  four sibling transforms already have, so a hermetic stub is typeable.
+
+**Fixtures added, all with provenance READMEs.** The two press-release feeds
+and `mods-CRPT-119hrpt1.xml` are byte-for-byte copies from the pinned
+spicy-docs v0.21.1, digests verified against the tag;
+`mods-CHRG-119hhrg63127.xml` was captured for this work on 2026-09-19 with the
+api.data.gov key sent only as `X-Api-Key`, and the capture refused to write any
+body containing the key or an `api_key=` parameter.
+
+Every check through the project's runner: `uv run --frozen pytest -q` (1,458
+passed, 3 deselected), `uv run --frozen ruff check .`, `uv run --frozen
+spicy-regs-dict check` (47 tables), `uv run --frozen ty check` (clean). Not
+pushed — local commits on `hosting-linkages` only, per instruction.
