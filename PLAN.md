@@ -429,11 +429,113 @@ same fixture rather than committing a second one, and build real PDFs with
 for the cleanup-record test, so a genuine GPO gutter-numbered page is really
 extracted, not merely accepted as non-null).
 
-**[SR01](#sr01) is untouched by all of this.** It owns the `congress_bills`
-reader replacement (adopting SpicyDocs' `listing.py` in place of the local
-`CongressBillsReader`). This work shares exactly one thing with it — the frozen
-ten-column prefix — which is precisely why the design froze that prefix: either
-side can land first.
+**[SR01](#sr01) was untouched by all of this — it landed separately, below.**
+It owned the `congress_bills` reader replacement (adopting SpicyDocs'
+`listing.py` in place of the local `CongressBillsReader`). This work shared
+exactly one thing with it — the frozen ten-column prefix — which is precisely
+why the design froze that prefix: either side could land first, and SR01 did,
+after this work, without touching it.
+
+**2026-09-19, branch `hosting-sr01` (off `billtrax-hosting-prep`, local only,
+not pushed).** Closes spicy-docs gap D2
+(`docs/research/closing-the-gaps-2026-09-19.md` in spicy-docs): retired
+`sources/congress_bills.py`'s hand-rolled `offset`/`limit` HTTP walk in favour
+of spicy-docs' `CongressListingReader` over the measured `bill` route
+(`sort_honored=True`, sealed 2026-09-19 — see spicy-docs
+`docs/sources/listings.md`). `CongressBillsReader` keeps every one of this
+repo's own responsibilities: the fetch window from the prior table's
+watermark minus the overlap, `MAX_WINDOW_DAYS`, `CONGRESS_SINCE`/
+`CONGRESS_UNTIL`, and this repo's own api.data.gov env fallback chain
+(`_resolve_api_key`) — now handed to the spicy-docs reader as a header
+(`X-Api-Key`), never a query parameter. `_bill_id`, `_shape`, `_bounded_until`
+and `build_congress_bills.py`'s ten-column `COLUMNS`/`merge_contract_table`
+call are untouched, so the frozen prefix and the data dictionary's contract
+digest do not move (`spicy-regs-dict check` reports no diff).
+
+The hand-rolled paging (`_paginate`, `_get_page`, `_get`, `_pagination_count`,
+`SORT_NEWEST_FIRST`, the manual retry/backoff loop) is deleted along with its
+seven tests; the reader also refuses — surfacing spicy-docs' own behavior —
+when the publisher's declared and observed row counts disagree, instead of
+this repo's old "warn below a completeness tolerance" heuristic (the shape of
+the 510-day freeze this reader once caused). Three tests replace the deleted
+seven, hermetic over `httpx.MockTransport`: the walk delegates correctly and
+yields raw dicts, an unset window sends no bound, and a declared/observed
+mismatch raises. 18 tests now cover this file (was 22: "21 existing tests plus
+the end-to-end merge test"); `test_build_congress_bills_merges_prior_and_fresh_rows`
+is unchanged and still green. 1,429 source tests pass (was 1,433; net four
+fewer, matching the seven removed against the three added) — `uv run --frozen
+pytest -q`, `ruff check .`, `spicy-regs-dict check`, `ty check` (the one
+pre-existing `tests/test_fec_relationships.py` diagnostic — gap E3 in
+spicy-docs `docs/research/closing-the-gaps-2026-09-19.md` — is unrelated and
+untouched). Not pushed — local commit on `hosting-sr01` only.
+
+**Same day, follow-up: refuse-and-retry replaces warn-and-publish.** Review
+before merging into `billtrax-hosting-prep` named an operational risk the
+change above did not cover: the spicy-docs reader refuses on *any* declared-
+count disagreement, not only a shortfall at the end, and a nightly window
+that closes at "now" is walked over several minutes — long enough for the
+publisher to edit a bill's `updateDate` past `toDateTime` mid-walk, shrinking
+the declared count out from under a request already in flight. Unlike the
+old reader's warn-below-a-tolerance heuristic, an unmitigated refusal there
+would publish *nothing* for the whole night on a transient publisher-side
+race, not a real truncation. The reader's refusal stays absolute — it is the
+evidence rule, and weakening it would reopen the exact defect this change
+closed — but the *policy* of what to do about a refusal belongs one layer up,
+where the window is chosen: `build_congress_bills.py` gained `_fetch_bills`,
+which asks a fresh `CongressBillsReader` for the identical window up to
+`FETCH_ATTEMPTS` (3) times with a `RETRY_PAUSE_SECONDS` (30s) pause between
+attempts, discarding each failed attempt's partial rows (a partially-yielded
+generator cannot be resumed, and keeping its rows would be the same
+truncated-table shape refuse-and-retry exists to prevent). A refusal that
+survives all three attempts propagates unchanged: the run publishes nothing
+and fails loudly, exactly as a first-attempt refusal always did — retrying
+buys tolerance for a drift that clears within a few attempts, not a license
+to ever publish a window this repo did not walk in full. Both module
+docstrings (`sources/congress_bills.py` and `transforms/build_congress_bills.py`)
+now state this trade-off directly.
+
+Two new tests pin the risk and the fix: `test_walk_refuses_when_the_declared_count_changes_mid_walk`
+in `tests/test_congress_bills.py` is a two-page `httpx.MockTransport` fixture
+where page two declares one fewer than page one, exercising the "declared
+count changed during the traversal" refusal specifically (distinct from the
+declared-vs-observed-at-the-end refusal already covered) — the exact shape
+the retry exists for. `test_fetch_retries_a_walk_refusal_and_succeeds` and
+`test_fetch_gives_up_after_max_attempts` use a stub reader whose `iter_records()`
+raises on its first N constructions then succeeds, proving both that a
+transient refusal is absorbed (first raises, second succeeds — the merged
+table matches the stub's rows) and that a persistent one is not (three
+attempts, then the original `PagedJsonSourceError` propagates from
+`build_congress_bills()` itself). 21 tests now cover `tests/test_congress_bills.py`
+(three more than the note above); 1,432 source tests pass. `ruff check .`,
+`spicy-regs-dict check` (no diff) and `ty check` (same one pre-existing,
+unrelated diagnostic) all still pass. Not pushed — local commit on
+`hosting-sr01` only.
+
+**Same day, two more nits before merge.** (A) `_fetch_bills`'s
+`PagedJsonSourceError` import was still eager — it ran before
+`CongressBillsReader(...)` even got a chance to short-circuit on a keyless
+run, unlike `iter_records()`'s own discipline. Fixed by catching `Exception`
+broadly and importing (then `isinstance`-checking, re-raising immediately if
+it doesn't match) only inside the handler: Python never evaluates an
+`except <Name>` clause's type at all when the `try` block doesn't raise, so
+on the keyless happy path — the only path a base install without the
+`source-readers` extra needs to survive — the import genuinely never runs
+now. Verified directly: `_fetch_bills(None, None)` with no key set and
+`spicy_docs` import blocked via a `sys.meta_path` hook still returns `[]`
+without tripping the block. (B) The retry caught every
+`PagedJsonSourceError`, not only the drift shape it exists for, so a
+permanent refusal (malformed JSON, a bad date parameter, a 404) would have
+burned two `RETRY_PAUSE_SECONDS` pauses under a "walk refused, retrying" log
+line before failing anyway. Narrowed to retry only when the error's
+`paged_json_acquisition` context carries both a `declaredCount` and an
+`observedCount` — the two drift shapes — and re-raise everything else at
+once. `test_fetch_does_not_retry_a_non_drift_refusal` pins it: a stub
+refusal with neither count in its context propagates on exactly one
+attempt. Both module docstrings restate the narrowed trade-off. 22 tests now
+cover `tests/test_congress_bills.py`; 1,433 source tests pass;
+`spicy-regs-dict check` still reports no diff (digest unchanged) and `ty
+check` still shows only the same one pre-existing, unrelated diagnostic. Not
+pushed — local commit on `hosting-sr01` only.
 
 **Not wired, with the reason:**
 
@@ -454,7 +556,7 @@ side can land first.
 
 <a id="sr01"></a>
 
-- [ ] **SR01 — Select SpicyRegs capabilities to reuse and local duplication to remove.**
+- [x] **SR01 — Select SpicyRegs capabilities to reuse and local duplication to remove.**
   **Owner: SpicyRegs.** Review actual source connectors, strict parsers, table
   and Iceberg publication, CourtListener handling, documented-value diagnostics,
   public imports and optional dependencies. Coordinate the local inventory with
@@ -473,6 +575,25 @@ side can land first.
   [S16](../spicy-docs/docs/simplification-todo.md#s16) own their local dispositions;
   [DocSpec D42](../DocSpec/docs/dataset-experiments-todo.md#d42) owns its adapter
   changes. Only the relevant ownership decision gates each handoff.
+
+  **Closed 2026-09-19, branch `hosting-sr01`.** The candidate spicy-docs'
+  gap register names under this label — `docs/research/closing-the-gaps-2026-09-19.md`
+  gap D2, "spicy-regs's hand-rolled `congress_bills` reader still exists beside
+  `listing.py`" — is decided KEEP/SHARE: keep this repo's window, watermark,
+  env-key-resolution and frozen-shape responsibilities; share the walk itself
+  by adopting `CongressListingReader` over spicy-docs' measured `bill` route.
+  [SR03](#sr03) is the follow-on for implementing it, and this same change
+  *is* that implementation — decision and implementation landed together for
+  this one candidate, the same pattern [SR04](#sr04) set for CourtListener.
+  See the narrative entry above (in "BillTrax-derived table hosting") for the
+  specifics: files, tests removed/added, the unchanged contract digest, and
+  the same-day follow-up that added a bounded retry around the reader's
+  now-absolute refusal so a mid-walk publisher drift on a nightly window
+  cannot fail a run the old heuristic would merely have warned about.
+  CourtListener handling was already decided and implemented under SR04; the
+  remaining named candidates (strict parsers, table/Iceberg publication,
+  documented-value diagnostics, public imports and optional dependencies)
+  were not reviewed by this change and stay open under SR03 if picked up.
 
 <a id="sr02"></a>
 
@@ -519,6 +640,15 @@ side can land first.
   Record deferred changes separately. Distinguish local preparation, commits,
   proposed upstream work and accepted upstream work; follow this plan's existing
   authorization rules for publication and upstream submission.
+
+  **First landed instance: the [SR01](#sr01) congress_bills decision, branch
+  `hosting-sr01`, 2026-09-19** — `CongressBillsReader` now adopts spicy-docs'
+  `CongressListingReader`; the replaced hand-rolled offset/limit walk and its
+  seven tests are removed. This repo's fixtures cover it directly
+  (`tests/test_congress_bills.py`, hermetic over `httpx.MockTransport`); no
+  separate installed-wheel handoff doc was needed since spicy-docs 0.21.1 was
+  already the pinned `source-readers` extra. Any further SR01 candidate that
+  gets a KEEP/SHARE decision lands here the same way.
 
 <a id="sr04"></a>
 
