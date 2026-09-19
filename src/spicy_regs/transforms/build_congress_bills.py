@@ -27,10 +27,41 @@ explicitly with ``CONGRESS_SINCE``/``CONGRESS_UNTIL``.
 
 Scope is deliberately **list-level only**: every column comes from the ``/bill``
 list payload, so there are no per-bill detail fetches (no N+1).
+
+**Refuse-and-retry replaces warn-and-publish.** The old hand-rolled reader
+warned when a walk returned materially fewer bills than the server had
+advertised and published the short result anyway — the completeness-tolerance
+heuristic that let the 510-day freeze go unnoticed for as long as it did. The
+spicy-docs reader this module now fetches through (see
+:mod:`spicy_regs.sources.congress_bills`) refuses outright — raises
+``PagedJsonSourceError``, publishes nothing — the moment its declared and
+observed counts disagree, at any point in the walk, not only at the end. That
+refusal is the right *evidence* rule and stays absolute in the reader: a
+window this repo asked for and did not fully receive must never look like a
+completed run. But an absolute refusal has an operational cost the reader
+cannot see: a nightly window that closes at "now" is walked over several
+minutes, and a bill the publisher edits *during* that walk can move its own
+``updateDate`` past ``toDateTime``, drop out of the result set mid-walk, and
+shrink the declared count out from under a request already in flight — a
+transient publisher-side race, not a truncated or out-of-order walk. Retrying
+the identical window is this module's job, not the reader's: :func:`_fetch_bills`
+asks the same ``since``/``until`` window again, up to :data:`FETCH_ATTEMPTS`
+times with a short pause between attempts, on the theory that the publisher's
+state has settled by the next attempt — but only when the refusal actually
+looks like that drift (its context names both a ``declaredCount`` and an
+``observedCount``); a permanent refusal (malformed JSON, a bad date
+parameter, a 404) propagates on the first attempt rather than spend the same
+pauses reaching the same failure. A drift refusal that survives all
+:data:`FETCH_ATTEMPTS` attempts propagates and fails the run loudly — the
+run publishes nothing and the next scheduled run tries again from the same
+watermark, exactly as a first-attempt refusal always did; retrying only buys
+tolerance for a drift that resolves itself within a few attempts, not a
+license to publish a table this repo never actually walked in full.
 """
 
 from __future__ import annotations
 
+import time
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -52,6 +83,19 @@ OVERLAP_DAYS = 3
 # freeze: ~90 days is ~42k bills, roughly 14 minutes — comfortably inside the
 # job timeout even if a stretch runs several times denser than average.
 MAX_WINDOW_DAYS = 90
+
+# How many times _fetch_bills asks the same window for before giving up and
+# propagating the reader's refusal. Three total attempts: the first is the
+# ordinary case, the second absorbs a single mid-walk publisher edit (the
+# expected shape of the drift below), and the third is headroom for an
+# unlucky repeat rather than a promise every drift resolves in one retry.
+FETCH_ATTEMPTS = 3
+
+# Paused between attempts so the publisher's own state (and this repo's
+# window, which is wall-clock "now"-relative on every run) has a moment to
+# settle rather than re-asking an in-flux window immediately. Short relative
+# to one walk (~14 minutes at MAX_WINDOW_DAYS) and to a nightly job's budget.
+RETRY_PAUSE_SECONDS = 30.0
 
 # The published schema: 10 columns, all VARCHAR, in a fixed order. ``bill_id`` is
 # the primary / dedup key.
@@ -116,6 +160,63 @@ def _bounded_until(since: date | None, until: date | None, *, today: date | None
     return min(until or today or date.today(), since + timedelta(days=MAX_WINDOW_DAYS))
 
 
+def _fetch_bills(since: date | None, until: date | None) -> list[dict]:
+    """Fetch + shape one window's bills, retrying a mid-walk publisher drift.
+
+    ``CongressBillsReader.iter_records()`` refuses — raises
+    ``PagedJsonSourceError`` — the moment the publisher's declared and
+    observed counts disagree; that refusal is correct and this function never
+    weakens it. What it adds is the retry *policy*: a fresh reader asks the
+    identical ``since``/``until`` window again, up to :data:`FETCH_ATTEMPTS`
+    times total with :data:`RETRY_PAUSE_SECONDS` between attempts, before the
+    refusal propagates. Each attempt starts a brand-new walk from scratch —
+    a partially-yielded generator cannot be resumed, and a refused walk's
+    partial rows are exactly the truncated-table shape this repo refuses to
+    publish, so they are discarded, not kept.
+
+    Retried only when the refusal actually looks like a drift: its
+    ``paged_json_acquisition`` context names both a ``declaredCount`` and an
+    ``observedCount`` — the shape of "the declared count changed mid-walk" and
+    "declared and observed disagree at the end", the two ways a publisher's
+    state can move out from under a request already in flight. Every other
+    ``PagedJsonSourceError`` — malformed JSON, a bad date parameter, a 404 —
+    is permanent: retrying it would only burn ``FETCH_ATTEMPTS`` pauses under
+    a misleading "walk refused, retrying" log line before failing the same
+    way it would have on the first attempt, so it propagates immediately.
+    """
+    for attempt in range(1, FETCH_ATTEMPTS + 1):
+        reader = CongressBillsReader(since=since, until=until)
+        try:
+            return [_shape(doc) for doc in reader.iter_records()]
+        except Exception as error:
+            # Deferred so a keyless run — CongressBillsReader.iter_records()
+            # returns before ever importing spicy-docs — never needs the
+            # optional source-readers extra either, matching the reader's own
+            # lazy-import discipline. By the time a PagedJsonSourceError can
+            # actually occur, the reader has already imported this module
+            # itself in order to raise it.
+            from spicy_docs.reading.paged_json import PagedJsonSourceError
+
+            if not isinstance(error, PagedJsonSourceError):
+                raise
+            context = getattr(error, "paged_json_acquisition", None) or {}
+            declared, observed = context.get("declaredCount"), context.get("observedCount")
+            if declared is None or observed is None:
+                raise
+            logger.warning(
+                "Congress bills: walk refused on attempt {}/{} (declared={}, observed={}): {}",
+                attempt,
+                FETCH_ATTEMPTS,
+                declared,
+                observed,
+                error,
+            )
+            if attempt == FETCH_ATTEMPTS:
+                raise
+            time.sleep(RETRY_PAUSE_SECONDS)
+    raise AssertionError("unreachable")  # the loop above always returns or raises
+
+
 def _prior_max_update_date(prior_file: Path) -> date | None:
     """Largest ``update_date`` in the prior table, or None if empty/absent."""
     if not prior_file.exists():
@@ -154,9 +255,8 @@ def build_congress_bills(output_dir: Path, *, since: date | None = None, until: 
         until or "now",
     )
 
-    # 3. Fetch + shape the freshly fetched rows.
-    reader = CongressBillsReader(since=since, until=until)
-    rows = [_shape(doc) for doc in reader.iter_records()]
+    # 3. Fetch + shape the freshly fetched rows, retrying a mid-walk drift.
+    rows = _fetch_bills(since, until)
     logger.info("Congress bills: fetched {:,} bills this run", len(rows))
 
     # 4. Merge through the contract, not through COLUMNS. This walk fills the

@@ -1,21 +1,33 @@
 """Hermetic tests for the Congress.gov bill ingest (no network).
 
 Covers the pieces with real logic: the raw-bill → published-schema mapping
-(``_shape`` / ``_bill_id``), the API-key resolution fallback chain, the
-offset/limit pagination, the request params that bound the fetch window, and
-(at the bottom) an end-to-end ``build_congress_bills()`` run against a seeded
-prior table and a stubbed fetch — the thing that actually proves the
-``table_merge.merge_table`` refactor preserved this table's merge behavior;
-the unit tests above it never call ``build_congress_bills()`` or read the
-merged Parquet, so they cannot make that claim on their own.
+(``_shape`` / ``_bill_id``), the API-key resolution fallback chain, the fetch
+window this repo still computes (``_bounded_until``), and — at the bottom —
+an end-to-end ``build_congress_bills()`` run against a seeded prior table and
+a stubbed fetch, plus the actual delegation to spicy-docs'
+``CongressListingReader`` over an ``httpx.MockTransport`` (gap D2 / SR01:
+this repo no longer hand-rolls the ``offset``/``limit`` walk; see
+``spicy_regs.sources.congress_bills``'s module docstring for what moved and
+why). The unit tests above ``test_build_congress_bills_merges_prior_and_fresh_rows``
+never call ``build_congress_bills()`` or read the merged Parquet, so only that
+test exercises the SQL merge end to end.
 
-The params tests are regression cover for the 510-day freeze: ``sort`` has to
-reach the API as ``updateDate+desc`` (a space, which httpx form-encodes to
-``+``) and the window has to be bounded server-side by ``fromDateTime``.
+The last section covers the retry *policy* this reader's absolute refusal
+made necessary: ``_fetch_bills`` in ``build_congress_bills.py`` retries an
+identical window a bounded number of times when the reader refuses on a
+mid-walk publisher drift, and gives up loudly — never publishing a partial
+table — once that bound is spent. It also narrows *which* refusals get
+retried: only ones whose context carries both a ``declaredCount`` and an
+``observedCount`` (the drift shapes); anything else propagates on the first
+attempt, covered by ``test_fetch_does_not_retry_a_non_drift_refusal``.
+``test_walk_refuses_when_the_declared_count_changes_mid_walk`` pins the exact
+refusal shape (a two-page walk whose declared count shrinks between pages)
+that policy exists for.
 """
 
 from __future__ import annotations
 
+import json
 from datetime import date, timedelta
 from importlib import import_module
 
@@ -23,10 +35,10 @@ import httpx
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
+from spicy_docs.reading.paged_json import PagedJsonSourceError
 
 from spicy_regs.sources.congress_bills import (
     API_KEY_ENV_VARS,
-    SORT_NEWEST_FIRST,
     CongressBillsReader,
     _resolve_api_key,
 )
@@ -126,102 +138,113 @@ def test_reader_yields_nothing_without_key(monkeypatch):
     for var in API_KEY_ENV_VARS:
         monkeypatch.delenv(var, raising=False)
     reader = CongressBillsReader()
-    # No key configured: a keyless run is a no-op, not a crash.
+    # No key configured: a keyless run is a no-op, not a crash — and this
+    # must not require spicy-docs' optional source-readers extra, since
+    # iter_records() returns before ever importing spicy_docs.
     assert list(reader.iter_records()) == []
 
 
-# -- pagination --------------------------------------------------------------
+# -- the walk, delegated to spicy-docs' CongressListingReader ---------------
 
 
-def _bill(n: int, day: str) -> dict:
-    return {"congress": 118, "type": "hr", "number": n, "updateDate": day}
+def _bill(number: int, day: str) -> dict:
+    return {"congress": 118, "type": "hr", "number": number, "updateDate": day}
 
 
-def test_paginate_walks_offsets_until_short_page(monkeypatch):
-    """Full pages advance the offset; a short page ends pagination."""
-    reader = CongressBillsReader(api_key="test", per_page=2)
-    pages = {
-        0: {"bills": [_bill(1, "2024-03-05"), _bill(2, "2024-03-04")]},
-        2: {"bills": [_bill(3, "2024-03-03")]},  # short page -> stop
-    }
-    monkeypatch.setattr(reader, "_get_page", lambda offset: pages.get(offset, {"bills": []}))
-    got = [b["number"] for b in reader._paginate()]
-    assert got == [1, 2, 3]
+def test_reader_walks_the_bill_route_and_yields_raw_dicts():
+    """The window this repo computes reaches the wire as fromDateTime/toDateTime
+    on the measured ``bill`` route; the key travels as a header, never the query
+    string — the whole walk is spicy-docs' CongressListingReader, not a local loop."""
+    bills = [_bill(1, "2025-04-07"), _bill(2, "2025-04-06")]
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        assert request.url.host == "api.congress.gov"
+        assert request.url.path == "/v3/bill"
+        assert request.headers["X-Api-Key"] == "test-key"
+        assert "api_key" not in request.url.params  # header-only, never the URL
+        assert request.url.params["sort"] == "updateDate desc"
+        assert request.url.params["fromDateTime"] == "2025-04-04T00:00:00Z"
+        assert request.url.params["toDateTime"] == "2025-04-08T00:00:00Z"
+        body = {"bills": bills, "pagination": {"count": len(bills)}}
+        return httpx.Response(
+            200, stream=httpx.ByteStream(json.dumps(body).encode()), headers={"content-type": "application/json"}
+        )
+
+    reader = CongressBillsReader(
+        since=date(2025, 4, 4),
+        until=date(2025, 4, 8),
+        api_key="test-key",
+        transport=httpx.MockTransport(respond),
+    )
+    assert list(reader.iter_records()) == bills
 
 
-def test_paginate_does_not_stop_on_an_out_of_order_page(monkeypatch):
-    """Row order must not truncate the walk — the server bounds the window.
+def test_no_since_or_until_sends_no_window_bound():
+    """A full backfill (no watermark yet) must not accidentally bound itself."""
 
-    This is the 510-day freeze in miniature: with ``sort`` silently ignored the
-    rows arrive shuffled, and the old client-side watermark stop quit after the
-    first row. Every bill on the page has to survive.
-    """
-    reader = CongressBillsReader(api_key="test", per_page=3, since=date(2025, 4, 4))
-    pages = {
-        0: {
-            "bills": [
-                _bill(1, "2025-04-07"),
-                _bill(2, "2025-01-02"),  # out of order — must NOT end the walk
-                _bill(3, "2026-03-24"),
-            ]
-        },
-        3: {"bills": [_bill(4, "2024-02-07")]},  # short page -> stop
-    }
-    monkeypatch.setattr(reader, "_get_page", lambda offset: pages.get(offset, {"bills": []}))
-    got = [b["number"] for b in reader._paginate()]
-    assert got == [1, 2, 3, 4]
+    def respond(request: httpx.Request) -> httpx.Response:
+        assert "fromDateTime" not in request.url.params
+        assert "toDateTime" not in request.url.params
+        body = {"bills": [], "pagination": {"count": 0}}
+        return httpx.Response(
+            200, stream=httpx.ByteStream(json.dumps(body).encode()), headers={"content-type": "application/json"}
+        )
+
+    reader = CongressBillsReader(api_key="test-key", transport=httpx.MockTransport(respond))
+    assert list(reader.iter_records()) == []
 
 
-# -- request params ----------------------------------------------------------
+def test_walk_refuses_when_declared_and_observed_counts_disagree():
+    """Surfaces spicy-docs' own walk-consistency refusal here: this repo no
+    longer hand-rolls pagination, so the discipline against an inconsistent or
+    truncated walk — the shape of the 510-day freeze — now lives in, and is
+    enforced by, the shared spicy-docs reader rather than a local completeness
+    warning."""
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        # The publisher declares 5 but the (sole, terminal) page only carries 1.
+        body = {"bills": [_bill(1, "2025-04-07")], "pagination": {"count": 5}}
+        return httpx.Response(
+            200, stream=httpx.ByteStream(json.dumps(body).encode()), headers={"content-type": "application/json"}
+        )
+
+    reader = CongressBillsReader(api_key="test-key", transport=httpx.MockTransport(respond))
+    with pytest.raises(PagedJsonSourceError, match="differ"):
+        list(reader.iter_records())
 
 
-def _params_for(monkeypatch, reader: CongressBillsReader) -> dict:
-    """Capture the query params ``_get_page`` would send."""
-    captured: dict = {}
+def test_walk_refuses_when_the_declared_count_changes_mid_walk():
+    """The operational risk ``_fetch_bills`` retries for: a nightly window that
+    closes at "now" is walked over several minutes, and a bill the publisher
+    edits *during* that walk can move its own ``updateDate`` past
+    ``toDateTime`` and drop out of the window — the declared count shrinks
+    between page one and page two of the *same* walk, not only at the end.
+    The reader refuses immediately rather than publish a shrunk result;
+    retrying the identical window is ``build_congress_bills.py``'s job, not
+    this reader's (see ``test_congress_bills.py``'s retry-policy tests)."""
+    page_one_bills = [_bill(1, "2025-04-07"), _bill(2, "2025-04-06")]
+    page_two_bills = [_bill(3, "2025-04-05")]
+    next_url = "https://api.congress.gov/v3/bill?format=json&limit=250&offset=250&sort=updateDate+desc"
+    calls = {"n": 0}
 
-    def fake_get(url, params):
-        captured.update(params or {})
-        return None
+    def respond(request: httpx.Request) -> httpx.Response:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            # Page one declares 3 bills total and points at a next page.
+            body = {"bills": page_one_bills, "pagination": {"count": 3, "next": next_url}}
+        else:
+            # Page two, the walk's terminal page: the publisher now declares
+            # only 2 — one fewer than page one stated, mid-walk.
+            assert str(request.url) == next_url
+            body = {"bills": page_two_bills, "pagination": {"count": 2}}
+        return httpx.Response(
+            200, stream=httpx.ByteStream(json.dumps(body).encode()), headers={"content-type": "application/json"}
+        )
 
-    monkeypatch.setattr(reader, "_get", fake_get)
-    reader._get_page(0)
-    return captured
-
-
-def test_sort_param_survives_url_encoding(monkeypatch):
-    """httpx must encode ``sort`` to ``updateDate+desc``, not ``updateDate%2Bdesc``.
-
-    The API answers 200 to both but only honours the former; the ``%2B`` form
-    returns rows in arbitrary order, which is what froze this table.
-    """
-    params = _params_for(monkeypatch, CongressBillsReader(api_key="test"))
-    assert params["sort"] == SORT_NEWEST_FIRST
-    url = httpx.Request("GET", "https://api.congress.gov/v3/bill", params=params).url
-    assert "sort=updateDate+desc" in str(url)
-    assert "%2B" not in str(url)
-
-
-def test_since_becomes_a_server_side_from_datetime(monkeypatch):
-    reader = CongressBillsReader(api_key="test", since=date(2025, 4, 4))
-    assert _params_for(monkeypatch, reader)["fromDateTime"] == "2025-04-04T00:00:00Z"
-
-
-def test_no_since_sends_no_window_bound(monkeypatch):
-    """A full backfill must not accidentally bound itself."""
-    params = _params_for(monkeypatch, CongressBillsReader(api_key="test"))
-    assert "fromDateTime" not in params
-
-
-def test_since_and_until_become_server_side_bounds(monkeypatch):
-    reader = CongressBillsReader(api_key="test", since=date(2025, 4, 4), until=date(2025, 7, 3))
-    params = _params_for(monkeypatch, reader)
-    assert params["fromDateTime"] == "2025-04-04T00:00:00Z"
-    assert params["toDateTime"] == "2025-07-03T00:00:00Z"
-
-
-def test_no_until_sends_no_upper_bound(monkeypatch):
-    params = _params_for(monkeypatch, CongressBillsReader(api_key="test", since=date(2025, 4, 4)))
-    assert "toDateTime" not in params
+    reader = CongressBillsReader(api_key="test-key", transport=httpx.MockTransport(respond))
+    with pytest.raises(PagedJsonSourceError, match="declared count changed during the traversal"):
+        list(reader.iter_records())
+    assert calls["n"] == 2
 
 
 # -- catch-up windowing ------------------------------------------------------
@@ -371,3 +394,98 @@ def test_build_congress_bills_merges_prior_and_fresh_rows(tmp_path, monkeypatch)
 
     # Ordered by update_date DESC, then bill_id.
     assert [row["bill_id"] for row in rows] == ["118-hr-1", "119-hr-99", "118-s-2"]
+
+
+# -- retrying a mid-walk publisher drift (build_congress_bills._fetch_bills) --
+
+
+def _flaky_reader_factory(*, fail_times: int, drift: bool = True) -> tuple[type, dict]:
+    """A CongressBillsReader stand-in whose first ``fail_times`` constructions
+    raise from ``iter_records()``, then succeed. Returns ``(cls, calls)``: the
+    counter dict is shared across instances — each retry attempt in
+    ``_fetch_bills`` builds a brand-new reader, exactly like a real retry
+    would — so a test can assert exactly how many attempts were made without
+    needing a class attribute (a class body cannot close over this factory's
+    locals the way a method can, so the counter travels back to the caller
+    instead).
+
+    ``drift=True`` (the default) raises with both ``declaredCount`` and
+    ``observedCount`` in the error's ``paged_json_acquisition`` context — the
+    shape of a mid-walk publisher drift ``_fetch_bills`` retries.
+    ``drift=False`` raises a permanent, non-drift refusal (a malformed page,
+    missing both counts) that must propagate on the first attempt instead.
+    """
+    calls = {"n": 0}
+
+    class _FlakyReader:
+        def __init__(self, *, since=None, until=None):
+            self.since = since
+            self.until = until
+
+        def iter_records(self):
+            calls["n"] += 1
+            if calls["n"] <= fail_times:
+                if drift:
+                    error = PagedJsonSourceError("Congress.gov declared count changed during the traversal")
+                    context = {"declaredCount": 3, "observedCount": 2}
+                else:
+                    error = PagedJsonSourceError("Congress.gov list response is not a JSON object")
+                    context = {"operation": "page", "requestCount": 1}
+                # Mirrors spicy-docs' own paged_json.py, which attaches this
+                # context via __dict__ rather than a declared attribute.
+                error.__dict__["paged_json_acquisition"] = context
+                raise error
+            return iter(_FRESH_RAW)
+
+    return _FlakyReader, calls
+
+
+def test_fetch_retries_a_walk_refusal_and_succeeds(tmp_path, monkeypatch):
+    """First attempt raises (the mid-walk drift), second succeeds — the retry
+    this reader's absolute refusal exists for; the reader itself never
+    weakens, but ``build_congress_bills`` asks the same window again."""
+    monkeypatch.setattr(bcb.r2, "download", lambda remote_key, local_path: False)
+    monkeypatch.setattr(bcb.time, "sleep", lambda seconds: None)
+    reader_cls, calls = _flaky_reader_factory(fail_times=1)
+    monkeypatch.setattr(bcb, "CongressBillsReader", reader_cls)
+
+    out_path = bcb.build_congress_bills(tmp_path)
+
+    rows = pq.read_table(out_path).to_pylist()
+    assert {row["bill_id"] for row in rows} == {"118-hr-1", "119-hr-99"}
+    assert calls["n"] == 2  # one refusal, one successful retry
+
+
+def test_fetch_gives_up_after_max_attempts(tmp_path, monkeypatch):
+    """A refusal that never clears exhausts every attempt and propagates —
+    the job fails loudly instead of publishing a table it never fully walked."""
+    monkeypatch.setattr(bcb.r2, "download", lambda remote_key, local_path: False)
+    monkeypatch.setattr(bcb.time, "sleep", lambda seconds: None)
+    reader_cls, calls = _flaky_reader_factory(fail_times=bcb.FETCH_ATTEMPTS + 10)
+    monkeypatch.setattr(bcb, "CongressBillsReader", reader_cls)
+
+    with pytest.raises(PagedJsonSourceError, match="declared count changed during the traversal"):
+        bcb.build_congress_bills(tmp_path)
+
+    # Exactly FETCH_ATTEMPTS attempts — no more (it must stop), no fewer (it
+    # must actually retry rather than propagate the first refusal).
+    assert calls["n"] == bcb.FETCH_ATTEMPTS
+
+
+def test_fetch_does_not_retry_a_non_drift_refusal(tmp_path, monkeypatch):
+    """A PagedJsonSourceError without both declaredCount and observedCount in
+    its context — malformed JSON, a bad date parameter, a 404 — is not the
+    mid-walk drift shape the retry exists for. Retrying it would only burn
+    FETCH_ATTEMPTS pauses under a misleading "walk refused, retrying" log
+    line before failing the same way on the first attempt, so it propagates
+    at once instead."""
+    monkeypatch.setattr(bcb.r2, "download", lambda remote_key, local_path: False)
+    monkeypatch.setattr(bcb.time, "sleep", lambda seconds: None)
+    reader_cls, calls = _flaky_reader_factory(fail_times=bcb.FETCH_ATTEMPTS + 10, drift=False)
+    monkeypatch.setattr(bcb, "CongressBillsReader", reader_cls)
+
+    with pytest.raises(PagedJsonSourceError, match="not a JSON object"):
+        bcb.build_congress_bills(tmp_path)
+
+    # A single attempt: no retry pause for a permanent, non-drift refusal.
+    assert calls["n"] == 1
