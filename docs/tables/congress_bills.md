@@ -4,22 +4,60 @@
 
 **Congressional bills**
 
-One row per congressional bill, ingested from the Congress.gov v3 REST API (`/bill` list endpoint) by `build_congress_bills`. The legislative record complementary to the regulations.gov `dockets`/`documents` view — the bills that authorize the rulemakings this dataset tracks. Scope is deliberately list-level only (no per-bill detail fetches), so every column comes from the list payload. Incremental by `update_date`, deduped on `bill_id`. All columns are stored as VARCHAR.
+One row per bill or resolution, as one BILLSTATUS document states it. Two rollups write this table: `congress-bills` walks the Congress.gov list endpoint for the ten-column prefix across the whole archive, and `bill-family` fills the full contract for the Congresses it is scoped to. The first ten columns keep the exact order and spelling they have always had, because other repositories pin that prefix by digest; every new column is appended after them. All columns are stored as VARCHAR.
 
-**Coverage.** True range. Bills with latest actions from 1799-12-16 (the 6th Congress) to 2026-09-04, complete on identifier, type and date for every row. *(measured 2026-09-06)*
+**Coverage.** True range on rows, mixed on columns. Every bill the Congress.gov ingest has walked is here, with latest actions from 1799-12-16 (the 6th Congress) to 2026-09-04, complete on identifier, type and date for every row. The first ten columns are filled for all of them. The thirty-eight columns the bill family appends — the publisher facts it discards, the stage, signing and money-bill findings, and their provenance — are filled only for the Congresses that rollup is scoped to, and are NULL on every older row until a run covers it. *(measured 2026-09-19)*
 
 - **Parquet file:** `congress_bills.parquet`
 - **Queryable via MCP `query_sql`:** Yes
 
 | Column | Type | Description |
 | --- | --- | --- |
-| `bill_id` | `VARCHAR` | Synthetic key `{congress}-{type}-{number}` (e.g. `118-hr-1234`). Primary key / dedup key. |
-| `congress` | `VARCHAR` | Congress number the bill was introduced in (e.g. `118`). |
-| `bill_type` | `VARCHAR` | Bill type, lowercased (e.g. `hr`, `s`, `hjres`, `sjres`, `hconres`, `sconres`, `hres`, `sres`). |
-| `bill_number` | `VARCHAR` | Bill number within its `(congress, bill_type)` (e.g. `1234`). |
-| `title` | `VARCHAR` | Bill title as returned by the list endpoint. |
-| `origin_chamber` | `VARCHAR` | Chamber the bill originated in (`House` or `Senate`). |
-| `latest_action_date` | `VARCHAR` | Date of the most recent action on the bill (ISO 8601 string). Often the useful sort/recency signal. |
-| `latest_action_text` | `VARCHAR` | Text describing the most recent action on the bill. |
-| `update_date` | `VARCHAR` | Date the Congress.gov record was last updated (ISO 8601 string). Incremental window key. |
-| `url` | `VARCHAR` | Congress.gov API URL for the bill's detail resource. |
+| `bill_id` | `VARCHAR` | Natural key: congress, bill type and number joined with hyphens (119-hr-6028). |
+| `congress` | `VARCHAR` | The numbered Congress this measure belongs to. |
+| `bill_type` | `VARCHAR` | Lowercase publisher bill or resolution type (hr, s, hjres, sres...). |
+| `bill_number` | `VARCHAR` | The measure's number within its Congress and type. |
+| `title` | `VARCHAR` | The measure's official title as BILLSTATUS states it. |
+| `origin_chamber` | `VARCHAR` | The chamber the measure originated in, as the publisher states it. |
+| `latest_action_date` | `VARCHAR` | Date of the publisher's own latestAction entry. |
+| `latest_action_text` | `VARCHAR` | Text of the publisher's own latestAction entry. |
+| `update_date` | `VARCHAR` | The publisher's updateDate for this record; the merge prefers the larger value. |
+| `url` | `VARCHAR` | The publisher's own legislation URL for this measure. |
+| `schema_version` | `VARCHAR` | The BILLSTATUS schema version the document declared (3.0.0 today). |
+| `update_date_including_text` | `VARCHAR` | The publisher's updateDateIncludingText, which moves when a text version posts. |
+| `introduced_date` | `VARCHAR` | The date the measure was introduced, as the publisher states it. |
+| `policy_area` | `VARCHAR` | The publisher's single policy-area term for this measure. |
+| `subjects_json` | `VARCHAR` | Every legislative subject term the publisher lists, as a JSON array in publisher order. |
+| `subject_count` | `VARCHAR` | How many legislative subject terms the publisher listed. |
+| `sponsor_bioguide_id` | `VARCHAR` | Bioguide id of the first sponsor the publisher lists. |
+| `sponsor_full_name` | `VARCHAR` | Full name string of the first sponsor, exactly as the publisher spells it. |
+| `cosponsor_count` | `VARCHAR` | Sponsors after the first, which is how BILLSTATUS states cosponsors here. |
+| `latest_action_code` | `VARCHAR` | Action code of the actions[] entry the publisher's latestAction names; latestAction itself states no code, so the two are linked on date and text. |
+| `latest_action_time` | `VARCHAR` | The publisher's actionTime on the latestAction entry. |
+| `latest_action_source_system_code` | `VARCHAR` | Source-system code of that same actions[] entry. |
+| `latest_action_source_system_name` | `VARCHAR` | Source-system name of that same actions[] entry. |
+| `action_count` | `VARCHAR` | How many action entries this document carries; the bill_actions row count for this bill. |
+| `committee_count` | `VARCHAR` | How many committees and subcommittees this document names, at any nesting depth.  This is the bill_committees row count except where the publisher states a committee with no systemCode, which cannot be keyed and is refused. |
+| `version_count` | `VARCHAR` | How many text versions this BILLSTATUS document offers.  Not the bill_versions row count: a PDF twin and an upload are rows the publisher's own list does not name. |
+| `public_law_number` | `VARCHAR` | Public law number from the publisher's laws entry, when the measure was enacted. |
+| `law_type` | `VARCHAR` | The publisher's law type for the first laws entry (Public Law or Private Law). |
+| `statutes_at_large_cite` | `VARCHAR` | Preserved NULL: the Statutes at Large citation lives in the PLAW package's GovInfo MODS, which this repository does not yet acquire, so the column is published empty rather than guessed. |
+| `stage` | `VARCHAR` | Interpreted legislative stage of the latest action any stage rule classified. |
+| `stage_rule` | `VARCHAR` | Which stage rule fired, or NULL when no rule fired and the default stood. |
+| `stage_matcher` | `VARCHAR` | The exact matcher string within that rule that matched. |
+| `stage_action_index` | `VARCHAR` | Position in the publisher's action list of the action the stage was read from. |
+| `stage_action_date` | `VARCHAR` | Date of the action the stage was read from. |
+| `stage_source_text` | `VARCHAR` | The full action text the stage rule matched against, never shortened. |
+| `signed_date` | `VARCHAR` | Interpreted signing date, from the coded became-law action. |
+| `signed_date_rule` | `VARCHAR` | Which of the three signed-date rules produced that answer. |
+| `signed_date_action_index` | `VARCHAR` | Position of the became-law action the signing date was read from. |
+| `signed_date_action_code` | `VARCHAR` | The publisher's action code on that became-law action. |
+| `money_bill_kind` | `VARCHAR` | Interpreted money-bill kind, or NULL when no rule claimed the measure. |
+| `money_bill_rule` | `VARCHAR` | Which money-bill rule fired, or NULL alongside a NULL kind. |
+| `money_bill_reason_codes` | `VARCHAR` | The rule's reason codes, unit-separator joined; BillTrax computed and then discarded these. |
+| `fiscal_year` | `VARCHAR` | Fiscal year detected in the title, spelled FY plus the year. |
+| `appropriations_subcommittee` | `VARCHAR` | Which of the twelve appropriations subcommittees the title names. |
+| `referral_signals` | `VARCHAR` | The referral signals the money-bill classifier was given, sorted and unit-separator joined; this is the classifier's input, recorded so a classification can be re-derived. |
+| `short_title` | `VARCHAR` | The publisher's short title, from the first titles[] entry whose titleType names a short title; NULL where the measure states none, which is ordinary. |
+| `related_bills_json` | `VARCHAR` | Every relatedBills entry the publisher states, as a JSON array, with each one's relationship details nested; this replaces BillTrax's hand-set related_bill_id with the publisher's own fact. |
+| `related_bill_count` | `VARCHAR` | How many related bills the publisher states. |

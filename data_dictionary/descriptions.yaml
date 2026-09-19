@@ -295,29 +295,25 @@ tables:
   congress_bills:
     label: "Congressional bills"
     coverage: >-
-      True range. Bills with latest actions from 1799-12-16 (the 6th
-      Congress) to 2026-09-04, complete on identifier, type and date for
-      every row.
-    measured_on: "2026-09-06"
+      True range on rows, mixed on columns. Every bill the Congress.gov ingest has
+      walked is here, with latest actions from 1799-12-16 (the 6th Congress) to
+      2026-09-04, complete on identifier, type and date for every row. The first
+      ten columns are filled for all of them. The thirty-eight columns the bill
+      family appends — the publisher facts it discards, the stage, signing and
+      money-bill findings, and their provenance — are filled only for the
+      Congresses that rollup is scoped to, and are NULL on every older row until a
+      run covers it.
+    measured_on: "2026-09-19"
     summary: >-
-      One row per congressional bill, ingested from the Congress.gov v3 REST API
-      (`/bill` list endpoint) by `build_congress_bills`. The legislative record
-      complementary to the regulations.gov `dockets`/`documents` view — the bills
-      that authorize the rulemakings this dataset tracks. Scope is deliberately
-      list-level only (no per-bill detail fetches), so every column comes from the
-      list payload. Incremental by `update_date`, deduped on `bill_id`. All columns
-      are stored as VARCHAR.
-    columns:
-      bill_id: "Synthetic key `{congress}-{type}-{number}` (e.g. `118-hr-1234`). Primary key / dedup key."
-      congress: "Congress number the bill was introduced in (e.g. `118`)."
-      bill_type: "Bill type, lowercased (e.g. `hr`, `s`, `hjres`, `sjres`, `hconres`, `sconres`, `hres`, `sres`)."
-      bill_number: "Bill number within its `(congress, bill_type)` (e.g. `1234`)."
-      title: "Bill title as returned by the list endpoint."
-      origin_chamber: "Chamber the bill originated in (`House` or `Senate`)."
-      latest_action_date: "Date of the most recent action on the bill (ISO 8601 string). Often the useful sort/recency signal."
-      latest_action_text: "Text describing the most recent action on the bill."
-      update_date: "Date the Congress.gov record was last updated (ISO 8601 string). Incremental window key."
-      url: "Congress.gov API URL for the bill's detail resource."
+      One row per bill or resolution, as one BILLSTATUS document states it. Two
+      rollups write this table: `congress-bills` walks the Congress.gov list
+      endpoint for the ten-column prefix across the whole archive, and
+      `bill-family` fills the full contract for the Congresses it is scoped to.
+      The first ten columns keep the exact order and spelling they have always
+      had, because other repositories pin that prefix by digest; every new column
+      is appended after them. All columns are stored as VARCHAR.
+    columns_from: spicy_docs
+
   unified_agenda:
     label: "Planned agency actions"
     coverage: >-
@@ -742,3 +738,314 @@ tables:
       total_page_count: "Total page count across the filing's attached documents, as a numeric string."
       documents_json: "JSON array of attached documents as `{filename, src}` objects, where `src` is the fcc.gov download URL."
       filing_url: "Canonical fcc.gov URL for the filing (`https://www.fcc.gov/ecfs/filing/<id_submission>`)."
+
+  # ---------------------------------------------------------------------------
+  # Tables hosted from spicy-docs' table contracts.
+  #
+  # `columns_from: spicy_docs` means the per-column prose is the contract's own
+  # (spicy_docs.schemas.TABLE_CONTRACTS[<table>].descriptions), read at load
+  # time by src/spicy_regs/data_dictionary.py. Four hundred and seven column
+  # sentences live beside the code that fills each column; copying them here
+  # would create a second copy with nothing keeping it in step. The label, the
+  # coverage statement, measured_on and the summary stay hand-written, because
+  # what this repository publishes and when it last measured it are its facts,
+  # not the wheel's.
+  #
+  # Listing `columns:` inline on one of these entries is refused at load, so
+  # the two sources cannot silently disagree.
+  # ---------------------------------------------------------------------------
+
+  bill_actions:
+    label: "Bill actions"
+    coverage: >-
+      Sampled. No run has been measured yet, so this states the weakest true claim
+      rather than a range it has not established. Filled from the BILLSTATUS bulk
+      archive for the Congresses the bill-family rollup is scoped to (the current
+      one by default), so it holds every action of every bill in that scope and
+      nothing outside it.
+    measured_on: "2026-09-19"
+    summary: >-
+      One row per action entry in a bill's BILLSTATUS document, in publisher order.
+      Each row also carries the stage the action text implies, with the rule and
+      matcher that fired, which makes `congress_bills.stage` auditable action by
+      action. All columns are stored as VARCHAR.
+    columns_from: spicy_docs
+
+  bill_committees:
+    label: "Bill committee referrals"
+    coverage: >-
+      Sampled. No run has been measured yet, so this states the weakest true claim
+      rather than a range it has not established. Same scope as `bill_actions`:
+      every committee and subcommittee named in the BILLSTATUS documents the
+      bill-family rollup read.
+    measured_on: "2026-09-19"
+    summary: >-
+      One row per committee or subcommittee a bill reached, as its BILLSTATUS
+      document names it. `referral_signal` is set only for the six appropriations
+      committees the money-bill classifier keys on; it is NULL elsewhere rather than
+      absent. All columns are stored as VARCHAR.
+    columns_from: spicy_docs
+
+  bill_publisher_summaries:
+    label: "CRS bill summaries (publisher)"
+    coverage: >-
+      Sampled. No run has been measured yet, so this states the weakest true claim
+      rather than a range it has not established. Same scope as `bill_actions`.
+      These are the Congressional Research Service summaries the publisher states on
+      a bill, not the model-written ones in `bill_summaries`.
+    measured_on: "2026-09-19"
+    summary: >-
+      One row per CRS summary the publisher states on a bill, at the version and
+      action it describes. `summary_html` is kept exactly as the publisher escaped
+      it. All columns are stored as VARCHAR.
+    columns_from: spicy_docs
+
+  bill_versions:
+    label: "Bill printings"
+    coverage: >-
+      Sampled. No run has been measured yet, so this states the weakest true claim
+      rather than a range it has not established. Two bounds, not one: the
+      Congresses the rollup is scoped to, and a per-run cap on how many printings'
+      bodies are fetched from GovInfo. A printing beyond the cap still gets a row
+      from the publisher's own facts, with the body columns (`sha256`, `byte_size`,
+      `resolved_url`, `observed_at`) NULL.
+    measured_on: "2026-09-19"
+    summary: >-
+      One row per printing of a bill, per source that supplied it. The full text is
+      deliberately not a column here: `bill_sections.body` carries it at the grain
+      people query, and the body is re-fetchable by package id and digest. All
+      columns are stored as VARCHAR.
+    columns_from: spicy_docs
+
+  bill_sections:
+    label: "Bill sections"
+    coverage: >-
+      Sampled. No run has been measured yet, so this states the weakest true claim
+      rather than a range it has not established. One row per content-bearing node
+      of the printings whose XML was fetched and parsed, which is a subset of
+      `bill_versions` — a printing offered only as PDF, or beyond the per-run fetch
+      cap, has no rows here.
+    measured_on: "2026-09-19"
+    summary: >-
+      One row per content-bearing node of one bill version, in document order. All
+      columns are stored as VARCHAR.
+    columns_from: spicy_docs
+
+  section_diffs:
+    label: "Bill version comparisons"
+    coverage: >-
+      Sampled. No run has been measured yet, so this states the weakest true claim
+      rather than a range it has not established. Consecutive printings only, and
+      only where both sides were fetched and parsed. Comparing every pair would be
+      quadratic in the number of printings; consecutive pairs is the deliberate
+      bound.
+    measured_on: "2026-09-19"
+    summary: >-
+      One row per compared pair of consecutive printings of one bill. `engine_name`,
+      `engine_version` and `engine_revision` record which diff engine produced the
+      row. All columns are stored as VARCHAR.
+    columns_from: spicy_docs
+
+  section_diff_items:
+    label: "Bill comparison items"
+    coverage: >-
+      Sampled. No run has been measured yet, so this states the weakest true claim
+      rather than a range it has not established. One row per settled correspondence
+      in the comparisons `section_diffs` holds.
+    measured_on: "2026-09-19"
+    summary: >-
+      One row per settled correspondence in one version-pair comparison.
+      `text_diff_json` is byte-capped, and `text_diff_truncated` says when the cap
+      was reached. All columns are stored as VARCHAR.
+    columns_from: spicy_docs
+
+  financial_changes:
+    label: "Dollar-figure changes"
+    coverage: >-
+      Sampled. No run has been measured yet, so this states the weakest true claim
+      rather than a range it has not established. Rows exist only where a section's
+      amounts actually changed between two printings, so an empty result for a bill
+      means no compared section changed an amount.
+    measured_on: "2026-09-19"
+    summary: >-
+      One row per aligned pair of dollar figures in a section whose amounts changed.
+      `pairing_claim` names how the two figures were aligned; it is word alignment,
+      not a semantic match. All columns are stored as VARCHAR.
+    columns_from: spicy_docs
+
+  section_classifications:
+    label: "Section classifications (model)"
+    coverage: >-
+      Sampled. No run has been measured yet, so this states the weakest true claim
+      rather than a range it has not established. Model-backed: rows exist only for
+      runs with a model key set. A keyless run publishes none, which is what
+      continuous integration does.
+    measured_on: "2026-09-19"
+    summary: >-
+      One row per label a model assigned to one section of one printing.
+      `vocabulary_hash` is a digest over the sealed label list, so a vocabulary
+      change is visible in the data rather than silently reinterpreting old rows.
+      All columns are stored as VARCHAR.
+    columns_from: spicy_docs
+
+  bill_summaries:
+    label: "Bill summaries (model)"
+    coverage: >-
+      Sampled. No run has been measured yet, so this states the weakest true claim
+      rather than a range it has not established. Model-backed, same condition as
+      `section_classifications`: no key, no rows.
+    measured_on: "2026-09-19"
+    summary: >-
+      One row per plain-language summary of one printing of a bill. `frame` is
+      stored because without it the summary is not reproducible from the row. All
+      columns are stored as VARCHAR.
+    columns_from: spicy_docs
+
+  diff_summaries:
+    label: "Change summaries (model)"
+    coverage: >-
+      Sampled. No run has been measured yet, so this states the weakest true claim
+      rather than a range it has not established. Model-backed, and further limited
+      to bills with at least two compared printings.
+    measured_on: "2026-09-19"
+    summary: >-
+      One row per model-written summary of the change between two printings of a
+      bill. All columns are stored as VARCHAR.
+    columns_from: spicy_docs
+
+  public_activity_events:
+    label: "Bill activity events"
+    coverage: >-
+      Derived. Computed by comparing one bill-family run against the previously
+      published one, so the first run's events are all additions and the table
+      cannot describe anything that happened before this rollup began. A row leaving
+      a table is not an event: the four event types are sealed.
+    measured_on: "2026-09-19"
+    summary: >-
+      One row per change detected between two runs of the bill family. Two instants
+      per row: `occurred_at` is the publisher's, `detected_at` is the run's. All
+      columns are stored as VARCHAR.
+    columns_from: spicy_docs
+
+  amendments:
+    label: "Amendments"
+    coverage: >-
+      Sampled. No run has been measured yet, so this states the weakest true claim
+      rather than a range it has not established. The Congress.gov amendment route
+      for the Congresses the rollup is scoped to.
+    measured_on: "2026-09-19"
+    summary: >-
+      One row per amendment, as the Congress.gov amendment list route states it.
+      Keyed on the amendment's own identity, not the bill it amends, because an
+      amendment can amend another amendment; `amended_bill_id` and
+      `amended_amendment_id` are foreign keys. All columns are stored as VARCHAR.
+    columns_from: spicy_docs
+
+  press_releases:
+    label: "Appropriations press releases"
+    coverage: >-
+      Window. Each feed is a rotating window the publisher trims, so a single
+      capture is only what was live that day; the table accumulates across runs and
+      keeps every release ever captured. It does not reach back before the first
+      capture.
+    measured_on: "2026-09-19"
+    summary: >-
+      One row per item in one appropriations committee press-release feed capture.
+      `bill_id` and the match columns are preserved NULLs: linking a release to a
+      bill is an interpretation seam this rollup does not yet drive. All columns are
+      stored as VARCHAR.
+    columns_from: spicy_docs
+
+  roll_call_votes:
+    label: "House roll-call votes"
+    coverage: >-
+      Sampled. No run has been measured yet, so this states the weakest true claim
+      rather than a range it has not established. House only, and bounded by a
+      per-run cap on how many roll calls are fetched from the Clerk, newest first.
+      The Senate's roll calls are not published at all rather than published with
+      empty tallies — there is no Senate route in the reader this rollup uses.
+    measured_on: "2026-09-19"
+    summary: >-
+      One row per roll call: the publisher's own tally, and the bill it refers to.
+      The four tally columns are the publisher's own counts or they are NULL; they
+      are never zero-filled. All columns are stored as VARCHAR.
+    columns_from: spicy_docs
+
+  member_votes:
+    label: "Member vote positions"
+    coverage: >-
+      Sampled. No run has been measured yet, so this states the weakest true claim
+      rather than a range it has not established. One row per member per roll call
+      in `roll_call_votes`, so it inherits that table's House-only scope and per-run
+      cap exactly.
+    measured_on: "2026-09-19"
+    summary: >-
+      One row per member's position on one roll call. `position` keeps the
+      publisher's own word (the Clerk spells both Aye/No and Yea/Nay) and
+      `position_normalized` carries the fold, so a count and a quotation are both
+      answerable. All columns are stored as VARCHAR.
+    columns_from: spicy_docs
+
+  members:
+    label: "Legislators"
+    coverage: >-
+      Sampled. No run has been measured yet, so this states the weakest true claim
+      rather than a range it has not established. Both roster files — current and
+      historical — are captured whole, so this is expected to be every legislator
+      the crosswalk knows; it is stated as sampled only because no run has been
+      measured to confirm it.
+    measured_on: "2026-09-19"
+    summary: >-
+      One row per legislator in one capture of the community crosswalk. Split from
+      `member_terms` because one row cannot hold a chamber switch. All columns are
+      stored as VARCHAR.
+    columns_from: spicy_docs
+
+  member_terms:
+    label: "Legislator terms"
+    coverage: >-
+      Sampled. No run has been measured yet, so this states the weakest true claim
+      rather than a range it has not established. Every term of every legislator in
+      `members`, in the crosswalk's own order, on the same unmeasured-but-whole
+      capture.
+    measured_on: "2026-09-19"
+    summary: >-
+      One row per term a legislator served, in the crosswalk's own order. All
+      columns are stored as VARCHAR.
+    columns_from: spicy_docs
+
+  committee_reports:
+    label: "Committee reports"
+    coverage: >-
+      Window. GovInfo CRPT packages by last-modified date, a thirty-day window per
+      run with a per-run package cap, so a revision of an older report is picked up
+      but the archive is not walked.
+    measured_on: "2026-09-19"
+    summary: >-
+      One row per captured GovInfo committee report package. `bill_id` is a
+      preserved NULL: a package-keyed report is fillable today, the bill linkage is
+      not. All columns are stored as VARCHAR.
+    columns_from: spicy_docs
+
+  report_sections:
+    label: "Committee report agency blocks"
+    coverage: >-
+      Window. The agency blocks parsed out of the reports in `committee_reports`, so
+      it inherits that table's window and cap.
+    measured_on: "2026-09-19"
+    summary: >-
+      One row per agency block parsed out of one committee report's text. `pattern`
+      records which header pattern fired, which is this table's provenance column.
+      All columns are stored as VARCHAR.
+    columns_from: spicy_docs
+
+  hearing_transcripts:
+    label: "Hearing transcripts"
+    coverage: >-
+      Window. GovInfo CHRG packages on the same thirty-day last-modified window and
+      per-run cap as `committee_reports`.
+    measured_on: "2026-09-19"
+    summary: >-
+      One row per captured GovInfo hearing transcript package. `bill_id` is a
+      preserved NULL for the same reason. All columns are stored as VARCHAR.
+    columns_from: spicy_docs

@@ -11,6 +11,8 @@ from __future__ import annotations
 import json
 from datetime import date
 
+import pytest
+
 from spicy_regs import data_dictionary as dd
 from spicy_regs.schemas.regulations import RECORD_TYPES
 
@@ -255,3 +257,68 @@ def test_unreachable_source_is_not_reported_as_a_pass():
     args = parser.parse_args(["check", "--source", "r2", "--base", "https://nonexistent.invalid"])
     assert args.func(args) == dd.EXIT_SOURCE_UNREACHABLE
     assert dd.EXIT_SOURCE_UNREACHABLE not in (0, 1)
+
+
+# --------------------------------------------------------------------------- #
+# The contract-hosted tables: prose comes from spicy-docs, not from this repo.
+# --------------------------------------------------------------------------- #
+def test_every_hosted_column_has_prose():
+    """All four hundred-odd columns carry a sentence, read from the contract."""
+    descriptions = dd.load_descriptions()
+    schemas = dd.expected_schemas()
+    for table in dd.CONTRACT_TABLES:
+        columns = descriptions[table]["columns"]
+        assert set(columns) == {c for c, _ in schemas[table]}, table
+        blank = [name for name, text in columns.items() if not (text or "").strip()]
+        assert not blank, f"{table}: columns with no description: {blank}"
+
+
+def test_hosted_prose_is_the_contract_prose_not_a_copy():
+    """The sentences are read from the wheel, so there is only one copy of them."""
+    from spicy_docs.schemas import TABLE_CONTRACTS
+
+    descriptions = dd.load_descriptions()
+    for table in dd.CONTRACT_TABLES:
+        assert descriptions[table]["columns"] == dict(TABLE_CONTRACTS[table].descriptions), table
+
+
+def test_hosted_entries_do_not_list_columns_inline():
+    """The marker and an inline list would be two sources that can disagree."""
+    import yaml
+
+    raw = yaml.safe_load(dd.DEFAULT_DESCRIPTIONS.read_text(encoding="utf-8"))["tables"]
+    for table in dd.CONTRACT_TABLES:
+        assert raw[table].get("columns_from") == dd.COLUMNS_FROM_SPICY_DOCS, table
+        assert "columns" not in raw[table], f"{table} lists columns inline as well as by marker"
+
+
+def test_an_inline_column_list_beside_the_marker_is_refused(tmp_path):
+    """Declaring both must fail loudly rather than silently preferring one."""
+    import yaml
+
+    path = tmp_path / "descriptions.yaml"
+    path.write_text(
+        yaml.safe_dump(
+            {"tables": {"members": {"columns_from": "spicy_docs", "columns": {"bioguide_id": "x"}}}},
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="columns_from"):
+        dd.load_descriptions(path)
+
+
+def test_hosted_schemas_are_all_varchar_in_contract_order():
+    from spicy_docs.schemas import TABLE_CONTRACTS
+
+    for table, columns in dd.contract_schemas().items():
+        assert columns == [(c, "VARCHAR") for c in TABLE_CONTRACTS[table].columns], table
+
+
+def test_congress_bills_keeps_the_frozen_prefix_in_the_dictionary():
+    """The digest-pinned ten stay first, in order, with the rest appended."""
+    from spicy_regs.transforms.build_congress_bills import COLUMNS
+
+    columns = [c for c, _ in dd.expected_schemas()["congress_bills"]]
+    assert tuple(columns[:10]) == COLUMNS
+    assert len(columns) == 48

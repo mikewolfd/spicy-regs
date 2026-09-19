@@ -52,6 +52,32 @@ TABLES = (
     "usaspending_recipients",
     "fcc_proceedings",
     "fcc_filings",
+    # The BillTrax-derived tables hosted from spicy-docs' table contracts.
+    # Listed literally rather than imported from data_dictionary: that module
+    # reads the contracts out of the spicy-docs wheel, and the MCP server is a
+    # base install that must not require the source-readers group.
+    # test_mcp_server_tables_match_dictionary keeps the two lists equal.
+    "bill_actions",
+    "bill_committees",
+    "bill_publisher_summaries",
+    "bill_versions",
+    "bill_sections",
+    "section_diffs",
+    "section_diff_items",
+    "financial_changes",
+    "section_classifications",
+    "bill_summaries",
+    "diff_summaries",
+    "public_activity_events",
+    "amendments",
+    "press_releases",
+    "roll_call_votes",
+    "member_votes",
+    "members",
+    "member_terms",
+    "committee_reports",
+    "report_sections",
+    "hearing_transcripts",
 )
 STATEMENT_TIMEOUT = os.environ.get("SPICY_REGS_STATEMENT_TIMEOUT", "790s")
 

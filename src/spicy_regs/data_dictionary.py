@@ -28,6 +28,7 @@ import hashlib
 import json
 import sys
 from datetime import date
+from functools import lru_cache
 import tempfile
 from pathlib import Path
 
@@ -48,11 +49,19 @@ DEFAULT_CATALOG_DIGEST_PATH = REPO_ROOT / "data_dictionary" / "catalog.json.sha2
 #: shape it does not know rather than guess at a missing field.
 CATALOG_FORMAT_VERSION = 3
 
-#: The four kinds a coverage statement can be, as machine-readable tokens,
+#: The five kinds a coverage statement can be, as machine-readable tokens,
 #: keyed by the prose prefix so the two cannot disagree.
+#:
+#: "Sampled" is the newest and the weakest claim: the table is filled from a
+#: bounded slice of the publisher's archive chosen by a per-run cap, not by a
+#: date window, so neither an end-to-end range nor a window describes it. The
+#: bill-family and roll-call tables open this way until a full run has been
+#: measured, because calling a capped first pass a "Window" would state a
+#: density it does not have.
 COVERAGE_KINDS: dict[str, str] = {
     "True range": "true_range",
     "Window": "window",
+    "Sampled": "sampled",
     "Derived": "derived",
     "Not a range": "not_a_range",
 }
@@ -74,6 +83,38 @@ def coverage_kind(coverage: str) -> str | None:
 
 
 DEFAULT_R2_BASE_URL = "https://data.spicy-regs.dev"
+
+#: The tables hosted from spicy-docs' table contracts. Their columns and their
+#: per-column prose both come from ``spicy_docs.schemas.TABLE_CONTRACTS``, so a
+#: column added upstream fails ``spicy-regs-dict check`` here until the release
+#: is adopted — it is never restated in this repository. ``congress_bills`` is
+#: in this list and is also the one table that predates it: the contract keeps
+#: its first ten columns in their published order and appends the rest.
+CONTRACT_TABLES: tuple[str, ...] = (
+    "congress_bills",
+    "bill_actions",
+    "bill_committees",
+    "bill_publisher_summaries",
+    "bill_versions",
+    "bill_sections",
+    "section_diffs",
+    "section_diff_items",
+    "financial_changes",
+    "section_classifications",
+    "bill_summaries",
+    "diff_summaries",
+    "public_activity_events",
+    "amendments",
+    "press_releases",
+    "roll_call_votes",
+    "member_votes",
+    "members",
+    "member_terms",
+    "committee_reports",
+    "report_sections",
+    "hearing_transcripts",
+)
+
 
 # Display order for the dictionary. The first three are the core record types;
 # the rest are derived rollups. This is the full public R2 surface.
@@ -102,6 +143,9 @@ TABLES: tuple[str, ...] = (
     "usaspending_recipients",
     "fcc_proceedings",
     "fcc_filings",
+    # The hosted tables, minus congress_bills — it predates them and keeps its
+    # position above, so appending CONTRACT_TABLES wholesale would list it twice.
+    *(name for name in CONTRACT_TABLES if name != "congress_bills"),
 )
 
 # Tables the MCP server (list_sources / describe_table / query_sql) exposes.
@@ -133,6 +177,7 @@ MCP_QUERYABLE: frozenset[str] = frozenset(
         "usaspending_recipients",
         "fcc_proceedings",
         "fcc_filings",
+        *CONTRACT_TABLES,
     }
 )
 
@@ -499,11 +544,58 @@ def _polars_type_label(dtype: object) -> str:
     return str(dtype)
 
 
+@lru_cache(maxsize=1)
+def _contracts() -> dict:
+    """``TABLE_CONTRACTS`` from the installed spicy-docs wheel.
+
+    Imported lazily, not at module import, so the base CLI and MCP installs
+    keep working without the ``source-readers`` group — ``vendor/README.md``
+    states that they do not require it. The dictionary commands do: the column
+    tuples and the per-column prose for the hosted tables are the wheel's, and
+    generating them from anything else would be this repository restating a
+    contract it does not own.
+    """
+    try:
+        from spicy_docs.schemas import TABLE_CONTRACTS
+    except ModuleNotFoundError as exc:  # pragma: no cover - install-shape guard
+        raise ModuleNotFoundError(
+            "The data dictionary reads the hosted tables' columns and prose from "
+            "spicy-docs. Install the source-readers group: uv sync --frozen"
+        ) from exc
+    return dict(TABLE_CONTRACTS)
+
+
+def contract_schemas() -> dict[str, list[tuple[str, str]]]:
+    """``{table: [(column, "VARCHAR"), ...]}`` for every contract-hosted table.
+
+    Every published value in these tables is a string — the host publishes
+    all-VARCHAR Parquet read through a DuckDB view — so the type is not a
+    per-column decision and is not stored per column anywhere.
+    """
+    contracts = _contracts()
+    return {name: [(column, "VARCHAR") for column in contracts[name].columns] for name in CONTRACT_TABLES}
+
+
+def contract_column_prose(table: str) -> dict[str, str]:
+    """The contract's own sentence per column, for a ``columns_from: spicy_docs`` entry."""
+    return dict(_contracts()[table].descriptions)
+
+
+def contract_grain(table: str) -> str:
+    """The contract's one-sentence grain, used as the table summary's first clause."""
+    return _contracts()[table].grain
+
+
 def expected_schemas() -> dict[str, list[tuple[str, str]]]:
     """Return ``{table: [(column, type_label), ...]}`` for all tables (offline)."""
     schemas: dict[str, list[tuple[str, str]]] = {}
+    from_contracts = contract_schemas()
     for name in TABLES:
-        if name in RECORD_TYPES:
+        if name in from_contracts:
+            # Checked before DERIVED_SCHEMAS on purpose: congress_bills is in
+            # both, and the contract is the longer, current one.
+            schemas[name] = list(from_contracts[name])
+        elif name in RECORD_TYPES:
             rt = RECORD_TYPES[name]
             schemas[name] = [(col, _polars_type_label(dt)) for col, dt in rt.schema.items()]
         elif name in DERIVED_SCHEMAS:
@@ -556,12 +648,38 @@ def discover_schemas(source: str, base: str | None = None) -> dict[str, list[tup
 # --------------------------------------------------------------------------- #
 # Descriptions file.
 # --------------------------------------------------------------------------- #
+#: A descriptions.yaml entry naming this source reads its per-column prose from
+#: the installed spicy-docs contract instead of listing it inline.
+COLUMNS_FROM_SPICY_DOCS = "spicy_docs"
+
+
 def load_descriptions(path: Path = DEFAULT_DESCRIPTIONS) -> dict:
+    """The curated descriptions, with every ``columns_from`` marker resolved.
+
+    ``columns_from: spicy_docs`` means "the per-column sentences for this table
+    are the contract's". Four hundred and six of them are, and copying them
+    here would create a second copy to keep in step with no mechanism keeping
+    it there. The label, coverage statement, ``measured_on`` and summary stay
+    hand-written, because what this repository publishes and when it last
+    measured it are its own facts, not the wheel's.
+
+    Resolving here rather than at each call site means ``check``, ``generate``
+    and ``catalog`` all see the same entry, and none of them has to know the
+    marker exists.
+    """
     import yaml
 
     with path.open(encoding="utf-8") as fh:
         data = yaml.safe_load(fh) or {}
-    return data.get("tables", {})
+    tables = data.get("tables", {})
+    for name, entry in tables.items():
+        if not entry or entry.get("columns_from") != COLUMNS_FROM_SPICY_DOCS:
+            continue
+        inline = entry.get("columns") or {}
+        if inline:
+            raise ValueError(f"[{name}] declares columns_from: {COLUMNS_FROM_SPICY_DOCS} and also lists columns inline")
+        entry["columns"] = contract_column_prose(name)
+    return tables
 
 
 # --------------------------------------------------------------------------- #
