@@ -377,13 +377,36 @@ and `[tool.uv.sources]` moved together. The resolve is clean in one line —
   rollup's processing state, with its columns in `DERIVED_SCHEMAS` and its
   prose inline. Only the four fields `acquire` compares are retained; the other
   six the publisher's listing states are left empty rather than guessed at. A
-  retained entry naming a different file is refused upstream on purpose and
-  falls back here to a cold download, so one stale row cannot wedge the rollup.
+  retained entry naming a different file is refused upstream on purpose; it is
+  recognised here *before any request* — `bulk_status_locator` spells the zip's
+  own name and link, and `read_bulk_listing` proves every entry against that
+  same locator — so a stale row costs one listing read (the one that replaces
+  it) rather than that plus the refused call's own, and cannot wedge the
+  rollup. Checked rather than caught because the upstream refusal carries no
+  listing to reuse.
 - [x] **Columns with no home, stated rather than invented.**
   `BodyText.derivation` has none on `bill_versions`, `committee_reports` or
-  `hearing_transcripts`; the renditions actually read are logged instead.
-  `rendition` needs none — `bill_versions.format_name` and the package tables'
-  `format` already say which one, filled from the fetched body itself.
+  `hearing_transcripts`, and review settled that it earns none: it is a pure
+  function of the rendition through `RENDITION_DERIVATIONS`, a static
+  four-entry table, so a column would restate `format` in a second vocabulary
+  and could only ever disagree with it by going stale. The renditions actually
+  read are logged instead. `rendition` needs no column either —
+  `bill_versions.format_name` and the package tables' `format` already say
+  which one, filled from the fetched body itself.
+- [x] **The PDF branch needed a provider, and a test to find that out.**
+  `body_text`'s default extractor is `DocumentExtractor(NativeText())`, whose
+  default reader opens PDFs with **PyMuPDF** — which this repository does not
+  install, pinning the narrow `pdf-pypdf` provider instead. SpicyDocs' own
+  tests inject a fake extractor, so nothing upstream exercises that default
+  either. Wired as first written, every PDF body would have raised
+  `ModuleNotFoundError` inside a per-package `except` and been logged as one
+  more refusal: the `cleanup_*` columns would have stayed NULL forever and
+  every PDF-only CRPT/CHRG package would have published no row, with no
+  failure louder than a warning. `transforms/pdf_text.py::PypdfPageExtractor`
+  adapts the pinned provider to the extractor seam — an `Extractor`, not a
+  `DocumentReader`, because `PypdfReader.open` takes a password rather than a
+  media type and `body_text` reads only each page's text — and both callers
+  pass it. The two tests that found it fail without it.
 - [x] **Coverage statements.** `bill_versions`, `bill_sections`,
   `committee_reports`, `report_sections` and `hearing_transcripts` now name the
   rendition order, say that bills before the 113th Congress have no XML so the
@@ -391,9 +414,13 @@ and `[tool.uv.sources]` moved together. The resolve is clean in one line —
   non-PDF rendition. 46 tables, `check` and `generate` clean.
 
 The stub in `tests/test_bill_family.py` reproduces `BulkStatusAcquirer`'s
-`unchanged_since` contract rather than recording the argument, so the
-second-run assertion is discriminating: the cold run still downloads, a zip
-whose size moved still downloads, and only the unchanged folder does not.
+`unchanged_since` contract rather than recording the argument — including
+refusing a mismatched name with `BillSourceError`, the error the real acquirer
+raises — so the second-run assertion is discriminating: the cold run still
+downloads, a zip whose size moved still downloads, and only the unchanged
+folder does not. The PDF-rendition tests derive a PDF-only BILLSTATUS from the
+same fixture rather than committing a second one, and build real PDFs with
+`tests/pdf_fixtures.make_pdf`, so the pinned pypdf really parses them.
 
 **[SR01](#sr01) is untouched by all of this.** It owns the `congress_bills`
 reader replacement (adopting SpicyDocs' `listing.py` in place of the local

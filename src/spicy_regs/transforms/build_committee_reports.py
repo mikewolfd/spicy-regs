@@ -19,10 +19,13 @@ or a form feed. So a committee report is read as HTML and states no page
 boundaries at all — ``page_count`` is NULL for it, and only the PDF branch,
 which an extractor paginates, fills one.
 
-The derivation name ``body_text`` returns has no column on either contract, so
-it is logged with the refusals rather than published. ``format`` is the column
-that says which rendition was read, and the shape function fills it from the
-fetched body itself. The PDF cleanup record is processing provenance and is not
+The derivation name ``body_text`` returns earns no column: it is a pure
+function of the rendition through ``extraction.body_text.RENDITION_DERIVATIONS``,
+a static four-entry table, so a column for it would restate ``format`` in a
+second vocabulary and could only ever disagree with it by being stale. The
+renditions actually read are logged instead. ``format`` is the column that says
+which rendition was read, and the shape function fills it from the fetched body
+itself. The PDF cleanup record is processing provenance and is not
 published here — ``bill_versions`` is the table that carries it, for the
 printings where it changes the text people read.
 
@@ -68,6 +71,7 @@ from spicy_docs.sources.govinfo.discovery import GovInfoDiscoveryReader, collect
 
 from spicy_regs.sources import r2
 from spicy_regs.sources.congress_bills import API_KEY_ENV_VARS, _resolve_api_key
+from spicy_regs.transforms.pdf_text import PypdfPageExtractor
 from spicy_regs.transforms.table_merge import merge_contract_table, prior_scratch_path
 
 
@@ -190,7 +194,11 @@ def _read_body(acquirer: PackageBodySource, package_id: str) -> tuple[Any, BodyT
     it was fetched in is the body's own, never this caller's guess.
     """
     package = acquirer.acquire(package_id)
-    return package, body_text(package)
+    # The extractor matters only on the PDF fallback, and only because
+    # ``body_text``'s default one opens PDFs with PyMuPDF, which this
+    # repository does not install — see ``PypdfPageExtractor``. Without it a
+    # CRPT or CHRG package offered only as PDF would be counted refused.
+    return package, body_text(package, extractor=PypdfPageExtractor())
 
 
 def build_committee_reports(

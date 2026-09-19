@@ -28,6 +28,7 @@ from spicy_docs.sources.govinfo.body_acquisition import GovInfoBodyBudget, GovIn
 from spicy_docs.transport.captured import CapturedBodyResponse
 
 from spicy_regs.transforms.build_committee_reports import build_committee_reports
+from tests.pdf_fixtures import make_pdf
 
 OBSERVED_AT = "2026-09-19T00:00:00Z"
 
@@ -49,9 +50,15 @@ BUDGET = GovInfoBodyBudget(
 )
 
 
+#: The folder and extension GovInfo serves each rendition from; not the format
+#: name (`spicy-docs/docs/sources/govinfo-bodies.md`).
+_ROUTES = {"htm": ("html", "htm"), "pdf": ("pdf", "pdf")}
+
+
 def _package(package_id: str, *, fmt: str = "htm", media_type: str = "text/html", body: bytes = REPORT_HTML):
     identity = parse_package_id(package_id)
-    url = f"https://www.govinfo.gov/content/pkg/{package_id}/html/{package_id}.htm"
+    folder, extension = _ROUTES[fmt]
+    url = f"https://www.govinfo.gov/content/pkg/{package_id}/{folder}/{package_id}.{extension}"
     capture = CapturedBodyResponse(
         requested_url=url,
         resolved_url=url,
@@ -168,3 +175,34 @@ def test_the_acquirer_is_asked_with_no_preference(tmp_path, monkeypatch):
     acquirer = StubBodyAcquirer()
     build_committee_reports(tmp_path, reader=StubDiscovery(), acquirer=acquirer, download_prior=_no_prior)
     assert acquirer.requested == ["CRPT-119hrpt1", "CHRG-119hhrg64242"]
+
+
+class StubPdfAcquirer:
+    """The fallback: a package offered only as PDF, which the sealed preference now reaches."""
+
+    def acquire(self, package_id: str, *, max_bytes=None):
+        body = make_pdf([f"{package_id} page one", "page two"])
+        return _package(package_id, fmt="pdf", media_type="application/pdf", body=body)
+
+
+def test_the_pdf_fallback_is_extracted_and_states_its_page_count(tmp_path, monkeypatch):
+    """The one rendition that does state page boundaries, and the one that needs an extractor.
+
+    `body_text`'s default extractor opens PDFs with PyMuPDF, which this
+    repository does not install — it pins the narrow `pdf-pypdf` provider — so
+    without `PypdfPageExtractor` every PDF-only package would be counted
+    refused and publish no row at all.
+    """
+    monkeypatch.delenv("COMMITTEE_REPORTS_SINCE", raising=False)
+    paths = {
+        path.stem: path
+        for path in build_committee_reports(
+            tmp_path, reader=StubDiscovery(), acquirer=StubPdfAcquirer(), download_prior=_no_prior
+        )
+    }
+    for table in ("committee_reports", "hearing_transcripts"):
+        rows = pq.read_table(paths[table]).to_pylist()
+        assert len(rows) == 1, f"{table}: the PDF fallback must publish a row, not a refusal"
+        assert rows[0]["format"] == "pdf"
+        assert rows[0]["page_count"] == "2", "a paginated rendition states its pages"
+        assert rows[0]["text_sha256"].startswith("sha256:")

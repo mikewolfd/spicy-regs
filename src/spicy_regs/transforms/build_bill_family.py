@@ -69,13 +69,19 @@ from spicy_docs.sources.congress.bill_versions import (
     choose_format,
     version_slug,
 )
-from spicy_docs.sources.congress.bulk_status import BulkListingEntry, BulkStatusAcquirer, BulkStatusBudget
+from spicy_docs.sources.congress.bulk_status import (
+    BulkListingEntry,
+    BulkStatusAcquirer,
+    BulkStatusBudget,
+    bulk_status_locator,
+)
 from spicy_docs.sources.govinfo.body_acquisition import GovInfoBodyAcquirer, GovInfoBodyBudget
 
 from spicy_regs.sources import r2
 from spicy_regs.sources.congress_bills import API_KEY_ENV_VARS, _resolve_api_key
 from spicy_regs.transforms.congress_scope import bill_types_from_env, congresses_from_env
 from spicy_regs.transforms.model_call import DEFAULT_MODEL, model_call, resolve_gemini_key
+from spicy_regs.transforms.pdf_text import PypdfPageExtractor
 from spicy_regs.transforms.table_merge import merge_contract_table, merge_table, prior_scratch_path
 
 #: The DeltaTrack commit the vendored wheel was built from. ``installed_engine_stamp``
@@ -284,8 +290,11 @@ def _version_captures(
                     # chosen: the acquirer picks from what the package MODS
                     # offers, and only the PDF branch of ``body_text`` yields
                     # the ``GpoCleanupRecord`` the cleanup_* columns describe.
+                    # The extractor is passed because ``body_text``'s default
+                    # opens PDFs with PyMuPDF, which this repository does not
+                    # install — see ``PypdfPageExtractor``.
                     try:
-                        cleanup = body_text(package).record
+                        cleanup = body_text(package, extractor=PypdfPageExtractor()).record
                     except Exception as error:  # noqa: BLE001 — an unextracted PDF is a NULL cleanup
                         logger.warning("Bill family: {} PDF text refused: {}", package_id, error)
 
@@ -457,25 +466,44 @@ def _held_archives(path: Path | None) -> dict[tuple[str, str], BulkListingEntry]
     return held
 
 
-def _acquire_archive(acquirer: BulkStatusSource, congress: int, bill_type: str, held: BulkListingEntry | None) -> Any:
-    """One folder's archive, skipping the zip when the retained entry still describes it.
+def _comparable_entry(held: BulkListingEntry | None, congress: int, bill_type: str) -> BulkListingEntry | None:
+    """The retained entry, but only while it still names this folder's own zip.
 
-    A retained entry whose ``name`` or ``link`` no longer matches the folder's
-    own zip is refused upstream on purpose — it describes a different file, so
-    comparing its stamp would risk a false skip. That is a stale cache, not a
-    reason to abandon the folder, so the zip is asked for the way a cold run
-    asks for it rather than letting one bad row wedge the rollup until someone
-    deletes the table.
+    ``acquire`` refuses an entry whose ``name`` or ``link`` differs from the
+    folder's zip entry — it describes a different file, so comparing its stamp
+    would risk a false skip — and it refuses it *after* reading the listing.
+    Those two fields are not listing facts, though: ``bulk_status_locator``
+    spells the zip's address, and ``read_bulk_listing`` proves every entry
+    against that same locator before returning one. So a stale row is
+    recognised here for no requests at all, and the folder falls back to a cold
+    download that pays one listing read — the one ``_retained_entry`` makes to
+    replace the row — instead of that plus the refused call's own.
+
+    Checked rather than caught for the same reason: the refusal carries no
+    listing to reuse, and retrying around it would ask the publisher twice for
+    something this run can already answer.
     """
     if held is None:
+        return None
+    locator = bulk_status_locator(congress, bill_type)
+    # The comparison ``acquire`` makes, against the address it would compare to.
+    if (held.name, held.link) == (locator.rsplit("/", 1)[-1], locator):
+        return held
+    logger.warning(
+        "Bill family: {} {} retained entry names {} rather than this folder's own zip — downloading it",
+        congress,
+        bill_type,
+        held.name,
+    )
+    return None
+
+
+def _acquire_archive(acquirer: BulkStatusSource, congress: int, bill_type: str, held: BulkListingEntry | None) -> Any:
+    """One folder's archive, skipping the zip when the retained entry still describes it."""
+    entry = _comparable_entry(held, congress, bill_type)
+    if entry is None:
         return acquirer.acquire(congress, bill_type)
-    try:
-        return acquirer.acquire(congress, bill_type, unchanged_since=held)
-    except Exception as error:  # noqa: BLE001 — a stale retained entry is not a failed run
-        logger.warning(
-            "Bill family: {} {} retained listing entry refused ({}) — downloading the zip", congress, bill_type, error
-        )
-        return acquirer.acquire(congress, bill_type)
+    return acquirer.acquire(congress, bill_type, unchanged_since=entry)
 
 
 def _retained_entry(acquirer: BulkStatusSource, acquisition: Any, congress: int, bill_type: str) -> dict | None:

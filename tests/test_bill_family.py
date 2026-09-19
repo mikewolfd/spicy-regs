@@ -21,14 +21,18 @@ one, which is the whole point of the second-run test below.
 
 from __future__ import annotations
 
+import json
+import re
 import shutil
 from datetime import UTC, datetime
 from pathlib import Path
 
 import pyarrow.parquet as pq
 import pytest
+from loguru import logger
 from spicy_docs.schemas import TABLE_CONTRACTS
 from spicy_docs.sources.congress.bill_status import BillIdentity, parse_bill_status
+from spicy_docs.sources.congress.bill_status import BillSourceError
 from spicy_docs.sources.congress.bulk_status import BulkListingEntry
 from spicy_docs.transport.captured import CapturedBodyResponse
 
@@ -39,6 +43,7 @@ from spicy_regs.transforms.build_bill_family import (
     build_bill_family,
     engine_stamp,
 )
+from tests.pdf_fixtures import make_pdf
 
 FIXTURES = Path(__file__).parent / "fixtures" / "govinfo_bills"
 IDENTITY = BillIdentity(congress=119, bill_type="hr", number=6028)
@@ -123,11 +128,12 @@ class StubBulkAcquirer:
     read and ``listings`` records the small listing requests.
     """
 
-    def __init__(self, entry=zip_entry):
+    def __init__(self, entry=zip_entry, status: bytes | None = None):
         self.calls: list[tuple[int, str]] = []
         self.zip_downloads: list[tuple[int, str]] = []
         self.listings: list[tuple[int, str]] = []
         self._entry = entry
+        self._status = status
 
     def _listing_capture(self, congress: int, bill_type: str) -> CapturedBodyResponse:
         return _capture(f"{BULKDATA.replace('/bulkdata/', '/bulkdata/json/')}/{congress}/{bill_type}", b"{}")
@@ -146,14 +152,14 @@ class StubBulkAcquirer:
             self.listings.append((congress, bill_type))
             listing_capture = self._listing_capture(congress, bill_type)
             if (unchanged_since.name, unchanged_since.link) != (entry.name, entry.link):
-                raise ValueError("unchanged_since names a different file than this folder's own zip entry")
+                raise BillSourceError("unchanged_since names a different file than this folder's own zip entry")
             if (unchanged_since.modified_at, unchanged_since.size) == (entry.modified_at, entry.size):
                 return _Acquisition(
                     None, None, skipped_unchanged=True, listing_capture=listing_capture, listing_entry=entry
                 )
 
         self.zip_downloads.append((congress, bill_type))
-        body = (FIXTURES / "status-119hr6028.xml").read_bytes()
+        body = self._status if self._status is not None else (FIXTURES / "status-119hr6028.xml").read_bytes()
         capture = _capture(entry.link, body)
         members = [_Member(parse_bill_status(body, identity=IDENTITY))] if (congress, bill_type) == (119, "hr") else []
         return _Acquisition(
@@ -164,10 +170,19 @@ class StubBulkAcquirer:
         )
 
 
+class _BodyIdentity:
+    def __init__(self, media_type: str, byte_size: int):
+        self.media_type = media_type
+        self.byte_size = byte_size
+
+
 class _Package:
-    def __init__(self, fmt: str, capture: CapturedBodyResponse):
+    """The three facts `body_text` reads off a fetched body, plus the capture."""
+
+    def __init__(self, fmt: str, capture: CapturedBodyResponse, *, media_type: str = "text/xml"):
         self.format = fmt
         self.body_capture = capture
+        self.body = _BodyIdentity(media_type, len(capture.body))
 
 
 class StubBodyAcquirer:
@@ -515,7 +530,12 @@ def test_a_moved_zip_is_downloaded_again(tmp_path, scoped):
 
 
 def test_a_retained_entry_naming_another_file_does_not_wedge_the_rollup(tmp_path, scoped):
-    """A stale row is refused upstream by name; the folder falls back to a cold download."""
+    """A stale row is recognised before a request, so the fallback costs one listing read.
+
+    ``acquire`` would refuse this entry by name — but only after reading the
+    folder listing, and its refusal carries no listing to reuse, so passing it
+    anyway would buy the same cold download for two reads instead of one.
+    """
     first = tmp_path / "run1"
     _run(first, StubBulkAcquirer(entry=lambda c, t: zip_entry(c, "sres")), _no_prior)
 
@@ -523,5 +543,101 @@ def test_a_retained_entry_naming_another_file_does_not_wedge_the_rollup(tmp_path
     paths = _run(tmp_path / "run2", renamed, _prior_from(first))
 
     assert renamed.zip_downloads == [(119, "hr")], "the zip is fetched rather than the run failing"
+    assert renamed.listings == [(119, "hr")], "and the folder listing is read exactly once"
     rows = pq.read_table(paths[ARCHIVES_TABLE]).to_pylist()
     assert {row["name"] for row in rows} == {"BILLSTATUS-119-hr.zip"}, "and the bad row is replaced"
+
+
+# --------------------------------------------------------------------------- #
+# The PDF rendition: reachable since 0.21.1 put PDF last in the preference
+# rather than outside it, and the one branch that fills the cleanup_* columns.
+# --------------------------------------------------------------------------- #
+def _pdf_only_status() -> bytes:
+    """The fixture bill with every printing offered only as PDF.
+
+    The real case this stands in for is the pre-113th corpus, which offers no
+    XML (spicy-docs `docs/research/pdf-only-corpus-2026-09-19.md`). Derived
+    from the fixture rather than committed beside it so the two cannot drift:
+    only the format URLs move, and `format_name` reads the rendition from the
+    URL folder exactly as it does for the XML original.
+    """
+    raw = (FIXTURES / "status-119hr6028.xml").read_text()
+    return re.sub(r"<url>(\S+?)/xml/(\S+?)\.xml</url>", r"<url>\1/pdf/\2.pdf</url>", raw).encode()
+
+
+class StubPdfBodyAcquirer:
+    """Serves each printing as a real, minimal PDF the pinned pypdf can read."""
+
+    def __init__(self):
+        self.requested: list[str] = []
+
+    def acquire(self, package_id: str, *, max_bytes=None):
+        self.requested.append(package_id)
+        url = f"https://www.govinfo.gov/content/pkg/{package_id}/pdf/{package_id}.pdf"
+        body = make_pdf([f"A BILL {package_id}", "SEC. 2. FINDINGS."])
+        capture = CapturedBodyResponse(
+            requested_url=url,
+            resolved_url=url,
+            status_code=200,
+            content_type="application/pdf",
+            observed_at=OBSERVED_AT,
+            body=body,
+        )
+        return _Package("pdf", capture, media_type="application/pdf")
+
+
+@pytest.fixture
+def pdf_family(tmp_path, scoped):
+    """One run over a bill whose printings are offered only as PDF, with the warnings it logged."""
+    messages: list[str] = []
+    sink = logger.add(messages.append, level="WARNING", format="{message}")
+    try:
+        paths = build_bill_family(
+            tmp_path,
+            bulk_acquirer=StubBulkAcquirer(status=_pdf_only_status()),
+            body_acquirer=StubPdfBodyAcquirer(),
+            download_prior=_no_prior,
+        )
+    finally:
+        logger.remove(sink)
+    return {path.stem: path for path in paths}, messages
+
+
+def test_a_pdf_printing_is_fetched_and_published_as_one(pdf_family):
+    """PDF is last in the preference, not outside it: the body columns are real."""
+    paths, _ = pdf_family
+    versions = pq.read_table(paths["bill_versions"]).to_pylist()
+    assert len(versions) == 2
+    assert {row["format_name"] for row in versions} == {"pdf"}
+    for row in versions:
+        assert row["source"] == "govinfo"
+        assert row["sha256"] and row["byte_size"] and row["observed_at"] and row["resolved_url"]
+
+
+def test_the_pdf_cleanup_record_reaches_the_cleanup_columns(pdf_family):
+    """`body_text`'s PDF branch is the GPO normalizer, and its record is what these columns are.
+
+    They were NULL on every row before this: the transform never ran
+    `body_text` at all, and its default extractor opens PDFs with PyMuPDF,
+    which this repository does not install.
+    """
+    paths, _ = pdf_family
+    versions = pq.read_table(paths["bill_versions"]).to_pylist()
+    for row in versions:
+        assert row["cleanup_line_numbers"] is not None
+        assert row["cleanup_gpo_footers"] is not None
+        assert row["cleanup_spacing_normalized"] is not None
+        pages = json.loads(row["cleanup_json"])
+        assert [page["page"] for page in pages] == [1, 2], "one entry per PDF page, one-based"
+        # The two fields 0.21.1 added to GpoPageCleanup, serialized upstream.
+        assert all("running_footer_lines" in page and "content_lines" in page for page in pages)
+
+
+def test_a_pdf_only_pair_is_refused_by_name_not_silently_skipped(pdf_family):
+    """No XML means no section tree, so the pair cannot be diffed — and says so."""
+    paths, messages = pdf_family
+    assert pq.read_table(paths["bill_sections"]).to_pylist() == [], "a PDF printing has no section tree"
+    assert pq.read_table(paths["section_diffs"]).to_pylist() == [], "so the consecutive pair yields no diff"
+    refusals = [line for line in messages if "refusals by table" in line]
+    assert refusals, "the refusal must be reported, not left as an empty table"
+    assert "section_diffs" in refusals[0]

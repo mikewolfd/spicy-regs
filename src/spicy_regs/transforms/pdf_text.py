@@ -18,12 +18,19 @@ Scope notes (matching the issue):
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from dataclasses import dataclass
 from enum import Enum
+from typing import Any
 
 # Pages are joined with a blank line so the boundary survives in the stored
 # text without inventing structure the source PDF didn't have.
 PAGE_SEPARATOR = "\n\n"
+
+#: The pypdf release this repository pins and checks before parsing, so PDF
+#: text and PDF failure behavior are the same in a checkout and a package
+#: install. `pyproject.toml` pins the same string; `vendor/README.md` says why.
+PYPDF_VERSION = "6.14.2"
 
 
 class PdfTextStatus(str, Enum):
@@ -70,14 +77,16 @@ def extract_pdf_text(data: bytes) -> PdfTextResult:
         from spicy_docs.extraction.pypdf import PdfEncryptedError, PdfPageError, PdfReadError, PypdfReader
     except ImportError:
         return PdfTextResult(
-            PdfTextStatus.ERROR, "", 0,
+            PdfTextStatus.ERROR,
+            "",
+            0,
             error="PDF extraction requires spicy-regs[source-readers]",
         )
 
     page_count = 0
     try:
         # Preserve the established empty-password attempt for permissions-only PDFs.
-        with PypdfReader(expected_backend_version="6.14.2").open(data, password="") as document:
+        with PypdfReader(expected_backend_version=PYPDF_VERSION).open(data, password="") as document:
             page_count = document.page_count
             parts = [document.read_page(page) or "" for page in range(1, page_count + 1)]
     except PdfEncryptedError as exc:
@@ -91,3 +100,43 @@ def extract_pdf_text(data: bytes) -> PdfTextResult:
     if not text:
         return PdfTextResult(PdfTextStatus.EMPTY, "", page_count)
     return PdfTextResult(PdfTextStatus.OK, text, page_count)
+
+
+class PypdfPageExtractor:
+    """``spicy_docs.extraction.Extractor`` over the pypdf provider this repository pins.
+
+    ``extraction.body_text.body_text`` derives a PDF body's text by running an
+    extractor and then ``gpo_normalize``. Its *default* extractor is
+    ``DocumentExtractor(NativeText())``, whose default reader opens PDFs with
+    PyMuPDF — a provider this repository does not install: it pins the narrow
+    ``pdf-pypdf`` provider extra instead (`vendor/README.md`), so the default
+    path raises ``ModuleNotFoundError`` on the first PDF body and every caller
+    that swallows the failure would simply never derive PDF text. Passing this
+    extractor is what makes the PDF branch reachable here.
+
+    It is an ``Extractor``, not a ``DocumentReader``: ``PypdfReader`` takes
+    ``open(source, *, password=...)`` while a ``DocumentReader`` takes
+    ``open(source, media_type)``, and the reader seam would also drag in the
+    page-geometry and rendering surface that native text extraction does not
+    use. ``body_text`` reads only each ``PageResult``'s text, so one text block
+    per page is the whole contract.
+
+    ``password=""`` keeps the empty-password attempt :func:`extract_pdf_text`
+    already makes, so a permissions-only PDF reads the same way through both
+    doors.
+    """
+
+    def extract(self, source: bytes, *, media_type: str, **_unused: Any) -> Iterator[Any]:
+        from spicy_docs.extraction.model import Box, PageContent, PageResult, TextBlock
+        from spicy_docs.extraction.pypdf import PypdfReader
+
+        if media_type != "application/pdf":
+            raise ValueError(f"expected application/pdf, got {media_type!r}")
+        with PypdfReader(expected_backend_version=PYPDF_VERSION).open(source, password="") as document:
+            for number in range(1, document.page_count + 1):
+                text = document.read_page(number) or ""
+                blocks = (TextBlock(text, Box()),) if text else ()
+                yield PageResult(
+                    metadata={"page": number, "backend": "pypdf", "backend_version": document.backend_version},
+                    content=PageContent(blocks, ()),
+                )

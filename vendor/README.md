@@ -67,6 +67,13 @@ Base CLI and MCP installs do not require them.
 PDF enrichment uses the narrow `pdf-pypdf` provider extra through `source-readers`.
 SpicyRegs additionally pins pypdf `6.14.2` and checks that version before parsing;
 package installs and checkouts therefore use the same qualified PDF behavior.
+That provider now backs the *body* path too. `extraction.body_text`'s PDF branch
+defaults to `DocumentExtractor(NativeText())`, whose default reader opens PDFs
+with PyMuPDF — which this repository deliberately does not install — so
+`transforms/pdf_text.py::PypdfPageExtractor` adapts the pinned provider to the
+extractor seam and both GovInfo body callers pass it. Dropping that argument
+does not fail loudly: it raises `ModuleNotFoundError` inside a per-package
+`except`, so PDF bodies would simply never be derived.
 
 CourtListener listing, pins and raw rows use the shared provider directly. Run
 `uv run pytest tests/test_courtlistener_bulk.py tests/test_courtlistener_shared.py tests/test_court_scope.py tests/test_cluster_court_scope_backfill.py`
