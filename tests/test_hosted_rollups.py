@@ -19,8 +19,10 @@ import yaml
 
 from spicy_regs import data_dictionary as dd
 from spicy_regs.pipelines.rollups.amendments import AmendmentsRollup
+from spicy_regs.pipelines.rollups.base import RollupPipeline
 from spicy_regs.pipelines.rollups.bill_family import BillFamilyRollup
 from spicy_regs.pipelines.rollups.committee_reports import CommitteeReportsRollup
+from spicy_regs.pipelines.rollups.congress_bills import CongressBillsRollup
 from spicy_regs.pipelines.rollups.members import MembersRollup
 from spicy_regs.pipelines.rollups.press_releases import PressReleasesRollup
 from spicy_regs.pipelines.rollups.roll_call_votes import RollCallVotesRollup
@@ -60,9 +62,69 @@ def test_every_output_is_a_published_table(rollup):
 
 
 @pytest.mark.parametrize("rollup", HOSTED_ROLLUPS, ids=lambda r: r.name)
-def test_an_ingesting_rollup_reads_no_base_table(rollup):
-    """These fetch from a publisher; reading another rollup's output would race it."""
+def test_an_ingesting_rollup_primes_no_base_table(rollup):
+    """These fetch from a publisher, so nothing is primed and nothing is fatal on absence.
+
+    This says only that the rollup declares no hard ``inputs``. It deliberately
+    does **not** stand in for "reads nothing else": two of these do read a
+    published table at merge time, and they satisfy an ``inputs == ()``
+    assertion by construction while doing it. What makes those reads safe is
+    checked in ``test_a_soft_input_is_an_ingest_output_its_writer_produces_first``,
+    against the ``soft_inputs`` they must declare.
+    """
     assert rollup.inputs == ()
+
+
+#: Every rollup that publishes a table, so a soft input can be traced to its writer.
+ALL_ROLLUPS = (*HOSTED_ROLLUPS, CongressBillsRollup)
+
+
+def _cron_minutes(workflow: Path) -> int:
+    """The daily minute-of-day the workflow's schedule fires at."""
+    crons = re.findall(r"cron: '(\d+) (\d+) \* \* \*'", workflow.read_text())
+    assert len(crons) == 1, f"{workflow.name} declares {len(crons)} daily crons, expected 1"
+    minute, hour = (int(part) for part in crons[0])
+    return hour * 60 + minute
+
+
+def _writers_of(remote_key: str) -> list[type[RollupPipeline]]:
+    return [rollup for rollup in ALL_ROLLUPS if remote_key in (rollup.outputs or (rollup.output,))]
+
+
+@pytest.mark.parametrize(
+    ("rollup", "soft_input"),
+    [(rollup, key) for rollup in HOSTED_ROLLUPS for key in rollup.soft_inputs],
+    ids=lambda value: value if isinstance(value, str) else value.name,
+)
+def test_a_soft_input_is_an_ingest_output_its_writer_produces_first(rollup, soft_input):
+    """The two things that make a merge-time read of a published table safe.
+
+    The rollup contract (``pipelines/rollups/base.py``) permits reading an
+    *ingest* rollup's output — one with no upstream dependency inside this
+    repository, so a stale copy costs one cron's lag rather than racing — and
+    forbids reading a derived rollup's. Both halves are checked here rather
+    than asserted in prose: the writer ingests (declares no ``inputs``), and
+    this rollup's cron fires after the writer's on the same day, so a steady
+    run reads the output that morning's writer produced.
+    """
+    writers = _writers_of(soft_input)
+    assert writers, f"{soft_input} is declared a soft input but no rollup publishes it"
+
+    reader_at = _cron_minutes(WORKFLOWS / f"rollup-{rollup.name}.yml")
+    earlier = []
+    for writer in writers:
+        assert writer.inputs == (), (
+            f"{soft_input} is written by {writer.name}, which reads base tables — "
+            "a derived rollup's output may not be a soft input"
+        )
+        writer_at = _cron_minutes(WORKFLOWS / f"rollup-{writer.name}.yml")
+        if writer_at < reader_at:
+            earlier.append((writer.name, reader_at - writer_at))
+
+    assert earlier, (
+        f"rollup-{rollup.name} reads {soft_input} but every writer of it "
+        f"({[w.name for w in writers]}) fires later in the day, so it always reads yesterday's"
+    )
 
 
 def test_the_bill_family_declares_all_thirteen_plus_its_own_two():

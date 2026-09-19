@@ -37,8 +37,12 @@ about the guarantee changed.
 A merge-time join of this kind is read **best-effort**, not declared in
 ``inputs``: ``inputs`` is for a table whose absence should fail the run,
 and a linkage input's absence must instead leave the linkage columns NULL so
-the rollup still publishes everything its own source establishes. Most rollups
-build one artifact (``output``); one that
+the rollup still publishes everything its own source establishes. It is
+declared in ``soft_inputs`` instead, which primes nothing and fails nothing —
+it exists so the read is *stated* rather than buried in a transform, and so a
+test can hold each one to the two things that make it safe: the table is an
+ingest rollup's output, and this rollup's cron runs after that rollup's.
+Most rollups build one artifact (``output``); one that
 builds several from a single expensive pass (e.g. the bill family, which would
 otherwise re-run its acquisition and model calls once per table) declares
 ``outputs`` instead and returns a tuple of paths from ``build()`` — each still
@@ -68,8 +72,17 @@ class RollupPipeline(Pipeline):
     """A single materialized rollup, run standalone from the base tables on R2."""
 
     #: Base-table Parquet files this rollup reads (R2 remote keys, e.g.
-    #: ``"documents.parquet"``). Primed from R2 before the build.
+    #: ``"documents.parquet"``). Primed from R2 before the build, and a
+    #: missing one fails the run.
     inputs: ClassVar[tuple[str, ...]] = ()
+
+    #: Published tables this rollup reads **best-effort** at merge time, to
+    #: fill columns its own source does not carry (R2 remote keys). Not
+    #: primed and never fatal: absence leaves those columns NULL and the
+    #: rollup still publishes everything its own source establishes. Each
+    #: entry must name an *ingest* rollup's output whose cron runs before
+    #: this one's — ``tests/test_hosted_rollups.py`` holds both.
+    soft_inputs: ClassVar[tuple[str, ...]] = ()
 
     #: Zero or more artifacts a multi-output rollup writes and publishes (R2
     #: remote keys, same convention as ``output``). Leave empty and declare
