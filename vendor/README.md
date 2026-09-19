@@ -5,16 +5,42 @@ The optional `source-readers` extra enables the same readers for package install
 its wheels must be supplied explicitly until they are published in a registry.
 Base CLI and MCP installs do not require them.
 
-- `spicy_docs-0.21.0`: built with `uv build` from SpicyDocs commit
-  `ff92406` (tag v0.21.0), 2026-09-19. SHA-256:
-  `ca3f26c5361f26bd3d38d7789277bff2a72ebfd224a65e65e0f24ec4ed241705`
-  (1,009,120 bytes). Carries the table-contract layer: `spicy_docs.schemas`'
-  twenty-two `TableContract`s with their columns, identity, version column,
-  grain and per-column prose, the `shape_*` function per table, and
-  `interpretation/bill_family.py`'s `build_bill_family`, which produces twelve
-  of them in one pass. The pin adds the `bill-diff` extra for the three diff
-  tables. Replaces 0.20.0 (`b96e083`, SHA-256 `594a2f01…`).
-- `rulespec_artifacts-1.0.13`: required by spicy-docs 0.21.0, which pins it
+- `spicy_docs-0.21.1`: built with `uv build` from SpicyDocs commit
+  `6f8d20e` (tag v0.21.1), 2026-09-19. SHA-256:
+  `c519e231b44a639c342fa857802869eca258bb4a7051a84b983956a2706e68a6`
+  (1,025,308 bytes). Keeps the whole table-contract layer 0.21.0 carried —
+  `spicy_docs.schemas`' twenty-two `TableContract`s with their columns,
+  identity, version column, grain and per-column prose, the `shape_*` function
+  per table, and `interpretation/bill_family.py`'s `build_bill_family`, which
+  produces twelve of them in one pass — and adds four things this repository
+  wires:
+  - **The sealed body preference.** `sources/govinfo/bodies.py`'s
+    `BODY_PREFERENCE = ("xml", "htm", "txt", "pdf")` is now
+    `GovInfoBodyAcquirer.acquire`'s default, and
+    `sources/congress/bill_versions.py`'s
+    `DEFAULT_FORMAT_PREFERENCE = ("xml", "html", "txt", "pdf")` is
+    `choose_format`'s. One order, spelled in each module's own format names;
+    a package offered only as PDF now yields a body instead of a refusal.
+  - **`extraction/body_text.py`.** `body_text(package_body) -> BodyText` —
+    one text derivation per rendition (text, pages, rendition, media type,
+    byte size, derivation name and the per-rendition cleanup record), so a
+    caller stops writing its own decoder. Measured in
+    `docs/sources/govinfo-bodies.md`: committee reports offer only `htm` and
+    `pdf`, the `htm` is the text rendition, no `[[Page N]]` marker and no form
+    feed exists in any GovInfo body, and PDF text is last.
+  - **The bulk listing skip.** `sources/congress/bulk_status.py` gained
+    `BulkListingEntry`, `BulkStatusAcquirer.list_archives(congress, bill_type)`
+    and `acquire(..., unchanged_since=entry)`, which reads the folder listing
+    first and skips the zip entirely when the retained entry's name, link,
+    modified time and size all match (`BulkStatusAcquisition.skipped_unchanged`,
+    `listing_entry`); `docs/sources/congress-bulk-status.md`.
+  - **The GPO normalization fixes.** `extraction/gpo_normalize.py`'s
+    `GpoPageCleanup` gained `running_footer_lines` and `content_lines`, which
+    `bill_version_tables._page_cleanup` already serializes into
+    `bill_versions.cleanup_json`.
+
+  Replaces 0.21.0 (`ff92406`, SHA-256 `ca3f26c5…1705`).
+- `rulespec_artifacts-1.0.13`: required by spicy-docs 0.21.1, which pins it
   exactly; 1.0.12 no longer resolves. Nothing here imports it — it is a
   transitive pin vendored under the same discipline. Byte-identical to the
   wheel `rulespec` itself built (`dist/artifacts/`) and to the one spicy-docs
@@ -28,8 +54,8 @@ Base CLI and MCP installs do not require them.
   registry package, so it is vendored the same way as the other source-reader
   wheels here rather than resolved transitively. It exists for the bill-diff
   tables (`section_diffs`, `section_diff_items`, `financial_changes`) that
-  `docs/research/table-contracts-2026-09-19.md` §5.4 describes, and the 0.21.0
-  pin now reaches them. `[tool.uv.sources]` alone was
+  `docs/research/table-contracts-2026-09-19.md` §5.4 describes, and the 0.21.x
+  pin reaches them. `[tool.uv.sources]` alone was
   not enough: a uv source binds a dependency the project declares, and
   DeltaTrack arrives only through spicy-docs' `bill-diff` extra, so uv looked
   for it in the registry and failed the resolve. `deltatrack==0.1.0` is

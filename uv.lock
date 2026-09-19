@@ -1893,14 +1893,14 @@ wheels = [
 
 [[package]]
 name = "spicy-docs"
-version = "0.21.0"
-source = { path = "vendor/spicy_docs-0.21.0-py3-none-any.whl" }
+version = "0.21.1"
+source = { path = "vendor/spicy_docs-0.21.1-py3-none-any.whl" }
 dependencies = [
     { name = "jsonschema" },
     { name = "rulespec-artifacts" },
 ]
 wheels = [
-    { filename = "spicy_docs-0.21.0-py3-none-any.whl", hash = "sha256:ca3f26c5361f26bd3d38d7789277bff2a72ebfd224a65e65e0f24ec4ed241705" },
+    { filename = "spicy_docs-0.21.1-py3-none-any.whl", hash = "sha256:c519e231b44a639c342fa857802869eca258bb4a7051a84b983956a2706e68a6" },
 ]
 
 [package.optional-dependencies]
@@ -2010,7 +2010,7 @@ requires-dist = [
     { name = "pyyaml" },
     { name = "rulespec-artifacts", marker = "extra == 'source-readers'", path = "vendor/rulespec_artifacts-1.0.13-py3-none-any.whl" },
     { name = "sentence-transformers", marker = "extra == 'embed'" },
-    { name = "spicy-docs", extras = ["acquisition", "pdf-pypdf", "bill-diff"], marker = "extra == 'source-readers'", path = "vendor/spicy_docs-0.21.0-py3-none-any.whl" },
+    { name = "spicy-docs", extras = ["acquisition", "pdf-pypdf", "bill-diff"], marker = "extra == 'source-readers'", path = "vendor/spicy_docs-0.21.1-py3-none-any.whl" },
     { name = "torch", marker = "extra == 'embed'" },
     { name = "tqdm" },
 ]
@@ -2034,7 +2034,7 @@ source-readers = [
     { name = "deltatrack", path = "vendor/deltatrack-0.1.0-py3-none-any.whl" },
     { name = "pypdf", specifier = "==6.14.2" },
     { name = "rulespec-artifacts", path = "vendor/rulespec_artifacts-1.0.13-py3-none-any.whl" },
-    { name = "spicy-docs", extras = ["acquisition", "pdf-pypdf", "bill-diff"], path = "vendor/spicy_docs-0.21.0-py3-none-any.whl" },
+    { name = "spicy-docs", extras = ["acquisition", "pdf-pypdf", "bill-diff"], path = "vendor/spicy_docs-0.21.1-py3-none-any.whl" },
 ]
 
 [[package]]
