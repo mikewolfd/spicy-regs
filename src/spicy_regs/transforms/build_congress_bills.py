@@ -38,7 +38,7 @@ from loguru import logger
 
 from spicy_regs.sources import r2
 from spicy_regs.sources.congress_bills import CongressBillsReader
-from spicy_regs.transforms.table_merge import merge_table, prior_scratch_path
+from spicy_regs.transforms.table_merge import merge_contract_table, prior_scratch_path
 
 OUTPUT = "congress_bills.parquet"
 NAME = "congress_bills"
@@ -159,16 +159,13 @@ def build_congress_bills(output_dir: Path, *, since: date | None = None, until: 
     rows = [_shape(doc) for doc in reader.iter_records()]
     logger.info("Congress bills: fetched {:,} bills this run", len(rows))
 
-    # 4. Merge prior + new, dedup on bill_id preferring the new row. prior_present
-    # carries what step 1 already found, so a cold start (no prior on R2) doesn't
-    # ask download_prior to retry the same failed download.
-    return merge_table(
-        output_dir,
-        name=NAME,
-        columns=COLUMNS,
-        identity=("bill_id",),
-        version_column="update_date",
-        rows=rows,
-        remote_key=OUTPUT,
-        prior_present=have_prior,
-    )
+    # 4. Merge through the contract, not through COLUMNS. This walk fills the
+    # frozen ten; the bill family fills all forty-eight. Publishing at this
+    # writer's width would rewrite the file 10 columns wide and delete the
+    # other thirty-eight from every row — a ~0.97 byte ratio the R2 shrink
+    # guard (0.5) does not notice. merge_contract_table publishes the
+    # contract's shape and, for this table alone, merges column-wise so a NULL
+    # here never overwrites a value the family put there. prior_present carries
+    # what step 1 already found, so a cold start doesn't retry the same failed
+    # download.
+    return merge_contract_table(output_dir, NAME, rows, prior_present=have_prior)

@@ -12,6 +12,8 @@ import re
 import tomllib
 from pathlib import Path
 
+import pyarrow as pa
+import pyarrow.parquet as pq
 import pytest
 import yaml
 
@@ -81,13 +83,83 @@ def test_congress_bills_has_a_second_narrow_writer():
 
     ``congress-bills`` walks the whole archive for the ten frozen columns;
     ``bill-family`` fills all forty-eight for the Congresses it is scoped to.
-    Both write ``congress_bills.parquet``, and the merge prefers whichever ran
-    most recently per ``bill_id``.
     """
     from spicy_regs.pipelines.rollups.congress_bills import CongressBillsRollup
 
     assert CongressBillsRollup.output == "congress_bills.parquet"
     assert "congress_bills.parquet" in BillFamilyRollup.outputs
+
+
+def test_the_narrow_writer_does_not_drop_the_familys_columns(tmp_path):
+    """The behavioral pin for the two-writer case, not a statement about it.
+
+    Before this was fixed, the narrow writer published at its own ten-column
+    width, which *deleted* the other thirty-eight from every published row —
+    and at realistic scale the result was 96.6% of the prior bytes, well above
+    the R2 shrink guard's 0.5, so nothing refused it. This seeds a prior the
+    bill family would have written, runs the narrow writer's own merge, and
+    asserts the published schema is still the contract's and that a value only
+    the family sets is still there.
+    """
+    from spicy_docs.schemas import TABLE_CONTRACTS
+
+    from spicy_regs.transforms.build_congress_bills import NAME, _shape
+    from spicy_regs.transforms.table_merge import merge_contract_table, prior_scratch_path
+
+    contract = TABLE_CONTRACTS["congress_bills"]
+    prior = {c: None for c in contract.columns}
+    prior.update(
+        {
+            "bill_id": "119-hr-6028",
+            "congress": "119",
+            "bill_type": "hr",
+            "bill_number": "6028",
+            "title": "A bill",
+            "update_date": "2026-09-01",
+            "stage": "passed_house",
+            "stage_rule": "house_passage",
+            "money_bill_kind": "appropriations",
+        }
+    )
+    pq.write_table(
+        pa.Table.from_pylist([prior], schema=pa.schema([(c, pa.string()) for c in contract.columns])),
+        prior_scratch_path(tmp_path, NAME),
+    )
+
+    # Rows exactly as the narrow writer shapes them: ten keys, no more.
+    fresh = _shape(
+        {
+            "congress": 119,
+            "type": "HR",
+            "number": 6028,
+            "title": "A bill (updated)",
+            "originChamber": "House",
+            "updateDate": "2026-09-02",
+            "latestAction": {"actionDate": "2026-09-02", "text": "Passed Senate."},
+            "url": "https://api.congress.gov/v3/bill/119/hr/6028",
+        }
+    )
+    assert len(fresh) == 10, "the narrow writer still shapes ten columns"
+
+    out = merge_contract_table(tmp_path, NAME, [fresh], download_prior=lambda key, path: False, prior_present=True)
+    published = pq.read_table(out)
+    assert published.schema.names == list(contract.columns), "the published shape is the contract's"
+
+    row = published.to_pylist()[0]
+    # What only the family sets survives a narrow run...
+    assert row["stage"] == "passed_house"
+    assert row["stage_rule"] == "house_passage"
+    assert row["money_bill_kind"] == "appropriations"
+    # ...and what the narrow writer owns is still updated by it.
+    assert row["title"] == "A bill (updated)"
+    assert row["update_date"] == "2026-09-02"
+
+
+def test_only_congress_bills_merges_column_wise():
+    """Coalescing is for tables with two writers; elsewhere a NULL is a value."""
+    from spicy_regs.transforms.table_merge import COALESCED_TABLES
+
+    assert COALESCED_TABLES == {"congress_bills"}
 
 
 @pytest.mark.parametrize("rollup", HOSTED_ROLLUPS, ids=lambda r: r.name)
