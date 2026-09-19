@@ -38,6 +38,16 @@ on:
         required: false
         default: ''
         type: string
+      bill_family_congresses:
+        description: 'Optional comma-separated Congress numbers to scope the bill-family rollup (e.g. 118,119)'
+        required: false
+        default: ''
+        type: string
+      bill_family_bill_types:
+        description: 'Optional comma-separated bill types to scope the bill-family rollup (e.g. hr,s,hres)'
+        required: false
+        default: ''
+        type: string
       fcc_since:
         description: 'Optional FCC ECFS backfill start date (YYYY-MM-DD)'
         required: false
@@ -96,6 +106,13 @@ jobs:
           LDA_UNTIL: ${{ inputs.lda_until }}
           CONGRESS_SINCE: ${{ inputs.congress_since }}
           CONGRESS_UNTIL: ${{ inputs.congress_until }}
+          BILL_FAMILY_CONGRESSES: ${{ inputs.bill_family_congresses }}
+          BILL_FAMILY_BILL_TYPES: ${{ inputs.bill_family_bill_types }}
+          # Gemini API key for the bill-family rollup's model-backed tables
+          # (section_classifications, bill_summaries — spicy_docs.interpretation's
+          # classify_sections/summarize_bill). A keyless run skips those tables
+          # rather than failing; the other nine bill-family tables still publish.
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           FCC_SINCE: ${{ inputs.fcc_since }}
           FCC_PROCEEDINGS: ${{ inputs.fcc_proceedings }}
           # Optional: raises the CourtListener API rate limit. The court_dockets

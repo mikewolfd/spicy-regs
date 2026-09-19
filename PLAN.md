@@ -161,6 +161,62 @@ public-data users. Retaining SpicyDocs separately is valid; none of these tasks
 requires moving that package into SpicyRegs. Adding the backlog does not
 establish that a capability is supported or that upstream work has been accepted.
 
+### BillTrax-derived table hosting
+
+**2026-09-19, branch `billtrax-hosting-prep` (local only, not pushed).** Landed
+the half of the table-contract layer's spicy-regs side that does not need
+SpicyDocs 0.21.0: [`docs/research/table-contracts-2026-09-19.md`](../spicy-docs/docs/research/table-contracts-2026-09-19.md)
+§5 is the build brief.
+
+- [x] `RollupPipeline` grew `outputs: ClassVar[tuple[str, ...]]`. `output`
+  stays a plain string on every existing rollup (Python resolves that
+  attribute from the subclass, so it shadows the base's new `output` property
+  entirely — none of the twenty existing rollups changed behavior). A rollup
+  that declares `outputs` instead picks up the property (`outputs[0]`) and can
+  return a tuple of paths from `build()`; `run()` uploads each through the
+  same shrink guard. This is for the bill family: one acquisition + model pass
+  producing eleven tables, not eleven rollups repeating it.
+- [x] `transforms/table_merge.py::merge_table` — the prior-download-plus-DuckDB-merge
+  half of `build_congress_bills.py` (~135-210), lifted and parameterised over
+  `columns`/`identity`/`version_column` so a table keyed on more than
+  `bill_id` doesn't copy the SQL. `build_congress_bills` now calls it;
+  `tests/test_congress_bills.py` (21 tests, unchanged) is the
+  behavior-preservation proof, and `tests/test_table_merge.py` covers the
+  helper directly (fresh-wins-on-repeat, prior-only rows kept, version
+  ordering, missing-prior tolerance, null-identity refusal).
+- [x] `.github/workflows/_rollup.yml` gained `bill_family_congresses` /
+  `bill_family_bill_types` inputs and a `GEMINI_API_KEY` secret placeholder
+  (named, no value — the bill family's `classify_sections`/`summarize_bill`
+  calls are Gemini-backed per `spicy_docs.extraction.gemini`). No rollup
+  workflow reads them yet.
+- [x] Vendored `deltatrack-0.1.0-py3-none-any.whl` (built `uv build --wheel`
+  from `civictechdc/DeltaTrack@c636448`, SHA-256
+  `7f060e30af9702f4e45c305fa93c53d1e3e59bd70858d3c6717f6fc9cf825197` — see
+  [`vendor/README.md`](vendor/README.md)) and pointed
+  `[tool.uv.sources] deltatrack` at it. `uv lock` resolves clean and leaves
+  `uv.lock` byte-identical with the entry present (nothing depends on it yet),
+  so it's inert until the 0.21.0 pin below pulls DeltaTrack transitively.
+
+**Deliberately not done here** — each needs SpicyDocs 0.21.0 (the contract
+layer + the DeltaTrack adapter branch, tagged and released) first:
+
+1. Bump both `source-readers` pins in `pyproject.toml` (and
+   `[tool.uv.sources] spicy-docs`) to `spicy-docs[acquisition,pdf-pypdf,bill-diff]==0.21.0`;
+   delete the 0.20.0 wheel; add the spicy-docs bullet to `vendor/README.md`.
+2. The transforms (`transforms/build_bill_family.py`,
+   `build_press_releases.py`, `build_amendments.py`, `build_roll_call_votes.py`,
+   `build_members.py`, `build_committee_reports.py`) — each imports
+   `spicy_docs.schemas.*` for its column contract, builds rows, calls
+   `merge_table` per output. No transform in this branch imports
+   `spicy_docs.schemas` yet, on purpose.
+3. The rollups (`pipelines/rollups/bill_family.py` + five siblings, all
+   `inputs = ()`), their `run-rollup-*` console scripts, and their
+   `rollup-*.yml` cron workflows delegating to `_rollup.yml`.
+4. `data_dictionary/descriptions.yaml` entries generated from
+   `TABLE_CONTRACTS` (`columns_from: spicy_docs`) plus the hand-written
+   `label`/`coverage`/`measured_on`, and one `mcp_server.py` `TABLES` line per
+   table.
+
 <a id="sr01"></a>
 
 - [ ] **SR01 — Select SpicyRegs capabilities to reuse and local duplication to remove.**

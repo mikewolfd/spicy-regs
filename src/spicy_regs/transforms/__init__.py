@@ -33,6 +33,7 @@ from spicy_regs.transforms.extract import ExtractRecords
 from spicy_regs.transforms.merge_comments_partitioned import merge_comments_partitioned
 from spicy_regs.transforms.merge_staging_files import merge_staging_files
 from spicy_regs.transforms.partition_comments import partition_comments
+from spicy_regs.transforms.table_merge import merge_table, prior_scratch_path
 from spicy_regs.transforms.pdf_text import (
     PAGE_SEPARATOR,
     PdfTextResult,
@@ -58,6 +59,8 @@ __all__ = [
     "build_agency_monthly_volume",
     "build_cfr_sections",
     "build_congress_bills",
+    "merge_table",
+    "prior_scratch_path",
     "build_crs_reports",
     "build_courtlistener",
     "build_discovery_signals",

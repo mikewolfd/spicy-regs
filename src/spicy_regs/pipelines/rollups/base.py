@@ -10,14 +10,18 @@ re-run or backfilled on its own, and a failure is isolated to a single artifact.
 
     1. Prime — download the base tables this rollup reads from R2 (skipping any
        already present locally, so local dev and re-runs don't re-download).
-    2. Build — materialize the rollup artifact via a transform.
-    3. Load  — publish the single artifact to R2 (shrink-guarded), off by
+    2. Build — materialize the rollup artifact(s) via a transform.
+    3. Load  — publish each artifact to R2 (shrink-guarded per file), off by
        default while vetting.
 
 **Contract:** a rollup reads only the ETL's *published base tables*
 (``dockets``, ``documents``, ``comments_index``, ``federal_register``) — never
 another rollup's output — so pipelines stay independently schedulable with no
-cross-pipeline race.
+cross-pipeline race. Most rollups build one artifact (``output``); one that
+builds several from a single expensive pass (e.g. the bill family, which would
+otherwise re-run its acquisition and model calls once per table) declares
+``outputs`` instead and returns a tuple of paths from ``build()`` — each still
+goes through the same per-file shrink guard on upload.
 """
 
 from abc import abstractmethod
@@ -39,9 +43,27 @@ class RollupPipeline(Pipeline):
     #: ``"documents.parquet"``). Primed from R2 before the build.
     inputs: ClassVar[tuple[str, ...]] = ()
 
+    #: Zero or more artifacts a multi-output rollup writes and publishes (R2
+    #: remote keys, same convention as ``output``). Leave empty and declare
+    #: ``output`` directly for the (default) single-output case; declaring
+    #: ``outputs`` instead picks up the ``output`` property below, which
+    #: reads as ``outputs[0]`` for anything that only needs one key (e.g. the
+    #: freshness checker).
+    outputs: ClassVar[tuple[str, ...]] = ()
+
     #: The single artifact this rollup writes and publishes (e.g.
     #: ``"feed_summary.parquet"``). Its R2 remote key is the same filename.
+    #: Single-output rollups set this directly, which — because Python
+    #: resolves a class attribute from the most-derived class first —
+    #: shadows the ``output`` property below entirely; it never runs for them.
     output: ClassVar[str]
+
+    @property
+    def output(self) -> str:  # noqa: F811 — intentional redefinition, see docstring above
+        """``outputs[0]``, for callers that only need this rollup's first/only key."""
+        if self.outputs:
+            return self.outputs[0]
+        raise AttributeError(f"{type(self).__name__} must set 'output' or 'outputs'")
 
     def __init__(self, *, output_dir: Path | None = None, skip_upload: bool = True) -> None:
         self.output_dir = output_dir
@@ -54,16 +76,18 @@ class RollupPipeline(Pipeline):
         # 1. Prime: pull the base tables this rollup reads from R2.
         self._prime(output_dir)
 
-        # 2. Build: materialize the rollup artifact.
+        # 2. Build: materialize the rollup artifact(s).
         logger.info("Building rollup {}...", self.output)
-        out_path = self.build(output_dir)
+        built = self.build(output_dir)
+        out_paths = built if isinstance(built, tuple) else (built,)
 
-        # 3. Load: publish the single artifact (shrink-guarded), unless skipping.
-        if self.skip_upload:
-            logger.info("skip_upload=True — {} left in {}", self.output, output_dir)
-        else:
-            logger.info("Uploading {} to R2...", self.output)
-            r2.upload_file(out_path, remote_key=self.output)
+        # 3. Load: publish each artifact (shrink-guarded), unless skipping.
+        for out_path in out_paths:
+            if self.skip_upload:
+                logger.info("skip_upload=True — {} left in {}", out_path.name, output_dir)
+            else:
+                logger.info("Uploading {} to R2...", out_path.name)
+                r2.upload_file(out_path, remote_key=out_path.name)
 
         logger.info("Done!")
 
@@ -86,8 +110,12 @@ class RollupPipeline(Pipeline):
                 )
 
     @abstractmethod
-    def build(self, output_dir: Path) -> Path:
-        """Materialize the rollup into ``output_dir`` and return its path."""
+    def build(self, output_dir: Path) -> Path | tuple[Path, ...]:
+        """Materialize the rollup into ``output_dir``.
+
+        Return the single artifact's path, or — for a rollup that declares
+        ``outputs`` — a tuple of paths, one per declared key, in any order.
+        """
         ...
 
 

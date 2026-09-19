@@ -34,14 +34,14 @@ from __future__ import annotations
 from datetime import date, timedelta
 from pathlib import Path
 
-import pyarrow as pa
-import pyarrow.parquet as pq
 from loguru import logger
 
 from spicy_regs.sources import r2
 from spicy_regs.sources.congress_bills import CongressBillsReader
+from spicy_regs.transforms.table_merge import merge_table, prior_scratch_path
 
 OUTPUT = "congress_bills.parquet"
+NAME = "congress_bills"
 
 # Re-scan this many days before the last stored update_date on each run, so bills
 # updated after our previous run's cutoff are picked up.
@@ -71,7 +71,6 @@ COLUMNS = (
     "update_date",
     "url",
 )
-_SCHEMA = pa.schema([(c, pa.string()) for c in COLUMNS])
 
 
 def _s(value: object) -> str | None:
@@ -134,12 +133,10 @@ def _prior_max_update_date(prior_file: Path) -> date | None:
 
 def build_congress_bills(output_dir: Path, *, since: date | None = None, until: date | None = None) -> Path:
     """Build ``congress_bills.parquet`` (incremental merge with the prior table)."""
-    import duckdb
-
-    out_file = output_dir / OUTPUT
-    prior_file = output_dir / "_congress_prior.parquet"
-
-    # 1. Pull the prior table (best effort — absence just means full backfill).
+    # 1. Pull the prior table (best effort — absence just means full backfill). Downloaded
+    # to table_merge's own scratch path so merge_table() below reuses it in place instead
+    # of downloading it again.
+    prior_file = prior_scratch_path(output_dir, NAME)
     have_prior = prior_file.exists() or r2.download(OUTPUT, prior_file)
     if have_prior:
         logger.info("Congress bills: merging against prior table {}", prior_file)
@@ -157,54 +154,18 @@ def build_congress_bills(output_dir: Path, *, since: date | None = None, until: 
         until or "now",
     )
 
-    # 3. Fetch + shape into a "new rows" parquet.
+    # 3. Fetch + shape the freshly fetched rows.
     reader = CongressBillsReader(since=since, until=until)
     rows = [_shape(doc) for doc in reader.iter_records()]
-    new_file = output_dir / "_congress_new.parquet"
-    table = pa.Table.from_pylist(rows, schema=_SCHEMA) if rows else _SCHEMA.empty_table()
-    pq.write_table(table, new_file, compression="zstd")
     logger.info("Congress bills: fetched {:,} bills this run", len(rows))
 
     # 4. Merge prior + new, dedup on bill_id preferring the new row.
-    spill_dir = output_dir / ".duckdb_tmp"
-    spill_dir.mkdir(exist_ok=True)
-    con = duckdb.connect()
-    con.execute("SET memory_limit='4GB'")
-    con.execute("SET preserve_insertion_order=false")
-    con.execute("SET threads=2")
-    con.execute(f"SET temp_directory='{spill_dir}'")
-
-    cols = ", ".join(COLUMNS)
-    if have_prior:
-        union = (
-            f"SELECT {cols}, 0 AS _src FROM read_parquet('{prior_file}') "
-            f"UNION ALL BY NAME "
-            f"SELECT {cols}, 1 AS _src FROM read_parquet('{new_file}')"
-        )
-    else:
-        union = f"SELECT {cols}, 1 AS _src FROM read_parquet('{new_file}')"
-
-    con.execute(
-        f"""
-        COPY (
-            SELECT {cols} FROM (
-                SELECT {cols}, ROW_NUMBER() OVER (
-                    PARTITION BY bill_id ORDER BY _src DESC
-                ) AS _rn
-                FROM ({union})
-                WHERE bill_id IS NOT NULL
-            )
-            WHERE _rn = 1
-            ORDER BY update_date DESC, bill_id
-        ) TO '{out_file}' (FORMAT PARQUET, COMPRESSION ZSTD, ROW_GROUP_SIZE 50000);
-        """
+    return merge_table(
+        output_dir,
+        name=NAME,
+        columns=COLUMNS,
+        identity=("bill_id",),
+        version_column="update_date",
+        rows=rows,
+        remote_key=OUTPUT,
     )
-    con.close()
-
-    # Housekeeping: drop scratch files so they aren't mistaken for outputs.
-    for scratch in (prior_file, new_file):
-        scratch.unlink(missing_ok=True)
-
-    total = pq.ParquetFile(out_file).metadata.num_rows
-    logger.info("Congress bills: {:,} rows", total)
-    return out_file

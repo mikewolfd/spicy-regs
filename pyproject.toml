@@ -93,6 +93,7 @@ build-backend = "uv_build"
 [tool.uv.sources]
 spicy-docs = { path = "vendor/spicy_docs-0.20.0-py3-none-any.whl" }
 rulespec-artifacts = { path = "vendor/rulespec_artifacts-1.0.12-py3-none-any.whl" }
+deltatrack = { path = "vendor/deltatrack-0.1.0-py3-none-any.whl" }
 
 [tool.uv]
 default-groups = ["dev", "source-readers"]
