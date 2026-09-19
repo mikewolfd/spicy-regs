@@ -12,6 +12,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pyarrow as pa
+import pytest
 import pyarrow.parquet as pq
 
 from spicy_regs.transforms.table_merge import merge_table, prior_scratch_path
@@ -206,3 +207,207 @@ def test_merge_null_fills_columns_the_prior_table_lacks(tmp_path):
         "stage": None,
         "stage_rule": None,
     }
+
+
+# --------------------------------------------------------------------------- #
+# A8/A9 (laws and rosters): scope replacement, and the statutes join on congress_bills.
+# --------------------------------------------------------------------------- #
+def _contract_rows(name: str, rows: list[dict]) -> list[dict]:
+    from spicy_docs.schemas import TABLE_CONTRACTS
+
+    columns = TABLE_CONTRACTS[name].columns
+    return [{c: None for c in columns} | row for row in rows]
+
+
+def _write(path: Path, name: str, rows: list[dict]) -> None:
+    from spicy_docs.schemas import TABLE_CONTRACTS
+
+    columns = TABLE_CONTRACTS[name].columns
+    pq.write_table(
+        pa.Table.from_pylist(_contract_rows(name, rows), schema=pa.schema([(c, pa.string()) for c in columns])), path
+    )
+
+
+def test_retire_prior_rows_drops_exactly_the_scope(tmp_path):
+    from spicy_regs.transforms.table_merge import prior_scratch_path, retire_prior_rows
+
+    prior = prior_scratch_path(tmp_path, "committee_assignments")
+    _write(
+        prior,
+        "committee_assignments",
+        [
+            {"congress": "119", "chamber": "house", "system_code": "a", "bioguide_id": "1"},
+            {"congress": "119", "chamber": "house", "system_code": "b", "bioguide_id": "2"},
+            {"congress": "119", "chamber": "senate", "system_code": "c", "bioguide_id": "3"},
+            {"congress": "118", "chamber": "house", "system_code": "a", "bioguide_id": "1"},
+            {"congress": None, "chamber": "house", "system_code": "z", "bioguide_id": "9"},
+        ],
+    )
+    assert retire_prior_rows(prior, congress="119", chamber="house") == 2
+    kept = {(r["congress"], r["chamber"]) for r in pq.read_table(prior).to_pylist()}
+    assert kept == {("119", "senate"), ("118", "house"), (None, "house")}
+    with pytest.raises(ValueError, match="at least one scope column"):
+        retire_prior_rows(prior)
+    with pytest.raises(ValueError, match="not a snake_case identifier"):
+        retire_prior_rows(prior, **{"congress; DROP": "1"})
+
+
+def _seed_laws(tmp_path: Path, rows: list[dict]) -> None:
+    from spicy_regs.transforms.table_merge import prior_scratch_path
+
+    _write(prior_scratch_path(tmp_path, "laws"), "laws", rows)
+
+
+def _no_download(remote_key: str, local_path: Path) -> bool:
+    return False
+
+
+def test_congress_bills_takes_its_citation_from_the_published_laws_table(tmp_path):
+    from spicy_docs.schemas import TABLE_CONTRACTS
+
+    from spicy_regs.transforms.table_merge import merge_contract_table
+
+    _seed_laws(
+        tmp_path,
+        [
+            {
+                "law_id": "119-public-1",
+                "congress": "119",
+                "law_type": "public",
+                "number": "1",
+                "bill_id": "119-s-5",
+                "statutes_at_large_cite": "139 Stat. 3",
+                "update_date": "2026-07-30",
+            },
+            # A law whose PLAW lagged states no citation and fills nothing.
+            {
+                "law_id": "119-public-110",
+                "congress": "119",
+                "law_type": "public",
+                "number": "110",
+                "bill_id": "119-s-307",
+                "update_date": "2026-09-18",
+            },
+        ],
+    )
+    fresh = _contract_rows(
+        "congress_bills",
+        [
+            {
+                "bill_id": "119-s-5",
+                "congress": "119",
+                "bill_type": "s",
+                "bill_number": "5",
+                "update_date": "2026-09-01",
+            },
+            {
+                "bill_id": "119-s-307",
+                "congress": "119",
+                "bill_type": "s",
+                "bill_number": "307",
+                "update_date": "2026-09-01",
+            },
+            {
+                "bill_id": "119-hr-1",
+                "congress": "119",
+                "bill_type": "hr",
+                "bill_number": "1",
+                "update_date": "2026-09-02",
+            },
+        ],
+    )
+    out = merge_contract_table(tmp_path, "congress_bills", fresh, download_prior=_no_download)
+    table = pq.read_table(out)
+    assert table.schema.names == list(TABLE_CONTRACTS["congress_bills"].columns)
+    rows = {r["bill_id"]: r for r in table.to_pylist()}
+    assert rows["119-s-5"]["statutes_at_large_cite"] == "139 Stat. 3"
+    assert rows["119-s-307"]["statutes_at_large_cite"] is None
+    assert rows["119-hr-1"]["statutes_at_large_cite"] is None
+    assert [r["bill_id"] for r in table.to_pylist()] == ["119-hr-1", "119-s-307", "119-s-5"], (
+        "the merge's order is kept"
+    )
+    assert not (tmp_path / "_laws_prior.parquet").exists(), "the soft input's scratch copy is not left behind"
+
+
+def test_a_writers_null_never_erases_a_citation_and_no_laws_table_leaves_it_as_it_was(tmp_path):
+    from spicy_regs.transforms.table_merge import merge_contract_table, prior_scratch_path
+
+    _write(
+        prior_scratch_path(tmp_path, "congress_bills"),
+        "congress_bills",
+        [
+            {
+                "bill_id": "119-s-5",
+                "congress": "119",
+                "update_date": "2026-09-01",
+                "statutes_at_large_cite": "139 Stat. 3",
+                "stage": "law",
+            }
+        ],
+    )
+    # The family's fresh row states no citation (the one-pass rule) and no laws table is published.
+    fresh = _contract_rows(
+        "congress_bills", [{"bill_id": "119-s-5", "congress": "119", "update_date": "2026-09-02", "title": "fresh"}]
+    )
+    out = merge_contract_table(tmp_path, "congress_bills", fresh, download_prior=_no_download, prior_present=True)
+    row = pq.read_table(out).to_pylist()[0]
+    assert (row["statutes_at_large_cite"], row["stage"], row["title"]) == ("139 Stat. 3", "law", "fresh")
+
+
+def test_a_recaptured_citation_in_laws_wins_over_the_one_already_here(tmp_path):
+    from spicy_regs.transforms.table_merge import merge_contract_table, prior_scratch_path
+
+    _write(
+        prior_scratch_path(tmp_path, "congress_bills"),
+        "congress_bills",
+        [
+            {
+                "bill_id": "119-s-5",
+                "congress": "119",
+                "update_date": "2026-09-01",
+                "statutes_at_large_cite": "139 Stat. 2",
+            }
+        ],
+    )
+    _seed_laws(
+        tmp_path,
+        [
+            {
+                "law_id": "119-public-1",
+                "congress": "119",
+                "law_type": "public",
+                "number": "1",
+                "bill_id": "119-s-5",
+                "statutes_at_large_cite": "139 Stat. 3",
+                "update_date": "2026-07-30",
+            }
+        ],
+    )
+    out = merge_contract_table(tmp_path, "congress_bills", [], download_prior=_no_download, prior_present=True)
+    assert pq.read_table(out).to_pylist()[0]["statutes_at_large_cite"] == "139 Stat. 3"
+
+
+@pytest.mark.parametrize(
+    "laws_file",
+    ["truncated", "column_short"],
+)
+def test_a_laws_table_that_cannot_be_read_leaves_congress_bills_as_merged(tmp_path, laws_file):
+    """The soft-input promise: a bad ``laws`` file is logged, not a failed congress-bills or bill-family run."""
+    from spicy_regs.transforms.table_merge import merge_contract_table, prior_scratch_path
+
+    laws_path = prior_scratch_path(tmp_path, "laws")
+    if laws_file == "truncated":
+        laws_path.write_bytes(b"PAR1 not a parquet file")
+    else:
+        # A laws table that predates the citation column: the binder cannot find it.
+        pq.write_table(
+            pa.Table.from_pylist([{"bill_id": "119-s-5"}], schema=pa.schema([("bill_id", pa.string())])), laws_path
+        )
+    fresh = _contract_rows(
+        "congress_bills", [{"bill_id": "119-s-5", "congress": "119", "update_date": "2026-09-01", "title": "as merged"}]
+    )
+    out = merge_contract_table(tmp_path, "congress_bills", fresh, download_prior=_no_download)
+    row = pq.read_table(out).to_pylist()[0]
+    assert (row["title"], row["statutes_at_large_cite"]) == ("as merged", None)
+    assert not laws_path.exists(), "the unreadable scratch copy is removed either way"
+    assert not (tmp_path / "_congress_bills_cited.parquet").exists()

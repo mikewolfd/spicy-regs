@@ -33,6 +33,10 @@ from spicy_regs.pipelines.rollups.congress_bills import CongressBillsRollup
 from spicy_regs.pipelines.rollups.members import MembersRollup
 from spicy_regs.pipelines.rollups.press_releases import PressReleasesRollup
 from spicy_regs.pipelines.rollups.roll_call_votes import RollCallVotesRollup
+
+# A8/A9 (laws and rosters)
+from spicy_regs.pipelines.rollups.committee_rosters import CommitteeRostersRollup
+from spicy_regs.pipelines.rollups.laws import LawsRollup
 from spicy_regs.transforms.build_bill_family import (
     ARCHIVE_COLUMNS,
     ARCHIVES_TABLE,
@@ -63,6 +67,9 @@ HOSTED_ROLLUPS = (
     RollCallVotesRollup,
     MembersRollup,
     CommitteeReportsRollup,
+    # A8/A9 (laws and rosters)
+    LawsRollup,
+    CommitteeRostersRollup,
     # The Congress.gov index tables (gaps A5, A7, A10).
     HouseCommunicationsRollup,
     CommitteeMeetingsRollup,
@@ -115,7 +122,7 @@ def _writers_of(remote_key: str) -> list[type[RollupPipeline]]:
 
 @pytest.mark.parametrize(
     ("rollup", "soft_input"),
-    [(rollup, key) for rollup in HOSTED_ROLLUPS for key in rollup.soft_inputs],
+    [(rollup, key) for rollup in ALL_ROLLUPS for key in rollup.soft_inputs],
     ids=lambda value: value if isinstance(value, str) else value.name,
 )
 def test_a_soft_input_is_an_ingest_output_its_writer_produces_first(rollup, soft_input):

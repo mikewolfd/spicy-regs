@@ -29,21 +29,13 @@ from spicy_regs.transforms.table_merge import merge_contract_table
 
 CONTRACT_NAMES = sorted(TABLE_CONTRACTS)
 
-#: Contracts spicy-docs 0.21.2 ships that no rollup here writes yet (the five
-#: Congress.gov index tables have theirs in pipelines/rollups/congress_index.py), so they
-#: are not hosted, queryable or described: ``data_dictionary.CONTRACT_TABLES``
-#: enumerates the hosted tables by hand on purpose, and each of these needs
-#: its own reader before it joins that tuple. Listed rather than computed so a
-#: contract added upstream fails here until someone decides whether to host it.
-UNHOSTED_CONTRACTS = frozenset(
-    {
-        "committee_assignments",
-        "committees",
-        "law_code_sections",
-        "laws",
-        "table3_records",
-    }
-)
+#: Contracts spicy-docs 0.21.2 ships that no rollup here writes: none, now
+#: that the A5/A7/A10 and A8/A9 branches have landed. Kept as an explicit,
+#: empty set — and ``test_every_hosted_table_is_registered_everywhere`` asserts
+#: exact equality with it — so a contract a later wheel adds fails here until
+#: someone decides whether to host it: ``data_dictionary.CONTRACT_TABLES``
+#: enumerates the hosted tables by hand on purpose.
+UNHOSTED_CONTRACTS: frozenset[str] = frozenset()
 
 
 def _no_download(remote_key: str, local_path: Path) -> bool:

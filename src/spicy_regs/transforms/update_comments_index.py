@@ -64,13 +64,16 @@ def update_comments_index(output_dir: Path, changed_files: list[Path]) -> Path:
 
     all_rows = kept_rows + new_rows
     if all_rows:
-        df = pl.DataFrame(all_rows, schema={
-            "agency_code": pl.Utf8,
-            "docket_id": pl.Utf8,
-            "year": pl.Int64,
-            "month": pl.Int64,
-            "row_count": pl.Int64,
-        })
+        df = pl.DataFrame(
+            all_rows,
+            schema={
+                "agency_code": pl.Utf8,
+                "docket_id": pl.Utf8,
+                "year": pl.Int64,
+                "month": pl.Int64,
+                "row_count": pl.Int64,
+            },
+        )
         df.write_parquet(index_file, compression="zstd")
 
     total_rows = sum(r["row_count"] for r in all_rows)

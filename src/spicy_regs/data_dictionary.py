@@ -113,6 +113,12 @@ CONTRACT_TABLES: tuple[str, ...] = (
     "committee_reports",
     "report_sections",
     "hearing_transcripts",
+    # A8/A9 (laws and rosters): the laws and committee-rosters rollups.
+    "laws",
+    "law_code_sections",
+    "table3_records",
+    "committees",
+    "committee_assignments",
     # The Congress.gov index tables (gaps A5, A7, A10), each written by its own
     # rollup in pipelines/rollups/congress_index.py.
     "house_communications",

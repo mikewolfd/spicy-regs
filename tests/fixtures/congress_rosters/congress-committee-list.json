@@ -1,0 +1,36 @@
+{
+    "committees": [
+        {
+            "chamber": "House",
+            "committeeTypeCode": "Standing",
+            "name": "Budget Committee",
+            "systemCode": "hsbu00",
+            "updateDate": "2026-09-08T19:24:14Z",
+            "url": "https://api.congress.gov/v3/committee/house/hsbu00?format=json"
+        },
+        {
+            "chamber": "Senate",
+            "committeeTypeCode": "Select",
+            "name": "Ethics (Select) Committee",
+            "systemCode": "slet00",
+            "updateDate": "2026-09-08T18:08:24Z",
+            "url": "https://api.congress.gov/v3/committee/senate/slet00?format=json"
+        },
+        {
+            "chamber": "Senate",
+            "committeeTypeCode": "Standing",
+            "name": "Small Business and Entrepreneurship Committee",
+            "systemCode": "sssb00",
+            "updateDate": "2026-09-08T18:07:00Z",
+            "url": "https://api.congress.gov/v3/committee/senate/sssb00?format=json"
+        }
+    ],
+    "pagination": {
+        "count": 238,
+        "next": "https://api.congress.gov/v3/committee/119?offset=3&limit=3&format=json"
+    },
+    "request": {
+        "contentType": "application/json",
+        "format": "json"
+    }
+}

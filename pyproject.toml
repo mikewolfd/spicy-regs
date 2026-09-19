@@ -87,6 +87,9 @@ run-rollup-amendments = "spicy_regs.pipelines.rollups.amendments:app"
 run-rollup-roll-call-votes = "spicy_regs.pipelines.rollups.roll_call_votes:app"
 run-rollup-members = "spicy_regs.pipelines.rollups.members:app"
 run-rollup-committee-reports = "spicy_regs.pipelines.rollups.committee_reports:app"
+# A8/A9 (laws and rosters)
+run-rollup-laws = "spicy_regs.pipelines.rollups.laws:app"
+run-rollup-committee-rosters = "spicy_regs.pipelines.rollups.committee_rosters:app"
 # The Congress.gov index tables (gaps A5, A7, A10): five rollups, one module.
 run-rollup-house-communications = "spicy_regs.pipelines.rollups.congress_index:house_communications_app"
 run-rollup-committee-meetings = "spicy_regs.pipelines.rollups.congress_index:committee_meetings_app"

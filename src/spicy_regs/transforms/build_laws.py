@@ -1,0 +1,430 @@
+"""Transform: build ``laws``, ``law_code_sections`` and ``table3_records``.
+
+Three tables from three publishers in one pass, because the second and third
+are addressed by what the first enumerates:
+
+* **``laws``** — the Congress.gov ``law/{congress}`` list route, walked whole
+  per scoped Congress (108 rows for the 119th on 2026-09-19, one page; the
+  route lists both public and private laws when ``law_type`` is omitted), one
+  row per ``laws[]`` entry of each record. Each row is then joined to the
+  GovInfo PLAW USLM file whose ``<meta>`` states the Statutes at Large
+  citation — one keyless request per law, the leg the per-run cap bounds.
+  ``shape_law`` refuses a USLM meta that states another law and a captured
+  file whose ``citableAs`` names no ``NNN Stat. NNN``, so a citation never
+  lands on the wrong row and ``captured`` always carries one.
+* **``law_code_sections``** — the OLRC per-Congress classification table:
+  one keyless request for the index, which links the *current* Congress's
+  session tables only, then one per linked table for a scoped Congress, in
+  the publisher's public-law order alone — the two orders hold the same rows
+  (measured 2026-09-19: the same 583-row multiset) and the contract keys a
+  row on its position in one page, so the code-order twin would collide.
+* **``table3_records``** — one act's Table III page per public law the route
+  listed, one keyless request each, oldest first per Congress, under its own
+  cap. Table III lags enactment by tens of laws (the 119th stood at 119-73
+  there while the route reached 119-110, 2026-09-14) and answers an act it
+  does not hold with a page cut off inside the site menu, which the reader
+  refuses; :data:`TABLE3_STOP_AFTER` consecutive refusals end that
+  Congress's walk for the run, which resumes there next run, so the lag
+  costs three requests a run rather than one per lagging act.
+
+**Incremental.** The list is small and is re-walked whole every run; the
+PLAW is what is not re-read. Per listed law: a row already published with
+``uslm_outcome = captured`` and the same ``update_date`` is left standing (no
+request, no fresh row — the merge keeps it); one whose list row moved, or
+whose outcome is ``unavailable`` (the bulk folder had not served it: 4 of 108
+on 2026-09-19, all the newest) or ``not_requested``, is asked for again,
+newest first, under :data:`MAX_USLM_PER_RUN`. When the cap or a transport
+failure stops the ask, a law not yet published gets its list row with
+``not_requested`` — the list fact is real, the USLM leg honestly unmade —
+and a law already published keeps its prior row until the next run reaches
+it. ``unavailable`` is only a ``404``/``410`` from the exact PLAW locator; a
+transport failure or a refused body is not a record of absence and is
+logged, not published as one. A ``401``/``403`` from any of the three
+publishers aborts the run.
+
+A session's classification page is a snapshot: a page read this run replaces
+every prior row for its Congress and session (:func:`retire_prior_rows`), so
+a line the publisher removed does not linger under a position it no longer
+holds. An act's Table III page is read once and never retired: an act already
+published is not re-read, and ``release_point`` says how current its page
+was. A refused act is stepped past, so one act the table never serves cannot
+hold every later act behind it; :data:`TABLE3_STOP_AFTER` consecutive
+refusals is the lag, and that Congress's walk stops there for the run.
+
+Needs an api.data.gov key for the list route; the PLAW and OLRC routes are
+keyless.
+"""
+
+from __future__ import annotations
+
+from collections import Counter
+from collections.abc import Callable, Mapping
+from pathlib import Path
+from typing import Any, NamedTuple, Protocol
+
+import httpx
+from loguru import logger
+from spicy_docs.reading.paged_json import PagedJsonBudget
+from spicy_docs.schemas.law_tables import shape_law, shape_law_code_section, shape_table3_record
+from spicy_docs.schemas.tables import TableContractError
+from spicy_docs.sources.congress.listing import LIST_ROUTES, MAX_LIMIT, CongressListingReader, list_route_url
+from spicy_docs.sources.govinfo.uslm import PublicLawSelection, UslmSourceError
+from spicy_docs.sources.govinfo.uslm_acquisition import (
+    UslmAcquirer,
+    UslmAcquisitionBudget,
+    UslmSourceUnavailableError,
+)
+from spicy_docs.sources.uscode import UsCodeSourceError
+from spicy_docs.sources.uscode.acquisition import UsCodeAcquirer, UsCodeAcquisitionBudget
+from spicy_docs.transport.credentials import scrub_credential
+
+from spicy_regs.sources import r2
+from spicy_regs.sources.congress_bills import API_KEY_ENV_VARS, _resolve_api_key
+from spicy_regs.transforms.congress_scope import congresses_from_env
+from spicy_regs.transforms.congress_walk import ListingSource, PerRunCap, walk_route
+from spicy_regs.transforms.table_merge import merge_contract_table, published_table, retire_prior_rows
+
+
+class LawTextSource(Protocol):
+    """What this transform needs of the PLAW USLM acquirer."""
+
+    def acquire_public_law(self, selection: Any, *, max_bytes: int | None = ...) -> Any: ...
+
+
+class OlrcSource(Protocol):
+    """What this transform needs of the OLRC acquirer: the classification index and tables, and Table III."""
+
+    def acquire_classification_index(self, *, max_bytes: int | None = ...) -> Any: ...
+
+    def acquire_classification_table(
+        self, congress: int, session: int, *, order: Any = ..., max_bytes: int | None = ..., max_rows: int = ...
+    ) -> Any: ...
+
+    def acquire_table3_act(self, key: str, *, max_bytes: int | None = ..., max_rows: int = ...) -> Any: ...
+
+
+LIST_BUDGET = PagedJsonBudget(
+    max_requests=500,
+    max_page_bytes=8 * 1024 * 1024,
+    timeout_seconds=60.0,
+    min_request_interval_seconds=0.2,
+)
+
+#: One request per law, paced; a PLAW file is tens of KB to a few MB
+#: (the acquirer's own default allowance is 32 MB).
+USLM_BUDGET = UslmAcquisitionBudget(
+    max_requests=4,
+    max_bytes=32 * 1024 * 1024,
+    timeout_seconds=120.0,
+    min_request_interval_seconds=0.5,
+)
+
+#: OLRC pages are generated per request and can be slow; the largest read
+#: here is a session table at ~115 KB.
+OLRC_BUDGET = UsCodeAcquisitionBudget(
+    max_requests=4,
+    max_bytes=8 * 1024 * 1024,
+    timeout_seconds=120.0,
+    min_request_interval_seconds=1.0,
+)
+
+#: Pages of ``MAX_LIMIT`` per Congress; a Congress enacts a few hundred laws.
+MAX_PAGES = 20
+
+#: PLAW files asked for per run. A Congress's laws fit in one run at the
+#: pacing above (~2.5 minutes for 300); the cap bounds a multi-Congress
+#: backfill so a run publishes before it times out.
+MAX_USLM_PER_RUN = 300
+
+#: Table III pages asked for per run, oldest unread act first.
+MAX_TABLE3_PER_RUN = 300
+
+NAME = "laws"
+CODE_SECTIONS = "law_code_sections"
+TABLE3 = "table3_records"
+CAPTURED = "captured"
+PUBLIC = "public"
+#: The one classification order read; see the module docstring.
+TABLE_ORDER = "public-law"
+
+
+class HeldLaw(NamedTuple):
+    update_date: str | None
+    uslm_outcome: str | None
+
+
+#: Consecutive Table III refusals that end a Congress's walk for the run. The
+#: lag answers every act past the release point the same way, so three in a
+#: row is the lag; a single refusal is stepped past, so an act the table
+#: never serves costs one request a run and blocks nothing behind it.
+TABLE3_STOP_AFTER = 3
+
+
+def _transport_error(error: BaseException) -> str:
+    return scrub_credential(str(error), "")
+
+
+def _held_laws(prior_file: Path | None, congresses: tuple[int, ...]) -> dict[str, HeldLaw]:
+    """``law_id`` -> what is published for it, for the scoped Congresses."""
+    if prior_file is None:
+        return {}
+    import duckdb
+
+    rows = duckdb.sql(
+        f"SELECT law_id, update_date, uslm_outcome FROM read_parquet('{prior_file}') WHERE congress IN (SELECT UNNEST(?))",
+        params=[[str(c) for c in congresses]],
+    ).fetchall()
+    return {str(law_id): HeldLaw(update_date, outcome) for law_id, update_date, outcome in rows}
+
+
+def _held_public_laws(prior_file: Path | None, congresses: tuple[int, ...]) -> set[tuple[int, int]]:
+    """``(congress, number)`` of every public law already published for the scoped Congresses."""
+    if prior_file is None:
+        return set()
+    import duckdb
+
+    rows = duckdb.sql(
+        f"SELECT congress, number FROM read_parquet('{prior_file}') WHERE law_type = ? AND congress IN (SELECT UNNEST(?))",
+        params=[PUBLIC, [str(c) for c in congresses]],
+    ).fetchall()
+    return {(int(congress), int(number)) for congress, number in rows}
+
+
+def _held_acts(prior_file: Path | None) -> set[str]:
+    if prior_file is None:
+        return set()
+    import duckdb
+
+    return {str(row[0]) for row in duckdb.sql(f"SELECT DISTINCT act_key FROM read_parquet('{prior_file}')").fetchall()}
+
+
+def _list_laws(
+    reader: ListingSource, congresses: tuple[int, ...]
+) -> list[tuple[Mapping[str, Any], Mapping[str, Any], dict]]:
+    """Every ``(record, laws[] entry, plain row)`` the route lists, newest law first.
+
+    The plain row — the shaper with no USLM — is the key and the version the
+    incremental rule reads; an entry the contract refuses is logged and
+    skipped rather than published with a hole in its key.
+    """
+    route = LIST_ROUTES["law"]
+    listed: list[tuple[Mapping[str, Any], Mapping[str, Any], dict]] = []
+    for congress in congresses:
+        walk = walk_route(
+            reader,
+            route,
+            list_route_url(route, congress=congress, limit=MAX_LIMIT),
+            max_pages=MAX_PAGES,
+            label=f"Laws: Congress {congress}",
+        )
+        for record in walk.records:
+            entries = record.get("laws")
+            for law in entries if isinstance(entries, list) else ():
+                if not isinstance(law, Mapping):
+                    continue
+                try:
+                    plain = shape_law(record, law)
+                except TableContractError as error:
+                    logger.warning("Laws: list entry {!r} refused by the contract: {}", law, error)
+                    continue
+                listed.append((record, law, plain))
+    listed.sort(key=lambda item: (int(item[2]["congress"]), int(item[2]["number"])), reverse=True)
+    return listed
+
+
+def _uslm_row(uslm: LawTextSource, record: Mapping[str, Any], law: Mapping[str, Any], plain: dict) -> dict | None:
+    """The row with its PLAW leg made: ``captured`` or ``unavailable``, or ``None`` when nothing was established.
+
+    A ``401``/``403`` propagates and aborts the run. A transport failure, a
+    refused body, or a meta the contract refuses is ``None``: the caller
+    decides whether the list row is published without the leg or the prior
+    row stands.
+    """
+    selection = PublicLawSelection(int(plain["congress"]), plain["law_type"], int(plain["number"]))
+    try:
+        acquired = uslm.acquire_public_law(selection)
+    except UslmSourceUnavailableError:
+        return shape_law(record, law, uslm_outcome="unavailable")
+    except (UslmSourceError, httpx.HTTPError, ConnectionError) as error:
+        logger.warning("Laws: PLAW {} not established: {}", selection.file_name, _transport_error(error))
+        return None
+    try:
+        return shape_law(
+            record,
+            law,
+            uslm=acquired.metadata,
+            uslm_sha256=acquired.capture.sha256,
+            uslm_observed_at=acquired.capture.observed_at,
+            uslm_outcome=CAPTURED,
+        )
+    except TableContractError as error:
+        logger.warning("Laws: PLAW {} captured but refused by the contract: {}", selection.file_name, error)
+        return None
+
+
+def _law_rows(
+    listed: list[tuple[Mapping[str, Any], Mapping[str, Any], dict]],
+    held: Mapping[str, HeldLaw],
+    uslm: LawTextSource,
+    cap: PerRunCap,
+) -> list[dict]:
+    rows: list[dict] = []
+    outcomes: Counter[str] = Counter()
+    unchanged = deferred = 0
+    for record, law, plain in listed:
+        prior = held.get(plain["law_id"])
+        if prior is not None and prior.uslm_outcome == CAPTURED and prior.update_date == plain["update_date"]:
+            unchanged += 1
+            continue
+        row = _uslm_row(uslm, record, law, plain) if cap.take() else None
+        if row is None:
+            if prior is not None:
+                # The prior row stands until a run reaches this law again.
+                deferred += 1
+                continue
+            row = plain
+        outcomes[row["uslm_outcome"]] += 1
+        rows.append(row)
+    logger.info(
+        "Laws: {:,} listed — {:,} rows this run by uslm_outcome {}, {:,} already captured and unchanged, {:,} held over",
+        len(listed),
+        len(rows),
+        dict(outcomes),
+        unchanged,
+        deferred,
+    )
+    return rows
+
+
+def _classification_rows(olrc: OlrcSource, congresses: tuple[int, ...], prior_file: Path | None) -> list[dict]:
+    """Every line of each public-law-order session table the index links for a scoped Congress."""
+    try:
+        index = olrc.acquire_classification_index().result
+    except (UsCodeSourceError, httpx.HTTPError, ConnectionError) as error:
+        logger.warning(
+            "Laws: classification index not established — no session table read this run: {}", _transport_error(error)
+        )
+        return []
+    linked = [link for link in index.tables if link.order == TABLE_ORDER and link.congress in congresses]
+    unlinked = sorted(set(congresses) - {link.congress for link in linked})
+    if unlinked:
+        logger.info("Laws: the classification index links no table for Congress {}", unlinked)
+    rows: list[dict] = []
+    for link in linked:
+        try:
+            acquired = olrc.acquire_classification_table(link.congress, link.session, order=TABLE_ORDER)
+        except (UsCodeSourceError, httpx.HTTPError, ConnectionError) as error:
+            logger.warning("Laws: classification table {} not established: {}", link.href, _transport_error(error))
+            continue
+        table = acquired.result
+        if prior_file is not None:
+            retire_prior_rows(prior_file, congress=str(table.congress), session=str(table.session))
+        observed_at = acquired.capture.observed_at
+        rows.extend(shape_law_code_section(record, table=table, observed_at=observed_at) for record in table.records)
+        logger.info(
+            "Laws: classification table {} — {:,} rows, stated {!r}, prepared {}",
+            link.href,
+            len(table.records),
+            table.stated_laws,
+            table.prepared_date,
+        )
+    return rows
+
+
+def _table3_rows(olrc: OlrcSource, acts: set[tuple[int, int]], held: set[str], cap: PerRunCap) -> list[dict]:
+    """One Table III page per unread public law, oldest first per Congress.
+
+    A refused act — the lag, a cut-off page, a transport failure — is stepped
+    past and retried next run; :data:`TABLE3_STOP_AFTER` consecutive refusals
+    end that Congress's walk for the run, with the acts left unread behind the
+    stop counted at WARNING.
+    """
+    rows: list[dict] = []
+    read = 0
+    refused: list[str] = []
+    by_congress: dict[int, list[int]] = {}
+    for congress, number in sorted(acts):
+        by_congress.setdefault(congress, []).append(number)
+    capped = False
+    for congress in sorted(by_congress, reverse=True):
+        if capped:
+            break
+        pending = [number for number in by_congress[congress] if f"{congress}-{number}" not in held]
+        consecutive = 0
+        for position, number in enumerate(pending):
+            key = f"{congress}-{number}"
+            if not cap.take():
+                # A run-wide stop, not this Congress's; the summary below
+                # still says how far the run got.
+                capped = True
+                break
+            try:
+                acquired = olrc.acquire_table3_act(key)
+            except (UsCodeSourceError, httpx.HTTPError, ConnectionError) as error:
+                refused.append(key)
+                consecutive += 1
+                if consecutive >= TABLE3_STOP_AFTER:
+                    logger.warning(
+                        "Laws: Table III stops for Congress {} after {} consecutive refusals ending at {} — "
+                        "{:,} act(s) left unread behind it: {}",
+                        congress,
+                        consecutive,
+                        key,
+                        len(pending) - position - 1,
+                        _transport_error(error),
+                    )
+                    break
+                logger.warning("Laws: Table III refused {} — stepping past it: {}", key, _transport_error(error))
+                continue
+            consecutive = 0
+            page = acquired.result
+            observed_at = acquired.capture.observed_at
+            rows.extend(
+                shape_table3_record(record, page=page, seq=seq, observed_at=observed_at)
+                for seq, record in enumerate(page.records)
+            )
+            read += 1
+    logger.info("Laws: Table III — {:,} acts read, {:,} refused {}, {:,} rows", read, len(refused), refused, len(rows))
+    return rows
+
+
+def build_laws(
+    output_dir: Path,
+    *,
+    reader: ListingSource | None = None,
+    uslm: LawTextSource | None = None,
+    olrc: OlrcSource | None = None,
+    max_uslm: int = MAX_USLM_PER_RUN,
+    max_table3: int = MAX_TABLE3_PER_RUN,
+    download_prior: Callable[[str, Path], bool] = r2.download,
+) -> tuple[Path, Path, Path]:
+    """Build ``laws.parquet``, ``law_code_sections.parquet`` and ``table3_records.parquet``."""
+    if reader is None:
+        api_key = _resolve_api_key()
+        if not api_key:
+            raise RuntimeError(f"Laws need an api.data.gov key (set one of {', '.join(API_KEY_ENV_VARS)})")
+        reader = CongressListingReader(budget=LIST_BUDGET, api_key=api_key)
+    uslm = uslm or UslmAcquirer(budget=USLM_BUDGET)
+    olrc = olrc or UsCodeAcquirer(budget=OLRC_BUDGET)
+
+    congresses = congresses_from_env()
+    priors = {name: published_table(output_dir, name, download_prior) for name in (NAME, CODE_SECTIONS, TABLE3)}
+
+    # 1. The enumeration, whole, then the PLAW leg under its cap.
+    listed = _list_laws(reader, congresses)
+    law_rows = _law_rows(listed, _held_laws(priors[NAME], congresses), uslm, PerRunCap(max_uslm, "Laws: PLAW files"))
+
+    # 2. The per-Congress classification tables the index links.
+    section_rows = _classification_rows(olrc, congresses, priors[CODE_SECTIONS])
+
+    # 3. Table III, one act per public law the route listed or the prior holds.
+    acts = _held_public_laws(priors[NAME], congresses) | {
+        (int(plain["congress"]), int(plain["number"])) for _, _, plain in listed if plain["law_type"] == PUBLIC
+    }
+    table3_rows = _table3_rows(olrc, acts, _held_acts(priors[TABLE3]), PerRunCap(max_table3, "Laws: Table III pages"))
+
+    return (
+        merge_contract_table(output_dir, NAME, law_rows, prior_present=priors[NAME] is not None),
+        merge_contract_table(output_dir, CODE_SECTIONS, section_rows, prior_present=priors[CODE_SECTIONS] is not None),
+        merge_contract_table(output_dir, TABLE3, table3_rows, prior_present=priors[TABLE3] is not None),
+    )

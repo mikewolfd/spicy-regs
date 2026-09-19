@@ -83,7 +83,7 @@ present and the next run resumes on ground this one did not reach.
 from __future__ import annotations
 
 from collections import Counter
-from collections.abc import Callable, Iterator, Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol, cast
 
@@ -112,21 +112,11 @@ from spicy_regs.sources import r2
 from spicy_regs.sources.congress_bills import API_KEY_ENV_VARS, _resolve_api_key
 from spicy_regs.transforms.build_bill_family import VOTE_REFERENCES_TABLE
 from spicy_regs.transforms.congress_scope import congresses_from_env, sessions_of
+from spicy_regs.transforms.congress_walk import ListingSource
 from spicy_regs.transforms.table_merge import merge_contract_table, published_table
 
 if TYPE_CHECKING:
     from spicy_docs.sources.congress.votes import Chamber
-
-
-class ListingSource(Protocol):
-    """What this transform needs of a Congress.gov listing reader.
-
-    Structural, for the same reason the bill family's acquirer seams are: a
-    hermetic test serves fixture pages, and naming the concrete reader here
-    would make that untypeable.
-    """
-
-    def records(self, route: Any, url: str, *, max_pages: int = ...) -> Iterator[Any]: ...
 
 
 class VoteSource(Protocol):

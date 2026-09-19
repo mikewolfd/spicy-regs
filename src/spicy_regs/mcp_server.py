@@ -78,6 +78,12 @@ TABLES = (
     "committee_reports",
     "report_sections",
     "hearing_transcripts",
+    # A8/A9 (laws and rosters): the laws and committee-rosters rollups.
+    "laws",
+    "law_code_sections",
+    "table3_records",
+    "committees",
+    "committee_assignments",
     # The Congress.gov index tables (gaps A5, A7, A10).
     "house_communications",
     "committee_meetings",

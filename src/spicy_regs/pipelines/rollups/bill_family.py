@@ -28,6 +28,11 @@ for the same reason every other output is — something reads them back from R2:
 Scope comes from the workflow inputs ``BILL_FAMILY_CONGRESSES`` and
 ``BILL_FAMILY_BILL_TYPES``, defaulting to the current Congress and all eight
 bill types.
+
+The ``congress_bills`` merge reads the published ``laws`` table best-effort to
+fill ``statutes_at_large_cite`` (``transforms/table_merge.py``) — a
+``soft_input``, absent or stale without failing anything. The ``laws``
+rollup's cron fires before this one's for that reason.
 """
 
 from pathlib import Path
@@ -49,6 +54,7 @@ class BillFamilyRollup(RollupPipeline):
 
     name: ClassVar[str] = "bill-family"
     inputs: ClassVar[tuple[str, ...]] = ()
+    soft_inputs: ClassVar[tuple[str, ...]] = ("laws.parquet",)
     outputs: ClassVar[tuple[str, ...]] = tuple(f"{contract}.parquet" for contract, _ in FAMILY_TABLES) + (
         "public_activity_events.parquet",
         f"{ARCHIVES_TABLE}.parquet",

@@ -1,0 +1,21 @@
+{
+ "congress": 119,
+ "latestAction": {
+  "actionDate": "2025-01-29",
+  "text": "Became Public Law No: 119-1."
+ },
+ "laws": [
+  {
+   "number": "119-1",
+   "type": "Public Law"
+  }
+ ],
+ "number": "5",
+ "originChamber": "Senate",
+ "originChamberCode": "S",
+ "title": "Laken Riley Act",
+ "type": "S",
+ "updateDate": "2026-07-30",
+ "updateDateIncludingText": "2026-07-30",
+ "url": "https://api.congress.gov/v3/bill/119/s/5?format=json"
+}

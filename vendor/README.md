@@ -21,20 +21,24 @@ Base CLI and MCP installs do not require them.
     built a `PackageModsIdentity` by hand now runs `validate_package_mods` over
     the fixture bytes, the same parse the acquirer runs.
   - **Thirty-two table contracts** (was twenty-two; 617 columns). Of the ten
-    new ones, five — `house_communications`, `committee_meetings`,
-    `record_issues`, `treaties`, `nominations` — are hosted by the rollups in
-    `pipelines/rollups/congress_index.py` (branch `hosting-rollups-index`); the
-    other five — `laws`, `law_code_sections`, `table3_records`, `committees`,
-    `committee_assignments` — have no rollup here and are **not hosted**:
-    `data_dictionary.CONTRACT_TABLES` enumerates the hosted tables by hand,
-    and `tests/test_contract_tables.py::UNHOSTED_CONTRACTS` names the rest so
-    a later wheel cannot add one silently. Two hosted contracts moved:
-    `hearing_transcripts` appends `event_id` as its twentieth column (read
-    from the Congress.gov `hearing-detail` route by `build_committee_reports`
-    since the same branch), and `congress_bills.statutes_at_large_cite`'s prose now says
-    the host fills it by joining `laws` at merge time, a join this repository
-    does not perform because it hosts no `laws` table; the column stays NULL
-    and the dictionary prints the wheel's sentence verbatim.
+    new ones, all ten are hosted: `house_communications`, `committee_meetings`,
+    `record_issues`, `treaties` and `nominations` by the rollups in
+    `pipelines/rollups/congress_index.py` (branch `hosting-rollups-index`,
+    A5/A7/A10), and `laws`, `law_code_sections`, `table3_records`,
+    `committees` and `committee_assignments` by the `laws` and
+    `committee-rosters` rollups (branch `hosting-rollups-laws-rosters`,
+    A8/A9). `data_dictionary.CONTRACT_TABLES` still enumerates the hosted
+    tables by hand, and `tests/test_contract_tables.py::UNHOSTED_CONTRACTS`
+    — now the empty set, asserted exactly — keeps the next wheel's new
+    contract a decision rather than a silent omission. Two hosted contracts
+    moved: `hearing_transcripts` appends `event_id` as its twentieth column
+    (read from the Congress.gov `hearing-detail` route by
+    `build_committee_reports` since the index branch), and
+    `congress_bills.statutes_at_large_cite`'s prose now says the host fills
+    it by joining `laws` at merge time, which
+    `transforms/table_merge.py::fill_statutes_at_large_cite` does after every
+    `congress_bills` merge from the published `laws` table; the dictionary
+    prints the wheel's sentence verbatim.
   - **`BODY_PREFERENCE = ("xml", "uslm", "htm", "txt", "pdf")`** and
     `DEFAULT_FORMAT_PREFERENCE = ("xml", "uslm", "html", "txt", "pdf")`: the
     USLM rendition after XML, in both spellings. Nothing here passes a

@@ -4,6 +4,11 @@ Unlike the derived rollups, this one *ingests* an external source rather than
 reading base tables from R2, so ``inputs`` is empty — the fetch + incremental
 merge with the prior published table happens inside ``build_congress_bills``.
 The base class still handles the shrink-guarded R2 upload of the single output.
+
+The merge reads the published ``laws`` table best-effort to fill
+``statutes_at_large_cite`` (``transforms/table_merge.py``) — a ``soft_input``,
+so a run with no laws table still publishes every bill with that column as it
+was. The ``laws`` rollup's cron fires before this one's for that reason.
 """
 
 import os
@@ -30,6 +35,7 @@ class CongressBillsRollup(RollupPipeline):
 
     name: ClassVar[str] = "congress-bills"
     inputs: ClassVar[tuple[str, ...]] = ()
+    soft_inputs: ClassVar[tuple[str, ...]] = ("laws.parquet",)
     output: ClassVar[str] = "congress_bills.parquet"
 
     def build(self, output_dir: Path) -> Path:

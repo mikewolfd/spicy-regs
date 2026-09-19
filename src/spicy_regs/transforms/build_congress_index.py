@@ -67,10 +67,10 @@ resolves it and sent only as a header by the spicy-docs reader.
 from __future__ import annotations
 
 from collections import Counter
-from collections.abc import Callable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any
 
 import httpx
 from loguru import logger
@@ -91,13 +91,8 @@ from spicy_docs.transport.credentials import CredentialRefusedError, scrub_crede
 from spicy_regs.sources import r2
 from spicy_regs.sources.congress_bills import API_KEY_ENV_VARS, _resolve_api_key, listing_reader
 from spicy_regs.transforms.congress_scope import congresses_from_env, record_volumes
+from spicy_regs.transforms.congress_walk import ListingSource
 from spicy_regs.transforms.table_merge import merge_contract_table, published_table
-
-
-class ListingSource(Protocol):
-    """What this transform needs of a Congress.gov listing reader (list and detail alike)."""
-
-    def records(self, route: Any, url: str, *, max_pages: int = ...) -> Iterator[Any]: ...
 
 
 #: Pages of ``MAX_LIMIT`` per list unit. The largest unit measured is
