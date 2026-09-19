@@ -60,13 +60,15 @@ attempt, still not fully received — the run publishes nothing, and the next
 scheduled run tries again from the same watermark.
 
 **Shared with the bill family's pre-BILLSTATUS backfill.** :func:`listing_reader`
-is the one place this repository constructs spicy-docs' reader over the
-``bill`` route — the budget, the header-only key and the lazy import — and
-:func:`bill_detail` is one bill's detail record fetched through that same
-reader instance (``capture_validated``, the primitive every spicy-docs source
-makes its single bounded, evidenced request with). ``build_bill_family``'s
-backfill of the 82nd–107th Congresses walks ``bill/{congress}`` with the first
-and builds status from the second; neither is a second walk implementation.
+is the one place this repository constructs spicy-docs' reader *for the
+``bill`` route* — the budget, the header-only key and the lazy import (the
+amendments and roll-call transforms construct the same class for their own
+routes) — and :func:`bill_detail` is one bill's detail record fetched through
+that same reader instance (``capture_validated``, the primitive every
+spicy-docs source makes its single bounded, evidenced request with).
+``build_bill_family``'s backfill of the 82nd–107th Congresses walks
+``bill/{congress}/{type}`` with the first and builds status from the second;
+neither is a second walk implementation of the route.
 
 **API key.** Congress.gov requires an api.data.gov key. The same key works
 across regulations.gov, Congress.gov, and GovInfo, so we resolve it from a
@@ -131,18 +133,16 @@ _TIMEOUT_SECONDS = 60.0
 _MIN_REQUEST_INTERVAL_SECONDS = 0.2
 
 
-def listing_reader(
-    api_key: str, transport: httpx.BaseTransport | None = None, *, max_requests: int | None = None
-) -> CongressListingReader:
+def listing_reader(api_key: str, transport: httpx.BaseTransport | None = None) -> CongressListingReader:
     """spicy-docs' reader over the Congress.gov list routes, with this repo's page budget and header-only key.
 
     Imported lazily on purpose: base CLI/MCP installations import this module
     for ``API_BASE``/``API_KEY_ENV_VARS``/``_resolve_api_key`` without the
     optional owner wheel, and only a caller with a key in hand ever gets here.
-    ``max_requests`` widens the budget's request bound for a caller whose walk
-    is wider than one window — the bill family's pre-BILLSTATUS backfill, which
-    pages through whole Congresses; the pacing and byte bounds are shared
-    either way.
+    The budget's ``max_requests`` is a *per-request* bound — the reader resets
+    it on every ``capture_validated`` call, so it caps one page's or one
+    detail's attempts including retries, never a walk — which is why no caller
+    widens it for a longer walk.
     """
     try:
         from spicy_docs.reading.paged_json import PagedJsonBudget
@@ -154,7 +154,7 @@ def listing_reader(
             ) from None
         raise
     budget = PagedJsonBudget(
-        max_requests=max_requests if max_requests is not None else _MAX_REQUESTS_PER_PAGE,
+        max_requests=_MAX_REQUESTS_PER_PAGE,
         max_page_bytes=_MAX_PAGE_BYTES,
         timeout_seconds=_TIMEOUT_SECONDS,
         min_request_interval_seconds=_MIN_REQUEST_INTERVAL_SECONDS,
