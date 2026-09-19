@@ -6,7 +6,7 @@
 
 One row per agency block parsed out of one committee report's text. `pattern` records which header pattern fired, which is this table's provenance column. All columns are stored as VARCHAR.
 
-**Coverage.** Window. The agency blocks parsed out of the reports in `committee_reports`, so it inherits that table's window and cap. *(measured 2026-09-19)*
+**Coverage.** Window, advancing. The agency blocks parsed out of the reports in `committee_reports`, so it inherits that table's watermark and cap. *(measured 2026-09-19)*
 
 - **Parquet file:** `report_sections.parquet`
 - **Queryable via MCP `query_sql`:** Yes

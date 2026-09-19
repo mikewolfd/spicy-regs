@@ -6,7 +6,7 @@
 
 One row per CRS summary the publisher states on a bill, at the version and action it describes. `summary_html` is kept exactly as the publisher escaped it. All columns are stored as VARCHAR.
 
-**Coverage.** Sampled. No run has been measured yet, so this states the weakest true claim rather than a range it has not established. Same scope as `bill_actions`. These are the Congressional Research Service summaries the publisher states on a bill, not the model-written ones in `bill_summaries`. *(measured 2026-09-19)*
+**Coverage.** Sampled, and accumulating. No run has been measured yet, so this states the weakest true claim rather than a range it has not established; each run adds to what is published rather than replacing it, because a bill the publisher has not touched since the last run is skipped and its rows stand. Same scope as `bill_actions`. These are the Congressional Research Service summaries the publisher states on a bill, not the model-written ones in `bill_summaries`. *(measured 2026-09-19)*
 
 - **Parquet file:** `bill_publisher_summaries.parquet`
 - **Queryable via MCP `query_sql`:** Yes

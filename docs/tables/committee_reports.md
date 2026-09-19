@@ -6,7 +6,7 @@
 
 One row per captured GovInfo committee report package. `bill_id` is a preserved NULL: a package-keyed report is fillable today, the bill linkage is not. All columns are stored as VARCHAR.
 
-**Coverage.** Window. GovInfo CRPT packages by last-modified date, a thirty-day window per run with a per-run package cap, so a revision of an older report is picked up but the archive is not walked. *(measured 2026-09-19)*
+**Coverage.** Window, advancing. GovInfo CRPT packages by last-modified date: the window starts at the watermark this table already reached, so each run asks for what changed since the last one and a revision of an older report is still picked up. Thirty days is the cold-start window only. A package already published is not fetched again, and a per-run package cap bounds a catch-up. *(measured 2026-09-19)*
 
 - **Parquet file:** `committee_reports.parquet`
 - **Queryable via MCP `query_sql`:** Yes

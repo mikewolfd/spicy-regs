@@ -6,7 +6,7 @@
 
 One row per captured GovInfo hearing transcript package. `bill_id` is a preserved NULL for the same reason. All columns are stored as VARCHAR.
 
-**Coverage.** Window. GovInfo CHRG packages on the same thirty-day last-modified window and per-run cap as `committee_reports`. *(measured 2026-09-19)*
+**Coverage.** Window, advancing. GovInfo CHRG packages on the same last-modified watermark and per-run cap as `committee_reports`. *(measured 2026-09-19)*
 
 - **Parquet file:** `hearing_transcripts.parquet`
 - **Queryable via MCP `query_sql`:** Yes

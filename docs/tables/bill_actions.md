@@ -6,7 +6,7 @@
 
 One row per action entry in a bill's BILLSTATUS document, in publisher order. Each row also carries the stage the action text implies, with the rule and matcher that fired, which makes `congress_bills.stage` auditable action by action. All columns are stored as VARCHAR.
 
-**Coverage.** Sampled. No run has been measured yet, so this states the weakest true claim rather than a range it has not established. Filled from the BILLSTATUS bulk archive for the Congresses the bill-family rollup is scoped to (the current one by default), so it holds every action of every bill in that scope and nothing outside it. *(measured 2026-09-19)*
+**Coverage.** Sampled, and accumulating. No run has been measured yet, so this states the weakest true claim rather than a range it has not established; each run adds to what is published rather than replacing it, because a bill the publisher has not touched since the last run is skipped and its rows stand. Filled from the BILLSTATUS bulk archive for the Congresses the bill-family rollup is scoped to (the current one by default), so it holds every action of every bill in that scope and nothing outside it. *(measured 2026-09-19)*
 
 - **Parquet file:** `bill_actions.parquet`
 - **Queryable via MCP `query_sql`:** Yes

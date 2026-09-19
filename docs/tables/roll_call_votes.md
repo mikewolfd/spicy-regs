@@ -6,7 +6,7 @@
 
 One row per roll call: the publisher's own tally, and the bill it refers to. The four tally columns are the publisher's own counts or they are NULL; they are never zero-filled. All columns are stored as VARCHAR.
 
-**Coverage.** Sampled. No run has been measured yet, so this states the weakest true claim rather than a range it has not established. House only, and bounded by a per-run cap on how many roll calls are fetched from the Clerk, newest first. The Senate's roll calls are not published at all rather than published with empty tallies — there is no Senate route in the reader this rollup uses. *(measured 2026-09-19)*
+**Coverage.** Sampled, and accumulating. No run has been measured yet, so this states the weakest true claim rather than a range it has not established. House only, and bounded by a per-run cap on how many roll calls are fetched from the Clerk, newest first; a roll call already published with a tally is not fetched again, so a steady-state run reads only new ones plus the newest few, which are re-read in case the publisher corrected them. The Senate's roll calls are not published at all rather than published with empty tallies — there is no Senate route in the reader this rollup uses. The bill linkage comes from the Congress.gov `house-vote` route alone: the other source the design names, the `recordedVotes` entries on a bill's actions, would reach Senate votes and per-action linkage but arrives with BILLSTATUS, which belongs to a different rollup, and a rollup may not read another's output — so it is not wired and `match_rule` never carries that rule. *(measured 2026-09-19)*
 
 - **Parquet file:** `roll_call_votes.parquet`
 - **Queryable via MCP `query_sql`:** Yes

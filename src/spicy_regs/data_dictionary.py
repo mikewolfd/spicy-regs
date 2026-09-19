@@ -657,9 +657,9 @@ def load_descriptions(path: Path = DEFAULT_DESCRIPTIONS) -> dict:
     """The curated descriptions, with every ``columns_from`` marker resolved.
 
     ``columns_from: spicy_docs`` means "the per-column sentences for this table
-    are the contract's". Four hundred and six of them are, and copying them
-    here would create a second copy to keep in step with no mechanism keeping
-    it there. The label, coverage statement, ``measured_on`` and summary stay
+    are the contract's". All four hundred and seven of them are, and copying
+    them here would create a second copy to keep in step with no mechanism
+    keeping it there. The label, coverage statement, ``measured_on`` and summary stay
     hand-written, because what this repository publishes and when it last
     measured it are its own facts, not the wheel's.
 

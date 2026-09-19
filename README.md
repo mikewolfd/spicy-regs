@@ -299,6 +299,17 @@ date; `check` fails on a missing or malformed one. `generate` also rewrites
 declaration other repos vendor — so regenerating the pages keeps that in step.
 CI fails if any of it drifts from the schema.
 
+The twenty-two hosted tables instead declare `columns_from: spicy_docs` and
+take their per-column prose from the installed spicy-docs contract, so those
+sentences live beside the code that fills each column. Declaring that marker
+and an inline `columns:` together is refused at load.
+
+> **Consumers must re-vendor.** `catalog.json` grew from 24 classes to 45 and
+> `congress_bills` from 10 columns to 48, so every copy pinned by
+> `catalog.json.sha256` is stale. `format_version` is still `3` — no field
+> changed shape — but the `kind` vocabulary gained `sampled`, so a consumer
+> that branches on `kind` needs a case for it before re-vendoring.
+
 ## Use it from an AI assistant
 
 A read-only MCP server exposes SQL over the corpus with three tools:

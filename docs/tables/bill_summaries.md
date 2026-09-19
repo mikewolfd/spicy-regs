@@ -6,7 +6,7 @@
 
 One row per plain-language summary of one printing of a bill. `frame` is stored because without it the summary is not reproducible from the row. All columns are stored as VARCHAR.
 
-**Coverage.** Sampled. No run has been measured yet, so this states the weakest true claim rather than a range it has not established. Model-backed, same condition as `section_classifications`: no key, no rows. *(measured 2026-09-19)*
+**Coverage.** Sampled, and accumulating. No run has been measured yet, so this states the weakest true claim rather than a range it has not established; each run adds to what is published rather than replacing it, because a bill the publisher has not touched since the last run is skipped and its rows stand. Model-backed, same condition as `section_classifications`: no key, no rows. *(measured 2026-09-19)*
 
 - **Parquet file:** `bill_summaries.parquet`
 - **Queryable via MCP `query_sql`:** Yes

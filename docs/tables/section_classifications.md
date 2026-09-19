@@ -6,7 +6,7 @@
 
 One row per label a model assigned to one section of one printing. `vocabulary_hash` is a digest over the sealed label list, so a vocabulary change is visible in the data rather than silently reinterpreting old rows. All columns are stored as VARCHAR.
 
-**Coverage.** Sampled. No run has been measured yet, so this states the weakest true claim rather than a range it has not established. Model-backed: rows exist only for runs with a model key set. A keyless run publishes none, which is what continuous integration does. *(measured 2026-09-19)*
+**Coverage.** Sampled, and accumulating. No run has been measured yet, so this states the weakest true claim rather than a range it has not established; each run adds to what is published rather than replacing it, because a bill the publisher has not touched since the last run is skipped and its rows stand. Model-backed: rows exist only for runs with a model key set. A keyless run publishes none, which is what continuous integration does. *(measured 2026-09-19)*
 
 - **Parquet file:** `section_classifications.parquet`
 - **Queryable via MCP `query_sql`:** Yes

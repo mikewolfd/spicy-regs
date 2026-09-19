@@ -6,7 +6,7 @@
 
 One row per printing of a bill, per source that supplied it. The full text is deliberately not a column here: `bill_sections.body` carries it at the grain people query, and the body is re-fetchable by package id and digest. All columns are stored as VARCHAR.
 
-**Coverage.** Sampled. No run has been measured yet, so this states the weakest true claim rather than a range it has not established. Two bounds, not one: the Congresses the rollup is scoped to, and a per-run cap on how many printings' bodies are fetched from GovInfo. A printing beyond the cap still gets a row from the publisher's own facts, with the body columns (`sha256`, `byte_size`, `resolved_url`, `observed_at`) NULL. *(measured 2026-09-19)*
+**Coverage.** Sampled, and accumulating. No run has been measured yet, so this states the weakest true claim rather than a range it has not established; each run adds to what is published rather than replacing it, because a bill the publisher has not touched since the last run is skipped and its rows stand. Two bounds, not one: the Congresses the rollup is scoped to, and a per-run cap on how many printings' bodies are fetched from GovInfo. A printing beyond the cap still gets a row from the publisher's own facts, with the body columns (`sha256`, `byte_size`, `resolved_url`, `observed_at`) NULL. A printing already captured is not fetched again, so each run spends the cap on ground the last one did not reach. *(measured 2026-09-19)*
 
 - **Parquet file:** `bill_versions.parquet`
 - **Queryable via MCP `query_sql`:** Yes

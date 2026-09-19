@@ -6,7 +6,7 @@
 
 One row per compared pair of consecutive printings of one bill. `engine_name`, `engine_version` and `engine_revision` record which diff engine produced the row. All columns are stored as VARCHAR.
 
-**Coverage.** Sampled. No run has been measured yet, so this states the weakest true claim rather than a range it has not established. Consecutive printings only, and only where both sides were fetched and parsed. Comparing every pair would be quadratic in the number of printings; consecutive pairs is the deliberate bound. *(measured 2026-09-19)*
+**Coverage.** Sampled, and accumulating. No run has been measured yet, so this states the weakest true claim rather than a range it has not established; each run adds to what is published rather than replacing it, because a bill the publisher has not touched since the last run is skipped and its rows stand. Consecutive printings only, and only where both sides were fetched and parsed. Comparing every pair would be quadratic in the number of printings; consecutive pairs is the deliberate bound, and a new printing's already-captured predecessor is re-fetched so the pair is not skipped. `engine_revision` is the DeltaTrack commit the host vendored its wheel from, recorded in `vendor/README.md` beside that wheel's SHA-256: a wheel install states no commit of its own, so the value is a fact of the vendoring rather than something read back from the installed package. *(measured 2026-09-19)*
 
 - **Parquet file:** `section_diffs.parquet`
 - **Queryable via MCP `query_sql`:** Yes

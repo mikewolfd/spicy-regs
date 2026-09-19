@@ -108,6 +108,17 @@ existing rollup, which is a publish and therefore Mike's.
 spicysearch holds a copy pinned by the digest in `catalog.json.sha256`; it
 cannot import `spicy_regs`. Changing the file means the consumer must
 re-vendor, so bump `CATALOG_FORMAT_VERSION` when the shape changes and say so.
+
+**Outstanding as of 2026-09-19: spicysearch must re-vendor.** Hosting the
+BillTrax-derived tables took the catalog from 24 classes to 45 and
+`congress_bills` from 10 columns to 48.
+`spicysearch/vendor/spicy-regs-catalog-dictionary.json` is still the 24-class
+copy (`01c77a4a…`, verified 2026-09-19) and no longer matches
+`catalog.json.sha256` (`d08822d8…`). `CATALOG_FORMAT_VERSION` stays `3` on
+purpose — no field changed shape, so a reader that only reads fields keeps
+working — but the `kind` vocabulary gained a fifth value, `sampled`, which a
+consumer branching on `kind` must handle before it re-vendors. This is a
+consumer-side change in another repository and is not done here.
 It declares only what this repo *publishes* — it carries no searchability
 field, and a test forbids even the words, because whether a class is indexed is
 the serving side's fact.
@@ -245,28 +256,79 @@ hosted; the public surface went from 24 tables to 45.
   table, kept literal so the MCP server stays installable without the
   `source-readers` group.
 
+**Every rollup is incremental where its source allows.** The pattern is
+`build_congress_bills`': take a watermark from the prior published table, ask
+the publisher only for what changed since, cap the window so a deep backfill
+converges over runs instead of timing out, and let the merge accumulate.
+
+| Rollup | What a steady-state run fetches | What bounds a catch-up |
+| --- | --- | --- |
+| `bill-family` | The 8 bulk archives, then only bills whose `updateDateIncludingText` differs from the published row, and of those only printings not already captured (plus a new printing's neighbour, so the consecutive-pair diff still happens) | `MAX_VERSION_FETCHES` printings/run; skipping what is held means the next run resumes on new ground rather than re-walking the same prefix |
+| `amendments` | The `updateDate` window from the prior max minus `OVERLAP_DAYS`, server-side via `fromDateTime`/`toDateTime` | `MAX_WINDOW_DAYS` (90); `AMENDMENTS_SINCE`/`AMENDMENTS_UNTIL` drive a chunk |
+| `roll-call-votes` | The index walk, then Clerk files only for roll calls not already published with a tally, plus the newest `OVERLAP_VOTES` re-read for corrections | `MAX_VOTES_PER_RUN`, newest first |
+| `committee-reports` | GovInfo packages modified since the prior max `last_modified` minus `OVERLAP_HOURS`; packages already published are not re-fetched | `MAX_PACKAGES_PER_RUN`; 30 days is the cold-start window only |
+| `press-releases` | Both feeds, whole — the feed *is* the delta, and the merge accumulates what rotates off | n/a |
+| `members` | Both roster files, whole — one small JSON each, with no partial-fetch route | n/a |
+
+`tests/test_incremental_rollups.py` pins each of these with a counting stub
+rather than a docstring: a seeded prior plus an assertion on what was actually
+requested.
+
+Three limits worth knowing, each a property of the source rather than a
+shortcut taken here:
+
+1. **Bulk archives are not skipped by last-modified.** The reviewer's condition
+   was "where spicy-docs's bulk listing exposes each zip's
+   `formattedLastModifiedTime`" — it does not. `BulkStatusAcquirer` takes a
+   congress and a bill type and returns the parsed archive; neither it nor
+   `listing.py` surfaces a per-zip modification time, and `CapturedBodyResponse`
+   keeps no `Last-Modified`. It costs 8 requests against ~600 printing fetches,
+   so the saving would be marginal; filling it means a reader change upstream.
+2. **The roll-call index walk is not short-circuited.** The `house-vote` route
+   declares `sort_honored=False`, so the publisher's order is not guaranteed
+   monotonic in roll number and stopping on a page of already-held votes could
+   silently drop roll calls sitting later in an unordered listing. The walk is
+   a few 250-row pages per session; the per-roll-call Clerk fetch is the real
+   cost and that *is* skipped.
+3. **A corrected roll call cannot be detected by comparison.** The
+   `roll_call_votes` contract has no column for the publisher's `updateDate`,
+   so there is nothing to compare a listing's `updateDate` against.
+   `OVERLAP_VOTES` re-reads the newest few every run instead, the same way
+   `OVERLAP_DAYS` stands in for exact change detection in `congress_bills`.
+
 **Two things a reader should know before changing this.**
 
 1. **The `congress_bills` frozen prefix is why the merge is compatible, and it
    is asserted, not assumed.** The contract's first ten columns are byte-equal
    to `build_congress_bills.COLUMNS` — other repositories pin that prefix by
    digest through `catalog.json` — and the family appends thirty-eight more.
-   `merge_table` now NULL-fills any column the prior published table lacks, so
+   `merge_table` NULL-fills any column the prior published table lacks, so
    the first family run merges 48-column rows onto the live 10-column table as
    a backfill rather than a migration.
    `test_congress_bills_keeps_its_frozen_prefix` and
    `test_merge_null_fills_columns_the_prior_table_lacks` hold both halves.
-2. **`congress_bills` now has two writers, deliberately.** `congress-bills`
-   walks the whole archive for the ten-column prefix; `bill-family` fills all
-   forty-eight for the Congresses it is scoped to. The merge prefers whichever
-   ran most recently per `bill_id`, so a `congress-bills` run after a
-   `bill-family` run **resets that bill's thirty-eight appended columns to
-   NULL** until the family covers it again. That is a real interaction, not a
-   bug in either rollup, and it is the open question this work leaves: the
-   options are to retire the narrow rollup, to give the family its own table,
-   or to teach the narrow writer to pass foreign columns through.
-   `test_congress_bills_has_a_second_narrow_writer` pins the current state so
-   it stays a decision rather than a surprise.
+2. **`congress_bills` has two writers, and the merge is column-wise because of
+   it.** `congress-bills` walks the whole archive for the ten-column prefix;
+   `bill-family` fills all forty-eight for the Congresses it is scoped to.
+   Row-wise replacement was wrong here and was a live defect: the narrow writer
+   passed its own ten-column tuple, `merge_table` projected the prior onto it,
+   and the published file came back **ten columns wide for every row** — the
+   other thirty-eight deleted, not nulled. Measured at realistic scale the
+   result was 96.6% of the prior bytes, and the R2 shrink guard only refuses
+   below 50%, so nothing would have stopped it; the next family run would then
+   have emitted a spurious `stage_changed` with `from=None` for every scoped
+   bill, and the digest-pinned catalog would have disagreed with the live table
+   for the six hours between the two crons.
+   Fixed in two halves: `build_congress_bills` publishes through
+   `merge_contract_table`, so the shape is always the contract's; and
+   `merge_table` gained `coalesce_prior`, which FULL OUTER JOINs on the
+   identity and emits `COALESCE(fresh, prior)` per column, so a narrow writer's
+   NULL cannot overwrite a value it simply does not populate.
+   `COALESCED_TABLES` holds `congress_bills` alone — elsewhere a fresh NULL is
+   a real value. `test_the_narrow_writer_does_not_drop_the_familys_columns` is
+   the behavioral pin: it seeds a 48-column prior, runs the narrow writer's own
+   merge, and asserts both the published schema and that a family-only `stage`
+   survives.
 
 **[SR01](#sr01) is untouched by all of this.** It owns the `congress_bills`
 reader replacement (adopting SpicyDocs' `listing.py` in place of the local

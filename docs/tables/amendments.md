@@ -6,7 +6,7 @@
 
 One row per amendment, as the Congress.gov amendment list route states it. Keyed on the amendment's own identity, not the bill it amends, because an amendment can amend another amendment; `amended_bill_id` and `amended_amendment_id` are foreign keys. All columns are stored as VARCHAR.
 
-**Coverage.** Sampled. No run has been measured yet, so this states the weakest true claim rather than a range it has not established. The Congress.gov amendment route for the Congresses the rollup is scoped to. *(measured 2026-09-19)*
+**Coverage.** Sampled, and accumulating. No run has been measured yet, so this states the weakest true claim rather than a range it has not established. The Congress.gov amendment route for the Congresses the rollup is scoped to, walked in an `updateDate` window that starts at the watermark this table already reached and runs forward at most ninety days. A cold start is a full walk; every run after it adds to what is published. *(measured 2026-09-19)*
 
 - **Parquet file:** `amendments.parquet`
 - **Queryable via MCP `query_sql`:** Yes
