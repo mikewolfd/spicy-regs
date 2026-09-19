@@ -81,7 +81,6 @@ from spicy_regs.sources import r2
 from spicy_regs.sources.congress_bills import API_KEY_ENV_VARS, _resolve_api_key
 from spicy_regs.transforms.congress_scope import bill_types_from_env, congresses_from_env
 from spicy_regs.transforms.model_call import DEFAULT_MODEL, model_call, resolve_gemini_key
-from spicy_regs.transforms.pdf_text import PypdfPageExtractor
 from spicy_regs.transforms.table_merge import merge_contract_table, merge_table, prior_scratch_path
 
 #: The DeltaTrack commit the vendored wheel was built from. ``installed_engine_stamp``
@@ -290,11 +289,15 @@ def _version_captures(
                     # chosen: the acquirer picks from what the package MODS
                     # offers, and only the PDF branch of ``body_text`` yields
                     # the ``GpoCleanupRecord`` the cleanup_* columns describe.
-                    # The extractor is passed because ``body_text``'s default
-                    # opens PDFs with PyMuPDF, which this repository does not
-                    # install — see ``PypdfPageExtractor``.
+                    # No extractor argument: ``body_text``'s default
+                    # (``DocumentExtractor(NativeText())``, PyMuPDF) is the
+                    # pipeline ``gpo_normalize`` was derived on — pypdf glues
+                    # the GPO gutter number onto its content line, so the
+                    # normalizer never detects the layout through it (measured
+                    # ``docs/research/gpo-normalizer-vs-upstream-2026-09-19.md``
+                    # in spicy-docs).
                     try:
-                        cleanup = body_text(package, extractor=PypdfPageExtractor()).record
+                        cleanup = body_text(package).record
                     except Exception as error:  # noqa: BLE001 — an unextracted PDF is a NULL cleanup
                         logger.warning("Bill family: {} PDF text refused: {}", package_id, error)
 

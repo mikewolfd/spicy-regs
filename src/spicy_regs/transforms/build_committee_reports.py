@@ -71,7 +71,6 @@ from spicy_docs.sources.govinfo.discovery import GovInfoDiscoveryReader, collect
 
 from spicy_regs.sources import r2
 from spicy_regs.sources.congress_bills import API_KEY_ENV_VARS, _resolve_api_key
-from spicy_regs.transforms.pdf_text import PypdfPageExtractor
 from spicy_regs.transforms.table_merge import merge_contract_table, prior_scratch_path
 
 
@@ -194,11 +193,12 @@ def _read_body(acquirer: PackageBodySource, package_id: str) -> tuple[Any, BodyT
     it was fetched in is the body's own, never this caller's guess.
     """
     package = acquirer.acquire(package_id)
-    # The extractor matters only on the PDF fallback, and only because
-    # ``body_text``'s default one opens PDFs with PyMuPDF, which this
-    # repository does not install — see ``PypdfPageExtractor``. Without it a
-    # CRPT or CHRG package offered only as PDF would be counted refused.
-    return package, body_text(package, extractor=PypdfPageExtractor())
+    # No extractor argument: ``body_text``'s default (``DocumentExtractor(NativeText())``,
+    # PyMuPDF) is the pipeline ``gpo_normalize`` was derived on — the GPO
+    # gutter-numbered layout only comes through on PyMuPDF's own line
+    # adjacency, not pypdf's (measured
+    # ``docs/research/gpo-normalizer-vs-upstream-2026-09-19.md`` in spicy-docs).
+    return package, body_text(package)
 
 
 def build_committee_reports(

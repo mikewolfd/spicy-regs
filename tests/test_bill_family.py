@@ -43,7 +43,7 @@ from spicy_regs.transforms.build_bill_family import (
     build_bill_family,
     engine_stamp,
 )
-from tests.pdf_fixtures import make_pdf
+from tests.pdf_fixtures import make_multiline_pdf
 
 FIXTURES = Path(__file__).parent / "fixtures" / "govinfo_bills"
 IDENTITY = BillIdentity(congress=119, bill_type="hr", number=6028)
@@ -565,8 +565,42 @@ def _pdf_only_status() -> bytes:
     return re.sub(r"<url>(\S+?)/xml/(\S+?)\.xml</url>", r"<url>\1/pdf/\2.pdf</url>", raw).encode()
 
 
+#: Two pages, each three real physical lines with its own gutter number
+#: (1-3, a consecutive run starting at 1) and a genuine hyphen-wrap on the
+#: first line, corroborated by its gutter number — the shape a real GPO
+#: gutter-numbered page has under PyMuPDF's line-grouped extraction (a
+#: content line immediately followed by its own bare digit line; see
+#: ``spicy_docs.extraction.gpo_normalize``'s module docstring). No real fixture
+#: from ``spicy-docs``' own ``tests/fixtures/gpo_pdf_text/README.md``
+#: provenance is both under 200 KB and gutter-numbered — its two documents
+#: under 200 KB (the ENR bill at 196,785 bytes, the committee report at
+#: 199,803 bytes) are never GPO line-numbered by GPO's own print convention,
+#: and its two gutter-numbered documents (223,439 and 206,513 bytes) both
+#: exceed 200 KB — so this synthetic PDF stands in, built to exercise
+#: ``is_gpo_layout`` for real rather than merely asserting its output is not
+#: None.
+PDF_GPO_PAGES = [
+    [
+        "Introduc-",
+        "1",
+        "ing this measure to amend the Act.",
+        "2",
+        "Additional provision text follows here today.",
+        "3",
+    ],
+    [
+        "Further findings support the measure describ-",
+        "1",
+        "ed in section one, presented here today now.",
+        "2",
+        "Enacted this day pursuant to the authority granted.",
+        "3",
+    ],
+]
+
+
 class StubPdfBodyAcquirer:
-    """Serves each printing as a real, minimal PDF the pinned pypdf can read."""
+    """Serves each printing as a real, minimal, genuinely GPO-gutter-numbered PDF."""
 
     def __init__(self):
         self.requested: list[str] = []
@@ -574,7 +608,7 @@ class StubPdfBodyAcquirer:
     def acquire(self, package_id: str, *, max_bytes=None):
         self.requested.append(package_id)
         url = f"https://www.govinfo.gov/content/pkg/{package_id}/pdf/{package_id}.pdf"
-        body = make_pdf([f"A BILL {package_id}", "SEC. 2. FINDINGS."])
+        body = make_multiline_pdf(PDF_GPO_PAGES)
         capture = CapturedBodyResponse(
             requested_url=url,
             resolved_url=url,
@@ -617,16 +651,30 @@ def test_a_pdf_printing_is_fetched_and_published_as_one(pdf_family):
 def test_the_pdf_cleanup_record_reaches_the_cleanup_columns(pdf_family):
     """`body_text`'s PDF branch is the GPO normalizer, and its record is what these columns are.
 
-    They were NULL on every row before this: the transform never ran
-    `body_text` at all, and its default extractor opens PDFs with PyMuPDF,
-    which this repository does not install.
+    They were NULL on every row before the 0.21.1 adoption: the transform
+    never ran `body_text` at all. They went silently null again, in a
+    different way, when this repository's PDF branch ran through
+    `PypdfPageExtractor` instead of `body_text`'s default PyMuPDF extractor:
+    pypdf glues a GPO gutter number onto the end of its content line
+    ("Representa-1") rather than emitting it as PyMuPDF does — its own
+    physical line immediately after — so `is_gpo_layout`'s adjacency
+    detector never fires on a pypdf-read page, `cleanup_line_numbers` stays
+    `False` on a genuinely numbered document, and `hyphen_rejoin_count` stays
+    `0` since rejoin is gated on the layout verdict (measured
+    `docs/research/gpo-normalizer-vs-upstream-2026-09-19.md` in spicy-docs:
+    0 of 6, then 0 of 12, real gutter numbers rejoined under pypdf, vs 6 of 6
+    and 12 of 12 under PyMuPDF). `PDF_GPO_PAGES` is genuinely gutter-numbered
+    (see its own docstring), so asserting the layout verdict and the rejoin
+    count here — not just that the columns are non-null — is what would catch
+    a regression back to an extractor that defeats the normalizer.
     """
     paths, _ = pdf_family
     versions = pq.read_table(paths["bill_versions"]).to_pylist()
     for row in versions:
-        assert row["cleanup_line_numbers"] is not None
+        assert row["cleanup_line_numbers"] == "true", "PDF_GPO_PAGES is gutter-numbered; the layout must be detected"
         assert row["cleanup_gpo_footers"] is not None
         assert row["cleanup_spacing_normalized"] is not None
+        assert row["cleanup_hyphen_rejoins"] == "2", "one gutter-corroborated hyphen wrap per page, two pages"
         pages = json.loads(row["cleanup_json"])
         assert [page["page"] for page in pages] == [1, 2], "one entry per PDF page, one-based"
         # The two fields 0.21.1 added to GpoPageCleanup, serialized upstream.

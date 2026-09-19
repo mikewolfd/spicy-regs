@@ -395,18 +395,23 @@ and `[tool.uv.sources]` moved together. The resolve is clean in one line —
   which one, filled from the fetched body itself.
 - [x] **The PDF branch needed a provider, and a test to find that out.**
   `body_text`'s default extractor is `DocumentExtractor(NativeText())`, whose
-  default reader opens PDFs with **PyMuPDF** — which this repository does not
-  install, pinning the narrow `pdf-pypdf` provider instead. SpicyDocs' own
-  tests inject a fake extractor, so nothing upstream exercises that default
-  either. Wired as first written, every PDF body would have raised
-  `ModuleNotFoundError` inside a per-package `except` and been logged as one
-  more refusal: the `cleanup_*` columns would have stayed NULL forever and
-  every PDF-only CRPT/CHRG package would have published no row, with no
+  default reader opens PDFs with **PyMuPDF** — which this repository did not
+  install at the time, pinning the narrow `pdf-pypdf` provider instead.
+  SpicyDocs' own tests inject a fake extractor, so nothing upstream exercises
+  that default either. Wired as first written, every PDF body would have
+  raised `ModuleNotFoundError` inside a per-package `except` and been logged
+  as one more refusal: the `cleanup_*` columns would have stayed NULL forever
+  and every PDF-only CRPT/CHRG package would have published no row, with no
   failure louder than a warning. `transforms/pdf_text.py::PypdfPageExtractor`
-  adapts the pinned provider to the extractor seam — an `Extractor`, not a
+  adapted the pinned provider to the extractor seam — an `Extractor`, not a
   `DocumentReader`, because `PypdfReader.open` takes a password rather than a
   media type and `body_text` reads only each page's text — and both callers
-  pass it. The two tests that found it fail without it.
+  passed it. The two tests that found it failed without it.
+
+  **Superseded the same day, fourth part below:** the pypdf adapter made the
+  PDF branch reachable but not correct — pypdf's line layout defeats
+  `gpo_normalize`'s own layout detector. `PypdfPageExtractor` is deleted and
+  both callers now take `body_text`'s default (PyMuPDF) instead.
 - [x] **Coverage statements.** `bill_versions`, `bill_sections`,
   `committee_reports`, `report_sections` and `hearing_transcripts` now name the
   rendition order, say that bills before the 113th Congress have no XML so the
@@ -420,7 +425,9 @@ raises — so the second-run assertion is discriminating: the cold run still
 downloads, a zip whose size moved still downloads, and only the unchanged
 folder does not. The PDF-rendition tests derive a PDF-only BILLSTATUS from the
 same fixture rather than committing a second one, and build real PDFs with
-`tests/pdf_fixtures.make_pdf`, so the pinned pypdf really parses them.
+`tests/pdf_fixtures.make_pdf` (as of the fourth part below, `make_multiline_pdf`
+for the cleanup-record test, so a genuine GPO gutter-numbered page is really
+extracted, not merely accepted as non-null).
 
 **[SR01](#sr01) is untouched by all of this.** It owns the `congress_bills`
 reader replacement (adopting SpicyDocs' `listing.py` in place of the local
@@ -539,6 +546,58 @@ side can land first.
   preserve all 3,361 retained courts after interruption; independent review approves.
   [Follow-up evidence](</Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/parsing-consolidation-2026-09-14/par10/delivery.md>).
   [Delivery and evidence](</Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/parsing-consolidation-2026-09-14/sr04/delivery.md>).
+
+**2026-09-19, same branch, fourth part.** The pypdf adapter from the third
+part made the GovInfo PDF branch *reachable*; it did not make it correct.
+SpicyDocs `docs/research/gpo-normalizer-vs-upstream-2026-09-19.md` measured
+both pipelines against real GovInfo PDFs and found `gpo_normalize.py`'s
+layout detector never fires on pypdf's output on any of the five documents
+measured, including the two that are genuinely GPO gutter-numbered: pypdf
+glues the margin number onto its content line (`Representa-1`), while
+PyMuPDF — the pipeline the normalizer was actually derived on — emits it as
+its own physical line immediately after, the adjacency the detector looks
+for. Under pypdf, three of the normalizer's rules are structurally
+unreachable on every PDF-derived GovInfo body: layout detection, hyphen
+rejoin (0 of 6, then 0 of 12, real gutter numbers rejoined, against 6 of 6
+and 12 of 12 under PyMuPDF on the same two documents), and the
+gutter-evidenced half of the bare-digit strip gate. The user's ruling: results
+decide this, not licensing.
+
+- [x] **`PypdfPageExtractor` deleted.** Both `build_bill_family.py` and
+  `build_committee_reports.py` call `body_text(package)` with no `extractor=`
+  argument, so the PDF branch now runs through `body_text`'s own default
+  (`DocumentExtractor(NativeText())`, PyMuPDF) — the pipeline `gpo_normalize`
+  was derived on and the one the hosted `cleanup_*` columns describe.
+  `transforms/pdf_text.py::PYPDF_VERSION` stays: `extract_pdf_text`, the
+  unrelated regulations.gov attachment-text path, still uses it.
+- [x] **`pyproject.toml`.** Both `source-readers` pins move to
+  `spicy-docs[acquisition,pdf,pdf-pypdf,bill-diff]==0.21.1` — `pdf` adds
+  PyMuPDF for the body path above; `pdf-pypdf` stays only because
+  `extract_pdf_text` still needs it. `uv lock` resolved clean in one line
+  (`Added pymupdf v1.28.2`); Pillow was already present as a transitive
+  dependency, so nothing else moved. `uv sync --frozen` installed exactly
+  `pymupdf==1.28.2`.
+- [x] **Tests.** `test_the_pdf_cleanup_record_reaches_the_cleanup_columns`
+  (`tests/test_bill_family.py`) now asserts `cleanup_line_numbers == "true"`
+  and `cleanup_hyphen_rejoins == "2"` rather than merely non-null, so a future
+  extractor swap that defeats the normalizer fails loudly. It runs against
+  `PDF_GPO_PAGES`, a genuinely gutter-numbered synthetic PDF
+  (`tests/pdf_fixtures.make_multiline_pdf`, new — writes several real physical
+  lines per page instead of `make_pdf`'s one `Tj` per page), not a live-fetched
+  real fixture: spicy-docs' own `tests/fixtures/gpo_pdf_text/README.md`
+  provenance has no document that is both under 200 KB and gutter-numbered —
+  its two sub-200 KB documents (ENR at 196,785 bytes, the committee report at
+  199,803 bytes) are never GPO line-numbered by GPO's own print convention,
+  and its two gutter-numbered documents (223,439 and 206,513 bytes) both
+  exceed 200 KB. `test_the_pdf_fallback_is_extracted_and_states_its_page_count`
+  (`tests/test_committee_reports.py`) needed no content change, only a
+  docstring update — it asserts page count and format, both extractor-agnostic.
+- [x] **`vendor/README.md` and this file.** Both corrected: the PDF body path
+  was never "this repository deliberately does not install PyMuPDF" as an
+  ongoing design choice; it now does, for this reason.
+
+1,433 source tests pass (`uv run --frozen pytest -q`). Not pushed — local
+commit on `billtrax-hosting-prep` only, per instruction.
 
 ## How to run anything
 

@@ -20,7 +20,7 @@ dependencies = [
 
 [project.optional-dependencies]
 source-readers = [
-    "spicy-docs[acquisition,pdf-pypdf,bill-diff]==0.21.1",
+    "spicy-docs[acquisition,pdf,pdf-pypdf,bill-diff]==0.21.1",
     "pypdf==6.14.2", # Qualified PDF text and failure behavior
     "rulespec-artifacts==1.0.13",
     "deltatrack==0.1.0", # spicy-docs' bill-diff extra; git-sourced upstream, so declared here to bind the vendored wheel
@@ -33,7 +33,7 @@ embed = [
 [dependency-groups]
 # Checkout pipelines use the pinned source wheels; base CLI/MCP installs do not.
 source-readers = [
-    "spicy-docs[acquisition,pdf-pypdf,bill-diff]==0.21.1",
+    "spicy-docs[acquisition,pdf,pdf-pypdf,bill-diff]==0.21.1",
     "pypdf==6.14.2", # Qualified PDF text and failure behavior
     "rulespec-artifacts==1.0.13",
     "deltatrack==0.1.0", # spicy-docs' bill-diff extra; git-sourced upstream, so declared here to bind the vendored wheel

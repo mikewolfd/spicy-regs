@@ -64,16 +64,38 @@ Base CLI and MCP installs do not require them.
 - `uv.lock` records every wheel SHA-256 above. Replace the wheel and refresh the
   lock together, then run receiver tests against the installed wheel.
 
-PDF enrichment uses the narrow `pdf-pypdf` provider extra through `source-readers`.
-SpicyRegs additionally pins pypdf `6.14.2` and checks that version before parsing;
-package installs and checkouts therefore use the same qualified PDF behavior.
-That provider now backs the *body* path too. `extraction.body_text`'s PDF branch
-defaults to `DocumentExtractor(NativeText())`, whose default reader opens PDFs
-with PyMuPDF — which this repository deliberately does not install — so
-`transforms/pdf_text.py::PypdfPageExtractor` adapts the pinned provider to the
-extractor seam and both GovInfo body callers pass it. Dropping that argument
-does not fail loudly: it raises `ModuleNotFoundError` inside a per-package
-`except`, so PDF bodies would simply never be derived.
+PDF enrichment (`transforms/pdf_text.py::extract_pdf_text`, the regulations.gov
+attachment path) uses the narrow `pdf-pypdf` provider extra through
+`source-readers`. SpicyRegs additionally pins pypdf `6.14.2` and checks that
+version before parsing; package installs and checkouts therefore use the same
+qualified PDF behavior.
+
+The GovInfo *body* path is different: `extraction.body_text`'s PDF branch
+(both `build_bill_family.py` and `build_committee_reports.py`) runs through
+`body_text`'s default extractor, `DocumentExtractor(NativeText())`, whose
+default reader opens PDFs with PyMuPDF — now installed via the `pdf` extra —
+rather than through a pypdf adapter. This is not a licensing call; the user's
+ruling is that results decide, not licensing (PyMuPDF is AGPL/commercial
+dual-licensed; pypdfium2, which DeltaTrack itself uses, is BSD/Apache — the
+same spicy-docs research doc measured it too and found it handles the two
+genuinely GPO-numbered fixtures as well as PyMuPDF, but introduces false
+hyphen rejoins on non-numbered layouts that spicy-docs's own extractor
+declines; adopting it is a spicy-docs-side question, out of scope here). It is
+a correctness one: `extraction/gpo_normalize.py`'s layout detector was derived
+against PyMuPDF's line-grouped text, where a GPO gutter line number comes back
+as its own physical line immediately after its content line. pypdf glues that
+number onto the end of the content line instead (`Representa-1`), so the
+detector's adjacency check never fires — measured on real GovInfo PDFs in
+spicy-docs `docs/research/gpo-normalizer-vs-upstream-2026-09-19.md`: 0 of 6,
+then 0 of 12, real gutter numbers correctly detected under pypdf, against 6 of
+6 and 12 of 12 under PyMuPDF, on the same two documents. Under pypdf, three of
+the normalizer's rules — layout detection, hyphen rejoin, and the
+gutter-evidenced half of the bare-digit strip gate — are structurally
+unreachable on every PDF-derived GovInfo body, not just occasionally
+degraded. Routing this path through spicy-docs's default extractor instead of
+`transforms/pdf_text.py::PypdfPageExtractor` (removed) is what restores it.
+`pdf-pypdf` stays in `source-readers` only because `extract_pdf_text` still
+needs it for the unrelated attachment path above.
 
 CourtListener listing, pins and raw rows use the shared provider directly. Run
 `uv run pytest tests/test_courtlistener_bulk.py tests/test_courtlistener_shared.py tests/test_court_scope.py tests/test_cluster_court_scope_backfill.py`

@@ -186,12 +186,12 @@ class StubPdfAcquirer:
 
 
 def test_the_pdf_fallback_is_extracted_and_states_its_page_count(tmp_path, monkeypatch):
-    """The one rendition that does state page boundaries, and the one that needs an extractor.
+    """The one rendition that does state page boundaries.
 
-    `body_text`'s default extractor opens PDFs with PyMuPDF, which this
-    repository does not install — it pins the narrow `pdf-pypdf` provider — so
-    without `PypdfPageExtractor` every PDF-only package would be counted
-    refused and publish no row at all.
+    `body_text` reads this through its default extractor
+    (`DocumentExtractor(NativeText())`, PyMuPDF) — the pipeline
+    `gpo_normalize` was derived on, and the one this repository now installs
+    for the GovInfo body path (`vendor/README.md`).
     """
     monkeypatch.delenv("COMMITTEE_REPORTS_SINCE", raising=False)
     paths = {
