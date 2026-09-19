@@ -5,42 +5,45 @@ The optional `source-readers` extra enables the same readers for package install
 its wheels must be supplied explicitly until they are published in a registry.
 Base CLI and MCP installs do not require them.
 
-- `spicy_docs-0.21.1`: built with `uv build` from SpicyDocs commit
-  `6f8d20e` (tag v0.21.1), 2026-09-19. SHA-256:
-  `c519e231b44a639c342fa857802869eca258bb4a7051a84b983956a2706e68a6`
-  (1,025,308 bytes). Keeps the whole table-contract layer 0.21.0 carried —
-  `spicy_docs.schemas`' twenty-two `TableContract`s with their columns,
-  identity, version column, grain and per-column prose, the `shape_*` function
-  per table, and `interpretation/bill_family.py`'s `build_bill_family`, which
-  produces twelve of them in one pass — and adds four things this repository
-  wires:
-  - **The sealed body preference.** `sources/govinfo/bodies.py`'s
-    `BODY_PREFERENCE = ("xml", "htm", "txt", "pdf")` is now
-    `GovInfoBodyAcquirer.acquire`'s default, and
-    `sources/congress/bill_versions.py`'s
-    `DEFAULT_FORMAT_PREFERENCE = ("xml", "html", "txt", "pdf")` is
-    `choose_format`'s. One order, spelled in each module's own format names;
-    a package offered only as PDF now yields a body instead of a refusal.
-  - **`extraction/body_text.py`.** `body_text(package_body) -> BodyText` —
-    one text derivation per rendition (text, pages, rendition, media type,
-    byte size, derivation name and the per-rendition cleanup record), so a
-    caller stops writing its own decoder. Measured in
-    `docs/sources/govinfo-bodies.md`: committee reports offer only `htm` and
-    `pdf`, the `htm` is the text rendition, no `[[Page N]]` marker and no form
-    feed exists in any GovInfo body, and PDF text is last.
-  - **The bulk listing skip.** `sources/congress/bulk_status.py` gained
-    `BulkListingEntry`, `BulkStatusAcquirer.list_archives(congress, bill_type)`
-    and `acquire(..., unchanged_since=entry)`, which reads the folder listing
-    first and skips the zip entirely when the retained entry's name, link,
-    modified time and size all match (`BulkStatusAcquisition.skipped_unchanged`,
-    `listing_entry`); `docs/sources/congress-bulk-status.md`.
-  - **The GPO normalization fixes.** `extraction/gpo_normalize.py`'s
-    `GpoPageCleanup` gained `running_footer_lines` and `content_lines`, which
-    `bill_version_tables._page_cleanup` already serializes into
-    `bill_versions.cleanup_json`.
+- `spicy_docs-0.21.2`: built with `uv build` from SpicyDocs commit
+  `3642aa1` (tag v0.21.2), 2026-09-19. SHA-256:
+  `96eb4897935998e903ed7e93ab26c120860baf3d677eeffd02599b760dbc8ca3`
+  (1,152,040 bytes). Keeps everything 0.21.1 carried — the table-contract
+  layer, the sealed body preference as `acquire`/`choose_format`'s default,
+  `extraction/body_text.py`, the bulk listing skip and the GPO normalization
+  fixes — and changes three things this repository reads:
+  - **`PackageModsIdentity.bills` and `.primary_bill`**
+    (`sources/govinfo/bodies.py`, `ModsBill`): every `<bill>` a package MODS
+    names, in document order, and the one marked `PRIMARY`.
+    `build_committee_reports.py` reads both from the package the acquirer
+    already proved and deletes the interim `_mods_bills`/`_primary_bill` parse
+    it carried. `bills` is a required field of the dataclass, so the test that
+    built a `PackageModsIdentity` by hand now runs `validate_package_mods` over
+    the fixture bytes, the same parse the acquirer runs.
+  - **Thirty-two table contracts** (was twenty-two; 617 columns). The ten new
+    ones — `house_communications`, `committee_meetings`, `record_issues`,
+    `treaties`, `nominations`, `laws`, `law_code_sections`, `table3_records`,
+    `committees`, `committee_assignments` — have no rollup here and are **not
+    hosted**: `data_dictionary.CONTRACT_TABLES` enumerates the hosted tables by
+    hand, and `tests/test_contract_tables.py::UNHOSTED_CONTRACTS` names the
+    ten so a later wheel cannot add one silently. Two hosted contracts moved:
+    `hearing_transcripts` appends `event_id` as its twentieth column (NULL
+    here — the transform does not walk the Congress.gov hearing detail that
+    states it), and `congress_bills.statutes_at_large_cite`'s prose now says
+    the host fills it by joining `laws` at merge time, a join this repository
+    does not perform because it hosts no `laws` table; the column stays NULL
+    and the dictionary prints the wheel's sentence verbatim.
+  - **`BODY_PREFERENCE = ("xml", "uslm", "htm", "txt", "pdf")`** and
+    `DEFAULT_FORMAT_PREFERENCE = ("xml", "uslm", "html", "txt", "pdf")`: the
+    USLM rendition after XML, in both spellings. Nothing here passes a
+    preference, so both callers take the new default.
 
-  Replaces 0.21.0 (`ff92406`, SHA-256 `ca3f26c5…1705`).
-- `rulespec_artifacts-1.0.13`: required by spicy-docs 0.21.1, which pins it
+  `CongressListRoute.single_record` and `paged_json.page()`/`pages()`'s
+  `single_record` keyword are additive (default `False`); nothing here calls
+  either positionally. The new `reconstruct` extra (lxml) is not installed.
+
+  Replaces 0.21.1 (`6f8d20e`, SHA-256 `c519e231…68a6`).
+- `rulespec_artifacts-1.0.13`: required by spicy-docs 0.21.2, which pins it
   exactly; 1.0.12 no longer resolves. Nothing here imports it — it is a
   transitive pin vendored under the same discipline. Byte-identical to the
   wheel `rulespec` itself built (`dist/artifacts/`) and to the one spicy-docs

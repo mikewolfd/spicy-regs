@@ -798,6 +798,63 @@ decide this, not licensing.
 1,433 source tests pass (`uv run --frozen pytest -q`). Not pushed — local
 commit on `billtrax-hosting-prep` only, per instruction.
 
+**2026-09-19, `hosting-adopt-0.21.2`, fifth part.** SpicyDocs 0.21.2 is
+released and adopted: `vendor/spicy_docs-0.21.2-py3-none-any.whl` (commit
+`3642aa1`, tag v0.21.2, sha256 `96eb4897…8ca3`, 1,152,040 bytes, verified
+after the copy and recorded identically in `uv.lock`), 0.21.1 deleted, both
+`source-readers` pins and `[tool.uv.sources]` moved together. The resolve is
+one line — `Updated spicy-docs v0.21.1 -> v0.21.2` — with no refusal; the
+same `rulespec-artifacts==1.0.13` and DeltaTrack pins hold. `vendor/README.md`
+lists what the release carries and what this repository reads of it.
+
+- [x] **`build_committee_reports.py` reads the MODS bills through spicy-docs.**
+  The interim `_mods_bills`/`_primary_bill` parse (the A2 review finding
+  below) is deleted: `package.mods.bills` and `package.mods.primary_bill`
+  (`PackageModsIdentity`, `ModsBill`) come from the parse the acquirer already
+  ran to prove the package. What remains here is one function, the key
+  spelling — `natural_key(congress, normalized_bill_type, number)` — which
+  declines to link a bill whose MODS `type` is outside `BILL_TYPES` rather
+  than publish a key with a hole in it. A contextless `<bill>` arrives as
+  `context=""` and counts as a mention, as before. The fixture-pinned
+  behavior holds: `CRPT-119hrpt1` links `119-hres-53` (PRIMARY third of four)
+  and `CHRG-119hhrg63127` links nothing and logs `'OTHER': 3`, `'BODY': 2`.
+  The test stub builds `mods` with `validate_package_mods` over the fixture
+  bytes — `bills` is a required field, so a hand-built identity no longer
+  constructs, and the acquirer's own parse is the truer stub anyway. The
+  `associated_bills_json` request stands, each entry keeping its `context`.
+- [x] **Ten new contracts, none hosted.** `TABLE_CONTRACTS` is thirty-two:
+  `house_communications`, `committee_meetings`, `record_issues`, `treaties`,
+  `nominations`, `laws`, `law_code_sections`, `table3_records`, `committees`
+  and `committee_assignments` are new, and no rollup here writes any of them.
+  `data_dictionary.CONTRACT_TABLES` is a hand-enumerated tuple and
+  `contract_schemas()` iterates it rather than the wheel, so a contract with
+  no rollup never reaches `TABLES`, the MCP list or the catalog. The one place
+  that assumed wheel == hosted was
+  `test_every_hosted_table_is_registered_everywhere`; it now asserts hosted ⊆
+  wheel and that the difference is exactly `UNHOSTED_CONTRACTS`, a named set,
+  so the next wheel's new contract is a decision here rather than silence.
+  `spicy-regs-dict check` passes (47 tables); `generate` moved exactly two
+  hosted tables. `hearing_transcripts` appends `event_id` as its twentieth
+  column — NULL here, since the transform does not read the Congress.gov
+  hearing detail that states it. `congress_bills.statutes_at_large_cite`'s
+  prose now says the host fills it by joining `laws` at merge time, which this
+  repository does not do because it hosts no `laws` table; the column stays
+  NULL and the sentence is the wheel's, printed verbatim. `catalog.json` gains
+  the one column and its digest moves; the shape is unchanged, so
+  `CATALOG_FORMAT_VERSION` stays at 3.
+- [x] **Nothing else moved.** `CongressListRoute.single_record` and
+  `paged_json.page()`/`pages()`'s `single_record` keyword are additive, and
+  nothing here calls either positionally. `BODY_PREFERENCE` and
+  `DEFAULT_FORMAT_PREFERENCE` gain `uslm` after `xml`; no caller here passes a
+  preference, so both take the new default.
+
+1,492 source tests pass, `ruff check .` and `spicy-regs-dict check` are clean.
+`ty check` is clean on everything this branch touches; the two diagnostics it
+reports in `vectordb/embed.py` appear only with the `embed` extra installed
+(`uv sync --all-extras`) and are absent on the plain `uv sync --frozen`
+checkout the gate has been run on. Not pushed — local commits on
+`hosting-adopt-0.21.2`, per instruction.
+
 ## How to run anything
 
 Everything goes through `uv run`, never a binary from `PATH`. The gate:
@@ -1024,7 +1081,8 @@ landed).
   local helpers now carry a comment naming what deletes them, and the column
   request is sharpened to `associated_bills_json` with each entry keeping its
   own `context` — bare ids would drop the very distinction that makes `bill_id`
-  trustworthy.
+  trustworthy. **Delivered in spicy-docs 0.21.2 and adopted — the fifth part of the
+  hosting-prep log above deletes the two helpers.**
 - **The 12-of-12 and 0-of-52 claims now have a retained receipt** (above), which
   corrected two restated figures in the process.
 - Smaller: `_full_action_name`'s matching branch is covered by putting a
