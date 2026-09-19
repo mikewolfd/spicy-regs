@@ -338,13 +338,17 @@ tables:
       writer's NULL can erase the other's value. All columns are stored as
       VARCHAR.
     data_quality: >-
-      `statutes_at_large_cite` is NULL on every row here. Its column sentence,
-      which is the contract's, says the host fills it by joining `laws` on
-      `bill_id` at merge time — this repository hosts no `laws` table, so no such
-      join runs and the column stays empty rather than guessed. `public_law_number`
-      and `law_type` are not that case: they come from the bill's own publisher
-      record — its `laws` entry, when the publisher states one — and are filled
-      wherever the bill family has reached.
+      `statutes_at_large_cite` is filled at this table's merge by joining the
+      published `laws` table on `bill_id`, as its column sentence says: whichever
+      rollup writes this table (`congress-bills` or `bill-family`) reads `laws`
+      best-effort after its own merge and takes the law's citation where one is
+      published, keeping a citation already here where `laws` has none for the
+      bill; with no `laws` table published the column stays as it was, NULL on a
+      cold start. It is never guessed: `laws` publishes a citation only from a
+      captured PLAW USLM file, and reads a NULL through its own `uslm_outcome`.
+      `public_law_number` and `law_type` are not that case: they come from the
+      bill's own publisher record — its `laws` entry, when the publisher states
+      one — and are filled wherever the bill family has reached.
     columns_from: spicy_docs
 
   unified_agenda:
@@ -1361,3 +1365,136 @@ tables:
       backfilled_count: "Bills of this unit filled as of the end of this walk, from the retained state; never re-counted for a bill re-fetched because its stamp moved."
       observed_at: "When this walk's last captured list page was observed."
 
+
+  # --- A8/A9 (laws and rosters): the laws and committee-rosters rollups ---
+  laws:
+    label: "Enacted laws"
+    coverage: >-
+      Sampled. None yet; the first run fills it. The Congress.gov law route for
+      the scoped Congresses (the current one by default) is walked whole each
+      run — 108 laws for the 119th on 2026-09-19, one page — and every law it
+      lists is a row; the PLAW USLM citation is added per law, newest first,
+      under a per-run cap, so a cold start reaches the citations over successive
+      runs and a steady-state run asks only about laws whose list row moved or
+      whose PLAW the bulk folder had not yet served.
+    measured_on: "2026-09-19"
+    data_quality: >-
+      `statutes_at_large_cite` is NULL exactly when `uslm_outcome` is not
+      `captured`. `unavailable` is the publisher's own lag, a `404` from the
+      exact PLAW locator: on 2026-09-19 the route listed 108 laws and the PLAW
+      bulk folder held 104, the four newest (119-103, 119-104, 119-109, 119-110)
+      absent, and the capped live proof run met exactly those four; each is
+      retried every run until the folder serves it. `not_requested` marks a law
+      the cap or a transport failure kept this run from establishing, retried
+      too; a transport failure is never published as `unavailable`. A captured
+      PLAW whose meta names no citation is refused, never published with a NULL.
+      A law already captured is not re-read unless its list row's `update_date`
+      moves. All columns are stored as VARCHAR.
+    summary: >-
+      One row per enacted law the Congress.gov law list route states, with the
+      Statutes at Large citation from the law's own PLAW USLM file where
+      captured. Keyed on the law's Congress, type and number, not on the bill;
+      `bill_id` is the foreign key to `congress_bills`, whose
+      `statutes_at_large_cite` the host fills from this table at that table's
+      merge. All columns are stored as VARCHAR.
+    columns_from: spicy_docs
+
+  law_code_sections:
+    label: "Law classifications by Congress"
+    coverage: >-
+      Sampled. None yet; the first run fills it. The OLRC classification index
+      links the current Congress's session tables only; each linked
+      public-law-order table for a scoped Congress is read whole every run (583
+      rows for the 119th's 2nd session on 2026-09-19) and replaces that
+      session's rows.
+    measured_on: "2026-09-19"
+    data_quality: >-
+      A row is its position on the page (`seq`), because one line can repeat;
+      a page read this run replaces every prior row for its Congress and
+      session, so a line the publisher removed does not linger under a position
+      it no longer holds. Only the public-law order is read: the code-order twin
+      holds the same lines under positions that would collide with these. A
+      Congress the index does not link — every Congress but the current one —
+      gets no rows here; `table3_records` is the historical view. `action` is
+      the page's column 3 verbatim, NULL where the page left it blank, which
+      its legend reads as amended. All columns are stored as VARCHAR.
+    summary: >-
+      One row per line of an OLRC per-Congress classification table: a U.S.
+      Code place one public law section touched, with the Statutes at Large
+      page and the publisher's action word. All columns are stored as VARCHAR.
+    columns_from: spicy_docs
+
+  table3_records:
+    label: "Table III records"
+    coverage: >-
+      Sampled. None yet; the first run fills it. One Table III page per public
+      law the law route listed for the scoped Congresses, oldest first, under a
+      per-run cap; an act already published is not re-read.
+    measured_on: "2026-09-19"
+    data_quality: >-
+      Table III lags enactment by tens of laws (the 119th stood at 119-73 there
+      while the law route reached 119-110, measured 2026-09-14), and an act it
+      does not yet hold answers a page cut off inside the site menu, which the
+      reader refuses; the walk stops at the first such act for that Congress
+      and resumes there next run, so the lag costs one request a run. An act's
+      page is read once: a later edit to it (a status moving to repealed) is
+      not picked up, and `release_point` says how current the captured page
+      was. Private laws and pre-1957 session-law chapters are not requested.
+      All columns are stored as VARCHAR.
+    summary: >-
+      One row per classification record on one act's OLRC Table III page: which
+      U.S. Code place each section of a public law went to, as the page states
+      it. All columns are stored as VARCHAR.
+    columns_from: spicy_docs
+
+  committees:
+    label: "Committees"
+    coverage: >-
+      Sampled. None yet; the first run fills it. The Congress.gov committee
+      route for the scoped Congresses is walked whole each run, and the
+      committee detail is folded onto each row under a per-run cap, newest
+      `update_date` first; a committee whose detail was captured is re-read only
+      when its list row's `update_date` moves.
+    measured_on: "2026-09-19"
+    data_quality: >-
+      The route over-declares: on 2026-09-19 `committee/119` declared 238 and
+      served 236 on its one terminal page with no continuation. The reader's
+      terminal-page count refusal is the one refusal this rollup reads past,
+      publishing what the publisher served with both numbers in the run log;
+      every other walk refusal fails the run. `detail_captured` says whether the
+      detail's columns are the publisher's or NULL; where the detail was
+      captured, its `subcommittees` are the row's, an empty list included. The
+      detail's counts (`bill_count` and the rest) are that day's statement,
+      dated by `detail_update_date`. All columns are stored as VARCHAR.
+    summary: >-
+      One row per committee or subcommittee the Congress.gov committee list
+      route states, keyed on the publisher's `systemCode`, with the detail
+      record's history, subcommittees, parent and currency folded on where
+      captured. All columns are stored as VARCHAR.
+    columns_from: spicy_docs
+
+  committee_assignments:
+    label: "Committee assignments"
+    coverage: >-
+      Sampled. None yet; the first run fills it. Today's seats: both chamber
+      files are captured whole each run (441 House seats with 2,516 assignments
+      and 100 senators with 450 seats on 2026-09-19), for the current Congress
+      only, and each capture replaces its chamber's rows for that Congress; an
+      earlier Congress keeps its last capture.
+    measured_on: "2026-09-19"
+    data_quality: >-
+      A row is a seat the file listed on its `file_date`: a seat the file no
+      longer lists is gone on the next capture. The House file states its
+      Congress and the reader proves it; the Senate file states none, so its
+      rows carry the caller's Congress with `congress_basis` = `caller`. A House
+      vacancy has no member and no row, and a seated member whose only
+      assignment is the file's `<committee rank=""/>` placeholder has none
+      either (nine placeholders on 2026-09-19). Only a file captured this run
+      replaces its chamber's rows; a chamber whose file was not established
+      keeps its prior rows. `system_code` joins `committees`; `bioguide_id`
+      joins `members`. All columns are stored as VARCHAR.
+    summary: >-
+      One row per member per committee or subcommittee seat a chamber roster
+      file lists today, from the House Clerk's MemberData.xml and the Senate's
+      cvc_member_data.xml. All columns are stored as VARCHAR.
+    columns_from: spicy_docs

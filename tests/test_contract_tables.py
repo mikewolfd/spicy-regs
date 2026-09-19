@@ -36,15 +36,10 @@ CONTRACT_NAMES = sorted(TABLE_CONTRACTS)
 #: contract added upstream fails here until someone decides whether to host it.
 UNHOSTED_CONTRACTS = frozenset(
     {
-        "committee_assignments",
         "committee_meetings",
-        "committees",
         "house_communications",
-        "law_code_sections",
-        "laws",
         "nominations",
         "record_issues",
-        "table3_records",
         "treaties",
     }
 )

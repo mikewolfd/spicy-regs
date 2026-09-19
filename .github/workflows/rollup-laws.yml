@@ -1,0 +1,28 @@
+name: Rollup — laws
+on:
+  schedule:
+    # 01:00 UTC — the law list per scoped Congress, one PLAW file per law and
+    # the OLRC tables, capped; before bill-family (02:00) and congress-bills
+    # (20:15), which both fill statutes_at_large_cite from this rollup's laws.
+    - cron: '0 1 * * *'
+  workflow_dispatch:
+    inputs:
+      skip_upload:
+        description: 'Skip R2 upload (dry run)'
+        required: false
+        default: false
+        type: boolean
+      congresses:
+        description: 'Comma-separated Congress numbers (e.g. 118,119); blank uses the current Congress'
+        required: false
+        default: ''
+        type: string
+jobs:
+  run:
+    uses: ./.github/workflows/_rollup.yml
+    secrets: inherit
+    with:
+      command: run-rollup-laws
+      skip_upload: ${{ github.event_name == 'workflow_dispatch' && inputs.skip_upload || false }}
+      bill_family_congresses: ${{ inputs.congresses || '' }}
+      timeout_minutes: 60

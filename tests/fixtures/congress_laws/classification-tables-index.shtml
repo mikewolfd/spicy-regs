@@ -1,0 +1,163 @@
+<?xml version='1.0' encoding='UTF-8' ?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml"><head>
+        <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+        <meta http-equiv="X-UA-Compatible" content="IE=8" />
+        <meta http-equiv="pragma" content="no-cache" /><!-- HTTP 1.0 -->
+        <meta http-equiv="cache-control" content="no-cache,must-revalidate" /><!-- HTTP 1.1 -->
+        <meta http-equiv="expires" content="0" />
+        <link rel="shortcut icon" href="/javax.faces.resource/favicon.ico.xhtml?ln=images" /><link type="text/css" rel="stylesheet" href="/javax.faces.resource/cssLayout.css.xhtml?ln=css" /><script type="text/javascript" src="/javax.faces.resource/jsf.js.xhtml?ln=javax.faces"></script><link type="text/css" rel="stylesheet" href="/javax.faces.resource/static.css.xhtml?ln=css" /></head><body style="display:none;"><script type="text/javascript" src="/javax.faces.resource/browserPreferences.js.xhtml?ln=scripts"></script>
+        <div id="body">
+    <noscript>
+        <div style="font-size: 12px; font-family: Arial; background-color: #F0F0FE;">
+            This page is better viewed with a JavaScript enabled browser.
+        </div>
+    </noscript>
+    <div id="header"><a href="/browse.xhtml;jsessionid=SESSIONID"><img src="/javax.faces.resource/u4.png.xhtml?ln=images" alt="OLRC home" style="border: none;" /></a>
+    </div>
+            <div style="margin-left: 2px; clear: both;  background-color: rgb(201, 173, 109);"><div id="menu_homeLink">
+        <div style="float:right;             width: 55px; height: 18px; font-family: Arial; margin-top: -20px;             text-align: center; cursor: pointer; background-color: rgb(187, 154, 74);             opacity: .9;             -ms-filter:'progid:DXImageTransform.Microsoft.Alpha(Opacity=90)';             filter: alpha(opacity=90);"><a href="/browse.xhtml;jsessionid=SESSIONID" style="text-decoration: none; font-family: 'Calibri'; color: rgb(69, 38, 35); font-size: 15px; font-weight: bold;">
+                    Home</a>
+        </div></div>
+    <!-- site menu removed -->
+<div id="content" class="page_content">
+                    <div class="page_content_internal"><head><title>UNITED STATES CODE CLASSIFICATION TABLES</title></head>
+<div align="center" >
+ <font color="#000080">
+  <h1>United States Code Classification Tables</h1>
+  <h3>Office of the Law Revision Counsel</h3>
+ </font>
+</div>
+
+<p>These tables show where recently enacted laws will appear in the United States Code and which sections of the Code have been amended by those laws. The tables sorted in Public Law order may be used to identify the sections of the Code affected by a particular law. The tables sorted in Code order may be used to determine whether a particular section of the Code has recently been amended. The tables only include those provisions of law that have been classified to the Code. The text of recently enacted laws may be found through the Library of Congress <a href="http://congress.gov/">CONGRESS.GOV</a> web site.</p>
+
+<br/>
+<br/>
+<div align="center" >
+
+<table border="2" cellpadding="10">
+
+ <tr valign="top">
+
+
+
+
+   <td align="center" width="50%">
+   <p>2026
+    <br />119th Congress, 2nd Session
+    <br />Public Law 119-70 and Public Laws 119-74 through 119-110
+   </p>
+   <p>&#160;&#160;Sorted in Public Law order
+    <br /><a href="tbl119pl_2nd.htm">(HTML format)</a>
+    <br />&#160;
+  </p>
+   <p>&#160;&#160;Sorted in U.S. Code order
+    <br /><a href="tbl119cd_2nd.htm">(HTML format)</a>
+    <br />&#160;
+   </p>
+  </td>
+
+
+
+ 
+   <td align="center" width="50%">
+   <p>2025
+    <br />119th Congress, 1st Session
+    <br />Public Laws 119-1 through 119-69
+	<br /> and
+	<br /> 119-71 through 119-73
+   </p>
+   <p>&#160;&#160;Sorted in Public Law order
+    <br /><a href="tbl119pl_1st.htm">(HTML format)</a>
+    <br />&#160;
+  </p>
+   <p>&#160;&#160;Sorted in U.S. Code order
+    <br /><a href="tbl119cd_1st.htm">(HTML format)</a>
+    <br />&#160;
+   </p>
+  </td>
+
+
+
+
+
+
+
+
+
+ 
+</tr>
+  <tfoot>
+   <tr>
+     <td colspan="2" style="border:none; text-align:center;"><em>Prior tables can be found <a href="priortables.shtml">here</a>.</em></td>
+   </tr>
+
+   <tr>
+   
+     <td colspan="2" style="border:none; text-align:center;">
+	 
+	 For editorial changes in Code classifications of earlier laws made in the process of classifying laws enacted during the 119th Congress, 2nd Session, see the table <a href="ecct.html">here</a>.
+	 
+	 <br/>
+	 For editorial changes in Code classifications of earlier laws made in the process of classifying laws enacted during the 119th Congress, 1st Session, see the table <a href="ecct_119-1.html">here</a>.
+	 
+	 </td>
+   </tr>
+
+<!-- 
+   <tr>
+     <td colspan="2" style="border:none; text-align:center;">For tables showing the dispositions of statutory notes that were editorially transferred related to the new part V of subtitle A of Title 10, Armed Forces, 
+see the disposition table <a href="t10NoteDispoPostPartVReorg.pdf">here</a>, and the reverse table organized by new location in the Code <a href="t10NoteDispoPostPartVReorgReverse.pdf">here</a>. </td>
+   </tr>
+-->
+
+  </tfoot>  
+ 
+
+
+ 
+ 
+ 
+ 
+
+ 
+</tr> 
+</table>
+
+
+</div>
+
+
+
+
+                    </div>
+                </div>
+                <div style="clear: both; width: 0px; height: 0px;">             
+                </div>
+            </div>
+    <div id="footer">
+        <div style="margin-left: 2px; margin-top: 2px; width: 161px; height: 28px; overflow: visible; float: left;">
+            <form target="_blank" action="https://twitter.com/uscode">
+                <input type="image" src="/javax.faces.resource/u35.png.xhtml?ln=images" style="width: 160px; height: 27px;" />
+            </form>
+        </div>
+        <div style="margin-top: 9px; margin-right: 10px; width: 410px; height: 16px; font-family: Arial; float: right; word-wrap: break-word;" id="u34">
+            <div style="text-align: right;">
+                <span class="footer">
+				    16v4      
+                    <a href="/about_office.xhtml;jsessionid=SESSIONID">About the Office</a> 
+                          <a href="/privacy_policy.xhtml;jsessionid=SESSIONID">Privacy Policy</a>
+                </span>
+            </div>
+        </div>
+    </div>
+        </div><span id="resizeWindow" class="debugCode">
+<form id="formPrefs" name="formPrefs" method="post" action="/static.xhtml;jsessionid=SESSIONID" enctype="application/x-www-form-urlencoded">
+<input type="hidden" name="formPrefs" value="formPrefs" />
+<input id="winTop" type="hidden" name="winTop" value="0" /><input id="left" type="hidden" name="left" value="0" /><input id="width" type="hidden" name="width" value="0" /><input id="height" type="hidden" name="height" value="0" /><input id="submitBtn" type="submit" name="submitBtn" value="change value" onclick="jsf.ajax.request(this, event, {execute:'@form', render: '@form'}); return false;" /><input id="refreshBtn" type="submit" name="refreshBtn" value="refresh value" onclick="jsf.ajax.request(this, event, {render: '@form'}); return false;" /><input type="hidden" name="javax.faces.ViewState" id="javax.faces.ViewState" value="H4sIAAAAAAAAAN1Ze2gcRRifXHJpk6YhfVgtpW1s09LUdi/PNn2IuTapCV7b0IvBVDCd3M7dbbK3u52dvdvri/qHioooqIhQUfCBxfqXf1VBkSJCoQULIiiCiiD+oRVRFAX1m9m93b3tnUlVLuDBTeZ25pv93t/vm1z4DkUNk6JlMziPJYspqjSCzexBbEQXffr+pVXHPqpHkQOoWdWxfACnmE5HURPLUmJmdVW2jbsGEf8cKyyG8Sx8exhaNDOlyKxvp0XRivsT4mAVaxnp8PQMSbE9T12978U2s1ONIGQbQBGxjqMzqB5mUQNIVt5fgea2935Pfj372eUSTZ1HE8lT1MH321Iap4gpkTzRmDSmmywuy+P6hEIKw/zRD49f/OCTtrcu8iMo2nwjyX49Z+gazJJFk5GcIHo3M/DTxNWJVodo7Y1Egb2bZp+7pHy++qqz9xZfoWLVESTxRNOh23KnXxdygNpX+LvilOJiQjGZ/eC1tc9/iF+oR3WjqMFUThBHTYUGPpoh3lMlrqUkw4yMgFUITeI8oZOX37rz6XNXDkZQJIGaUio2zUM4RxhaLvQb4/qNJRlVtMyeBGo2gUYWZzC0ytmh6LEkoQpWlRN4WiV7bMPIc723mnxsY2i4Mif3jnq67KikVS4l0QiNy9hghPq2LJ3bDWdJpqW5J1OigVCzCpOyLKdOTWNTSUnJFFUMdkQsEWqAG6yrxs1hixkWQ/7HNkAU3+3OUNQ/tyRjVDcIZcV7SNEco0oeNFU6b7kweavvtsOalQsuGgytxAx0PW0xYo5nMYtTkiRMCNwasK5QgMHHle6coXXl2uCjCqRSfGwsMTo8ZAP70s2xH2SNv2UdQ80+e+LFyI3sRhHZ/FvHH3eA//VX4UfJGao0RNLYUtkB52FH3DDU4rg+S7SfX982eW5wZrCFq6OwHW2MQRLRLQpHxMAxDBX06c8km5saXvrS228Wp2wwF/ityCs9vbt7unY7075A6jACFq0HlfRVUwkEAbj8fl1jWAEnnEsxjRA4bFT2cqSw76jGSIbQ5V+99MovDz4yEOGhGs1j1SLgB23+vkNWbprQhy88u3bJM188XspeiwwvSfoSRKrIEuWT9fNwFGEewfXmv7cgHzsLd6DbAxZIU5zJgX5gpusQk5X077LcU3uW+bBX8NDAigbxXtTAX8vAMK5jDJT8gm/YBrYzSUrX5PD+RrFrV0U5xLSxvMTwydK5xeHDqnAy48NqsWuNvYBWzRIsV7aqF1Xd3WHtiZ8D/ys18WHS9p1gAeKPD1sDLOysiYJZOG1XLqqsqAK0I8QvrLW3yY4FtUmWKJksq5piekNB4odPeMVJl739C5kuo5yH7nk7GICozgpYmhLHGzwwIVDcj7++tqX+0d2bIm6tbP6Hnslx8L4qkILhjDRjpqF+UwLQAkAsxUzJkwpg8lTHWXL92cReAXeXanqcZkpLDK0RgNaOETV2kLCsLg/bBqRJU9E1wL6tIFRgO+fqZQHPt1dhi6jSOM6ET3KxQ12LQIOrHUXC1vC+44lblxx98ssfnEZhhbfP3/HyQ48lfzx6bW+pTVhf4qPCaaMAmD4/cmagZfLp6y2uKV4rDKGujSc1nFcyoC9dG8GarEL+lwnUdoA/gD1VaEeIvB+wVkanxS2dp4O4xelWwg2c2yy8eW3im2/Xnry7BGeQYdgFglIVCw+MllN22ge7u7Z1d+1oV10937nhZlncYAuXeVWM5/8jIflZb3C7sfl2hTWUFyKyvRqQ5a3tEUBryP+Ixsbw42rLXLQdfALd/p/uB5BsAkVNiDtoAze7USPIYxigvJISvMcAM3PdJfm+PXYwF7WIXNTm6HMZHKTJmMpHSBqKiQbHADDP6Hkpq1smkSwzpcvEZ8yUTIJpKst72XK6UmxFUBTiFUBdWskcUFTCO1r++mUJtDitUJNNYNX93eSAP/+BwI7uvN6izmPemsViwFJMsBRzWIo5b7CoIy7j7a8OagAO7ZwKGue07/gD78HKbiECypKCyioZKth5wbpspfjWQJ0JgzG3muyqcQ1hoEbGzbCPaf7LvFldKJmXInMzAl+/wfiSQXVQjhkXwp5GKBh7FS5XnH1eyB1DD8yjZ2wf7N+xraevHQviRCD25uLHzS7nC33z4j7Q7k/oiuzJwtOhAxpcm9UOQZ+qEVrbG+oc+is7a22Qbe0F94J0Z1UwWH1lV2ilQSXp6nCzsmZ7ej2CxTW+NuhE6+eoe8H2UghTD3mw/P4mnNwcrDQlYn9K1Z28OTUyHB/y5Gksk27RzUl3hv/ZxFALdbuacagEUFob8hC4ZeVzfm6w1S6/Dtqn6yrB2pV2evbjc799D0X0aOk6yOCloq7Os9z8wfi/jYlatdN/iJhYyh1gKqvnSELRZmtZpf7gVaqZkjT/p0RZmbrhTnBXZTjEvVYagQHAXg6y/j6LMV2b62JQwAl+x2RN5xTGW8eCoo3rRjiW/dDvCrm9F+XhnOAthCn8s3oqJobuBbqcmwwVhL5qAoUXfJIdoRWO0KqmxbD0/jHhK0CPJHx+tAC/suE3RAWILH9q/wWXOZqXJRsAAA==" autocomplete="off" />
+</form>
+<form id="formStdRef" name="formStdRef" method="post" action="/static.xhtml;jsessionid=SESSIONID" enctype="application/x-www-form-urlencoded">
+<input type="hidden" name="formStdRef" value="formStdRef" />
+<input id="first" type="hidden" name="first" value="" /><input id="second" type="hidden" name="second" value="" /><input id="type" type="hidden" name="type" value="" /><input id="url" type="hidden" name="url" value="" /><input id="stdRefBtn" type="submit" name="stdRefBtn" value="open std ref value" onclick="jsf.ajax.request(this, event, {execute:'@form', render: '@form'}); return false;" /><input type="hidden" name="javax.faces.ViewState" id="javax.faces.ViewState" value="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" autocomplete="off" />
+</form></span></body><script type="text/javascript" src="/javax.faces.resource/frameCheck.js.xhtml?ln=scripts"></script>
+</html>

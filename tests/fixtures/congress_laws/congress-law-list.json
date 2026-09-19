@@ -1,0 +1,76 @@
+{
+    "bills": [
+        {
+            "congress": 119,
+            "latestAction": {
+                "actionDate": "2026-09-16",
+                "text": "Became Public Law No: 119-110."
+            },
+            "laws": [
+                {
+                    "number": "119-110",
+                    "type": "Public Law"
+                }
+            ],
+            "number": "307",
+            "originChamber": "Senate",
+            "originChamberCode": "S",
+            "title": "Prison Staff Safety Enhancement Act",
+            "type": "S",
+            "updateDate": "2026-09-18",
+            "updateDateIncludingText": "2026-09-18",
+            "url": "https://api.congress.gov/v3/bill/119/s/307?format=json"
+        },
+        {
+            "congress": 119,
+            "latestAction": {
+                "actionDate": "2026-09-16",
+                "text": "Became Public Law No: 119-109."
+            },
+            "laws": [
+                {
+                    "number": "119-109",
+                    "type": "Public Law"
+                }
+            ],
+            "number": "32",
+            "originChamber": "Senate",
+            "originChamberCode": "S",
+            "title": "LACA",
+            "type": "S",
+            "updateDate": "2026-09-18",
+            "updateDateIncludingText": "2026-09-18",
+            "url": "https://api.congress.gov/v3/bill/119/s/32?format=json"
+        },
+        {
+            "congress": 119,
+            "latestAction": {
+                "actionDate": "2026-09-10",
+                "text": "Became Public Law No: 119-104."
+            },
+            "laws": [
+                {
+                    "number": "119-104",
+                    "type": "Public Law"
+                }
+            ],
+            "number": "858",
+            "originChamber": "Senate",
+            "originChamberCode": "S",
+            "title": "Hershel ‘Woody' Williams National Medal of Honor Monument Location Act",
+            "type": "S",
+            "updateDate": "2026-09-18",
+            "updateDateIncludingText": "2026-09-18",
+            "url": "https://api.congress.gov/v3/bill/119/s/858?format=json"
+        }
+    ],
+    "pagination": {
+        "count": 108,
+        "next": "https://api.congress.gov/v3/law/119?offset=3&limit=3&format=json"
+    },
+    "request": {
+        "congress": "119",
+        "contentType": "application/json",
+        "format": "json"
+    }
+}

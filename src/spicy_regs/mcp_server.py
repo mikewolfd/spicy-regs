@@ -78,6 +78,12 @@ TABLES = (
     "committee_reports",
     "report_sections",
     "hearing_transcripts",
+    # A8/A9 (laws and rosters): the laws and committee-rosters rollups.
+    "laws",
+    "law_code_sections",
+    "table3_records",
+    "committees",
+    "committee_assignments",
     # Processing state, not a contract table: the bill-family rollup retains one
     # BILLSTATUS folder listing entry per folder so the next run can prove a zip
     # unchanged without downloading it. Queryable for the same reason every

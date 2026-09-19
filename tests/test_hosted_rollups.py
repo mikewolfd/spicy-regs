@@ -26,6 +26,10 @@ from spicy_regs.pipelines.rollups.congress_bills import CongressBillsRollup
 from spicy_regs.pipelines.rollups.members import MembersRollup
 from spicy_regs.pipelines.rollups.press_releases import PressReleasesRollup
 from spicy_regs.pipelines.rollups.roll_call_votes import RollCallVotesRollup
+
+# A8/A9 (laws and rosters)
+from spicy_regs.pipelines.rollups.committee_rosters import CommitteeRostersRollup
+from spicy_regs.pipelines.rollups.laws import LawsRollup
 from spicy_regs.transforms.build_bill_family import (
     ARCHIVE_COLUMNS,
     ARCHIVES_TABLE,
@@ -56,6 +60,9 @@ HOSTED_ROLLUPS = (
     RollCallVotesRollup,
     MembersRollup,
     CommitteeReportsRollup,
+    # A8/A9 (laws and rosters)
+    LawsRollup,
+    CommitteeRostersRollup,
 )
 
 

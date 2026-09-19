@@ -1,0 +1,45 @@
+{
+ "chamber": "House",
+ "committeeTypeCode": "Standing",
+ "name": "Judiciary Committee",
+ "subcommittees": [
+  {
+   "name": "Select Subcommittee to Investigate the Remaining Questions Surrounding January 6, 2021",
+   "systemCode": "hlqj00",
+   "url": "https://api.congress.gov/v3/committee/house/hlqj00?format=json"
+  },
+  {
+   "name": "Courts, Intellectual Property, Artificial Intelligence, and the Internet Subcommittee",
+   "systemCode": "hsju03",
+   "url": "https://api.congress.gov/v3/committee/house/hsju03?format=json"
+  },
+  {
+   "name": "Crime and Federal Government Surveillance Subcommittee",
+   "systemCode": "hsju08",
+   "url": "https://api.congress.gov/v3/committee/house/hsju08?format=json"
+  },
+  {
+   "name": "Immigration Integrity, Security, and Enforcement Subcommittee",
+   "systemCode": "hsju01",
+   "url": "https://api.congress.gov/v3/committee/house/hsju01?format=json"
+  },
+  {
+   "name": "Constitution and Limited Government Subcommittee",
+   "systemCode": "hsju10",
+   "url": "https://api.congress.gov/v3/committee/house/hsju10?format=json"
+  },
+  {
+   "name": "Administrative State, Regulatory Reform, and Antitrust Subcommittee",
+   "systemCode": "hsju05",
+   "url": "https://api.congress.gov/v3/committee/house/hsju05?format=json"
+  },
+  {
+   "name": "Oversight Subcommittee",
+   "systemCode": "hsju13",
+   "url": "https://api.congress.gov/v3/committee/house/hsju13?format=json"
+  }
+ ],
+ "systemCode": "hsju00",
+ "updateDate": "2024-01-16T20:39:17Z",
+ "url": "https://api.congress.gov/v3/committee/house/hsju00?format=json"
+}

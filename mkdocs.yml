@@ -84,4 +84,10 @@ nav:
       - committee_reports: tables/committee_reports.md
       - report_sections: tables/report_sections.md
       - hearing_transcripts: tables/hearing_transcripts.md
+      # A8/A9 (laws and rosters)
+      - laws: tables/laws.md
+      - law_code_sections: tables/law_code_sections.md
+      - table3_records: tables/table3_records.md
+      - committees: tables/committees.md
+      - committee_assignments: tables/committee_assignments.md
       - bill_family_archives: tables/bill_family_archives.md

@@ -1,0 +1,131 @@
+<senators>
+<lastUpdate>
+<date>Saturday, September 19, 2026</date>
+<time>5:00:10 AM EDT</time>
+</lastUpdate>
+<senator lis_member_id="S428">
+<name>
+<prefix>Ms.</prefix>
+<first>Angela D.</first>
+<last>Alsobrooks</last>
+<suffix>        
+</suffix>
+</name>
+<party>D</party>
+<state>MD</state>
+<homeTown>Upper Marlboro</homeTown>
+<stateRank>2</stateRank>
+<bioguideId>A000382</bioguideId>
+<office>374 Russell </office>
+<committees>
+<committee code="SPAG00">Special Committee on Aging</committee>
+<committee code="SSBK00">Committee on Banking, Housing, and Urban Affairs</committee>
+<committee code="SSEV00">Committee on Environment and Public Works</committee>
+<committee code="SSHR00">Committee on Health, Education, Labor, and Pensions</committee>
+</committees>
+</senator>
+<senator lis_member_id="S440">
+<name>
+<prefix>Mr.</prefix>
+<first>Alan</first>
+<last>Armstrong</last>
+<suffix>        
+</suffix>
+</name>
+<party>R</party>
+<state>OK</state>
+<homeTown>Tulsa</homeTown>
+<stateRank>2</stateRank>
+<bioguideId>A000383</bioguideId>
+<office>330 Hart </office>
+<committees>
+<committee code="SLIA00">Committee on Indian Affairs</committee>
+<committee code="SSHR00">Committee on Health, Education, Labor, and Pensions</committee>
+</committees>
+</senator>
+<senator lis_member_id="S354">
+<name>
+<prefix>Ms.</prefix>
+<first>Tammy </first>
+<last>Baldwin</last>
+<suffix>        
+</suffix>
+</name>
+<party>D</party>
+<state>WI</state>
+<homeTown>Madison</homeTown>
+<stateRank>2</stateRank>
+<bioguideId>B001230</bioguideId>
+<office>141 Hart </office>
+<committees>
+<committee code="SSAP00">Committee on Appropriations</committee>
+<committee code="SSCM00">Committee on Commerce, Science, and Transportation</committee>
+<committee code="SSHR00">Committee on Health, Education, Labor, and Pensions</committee>
+</committees>
+</senator>
+<senator lis_member_id="S429">
+<name>
+<prefix>Mr.</prefix>
+<first>Jim </first>
+<last>Banks</last>
+<suffix>        
+</suffix>
+</name>
+<party>R</party>
+<state>IN</state>
+<homeTown>Columbia City</homeTown>
+<stateRank>2</stateRank>
+<bioguideId>B001299</bioguideId>
+<office>303 Hart </office>
+<committees>
+<committee code="SSAS00">Committee on Armed Services</committee>
+<committee code="SSBK00">Committee on Banking, Housing, and Urban Affairs</committee>
+<committee code="SSHR00">Committee on Health, Education, Labor, and Pensions</committee>
+<committee code="SSVA00">Committee on Veterans' Affairs</committee>
+</committees>
+</senator>
+<senator lis_member_id="S317">
+<name>
+<prefix>Mr.</prefix>
+<first>John </first>
+<last>Barrasso</last>
+<suffix>        
+</suffix>
+</name>
+<party>R</party>
+<state>WY</state>
+<homeTown>Casper</homeTown>
+<stateRank>1</stateRank>
+<bioguideId>B001261</bioguideId>
+<office>307 Dirksen </office>
+<leadership_position>Majority Whip</leadership_position>
+<committees>
+<committee code="SSFR00">Committee on Foreign Relations</committee>
+<committee code="SSFI00">Committee on Finance</committee>
+<committee code="SSEG00">Committee on Energy and Natural Resources</committee>
+</committees>
+</senator>
+<senator lis_member_id="S343">
+<name>
+<prefix>Mr.</prefix>
+<first>John </first>
+<last>Boozman</last>
+<suffix>        
+</suffix>
+</name>
+<party>R</party>
+<state>AR</state>
+<homeTown>Rogers</homeTown>
+<stateRank>1</stateRank>
+<bioguideId>B001236</bioguideId>
+<office>555 Dirksen </office>
+<committees>
+<committee code="JCSE00">Commission on Security and Cooperation in Europe</committee>
+<committee code="SSAP00">Committee on Appropriations</committee>
+<committee code="SSAF00" position="Chairman">Committee on Agriculture, Nutrition, and Forestry</committee>
+<committee code="SSRA00">Committee on Rules and Administration</committee>
+<committee code="SSEV00">Committee on Environment and Public Works</committee>
+<committee code="SSVA00">Committee on Veterans' Affairs</committee>
+</committees>
+</senator>
+</senators>
