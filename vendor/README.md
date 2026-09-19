@@ -5,24 +5,37 @@ The optional `source-readers` extra enables the same readers for package install
 its wheels must be supplied explicitly until they are published in a registry.
 Base CLI and MCP installs do not require them.
 
-- `spicy_docs-0.20.0`: built from SpicyDocs commit `b96e083805019302fcf5b96bae962521b8a5ad7a` (tag v0.20.0). Address sweep to sources/uscode/*, spicy_docs.reading.* and sources/courtlistener/* in the same commit; receivers re-qualified below.
-  SHA-256: `594a2f01f689c10f8c3b133a70b2e8ee9f644dd9234788a957b4f731e6d1c7e3`.
-- `rulespec_artifacts-1.0.12`: unchanged from the prior source-reader pin.
+- `spicy_docs-0.21.0`: built with `uv build` from SpicyDocs commit
+  `ff92406` (tag v0.21.0), 2026-09-19. SHA-256:
+  `ca3f26c5361f26bd3d38d7789277bff2a72ebfd224a65e65e0f24ec4ed241705`
+  (1,009,120 bytes). Carries the table-contract layer: `spicy_docs.schemas`'
+  twenty-two `TableContract`s with their columns, identity, version column,
+  grain and per-column prose, the `shape_*` function per table, and
+  `interpretation/bill_family.py`'s `build_bill_family`, which produces twelve
+  of them in one pass. The pin adds the `bill-diff` extra for the three diff
+  tables. Replaces 0.20.0 (`b96e083`, SHA-256 `594a2f01…`).
+- `rulespec_artifacts-1.0.13`: required by spicy-docs 0.21.0, which pins it
+  exactly; 1.0.12 no longer resolves. Nothing here imports it — it is a
+  transitive pin vendored under the same discipline. Byte-identical to the
+  wheel `rulespec` itself built (`dist/artifacts/`) and to the one spicy-docs
+  vendors. SHA-256:
+  `72d15ff9453bb819ab5945141dea92cae6c3ff5f76e1d26bb04849cf690bf377`.
 - `deltatrack-0.1.0`: built with `uv build --wheel` from `civictechdc/DeltaTrack`
   commit `c636448ba08d55bba7cb8c884aad0f5ac1ccf2f6`, 2026-09-19.
   SHA-256: `7f060e30af9702f4e45c305fa93c53d1e3e59bd70858d3c6717f6fc9cf825197`.
   DeltaTrack is a git dependency (SpicyDocs' `bill-diff` extra pins
   `git+https://github.com/civictechdc/DeltaTrack?rev=c636448…`), not a
   registry package, so it is vendored the same way as the other source-reader
-  wheels here rather than resolved transitively. `[tool.uv.sources]` points at
-  it already, but nothing depends on it yet — `uv lock` resolves 165 packages
-  with the entry present and leaves `uv.lock` byte-identical, so it is inert
-  until spicy-docs 0.21.0 pins `spicy-docs[...,bill-diff]` (`source-readers`),
-  which pulls DeltaTrack transitively and puts this wheel in the lock. It
-  exists for the bill-diff tables (`section_diffs`, `section_diff_items`,
-  `financial_changes`) that `docs/research/table-contracts-2026-09-19.md` §5.4
-  describes.
-- `uv.lock` records both wheel SHA-256 values. Replace the wheel and refresh the
+  wheels here rather than resolved transitively. It exists for the bill-diff
+  tables (`section_diffs`, `section_diff_items`, `financial_changes`) that
+  `docs/research/table-contracts-2026-09-19.md` §5.4 describes, and the 0.21.0
+  pin now reaches them. `[tool.uv.sources]` alone was
+  not enough: a uv source binds a dependency the project declares, and
+  DeltaTrack arrives only through spicy-docs' `bill-diff` extra, so uv looked
+  for it in the registry and failed the resolve. `deltatrack==0.1.0` is
+  therefore also declared directly in both `source-readers` lists — the same
+  shape `rulespec-artifacts` already had for the same reason.
+- `uv.lock` records every wheel SHA-256 above. Replace the wheel and refresh the
   lock together, then run receiver tests against the installed wheel.
 
 PDF enrichment uses the narrow `pdf-pypdf` provider extra through `source-readers`.
