@@ -348,13 +348,19 @@ def _table3_rows(olrc: OlrcSource, acts: set[tuple[int, int]], held: set[str], b
     by_congress: dict[int, list[int]] = {}
     for congress, number in sorted(acts):
         by_congress.setdefault(congress, []).append(number)
+    capped = False
     for congress in sorted(by_congress, reverse=True):
+        if capped:
+            break
         for number in by_congress[congress]:
             key = f"{congress}-{number}"
             if key in held:
                 continue
             if not budget.take():
-                return rows
+                # A run-wide stop, not this Congress's; the summary below
+                # still says how far the run got.
+                capped = True
+                break
             try:
                 acquired = olrc.acquire_table3_act(key)
             except (UsCodeSourceError, httpx.HTTPError, ConnectionError) as error:
