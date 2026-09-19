@@ -11,6 +11,14 @@ this repo no longer hand-rolls the ``offset``/``limit`` walk; see
 why). The unit tests above ``test_build_congress_bills_merges_prior_and_fresh_rows``
 never call ``build_congress_bills()`` or read the merged Parquet, so only that
 test exercises the SQL merge end to end.
+
+The last section covers the retry *policy* this reader's absolute refusal
+made necessary: ``_fetch_bills`` in ``build_congress_bills.py`` retries an
+identical window a bounded number of times when the reader refuses on a
+mid-walk publisher drift, and gives up loudly — never publishing a partial
+table — once that bound is spent. ``test_walk_refuses_when_the_declared_count_changes_mid_walk``
+pins the exact refusal shape (a two-page walk whose declared count shrinks
+between pages) that policy exists for.
 """
 
 from __future__ import annotations
@@ -201,6 +209,40 @@ def test_walk_refuses_when_declared_and_observed_counts_disagree():
         list(reader.iter_records())
 
 
+def test_walk_refuses_when_the_declared_count_changes_mid_walk():
+    """The operational risk ``_fetch_bills`` retries for: a nightly window that
+    closes at "now" is walked over several minutes, and a bill the publisher
+    edits *during* that walk can move its own ``updateDate`` past
+    ``toDateTime`` and drop out of the window — the declared count shrinks
+    between page one and page two of the *same* walk, not only at the end.
+    The reader refuses immediately rather than publish a shrunk result;
+    retrying the identical window is ``build_congress_bills.py``'s job, not
+    this reader's (see ``test_congress_bills.py``'s retry-policy tests)."""
+    page_one_bills = [_bill(1, "2025-04-07"), _bill(2, "2025-04-06")]
+    page_two_bills = [_bill(3, "2025-04-05")]
+    next_url = "https://api.congress.gov/v3/bill?format=json&limit=250&offset=250&sort=updateDate+desc"
+    calls = {"n": 0}
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            # Page one declares 3 bills total and points at a next page.
+            body = {"bills": page_one_bills, "pagination": {"count": 3, "next": next_url}}
+        else:
+            # Page two, the walk's terminal page: the publisher now declares
+            # only 2 — one fewer than page one stated, mid-walk.
+            assert str(request.url) == next_url
+            body = {"bills": page_two_bills, "pagination": {"count": 2}}
+        return httpx.Response(
+            200, stream=httpx.ByteStream(json.dumps(body).encode()), headers={"content-type": "application/json"}
+        )
+
+    reader = CongressBillsReader(api_key="test-key", transport=httpx.MockTransport(respond))
+    with pytest.raises(PagedJsonSourceError, match="declared count changed during the traversal"):
+        list(reader.iter_records())
+    assert calls["n"] == 2
+
+
 # -- catch-up windowing ------------------------------------------------------
 
 
@@ -348,3 +390,68 @@ def test_build_congress_bills_merges_prior_and_fresh_rows(tmp_path, monkeypatch)
 
     # Ordered by update_date DESC, then bill_id.
     assert [row["bill_id"] for row in rows] == ["118-hr-1", "119-hr-99", "118-s-2"]
+
+
+# -- retrying a mid-walk publisher drift (build_congress_bills._fetch_bills) --
+
+
+def _flaky_reader_factory(*, fail_times: int) -> tuple[type, dict]:
+    """A CongressBillsReader stand-in whose first ``fail_times`` constructions
+    raise from ``iter_records()`` (the shape of a mid-walk declared-count
+    drift), then succeed. Returns ``(cls, calls)``: the counter dict is
+    shared across instances — each retry attempt in ``_fetch_bills`` builds a
+    brand-new reader, exactly like a real retry would — so a test can assert
+    exactly how many attempts were made without needing a class attribute
+    (a class body cannot close over this factory's locals the way a method
+    can, so the counter travels back to the caller instead).
+    """
+    calls = {"n": 0}
+
+    class _FlakyReader:
+        def __init__(self, *, since=None, until=None):
+            self.since = since
+            self.until = until
+
+        def iter_records(self):
+            calls["n"] += 1
+            if calls["n"] <= fail_times:
+                error = PagedJsonSourceError("Congress.gov declared count changed during the traversal")
+                # Mirrors spicy-docs' own paged_json.py, which attaches this
+                # context via __dict__ rather than a declared attribute.
+                error.__dict__["paged_json_acquisition"] = {"declaredCount": 3, "observedCount": 2}
+                raise error
+            return iter(_FRESH_RAW)
+
+    return _FlakyReader, calls
+
+
+def test_fetch_retries_a_walk_refusal_and_succeeds(tmp_path, monkeypatch):
+    """First attempt raises (the mid-walk drift), second succeeds — the retry
+    this reader's absolute refusal exists for; the reader itself never
+    weakens, but ``build_congress_bills`` asks the same window again."""
+    monkeypatch.setattr(bcb.r2, "download", lambda remote_key, local_path: False)
+    monkeypatch.setattr(bcb.time, "sleep", lambda seconds: None)
+    reader_cls, calls = _flaky_reader_factory(fail_times=1)
+    monkeypatch.setattr(bcb, "CongressBillsReader", reader_cls)
+
+    out_path = bcb.build_congress_bills(tmp_path)
+
+    rows = pq.read_table(out_path).to_pylist()
+    assert {row["bill_id"] for row in rows} == {"118-hr-1", "119-hr-99"}
+    assert calls["n"] == 2  # one refusal, one successful retry
+
+
+def test_fetch_gives_up_after_max_attempts(tmp_path, monkeypatch):
+    """A refusal that never clears exhausts every attempt and propagates —
+    the job fails loudly instead of publishing a table it never fully walked."""
+    monkeypatch.setattr(bcb.r2, "download", lambda remote_key, local_path: False)
+    monkeypatch.setattr(bcb.time, "sleep", lambda seconds: None)
+    reader_cls, calls = _flaky_reader_factory(fail_times=bcb.FETCH_ATTEMPTS + 10)
+    monkeypatch.setattr(bcb, "CongressBillsReader", reader_cls)
+
+    with pytest.raises(PagedJsonSourceError, match="declared count changed during the traversal"):
+        bcb.build_congress_bills(tmp_path)
+
+    # Exactly FETCH_ATTEMPTS attempts — no more (it must stop), no fewer (it
+    # must actually retry rather than propagate the first refusal).
+    assert calls["n"] == bcb.FETCH_ATTEMPTS

@@ -469,6 +469,48 @@ pre-existing `tests/test_fec_relationships.py` diagnostic — gap E3 in
 spicy-docs `docs/research/closing-the-gaps-2026-09-19.md` — is unrelated and
 untouched). Not pushed — local commit on `hosting-sr01` only.
 
+**Same day, follow-up: refuse-and-retry replaces warn-and-publish.** Review
+before merging into `billtrax-hosting-prep` named an operational risk the
+change above did not cover: the spicy-docs reader refuses on *any* declared-
+count disagreement, not only a shortfall at the end, and a nightly window
+that closes at "now" is walked over several minutes — long enough for the
+publisher to edit a bill's `updateDate` past `toDateTime` mid-walk, shrinking
+the declared count out from under a request already in flight. Unlike the
+old reader's warn-below-a-tolerance heuristic, an unmitigated refusal there
+would publish *nothing* for the whole night on a transient publisher-side
+race, not a real truncation. The reader's refusal stays absolute — it is the
+evidence rule, and weakening it would reopen the exact defect this change
+closed — but the *policy* of what to do about a refusal belongs one layer up,
+where the window is chosen: `build_congress_bills.py` gained `_fetch_bills`,
+which asks a fresh `CongressBillsReader` for the identical window up to
+`FETCH_ATTEMPTS` (3) times with a `RETRY_PAUSE_SECONDS` (30s) pause between
+attempts, discarding each failed attempt's partial rows (a partially-yielded
+generator cannot be resumed, and keeping its rows would be the same
+truncated-table shape refuse-and-retry exists to prevent). A refusal that
+survives all three attempts propagates unchanged: the run publishes nothing
+and fails loudly, exactly as a first-attempt refusal always did — retrying
+buys tolerance for a drift that clears within a few attempts, not a license
+to ever publish a window this repo did not walk in full. Both module
+docstrings (`sources/congress_bills.py` and `transforms/build_congress_bills.py`)
+now state this trade-off directly.
+
+Two new tests pin the risk and the fix: `test_walk_refuses_when_the_declared_count_changes_mid_walk`
+in `tests/test_congress_bills.py` is a two-page `httpx.MockTransport` fixture
+where page two declares one fewer than page one, exercising the "declared
+count changed during the traversal" refusal specifically (distinct from the
+declared-vs-observed-at-the-end refusal already covered) — the exact shape
+the retry exists for. `test_fetch_retries_a_walk_refusal_and_succeeds` and
+`test_fetch_gives_up_after_max_attempts` use a stub reader whose `iter_records()`
+raises on its first N constructions then succeeds, proving both that a
+transient refusal is absorbed (first raises, second succeeds — the merged
+table matches the stub's rows) and that a persistent one is not (three
+attempts, then the original `PagedJsonSourceError` propagates from
+`build_congress_bills()` itself). 21 tests now cover `tests/test_congress_bills.py`
+(three more than the note above); 1,432 source tests pass. `ruff check .`,
+`spicy-regs-dict check` (no diff) and `ty check` (same one pre-existing,
+unrelated diagnostic) all still pass. Not pushed — local commit on
+`hosting-sr01` only.
+
 **Not wired, with the reason:**
 
 - **Senate roll calls.** `listing.py` has a `house-vote` route and no Senate
@@ -518,7 +560,10 @@ untouched). Not pushed — local commit on `hosting-sr01` only.
   *is* that implementation — decision and implementation landed together for
   this one candidate, the same pattern [SR04](#sr04) set for CourtListener.
   See the narrative entry above (in "BillTrax-derived table hosting") for the
-  specifics: files, tests removed/added, and the unchanged contract digest.
+  specifics: files, tests removed/added, the unchanged contract digest, and
+  the same-day follow-up that added a bounded retry around the reader's
+  now-absolute refusal so a mid-walk publisher drift on a nightly window
+  cannot fail a run the old heuristic would merely have warned about.
   CourtListener handling was already decided and implemented under SR04; the
   remaining named candidates (strict parsers, table/Iceberg publication,
   documented-value diagnostics, public imports and optional dependencies)

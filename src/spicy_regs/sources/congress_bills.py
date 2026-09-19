@@ -41,6 +41,24 @@ repo's to compute, but no longer this repo's to encode onto the wire or to
 police for completeness — that is exactly the refusal spicy-docs' walk now
 does on our behalf.
 
+**Refuse-and-retry, not warn-and-publish.** This reader's refusal is
+absolute and stays that way: it never weakens the check above, never
+retries internally, and never publishes a walk it could not complete in
+full — a window asked for and not fully received must never look like a
+completed run. But that refusal has an operational cost this reader cannot
+see or absorb on its own: a nightly window closes at "now," a walk over it
+takes minutes, and a bill the publisher edits *during* that walk can move
+its own ``updateDate`` past ``toDateTime`` and shrink the declared count out
+from under a request already in flight — a transient publisher-side race,
+not a truncated or out-of-order walk. Retrying the identical window is the
+caller's job, not this reader's:
+:func:`~spicy_regs.transforms.build_congress_bills._fetch_bills` asks a
+fresh reader for the same window a few times, with a short pause, before
+giving up. A refusal that survives every retry propagates unchanged and
+fails the run loudly; it means the window was asked for and, after every
+attempt, still not fully received — the run publishes nothing, and the next
+scheduled run tries again from the same watermark.
+
 **API key.** Congress.gov requires an api.data.gov key. The same key works
 across regulations.gov, Congress.gov, and GovInfo, so we resolve it from a
 fallback chain of the env vars this repo already uses (:func:`_resolve_api_key`
