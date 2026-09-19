@@ -48,7 +48,7 @@ def merge_table(
     name: str,
     columns: tuple[str, ...],
     identity: tuple[str, ...],
-    version_column: str,
+    version_column: str | None,
     rows: Iterable[Mapping[str, object]],
     remote_key: str,
     download_prior: Callable[[str, Path], bool] = r2.download,
@@ -60,13 +60,24 @@ def merge_table(
     downloaded via ``download_prior``, defaulting to :func:`spicy_regs.sources.r2.download`)
     and ``rows``, deduplicated on ``identity`` (all columns must be non-null;
     the fresh row wins over the prior one on a repeated identity), ordered by
-    ``version_column`` descending then ``identity``.
+    ``version_column`` descending then ``identity`` — or by ``identity`` alone
+    when ``version_column`` is ``None``, which is how the two contracts with no
+    freshness axis (``section_diff_items``, ``financial_changes``, both ordered
+    within their parent by a sequence number) publish.
 
     ``columns`` becomes an all-VARCHAR Arrow schema — every published table in
     this pipeline is string-typed, so callers coerce before calling this. An
     absent prior table (first run, or ``download_prior`` returning ``False``)
     degrades to publishing ``rows`` alone, which is a full backfill, not an
     error.
+
+    A prior table missing some of ``columns`` is also not an error: each absent
+    column is selected as a VARCHAR NULL, so appending a column to a contract
+    is a NULL backfill on the rows already published rather than a migration.
+    ``congress_bills`` is the live case — its first ten columns are frozen
+    because other repositories pin that prefix by digest, and the bill family
+    appends thirty-eight more, so the first family run merges 48-column rows
+    onto a 10-column published table.
 
     ``prior_present``: pass ``False`` when the caller already tried
     :func:`prior_scratch_path` and knows the prior is absent (e.g. it read the
@@ -113,11 +124,31 @@ def merge_table(
 
     cols = ", ".join(columns)
     key_cols = ", ".join(identity)
+    order_by = f"{version_column} DESC, {key_cols}" if version_column else key_cols
     not_null = " AND ".join(f"{c} IS NOT NULL" for c in identity)
 
     if have_prior:
+        # The prior table may predate columns this contract has since gained —
+        # ``congress_bills`` is the live case: its first ten columns are frozen
+        # and the bill family appends to them, so a prior published before the
+        # family ran has ten of forty-eight. Select each missing column as a
+        # typed NULL rather than letting the binder fail on it, which makes a
+        # column addition a NULL backfill instead of a migration.
+        prior_cols = {
+            str(row[0]) for row in con.execute(f"DESCRIBE SELECT * FROM read_parquet('{prior_file}')").fetchall()
+        }
+        absent = [c for c in columns if c not in prior_cols]
+        if absent:
+            logger.info(
+                "{}: prior table lacks {} of {} columns ({}) — NULL-filling them",
+                name,
+                len(absent),
+                len(columns),
+                ", ".join(absent),
+            )
+        prior_select = ", ".join(c if c in prior_cols else f"CAST(NULL AS VARCHAR) AS {c}" for c in columns)
         union = (
-            f"SELECT {cols}, 0 AS _src FROM read_parquet('{prior_file}') "
+            f"SELECT {prior_select}, 0 AS _src FROM read_parquet('{prior_file}') "
             f"UNION ALL BY NAME "
             f"SELECT {cols}, 1 AS _src FROM read_parquet('{new_file}')"
         )
@@ -135,7 +166,7 @@ def merge_table(
                 WHERE {not_null}
             )
             WHERE _rn = 1
-            ORDER BY {version_column} DESC, {key_cols}
+            ORDER BY {order_by}
         ) TO '{out_file}' (FORMAT PARQUET, COMPRESSION ZSTD, ROW_GROUP_SIZE 50000);
         """
     )
@@ -148,3 +179,38 @@ def merge_table(
     total = pq.ParquetFile(out_file).metadata.num_rows
     logger.info("{}: {:,} rows", name, total)
     return out_file
+
+
+def merge_contract_table(
+    output_dir: Path,
+    contract_name: str,
+    rows: Iterable[Mapping[str, object]],
+    *,
+    download_prior: Callable[[str, Path], bool] = r2.download,
+    prior_present: bool | None = None,
+) -> Path:
+    """Merge ``rows`` for one ``spicy_docs.schemas`` table contract.
+
+    The single door the twenty-two hosted tables go through. The contract owns
+    the column tuple, the identity and the version column, so this repository
+    never restates a published shape: a column appended in spicy-docs appears
+    here by re-reading ``TABLE_CONTRACTS``, and the NULL-fill in
+    :func:`merge_table` makes that a backfill rather than a migration.
+
+    The remote key is ``{contract_name}.parquet``, matching the R2 key = MCP
+    view = dictionary key convention every other published table follows.
+    """
+    from spicy_docs.schemas import TABLE_CONTRACTS
+
+    contract = TABLE_CONTRACTS[contract_name]
+    return merge_table(
+        output_dir,
+        name=contract.name,
+        columns=contract.columns,
+        identity=contract.identity,
+        version_column=contract.version_column,
+        rows=rows,
+        remote_key=f"{contract.name}.parquet",
+        download_prior=download_prior,
+        prior_present=prior_present,
+    )

@@ -153,3 +153,56 @@ def test_merge_still_asks_download_prior_when_presence_is_unknown(tmp_path):
 
     assert download_prior.calls == 1
     assert _read(out) == fresh
+
+
+def test_merge_null_fills_columns_the_prior_table_lacks(tmp_path):
+    """A contract that gained columns merges onto a prior published without them.
+
+    This is ``congress_bills``' live shape: ten frozen columns already
+    published, thirty-eight appended by the bill family. The prior rows must
+    survive with NULLs in the new columns rather than failing the binder, and a
+    fresh row must still win on a repeated identity.
+    """
+    narrow = ("id", "name", "version")
+    schema = pa.schema([(c, pa.string()) for c in narrow])
+    pq.write_table(
+        pa.Table.from_pylist(
+            [
+                {"id": "1", "name": "old", "version": "2024-01-01"},
+                {"id": "2", "name": "prior-only", "version": "2024-01-02"},
+            ],
+            schema=schema,
+        ),
+        prior_scratch_path(tmp_path, NAME),
+    )
+
+    wide = ("id", "name", "version", "stage", "stage_rule")
+    out = merge_table(
+        tmp_path,
+        name=NAME,
+        columns=wide,
+        identity=("id",),
+        version_column="version",
+        rows=[{"id": "1", "name": "new", "version": "2024-02-01", "stage": "enacted", "stage_rule": "law_line"}],
+        remote_key=REMOTE_KEY,
+        download_prior=_never_called,
+    )
+
+    rows = {r["id"]: r for r in _read(out)}
+    assert list(pq.read_table(out).schema.names) == list(wide)
+    # The fresh row wins and carries the appended columns.
+    assert rows["1"] == {
+        "id": "1",
+        "name": "new",
+        "version": "2024-02-01",
+        "stage": "enacted",
+        "stage_rule": "law_line",
+    }
+    # The prior-only row survives, NULL-filled in the columns it predates.
+    assert rows["2"] == {
+        "id": "2",
+        "name": "prior-only",
+        "version": "2024-01-02",
+        "stage": None,
+        "stage_rule": None,
+    }
