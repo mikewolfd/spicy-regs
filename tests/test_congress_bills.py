@@ -16,9 +16,13 @@ The last section covers the retry *policy* this reader's absolute refusal
 made necessary: ``_fetch_bills`` in ``build_congress_bills.py`` retries an
 identical window a bounded number of times when the reader refuses on a
 mid-walk publisher drift, and gives up loudly — never publishing a partial
-table — once that bound is spent. ``test_walk_refuses_when_the_declared_count_changes_mid_walk``
-pins the exact refusal shape (a two-page walk whose declared count shrinks
-between pages) that policy exists for.
+table — once that bound is spent. It also narrows *which* refusals get
+retried: only ones whose context carries both a ``declaredCount`` and an
+``observedCount`` (the drift shapes); anything else propagates on the first
+attempt, covered by ``test_fetch_does_not_retry_a_non_drift_refusal``.
+``test_walk_refuses_when_the_declared_count_changes_mid_walk`` pins the exact
+refusal shape (a two-page walk whose declared count shrinks between pages)
+that policy exists for.
 """
 
 from __future__ import annotations
@@ -395,15 +399,21 @@ def test_build_congress_bills_merges_prior_and_fresh_rows(tmp_path, monkeypatch)
 # -- retrying a mid-walk publisher drift (build_congress_bills._fetch_bills) --
 
 
-def _flaky_reader_factory(*, fail_times: int) -> tuple[type, dict]:
+def _flaky_reader_factory(*, fail_times: int, drift: bool = True) -> tuple[type, dict]:
     """A CongressBillsReader stand-in whose first ``fail_times`` constructions
-    raise from ``iter_records()`` (the shape of a mid-walk declared-count
-    drift), then succeed. Returns ``(cls, calls)``: the counter dict is
-    shared across instances — each retry attempt in ``_fetch_bills`` builds a
-    brand-new reader, exactly like a real retry would — so a test can assert
-    exactly how many attempts were made without needing a class attribute
-    (a class body cannot close over this factory's locals the way a method
-    can, so the counter travels back to the caller instead).
+    raise from ``iter_records()``, then succeed. Returns ``(cls, calls)``: the
+    counter dict is shared across instances — each retry attempt in
+    ``_fetch_bills`` builds a brand-new reader, exactly like a real retry
+    would — so a test can assert exactly how many attempts were made without
+    needing a class attribute (a class body cannot close over this factory's
+    locals the way a method can, so the counter travels back to the caller
+    instead).
+
+    ``drift=True`` (the default) raises with both ``declaredCount`` and
+    ``observedCount`` in the error's ``paged_json_acquisition`` context — the
+    shape of a mid-walk publisher drift ``_fetch_bills`` retries.
+    ``drift=False`` raises a permanent, non-drift refusal (a malformed page,
+    missing both counts) that must propagate on the first attempt instead.
     """
     calls = {"n": 0}
 
@@ -415,10 +425,15 @@ def _flaky_reader_factory(*, fail_times: int) -> tuple[type, dict]:
         def iter_records(self):
             calls["n"] += 1
             if calls["n"] <= fail_times:
-                error = PagedJsonSourceError("Congress.gov declared count changed during the traversal")
+                if drift:
+                    error = PagedJsonSourceError("Congress.gov declared count changed during the traversal")
+                    context = {"declaredCount": 3, "observedCount": 2}
+                else:
+                    error = PagedJsonSourceError("Congress.gov list response is not a JSON object")
+                    context = {"operation": "page", "requestCount": 1}
                 # Mirrors spicy-docs' own paged_json.py, which attaches this
                 # context via __dict__ rather than a declared attribute.
-                error.__dict__["paged_json_acquisition"] = {"declaredCount": 3, "observedCount": 2}
+                error.__dict__["paged_json_acquisition"] = context
                 raise error
             return iter(_FRESH_RAW)
 
@@ -455,3 +470,22 @@ def test_fetch_gives_up_after_max_attempts(tmp_path, monkeypatch):
     # Exactly FETCH_ATTEMPTS attempts — no more (it must stop), no fewer (it
     # must actually retry rather than propagate the first refusal).
     assert calls["n"] == bcb.FETCH_ATTEMPTS
+
+
+def test_fetch_does_not_retry_a_non_drift_refusal(tmp_path, monkeypatch):
+    """A PagedJsonSourceError without both declaredCount and observedCount in
+    its context — malformed JSON, a bad date parameter, a 404 — is not the
+    mid-walk drift shape the retry exists for. Retrying it would only burn
+    FETCH_ATTEMPTS pauses under a misleading "walk refused, retrying" log
+    line before failing the same way on the first attempt, so it propagates
+    at once instead."""
+    monkeypatch.setattr(bcb.r2, "download", lambda remote_key, local_path: False)
+    monkeypatch.setattr(bcb.time, "sleep", lambda seconds: None)
+    reader_cls, calls = _flaky_reader_factory(fail_times=bcb.FETCH_ATTEMPTS + 10, drift=False)
+    monkeypatch.setattr(bcb, "CongressBillsReader", reader_cls)
+
+    with pytest.raises(PagedJsonSourceError, match="not a JSON object"):
+        bcb.build_congress_bills(tmp_path)
+
+    # A single attempt: no retry pause for a permanent, non-drift refusal.
+    assert calls["n"] == 1

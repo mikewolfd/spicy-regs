@@ -511,6 +511,32 @@ attempts, then the original `PagedJsonSourceError` propagates from
 unrelated diagnostic) all still pass. Not pushed — local commit on
 `hosting-sr01` only.
 
+**Same day, two more nits before merge.** (A) `_fetch_bills`'s
+`PagedJsonSourceError` import was still eager — it ran before
+`CongressBillsReader(...)` even got a chance to short-circuit on a keyless
+run, unlike `iter_records()`'s own discipline. Fixed by catching `Exception`
+broadly and importing (then `isinstance`-checking, re-raising immediately if
+it doesn't match) only inside the handler: Python never evaluates an
+`except <Name>` clause's type at all when the `try` block doesn't raise, so
+on the keyless happy path — the only path a base install without the
+`source-readers` extra needs to survive — the import genuinely never runs
+now. Verified directly: `_fetch_bills(None, None)` with no key set and
+`spicy_docs` import blocked via a `sys.meta_path` hook still returns `[]`
+without tripping the block. (B) The retry caught every
+`PagedJsonSourceError`, not only the drift shape it exists for, so a
+permanent refusal (malformed JSON, a bad date parameter, a 404) would have
+burned two `RETRY_PAUSE_SECONDS` pauses under a "walk refused, retrying" log
+line before failing anyway. Narrowed to retry only when the error's
+`paged_json_acquisition` context carries both a `declaredCount` and an
+`observedCount` — the two drift shapes — and re-raise everything else at
+once. `test_fetch_does_not_retry_a_non_drift_refusal` pins it: a stub
+refusal with neither count in its context propagates on exactly one
+attempt. Both module docstrings restate the narrowed trade-off. 22 tests now
+cover `tests/test_congress_bills.py`; 1,433 source tests pass;
+`spicy-regs-dict check` still reports no diff (digest unchanged) and `ty
+check` still shows only the same one pre-existing, unrelated diagnostic. Not
+pushed — local commit on `hosting-sr01` only.
+
 **Not wired, with the reason:**
 
 - **Senate roll calls.** `listing.py` has a `house-vote` route and no Senate

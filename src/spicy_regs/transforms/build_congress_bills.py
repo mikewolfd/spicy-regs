@@ -47,7 +47,11 @@ transient publisher-side race, not a truncated or out-of-order walk. Retrying
 the identical window is this module's job, not the reader's: :func:`_fetch_bills`
 asks the same ``since``/``until`` window again, up to :data:`FETCH_ATTEMPTS`
 times with a short pause between attempts, on the theory that the publisher's
-state has settled by the next attempt. A refusal that survives all
+state has settled by the next attempt — but only when the refusal actually
+looks like that drift (its context names both a ``declaredCount`` and an
+``observedCount``); a permanent refusal (malformed JSON, a bad date
+parameter, a 404) propagates on the first attempt rather than spend the same
+pauses reaching the same failure. A drift refusal that survives all
 :data:`FETCH_ATTEMPTS` attempts propagates and fails the run loudly — the
 run publishes nothing and the next scheduled run tries again from the same
 watermark, exactly as a first-attempt refusal always did; retrying only buys
@@ -169,29 +173,48 @@ def _fetch_bills(since: date | None, until: date | None) -> list[dict]:
     a partially-yielded generator cannot be resumed, and a refused walk's
     partial rows are exactly the truncated-table shape this repo refuses to
     publish, so they are discarded, not kept.
-    """
-    from spicy_docs.reading.paged_json import PagedJsonSourceError
 
-    last_error: PagedJsonSourceError | None = None
+    Retried only when the refusal actually looks like a drift: its
+    ``paged_json_acquisition`` context names both a ``declaredCount`` and an
+    ``observedCount`` — the shape of "the declared count changed mid-walk" and
+    "declared and observed disagree at the end", the two ways a publisher's
+    state can move out from under a request already in flight. Every other
+    ``PagedJsonSourceError`` — malformed JSON, a bad date parameter, a 404 —
+    is permanent: retrying it would only burn ``FETCH_ATTEMPTS`` pauses under
+    a misleading "walk refused, retrying" log line before failing the same
+    way it would have on the first attempt, so it propagates immediately.
+    """
     for attempt in range(1, FETCH_ATTEMPTS + 1):
         reader = CongressBillsReader(since=since, until=until)
         try:
             return [_shape(doc) for doc in reader.iter_records()]
-        except PagedJsonSourceError as error:
-            last_error = error
+        except Exception as error:
+            # Deferred so a keyless run — CongressBillsReader.iter_records()
+            # returns before ever importing spicy-docs — never needs the
+            # optional source-readers extra either, matching the reader's own
+            # lazy-import discipline. By the time a PagedJsonSourceError can
+            # actually occur, the reader has already imported this module
+            # itself in order to raise it.
+            from spicy_docs.reading.paged_json import PagedJsonSourceError
+
+            if not isinstance(error, PagedJsonSourceError):
+                raise
             context = getattr(error, "paged_json_acquisition", None) or {}
+            declared, observed = context.get("declaredCount"), context.get("observedCount")
+            if declared is None or observed is None:
+                raise
             logger.warning(
                 "Congress bills: walk refused on attempt {}/{} (declared={}, observed={}): {}",
                 attempt,
                 FETCH_ATTEMPTS,
-                context.get("declaredCount"),
-                context.get("observedCount"),
+                declared,
+                observed,
                 error,
             )
             if attempt == FETCH_ATTEMPTS:
                 raise
             time.sleep(RETRY_PAUSE_SECONDS)
-    raise AssertionError("unreachable") from last_error  # the loop above always returns or raises
+    raise AssertionError("unreachable")  # the loop above always returns or raises
 
 
 def _prior_max_update_date(prior_file: Path) -> date | None:
