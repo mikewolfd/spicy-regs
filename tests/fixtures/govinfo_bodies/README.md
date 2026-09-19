@@ -23,18 +23,25 @@ the `context` attribute is the publisher's own statement of *how*:
   H. Res. 53 as `PRIMARY` — the resolution the report accompanies — and
   H. Res. 53 again, S. 5 and H.R. 471 as `OTHER`. The `associatedBills`
   element beside them reads `H. Res. 53, 119th`. Measured live 2026-09-19 on
-  the first twelve reports the `committee-report/119` list route names, the
-  `PRIMARY` bill agreed with the route's own `associatedBill[0]` on 12 of 12,
-  and every report's text-format URL stem was `CRPT-{congress}{type}{number}`.
+  the twelve newest reports the `committee-report/119` list route names, the
+  `PRIMARY` bill agreed with the route's own `associatedBill[0]` on **12 of
+  12**.
 - `CHRG-119hhrg63127` (the House Homeland Security hearing *Worldwide Threats
   to the Homeland*) lists H.R. 1 and H.R. 5371, both as `BODY`: bills the
-  transcript mentions, not a bill the hearing was held on. Measured live the
-  same day over 52 hearings from the `hearing/119` list route, no CHRG MODS
-  carried a `PRIMARY` bill at all — 18 carried `BODY` or `COVER` mentions,
-  up to 25 on one hearing — and of the 6 hearings whose detail named a
-  committee meeting, none of those meetings' `relatedItems.bills` named a
-  bill. So `hearing_transcripts.bill_id` stays NULL, and this fixture is the
-  case that proves a mention is not promoted to a linkage.
+  transcript mentions, not a bill the hearing was held on. Over 52 hearings of
+  the `hearing/119` route, **no CHRG MODS carried a `PRIMARY` bill** — 11
+  carried `BODY` or `COVER` mentions, 38 entries in all, the most on any one
+  hearing being 11 — and of the 12 hearings whose detail named a committee
+  meeting, **none** of those meetings' `relatedItems.bills` named a bill. So
+  `hearing_transcripts.bill_id` stays NULL, and this fixture is the case that
+  proves a mention is not promoted to a linkage.
+
+**Both measurements are retained**, with every request and every raw response,
+at `~/Work/corpora/supply-2026-09-02/receipts/report-bill-linkage-2026-09-19/`
+— 146 requests, with its own README stating the method and the per-package
+verdicts. The restatements elsewhere in this repository (the transform
+docstring, the two dictionary entries and `PLAN.md`) cite that receipt rather
+than re-deriving the numbers.
 
 Offline tests establish behavior for these shapes; they do not establish
 coverage or continuing live availability. Replace the CRPT file only by

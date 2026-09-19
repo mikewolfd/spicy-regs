@@ -41,15 +41,25 @@ MODS ``PRIMARY`` bill agreed with the route's own ``associatedBill[0]`` on 12
 of 12 — the same edge the legislative data map resolved 17 of 17 — at one
 keyed detail request per report that this design does not make. Over 52
 hearings from the ``hearing/119`` route, no CHRG MODS carried a ``PRIMARY``
-bill (18 carried ``BODY`` or ``COVER`` mentions, up to 25 on one hearing), and
-of the 6 whose detail named a committee meeting none of those meetings'
+bill (11 carried ``BODY``/``COVER`` mentions, 38 entries in all), and of the 12
+whose detail named a committee meeting none of those meetings'
 ``relatedItems.bills`` named a bill, so ``hearing_transcripts.bill_id`` is NULL
 in practice and the ``hearing -> meeting -> bill`` chain, at two keyed
-requests per hearing, is not walked. A mention is never promoted to a
+requests per hearing, is not walked. Both measurements are retained with every
+request and raw response at
+``~/Work/corpora/supply-2026-09-02/receipts/report-bill-linkage-2026-09-19/``. A mention is never promoted to a
 linkage: publishing H.R. 1 as the bill of a hearing that cites it would be a
-guess dressed as a fact. The mentions are counted in the run log; the column
-that would carry them, ``associated_bills_json`` with each bill's context, is
-not in the contract and is stated as a request rather than added here.
+guess dressed as a fact. The mentions are counted in the run log.
+
+**Two things requested from spicy-docs**, neither added here, because this
+repository does not restate a published shape or a source rule it does not
+own. First, the MODS accessors noted above ``PRIMARY_BILL_CONTEXT``, so the
+rule lives beside the parser. Second, a column on both package tables —
+``associated_bills_json``, an array whose every entry keeps **both** the bill
+key and that bill's own ``context`` — so the mentions this column drops have a
+home. Bare bill ids would not do: dropping ``context`` discards exactly the
+distinction that makes ``bill_id`` trustworthy, and a consumer could no longer
+tell the measure a report accompanies from one its text happens to cite.
 
 **Incremental.** The window starts at the prior published table's max
 ``last_modified`` minus a short overlap, so a steady-state run asks GovInfo for
