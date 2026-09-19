@@ -4,29 +4,46 @@ No network and no model: the two acquirers are stubbed with the fixture bytes
 copied from spicy-docs (see ``tests/fixtures/govinfo_bills/README.md``), and
 both model seams stay unwired because no key is set. What this establishes is
 that the transform drives ``build_bill_family`` correctly and publishes all
-thirteen tables — not that any rule inside it is right, which is spicy-docs'
-own test's job.
+thirteen tables plus its own archive state — not that any rule inside it is
+right, which is spicy-docs' own test's job.
 
 119 HR 6028 is used because it offers two consecutive printings, which is the
 smallest input that reaches the section and diff tables as well as the
 status-derived ones.
+
+``StubBulkAcquirer`` reproduces ``BulkStatusAcquirer``'s ``unchanged_since``
+contract rather than just recording the argument: reading the listing only when
+given something to compare against, refusing an entry that names a different
+file, and returning ``skipped_unchanged`` with no archive and no zip capture.
+A stub that always served the zip could not tell a wired skip from an unwired
+one, which is the whole point of the second-run test below.
 """
 
 from __future__ import annotations
 
+import shutil
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pyarrow.parquet as pq
 import pytest
 from spicy_docs.schemas import TABLE_CONTRACTS
 from spicy_docs.sources.congress.bill_status import BillIdentity, parse_bill_status
+from spicy_docs.sources.congress.bulk_status import BulkListingEntry
 from spicy_docs.transport.captured import CapturedBodyResponse
 
-from spicy_regs.transforms.build_bill_family import FAMILY_TABLES, build_bill_family, engine_stamp
+from spicy_regs.transforms.build_bill_family import (
+    ARCHIVE_COLUMNS,
+    ARCHIVES_TABLE,
+    FAMILY_TABLES,
+    build_bill_family,
+    engine_stamp,
+)
 
 FIXTURES = Path(__file__).parent / "fixtures" / "govinfo_bills"
 IDENTITY = BillIdentity(congress=119, bill_type="hr", number=6028)
 OBSERVED_AT = "2026-09-19T00:00:00Z"
+BULKDATA = "https://www.govinfo.gov/bulkdata/BILLSTATUS"
 
 #: The printings the fixture bill offers, by the package id each resolves to.
 TEXT_FIXTURES = {
@@ -61,25 +78,90 @@ class _Archive:
 
 
 class _Acquisition:
-    def __init__(self, archive, capture):
+    def __init__(self, archive, capture, *, skipped_unchanged=False, listing_capture=None, listing_entry=None):
         self.archive = archive
+        self.capture = capture
+        self.skipped_unchanged = skipped_unchanged
+        self.listing_capture = listing_capture
+        self.listing_entry = listing_entry
+
+
+class _Listing:
+    def __init__(self, zip_entry):
+        self.zip_entry = zip_entry
+
+
+class _ListingAcquisition:
+    def __init__(self, listing, capture):
+        self.listing = listing
         self.capture = capture
 
 
+def zip_entry(congress: int, bill_type: str, *, size: int = 31_656_886) -> BulkListingEntry:
+    """The folder's own zip entry as GovInfo's bulkdata listing states it."""
+    name = f"BILLSTATUS-{congress}-{bill_type}.zip"
+    return BulkListingEntry(
+        name=name,
+        display_label=name,
+        just_file_name=name,
+        link=f"{BULKDATA}/{congress}/{bill_type}/{name}",
+        folder=False,
+        formatted_last_modified_time="18-Sep-2026 20:26",
+        modified_at=datetime(2026, 9, 18, 20, 26, tzinfo=UTC),
+        mime_type="application/zip",
+        file_extension="zip",
+        formatted_size="30 MB",
+        size=size,
+    )
+
+
 class StubBulkAcquirer:
-    """Serves the one fixture bill for (119, hr) and an empty archive otherwise."""
+    """Serves the one fixture bill for (119, hr) and an empty archive otherwise.
 
-    def __init__(self):
+    Honors ``unchanged_since`` the way ``BulkStatusAcquirer`` does, so
+    ``zip_downloads`` records only the folders whose zip bytes were really
+    read and ``listings`` records the small listing requests.
+    """
+
+    def __init__(self, entry=zip_entry):
         self.calls: list[tuple[int, str]] = []
+        self.zip_downloads: list[tuple[int, str]] = []
+        self.listings: list[tuple[int, str]] = []
+        self._entry = entry
 
-    def acquire(self, congress: int, bill_type: str):
+    def _listing_capture(self, congress: int, bill_type: str) -> CapturedBodyResponse:
+        return _capture(f"{BULKDATA.replace('/bulkdata/', '/bulkdata/json/')}/{congress}/{bill_type}", b"{}")
+
+    def list_archives(self, congress: int, bill_type: str):
+        self.listings.append((congress, bill_type))
+        return _ListingAcquisition(
+            _Listing(self._entry(congress, bill_type)), self._listing_capture(congress, bill_type)
+        )
+
+    def acquire(self, congress: int, bill_type: str, *, unchanged_since: BulkListingEntry | None = None):
         self.calls.append((congress, bill_type))
+        entry = self._entry(congress, bill_type)
+        listing_capture = None
+        if unchanged_since is not None:
+            self.listings.append((congress, bill_type))
+            listing_capture = self._listing_capture(congress, bill_type)
+            if (unchanged_since.name, unchanged_since.link) != (entry.name, entry.link):
+                raise ValueError("unchanged_since names a different file than this folder's own zip entry")
+            if (unchanged_since.modified_at, unchanged_since.size) == (entry.modified_at, entry.size):
+                return _Acquisition(
+                    None, None, skipped_unchanged=True, listing_capture=listing_capture, listing_entry=entry
+                )
+
+        self.zip_downloads.append((congress, bill_type))
         body = (FIXTURES / "status-119hr6028.xml").read_bytes()
-        capture = _capture("https://www.govinfo.gov/bulkdata/BILLSTATUS/119/hr/BILLSTATUS-119-hr.zip", body)
-        if (congress, bill_type) != (119, "hr"):
-            return _Acquisition(_Archive([]), capture)
-        status = parse_bill_status(body, identity=IDENTITY)
-        return _Acquisition(_Archive([_Member(status)]), capture)
+        capture = _capture(entry.link, body)
+        members = [_Member(parse_bill_status(body, identity=IDENTITY))] if (congress, bill_type) == (119, "hr") else []
+        return _Acquisition(
+            _Archive(members),
+            capture,
+            listing_capture=listing_capture,
+            listing_entry=entry if unchanged_since is not None else None,
+        )
 
 
 class _Package:
@@ -94,7 +176,7 @@ class StubBodyAcquirer:
     def __init__(self):
         self.requested: list[str] = []
 
-    def acquire(self, package_id: str, *, prefer=(), max_bytes=None):
+    def acquire(self, package_id: str, *, max_bytes=None):
         self.requested.append(package_id)
         name = TEXT_FIXTURES.get(package_id)
         if name is None:
@@ -105,6 +187,19 @@ class StubBodyAcquirer:
 
 def _no_prior(remote_key: str, local_path: Path) -> bool:
     return False
+
+
+def _prior_from(published: Path):
+    """A ``download_prior`` that serves an earlier run's published files."""
+
+    def download(remote_key: str, local_path: Path) -> bool:
+        source = published / remote_key
+        if not source.exists():
+            return False
+        shutil.copyfile(source, local_path)
+        return True
+
+    return download
 
 
 @pytest.fixture
@@ -126,13 +221,20 @@ def family(tmp_path, monkeypatch):
 
 
 def test_every_family_table_is_published(family):
-    expected = {contract for contract, _ in FAMILY_TABLES} | {"public_activity_events"}
+    expected = {contract for contract, _ in FAMILY_TABLES} | {"public_activity_events", ARCHIVES_TABLE}
     assert set(family) == expected
-    assert len(family) == 13
+    assert len(family) == 14
+
+
+def test_each_published_table_matches_its_contract_schema_or_its_own(family):
+    """The thirteen contracts are spicy-docs'; the fourteenth is this transform's."""
+    assert pq.read_table(family[ARCHIVES_TABLE]).schema.names == list(ARCHIVE_COLUMNS)
 
 
 def test_each_published_table_matches_its_contract_schema(family):
     for name, path in family.items():
+        if name == ARCHIVES_TABLE:
+            continue
         contract = TABLE_CONTRACTS[name]
         assert pq.read_table(path).schema.names == list(contract.columns), name
 
@@ -348,3 +450,78 @@ def test_needed_printings_picks_the_unheld_and_their_neighbours():
     assert _needed_printings(codes, held=set(codes)) == set()
     assert _needed_printings(codes, held={"a", "b", "c"}) == {2, 3}
     assert _needed_printings(codes, held=()) == {0, 1, 2, 3}
+
+
+# --------------------------------------------------------------------------- #
+# The bulk-listing skip: a folder whose zip has not moved is not downloaded.
+# --------------------------------------------------------------------------- #
+def _run(output_dir: Path, bulk: StubBulkAcquirer, download_prior) -> dict[str, Path]:
+    output_dir.mkdir(exist_ok=True)
+    paths = build_bill_family(
+        output_dir, bulk_acquirer=bulk, body_acquirer=StubBodyAcquirer(), download_prior=download_prior
+    )
+    return {path.stem: path for path in paths}
+
+
+def test_a_cold_folder_retains_the_listing_entry_it_did_not_need(tmp_path, scoped):
+    """`acquire` reads no listing with nothing to compare, so the run asks for one itself.
+
+    Without this, the retained table would stay empty and the skip could never
+    fire on any later run — the failure would look exactly like a working
+    pipeline that just never saves anything.
+    """
+    bulk = StubBulkAcquirer()
+    paths = _run(tmp_path / "run", bulk, _no_prior)
+
+    assert bulk.zip_downloads == [(119, "hr")], "a cold folder downloads its zip"
+    assert bulk.listings == [(119, "hr")], "and asks for the listing once, to retain the entry"
+    rows = pq.read_table(paths[ARCHIVES_TABLE]).to_pylist()
+    assert len(rows) == 1
+    expected = zip_entry(119, "hr")
+    assert rows[0]["name"] == expected.name
+    assert rows[0]["link"] == expected.link
+    assert rows[0]["size"] == str(expected.size)
+    assert rows[0]["modified_at"] == expected.modified_at.isoformat()
+    assert rows[0]["congress"] == "119"
+    assert rows[0]["bill_type"] == "hr"
+
+
+def test_a_second_run_over_an_unchanged_listing_makes_no_zip_request(tmp_path, scoped):
+    """The whole point of the retained entry: the zip is proved unchanged, not re-read."""
+    first = tmp_path / "run1"
+    _run(first, StubBulkAcquirer(), _no_prior)
+
+    second = StubBulkAcquirer()
+    paths = _run(tmp_path / "run2", second, _prior_from(first))
+
+    assert second.calls == [(119, "hr")], "the folder is still visited"
+    assert second.listings == [(119, "hr")], "through its listing, which is the cheap half"
+    assert second.zip_downloads == [], "and the zip itself is never requested"
+    # The entry is retained again, so a third run can skip on the same evidence.
+    assert len(pq.read_table(paths[ARCHIVES_TABLE]).to_pylist()) == 1
+
+
+def test_a_moved_zip_is_downloaded_again(tmp_path, scoped):
+    """The comparison has to be able to say no, or the skip is just a cache that never expires."""
+    first = tmp_path / "run1"
+    _run(first, StubBulkAcquirer(), _no_prior)
+
+    # The publisher rebuilt the zip: same name and link, different size.
+    moved = StubBulkAcquirer(entry=lambda c, t: zip_entry(c, t, size=31_658_670))
+    _run(tmp_path / "run2", moved, _prior_from(first))
+
+    assert moved.zip_downloads == [(119, "hr")]
+    assert moved.listings == [(119, "hr")], "the listing is read once, inside acquire"
+
+
+def test_a_retained_entry_naming_another_file_does_not_wedge_the_rollup(tmp_path, scoped):
+    """A stale row is refused upstream by name; the folder falls back to a cold download."""
+    first = tmp_path / "run1"
+    _run(first, StubBulkAcquirer(entry=lambda c, t: zip_entry(c, "sres")), _no_prior)
+
+    renamed = StubBulkAcquirer()
+    paths = _run(tmp_path / "run2", renamed, _prior_from(first))
+
+    assert renamed.zip_downloads == [(119, "hr")], "the zip is fetched rather than the run failing"
+    rows = pq.read_table(paths[ARCHIVES_TABLE]).to_pylist()
+    assert {row["name"] for row in rows} == {"BILLSTATUS-119-hr.zip"}, "and the bad row is replaced"

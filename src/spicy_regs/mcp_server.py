@@ -78,6 +78,13 @@ TABLES = (
     "committee_reports",
     "report_sections",
     "hearing_transcripts",
+    # Processing state, not a contract table: the bill-family rollup retains one
+    # BILLSTATUS folder listing entry per folder so the next run can prove a zip
+    # unchanged without downloading it. Queryable for the same reason every
+    # other published object is — it is on the public bucket either way, and a
+    # reader asking "when did this pipeline last see the H.R. zip" should not
+    # have to reach past the server to answer it.
+    "bill_family_archives",
 )
 STATEMENT_TIMEOUT = os.environ.get("SPICY_REGS_STATEMENT_TIMEOUT", "790s")
 

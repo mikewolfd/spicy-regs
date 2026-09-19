@@ -1188,6 +1188,25 @@
         "page_count",
         "text_sha256"
       ]
+    },
+    {
+      "table": "bill_family_archives",
+      "label": "Bill-family archive listings",
+      "summary": "One row per BILLSTATUS bulk folder, holding the listing entry the next `bill-family` run compares against before downloading that folder's zip. All columns are stored as VARCHAR.",
+      "coverage": "Not a range. Processing state, not published data: one row per BILLSTATUS bulk folder the `bill-family` rollup is scoped to — eight per Congress — holding the GovInfo bulkdata listing entry for that folder's zip as the last run saw it. The next run asks GovInfo for the folder listing and, when the entry still states the same file at the same size and stamp, skips downloading the zip entirely. It describes this pipeline's own runs, not the publisher's corpus, so no coverage range applies to it.",
+      "kind": "not_a_range",
+      "measured_on": "2026-09-19",
+      "data_quality": "Only the four fields the skip compares are retained — `name` and `link`, which must name the folder's own zip or the comparison is refused outright, and `modified_at` and `size`, which must match for the zip to be skipped. The other six the publisher's listing states are deliberately absent rather than filled with guesses. All columns are stored as VARCHAR.",
+      "columns": [
+        "name",
+        "link",
+        "formatted_last_modified_time",
+        "modified_at",
+        "size",
+        "congress",
+        "bill_type",
+        "observed_at"
+      ]
     }
   ]
 }

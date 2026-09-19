@@ -146,6 +146,10 @@ TABLES: tuple[str, ...] = (
     # The hosted tables, minus congress_bills — it predates them and keeps its
     # position above, so appending CONTRACT_TABLES wholesale would list it twice.
     *(name for name in CONTRACT_TABLES if name != "congress_bills"),
+    # Published, but not a contract table: the bill-family rollup's own
+    # processing state. Its columns are this repository's, so they live in
+    # DERIVED_SCHEMAS and its prose is inline in descriptions.yaml.
+    "bill_family_archives",
 )
 
 # Tables the MCP server (list_sources / describe_table / query_sql) exposes.
@@ -177,6 +181,7 @@ MCP_QUERYABLE: frozenset[str] = frozenset(
         "usaspending_recipients",
         "fcc_proceedings",
         "fcc_filings",
+        "bill_family_archives",
         *CONTRACT_TABLES,
     }
 )
@@ -523,6 +528,22 @@ DERIVED_SCHEMAS: dict[str, list[tuple[str, str]]] = {
         ("total_page_count", "VARCHAR"),
         ("documents_json", "VARCHAR"),
         ("filing_url", "VARCHAR"),
+    ],
+    # The bill-family rollup's own processing state (build_bill_family):
+    # one retained GovInfo bulkdata listing entry per BILLSTATUS folder, which
+    # the next run compares the live listing against to decide whether the zip
+    # needs downloading at all. Listed literally, like every other entry here;
+    # test_hosted_rollups pins it equal to the transform's ARCHIVE_COLUMNS, the
+    # same way mcp_server.TABLES is pinned to this module's TABLES.
+    "bill_family_archives": [
+        ("name", "VARCHAR"),
+        ("link", "VARCHAR"),
+        ("formatted_last_modified_time", "VARCHAR"),
+        ("modified_at", "VARCHAR"),
+        ("size", "VARCHAR"),
+        ("congress", "VARCHAR"),
+        ("bill_type", "VARCHAR"),
+        ("observed_at", "VARCHAR"),
     ],
 }
 
