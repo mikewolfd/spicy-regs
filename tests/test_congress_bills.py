@@ -1,21 +1,21 @@
 """Hermetic tests for the Congress.gov bill ingest (no network).
 
 Covers the pieces with real logic: the raw-bill → published-schema mapping
-(``_shape`` / ``_bill_id``), the API-key resolution fallback chain, the
-offset/limit pagination, the request params that bound the fetch window, and
-(at the bottom) an end-to-end ``build_congress_bills()`` run against a seeded
-prior table and a stubbed fetch — the thing that actually proves the
-``table_merge.merge_table`` refactor preserved this table's merge behavior;
-the unit tests above it never call ``build_congress_bills()`` or read the
-merged Parquet, so they cannot make that claim on their own.
-
-The params tests are regression cover for the 510-day freeze: ``sort`` has to
-reach the API as ``updateDate+desc`` (a space, which httpx form-encodes to
-``+``) and the window has to be bounded server-side by ``fromDateTime``.
+(``_shape`` / ``_bill_id``), the API-key resolution fallback chain, the fetch
+window this repo still computes (``_bounded_until``), and — at the bottom —
+an end-to-end ``build_congress_bills()`` run against a seeded prior table and
+a stubbed fetch, plus the actual delegation to spicy-docs'
+``CongressListingReader`` over an ``httpx.MockTransport`` (gap D2 / SR01:
+this repo no longer hand-rolls the ``offset``/``limit`` walk; see
+``spicy_regs.sources.congress_bills``'s module docstring for what moved and
+why). The unit tests above ``test_build_congress_bills_merges_prior_and_fresh_rows``
+never call ``build_congress_bills()`` or read the merged Parquet, so only that
+test exercises the SQL merge end to end.
 """
 
 from __future__ import annotations
 
+import json
 from datetime import date, timedelta
 from importlib import import_module
 
@@ -23,10 +23,10 @@ import httpx
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
+from spicy_docs.reading.paged_json import PagedJsonSourceError
 
 from spicy_regs.sources.congress_bills import (
     API_KEY_ENV_VARS,
-    SORT_NEWEST_FIRST,
     CongressBillsReader,
     _resolve_api_key,
 )
@@ -126,102 +126,79 @@ def test_reader_yields_nothing_without_key(monkeypatch):
     for var in API_KEY_ENV_VARS:
         monkeypatch.delenv(var, raising=False)
     reader = CongressBillsReader()
-    # No key configured: a keyless run is a no-op, not a crash.
+    # No key configured: a keyless run is a no-op, not a crash — and this
+    # must not require spicy-docs' optional source-readers extra, since
+    # iter_records() returns before ever importing spicy_docs.
     assert list(reader.iter_records()) == []
 
 
-# -- pagination --------------------------------------------------------------
+# -- the walk, delegated to spicy-docs' CongressListingReader ---------------
 
 
-def _bill(n: int, day: str) -> dict:
-    return {"congress": 118, "type": "hr", "number": n, "updateDate": day}
+def _bill(number: int, day: str) -> dict:
+    return {"congress": 118, "type": "hr", "number": number, "updateDate": day}
 
 
-def test_paginate_walks_offsets_until_short_page(monkeypatch):
-    """Full pages advance the offset; a short page ends pagination."""
-    reader = CongressBillsReader(api_key="test", per_page=2)
-    pages = {
-        0: {"bills": [_bill(1, "2024-03-05"), _bill(2, "2024-03-04")]},
-        2: {"bills": [_bill(3, "2024-03-03")]},  # short page -> stop
-    }
-    monkeypatch.setattr(reader, "_get_page", lambda offset: pages.get(offset, {"bills": []}))
-    got = [b["number"] for b in reader._paginate()]
-    assert got == [1, 2, 3]
+def test_reader_walks_the_bill_route_and_yields_raw_dicts():
+    """The window this repo computes reaches the wire as fromDateTime/toDateTime
+    on the measured ``bill`` route; the key travels as a header, never the query
+    string — the whole walk is spicy-docs' CongressListingReader, not a local loop."""
+    bills = [_bill(1, "2025-04-07"), _bill(2, "2025-04-06")]
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        assert request.url.host == "api.congress.gov"
+        assert request.url.path == "/v3/bill"
+        assert request.headers["X-Api-Key"] == "test-key"
+        assert "api_key" not in request.url.params  # header-only, never the URL
+        assert request.url.params["sort"] == "updateDate desc"
+        assert request.url.params["fromDateTime"] == "2025-04-04T00:00:00Z"
+        assert request.url.params["toDateTime"] == "2025-04-08T00:00:00Z"
+        body = {"bills": bills, "pagination": {"count": len(bills)}}
+        return httpx.Response(
+            200, stream=httpx.ByteStream(json.dumps(body).encode()), headers={"content-type": "application/json"}
+        )
+
+    reader = CongressBillsReader(
+        since=date(2025, 4, 4),
+        until=date(2025, 4, 8),
+        api_key="test-key",
+        transport=httpx.MockTransport(respond),
+    )
+    assert list(reader.iter_records()) == bills
 
 
-def test_paginate_does_not_stop_on_an_out_of_order_page(monkeypatch):
-    """Row order must not truncate the walk — the server bounds the window.
+def test_no_since_or_until_sends_no_window_bound():
+    """A full backfill (no watermark yet) must not accidentally bound itself."""
 
-    This is the 510-day freeze in miniature: with ``sort`` silently ignored the
-    rows arrive shuffled, and the old client-side watermark stop quit after the
-    first row. Every bill on the page has to survive.
-    """
-    reader = CongressBillsReader(api_key="test", per_page=3, since=date(2025, 4, 4))
-    pages = {
-        0: {
-            "bills": [
-                _bill(1, "2025-04-07"),
-                _bill(2, "2025-01-02"),  # out of order — must NOT end the walk
-                _bill(3, "2026-03-24"),
-            ]
-        },
-        3: {"bills": [_bill(4, "2024-02-07")]},  # short page -> stop
-    }
-    monkeypatch.setattr(reader, "_get_page", lambda offset: pages.get(offset, {"bills": []}))
-    got = [b["number"] for b in reader._paginate()]
-    assert got == [1, 2, 3, 4]
+    def respond(request: httpx.Request) -> httpx.Response:
+        assert "fromDateTime" not in request.url.params
+        assert "toDateTime" not in request.url.params
+        body = {"bills": [], "pagination": {"count": 0}}
+        return httpx.Response(
+            200, stream=httpx.ByteStream(json.dumps(body).encode()), headers={"content-type": "application/json"}
+        )
+
+    reader = CongressBillsReader(api_key="test-key", transport=httpx.MockTransport(respond))
+    assert list(reader.iter_records()) == []
 
 
-# -- request params ----------------------------------------------------------
+def test_walk_refuses_when_declared_and_observed_counts_disagree():
+    """Surfaces spicy-docs' own walk-consistency refusal here: this repo no
+    longer hand-rolls pagination, so the discipline against an inconsistent or
+    truncated walk — the shape of the 510-day freeze — now lives in, and is
+    enforced by, the shared spicy-docs reader rather than a local completeness
+    warning."""
 
+    def respond(request: httpx.Request) -> httpx.Response:
+        # The publisher declares 5 but the (sole, terminal) page only carries 1.
+        body = {"bills": [_bill(1, "2025-04-07")], "pagination": {"count": 5}}
+        return httpx.Response(
+            200, stream=httpx.ByteStream(json.dumps(body).encode()), headers={"content-type": "application/json"}
+        )
 
-def _params_for(monkeypatch, reader: CongressBillsReader) -> dict:
-    """Capture the query params ``_get_page`` would send."""
-    captured: dict = {}
-
-    def fake_get(url, params):
-        captured.update(params or {})
-        return None
-
-    monkeypatch.setattr(reader, "_get", fake_get)
-    reader._get_page(0)
-    return captured
-
-
-def test_sort_param_survives_url_encoding(monkeypatch):
-    """httpx must encode ``sort`` to ``updateDate+desc``, not ``updateDate%2Bdesc``.
-
-    The API answers 200 to both but only honours the former; the ``%2B`` form
-    returns rows in arbitrary order, which is what froze this table.
-    """
-    params = _params_for(monkeypatch, CongressBillsReader(api_key="test"))
-    assert params["sort"] == SORT_NEWEST_FIRST
-    url = httpx.Request("GET", "https://api.congress.gov/v3/bill", params=params).url
-    assert "sort=updateDate+desc" in str(url)
-    assert "%2B" not in str(url)
-
-
-def test_since_becomes_a_server_side_from_datetime(monkeypatch):
-    reader = CongressBillsReader(api_key="test", since=date(2025, 4, 4))
-    assert _params_for(monkeypatch, reader)["fromDateTime"] == "2025-04-04T00:00:00Z"
-
-
-def test_no_since_sends_no_window_bound(monkeypatch):
-    """A full backfill must not accidentally bound itself."""
-    params = _params_for(monkeypatch, CongressBillsReader(api_key="test"))
-    assert "fromDateTime" not in params
-
-
-def test_since_and_until_become_server_side_bounds(monkeypatch):
-    reader = CongressBillsReader(api_key="test", since=date(2025, 4, 4), until=date(2025, 7, 3))
-    params = _params_for(monkeypatch, reader)
-    assert params["fromDateTime"] == "2025-04-04T00:00:00Z"
-    assert params["toDateTime"] == "2025-07-03T00:00:00Z"
-
-
-def test_no_until_sends_no_upper_bound(monkeypatch):
-    params = _params_for(monkeypatch, CongressBillsReader(api_key="test", since=date(2025, 4, 4)))
-    assert "toDateTime" not in params
+    reader = CongressBillsReader(api_key="test-key", transport=httpx.MockTransport(respond))
+    with pytest.raises(PagedJsonSourceError, match="differ"):
+        list(reader.iter_records())
 
 
 # -- catch-up windowing ------------------------------------------------------

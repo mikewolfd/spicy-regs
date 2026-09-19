@@ -429,11 +429,45 @@ same fixture rather than committing a second one, and build real PDFs with
 for the cleanup-record test, so a genuine GPO gutter-numbered page is really
 extracted, not merely accepted as non-null).
 
-**[SR01](#sr01) is untouched by all of this.** It owns the `congress_bills`
-reader replacement (adopting SpicyDocs' `listing.py` in place of the local
-`CongressBillsReader`). This work shares exactly one thing with it — the frozen
-ten-column prefix — which is precisely why the design froze that prefix: either
-side can land first.
+**[SR01](#sr01) was untouched by all of this — it landed separately, below.**
+It owned the `congress_bills` reader replacement (adopting SpicyDocs'
+`listing.py` in place of the local `CongressBillsReader`). This work shared
+exactly one thing with it — the frozen ten-column prefix — which is precisely
+why the design froze that prefix: either side could land first, and SR01 did,
+after this work, without touching it.
+
+**2026-09-19, branch `hosting-sr01` (off `billtrax-hosting-prep`, local only,
+not pushed).** Closes spicy-docs gap D2
+(`docs/research/closing-the-gaps-2026-09-19.md` in spicy-docs): retired
+`sources/congress_bills.py`'s hand-rolled `offset`/`limit` HTTP walk in favour
+of spicy-docs' `CongressListingReader` over the measured `bill` route
+(`sort_honored=True`, sealed 2026-09-19 — see spicy-docs
+`docs/sources/listings.md`). `CongressBillsReader` keeps every one of this
+repo's own responsibilities: the fetch window from the prior table's
+watermark minus the overlap, `MAX_WINDOW_DAYS`, `CONGRESS_SINCE`/
+`CONGRESS_UNTIL`, and this repo's own api.data.gov env fallback chain
+(`_resolve_api_key`) — now handed to the spicy-docs reader as a header
+(`X-Api-Key`), never a query parameter. `_bill_id`, `_shape`, `_bounded_until`
+and `build_congress_bills.py`'s ten-column `COLUMNS`/`merge_contract_table`
+call are untouched, so the frozen prefix and the data dictionary's contract
+digest do not move (`spicy-regs-dict check` reports no diff).
+
+The hand-rolled paging (`_paginate`, `_get_page`, `_get`, `_pagination_count`,
+`SORT_NEWEST_FIRST`, the manual retry/backoff loop) is deleted along with its
+seven tests; the reader also refuses — surfacing spicy-docs' own behavior —
+when the publisher's declared and observed row counts disagree, instead of
+this repo's old "warn below a completeness tolerance" heuristic (the shape of
+the 510-day freeze this reader once caused). Three tests replace the deleted
+seven, hermetic over `httpx.MockTransport`: the walk delegates correctly and
+yields raw dicts, an unset window sends no bound, and a declared/observed
+mismatch raises. 18 tests now cover this file (was 22: "21 existing tests plus
+the end-to-end merge test"); `test_build_congress_bills_merges_prior_and_fresh_rows`
+is unchanged and still green. 1,429 source tests pass (was 1,433; net four
+fewer, matching the seven removed against the three added) — `uv run --frozen
+pytest -q`, `ruff check .`, `spicy-regs-dict check`, `ty check` (the one
+pre-existing `tests/test_fec_relationships.py` diagnostic — gap E3 in
+spicy-docs `docs/research/closing-the-gaps-2026-09-19.md` — is unrelated and
+untouched). Not pushed — local commit on `hosting-sr01` only.
 
 **Not wired, with the reason:**
 
@@ -454,7 +488,7 @@ side can land first.
 
 <a id="sr01"></a>
 
-- [ ] **SR01 — Select SpicyRegs capabilities to reuse and local duplication to remove.**
+- [x] **SR01 — Select SpicyRegs capabilities to reuse and local duplication to remove.**
   **Owner: SpicyRegs.** Review actual source connectors, strict parsers, table
   and Iceberg publication, CourtListener handling, documented-value diagnostics,
   public imports and optional dependencies. Coordinate the local inventory with
@@ -473,6 +507,22 @@ side can land first.
   [S16](../spicy-docs/docs/simplification-todo.md#s16) own their local dispositions;
   [DocSpec D42](../DocSpec/docs/dataset-experiments-todo.md#d42) owns its adapter
   changes. Only the relevant ownership decision gates each handoff.
+
+  **Closed 2026-09-19, branch `hosting-sr01`.** The candidate spicy-docs'
+  gap register names under this label — `docs/research/closing-the-gaps-2026-09-19.md`
+  gap D2, "spicy-regs's hand-rolled `congress_bills` reader still exists beside
+  `listing.py`" — is decided KEEP/SHARE: keep this repo's window, watermark,
+  env-key-resolution and frozen-shape responsibilities; share the walk itself
+  by adopting `CongressListingReader` over spicy-docs' measured `bill` route.
+  [SR03](#sr03) is the follow-on for implementing it, and this same change
+  *is* that implementation — decision and implementation landed together for
+  this one candidate, the same pattern [SR04](#sr04) set for CourtListener.
+  See the narrative entry above (in "BillTrax-derived table hosting") for the
+  specifics: files, tests removed/added, and the unchanged contract digest.
+  CourtListener handling was already decided and implemented under SR04; the
+  remaining named candidates (strict parsers, table/Iceberg publication,
+  documented-value diagnostics, public imports and optional dependencies)
+  were not reviewed by this change and stay open under SR03 if picked up.
 
 <a id="sr02"></a>
 
@@ -519,6 +569,15 @@ side can land first.
   Record deferred changes separately. Distinguish local preparation, commits,
   proposed upstream work and accepted upstream work; follow this plan's existing
   authorization rules for publication and upstream submission.
+
+  **First landed instance: the [SR01](#sr01) congress_bills decision, branch
+  `hosting-sr01`, 2026-09-19** — `CongressBillsReader` now adopts spicy-docs'
+  `CongressListingReader`; the replaced hand-rolled offset/limit walk and its
+  seven tests are removed. This repo's fixtures cover it directly
+  (`tests/test_congress_bills.py`, hermetic over `httpx.MockTransport`); no
+  separate installed-wheel handoff doc was needed since spicy-docs 0.21.1 was
+  already the pinned `source-readers` extra. Any further SR01 candidate that
+  gets a KEEP/SHARE decision lands here the same way.
 
 <a id="sr04"></a>
 
