@@ -205,25 +205,91 @@ SpicyDocs 0.21.0: [`docs/research/table-contracts-2026-09-19.md`](../spicy-docs/
   `uv.lock` byte-identical with the entry present (nothing depends on it yet),
   so it's inert until the 0.21.0 pin below pulls DeltaTrack transitively.
 
-**Deliberately not done here** — each needs SpicyDocs 0.21.0 (the contract
-layer + the DeltaTrack adapter branch, tagged and released) first:
+**2026-09-19, same branch, second half.** SpicyDocs 0.21.0 is released, so the
+four items this entry listed as blocked are done. Twenty-two tables are now
+hosted; the public surface went from 24 tables to 45.
 
-1. Bump both `source-readers` pins in `pyproject.toml` (and
-   `[tool.uv.sources] spicy-docs`) to `spicy-docs[acquisition,pdf-pypdf,bill-diff]==0.21.0`;
-   delete the 0.20.0 wheel; add the spicy-docs bullet to `vendor/README.md`.
-2. The transforms (`transforms/build_bill_family.py`,
-   `build_press_releases.py`, `build_amendments.py`, `build_roll_call_votes.py`,
-   `build_members.py`, `build_committee_reports.py`) — each imports
-   `spicy_docs.schemas.*` for its column contract, builds rows, calls
-   `merge_table` per output. No transform in this branch imports
-   `spicy_docs.schemas` yet, on purpose.
-3. The rollups (`pipelines/rollups/bill_family.py` + five siblings, all
-   `inputs = ()`), their `run-rollup-*` console scripts, and their
-   `rollup-*.yml` cron workflows delegating to `_rollup.yml`.
-4. `data_dictionary/descriptions.yaml` entries generated from
-   `TABLE_CONTRACTS` (`columns_from: spicy_docs`) plus the hand-written
-   `label`/`coverage`/`measured_on`, and one `mcp_server.py` `TABLES` line per
-   table.
+- [x] **The release.** `vendor/spicy_docs-0.21.0-py3-none-any.whl` (commit
+  `ff92406`, tag v0.21.0, sha256 `ca3f26c5…1705`, verified after the copy);
+  0.20.0 deleted; both `source-readers` pins at
+  `spicy-docs[acquisition,pdf-pypdf,bill-diff]==0.21.0`. Two resolver refusals,
+  both fixed by matching what the release declares:
+  0.21.0 pins `rulespec-artifacts==1.0.13` (we had 1.0.12 — vendored 1.0.13,
+  which is byte-identical to rulespec's own build and to SpicyDocs' copy), and
+  `deltatrack` resolved to the registry because a `[tool.uv.sources]` entry
+  binds only a dependency the *project* declares, while DeltaTrack arrives
+  through SpicyDocs' `bill-diff` extra — declaring `deltatrack==0.1.0` directly
+  in both `source-readers` lists binds the vendored wheel, the same shape
+  `rulespec-artifacts` already had. No `diff=False` fallback was needed.
+- [x] **The transforms.** `build_bill_family.py` (thirteen tables from one
+  pass), `build_press_releases.py`, `build_amendments.py`,
+  `build_roll_call_votes.py`, `build_members.py`,
+  `build_committee_reports.py`. Each imports its contract from
+  `spicy_docs.schemas.*` and publishes through `merge_contract_table`, the one
+  door added to `table_merge.py` — no transform restates a column tuple, an
+  identity or a version column. `congress_scope.py` holds the
+  "which Congresses, which types" rule the three Congress-sourced transforms
+  share; `model_call.py` adapts a Gemini `GenerationClient` to the narrower
+  `ModelCall` seam the interpretation package takes (the two do not fit
+  directly).
+- [x] **The rollups**, all `inputs = ()`, their `run-rollup-*` console scripts,
+  and six `rollup-*.yml` workflows on their own crons (02:00 through 03:40 UTC,
+  clear of the existing 17:00–24:00 block). `_rollup.yml` gained
+  `committee_reports_since`.
+- [x] **The dictionary.** `DERIVED_SCHEMAS` is joined by `contract_schemas()`,
+  generated from `TABLE_CONTRACTS` as all-VARCHAR; `descriptions.yaml` entries
+  carry a hand-written `label`, `coverage`, `measured_on` and `summary` plus
+  `columns_from: spicy_docs`, which `load_descriptions` resolves by reading the
+  407 column sentences out of the wheel. Declaring both the marker and an
+  inline `columns:` is refused at load. One `mcp_server.py` `TABLES` line per
+  table, kept literal so the MCP server stays installable without the
+  `source-readers` group.
+
+**Two things a reader should know before changing this.**
+
+1. **The `congress_bills` frozen prefix is why the merge is compatible, and it
+   is asserted, not assumed.** The contract's first ten columns are byte-equal
+   to `build_congress_bills.COLUMNS` — other repositories pin that prefix by
+   digest through `catalog.json` — and the family appends thirty-eight more.
+   `merge_table` now NULL-fills any column the prior published table lacks, so
+   the first family run merges 48-column rows onto the live 10-column table as
+   a backfill rather than a migration.
+   `test_congress_bills_keeps_its_frozen_prefix` and
+   `test_merge_null_fills_columns_the_prior_table_lacks` hold both halves.
+2. **`congress_bills` now has two writers, deliberately.** `congress-bills`
+   walks the whole archive for the ten-column prefix; `bill-family` fills all
+   forty-eight for the Congresses it is scoped to. The merge prefers whichever
+   ran most recently per `bill_id`, so a `congress-bills` run after a
+   `bill-family` run **resets that bill's thirty-eight appended columns to
+   NULL** until the family covers it again. That is a real interaction, not a
+   bug in either rollup, and it is the open question this work leaves: the
+   options are to retire the narrow rollup, to give the family its own table,
+   or to teach the narrow writer to pass foreign columns through.
+   `test_congress_bills_has_a_second_narrow_writer` pins the current state so
+   it stays a decision rather than a surprise.
+
+**[SR01](#sr01) is untouched by all of this.** It owns the `congress_bills`
+reader replacement (adopting SpicyDocs' `listing.py` in place of the local
+`CongressBillsReader`). This work shares exactly one thing with it — the frozen
+ten-column prefix — which is precisely why the design froze that prefix: either
+side can land first.
+
+**Not wired, with the reason:**
+
+- **Senate roll calls.** `listing.py` has a `house-vote` route and no Senate
+  equivalent, and the Senate LIS menu is not a reader this repository has. No
+  Senate row is published rather than one with a NULL tally.
+- **`recordedVotes` as a second vote-linkage source.** It would reach Senate
+  votes and per-action linkage, but it arrives with BILLSTATUS, and a rollup
+  may not read another rollup's output — wiring it means re-acquiring every
+  bill's status inside the votes rollup.
+- **`press_releases.bill_id`** and its match columns, and
+  **`committee_reports.bill_id` / `hearing_transcripts.bill_id`**: preserved
+  NULLs. The contract states the columns; the linkage seams are not driven.
+- **Coverage statements are honest, not flattering.** Sixteen of the new
+  entries open "Sampled" — a fifth `COVERAGE_KINDS` entry added for this —
+  because no run has been measured. Promoting one to "Window" or "True range"
+  is a measurement, not an edit.
 
 <a id="sr01"></a>
 
