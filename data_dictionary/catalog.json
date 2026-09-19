@@ -1186,7 +1186,8 @@
         "sha256",
         "observed_at",
         "page_count",
-        "text_sha256"
+        "text_sha256",
+        "event_id"
       ]
     },
     {

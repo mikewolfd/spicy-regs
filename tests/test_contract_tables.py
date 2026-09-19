@@ -1,4 +1,4 @@
-"""Hermetic tests for the twenty-two contract-hosted tables.
+"""Hermetic tests for the contract-hosted tables.
 
 No network. These cover the seam this repository actually owns — the
 conversion from a contract's row shape to a published Parquet table — and
@@ -9,9 +9,10 @@ second copy of the same claim that can only drift.
 
 What is owned here: every hosted table publishes an all-VARCHAR schema in the
 contract's column order, and the merge prefers the fresh row on a repeated
-identity. Both are proved for all twenty-two, by iterating ``TABLE_CONTRACTS``
-rather than by listing tables, so a table added upstream is covered the moment
-the wheel is adopted instead of when someone remembers to add a case.
+identity. Both are proved for every contract the wheel ships, hosted here or
+not yet, by iterating ``TABLE_CONTRACTS`` rather than by listing tables, so a
+table added upstream is covered the moment the wheel is adopted instead of
+when someone remembers to add a case.
 """
 
 from __future__ import annotations
@@ -27,6 +28,26 @@ from spicy_regs import data_dictionary as dd
 from spicy_regs.transforms.table_merge import merge_contract_table
 
 CONTRACT_NAMES = sorted(TABLE_CONTRACTS)
+
+#: Contracts spicy-docs 0.21.2 ships that no rollup here writes yet, so they
+#: are not hosted, queryable or described: ``data_dictionary.CONTRACT_TABLES``
+#: enumerates the hosted tables by hand on purpose, and each of these needs
+#: its own reader before it joins that tuple. Listed rather than computed so a
+#: contract added upstream fails here until someone decides whether to host it.
+UNHOSTED_CONTRACTS = frozenset(
+    {
+        "committee_assignments",
+        "committee_meetings",
+        "committees",
+        "house_communications",
+        "law_code_sections",
+        "laws",
+        "nominations",
+        "record_issues",
+        "table3_records",
+        "treaties",
+    }
+)
 
 
 def _no_download(remote_key: str, local_path: Path) -> bool:
@@ -88,11 +109,18 @@ def test_a_row_missing_its_identity_is_dropped_not_published(tmp_path, name):
 
 
 def test_every_hosted_table_is_registered_everywhere():
-    """A contract the wheel ships must be published, queryable and described."""
+    """A hosted table is one of the wheel's contracts, and is published, queryable and described.
+
+    The wheel ships more contracts than this repository hosts; the difference
+    is ``UNHOSTED_CONTRACTS``, stated so a new upstream contract is a decision
+    here rather than a silent omission from the hosted surface.
+    """
     from spicy_regs import mcp_server
 
     hosted = set(dd.CONTRACT_TABLES)
-    assert hosted == set(TABLE_CONTRACTS), "CONTRACT_TABLES must be exactly the wheel's contracts"
+    assert hosted <= set(TABLE_CONTRACTS), "every hosted table must be a wheel contract"
+    assert set(TABLE_CONTRACTS) - hosted == UNHOSTED_CONTRACTS, "a wheel contract is hosted or named as not yet"
+    assert UNHOSTED_CONTRACTS.isdisjoint(dd.TABLES), "an unhosted contract must not be half-listed"
     assert hosted <= set(dd.TABLES)
     assert hosted <= set(mcp_server.TABLES)
     assert hosted <= set(dd.load_descriptions())

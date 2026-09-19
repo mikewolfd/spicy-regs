@@ -41,7 +41,7 @@ One row per bill or resolution, as one BILLSTATUS document states it. Two rollup
 | `version_count` | `VARCHAR` | How many text versions this BILLSTATUS document offers.  Not the bill_versions row count: a PDF twin and an upload are rows the publisher's own list does not name. |
 | `public_law_number` | `VARCHAR` | Public law number from the publisher's laws entry, when the measure was enacted. |
 | `law_type` | `VARCHAR` | The publisher's law type for the first laws entry (Public Law or Private Law). |
-| `statutes_at_large_cite` | `VARCHAR` | Preserved NULL: the Statutes at Large citation lives in the PLAW package's GovInfo MODS, which this repository does not yet acquire, so the column is published empty rather than guessed. |
+| `statutes_at_large_cite` | `VARCHAR` | NULL here on purpose: the citation is published on laws.statutes_at_large_cite, read from the PLAW USLM meta, and the host fills this column by joining laws on bill_id at merge time. The family build sees one BILLSTATUS document and its printings; the PLAW is a different package the laws rollup acquires once per law, so filling it here would fetch every PLAW twice or read another table's output, which the one-pass rule forbids. |
 | `stage` | `VARCHAR` | Interpreted legislative stage of the latest action any stage rule classified. |
 | `stage_rule` | `VARCHAR` | Which stage rule fired, or NULL when no rule fired and the default stood. |
 | `stage_matcher` | `VARCHAR` | The exact matcher string within that rule that matched. |

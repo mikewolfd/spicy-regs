@@ -34,3 +34,4 @@ One row per captured GovInfo hearing transcript package. `bill_id` is read the s
 | `observed_at` | `VARCHAR` | When the body was captured. |
 | `page_count` | `VARCHAR` | How many pages the extraction read, where a page-based extractor ran. |
 | `text_sha256` | `VARCHAR` | Digest of the extracted text, so a re-extraction that changed nothing is visible as such. |
+| `event_id` | `VARCHAR` | The committee-meeting event id the Congress.gov hearing record names as its associatedMeeting, which committee_meetings.event_id joins on; NULL where the hearing names none or was not looked up. |

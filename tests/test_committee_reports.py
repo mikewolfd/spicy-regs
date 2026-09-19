@@ -10,8 +10,10 @@ text comes from ``extraction.body_text`` rather than a local decoder, and a
 rendition that states no page boundary publishes a NULL ``page_count`` instead
 of a count invented from a separator that never occurs — and the bill linkage:
 ``bill_id`` is read from the package's own MODS, the real one for each package
-(``tests/fixtures/govinfo_bodies/README.md``), and only a ``PRIMARY`` bill
-fills it. The window arithmetic is covered in ``test_incremental_rollups.py``.
+(``tests/fixtures/govinfo_bodies/README.md``) parsed by the same
+``validate_package_mods`` the acquirer runs, and only the bill spicy-docs'
+``PackageModsIdentity.primary_bill`` names fills it. The window arithmetic is
+covered in ``test_incremental_rollups.py``.
 """
 
 from __future__ import annotations
@@ -22,9 +24,9 @@ import pyarrow.parquet as pq
 import pytest
 from spicy_docs.sources.govinfo.bodies import (
     PackageBodyIdentity,
-    PackageModsIdentity,
     PackageSummary,
     parse_package_id,
+    validate_package_mods,
 )
 from spicy_docs.sources.govinfo.body_acquisition import GovInfoBodyBudget, GovInfoPackageBody
 from spicy_docs.transport.captured import CapturedBodyResponse
@@ -84,6 +86,11 @@ def _package(package_id: str, *, fmt: str = "htm", media_type: str = "text/html"
         observed_at=OBSERVED_AT,
         body=(FIXTURES / f"mods-{package_id}.xml").read_bytes(),
     )
+    # The parse the acquirer itself runs on these bytes, so `mods.bills` and
+    # `mods.primary_bill` come from the real MODS rather than a hand-typed list.
+    mods = validate_package_mods(
+        mods_capture.body, package=identity, final_url=mods_url, max_bytes=BUDGET.max_metadata_bytes
+    )
     return GovInfoPackageBody(
         identity=identity,
         format=fmt,
@@ -97,14 +104,7 @@ def _package(package_id: str, *, fmt: str = "htm", media_type: str = "text/html"
             title=f"Report {package_id}",
             download_links=(),
         ),
-        mods=PackageModsIdentity(
-            identity=identity,
-            access_ids=(package_id,),
-            collection_code=identity.collection,
-            offered_formats=("htm", "pdf"),
-            moved_renditions=(),
-            other_renditions=(),
-        ),
+        mods=mods,
         body=PackageBodyIdentity(
             identity=identity,
             format=fmt,

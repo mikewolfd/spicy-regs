@@ -1910,14 +1910,14 @@ wheels = [
 
 [[package]]
 name = "spicy-docs"
-version = "0.21.1"
-source = { path = "vendor/spicy_docs-0.21.1-py3-none-any.whl" }
+version = "0.21.2"
+source = { path = "vendor/spicy_docs-0.21.2-py3-none-any.whl" }
 dependencies = [
     { name = "jsonschema" },
     { name = "rulespec-artifacts" },
 ]
 wheels = [
-    { filename = "spicy_docs-0.21.1-py3-none-any.whl", hash = "sha256:c519e231b44a639c342fa857802869eca258bb4a7051a84b983956a2706e68a6" },
+    { filename = "spicy_docs-0.21.2-py3-none-any.whl", hash = "sha256:96eb4897935998e903ed7e93ab26c120860baf3d677eeffd02599b760dbc8ca3" },
 ]
 
 [package.optional-dependencies]
@@ -1947,6 +1947,7 @@ requires-dist = [
     { name = "httpx", marker = "extra == 'pdf-gemini'", specifier = ">=0.28,<1" },
     { name = "jsonschema", specifier = ">=4.23" },
     { name = "loguru", marker = "extra == 'acquisition'" },
+    { name = "lxml", marker = "extra == 'reconstruct'", specifier = ">=6,<7" },
     { name = "mlx-vlm", marker = "platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'pdf-mlx'", specifier = "==0.7.0" },
     { name = "ocrmac", marker = "sys_platform == 'darwin' and extra == 'pdf-apple'", specifier = ">=1.0.1,<2" },
     { name = "pillow", marker = "extra == 'pdf'", specifier = ">=12,<13" },
@@ -1958,7 +1959,7 @@ requires-dist = [
     { name = "rulespec-artifacts", specifier = "==1.0.13" },
     { name = "tqdm", marker = "extra == 'acquisition'" },
 ]
-provides-extras = ["acquisition", "bill-diff", "html", "pdf", "pdf-apple", "pdf-gemini", "pdf-mlx", "pdf-pypdf", "pdf-rapidocr", "public-table"]
+provides-extras = ["acquisition", "bill-diff", "html", "pdf", "pdf-apple", "pdf-gemini", "pdf-mlx", "pdf-pypdf", "pdf-rapidocr", "public-table", "reconstruct"]
 
 [[package]]
 name = "spicy-regs"
@@ -2031,7 +2032,7 @@ requires-dist = [
     { name = "pyyaml" },
     { name = "rulespec-artifacts", marker = "extra == 'source-readers'", path = "vendor/rulespec_artifacts-1.0.13-py3-none-any.whl" },
     { name = "sentence-transformers", marker = "extra == 'embed'" },
-    { name = "spicy-docs", extras = ["acquisition", "pdf", "pdf-pypdf", "bill-diff"], marker = "extra == 'source-readers'", path = "vendor/spicy_docs-0.21.1-py3-none-any.whl" },
+    { name = "spicy-docs", extras = ["acquisition", "pdf", "pdf-pypdf", "bill-diff"], marker = "extra == 'source-readers'", path = "vendor/spicy_docs-0.21.2-py3-none-any.whl" },
     { name = "torch", marker = "extra == 'embed'" },
     { name = "tqdm" },
 ]
@@ -2055,7 +2056,7 @@ source-readers = [
     { name = "deltatrack", path = "vendor/deltatrack-0.1.0-py3-none-any.whl" },
     { name = "pypdf", specifier = "==6.14.2" },
     { name = "rulespec-artifacts", path = "vendor/rulespec_artifacts-1.0.13-py3-none-any.whl" },
-    { name = "spicy-docs", extras = ["acquisition", "pdf", "pdf-pypdf", "bill-diff"], path = "vendor/spicy_docs-0.21.1-py3-none-any.whl" },
+    { name = "spicy-docs", extras = ["acquisition", "pdf", "pdf-pypdf", "bill-diff"], path = "vendor/spicy_docs-0.21.2-py3-none-any.whl" },
 ]
 
 [[package]]
