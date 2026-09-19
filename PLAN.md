@@ -282,28 +282,39 @@ backfill walks only when a pre-108th Congress is named.
   reader of the route. A `401`/`403` aborts the run; any other detail refusal
   is that one bill's gap, retried next run; a list walk that refuses fails
   the run loudly.
-- [x] Resume state beside `bill_family_archives`:
-  `bill_family_backfills` (per filled bill, the list stamp it was filled
-  under — the skip comparison) and `bill_family_backfill_congresses` (per
-  Congress, the route's declared total against what was actually walked, so a
-  capped or refused walk cannot read as an empty Congress). Both are
-  published outputs (dictionary + MCP), all VARCHAR.
-- [x] Provenance: the detail record states laws, sponsors and the latest
-  action but only sub-route *counts* for actions, committees, titles,
-  subjects, summaries and text versions — so the backfilled `congress_bills`
-  row NULLs every column a zero would lie about
-  (`BACKFILL_UNSUBSTANTIATED`), and its NULL `schema_version` marks it as the
-  detail route's; the consumer's test is `congress < 108`, where no BILLSTATUS
-  exists. Said in the `congress_bills` dictionary entry.
+- [x] Resume state beside `bill_family_archives`, on the CRS summaries
+  pattern AGENTS.md points at (skip only a success, retry every failure):
+  `bill_family_backfills` (per attempted bill, the list stamp and whether it
+  was filled or refused — a refusal is retried first next run, one request,
+  without a walk) and `bill_family_backfill_walks` (per `(congress,
+  bill_type)`, the route's declared total against what was actually walked;
+  a unit walked complete with every record filled, refused or unwalkable is
+  settled and never re-walked, so a permanent gap costs one request a run,
+  not a page walk). Every page and every detail is charged to the same cap.
+  Both are published outputs (dictionary + MCP), all VARCHAR.
+- [x] Provenance: the detail record states laws, sponsors, the latest action
+  and a `cosponsors.count`, but only sub-route *counts* for actions,
+  committees, titles, subjects, summaries and text versions — so the
+  backfilled `congress_bills` row publishes `cosponsor_count` from the
+  sub-route count (never the sponsor arithmetic), NULLs every count a zero
+  would lie about, NULLs `stage` and `signed_date_rule` (no action was
+  examined, so neither the default rung nor the no-became-law-action rule is
+  a finding), and carries a NULL `schema_version` as the marker that it is
+  the detail route's; the consumer's test is `congress < 108`. Said in the
+  `congress_bills` dictionary entry.
 - [x] Proof — receipt
   `~/Work/corpora/supply-2026-09-02/receipts/a11-pre-108th-backfill-2026-09-19/`:
   declared counts for all 26 candidate Congresses (the 92nd smallest at 767);
   the 92nd walked end to end against its declared total (767 of 767, 4 pages,
-  `completed: true`); 50 retained detail records built through the real code
-  path offline (50 rows, every unsubstantiated count NULL, the resume
-  re-requesting nothing). 82 keyed requests of the 120 budget; the key only
-  ever an `X-Api-Key` header; `verify_credentials.py` re-scans everything
-  retained.
+  `completed: true`); the 767 retained records replayed through the real
+  code path offline per type (declared totals summing to 767, every unit
+  settled, the 50 retained details filled, the 717 not retained recorded as
+  refusals), then resumed under a budget of 2 with no list request and
+  exactly the first two refusals retried. 82 keyed requests of the 120
+  budget; the key only ever an `X-Api-Key` header; `verify_credentials.py`
+  re-scans everything retained. Review round one (cosponsor arithmetic,
+  the default stage, the per-request budget misread as a run backstop, the
+  uncharged pages, the double count) fixed in the follow-up commits.
 
 **Every rollup is incremental where its source allows.** The pattern is
 `build_congress_bills`': take a watermark from the prior published table, ask
