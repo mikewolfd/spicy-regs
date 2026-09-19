@@ -1,0 +1,32 @@
+{
+    "houseCommunication": {
+        "abstract": "The SPEAKER presented a memorial of the Legislature of the State of Louisiana, relative to House Resolution No. 292, to memorialize the United States Department of Commerce and the National Oceanic and Atmospheric Administration to take such actions as are necessary to properly inspect and ensure the safety of imported seafood.; to the Committee on Natural Resources.",
+        "chamber": "House",
+        "committees": [
+            {
+                "name": "Natural Resources Committee",
+                "referralDate": "2026-09-16",
+                "systemCode": "hsii00",
+                "url": "https://api.congress.gov/v3/committee/house/hsii00?format=xml"
+            }
+        ],
+        "communicationType": {
+            "code": "ML",
+            "name": "Memorial"
+        },
+        "congress": 119,
+        "congressionalRecordDate": "2026-09-16",
+        "isRulemaking": "False",
+        "number": 136,
+        "reportNature": "House Resolution No. 292, to memorialize the United States Department of Commerce and the National Oceanic and Atmospheric Administration to take such actions as are necessary to properly inspect and ensure the safety of imported seafood.",
+        "sessionNumber": 2,
+        "updateDate": "2026-09-17"
+    },
+    "request": {
+        "communicationNum": "136",
+        "congress": "119",
+        "contentType": "application/json",
+        "execCommunicationType": "ml",
+        "format": "json"
+    }
+}

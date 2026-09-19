@@ -1,0 +1,60 @@
+{
+    "request": {
+        "congress": "119",
+        "contentType": "application/json",
+        "format": "json"
+    },
+    "treaty": [
+        {
+            "actions": {
+                "count": 1,
+                "url": "https://api.congress.gov/v3/treaty/119/1/actions?format=json"
+            },
+            "congressConsidered": null,
+            "congressReceived": 119,
+            "countriesParties": [
+                {
+                    "name": "United Arab Emirates"
+                }
+            ],
+            "inForceDate": null,
+            "indexTerms": [
+                {
+                    "name": "119-1"
+                },
+                {
+                    "name": "Criminal"
+                },
+                {
+                    "name": "Mutual Legal Assistance"
+                },
+                {
+                    "name": "T. Doc. 119-1"
+                },
+                {
+                    "name": "United Arab Emirates"
+                }
+            ],
+            "number": 1,
+            "oldNumber": null,
+            "oldNumberDisplayName": null,
+            "parts": {},
+            "relatedDocs": [],
+            "resolutionText": null,
+            "suffix": "",
+            "titles": [
+                {
+                    "title": "Treaty between the Government of the United States of America and the Government of the United Arab Emirates on Mutual Legal Assistance in Criminal Matters",
+                    "titleType": "Treaty - Formal Title"
+                },
+                {
+                    "title": "Treaty with the United Arab Emirates on Mutual Legal Assistance in Criminal Matters",
+                    "titleType": "Treaty - Short Title"
+                }
+            ],
+            "topic": "Mutual Legal Assistance",
+            "transmittedDate": "2025-01-14T00:00:00Z",
+            "updateDate": "2025-01-15T00:18:16Z"
+        }
+    ]
+}

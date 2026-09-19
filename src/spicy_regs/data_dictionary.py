@@ -113,6 +113,13 @@ CONTRACT_TABLES: tuple[str, ...] = (
     "committee_reports",
     "report_sections",
     "hearing_transcripts",
+    # The Congress.gov index tables (gaps A5, A7, A10), each written by its own
+    # rollup in pipelines/rollups/congress_index.py.
+    "house_communications",
+    "committee_meetings",
+    "record_issues",
+    "treaties",
+    "nominations",
 )
 
 
@@ -343,6 +350,7 @@ DERIVED_SCHEMAS: dict[str, list[tuple[str, str]]] = {
         ("subtype", "VARCHAR"),
         ("executive_order_number", "VARCHAR"),
         ("modify_date", "VARCHAR"),
+        ("rin", "VARCHAR"),
     ],
     # Ingested from the SAM.gov Entity API v4 (build_sam_entities); list-level
     # fields only, all stored as VARCHAR. Keyed by uei (Unique Entity ID).

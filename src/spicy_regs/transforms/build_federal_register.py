@@ -18,11 +18,24 @@ With no prior table (first run) step 2 becomes a full backfill from the FR epoch
 ``modify_date`` is not exposed by the REST API; freshly fetched rows carry NULL
 for it while the merge preserves whatever the prior table already had. No current
 consumer reads it.
+
+``rin`` is the one column not fetched: the first Regulation Identifier Number
+in ``regulation_id_numbers_json``, derived in the merge for every row so a
+prior table that predates the column is filled on the next run rather than
+left NULL. It is the scalar join key the regulatory bridge needs --
+``house_communications.rin`` is one RIN per communication, and a hash join
+wants one per side -- and it is a projection of the array, not a second fact.
+Measured on the published table 2026-09-19 (803,996 rows): 96,060 documents
+state one RIN, 1,499 state two or more (up to 41), 9,758 state ``[]`` and
+696,679 rows from before the in-repo ingest carry no array at all; the last
+two are NULL here alike, and a consumer wanting every RIN of a multi-RIN
+document unnests the array.
 """
 
 from __future__ import annotations
 
 import json
+from collections.abc import Callable, Iterable
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -39,9 +52,9 @@ OUTPUT = "federal_register.parquet"
 # documents added/corrected after their nominal publication date are picked up.
 OVERLAP_DAYS = 7
 
-# The published schema: 22 columns, all VARCHAR, in the exact order the existing
-# table uses.
-COLUMNS = (
+# The fetched shape: 22 columns, all VARCHAR, in the exact order the existing
+# table uses. ``COLUMNS`` appends the one derived column.
+FETCHED_COLUMNS = (
     "document_number",
     "title",
     "abstract",
@@ -65,7 +78,12 @@ COLUMNS = (
     "executive_order_number",
     "modify_date",
 )
-_SCHEMA = pa.schema([(c, pa.string()) for c in COLUMNS])
+COLUMNS = (*FETCHED_COLUMNS, "rin")
+_SCHEMA = pa.schema([(c, pa.string()) for c in FETCHED_COLUMNS])
+
+#: ``rin`` as a projection of the array, for every row of the merged table.
+#: ``[]`` and NULL both give NULL: a join key is present or it is not.
+_RIN_SQL = "json_extract_string(regulation_id_numbers_json, '$[0]')"
 
 
 def _s(value: object) -> str | None:
@@ -120,15 +138,25 @@ def _prior_max_publication_date(prior_file: Path) -> date | None:
         return None
 
 
-def build_federal_register(output_dir: Path, *, since: date | None = None) -> Path:
-    """Build ``federal_register.parquet`` (incremental merge with the prior table)."""
+def build_federal_register(
+    output_dir: Path,
+    *,
+    since: date | None = None,
+    documents: Callable[[date], Iterable[dict]] | None = None,
+    download_prior: Callable[[str, Path], bool] = r2.download,
+) -> Path:
+    """Build ``federal_register.parquet`` (incremental merge with the prior table).
+
+    ``documents`` is the raw API records published since a date; the default
+    is the live reader, and a hermetic test passes its own.
+    """
     import duckdb
 
     out_file = output_dir / OUTPUT
     prior_file = output_dir / "_fr_prior.parquet"
 
     # 1. Pull the prior table (best effort — absence just means full backfill).
-    have_prior = prior_file.exists() or r2.download(OUTPUT, prior_file)
+    have_prior = prior_file.exists() or download_prior(OUTPUT, prior_file)
     if have_prior:
         logger.info("FR: merging against prior table {}", prior_file)
     else:
@@ -141,8 +169,8 @@ def build_federal_register(output_dir: Path, *, since: date | None = None) -> Pa
     logger.info("FR: fetching documents published since {}", since)
 
     # 3. Fetch + shape into a "new rows" parquet.
-    reader = FederalRegisterReader(since=since)
-    rows = [_shape(doc) for doc in reader.iter_records()]
+    fetch = documents or (lambda start: FederalRegisterReader(since=start).iter_records())
+    rows = [_shape(doc) for doc in fetch(since)]
     new_file = output_dir / "_fr_new.parquet"
     table = pa.Table.from_pylist(rows, schema=_SCHEMA) if rows else _SCHEMA.empty_table()
     pq.write_table(table, new_file, compression="zstd")
@@ -157,7 +185,9 @@ def build_federal_register(output_dir: Path, *, since: date | None = None) -> Pa
     con.execute("SET threads=2")
     con.execute(f"SET temp_directory='{spill_dir}'")
 
-    cols = ", ".join(COLUMNS)
+    # The fetched columns are what both files carry; a prior that already has
+    # ``rin`` is not read for it, since the projection below recomputes it.
+    cols = ", ".join(FETCHED_COLUMNS)
     if have_prior:
         union = (
             f"SELECT {cols}, 0 AS _src FROM read_parquet('{prior_file}') "
@@ -170,7 +200,7 @@ def build_federal_register(output_dir: Path, *, since: date | None = None) -> Pa
     con.execute(
         f"""
         COPY (
-            SELECT {cols} FROM (
+            SELECT {cols}, {_RIN_SQL} AS rin FROM (
                 SELECT {cols}, ROW_NUMBER() OVER (
                     PARTITION BY document_number ORDER BY _src DESC
                 ) AS _rn

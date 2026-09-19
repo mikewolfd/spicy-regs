@@ -19,6 +19,7 @@ covered in ``test_incremental_rollups.py``.
 from __future__ import annotations
 
 import ast
+import json
 from pathlib import Path
 
 import pyarrow.parquet as pq
@@ -36,6 +37,7 @@ from spicy_regs.transforms.build_committee_reports import build_committee_report
 from tests.pdf_fixtures import make_pdf
 
 FIXTURES = Path(__file__).parent / "fixtures" / "govinfo_bodies"
+HEARINGS = Path(__file__).parent / "fixtures" / "congress_hearings"
 OBSERVED_AT = "2026-09-19T00:00:00Z"
 
 #: The CRPT package's report accompanies H. Res. 53 (`PRIMARY`); the CHRG
@@ -165,6 +167,30 @@ class StubBodyAcquirer:
         return _package(package_id, mods_bytes=self.mods_bytes)
 
 
+class StubHearings:
+    """Serves the two retained Congress.gov hearing details by jacket; anything else is a 404-shaped refusal.
+
+    Jacket 63127 (the CHRG MODS fixture's) states no `associatedMeeting`;
+    64431 states event 119003 (`tests/fixtures/congress_hearings/README.md`).
+    """
+
+    DETAILS = {"63127": "hearing-119-house-63127.json", "64431": "hearing-119-house-64431.json"}
+
+    def __init__(self, details: dict[str, str] | None = None):
+        self.requested: list[str] = []
+        self.details = self.DETAILS if details is None else details
+
+    def records(self, route, url: str, *, max_pages: int = 1):
+        self.requested.append(url)
+        jacket = url.rsplit("/", 1)[-1].split("?", 1)[0]
+        if jacket not in self.details:
+            from spicy_docs.reading.paged_json import PagedJsonSourceError
+
+            raise PagedJsonSourceError("stub: list source answered HTTP 404 for the requested page")
+        record = json.loads((HEARINGS / self.details[jacket]).read_text())["hearing"]
+        yield _Page((record,))
+
+
 def _no_prior(remote_key: str, local_path: Path) -> bool:
     return False
 
@@ -176,7 +202,9 @@ def _build_with_log(tmp_path: Path, *, reader, acquirer) -> tuple[dict[str, Path
     messages: list[str] = []
     sink = logger.add(messages.append, level="INFO", format="{message}")
     try:
-        paths = build_committee_reports(tmp_path, reader=reader, acquirer=acquirer, download_prior=_no_prior)
+        paths = build_committee_reports(
+            tmp_path, reader=reader, acquirer=acquirer, hearings=StubHearings(), download_prior=_no_prior
+        )
     finally:
         logger.remove(sink)
     return {path.stem: path for path in paths}, messages
@@ -193,7 +221,7 @@ def _mentions_line(messages: list[str]) -> tuple[int, dict[str, int]]:
 def reports(tmp_path, monkeypatch):
     monkeypatch.delenv("COMMITTEE_REPORTS_SINCE", raising=False)
     paths = build_committee_reports(
-        tmp_path, reader=StubDiscovery(), acquirer=StubBodyAcquirer(), download_prior=_no_prior
+        tmp_path, reader=StubDiscovery(), acquirer=StubBodyAcquirer(), hearings=StubHearings(), download_prior=_no_prior
     )
     return {path.stem: path for path in paths}
 
@@ -311,7 +339,9 @@ def test_the_acquirer_is_asked_with_no_preference(tmp_path, monkeypatch):
     """The rendition order is the acquirer's sealed default; passing one here would fork it."""
     monkeypatch.delenv("COMMITTEE_REPORTS_SINCE", raising=False)
     acquirer = StubBodyAcquirer()
-    build_committee_reports(tmp_path, reader=StubDiscovery(), acquirer=acquirer, download_prior=_no_prior)
+    build_committee_reports(
+        tmp_path, reader=StubDiscovery(), acquirer=acquirer, hearings=StubHearings(), download_prior=_no_prior
+    )
     assert acquirer.requested == [CRPT_ID, CHRG_ID]
 
 
@@ -335,7 +365,11 @@ def test_the_pdf_fallback_is_extracted_and_states_its_page_count(tmp_path, monke
     paths = {
         path.stem: path
         for path in build_committee_reports(
-            tmp_path, reader=StubDiscovery(), acquirer=StubPdfAcquirer(), download_prior=_no_prior
+            tmp_path,
+            reader=StubDiscovery(),
+            acquirer=StubPdfAcquirer(),
+            hearings=StubHearings(),
+            download_prior=_no_prior,
         )
     }
     for table in ("committee_reports", "hearing_transcripts"):
@@ -344,3 +378,106 @@ def test_the_pdf_fallback_is_extracted_and_states_its_page_count(tmp_path, monke
         assert rows[0]["format"] == "pdf"
         assert rows[0]["page_count"] == "2", "a paginated rendition states its pages"
         assert rows[0]["text_sha256"].startswith("sha256:")
+
+
+# --------------------------------------------------------------------------- #
+# hearing_transcripts.event_id, from the Congress.gov hearing detail (A7).
+# --------------------------------------------------------------------------- #
+JACKET_64431 = "CHRG-119hhrg64431"
+
+
+def _hearing_mods(package_id: str) -> bytes:
+    """The smallest package MODS `validate_package_mods` accepts for a CHRG package."""
+    return (
+        '<mods xmlns="http://www.loc.gov/mods/v3"><extension>'
+        f"<accessId>{package_id}</accessId><collectionCode>CHRG</collectionCode>"
+        "</extension></mods>"
+    ).encode()
+
+
+class TwoHearingsDiscovery(StubDiscovery):
+    """The CHRG package whose MODS is on disk, and one whose hearing detail names a meeting."""
+
+    IDS = {"CRPT": [], "CHRG": [CHRG_ID, JACKET_64431]}
+
+
+class HearingBodyAcquirer(StubBodyAcquirer):
+    """The real MODS for 63127, a minimal one for 64431, both through `validate_package_mods`."""
+
+    def acquire(self, package_id: str, *, max_bytes=None):
+        self.requested.append(package_id)
+        mods = None if package_id == CHRG_ID else _hearing_mods(package_id)
+        return _package(package_id, mods_bytes=mods)
+
+
+def _hearing_rows(tmp_path, hearings: StubHearings) -> tuple[dict[str, dict], list[str], StubHearings]:
+    from loguru import logger
+
+    messages: list[str] = []
+    sink = logger.add(messages.append, level="INFO", format="{message}")
+    try:
+        paths = build_committee_reports(
+            tmp_path,
+            reader=TwoHearingsDiscovery(),
+            acquirer=HearingBodyAcquirer(),
+            hearings=hearings,
+            download_prior=_no_prior,
+        )
+    finally:
+        logger.remove(sink)
+    rows = {row["package_id"]: row for row in pq.read_table(paths[2]).to_pylist()}
+    return rows, messages, hearings
+
+
+def test_event_id_is_the_meeting_the_hearing_detail_names_and_null_when_it_names_none(tmp_path, monkeypatch):
+    """Two real details: 64431 names event 119003, 63127 names no meeting at all."""
+    monkeypatch.delenv("COMMITTEE_REPORTS_SINCE", raising=False)
+    rows, messages, hearings = _hearing_rows(tmp_path, StubHearings())
+    assert rows[JACKET_64431]["event_id"] == "119003"
+    assert rows[CHRG_ID]["event_id"] is None
+    # One keyed request per CHRG package, addressed by the package id's own chamber and jacket.
+    assert [url.split("/v3/", 1)[1].split("?", 1)[0] for url in hearings.requested] == [
+        "hearing/119/house/63127",
+        "hearing/119/house/64431",
+    ]
+    assert any("hearing details by outcome — {'no_meeting': 1, 'meeting': 1}" in m for m in messages)
+
+
+def test_a_refused_hearing_detail_leaves_event_id_null_and_is_counted(tmp_path, monkeypatch):
+    """A jacket Congress.gov does not hold is a refusal, counted apart from a detail naming no meeting."""
+    monkeypatch.delenv("COMMITTEE_REPORTS_SINCE", raising=False)
+    rows, messages, _ = _hearing_rows(tmp_path, StubHearings(details={}))
+    assert rows[JACKET_64431]["event_id"] is None
+    assert rows[CHRG_ID]["event_id"] is None
+    assert any("hearing details by outcome — {'refused': 2}" in m for m in messages)
+    assert sum("hearing detail refused" in m for m in messages) == 2
+
+
+def test_a_hearing_detail_for_another_jacket_is_refused_not_read(tmp_path, monkeypatch):
+    """The detail must name the jacket asked for: 63127's record served under 64431 is not 64431's event."""
+    monkeypatch.delenv("COMMITTEE_REPORTS_SINCE", raising=False)
+    swapped = StubHearings(details={"64431": "hearing-119-house-63127.json", "63127": "hearing-119-house-64431.json"})
+    rows, messages, _ = _hearing_rows(tmp_path, swapped)
+    assert rows[JACKET_64431]["event_id"] is None
+    assert rows[CHRG_ID]["event_id"] is None
+    assert any("identity differs from the requested jacket" in m for m in messages)
+
+
+def test_a_credential_refusal_on_the_hearing_detail_aborts_the_run(tmp_path, monkeypatch):
+    from spicy_docs.transport.credentials import CredentialRefusedError
+
+    monkeypatch.delenv("COMMITTEE_REPORTS_SINCE", raising=False)
+
+    class Refusing:
+        def records(self, route, url, *, max_pages=1):
+            raise CredentialRefusedError("stub: 403")
+            yield  # pragma: no cover
+
+    with pytest.raises(CredentialRefusedError):
+        build_committee_reports(
+            tmp_path,
+            reader=TwoHearingsDiscovery(),
+            acquirer=HearingBodyAcquirer(),
+            hearings=Refusing(),
+            download_prior=_no_prior,
+        )

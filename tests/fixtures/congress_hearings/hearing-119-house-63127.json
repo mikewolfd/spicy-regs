@@ -1,0 +1,40 @@
+{
+    "hearing": {
+        "chamber": "House",
+        "citation": "H.Hrg.119",
+        "committees": [
+            {
+                "name": "House Homeland Security (Select) Committee",
+                "systemCode": "hshm00",
+                "url": "https://api.congress.gov/v3/committee/house/hshm00?format=json"
+            }
+        ],
+        "congress": 119,
+        "dates": [
+            {
+                "date": "2025-12-11"
+            }
+        ],
+        "formats": [
+            {
+                "type": "Formatted Text",
+                "url": "https://congress.gov/119/chrg/CHRG-119hhrg63127/generated/CHRG-119hhrg63127.htm"
+            },
+            {
+                "type": "PDF",
+                "url": "https://congress.gov/119/chrg/CHRG-119hhrg63127/CHRG-119hhrg63127.pdf"
+            }
+        ],
+        "jacketNumber": 63127,
+        "libraryOfCongressIdentifier": "LC75975",
+        "title": "WORLDWIDE THREATS TO THE HOMELAND",
+        "updateDate": "2026-09-18T01:21:16Z"
+    },
+    "request": {
+        "chamber": "house",
+        "congress": "119",
+        "contentType": "application/json",
+        "format": "json",
+        "jacketNumber": "63127"
+    }
+}

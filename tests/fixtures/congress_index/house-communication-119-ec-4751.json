@@ -1,0 +1,35 @@
+{
+    "houseCommunication": {
+        "abstract": "A letter from the Acting Director for Legislative Affairs, Office of Legislative Affairs, Department of Homeland Security, transmitting the Cybersecurity and Infrastructure Security Agency's State and Local Cybersecurity Grant Program Fiscal Year 2023 Annual Report, pursuant to 6 U.S.C. 665g(q)(2); Public Law 107–296, title XXII, section 2218 (as added by Public Law 117–58, section 70612(a)); (135 Stat. 1284); to the Committee on Homeland Security.",
+        "chamber": "House",
+        "committees": [
+            {
+                "name": "Homeland Security Committee",
+                "referralDate": "2026-09-16",
+                "systemCode": "hshm00",
+                "url": "https://api.congress.gov/v3/committee/house/hshm00?format=xml"
+            }
+        ],
+        "communicationType": {
+            "code": "EC",
+            "name": "Executive Communication"
+        },
+        "congress": 119,
+        "congressionalRecordDate": "2026-09-16",
+        "isRulemaking": "False",
+        "legalAuthority": "6 U.S.C. 665g(q)(2); Public Law 107–296, title XXII, section 2218 (as added by Public Law 117–58, section 70612(a)); (135 Stat. 1284)",
+        "number": 4751,
+        "reportNature": "The Cybersecurity and Infrastructure Security Agency's State and Local Cybersecurity Grant Program Fiscal Year 2023 Annual Report.",
+        "sessionNumber": 2,
+        "submittingAgency": "Office of Legislative Affairs, Department of Homeland Security",
+        "submittingOfficial": "Acting Director for Legislative Affairs",
+        "updateDate": "2026-09-17"
+    },
+    "request": {
+        "communicationNum": "4751",
+        "congress": "119",
+        "contentType": "application/json",
+        "execCommunicationType": "ec",
+        "format": "json"
+    }
+}

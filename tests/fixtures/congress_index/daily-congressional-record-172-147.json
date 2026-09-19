@@ -1,0 +1,83 @@
+{
+    "issue": {
+        "congress": 119,
+        "fullIssue": {
+            "articles": {
+                "count": 137,
+                "url": "https://api.congress.gov/v3/daily-congressional-record/172/147/articles?format=json"
+            },
+            "entireIssue": [
+                {
+                    "part": "1",
+                    "type": "PDF",
+                    "url": "https://www.congress.gov/119/crec/2026/09/17/172/147/CREC-2026-09-17.pdf"
+                }
+            ],
+            "sections": [
+                {
+                    "endPage": "D918",
+                    "name": "Daily Digest",
+                    "startPage": "D913",
+                    "text": [
+                        {
+                            "type": "Formatted Text",
+                            "url": "https://www.congress.gov/119/crec/2026/09/17/d17se6-1.htm"
+                        },
+                        {
+                            "type": "PDF",
+                            "url": "https://www.congress.gov/119/crec/2026/09/17/172/147/CREC-2026-09-17-dailydigest.pdf"
+                        }
+                    ]
+                },
+                {
+                    "endPage": "E954",
+                    "name": "Extensions of Remarks Section",
+                    "startPage": "E953",
+                    "text": [
+                        {
+                            "part": "1",
+                            "type": "PDF",
+                            "url": "https://www.congress.gov/119/crec/2026/09/17/172/147/CREC-2026-09-17-extensions.pdf"
+                        }
+                    ]
+                },
+                {
+                    "endPage": "H5990",
+                    "name": "House Section",
+                    "startPage": "H5987",
+                    "text": [
+                        {
+                            "part": "1",
+                            "type": "PDF",
+                            "url": "https://www.congress.gov/119/crec/2026/09/17/172/147/CREC-2026-09-17-house.pdf"
+                        }
+                    ]
+                },
+                {
+                    "endPage": "S4836",
+                    "name": "Senate Section",
+                    "startPage": "S4765",
+                    "text": [
+                        {
+                            "part": "1",
+                            "type": "PDF",
+                            "url": "https://www.congress.gov/119/crec/2026/09/17/172/147/CREC-2026-09-17-senate.pdf"
+                        }
+                    ]
+                }
+            ]
+        },
+        "issueDate": "2026-09-17T04:00:00Z",
+        "issueNumber": "147",
+        "sessionNumber": 2,
+        "updateDate": "2026-09-18T12:29:16Z",
+        "url": "https://api.congress.gov/v3/daily-congressional-record/172/147?format=json",
+        "volumeNumber": 172
+    },
+    "request": {
+        "contentType": "application/json",
+        "format": "json",
+        "issueNumber": "147",
+        "volumeNumber": "172"
+    }
+}

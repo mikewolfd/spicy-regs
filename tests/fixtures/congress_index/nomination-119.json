@@ -1,0 +1,48 @@
+{
+  "nominations": [
+    {
+      "citation": "PN1273-8",
+      "congress": 119,
+      "description": "Elliott Hulse, of California, to be Chief Executive Officer, Millennium Challenge Corporation, vice Alice P. Albright, resigned.",
+      "latestAction": {
+        "actionDate": "2026-09-14",
+        "text": "Received in the Senate and referred to the Committee on Foreign Relations."
+      },
+      "nominationType": {
+        "isCivilian": true
+      },
+      "number": 1273,
+      "organization": "Millennium Challenge Corporation",
+      "partNumber": "08",
+      "receivedDate": "2026-09-14",
+      "updateDate": "2026-09-19T11:00:27Z",
+      "url": "https://api.congress.gov/v3/nomination/119/1273-8?format=json"
+    },
+    {
+      "citation": "PN937-10",
+      "congress": 119,
+      "description": "Abby Warren, of Virginia, to be an Assistant Secretary of Commerce, vice Thea D. Rozman Kendler, resigned.",
+      "latestAction": {
+        "actionDate": "2026-09-17",
+        "text": "Placed on Senate Executive Calendar. Calendar No. 921. Subject to nominee's commitment to respond to requests to appear and testify before any duly constituted committee of the Senate."
+      },
+      "nominationType": {
+        "isCivilian": true
+      },
+      "number": 937,
+      "organization": "Department of Commerce",
+      "partNumber": "10",
+      "receivedDate": "2026-04-27",
+      "updateDate": "2026-09-18T11:00:36Z",
+      "url": "https://api.congress.gov/v3/nomination/119/937-10?format=json"
+    }
+  ],
+  "pagination": {
+    "count": 2208
+  },
+  "request": {
+    "congress": "119",
+    "contentType": "application/json",
+    "format": "json"
+  }
+}

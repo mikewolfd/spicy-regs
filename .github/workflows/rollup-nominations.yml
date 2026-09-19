@@ -1,0 +1,26 @@
+name: Rollup — nominations
+on:
+  schedule:
+    # 06:20 UTC — the nomination list per Congress, whole; no detail route.
+    - cron: '20 6 * * *'
+  workflow_dispatch:
+    inputs:
+      skip_upload:
+        description: 'Skip R2 upload (dry run)'
+        required: false
+        default: false
+        type: boolean
+      congresses:
+        description: 'Comma-separated Congress numbers (e.g. 118,119); blank uses the current Congress'
+        required: false
+        default: ''
+        type: string
+jobs:
+  run:
+    uses: ./.github/workflows/_rollup.yml
+    secrets: inherit
+    with:
+      command: run-rollup-nominations
+      skip_upload: ${{ github.event_name == 'workflow_dispatch' && inputs.skip_upload || false }}
+      bill_family_congresses: ${{ inputs.congresses || '' }}
+      timeout_minutes: 30
