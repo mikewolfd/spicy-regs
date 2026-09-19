@@ -18,6 +18,7 @@ covered in ``test_incremental_rollups.py``.
 
 from __future__ import annotations
 
+import ast
 from pathlib import Path
 
 import pyarrow.parquet as pq
@@ -65,7 +66,14 @@ BUDGET = GovInfoBodyBudget(
 _ROUTES = {"htm": ("html", "htm"), "pdf": ("pdf", "pdf")}
 
 
-def _package(package_id: str, *, fmt: str = "htm", media_type: str = "text/html", body: bytes = REPORT_HTML):
+def _package(
+    package_id: str,
+    *,
+    fmt: str = "htm",
+    media_type: str = "text/html",
+    body: bytes = REPORT_HTML,
+    mods_bytes: bytes | None = None,
+):
     identity = parse_package_id(package_id)
     folder, extension = _ROUTES[fmt]
     url = f"https://www.govinfo.gov/content/pkg/{package_id}/{folder}/{package_id}.{extension}"
@@ -84,7 +92,7 @@ def _package(package_id: str, *, fmt: str = "htm", media_type: str = "text/html"
         status_code=200,
         content_type="application/xml",
         observed_at=OBSERVED_AT,
-        body=(FIXTURES / f"mods-{package_id}.xml").read_bytes(),
+        body=(FIXTURES / f"mods-{package_id}.xml").read_bytes() if mods_bytes is None else mods_bytes,
     )
     # The parse the acquirer itself runs on these bytes, so `mods.bills` and
     # `mods.primary_bill` come from the real MODS rather than a hand-typed list.
@@ -135,19 +143,50 @@ class StubDiscovery:
         yield _Page([{"packageId": package_id} for package_id in self.IDS[collection]])
 
 
-class StubBodyAcquirer:
-    """Serves the htm rendition, and records that no preference was asked for."""
+class CrptOnlyDiscovery(StubDiscovery):
+    """The CRPT package alone, for the cases that hand-build its MODS."""
 
-    def __init__(self):
+    IDS = {"CRPT": [CRPT_ID], "CHRG": []}
+
+
+class StubBodyAcquirer:
+    """Serves the htm rendition, and records that no preference was asked for.
+
+    `mods_bytes` stands in for every package's fixture MODS, for the hand-built
+    edge cases; the default is each package's real one.
+    """
+
+    def __init__(self, mods_bytes: bytes | None = None):
         self.requested: list[str] = []
+        self.mods_bytes = mods_bytes
 
     def acquire(self, package_id: str, *, max_bytes=None):
         self.requested.append(package_id)
-        return _package(package_id)
+        return _package(package_id, mods_bytes=self.mods_bytes)
 
 
 def _no_prior(remote_key: str, local_path: Path) -> bool:
     return False
+
+
+def _build_with_log(tmp_path: Path, *, reader, acquirer) -> tuple[dict[str, Path], list[str]]:
+    """Run the transform and return its tables by name with every INFO-and-up log line."""
+    from loguru import logger
+
+    messages: list[str] = []
+    sink = logger.add(messages.append, level="INFO", format="{message}")
+    try:
+        paths = build_committee_reports(tmp_path, reader=reader, acquirer=acquirer, download_prior=_no_prior)
+    finally:
+        logger.remove(sink)
+    return {path.stem: path for path in paths}, messages
+
+
+def _mentions_line(messages: list[str]) -> tuple[int, dict[str, int]]:
+    """The linked count and the by-context mention counter the run log states."""
+    line = next(m for m in messages if "PRIMARY bill" in m)
+    linked = int(line.removeprefix("Committee reports: ").split(" ", 1)[0].replace(",", ""))
+    return linked, ast.literal_eval(line.split("— ", 1)[1])
 
 
 @pytest.fixture
@@ -209,18 +248,63 @@ def test_a_hearing_that_only_mentions_bills_is_not_linked_to_one(reports):
 
 def test_the_mentions_are_counted_by_context_in_the_run_log(tmp_path, monkeypatch):
     """What the column does not carry is still stated: the OTHER and BODY mentions, by context."""
-    from loguru import logger
-
     monkeypatch.delenv("COMMITTEE_REPORTS_SINCE", raising=False)
-    messages: list[str] = []
-    sink = logger.add(messages.append, level="INFO", format="{message}")
-    try:
-        build_committee_reports(tmp_path, reader=StubDiscovery(), acquirer=StubBodyAcquirer(), download_prior=_no_prior)
-    finally:
-        logger.remove(sink)
-    line = next(m for m in messages if "PRIMARY bill" in m)
-    assert line.startswith("Committee reports: 1 packages name a PRIMARY bill")
-    assert "'OTHER': 3" in line and "'BODY': 2" in line
+    _, messages = _build_with_log(tmp_path, reader=StubDiscovery(), acquirer=StubBodyAcquirer())
+    assert _mentions_line(messages) == (1, {"OTHER": 3, "BODY": 2})
+
+
+def _mods(bills: str) -> bytes:
+    """The smallest package MODS `validate_package_mods` accepts for the CRPT package, with these `<bill>`s."""
+    return (
+        '<mods xmlns="http://www.loc.gov/mods/v3"><extension>'
+        f"<accessId>{CRPT_ID}</accessId><collectionCode>CRPT</collectionCode>{bills}"
+        "</extension></mods>"
+    ).encode()
+
+
+#: (the MODS `<bill>` elements, the published bill_id, the mention counter, whether a type warning is logged)
+MODS_EDGES = {
+    "no bills": ("", None, {}, False),
+    "a contextless bill is a mention": ('<bill congress="119" number="7" type="HR"/>', None, {"": 1}, False),
+    "two PRIMARY: the first in document order": (
+        '<bill congress="119" context="PRIMARY" number="5" type="S"/>'
+        '<bill congress="119" context="PRIMARY" number="53" type="HRES"/>',
+        "119-s-5",
+        {},
+        False,
+    ),
+    "a type outside the vocabulary is not linked but still counted": (
+        '<bill congress="119" context="PRIMARY" number="9" type="HDOC"/>'
+        '<bill congress="119" context="OTHER" number="10" type="HDOC"/>',
+        None,
+        {"OTHER": 1},
+        True,
+    ),
+    "a zero-padded number spells the int key": (
+        '<bill congress="119" context="PRIMARY" number="0053" type="HRES"/>',
+        "119-hres-53",
+        {},
+        False,
+    ),
+}
+
+
+@pytest.mark.parametrize(("bills", "bill_id", "mentions", "warns"), MODS_EDGES.values(), ids=MODS_EDGES.keys())
+def test_the_mods_bill_edges(tmp_path, monkeypatch, bills, bill_id, mentions, warns):
+    """Hand-built MODS through the acquirer's own `validate_package_mods`, one edge per case.
+
+    The key is spelled from an int because `congress_bills.bill_id` is, so a
+    publisher's zero-padded number joins; two `PRIMARY` entries resolve to the
+    first in document order, spicy-docs' rule; a type outside `BILL_TYPES`
+    is refused as a linkage with a warning yet counted as the mention it is;
+    and an entry stating no `context` is a mention under `""`, not dropped.
+    """
+    monkeypatch.delenv("COMMITTEE_REPORTS_SINCE", raising=False)
+    paths, messages = _build_with_log(tmp_path, reader=CrptOnlyDiscovery(), acquirer=StubBodyAcquirer(_mods(bills)))
+    rows = pq.read_table(paths["committee_reports"]).to_pylist()
+    assert [row["bill_id"] for row in rows] == [bill_id]
+    assert _mentions_line(messages) == (int(bill_id is not None), mentions)
+    assert any("not a supported bill type" in m for m in messages) is warns
 
 
 def test_the_acquirer_is_asked_with_no_preference(tmp_path, monkeypatch):

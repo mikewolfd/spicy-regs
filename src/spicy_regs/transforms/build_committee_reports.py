@@ -68,8 +68,10 @@ trustworthy, and a consumer could no longer tell the measure a report
 accompanies from one its text happens to cite. Until then the mentions are
 counted by context in the run log, a ``<bill>`` stating no ``context`` among
 them under ``""`` — spicy-docs keeps such an entry rather than dropping it,
-and a mention is what it is. (The other request, the MODS accessors, landed
-in 0.21.2 and replaced the interim parse this module carried.)
+and a mention is what it is — and so is one whose type is outside the bill
+vocabulary, since only a linkage needs a key. (The other request, the MODS
+accessors, landed in 0.21.2 and replaced the interim parse this module
+carried.)
 
 **Incremental.** The window starts at the prior published table's max
 ``last_modified`` minus a short overlap, so a steady-state run asks GovInfo for
@@ -259,7 +261,11 @@ def _bill_key(package_id: str, bill: ModsBill) -> str | None:
     if bill.normalized_bill_type is None:
         logger.warning("{}: MODS bill type {!r} is not a supported bill type; not linked", package_id, bill.bill_type)
         return None
-    return natural_key(bill.congress, bill.normalized_bill_type, bill.number)
+    # ``int`` on purpose: the wheel keeps the publisher's digits verbatim
+    # (``isdecimal()`` is guaranteed), while ``congress_bills.bill_id`` is
+    # spelled from an int, so a zero-padded MODS number must collapse to the
+    # key it can join on.
+    return natural_key(bill.congress, bill.normalized_bill_type, int(bill.number))
 
 
 def build_committee_reports(
@@ -318,6 +324,8 @@ def build_committee_reports(
             bill = None if primary is None else _bill_key(package_id, primary)
             if bill is not None:
                 linked += 1
+            # Counted whatever the type is spelled: a mention needs no key, only
+            # a linkage does, so ``_bill_key``'s vocabulary check does not gate it.
             mentions.update(entry.context for entry in package.mods.bills if entry.context != PRIMARY_BILL_CONTEXT)
             rows.append(
                 shape(

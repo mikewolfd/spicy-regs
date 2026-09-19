@@ -8,6 +8,8 @@ One row per bill or resolution. Two rollups write this table: `congress-bills` w
 
 **Coverage.** True range on rows, mixed on columns. Every bill the Congress.gov ingest has walked is here, with latest actions from 1799-12-16 (the 6th Congress) to 2026-09-04, complete on identifier, type and date for every row. The first ten columns are filled for all of them. The thirty-eight columns the bill family appends — the publisher facts the list endpoint discards, the stage, signing and money-bill findings, and their provenance — are filled only for the Congresses that rollup has covered, and are NULL on every other row until it reaches them; for the 82nd through the 107th it reaches them through the API detail route rather than a BILLSTATUS zip, and the count columns it cannot substantiate from that route stay NULL there. Once filled they stay filled: the two rollups that write this table merge column-wise, so the archive-wide walk updates the ten columns it owns without clearing the thirty-eight it does not. *(measured 2026-09-19)*
 
+**Data quality.** `statutes_at_large_cite` is NULL on every row here. Its column sentence, which is the contract's, says the host fills it by joining `laws` on `bill_id` at merge time — this repository hosts no `laws` table, so no such join runs and the column stays empty rather than guessed. `public_law_number` and `law_type` are not that case: they come from the bill's own publisher record — its `laws` entry, when the publisher states one — and are filled wherever the bill family has reached.
+
 - **Parquet file:** `congress_bills.parquet`
 - **Queryable via MCP `query_sql`:** Yes
 

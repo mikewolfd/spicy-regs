@@ -337,6 +337,14 @@ tables:
       two rollups write it, this is the one table merged column-wise: neither
       writer's NULL can erase the other's value. All columns are stored as
       VARCHAR.
+    data_quality: >-
+      `statutes_at_large_cite` is NULL on every row here. Its column sentence,
+      which is the contract's, says the host fills it by joining `laws` on
+      `bill_id` at merge time — this repository hosts no `laws` table, so no such
+      join runs and the column stays empty rather than guessed. `public_law_number`
+      and `law_type` are not that case: they come from the bill's own publisher
+      record — its `laws` entry, when the publisher states one — and are filled
+      wherever the bill family has reached.
     columns_from: spicy_docs
 
   unified_agenda:
@@ -1197,6 +1205,9 @@ tables:
       related bill either. So expect this column to be NULL. The measurement is
       retained with every request and raw response under
       `~/Work/corpora/supply-2026-09-02/receipts/report-bill-linkage-2026-09-19/`.
+      `event_id` is NULL here too: the transform does not read the Congress.gov
+      hearing detail record that states the `associatedMeeting`, and the package
+      itself does not carry it.
     columns_from: spicy_docs
 
   bill_family_archives:
