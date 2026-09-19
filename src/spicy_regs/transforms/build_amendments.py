@@ -25,10 +25,9 @@ publishing a truncated table.
 from __future__ import annotations
 
 import os
-from collections.abc import Callable, Iterator
+from collections.abc import Callable
 from datetime import date, datetime, timedelta
 from pathlib import Path
-from typing import Any, Protocol
 
 from loguru import logger
 from spicy_docs.reading.paged_json import PagedJsonBudget
@@ -43,16 +42,11 @@ from spicy_docs.sources.congress.listing import (
 from spicy_regs.sources import r2
 from spicy_regs.sources.congress_bills import API_KEY_ENV_VARS, _resolve_api_key
 from spicy_regs.transforms.congress_scope import congresses_from_env
+from spicy_regs.transforms.congress_walk import ListingSource
 from spicy_regs.transforms.table_merge import merge_contract_table, prior_scratch_path
 
 NAME = "amendments"
 OUTPUT = "amendments.parquet"
-
-
-class ListingSource(Protocol):
-    """What this transform needs of a Congress.gov listing reader."""
-
-    def records(self, route: Any, url: str, *, max_pages: int = ...) -> Iterator[Any]: ...
 
 
 BUDGET = PagedJsonBudget(

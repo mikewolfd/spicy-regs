@@ -283,7 +283,7 @@ def merge_contract_table(
 
     contract = TABLE_CONTRACTS[contract_name]
     coalesce = contract_name in COALESCED_TABLES
-    return merge_table(
+    out_file = merge_table(
         output_dir,
         name=contract.name,
         columns=contract.columns,
@@ -295,3 +295,118 @@ def merge_contract_table(
         prior_present=prior_present,
         coalesce_prior=coalesce,
     )
+    if contract_name == STATUTES_JOIN_TARGET:
+        fill_statutes_at_large_cite(output_dir, out_file, contract.version_column, contract.identity, download_prior)
+    return out_file
+
+
+#: ``congress_bills.statutes_at_large_cite`` is filled from ``laws`` at this
+#: table's merge — the contract's own sentence for the column — and from
+#: nowhere else: the bill family sees one BILLSTATUS document, and the
+#: citation lives in the PLAW USLM file the laws rollup captures once per law.
+STATUTES_JOIN_TARGET = "congress_bills"
+STATUTES_JOIN_SOURCE = "laws"
+STATUTES_JOIN_COLUMN = "statutes_at_large_cite"
+STATUTES_JOIN_KEY = "bill_id"
+
+
+def fill_statutes_at_large_cite(
+    output_dir: Path,
+    out_file: Path,
+    version_column: str | None,
+    identity: tuple[str, ...],
+    download_prior: Callable[[str, Path], bool] = r2.download,
+) -> int:
+    """Fill ``statutes_at_large_cite`` on a merged ``congress_bills`` from the published ``laws`` table.
+
+    A merge-time join of the kind ``pipelines/rollups/base.py`` permits: ``laws``
+    is an ingest rollup's output, read best-effort, and both writers of
+    ``congress_bills`` declare it in ``soft_inputs``. Runs *after* the
+    column-wise merge so the coalesce semantics that protect the two writers'
+    columns are untouched, and takes the law's citation where ``laws`` states
+    one, keeping a citation already here where it does not — ``laws`` never
+    publishes a captured citation as NULL, so nothing is ever cleared. One law
+    per bill: where the route lists two law entries for one bill (measured 0
+    of 108 on the 119th), the larger ``update_date`` wins, then the key.
+    With no ``laws`` table published the column stays as it was. Returns how
+    many rows now carry a citation.
+    """
+    import duckdb
+
+    laws = published_table(output_dir, STATUTES_JOIN_SOURCE, download_prior)
+    if laws is None:
+        logger.info(
+            "{}: no published {} table — {} left as merged",
+            STATUTES_JOIN_TARGET,
+            STATUTES_JOIN_SOURCE,
+            STATUTES_JOIN_COLUMN,
+        )
+        return 0
+    filled_file = output_dir / f"_{STATUTES_JOIN_TARGET}_cited.parquet"
+    order_by = f"{version_column} DESC, {', '.join(identity)}" if version_column else ", ".join(identity)
+    con = duckdb.connect()
+    con.execute(
+        f"""
+        COPY (
+            SELECT b.* REPLACE (COALESCE(l.{STATUTES_JOIN_COLUMN}, b.{STATUTES_JOIN_COLUMN}) AS {STATUTES_JOIN_COLUMN})
+            FROM read_parquet('{out_file}') b
+            LEFT JOIN (
+                SELECT {STATUTES_JOIN_KEY}, {STATUTES_JOIN_COLUMN} FROM read_parquet('{laws}')
+                WHERE {STATUTES_JOIN_KEY} IS NOT NULL AND {STATUTES_JOIN_COLUMN} IS NOT NULL
+                QUALIFY ROW_NUMBER() OVER (PARTITION BY {STATUTES_JOIN_KEY} ORDER BY update_date DESC, law_id) = 1
+            ) l USING ({STATUTES_JOIN_KEY})
+            ORDER BY {order_by}
+        ) TO '{filled_file}' (FORMAT PARQUET, COMPRESSION ZSTD, ROW_GROUP_SIZE 50000);
+        """
+    )
+    cited = con.execute(
+        f"SELECT count(*) FROM read_parquet('{filled_file}') WHERE {STATUTES_JOIN_COLUMN} IS NOT NULL"
+    ).fetchone()
+    con.close()
+    filled_file.replace(out_file)
+    laws.unlink(missing_ok=True)
+    count = int(cited[0]) if cited else 0
+    logger.info(
+        "{}: {:,} rows carry a {} after joining {}",
+        STATUTES_JOIN_TARGET,
+        count,
+        STATUTES_JOIN_COLUMN,
+        STATUTES_JOIN_SOURCE,
+    )
+    return count
+
+
+def retire_prior_rows(prior_file: Path, **scope: str) -> int:
+    """Drop from a downloaded prior table every row matching all of ``scope``, returning how many went.
+
+    For a table that is a *snapshot* rather than an accumulation — today's
+    committee seats, one session's classification page — a row the publisher
+    no longer lists must not linger from an earlier capture, and
+    :func:`merge_table` alone keeps every prior row. Rewriting the prior
+    scratch file without the scope's rows before the merge makes that merge
+    "replace the scope", and leaves every other scope's rows standing (an
+    earlier Congress keeps its last capture). ``scope`` names columns of the
+    prior table; values are bound as parameters.
+    """
+    import duckdb
+
+    if not scope:
+        raise ValueError("retire_prior_rows needs at least one scope column")
+    for column in scope:
+        if not column.isidentifier() or column != column.lower():
+            raise ValueError(f"scope column {column!r} is not a snake_case identifier")
+    where = " AND ".join(f"{column} = ?" for column in scope)
+    values = list(scope.values())
+    kept_file = prior_file.with_name(prior_file.stem + "_kept.parquet")
+    con = duckdb.connect()
+    retired = con.execute(f"SELECT count(*) FROM read_parquet('{prior_file}') WHERE {where}", values).fetchone()
+    con.execute(
+        f"COPY (SELECT * FROM read_parquet('{prior_file}') WHERE NOT ({where}) OR ({' OR '.join(f'{c} IS NULL' for c in scope)}))"
+        f" TO '{kept_file}' (FORMAT PARQUET, COMPRESSION ZSTD)",
+        values,
+    )
+    con.close()
+    kept_file.replace(prior_file)
+    count = int(retired[0]) if retired else 0
+    logger.info("{}: retired {:,} prior row(s) for {}", prior_file.name, count, scope)
+    return count
