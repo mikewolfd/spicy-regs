@@ -255,6 +255,7 @@ def build_committee_reports(
     logger.info("Committee reports: modified since {}; cap {} per collection; agenda cap 0", since, max_packages)
     observed_at = datetime.now(UTC).isoformat()
     link_rows: list[dict] = []
+    evaluated_hearings: set[str] = set()
     report_rows: list[dict] = []
     section_rows: list[dict] = []
     hearing_rows: list[dict] = []
@@ -301,6 +302,7 @@ def build_committee_reports(
                     state["outcome"] = "detail_refused"
                 hearing_rows.append(shape_hearing_transcript(package, event_id=event_id, **common))
                 link_rows.extend(shape_hearing_bill_link(link) for link in cover_links(package.mods, event_id=event_id))
+                evaluated_hearings.add(package_id)
             else:
                 estimate = read_cbo_estimate(derived.text)
                 report_rows.append(shape_committee_report(
@@ -333,6 +335,7 @@ def build_committee_reports(
         logger.info("Committee reports: renditions read — {}", dict(renditions))
     logger.info("Committee reports: {} cover links; agenda deferred (no verified meeting-to-jacket join)", len(link_rows))
     paths = tuple(merge_contract_table(output_dir, name, rows, download_prior=download_prior,
+                                     replace_parents=("package_id", evaluated_hearings) if name == "hearing_bill_links" else None,
                                      prior_present=(prior_files[name] is not None) if name in prior_files else None)
                   for name, rows in (("committee_reports", report_rows), ("report_sections", section_rows),
                                      ("hearing_transcripts", hearing_rows), ("hearing_bill_links", link_rows)))

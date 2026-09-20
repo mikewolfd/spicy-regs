@@ -1,4 +1,4 @@
-"""Local unresolved-key observations, retained across agency/type subsets."""
+"""Unresolved-key observations, restored from R2 across agency/type subsets."""
 
 from collections.abc import Iterable, Mapping
 from dataclasses import asdict
@@ -12,6 +12,13 @@ from spicy_docs.sources.mirrulations import KeyOutcome
 from spicy_docs.transport.credentials import scrub_credential
 
 from spicy_regs.schemas import RECORD_TYPES, RecordType
+from spicy_regs.sources import r2
+
+
+UNRESOLVED_SCHEMA = pa.schema([
+    ("agency", pa.string()), ("record_type", pa.string()), ("key", pa.string()),
+    ("status", pa.string()), ("reason", pa.string()), ("attempted_at", pa.string()), ("attempts", pa.int64()),
+])
 
 
 def source_record_type(record_type: RecordType) -> SourceRecordType:
@@ -30,6 +37,8 @@ class UnresolvedKeys:
     def __init__(self, output_dir: Path) -> None:
         self.path = output_dir / "failed_keys.parquet"
         self.rows: dict[str, dict] = {}
+        if not self.path.exists():
+            r2.download(self.path.name, self.path)
         if self.path.exists():
             for row in pq.read_table(self.path).to_pylist():
                 if "status" not in row:
@@ -59,10 +68,10 @@ class UnresolvedKeys:
                 row = asdict(observation)
                 row["reason"] = scrub_credential(row["reason"], "")
                 self.rows[observation.key] = {"agency": agency, "record_type": record_type, **row}
-        if not self.rows:
-            self.path.unlink(missing_ok=True)
-            return
+        # Publish an empty checkpoint too: absence would leave the last remote
+        # failures available to resurrect on a fresh hosted runner.
         temporary = self.path.with_suffix(".tmp.parquet")
-        pq.write_table(pa.Table.from_pylist(list(self.rows.values())), temporary, compression="zstd")
+        pq.write_table(pa.Table.from_pylist(list(self.rows.values()), schema=UNRESOLVED_SCHEMA),
+                       temporary, compression="zstd")
         temporary.replace(self.path)
         logger.info("Retained {} unresolved keys; none manifested as coverage", len(self.rows))

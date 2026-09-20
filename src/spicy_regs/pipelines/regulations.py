@@ -41,6 +41,7 @@ from spicy_regs.pipelines.staging import stage_agencies
 from spicy_regs.schemas import RECORD_TYPES, RecordType
 from spicy_regs.sources import iceberg, r2
 from spicy_regs.sources.derived_text import DerivedCommentText
+from spicy_regs.sources.mirrulations_records import IdentityCheckedReader
 from spicy_regs.transforms import (
     Chain,
     EnrichCommentText,
@@ -135,7 +136,7 @@ class RegulationsPipeline(Pipeline):
             agencies,
             record_types,
             staging_dir,
-            lambda agency, rt: read(agency, source_types[rt.name]),
+            lambda agency, rt: IdentityCheckedReader(read(agency, source_types[rt.name]), unresolved.for_reader(agency, rt)),
             transform_for=self._transform_for,
             max_workers=self.max_workers,
         )
@@ -159,7 +160,7 @@ class RegulationsPipeline(Pipeline):
         manifest.save(output_dir)
         if self.skip_upload:
             logger.info("skip_upload=True — output left in {}", output_dir)
-        elif any(staged.values()):
+        else:
             logger.info("Uploading to R2...")
             self._publish(output_dir, record_types, staged, changed_comments)
 
@@ -182,9 +183,10 @@ class RegulationsPipeline(Pipeline):
         object clears its size guard first, and the manifest uploads last, once
         every data upload has returned.
         """
-        base_data_types = [rt.name for rt in record_types if rt.name != "comments"]
+        base_data_types = [rt.name for rt in record_types if rt.name != "comments" and staged.get(rt.name, 0)]
         index_file = output_dir / "comments_index.parquet"
         manifest_file = output_dir / "manifest.parquet"
+        unresolved_file = output_dir / "failed_keys.parquet"
         # The Iceberg comments path MERGEs rows through the catalog rather than
         # under the public comments/ prefix, so it changes no partition files —
         # only the refreshed index needs publishing.
@@ -198,6 +200,8 @@ class RegulationsPipeline(Pipeline):
         planned = r2.dataset_files(output_dir, base_data_types) + changed_comments
         if publish_index:
             planned.append(index_file)
+        if unresolved_file.exists():
+            planned.append(unresolved_file)
         if publish_manifest:
             planned.append(manifest_file)
         r2.preflight_uploads(output_dir, planned)
@@ -214,6 +218,8 @@ class RegulationsPipeline(Pipeline):
         elif publish_index:
             logger.info("Uploading refreshed comments index (Iceberg path)...")
             r2.upload_file(index_file, remote_key="comments_index.parquet")
+        if unresolved_file.exists():
+            r2.upload_file(unresolved_file, remote_key=unresolved_file.name)
         if publish_manifest:
             logger.info("Uploading manifest after all data files succeeded...")
             r2.upload_file(manifest_file, remote_key="manifest.parquet")
@@ -248,11 +254,12 @@ class RegulationsPipeline(Pipeline):
         total = len(keys)
         for start in range(0, total, self.chunk_size):
             chunk = keys[start : start + self.chunk_size]
-            reader = mirrulations.MirrulationsReader(
+            source = mirrulations.MirrulationsReader(
                 resource, mirrulations.BUCKET, mirrulations.PREFIX, agency, source_record_type(comment_rt),
                 key_lister=lambda: chunk,
                 unresolved_keys=[item for item in previous if item.key in chunk],
             )
+            reader = IdentityCheckedReader(source, [item for item in previous if item.key in chunk])
             records = list(transform.apply(reader.iter_records()))
             if records:
                 write_staging(agency, comment_rt.name, records, staging_dir, comment_rt.schema)
@@ -263,6 +270,8 @@ class RegulationsPipeline(Pipeline):
             manifest.record(reader.last_keys)
             if reader.last_keys:
                 save_manifest(output_dir, set(reader.last_keys))
+            if not self.skip_upload:
+                self._publish(output_dir, [comment_rt], {comment_rt.name: len(records)}, [])
             logger.info("[{}] comments: committed {}/{}", agency, start + len(chunk), total)
 
     # -- regulations-specific wiring ---------------------------------------

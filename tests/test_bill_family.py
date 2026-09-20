@@ -216,6 +216,24 @@ def _no_prior(remote_key: str, local_path: Path) -> bool:
     return False
 
 
+def test_printing_403_aborts_run_before_any_further_capture(tmp_path, monkeypatch):
+    monkeypatch.setenv("BILL_FAMILY_CONGRESSES", "119")
+    monkeypatch.setenv("BILL_FAMILY_BILL_TYPES", "hr")
+    monkeypatch.setattr("spicy_regs.transforms.build_bill_family.resolve_gemini_key", lambda: None)
+
+    class Refused(StubBodyAcquirer):
+        def acquire(self, package_id, *, max_bytes=None):
+            self.requested.append(package_id)
+            raise CredentialRefusedError("stub: HTTP 403")
+
+    bodies = Refused()
+    with pytest.raises(CredentialRefusedError, match="403"):
+        build_bill_family(tmp_path, bulk_acquirer=StubBulkAcquirer(), body_acquirer=bodies,
+                          max_version_fetches=10, download_prior=_no_prior)
+    assert len(bodies.requested) == 1, "the fixture offers two printings; the second must never be attempted"
+    assert not list(tmp_path.glob("*.parquet")), "an aborted run must produce no capture tables or checkpoints"
+
+
 def _prior_from(published: Path):
     """A ``download_prior`` that serves an earlier run's published files."""
 

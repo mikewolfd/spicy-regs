@@ -118,6 +118,10 @@ def _assert_upload_safe(
     must be at least that fraction of the existing remote file. Set
     ``R2_ALLOW_SHRINK=1`` to bypass (used by recovery scripts).
     """
+    # Retry state must shrink to zero when the last unresolved key recovers.
+    # Dataset size guards still apply to every data table and the manifest.
+    if remote_key == "failed_keys.parquet":
+        return
     if remote_size is None or remote_size == 0:
         return
     if getenv("R2_ALLOW_SHRINK") == "1":

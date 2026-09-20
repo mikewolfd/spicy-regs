@@ -486,6 +486,8 @@ def _version_captures(
             budget[0] -= 1
             try:
                 package = acquirer.acquire(package_id)
+            except CredentialRefusedError:
+                raise
             except Exception as error:  # noqa: BLE001 — one printing's refusal is not the bill's
                 logger.warning(
                     "Bill family: {} {} body refused: {}",
@@ -1542,6 +1544,12 @@ def build_bill_family(
             rows,
             download_prior=download_prior,
             prior_present=(prior_paths.get(contract) is not None) if contract in prior_paths else None,
+            replace_parents=("bill_id", {
+                identifier for row in folded.bills
+                if (identifier := row["bill_id"]) is not None and row.get("cbo_cost_estimates_outcome") in {
+                    "populated", "requested-empty:absent", "requested-empty:present-and-empty",
+                }
+            }) if contract == "cbo_cost_estimates" else None,
         )
 
     paths = [publish(contract, getattr(folded, attr)) for contract, attr in FAMILY_TABLES]

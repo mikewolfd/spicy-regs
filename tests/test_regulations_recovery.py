@@ -12,7 +12,10 @@ from spicy_regs.manifest import Manifest, save_manifest
 from spicy_regs.pipelines.regulations import RegulationsPipeline
 from spicy_regs.pipelines.regulations_state import UnresolvedKeys
 from spicy_regs.schemas import DOCKET
-from tests.test_regulations_pipeline import _FakeS3Resource, _comment_key, _docket_key, _docket_payload
+from spicy_regs.sources import r2
+from tests.test_regulations_pipeline import (
+    _FakeS3Resource, _RaisingObj, _comment_key, _comment_payload, _docket_key, _docket_payload,
+)
 
 
 @pytest.mark.parametrize("chunked", [False, True])
@@ -57,6 +60,44 @@ def test_access_refusal_aborts_without_checkpoint(tmp_path, monkeypatch, status,
     assert not (tmp_path / "failed_keys.parquet").exists()
 
 
+@pytest.mark.parametrize("chunked", [False, True])
+@pytest.mark.parametrize("transient_first", [False, True])
+@pytest.mark.parametrize("body", [
+    {"data": {}}, {"errors": [{"detail": "upstream failed"}]},
+    {"data": {"id": "  "}}, {"data": {"id": 42}},
+])
+def test_missing_record_identity_never_becomes_a_row_or_coverage(tmp_path, monkeypatch, chunked, body, transient_first):
+    from spicy_regs.pipelines import regulations
+
+    key = _comment_key("c1", "EPA-2026-0001") if chunked else _docket_key("EPA-2026-0001")
+    class Resource(_FakeS3Resource):
+        fail_next = transient_first
+
+        def Object(self, name, key):  # noqa: N802
+            if self.fail_next:
+                self.fail_next = False
+                return _RaisingObj()
+            return super().Object(name, key)
+
+    resource = Resource({key: json.dumps(body).encode()})
+    monkeypatch.setattr(mirrulations, "s3_resource", lambda: resource)
+    monkeypatch.setattr(regulations.iceberg, "merge_comments", lambda *a: pytest.fail("invalid record reached merge"))
+    pipeline = RegulationsPipeline(
+        agency="EPA", output_dir=tmp_path, only_comments=chunked, skip_comments=not chunked,
+        enrich_text=False, use_iceberg=chunked, chunk_size=1 if chunked else 0,
+    )
+    pipeline.run()
+    pipeline.run()
+    assert key not in Manifest.load(tmp_path)
+    [row] = pq.read_table(tmp_path / "failed_keys.parquet").to_pylist()
+    assert row["key"] == key and row["attempts"] == (3 if transient_first else 2)
+    assert row["status"] == "requested-empty"
+    assert row["reason"] == "missing-record-identity: expected a non-blank data.id string"
+    assert not list((tmp_path / "staging").rglob("*.parquet"))
+    assert not (tmp_path / "dockets.parquet").exists()
+    assert not (tmp_path / "comments_index.parquet").exists()
+
+
 def test_legacy_false_coverage_is_retried_before_new_work(tmp_path, monkeypatch):
     old, new = _docket_key("EPA-2024-0001"), _docket_key("EPA-2025-0002")
     save_manifest(tmp_path, {old})
@@ -78,7 +119,7 @@ def test_legacy_false_coverage_is_retried_before_new_work(tmp_path, monkeypatch)
     RegulationsPipeline(agency="EPA", output_dir=tmp_path, skip_comments=True).run()
     assert asked == [old, new]
     assert pq.read_table(tmp_path / "dockets.parquet").num_rows == 2
-    assert not (tmp_path / "failed_keys.parquet").exists()
+    assert pq.read_table(tmp_path / "failed_keys.parquet").num_rows == 0
 
 
 def test_scoped_run_preserves_other_agencies_outcomes(tmp_path):
@@ -87,3 +128,88 @@ def test_scoped_run_preserves_other_agencies_outcomes(tmp_path):
     state.update([], {("FDA", "dockets"): [outcome]})
     state.update([], {("EPA", "dockets"): []})
     assert UnresolvedKeys(tmp_path).for_reader("FDA", DOCKET) == [outcome]
+
+
+@pytest.mark.parametrize("chunked", [False, True])
+@pytest.mark.parametrize("recovers", [False, True])
+def test_unresolved_history_survives_fresh_hosted_runner(tmp_path, monkeypatch, chunked, recovers):
+    from spicy_regs import manifest as manifest_module
+    from spicy_regs.pipelines import regulations
+
+    remote = {}
+    uploaded = []
+    asked = []
+    old = _comment_key("old", "EPA-2026-0001") if chunked else _docket_key("EPA-2026-0001")
+    new = _comment_key("new", "EPA-2026-0001") if chunked else _docket_key("EPA-2026-0002")
+    store = {old: b'{"data":{}}'}
+
+    def download(key, path):
+        if key not in remote:
+            return False
+        path.write_bytes(remote[key])
+        return True
+
+    def upload(path, remote_key=None):
+        key = remote_key or path.name
+        # Exercise the real shrink decision, including a fully cleared checkpoint.
+        r2._assert_upload_safe(path.stat().st_size, len(remote[key]) if key in remote else None, key)
+        remote[key] = path.read_bytes()
+        uploaded.append(key)
+
+    class Recording(_FakeS3Resource):
+        def Object(self, name, key):  # noqa: N802
+            asked.append(key)
+            return super().Object(name, key)
+
+    original = mirrulations.reader_factory
+    monkeypatch.setattr(mirrulations, "reader_factory", lambda *a, **kw: original(*a, **kw, download_workers=1))
+    monkeypatch.setattr(mirrulations, "s3_resource", lambda: Recording(store))
+    monkeypatch.setattr(r2, "download", download)
+    monkeypatch.setattr(manifest_module, "download_from_r2", download)
+    monkeypatch.setattr(r2, "upload_file", upload)
+    monkeypatch.setattr(r2, "preflight_uploads", lambda *a: None)
+    monkeypatch.setattr(r2, "upload_dataset", lambda out, names: [upload(out / f"{name}.parquet") for name in names])
+    monkeypatch.setattr(regulations.iceberg, "merge_comments", lambda sd, out, rt: pq.write_table(
+        pa.table({"rows": [1]}), out / "comments_index.parquet"))
+
+    def run(directory):
+        RegulationsPipeline(
+            agency="EPA", output_dir=directory, only_comments=chunked, skip_comments=not chunked,
+            enrich_text=False, use_iceberg=chunked, chunk_size=1 if chunked else 0, skip_upload=False,
+        ).run()
+
+    first, second = tmp_path / "first", tmp_path / "fresh-runner"
+    run(first)
+    assert uploaded == ["failed_keys.parquet"], "a zero-row pass must publish its unresolved state"
+    [previous] = pq.read_table(first / "failed_keys.parquet").to_pylist()
+    assert previous["attempts"] == 1
+    uploaded.clear()
+    asked.clear()
+    valid_old = _comment_payload("old", "EPA-2026-0001", "2026-01-01") if chunked else _docket_payload("EPA-2026-0001", "2026-01-01")
+    valid_new = _comment_payload("new", "EPA-2026-0001", "2026-01-01") if chunked else _docket_payload("EPA-2026-0002", "2026-01-01")
+    # The old key is absent from discovery; only restored state can retry it.
+    store = {new: json.dumps(valid_new).encode()}
+    original_object = Recording.Object
+
+    def object_with_old(self, name, key):
+        if key == old:
+            asked.append(key)
+            return _FakeS3Resource({old: json.dumps(valid_old).encode() if recovers else b'{"data":{}}'}).Object(name, key)
+        return original_object(self, name, key)
+
+    monkeypatch.setattr(Recording, "Object", object_with_old)
+    run(second)
+    assert asked == [old, new], "restored unresolved work must precede new discovery"
+    outcomes = UnresolvedKeys(second).rows
+    if recovers:
+        assert outcomes == {}
+        assert old in Manifest.load(second)
+    else:
+        assert outcomes[old]["attempts"] == 2
+        assert outcomes[old]["reason"] == previous["reason"]
+        assert old not in Manifest.load(second)
+    assert new in Manifest.load(second)
+    assert uploaded[-2:] == ["failed_keys.parquet", "manifest.parquet"]
+    third = tmp_path / "restore-only"
+    third.mkdir()
+    assert UnresolvedKeys(third).rows == outcomes, "cleared state must also survive a fresh runner"

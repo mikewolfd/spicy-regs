@@ -2,9 +2,12 @@
 
 import html
 import shutil
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
+from xml.etree import ElementTree as ET
 
+import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 from spicy_docs.sources.congress.bill_status import BillIdentity, parse_bill_status
@@ -168,3 +171,107 @@ def test_communication_route_is_filled_on_unchanged_old_rows(tmp_path):
     assert reader.details == []
     assert {r["source_route"] for r in updated} == {"congress-gov-detail"}
     assert all(r["record_entry_text"] is None for r in updated)
+
+
+@pytest.mark.parametrize("correction", ["empty", "partial", "refused"])
+def test_hearing_correction_replaces_only_evaluated_parent_links(tmp_path, correction):
+    package_id = "CHRG-118hhrg56198"
+    modified = "2026-09-18T12:00:00Z"
+    mods = (FIXTURES / f"mods-{package_id}.excerpt.xml").read_bytes()
+    asked = []
+
+    class Discovery:
+        def packages(self, url, *, max_pages=1):
+            yield SimpleNamespace(records=[{"packageId": package_id, "lastModified": modified}]
+                                  if "/CHRG/" in url else [])
+
+    class Bodies:
+        def acquire(self, package_id, *, max_bytes=None):
+            asked.append(package_id)
+            if correction == "refused" and modified.startswith("2026-09-20"):
+                raise ValueError("body temporarily unavailable")
+            package = _package(package_id, mods_bytes=mods)
+            return replace(package, summary=replace(package.summary, last_modified=modified))
+
+    class Hearings:
+        def records(self, route, url, *, max_pages=1):
+            yield SimpleNamespace(records=[{"congress": 118, "jacketNumber": "56198"}])
+
+    def run():
+        return build_committee_reports(tmp_path, reader=Discovery(), acquirer=Bodies(),
+                                       hearings=Hearings(), download_prior=_no_prior)
+
+    paths = run()
+    original = pq.read_table(paths[3])
+    assert original.num_rows == 12
+    untouched = original.to_pylist()[0] | {"package_id": "CHRG-118hhrg99999"}
+    pq.write_table(pa.Table.from_pylist([*original.to_pylist(), untouched], schema=original.schema), paths[3])
+    retain(paths)
+    modified = "2026-09-20T12:00:00Z"
+    mods = mods.replace(b'context="COVER"', b'context="BODY"', 1 if correction == "partial" else -1)
+    paths = run()
+    rows = pq.read_table(paths[3]).to_pylist()
+    fresh = [row for row in rows if row["package_id"] == package_id]
+    assert len(fresh) == {"empty": 0, "partial": 11, "refused": 12}[correction]
+    assert [row for row in rows if row["package_id"] != package_id] == [untouched]
+    [checkpoint] = pq.read_table(paths[4]).to_pylist()
+    assert checkpoint["outcome"] == ("refused" if correction == "refused" else "complete")
+    retain(paths)
+    asked.clear()
+    run()
+    assert asked == ([package_id] if correction == "refused" else [])
+    assert pq.read_table(paths[3]).to_pylist() == rows
+
+
+@pytest.mark.parametrize("correction", ["absent", "empty", "replacement", "unexpected"])
+def test_cbo_correction_replaces_only_successfully_evaluated_bill_estimates(tmp_path, monkeypatch, correction):
+    monkeypatch.setenv("BILL_FAMILY_CONGRESSES", "118")
+    monkeypatch.setenv("BILL_FAMILY_BILL_TYPES", "hr")
+    monkeypatch.setattr("spicy_regs.transforms.build_bill_family.resolve_gemini_key", lambda: None)
+    xml = (FIXTURES / "BILLSTATUS-118hr801.excerpt.xml").read_bytes()
+
+    class Bulk(StubBulkAcquirer):
+        def acquire(self, congress, bill_type, *, unchanged_since=None):
+            status = parse_bill_status(xml, identity=BillIdentity(118, "hr", 801))
+            return _Acquisition(_Archive([_Member(status)]), _capture("https://www.govinfo.gov/bulkdata/test.zip", xml))
+
+    def run():
+        return build_bill_family(tmp_path, bulk_acquirer=Bulk(), body_acquirer=StubBodyAcquirer(),
+                                 max_version_fetches=0, download_prior=_no_prior)
+
+    paths = run()
+    estimates_path = tmp_path / "cbo_cost_estimates.parquet"
+    original = pq.read_table(estimates_path)
+    [old] = original.to_pylist()
+    untouched = old | {"bill_id": "118-hr-9999"}
+    pq.write_table(pa.Table.from_pylist([old, untouched], schema=original.schema), estimates_path)
+    retain(paths)
+    root = ET.fromstring(xml)
+    bill = root.find("bill")
+    assert bill is not None
+    updated = bill.find("updateDateIncludingText")
+    estimates = bill.find("cboCostEstimates")
+    assert updated is not None and estimates is not None
+    updated.text = "2026-09-20T12:00:00Z"
+    if correction == "absent":
+        bill.remove(estimates)
+    elif correction == "empty":
+        estimates.clear()
+    elif correction == "unexpected":
+        estimates.text = "upstream failed"
+    else:
+        url = estimates.find("item/url")
+        assert url is not None
+        url.text = "https://www.cbo.gov/publication/99999"
+    xml = ET.tostring(root)
+    paths = run()
+    rows = pq.read_table(estimates_path).to_pylist()
+    assert [row for row in rows if row["bill_id"] == "118-hr-9999"] == [untouched]
+    fresh = [row for row in rows if row["bill_id"] == "118-hr-801"]
+    assert [row["publication_id"] for row in fresh] == (
+        ["59139"] if correction == "unexpected" else ["99999"] if correction == "replacement" else []
+    )
+    if correction != "unexpected":
+        retain(paths)
+        run()
+        assert pq.read_table(estimates_path).to_pylist() == rows

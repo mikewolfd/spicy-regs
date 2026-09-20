@@ -331,7 +331,7 @@ def test_parse_failure_is_unresolved_and_recovers(tmp_output: Path, monkeypatch:
     store[corrupt] = dumps(_docket_payload("EPA-2025-0002", "2025-01-01")).encode()
     _run(tmp_output)
     assert corrupt in Manifest.load(tmp_output)
-    assert not (tmp_output / "failed_keys.parquet").exists()
+    assert pl.read_parquet(tmp_output / "failed_keys.parquet").is_empty()
 
 
 def test_chunked_comments_exclude_failed_keys_from_manifest(tmp_output: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -433,7 +433,7 @@ def test_run_uploads_changed_comment_partitions(tmp_output: Path, monkeypatch: p
         skip_upload=False,
     ).run()
 
-    assert [label for label, _ in events] == ["preflight", "partitions", "file"]
+    assert [label for label, _ in events] == ["preflight", "partitions", "file", "file"]
     preflight = events[0][1]
     assert tmp_output / "comments_index.parquet" in preflight
     assert tmp_output / "manifest.parquet" in preflight
@@ -441,7 +441,9 @@ def test_run_uploads_changed_comment_partitions(tmp_output: Path, monkeypatch: p
     out, changed = events[1][1]
     assert out == tmp_output
     assert changed and all(p.suffix == ".parquet" for p in changed)
-    assert events[2][1] == (tmp_output / "manifest.parquet", "manifest.parquet")
+    assert tmp_output / "failed_keys.parquet" in preflight
+    assert events[2][1] == (tmp_output / "failed_keys.parquet", "failed_keys.parquet")
+    assert events[3][1] == (tmp_output / "manifest.parquet", "manifest.parquet")
 
 
 def test_run_does_not_advance_manifest_after_comment_upload_failure(
