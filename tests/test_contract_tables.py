@@ -29,13 +29,31 @@ from spicy_regs.transforms.table_merge import merge_contract_table
 
 CONTRACT_NAMES = sorted(TABLE_CONTRACTS)
 
-#: Contracts spicy-docs 0.21.2 ships that no rollup here writes: none, now
-#: that the A5/A7/A10 and A8/A9 branches have landed. Kept as an explicit,
-#: empty set — and ``test_every_hosted_table_is_registered_everywhere`` asserts
-#: exact equality with it — so a contract a later wheel adds fails here until
-#: someone decides whether to host it: ``data_dictionary.CONTRACT_TABLES``
-#: enumerates the hosted tables by hand on purpose.
-UNHOSTED_CONTRACTS: frozenset[str] = frozenset()
+#: How many contracts the adopted wheel ships (spicy-docs 0.23.0: 37 over 766
+#: columns). See ``test_every_hosted_table_is_registered_everywhere`` for what
+#: this catches that the hosted/unhosted partition below cannot.
+ADOPTED_CONTRACT_COUNT = 37
+
+#: Contracts spicy-docs 0.23.0 ships that no rollup here writes yet.
+#: ``test_every_hosted_table_is_registered_everywhere`` asserts **exact**
+#: equality against it, so the wheel's thirty-seven contracts are accounted for
+#: one by one: a contract is either in ``data_dictionary.CONTRACT_TABLES`` — the
+#: hosted surface, enumerated by hand on purpose — or named here as a decision
+#: taken and not yet acted on. A contract a later wheel adds is in neither and
+#: fails this test, which is the point.
+#:
+#: These five arrived with 0.23.0 and are the two PDF-family rollups' outputs.
+#: Each name leaves this set in the commit that gives it a writer, so the set
+#: is empty again once both rollups have landed.
+UNHOSTED_CONTRACTS: frozenset[str] = frozenset(
+    {
+        "document_citations",
+        "house_activity_reports",
+        "budget_volumes",
+        "senate_expenditures",
+        "bill_committee_actions",
+    }
+)
 
 
 def _no_download(remote_key: str, local_path: Path) -> bool:
@@ -101,11 +119,23 @@ def test_every_hosted_table_is_registered_everywhere():
 
     The wheel ships more contracts than this repository hosts; the difference
     is ``UNHOSTED_CONTRACTS``, stated so a new upstream contract is a decision
-    here rather than a silent omission from the hosted surface.
+    here rather than a silent omission from the hosted surface. The two sets
+    partition the registry by name, so every contract the adopted wheel ships
+    is accounted for individually rather than by a count.
+
+    ``ADOPTED_CONTRACT_COUNT`` is the one place a number appears, and it is
+    there because the partition alone cannot see one thing: adopting a wheel
+    that adds a contract *and* adding that contract to ``CONTRACT_TABLES`` in
+    the same edit keeps the partition exact while hosting a table nobody
+    decided to host. The count fails in that case and the partition does not.
     """
     from spicy_regs import mcp_server
 
     hosted = set(dd.CONTRACT_TABLES)
+    assert len(TABLE_CONTRACTS) == ADOPTED_CONTRACT_COUNT, (
+        "the adopted wheel's contract count moved; adopting a release is a decision, "
+        "so update this number in the same commit that decides what to do with the new contracts"
+    )
     assert hosted <= set(TABLE_CONTRACTS), "every hosted table must be a wheel contract"
     assert set(TABLE_CONTRACTS) - hosted == UNHOSTED_CONTRACTS, "a wheel contract is hosted or named as not yet"
     assert UNHOSTED_CONTRACTS.isdisjoint(dd.TABLES), "an unhosted contract must not be half-listed"
