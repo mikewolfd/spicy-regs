@@ -1077,6 +1077,21 @@ why nothing caught it. **On this evidence a keyed production run publishes zero
 shape. The fix is spicy-docs' — either the sealed prompt names its keys (moving
 `PROMPT_VERSION`) or the reader accepts the publisher-neutral spellings — and
 sealing decisions are not this repository's, so it is recorded and not changed.
+**Fixed and adopted, 2026-09-20.** spicy-docs 0.21.3 took the first route: each
+prompt now states the JSON object its reader parses, from the one `AnswerField`
+declaration the reader reads, at `PROMPT_VERSION` `v2`. Proved live in
+spicy-docs' own receipt
+`~/Work/corpora/supply-2026-09-02/receipts/c1-prompt-fix-2026-09-19/` — one
+`summarize_bill` call, answered with `summary`, `audience` and
+`topThreeProvisions`, **read into one `bill_summaries` row** at 250 in / 197
+out, **USD 0.000567**; a `summarize_diff` call read into one `diff_summaries`
+row on a constructed pair. `classify_sections` is *not* proved end to end: its
+answer carried the right `v2` keys and was then refused by the batch guard for
+naming a section outside its batch, and the run's three-call budget was spent.
+`hosting-adopt-0.21.3` adopts the wheel and asserts both halves here (the `v2`
+stamp on a produced row, and the measured `v1`-era answer refused by name), but
+**no keyed production run has been made in this repository**, so nothing above
+about what a real corpus costs or yields is superseded.
 Cost: **USD 0.00057-0.00059 per bill** -- a range, not a figure, because the
 input is deterministic at 204 tokens and the output is not (208 / 213 / 206
 across three calls). The rate is pinned in the receipt and is a pin, not a
@@ -1390,3 +1405,80 @@ landed).
   it duplicates is a *genuine* disagreement, inflating `conflict_count`); and
   the digest-drift note above no longer blames this work for drift that
   `2eaffe0` and `473966f` had already caused.
+
+**2026-09-20, branch `hosting-adopt-0.21.3` (worktree `spicy-regs-wt-adopt3`,
+from `billtrax-hosting-prep` at `bc82c51`).** SpicyDocs 0.21.3 is released and
+adopted: `vendor/spicy_docs-0.21.3-py3-none-any.whl` (commit `083b536`, tag
+v0.21.3, sha256 `1f91bb70…f84b`, 1,181,012 bytes, verified after the copy and
+recorded identically in `uv.lock`), 0.21.2 deleted, both `source-readers` pins
+and `[tool.uv.sources]` moved together. The resolve is one line — `Updated
+spicy-docs v0.21.2 -> v0.21.3` — with no refusal; the same
+`rulespec-artifacts==1.0.13` and DeltaTrack pins hold. It carries the fix for
+the C1 finding above: the model prompts and their readers are one statement
+again.
+
+- [x] **Nothing in the dictionary moved, and that is a measurement.** The two
+  wheels were unzipped and diffed: three `interpretation/` modules changed and
+  one data directory (`schemas/document_capture/1.0/`, DocumentCapture v1
+  schemas and six profiles) was added. `TABLE_CONTRACTS` was then dumped from
+  each wheel and compared field by field — thirty-two contracts, 617 columns,
+  same columns, identity, version column, grain and per-column prose. So
+  `UNHOSTED_CONTRACTS` stays the empty set with nothing to decide, and
+  `spicy-regs-dict check` (59 tables) then `generate` leaves `git status
+  --short docs/tables data_dictionary` empty — including the three model
+  tables' `prompt_version` prose, which describes the column and never quoted
+  a version. The dictionary is generated from the contracts, so checking it
+  against the contracts would have agreed with itself; the field-by-field dump
+  is the independent half.
+- [x] **`transforms/model_call.py`'s request is unchanged**, as instructed and
+  on the evidence: `responseMimeType: application/json` was the half of the
+  contract that was already right. C1's defect was that the *prompt* named no
+  keys while the request demanded JSON, which is what 0.21.3 fixes upstream.
+- [x] **The readers are now actually run in a test here.** Every model stub in
+  `tests/` was checked against the `v2` readers. `tests/test_model_call.py`
+  stubs the Gemini *client* and asserts the adapter, never the readers, so
+  nothing in it needed to change — `{"summary": "ok", "audience": "everyone"}`
+  is an adapter fixture, not an answer any reader sees. And
+  `tests/test_bill_family.py` ran the whole family **keyless**, so
+  `section_classifications`, `bill_summaries` and `diff_summaries` were only
+  ever asserted empty: no spicy-regs test had ever reached `_read_answer`.
+  That is the same blind spot as "every test stubs the call with the right
+  keys", one level out. `StubGemini` now stands in for `GeminiClient`, behind
+  `model_call` and both readers, and builds each answer from the shape the
+  prompt it was handed states — `answer_shape_block` over spicy-docs' own
+  `AnswerField` records, and the classification ids read off the prompt's own
+  `Sections:` block rather than recomputed, which is also what the live model
+  got wrong. Two tests: a produced row is stamped `v2` (asserted as the
+  literal, since reading `PROMPT_VERSION` back would agree with itself), and
+  the measured `v1`-era answer (`most_affected_audience`,
+  `notable_provisions`) is refused with **both** missing keys named while the
+  run continues. Mutation-checked three ways: against the 0.21.2 modules the
+  file will not import (`SUMMARY_FIELDS` does not exist there), with the
+  installed `PROMPT_VERSION` forced to `v1` (the stamp assertion fails), and
+  with the guard below removed (the refusal test fails).
+- [x] **A refused answer now costs its own rows, not the run.** Found writing
+  that second test, and pre-existing rather than new:
+  `interpretation/bill_family.py` calls all three generators *outside* its own
+  `_Admitter` guard, which wraps only the row shapers, so a `ModelCallError`
+  left `build_bill_family` and aborted the rollup. One bad answer about one
+  printing would have cost every status-derived row of every bill in the run —
+  strictly worse than the empty `bill_summaries` table C1 predicted.
+  `model_call.survive_refused_answer` wraps each seam so the refusal returns
+  what its caller already reads as nothing to store (`()`, `None`), which
+  `bill_family` files as a named refusal; spicy-regs logs the answer's real
+  reason (scrubbed, message only — never `details`, which holds the model's
+  answer) and counts it apart from the shaper refusals. The catch is
+  `ModelCallError` alone: `GeminiClient` raises `CredentialRefusedError` on
+  `401`/`403` and `ExtractionError` on any other status, so a credential
+  refusal still aborts and an empty model table is never what a `502` looks
+  like. **Left for spicy-docs:** the refusal `bill_family` files for a `None`
+  summary says the text was below the minimum, which is not why this one came
+  back empty; naming the true reason needs `_summarize_version` to catch
+  `ModelCallError` itself.
+
+1,623 source tests pass (was 1,621), `ruff check .` is clean, and
+`spicy-regs-dict check`/`generate` are clean with no diff. `ty check` reports
+only the two known `vectordb/embed.py` diagnostics, which appear solely with
+the `embed` extra installed (`uv sync --frozen --all-extras`, used here) and
+are pre-existing. Not pushed — local commits on `hosting-adopt-0.21.3`, per
+instruction. Review before merge, per the standing rule.
