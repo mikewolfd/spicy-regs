@@ -32,9 +32,8 @@ import pyarrow.parquet as pq
 import pytest
 from loguru import logger
 from spicy_docs.extraction import gemini
-from spicy_docs.interpretation.bill_summaries import SUMMARY_FIELDS
-from spicy_docs.interpretation.model_call import answer_shape_block
-from spicy_docs.interpretation.section_classification import CLASSIFICATION_FIELDS, LABEL_NAMES
+from spicy_docs.interpretation.bill_summaries import DIFF_SUMMARY_ANSWER_SCHEMA, SUMMARY_ANSWER_SCHEMA
+from spicy_docs.interpretation.section_classification import CLASSIFICATION_ANSWER_SCHEMA, LABEL_NAMES
 from spicy_docs.schemas import TABLE_CONTRACTS
 from spicy_docs.sources.congress.bill_status import BillIdentity, parse_bill_status
 from spicy_docs.sources.congress.bill_status import BillSourceError
@@ -331,13 +330,21 @@ def test_the_model_tables_are_empty_without_a_key(family):
 #
 # ``build_bill_family`` builds its own ``GeminiClient`` from the environment,
 # so the seam a test reaches is the client: a stub in its place sits behind
-# ``model_call``, both readers and every check they make, which is the whole
-# path a live answer takes. The answers are built from the shape each prompt
-# states — ``answer_shape_block`` over spicy-docs' own ``AnswerField``
-# records, which is the byte the prompt carries — rather than from key
-# spellings written out here. A stub that spelled them itself and an answer
-# the reader accepted would prove only that this file and that one agree,
-# which is precisely the failure spicy-docs 0.21.3 fixed.
+# spicy-docs' ``gemini_call.model_call``, all three readers and every check
+# they make, which is the whole path a live answer takes.
+#
+# **Which prompt arrived is decided by ``response_schema``** — the request's
+# own copy of the answer declaration, which spicy-docs 0.22.0 derives from the
+# same ``AnswerField`` tuple as the prompt and the reader — compared against
+# the three constants the generators send. That is exact where matching a
+# substring of the prompt was not, and it fails if the schema stops reaching
+# the request at all.
+#
+# **The answer keys are literal spellings on purpose.** Deriving them from
+# ``field.key for field in SUMMARY_FIELDS`` would make a stub that silently
+# follows a key rename, and a test asking whether a real answer is read would
+# then be asking whether this file agrees with itself. Spelled out, a
+# divergence fails here loudly, which is the whole lesson of C1.
 
 LABEL = LABEL_NAMES[0]
 #: Long enough for the reader's 60-character floor and short of its 1200 cap.
@@ -345,62 +352,108 @@ GOOD_SUMMARY = (
     "This bill directs the named agency to carry out the program it describes, "
     "and says who is covered, for how long, and what has to be reported back."
 )
+GOOD_ANSWER = {"summary": GOOD_SUMMARY, "audience": "people the program serves", "topThreeProvisions": ["one"]}
 #: What the first live call actually answered (spicy-docs receipt
 #: ``c1-provenance.json``, 2026-09-19): the summary key right and the other
 #: two invented. Not a hypothetical — it is the measured answer the declared
 #: key set exists to refuse.
-V1_ERA_SUMMARY = {
+V1_ERA_ANSWER = {
     "summary": GOOD_SUMMARY,
     "most_affected_audience": "people the program serves",
     "notable_provisions": ["the first one", "the second one"],
 }
+GOOD_DIFF_ANSWER = {
+    "headline": "the later printing rewrites the program section and adds a funding section",
+    "keyChanges": ["the program section is rewritten", "a funding section is added"],
+    "sectionsAdded": ["Funding"],
+    "sectionsRemoved": [],
+    "dollarChanges": ["$1,400,000 authorized"],
+}
 
 
 def _section_ids(prompt: str) -> list[str]:
-    """The bracketed ids the classification prompt itself lists, in its order.
+    """The section ids the classification prompt itself lists, in its order.
 
-    Read off the prompt rather than recomputed here: the reader refuses a row
-    naming a section outside the batch it was sent, so answering from the
-    request is what a stub must do to reach the row shapers at all.
+    Read off the prompt rather than recomputed here: ``_read_row`` refuses a
+    row naming a section outside the batch it was sent, so answering from the
+    request is what a stub must do to reach the row shapers at all. Stripping
+    the brackets is what the ``v3`` field asks for in so many words — under
+    ``v2`` it said "copied exactly as given below", and the live model
+    returned the brackets too and was refused, twice.
     """
     body = prompt.split("Sections:\n", 1)[1]
     return [chunk.split("]", 1)[0].removeprefix("[") for chunk in body.split("\n\n---\n\n")]
 
 
 class StubGemini:
-    """A ``GenerationClient`` that answers in the shape the prompt it was handed asks for.
+    """A ``GenerationClient`` answering in the shape the request it was handed states.
 
-    One client serves every prompt, as the real one does, so which prompt
-    arrived is decided by the answer-shape block it carries.
-    ``summary_answer`` replaces the summary answer alone, which is how a
-    refusal is fed to one table without disturbing the others.
-
-    Only two prompts reach it on this fixture: the pair's three settled
-    correspondences are all ``unchanged``, so ``summarize_diff`` declines
-    before it asks anything and ``diff_summaries`` is a named refusal rather
-    than a call. There is no third branch for an answer nothing sends — the
-    closing assertion names the prompt instead if that ever changes.
+    One client serves every prompt, as the real one does. ``summary_answer``
+    replaces the summary answer alone, which is how a refusal is fed to one
+    table without disturbing the others.
     """
 
     def __init__(self, *, summary_answer: dict | None = None):
         self.summary_answer = summary_answer
-        self.prompts: list[str] = []
+        self.calls: list[tuple[str, object]] = []
 
     def generate(self, model: str, body: dict) -> dict:
         prompt = body["contents"][0]["parts"][0]["text"]
-        self.prompts.append(prompt)
-        return {"candidates": [{"content": {"parts": [{"text": json.dumps(self._answer(prompt))}]}}]}
+        config = body["generationConfig"]
+        assert config["responseMimeType"] == "application/json"
+        schema = config.get("responseJsonSchema")
+        assert schema is not None, "since 0.22.0 every generator states its answer's shape on the request"
+        self.calls.append((prompt, schema))
+        return {"candidates": [{"content": {"parts": [{"text": json.dumps(self._answer(prompt, schema))}]}}]}
 
-    def _answer(self, prompt: str):
-        if answer_shape_block(CLASSIFICATION_FIELDS) in prompt:
+    def _answer(self, prompt: str, schema: object):
+        if schema == CLASSIFICATION_ANSWER_SCHEMA:
             return [{"sectionId": ref, "label": LABEL, "confidence": 0.9} for ref in _section_ids(prompt)]
-        assert answer_shape_block(SUMMARY_FIELDS) in prompt, f"no prompt states this shape: {prompt[:120]}"
-        if self.summary_answer is not None:
-            return self.summary_answer
-        return {"summary": GOOD_SUMMARY, "audience": "people the program serves", "topThreeProvisions": ["one"]}
+        if schema == DIFF_SUMMARY_ANSWER_SCHEMA:
+            return dict(GOOD_DIFF_ANSWER)
+        assert schema == SUMMARY_ANSWER_SCHEMA, "a fourth request schema is a prompt this stub does not answer"
+        return dict(self.summary_answer) if self.summary_answer is not None else dict(GOOD_ANSWER)
 
 
-def _modelled_run(tmp_path, monkeypatch, *, summary_answer: dict | None = None):
+def _changed_eh() -> bytes:
+    """The engrossed fixture with its one section rewritten and a second added.
+
+    The committed pair settles as entirely ``unchanged``, so ``summarize_diff``
+    declines before asking anything and the diff reader is never reached — the
+    gap this exists to close. Derived from the fixture bytes rather than
+    committed as a third file, so what differs from the real printing is
+    stated in one place and cannot drift from it.
+    """
+    fixture = (FIXTURES / TEXT_FIXTURES["BILLS-119hr6028eh"]).read_text()
+    rewritten = fixture.replace(
+        "<header>Short title</header>",
+        "<header>Short title and purpose</header>",
+    ).replace(
+        "</legis-body>",
+        "    <section id=\"HADDEDSECTION0000000000000000001\">\n"
+        "      <enum>2.</enum>\n"
+        "      <header>Funding</header>\n"
+        "      <text display-inline=\"no-display-inline\">There is authorized to be appropriated "
+        "$1,400,000 to carry out this Act.</text>\n"
+        "    </section>\n"
+        "  </legis-body>",
+    )
+    assert rewritten != fixture, "the changed printing must actually differ from the fixture"
+    return rewritten.encode()
+
+
+class StubChangedBodyAcquirer(StubBodyAcquirer):
+    """``StubBodyAcquirer`` serving a changed engrossed printing, so the pair has a diff."""
+
+    def acquire(self, package_id: str, *, max_bytes=None):
+        package = super().acquire(package_id, max_bytes=max_bytes)
+        if package_id != "BILLS-119hr6028eh":
+            return package
+        url = package.body_capture.requested_url
+        return _Package("xml", _capture(url, _changed_eh()))
+
+
+def _modelled_run(tmp_path, monkeypatch, *, summary_answer: dict | None = None, body_acquirer=None):
     """One run with the model seams wired to ``StubGemini``; returns tables, warnings and the client."""
     monkeypatch.setenv("BILL_FAMILY_CONGRESSES", "119")
     monkeypatch.setenv("BILL_FAMILY_BILL_TYPES", "hr")
@@ -418,7 +471,7 @@ def _modelled_run(tmp_path, monkeypatch, *, summary_answer: dict | None = None):
         paths = build_bill_family(
             tmp_path,
             bulk_acquirer=StubBulkAcquirer(),
-            body_acquirer=StubBodyAcquirer(),
+            body_acquirer=body_acquirer or StubBodyAcquirer(),
             download_prior=_no_prior,
         )
     finally:
@@ -426,13 +479,13 @@ def _modelled_run(tmp_path, monkeypatch, *, summary_answer: dict | None = None):
     return {path.stem: path for path in paths}, messages, client
 
 
-def test_a_produced_summary_row_is_stamped_with_the_prompt_version_that_asked_for_it(tmp_path, monkeypatch):
-    """The v2 prompts state their keys; a row produced under them must say ``v2``.
+def test_a_produced_row_is_stamped_with_the_prompt_version_that_asked_for_it(tmp_path, monkeypatch):
+    """A row must say which prompt produced it: summaries ``v2``, labels ``v3``.
 
-    Asserted as the literal, not against ``bill_summaries.PROMPT_VERSION``:
-    reading the constant the column is filled from would agree with itself
-    whatever it said, and this column is how a stored row is told apart from
-    one the v1 prompt produced (``needs_regeneration`` reads it).
+    Asserted as literals, not against each module's ``PROMPT_VERSION``:
+    reading back the constant the column is filled from would agree with
+    itself whatever it said, and this column is how a stored row is told apart
+    from one an earlier prompt produced (``needs_regeneration`` reads it).
     """
     tables, _messages, _client = _modelled_run(tmp_path, monkeypatch)
 
@@ -444,38 +497,66 @@ def test_a_produced_summary_row_is_stamped_with_the_prompt_version_that_asked_fo
 
     classifications = pq.read_table(tables["section_classifications"]).to_pylist()
     assert classifications, "the classifier answered every section it was sent"
-    assert {row["prompt_version"] for row in classifications} == {"v2"}
+    assert {row["prompt_version"] for row in classifications} == {"v3"}
     assert {row["label"] for row in classifications} == {LABEL}
 
 
-def test_a_v1_era_answer_costs_its_own_rows_and_names_the_keys_it_left_out(tmp_path, monkeypatch):
-    """The measured failure, end to end: the run continues and says what was missing.
+def test_a_v1_era_answer_is_refused_by_name_and_the_run_completes(tmp_path, monkeypatch):
+    """The measured failure, end to end: one refusal record, and the rest of the run.
 
     ``most_affected_audience`` and ``notable_provisions`` are what the first
-    live call answered. Under v2 the reader refuses it naming **both** absent
-    keys at once — v1 refused the same answer but stopped at the first — and
-    the refusal must cost the summary rows only: the status-derived tables,
-    the diff and the classifications this same client answered correctly are
-    all still published, because a rollup that loses a run to one bad answer
-    about one printing has replaced one defect with a worse one.
+    live call answered. The reader refuses it naming **both** absent keys at
+    once — ``v1`` refused the same answer but stopped at the first — and since
+    spicy-docs 0.22.0 that refusal is a ``FamilyRefusal`` filed against the
+    printing, not an exception out of the rollup. It must cost the summary
+    rows only: the status-derived tables, the diff and the classifications
+    this same client answered correctly are all still published.
     """
-    tables, warnings, client = _modelled_run(tmp_path, monkeypatch, summary_answer=V1_ERA_SUMMARY)
+    tables, warnings, client = _modelled_run(tmp_path, monkeypatch, summary_answer=V1_ERA_ANSWER)
 
     assert pq.read_table(tables["bill_summaries"]).to_pylist() == [], "a refused answer must not be stored"
-    refusals = [line for line in warnings if "bill_summaries answer refused" in line]
-    assert refusals, f"the refusal must be reported, not swallowed: {warnings}"
+    # The wording is the family's own refusal reason, not this rollup's prose.
+    refusals = [line for line in warnings if "bill_summaries" in line and "the model's answer was refused" in line]
+    assert refusals, f"the refusal record must reach the run log: {warnings}"
     for line in refusals:
         assert "audience" in line and "topThreeProvisions" in line, line
         assert "most_affected_audience" not in line, "the answer's own spellings are not the reader's to offer"
 
-    # The run continued: everything that does not depend on that answer is here.
+    # The run completed: everything that does not depend on that answer is here.
     assert [row["bill_id"] for row in pq.read_table(tables["congress_bills"]).to_pylist()] == ["119-hr-6028"]
     assert pq.read_table(tables["bill_versions"]).to_pylist()
     assert pq.read_table(tables["section_diffs"]).to_pylist()
     classifications = pq.read_table(tables["section_classifications"]).to_pylist()
     assert classifications, "the classifier's own answers were fine and must still be stored"
-    assert {row["prompt_version"] for row in classifications} == {"v2"}
-    assert len(client.prompts) > 1, "the run kept asking after the first refusal"
+    assert {row["prompt_version"] for row in classifications} == {"v3"}
+    assert len(client.calls) > 1, "the run kept asking after the first refusal"
+
+
+def test_a_changed_pair_runs_the_diff_reader_and_publishes_its_row(tmp_path, monkeypatch):
+    """``summarize_diff`` and ``_read_diff_answer`` on a pair that actually changed.
+
+    On the committed fixtures every settled correspondence is ``unchanged``,
+    so the generator declines before asking and this reader is never reached —
+    which is why `diff_summaries` had no coverage here at all. With one
+    section rewritten and one added, the diff text is non-empty, the call is
+    made, and the five-key answer is read into a row.
+    """
+    tables, _messages, client = _modelled_run(tmp_path, monkeypatch, body_acquirer=StubChangedBodyAcquirer())
+
+    assert any(schema == DIFF_SUMMARY_ANSWER_SCHEMA for _prompt, schema in client.calls), (
+        "a changed pair must reach the diff-summary generator"
+    )
+    rows = pq.read_table(tables["diff_summaries"]).to_pylist()
+    assert len(rows) == 1, "one compared pair, one diff summary"
+    row = rows[0]
+    assert row["bill_id"] == "119-hr-6028"
+    assert (row["from_version_code"], row["to_version_code"]) == ("introduced-in-house", "engrossed-in-house")
+    assert row["headline"] == GOOD_DIFF_ANSWER["headline"]
+    assert row["prompt_version"] == "v2"
+    # The four list-valued keys survive the reader and the shaper as JSON.
+    assert json.loads(row["sections_added_json"]) == GOOD_DIFF_ANSWER["sectionsAdded"]
+    assert json.loads(row["sections_removed_json"]) == [], "an empty array is a stated answer, not a NULL"
+    assert json.loads(row["dollar_changes_json"]) == GOOD_DIFF_ANSWER["dollarChanges"]
 
 
 def test_the_first_run_reports_every_bill_as_added(family):
