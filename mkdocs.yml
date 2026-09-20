@@ -84,6 +84,10 @@ nav:
       - committee_reports: tables/committee_reports.md
       - report_sections: tables/report_sections.md
       - hearing_transcripts: tables/hearing_transcripts.md
+      - house_activity_reports: tables/house_activity_reports.md
+      - budget_volumes: tables/budget_volumes.md
+      - bill_committee_actions: tables/bill_committee_actions.md
+      - document_citations: tables/document_citations.md
       # A5/A7/A10 (Congress.gov index tables)
       - house_communications: tables/house_communications.md
       - committee_meetings: tables/committee_meetings.md

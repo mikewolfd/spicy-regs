@@ -42,18 +42,10 @@ ADOPTED_CONTRACT_COUNT = 37
 #: taken and not yet acted on. A contract a later wheel adds is in neither and
 #: fails this test, which is the point.
 #:
-#: These five arrived with 0.23.0 and are the two PDF-family rollups' outputs.
-#: Each name leaves this set in the commit that gives it a writer, so the set
-#: is empty again once both rollups have landed.
-UNHOSTED_CONTRACTS: frozenset[str] = frozenset(
-    {
-        "document_citations",
-        "house_activity_reports",
-        "budget_volumes",
-        "senate_expenditures",
-        "bill_committee_actions",
-    }
-)
+#: ``senate_expenditures`` is the one left: its acquisition pass is PDF table
+#: detection over multi-thousand-page granule files, which is its own rollup,
+#: and it leaves this set in the commit that gives it a writer.
+UNHOSTED_CONTRACTS: frozenset[str] = frozenset({"senate_expenditures"})
 
 
 def _no_download(remote_key: str, local_path: Path) -> bool:

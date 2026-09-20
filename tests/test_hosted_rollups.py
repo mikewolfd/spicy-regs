@@ -31,6 +31,7 @@ from spicy_regs.pipelines.rollups.congress_index import (
 )
 from spicy_regs.pipelines.rollups.congress_bills import CongressBillsRollup
 from spicy_regs.pipelines.rollups.members import MembersRollup
+from spicy_regs.pipelines.rollups.print_citations import PrintCitationsRollup
 from spicy_regs.pipelines.rollups.press_releases import PressReleasesRollup
 from spicy_regs.pipelines.rollups.roll_call_votes import RollCallVotesRollup
 
@@ -76,6 +77,8 @@ HOSTED_ROLLUPS = (
     RecordIssuesRollup,
     TreatiesRollup,
     NominationsRollup,
+    # The first of the two PDF-only families (spicy-docs 0.23.0).
+    PrintCitationsRollup,
 )
 
 

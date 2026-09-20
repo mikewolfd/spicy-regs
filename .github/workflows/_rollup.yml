@@ -53,6 +53,11 @@ on:
         required: false
         default: ''
         type: string
+      print_citations_since:
+        description: 'Optional GovInfo CRPT/BUDGET issue-date floor (YYYY-MM-DD); blank uses 2023-01-01'
+        required: false
+        default: ''
+        type: string
       fcc_since:
         description: 'Optional FCC ECFS backfill start date (YYYY-MM-DD)'
         required: false
@@ -120,6 +125,7 @@ jobs:
           # failing; the other ten bill-family tables still publish.
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           COMMITTEE_REPORTS_SINCE: ${{ inputs.committee_reports_since }}
+          PRINT_CITATIONS_SINCE: ${{ inputs.print_citations_since }}
           FCC_SINCE: ${{ inputs.fcc_since }}
           FCC_PROCEEDINGS: ${{ inputs.fcc_proceedings }}
           # Optional: raises the CourtListener API rate limit. The court_dockets
