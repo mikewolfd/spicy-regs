@@ -1512,3 +1512,88 @@ adapter tests moved upstream with the adapter. Not pushed — local commits on
 `hosting-adopt-0.21.3`, per instruction. Reviewed once (REQUEST CHANGES on
 prose and one coverage gap, no code defect); this extension answers all four
 findings and supersedes the code two of them were about.
+
+**2026-09-20, branch `adopt-spicy-docs-0.23.0` (worktree
+`.claude/worktrees/adopt-0-23-0`, from `billtrax-hosting-prep` at `2d13f81`).**
+SpicyDocs 0.23.0 is released and adopted, and the five contracts it adds are
+hosted by two new rollups. Vendored:
+`vendor/spicy_docs-0.23.0-py3-none-any.whl` (commit `73b10e5`, tag v0.23.0,
+sha256 `36d619a6…4f66`, 1,259,241 bytes, verified after the copy and recorded
+identically in `uv.lock`), 0.22.0 deleted, both `source-readers` pins and
+`[tool.uv.sources]` moved together. The resolve is one line — `Updated
+spicy-docs v0.22.0 -> v0.23.0` — with no refusal; the same
+`rulespec-artifacts==1.0.13` and DeltaTrack pins hold. **Sixty-four tables are
+now hosted**; the public surface went from 59 to 64.
+
+- [x] **What moved is a measurement, not a release note.** The wheels were
+  unzipped and diffed: three modules changed (`schemas/__init__.py`,
+  `sources/govinfo/bodies.py`, `sources/zyte.py`) and seven added — the four
+  `schemas/*_tables.py`, `interpretation/citations.py`,
+  `interpretation/bill_actions.py` and `transport/zyte.py`. `TABLE_CONTRACTS`
+  was then dumped from each wheel and compared field by field: the **thirty-two
+  contracts 0.22.0 shipped are identical**, all 617 columns, and five are new
+  over 149 columns, taking the registry to **37 over 766**. Checking the
+  dictionary against the contracts it is generated from would only have agreed
+  with itself; the dump is the independent half.
+- [x] **The unhosted set is a partition, and it gained a number.**
+  `UNHOSTED_CONTRACTS` named the five on adoption and is empty again now that
+  both rollups have landed, so the wheel's 37 are accounted for name by name.
+  `ADOPTED_CONTRACT_COUNT = 37` was added for the one case the partition
+  cannot see: adopting a wheel that adds a contract *and* adding it to
+  `CONTRACT_TABLES` in the same edit keeps the partition exact while hosting a
+  table nobody decided to host.
+- [x] **Two rollups, one per acquisition pass.** `print-citations` writes
+  `house_activity_reports`, `budget_volumes`, `bill_committee_actions` and
+  `document_citations` from one keyed GovInfo body fetch per package;
+  `senate-expenditures` writes its one table from granule PDFs under PyMuPDF
+  table detection, which costs 26.5–84.6 ms a page against 9.8 ms without.
+  `document_citations` is a shared link table with exactly one owner, the two
+  families told apart inside it by spicy-docs' own `document_kind` constants.
+  No column, identity, rule or classification is restated: the four shape
+  functions, `find_citations`, `find_bill_actions` and `document_provenance`
+  do all of it.
+- [x] **Enumeration is the whole issue-date window, every run**, on GovInfo's
+  `published` route — not `collections`, which spicy-docs measured serving
+  SERIALSET rows inside a BUDGET walk. Both families are small enough that the
+  walk costs a handful of list pages, and it buys what a last-modified
+  watermark cannot: a refused package is offered again next run rather than
+  being stepped past forever once some other package publishes. Only a package
+  already published at the same `last_modified` is skipped.
+- [x] **The measured run**, receipt
+  `~/Work/corpora/supply-2026-09-02/receipts/rollups-pdf-families-2026-09-20/`,
+  caps declared in `caps.json` before either run and neither widened. Worst
+  rolling hour across every run: **261 keyed**, against the shared 4,000 and
+  the 3,680 D1 measured; both crons sit in the 07:00–16:59 UTC block no other
+  rollup occupies. Published: 41 `house_activity_reports`, 23
+  `budget_volumes`, 12,700 `bill_committee_actions`, 49,792
+  `document_citations`, 2,623 `senate_expenditures`. The resume run **skipped
+  40 already-published packages at zero request cost**, which measures the
+  incremental claim D1 could only record as design.
+- [x] **The run changed the code once, and the wrong run is retained.** The
+  first `print-citations` attempt used the acquirer's sealed
+  `BODY_PREFERENCE`, which puts HTML first: **10 of 41** activity reports
+  refused on HTML nesting depth and the 31 read published **0 page
+  attributions across 29,308 citation rows**, with `pages_read`,
+  `stated_page_count` and `pages_capped` NULL on every document row.
+  `PRINT_BODY_PREFERENCE` puts PDF first and keeps the sealed order behind it;
+  under it nothing refused and all 49,792 citation rows carry a page.
+
+**One finding for spicy-docs, and one correction to a published number.**
+Walking BUDGET from 2023-01-01 rather than the research's 2025-01-01 serves
+**17 real budget packages whose part is outside the sealed six** — `OBJCLASS`,
+`TAB`, `DB`, `CLIMATE`, `LRB`, `CROSSCUT`, `DOD`. The rollup refuses each by
+name and logs it, which is the designed behaviour, so `budget_volumes` covers
+six parts of thirteen and its data-quality note says so; widening the grammar
+is spicy-docs', because a package-id grammar is a published shape this
+repository does not restate. Separately, "the print states nothing its index
+does not" is very nearly right and not exactly right: over 41 activity reports
+rather than eight, 7 print-only bills of 7,686 distinct, 5 print-only laws of
+990 and 6 print-only Code sections.
+
+1,680 source tests pass and `ruff check .` is clean. `ty check` is clean in
+this worktree, which is `uv sync --frozen` **without** `--all-extras` — the
+two known `vectordb/embed.py` diagnostics the 0.22.0 step recorded appear only
+with the `embed` extra installed, so this run did not see them and does not
+claim they are gone. `spicy-regs-dict check` (64 tables) then `generate`
+leaves `docs/tables` and `data_dictionary` untouched, twice in a row. Not
+pushed — local commits on `adopt-spicy-docs-0.23.0`, per instruction.
