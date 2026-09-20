@@ -88,6 +88,7 @@ nav:
       - budget_volumes: tables/budget_volumes.md
       - bill_committee_actions: tables/bill_committee_actions.md
       - document_citations: tables/document_citations.md
+      - senate_expenditures: tables/senate_expenditures.md
       # A5/A7/A10 (Congress.gov index tables)
       - house_communications: tables/house_communications.md
       - committee_meetings: tables/committee_meetings.md

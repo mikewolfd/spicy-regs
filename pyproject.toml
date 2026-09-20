@@ -89,6 +89,7 @@ run-rollup-members = "spicy_regs.pipelines.rollups.members:app"
 run-rollup-committee-reports = "spicy_regs.pipelines.rollups.committee_reports:app"
 # The two PDF-only families (spicy-docs 0.23.0): one rollup per acquisition pass.
 run-rollup-print-citations = "spicy_regs.pipelines.rollups.print_citations:app"
+run-rollup-senate-expenditures = "spicy_regs.pipelines.rollups.senate_expenditures:app"
 # A8/A9 (laws and rosters)
 run-rollup-laws = "spicy_regs.pipelines.rollups.laws:app"
 run-rollup-committee-rosters = "spicy_regs.pipelines.rollups.committee_rosters:app"

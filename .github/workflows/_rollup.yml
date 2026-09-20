@@ -58,6 +58,11 @@ on:
         required: false
         default: ''
         type: string
+      senate_expenditures_since:
+        description: 'Optional GovInfo CDOC issue-date floor (YYYY-MM-DD); blank uses 2024-01-01'
+        required: false
+        default: ''
+        type: string
       fcc_since:
         description: 'Optional FCC ECFS backfill start date (YYYY-MM-DD)'
         required: false
@@ -126,6 +131,7 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           COMMITTEE_REPORTS_SINCE: ${{ inputs.committee_reports_since }}
           PRINT_CITATIONS_SINCE: ${{ inputs.print_citations_since }}
+          SENATE_EXPENDITURES_SINCE: ${{ inputs.senate_expenditures_since }}
           FCC_SINCE: ${{ inputs.fcc_since }}
           FCC_PROCEEDINGS: ${{ inputs.fcc_proceedings }}
           # Optional: raises the CourtListener API rate limit. The court_dockets

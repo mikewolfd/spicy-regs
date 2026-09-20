@@ -133,6 +133,7 @@ CONTRACT_TABLES: tuple[str, ...] = (
     "budget_volumes",
     "bill_committee_actions",
     "document_citations",
+    "senate_expenditures",
 )
 
 

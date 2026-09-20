@@ -34,18 +34,16 @@ CONTRACT_NAMES = sorted(TABLE_CONTRACTS)
 #: this catches that the hosted/unhosted partition below cannot.
 ADOPTED_CONTRACT_COUNT = 37
 
-#: Contracts spicy-docs 0.23.0 ships that no rollup here writes yet.
+#: Contracts spicy-docs 0.23.0 ships that no rollup here writes: none, now
+#: that the two PDF-family rollups have landed and the five contracts 0.23.0
+#: added are hosted. Kept as an explicit, empty set — and
 #: ``test_every_hosted_table_is_registered_everywhere`` asserts **exact**
-#: equality against it, so the wheel's thirty-seven contracts are accounted for
-#: one by one: a contract is either in ``data_dictionary.CONTRACT_TABLES`` — the
-#: hosted surface, enumerated by hand on purpose — or named here as a decision
-#: taken and not yet acted on. A contract a later wheel adds is in neither and
-#: fails this test, which is the point.
-#:
-#: ``senate_expenditures`` is the one left: its acquisition pass is PDF table
-#: detection over multi-thousand-page granule files, which is its own rollup,
-#: and it leaves this set in the commit that gives it a writer.
-UNHOSTED_CONTRACTS: frozenset[str] = frozenset({"senate_expenditures"})
+#: equality against it — so the wheel's thirty-seven contracts are accounted
+#: for one by one: a contract is either in ``data_dictionary.CONTRACT_TABLES``,
+#: the hosted surface enumerated by hand on purpose, or named here as a
+#: decision taken and not yet acted on. A contract a later wheel adds is in
+#: neither and fails this test, which is the point.
+UNHOSTED_CONTRACTS: frozenset[str] = frozenset()
 
 
 def _no_download(remote_key: str, local_path: Path) -> bool:
