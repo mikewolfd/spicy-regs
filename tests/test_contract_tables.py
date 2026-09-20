@@ -29,21 +29,11 @@ from spicy_regs.transforms.table_merge import merge_contract_table
 
 CONTRACT_NAMES = sorted(TABLE_CONTRACTS)
 
-#: How many contracts the adopted wheel ships (spicy-docs 0.23.0: 37 over 766
-#: columns). See ``test_every_hosted_table_is_registered_everywhere`` for what
-#: this catches that the hosted/unhosted partition below cannot.
-ADOPTED_CONTRACT_COUNT = 37
+#: Adoption fixes the registry size as well as its named hosted/unhosted partition.
+ADOPTED_CONTRACT_COUNT = 39
 
-#: Contracts spicy-docs 0.23.0 ships that no rollup here writes: none, now
-#: that the two PDF-family rollups have landed and the five contracts 0.23.0
-#: added are hosted. Kept as an explicit, empty set — and
-#: ``test_every_hosted_table_is_registered_everywhere`` asserts **exact**
-#: equality against it — so the wheel's thirty-seven contracts are accounted
-#: for one by one: a contract is either in ``data_dictionary.CONTRACT_TABLES``,
-#: the hosted surface enumerated by hand on purpose, or named here as a
-#: decision taken and not yet acted on. A contract a later wheel adds is in
-#: neither and fails this test, which is the point.
-UNHOSTED_CONTRACTS: frozenset[str] = frozenset()
+#: These two leave the set when their owning rollups host them.
+UNHOSTED_CONTRACTS = frozenset({"hearing_bill_links", "cbo_cost_estimates"})
 
 
 def _no_download(remote_key: str, local_path: Path) -> bool:

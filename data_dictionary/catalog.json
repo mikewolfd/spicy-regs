@@ -282,7 +282,8 @@
         "referral_signals",
         "short_title",
         "related_bills_json",
-        "related_bill_count"
+        "related_bill_count",
+        "cbo_cost_estimates_outcome"
       ]
     },
     {
@@ -1134,7 +1135,20 @@
         "sha256",
         "observed_at",
         "page_count",
-        "text_sha256"
+        "text_sha256",
+        "estimate_rule",
+        "estimate_rule_version",
+        "report_states_estimate",
+        "recital_bill_id",
+        "estimate_heading",
+        "estimate_heading_rule",
+        "letter_span_start",
+        "letter_span_end",
+        "letter_text_sha256",
+        "letter_end_rule",
+        "letter_signatory",
+        "estimate_absence_reason",
+        "estimate_absence_rule"
       ]
     },
     {
@@ -1382,7 +1396,12 @@
         "rin_rule",
         "rin_matched_text",
         "update_date",
-        "url"
+        "url",
+        "source_route",
+        "record_package_id",
+        "record_granule_id",
+        "record_entry_text",
+        "reconstruction_rule_version"
       ]
     },
     {

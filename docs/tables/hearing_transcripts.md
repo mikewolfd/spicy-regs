@@ -24,7 +24,7 @@ One row per captured GovInfo hearing transcript package. `bill_id` is read the s
 | `title` | `VARCHAR` | The package title as the keyed summary states it. |
 | `date_issued` | `VARCHAR` | The date the package was issued. |
 | `last_modified` | `VARCHAR` | When the publisher last modified the package; the merge prefers the larger value. |
-| `bill_id` | `VARCHAR` | The bill this package concerns, where a linkage exists; nullable by design (C11). |
+| `bill_id` | `VARCHAR` | Always NULL here, and NULL for a stated reason: a legislative hearing is held on a *list* of bills -- twelve of them on CHRG-118hhrg56198 -- so a scalar column would have to pick one of twelve.  The relationship is one-to-many and `hearing_bill_links` hosts it, one row per hearing, bill and source, the way `event_id` names `committee_meetings`.  The column stays because this table shares its shape with `committee_reports`, where a report *is* filed against one bill. |
 | `format` | `VARCHAR` | Which rendition was read (htm, xml, txt, pdf). |
 | `media_type` | `VARCHAR` | The response media type, proved against the format before the body was accepted. |
 | `requested_url` | `VARCHAR` | The URL the body fetch asked for. |

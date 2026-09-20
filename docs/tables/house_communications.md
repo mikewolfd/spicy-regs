@@ -22,23 +22,28 @@ One row per House executive communication, as the Congress.gov house-communicati
 | `number` | `VARCHAR` | The communication's number within its Congress and type. |
 | `chamber` | `VARCHAR` | The chamber, as the publisher spells it. |
 | `session` | `VARCHAR` | The session of Congress the communication was received in. |
-| `abstract` | `VARCHAR` | The publisher's abstract: the Record's own description of the communication. |
+| `abstract` | `VARCHAR` | The publisher's abstract: the Record's own description of the communication. On a `congressional-record-granule` row it is the printed entry under the four normalizations the publisher's own abstract applies, which `record_entry_text` keeps unapplied. |
 | `report_nature` | `VARCHAR` | The nature of the report transmitted, where the detail states one; where the RIN is read from. |
 | `legal_authority` | `VARCHAR` | The statutory authority the communication cites, where the detail states one; a Congressional Review Act rule submission cites 5 U.S.C. 801(a)(1)(A). |
 | `submitting_agency` | `VARCHAR` | The agency that submitted the communication, where the detail states one. |
 | `submitting_official` | `VARCHAR` | The official who submitted it, where the detail states one. |
 | `congressional_record_date` | `VARCHAR` | The date the communication appeared in the Congressional Record. |
 | `is_rulemaking` | `VARCHAR` | Whether the publisher flags the communication as a rulemaking: the publisher's `True`/`False` strings folded onto the one published truth spelling; any other spelling refuses. |
-| `referral_system_code` | `VARCHAR` | System code of the first committee the communication was referred to. |
-| `referral_committee_name` | `VARCHAR` | That committee's name as the publisher spells it. |
+| `referral_system_code` | `VARCHAR` | System code of the first committee the communication was referred to. NULL on a `congressional-record-granule` row: the Record prints a name, and the resolver from a name to a `committees.system_code` is not built. |
+| `referral_committee_name` | `VARCHAR` | That committee's name as the publisher spells it; on a `congressional-record-granule` row, as the Record printed it, which is the committee's name on the day and agrees with Congress.gov's current spelling on 71.5% of held-out rows. Resolve identity through `referral_system_code`, never through this. |
 | `referral_date` | `VARCHAR` | The date of that referral. |
 | `referral_count` | `VARCHAR` | How many committees the detail lists; every one is in committees_json. |
-| `committees_json` | `VARCHAR` | Every committee referral the detail lists, as a JSON array of the publisher's objects. NULL where no detail was read. |
+| `committees_json` | `VARCHAR` | Every committee referral the detail lists, as a JSON array of the publisher's objects. NULL where no detail was read. On a `congressional-record-granule` row, one `{name}` object per committee the printed referral tail names, in printed order. |
 | `matching_requirement_number` | `VARCHAR` | Number of the first House reporting requirement the communication matches. |
 | `matching_requirement_count` | `VARCHAR` | How many requirements the detail lists; every one is in matching_requirements_json. |
 | `matching_requirements_json` | `VARCHAR` | Every matching requirement the detail lists, as a JSON array of numbers. NULL where no detail was read. |
 | `rin` | `VARCHAR` | The Regulation Identifier Number read from report_nature, where the rule found one. |
 | `rin_rule` | `VARCHAR` | Which RIN rule fired (`report_nature_rin_label`), or `unmatched`; NULL where the rule was not run. |
 | `rin_matched_text` | `VARCHAR` | The exact text the RIN rule matched, so a false positive is readable from the row. |
-| `update_date` | `VARCHAR` | The publisher's updateDate; the merge prefers the larger value. |
-| `url` | `VARCHAR` | The publisher's own URL for this communication, which only the list row states. |
+| `update_date` | `VARCHAR` | The publisher's updateDate; the merge prefers the larger value, except across source_route, where a `congress-gov-detail` row always wins. |
+| `url` | `VARCHAR` | The publisher's own URL for this communication, which only the list row states. NULL on a `congressional-record-granule` row: the detail route 404s for every pre-114th communication. |
+| `source_route` | `VARCHAR` | What produced this row: `congress-gov-detail` where the publisher decomposed the communication itself, `congressional-record-granule` where it was reconstructed from the printed entry. |
+| `record_package_id` | `VARCHAR` | The CREC package whose issue printed the entry (`CREC-{congressional_record_date}`); NULL on a publisher-decomposed row. |
+| `record_granule_id` | `VARCHAR` | The `EXECUTIVE COMMUNICATIONS, ETC.` granule within that package, so the row is replayable the way `committee_reports` replays from `package_id`; NULL on a publisher-decomposed row. |
+| `record_entry_text` | `VARCHAR` | The sentence the Record printed, GPO's own wording with none of the publisher's normalizations applied, kept beside the derived fields the way `rin_matched_text` is kept beside `rin`, so a bad parse is readable from the row; NULL on a publisher-decomposed row. |
+| `reconstruction_rule_version` | `VARCHAR` | The `record-communication-` rule identity that produced the derived fields (`RECORD_COMMUNICATION_RULE_VERSION`); NULL on a publisher-decomposed row. |

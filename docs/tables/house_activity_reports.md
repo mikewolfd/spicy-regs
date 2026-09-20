@@ -47,7 +47,7 @@ One row per captured end-of-Congress House committee activity report package, wi
 | `pages_read` | `VARCHAR` | How many pages the extraction actually read, which a capped read makes smaller than page_count. |
 | `stated_page_count` | `VARCHAR` | How many pages the document has, as the keyed summary's own `pages` field states it -- not re-derived from the bytes.  Named apart from `committee_reports.page_count`, which is a package-keyed column holding how many pages *that* extraction read: the two would otherwise collide on one `package_id` with opposite meanings (282 against 60 on CRPT-118hrpt965). |
 | `pages_capped` | `VARCHAR` | Whether the read stopped short of the document, so every count above is a floor. |
-| `body_rendition` | `VARCHAR` | Which rendition the text was derived from; `pdf` for this family. |
+| `body_rendition` | `VARCHAR` | Which rendition the text was derived from.  `pdf` here because the acquirer is asked for `sources.govinfo.bodies.PRINT_BODY_PREFERENCE` -- the sealed order with PDF first -- and **not** because it is all an activity report offers: these packages state `htm` too, and under the sealed default 10 of 41 refused on HTML nesting depth while the 31 that were read stated no page at all, which is what the four page-stating columns here need. |
 | `body_derivation` | `VARCHAR` | How that rendition became text. |
 | `text_sha256` | `VARCHAR` | Digest of the normalized text the citation spans index into. |
 | `rule_set_version` | `VARCHAR` | Digest over every citation rule's name, version, pattern and rejects, so these counts name the rules that produced them. |
