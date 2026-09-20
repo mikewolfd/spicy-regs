@@ -1077,21 +1077,34 @@ why nothing caught it. **On this evidence a keyed production run publishes zero
 shape. The fix is spicy-docs' — either the sealed prompt names its keys (moving
 `PROMPT_VERSION`) or the reader accepts the publisher-neutral spellings — and
 sealing decisions are not this repository's, so it is recorded and not changed.
-**Fixed and adopted, 2026-09-20.** spicy-docs 0.21.3 took the first route: each
-prompt now states the JSON object its reader parses, from the one `AnswerField`
-declaration the reader reads, at `PROMPT_VERSION` `v2`. Proved live in
-spicy-docs' own receipt
-`~/Work/corpora/supply-2026-09-02/receipts/c1-prompt-fix-2026-09-19/` — one
-`summarize_bill` call, answered with `summary`, `audience` and
-`topThreeProvisions`, **read into one `bill_summaries` row** at 250 in / 197
-out, **USD 0.000567**; a `summarize_diff` call read into one `diff_summaries`
-row on a constructed pair. `classify_sections` is *not* proved end to end: its
-answer carried the right `v2` keys and was then refused by the batch guard for
-naming a section outside its batch, and the run's three-call budget was spent.
-`hosting-adopt-0.21.3` adopts the wheel and asserts both halves here (the `v2`
-stamp on a produced row, and the measured `v1`-era answer refused by name), but
-**no keyed production run has been made in this repository**, so nothing above
-about what a real corpus costs or yields is superseded.
+**Fixed and adopted, 2026-09-20 (spicy-docs 0.21.3, then 0.22.0).** The first
+route was taken: each prompt now states the JSON object its reader parses,
+from the one `AnswerField` declaration the reader reads, and 0.22.0 puts that
+same declaration on the *request* as a JSON Schema — which is where BillTrax's
+zod schemas sat, and the half this port had dropped. Two receipts, both
+spicy-docs':
+
+- `~/Work/corpora/supply-2026-09-02/receipts/c1-prompt-fix-2026-09-19/` — the
+  summary prompts at `v2`. One `summarize_bill` call answered `summary`,
+  `audience`, `topThreeProvisions` and was **read into one `bill_summaries`
+  row** (250 in / 197 out, **USD 0.000567**); one `summarize_diff` call read
+  into one `diff_summaries` row on a constructed pair.
+- `~/Work/corpora/supply-2026-09-02/receipts/c1-classification-v3-2026-09-20/`
+  — the classification prompt at `v3`, which closes the part the first receipt
+  could not. Under `v2` two live runs were answered and refused: `sectionId`
+  asked for "the bracketed id, copied exactly as given below" and the model
+  copied the brackets, which `_read_row`'s batch guard refuses, so **zero
+  `section_classifications` rows** both times. `v3` rewords that one field.
+  **Two identical requests, three rows each**, no refusals, ids as sent, 534
+  in / 200 out, **USD 0.00066**. Two calls because one success does not
+  establish a reliable route.
+
+So both defects were an unstated or ambiguously stated *request*, found only
+by asking. `hosting-adopt-0.21.3`, extended to 0.22.0, adopts the wheels and
+asserts each half here: the `v2` and `v3` stamps on produced rows, the
+measured `v1`-era answer refused by name, and the diff reader on a changed
+pair. **No keyed production run has been made in this repository**, so nothing
+above about what a real corpus costs or yields is superseded.
 Cost: **USD 0.00057-0.00059 per bill** -- a range, not a figure, because the
 input is deterministic at 204 tokens and the output is not (208 / 213 / 206
 across three calls). The rate is pinned in the receipt and is a pin, not a
@@ -1407,78 +1420,95 @@ landed).
   `2eaffe0` and `473966f` had already caused.
 
 **2026-09-20, branch `hosting-adopt-0.21.3` (worktree `spicy-regs-wt-adopt3`,
-from `billtrax-hosting-prep` at `bc82c51`).** SpicyDocs 0.21.3 is released and
-adopted: `vendor/spicy_docs-0.21.3-py3-none-any.whl` (commit `083b536`, tag
-v0.21.3, sha256 `1f91bb70…f84b`, 1,181,012 bytes, verified after the copy and
-recorded identically in `uv.lock`), 0.21.2 deleted, both `source-readers` pins
-and `[tool.uv.sources]` moved together. The resolve is one line — `Updated
-spicy-docs v0.21.2 -> v0.21.3` — with no refusal; the same
-`rulespec-artifacts==1.0.13` and DeltaTrack pins hold. It carries the fix for
-the C1 finding above: the model prompts and their readers are one statement
-again.
+from `billtrax-hosting-prep` at `bc82c51`).** SpicyDocs 0.21.3 and then
+0.22.0 are released and adopted on the one branch, which keeps its first
+name. Vendored: `vendor/spicy_docs-0.22.0-py3-none-any.whl` (commit `b76a1f0`,
+tag v0.22.0, sha256 `782735d8…bafa1`, 1,188,118 bytes, verified after the copy
+and recorded identically in `uv.lock`), 0.21.3 deleted in turn, both
+`source-readers` pins and `[tool.uv.sources]` moved together each time. Each
+resolve is one line — `Updated spicy-docs v0.21.2 -> v0.21.3`, then `v0.21.3
+-> v0.22.0` — with no refusal; the same `rulespec-artifacts==1.0.13` and
+DeltaTrack pins hold throughout. Together the two releases close the C1
+finding above.
 
-- [x] **Nothing in the dictionary moved, and that is a measurement.** The two
-  wheels were unzipped and diffed: three `interpretation/` modules changed and
-  one data directory (`schemas/document_capture/1.0/`, DocumentCapture v1
-  schemas and six profiles) was added. `TABLE_CONTRACTS` was then dumped from
-  each wheel and compared field by field — thirty-two contracts, 617 columns,
-  same columns, identity, version column, grain and per-column prose. So
-  `UNHOSTED_CONTRACTS` stays the empty set with nothing to decide, and
-  `spicy-regs-dict check` (59 tables) then `generate` leaves `git status
-  --short docs/tables data_dictionary` empty — including the three model
-  tables' `prompt_version` prose, which describes the column and never quoted
-  a version. The dictionary is generated from the contracts, so checking it
-  against the contracts would have agreed with itself; the field-by-field dump
-  is the independent half.
-- [x] **`transforms/model_call.py`'s request is unchanged**, as instructed and
-  on the evidence: `responseMimeType: application/json` was the half of the
-  contract that was already right. C1's defect was that the *prompt* named no
-  keys while the request demanded JSON, which is what 0.21.3 fixes upstream.
-- [x] **The readers are now actually run in a test here.** Every model stub in
-  `tests/` was checked against the `v2` readers. `tests/test_model_call.py`
-  stubs the Gemini *client* and asserts the adapter, never the readers, so
-  nothing in it needed to change — `{"summary": "ok", "audience": "everyone"}`
-  is an adapter fixture, not an answer any reader sees. And
-  `tests/test_bill_family.py` ran the whole family **keyless**, so
-  `section_classifications`, `bill_summaries` and `diff_summaries` were only
-  ever asserted empty: no spicy-regs test had ever reached `_read_answer`.
-  That is the same blind spot as "every test stubs the call with the right
-  keys", one level out. `StubGemini` now stands in for `GeminiClient`, behind
-  `model_call` and both readers, and builds each answer from the shape the
-  prompt it was handed states — `answer_shape_block` over spicy-docs' own
-  `AnswerField` records, and the classification ids read off the prompt's own
-  `Sections:` block rather than recomputed, which is also what the live model
-  got wrong. Two tests: a produced row is stamped `v2` (asserted as the
-  literal, since reading `PROMPT_VERSION` back would agree with itself), and
-  the measured `v1`-era answer (`most_affected_audience`,
-  `notable_provisions`) is refused with **both** missing keys named while the
-  run continues. Mutation-checked three ways: against the 0.21.2 modules the
-  file will not import (`SUMMARY_FIELDS` does not exist there), with the
-  installed `PROMPT_VERSION` forced to `v1` (the stamp assertion fails), and
-  with the guard below removed (the refusal test fails).
-- [x] **A refused answer now costs its own rows, not the run.** Found writing
-  that second test, and pre-existing rather than new:
-  `interpretation/bill_family.py` calls all three generators *outside* its own
-  `_Admitter` guard, which wraps only the row shapers, so a `ModelCallError`
-  left `build_bill_family` and aborted the rollup. One bad answer about one
-  printing would have cost every status-derived row of every bill in the run —
-  strictly worse than the empty `bill_summaries` table C1 predicted.
-  `model_call.survive_refused_answer` wraps each seam so the refusal returns
-  what its caller already reads as nothing to store (`()`, `None`), which
-  `bill_family` files as a named refusal; spicy-regs logs the answer's real
-  reason (scrubbed, message only — never `details`, which holds the model's
-  answer) and counts it apart from the shaper refusals. The catch is
-  `ModelCallError` alone: `GeminiClient` raises `CredentialRefusedError` on
-  `401`/`403` and `ExtractionError` on any other status, so a credential
-  refusal still aborts and an empty model table is never what a `502` looks
-  like. **Left for spicy-docs:** the refusal `bill_family` files for a `None`
-  summary says the text was below the minimum, which is not why this one came
-  back empty; naming the true reason needs `_summarize_version` to catch
-  `ModelCallError` itself.
+- [x] **Nothing in the dictionary moved, across both releases, and that is a
+  measurement.** The wheels were unzipped and diffed pairwise: 0.21.3 changed
+  three `interpretation/` modules and added `schemas/document_capture/1.0/`
+  (DocumentCapture v1 schemas and six capture profiles, registering no
+  contract and unread here); 0.22.0 changed five modules and added
+  `interpretation/gemini_call.py`, all of them the model seam. `TABLE_CONTRACTS`
+  was then dumped from each wheel and compared field by field — thirty-two
+  contracts, 617 columns, same columns, identity, version column, grain and
+  per-column prose, **identical since 0.21.2**. So `UNHOSTED_CONTRACTS` stays
+  the empty set with nothing to decide, `spicy-regs-dict check` (59 tables)
+  passes, and `generate` leaves `docs/tables` and `data_dictionary` untouched
+  — run twice, byte-identical the second time, so the empty diff is
+  idempotence and not a first-run artefact. The dictionary is generated from
+  the contracts, so checking it against them would have agreed with itself;
+  the field-by-field dump is the independent half.
+- [x] **The local Gemini adapter is deleted for spicy-docs'.** 0.22.0 gave
+  `ModelCall` a `response_schema` argument that every generator passes, so
+  `transforms/model_call.py`'s `call(*, model, prompt)` raised `TypeError` on
+  every call — a copy that could not stay in step, which is the argument for
+  not having had one. `spicy_docs.interpretation.gemini_call` replaces it, and
+  the module keeps only `resolve_gemini_key`: which environment variable this
+  host reads, the one part that is the application's. Its adapter tests went
+  upstream with the code (`tests/test_interpretation_gemini_call.py`), where
+  they sit beside what decides them; the key-resolution tests stayed and
+  gained the two cases they were missing (the second variable, and an
+  exported-but-empty one).
+- [x] **The `survive_refused_answer` wrapper is deleted.** It existed because
+  a `ModelCallError` escaped spicy-docs' `build_bill_family` and aborted the
+  whole rollup; 0.22.0's `_model_answer` runs all three generators inside the
+  guard the row shapers already ran inside and files a `FamilyRefusal` naming
+  the reader's message, while a credential refusal and a transport failure
+  still abort. The wrapper had to report a refused summary as a *declined*
+  one — "its text is below the minimum" — and the diff path had the same
+  misstatement; both are fixed upstream. Two review findings against that
+  wrapper (a docstring claiming the classifier's caller files a refusal, which
+  it did not; and its blast radius) are answered by the deletion.
+  **The blast radius is real and now upstream's to state, which it does:**
+  `classify_sections` batches at 30 and returns only when every batch has been
+  read, so one refused answer discards the batches already paid for — up to 90
+  answers on a five-batch printing. One `FamilyRefusal` is filed for the
+  printing. Nothing here can narrow that without re-implementing the batching.
+- [x] **Refusal reasons reach the run log.** The reason is why a
+  `FamilyRefusal` carries one, and this rollup counted refusals by table and
+  threw the reason away — the C1 defect would have read as "the model tables
+  are short". Counted now by `(table, reason)` over `folded.refusals`, which
+  also fixes a gap: the per-bill loop this replaces never counted the
+  backfill pass's refusals at all, and `concat` carries them. Distinct reasons
+  are logged with their counts, capped at `REFUSAL_REASONS_LOGGED` (20), so a
+  prompt every bill refuses is one line rather than one per bill; reasons are
+  scrubbed with the key before logging.
+- [x] **All three readers are now run in a test here, which none was before.**
+  Every model stub was checked: `tests/test_model_call.py` stubbed the *client*
+  and asserted the adapter, and `tests/test_bill_family.py` ran the family
+  keyless, so the three model tables were only ever asserted empty. No
+  spicy-regs test had reached `_read_answer` — the same blind spot as "every
+  test stubs the call with the right keys", one level out, and why the defect
+  reached a live call. `StubGemini` now stands in for `GeminiClient`, behind
+  `gemini_call.model_call` and all three readers, dispatching on
+  `response_schema` compared against the three constants the generators send
+  (exact where a prompt substring was not, and it fails if the schema stops
+  reaching the request). **The answer keys in it are literal spellings on
+  purpose**: derived from `field.key` the stub would silently follow a rename,
+  and the test would be asking whether the file agrees with itself. Three
+  tests — the `v2`/`v3` stamps on produced rows; the measured `v1`-era answer
+  refused with both missing keys named while the run completes; and
+  `summarize_diff`/`_read_diff_answer` on a pair with one section rewritten
+  and one added, which had no coverage at all because the committed printings
+  settle entirely `unchanged` and the generator declines before asking.
+  Mutation-checked: the classification stamp fails with the installed
+  `PROMPT_VERSION` forced to `v2`, and the diff test fails on the unchanged
+  fixture pair.
 
-1,623 source tests pass (was 1,621), `ruff check .` is clean, and
-`spicy-regs-dict check`/`generate` are clean with no diff. `ty check` reports
-only the two known `vectordb/embed.py` diagnostics, which appear solely with
-the `embed` extra installed (`uv sync --frozen --all-extras`, used here) and
-are pre-existing. Not pushed — local commits on `hosting-adopt-0.21.3`, per
-instruction. Review before merge, per the standing rule.
+1,615 source tests pass, `ruff check .` is clean, `spicy-regs-dict
+check`/`generate` are clean and idempotent. `ty check` reports only the two
+known `vectordb/embed.py` diagnostics, which appear solely with the `embed`
+extra installed (`uv sync --frozen --all-extras`, used here) and are
+pre-existing. The count is lower than the 1,623 of the 0.21.3 step because the
+adapter tests moved upstream with the adapter. Not pushed — local commits on
+`hosting-adopt-0.21.3`, per instruction. Reviewed once (REQUEST CHANGES on
+prose and one coverage gap, no code defect); this extension answers all four
+findings and supersedes the code two of them were about.
