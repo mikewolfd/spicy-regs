@@ -1545,10 +1545,11 @@ contracts over 813 columns: two new tables and appended columns on three.
 All 39 are registered, the unhosted set is empty, and 67 tables are described
 (the two additions plus this host's committee_report_reads checkpoint).
 
-- The package owns Mirrulations downloads, retries and access refusals. A host
-  guard requires a non-blank string data.id before staging or manifesting a key;
-  unexpected objects remain unresolved with a named reason. spicy-docs is adding
-  the same shape check, making the guard belt-and-braces at the next adoption.
+- The package owns Mirrulations downloads, retries and access refusals. The
+  temporary host guard required a nonblank string data.id before staging or
+  manifesting a key. The 0.24.1 patch adopted below supplies that check for
+  every ingested type, so both ingestion paths now use the supplier directly;
+  unexpected objects remain unresolved with a named reason.
   Unresolved keys retry first with attempts carried forward. failed_keys.parquet
   restores from R2 and publishes before the manifest, including on zero-row
   passes and when recovery clears the last failure. Only this retry checkpoint
@@ -1617,3 +1618,33 @@ hearing/CBO relationships. Frozen-runner checks: **1,748 passed, 3 deselected**,
 ruff and ty clean, dictionary check **67 tables**, generation idempotent across
 69 artifacts. Credential grep over the new diff: **0 matches** for the current
 API_GOV value and credential patterns. No push or live acquisition run.
+
+**2026-09-20, spicy-docs 0.24.1 patch adoption.** The current pin replaces
+0.24.0 in both dependency lists and the uv source. The wheel is **1,321,932
+bytes**, SHA-256
+`ce25270b5328ccd4da4f51d2e241141531b4fb058313da38628c647f63531fa6`, verified
+before and after copying. Independent imports from both wheel archives prove
+all **39 contracts and 813 columns** identical, including column order,
+identities, version columns and descriptions. Registry dumps and comparison:
+`/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/spicy-docs-0-24-1-adoption-2026-09-20/`.
+
+| Ingested type | Host identity | Supplier 0.24.1 requirement | Local guard |
+| --- | --- | --- | --- |
+| dockets | Nonblank string `data.id` -> `docket_id` | Same; also rejects `errors` | Deleted |
+| documents | Nonblank string `data.id` -> `document_id` | Same; also rejects `errors` | Deleted |
+| comments | Nonblank string `data.id` -> `comment_id` | Same; also rejects `errors` | Deleted in standard and chunked ingest |
+
+No host-only identity requirement remains. The supplier's record definitions,
+the host's extractors and the removed guard agree for all three types.
+The regression suite retains the original empty-data, publisher-error,
+blank-ID and numeric-ID reproductions, expands them to every ingested type,
+and checks retry counts across two runs. Direct supplier-reader tests prove
+the identity mapping, raw-field preservation and scrubbed publisher reasons,
+including error bodies that also carry a valid ID.
+
+Checks through `uv run --frozen`: **1,801 passed, 3 deselected**; `ruff check .`
+and `ty check` clean; `spicy-regs-dict check` passes for **67 tables**;
+`spicy-regs-dict generate` leaves all **69 artifacts byte-identical**.
+Credential grep over the new binary diff: **0 matches** for the current
+API_GOV value and credential patterns; the unpacked new wheel also contains
+zero matches for that value. Local adoption only; no push or live acquisition.

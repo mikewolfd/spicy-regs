@@ -210,8 +210,8 @@ def _typed_store() -> dict[str, bytes]:
     base = f"{PREFIX}/{AGENCY}/EPA-2024-0001/text-EPA-2024-0001"
     return {
         f"{base}/docket/EPA-2024-0001.json": dumps(_docket_payload("EPA-2024-0001")).encode(),
-        f"{base}/documents/EPA-2024-0001-0001.json": b'{"data": {}}',
-        f"{base}/comments/EPA-2024-0001-0002.json": b'{"data": {}}',
+        f"{base}/documents/EPA-2024-0001-0001.json": b'{"data": {"id": "EPA-2024-0001-0001"}}',
+        f"{base}/comments/EPA-2024-0001-0002.json": b'{"data": {"id": "EPA-2024-0001-0002"}}',
         # Non-JSON / binary — must be ignored.
         f"{base}/binary-EPA-2024-0001/docket/x.pdf": b"x",
     }

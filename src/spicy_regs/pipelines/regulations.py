@@ -41,7 +41,6 @@ from spicy_regs.pipelines.staging import stage_agencies
 from spicy_regs.schemas import RECORD_TYPES, RecordType
 from spicy_regs.sources import iceberg, r2
 from spicy_regs.sources.derived_text import DerivedCommentText
-from spicy_regs.sources.mirrulations_records import IdentityCheckedReader
 from spicy_regs.transforms import (
     Chain,
     EnrichCommentText,
@@ -136,7 +135,7 @@ class RegulationsPipeline(Pipeline):
             agencies,
             record_types,
             staging_dir,
-            lambda agency, rt: IdentityCheckedReader(read(agency, source_types[rt.name]), unresolved.for_reader(agency, rt)),
+            lambda agency, rt: read(agency, source_types[rt.name]),
             transform_for=self._transform_for,
             max_workers=self.max_workers,
         )
@@ -254,12 +253,11 @@ class RegulationsPipeline(Pipeline):
         total = len(keys)
         for start in range(0, total, self.chunk_size):
             chunk = keys[start : start + self.chunk_size]
-            source = mirrulations.MirrulationsReader(
+            reader = mirrulations.MirrulationsReader(
                 resource, mirrulations.BUCKET, mirrulations.PREFIX, agency, source_record_type(comment_rt),
                 key_lister=lambda: chunk,
                 unresolved_keys=[item for item in previous if item.key in chunk],
             )
-            reader = IdentityCheckedReader(source, [item for item in previous if item.key in chunk])
             records = list(transform.apply(reader.iter_records()))
             if records:
                 write_staging(agency, comment_rt.name, records, staging_dir, comment_rt.schema)

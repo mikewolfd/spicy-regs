@@ -5,14 +5,26 @@ The optional `source-readers` extra enables the same readers for package install
 its wheels must be supplied explicitly until they are published in a registry.
 Base CLI and MCP installs do not require them.
 
-- `spicy_docs-0.24.0`: built from SpicyDocs `713c821` (tag `v0.24.0`),
-  2026-09-20. Verified before and after copying: **1,319,390 bytes**, SHA-256
-  `0a03ce34916cfedf4162356dd49e8dc4d95cb50e9dd280f4256c087d379f680a`.
+- `spicy_docs-0.24.1`: SpicyDocs patch release (release commit `fc8171d`),
+  2026-09-20. Verified before and after copying: **1,321,932 bytes**, SHA-256
+  `ce25270b5328ccd4da4f51d2e241141531b4fb058313da38628c647f63531fa6`.
   Both pins and the uv source move together; `uv.lock` records the same digest.
-  Replaces 0.23.0 (`73b10e5`, 1,259,241 bytes, `36d619a6…4f66`).
+  Replaces 0.24.0 (`713c821`, 1,319,390 bytes, `0a03ce34…680a`).
 
-  Independent dumps from both wheels establish **39 contracts, 813 columns**
-  (previously 37, 766). New: `hearing_bill_links` (12 columns, key
+  Independent imports from both wheel archives establish **39 contracts,
+  813 columns**, with every contract identical: column order, identity,
+  version column, grain and descriptions. The comparison and registry dumps
+  are retained in
+  `receipts/spicy-docs-0-24-1-adoption-2026-09-20/contracts-comparison.json`
+  under `/Users/mikewolfd/Work/corpora/supply-2026-09-02/`.
+  The Mirrulations reader now requires a nonblank `data.id` string for all
+  three ingested types and rejects publisher error bodies. This matches the
+  host's identity requirement and adds error rejection, so both ingestion
+  paths use the supplier reader directly. Publisher reasons remain scrubbed;
+  regression tests retain the missing-identity and retry cases.
+
+  The preceding 0.24.0 adoption grew the registry from 37 contracts and 766
+  columns. It added `hearing_bill_links` (12 columns, key
   `package_id, bill_id, link_source`) and `cbo_cost_estimates` (16, key
   `bill_id, publication_id`). Appended: `house_communications` +5 provenance
   columns, `committee_reports` +13 CBO letter columns, `congress_bills` +1
@@ -31,7 +43,7 @@ Base CLI and MCP installs do not require them.
   `shape_hearing_transcript` no longer accepts `bill_id`: hearing relationships
   are one-to-many and live in `hearing_bill_links`.
 
-- `rulespec_artifacts-1.0.13`: required by spicy-docs 0.24.0, which pins it
+- `rulespec_artifacts-1.0.13`: required by spicy-docs 0.24.1, which pins it
   exactly; 1.0.12 no longer resolves. Nothing here imports it — it is a
   transitive pin vendored under the same discipline. Byte-identical to the
   wheel `rulespec` itself built (`dist/artifacts/`) and to the one spicy-docs

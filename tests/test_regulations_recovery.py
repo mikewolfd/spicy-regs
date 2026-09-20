@@ -6,12 +6,13 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 from botocore.exceptions import ClientError
+from spicy_docs.schemas.regulations import RECORD_TYPES as SOURCE_RECORD_TYPES
 from spicy_docs.sources import mirrulations
 
 from spicy_regs.manifest import Manifest, save_manifest
 from spicy_regs.pipelines.regulations import RegulationsPipeline
 from spicy_regs.pipelines.regulations_state import UnresolvedKeys
-from spicy_regs.schemas import DOCKET
+from spicy_regs.schemas import DOCKET, RECORD_TYPES
 from spicy_regs.sources import r2
 from tests.test_regulations_pipeline import (
     _FakeS3Resource, _RaisingObj, _comment_key, _comment_payload, _docket_key, _docket_payload,
@@ -60,16 +61,23 @@ def test_access_refusal_aborts_without_checkpoint(tmp_path, monkeypatch, status,
     assert not (tmp_path / "failed_keys.parquet").exists()
 
 
-@pytest.mark.parametrize("chunked", [False, True])
+@pytest.mark.parametrize("record_name,chunked", [
+    *((name, False) for name in RECORD_TYPES), ("comments", True),
+])
 @pytest.mark.parametrize("transient_first", [False, True])
 @pytest.mark.parametrize("body", [
     {"data": {}}, {"errors": [{"detail": "upstream failed"}]},
     {"data": {"id": "  "}}, {"data": {"id": 42}},
+    {"data": {"id": None}}, {"data": {"id": ""}},
+    {"id": "misplaced"}, {"data": {"attributes": {"docketId": "EPA-2026-0001"}}},
 ])
-def test_missing_record_identity_never_becomes_a_row_or_coverage(tmp_path, monkeypatch, chunked, body, transient_first):
+def test_missing_record_identity_never_becomes_a_row_or_coverage(
+    tmp_path, monkeypatch, record_name, chunked, body, transient_first,
+):
     from spicy_regs.pipelines import regulations
 
-    key = _comment_key("c1", "EPA-2026-0001") if chunked else _docket_key("EPA-2026-0001")
+    record_type = RECORD_TYPES[record_name]
+    key = f"raw-data/EPA/EPA-2026-0001/text-record{record_type.path_pattern}record.json"
     class Resource(_FakeS3Resource):
         fail_next = transient_first
 
@@ -83,7 +91,8 @@ def test_missing_record_identity_never_becomes_a_row_or_coverage(tmp_path, monke
     monkeypatch.setattr(mirrulations, "s3_resource", lambda: resource)
     monkeypatch.setattr(regulations.iceberg, "merge_comments", lambda *a: pytest.fail("invalid record reached merge"))
     pipeline = RegulationsPipeline(
-        agency="EPA", output_dir=tmp_path, only_comments=chunked, skip_comments=not chunked,
+        agency="EPA", output_dir=tmp_path, only_comments=record_name == "comments",
+        skip_comments=record_name != "comments",
         enrich_text=False, use_iceberg=chunked, chunk_size=1 if chunked else 0,
     )
     pipeline.run()
@@ -92,10 +101,49 @@ def test_missing_record_identity_never_becomes_a_row_or_coverage(tmp_path, monke
     [row] = pq.read_table(tmp_path / "failed_keys.parquet").to_pylist()
     assert row["key"] == key and row["attempts"] == (3 if transient_first else 2)
     assert row["status"] == "requested-empty"
-    assert row["reason"] == "missing-record-identity: expected a non-blank data.id string"
+    assert f"missing nonblank data.id identity for {record_name} ({record_type.dedup_key})" in row["reason"]
+    if "errors" in body:
+        assert "publisher error" in row["reason"] and "upstream failed" in row["reason"]
     assert not list((tmp_path / "staging").rglob("*.parquet"))
     assert not (tmp_path / "dockets.parquet").exists()
+    assert not (tmp_path / "documents.parquet").exists()
     assert not (tmp_path / "comments_index.parquet").exists()
+
+
+@pytest.mark.parametrize("record_name", list(RECORD_TYPES))
+def test_supplier_identity_matches_host_and_preserves_raw_fields(record_name):
+    """Every ingested type keys on data.id; no parent docket ID is required."""
+    host_type = RECORD_TYPES[record_name]
+    source_type = SOURCE_RECORD_TYPES[record_name]
+    assert source_type.dedup_key == host_type.dedup_key
+    assert source_type.path_pattern == host_type.path_pattern
+    body = {"data": {"id": "EPA-2026-0001", "attributes": {"title": "Unchanged"}}, "unknown": [1, 2]}
+    reader = mirrulations.MirrulationsReader(
+        _FakeS3Resource({"key": json.dumps(body).encode()}), "mirrulations", "raw-data", "EPA", source_type,
+        key_lister=lambda: ["key"], download_workers=1,
+    )
+    assert list(reader.iter_records()) == [body]
+    assert reader.last_keys == ["key"] and reader.unresolved == []
+    expected = body["data"]["id"]
+    assert host_type.extract(body)[host_type.dedup_key] == expected
+    assert source_type.extract(body)[source_type.dedup_key] == expected
+
+
+@pytest.mark.parametrize("record_name", list(RECORD_TYPES))
+def test_supplier_rejects_publisher_error_even_with_identity(record_name):
+    """The supplier is stricter than the removed guard and keeps scrubbed reasons."""
+    secret = "synthetic-" + "publisher-secret"
+    body = {"data": {"id": "EPA-2026-0001"}, "errors": [{"detail": "upstream failed api_key=" + secret}]}
+    reader = mirrulations.MirrulationsReader(
+        _FakeS3Resource({"key": json.dumps(body).encode()}), "mirrulations", "raw-data", "EPA",
+        SOURCE_RECORD_TYPES[record_name], key_lister=lambda: ["key"], download_workers=1,
+    )
+    assert list(reader.iter_records()) == []
+    assert reader.last_keys == [] and reader.failed_keys == ["key"]
+    [outcome] = reader.unresolved
+    assert outcome.status == "requested-empty" and outcome.attempts == 1
+    assert "publisher error" in outcome.reason and "upstream failed" in outcome.reason
+    assert secret not in outcome.reason
 
 
 def test_legacy_false_coverage_is_retried_before_new_work(tmp_path, monkeypatch):
