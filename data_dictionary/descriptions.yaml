@@ -2138,13 +2138,18 @@ tables:
       measured on one cold-start run 2026-09-20 (receipt
       `rollups-pdf-families-2026-09-20/`). The GovInfo `published` CDOC window
       from the 2024-01-01 issue floor served **291 rows and matched 5**
-      Secretary-of-the-Senate reprints; the 4-package cap read **4 of them**,
-      eight granule files, 640 pages, 556 tables, **2,623 ruled rows**, zero
-      refusals, 21 keyed requests. `GPO-CDOC-118sdoc11` was not reached and is
-      read on the next run — the window is walked whole every run so that is
-      true. **Every count over this table is a floor on the volume**: each
-      report runs 1,259 to 1,542 pages a file and only the first 80 of each are
-      read, so `pages_capped` is `true` on all 2,623 rows. Those 80 pages carry
+      Secretary-of-the-Senate reprints, and **all five are published** — 3,272
+      ruled rows over ten granule files, zero refusals. It took two runs under
+      the same 4-package cap: the first read four packages (2,623 rows, 640
+      pages, 556 tables, 21 keyed requests) and the second read the fifth,
+      `GPO-CDOC-118sdoc11` (649 rows, 160 pages, 138 tables, 10 keyed
+      requests), having found the other four already published and fetched no
+      body for them. A package with nothing left to read costs its granule
+      list and not a cap slot, which is what makes a window larger than the cap
+      finish rather than stall. **Every count over this table is a floor on the
+      volume**: each
+      report runs 1,259 to 1,495 pages a file and only the first 80 of each are
+      read, so `pages_capped` is `true` on all 3,272 rows. Those 80 pages carry
       the `A-` summary-of-transactions section and the start of the `B-`
       detailed statement; the `C-` compensation-of-members and `D-`
       mail-allocation sections the contents page names sit past page 2,000 and

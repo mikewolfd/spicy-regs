@@ -1562,13 +1562,27 @@ now hosted**; the public surface went from 59 to 64.
 - [x] **The measured run**, receipt
   `~/Work/corpora/supply-2026-09-02/receipts/rollups-pdf-families-2026-09-20/`,
   caps declared in `caps.json` before either run and neither widened. Worst
-  rolling hour across every run: **261 keyed**, against the shared 4,000 and
+  rolling hour across every run: **271 keyed**, against the shared 4,000 and
   the 3,680 D1 measured; both crons sit in the 07:00–16:59 UTC block no other
   rollup occupies. Published: 41 `house_activity_reports`, 23
   `budget_volumes`, 12,700 `bill_committee_actions`, 49,792
-  `document_citations`, 2,623 `senate_expenditures`. The resume run **skipped
-  40 already-published packages at zero request cost**, which measures the
+  `document_citations`, 3,272 `senate_expenditures`. Each rollup's resume run
+  **skipped its already-published work at zero body-fetch cost** — 40 packages
+  for `print-citations`, 4 for `senate-expenditures` — which measures the
   incremental claim D1 could only record as design.
+- [x] **Review found one stall and one starvation, both fixed and both now
+  measured.** The Senate cap charged a package as soon as its granule list
+  answered, before the held-file check, so with five matched packages and a
+  cap of four every later run re-listed the four published ones, reached the
+  cap and broke before the fifth — `GPO-CDOC-118sdoc11` was unreachable by any
+  number of runs. A slot is now charged only when a file is actually read, and
+  the re-run under the **same** cap found four packages held at zero body
+  fetches and read the fifth: 649 rows, 10 keyed requests, **3,272 rows over
+  all five packages**. Separately, `print-citations` walked CRPT to exhaustion
+  and published an empty `budget_volumes` on a cold run; `_schedule`
+  round-robins the two collections into the one capped list, so neither family
+  is starved and the total fetched is unchanged. Both regressions are pinned
+  by tests that fail against the shipped code.
 - [x] **The run changed the code once, and the wrong run is retained.** The
   first `print-citations` attempt used the acquirer's sealed
   `BODY_PREFERENCE`, which puts HTML first: **10 of 41** activity reports
@@ -1590,7 +1604,7 @@ does not" is very nearly right and not exactly right: over 41 activity reports
 rather than eight, 7 print-only bills of 7,686 distinct, 5 print-only laws of
 990 and 6 print-only Code sections.
 
-1,680 source tests pass and `ruff check .` is clean. `ty check` is clean in
+1,683 source tests pass and `ruff check .` is clean. `ty check` is clean in
 this worktree, which is `uv sync --frozen` **without** `--all-extras` — the
 two known `vectordb/embed.py` diagnostics the 0.22.0 step recorded appear only
 with the `embed` extra installed, so this run did not see them and does not
