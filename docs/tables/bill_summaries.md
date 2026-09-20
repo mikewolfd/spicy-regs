@@ -6,7 +6,7 @@
 
 One row per plain-language summary of one printing of a bill. `frame` is stored because without it the summary is not reproducible from the row. All columns are stored as VARCHAR.
 
-**Coverage.** Sampled, and accumulating, and empty on every run measured so far. **`measured_on` does not carry its usual meaning here**: no run has exercised this table, so the date beside this statement is the day the statement was written, not the day a run checked it against the publisher (`descriptions.yaml`'s header lists the five entries in this position). Model-backed, same condition as `section_classifications`: no key, no rows, and the measured cold-start run of the 119th was deliberately keyless. The one live call made since (receipt `d1-measured-run-2026-09-19/`, row C1) was answered by the model and then refused by `_read_answer`, because the sealed prompt asks for its three items in prose and never names the JSON keys the reader requires: the model returned `affected_audience` and `notable_provisions` where the reader wants `audience` and `topThreeProvisions`. Until that is settled upstream, a keyed run should be expected to publish no rows here either. *(measured 2026-09-19)*
+**Coverage.** Sampled. The adoption run produced 0 rows in this output from the 118th Congress's HR and S BILLSTATUS archives, processing 16,213 bills in one pass. The pass used 16 requests (8 keyed, 8 keyless), with the printing cap fixed at four and model calls disabled. Model calls were capped at zero, so this run measures no summary yield. Receipt: `rollups-0-24-0-adoption-2026-09-20/`. Local output only; not uploaded. *(measured 2026-09-20)*
 
 - **Parquet file:** `bill_summaries.parquet`
 - **Queryable via MCP `query_sql`:** Yes

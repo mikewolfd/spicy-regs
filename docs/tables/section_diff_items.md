@@ -6,7 +6,7 @@
 
 One row per settled correspondence in one version-pair comparison. `text_diff_json` is byte-capped, and `text_diff_truncated` says when the cap was reached. All columns are stored as VARCHAR.
 
-**Coverage.** Sampled, and accumulating. Measured on one cold-start run of the 119th (receipt `d1-measured-run-2026-09-19/`): 18,956 bills rebuilt from the eight BILLSTATUS archives in 500 seconds, at 1,200 keyed and 616 keyless requests. It published 1,266 correspondence rows over the 128 comparisons in `section_diffs`. One row per settled correspondence in those comparisons. *(measured 2026-09-19)*
+**Coverage.** Sampled. The adoption run produced 0 rows in this output from the 118th Congress's HR and S BILLSTATUS archives, processing 16,213 bills in one pass. The pass used 16 requests (8 keyed, 8 keyless), with the printing cap fixed at four and model calls disabled. No consecutive pair had both parsed bodies in the four-printing sample. Receipt: `rollups-0-24-0-adoption-2026-09-20/`. Local output only; not uploaded. *(measured 2026-09-20)*
 
 - **Parquet file:** `section_diff_items.parquet`
 - **Queryable via MCP `query_sql`:** Yes

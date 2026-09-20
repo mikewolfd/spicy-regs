@@ -6,7 +6,7 @@
 
 One row per model-written summary of the change between two printings of a bill. All columns are stored as VARCHAR.
 
-**Coverage.** Sampled, and accumulating, and empty on every run measured so far. **`measured_on` does not carry its usual meaning here**: no run has exercised this table, so the date beside this statement is the day the statement was written, not the day a run checked it against the publisher (`descriptions.yaml`'s header lists the five entries in this position). Model-backed, and further limited to bills with at least two compared printings — of which the measured cold-start run produced 128. It shares the prompt-and-reader shape that row C1 of receipt `d1-measured-run-2026-09-19/` found refuses the model's own answer on `bill_summaries`, so the same caveat applies until that is settled upstream. *(measured 2026-09-19)*
+**Coverage.** Sampled. The adoption run produced 0 rows in this output from the 118th Congress's HR and S BILLSTATUS archives, processing 16,213 bills in one pass. The pass used 16 requests (8 keyed, 8 keyless), with the printing cap fixed at four and model calls disabled. Model calls were capped at zero, so this run measures no summary yield. Receipt: `rollups-0-24-0-adoption-2026-09-20/`. Local output only; not uploaded. *(measured 2026-09-20)*
 
 - **Parquet file:** `diff_summaries.parquet`
 - **Queryable via MCP `query_sql`:** Yes
