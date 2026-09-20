@@ -5,51 +5,68 @@ The optional `source-readers` extra enables the same readers for package install
 its wheels must be supplied explicitly until they are published in a registry.
 Base CLI and MCP installs do not require them.
 
-- `spicy_docs-0.21.2`: built with `uv build` from SpicyDocs commit
-  `3642aa1` (tag v0.21.2), 2026-09-19. SHA-256:
-  `96eb4897935998e903ed7e93ab26c120860baf3d677eeffd02599b760dbc8ca3`
-  (1,152,040 bytes). Keeps everything 0.21.1 carried — the table-contract
-  layer, the sealed body preference as `acquire`/`choose_format`'s default,
-  `extraction/body_text.py`, the bulk listing skip and the GPO normalization
-  fixes — and changes three things this repository reads:
-  - **`PackageModsIdentity.bills` and `.primary_bill`**
-    (`sources/govinfo/bodies.py`, `ModsBill`): every `<bill>` a package MODS
-    names, in document order, and the one marked `PRIMARY`.
-    `build_committee_reports.py` reads both from the package the acquirer
-    already proved and deletes the interim `_mods_bills`/`_primary_bill` parse
-    it carried. `bills` is a required field of the dataclass, so the test that
-    built a `PackageModsIdentity` by hand now runs `validate_package_mods` over
-    the fixture bytes, the same parse the acquirer runs.
-  - **Thirty-two table contracts** (was twenty-two; 617 columns). Of the ten
-    new ones, all ten are hosted: `house_communications`, `committee_meetings`,
-    `record_issues`, `treaties` and `nominations` by the rollups in
-    `pipelines/rollups/congress_index.py` (branch `hosting-rollups-index`,
-    A5/A7/A10), and `laws`, `law_code_sections`, `table3_records`,
-    `committees` and `committee_assignments` by the `laws` and
-    `committee-rosters` rollups (branch `hosting-rollups-laws-rosters`,
-    A8/A9). `data_dictionary.CONTRACT_TABLES` still enumerates the hosted
-    tables by hand, and `tests/test_contract_tables.py::UNHOSTED_CONTRACTS`
-    — now the empty set, asserted exactly — keeps the next wheel's new
-    contract a decision rather than a silent omission. Two hosted contracts
-    moved: `hearing_transcripts` appends `event_id` as its twentieth column
-    (read from the Congress.gov `hearing-detail` route by
-    `build_committee_reports` since the index branch), and
-    `congress_bills.statutes_at_large_cite`'s prose now says the host fills
-    it by joining `laws` at merge time, which
-    `transforms/table_merge.py::fill_statutes_at_large_cite` does after every
-    `congress_bills` merge from the published `laws` table; the dictionary
-    prints the wheel's sentence verbatim.
-  - **`BODY_PREFERENCE = ("xml", "uslm", "htm", "txt", "pdf")`** and
-    `DEFAULT_FORMAT_PREFERENCE = ("xml", "uslm", "html", "txt", "pdf")`: the
-    USLM rendition after XML, in both spellings. Nothing here passes a
-    preference, so both callers take the new default.
+- `spicy_docs-0.22.0`: built with `uv build` from SpicyDocs commit
+  `b76a1f0` (tag v0.22.0), 2026-09-20. SHA-256:
+  `782735d857b7ebe8cfa9e6fca1ad2dd265e0ab2e07c8dae9c7b1fe26474bafa1`
+  (1,188,118 bytes). Unzipping both wheels and diffing them shows five
+  modules changed and one added, all of them the model seam, and
+  **the thirty-two table contracts are identical** — same 617 columns, same
+  identity, version column, grain and per-column prose, compared field by
+  field against both 0.21.3 and 0.21.2 rather than inferred from the release
+  note. `spicy-regs-dict generate` accordingly moves nothing, twice over. What
+  changed here:
+  - **`interpretation/gemini_call.py`**, the Gemini-to-`ModelCall` adapter,
+    now upstream. This repository's copy in `transforms/model_call.py` is
+    deleted: 0.22.0 gave `ModelCall` a `response_schema` argument that every
+    generator passes, so a local `call(*, model, prompt)` raised `TypeError`
+    on every call. `transforms/model_call.py` keeps only `resolve_gemini_key`
+    — which environment variable this host reads — because a hosting
+    application supplies the key and spicy-docs never reads the environment
+    for one. The adapter's own tests went with it
+    (`tests/test_interpretation_gemini_call.py` upstream).
+  - **The answer shape is on the request.** `model_call.answer_schema` derives
+    a draft 2020-12 schema from the same `AnswerField` tuple the prompt and
+    the reader use, and `gemini_call` sends it as Gemini's
+    `responseJsonSchema` beside `responseMimeType: application/json` (one
+    home, `extraction.gemini.json_generation_config`). This is the half of
+    BillTrax's request the port had dropped. It is a request and not the
+    contract: the readers still refuse, unchanged, because a provider may
+    accept a schema and answer around it.
+  - **A refused answer is a `FamilyRefusal`, not an exception.**
+    `interpretation/bill_family._model_answer` runs all three generators
+    inside the guard the row shapers already ran inside and files the
+    reader's own message against the printing, while a credential refusal and
+    a transport failure still abort. This closes what adopting 0.21.3 here
+    found: a `ModelCallError` escaped `build_bill_family` and aborted the
+    whole rollup, and the wrapper this repository added to survive it had to
+    report a refused summary as a *declined* one — "its text is below the
+    minimum" — which was false. Both that wrapper and the misstatement are
+    gone; the diff path's twin misstatement is fixed upstream too.
+  - **The classification prompt is `v3`** (`section_classification`): the
+    `sectionId` field now asks for "the text inside the square brackets
+    below, without the brackets". Under `v2` it said "copied exactly as given
+    below" and the model copied the brackets too — measured live twice, zero
+    rows stored both times. The two summary prompts stay `v2`: their schema
+    rides in the generation config, so their prompt bytes did not move.
 
-  `CongressListRoute.single_record` and `paged_json.page()`/`pages()`'s
-  `single_record` keyword are additive (default `False`); nothing here calls
-  either positionally. The new `reconstruct` extra (lxml) is not installed.
+  What this repository does with it: `tests/test_bill_family.py` runs all
+  three readers behind a stubbed client, dispatching on `response_schema`
+  against the three schema constants the generators send, so the `v2`/`v3`
+  stamps, the refusal of the measured `v1`-era answer and the diff reader on
+  a changed pair are each asserted here. `transforms/build_bill_family.py`
+  wires the seams unwrapped and logs each distinct `FamilyRefusal` reason
+  with its count, so a refusal is actionable rather than only counted.
 
-  Replaces 0.21.1 (`6f8d20e`, SHA-256 `c519e231…68a6`).
-- `rulespec_artifacts-1.0.13`: required by spicy-docs 0.21.2, which pins it
+  Replaces 0.21.3 (`083b536`, SHA-256 `1f91bb70…f84b`, 1,181,012 bytes), which
+  first stated each answer's keys in its prompt at `PROMPT_VERSION` v2 and
+  added `schemas/document_capture/1.0/` (DocumentCapture v1 schemas and six
+  capture profiles, registering no contract and unread here); and before it
+  0.21.2 (`3642aa1`, `96eb4897…8ca3`), which carried
+  `PackageModsIdentity.bills`/`.primary_bill`, the ten new contracts this
+  repository now hosts in full, and `uslm` in `BODY_PREFERENCE` /
+  `DEFAULT_FORMAT_PREFERENCE`. All of that stands unchanged. The `reconstruct`
+  extra (lxml) is still not installed.
+- `rulespec_artifacts-1.0.13`: required by spicy-docs 0.22.0, which pins it
   exactly; 1.0.12 no longer resolves. Nothing here imports it — it is a
   transitive pin vendored under the same discipline. Byte-identical to the
   wheel `rulespec` itself built (`dist/artifacts/`) and to the one spicy-docs

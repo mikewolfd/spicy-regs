@@ -92,6 +92,7 @@ from spicy_docs.interpretation.bill_family import (
 )
 from spicy_docs.interpretation.bill_family import build_bill_family as build_family
 from spicy_docs.interpretation.bill_summaries import summarize_bill, summarize_diff
+from spicy_docs.interpretation.gemini_call import DEFAULT_MODEL, model_call
 from spicy_docs.interpretation.section_classification import classify_sections
 from spicy_docs.interpretation.vote_matching import (
     VoteMatchError,
@@ -138,7 +139,7 @@ from spicy_regs.sources.congress_bills import (
     listing_reader,
 )
 from spicy_regs.transforms.congress_scope import bill_types_from_env, congresses_from_env
-from spicy_regs.transforms.model_call import DEFAULT_MODEL, model_call, resolve_gemini_key
+from spicy_regs.transforms.model_call import resolve_gemini_key
 from spicy_regs.transforms.table_merge import merge_contract_table, merge_table, published_table
 
 #: The DeltaTrack commit the vendored wheel was built from. ``installed_engine_stamp``
@@ -169,6 +170,12 @@ BODY_BUDGET = GovInfoBodyBudget(
 
 #: ~3 requests each at ~3/s: 600 printings is ~10 minutes.
 MAX_VERSION_FETCHES = 600
+
+#: How many distinct refusal reasons a run's log names before it stops and says
+#: how many it did not. Distinct reasons, not refusals: a prompt every bill
+#: refuses is one reason and one line. The cap is only against a reason that
+#: embeds a publisher string and so varies per row.
+REFUSAL_REASONS_LOGGED = 20
 
 #: The per-folder listing entries this rollup retains between runs, so the next
 #: run can prove a BILLSTATUS zip has not moved without downloading it. It is
@@ -1379,7 +1386,12 @@ def build_bill_family(
                 ", ".join(API_KEY_ENV_VARS),
             )
 
-    # The model seams, wired only when a key is present.
+    # The model seams, wired only when a key is present. Nothing wraps them:
+    # since spicy-docs 0.22.0 `build_bill_family` runs all three inside its own
+    # guard and files a `FamilyRefusal` naming the reader's message, while a
+    # credential refusal and a transport failure still abort. A wrapper here
+    # could only re-file one of those as the other, which is what the 0.21.3
+    # one had to do.
     gemini_key = resolve_gemini_key()
     classify = summarize = summarize_diff_call = None
     if gemini_key:
@@ -1405,7 +1417,6 @@ def build_bill_family(
     # 2. Acquire and build, one bill at a time, skipping the unchanged.
     remaining = [max_version_fetches]
     families: list[BillFamilyTables] = []
-    refusals: Counter[str] = Counter()
     touched: set[str] = set()
     archive_rows: list[dict] = []
     vote_rows: list[dict] = []
@@ -1472,8 +1483,6 @@ def build_bill_family(
                     summarize_diff=summarize_diff_call,
                 )
                 families.append(tables)
-                for refusal in tables.refusals:
-                    refusals[refusal.table] += 1
                 rows, refused = vote_reference_rows(member.status, observed_at=observed_at)
                 vote_rows.extend(rows)
                 votes_refused += refused
@@ -1518,6 +1527,18 @@ def build_bill_family(
             )
 
     folded = BillFamilyTables.concat(families)
+    # One pass over every refusal both passes produced — `concat` carries them,
+    # so the backfill's families are counted here too, which the per-bill count
+    # this replaces never reached. Keyed by the reason as well as the table: a
+    # `FamilyRefusal` carries the reason so someone can act on it, and a count
+    # alone throws that away. The C1 defect read as "the model tables are
+    # short" until the message said which keys the answer had left out.
+    # Distinct reasons rather than one line per refusal keeps it bounded: a
+    # systematically refused prompt is one line, not one per bill.
+    refusals: Counter[str] = Counter(refusal.table for refusal in folded.refusals)
+    reasons: Counter[tuple[str, str]] = Counter(
+        (refusal.table, scrub_credential(refusal.reason, gemini_key or "")) for refusal in folded.refusals
+    )
     logger.info(
         "Bill family: {:,} bills rebuilt, {:,} unchanged and skipped, {:,} status fetches (printings and backfill "
         "details) of {:,} allowed",
@@ -1541,6 +1562,12 @@ def build_bill_family(
         logger.warning("Bill family: {:,} archive entries the reader refused", skipped)
     if refusals:
         logger.warning("Bill family: refusals by table — {}", dict(refusals))
+        for (table, reason), count in reasons.most_common(REFUSAL_REASONS_LOGGED):
+            logger.warning("Bill family: {} refused {:,}x — {}", table, count, reason)
+        if len(reasons) > REFUSAL_REASONS_LOGGED:
+            logger.warning(
+                "Bill family: {:,} further distinct refusal reasons not listed", len(reasons) - REFUSAL_REASONS_LOGGED
+            )
     logger.info("Bill family: {:,} recorded-vote references on this run's bills", len(vote_rows))
     if votes_refused:
         logger.warning("Bill family: {:,} recordedVotes entries refused for a missing sealed field", votes_refused)
