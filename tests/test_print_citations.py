@@ -37,6 +37,7 @@ from spicy_docs.transport.credentials import CredentialRefusedError
 
 from spicy_regs.transforms.build_print_citations import (
     ACTIVITY_REPORT_TITLE,
+    PRINT_BODY_PREFERENCE,
     ACTIVITY_REPORTS,
     BILL_ACTIONS,
     BUDGET_VOLUMES,
@@ -165,9 +166,11 @@ class _Acquirer:
         self.packages = packages
         self.refuse = refuse or {}
         self.asked: list[str] = []
+        self.preferences: list[tuple[str, ...]] = []
 
-    def acquire(self, package_id, *, max_bytes=None):
+    def acquire(self, package_id, *, prefer=(), max_bytes=None):
         self.asked.append(package_id)
+        self.preferences.append(tuple(prefer))
         if package_id in self.refuse:
             raise self.refuse[package_id]
         return self.packages[package_id]
@@ -424,3 +427,42 @@ def test_the_per_run_cap_bounds_the_fetch_and_not_the_walk(tmp_path):
     _build(tmp_path, reader, acquirer, max_packages=1)
     assert acquirer.asked == [CRPT_ID]
     assert reader.walked == ["CRPT", "BUDGET"], "the window is walked whole so the rest is retried next run"
+
+
+def test_every_body_is_asked_for_pdf_first(tmp_path):
+    """The one rendition this transform names, and the reason it names one.
+
+    Under the acquirer's sealed order HTML comes first, and a measured run
+    (2026-09-20, retained as the receipt's first attempt) refused 10 of 41
+    activity reports on HTML nesting depth and published no page attribution
+    at all on the 31 it read. Four published columns state a page, so the
+    order is this transform's to choose and the choice must not drift back.
+    """
+    reader = _Reader(
+        {
+            "CRPT": [_listing(CRPT_ID, "ACTIVITY REPORT of the COMMITTEE ON ENERGY AND COMMERCE")],
+            "BUDGET": [_listing(BUDGET_ID, "Mid-Session Review")],
+        }
+    )
+    acquirer = _Acquirer(
+        {CRPT_ID: _package(CRPT_ID, pages=REPORT_PAGES), BUDGET_ID: _package(BUDGET_ID, pages=BUDGET_PAGES)}
+    )
+    _build(tmp_path, reader, acquirer)
+    assert acquirer.preferences == [PRINT_BODY_PREFERENCE, PRINT_BODY_PREFERENCE]
+    assert PRINT_BODY_PREFERENCE[0] == "pdf"
+    # The rest of the sealed order still follows, so a package offering no PDF
+    # yields a body rather than being refused for want of one.
+    assert set(PRINT_BODY_PREFERENCE[1:]) >= {"xml", "htm", "txt"}
+
+
+def test_a_pdf_body_fills_the_page_columns_an_html_body_cannot(tmp_path):
+    """The consequence the preference exists for, asserted on a published row."""
+    reader = _Reader({"CRPT": [_listing(CRPT_ID, "ACTIVITY REPORT of the COMMITTEE")], "BUDGET": []})
+    acquirer = _Acquirer({CRPT_ID: _package(CRPT_ID, pages=REPORT_PAGES)})
+    activity, _, _, citations = _build(tmp_path, reader, acquirer)
+
+    row = _rows(activity)[0]
+    assert row["body_rendition"] == "pdf"
+    assert row["pages_read"] == str(len(REPORT_PAGES))
+    assert row["pages_capped"] == "false"
+    assert all(r["evidence_page"] is not None for r in _rows(citations)), "a paginated body attributes every cite"

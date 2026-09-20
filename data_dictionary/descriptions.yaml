@@ -1922,16 +1922,18 @@ tables:
   house_activity_reports:
     label: "House committee activity reports"
     coverage: >-
-      Sampled — no run has been measured here yet. The print-citations rollup
-      walks GovInfo's
-      `published` CRPT window from a 2023-01-01 issue floor and keeps the
-      packages whose title states a committee activity report; measured live
-      2026-09-20 on the 2025-01-01..2025-03-31 window, 71 CRPT packages were
-      walked and 15 matched. The floor is a scope, not a coverage claim:
-      GovInfo's CRPT collection reaches 1817 and no walk of an earlier window
-      has been made, here or in spicy-docs. Pages are read whole rather than
-      capped, so `pages_capped` is false and the counts on a row are the
-      document's rather than a window's.
+      Sampled, and measured on one cold-start pair of runs 2026-09-20 (receipt
+      `rollups-pdf-families-2026-09-20/`). The GovInfo `published` CRPT window
+      from the 2023-01-01 issue floor served **2,256 packages, of which 41
+      matched the activity-report title rule, and all 41 published** — 8 of the
+      117th Congress, 27 of the 118th, 6 of the 119th. Zero refusals, 5,191
+      pages read against 5,191 the publisher states, so **`pages_capped` is
+      false on every row** and no count here is a window's. Two runs because
+      the 40-package cap was reached inside CRPT on the first; the second
+      skipped all 40 already-published packages at zero request cost and
+      finished the window. 84 then 52 keyed requests. The floor is a scope,
+      not a coverage claim: GovInfo's CRPT collection reaches 1817 and no walk
+      of an earlier window has been made, here or in spicy-docs.
     measured_on: "2026-09-20"
     summary: >-
       One row per captured end-of-Congress House committee activity report
@@ -1945,8 +1947,11 @@ tables:
       public laws, 0 of 37 U.S. Code sections and 0 of 7 Statutes at Large
       pages that the package MODS does not already state — so
       `distinct_bills_beyond_index`, `distinct_laws_beyond_index` and
-      `distinct_usc_sections_beyond_index` are expected to be zero, and a
-      nonzero one is worth reading the evidence span for. The one apparent
+      `distinct_usc_sections_beyond_index` are near zero, and a nonzero one is
+      worth reading the evidence span for rather than taking as new yield.
+      Measured here 2026-09-20 over **41** reports rather than eight, "zero"
+      is very nearly right and not exactly right: 7 print-only bills of 7,686
+      distinct, 5 print-only laws of 990, and 6 print-only Code sections. The one apparent
       survivor, `188-11`, was the print's own misprint of `118-11`. What the
       print does add is committees beyond the submitting one (27 resolved
       codes), 87 RINs, 38 agency dockets and 5 GAO product ids.
@@ -1963,15 +1968,18 @@ tables:
   budget_volumes:
     label: "President's budget volumes"
     coverage: >-
-      Sampled — no run has been measured here yet. The print-citations rollup
-      walks GovInfo's
-      `published` BUDGET window from a 2023-01-01 issue floor; measured live
-      2026-09-20 over 2025-01-01..2026-09-20 the window held 18 volumes, all
-      of them FY2026 and FY2027. No earlier fiscal year has been walked here
-      or in spicy-docs, so the earliest fiscal year the collection serves is
-      unmeasured rather than known. Pages are read whole, which is the
-      difference that matters for this family: `BUDGET-2027-APP` names 29
-      public laws read to 60 pages and 490 read to all 1,340.
+      Sampled, and measured on one cold-start run 2026-09-20 (receipt
+      `rollups-pdf-families-2026-09-20/`). The GovInfo `published` BUDGET
+      window from the 2023-01-01 issue floor served 40 packages; **23 published
+      and 17 did not**, for the reason in the data-quality note below. The 23
+      cover fiscal years 2023 to 2027 across all six parts the package-id
+      grammar accepts — `APP` 4, `BALANCES` 4, `BUD` 4, `FCS` 4, `MSR` 4, `PER`
+      3. Zero refusals, 7,154 pages read whole rather than capped, which is the
+      difference that matters for this family: across those volumes the print
+      names 2,237 distinct public laws and **2,081 of them are absent from the
+      volumes' own MODS**. No earlier fiscal year has been walked here or in
+      spicy-docs, so the earliest the collection serves is unmeasured rather
+      than known.
     measured_on: "2026-09-20"
     summary: >-
       One row per published volume of the President's budget, with what its
@@ -2000,16 +2008,34 @@ tables:
       the package id and by the MODS, which spicy-docs asserts agree.
       `associated_bills_json` is published whole because it is the only
       statement of this edge that carries a Congress.
+
+
+      **Seven budget parts are not carried, and the rollup refuses them by
+      name rather than guessing.** The package-id grammar seals six parts —
+      `APP`, `BALANCES`, `BUD`, `FCS`, `MSR`, `PER` — measured over a
+      2025-01-01 window. Walking from 2023-01-01 on 2026-09-20 served **17
+      further real budget packages whose part is outside that six**:
+      `OBJCLASS` (FY2024-FY2027), `TAB` (FY2024-FY2027), `DB` (FY2024, 2025,
+      2027), `CLIMATE` (FY2024, 2025), `LRB` (FY2024, 2025), `CROSSCUT`
+      (FY2026) and `DOD` (FY2026). Each is logged and dropped before it costs
+      a request, which is the designed behaviour — an address that was never
+      measured is not an address — but it means this table covers six parts of
+      thirteen. Widening the grammar is spicy-docs', because a package-id
+      grammar is a published shape this repository does not restate; the
+      packages are enumerated again every run and publish as soon as it moves.
     columns_from: spicy_docs
 
   bill_committee_actions:
     label: "Committee-print bill actions"
     coverage: >-
-      Derived, and bounded by its input — and no run has been measured here
-      yet. Built from the same activity-report bodies as
-      `house_activity_reports`, so it inherits that table's window, floor and
-      per-run package cap, and rows appear only for a package fetched in the
-      run.
+      Derived, and bounded by its input — measured on the same 2026-09-20 runs.
+      **12,700 rows over 3,010 distinct bills and 25 print phrasings**, from
+      the 41 activity reports `house_activity_reports` published. Built from
+      the same bodies, so it inherits that table's window, floor and per-run
+      package cap, and rows appear only for a package fetched in the run.
+      10,848 rows are `single` and 1,852 are `multi` (85.4 percent single,
+      against the 91.8 percent spicy-docs measured on its eight-report sample);
+      `sealed_stage` is filled on 7,450 and NULL on 5,250.
     measured_on: "2026-09-20"
     summary: >-
       One row per action phrase a committee print states about one bill it
@@ -2053,12 +2079,16 @@ tables:
   document_citations:
     label: "Document citation link table"
     coverage: >-
-      Derived, and bounded by its two source families' windows — and no run
-      has been measured here yet:
-      every row comes from an activity report or a budget volume the
-      print-citations rollup fetched, so it inherits both families' floors and
-      the per-run package cap. `document_kind` says which family a row came
-      from.
+      Derived, and bounded by its two source families' windows — measured on
+      the same 2026-09-20 runs. **49,792 rows over 13 citation kinds** from 41
+      activity reports and 23 budget volumes: 25,714 bill numbers, 9,497 public
+      laws, 7,318 committee names, 6,028 U.S. Code sections, and the rest
+      across Statutes pages, GAO product ids, RINs, CFR sections, agency
+      dockets, Federal Register cites, U.S. Reports cites, case dockets and CRS
+      report ids. **Every one of the 49,792 carries an `evidence_page`**,
+      because both families are read from a paginated rendition. `document_kind`
+      says which family a row came from — 35,327 `govinfo_package` and 14,465
+      `budget_volume`.
     measured_on: "2026-09-20"
     summary: >-
       One row per occurrence of one cited key in one document's text: the key,
@@ -2096,15 +2126,17 @@ tables:
   senate_expenditures:
     label: "Secretary of the Senate expenditure tables"
     coverage: >-
-      Sampled — no run has been measured here yet, and the sample is a page
-      window inside each file. The senate-expenditures rollup walks GovInfo's
-      `published` CDOC window from a 2024-01-01 issue floor and keeps the
-      `GPO-CDOC-` reprints whose title states a Report of the Secretary of the
-      Senate; measured live 2026-09-20, 291 CDOC rows were walked and 5
-      matched, covering the 118th and 119th Congresses. **Every count over
-      this table is a floor on the volume**: each report runs 1,259 to 3,018
-      pages across two or three PDFs and only the first 80 pages of each file
-      are read, so `pages_capped` is true on every row. Those 80 pages carry
+      Sampled — the sample is a page window inside each file, and it was
+      measured on one cold-start run 2026-09-20 (receipt
+      `rollups-pdf-families-2026-09-20/`). The GovInfo `published` CDOC window
+      from the 2024-01-01 issue floor served **291 rows and matched 5**
+      Secretary-of-the-Senate reprints; the 4-package cap read **4 of them**,
+      eight granule files, 640 pages, 556 tables, **2,623 ruled rows**, zero
+      refusals, 21 keyed requests. `GPO-CDOC-118sdoc11` was not reached and is
+      read on the next run — the window is walked whole every run so that is
+      true. **Every count over this table is a floor on the volume**: each
+      report runs 1,259 to 1,542 pages a file and only the first 80 of each are
+      read, so `pages_capped` is `true` on all 2,623 rows. Those 80 pages carry
       the `A-` summary-of-transactions section and the start of the `B-`
       detailed statement; the `C-` compensation-of-members and `D-`
       mail-allocation sections the contents page names sit past page 2,000 and

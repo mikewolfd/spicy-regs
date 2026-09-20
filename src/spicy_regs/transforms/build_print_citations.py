@@ -111,7 +111,7 @@ from __future__ import annotations
 import os
 import re
 from collections import Counter
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Protocol
@@ -233,6 +233,34 @@ ROSTER_BUDGET = CommitteeRosterBudget(
     min_request_interval_seconds=0.2,
 )
 
+#: **The one place this transform names a rendition, against the acquirer's
+#: sealed default, and the reason is measured.** ``BODY_PREFERENCE`` puts HTML
+#: ahead of PDF, which is right for ``committee_reports`` — a CRPT ``htm`` body
+#: *is* GPO's text inside a ``<pre>`` wrapper — and wrong for these two
+#: families, for three reasons:
+#:
+#: 1. **Every number in both contracts' prose is a PDF measurement.**
+#:    ``body_derivation`` is ``pdf-extraction-gpo-normalized`` in every
+#:    spicy-docs fixture of these families, and the GPO normalizer's own gate
+#:    fired on 8 of 8 activity reports and on none of the other 63 documents in
+#:    the PDF-family census. It exists for this layout.
+#: 2. **Four published columns are meaningless on an unpaginated rendition.**
+#:    ``pages_read``, ``stated_page_count`` and ``pages_capped`` on both
+#:    document tables, and ``evidence_page`` on every citation row, all state
+#:    a page. No GovInfo ``htm`` body of any collection carries a page
+#:    boundary, so reading HTML publishes four NULL columns and calls it a row.
+#: 3. **HTML refuses outright on a quarter of this family.** Measured here
+#:    2026-09-20, first run, retained as
+#:    ``receipts/rollups-pdf-families-2026-09-20/requests/print-citations-attempt-1-html.json``:
+#:    under the sealed default, **10 of 41** activity reports refused with
+#:    ``MarkupReadError: HTML markup exceeds the supported nesting depth``, and
+#:    the 31 that were read published **0 page attributions across 29,308
+#:    citation rows**. Under this order the same window reads as PDF.
+#:
+#: PDF is first and the sealed order follows it, so a package that offers no
+#: PDF still yields a body rather than being refused for want of one.
+PRINT_BODY_PREFERENCE: tuple[str, ...] = ("pdf", "xml", "uslm", "htm", "txt")
+
 #: The committee whose print this is, for ``find_bill_actions``. It uses the
 #: chamber for one thing only: a hearing or a markup is the committee's own
 #: act, so its action code follows the actor rather than the measure. Every
@@ -262,13 +290,11 @@ class PackageDiscoverySource(Protocol):
 class PackageBodySource(Protocol):
     """What this transform needs of a GovInfo package-body acquirer.
 
-    No ``prefer``: the rendition order is the acquirer's sealed default. Both
-    families offer PDF and nothing else (spicy-docs measured all eleven
-    retained records), so the default lands on PDF without this module naming
-    it.
+    ``prefer`` is in the signature because this transform passes one — see
+    :data:`PRINT_BODY_PREFERENCE`, the one place it names a rendition.
     """
 
-    def acquire(self, package_id: str, *, max_bytes: int | None = ...) -> Any: ...
+    def acquire(self, package_id: str, *, prefer: Sequence[str] = ..., max_bytes: int | None = ...) -> Any: ...
 
 
 class RosterSource(Protocol):
@@ -383,7 +409,7 @@ def _read_body(acquirer: PackageBodySource, package_id: str) -> tuple[Any, BodyT
     adjacency. Table detection stays off — nothing published here is a ruled
     cell, and it would cost three to eight times the per-page time.
     """
-    package = acquirer.acquire(package_id)
+    package = acquirer.acquire(package_id, prefer=PRINT_BODY_PREFERENCE)
     return package, body_text(package)
 
 
