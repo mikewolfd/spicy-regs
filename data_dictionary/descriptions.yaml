@@ -2102,11 +2102,19 @@ tables:
       document, kind and target alone would collapse CRPT-118hrpt968's 267 bill
       mentions into 179 rows; the aggregate is derivable from this table with
       `GROUP BY document_key, cite_kind, target_key` and the reverse is not.
-      **The table is append-only per text digest.** `text_sha256` is in the
-      identity, so a re-extraction of the same document under a newer rule set
-      adds rows beside the old ones rather than retiring them — filter to the
+      **The table is append-only per text digest, and it therefore grows
+      without bound.** `text_sha256` is in the identity, so a re-extraction of
+      the same document — a publisher revision, or a newer citation rule set —
+      adds a whole fresh set of rows beside the old ones and **retires
+      nothing**. Size is O(revisions x citations per document), not O(documents
+      x citations): a document revised three times carries three complete
+      copies of its spans. Nothing in this repository prunes them, because
+      which digest a consumer wants is the consumer's question — filter to the
       digest the document row states (`house_activity_reports.text_sha256` or
-      `budget_volumes.text_sha256`) to read one extraction. `stated_by_index`
+      `budget_volumes.text_sha256`) to read exactly one extraction. Prints are
+      revised rarely, so this is a property to know before building on the
+      table rather than a problem today; a retention rule would be a decision,
+      and there is not one. `stated_by_index`
       is three-valued and the third value matters: `true`/`false` where a
       keyed index record was read and could state a key of this shape, and
       **NULL where no comparison was possible** — either no index record was

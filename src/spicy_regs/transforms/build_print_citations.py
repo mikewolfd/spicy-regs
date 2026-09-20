@@ -111,7 +111,7 @@ from __future__ import annotations
 import os
 import re
 from collections import Counter
-from collections.abc import Callable, Iterator, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Protocol
@@ -146,7 +146,7 @@ from spicy_docs.sources.congress.committee_rosters import (
     CommitteeRosterError,
 )
 from spicy_docs.sources.govinfo.body_acquisition import GovInfoBodyAcquirer, GovInfoBodyBudget
-from spicy_docs.sources.govinfo.bodies import parse_package_id
+from spicy_docs.sources.govinfo.bodies import BODY_PREFERENCE, parse_package_id
 from spicy_docs.sources.govinfo.discovery import GovInfoDiscoveryReader, published_url
 from spicy_docs.transport.credentials import CredentialRefusedError, scrub_credential
 
@@ -257,9 +257,18 @@ ROSTER_BUDGET = CommitteeRosterBudget(
 #:    the 31 that were read published **0 page attributions across 29,308
 #:    citation rows**. Under this order the same window reads as PDF.
 #:
-#: PDF is first and the sealed order follows it, so a package that offers no
-#: PDF still yields a body rather than being refused for want of one.
-PRINT_BODY_PREFERENCE: tuple[str, ...] = ("pdf", "xml", "uslm", "htm", "txt")
+#: PDF is first and **the sealed order follows it, derived rather than
+#: transcribed**, so a package that offers no PDF still yields a body rather
+#: than being refused for want of one, and a rendition spicy-docs adds to
+#: ``BODY_PREFERENCE`` arrives here without anyone remembering to copy it. A
+#: hand-written tuple would be a second copy of a published order that can only
+#: drift; ``tests/test_print_citations.py`` asserts this equals the derivation.
+#:
+#: **Temporary.** spicy-docs is adding this same named preference to
+#: ``sources/govinfo/bodies.py`` as ``PRINT_BODY_PREFERENCE`` (in progress).
+#: When that lands, delete this constant and import theirs — the next adoption
+#: is the commit that should do it.
+PRINT_BODY_PREFERENCE: tuple[str, ...] = ("pdf", *(fmt for fmt in BODY_PREFERENCE if fmt != "pdf"))
 
 #: The committee whose print this is, for ``find_bill_actions``. It uses the
 #: chamber for one thing only: a hearing or a markup is the committee's own
@@ -413,6 +422,62 @@ def _read_body(acquirer: PackageBodySource, package_id: str) -> tuple[Any, BodyT
     return package, body_text(package)
 
 
+#: The two collections this pass walks, with the table each fills and the rule
+#: that says a listing row belongs to it. Named once so the enumeration, the
+#: scheduling and the row lists cannot disagree about which families exist.
+_FAMILIES: tuple[tuple[str, str, str, Callable[[str, str], bool]], ...] = (
+    (CRPT, ACTIVITY_REPORTS, "activity", _is_activity_report),
+    (BUDGET, BUDGET_VOLUMES, "budget", _is_budget_volume),
+)
+
+
+def _schedule(outstanding: Mapping[str, Sequence[str]], cap: int) -> list[tuple[str, str]]:
+    """Round-robin the collections' outstanding packages into one capped list.
+
+    **Why not simply walk one collection and then the other.** The cap is
+    shared, so walking CRPT first spends all of it on CRPT whenever CRPT has
+    more outstanding packages than the cap — and then the run publishes an
+    *empty* ``budget_volumes``. That is what the first measured run did
+    (2026-09-20: 40 activity reports, 0 budget volumes), and an empty contract
+    table is worse than a partial one, because a consumer cannot tell "this
+    family published nothing" from "this family has nothing". The second run
+    filled it, so the outcome converged, but a cold deploy should not have to
+    run twice to publish a table at all.
+
+    Round-robin fixes that without touching the cap: the same total is
+    fetched, both families make progress every run, and a family with more
+    outstanding work keeps the slack once the other is exhausted. With 41
+    activity reports and 23 budget volumes against a cap of 40 this schedules
+    20 and 20; the next run takes the remaining 21 and 3.
+
+    ``O(cap)`` in time, and the order within a collection is the publisher's
+    own listing order, untouched.
+    """
+    queues = {collection: list(packages) for collection, packages in outstanding.items() if packages}
+    scheduled: list[tuple[str, str]] = []
+    while queues and len(scheduled) < cap:
+        for collection in list(queues):
+            if len(scheduled) >= cap:
+                break
+            scheduled.append((collection, queues[collection].pop(0)))
+            if not queues[collection]:
+                del queues[collection]
+    remaining = sum(len(packages) for packages in outstanding.values()) - len(scheduled)
+    if remaining:
+        # The windows were enumerated whole; only the fetch stopped. The next
+        # run enumerates them again and picks up what this one left.
+        logger.warning(
+            "Print citations: per-run cap of {:,} packages reached — {:,} outstanding packages are retried next run",
+            cap,
+            remaining,
+        )
+    logger.info(
+        "Print citations: scheduled {}",
+        dict(Counter(collection for collection, _ in scheduled)) or "nothing — every package is published",
+    )
+    return scheduled
+
+
 def build_print_citations(
     output_dir: Path,
     *,
@@ -431,9 +496,16 @@ def build_print_citations(
         acquirer = acquirer or GovInfoBodyAcquirer(budget=BODY_BUDGET, api_key=api_key)
     rosters = rosters or CommitteeRosterAcquirer(budget=ROSTER_BUDGET)
 
-    priors = {name: published_table(output_dir, name, download_prior) for name in (ACTIVITY_REPORTS, BUDGET_VOLUMES)}
+    # All four priors are asked for once, up front. The two document tables
+    # need theirs for the held-package check anyway; the two derived tables ask
+    # only so ``merge_contract_table`` is told whether a prior exists and does
+    # not repeat a download that already returned 404.
+    priors = {
+        name: published_table(output_dir, name, download_prior)
+        for name in (ACTIVITY_REPORTS, BUDGET_VOLUMES, BILL_ACTIONS, CITATIONS)
+    }
     have_prior = {name: path is not None for name, path in priors.items()}
-    held = {name: _held_packages(path) for name, path in priors.items()}
+    held = {name: _held_packages(priors[name]) for name in (ACTIVITY_REPORTS, BUDGET_VOLUMES)}
     since = _issue_floor()
 
     vocabulary = _roster_vocabulary(rosters, current_congress())
@@ -447,95 +519,93 @@ def build_print_citations(
     unchanged = fetched = capped = 0
     pages_read = 0
 
-    for collection, table, rows, keep in (
-        (CRPT, ACTIVITY_REPORTS, activity_rows, _is_activity_report),
-        (BUDGET, BUDGET_VOLUMES, budget_rows, _is_budget_volume),
-    ):
+    # Enumerate both windows first, drop what is already published, then
+    # interleave — see :func:`_schedule` for why the order is not "CRPT, then
+    # whatever is left".
+    outstanding: dict[str, list[str]] = {}
+    for collection, table, _label, keep in _FAMILIES:
         already = held[table]
-        for package_id, last_modified in _listed(reader, collection, since, keep):
-            if fetched >= max_packages:
-                # The window was enumerated whole; only the fetch stopped. The
-                # next run enumerates it again and picks up where this left off.
-                logger.warning(
-                    "Print citations: per-run cap of {:,} packages reached in {} — the rest of the window"
-                    " is retried next run",
-                    max_packages,
-                    collection,
-                )
-                break
-            if package_id in already and already[package_id] == last_modified:
-                # Published already and unmodified since; the publisher's own
-                # last_modified is the comparison, not a guess from the date.
-                unchanged += 1
-                continue
-            try:
-                package, derived = _read_body(acquirer, package_id)
-            except CredentialRefusedError:
-                raise
-            except _PACKAGE_REFUSALS as error:
-                # Counted by reason, not just counted: forty refusals sharing
-                # one reason is a defect here, and forty different ones are the
-                # publisher.
-                reason = type(error).__name__
-                refusals[reason] += 1
-                logger.warning(
-                    "{}: {} refused ({}): {}", collection, package_id, reason, scrub_credential(str(error), "")
-                )
-                continue
-            fetched += 1
+        listed = _listed(reader, collection, since, keep)
+        outstanding[collection] = [
+            package_id
+            for package_id, last_modified in listed
+            # Published already and unmodified since; the publisher's own
+            # last_modified is the comparison, not a guess from the date.
+            if not (package_id in already and already[package_id] == last_modified)
+        ]
+        unchanged += len(listed) - len(outstanding[collection])
 
-            identity = package.identity
-            findings = find_citations(
-                derived.text,
-                pages=derived.pages,
-                # A BUDGET package states no Congress at all, so a printed bill
-                # key stays congress-free and unresolved rather than being
-                # stamped with a Congress nothing established.
-                congress=getattr(identity, "congress", None),
-                committees=vocabulary if collection == CRPT else (),
+    scheduled = _schedule(outstanding, max_packages)
+    rows_for = {CRPT: activity_rows, BUDGET: budget_rows}
+
+    for collection, package_id in scheduled:
+        rows = rows_for[collection]
+        try:
+            package, derived = _read_body(acquirer, package_id)
+        except CredentialRefusedError:
+            raise
+        except _PACKAGE_REFUSALS as error:
+            # Counted by reason, not just counted: forty refusals sharing
+            # one reason is a defect here, and forty different ones are the
+            # publisher.
+            reason = type(error).__name__
+            refusals[reason] += 1
+            logger.warning("{}: {} refused ({}): {}", collection, package_id, reason, scrub_credential(str(error), ""))
+            continue
+        fetched += 1
+
+        identity = package.identity
+        findings = find_citations(
+            derived.text,
+            pages=derived.pages,
+            # A BUDGET package states no Congress at all, so a printed bill
+            # key stays congress-free and unresolved rather than being
+            # stamped with a Congress nothing established.
+            congress=getattr(identity, "congress", None),
+            committees=vocabulary if collection == CRPT else (),
+        )
+        for finding in findings:
+            kinds[finding.kind] += 1
+
+        if collection == CRPT:
+            stated = index_stated_keys(package.mods)
+            document_kind = GOVINFO_PACKAGE
+            rows.append(
+                shape_activity_report(
+                    package.summary, package.mods, derived, findings, rule_set_version=CITATION_RULE_SET_VERSION
+                )
             )
-            for finding in findings:
-                kinds[finding.kind] += 1
-
-            if collection == CRPT:
-                stated = index_stated_keys(package.mods)
-                document_kind = GOVINFO_PACKAGE
-                rows.append(
-                    shape_activity_report(
-                        package.summary, package.mods, derived, findings, rule_set_version=CITATION_RULE_SET_VERSION
-                    )
+        else:
+            # Bills are dropped from the comparison, not answered `false`:
+            # a budget volume has no Congress, so no comparison against the
+            # MODS's `119-hr-7806` is possible from the print's `HR7806`.
+            stated = budget_index_stated_keys(package.mods)
+            document_kind = BUDGET_VOLUME
+            rows.append(
+                shape_budget_volume(
+                    package.summary, package.mods, derived, findings, rule_set_version=CITATION_RULE_SET_VERSION
                 )
-            else:
-                # Bills are dropped from the comparison, not answered `false`:
-                # a budget volume has no Congress, so no comparison against the
-                # MODS's `119-hr-7806` is possible from the print's `HR7806`.
-                stated = budget_index_stated_keys(package.mods)
-                document_kind = BUDGET_VOLUME
-                rows.append(
-                    shape_budget_volume(
-                        package.summary, package.mods, derived, findings, rule_set_version=CITATION_RULE_SET_VERSION
-                    )
+            )
+
+        provenance = document_provenance(derived, document_key=package_id, document_kind=document_kind)
+        citation_rows.extend(shape_document_citation(f, provenance, stated_by_index=stated) for f in findings)
+
+        if collection == CRPT:
+            reading = find_bill_actions(derived.text, findings, committee_chamber=ACTIVITY_REPORT_CHAMBER)
+            action_rows.extend(
+                shape_bill_committee_action(
+                    action,
+                    provenance,
+                    citation_rule_version=CITATION_RULES_BY_NAME["bill_number"].version,
                 )
+                for action in reading.findings
+            )
 
-            provenance = document_provenance(derived, document_key=package_id, document_kind=document_kind)
-            citation_rows.extend(shape_document_citation(f, provenance, stated_by_index=stated) for f in findings)
-
-            if collection == CRPT:
-                reading = find_bill_actions(derived.text, findings, committee_chamber=ACTIVITY_REPORT_CHAMBER)
-                action_rows.extend(
-                    shape_bill_committee_action(
-                        action,
-                        provenance,
-                        citation_rule_version=CITATION_RULES_BY_NAME["bill_number"].version,
-                    )
-                    for action in reading.findings
-                )
-
-            depth = len(derived.pages) if derived.pages is not None else 0
-            pages_read += depth
-            stated_pages = package.summary.pages
-            if stated_pages is not None and str(stated_pages).isdecimal() and depth < int(stated_pages):
-                capped += 1
+        depth = len(derived.pages) if derived.pages is not None else 0
+        pages_read += depth
+        stated_pages = package.summary.pages
+        if stated_pages is not None and str(stated_pages).isdecimal() and depth < int(stated_pages):
+            capped += 1
 
     logger.info(
         "Print citations: {:,} activity reports, {:,} budget volumes, {:,} citation rows, {:,} action rows"
@@ -577,6 +647,18 @@ def build_print_citations(
             download_prior=download_prior,
             prior_present=have_prior[BUDGET_VOLUMES],
         ),
-        merge_contract_table(output_dir, BILL_ACTIONS, action_rows, download_prior=download_prior),
-        merge_contract_table(output_dir, CITATIONS, citation_rows, download_prior=download_prior),
+        merge_contract_table(
+            output_dir,
+            BILL_ACTIONS,
+            action_rows,
+            download_prior=download_prior,
+            prior_present=have_prior[BILL_ACTIONS],
+        ),
+        merge_contract_table(
+            output_dir,
+            CITATIONS,
+            citation_rows,
+            download_prior=download_prior,
+            prior_present=have_prior[CITATIONS],
+        ),
     )

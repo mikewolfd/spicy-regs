@@ -360,7 +360,7 @@ def build_senate_expenditures(
     refusals: Counter[str] = Counter()
     grids: Counter[str] = Counter()
     read_files = tables = pages = skipped = 0
-    packages = 0
+    packages = held_packages = 0
 
     for package_id in _listed(reader, since):
         if packages >= max_packages:
@@ -379,21 +379,32 @@ def build_senate_expenditures(
             refusals[reason] += 1
             logger.warning("{}: granule list refused ({}): {}", package_id, reason, scrub_credential(str(error), ""))
             continue
-        packages += 1
         if not granule_ids:
             # A package stating no content granule is not an error and not a
             # zero: it is one package that published nothing this route can
             # address, and it is enumerated again next run.
             logger.warning("{}: states no content granule", package_id)
             continue
-        for granule_id in granule_ids:
+        # The print is a fixed artifact: a published file's ruled rows do not
+        # change, so re-reading it would spend minutes of table detection to
+        # write the rows already there.
+        unheld = [gid for gid in granule_ids if (package_id, f"{gid}.pdf") not in held]
+        skipped += len(granule_ids) - len(unheld)
+        if not unheld:
+            # **A package with nothing left to read costs its granule list and
+            # not a cap slot.** Counting it against the cap is what the first
+            # version did, and with more matched packages than the cap it
+            # stalls permanently: every run re-lists the same held packages,
+            # reaches the cap on them and breaks before the one package it has
+            # never read, which is therefore never read. Measured on the
+            # 2026-09-20 receipt, where five packages matched, the cap was
+            # four, and `GPO-CDOC-118sdoc11` could not be reached by any number
+            # of runs.
+            held_packages += 1
+            continue
+        read_before = read_files
+        for granule_id in unheld:
             file_name = f"{granule_id}.pdf"
-            if (package_id, file_name) in held:
-                # The print is a fixed artifact: a published file's ruled rows
-                # do not change, so re-reading it would spend minutes of table
-                # detection to write the rows already there.
-                skipped += 1
-                continue
             try:
                 body = acquirer.acquire_granule(package_id, granule_id)
                 read_pages, page_count = _read_pages(body, extractor)
@@ -428,16 +439,24 @@ def build_senate_expenditures(
                 found,
                 len(file_rows),
             )
+        if read_files > read_before:
+            # A package whose every file refused spends its requests without a
+            # cap slot, the same way `print-citations` does not charge a
+            # refused package: a permanent refusal must not lock the rest of
+            # the window out. The window itself is the bound — five packages
+            # over three Congresses — not this counter.
+            packages += 1
 
     logger.info(
         "Senate expenditures: {:,} ruled rows from {:,} files over {:,} packages, {:,} pages, {:,} tables;"
-        " {:,} files already held, {:,} refused",
+        " {:,} files already held in {:,} fully-held packages, {:,} refused",
         len(rows),
         read_files,
         packages,
         pages,
         tables,
         skipped,
+        held_packages,
         sum(refusals.values()),
     )
     if refusals:

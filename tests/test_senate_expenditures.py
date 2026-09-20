@@ -19,6 +19,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 from spicy_docs.reading.paged_json import PagedJsonSourceError
@@ -314,3 +315,63 @@ def test_the_per_run_cap_bounds_the_packages(tmp_path):
     acquirer = _Acquirer()
     _build(tmp_path, reader, acquirer, _Extractor(page_count=2), max_packages=1)
     assert acquirer.asked == [PART_ONE]
+
+
+def test_a_fully_held_package_does_not_consume_a_cap_slot(tmp_path):
+    """The permanent stall this rollup shipped with, and the fix, on one run pair.
+
+    Five packages match and the cap is four. The first version counted a
+    package against the cap as soon as its granule list answered — before the
+    held-file check — so the second run re-listed the four published packages,
+    reached the cap on them, and broke before the fifth. The fifth was
+    therefore unreachable by **any** number of runs, while
+    ``docs/tables/senate_expenditures.md`` promised it would be read next run.
+    Measured on the 2026-09-20 receipt, where the fifth was
+    ``GPO-CDOC-118sdoc11``.
+
+    Run one fills four; run two must reach the fifth and nothing else.
+    """
+    packages = [f"GPO-CDOC-119sdoc{n}" for n in (3, 5, 6)] + ["GPO-CDOC-118sdoc13", "GPO-CDOC-118sdoc11"]
+    listings = [_listing(package) for package in packages]
+    granules = {package: [_granule(f"{package}-1")] for package in packages}
+
+    acquirer = _Acquirer()
+    out = _build(tmp_path, _Reader(listings, granules), acquirer, _Extractor(page_count=2), max_packages=4)
+    first = {row["package_id"] for row in _rows(out)}
+    assert len(first) == 4, "the cap is the cap"
+    assert packages[4] not in first, "the fifth is what the second run must reach"
+
+    out.rename(tmp_path / f"_{NAME}_prior.parquet")
+    acquirer.asked.clear()
+    reader = _Reader(listings, granules)
+    out = _build(tmp_path, reader, acquirer, _Extractor(page_count=2), max_packages=4)
+
+    assert acquirer.asked == [f"{packages[4]}-1"], "only the unread package costs a body fetch"
+    assert {row["package_id"] for row in _rows(out)} == set(packages), "all five are published"
+    # The held packages still cost their granule list — the window is walked
+    # whole every run so a refusal is retried — and that is all they cost.
+    assert reader.granule_calls == packages
+
+
+def test_a_partly_held_package_still_reads_its_unread_file(tmp_path):
+    """A package is not all-or-nothing: Part II is read while Part I is skipped.
+
+    The held check is per file because the identity is per file, so a package
+    whose second part the publisher added later is picked up without re-reading
+    the first.
+    """
+    granules = {PACKAGE: [_granule(PART_ONE), _granule(PART_TWO)]}
+    acquirer = _Acquirer()
+    out = _build(tmp_path, _Reader([_listing()], granules), acquirer, _Extractor(page_count=2))
+
+    # A prior holding Part I alone, as if Part II had just been published.
+    table = pq.read_table(out)
+    kept = [row for row in table.to_pylist() if row["file_name"] == f"{PART_ONE}.pdf"]
+    assert kept, "the fixture must actually hold Part I"
+    pq.write_table(pa.Table.from_pylist(kept, schema=table.schema), tmp_path / f"_{NAME}_prior.parquet")
+    out.unlink()
+
+    acquirer.asked.clear()
+    out = _build(tmp_path, _Reader([_listing()], granules), acquirer, _Extractor(page_count=2))
+    assert acquirer.asked == [PART_TWO], "only the unheld part is fetched"
+    assert {row["file_name"] for row in _rows(out)} == {f"{PART_ONE}.pdf", f"{PART_TWO}.pdf"}

@@ -26,6 +26,7 @@ from pathlib import Path
 from spicy_docs.reading.paged_json import PagedJsonSourceError
 from spicy_docs.schemas import TABLE_CONTRACTS
 from spicy_docs.sources.govinfo.bodies import (
+    BODY_PREFERENCE,
     PackageBodyIdentity,
     PackageSummary,
     parse_package_id,
@@ -449,10 +450,13 @@ def test_every_body_is_asked_for_pdf_first(tmp_path):
     )
     _build(tmp_path, reader, acquirer)
     assert acquirer.preferences == [PRINT_BODY_PREFERENCE, PRINT_BODY_PREFERENCE]
-    assert PRINT_BODY_PREFERENCE[0] == "pdf"
-    # The rest of the sealed order still follows, so a package offering no PDF
-    # yields a body rather than being refused for want of one.
-    assert set(PRINT_BODY_PREFERENCE[1:]) >= {"xml", "htm", "txt"}
+    # Equality with the derivation, not a spot check: a subset assertion would
+    # pass on a transcription that had silently dropped `uslm`, and an
+    # `[0] == "pdf"` assertion says nothing about the order behind it. This
+    # fails the moment the constant stops being "PDF, then the sealed order",
+    # including when spicy-docs adds a rendition to BODY_PREFERENCE.
+    assert PRINT_BODY_PREFERENCE == ("pdf", *(fmt for fmt in BODY_PREFERENCE if fmt != "pdf"))
+    assert set(PRINT_BODY_PREFERENCE) == set(BODY_PREFERENCE), "no rendition is dropped or invented"
 
 
 def test_a_pdf_body_fills_the_page_columns_an_html_body_cannot(tmp_path):
@@ -466,3 +470,39 @@ def test_a_pdf_body_fills_the_page_columns_an_html_body_cannot(tmp_path):
     assert row["pages_read"] == str(len(REPORT_PAGES))
     assert row["pages_capped"] == "false"
     assert all(r["evidence_page"] is not None for r in _rows(citations)), "a paginated body attributes every cite"
+
+
+def test_a_cold_run_over_both_collections_publishes_rows_in_both(tmp_path):
+    """Neither family may be starved by a shared cap, whatever the listing order.
+
+    Walking CRPT to exhaustion first spends the whole cap on it whenever CRPT
+    has more outstanding packages than the cap, and publishes an **empty**
+    ``budget_volumes`` — which is what the first measured run did (40 activity
+    reports, 0 budget volumes, 2026-09-20). A consumer cannot tell an empty
+    contract table from a family with nothing in it, so a cold deploy must not
+    produce one. The cap here is smaller than the CRPT listing on purpose.
+    """
+    reader = _Reader(
+        {
+            "CRPT": [
+                _listing(CRPT_ID, "ACTIVITY REPORT of the COMMITTEE ON ENERGY AND COMMERCE"),
+                _listing("CRPT-119hrpt9", "ACTIVITY REPORT of the COMMITTEE ON RULES"),
+                _listing("CRPT-119hrpt11", "ACTIVITY REPORT of the COMMITTEE ON THE BUDGET"),
+            ],
+            "BUDGET": [_listing(BUDGET_ID, "Mid-Session Review")],
+        }
+    )
+    acquirer = _Acquirer(
+        {
+            CRPT_ID: _package(CRPT_ID, pages=REPORT_PAGES),
+            "CRPT-119hrpt9": _package(CRPT_ID, pages=REPORT_PAGES),
+            "CRPT-119hrpt11": _package(CRPT_ID, pages=REPORT_PAGES),
+            BUDGET_ID: _package(BUDGET_ID, pages=BUDGET_PAGES),
+        }
+    )
+    activity, budget, _, _ = _build(tmp_path, reader, acquirer, max_packages=2)
+
+    assert _rows(activity), "the activity-report table must not be empty"
+    assert _rows(budget), "nor may the budget table, which the listing order would starve"
+    # The cap is still the cap: two packages, one from each family.
+    assert len(acquirer.asked) == 2
