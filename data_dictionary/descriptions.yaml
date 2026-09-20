@@ -9,6 +9,28 @@
 # longer exists — so a schema change forces a docs update in the same PR.
 #
 # To regenerate the browsable site after editing:  uv run spicy-regs-dict generate
+#
+# `measured_on` means: **the day a run checked this coverage statement against
+# the publisher** — not the day someone wrote the sentence, and not the day the
+# data was last published. Before 2026-09-19 it held the statement date on every
+# entry, because no rollup had ever been run against a real publisher and there
+# was nothing else it could hold; gap row D1 of the spicy-docs register
+# (receipt `~/Work/corpora/supply-2026-09-02/receipts/d1-measured-run-2026-09-19/`)
+# is the run that gave it the stronger meaning for the tables it exercised.
+#
+# Five entries still carry the weaker meaning, and say so in their own prose
+# rather than only here: `bill_family_backfills` and
+# `bill_family_backfill_walks` (that run scoped the 119th, which BILLSTATUS bulk
+# serves, so the backfill leg was never entered) and the three model-backed
+# tables `section_classifications`, `bill_summaries` and `diff_summaries` (a
+# keyless run cannot fill them). For those five the date is the statement date,
+# as it was before.
+#
+# A run that only *exercises* a path is not the same as a run that measures
+# what the statement claims. Several statements below describe incremental
+# behavior — skipping a bill the publisher has not touched, a watermark window,
+# an unchanged-zip skip — and D1 was a cold start, so those clauses are marked
+# as design rather than measurement where they appear.
 
 tables:
   dockets:
@@ -295,19 +317,26 @@ tables:
   congress_bills:
     label: "Congressional bills"
     coverage: >-
-      True range on rows, mixed on columns. Every bill the Congress.gov ingest has
-      walked is here, with latest actions from 1799-12-16 (the 6th Congress) to
-      2026-09-04, complete on identifier, type and date for every row. The first ten
-      columns are filled for all of them. The thirty-eight columns the bill family
-      appends — the publisher facts the list endpoint discards, the stage, signing
-      and money-bill findings, and their provenance — are filled only for the
-      Congresses that rollup has covered, and are NULL on every other row until it
-      reaches them; for the 82nd through the 107th it reaches them through the API
-      detail route rather than a BILLSTATUS zip, and the count columns it cannot
-      substantiate from that route stay NULL there. Once filled they stay filled:
-      the two rollups that write this table merge column-wise, so the archive-wide
-      walk updates the ten columns it owns without clearing the thirty-eight it
-      does not.
+      True range on rows, mixed on columns. Every bill the Congress.gov ingest
+      has walked is here, with latest actions from 1799-12-16 (the 6th
+      Congress) to 2026-09-18 — re-derived from this run's own output (receipt
+      `d1-measured-run-2026-09-19/`, `rederived-ranges.json`) rather than
+      carried forward: the statement previously read 2026-09-04, which was the
+      date of an earlier look and not of this table. 20 of the 419,621 rows
+      state no latest action at all, so "every row" holds for identifier and
+      type and not for date. The first ten columns are filled for all of them.
+      The thirty-eight columns the bill family appends — the publisher facts
+      the list endpoint discards, the stage, signing and money-bill findings,
+      and their provenance — are filled only for the Congresses that rollup
+      has covered, and are NULL on every other row until it reaches them; on
+      the measured run that was 18,956 bills of the 119th. For the 82nd
+      through the 107th it reaches them through the API detail route rather
+      than a BILLSTATUS zip, and the count columns it cannot substantiate from
+      that route stay NULL there. Once filled they stay filled: the two
+      rollups that write this table merge column-wise, so the archive-wide
+      walk updates the ten columns it owns without clearing the thirty-eight
+      it does not — a claim the measured run exercised in one direction only,
+      the family writing onto a ten-column prior.
     measured_on: "2026-09-19"
     summary: >-
       One row per bill or resolution. Two rollups write this table:
@@ -810,12 +839,15 @@ tables:
       requests. It published 77,998 action rows over those bills, so at the
       119th's size one run costs no requests beyond the eight archive reads
       for this table — the actions come out of the BILLSTATUS document, not a
-      per-bill fetch. Each run adds to what is published rather than replacing
-      it, because a bill the publisher has not touched since the last run is
-      skipped and its rows stand. Filled from the BILLSTATUS bulk archive for
-      the Congresses the bill-family rollup is scoped to (the current one by
+      per-bill fetch. Filled from the BILLSTATUS bulk archive for the
+      Congresses the bill-family rollup is scoped to (the current one by
       default), so it holds every action of every bill in that scope and
-      nothing outside it.
+      nothing outside it. Each run is meant to add to what is published rather
+      than replace it, because a bill the publisher has not touched since the
+      last run is skipped and its rows stand. **The skip is design, not
+      measurement**: D1 was a cold start, so nothing was held and nothing was
+      skipped, and the saving described here has not been observed yet — the
+      second run is what measures it.
     measured_on: "2026-09-19"
     summary: >-
       One row per action entry in a bill's BILLSTATUS document, in publisher order.
@@ -830,11 +862,14 @@ tables:
       Sampled, and accumulating. Measured on one cold-start run of the 119th
       (receipt `d1-measured-run-2026-09-19/`): 18,956 bills rebuilt from the
       eight BILLSTATUS archives in 500 seconds, at 1,200 keyed and 616 keyless
-      requests. It published 25,735 referral rows. Each run adds to what is
-      published rather than replacing it, because a bill the publisher has not
-      touched since the last run is skipped and its rows stand. Same scope as
+      requests. It published 25,735 referral rows. Same scope as
       `bill_actions`: every committee and subcommittee named in the BILLSTATUS
-      documents the bill-family rollup read.
+      documents the bill-family rollup read. Each run is meant to add to what
+      is published rather than replace it, because a bill the publisher has
+      not touched since the last run is skipped and its rows stand. **The skip
+      is design, not measurement**: D1 was a cold start, so nothing was held
+      and nothing was skipped, and the saving described here has not been
+      observed yet — the second run is what measures it.
     measured_on: "2026-09-19"
     summary: >-
       One row per committee or subcommittee a bill reached, as its BILLSTATUS
@@ -849,12 +884,15 @@ tables:
       Sampled, and accumulating. Measured on one cold-start run of the 119th
       (receipt `d1-measured-run-2026-09-19/`): 18,956 bills rebuilt from the
       eight BILLSTATUS archives in 500 seconds, at 1,200 keyed and 616 keyless
-      requests. It published 5,820 CRS summary rows. Each run adds to what is
-      published rather than replacing it, because a bill the publisher has not
-      touched since the last run is skipped and its rows stand. Same scope as
+      requests. It published 5,820 CRS summary rows. Same scope as
       `bill_actions`. These are the Congressional Research Service summaries
       the publisher states on a bill, not the model-written ones in
-      `bill_summaries`.
+      `bill_summaries`. Each run is meant to add to what is published rather
+      than replace it, because a bill the publisher has not touched since the
+      last run is skipped and its rows stand. **The skip is design, not
+      measurement**: D1 was a cold start, so nothing was held and nothing was
+      skipped, and the saving described here has not been observed yet — the
+      second run is what measures it.
     measured_on: "2026-09-19"
     summary: >-
       One row per CRS summary the publisher states on a bill, at the version and
@@ -873,20 +911,26 @@ tables:
       after 2 repeated identities were collapsed, of which only the 600 the
       cap allowed had their bodies fetched from GovInfo — 600 status fetches
       of 600 allowed, so a cold start of one Congress reaches a small fraction
-      of its printings' bodies in one run and converges over many. Two bounds,
-      not one: the Congresses the rollup is scoped to, and that per-run cap. A
-      printing beyond the cap still gets a row from the publisher's own facts,
-      with the body columns (`sha256`, `byte_size`, `resolved_url`,
-      `observed_at`) NULL. A printing already captured is not fetched again,
-      so each run spends the cap on ground the last one did not reach. Each
-      printing is read in the first rendition the publisher offers of XML,
-      HTML, text, then PDF, and `format_name` says which one; PDF is last but
-      is no longer excluded, so a printing offered only as PDF has a row with
-      real body columns. Bills before the 113th Congress offer no XML at all
-      (measured 2026-09-19), so for those the section tree is absent — they
-      have no `bill_sections` rows and no `section_diffs` — and the
-      `cleanup_*` columns, which record what the GPO normalizer did to a PDF's
-      text, are filled only for the PDF printings.
+      of its printings' bodies in one run. Two bounds, not one: the Congresses
+      the rollup is scoped to, and that per-run cap. A printing beyond the cap
+      still gets a row from the publisher's own facts, with the body columns
+      (`sha256`, `byte_size`, `resolved_url`, `observed_at`) NULL. A printing
+      already captured is not fetched again, so each run is meant to spend the
+      cap on ground the last one did not reach. **The skip is design, not
+      measurement**: D1 was a cold start, so nothing was held and nothing was
+      skipped, and the saving described here has not been observed yet — the
+      second run is what measures it. How many runs that convergence actually
+      takes is therefore not stated here: it depends on how many printings the
+      publisher adds between runs and how many held ones a changed bill forces
+      to be re-read, and one run measures neither. Each printing is read in
+      the first rendition the publisher offers of XML, HTML, text, then PDF,
+      and `format_name` says which one; PDF is last but is no longer excluded,
+      so a printing offered only as PDF has a row with real body columns.
+      Bills before the 113th Congress offer no XML at all (measured
+      2026-09-19), so for those the section tree is absent — they have no
+      `bill_sections` rows and no `section_diffs` — and the `cleanup_*`
+      columns, which record what the GPO normalizer did to a PDF's text, are
+      filled only for the PDF printings.
     measured_on: "2026-09-19"
     summary: >-
       One row per printing of a bill, per source that supplied it. The full text is
@@ -996,15 +1040,19 @@ tables:
   section_classifications:
     label: "Section classifications (model)"
     coverage: >-
-      Sampled, and accumulating, and **empty on every run measured so far**.
-      Model-backed: rows exist only for runs with a model key set, and a
-      keyless run publishes none, which is what continuous integration does
-      and what the measured cold-start run of the 119th did: 18,956 bills
-      rebuilt with no Gemini key set, so this table came back empty by design.
-      The model path's first live exercise is recorded in the same receipt
-      under row C1, and the answer the model returned did not satisfy the
-      reader's contract, so no model-backed row has yet been published by any
-      run.
+      Sampled, and accumulating, and empty on every run measured so far.
+      **`measured_on` does not carry its usual meaning here**: no run has
+      exercised this table, so the date beside this statement is the day the
+      statement was written, not the day a run checked it against the
+      publisher (`descriptions.yaml`'s header lists the five entries in this
+      position). Model-backed: rows exist only for runs with a model key set,
+      and a keyless run publishes none, which is what continuous integration
+      does and what the measured cold-start run of the 119th did — 18,956
+      bills rebuilt with no Gemini key set, so this table came back empty by
+      design. The model path's first live exercise is recorded in receipt
+      `d1-measured-run-2026-09-19/` under row C1, and the answer the model
+      returned did not satisfy the reader's contract, so no model-backed row
+      has yet been published by any run.
     measured_on: "2026-09-19"
     summary: >-
       One row per label a model assigned to one section of one printing.
@@ -1016,10 +1064,14 @@ tables:
   bill_summaries:
     label: "Bill summaries (model)"
     coverage: >-
-      Sampled, and accumulating, and **empty on every run measured so far**.
-      Model-backed, same condition as `section_classifications`: no key, no
-      rows, and the measured cold-start run of the 119th was deliberately
-      keyless. The one live call made since (receipt
+      Sampled, and accumulating, and empty on every run measured so far.
+      **`measured_on` does not carry its usual meaning here**: no run has
+      exercised this table, so the date beside this statement is the day the
+      statement was written, not the day a run checked it against the
+      publisher (`descriptions.yaml`'s header lists the five entries in this
+      position). Model-backed, same condition as `section_classifications`: no
+      key, no rows, and the measured cold-start run of the 119th was
+      deliberately keyless. The one live call made since (receipt
       `d1-measured-run-2026-09-19/`, row C1) was answered by the model and
       then refused by `_read_answer`, because the sealed prompt asks for its
       three items in prose and never names the JSON keys the reader requires:
@@ -1037,10 +1089,14 @@ tables:
   diff_summaries:
     label: "Change summaries (model)"
     coverage: >-
-      Sampled, and accumulating, and **empty on every run measured so far**.
-      Model-backed, and further limited to bills with at least two compared
-      printings — of which the measured cold-start run produced 128. It shares
-      the prompt-and-reader shape that row C1 of receipt
+      Sampled, and accumulating, and empty on every run measured so far.
+      **`measured_on` does not carry its usual meaning here**: no run has
+      exercised this table, so the date beside this statement is the day the
+      statement was written, not the day a run checked it against the
+      publisher (`descriptions.yaml`'s header lists the five entries in this
+      position). Model-backed, and further limited to bills with at least two
+      compared printings — of which the measured cold-start run produced 128.
+      It shares the prompt-and-reader shape that row C1 of receipt
       `d1-measured-run-2026-09-19/` found refuses the model's own answer on
       `bill_summaries`, so the same caveat applies until that is settled
       upstream.
@@ -1086,8 +1142,10 @@ tables:
       identities were collapsed. The Congress.gov amendment route for the
       Congresses the rollup is scoped to, walked in an `updateDate` window
       that starts at the watermark this table already reached and runs forward
-      at most ninety days; every run after the cold start adds to what is
-      published rather than replacing it.
+      at most ninety days. **The watermark window is design, not
+      measurement**: the measured run had no prior table, so it took the open
+      window and no narrowed one has been observed — the second run is what
+      measures it.
     measured_on: "2026-09-19"
     summary: >-
       One row per amendment, as the Congress.gov amendment list route states it.
@@ -1144,19 +1202,24 @@ tables:
       577 were fetched from the Clerk under the 1,500-per-run cap with no
       refusal — 4 keyed and 577 keyless requests in 310 seconds, 577 rows
       published from an empty prior. House only, and bounded by that per-run
-      cap on how many roll calls are fetched, newest first; a roll call
+      cap on how many roll calls are fetched, newest first. A roll call
       already published with a tally is not fetched again, so a steady-state
-      run reads only new ones plus the newest few, which are re-read in case
-      the publisher corrected them. The Senate's roll calls are not published
-      at all rather than published with empty tallies — there is no Senate
-      index route in the reader this rollup uses, and a set of Senate roll
-      calls reached from bills is not an index of a session's roll calls. A
-      House roll call that a bill's own action names can be published a cron
+      run is meant to read only new ones plus the newest few, which are
+      re-read in case the publisher corrected them. **The skip is design, not
+      measurement**: D1 was a cold start, so nothing was held and nothing was
+      skipped, and the saving described here has not been observed yet — the
+      second run is what measures it. The Senate's roll calls are not
+      published at all rather than published with empty tallies — there is no
+      Senate index route in the reader this rollup uses, and a set of Senate
+      roll calls reached from bills is not an index of a session's roll calls.
+      A House roll call that a bill's own action names can be published a cron
       before the Congress.gov vote index lists it, since the two linkage
       sources are read independently and the Clerk file is addressable from
       the roll-call key alone; such a row carries the same tally and member
       positions as any other, so this widens timeliness rather than the
-      coverage claim.
+      coverage claim. `vote_date` keeps the Clerk's own spelling
+      (`9-Sep-2025`), which does not sort as a date, so no range over it is
+      quoted here.
     measured_on: "2026-09-19"
     summary: >-
       One row per roll call: the publisher's own tally, and the bill it refers to.
@@ -1234,20 +1297,25 @@ tables:
       the `collections/CRPT` route serves SERIALSET package ids the body
       grammar does not accept, 8 because the package's MODS states a different
       `accessId` than the one requested, 2 for HTML nesting depth and 1 for
-      offering no supported rendition. 262 keyed and 120 keyless requests, 113
-      seconds, well inside the 200-package cap. GovInfo CRPT packages by
-      last-modified date: the window starts at the watermark this table
-      already reached, so each run asks for what changed since the last one
-      and a revision of an older report is still picked up. Thirty days is the
-      cold-start window only. A package already published is not fetched
-      again, and a per-run package cap bounds a catch-up. Each package is read
-      in the first rendition it offers of XML, HTML, text, then PDF, and
-      `format` says which one. Measured 2026-09-19, committee reports offer
-      only HTML and PDF, and the HTML is the text rendition, so in practice
-      every row is read from HTML with PDF as the fallback — all 118 bodies
-      read in the measured run were HTML. No GovInfo body of any rendition
-      states a page boundary, so `page_count` is NULL except on the PDF
-      fallback, which an extractor paginates.
+      offering no supported rendition. The rollup spent 275 keyed requests
+      (262 to GovInfo, and 13 to the Congress.gov hearing detail for
+      `hearing_transcripts.event_id`) and 120 keyless, in 113 seconds, well
+      inside the 200-package cap. GovInfo CRPT packages by last-modified date:
+      the window starts at the watermark this table already reached, so each
+      run asks for what changed since the last one and a revision of an older
+      report is still picked up. Thirty days is the cold-start window only. A
+      package already published is not fetched again, and a per-run package
+      cap bounds a catch-up. **Both the watermark and the already-published
+      skip are design, not measurement**: D1 was a cold start, so the window
+      was the thirty-day default and nothing was skipped — the second run is
+      what measures either. Each package is read in the first rendition it
+      offers of XML, HTML, text, then PDF, and `format` says which one.
+      Measured 2026-09-19, committee reports offer only HTML and PDF, and the
+      HTML is the text rendition, so in practice every row is read from HTML
+      with PDF as the fallback — all 118 bodies read in the measured run were
+      HTML. No GovInfo body of any rendition states a page boundary, so
+      `page_count` is NULL except on the PDF fallback, which an extractor
+      paginates.
     measured_on: "2026-09-19"
     summary: >-
       One row per captured GovInfo committee report package. `bill_id` is the
@@ -1337,12 +1405,14 @@ tables:
       Congress — holding the GovInfo bulkdata listing entry for that folder's
       zip as the last run saw it. Measured on the cold-start run of the 119th
       (receipt `d1-measured-run-2026-09-19/`): 8 rows, one per folder, all
-      downloaded because no prior entry existed to compare against. The next
-      run asks GovInfo for the folder listing and, when the entry still states
-      the same file at the same size and stamp, skips downloading the zip
-      entirely — the saving this table exists for is the one a cold start
-      cannot show. It describes this pipeline's own runs, not the publisher's
-      corpus, so no coverage range applies to it.
+      downloaded because no prior entry existed to compare against — 52 MB of
+      zips across the eight. The next run asks GovInfo for the folder listing
+      and, when the entry still states the same file at the same size and
+      stamp, skips downloading the zip entirely. **That skip is the whole
+      point of this table and is the one thing the measured run could not
+      show**, since a cold start has no retained entry to compare against; the
+      second run is what measures it. It describes this pipeline's own runs,
+      not the publisher's corpus, so no coverage range applies to it.
     measured_on: "2026-09-19"
     data_quality: >-
       Only the four fields the skip compares are retained — `name` and `link`,
@@ -1411,12 +1481,17 @@ tables:
     coverage: >-
       Not a range. Processing state, not published data: one row per bill the
       `bill-family` rollup has attempted from the API detail route for a
-      Congress below the 108th. Still none: the measured run (receipt
+      Congress below the 108th. Still none. **`measured_on` does not carry its
+      usual meaning here**: no run has exercised this table, so the date
+      beside this statement is the day the statement was written, not the day
+      a run checked it against the publisher (`descriptions.yaml`'s header
+      lists the five entries in this position). The measured run (receipt
       `d1-measured-run-2026-09-19/`) named the 119th only, which BILLSTATUS
       bulk serves, so the backfill leg was never entered and this table was
-      written empty. The first run that names a pre-108th Congress fills it.
-      It describes this pipeline's own runs, not the publisher's corpus, so no
-      coverage range applies to it.
+      written empty; the first run that names a pre-108th Congress fills it
+      and is what would give the date its stronger meaning. It describes this
+      pipeline's own runs, not the publisher's corpus, so no coverage range
+      applies to it.
     measured_on: "2026-09-19"
     data_quality: >-
       A row with `refusal` NULL is a success record — the bill's `congress_bills`
@@ -1451,7 +1526,11 @@ tables:
       Not a range. Processing state, not published data: one row per
       (pre-108th Congress, bill type) a `bill-family` run actually walked on
       the `bill/{congress}/{type}` route, rewritten each walk. Still none, for
-      the same reason as `bill_family_backfills`: the measured run (receipt
+      the same reason as `bill_family_backfills`. **`measured_on` does not
+      carry its usual meaning here**: no run has exercised this table, so the
+      date beside this statement is the day the statement was written, not the
+      day a run checked it against the publisher (`descriptions.yaml`'s header
+      lists the five entries in this position). The measured run (receipt
       `d1-measured-run-2026-09-19/`) named the 119th only, so no walk happened
       and this table was written empty. A unit walked complete with every
       record filled, refused or unwalkable is settled and not walked again; it
@@ -1504,9 +1583,12 @@ tables:
       Statutes at Large citations. The Congress.gov law route for the scoped
       Congresses (the current one by default) is walked whole each run and
       every law it lists is a row; the PLAW USLM citation is added per law,
-      newest first, under the per-run cap, so a steady-state run asks only
-      about laws whose list row moved or whose PLAW the bulk folder had not
-      yet served.
+      newest first, under the per-run cap. A steady-state run is meant to ask
+      only about laws whose list row moved or whose PLAW the bulk folder had
+      not yet served. **The skip is design, not measurement**: D1 was a cold
+      start, so nothing was held and nothing was skipped, and the saving
+      described here has not been observed yet — the second run is what
+      measures it.
     measured_on: "2026-09-19"
     data_quality: >-
       `statutes_at_large_cite` is NULL exactly when `uslm_outcome` is not
@@ -1575,11 +1657,15 @@ tables:
     coverage: >-
       Sampled. Measured on one cold-start run (receipt
       `d1-measured-run-2026-09-19/`), and the measurement is mostly a refusal:
-      of the 108 acts the law route listed, 2 were read and produced 65 rows,
-      5 were refused, and the walk then stopped for the Congress with 99 acts
-      unread — the per-run cap of 300 was never approached. One Table III page
-      per public law the law route listed for the scoped Congresses, oldest
-      first, under that cap; an act already published is not re-read.
+      of the 106 public acts the law route listed (108 laws, less the 2
+      private laws, which are not requested), 2 were read and produced 65
+      rows, 5 were refused, and the walk then stopped for the Congress with 99
+      acts unread — the per-run cap of 300 was never approached. One Table III
+      page per public law the law route listed for the scoped Congresses,
+      oldest first, under that cap. An act already published is not re-read.
+      **The skip is design, not measurement**: D1 was a cold start, so nothing
+      was held and nothing was skipped, and the saving described here has not
+      been observed yet — the second run is what measures it.
     measured_on: "2026-09-19"
     data_quality: >-
       Two things keep rows out of this table, and the measured run met the
@@ -1594,20 +1680,28 @@ tables:
       chunked body: `httpx` raises `RemoteProtocolError: peer closed
       connection without sending complete message body (incomplete chunked
       read)`, which the acquirer reports as a transport failure after its
-      three retries. It is intermittent per page, not per act — `119_1` and
-      `119_4` were served whole in the same run while `119_2`, `119_3`,
-      `119_5`, `119_6` and `119_7` were not — and it is invisible to a
-      status-code check, because the status line is a clean `200`. It was
-      re-derived outside the rollup with a plain `httpx.get` to confirm it is
-      the publisher's and not the acquirer's.
+      three retries. It is invisible to a status-code check, because the
+      status line is a clean `200` — all 20 attempts on the five failing acts
+      (15 of them retries) returned one.
+
+      It is the publisher's and not the acquirer's, and it is a per-page
+      truncation and not an outage. Both halves were re-derived outside the
+      rollup with a plain `httpx.get`, no retries and no budget, against the
+      same five acts plus one control act the same run had read whole: the
+      five failed again and the control returned 63,493 bytes. The control is
+      what carries the argument — five failures alone are equally consistent
+      with the site being down. Retained as `table3-rederivation.json` in
+      receipt `d1-measured-run-2026-09-19/`.
 
       The rollup's two guards did their job and bounded the damage: each
       refused act was stepped past and left to the next run, and three
       consecutive refusals ended that Congress's walk, so the run spent 25
-      OLRC requests rather than 300 and stopped with 99 of the 108 listed acts
-      unread. Of the 2 acts that were read, 65 rows were published. A refused
-      act holds nothing behind it and is retried next run, so the table fills
-      as the publisher's body serving allows rather than failing the rollup.
+      OLRC requests rather than 300 and stopped with 99 of the 106 public acts
+      unread (108 laws listed, less the 2 private laws, which are never
+      requested). Of the 2 acts that were read, 65 rows were published. A
+      refused act holds nothing behind it and is retried next run, so the
+      table fills as the publisher's body serving allows rather than failing
+      the rollup.
 
       An act's page is read once: a later edit to it (a status moving to
       repealed) is not picked up, and `release_point` says how current the
@@ -1688,11 +1782,17 @@ tables:
       declared 4,975 and served 4,975 over 20 pages, 12 of them repeats across
       a page boundary, so 4,963 distinct rows were published; 1,000 details
       were read under the per-run cap and 3,963 rows were published list-only,
-      at 1,020 keyed requests in 479 seconds. At that rate the details
-      converge in five runs. Each run walks the whole list for the Congresses
-      in scope and reads the detail of every communication the table does not
-      yet hold, newest `updateDate` first, at most 1,000 a run; the index is
-      complete after the first run.
+      at 1,020 keyed requests in 479 seconds. Each run walks the whole list
+      for the Congresses in scope and reads the detail of every communication
+      the table does not yet hold, newest `updateDate` first, at most 1,000 a
+      run; the index is complete after the first run. How many runs the
+      details take to converge is deliberately not stated: dividing the 3,963
+      outstanding by the 1,000 cap would assume the publisher adds nothing and
+      that no held row's stamp moves to force a re-read, and one cold-start
+      run measures neither. **The skip is design, not measurement**: D1 was a
+      cold start, so nothing was held and nothing was skipped, and the saving
+      described here has not been observed yet — the second run is what
+      measures it.
     measured_on: "2026-09-19"
     summary: >-
       One row per House executive communication, as the Congress.gov

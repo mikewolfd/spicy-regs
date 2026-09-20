@@ -979,9 +979,18 @@ hour ledger, output digests). Thirteen rollups, 36 tables. The completed runs
 cost **4,148 keyed and 1,452 keyless** publisher requests; the night as a whole
 asked for **5,348 keyed and 2,054 keyless**, the difference being the bill
 family's crashed first attempt (finding 1 below), and **the worst rolling hour
-was 3,680 against the 4,000 ceiling**, which answers **D5** — the family's eight archive reads cost
-one listing request each and the night never approached the cap, so the
-register's "stop here unless it exceeds the cap" is satisfied.
+was 3,680 against the 4,000 ceiling**, which answers **D5**.
+
+Read the margin rather than the verdict: **320 requests of headroom, and
+2,400 of that hour was the bill family run twice.** A single clean
+bill-family run leaves the hour at 2,480; the 3,680 figure exists because a
+crash cost a full 1,200-request budget and the re-run landed inside the same
+hour. The ceiling was cleared, but not comfortably, and it would not be
+cleared by a night that added a second Congress to the scope or that lost two
+runs instead of one. D5's own question -- whether the family's eight archive
+listing reads are worth worrying about -- is answered no: they are 8 keyless
+requests of 7,446. The register's "stop here unless it exceeds the cap" is
+satisfied; the headroom is the thing to watch, not the archive reads.
 
 - [x] **No cap was reduced.** The bill family's `MAX_VERSION_FETCHES` (600) is
   documented as three requests per printing, which would breach the
@@ -1028,12 +1037,19 @@ register's "stop here unless it exceeds the cap" is satisfied.
    `uscode.house.gov` returns a clean status line and headers, then closes the
    connection mid-chunk (`RemoteProtocolError: peer closed connection without
    sending complete message body`). Intermittent per page, not per act
-   (`119_1` and `119_4` were served whole in the same run). Re-derived outside
-   the rollup with a plain `httpx.get`, so it is the publisher's. It blocked
-   99 of the 108 listed acts; the rollup's step-past and stop-after-three
-   guards held, spending 25 OLRC requests instead of 300. Written into
-   `table3_records`' `data_quality`. **A status-code check cannot see this** —
-   worth remembering wherever a `200` is treated as a record.
+   (`119_1` and `119_4` were served whole in the same run). **Re-derived and
+   retained**, not asserted: `scripts/table3_rederive.py` in the receipt
+   re-asks the five failing acts with a plain `httpx.get` -- no acquirer, no
+   retries -- *and one control act the same run read whole*, because five
+   failures on their own are equally consistent with the site being down. The
+   five failed again; the control returned 63,493 bytes. It blocked 99 of the
+   106 public acts (108 laws less the 2 private ones, which are never
+   requested); the rollup's step-past and stop-after-three guards held, spending
+   25 OLRC requests instead of 300, with 20 attempts on the five failing acts
+   of which 15 were retries. Written into `table3_records`' `data_quality`.
+   **A status-code check cannot see this** -- every one of those 20 attempts
+   returned a clean `200` status line -- worth remembering wherever a `200` is
+   treated as a record.
 3. **The CHRG per-run cap is spent on packages that cannot become rows.** 187
    of the 200 packages the `collections/CHRG` window served are SERIALSET ids
    the body grammar refuses, leaving 13 `hearing_transcripts`. The CRPT side
@@ -1061,9 +1077,14 @@ why nothing caught it. **On this evidence a keyed production run publishes zero
 shape. The fix is spicy-docs' — either the sealed prompt names its keys (moving
 `PROMPT_VERSION`) or the reader accepts the publisher-neutral spellings — and
 sealing decisions are not this repository's, so it is recorded and not changed.
-Cost: **USD 0.00059 per bill** at the rate pinned in the receipt (a pin, not a
-measurement — nothing in the run observes a price); tokens are the publisher's
-own `usageMetadata`.
+Cost: **USD 0.00057-0.00059 per bill** -- a range, not a figure, because the
+input is deterministic at 204 tokens and the output is not (208 / 213 / 206
+across three calls). The rate is pinned in the receipt and is a pin, not a
+measurement; the tokens are the publisher's own `usageMetadata`. The cost is
+recorded whether or not the reader accepted the answer, which on this evidence
+it does not -- a refused answer is still a billed call, and the receipt's
+arithmetic used to sit in the success branch where it would have reported
+nothing for the outcome that actually happened.
 
 **What one run cannot establish.** Every table but `congress_bills` was a cold
 start, so the incremental paths — skip-what-is-held, the watermark windows, the
