@@ -24,6 +24,7 @@ import pytest
 from pathlib import Path
 
 from spicy_docs.reading.paged_json import PagedJsonSourceError
+from spicy_docs.sources.govinfo.activity_reports import is_activity_report
 from spicy_docs.schemas import TABLE_CONTRACTS
 from spicy_docs.sources.govinfo.bodies import (
     BODY_PREFERENCE,
@@ -37,7 +38,6 @@ from spicy_docs.transport.captured import CapturedBodyResponse
 from spicy_docs.transport.credentials import CredentialRefusedError
 
 from spicy_regs.transforms.build_print_citations import (
-    ACTIVITY_REPORT_TITLE,
     PRINT_BODY_PREFERENCE,
     ACTIVITY_REPORTS,
     BILL_ACTIONS,
@@ -229,7 +229,7 @@ MEASURED_FALSE_POSITIVES = (
 
 @pytest.mark.parametrize("title", REAL_ACTIVITY_TITLES)
 def test_the_title_rule_matches_every_real_activity_report(title):
-    assert ACTIVITY_REPORT_TITLE.search(title) is not None
+    assert is_activity_report(CRPT_ID, title)
 
 
 @pytest.mark.parametrize("title", MEASURED_FALSE_POSITIVES)
@@ -241,7 +241,7 @@ def test_the_title_rule_refuses_the_measured_false_positive_class(title):
     word match.
     """
     assert "activit" in title.lower(), "the false positive must contain the word, or this proves nothing"
-    assert ACTIVITY_REPORT_TITLE.search(title) is None
+    assert not is_activity_report(CRPT_ID, title)
 
 
 # --------------------------------------------------------------------------
