@@ -541,7 +541,12 @@ def _version_captures(
             try:
                 package = acquirer.acquire(package_id)
             except Exception as error:  # noqa: BLE001 — one printing's refusal is not the bill's
-                logger.warning("Bill family: {} {} body refused: {}", package_id, version_code, error)
+                logger.warning(
+                    "Bill family: {} {} body refused: {}",
+                    package_id,
+                    version_code,
+                    scrub_credential(str(error), ""),
+                )
             else:
                 body = package.body_capture
                 source = "govinfo"
@@ -549,7 +554,7 @@ def _version_captures(
                     try:
                         document = parse_bill_tree(body.body, version=version_code)
                     except Exception as error:  # noqa: BLE001 — an unparsed printing is a NULL tree
-                        logger.warning("Bill family: {} tree refused: {}", package_id, error)
+                        logger.warning("Bill family: {} tree refused: {}", package_id, scrub_credential(str(error), ""))
                 elif package.format == "pdf":
                     # Keyed on the rendition actually fetched, not on the link
                     # chosen: the acquirer picks from what the package MODS
@@ -565,7 +570,7 @@ def _version_captures(
                     try:
                         cleanup = body_text(package).record
                     except Exception as error:  # noqa: BLE001 — an unextracted PDF is a NULL cleanup
-                        logger.warning("Bill family: {} PDF text refused: {}", package_id, error)
+                        logger.warning("Bill family: {} PDF text refused: {}", package_id, scrub_credential(str(error), ""))
 
         captures.append(
             BillVersionCapture(
@@ -843,7 +848,7 @@ def _retained_entry(acquirer: BulkStatusSource, acquisition: Any, congress: int,
                 "Bill family: {} {} listing refused, so the next run cannot skip its zip: {}",
                 congress,
                 bill_type,
-                error,
+                scrub_credential(str(error), ""),
             )
             return None
         entry, capture = listing.listing.zip_entry, listing.capture
