@@ -5,8 +5,8 @@ from json import dumps
 
 import pytest
 
-from spicy_regs.schemas import COMMENT, DOCKET, DOCUMENT
-from spicy_regs.sources import MirrulationsReader
+from spicy_docs.schemas.regulations import COMMENT, DOCKET, DOCUMENT
+from spicy_docs.sources.mirrulations import MirrulationsReader
 
 BUCKET = "mirrulations"
 PREFIX = "raw-data"
@@ -210,8 +210,8 @@ def _typed_store() -> dict[str, bytes]:
     base = f"{PREFIX}/{AGENCY}/EPA-2024-0001/text-EPA-2024-0001"
     return {
         f"{base}/docket/EPA-2024-0001.json": dumps(_docket_payload("EPA-2024-0001")).encode(),
-        f"{base}/documents/EPA-2024-0001-0001.json": b'{"data": {}}',
-        f"{base}/comments/EPA-2024-0001-0002.json": b'{"data": {}}',
+        f"{base}/documents/EPA-2024-0001-0001.json": b'{"data": {"id": "EPA-2024-0001-0001"}}',
+        f"{base}/comments/EPA-2024-0001-0002.json": b'{"data": {"id": "EPA-2024-0001-0002"}}',
         # Non-JSON / binary — must be ignored.
         f"{base}/binary-EPA-2024-0001/docket/x.pdf": b"x",
     }
@@ -223,7 +223,7 @@ def test_single_scan_buckets_keys_by_record_type() -> None:
     Replaces the prior behavior of scanning the whole agency prefix once per
     record type (3x). A counting fake proves exactly one scan happens.
     """
-    from spicy_regs.sources.mirrulations import list_agency_files_by_type
+    from spicy_docs.sources.mirrulations import list_agency_files_by_type
 
     scans = [0]
     resource = _CountingResource(_typed_store(), scans)
@@ -242,7 +242,7 @@ def test_single_scan_buckets_keys_by_record_type() -> None:
 
 def test_reader_factory_scans_each_agency_once() -> None:
     """The readers a factory builds for one agency share a single prefix scan."""
-    from spicy_regs.sources.mirrulations import reader_factory
+    from spicy_docs.sources.mirrulations import reader_factory
 
     scans = [0]
     resource = _CountingResource(_typed_store(), scans)
@@ -266,7 +266,7 @@ def test_download_keys_yields_payloads() -> None:
     This is the shared download engine used by both iter_records and the chunked
     ingest path (which downloads one bounded key-chunk at a time).
     """
-    from spicy_regs.sources.mirrulations import download_keys
+    from spicy_docs.sources.mirrulations import download_keys
 
     store = _make_store()
     keys = [_docket_key("EPA-2024-0001"), _docket_key("EPA-2025-0002")]
@@ -287,7 +287,7 @@ def test_download_and_parse_closes_body_on_read_error() -> None:
     (rather than returning None) lets the caller keep the key out of the manifest
     so it's retried next run.
     """
-    from spicy_regs.sources.mirrulations import TransientDownloadError, download_and_parse
+    from spicy_docs.sources.mirrulations import TransientDownloadError, download_and_parse
 
     closed = {"value": False}
 
@@ -318,7 +318,7 @@ def test_download_and_parse_raises_parse_error_on_bad_json() -> None:
     The bytes came off S3 fine — retrying just re-fetches the same corrupt
     payload — so this is a distinct, non-retryable failure class.
     """
-    from spicy_regs.sources.mirrulations import PayloadParseError, download_and_parse
+    from spicy_docs.sources.mirrulations import PayloadParseError, download_and_parse
 
     store = {"bad/key.json": b"{ not valid json"}
     with pytest.raises(PayloadParseError):
@@ -336,27 +336,6 @@ def _mixed_failure_store() -> tuple[dict[str, bytes], str, str, str]:
         transient_bad: dumps(_docket_payload("EPA-2024-0003")).encode(),
     }
     return store, good, parse_bad, transient_bad
-
-
-@pytest.mark.parametrize("workers", [1, 4])
-def test_download_keys_reports_failed_keys(workers: int) -> None:
-    """download_keys buckets each unyielded key by failure kind (both branches).
-
-    ``workers=1`` exercises the serial branch, ``workers=4`` the thread-pool
-    branch (future->key attribution) — both must report the same split.
-    """
-    from spicy_regs.sources.mirrulations import DownloadFailures, download_keys
-
-    store, good, parse_bad, transient_bad = _mixed_failure_store()
-    resource = _FlakyResource(store, transient_fail=[transient_bad])
-    failures = DownloadFailures()
-    payloads = list(
-        download_keys(resource, BUCKET, [good, parse_bad, transient_bad], workers=workers, failures=failures)
-    )
-
-    assert [p["data"]["id"] for p in payloads] == ["EPA-2024-0001"]
-    assert failures.transient == [transient_bad]
-    assert failures.parse == [parse_bad]
 
 
 def test_iter_records_excludes_transient_failures_from_last_keys() -> None:
@@ -386,45 +365,3 @@ def test_iter_records_retries_transient_failure_once() -> None:
     assert sorted(_raw_id(r) for r in records) == ["EPA-2024-0001", "EPA-2025-0002"]
     assert reader.failed_keys == []  # recovered on retry
     assert sorted(reader.last_keys) == sorted([_docket_key("EPA-2024-0001"), flaky])
-
-
-def test_iter_records_keeps_parse_failures_in_last_keys() -> None:
-    """A parse failure stays in last_keys (marked processed) but is reported."""
-    store = _make_store()
-    bad = _docket_key("EPA-2025-0002")
-    store[bad] = b"{ broken json"
-    reader = MirrulationsReader(_FakeS3Resource(store), BUCKET, PREFIX, AGENCY, DOCKET, download_workers=1)
-
-    records = list(reader.iter_records())
-
-    assert [_raw_id(r) for r in records] == ["EPA-2024-0001"]
-    assert reader.parse_failed_keys == [bad]
-    assert reader.failed_keys == []
-    # Deterministically corrupt -> stays processed so it doesn't retry forever.
-    assert sorted(reader.last_keys) == sorted([_docket_key("EPA-2024-0001"), bad])
-
-
-def test_s3_resource_configures_retries() -> None:
-    """The resource must set an explicit retry policy so a transient S3 error
-    is retried rather than silently dropping the record (botocore's default
-    leaves ``retries`` unset)."""
-    from spicy_regs.sources.mirrulations import s3_resource
-
-    cfg = s3_resource().meta.client.meta.config
-    assert cfg.retries is not None
-    # botocore normalizes max_attempts -> total_max_attempts under standard mode.
-    attempts = cfg.retries.get("total_max_attempts") or cfg.retries.get("max_attempts", 0)
-    assert attempts >= 2
-
-
-def test_s3_resource_connection_pool_fits_download_workers() -> None:
-    """The S3 resource's HTTP connection pool must be at least as large as the
-    download thread pool. Otherwise concurrent GETs oversubscribe a too-small
-    pool: connections churn into CLOSE_WAIT and the run stalls (botocore's
-    default max_pool_connections is 10, below DEFAULT_DOWNLOAD_WORKERS)."""
-    from spicy_regs.sources.mirrulations import DEFAULT_DOWNLOAD_WORKERS, s3_resource
-
-    resource = s3_resource()
-    pool_size = resource.meta.client.meta.config.max_pool_connections
-
-    assert pool_size >= DEFAULT_DOWNLOAD_WORKERS

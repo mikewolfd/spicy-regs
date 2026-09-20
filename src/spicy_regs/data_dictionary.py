@@ -113,6 +113,8 @@ CONTRACT_TABLES: tuple[str, ...] = (
     "committee_reports",
     "report_sections",
     "hearing_transcripts",
+    "hearing_bill_links",
+    "cbo_cost_estimates",
     # A8/A9 (laws and rosters): the laws and committee-rosters rollups.
     "laws",
     "law_code_sections",
@@ -175,6 +177,7 @@ TABLES: tuple[str, ...] = (
     "bill_vote_references",
     "bill_family_backfills",
     "bill_family_backfill_walks",
+    "committee_report_reads",
 )
 
 # Tables the MCP server (list_sources / describe_table / query_sql) exposes.
@@ -210,6 +213,7 @@ MCP_QUERYABLE: frozenset[str] = frozenset(
         "bill_vote_references",
         "bill_family_backfills",
         "bill_family_backfill_walks",
+    "committee_report_reads",
         *CONTRACT_TABLES,
     }
 )
@@ -606,6 +610,8 @@ DERIVED_SCHEMAS: dict[str, list[tuple[str, str]]] = {
         ("refusal", "VARCHAR"),
         ("observed_at", "VARCHAR"),
     ],
+    "committee_report_reads": [(column, "VARCHAR") for column in
+                               ("package_id", "last_modified", "outcome", "rule_version", "observed_at")],
     "bill_family_backfill_walks": [
         ("congress", "VARCHAR"),
         ("bill_type", "VARCHAR"),

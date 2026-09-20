@@ -5,79 +5,45 @@ The optional `source-readers` extra enables the same readers for package install
 its wheels must be supplied explicitly until they are published in a registry.
 Base CLI and MCP installs do not require them.
 
-- `spicy_docs-0.23.0`: built with `uv build` from SpicyDocs commit
-  `73b10e5` (tag v0.23.0), 2026-09-20. SHA-256:
-  `36d619a6744cf10d37bf466a3114b1958f59453b22d90ba42be61c6719be4f66`
-  (1,259,241 bytes), verified against the built wheel after the copy and
-  recorded identically in `uv.lock`. The resolve is one line — `Updated
-  spicy-docs v0.22.0 -> v0.23.0` — with no refusal; the same
-  `rulespec-artifacts==1.0.13` and DeltaTrack pins hold.
+- `spicy_docs-0.24.1`: SpicyDocs patch release (release commit `fc8171d`),
+  2026-09-20. Verified before and after copying: **1,321,932 bytes**, SHA-256
+  `ce25270b5328ccd4da4f51d2e241141531b4fb058313da38628c647f63531fa6`.
+  Both pins and the uv source move together; `uv.lock` records the same digest.
+  Replaces 0.24.0 (`713c821`, 1,319,390 bytes, `0a03ce34…680a`).
 
-  **What moved, measured rather than read off a release note.** Unzipping both
-  wheels and diffing them shows three modules changed
-  (`schemas/__init__.py`, `sources/govinfo/bodies.py`, `sources/zyte.py`) and
-  seven added (`schemas/document_citation_tables.py`,
-  `schemas/budget_volume_tables.py`, `schemas/senate_expenditure_tables.py`,
-  `schemas/bill_action_tables.py`, `interpretation/citations.py`,
-  `interpretation/bill_actions.py`, `transport/zyte.py`). `TABLE_CONTRACTS`
-  was then dumped from each wheel and compared field by field — columns,
-  identity, version column, grain and per-column prose:
+  Independent imports from both wheel archives establish **39 contracts,
+  813 columns**, with every contract identical: column order, identity,
+  version column, grain and descriptions. The comparison and registry dumps
+  are retained in
+  `receipts/spicy-docs-0-24-1-adoption-2026-09-20/contracts-comparison.json`
+  under `/Users/mikewolfd/Work/corpora/supply-2026-09-02/`.
+  The Mirrulations reader now requires a nonblank `data.id` string for all
+  three ingested types and rejects publisher error bodies. This matches the
+  host's identity requirement and adds error rejection, so both ingestion
+  paths use the supplier reader directly. Publisher reasons remain scrubbed;
+  regression tests retain the missing-identity and retry cases.
 
-  - **The thirty-two contracts 0.22.0 shipped are identical**, all 617
-    columns. Nothing this repository already hosts moved, so no hosted
-    dictionary entry could move either.
-  - **Five contracts are new, 149 columns**, taking the registry to **37
-    contracts over 766 columns**: `document_citations` (17, keyed
-    `document_key, text_sha256, cite_kind, target_key, span_start`),
-    `house_activity_reports` (36, keyed `package_id`), `budget_volumes` (34,
-    keyed `package_id`), `senate_expenditures` (35, keyed on package, file,
-    page, table, row and the page text's digest) and
-    `bill_committee_actions` (27, keyed `document_key, text_sha256, bill_id,
-    print_phrasing, span_start`).
+  The preceding 0.24.0 adoption grew the registry from 37 contracts and 766
+  columns. It added `hearing_bill_links` (12 columns, key
+  `package_id, bill_id, link_source`) and `cbo_cost_estimates` (16, key
+  `bill_id, publication_id`). Appended: `house_communications` +5 provenance
+  columns, `committee_reports` +13 CBO letter columns, `congress_bills` +1
+  estimate outcome. Existing prefixes, keys and version columns are unchanged.
+  Prose also changes on `budget_volumes`, `hearing_transcripts` and
+  `house_activity_reports`; every other contract is identical.
 
-  So `UNHOSTED_CONTRACTS` in `tests/test_contract_tables.py` names those five
-  rather than staying empty, and each leaves the set in the commit that gives
-  it a writer. `spicy-regs-dict check`/`generate` move nothing on adoption:
-  the dictionary is generated from `CONTRACT_TABLES`, which the adoption does
-  not touch.
+  Seven modules added and twelve changed; the complete wheel and registry
+  comparison is retained in
+  `receipts/rollups-0-24-0-adoption-2026-09-20/contracts-comparison.json`.
+  The release supplies the Mirrulations refusal/retry reader, activity-report
+  selection, PDF-first print preference, thirteen measured BUDGET parts,
+  hearing cover/agenda rules and repository reader, CBO index and letter rule,
+  and Record communication reconstruction. Hosting adopts these public
+  functions; the Record acquisition backfill is a separate rollup.
+  `shape_hearing_transcript` no longer accepts `bill_id`: hearing relationships
+  are one-to-many and live in `hearing_bill_links`.
 
-  What the release carries here, beyond the contracts:
-  - **`interpretation/citations.py`** — `find_citations(text, *, pages, kinds,
-    congress, committees)`, the rule set that reads cited keys out of a
-    document's own text with their character spans, and
-    `committee_vocabulary(house=…, senate=…)`, which turns roster records into
-    the names those rules resolve against. `CITATION_RULE_SET_VERSION` and the
-    per-rule versions in `CITATION_RULES_BY_NAME` are what the row shapers
-    stamp, so a re-extraction is distinguishable from the one before it.
-  - **`interpretation/bill_actions.py`** — `find_bill_actions(text, citations,
-    *, committee_chamber)`, which pairs an action phrase a committee print
-    states with the bill named in the same sentence, and states its own
-    attachment class per row rather than publishing a pairing as a fact.
-  - **The package-id grammar is widened** (`sources/govinfo/bodies.py`) to
-    `BUDGET-{fy}-{part}` — six sealed parts, `APP`, `BALANCES`, `BUD`, `FCS`,
-    `MSR`, `PER` — and `GPO-CDOC-{congress}sdoc{n}`. The same change records a
-    publisher fact this repository must not assume away: **the collection a
-    package id names is not always the `collectionCode` its records state**.
-    Both `BUDGET` and the GPO-prefixed CDOC reprints state `GPO`, so each
-    grammar entry carries the code its records state and the check compares
-    against that.
-  - **`transport/zyte.py`**, and `sources/zyte.py` grows a `mode` on its
-    response — `httpResponseBody` is the publisher's own bytes,
-    `browserHtml` is Zyte's browser's serialized DOM, which no publisher ever
-    sent. The two are kept apart because they are different evidence. Nothing
-    here reaches a walled route yet, so nothing in this repository calls it.
-
-  Replaces 0.22.0 (`b76a1f0`, SHA-256 `782735d8…bafa1`, 1,188,118 bytes),
-  which put each answer's declaration on the *request* as a JSON Schema, made
-  a refused answer a `FamilyRefusal` rather than an exception out of the
-  rollup, moved the classification prompt to `v3`, and brought
-  `interpretation/gemini_call.py` upstream; and before it 0.21.3 (`083b536`,
-  `1f91bb70…f84b`) and 0.21.2 (`3642aa1`, `96eb4897…8ca3`), which carried
-  `PackageModsIdentity.bills`/`.primary_bill`, the ten contracts this
-  repository hosts in full, and `uslm` in `BODY_PREFERENCE` /
-  `DEFAULT_FORMAT_PREFERENCE`. All of that stands unchanged. The `reconstruct`
-  extra (lxml) is still not installed.
-- `rulespec_artifacts-1.0.13`: required by spicy-docs 0.23.0, which pins it
+- `rulespec_artifacts-1.0.13`: required by spicy-docs 0.24.1, which pins it
   exactly; 1.0.12 no longer resolves. Nothing here imports it — it is a
   transitive pin vendored under the same discipline. Byte-identical to the
   wheel `rulespec` itself built (`dist/artifacts/`) and to the one spicy-docs

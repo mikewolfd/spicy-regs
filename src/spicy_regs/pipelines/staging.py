@@ -13,13 +13,26 @@ from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import TYPE_CHECKING, Protocol
+
+if TYPE_CHECKING:
+    from spicy_docs.sources.mirrulations import KeyOutcome
 
 from loguru import logger
 
 from spicy_regs.schemas import RecordType
 from spicy_regs.sources import StagingWriter
-from spicy_regs.sources.base import Reader
 from spicy_regs.transforms.base import Transform
+
+
+class Reader(Protocol):
+    """The stream and completion accounting a staging source supplies."""
+
+    last_keys: list[str]
+    failed_keys: list[str]
+
+    def iter_records(self): ...
+
 
 # Factories the caller provides, keyed by (agency,) record type: build a
 # configured Reader (connection details, filters) and the Transform that shapes
@@ -32,17 +45,15 @@ TransformFactory = Callable[[RecordType], Transform]
 class StageResult:
     """Outcome of a staging pass.
 
-    ``consumed_keys`` are safe to record in the manifest. ``failed_keys`` were
-    attempted but failed transiently — the caller must keep them out of the
-    manifest so the next run retries them. ``parse_failed_keys`` are
-    deterministically corrupt files: staged as processed, but reported so they
-    can be replayed deliberately after a fix.
+    Only ``consumed_keys`` may be manifested. All unresolved outcomes retain
+    their agency/type scope so the pipeline can resume them before new keys.
     """
 
     rows_by_type: dict[str, int]
     consumed_keys: set[str] = field(default_factory=set)
     failed_keys: set[str] = field(default_factory=set)
     parse_failed_keys: set[str] = field(default_factory=set)
+    unresolved: dict[tuple[str, str], list["KeyOutcome"]] = field(default_factory=dict)
 
 
 def stage_agencies(
@@ -60,11 +71,12 @@ def stage_agencies(
     ``transform_for`` is omitted the reader's records are staged as-is.
     """
 
-    def stage_one_agency(agency: str) -> tuple[dict[str, int], list[str], list[str], list[str]]:
+    def stage_one_agency(agency: str):
         rows: dict[str, int] = {}
         keys: list[str] = []
         failed: list[str] = []
         parse_failed: list[str] = []
+        outcomes = {}
         for record_type in record_types:
             reader = read(agency, record_type)
             records = reader.iter_records()
@@ -80,25 +92,27 @@ def stage_agencies(
             rt_parse_failed = list(getattr(reader, "parse_failed_keys", []))
             failed.extend(rt_failed)
             parse_failed.extend(rt_parse_failed)
+            outcomes[(agency, record_type.name)] = list(getattr(reader, "unresolved", ()))
             if rt_failed or rt_parse_failed:
                 logger.warning(
-                    "[{}] {}: {} download failures (retry next run), {} parse failures (marked processed)",
+                    "[{}] {}: {} unresolved keys, {} unreadable/empty; all retry next run",
                     agency,
                     record_type.name,
                     len(rt_failed),
                     len(rt_parse_failed),
                 )
             logger.info("[{}] {}: staged {} rows", agency, record_type.name, writer.rows_written)
-        return rows, keys, failed, parse_failed
+        return rows, keys, failed, parse_failed, outcomes
 
     result = StageResult(rows_by_type={rt.name: 0 for rt in record_types})
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = [executor.submit(stage_one_agency, agency) for agency in agencies]
         for future in as_completed(futures):
-            rows, keys, failed, parse_failed = future.result()
+            rows, keys, failed, parse_failed, outcomes = future.result()
             for name, count in rows.items():
                 result.rows_by_type[name] += count
             result.consumed_keys.update(keys)
             result.failed_keys.update(failed)
             result.parse_failed_keys.update(parse_failed)
+            result.unresolved.update(outcomes)
     return result

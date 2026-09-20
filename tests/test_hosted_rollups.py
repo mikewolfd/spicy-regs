@@ -52,12 +52,16 @@ from spicy_regs.transforms.build_bill_family import (
 
 #: The bill family's published outputs that are not contract tables, each with
 #: the column tuple its transform writes.
-OWN_TABLES = {
+from spicy_regs.transforms.committee_report_reads import READS_TABLE, READ_COLUMNS
+
+BILL_OWN_TABLES = {
     ARCHIVES_TABLE: ARCHIVE_COLUMNS,
     VOTE_REFERENCES_TABLE: VOTE_REFERENCE_COLUMNS,
     BACKFILLS_TABLE: BACKFILL_COLUMNS,
     BACKFILL_WALKS_TABLE: BACKFILL_WALK_COLUMNS,
 }
+
+OWN_TABLES = BILL_OWN_TABLES | {READS_TABLE: READ_COLUMNS}
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 WORKFLOWS = REPO_ROOT / ".github" / "workflows"
@@ -170,10 +174,10 @@ def test_a_soft_input_is_an_ingest_output_its_writer_produces_first(rollup, soft
     )
 
 
-def test_the_bill_family_declares_all_thirteen_plus_its_own_four():
-    assert len(BillFamilyRollup.outputs) == 17
+def test_the_bill_family_declares_all_fourteen_plus_its_own_four():
+    assert len(BillFamilyRollup.outputs) == 18
     assert BillFamilyRollup.outputs[0] == "congress_bills.parquet"
-    assert set(BillFamilyRollup.outputs[-4:]) == {f"{name}.parquet" for name in OWN_TABLES}
+    assert set(BillFamilyRollup.outputs[-4:]) == {f"{name}.parquet" for name in BILL_OWN_TABLES}
     # The property the freshness checker uses resolves to the first key.
     assert BillFamilyRollup(output_dir=None).output == "congress_bills.parquet"
 

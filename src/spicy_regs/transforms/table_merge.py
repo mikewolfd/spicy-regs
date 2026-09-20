@@ -17,7 +17,7 @@ on the merged output — the other tests in that file cover ``_shape``,
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Collection, Iterable, Mapping
 from pathlib import Path
 
 import pyarrow as pa
@@ -72,6 +72,7 @@ def merge_table(
     download_prior: Callable[[str, Path], bool] = r2.download,
     prior_present: bool | None = None,
     coalesce_prior: bool = False,
+    replace_parents: tuple[str, Collection[str]] | None = None,
 ) -> Path:
     """Merge freshly fetched ``rows`` against the prior ``remote_key`` table.
 
@@ -120,6 +121,10 @@ def merge_table(
     ``download_prior`` a second time for the same known-absent object.
     ``True`` or the default ``None`` leave the existing
     "already on disk, else ask ``download_prior``" behavior unchanged.
+
+    ``replace_parents`` names a parent column and the successfully evaluated
+    parent IDs. Remove their prior relationship rows before merging, including
+    when their fresh result is empty. Unread or failed parents keep their rows.
     """
     import duckdb
 
@@ -166,6 +171,15 @@ def merge_table(
     newest = f"_src DESC, {version_column} DESC" if version_column else "_src DESC"
 
     prior_select = ""
+    prior_filter = ""
+    if replace_parents is not None:
+        parent_column, parent_ids = replace_parents
+        if parent_column not in columns or not parent_column.isidentifier():
+            raise ValueError("replace_parents must name a table column")
+        con.register("replaced_parents", pa.table({"parent_id": pa.array(list(parent_ids), type=pa.string())}))
+        prior_filter = (
+            f"WHERE NOT EXISTS (SELECT 1 FROM replaced_parents r WHERE r.parent_id = p.{parent_column})"
+        )
     if have_prior:
         # The prior table may predate columns this contract has since gained —
         # ``congress_bills`` is the live case: its first ten columns are frozen
@@ -208,13 +222,14 @@ def merge_table(
             f"SELECT {cols}, 1 AS _src, {fresh_rank} AS _rn FROM read_parquet('{new_file}') WHERE {not_null}"
             f") WHERE _rn = 1"
         )
-        prior_q = f"SELECT {prior_select} FROM read_parquet('{prior_file}') WHERE {not_null}"
+        prior_q = (f"SELECT * FROM (SELECT {prior_select} FROM read_parquet('{prior_file}') p {prior_filter}) "
+                   f"WHERE {not_null}")
         merged = ", ".join(c if c in identity else f"COALESCE(f.{c}, p.{c}) AS {c}" for c in columns)
         selection = f"SELECT {merged} FROM ({fresh_q}) f FULL OUTER JOIN ({prior_q}) p USING ({key_cols})"
     else:
         if have_prior:
             union = (
-                f"SELECT {prior_select}, 0 AS _src FROM read_parquet('{prior_file}') "
+                f"SELECT {prior_select}, 0 AS _src FROM read_parquet('{prior_file}') p {prior_filter} "
                 f"UNION ALL BY NAME "
                 f"SELECT {cols}, 1 AS _src FROM read_parquet('{new_file}')"
             )
@@ -377,6 +392,7 @@ def merge_contract_table(
     *,
     download_prior: Callable[[str, Path], bool] = r2.download,
     prior_present: bool | None = None,
+    replace_parents: tuple[str, Collection[str]] | None = None,
 ) -> Path:
     """Merge ``rows`` for one ``spicy_docs.schemas`` table contract.
 
@@ -404,6 +420,7 @@ def merge_contract_table(
         download_prior=download_prior,
         prior_present=prior_present,
         coalesce_prior=coalesce,
+        replace_parents=replace_parents,
     )
     if contract_name == STATUTES_JOIN_TARGET:
         fill_statutes_at_large_cite(output_dir, out_file, contract.version_column, contract.identity, download_prior)

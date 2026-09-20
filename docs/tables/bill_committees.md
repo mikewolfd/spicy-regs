@@ -6,7 +6,7 @@
 
 One row per committee or subcommittee a bill reached, as its BILLSTATUS document names it. `referral_signal` is set only for the six appropriations committees the money-bill classifier keys on; it is NULL elsewhere rather than absent. All columns are stored as VARCHAR.
 
-**Coverage.** Sampled, and accumulating. Measured on one cold-start run of the 119th (receipt `d1-measured-run-2026-09-19/`): 18,956 bills rebuilt from the eight BILLSTATUS archives in 500 seconds, at 1,200 keyed and 616 keyless requests. It published 25,735 referral rows. Same scope as `bill_actions`: every committee and subcommittee named in the BILLSTATUS documents the bill-family rollup read. Each run is meant to add to what is published rather than replace it, because a bill the publisher has not touched since the last run is skipped and its rows stand. **The skip is design, not measurement**: D1 was a cold start, so nothing was held and nothing was skipped, and the saving described here has not been observed yet — the second run is what measures it. *(measured 2026-09-19)*
+**Coverage.** Sampled. The adoption run produced 26,029 rows in this output from the 118th Congress's HR and S BILLSTATUS archives, processing 16,213 bills in one pass. The pass used 16 requests (8 keyed, 8 keyless), with the printing cap fixed at four and model calls disabled. Receipt: `rollups-0-24-0-adoption-2026-09-20/`. Local output only; not uploaded. *(measured 2026-09-20)*
 
 - **Parquet file:** `bill_committees.parquet`
 - **Queryable via MCP `query_sql`:** Yes

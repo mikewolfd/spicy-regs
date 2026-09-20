@@ -24,6 +24,7 @@ import pytest
 from pathlib import Path
 
 from spicy_docs.reading.paged_json import PagedJsonSourceError
+from spicy_docs.sources.govinfo.activity_reports import is_activity_report
 from spicy_docs.schemas import TABLE_CONTRACTS
 from spicy_docs.sources.govinfo.bodies import (
     BODY_PREFERENCE,
@@ -37,7 +38,6 @@ from spicy_docs.transport.captured import CapturedBodyResponse
 from spicy_docs.transport.credentials import CredentialRefusedError
 
 from spicy_regs.transforms.build_print_citations import (
-    ACTIVITY_REPORT_TITLE,
     PRINT_BODY_PREFERENCE,
     ACTIVITY_REPORTS,
     BILL_ACTIONS,
@@ -229,7 +229,7 @@ MEASURED_FALSE_POSITIVES = (
 
 @pytest.mark.parametrize("title", REAL_ACTIVITY_TITLES)
 def test_the_title_rule_matches_every_real_activity_report(title):
-    assert ACTIVITY_REPORT_TITLE.search(title) is not None
+    assert is_activity_report(CRPT_ID, title)
 
 
 @pytest.mark.parametrize("title", MEASURED_FALSE_POSITIVES)
@@ -241,7 +241,7 @@ def test_the_title_rule_refuses_the_measured_false_positive_class(title):
     word match.
     """
     assert "activit" in title.lower(), "the false positive must contain the word, or this proves nothing"
-    assert ACTIVITY_REPORT_TITLE.search(title) is None
+    assert not is_activity_report(CRPT_ID, title)
 
 
 # --------------------------------------------------------------------------
@@ -506,3 +506,21 @@ def test_a_cold_run_over_both_collections_publishes_rows_in_both(tmp_path):
     assert _rows(budget), "nor may the budget table, which the listing order would starve"
     # The cap is still the cap: two packages, one from each family.
     assert len(acquirer.asked) == 2
+
+
+@pytest.mark.parametrize("part", ["OBJCLASS", "TAB", "DB", "CLIMATE", "LRB", "CROSSCUT", "DOD"])
+def test_new_budget_parts_reach_the_publisher_and_root_answers_are_counted(tmp_path, part):
+    from loguru import logger
+    from spicy_docs.sources.govinfo.body_acquisition import GovInfoFormatNotOfferedError
+
+    package_id = f"BUDGET-2025-{part}"
+    acquirer = _Acquirer({}, {package_id: GovInfoFormatNotOfferedError(package_id, PRINT_BODY_PREFERENCE, ())})
+    messages = []
+    sink = logger.add(lambda message: messages.append(message.record["message"]))
+    try:
+        paths = _build(tmp_path, _Reader({"BUDGET": [_listing(package_id, "Volume")]}), acquirer)
+    finally:
+        logger.remove(sink)
+    assert acquirer.asked == [package_id]
+    assert all(not _rows(path) for path in paths)
+    assert any("1 publisher package-root format answers (not failures)" in message for message in messages)

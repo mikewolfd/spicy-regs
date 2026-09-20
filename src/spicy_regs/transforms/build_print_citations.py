@@ -1,115 +1,21 @@
-"""Transform: build ``house_activity_reports``, ``budget_volumes``, ``bill_committee_actions`` and ``document_citations``.
+"""Build activity reports, budget volumes, bill actions and citations in one pass.
 
-Four tables from two GovInfo collections, in one pass, for the same reason
-``build_committee_reports`` builds three: they share an acquirer and its pacing
-budget, and everything published here is read out of a document body that is
-only in hand during the pass that fetched it.
+SpicyDocs owns selection, rendition preference, interpretation and row shapes.
+This host owns the issue-date window, caps, prior-output resume and publication.
+The whole published window is enumerated each run so unsuccessful packages
+remain eligible; unchanged captured packages cost no body requests. Collections
+share the package cap round-robin so neither starves on a cold start.
 
-**Why these four and not some other grouping.** The spicy-docs research splits
-the PDF-only families by *acquisition pass*, and this is the pass that is one
-keyed GovInfo body fetch per package:
-
-* **CRPT** activity reports fill ``house_activity_reports``, one row per
-  captured package. Their text then produces two derived tables —
-  ``document_citations`` (every cited key with the span it was read at) and
-  ``bill_committee_actions`` (what the print says *happened* to a bill it
-  names). Both come from the same two rule sets run over the same characters;
-  splitting them into separate rollups would fetch and extract the same
-  1,249-page corpus twice for no gain.
-* **BUDGET** volumes fill ``budget_volumes`` and contribute to the same
-  ``document_citations``. A budget citation is a link-table row with
-  ``document_kind`` ``budget_volume``, not a second table
-  (spicy-docs ``docs/decisions.md``, "A citation is keyed on where it was read").
-  They are here rather than in their own rollup because they are the same
-  acquirer, the same key, the same budget and the same shared output.
-
-``senate_expenditures`` is deliberately **not** here: its pass is PyMuPDF table
-detection over 1,259-to-3,018-page volumes, which costs 26.5–84.6 ms a page
-against 9.8 ms without table detection (spicy-docs
-``docs/research/pdf-yield-mods-recheck-2026-09-20.md``), and its bodies are
-granule files rather than package ones. Different acquisition, different cost
-class, its own rollup.
-
-**``document_citations`` has exactly one owner, and it is this transform.** The
-contract is a shared link table over every document family, keyed
-``(document_key, text_sha256, cite_kind, target_key, span_start)``.
-``document_kind`` is what keeps the two families apart inside it —
-``govinfo_package`` for an activity report, ``budget_volume`` for a budget
-volume, both spicy-docs' own constants, never spelled here. A third family
-would join by being added to this pass or by a decision to give the table a
-second writer, which the repository's one-writer rule
-(``tests/test_hosted_rollups.py``) makes a decision rather than an accident.
-
-**The row shapes are spicy-docs'.** ``shape_activity_report``,
-``shape_budget_volume``, ``shape_document_citation`` and
-``shape_bill_committee_action`` build every row; ``find_citations`` and
-``find_bill_actions`` find everything in them; ``document_provenance`` takes
-the text digest. Nothing about a column, an identity or a rule is restated
-here. What this module owns is the acquisition, the enumeration and the
-pacing.
-
-**Enumeration: the whole issue-date window, every run.** Both families are
-small — 15 activity reports in one quarter of CRPT and 18 budget volumes in
-twenty months, measured 2026-09-20 — so walking the window whole costs a
-handful of list pages and buys the property a watermark cannot give: a package
-refused this run is enumerated again next run and retried, which is
-AGENTS.md's "retry every previously unsuccessful row on resume". A
-last-modified watermark would advance past a refused package as soon as any
-*other* package published, and the refusal would never be seen again. What is
-skipped is only a package already published with the same ``last_modified``,
-so a steady-state run fetches nothing and a revised volume is re-read.
-
-**The ``published`` route, not ``collections``.** ``/published/{start}/{end}``
-selects by issue date; ``/collections/{code}/{modified}`` selects by
-last-modified and would be the cheaper resume primitive. It is not used
-because it does not answer only the collection asked for: spicy-docs measured
-``/collections/BUDGET/{lastModified}`` serving SERIALSET rows among BUDGET
-rows on 2026-09-20. So the issued-date route is walked and **every row's own
-``packageId`` is checked against the grammar** rather than trusted from the
-request — which is also why a CRPT walk that meets an ``ERP-`` or ``GPO-``
-neighbour (3 of 3,000 CRPT-scoped ids, 2026-09-19) drops it by name.
-
-**Which CRPT packages are activity reports is a title rule, and it is stated
-here because it is not published.** ``ACTIVITY_REPORT_TITLE`` is spicy-docs'
-rule from ``tools/analysis/pdf_family_rollup.py``, which the wheel does not
-ship — ``tools/`` is not packaged — so this is the one selection rule in this
-module that is a copy rather than an import, and it is pinned by
-``tests/test_print_citations.py`` against both the titles it must match and
-the measured class it must not. It matches a *phrase* and not the word
-``activit``: a bare word match took in "DIRECTING THE SECRETARY ... RELATING
-TO ... ACTIVITIES" twice in the first eight matches spicy-docs measured on
-2026-09-20. Measured live here 2026-09-20 on the ``published`` CRPT window
-2025-01-01..2025-03-31: 71 packages walked, 15 matched.
-
-**The committee roster vocabulary is two keyless requests a run.**
-``find_citations`` settles a printed committee name against the vocabulary
-``committee_vocabulary`` builds from the Clerk's ``MemberData.xml`` and the
-Senate ``cvc`` file — the same two files ``build_committee_rosters`` already
-reads, through the same acquirer, so this is a reuse and not a second reader.
-Without it a printed committee name stays unresolved rather than being
-guessed, so a roster file that refuses degrades the vocabulary and is logged;
-it does not fail the run. ``committees_unresolved`` on the published row is a
-floor for that reason and not a defect count: the Senate ``cvc`` file states
-only the committees its listed senators sit on.
-
-**Pages are read whole, and that is the measurement that matters.** The
-research read at most 60 pages a document, and the re-check showed what that
-cost: ``BUDGET-2027-APP`` names 29 public laws read to 60 pages and 490 read
-to all 1,340, "a 4-percent sample of a 1,340-page volume reported as the
-volume". So nothing here caps pages; ``pages_read``, ``stated_page_count`` and
-``pages_capped`` are filled by spicy-docs' own ``read_depth`` from the fetch
-that happened, and the per-run bound is a *package* count. Uncapped reading
-costs 9.8 ms a page with table detection off (18,119 pages in 176.8 s), so the
-whole corpus is a minute of extraction, not an hour.
-
-Needs an api.data.gov key: GovInfo's ``published``, summary and MODS routes are
-keyed. A ``401``/``403`` aborts the run rather than being counted as a bad row.
+Print families use the package's PDF-first order because their columns state
+pages. Bodies are read whole; read_depth reports the publisher's stated extent
+against pages actually extracted. The two keyless chamber rosters supply the
+committee vocabulary. A roster failure leaves its names unresolved; access
+refusals abort. Senate expenditure granules use a separate acquisition pass.
 """
 
 from __future__ import annotations
 
 import os
-import re
 from collections import Counter
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from datetime import UTC, datetime
@@ -145,8 +51,9 @@ from spicy_docs.sources.congress.committee_rosters import (
     CommitteeRosterBudget,
     CommitteeRosterError,
 )
-from spicy_docs.sources.govinfo.body_acquisition import GovInfoBodyAcquirer, GovInfoBodyBudget
-from spicy_docs.sources.govinfo.bodies import BODY_PREFERENCE, parse_package_id
+from spicy_docs.sources.govinfo.body_acquisition import GovInfoBodyAcquirer, GovInfoBodyBudget, GovInfoFormatNotOfferedError
+from spicy_docs.sources.govinfo.bodies import MEASURED_BUDGET_PARTS, PRINT_BODY_PREFERENCE, parse_package_id
+from spicy_docs.sources.govinfo.activity_reports import ACTIVITY_REPORT_RULE_VERSION, is_activity_report, names_activity
 from spicy_docs.sources.govinfo.discovery import GovInfoDiscoveryReader, published_url
 from spicy_docs.transport.credentials import CredentialRefusedError, scrub_credential
 
@@ -168,16 +75,6 @@ CITATIONS = "document_citations"
 #: spicy-docs 2026-09-19).
 CRPT = "CRPT"
 BUDGET = "BUDGET"
-
-#: spicy-docs' own selection rule for "this CRPT package is a committee
-#: activity report", copied because ``tools/`` is not in the wheel. The phrase,
-#: never the bare word — see the module docstring.
-ACTIVITY_REPORT_TITLE = re.compile(
-    r"(?i)activit(?:y|ies)\b[^.]{0,80}\bcommittee\b"
-    r"|\bcommittee\b[^.]{0,80}\bactivit(?:y|ies)\b"
-    r"|\bactivity report\b"
-    r"|\breport on activities\b"
-)
 
 #: The issue-date floor a cold run walks from. **This is a scope, not a
 #: coverage claim.** GovInfo's CRPT and CDOC collections reach 1817, and
@@ -232,43 +129,6 @@ ROSTER_BUDGET = CommitteeRosterBudget(
     timeout_seconds=60.0,
     min_request_interval_seconds=0.2,
 )
-
-#: **The one place this transform names a rendition, against the acquirer's
-#: sealed default, and the reason is measured.** ``BODY_PREFERENCE`` puts HTML
-#: ahead of PDF, which is right for ``committee_reports`` — a CRPT ``htm`` body
-#: *is* GPO's text inside a ``<pre>`` wrapper — and wrong for these two
-#: families, for three reasons:
-#:
-#: 1. **Every number in both contracts' prose is a PDF measurement.**
-#:    ``body_derivation`` is ``pdf-extraction-gpo-normalized`` in every
-#:    spicy-docs fixture of these families, and the GPO normalizer's own gate
-#:    fired on 8 of 8 activity reports and on none of the other 63 documents in
-#:    the PDF-family census. It exists for this layout.
-#: 2. **Four published columns are meaningless on an unpaginated rendition.**
-#:    ``pages_read``, ``stated_page_count`` and ``pages_capped`` on both
-#:    document tables, and ``evidence_page`` on every citation row, all state
-#:    a page. No GovInfo ``htm`` body of any collection carries a page
-#:    boundary, so reading HTML publishes four NULL columns and calls it a row.
-#: 3. **HTML refuses outright on a quarter of this family.** Measured here
-#:    2026-09-20, first run, retained as
-#:    ``receipts/rollups-pdf-families-2026-09-20/requests/print-citations-attempt-1-html.json``:
-#:    under the sealed default, **10 of 41** activity reports refused with
-#:    ``MarkupReadError: HTML markup exceeds the supported nesting depth``, and
-#:    the 31 that were read published **0 page attributions across 29,308
-#:    citation rows**. Under this order the same window reads as PDF.
-#:
-#: PDF is first and **the sealed order follows it, derived rather than
-#: transcribed**, so a package that offers no PDF still yields a body rather
-#: than being refused for want of one, and a rendition spicy-docs adds to
-#: ``BODY_PREFERENCE`` arrives here without anyone remembering to copy it. A
-#: hand-written tuple would be a second copy of a published order that can only
-#: drift; ``tests/test_print_citations.py`` asserts this equals the derivation.
-#:
-#: **Temporary.** spicy-docs is adding this same named preference to
-#: ``sources/govinfo/bodies.py`` as ``PRINT_BODY_PREFERENCE`` (in progress).
-#: When that lands, delete this constant and import theirs — the next adoption
-#: is the commit that should do it.
-PRINT_BODY_PREFERENCE: tuple[str, ...] = ("pdf", *(fmt for fmt in BODY_PREFERENCE if fmt != "pdf"))
 
 #: The committee whose print this is, for ``find_bill_actions``. It uses the
 #: chamber for one thing only: a hearing or a markup is the committee's own
@@ -333,10 +193,6 @@ def _held_packages(prior_file: Path | None) -> dict[str, str | None]:
     return dict(duckdb.sql(f"SELECT package_id, last_modified FROM read_parquet('{prior_file}')").fetchall())
 
 
-def _is_activity_report(package_id: str, title: str) -> bool:
-    return package_id.startswith(f"{CRPT}-") and ACTIVITY_REPORT_TITLE.search(title) is not None
-
-
 def _is_budget_volume(package_id: str, title: str) -> bool:
     # The title says nothing useful here — "Appendix", "Mid-Session Review" —
     # so the id's own prefix is the whole rule, checked against the row rather
@@ -356,13 +212,15 @@ def _listed(
     grammar refuses is dropped by name and counted, never fetched.
     """
     accepted: list[tuple[str, str | None]] = []
-    walked = refused_id = 0
+    walked = refused_id = activity_named = 0
     url = published_url(since, _today(), collections=[collection], page_size=1000)
     for page in reader.packages(url, max_pages=MAX_PAGES):
         for record in page.records:
             walked += 1
             package_id = str(record.get("packageId") or "")
-            if not keep(package_id, str(record.get("title") or "")):
+            title = str(record.get("title") or "")
+            activity_named += int(names_activity(title))
+            if not keep(package_id, title):
                 continue
             try:
                 parse_package_id(package_id)
@@ -380,6 +238,9 @@ def _listed(
         len(accepted),
         refused_id,
     )
+    if collection == CRPT:
+        logger.info("CRPT title rule {}: {} titles name activity, {} accepted",
+                    ACTIVITY_REPORT_RULE_VERSION, activity_named, len(accepted))
     return accepted
 
 
@@ -398,6 +259,8 @@ def _roster_vocabulary(rosters: RosterSource, congress: int) -> tuple[tuple[str,
     ):
         try:
             into.append(call().roster)
+        except CredentialRefusedError:
+            raise
         except (CommitteeRosterError, httpx.HTTPError, ConnectionError) as error:
             logger.warning(
                 "Print citations: {} roster not established, its committees stay unresolved: {}",
@@ -426,7 +289,7 @@ def _read_body(acquirer: PackageBodySource, package_id: str) -> tuple[Any, BodyT
 #: that says a listing row belongs to it. Named once so the enumeration, the
 #: scheduling and the row lists cannot disagree about which families exist.
 _FAMILIES: tuple[tuple[str, str, str, Callable[[str, str], bool]], ...] = (
-    (CRPT, ACTIVITY_REPORTS, "activity", _is_activity_report),
+    (CRPT, ACTIVITY_REPORTS, "activity", is_activity_report),
     (BUDGET, BUDGET_VOLUMES, "budget", _is_budget_volume),
 )
 
@@ -507,6 +370,7 @@ def build_print_citations(
     have_prior = {name: path is not None for name, path in priors.items()}
     held = {name: _held_packages(priors[name]) for name in (ACTIVITY_REPORTS, BUDGET_VOLUMES)}
     since = _issue_floor()
+    logger.info("BUDGET: {} measured parts admitted by the package grammar", len(MEASURED_BUDGET_PARTS))
 
     vocabulary = _roster_vocabulary(rosters, current_congress())
 
@@ -516,7 +380,7 @@ def build_print_citations(
     citation_rows: list[dict] = []
     refusals: Counter[str] = Counter()
     kinds: Counter[str] = Counter()
-    unchanged = fetched = capped = 0
+    unchanged = fetched = capped = root_not_offered = 0
     pages_read = 0
 
     # Enumerate both windows first, drop what is already published, then
@@ -544,6 +408,13 @@ def build_print_citations(
             package, derived = _read_body(acquirer, package_id)
         except CredentialRefusedError:
             raise
+        except GovInfoFormatNotOfferedError as error:
+            if collection != BUDGET:
+                raise
+            root_not_offered += 1
+            logger.info("BUDGET: {} publisher offers no preferred package-root body: {}; no granule attempted",
+                        package_id, scrub_credential(str(error), ""))
+            continue
         except _PACKAGE_REFUSALS as error:
             # Counted by reason, not just counted: forty refusals sharing
             # one reason is a defect here, and forty different ones are the
@@ -619,6 +490,7 @@ def build_print_citations(
         unchanged,
         sum(refusals.values()),
     )
+    logger.info("BUDGET: {} publisher package-root format answers (not failures)", root_not_offered)
     if capped:
         # Every count on a capped document is a floor. Nothing here caps pages,
         # so this can only mean the body the publisher served was shorter than

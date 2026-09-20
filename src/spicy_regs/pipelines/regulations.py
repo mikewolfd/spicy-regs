@@ -18,7 +18,7 @@ This is also the run file. Invoke it via the ``run-pipeline`` console script::
        path is vetted; pass ``--no-skip-upload`` to turn it on.
 
 The reusable pieces live elsewhere: connection details + the reader factory in
-``sources.mirrulations``, the json→record transform in ``transforms.extract``,
+``spicy_docs.sources.mirrulations``, the json→record transform in ``transforms.extract``,
 the parallel fan-out in ``pipelines.staging``, R2 in ``sources.r2``, and
 processed-key tracking in ``manifest``. This module is just the wiring.
 """
@@ -32,11 +32,14 @@ from cyclopts import App, Parameter
 from dotenv import load_dotenv
 from loguru import logger
 
-from spicy_regs.manifest import Manifest, save_failed_keys
+from spicy_docs.sources import mirrulations
+
+from spicy_regs.manifest import Manifest, save_manifest
+from spicy_regs.pipelines.regulations_state import UnresolvedKeys, source_record_type
 from spicy_regs.pipelines.base import Pipeline
 from spicy_regs.pipelines.staging import stage_agencies
 from spicy_regs.schemas import RECORD_TYPES, RecordType
-from spicy_regs.sources import iceberg, mirrulations, r2
+from spicy_regs.sources import iceberg, r2
 from spicy_regs.sources.derived_text import DerivedCommentText
 from spicy_regs.transforms import (
     Chain,
@@ -122,35 +125,21 @@ class RegulationsPipeline(Pipeline):
             len(record_types),
             self.max_workers,
         )
+        unresolved = UnresolvedKeys(output_dir)
+        source_types = {rt.name: source_record_type(rt) for rt in record_types}
+        read = mirrulations.reader_factory(
+            list(source_types.values()), processed_keys=manifest, unresolved_keys=unresolved.for_reader,
+            since_year=self.since_year, verbose=self.verbose,
+        )
         result = stage_agencies(
             agencies,
             record_types,
             staging_dir,
-            mirrulations.reader_factory(
-                record_types,
-                processed_keys=manifest,
-                since_year=self.since_year,
-                verbose=self.verbose,
-            ),
+            lambda agency, rt: read(agency, source_types[rt.name]),
             transform_for=self._transform_for,
             max_workers=self.max_workers,
         )
         manifest.record(result.consumed_keys)
-        # Transient download failures were already excluded from consumed_keys, so
-        # the manifest never marks them processed and the next run retries them;
-        # parse failures were staged as processed. Surface both and persist a
-        # local diagnostic (transient count doubles as a download-health alert).
-        if result.failed_keys or result.parse_failed_keys:
-            logger.warning(
-                "{} keys failed download (excluded from manifest, retried next run); "
-                "{} parse failures (marked processed)",
-                len(result.failed_keys),
-                len(result.parse_failed_keys),
-            )
-        else:
-            logger.info("0 download/parse failures this run")
-        save_failed_keys(output_dir, result.failed_keys, result.parse_failed_keys)
-
         # 3. Transform: merge per-agency staging into the deduplicated dataset.
         staged = result.rows_by_type
         changed_comments: list[Path] = []
@@ -166,10 +155,11 @@ class RegulationsPipeline(Pipeline):
             logger.info("No new records staged; skipping merge.")
 
         # 4. Load: persist the manifest, then publish to R2 (off by default while vetting).
+        unresolved.update(result.consumed_keys, result.unresolved)
         manifest.save(output_dir)
         if self.skip_upload:
             logger.info("skip_upload=True — output left in {}", output_dir)
-        elif any(staged.values()):
+        else:
             logger.info("Uploading to R2...")
             self._publish(output_dir, record_types, staged, changed_comments)
 
@@ -192,9 +182,10 @@ class RegulationsPipeline(Pipeline):
         object clears its size guard first, and the manifest uploads last, once
         every data upload has returned.
         """
-        base_data_types = [rt.name for rt in record_types if rt.name != "comments"]
+        base_data_types = [rt.name for rt in record_types if rt.name != "comments" and staged.get(rt.name, 0)]
         index_file = output_dir / "comments_index.parquet"
         manifest_file = output_dir / "manifest.parquet"
+        unresolved_file = output_dir / "failed_keys.parquet"
         # The Iceberg comments path MERGEs rows through the catalog rather than
         # under the public comments/ prefix, so it changes no partition files —
         # only the refreshed index needs publishing.
@@ -208,6 +199,8 @@ class RegulationsPipeline(Pipeline):
         planned = r2.dataset_files(output_dir, base_data_types) + changed_comments
         if publish_index:
             planned.append(index_file)
+        if unresolved_file.exists():
+            planned.append(unresolved_file)
         if publish_manifest:
             planned.append(manifest_file)
         r2.preflight_uploads(output_dir, planned)
@@ -224,6 +217,8 @@ class RegulationsPipeline(Pipeline):
         elif publish_index:
             logger.info("Uploading refreshed comments index (Iceberg path)...")
             r2.upload_file(index_file, remote_key="comments_index.parquet")
+        if unresolved_file.exists():
+            r2.upload_file(unresolved_file, remote_key=unresolved_file.name)
         if publish_manifest:
             logger.info("Uploading manifest after all data files succeeded...")
             r2.upload_file(manifest_file, remote_key="manifest.parquet")
@@ -243,7 +238,7 @@ class RegulationsPipeline(Pipeline):
             mirrulations.BUCKET,
             mirrulations.PREFIX,
             agency,
-            [comment_rt],
+            [source_record_type(comment_rt)],
             processed_keys=manifest,
             since_year=self.since_year,
             verbose=self.verbose,
@@ -252,45 +247,30 @@ class RegulationsPipeline(Pipeline):
         total = len(keys)
         logger.info("[{}] comments: {} files, ingesting in chunks of {}", agency, total, self.chunk_size)
 
-        # Accumulate failures across chunks so the per-run diagnostic is written
-        # once for the whole agency (save_failed_keys overwrites per run).
-        agency_failures = mirrulations.DownloadFailures()
+        unresolved = UnresolvedKeys(output_dir)
+        previous = unresolved.for_reader(agency, comment_rt)
+        keys = list(dict.fromkeys([*(item.key for item in previous), *keys]))
+        total = len(keys)
         for start in range(0, total, self.chunk_size):
             chunk = keys[start : start + self.chunk_size]
-            label = f"[{agency}] comments {start + len(chunk)}/{total}"
-            failures = mirrulations.DownloadFailures()
-            payloads = mirrulations.download_keys(resource, mirrulations.BUCKET, chunk, label=label, failures=failures)
-            records = list(transform.apply(payloads))
-            # One in-run retry over transient failures before committing the chunk,
-            # mirroring the reader path (a huge agency's chunk shouldn't drop a
-            # record to a single transient blip).
-            if failures.transient:
-                retry = mirrulations.DownloadFailures()
-                retried = mirrulations.download_keys(
-                    resource, mirrulations.BUCKET, list(failures.transient), label=f"{label} retry", failures=retry
-                )
-                records.extend(transform.apply(retried))
-                failures.transient = retry.transient
-                failures.parse.extend(retry.parse)
-            write_staging(agency, comment_rt.name, records, staging_dir, comment_rt.schema)
-            iceberg.merge_comments(staging_dir, output_dir, comment_rt)
-            rmtree(staging_dir / comment_rt.name, ignore_errors=True)
-            # Exclude still-failing transient keys from the manifest so the next
-            # run re-lists them; parse failures stay recorded (marked processed).
-            dropped = set(failures.transient)
-            manifest.record([k for k in chunk if k not in dropped])
-            agency_failures.transient.extend(failures.transient)
-            agency_failures.parse.extend(failures.parse)
-            logger.info("[{}] comments: committed {}/{}", agency, start + len(chunk), total)
-
-        if agency_failures.transient or agency_failures.parse:
-            logger.warning(
-                "[{}] comments: {} download failures (retry next run), {} parse failures (marked processed)",
-                agency,
-                len(agency_failures.transient),
-                len(agency_failures.parse),
+            reader = mirrulations.MirrulationsReader(
+                resource, mirrulations.BUCKET, mirrulations.PREFIX, agency, source_record_type(comment_rt),
+                key_lister=lambda: chunk,
+                unresolved_keys=[item for item in previous if item.key in chunk],
             )
-            save_failed_keys(output_dir, agency_failures.transient, agency_failures.parse)
+            records = list(transform.apply(reader.iter_records()))
+            if records:
+                write_staging(agency, comment_rt.name, records, staging_dir, comment_rt.schema)
+                iceberg.merge_comments(staging_dir, output_dir, comment_rt)
+                rmtree(staging_dir / comment_rt.name, ignore_errors=True)
+            # Only a completed read and successful merge can retire a key.
+            unresolved.update(reader.last_keys, {(agency, comment_rt.name): reader.unresolved})
+            manifest.record(reader.last_keys)
+            if reader.last_keys:
+                save_manifest(output_dir, set(reader.last_keys))
+            if not self.skip_upload:
+                self._publish(output_dir, [comment_rt], {comment_rt.name: len(records)}, [])
+            logger.info("[{}] comments: committed {}/{}", agency, start + len(chunk), total)
 
     # -- regulations-specific wiring ---------------------------------------
 

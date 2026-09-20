@@ -1,67 +1,7 @@
-"""Transform: the five Congress.gov index tables, from one incremental walk.
+"""Congress.gov index tables, with bounded detail reads and own-output resume.
 
-``house_communications``, ``committee_meetings``, ``record_issues``,
-``treaties`` and ``nominations`` (spicy-docs ``schemas/congress_index_tables.py``,
-gaps A5, A7 and A10 of ``docs/research/closing-the-gaps-2026-09-19.md``) are
-each one row per record of one Congress.gov list route, four of them completed
-by that record's own detail route. The five differ only in their address, their
-shaper and the column that says a detail was read, so one walk
-(:func:`build_index_table`) serves five :class:`IndexSpec` entries rather than
-five copies of the same loop. Each spec is published by its own rollup
-(``pipelines/rollups/congress_index.py``) so a refusal on one route fails one
-table's run and not four others', the isolation ``pipelines/rollups/base.py``
-gives as the reason rollups are separate at all.
-
-**Every run walks the whole list.** None of the five list routes honours
-``sort`` (measured, spicy-docs ``docs/sources/listings.md``), so there is no
-newest-first page to stop on, and a walk cut short would silently drop rows
-sitting later in an unordered listing -- the reason the roll-call index is not
-short-circuited either. A date window is not used: it is measured honoured on
-``committee-meeting`` and ``treaty`` only, measured *ignored* on the daily
-Record, and an unmeasured default on the other two, and a window that filtered
-on some field other than ``updateDate`` would hide a changed row from the
-resume below. The list is cheap (4,975 communications are 20 pages of 250) and
-the reader refuses an incomplete or inconsistent walk, so a walk that returns
-*is* the declared count; the per-unit line in the run log states declared,
-walked and pages, and a repeated record across a page boundary is counted
-rather than published twice (measured on the bill route, A11).
-
-**Details are what is skipped, and what is capped.** The published table is
-the resume state, because the contract already distinguishes the two cases
-that matter: a list-only row has every detail-only column NULL, and a row
-whose detail was read has ``[]`` where the detail states none. So
-``detail_marker`` -- one detail-only column, NULL exactly when no detail was
-read -- and ``update_date`` together decide each listed record:
-
-* not held: queued; beyond the cap it is published list-only *now*, so the
-  index is complete after the first run and its NULL marker queues it next;
-* held at the same stamp with the marker set: no request;
-* held with a NULL marker (an earlier refusal, or list-only under the cap):
-  queued, which is how every previously unsuccessful row is retried;
-* held at an older stamp: queued; not reached or refused, the prior row
-  stands and its stale stamp queues it again, because publishing a list-only
-  replacement would erase a detail already held.
-
-One queue per table, newest ``updateDate`` first, at most
-:data:`MAX_DETAILS_PER_RUN` requests. A ``401``/``403`` aborts the run. A
-``404``, a malformed page, a transport failure after the reader's retries, a
-type the detail route's vocabulary refuses, or a detail naming a different
-record than the one asked for is that row's refusal: counted, logged scrubbed,
-never a row with invented values. The identity is read off the shaper's own
-output for both the list row and the detail, so the key is spelled in exactly
-one place, the wheel.
-
-``nominations`` has no detail route; every list row is complete and is
-published every run, fresh row winning, the way ``amendments`` publishes its
-window. A partitioned treaty (a non-empty ``suffix``) has no detail route in
-``LIST_ROUTES`` either, so it is published list-only and never queued.
-
-The RIN on a communication is ``interpretation.communication_rin``'s finding
-over the detail's ``reportNature``, computed at shape time; a list-only row
-carries NULL in all three RIN columns, since the rule was not run on it.
-
-Needs an api.data.gov key, resolved the way every Congress.gov consumer here
-resolves it and sent only as a header by the spicy-docs reader.
+House communications retain the publisher route on historical rows. The
+Congressional Record reconstruction is a separate, deferred acquisition.
 """
 
 from __future__ import annotations
@@ -433,7 +373,20 @@ def build_index_table(
         outcomes["read"] += 1
 
     logger.info("{}: {:,} listed; {}", spec.table, len(listed), dict(outcomes) or "every row complete from the list")
-    return merge_contract_table(output_dir, spec.table, rows, prior_present=prior is not None)
+    output = merge_contract_table(output_dir, spec.table, rows, download_prior=download_prior,
+                                  prior_present=prior is not None)
+    if spec.table == "house_communications":
+        import pyarrow.compute as pc
+        import pyarrow.parquet as pq
+        from spicy_docs.schemas.congress_index_tables import COMMUNICATION_SOURCE_ROUTES
+
+        table = pq.read_table(output)
+        index = table.schema.get_field_index("source_route")
+        table = table.set_column(index, "source_route", pc.fill_null(table["source_route"], COMMUNICATION_SOURCE_ROUTES[0]))
+        temporary = output.with_suffix(".tmp.parquet")
+        pq.write_table(table, temporary, compression="zstd")
+        temporary.replace(output)
+    return output
 
 
 def build_house_communications(output_dir: Path, **kwargs: Any) -> Path:

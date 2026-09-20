@@ -1,0 +1,545 @@
+<mods xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:exslt="http://exslt.org/common" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://www.loc.gov/mods/v3" version="3.3" xsi:schemaLocation="http://www.loc.gov/mods/v3 http://www.loc.gov/standards/mods/v3/mods-3-3.xsd" ID="P0b002ee1dd4b8e15">
+    <name type="corporate">
+         <namePart>United States Government Publishing Office</namePart>
+         <role>
+              <roleTerm authority="marcrelator" type="text">publisher</roleTerm>
+              <roleTerm authority="marcrelator" type="code">pbl</roleTerm>
+        </role>
+         <role>
+              <roleTerm authority="marcrelator" type="text">distributor</roleTerm>
+              <roleTerm authority="marcrelator" type="code">dst</roleTerm>
+        </role>
+    </name>
+    <name type="corporate">
+         <namePart>United States</namePart>
+         <namePart>Congress</namePart>
+         <namePart>House of Representatives</namePart>
+         <role>
+              <roleTerm authority="marcrelator" type="text">author</roleTerm>
+              <roleTerm authority="marcrelator" type="code">aut</roleTerm>
+        </role>
+         <description>Government Organization</description>
+    </name>
+    <typeOfResource>text</typeOfResource>
+    <genre authority="marcgt">government publication</genre>
+    <language>
+         <languageTerm type="code" authority="iso639-2b">eng</languageTerm>
+    </language>
+    <extension>
+         <collectionCode>CHRG</collectionCode>
+         <category>Congressional Committee Materials</category>
+         <waisDatabaseName>118_house_hearings</waisDatabaseName>
+         <branch>legislative</branch>
+         <dateIngested>2026-01-20</dateIngested>
+    </extension>
+    <titleInfo>
+         <title>LEGISLATIVE HEARING ON H.R. 226, H.R. 7543, H.R. 7896, H.R. 7920, H.R. 8529, H.R. 8661, H.R. 8646, H.R. 8647, H.R. 8514, H.R. 8560, H.R. 8627, AND H.R. 8607</title>
+    </titleInfo>
+    <titleInfo type="alternative"></titleInfo>
+    <location>
+         <url displayLabel="Content Detail" access="object in context">https://www.govinfo.gov/app/details/CHRG-118hhrg56198</url>
+         <url displayLabel="HTML rendition" access="raw object">https://www.govinfo.gov/content/pkg/CHRG-118hhrg56198/html/CHRG-118hhrg56198.htm</url>
+         <url displayLabel="PDF rendition" access="raw object">https://www.govinfo.gov/content/pkg/CHRG-118hhrg56198/pdf/CHRG-118hhrg56198.pdf</url>
+    </location>
+    <originInfo>
+         <publisher>U.S. Government Publishing Office</publisher>
+         <dateIssued encoding="w3cdtf">2024-06-12</dateIssued>
+         <issuance>monographic</issuance>
+    </originInfo>
+    <physicalDescription>
+         <note type="source content type">deposited</note>
+         <digitalOrigin>born digital</digitalOrigin>
+         <extent>115 digital object pages</extent>
+    </physicalDescription>
+    <classification authority="sudocs">Y 4.V 64/3:118-68</classification>
+    <identifier type="uri">https://www.govinfo.gov/app/details/CHRG-118hhrg56198</identifier>
+    <identifier type="local">P0b002ee1dd4b8e15</identifier>
+    <identifier type="ILS system id">001466238</identifier>
+    <identifier type="former package identifier">f:56198.txt</identifier>
+    <recordInfo>
+         <recordContentSource authority="marcorg">DGPO</recordContentSource>
+         <recordCreationDate encoding="w3cdtf">2026-01-20</recordCreationDate>
+         <recordChangeDate encoding="w3cdtf">2026-01-20</recordChangeDate>
+         <recordIdentifier source="DGPO">CHRG-118hhrg56198</recordIdentifier>
+         <recordOrigin>machine generated</recordOrigin>
+         <languageOfCataloging>
+              <languageTerm type="code" authority="iso639-2b">eng</languageTerm>
+        </languageOfCataloging>
+    </recordInfo>
+    <accessCondition type="GPO scope determination">fdlp</accessCondition>
+    <extension>
+         <docClass>HHRG</docClass>
+         <accessId>CHRG-118hhrg56198</accessId>
+         <type>G</type>
+         <chamber>HOUSE</chamber>
+         <congress years="2023-2024">118</congress>
+         <session>2</session>
+         <heldDate>2024-06-12</heldDate>
+         <preferredCitation>Serial No. 118-68</preferredCitation>
+    </extension>
+    <extension>
+         <searchTitle>LEGISLATIVE HEARING ON H.R. 226, H.R. 7543, H.R. 7896, H.R. 7920, H.R. 8529, H.R. 8661, H.R. 8646, H.R. 8647, H.R. 8514, H.R. 8560, H.R. 8627, AND H.R. 8607</searchTitle>
+         <granuleClass>OTHERPART</granuleClass>
+         <accessId>CHRG-118hhrg56198</accessId>
+         <graphicsInPDF>true</graphicsInPDF>
+         <witness>Mr. John Bell, Executive Director, Loan Guaranty Service, U.S. Department of Veterans Affairs</witness>
+         <witness>Accompanied by: Mr. Joseph Garcia, Executive Director, Education Service, U.S. Department of Veterans Affairs Mr. James Ruhlman, Deputy Director, Education Service, U.S. Department of Veterans Affairs Ms. Jill Albanese, Director, Clinical Operations/Senior Advisor, Veterans Health Administration, U.S. Department of Veterans Affairs Dr. Jan Del Signore, President, National Association of Veterans Program Administrators</witness>
+         <witness>Mr. Kevin O&apos;Neil, Senior Employment and Education Policy Associate, The American Legion</witness>
+         <witness>Ms. Karen Kreutziger Powell, Chief Executive Officer of Flat Home Loans, Mortgage Bankers Association</witness>
+         <witness>Mr. Marquis Barefield, Assistant National Legislative Director, Disabled American Veterans</witness>
+         <witness>Mr. Richard Brookshire, Chief Executive Officer, Black Veterans Project</witness>
+         <isAppropriation>false</isAppropriation>
+         <congSerial chamber="H" congress="118" number="68"></congSerial>
+         <jacketId>56-198</jacketId>
+         <congCommittee authorityId="hsvr00" chamber="H" congress="118" type="S">
+                                    
+              <name type="authority-standard">Committee on Veterans&apos; Affairs</name>
+                                    
+              <name type="authority-short">Veterans&apos; Affairs</name>
+                                    
+              <subCommittee>
+                                            
+                   <name type="parsed">Subcommittee on Economic Opportunity</name>
+                                        
+            </subCommittee>
+                                
+        </congCommittee>
+         <eventId>117409</eventId>
+         <congMember bioGuideId="B001285" chamber="H" congress="118" party="D" role="COMMMEMBER" state="CA">
+                                    
+              <name type="parsed">JULIA BROWNLEY of California</name>
+                                    
+              <name type="authority-fnf">Julia Brownley</name>
+                                    
+              <name type="authority-lnf">Brownley, Julia</name>
+                                
+        </congMember>
+         <congMember bioGuideId="B001295" chamber="H" congress="118" party="R" role="COMMMEMBER" state="IL">
+                                    
+              <name type="parsed">MIKE BOST of Illinois</name>
+                                    
+              <name type="authority-fnf">Mike Bost</name>
+                                    
+              <name type="authority-lnf">Bost, Mike</name>
+                                
+        </congMember>
+         <congMember bioGuideId="B001301" chamber="H" congress="118" party="R" role="COMMMEMBER" state="MI">
+                                    
+              <name type="parsed">JACK BERGMAN of Michigan</name>
+                                    
+              <name type="authority-fnf">Jack Bergman</name>
+                                    
+              <name type="authority-lnf">Bergman, Jack</name>
+                                
+        </congMember>
+         <congMember bioGuideId="B001315" chamber="H" congress="118" party="D" role="COMMMEMBER" state="IL">
+                                    
+              <name type="parsed">NIKKI BUDZINSKI of Illinois</name>
+                                    
+              <name type="authority-fnf">Nikki Budzinski</name>
+                                    
+              <name type="authority-lnf">Budzinski, Nikki</name>
+                                
+        </congMember>
+         <congMember bioGuideId="C001132" chamber="H" congress="118" party="R" role="COMMMEMBER" state="AZ">
+                                    
+              <name type="parsed">ELIJAH CRANE of Arizona</name>
+                                    
+              <name type="authority-fnf">Elijah Crane</name>
+                                    
+              <name type="authority-lnf">Crane, Elijah</name>
+                                
+        </congMember>
+         <congMember bioGuideId="C001133" chamber="H" congress="118" party="R" role="COMMMEMBER" state="AZ">
+                                    
+              <name type="parsed">JUAN CISCOMANI of Arizona</name>
+                                    
+              <name type="authority-fnf">Juan Ciscomani</name>
+                                    
+              <name type="authority-lnf">Ciscomani, Juan</name>
+                                
+        </congMember>
+         <congMember bioGuideId="K000399" chamber="H" congress="118" party="R" role="COMMMEMBER" state="VA">
+                                    
+              <name type="parsed">JENNIFER A. KIGGANS of Virginia</name>
+                                    
+              <name type="authority-fnf">Jennifer A. Kiggans</name>
+                                    
+              <name type="authority-lnf">Kiggans, Jennifer A.</name>
+                                    
+              <name type="authority-other">Jennifer Kiggans</name>
+                                
+        </congMember>
+         <congMember bioGuideId="L000593" chamber="H" congress="118" party="D" role="COMMMEMBER" state="CA">
+                                    
+              <name type="parsed">MIKE LEVIN of California</name>
+                                    
+              <name type="authority-fnf">Mike Levin</name>
+                                    
+              <name type="authority-lnf">Levin, Mike</name>
+                                
+        </congMember>
+         <congMember bioGuideId="L000601" chamber="H" congress="118" party="D" role="COMMMEMBER" state="OH">
+                                    
+              <name type="parsed">GREG LANDSMAN of Ohio</name>
+                                    
+              <name type="authority-fnf">Greg Landsman</name>
+                                    
+              <name type="authority-lnf">Landsman, Greg</name>
+                                
+        </congMember>
+         <congMember bioGuideId="L000603" chamber="H" congress="118" party="R" role="COMMMEMBER" state="TX">
+                                    
+              <name type="parsed">MORGAN LUTTRELL of Texas</name>
+                                    
+              <name type="authority-fnf">Morgan Luttrell</name>
+                                    
+              <name type="authority-lnf">Luttrell, Morgan</name>
+                                
+        </congMember>
+         <congMember bioGuideId="M000194" chamber="H" congress="118" party="R" role="COMMMEMBER" state="SC">
+                                    
+              <name type="parsed">NANCY MACE of South Carolina</name>
+                                    
+              <name type="authority-fnf">Nancy Mace</name>
+                                    
+              <name type="authority-lnf">Mace, Nancy</name>
+                                
+        </congMember>
+         <congMember bioGuideId="M001210" chamber="H" congress="118" party="R" role="COMMMEMBER" state="NC">
+                                    
+              <name type="parsed">GREGORY F. MURPHY of North Carolina</name>
+                                    
+              <name type="authority-fnf">Gregory F. Murphy</name>
+                                    
+              <name type="authority-lnf">Murphy, Gregory F.</name>
+                                    
+              <name type="authority-other">Gregory Murphy</name>
+                                
+        </congMember>
+         <congMember bioGuideId="M001214" chamber="H" congress="118" party="D" role="COMMMEMBER" state="IN">
+                                    
+              <name type="parsed">FRANK J. MRVAN of Indiana</name>
+                                    
+              <name type="authority-fnf">Frank J. Mrvan</name>
+                                    
+              <name type="authority-lnf">Mrvan, Frank J.</name>
+                                    
+              <name type="authority-other">Frank Mrvan</name>
+                                
+        </congMember>
+         <congMember bioGuideId="M001215" chamber="H" congress="118" party="R" role="COMMMEMBER" state="IA">
+                                    
+              <name type="parsed">MARIANNETTE MILLER-MEEKS of Iowa</name>
+                                    
+              <name type="authority-fnf">Mariannette Miller-Meeks</name>
+                                    
+              <name type="authority-lnf">Miller-Meeks, Mariannette</name>
+                                
+        </congMember>
+         <congMember bioGuideId="M001220" chamber="H" congress="118" party="D" role="COMMMEMBER" state="KY">
+                                    
+              <name type="parsed">MORGAN MCGARVEY of Kentucky</name>
+                                    
+              <name type="authority-fnf">Morgan McGarvey</name>
+                                    
+              <name type="authority-lnf">McGarvey, Morgan</name>
+                                
+        </congMember>
+         <congMember bioGuideId="P000614" chamber="H" congress="118" party="D" role="COMMMEMBER" state="NH">
+                                    
+              <name type="parsed">CHRIS PAPPAS of New Hampshire</name>
+                                    
+              <name type="authority-fnf">Chris Pappas</name>
+                                    
+              <name type="authority-lnf">Pappas, Chris</name>
+                                
+        </congMember>
+         <congMember bioGuideId="R000617" chamber="H" congress="118" party="D" role="COMMMEMBER" state="IL">
+                                    
+              <name type="parsed">DELIA C. RAMIREZ of Illinois</name>
+                                    
+              <name type="authority-fnf">Delia C. Ramirez</name>
+                                    
+              <name type="authority-lnf">Ramirez, Delia C.</name>
+                                    
+              <name type="authority-other">Delia Ramirez</name>
+                                
+        </congMember>
+         <congMember bioGuideId="S001224" chamber="H" congress="118" party="R" role="COMMMEMBER" state="TX">
+                                    
+              <name type="parsed">KEITH SELF of Texas</name>
+                                    
+              <name type="authority-fnf">Keith Self</name>
+                                    
+              <name type="authority-lnf">Self, Keith</name>
+                                
+        </congMember>
+         <congMember bioGuideId="T000472" chamber="H" congress="118" party="D" role="COMMMEMBER" state="CA">
+                                    
+              <name type="parsed">MARK TAKANO of California</name>
+                                    
+              <name type="authority-fnf">Mark Takano</name>
+                                    
+              <name type="authority-lnf">Takano, Mark</name>
+                                
+        </congMember>
+         <law congress="110" isPrivate="false" number="315"></law>
+         <law congress="115" isPrivate="false" number="48"></law>
+         <law congress="116" isPrivate="false" number="315"></law>
+         <law congress="117" isPrivate="false" number="333"></law>
+         <USCode title="38">
+                                    
+              <section detail="(e)(2)(B)(iv)(I)" number="3313"></section>
+                                    
+              <section detail="(a)(4)(B)(iii)(II)" number="3680A"></section>
+                                    
+              <section detail="(b)" number="3685"></section>
+                                    
+              <section number="5302"></section>
+                                
+        </USCode>
+         <bill congress="118" context="COVER" number="226" type="HR"></bill>
+         <bill congress="118" context="BODY" number="226" type="HR"></bill>
+         <bill congress="118" context="BODY" number="2642" type="HR"></bill>
+         <bill congress="118" context="BODY" number="3728" type="S"></bill>
+         <bill congress="118" context="COVER" number="7543" type="HR"></bill>
+         <bill congress="118" context="BODY" number="7543" type="HR"></bill>
+         <bill congress="118" context="COVER" number="7896" type="HR"></bill>
+         <bill congress="118" context="BODY" number="7896" type="HR"></bill>
+         <bill congress="118" context="BODY" number="7898" type="HR"></bill>
+         <bill congress="118" context="COVER" number="7920" type="HR"></bill>
+         <bill congress="118" context="BODY" number="7920" type="HR"></bill>
+         <bill congress="118" context="BODY" number="7986" type="HR"></bill>
+         <bill congress="118" context="COVER" number="8514" type="HR"></bill>
+         <bill congress="118" context="BODY" number="8514" type="HR"></bill>
+         <bill congress="118" context="COVER" number="8529" type="HR"></bill>
+         <bill congress="118" context="BODY" number="8529" type="HR"></bill>
+         <bill congress="118" context="COVER" number="8560" type="HR"></bill>
+         <bill congress="118" context="BODY" number="8560" type="HR"></bill>
+         <bill congress="118" context="BODY" number="8592" type="HR"></bill>
+         <bill congress="118" context="COVER" number="8607" type="HR"></bill>
+         <bill congress="118" context="BODY" number="8607" type="HR"></bill>
+         <bill congress="118" context="COVER" number="8627" type="HR"></bill>
+         <bill congress="118" context="BODY" number="8627" type="HR"></bill>
+         <bill congress="118" context="COVER" number="8646" type="HR"></bill>
+         <bill congress="118" context="BODY" number="8646" type="HR"></bill>
+         <bill congress="118" context="COVER" number="8647" type="HR"></bill>
+         <bill congress="118" context="BODY" number="8647" type="HR"></bill>
+         <bill congress="118" context="COVER" number="8661" type="HR"></bill>
+         <bill congress="118" context="BODY" number="8661" type="HR"></bill>
+         <isNomination>false</isNomination>
+         <isErrata>false</isErrata>
+    </extension>
+    <name type="corporate">
+         <namePart>United States</namePart>
+         <namePart>Congress</namePart>
+         <namePart>House of Representatives</namePart>
+         <namePart>Committee on Veterans&apos; Affairs</namePart>
+         <role>
+              <roleTerm authority="marcrelator" type="text">associated name</roleTerm>
+              <roleTerm authority="marcrelator" type="code">asn</roleTerm>
+        </role>
+         <description>Government Organization</description>
+    </name>
+    <name type="personal">
+         <namePart>Julia Brownley</namePart>
+         <affiliation>United States House of Representatives</affiliation>
+         <role>
+              <roleTerm type="text">committee member</roleTerm>
+        </role>
+         <description>United States Congressional Member</description>
+    </name>
+    <name type="personal">
+         <namePart>Mike Bost</namePart>
+         <affiliation>United States House of Representatives</affiliation>
+         <role>
+              <roleTerm type="text">committee member</roleTerm>
+        </role>
+         <description>United States Congressional Member</description>
+    </name>
+    <name type="personal">
+         <namePart>Jack Bergman</namePart>
+         <affiliation>United States House of Representatives</affiliation>
+         <role>
+              <roleTerm type="text">committee member</roleTerm>
+        </role>
+         <description>United States Congressional Member</description>
+    </name>
+    <name type="personal">
+         <namePart>Nikki Budzinski</namePart>
+         <affiliation>United States House of Representatives</affiliation>
+         <role>
+              <roleTerm type="text">committee member</roleTerm>
+        </role>
+         <description>United States Congressional Member</description>
+    </name>
+    <name type="personal">
+         <namePart>Elijah Crane</namePart>
+         <affiliation>United States House of Representatives</affiliation>
+         <role>
+              <roleTerm type="text">committee member</roleTerm>
+        </role>
+         <description>United States Congressional Member</description>
+    </name>
+    <name type="personal">
+         <namePart>Juan Ciscomani</namePart>
+         <affiliation>United States House of Representatives</affiliation>
+         <role>
+              <roleTerm type="text">committee member</roleTerm>
+        </role>
+         <description>United States Congressional Member</description>
+    </name>
+    <name type="personal">
+         <namePart>Jennifer A. Kiggans</namePart>
+         <affiliation>United States House of Representatives</affiliation>
+         <role>
+              <roleTerm type="text">committee member</roleTerm>
+        </role>
+         <description>United States Congressional Member</description>
+    </name>
+    <name type="personal">
+         <namePart>Mike Levin</namePart>
+         <affiliation>United States House of Representatives</affiliation>
+         <role>
+              <roleTerm type="text">committee member</roleTerm>
+        </role>
+         <description>United States Congressional Member</description>
+    </name>
+    <name type="personal">
+         <namePart>Greg Landsman</namePart>
+         <affiliation>United States House of Representatives</affiliation>
+         <role>
+              <roleTerm type="text">committee member</roleTerm>
+        </role>
+         <description>United States Congressional Member</description>
+    </name>
+    <name type="personal">
+         <namePart>Morgan Luttrell</namePart>
+         <affiliation>United States House of Representatives</affiliation>
+         <role>
+              <roleTerm type="text">committee member</roleTerm>
+        </role>
+         <description>United States Congressional Member</description>
+    </name>
+    <name type="personal">
+         <namePart>Nancy Mace</namePart>
+         <affiliation>United States House of Representatives</affiliation>
+         <role>
+              <roleTerm type="text">committee member</roleTerm>
+        </role>
+         <description>United States Congressional Member</description>
+    </name>
+    <name type="personal">
+         <namePart>Gregory F. Murphy</namePart>
+         <affiliation>United States House of Representatives</affiliation>
+         <role>
+              <roleTerm type="text">committee member</roleTerm>
+        </role>
+         <description>United States Congressional Member</description>
+    </name>
+    <name type="personal">
+         <namePart>Frank J. Mrvan</namePart>
+         <affiliation>United States House of Representatives</affiliation>
+         <role>
+              <roleTerm type="text">committee member</roleTerm>
+        </role>
+         <description>United States Congressional Member</description>
+    </name>
+    <name type="personal">
+         <namePart>Mariannette Miller-Meeks</namePart>
+         <affiliation>United States House of Representatives</affiliation>
+         <role>
+              <roleTerm type="text">committee member</roleTerm>
+        </role>
+         <description>United States Congressional Member</description>
+    </name>
+    <name type="personal">
+         <namePart>Morgan McGarvey</namePart>
+         <affiliation>United States House of Representatives</affiliation>
+         <role>
+              <roleTerm type="text">committee member</roleTerm>
+        </role>
+         <description>United States Congressional Member</description>
+    </name>
+    <name type="personal">
+         <namePart>Chris Pappas</namePart>
+         <affiliation>United States House of Representatives</affiliation>
+         <role>
+              <roleTerm type="text">committee member</roleTerm>
+        </role>
+         <description>United States Congressional Member</description>
+    </name>
+    <name type="personal">
+         <namePart>Delia C. Ramirez</namePart>
+         <affiliation>United States House of Representatives</affiliation>
+         <role>
+              <roleTerm type="text">committee member</roleTerm>
+        </role>
+         <description>United States Congressional Member</description>
+    </name>
+    <name type="personal">
+         <namePart>Keith Self</namePart>
+         <affiliation>United States House of Representatives</affiliation>
+         <role>
+              <roleTerm type="text">committee member</roleTerm>
+        </role>
+         <description>United States Congressional Member</description>
+    </name>
+    <name type="personal">
+         <namePart>Mark Takano</namePart>
+         <affiliation>United States House of Representatives</affiliation>
+         <role>
+              <roleTerm type="text">committee member</roleTerm>
+        </role>
+         <description>United States Congressional Member</description>
+    </name>
+    <name type="personal">
+         <namePart>Mr. John Bell, Executive Director, Loan Guaranty Service, U.S. Department of Veterans Affairs</namePart>
+         <role>
+              <roleTerm authority="marcrelator" type="text">witness</roleTerm>
+              <roleTerm authority="marcrelator" type="code">wit</roleTerm>
+        </role>
+         <description>Hearing Witness</description>
+    </name>
+    <name type="personal">
+         <namePart>Accompanied by: Mr. Joseph Garcia, Executive Director, Education Service, U.S. Department of Veterans Affairs Mr. James Ruhlman, Deputy Director, Education Service, U.S. Department of Veterans Affairs Ms. Jill Albanese, Director, Clinical Operations/Senior Advisor, Veterans Health Administration, U.S. Department of Veterans Affairs Dr. Jan Del Signore, President, National Association of Veterans Program Administrators</namePart>
+         <role>
+              <roleTerm authority="marcrelator" type="text">witness</roleTerm>
+              <roleTerm authority="marcrelator" type="code">wit</roleTerm>
+        </role>
+         <description>Hearing Witness</description>
+    </name>
+    <name type="personal">
+         <namePart>Mr. Kevin O&apos;Neil, Senior Employment and Education Policy Associate, The American Legion</namePart>
+         <role>
+              <roleTerm authority="marcrelator" type="text">witness</roleTerm>
+              <roleTerm authority="marcrelator" type="code">wit</roleTerm>
+        </role>
+         <description>Hearing Witness</description>
+    </name>
+    <name type="personal">
+         <namePart>Ms. Karen Kreutziger Powell, Chief Executive Officer of Flat Home Loans, Mortgage Bankers Association</namePart>
+         <role>
+              <roleTerm authority="marcrelator" type="text">witness</roleTerm>
+              <roleTerm authority="marcrelator" type="code">wit</roleTerm>
+        </role>
+         <description>Hearing Witness</description>
+    </name>
+    <name type="personal">
+         <namePart>Mr. Marquis Barefield, Assistant National Legislative Director, Disabled American Veterans</namePart>
+         <role>
+              <roleTerm authority="marcrelator" type="text">witness</roleTerm>
+              <roleTerm authority="marcrelator" type="code">wit</roleTerm>
+        </role>
+         <description>Hearing Witness</description>
+    </name>
+    <name type="personal">
+         <namePart>Mr. Richard Brookshire, Chief Executive Officer, Black Veterans Project</namePart>
+         <role>
+              <roleTerm authority="marcrelator" type="text">witness</roleTerm>
+              <roleTerm authority="marcrelator" type="code">wit</roleTerm>
+        </role>
+         <description>Hearing Witness</description>
+    </name>
+</mods>

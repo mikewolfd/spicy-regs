@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  BILLSTATUS-118hr801.xml, a bounded excerpt.
+  Source: https://www.govinfo.gov/bulkdata/BILLSTATUS/118/hr/BILLSTATUS-118-hr.zip
+  retained as blobs/8e7ca7dab50a7b9b977f021ec1b3231f8fedf82c33494553857b892fadfdba98 in
+  ~/Work/corpora/supply-2026-09-02/receipts/cbo-routes-2026-09-20/ (2026-09-20).
+  Whole record: 21021 bytes, sha256 46587fb207601d8e07d10e905404c4d4572b66d564f2e6608224f54c7ae60031.
+  Kept: the identity block parse_bill_status validates, <committeeReports>
+  and <cboCostEstimates>, each element whole and verbatim. Dropped:
+  actions, summaries, subjects, titles, sponsors, cosponsors, textVersions,
+  relatedBills, committees, laws, notes and amendments; none of which
+  this table reads.
+  One estimate, one House report: the ordinary shape, and the bill whose
+  report (CRPT-118hrpt53) carries the cover recital and the reprinted letter.
+-->
+<billStatus>
+  <version>3.0.0</version>
+  <bill>
+    <number>801</number>
+    <updateDate>2025-05-27T14:14:35Z</updateDate>
+    <updateDateIncludingText>2025-05-27T14:14:35Z</updateDateIncludingText>
+    <originChamber>House</originChamber>
+    <type>HR</type>
+    <introducedDate>2023-02-02</introducedDate>
+    <congress>118</congress>
+    <committeeReports>
+      <committeeReport>
+        <citation>H. Rept. 118-53</citation>
+      </committeeReport>
+    </committeeReports>
+    <cboCostEstimates>
+      <item>
+        <pubDate>2023-05-05T16:34:00Z</pubDate>
+        <title>H.R. 801, Securing the Border for Public Health Act of 2023</title>
+        <url>https://www.cbo.gov/publication/59139</url>
+        <description>As ordered reported by the House Committee on Energy and Commerce on March 24, 2023</description>
+      </item>
+    </cboCostEstimates>
+    <title>Securing the Border for Public Health Act of 2023</title>
+  </bill>
+</billStatus>

@@ -6,9 +6,9 @@
 
 One row per House executive communication, as the Congress.gov house-communication list and detail routes state it, keyed on the publisher's own address. The regulatory bridge: `is_rulemaking`, the cited `legal_authority`, the committee referral, the matching House requirement and the RIN read from `report_nature`, which joins `federal_register.rin`. All columns are stored as VARCHAR.
 
-**Coverage.** Sampled, and accumulating. Measured on one cold-start run (receipt `d1-measured-run-2026-09-19/`): the whole `house-communication/119` walk declared 4,975 and served 4,975 over 20 pages, 12 of them repeats across a page boundary, so 4,963 distinct rows were published; 1,000 details were read under the per-run cap and 3,963 rows were published list-only, at 1,020 keyed requests in 479 seconds. Each run walks the whole list for the Congresses in scope and reads the detail of every communication the table does not yet hold, newest `updateDate` first, at most 1,000 a run; the index is complete after the first run. How many runs the details take to converge is deliberately not stated: dividing the 3,963 outstanding by the 1,000 cap would assume the publisher adds nothing and that no held row's stamp moves to force a re-read, and one cold-start run measures neither. **The skip is design, not measurement**: D1 was a cold start, so nothing was held and nothing was skipped, and the saving described here has not been observed yet — the second run is what measures it. *(measured 2026-09-19)*
+**Coverage.** Sampled, accumulating. The adoption run used 30 keyed requests: 20 list pages and 10 details under the declared detail cap. The list declared and served 4,975 records, with 9 repeats and 4,966 distinct identities; merging its own 4,963-row prior retained 4,969 rows. All 4,969 now state the publisher source_route, 1,010 have details and 3,959 remain list-only. No Record backfill request was made and every Record evidence column remains NULL. Receipt: `rollups-0-24-0-adoption-2026-09-20/`. Local output only; not uploaded. *(measured 2026-09-20)*
 
-**Data quality.** A row whose `committees_json` is NULL is list-only: its detail has not been read yet (not reached under the cap, or refused), and every detail-only column is NULL with it, including the three RIN columns, because the rule was not run. A row whose detail was read states `[]` where the detail lists none. The RIN is an interpretation: `rin_rule` names the rule that fired (`report_nature_rin_label`) or `unmatched`, and `rin_matched_text` is the exact text, so a false positive is readable from the row. The publisher repeats a record across a page boundary (15 of 4,975 on the 119th); the table holds each identity once.
+**Data quality.** A row whose `committees_json` is NULL is list-only: its detail has not been read yet (not reached under the cap, or refused), and every detail-only column is NULL with it, including the three RIN columns, because the rule was not run. A row whose detail was read states `[]` where the detail lists none. The RIN is an interpretation: `rin_rule` names the rule that fired (`report_nature_rin_label`) or `unmatched`, and `rin_matched_text` is the exact text, so a false positive is readable from the row. The publisher repeats a record across a page boundary (15 of 4,975 on the 119th); the table holds each identity once. Every existing publisher row receives source_route=congress-gov-detail. The four Record evidence columns remain NULL until the separate Record backfill, about 11,000 GovInfo requests, is acquired in the next rollup. In that future reconstruction submitting_official and submitting_agency must both remain NULL: held-out precision was 85.3% and 88.4%, below the declared 90% gate. The original sentence stays in record_entry_text.
 
 - **Parquet file:** `house_communications.parquet`
 - **Queryable via MCP `query_sql`:** Yes
@@ -22,23 +22,28 @@ One row per House executive communication, as the Congress.gov house-communicati
 | `number` | `VARCHAR` | The communication's number within its Congress and type. |
 | `chamber` | `VARCHAR` | The chamber, as the publisher spells it. |
 | `session` | `VARCHAR` | The session of Congress the communication was received in. |
-| `abstract` | `VARCHAR` | The publisher's abstract: the Record's own description of the communication. |
+| `abstract` | `VARCHAR` | The publisher's abstract: the Record's own description of the communication. On a `congressional-record-granule` row it is the printed entry under the four normalizations the publisher's own abstract applies, which `record_entry_text` keeps unapplied. |
 | `report_nature` | `VARCHAR` | The nature of the report transmitted, where the detail states one; where the RIN is read from. |
 | `legal_authority` | `VARCHAR` | The statutory authority the communication cites, where the detail states one; a Congressional Review Act rule submission cites 5 U.S.C. 801(a)(1)(A). |
 | `submitting_agency` | `VARCHAR` | The agency that submitted the communication, where the detail states one. |
 | `submitting_official` | `VARCHAR` | The official who submitted it, where the detail states one. |
 | `congressional_record_date` | `VARCHAR` | The date the communication appeared in the Congressional Record. |
 | `is_rulemaking` | `VARCHAR` | Whether the publisher flags the communication as a rulemaking: the publisher's `True`/`False` strings folded onto the one published truth spelling; any other spelling refuses. |
-| `referral_system_code` | `VARCHAR` | System code of the first committee the communication was referred to. |
-| `referral_committee_name` | `VARCHAR` | That committee's name as the publisher spells it. |
+| `referral_system_code` | `VARCHAR` | System code of the first committee the communication was referred to. NULL on a `congressional-record-granule` row: the Record prints a name, and the resolver from a name to a `committees.system_code` is not built. |
+| `referral_committee_name` | `VARCHAR` | That committee's name as the publisher spells it; on a `congressional-record-granule` row, as the Record printed it, which is the committee's name on the day and agrees with Congress.gov's current spelling on 71.5% of held-out rows. Resolve identity through `referral_system_code`, never through this. |
 | `referral_date` | `VARCHAR` | The date of that referral. |
 | `referral_count` | `VARCHAR` | How many committees the detail lists; every one is in committees_json. |
-| `committees_json` | `VARCHAR` | Every committee referral the detail lists, as a JSON array of the publisher's objects. NULL where no detail was read. |
+| `committees_json` | `VARCHAR` | Every committee referral the detail lists, as a JSON array of the publisher's objects. NULL where no detail was read. On a `congressional-record-granule` row, one `{name}` object per committee the printed referral tail names, in printed order. |
 | `matching_requirement_number` | `VARCHAR` | Number of the first House reporting requirement the communication matches. |
 | `matching_requirement_count` | `VARCHAR` | How many requirements the detail lists; every one is in matching_requirements_json. |
 | `matching_requirements_json` | `VARCHAR` | Every matching requirement the detail lists, as a JSON array of numbers. NULL where no detail was read. |
 | `rin` | `VARCHAR` | The Regulation Identifier Number read from report_nature, where the rule found one. |
 | `rin_rule` | `VARCHAR` | Which RIN rule fired (`report_nature_rin_label`), or `unmatched`; NULL where the rule was not run. |
 | `rin_matched_text` | `VARCHAR` | The exact text the RIN rule matched, so a false positive is readable from the row. |
-| `update_date` | `VARCHAR` | The publisher's updateDate; the merge prefers the larger value. |
-| `url` | `VARCHAR` | The publisher's own URL for this communication, which only the list row states. |
+| `update_date` | `VARCHAR` | The publisher's updateDate; the merge prefers the larger value, except across source_route, where a `congress-gov-detail` row always wins. |
+| `url` | `VARCHAR` | The publisher's own URL for this communication, which only the list row states. NULL on a `congressional-record-granule` row: the detail route 404s for every pre-114th communication. |
+| `source_route` | `VARCHAR` | What produced this row: `congress-gov-detail` where the publisher decomposed the communication itself, `congressional-record-granule` where it was reconstructed from the printed entry. |
+| `record_package_id` | `VARCHAR` | The CREC package whose issue printed the entry (`CREC-{congressional_record_date}`); NULL on a publisher-decomposed row. |
+| `record_granule_id` | `VARCHAR` | The `EXECUTIVE COMMUNICATIONS, ETC.` granule within that package, so the row is replayable the way `committee_reports` replays from `package_id`; NULL on a publisher-decomposed row. |
+| `record_entry_text` | `VARCHAR` | The sentence the Record printed, GPO's own wording with none of the publisher's normalizations applied, kept beside the derived fields the way `rin_matched_text` is kept beside `rin`, so a bad parse is readable from the row; NULL on a publisher-decomposed row. |
+| `reconstruction_rule_version` | `VARCHAR` | The `record-communication-` rule identity that produced the derived fields (`RECORD_COMMUNICATION_RULE_VERSION`); NULL on a publisher-decomposed row. |

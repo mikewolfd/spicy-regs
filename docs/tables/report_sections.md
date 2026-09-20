@@ -6,7 +6,7 @@
 
 One row per agency block parsed out of one committee report's text. `pattern` records which header pattern fired, which is this table's provenance column. All columns are stored as VARCHAR.
 
-**Coverage.** Window, advancing. Measured on one cold-start run (receipt `d1-measured-run-2026-09-19/`): 1,246 agency blocks parsed out of the 105 reports that run published, an average of 12 a report. The blocks come from the reports in `committee_reports`, so this inherits that table's watermark, cap and rendition. `page_start` and `page_end` are NULL wherever the rendition read stated no page boundary, which is every HTML body — and every body read in the measured run was HTML, so every row it published has both NULL. *(measured 2026-09-19)*
+**Coverage.** Sampled. The adoption run re-read 30 reports and shaped 290 agency blocks; the merge retained 1,246 rows from this rollup's own prior and fresh output. The shared committee-reports pass used 144 requests, 101 keyed. HTML states no page boundaries, so these fresh blocks have NULL page_start and page_end. Receipt: `rollups-0-24-0-adoption-2026-09-20/`. Local output only; not uploaded. *(measured 2026-09-20)*
 
 - **Parquet file:** `report_sections.parquet`
 - **Queryable via MCP `query_sql`:** Yes

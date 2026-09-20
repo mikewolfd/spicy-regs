@@ -7,6 +7,13 @@ import pytest
 import spicy_regs.sources.r2 as r2
 
 
+def test_retry_checkpoint_can_clear_without_disabling_dataset_shrink_guards():
+    r2._assert_upload_safe(100, 100_000, "failed_keys.parquet")
+    for key in ("manifest.parquet", "dockets.parquet", "comments_index.parquet"):
+        with pytest.raises(RuntimeError, match="shrink"):
+            r2._assert_upload_safe(100, 100_000, key)
+
+
 def test_download_delegates(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list = []
     monkeypatch.setattr(r2, "download_from_r2", lambda key, path: calls.append((key, path)) or True)

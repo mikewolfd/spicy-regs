@@ -4,11 +4,11 @@
 
 **Hearing transcripts**
 
-One row per captured GovInfo hearing transcript package. `bill_id` is read the same way as on `committee_reports` and is NULL in practice. All columns are stored as VARCHAR.
+One row per captured GovInfo hearing transcript. bill_id is always NULL: a hearing can concern several bills, represented in hearing_bill_links. All columns are stored as VARCHAR.
 
-**Coverage.** Window, advancing, and the narrowest table here in practice. Measured on one cold-start run (receipt `d1-measured-run-2026-09-19/`): the CHRG leg reached its 200-package cap and published 13 rows, because 187 of the 200 packages the `collections/CHRG` route served in the window are SERIALSET package ids the body grammar does not accept. The cap is therefore spent almost entirely on packages that cannot become rows, and the window advances slowly for that reason rather than because few hearings are published. GovInfo CHRG packages on the same last-modified watermark and per-run cap as `committee_reports`, read in the same rendition order — XML, HTML, text, then PDF — and, like committee reports, offering only HTML and PDF in practice. `page_count` is NULL for the same reason: no GovInfo body states a page boundary, so only the PDF fallback has one. *(measured 2026-09-19)*
+**Coverage.** Sampled. The adoption run re-read all 13 prior hearings under the 30-body CHRG cap, retaining 13 rows. Two details named a meeting and 11 named none; none refused. The shared committee-reports pass used 144 requests, 101 keyed. Unsupported IDs are filtered through the provider grammar before the body cap. Receipt: `rollups-0-24-0-adoption-2026-09-20/`. Local output only; not uploaded. *(measured 2026-09-20)*
 
-**Data quality.** `bill_id` is filled from the package's MODS `PRIMARY` bill, exactly as on `committee_reports`, but a hearing does not accompany a measure the way a report does: measured 2026-09-19 over 50 distinct hearings of the 119th Congress, no CHRG MODS carried a `PRIMARY` bill at all. Ten carried `BODY` or `COVER` mentions — bills the transcript cites, 31 entries in all — and those are not promoted to a linkage, because publishing a cited bill as the hearing's subject would be a guess stated as a fact. Of the twelve hearings whose Congress.gov detail named a committee meeting, none of those meetings listed a related bill either. So expect this column to be NULL. The measurement is retained with every request and raw response under `~/Work/corpora/supply-2026-09-02/receipts/report-bill-linkage-2026-09-19/`. `event_id` is read from the Congress.gov hearing detail (`hearing/{congress}/{chamber}/{jacket}`, one keyed request per CHRG package fetched in the run) and joins `committee_meetings.event_id`. It is NULL in three cases the run log counts apart: the detail names no meeting (jacket 63127, retained), the detail was refused (a jacket Congress.gov does not hold, or a transport failure), or the row was published before this column was read -- only a package fetched in the run is asked about, so a row from an earlier run keeps its NULL until the package is modified and re-fetched.
+**Data quality.** Cover bills come from the package's MODS and cost no extra requests. BODY mentions do not become hearing links. event_id comes from a verified Congress.gov hearing detail; NULL can mean no meeting or a refused detail. committee_report_reads distinguishes a completed read from a refused one.
 
 - **Parquet file:** `hearing_transcripts.parquet`
 - **Queryable via MCP `query_sql`:** Yes
@@ -24,7 +24,7 @@ One row per captured GovInfo hearing transcript package. `bill_id` is read the s
 | `title` | `VARCHAR` | The package title as the keyed summary states it. |
 | `date_issued` | `VARCHAR` | The date the package was issued. |
 | `last_modified` | `VARCHAR` | When the publisher last modified the package; the merge prefers the larger value. |
-| `bill_id` | `VARCHAR` | The bill this package concerns, where a linkage exists; nullable by design (C11). |
+| `bill_id` | `VARCHAR` | Always NULL here, and NULL for a stated reason: a legislative hearing is held on a *list* of bills -- twelve of them on CHRG-118hhrg56198 -- so a scalar column would have to pick one of twelve.  The relationship is one-to-many and `hearing_bill_links` hosts it, one row per hearing, bill and source, the way `event_id` names `committee_meetings`.  The column stays because this table shares its shape with `committee_reports`, where a report *is* filed against one bill. |
 | `format` | `VARCHAR` | Which rendition was read (htm, xml, txt, pdf). |
 | `media_type` | `VARCHAR` | The response media type, proved against the format before the body was accepted. |
 | `requested_url` | `VARCHAR` | The URL the body fetch asked for. |

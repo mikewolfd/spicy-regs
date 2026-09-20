@@ -206,6 +206,8 @@ jobs:
           echo "Running: uv run run-pipeline ${ARGS[*]}"
           uv run run-pipeline "${ARGS[@]}"
 
+      # Successful passes publish failed_keys.parquet to R2 before the manifest,
+      # even with zero new rows. Fresh runners restore that retry state directly.
       - name: Upload artifacts (for debugging)
         if: failure()
         uses: actions/upload-artifact@v4

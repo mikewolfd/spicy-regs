@@ -1513,101 +1513,138 @@ adapter tests moved upstream with the adapter. Not pushed — local commits on
 prose and one coverage gap, no code defect); this extension answers all four
 findings and supersedes the code two of them were about.
 
-**2026-09-20, branch `adopt-spicy-docs-0.23.0` (worktree
-`.claude/worktrees/adopt-0-23-0`, from `billtrax-hosting-prep` at `2d13f81`).**
-SpicyDocs 0.23.0 is released and adopted, and the five contracts it adds are
-hosted by two new rollups. Vendored:
-`vendor/spicy_docs-0.23.0-py3-none-any.whl` (commit `73b10e5`, tag v0.23.0,
-sha256 `36d619a6…4f66`, 1,259,241 bytes, verified after the copy and recorded
-identically in `uv.lock`), 0.22.0 deleted, both `source-readers` pins and
-`[tool.uv.sources]` moved together. The resolve is one line — `Updated
-spicy-docs v0.22.0 -> v0.23.0` — with no refusal; the same
-`rulespec-artifacts==1.0.13` and DeltaTrack pins hold. **Sixty-four tables are
-now hosted**; the public surface went from 59 to 64.
+**2026-09-20, 0.23.0 adoption precedent** (`adopt-spicy-docs-0.23.0`,
+from `billtrax-hosting-prep` at `2d13f81`). Vendored `73b10e5` / v0.23.0,
+1,259,241 bytes, SHA-256 `36d619a6…4f66`; both pins, uv source and lock moved
+as one change. Independent wheel and registry dumps proved 32 unchanged
+contracts plus five new ones: 37 contracts, 766 columns, 64 hosted tables.
+The procedure for the next adoption is the same: verify release bytes, compare
+both registries independently, explicitly account for every contract, import
+the package's shapes, assign one owner per acquisition pass, declare caps
+before measuring, retain request ledgers and rows, and update coverage from
+the resulting artifacts. Use the frozen project runner for every check and
+generate twice to prove idempotence; local completion does not imply a push.
 
-- [x] **What moved is a measurement, not a release note.** The wheels were
-  unzipped and diffed: three modules changed (`schemas/__init__.py`,
-  `sources/govinfo/bodies.py`, `sources/zyte.py`) and seven added — the four
-  `schemas/*_tables.py`, `interpretation/citations.py`,
-  `interpretation/bill_actions.py` and `transport/zyte.py`. `TABLE_CONTRACTS`
-  was then dumped from each wheel and compared field by field: the **thirty-two
-  contracts 0.22.0 shipped are identical**, all 617 columns, and five are new
-  over 149 columns, taking the registry to **37 over 766**. Checking the
-  dictionary against the contracts it is generated from would only have agreed
-  with itself; the dump is the independent half.
-- [x] **The unhosted set is a partition, and it gained a number.**
-  `UNHOSTED_CONTRACTS` named the five on adoption and is empty again now that
-  both rollups have landed, so the wheel's 37 are accounted for name by name.
-  `ADOPTED_CONTRACT_COUNT = 37` was added for the one case the partition
-  cannot see: adopting a wheel that adds a contract *and* adding it to
-  `CONTRACT_TABLES` in the same edit keeps the partition exact while hosting a
-  table nobody decided to host.
-- [x] **Two rollups, one per acquisition pass.** `print-citations` writes
-  `house_activity_reports`, `budget_volumes`, `bill_committee_actions` and
-  `document_citations` from one keyed GovInfo body fetch per package;
-  `senate-expenditures` writes its one table from granule PDFs under PyMuPDF
-  table detection, which costs 26.5–84.6 ms a page against 9.8 ms without.
-  `document_citations` is a shared link table with exactly one owner, the two
-  families told apart inside it by spicy-docs' own `document_kind` constants.
-  No column, identity, rule or classification is restated: the four shape
-  functions, `find_citations`, `find_bill_actions` and `document_provenance`
-  do all of it.
-- [x] **Enumeration is the whole issue-date window, every run**, on GovInfo's
-  `published` route — not `collections`, which spicy-docs measured serving
-  SERIALSET rows inside a BUDGET walk. Both families are small enough that the
-  walk costs a handful of list pages, and it buys what a last-modified
-  watermark cannot: a refused package is offered again next run rather than
-  being stepped past forever once some other package publishes. Only a package
-  already published at the same `last_modified` is skipped.
-- [x] **The measured run**, receipt
-  `~/Work/corpora/supply-2026-09-02/receipts/rollups-pdf-families-2026-09-20/`,
-  caps declared in `caps.json` before either run and neither widened. Worst
-  rolling hour across every run: **271 keyed**, against the shared 4,000 and
-  the 3,680 D1 measured; both crons sit in the 07:00–16:59 UTC block no other
-  rollup occupies. Published: 41 `house_activity_reports`, 23
-  `budget_volumes`, 12,700 `bill_committee_actions`, 49,792
-  `document_citations`, 3,272 `senate_expenditures`. Each rollup's resume run
-  **skipped its already-published work at zero body-fetch cost** — 40 packages
-  for `print-citations`, 4 for `senate-expenditures` — which measures the
-  incremental claim D1 could only record as design.
-- [x] **Review found one stall and one starvation, both fixed and both now
-  measured.** The Senate cap charged a package as soon as its granule list
-  answered, before the held-file check, so with five matched packages and a
-  cap of four every later run re-listed the four published ones, reached the
-  cap and broke before the fifth — `GPO-CDOC-118sdoc11` was unreachable by any
-  number of runs. A slot is now charged only when a file is actually read, and
-  the re-run under the **same** cap found four packages held at zero body
-  fetches and read the fifth: 649 rows, 10 keyed requests, **3,272 rows over
-  all five packages**. Separately, `print-citations` walked CRPT to exhaustion
-  and published an empty `budget_volumes` on a cold run; `_schedule`
-  round-robins the two collections into the one capped list, so neither family
-  is starved and the total fetched is unchanged. Both regressions are pinned
-  by tests that fail against the shipped code.
-- [x] **The run changed the code once, and the wrong run is retained.** The
-  first `print-citations` attempt used the acquirer's sealed
-  `BODY_PREFERENCE`, which puts HTML first: **10 of 41** activity reports
-  refused on HTML nesting depth and the 31 read published **0 page
-  attributions across 29,308 citation rows**, with `pages_read`,
-  `stated_page_count` and `pages_capped` NULL on every document row.
-  `PRINT_BODY_PREFERENCE` puts PDF first and keeps the sealed order behind it;
-  under it nothing refused and all 49,792 citation rows carry a page.
+The two new owners were print-citations and senate-expenditures. Their receipt,
+`rollups-pdf-families-2026-09-20/`, retains the initial HTML failure and the
+subsequent PDF-first and resume measurements. Final counts were 41 activity
+reports, 23 budget volumes, 12,700 actions, 49,792 citations and 3,272 Senate
+expenditures; worst observed keyed hour 271. Resume skipped held work, and
+tests pinned the Senate cap accounting and print-family interleaving fixes.
+The 17 BUDGET packages outside the six-part grammar were the next package
+request, resolved in 0.24.0 below. Checks: 1,683 tests, clean ruff and ty,
+64-table dictionary and idempotent generation. No push.
 
-**One finding for spicy-docs, and one correction to a published number.**
-Walking BUDGET from 2023-01-01 rather than the research's 2025-01-01 serves
-**17 real budget packages whose part is outside the sealed six** — `OBJCLASS`,
-`TAB`, `DB`, `CLIMATE`, `LRB`, `CROSSCUT`, `DOD`. The rollup refuses each by
-name and logs it, which is the designed behaviour, so `budget_volumes` covers
-six parts of thirteen and its data-quality note says so; widening the grammar
-is spicy-docs', because a package-id grammar is a published shape this
-repository does not restate. Separately, "the print states nothing its index
-does not" is very nearly right and not exactly right: over 41 activity reports
-rather than eight, 7 print-only bills of 7,686 distinct, 5 print-only laws of
-990 and 6 print-only Code sections.
+**2026-09-20, spicy-docs 0.24.0 adoption** (`adopt-spicy-docs-0.24.0`,
+this worktree, from `billtrax-hosting-prep`). Release `713c821` / v0.24.0:
+1,319,390 bytes, SHA-256
+`0a03ce34916cfedf4162356dd49e8dc4d95cb50e9dd280f4256c087d379f680a`, verified
+before and after vendoring. Both pins and the uv source moved; 0.23.0 was
+deleted and the lock refreshed. Independent registry dumps establish 39
+contracts over 813 columns: two new tables and appended columns on three.
+All 39 are registered, the unhosted set is empty, and 67 tables are described
+(the two additions plus this host's committee_report_reads checkpoint).
 
-1,683 source tests pass and `ruff check .` is clean. `ty check` is clean in
-this worktree, which is `uv sync --frozen` **without** `--all-extras` — the
-two known `vectordb/embed.py` diagnostics the 0.22.0 step recorded appear only
-with the `embed` extra installed, so this run did not see them and does not
-claim they are gone. `spicy-regs-dict check` (64 tables) then `generate`
-leaves `docs/tables` and `data_dictionary` untouched, twice in a row. Not
-pushed — local commits on `adopt-spicy-docs-0.23.0`, per instruction.
+- The package owns Mirrulations downloads, retries and access refusals. The
+  temporary host guard required a nonblank string data.id before staging or
+  manifesting a key. The 0.24.1 patch adopted below supplies that check for
+  every ingested type, so both ingestion paths now use the supplier directly;
+  unexpected objects remain unresolved with a named reason.
+  Unresolved keys retry first with attempts carried forward. failed_keys.parquet
+  restores from R2 and publishes before the manifest, including on zero-row
+  passes and when recovery clears the last failure. Only this retry checkpoint
+  is exempt from the data-size shrink guard. Legacy parse failures remain
+  eligible even if the old manifest incorrectly marked them processed.
+- Print selection and PDF preference now import the package rules. All thirteen
+  measured BUDGET parts reach acquisition; a root-format refusal is counted as
+  the publisher's answer and creates no volume or citation row.
+- Committee reports own hearing_bill_links and the thirteen CBO letter columns.
+  cover_links reads the MODS already fetched; read_cbo_estimate gates the letter
+  on the cover recital. The own-output checkpoint distinguishes completed empty
+  covers, pending work and failures, and queues old rows for enrichment once.
+  Successfully evaluated hearings replace their prior relationship rows,
+  including when the corrected cover has no links; unread or refused bodies
+  keep their prior links.
+- Bill family hosts build_bill_family's cbo_cost_estimates rows and the bill's
+  outcome, including requested-empty. Old rows without that outcome invalidate
+  the archive skip once. House communications retain the publisher source_route
+  on every existing row. No new rollup reads another rollup's output.
+  Successfully evaluated CBO lists replace each bill's prior estimate rows,
+  including absent or empty lists. Unexpected list shapes retain prior rows.
+  A credential refusal during printing acquisition aborts before any later
+  printing capture, as the report, print-citation and communication paths do.
+
+One measured run per changed rollup, with caps written first and never widened:
+
+| Rollup | Declared work cap | Requests, keyed / keyless | Final local rows |
+| --- | --- | --- | --- |
+| print-citations | 40 packages; 160 HTTP | 38 / 8 | 41 activity reports, 29 budgets, 12,700 actions, 49,935 citations |
+| committee-reports | 30 bodies per collection; 400 HTTP | 101 / 43 | 105 reports, 1,246 sections, 13 hearings, 0 links, 118 checkpoints |
+| bill-family | 118 HR/S; 4 printing captures; 40 HTTP | 8 / 8 | 16,213 bills, 1,431 CBO estimates; all 18 outputs in receipt |
+| house-communications | 119; 10 details; 60 HTTP | 30 / 0 | 4,969 communications, all publisher-route |
+
+The receipt is
+`/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/rollups-0-24-0-adoption-2026-09-20/`.
+It retains caps, request ledgers, logs, output digests, row counts and source
+pins. The combined worst observed hour was **177 keyed / 4,000**; unrelated
+unlogged activity is not measured. The dictionary carries measured_on=2026-09-20.
+The report pass evaluated 30 rows: four recitals, three letter spans, 26 absent
+recitals; 75 remain NULL and pending. Thirteen acquired hearings stated zero
+cover links; recall remains unmeasured. Bills state 1,368 populated and 14,845
+requested-empty:absent outcomes, with no NULL outcome in the measured scope.
+
+**Deferred and next:** agenda acquisition has cap zero because this pass lacks
+a verified meeting-to-jacket join and House repository locator; no guessed
+agenda URL is requested. Eleven budget roots offered no supported rendition
+(TAB, DB, CLIMATE and LRB have no root PDF); the package's budget shaper accepts
+package metadata, so granule acquisition is deferred. Seventy-five report
+reads remain pending under the unchanged cap. Model calls were zero and only
+four bill printings were acquired; the measured CBO index needs neither.
+The next acquisition rollup is the **House communication Record backfill**,
+about **11,000 GovInfo requests**, separately budgeted. Its official and agency
+split remains NULL: held-out precision 85.3% and 88.4% missed the declared 90%
+gate; the source sentence must remain beside the NULLs. The new dictionary
+pages preserve that limit, per-source link precision and the recital gate.
+
+Checks through the frozen runner: **1,718 passed, 3 deselected**, ruff and ty
+clean, dictionary check **67 tables**, generation idempotent twice. Local
+commits only; no push or upload. Credential audit over the branch diff and the
+receipt: **0 matches**, including decoded Parquet values.
+
+Review follow-up: all four findings fixed locally. Regression tests cover
+identity-free Mirrulations objects in both ingestion paths, printing credential
+refusals, unresolved history across fresh runners, and removal of corrected
+hearing/CBO relationships. Frozen-runner checks: **1,748 passed, 3 deselected**,
+ruff and ty clean, dictionary check **67 tables**, generation idempotent across
+69 artifacts. Credential grep over the new diff: **0 matches** for the current
+API_GOV value and credential patterns. No push or live acquisition run.
+
+**2026-09-20, spicy-docs 0.24.1 patch adoption.** The current pin replaces
+0.24.0 in both dependency lists and the uv source. The wheel is **1,321,932
+bytes**, SHA-256
+`ce25270b5328ccd4da4f51d2e241141531b4fb058313da38628c647f63531fa6`, verified
+before and after copying. Independent imports from both wheel archives prove
+all **39 contracts and 813 columns** identical, including column order,
+identities, version columns and descriptions. Registry dumps and comparison:
+`/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/spicy-docs-0-24-1-adoption-2026-09-20/`.
+
+| Ingested type | Host identity | Supplier 0.24.1 requirement | Local guard |
+| --- | --- | --- | --- |
+| dockets | Nonblank string `data.id` -> `docket_id` | Same; also rejects `errors` | Deleted |
+| documents | Nonblank string `data.id` -> `document_id` | Same; also rejects `errors` | Deleted |
+| comments | Nonblank string `data.id` -> `comment_id` | Same; also rejects `errors` | Deleted in standard and chunked ingest |
+
+No host-only identity requirement remains. The supplier's record definitions,
+the host's extractors and the removed guard agree for all three types.
+The regression suite retains the original empty-data, publisher-error,
+blank-ID and numeric-ID reproductions, expands them to every ingested type,
+and checks retry counts across two runs. Direct supplier-reader tests prove
+the identity mapping, raw-field preservation and scrubbed publisher reasons,
+including error bodies that also carry a valid ID.
+
+Checks through `uv run --frozen`: **1,801 passed, 3 deselected**; `ruff check .`
+and `ty check` clean; `spicy-regs-dict check` passes for **67 tables**;
+`spicy-regs-dict generate` leaves all **69 artifacts byte-identical**.
+Credential grep over the new binary diff: **0 matches** for the current
+API_GOV value and credential patterns; the unpacked new wheel also contains
+zero matches for that value. Local adoption only; no push or live acquisition.

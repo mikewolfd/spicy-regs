@@ -1,69 +1,7 @@
-"""Transform: the bill family — thirteen tables from one acquisition pass.
+"""Build the bill family through spicy-docs, retaining this rollup's own resume state.
 
-``spicy_docs.interpretation.bill_family.build_bill_family`` does the composing:
-given one bill's BILLSTATUS and its captured printings, it returns twelve row
-tuples (bills, actions, committees, publisher summaries, versions, sections,
-the three diff tables, the two model tables, diff summaries) plus the refusals.
-This transform acquires the input, folds the per-bill results, derives the
-thirteenth table (``public_activity_events``) by comparing the run against the
-previously published one, and merges each through the one shared helper. It
-re-derives no rule: every column is shaped in spicy-docs.
-
-A fourteenth output, ``bill_family_archives``, is not a table of the family: it
-is this rollup's own processing state, one row per BILLSTATUS folder holding
-the listing entry the next run compares against (see ``ARCHIVES_TABLE``).
-
-A fifteenth, ``bill_vote_references``, is the family's own statement of which
-roll calls each bill's actions record — the ``recordedVotes`` entries, read by
-``spicy_docs.interpretation.vote_matching.recorded_vote_references`` and
-published one row per reference (see ``VOTE_REFERENCES_TABLE``). It is
-emitted here because the BILLSTATUS document is already in hand, and read by
-the ``roll-call-votes`` rollup at merge time to fill ``roll_call_votes.bill_id``
-and its match columns: that rollup joins against a published ingest output,
-which the rollup contract allows, rather than re-acquiring every bill's status
-to reach the same six fields.
-
-**Acquisition, and why it is bounded.** Bills come from the BILLSTATUS bulk
-archive — one keyless zip per ``(congress, bill_type)``, so the whole scope
-costs eight requests, and a folder whose zip has not moved since the last run
-costs one small listing request instead of up to 32 MB of it. Printings are the
-expensive half: each is a GovInfo package (summary, MODS, body — three keyed
-requests), and a Congress has tens of thousands. A rollup publishes nothing
-until it finishes, so an unbounded first pass would time out and persist
-nothing, exactly the failure ``build_congress_bills`` documents.
-``MAX_VERSION_FETCHES`` bounds the printings; the status-derived tables still
-cover every bill in scope, and the coverage statement says which is which.
-
-**The pre-BILLSTATUS backfill.** BILLSTATUS bulk begins at the 108th Congress
-(``BULK_STATUS_FLOOR``); below it the same ``BILL_FAMILY_CONGRESSES`` input is
-filled from the API ``bill`` route instead — one page-walk per Congress over
-the same reader seam the ``congress-bills`` rollup uses (there is no second
-implementation of that walk), and one detail request per bill not already
-filled, under the same per-run cap, newest Congress first. It resumes from the
-two state tables this adds beside ``bill_family_archives``:
-``bill_family_backfills`` holds, per attempted bill, the list stamp it was
-attempted under and whether it was filled or refused (a filled row whose
-stamp still matches costs no request; a refused row is retried first, one
-request, without a walk), and ``bill_family_backfill_walks`` holds each
-``(congress, bill_type)``'s declared total against what a run actually
-walked, so a capped or refused walk never reads as an empty unit, and a unit
-walked complete with every record accounted for is not walked again. The
-detail record states a count for its actions, committees, titles, subjects,
-summaries and text-version sub-routes but not their items, so the backfilled
-``congress_bills`` row carries what the record actually states and NULLs the
-columns a derived zero or default would lie with; its NULL ``schema_version``
-is what marks the row as the detail route's rather than a BILLSTATUS
-document's.
-
-**The model seams.** ``classify`` and ``summarize`` are wired only when a
-Gemini key is in the environment; without one they are ``None`` and the three
-model tables come back empty, which is what a keyless CI run does. Nothing
-about a bill changes when they are off.
-
-**Refusals are counted.** A printing with no parsed document, a pair that
-cannot be diffed, a row whose identity has a null part — ``build_bill_family``
-returns each as a ``FamilyRefusal``, and this logs them by table. They are
-never dropped silently and never published as a row with invented values.
+BILLSTATUS supplies the CBO index and explicit per-bill outcomes. Optional
+body capture and model processing keep their separate declared caps.
 """
 
 from __future__ import annotations
@@ -340,7 +278,7 @@ _SNAPSHOT_ARG = {
 #: A prior row with this source is what 'already held' means.
 ACQUIRED_SOURCE = "govinfo"
 
-#: The twelve ``BillFamilyTables`` row tuples, by the contract each fills.
+#: Provider-owned shapes, including the CBO publication index.
 FAMILY_TABLES: tuple[tuple[str, str], ...] = (
     ("congress_bills", "bills"),
     ("bill_actions", "bill_actions"),
@@ -354,6 +292,7 @@ FAMILY_TABLES: tuple[tuple[str, str], ...] = (
     ("section_classifications", "section_classifications"),
     ("bill_summaries", "bill_summaries"),
     ("diff_summaries", "diff_summaries"),
+    ("cbo_cost_estimates", "cbo_cost_estimates"),
 )
 
 
@@ -547,6 +486,8 @@ def _version_captures(
             budget[0] -= 1
             try:
                 package = acquirer.acquire(package_id)
+            except CredentialRefusedError:
+                raise
             except Exception as error:  # noqa: BLE001 — one printing's refusal is not the bill's
                 logger.warning(
                     "Bill family: {} {} body refused: {}",
@@ -627,7 +568,7 @@ def _download_prior(output_dir: Path, download_prior: Callable[[str, Path], bool
     """Fetch each prior table this run reads before merging, to the path the merge reuses in place."""
     return {
         name: published_table(output_dir, name, download_prior)
-        for name in (*SNAPSHOT_TABLES, ARCHIVES_TABLE, BACKFILLS_TABLE, BACKFILL_WALKS_TABLE)
+        for name in (*SNAPSHOT_TABLES, "cbo_cost_estimates", ARCHIVES_TABLE, BACKFILLS_TABLE, BACKFILL_WALKS_TABLE)
     }
 
 
@@ -637,9 +578,11 @@ def _prior_index(paths: Mapping[str, Path | None]) -> PriorIndex:
 
     text_dates: dict[str, str | None] = {}
     bills_path = paths.get("congress_bills")
-    if bills_path is not None and _has_columns(bills_path, ("bill_id", "update_date_including_text")):
+    if (bills_path is not None and paths.get("cbo_cost_estimates") is not None
+            and _has_columns(bills_path, ("bill_id", "update_date_including_text", "cbo_cost_estimates_outcome"))):
         text_dates = dict(
-            duckdb.sql(f"SELECT bill_id, update_date_including_text FROM read_parquet('{bills_path}')").fetchall()
+            duckdb.sql(f"SELECT bill_id, update_date_including_text FROM read_parquet('{bills_path}') "
+                       "WHERE cbo_cost_estimates_outcome IS NOT NULL").fetchall()
         )
 
     printings: set[str] = set()
@@ -1355,7 +1298,7 @@ def build_bill_family(
     max_version_fetches: int = MAX_VERSION_FETCHES,
     download_prior: Callable[[str, Path], bool] = r2.download,
 ) -> tuple[Path, ...]:
-    """Build all seventeen bill-family outputs; returns one path per table."""
+    """Build all eighteen bill-family outputs; returns one path per table."""
     congresses = congresses_from_env()
     bill_types = bill_types_from_env()
     logger.info("Bill family: Congresses {}, bill types {}", congresses, bill_types)
@@ -1413,6 +1356,14 @@ def build_bill_family(
     prior_paths = _download_prior(output_dir, download_prior)
     index = _prior_index(prior_paths)
     held_archives = _held_archives(prior_paths.get(ARCHIVES_TABLE))
+    # An unchanged archive still needs one read when its old rows predate the CBO reader.
+    bills_prior = prior_paths.get("congress_bills")
+    if bills_prior is not None:
+        import pyarrow.parquet as pq
+
+        for row in pq.read_table(bills_prior).to_pylist():
+            if row["bill_id"] not in index.bill_text_dates:
+                held_archives.pop((row.get("congress"), row.get("bill_type")), None)
 
     # 2. Acquire and build, one bill at a time, skipping the unchanged.
     remaining = [max_version_fetches]
@@ -1592,7 +1543,13 @@ def build_bill_family(
             contract,
             rows,
             download_prior=download_prior,
-            prior_present=(prior_paths.get(contract) is not None) if contract in SNAPSHOT_TABLES else None,
+            prior_present=(prior_paths.get(contract) is not None) if contract in prior_paths else None,
+            replace_parents=("bill_id", {
+                identifier for row in folded.bills
+                if (identifier := row["bill_id"]) is not None and row.get("cbo_cost_estimates_outcome") in {
+                    "populated", "requested-empty:absent", "requested-empty:present-and-empty",
+                }
+            }) if contract == "cbo_cost_estimates" else None,
         )
 
     paths = [publish(contract, getattr(folded, attr)) for contract, attr in FAMILY_TABLES]

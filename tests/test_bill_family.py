@@ -216,6 +216,24 @@ def _no_prior(remote_key: str, local_path: Path) -> bool:
     return False
 
 
+def test_printing_403_aborts_run_before_any_further_capture(tmp_path, monkeypatch):
+    monkeypatch.setenv("BILL_FAMILY_CONGRESSES", "119")
+    monkeypatch.setenv("BILL_FAMILY_BILL_TYPES", "hr")
+    monkeypatch.setattr("spicy_regs.transforms.build_bill_family.resolve_gemini_key", lambda: None)
+
+    class Refused(StubBodyAcquirer):
+        def acquire(self, package_id, *, max_bytes=None):
+            self.requested.append(package_id)
+            raise CredentialRefusedError("stub: HTTP 403")
+
+    bodies = Refused()
+    with pytest.raises(CredentialRefusedError, match="403"):
+        build_bill_family(tmp_path, bulk_acquirer=StubBulkAcquirer(), body_acquirer=bodies,
+                          max_version_fetches=10, download_prior=_no_prior)
+    assert len(bodies.requested) == 1, "the fixture offers two printings; the second must never be attempted"
+    assert not list(tmp_path.glob("*.parquet")), "an aborted run must produce no capture tables or checkpoints"
+
+
 def _prior_from(published: Path):
     """A ``download_prior`` that serves an earlier run's published files."""
 
@@ -258,7 +276,7 @@ OWN_TABLES = {
 def test_every_family_table_is_published(family):
     expected = {contract for contract, _ in FAMILY_TABLES} | {"public_activity_events", *OWN_TABLES}
     assert set(family) == expected
-    assert len(family) == 17
+    assert len(family) == 18
 
 
 def test_each_published_table_matches_its_contract_schema_or_its_own(family):
@@ -647,7 +665,11 @@ def test_an_unchanged_bill_costs_no_requests(tmp_path, scoped):
     _seed_prior(
         tmp_path,
         "congress_bills",
-        [{"bill_id": "119-hr-6028", "update_date_including_text": _status_text_date()}],
+        [{"bill_id": "119-hr-6028", "update_date_including_text": _status_text_date(),
+          "cbo_cost_estimates_outcome": "requested-empty:absent"}],
+    )
+    _seed_prior(
+        tmp_path, "cbo_cost_estimates", [],
     )
     body = StubBodyAcquirer()
     build_bill_family(tmp_path, bulk_acquirer=StubBulkAcquirer(), body_acquirer=body, download_prior=_no_prior)
