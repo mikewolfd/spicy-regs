@@ -554,6 +554,7 @@ def test_a_changed_pair_runs_the_diff_reader_and_publishes_its_row(tmp_path, mon
     assert row["headline"] == GOOD_DIFF_ANSWER["headline"]
     assert row["prompt_version"] == "v2"
     # The four list-valued keys survive the reader and the shaper as JSON.
+    assert json.loads(row["key_changes_json"]) == GOOD_DIFF_ANSWER["keyChanges"]
     assert json.loads(row["sections_added_json"]) == GOOD_DIFF_ANSWER["sectionsAdded"]
     assert json.loads(row["sections_removed_json"]) == [], "an empty array is a stated answer, not a NULL"
     assert json.loads(row["dollar_changes_json"]) == GOOD_DIFF_ANSWER["dollarChanges"]
