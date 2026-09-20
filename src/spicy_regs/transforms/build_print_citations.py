@@ -51,8 +51,8 @@ from spicy_docs.sources.congress.committee_rosters import (
     CommitteeRosterBudget,
     CommitteeRosterError,
 )
-from spicy_docs.sources.govinfo.body_acquisition import GovInfoBodyAcquirer, GovInfoBodyBudget
-from spicy_docs.sources.govinfo.bodies import PRINT_BODY_PREFERENCE, parse_package_id
+from spicy_docs.sources.govinfo.body_acquisition import GovInfoBodyAcquirer, GovInfoBodyBudget, GovInfoFormatNotOfferedError
+from spicy_docs.sources.govinfo.bodies import MEASURED_BUDGET_PARTS, PRINT_BODY_PREFERENCE, parse_package_id
 from spicy_docs.sources.govinfo.activity_reports import ACTIVITY_REPORT_RULE_VERSION, is_activity_report, names_activity
 from spicy_docs.sources.govinfo.discovery import GovInfoDiscoveryReader, published_url
 from spicy_docs.transport.credentials import CredentialRefusedError, scrub_credential
@@ -370,6 +370,7 @@ def build_print_citations(
     have_prior = {name: path is not None for name, path in priors.items()}
     held = {name: _held_packages(priors[name]) for name in (ACTIVITY_REPORTS, BUDGET_VOLUMES)}
     since = _issue_floor()
+    logger.info("BUDGET: {} measured parts admitted by the package grammar", len(MEASURED_BUDGET_PARTS))
 
     vocabulary = _roster_vocabulary(rosters, current_congress())
 
@@ -379,7 +380,7 @@ def build_print_citations(
     citation_rows: list[dict] = []
     refusals: Counter[str] = Counter()
     kinds: Counter[str] = Counter()
-    unchanged = fetched = capped = 0
+    unchanged = fetched = capped = root_not_offered = 0
     pages_read = 0
 
     # Enumerate both windows first, drop what is already published, then
@@ -407,6 +408,13 @@ def build_print_citations(
             package, derived = _read_body(acquirer, package_id)
         except CredentialRefusedError:
             raise
+        except GovInfoFormatNotOfferedError as error:
+            if collection != BUDGET:
+                raise
+            root_not_offered += 1
+            logger.info("BUDGET: {} publisher offers no preferred package-root body: {}; no granule attempted",
+                        package_id, scrub_credential(str(error), ""))
+            continue
         except _PACKAGE_REFUSALS as error:
             # Counted by reason, not just counted: forty refusals sharing
             # one reason is a defect here, and forty different ones are the
@@ -482,6 +490,7 @@ def build_print_citations(
         unchanged,
         sum(refusals.values()),
     )
+    logger.info("BUDGET: {} publisher package-root format answers (not failures)", root_not_offered)
     if capped:
         # Every count on a capped document is a floor. Nothing here caps pages,
         # so this can only mean the body the publisher served was shorter than

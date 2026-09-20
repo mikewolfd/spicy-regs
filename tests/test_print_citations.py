@@ -506,3 +506,21 @@ def test_a_cold_run_over_both_collections_publishes_rows_in_both(tmp_path):
     assert _rows(budget), "nor may the budget table, which the listing order would starve"
     # The cap is still the cap: two packages, one from each family.
     assert len(acquirer.asked) == 2
+
+
+@pytest.mark.parametrize("part", ["OBJCLASS", "TAB", "DB", "CLIMATE", "LRB", "CROSSCUT", "DOD"])
+def test_new_budget_parts_reach_the_publisher_and_root_answers_are_counted(tmp_path, part):
+    from loguru import logger
+    from spicy_docs.sources.govinfo.body_acquisition import GovInfoFormatNotOfferedError
+
+    package_id = f"BUDGET-2025-{part}"
+    acquirer = _Acquirer({}, {package_id: GovInfoFormatNotOfferedError(package_id, PRINT_BODY_PREFERENCE, ())})
+    messages = []
+    sink = logger.add(lambda message: messages.append(message.record["message"]))
+    try:
+        paths = _build(tmp_path, _Reader({"BUDGET": [_listing(package_id, "Volume")]}), acquirer)
+    finally:
+        logger.remove(sink)
+    assert acquirer.asked == [package_id]
+    assert all(not _rows(path) for path in paths)
+    assert any("1 publisher package-root format answers (not failures)" in message for message in messages)

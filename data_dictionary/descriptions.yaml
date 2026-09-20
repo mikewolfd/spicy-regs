@@ -1972,8 +1972,8 @@ tables:
       `rollups-pdf-families-2026-09-20/`). The GovInfo `published` BUDGET
       window from the 2023-01-01 issue floor served 40 packages; **23 published
       and 17 did not**, for the reason in the data-quality note below. The 23
-      cover fiscal years 2023 to 2027 across all six parts the package-id
-      grammar accepts — `APP` 4, `BALANCES` 4, `BUD` 4, `FCS` 4, `MSR` 4, `PER`
+      cover fiscal years 2023 to 2027 across the six parts the 0.23.0 package-id
+      grammar accepted — `APP` 4, `BALANCES` 4, `BUD` 4, `FCS` 4, `MSR` 4, `PER`
       3. Zero refusals, 7,154 pages read whole rather than capped, which is the
       difference that matters for this family: across those volumes the print
       names 2,237 distinct public laws and **2,081 of them are absent from the
@@ -1983,9 +1983,8 @@ tables:
     measured_on: "2026-09-20"
     summary: >-
       One row per published volume of the President's budget, with what its
-      print adds to its own MODS index. Six parts — `APP` Appendix,
-      `BALANCES`, `BUD`, `FCS` Federal Credit Supplement, `MSR` Mid-Session
-      Review, `PER` Analytical Perspectives. All columns are stored as
+      print adds to its own MODS index. Thirteen measured package parts are
+      accepted; only volumes offering a supported package-root body yield rows. All columns are stored as
       VARCHAR.
     data_quality: >-
       **The bill counts are congress-blind and are not join keys.** A BUDGET
@@ -2010,20 +2009,17 @@ tables:
       statement of this edge that carries a Congress.
 
 
-      **Seven budget parts are not carried, and the rollup refuses them by
-      name rather than guessing.** The package-id grammar seals six parts —
-      `APP`, `BALANCES`, `BUD`, `FCS`, `MSR`, `PER` — measured over a
-      2025-01-01 window. Walking from 2023-01-01 on 2026-09-20 served **17
-      further real budget packages whose part is outside that six**:
-      `OBJCLASS` (FY2024-FY2027), `TAB` (FY2024-FY2027), `DB` (FY2024, 2025,
-      2027), `CLIMATE` (FY2024, 2025), `LRB` (FY2024, 2025), `CROSSCUT`
-      (FY2026) and `DOD` (FY2026). Each is logged and dropped before it costs
-      a request, which is the designed behaviour — an address that was never
-      measured is not an address — but it means this table covers six parts of
-      thirteen. Widening the grammar is spicy-docs', because a package-id
-      grammar is a published shape this repository does not restate; the
-      packages are enumerated again every run and publish as soon as it moves.
+      **Thirteen measured parts are accepted by spicy-docs 0.24.0.** The
+      seven additions are `OBJCLASS`, `TAB`, `DB`, `CLIMATE`, `LRB`, `CROSSCUT`
+      and `DOD`. On one measured volume per part, `TAB`, `DB` and `CLIMATE`
+      offer PDF only at granule stems; `LRB` offers an XLS and no supported
+      body. A `GovInfoFormatNotOfferedError` at the package root is counted
+      and logged as the publisher's answer, not as a failed or missing volume.
+      No granule route is attempted: `shape_budget_volume` takes package
+      summary/MODS and does not support a granule identity. These observations
+      remain eligible on the next run and produce no invented document row.
     columns_from: spicy_docs
+
 
   bill_committee_actions:
     label: "Committee-print bill actions"
