@@ -33,7 +33,7 @@ CONTRACT_NAMES = sorted(TABLE_CONTRACTS)
 ADOPTED_CONTRACT_COUNT = 39
 
 #: These two leave the set when their owning rollups host them.
-UNHOSTED_CONTRACTS = frozenset({"hearing_bill_links", "cbo_cost_estimates"})
+UNHOSTED_CONTRACTS = frozenset()
 
 
 def _no_download(remote_key: str, local_path: Path) -> bool:

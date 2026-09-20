@@ -365,5 +365,3 @@ def test_iter_records_retries_transient_failure_once() -> None:
     assert sorted(_raw_id(r) for r in records) == ["EPA-2024-0001", "EPA-2025-0002"]
     assert reader.failed_keys == []  # recovered on retry
     assert sorted(reader.last_keys) == sorted([_docket_key("EPA-2024-0001"), flaky])
-
-

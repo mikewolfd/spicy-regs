@@ -258,7 +258,7 @@ OWN_TABLES = {
 def test_every_family_table_is_published(family):
     expected = {contract for contract, _ in FAMILY_TABLES} | {"public_activity_events", *OWN_TABLES}
     assert set(family) == expected
-    assert len(family) == 17
+    assert len(family) == 18
 
 
 def test_each_published_table_matches_its_contract_schema_or_its_own(family):
@@ -647,7 +647,11 @@ def test_an_unchanged_bill_costs_no_requests(tmp_path, scoped):
     _seed_prior(
         tmp_path,
         "congress_bills",
-        [{"bill_id": "119-hr-6028", "update_date_including_text": _status_text_date()}],
+        [{"bill_id": "119-hr-6028", "update_date_including_text": _status_text_date(),
+          "cbo_cost_estimates_outcome": "requested-empty:absent"}],
+    )
+    _seed_prior(
+        tmp_path, "cbo_cost_estimates", [],
     )
     body = StubBodyAcquirer()
     build_bill_family(tmp_path, bulk_acquirer=StubBulkAcquirer(), body_acquirer=body, download_prior=_no_prior)

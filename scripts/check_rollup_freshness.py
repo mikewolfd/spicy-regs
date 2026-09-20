@@ -71,6 +71,9 @@ DATE_CHECKS = BASE_TABLE_CHECKS + EXTERNAL_DATE_CHECKS
 
 ROW_CHANGE_BUDGETS = {"usaspending_recipients": 14}
 SKIPPED = {
+    "hearing_bill_links": "derived cover links; recall unmeasured, no daily watermark",
+    "cbo_cost_estimates": "sparse publication index; no daily publication guarantee",
+    "committee_report_reads": "own processing state; local adoption run, not yet published",
     "unified_agenda": "semiannual edition, not a daily date watermark",
     "sam_entities": "registration_date does not change when an existing entity is refreshed",
     # Promote these to DateChecks (date_created / date_received) once the first

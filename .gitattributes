@@ -1,0 +1,3 @@
+# Preserve byte-exact publisher excerpts and their recorded digests.
+tests/fixtures/adoption_0_24_0/*.txt -whitespace
+tests/fixtures/adoption_0_24_0/*.xml -whitespace

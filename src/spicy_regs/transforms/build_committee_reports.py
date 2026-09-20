@@ -1,106 +1,9 @@
-"""Transform: build ``committee_reports``, ``report_sections``, ``hearing_transcripts``.
+"""Reports, letters, hearing cover links and their own acquisition checkpoints.
 
-Three tables from two GovInfo collections, in one pass because they share an
-acquirer and a pacing budget:
-
-* **CRPT** (committee reports) fills ``committee_reports``, one row per
-  captured package, and ``report_sections`` — the per-agency blocks
-  ``spicy_docs.sources.agency_reports.report_blocks`` parses out of the report
-  text, each carrying the header pattern that fired as its provenance.
-* **CHRG** (hearing transcripts) fills ``hearing_transcripts``.
-
-Report text comes from ``extraction.body_text``, which owns one derivation per
-rendition: the markup reader for ``htm`` and ``xml``, the shared cleanup for
-``txt``, and extraction plus ``gpo_normalize`` for ``pdf``. Measured
-2026-09-19 (spicy-docs ``docs/sources/govinfo-bodies.md``), CRPT and CHRG offer
-only ``htm`` and ``pdf``, the ``htm`` *is* GPO's text inside a ``<pre>``
-wrapper, and no GovInfo body of any rendition carries a ``[[Page N]]`` marker
-or a form feed. So a committee report is read as HTML and states no page
-boundaries at all — ``page_count`` is NULL for it, and only the PDF branch,
-which an extractor paginates, fills one.
-
-The derivation name ``body_text`` returns earns no column: it is a pure
-function of the rendition through ``extraction.body_text.RENDITION_DERIVATIONS``,
-a static four-entry table, so a column for it would restate ``format`` in a
-second vocabulary and could only ever disagree with it by being stale. The
-renditions actually read are logged instead. ``format`` is the column that says
-which rendition was read, and the shape function fills it from the fetched body
-itself. The PDF cleanup record is processing provenance and is not
-published here — ``bill_versions`` is the table that carries it, for the
-printings where it changes the text people read.
-
-**``bill_id`` is read from the package's own MODS**, which the acquirer already
-fetches to prove the package's identity, so the linkage costs no request. A
-GovInfo MODS names the bills a package relates to as
-``<extension><bill congress type number context/>``, and ``context`` is the
-publisher's own statement of how: ``PRIMARY`` is the measure a report
-accompanies, ``OTHER``, ``COVER`` and ``BODY`` are measures it mentions. The
-parse and the rule live beside the acquirer, in spicy-docs (0.21.2):
-``package.mods.bills`` is every ``<bill>`` in document order and
-``package.mods.primary_bill`` the one marked ``PRIMARY`` — never the first
-listed, since document order is not priority order (``CRPT-119hrpt1`` lists
-S. 5 before the H. Res. 53 it accompanies). Only that bill fills the column,
-spelled through ``natural_key`` in the lowercase vocabulary every bill table
-shares; a type outside it is logged and not linked. Measured live 2026-09-19
-on the twelve
-newest reports the Congress.gov ``committee-report/119`` route lists, the
-MODS ``PRIMARY`` bill agreed with the route's own ``associatedBill[0]`` on 12
-of 12 — the same edge the legislative data map resolved 17 of 17 — at one
-keyed detail request per report that this design does not make. Over 50
-distinct hearings from the ``hearing/119`` route, no CHRG MODS carried a
-``PRIMARY`` bill (10 carried ``BODY``/``COVER`` mentions, 31 entries in all),
-and of the 12 whose detail named a committee meeting none of those meetings'
-``relatedItems.bills`` named a bill, so ``hearing_transcripts.bill_id`` is NULL
-in practice and the ``hearing -> meeting -> bill`` chain, at two keyed
-requests per hearing, is not walked. A mention is never promoted to a linkage:
-publishing H.R. 1 as the bill of a hearing that cites it would be a guess
-dressed as a fact. The mentions are counted in the run log. Both measurements
-are retained with every request and raw response at
-``~/Work/corpora/supply-2026-09-02/receipts/report-bill-linkage-2026-09-19/``.
-
-**One thing still requested from spicy-docs**, not added here, because this
-repository does not restate a published shape it does not own: a column on
-both package tables — ``associated_bills_json``, an array whose every entry
-keeps **both** the bill key and that bill's own ``context`` — so the mentions
-this column drops have a home. Bare bill ids would not do: dropping
-``context`` discards exactly the distinction that makes ``bill_id``
-trustworthy, and a consumer could no longer tell the measure a report
-accompanies from one its text happens to cite. Until then the mentions are
-counted by context in the run log, a ``<bill>`` stating no ``context`` among
-them under ``""`` — spicy-docs keeps such an entry rather than dropping it,
-and a mention is what it is — and so is one whose type is outside the bill
-vocabulary, since only a linkage needs a key. (The other request, the MODS
-accessors, landed in 0.21.2 and replaced the interim parse this module
-carried.)
-
-**``event_id`` is read from the Congress.gov hearing detail**, one keyed
-request per CHRG package fetched in the run: ``hearing/{congress}/{chamber}/{jacket}``
-answers a bare ``hearing`` object whose ``associatedMeeting.eventId`` is the
-key ``committee_meetings`` is keyed on (spicy-docs ``listing.py``'s
-``hearing-detail`` route, measured on jacket 64431 -> event 119003). The
-chamber is the package id's own letter (``hhrg``, ``shrg``, ``jhrg``), and the
-detail must name the jacket and Congress asked for or it is refused. Three
-outcomes stay distinct in the run log and none invents a value: the detail
-named a meeting; the detail named none (jacket 63127 is the retained case);
-the detail was refused -- a ``404`` for a jacket Congress.gov does not hold, a
-malformed page, a transport failure after the reader's retries -- which is
-counted and leaves the column NULL. A ``401``/``403`` aborts the run. Only
-packages fetched in the run are asked about: a row published before this
-column was read keeps its NULL until the package is modified and re-fetched,
-which is what the dictionary's data-quality note says.
-
-**Incremental.** The window starts at the prior published table's max
-``last_modified`` minus a short overlap, so a steady-state run asks GovInfo for
-the packages changed since the last run rather than a fixed thirty days of
-them. The thirty-day default is the cold-start window only — with no prior
-table there is no watermark to start from. ``COMMITTEE_REPORTS_SINCE`` overrides
-both. Enumerating by last-modified rather than by issue date is deliberate: a
-revision of an older report is a change this table should pick up.
-
-A package already published with the same ``last_modified`` is skipped without
-being re-fetched, which is where the three-requests-per-package cost goes.
-
-Needs an api.data.gov key: GovInfo's summary and MODS routes are keyed.
+MODS cover links and the CBO letter rule use bytes already fetched. Agenda
+acquisition is deferred: this pass has no verified meeting-to-jacket join or
+House repository locator. Pending reads precede discovery under the same cap;
+completed empty covers are checkpointed without inventing a link row.
 """
 
 from __future__ import annotations
@@ -116,6 +19,9 @@ from typing import Any, Protocol
 import httpx
 from loguru import logger
 from spicy_docs.extraction.body_text import BodyText, body_text
+from spicy_docs.interpretation.cbo_estimates import read_cbo_estimate, recital_bill_id
+from spicy_docs.interpretation.hearing_bill_links import cover_links
+from spicy_docs.schemas.hearing_bill_link_tables import shape_hearing_bill_link
 from spicy_docs.reading.paged_json import PagedJsonBudget
 from spicy_docs.schemas.committee_report_tables import (
     shape_committee_report,
@@ -124,7 +30,7 @@ from spicy_docs.schemas.committee_report_tables import (
 )
 from spicy_docs.schemas.tables import natural_key
 from spicy_docs.sources.agency_reports.report_blocks import parse_agency_blocks
-from spicy_docs.sources.govinfo.bodies import ModsBill
+from spicy_docs.sources.govinfo.bodies import ModsBill, GovInfoBodySourceError, parse_package_id
 from spicy_docs.sources.govinfo.body_acquisition import GovInfoBodyAcquirer, GovInfoBodyBudget
 from spicy_docs.reading.paged_json import PagedJsonSourceError
 from spicy_docs.schemas.tables import text
@@ -134,7 +40,8 @@ from spicy_docs.transport.credentials import CredentialRefusedError, scrub_crede
 
 from spicy_regs.sources import r2
 from spicy_regs.sources.congress_bills import API_KEY_ENV_VARS, _resolve_api_key, listing_reader
-from spicy_regs.transforms.table_merge import merge_contract_table, published_table
+from spicy_regs.transforms.table_merge import merge_contract_table, merge_table, published_table
+from spicy_regs.transforms.committee_report_reads import READS_TABLE, READ_COLUMNS, RULE_VERSIONS, complete, prior_reads
 
 
 class PackageDiscoverySource(Protocol):
@@ -219,38 +126,22 @@ def _since(prior_file: Path | None = None, window_days: int = DEFAULT_WINDOW_DAY
     return start.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def _held_packages(prior_file: Path) -> dict[str, str | None]:
-    """``package_id`` -> published ``last_modified``, for skipping unchanged packages."""
-    if not prior_file.exists():
-        return {}
-    import duckdb
-
-    return dict(duckdb.sql(f"SELECT package_id, last_modified FROM read_parquet('{prior_file}')").fetchall())
-
-
-def _package_ids(reader: PackageDiscoverySource, collection: str, since: str, limit: int) -> list[str]:
-    """Package ids in one collection modified since ``since``, newest first, bounded."""
-    ids: list[str] = []
-    truncated = False
+def _package_ids(reader: PackageDiscoverySource, collection: str, since: str) -> dict[str, str | None]:
+    """Enumerate within the page cap; use the package grammar before spending body requests."""
+    found = {}
+    unsupported = 0
     for page in reader.packages(collection_url(collection, since), max_pages=MAX_PAGES):
         for record in page.records:
             package_id = record.get("packageId")
-            if package_id:
-                ids.append(str(package_id))
-        if len(ids) >= limit:
-            # The walk stopped early, so the window was not fully enumerated —
-            # that is the fact worth warning about, not the arithmetic below.
-            truncated = True
-            logger.warning(
-                "{}: per-run cap of {:,} packages reached — the window was not fully walked;"
-                " the next run resumes from the published watermark",
-                collection,
-                limit,
-            )
-            break
-    if not truncated:
-        logger.info("{}: {:,} packages in window", collection, len(ids))
-    return ids[:limit]
+            try:
+                identity = parse_package_id(package_id)
+            except GovInfoBodySourceError:
+                unsupported += 1
+                continue
+            if identity.collection == collection:
+                found[str(package_id)] = text(record.get("lastModified"))
+    logger.info("{}: {} supported packages in window, {} unsupported IDs", collection, len(found), unsupported)
+    return found
 
 
 def _read_body(acquirer: PackageBodySource, package_id: str) -> tuple[Any, BodyText]:
@@ -345,8 +236,8 @@ def build_committee_reports(
     hearings: HearingDetailSource | None = None,
     max_packages: int = MAX_PACKAGES_PER_RUN,
     download_prior: Callable[[str, Path], bool] = r2.download,
-) -> tuple[Path, Path, Path]:
-    """Build the two committee-report tables and the hearing-transcript table."""
+) -> tuple[Path, ...]:
+    """Build four contract tables and the acquisition checkpoint, with one owner."""
     if reader is None or acquirer is None or hearings is None:
         api_key = _resolve_api_key()
         if not api_key:
@@ -358,13 +249,12 @@ def build_committee_reports(
     prior_files = {
         name: published_table(output_dir, name, download_prior) for name in ("committee_reports", "hearing_transcripts")
     }
-    have_prior = {name: path is not None for name, path in prior_files.items()}
-    # The watermark comes from the reports table: both collections are walked on
-    # the same window, and it is the one with the longer history.
+    checkpoint = published_table(output_dir, READS_TABLE, download_prior)
+    reads = prior_reads(checkpoint, prior_files)
     since = _since(prior_files["committee_reports"])
-    held = {name: ({} if path is None else _held_packages(path)) for name, path in prior_files.items()}
-    logger.info("Committee reports: packages modified since {}", since)
-
+    logger.info("Committee reports: modified since {}; cap {} per collection; agenda cap 0", since, max_packages)
+    observed_at = datetime.now(UTC).isoformat()
+    link_rows: list[dict] = []
     report_rows: list[dict] = []
     section_rows: list[dict] = []
     hearing_rows: list[dict] = []
@@ -373,60 +263,52 @@ def build_committee_reports(
     meetings: Counter[str] = Counter()
     refused = unchanged = linked = 0
 
-    for collection, table, rows, shape in (
-        ("CRPT", "committee_reports", report_rows, shape_committee_report),
-        ("CHRG", "hearing_transcripts", hearing_rows, shape_hearing_transcript),
-    ):
-        package_ids = _package_ids(reader, collection, since, max_packages)
-        already = held[table]
-        for package_id in package_ids:
-            if package_id in already:
-                # Published already, and the window is a last-modified window —
-                # so a package that reappears unchanged costs nothing.
-                unchanged += 1
-                continue
+    for collection in ("CRPT", "CHRG"):
+        listed = _package_ids(reader, collection, since)
+        pending = {key: row.get("last_modified") for key, row in reads.items()
+                   if key.startswith(collection + "-") and not complete(row, collection)}
+        pending.update({key: modified for key, modified in listed.items()
+                        if not complete(reads.get(key, {}), collection, modified)})
+        unchanged += len(listed) - sum(key in pending for key in listed)
+        for package_id, modified in pending.items():
+            reads[package_id] = {"package_id": package_id, "last_modified": modified,
+                                 "outcome": "pending", "rule_version": RULE_VERSIONS[collection],
+                                 "observed_at": observed_at}
+        logger.info("{}: {} pending; {} deferred by package cap", collection, len(pending), max(0, len(pending) - max_packages))
+        for package_id in list(pending)[:max_packages]:
+            state = reads[package_id]
             try:
                 package, derived = _read_body(acquirer, package_id)
-            except Exception as error:  # noqa: BLE001 — a package refusal is counted, not fatal
+            except CredentialRefusedError:
+                raise
+            except Exception as error:  # noqa: BLE001 — retained for the next run
                 refused += 1
-                logger.warning("{}: {} refused: {}", collection, package_id, error)
+                state["outcome"] = "refused"
+                logger.warning("{}: {} refused: {}", collection, package_id, scrub_credential(str(error), ""))
                 continue
             renditions[derived.rendition] += 1
             primary = package.mods.primary_bill
             bill = None if primary is None else _bill_key(package_id, primary)
-            if bill is not None:
-                linked += 1
-            # Counted whatever the type is spelled: a mention needs no key, only
-            # a linkage does, so ``_bill_key``'s vocabulary check does not gate it.
+            linked += bill is not None
             mentions.update(entry.context for entry in package.mods.bills if entry.context != PRIMARY_BILL_CONTEXT)
-            linkage: dict[str, Any] = {}
+            common = {"page_count": None if derived.pages is None else len(derived.pages),
+                      "text_sha256": "sha256:" + hashlib.sha256(derived.text.encode("utf-8")).hexdigest()}
+            state.update(last_modified=package.summary.last_modified, outcome="complete")
             if collection == "CHRG":
-                # One keyed request, only for a package fetched this run.
                 event_id, outcome = _event_id(hearings, package)
                 meetings[outcome] += 1
-                linkage["event_id"] = event_id
-            rows.append(
-                shape(
-                    package,
-                    bill_id=bill,
-                    # NULL rather than 1: a rendition that states no page
-                    # boundary has no page count, and calling the whole body
-                    # one page would be a measurement nothing made.
-                    page_count=None if derived.pages is None else len(derived.pages),
-                    text_sha256="sha256:" + hashlib.sha256(derived.text.encode("utf-8")).hexdigest(),
-                    **linkage,
-                )
-            )
-            if collection == "CRPT":
-                for seq, block in enumerate(parse_agency_blocks(derived.text)):
-                    section_rows.append(
-                        shape_report_section(
-                            block,
-                            package_id=package_id,
-                            seq=seq,
-                            last_modified=report_rows[-1].get("last_modified"),
-                        )
-                    )
+                if outcome == "refused":
+                    state["outcome"] = "detail_refused"
+                hearing_rows.append(shape_hearing_transcript(package, event_id=event_id, **common))
+                link_rows.extend(shape_hearing_bill_link(link) for link in cover_links(package.mods, event_id=event_id))
+            else:
+                estimate = read_cbo_estimate(derived.text)
+                report_rows.append(shape_committee_report(
+                    package, bill_id=bill, estimate=estimate,
+                    recital_bill_id=recital_bill_id(estimate, package.identity.congress), **common))
+                section_rows.extend(shape_report_section(
+                    block, package_id=package_id, seq=seq, last_modified=package.summary.last_modified
+                ) for seq, block in enumerate(parse_agency_blocks(derived.text)))
 
     logger.info(
         "Committee reports: {:,} reports, {:,} sections, {:,} hearings, {:,} already held, {:,} refused",
@@ -449,12 +331,12 @@ def build_committee_reports(
         # Which rendition each package was actually read in. Neither contract
         # has a column for the derivation name, so this is where it is stated.
         logger.info("Committee reports: renditions read — {}", dict(renditions))
-    return (
-        merge_contract_table(
-            output_dir, "committee_reports", report_rows, prior_present=have_prior["committee_reports"]
-        ),
-        merge_contract_table(output_dir, "report_sections", section_rows),
-        merge_contract_table(
-            output_dir, "hearing_transcripts", hearing_rows, prior_present=have_prior["hearing_transcripts"]
-        ),
-    )
+    logger.info("Committee reports: {} cover links; agenda deferred (no verified meeting-to-jacket join)", len(link_rows))
+    paths = tuple(merge_contract_table(output_dir, name, rows, download_prior=download_prior,
+                                     prior_present=(prior_files[name] is not None) if name in prior_files else None)
+                  for name, rows in (("committee_reports", report_rows), ("report_sections", section_rows),
+                                     ("hearing_transcripts", hearing_rows), ("hearing_bill_links", link_rows)))
+    return (*paths, merge_table(output_dir, name=READS_TABLE, columns=READ_COLUMNS,
+                               identity=("package_id",), version_column="observed_at", rows=reads.values(),
+                               remote_key=f"{READS_TABLE}.parquet", download_prior=download_prior,
+                               prior_present=checkpoint is not None))

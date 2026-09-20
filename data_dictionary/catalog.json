@@ -1112,10 +1112,10 @@
       "table": "committee_reports",
       "label": "Committee reports",
       "summary": "One row per captured GovInfo committee report package. `bill_id` is the measure the report accompanies, read from the package's own MODS metadata. All columns are stored as VARCHAR.",
-      "coverage": "Window, advancing. Measured on one cold-start run (receipt `d1-measured-run-2026-09-19/`): the thirty-day cold-start window held 133 CRPT packages, of which 105 became rows — 17 were refused because the `collections/CRPT` route serves SERIALSET package ids the body grammar does not accept, 8 because the package's MODS states a different `accessId` than the one requested, 2 for HTML nesting depth and 1 for offering no supported rendition. The rollup spent 275 keyed requests (262 to GovInfo, and 13 to the Congress.gov hearing detail for `hearing_transcripts.event_id`) and 120 keyless, in 113 seconds, well inside the 200-package cap. GovInfo CRPT packages by last-modified date: the window starts at the watermark this table already reached, so each run asks for what changed since the last one and a revision of an older report is still picked up. Thirty days is the cold-start window only. A package already published is not fetched again, and a per-run package cap bounds a catch-up. **Both the watermark and the already-published skip are design, not measurement**: D1 was a cold start, so the window was the thirty-day default and nothing was skipped — the second run is what measures either. Each package is read in the first rendition it offers of XML, HTML, text, then PDF, and `format` says which one. Measured 2026-09-19, committee reports offer only HTML and PDF, and the HTML is the text rendition, so in practice every row is read from HTML with PDF as the fallback — all 118 bodies read in the measured run were HTML. No GovInfo body of any rendition states a page boundary, so `page_count` is NULL except on the PDF fallback, which an extractor paginates.",
-      "kind": "window",
+      "coverage": "Sampled. Bounded CRPT and CHRG discovery, with a per-collection body cap. Pending packages retained in committee_report_reads are tried before newly listed ones; unchanged completed reads are skipped. Rows from before 0.24.0 are queued once for the letter rule even if their publisher stamp is unchanged. The adoption measurement is pending. XML, HTML, text, then PDF is the body preference; only an extracted PDF states page boundaries.",
+      "kind": "sampled",
       "measured_on": "2026-09-19",
-      "data_quality": "`bill_id` is the publisher's own statement, not a guess from the title: a GovInfo MODS names each related bill with a `context` attribute, and only `PRIMARY` — the measure a report accompanies — fills this column. `OTHER`, `COVER` and `BODY` are mentions and are deliberately not published, so a report that merely discusses a bill is not linked to it; the column that would carry them does not exist in the contract. Measured 2026-09-19 over the twelve newest reports of the 119th Congress, the MODS `PRIMARY` bill agreed with Congress.gov's own `associatedBill[0]` on 12 of 12, with every request and raw response retained under `~/Work/corpora/supply-2026-09-02/receipts/report-bill-linkage-2026-09-19/`. A report whose MODS names no `PRIMARY` bill publishes a NULL.",
+      "data_quality": "Only the MODS PRIMARY bill fills bill_id. The thirteen CBO columns come from spicy-docs read_cbo_estimate on the same body already acquired. The cover recital gates publication of a letter: a CBO heading alone is not an estimate. report_states_estimate=false records an absent recital; NULL means the rule has not run. A positive recital with no resolved letter span remains distinct from an extracted letter. recital_bill_id comes from the printed recital and is retained beside the MODS bill_id.",
       "columns": [
         "package_id",
         "collection",
@@ -1177,11 +1177,11 @@
     {
       "table": "hearing_transcripts",
       "label": "Hearing transcripts",
-      "summary": "One row per captured GovInfo hearing transcript package. `bill_id` is read the same way as on `committee_reports` and is NULL in practice. All columns are stored as VARCHAR.",
-      "coverage": "Window, advancing, and the narrowest table here in practice. Measured on one cold-start run (receipt `d1-measured-run-2026-09-19/`): the CHRG leg reached its 200-package cap and published 13 rows, because 187 of the 200 packages the `collections/CHRG` route served in the window are SERIALSET package ids the body grammar does not accept. The cap is therefore spent almost entirely on packages that cannot become rows, and the window advances slowly for that reason rather than because few hearings are published. GovInfo CHRG packages on the same last-modified watermark and per-run cap as `committee_reports`, read in the same rendition order — XML, HTML, text, then PDF — and, like committee reports, offering only HTML and PDF in practice. `page_count` is NULL for the same reason: no GovInfo body states a page boundary, so only the PDF fallback has one.",
-      "kind": "window",
+      "summary": "One row per captured GovInfo hearing transcript. bill_id is always NULL: a hearing can concern several bills, represented in hearing_bill_links. All columns are stored as VARCHAR.",
+      "coverage": "Sampled. CHRG packages share committee-reports' bounded discovery and own checkpoints. Unsupported package IDs are counted before spending the body cap. Failed details remain pending. The adoption measurement is pending.",
+      "kind": "sampled",
       "measured_on": "2026-09-19",
-      "data_quality": "`bill_id` is filled from the package's MODS `PRIMARY` bill, exactly as on `committee_reports`, but a hearing does not accompany a measure the way a report does: measured 2026-09-19 over 50 distinct hearings of the 119th Congress, no CHRG MODS carried a `PRIMARY` bill at all. Ten carried `BODY` or `COVER` mentions — bills the transcript cites, 31 entries in all — and those are not promoted to a linkage, because publishing a cited bill as the hearing's subject would be a guess stated as a fact. Of the twelve hearings whose Congress.gov detail named a committee meeting, none of those meetings listed a related bill either. So expect this column to be NULL. The measurement is retained with every request and raw response under `~/Work/corpora/supply-2026-09-02/receipts/report-bill-linkage-2026-09-19/`. `event_id` is read from the Congress.gov hearing detail (`hearing/{congress}/{chamber}/{jacket}`, one keyed request per CHRG package fetched in the run) and joins `committee_meetings.event_id`. It is NULL in three cases the run log counts apart: the detail names no meeting (jacket 63127, retained), the detail was refused (a jacket Congress.gov does not hold, or a transport failure), or the row was published before this column was read -- only a package fetched in the run is asked about, so a row from an earlier run keeps its NULL until the package is modified and re-fetched.",
+      "data_quality": "Cover bills come from the package's MODS and cost no extra requests. BODY mentions do not become hearing links. event_id comes from a verified Congress.gov hearing detail; NULL can mean no meeting or a refused detail. committee_report_reads distinguishes a completed read from a refused one.",
       "columns": [
         "package_id",
         "collection",
@@ -1203,6 +1203,56 @@
         "page_count",
         "text_sha256",
         "event_id"
+      ]
+    },
+    {
+      "table": "hearing_bill_links",
+      "label": "Hearing-to-bill links",
+      "summary": "One row per package, bill and link source, shaped by spicy-docs.",
+      "coverage": "Sampled. Cover links from the committee-reports rollup's own MODS pass; the adoption measurement is pending. Agenda acquisition has cap zero: this pass lacks a verified meeting-to-jacket join and House repository locator. It does not read the committee-meetings rollup's output.",
+      "kind": "sampled",
+      "measured_on": "2026-09-20",
+      "data_quality": "mods_cover means held_on. The package measured confirmation on 19 of 20 cover pairs and 18 of 18 pairs where cover and agenda agreed. Agenda links mean noticed, not held_on: agenda-only pairs were confirmed 1 of 18, contradicted 1 and unverifiable 16. Recall is unmeasured. Only 2 of 20 sampled House hearings and 0 of 3 Senate hearings stated COVER bills; a missing row does not establish that a hearing concerned no bills.",
+      "columns": [
+        "package_id",
+        "congress",
+        "chamber",
+        "committee_system_code",
+        "held_date",
+        "event_id",
+        "bill_id",
+        "link_source",
+        "relation",
+        "evidence_rule",
+        "evidence_text",
+        "link_rule_version"
+      ]
+    },
+    {
+      "table": "cbo_cost_estimates",
+      "label": "CBO cost-estimate publication index",
+      "summary": "One row per bill and CBO publication, using build_bill_family's own cbo_cost_estimates output. All columns are stored as VARCHAR.",
+      "coverage": "Sampled. BILLSTATUS records in the bill-family rollup's declared scope; the adoption measurement is pending. No CBO.gov body requests are made.",
+      "kind": "sampled",
+      "measured_on": "2026-09-20",
+      "data_quality": "The bill's cbo_cost_estimates_outcome distinguishes an absent or empty element, an unexpected shape, and populated estimates. An empty index does not establish that CBO never scored the bill. Report citations are the bill's list, not proof that each publication is reprinted in each report; the report's recital gate is evaluated separately.",
+      "columns": [
+        "bill_id",
+        "congress",
+        "bill_type",
+        "bill_number",
+        "publication_id",
+        "pub_date",
+        "title",
+        "description",
+        "url",
+        "source",
+        "estimate_index",
+        "stated_count",
+        "restatements_json",
+        "report_citation_count",
+        "report_citations_json",
+        "publication_id_rule"
       ]
     },
     {
@@ -1368,7 +1418,7 @@
       "coverage": "Sampled, and accumulating. Measured on one cold-start run (receipt `d1-measured-run-2026-09-19/`): the whole `house-communication/119` walk declared 4,975 and served 4,975 over 20 pages, 12 of them repeats across a page boundary, so 4,963 distinct rows were published; 1,000 details were read under the per-run cap and 3,963 rows were published list-only, at 1,020 keyed requests in 479 seconds. Each run walks the whole list for the Congresses in scope and reads the detail of every communication the table does not yet hold, newest `updateDate` first, at most 1,000 a run; the index is complete after the first run. How many runs the details take to converge is deliberately not stated: dividing the 3,963 outstanding by the 1,000 cap would assume the publisher adds nothing and that no held row's stamp moves to force a re-read, and one cold-start run measures neither. **The skip is design, not measurement**: D1 was a cold start, so nothing was held and nothing was skipped, and the saving described here has not been observed yet — the second run is what measures it.",
       "kind": "sampled",
       "measured_on": "2026-09-19",
-      "data_quality": "A row whose `committees_json` is NULL is list-only: its detail has not been read yet (not reached under the cap, or refused), and every detail-only column is NULL with it, including the three RIN columns, because the rule was not run. A row whose detail was read states `[]` where the detail lists none. The RIN is an interpretation: `rin_rule` names the rule that fired (`report_nature_rin_label`) or `unmatched`, and `rin_matched_text` is the exact text, so a false positive is readable from the row. The publisher repeats a record across a page boundary (15 of 4,975 on the 119th); the table holds each identity once.",
+      "data_quality": "A row whose `committees_json` is NULL is list-only: its detail has not been read yet (not reached under the cap, or refused), and every detail-only column is NULL with it, including the three RIN columns, because the rule was not run. A row whose detail was read states `[]` where the detail lists none. The RIN is an interpretation: `rin_rule` names the rule that fired (`report_nature_rin_label`) or `unmatched`, and `rin_matched_text` is the exact text, so a false positive is readable from the row. The publisher repeats a record across a page boundary (15 of 4,975 on the 119th); the table holds each identity once. Every existing publisher row receives source_route=congress-gov-detail. The four Record evidence columns remain NULL until the separate Record backfill, about 11,000 GovInfo requests, is acquired in the next rollup. In that future reconstruction submitting_official and submitting_agency must both remain NULL: held-out precision was 85.3% and 88.4%, below the declared 90% gate. The original sentence stays in record_entry_text.",
       "columns": [
         "communication_id",
         "congress",
@@ -1808,6 +1858,22 @@
         "unwalkable_count",
         "repeated_count",
         "backfilled_count",
+        "observed_at"
+      ]
+    },
+    {
+      "table": "committee_report_reads",
+      "label": "Committee-report acquisition checkpoints",
+      "summary": "One row per package observed or inherited from this rollup's prior tables. Pending reads precede discovery under the declared body cap.",
+      "coverage": "Not a range. The committee-reports rollup's own processing state, including pending, refused, detail_refused and complete package reads. A complete hearing with zero cover links still has one checkpoint.",
+      "kind": "not_a_range",
+      "measured_on": "2026-09-20",
+      "data_quality": null,
+      "columns": [
+        "package_id",
+        "last_modified",
+        "outcome",
+        "rule_version",
         "observed_at"
       ]
     }

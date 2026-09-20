@@ -47,5 +47,3 @@ def test_load_with_no_manifest_is_empty(tmp_output: Path, monkeypatch: pytest.Mo
 def test_empty_save_is_noop(tmp_output: Path) -> None:
     Manifest.empty().save(tmp_output)
     assert not (tmp_output / "manifest.parquet").exists()
-
-

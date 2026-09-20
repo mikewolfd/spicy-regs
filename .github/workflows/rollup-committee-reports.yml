@@ -1,7 +1,8 @@
 name: Rollup — committee_reports
 on:
   schedule:
-    # 03:40 UTC — two GovInfo collections, three requests per package, capped.
+    # 03:40 UTC — reports, letters, hearings, cover links and own checkpoints.
+    # Agenda requests deferred; bodies and hearing details remain capped.
     - cron: '40 3 * * *'
   workflow_dispatch:
     inputs:

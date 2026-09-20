@@ -78,6 +78,8 @@ TABLES = (
     "committee_reports",
     "report_sections",
     "hearing_transcripts",
+    "hearing_bill_links",
+    "cbo_cost_estimates",
     "house_activity_reports",
     "budget_volumes",
     "bill_committee_actions",
@@ -109,6 +111,7 @@ TABLES = (
     # without reaching past the server.
     "bill_family_backfills",
     "bill_family_backfill_walks",
+    "committee_report_reads",
 )
 STATEMENT_TIMEOUT = os.environ.get("SPICY_REGS_STATEMENT_TIMEOUT", "790s")
 

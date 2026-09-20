@@ -21,6 +21,8 @@ class CommitteeReportsRollup(RollupPipeline):
         "committee_reports.parquet",
         "report_sections.parquet",
         "hearing_transcripts.parquet",
+        "hearing_bill_links.parquet",
+        "committee_report_reads.parquet",
     )
 
     def build(self, output_dir: Path) -> tuple[Path, ...]:
