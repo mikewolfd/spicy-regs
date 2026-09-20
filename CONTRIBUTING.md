@@ -159,7 +159,7 @@ Reader  ->  Transform  ->  Writer        (a record at a time)
 | Concept       | Base class                              | What it does                                  | Example |
 |---------------|-----------------------------------------|-----------------------------------------------|---------|
 | `RecordType`  | `spicy_regs.schemas` (a value, not a subclass) | Describes one data shape: schema, primary key, extractor | `schemas/regulations.py` |
-| `Reader`      | `spicy_regs.sources.base.Reader`        | A **source**: yields raw records              | `sources/mirrulations.py` |
+| `Reader`      | `spicy_regs.sources.base.Reader`        | A **source**: yields raw records              | `spicy_docs.sources.mirrulations` |
 | `Transform`   | `spicy_regs.transforms.base.Transform`  | Maps a record stream → record stream          | `transforms/extract.py` |
 | `Writer`      | `spicy_regs.sources.base.Writer`        | A **sink**: persists records                  | `sources/parquet.py` |
 | `Pipeline`    | `spicy_regs.pipelines.base.Pipeline`    | Composes the above and exposes `run()`        | `pipelines/regulations.py` |
@@ -188,7 +188,7 @@ not connectors — don't subclass them.
 - **Add a record shape:** construct a new `RecordType` in `schemas/` (set
   `path_pattern` only if your source addresses files by path).
 - **Add a source:** subclass `Reader`, implement `iter_records()` to yield raw
-  payloads (keep extraction out of the reader). See `sources/mirrulations.py`.
+  payloads (keep extraction out of the reader). See `spicy_docs.sources.mirrulations`.
 - **Add a transform:** subclass `Transform`, implement `apply()`. See
   `transforms/extract.py`.
 - **Add a sink:** subclass `Writer`, implement `write()`. See `sources/parquet.py`.

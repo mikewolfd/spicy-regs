@@ -13,7 +13,7 @@ import polars as pl
 import pytest
 
 import spicy_regs.pipelines.regulations as regulations
-import spicy_regs.sources.mirrulations as mirrulations
+import spicy_docs.sources.mirrulations as mirrulations
 from spicy_regs.manifest import Manifest
 from spicy_regs.pipelines import Pipeline, RegulationsPipeline
 
@@ -305,9 +305,8 @@ def test_failed_download_is_not_committed_to_manifest_and_retries_next_run(
     assert sorted(df["docket_id"].to_list()) == ["EPA-2024-0001", "EPA-2025-0002"]
 
 
-def test_parse_failure_is_committed_to_manifest(tmp_output: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """A deterministically corrupt file is marked processed (so it doesn't retry
-    forever) and recorded in failed_keys.parquet with kind=parse."""
+def test_parse_failure_is_unresolved_and_recovers(tmp_output: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Unreadable bytes stay retryable, with attempt history retained by the host."""
     good = _docket_key("EPA-2024-0001")
     corrupt = _docket_key("EPA-2025-0002")
     store = {
@@ -319,13 +318,20 @@ def test_parse_failure_is_committed_to_manifest(tmp_output: Path, monkeypatch: p
     _run(tmp_output)
 
     reloaded = Manifest.load(tmp_output)
-    assert corrupt in reloaded  # parse failure stays processed
+    assert corrupt not in reloaded
     assert good in reloaded
 
     failed = pl.read_parquet(tmp_output / "failed_keys.parquet")
     row = failed.filter(pl.col("key") == corrupt)
     assert row.height == 1
-    assert row["kind"].to_list() == ["parse"]
+    assert row["status"].to_list() == ["unreadable"]
+    assert row["attempts"].to_list() == [1]
+    _run(tmp_output)
+    assert pl.read_parquet(tmp_output / "failed_keys.parquet")["attempts"].to_list() == [2]
+    store[corrupt] = dumps(_docket_payload("EPA-2025-0002", "2025-01-01")).encode()
+    _run(tmp_output)
+    assert corrupt in Manifest.load(tmp_output)
+    assert not (tmp_output / "failed_keys.parquet").exists()
 
 
 def test_chunked_comments_exclude_failed_keys_from_manifest(tmp_output: Path, monkeypatch: pytest.MonkeyPatch) -> None:

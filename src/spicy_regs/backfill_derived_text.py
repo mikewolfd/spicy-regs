@@ -55,7 +55,7 @@ from dotenv import load_dotenv
 from loguru import logger
 
 from spicy_regs.schemas import RecordType
-from spicy_regs.sources import mirrulations
+from spicy_docs.sources import mirrulations
 from spicy_regs.sources.derived_text import DerivedCommentText
 from spicy_regs.transforms.pdf_text import PdfTextStatus
 
