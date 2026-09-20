@@ -82,6 +82,19 @@ SKIPPED = {
     # better signal — promote it to ROW_CHANGE_BUDGETS once the first publish
     # lands and a steady-state row count is known.
     "org_committee_links": "derived link table; no date watermark of its own",
+    # The two PDF-only families. None of the five is a daily-watermark table:
+    # House activity reports are published once a Congress, budget volumes once
+    # a fiscal year, and the Secretary of the Senate reports twice a year, so
+    # any age budget a daily check could use would page for months at a time on
+    # a source behaving normally. The three derived tables carry no watermark of
+    # their own at all. Promote the two document tables to ROW_CHANGE_BUDGETS
+    # once a first publish lands and a steady-state row count is known — a
+    # stalled rollup shows there, where a date budget cannot show it.
+    "house_activity_reports": "published once a Congress; no daily watermark",
+    "budget_volumes": "published once a fiscal year; no daily watermark",
+    "bill_committee_actions": "derived from house_activity_reports, which is watched with it",
+    "document_citations": "derived link table; both of its source families are watched with it",
+    "senate_expenditures": "semiannual report; no daily watermark",
 }
 
 

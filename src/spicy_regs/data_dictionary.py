@@ -126,6 +126,14 @@ CONTRACT_TABLES: tuple[str, ...] = (
     "record_issues",
     "treaties",
     "nominations",
+    # The two PDF-only families (spicy-docs 0.23.0). ``document_citations`` is
+    # the shared link table both GovInfo families write into, with one owner:
+    # the print-citations rollup.
+    "house_activity_reports",
+    "budget_volumes",
+    "bill_committee_actions",
+    "document_citations",
+    "senate_expenditures",
 )
 
 

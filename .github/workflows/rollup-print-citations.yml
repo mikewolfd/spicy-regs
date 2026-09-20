@@ -1,0 +1,31 @@
+name: Rollup — print_citations
+on:
+  schedule:
+    # 07:00 UTC. The block 07:00-16:59 is free of every other rollup cron, so
+    # this rollup's keyed GovInfo requests never share a rolling hour with the
+    # 3,680 the D1 receipt measured as the worst hour across the existing
+    # rollups, against the shared 4,000-per-hour ceiling.
+    - cron: '0 7 * * *'
+  workflow_dispatch:
+    inputs:
+      skip_upload:
+        description: 'Skip R2 upload (dry run)'
+        required: false
+        default: false
+        type: boolean
+      since:
+        description: 'Issue-date floor to walk from (YYYY-MM-DD); blank uses the 2023-01-01 default'
+        required: false
+        default: ''
+        type: string
+jobs:
+  run:
+    uses: ./.github/workflows/_rollup.yml
+    secrets: inherit
+    with:
+      command: run-rollup-print-citations
+      skip_upload: ${{ github.event_name == 'workflow_dispatch' && inputs.skip_upload || false }}
+      print_citations_since: ${{ inputs.since || '' }}
+      # Two GovInfo collections, two keyed requests a package, and an uncapped
+      # PDF read of up to 1,340 pages each at ~10 ms a page.
+      timeout_minutes: 120

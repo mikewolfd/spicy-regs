@@ -78,6 +78,11 @@ TABLES = (
     "committee_reports",
     "report_sections",
     "hearing_transcripts",
+    "house_activity_reports",
+    "budget_volumes",
+    "bill_committee_actions",
+    "document_citations",
+    "senate_expenditures",
     # A8/A9 (laws and rosters): the laws and committee-rosters rollups.
     "laws",
     "law_code_sections",

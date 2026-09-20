@@ -1,0 +1,31 @@
+name: Rollup — senate_expenditures
+on:
+  schedule:
+    # 07:30 UTC, Tuesdays. Weekly rather than daily because the publisher adds
+    # two packages a year: a daily run would enumerate a window whose every
+    # file is already published and read nothing. In the same free 07:00-16:59
+    # block as print-citations, thirty minutes later.
+    - cron: '30 7 * * 2'
+  workflow_dispatch:
+    inputs:
+      skip_upload:
+        description: 'Skip R2 upload (dry run)'
+        required: false
+        default: false
+        type: boolean
+      since:
+        description: 'Issue-date floor to walk from (YYYY-MM-DD); blank uses the 2024-01-01 default'
+        required: false
+        default: ''
+        type: string
+jobs:
+  run:
+    uses: ./.github/workflows/_rollup.yml
+    secrets: inherit
+    with:
+      command: run-rollup-senate-expenditures
+      skip_upload: ${{ github.event_name == 'workflow_dispatch' && inputs.skip_upload || false }}
+      senate_expenditures_since: ${{ inputs.since || '' }}
+      # Table detection over 80 pages of each of up to eight multi-thousand-page
+      # granule PDFs, plus their download.
+      timeout_minutes: 60

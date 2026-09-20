@@ -1,0 +1,123 @@
+<mods xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://www.loc.gov/mods/v3" version="3.3" xsi:schemaLocation="http://www.loc.gov/mods/v3 http://www.loc.gov/standards/mods/v3/mods-3-3.xsd" ID="P0b002ee1e7d3bf17">
+    <name type="corporate">
+         <namePart>United States Government Publishing Office</namePart>
+         <role>
+              <roleTerm authority="marcrelator" type="text">publisher</roleTerm>
+              <roleTerm authority="marcrelator" type="code">pbl</roleTerm>
+        </role>
+         <role>
+              <roleTerm authority="marcrelator" type="text">distributor</roleTerm>
+              <roleTerm authority="marcrelator" type="code">dst</roleTerm>
+        </role>
+    </name>
+    <name type="corporate">
+         <namePart>United States</namePart>
+         <namePart>Executive Office of the President</namePart>
+         <namePart>Office of Management and Budget</namePart>
+         <role>
+              <roleTerm authority="marcrelator" type="text">author</roleTerm>
+              <roleTerm authority="marcrelator" type="code">aut</roleTerm>
+        </role>
+         <description>Government Organization</description>
+    </name>
+    <typeOfResource>text</typeOfResource>
+    <genre authority="marcgt">government publication</genre>
+    <language>
+         <languageTerm type="code" authority="iso639-2b">eng</languageTerm>
+    </language>
+    <extension>
+         <collectionCode>GPO</collectionCode>
+         <category>Budget and Presidential Materials</category>
+         <branch>executive</branch>
+         <dateIngested>2026-09-04</dateIngested>
+    </extension>
+    <originInfo>
+         <publisher>Office of Management and Budget, Executive Office of the President</publisher>
+         <dateIssued encoding="w3cdtf">2025-09-05</dateIssued>
+         <issuance>continuing</issuance>
+         <frequency authority="marcfrequency">Annual</frequency>
+    </originInfo>
+    <physicalDescription>
+         <note type="source content type">deposited</note>
+         <digitalOrigin>born digital</digitalOrigin>
+         <extent>16 digital object pages</extent>
+    </physicalDescription>
+    <classification authority="sudocs">PREX 2.8:2026</classification>
+    <identifier type="uri">https://www.govinfo.gov/app/details/BUDGET-2026-MSR</identifier>
+    <identifier type="local">P0b002ee1e7d3bf17</identifier>
+    <recordInfo>
+         <recordContentSource authority="marcorg">DGPO</recordContentSource>
+         <recordCreationDate encoding="w3cdtf">2026-09-04</recordCreationDate>
+         <recordChangeDate encoding="w3cdtf">2026-09-04</recordChangeDate>
+         <recordIdentifier source="DGPO">BUDGET-2026-MSR</recordIdentifier>
+         <recordOrigin>machine generated</recordOrigin>
+         <languageOfCataloging>
+              <languageTerm type="code" authority="iso639-2b">eng</languageTerm>
+        </languageOfCataloging>
+    </recordInfo>
+    <accessCondition type="GPO scope determination">fdlp</accessCondition>
+    <extension>
+         <docClass>BUDGET</docClass>
+         <accessId>BUDGET-2026-MSR</accessId>
+         <ACCode>BUDGET</ACCode>
+         <isCurrentEdition>false</isCurrentEdition>
+         <editionId>BUDGET-MSR</editionId>
+         <field name="Fiscal Year">2026</field>
+         <description>The Mid-Session Review (MSR) is a supplemental update to the President’s FY 2026 Budget. </description>
+         <image>thumbnails/BUDGET-2026-MSR.jpg</image>
+         <docCitation text="Budget FY 2026"></docCitation>
+         <genericNav1Value>Mid-Session Review</genericNav1Value>
+         <genericNav2Value>Fiscal Year 2026</genericNav2Value>
+         <packageSort>Z</packageSort>
+         <law congress="119" isPrivate="false" number="21"></law>
+         <USCode title="31">
+                                
+              <section number="1106"></section>
+                                
+              <section detail="(a)(2)" number="1106"></section>
+                                
+              <section detail="(a)(3)" number="1106"></section>
+                            
+        </USCode>
+         <USCode title="31">
+                                
+              <section detail="(a)(2)" number="1106"></section>
+                                
+              <section detail="(a)(3)" number="1106"></section>
+                            
+        </USCode>
+         <president id="DJT" party="R">
+                                
+              <name type="authority-fnf">Donald J. Trump</name>
+                                
+              <name type="authority-lnf">Trump, Donald J.</name>
+                                
+              <name type="authority-other">Donald Trump</name>
+                                
+              <name type="authority-other">Donald John Trump</name>
+                            
+        </president>
+    </extension>
+    <titleInfo>
+         <title>Mid-Session Review</title>
+    </titleInfo>
+    <location>
+         <url displayLabel="Content Detail" access="object in context">https://www.govinfo.gov/app/details/BUDGET-2026-MSR</url>
+         <url access="raw object" displayLabel="PDF rendition">https://www.govinfo.gov/content/pkg/BUDGET-2026-MSR/pdf/BUDGET-2026-MSR.pdf</url>
+         <url access="raw object" displayLabel="JPEG rendition">https://www.govinfo.gov/content/pkg/BUDGET-2026-MSR/thumbnails/BUDGET-2026-MSR.jpg</url>
+    </location>
+    <identifier type="preferred citation">Budget FY 2026</identifier>
+    <abstract>The Mid-Session Review (MSR) is a supplemental update to the President’s FY 2026 Budget. </abstract>
+    <name type="personal">
+         <namePart>Donald J. Trump</namePart>
+         <role>
+              <roleTerm authority="marcrelator" type="text">originator</roleTerm>
+              <roleTerm authority="marcrelator" type="code">org</roleTerm>
+        </role>
+         <description>President of the United States</description>
+    </name>
+    <extension>
+         <searchTitle>Budget FY 2026;Mid-Session Review;
+            </searchTitle>
+    </extension>
+</mods>

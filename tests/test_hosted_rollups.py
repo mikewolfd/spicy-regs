@@ -31,8 +31,10 @@ from spicy_regs.pipelines.rollups.congress_index import (
 )
 from spicy_regs.pipelines.rollups.congress_bills import CongressBillsRollup
 from spicy_regs.pipelines.rollups.members import MembersRollup
+from spicy_regs.pipelines.rollups.print_citations import PrintCitationsRollup
 from spicy_regs.pipelines.rollups.press_releases import PressReleasesRollup
 from spicy_regs.pipelines.rollups.roll_call_votes import RollCallVotesRollup
+from spicy_regs.pipelines.rollups.senate_expenditures import SenateExpendituresRollup
 
 # A8/A9 (laws and rosters)
 from spicy_regs.pipelines.rollups.committee_rosters import CommitteeRostersRollup
@@ -76,6 +78,10 @@ HOSTED_ROLLUPS = (
     RecordIssuesRollup,
     TreatiesRollup,
     NominationsRollup,
+    # The two PDF-only families (spicy-docs 0.23.0), one rollup per
+    # acquisition pass.
+    PrintCitationsRollup,
+    SenateExpendituresRollup,
 )
 
 
