@@ -968,6 +968,111 @@ test kept. The index transform's own `ListingSource` copy is deleted in favour
 of `congress_walk.ListingSource`. All thirty-two contracts are hosted; the
 public surface is 59 tables.
 
+**2026-09-19, branch `hosting-d1-measured` (worktree `spicy-regs-wt-d1`).**
+Gap row **D1** of the
+[spicy-docs gap register](../spicy-docs/docs/research/closing-the-gaps-2026-09-19.md):
+one measured run per hosted rollup against the real publishers, under the
+stated caps, local output only. Receipt:
+`~/Work/corpora/supply-2026-09-02/receipts/d1-measured-run-2026-09-19/`
+(README, `summary.md` generated from the manifests, per-rollup request log,
+hour ledger, output digests). Thirteen rollups, 36 tables. The completed runs
+cost **4,148 keyed and 1,452 keyless** publisher requests; the night as a whole
+asked for **5,348 keyed and 2,054 keyless**, the difference being the bill
+family's crashed first attempt (finding 1 below), and **the worst rolling hour
+was 3,680 against the 4,000 ceiling**, which answers **D5** — the family's eight archive reads cost
+one listing request each and the night never approached the cap, so the
+register's "stop here unless it exceeds the cap" is satisfied.
+
+- [x] **No cap was reduced.** The bill family's `MAX_VERSION_FETCHES` (600) is
+  documented as three requests per printing, which would breach the
+  1,500-keyed threshold the brief set — but the measured split is **2 keyed +
+  1 keyless** per GovInfo package (`api.govinfo.gov` summary and MODS are
+  keyed, the `www.govinfo.gov` body is not), so 600 printings is 1,200 keyed.
+  Confirmed on `committee-reports` before the family ran and again by the
+  family landing on exactly 1,200.
+- [x] **Uploads impossible rather than skipped.** Every run started with no
+  `R2_ACCESS_KEY_ID`/`R2_SECRET_ACCESS_KEY`, and the runner refuses to start if
+  either is set; the transforms were called directly, so `RollupPipeline.run()`'s
+  publish step was never reached. `R2_PUBLIC_URL` was set, because the prior
+  table is read over it with a plain public GET — that read is what makes
+  "size before" a number. Only `congress_bills` existed (419,565 rows, 10
+  columns); the other 35 tables answered `404`, recorded as never-published
+  rather than as zero (`prior-tables.json`).
+- [x] **`descriptions.yaml` carries the numbers.** All 26 "no run has been
+  measured yet" / "none yet; the first run fills it" statements are replaced
+  with the run's figures, and publisher findings went into `data_quality`.
+  `measured_on` was already `2026-09-19` and the run is that date, so most
+  values do not move — what moves is what the field now means: the day a run
+  checked the sentence, not the day someone wrote it. Regenerated; `generate`
+  is idempotent (second run changes no byte).
+
+**Findings the run turned up, in the order they cost something:**
+
+1. **A `Private Law` printing killed the whole bill-family run.**
+   `version_slug("Private Law")` resolves to `private-law` and `govinfo_suffix`
+   refuses it (GovInfo publishes private laws as PLAW `pvtl`, not as a BILLS
+   printing). In `_version_captures` that derivation sat *outside* the
+   per-printing refusal boundary the function already keeps around the fetch,
+   so the first attempt lost all seventeen outputs after 532 s and 1,802
+   requests. The wheel answers the same refusal twice — in
+   `BillVersionCapture.version_code_is_reprint_ambiguous`, whose docstring says
+   in as many words "rather than left to abort a whole bill over one
+   unrecognised printing", and in `_sorted_versions`. This repository was the
+   third place and the only one that aborted. **Fixed here**, minimally: the
+   refusal is caught, the printing still gets its row from the publisher's own
+   facts, `package_id` stays `None` (which the capture's type already allows)
+   and it is not fetched and does not spend the budget. Regression test
+   mutation-checked. Two bills of the 119th carry such a printing
+   (`119-hr-3377`, `119-hr-7194`) out of 18,956.
+2. **OLRC Table III answers `200` and then truncates the body.**
+   `uscode.house.gov` returns a clean status line and headers, then closes the
+   connection mid-chunk (`RemoteProtocolError: peer closed connection without
+   sending complete message body`). Intermittent per page, not per act
+   (`119_1` and `119_4` were served whole in the same run). Re-derived outside
+   the rollup with a plain `httpx.get`, so it is the publisher's. It blocked
+   99 of the 108 listed acts; the rollup's step-past and stop-after-three
+   guards held, spending 25 OLRC requests instead of 300. Written into
+   `table3_records`' `data_quality`. **A status-code check cannot see this** —
+   worth remembering wherever a `200` is treated as a record.
+3. **The CHRG per-run cap is spent on packages that cannot become rows.** 187
+   of the 200 packages the `collections/CHRG` window served are SERIALSET ids
+   the body grammar refuses, leaving 13 `hearing_transcripts`. The CRPT side
+   loses 28 of 133 the same way and to MODS `accessId` mismatches. The window
+   advances slowly for that reason, not because few hearings are published —
+   a cheap pre-filter on the collection listing is the obvious next move.
+4. **Seven committee meetings state a chamber the detail route will not
+   spell**, so they stay list-only permanently rather than transiently.
+5. **Page-boundary repeats on three more routes**: 12 of 4,975 communications,
+   4 of 2,208 nominations, 50 of 7,066 amendments — the declared total counts
+   entries, not records, as A11 found on the bill route.
+
+**C1 (the model-backed modules, live for the first time): the adapter works
+and the contract does not.** One `summarize_bill` call through
+`transforms/model_call.py` and the real `GeminiClient` over one printing of the
+fixture bill. `gemini-3.8-flash` answered in 4.45 s with 204 input and 213
+output tokens — and `_read_answer` refused the answer.
+`SUMMARY_PROMPT_TEMPLATE` asks for its three items in prose and **never names
+the JSON keys**, while the adapter asks for `application/json`, so the model
+chose its own: it returned `summary` (which matches), `affected_audience`
+(reader wants `audience`) and `notable_provisions` (reader wants
+`topThreeProvisions`). Every test stubs the call with the right keys, which is
+why nothing caught it. **On this evidence a keyed production run publishes zero
+`bill_summaries` rows, every bill refused**, and `diff_summaries` shares the
+shape. The fix is spicy-docs' — either the sealed prompt names its keys (moving
+`PROMPT_VERSION`) or the reader accepts the publisher-neutral spellings — and
+sealing decisions are not this repository's, so it is recorded and not changed.
+Cost: **USD 0.00059 per bill** at the rate pinned in the receipt (a pin, not a
+measurement — nothing in the run observes a price); tokens are the publisher's
+own `usageMetadata`.
+
+**What one run cannot establish.** Every table but `congress_bills` was a cold
+start, so the incremental paths — skip-what-is-held, the watermark windows, the
+BILLSTATUS unchanged-zip skip that `bill_family_archives` exists for — were
+exercised only in their cold-start branch. **The second run is the one that
+measures the skip**, and it is the cheapest useful measurement still
+outstanding here.
+
+
 **2026-09-19, branch `hosting-rollups-index` (worktree `spicy-regs-wt-index`),
 sixth part.** Gaps A5, A7 and A10 of the
 [spicy-docs gap register](../spicy-docs/docs/research/closing-the-gaps-2026-09-19.md):
