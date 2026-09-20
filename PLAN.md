@@ -1545,10 +1545,15 @@ contracts over 813 columns: two new tables and appended columns on three.
 All 39 are registered, the unhosted set is empty, and 67 tables are described
 (the two additions plus this host's committee_report_reads checkpoint).
 
-- The local Mirrulations reader is deleted. The package reader aborts on
-  access refusal, manifests only records, and retries retained unresolved keys
-  first with attempts carried forward. Legacy parse failures remain eligible
-  even if the old manifest incorrectly marked them processed.
+- The package owns Mirrulations downloads, retries and access refusals. A host
+  guard requires a non-blank string data.id before staging or manifesting a key;
+  unexpected objects remain unresolved with a named reason. spicy-docs is adding
+  the same shape check, making the guard belt-and-braces at the next adoption.
+  Unresolved keys retry first with attempts carried forward. failed_keys.parquet
+  restores from R2 and publishes before the manifest, including on zero-row
+  passes and when recovery clears the last failure. Only this retry checkpoint
+  is exempt from the data-size shrink guard. Legacy parse failures remain
+  eligible even if the old manifest incorrectly marked them processed.
 - Print selection and PDF preference now import the package rules. All thirteen
   measured BUDGET parts reach acquisition; a root-format refusal is counted as
   the publisher's answer and creates no volume or citation row.
@@ -1556,10 +1561,17 @@ All 39 are registered, the unhosted set is empty, and 67 tables are described
   cover_links reads the MODS already fetched; read_cbo_estimate gates the letter
   on the cover recital. The own-output checkpoint distinguishes completed empty
   covers, pending work and failures, and queues old rows for enrichment once.
+  Successfully evaluated hearings replace their prior relationship rows,
+  including when the corrected cover has no links; unread or refused bodies
+  keep their prior links.
 - Bill family hosts build_bill_family's cbo_cost_estimates rows and the bill's
   outcome, including requested-empty. Old rows without that outcome invalidate
   the archive skip once. House communications retain the publisher source_route
   on every existing row. No new rollup reads another rollup's output.
+  Successfully evaluated CBO lists replace each bill's prior estimate rows,
+  including absent or empty lists. Unexpected list shapes retain prior rows.
+  A credential refusal during printing acquisition aborts before any later
+  printing capture, as the report, print-citation and communication paths do.
 
 One measured run per changed rollup, with caps written first and never widened:
 
@@ -1597,3 +1609,11 @@ Checks through the frozen runner: **1,718 passed, 3 deselected**, ruff and ty
 clean, dictionary check **67 tables**, generation idempotent twice. Local
 commits only; no push or upload. Credential audit over the branch diff and the
 receipt: **0 matches**, including decoded Parquet values.
+
+Review follow-up: all four findings fixed locally. Regression tests cover
+identity-free Mirrulations objects in both ingestion paths, printing credential
+refusals, unresolved history across fresh runners, and removal of corrected
+hearing/CBO relationships. Frozen-runner checks: **1,748 passed, 3 deselected**,
+ruff and ty clean, dictionary check **67 tables**, generation idempotent across
+69 artifacts. Credential grep over the new diff: **0 matches** for the current
+API_GOV value and credential patterns. No push or live acquisition run.

@@ -8,7 +8,7 @@ One row per bill and CBO publication, using build_bill_family's own cbo_cost_est
 
 **Coverage.** Sampled. The one adoption bill-family run read the 118th's HR and S archives: 1,431 publication rows over 1,368 of 16,213 bills. The other 14,845 bills state requested-empty:absent on congress_bills, with zero invented estimate rows. The whole pass used 16 requests (8 keyed, 8 keyless) under four printing captures; the estimate index itself cost no extra requests. No CBO.gov body was requested. Other Congresses and bill types were outside this run's scope. Receipt: `rollups-0-24-0-adoption-2026-09-20/`. Local output only; not uploaded. *(measured 2026-09-20)*
 
-**Data quality.** The bill's cbo_cost_estimates_outcome distinguishes an absent or empty element, an unexpected shape, and populated estimates. An empty index does not establish that CBO never scored the bill. Report citations are the bill's list, not proof that each publication is reprinted in each report; the report's recital gate is evaluated separately.
+**Data quality.** The bill's cbo_cost_estimates_outcome distinguishes an absent or empty element, an unexpected shape, and populated estimates. An empty index does not establish that CBO never scored the bill. Report citations are the bill's list, not proof that each publication is reprinted in each report; the report's recital gate is evaluated separately. A successfully evaluated bill replaces its prior estimate rows, including when the list is absent or empty. An unexpected list shape retains prior rows until a successful read can establish the current relationships.
 
 - **Parquet file:** `cbo_cost_estimates.parquet`
 - **Queryable via MCP `query_sql`:** Yes

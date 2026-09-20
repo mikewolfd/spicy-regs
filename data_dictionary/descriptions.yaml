@@ -2018,6 +2018,8 @@ tables:
       18, contradicted 1 and unverifiable 16. Recall is unmeasured. Only 2 of
       20 sampled House hearings and 0 of 3 Senate hearings stated COVER bills;
       a missing row does not establish that a hearing concerned no bills.
+      A successfully re-read cover replaces that hearing's prior links, including
+      an empty result. Unread or refused bodies retain their prior links.
     columns_from: spicy_docs
 
   cbo_cost_estimates:
@@ -2040,6 +2042,9 @@ tables:
       does not establish that CBO never scored the bill. Report citations are
       the bill's list, not proof that each publication is reprinted in each
       report; the report's recital gate is evaluated separately.
+      A successfully evaluated bill replaces its prior estimate rows, including
+      when the list is absent or empty. An unexpected list shape retains prior
+      rows until a successful read can establish the current relationships.
     columns_from: spicy_docs
 
   committee_report_reads:

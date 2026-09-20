@@ -1212,7 +1212,7 @@
       "coverage": "Sampled. Zero cover-link rows from 13 acquired CHRG MODS in the one adoption run, at zero additional requests. The owning committee-reports pass used 144 requests, 101 keyed. This bounded sample does not measure recall. Agenda requests remain capped at zero: the pass lacks a verified meeting-to- jacket join and House repository locator, and does not read another rollup's committee_meetings output. Receipt: `rollups-0-24-0-adoption-2026-09-20/`. Local output only; not uploaded.",
       "kind": "sampled",
       "measured_on": "2026-09-20",
-      "data_quality": "mods_cover means held_on. The package measured confirmation on 19 of 20 cover pairs and 18 of 18 pairs where cover and agenda agreed. Agenda links mean noticed, not held_on: agenda-only pairs were confirmed 1 of 18, contradicted 1 and unverifiable 16. Recall is unmeasured. Only 2 of 20 sampled House hearings and 0 of 3 Senate hearings stated COVER bills; a missing row does not establish that a hearing concerned no bills.",
+      "data_quality": "mods_cover means held_on. The package measured confirmation on 19 of 20 cover pairs and 18 of 18 pairs where cover and agenda agreed. Agenda links mean noticed, not held_on: agenda-only pairs were confirmed 1 of 18, contradicted 1 and unverifiable 16. Recall is unmeasured. Only 2 of 20 sampled House hearings and 0 of 3 Senate hearings stated COVER bills; a missing row does not establish that a hearing concerned no bills. A successfully re-read cover replaces that hearing's prior links, including an empty result. Unread or refused bodies retain their prior links.",
       "columns": [
         "package_id",
         "congress",
@@ -1235,7 +1235,7 @@
       "coverage": "Sampled. The one adoption bill-family run read the 118th's HR and S archives: 1,431 publication rows over 1,368 of 16,213 bills. The other 14,845 bills state requested-empty:absent on congress_bills, with zero invented estimate rows. The whole pass used 16 requests (8 keyed, 8 keyless) under four printing captures; the estimate index itself cost no extra requests. No CBO.gov body was requested. Other Congresses and bill types were outside this run's scope. Receipt: `rollups-0-24-0-adoption-2026-09-20/`. Local output only; not uploaded.",
       "kind": "sampled",
       "measured_on": "2026-09-20",
-      "data_quality": "The bill's cbo_cost_estimates_outcome distinguishes an absent or empty element, an unexpected shape, and populated estimates. An empty index does not establish that CBO never scored the bill. Report citations are the bill's list, not proof that each publication is reprinted in each report; the report's recital gate is evaluated separately.",
+      "data_quality": "The bill's cbo_cost_estimates_outcome distinguishes an absent or empty element, an unexpected shape, and populated estimates. An empty index does not establish that CBO never scored the bill. Report citations are the bill's list, not proof that each publication is reprinted in each report; the report's recital gate is evaluated separately. A successfully evaluated bill replaces its prior estimate rows, including when the list is absent or empty. An unexpected list shape retains prior rows until a successful read can establish the current relationships.",
       "columns": [
         "bill_id",
         "congress",
