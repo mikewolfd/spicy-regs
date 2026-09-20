@@ -1231,3 +1231,101 @@ def test_a_congress_below_the_route_floor_is_refused(tmp_path, monkeypatch):
     monkeypatch.setenv("BILL_FAMILY_CONGRESSES", "81")
     with pytest.raises(ValueError, match="82nd"):
         build_bill_family(tmp_path, list_source=StubListSource({}, {}), download_prior=_no_prior)
+
+
+def test_a_printing_with_no_govinfo_suffix_is_a_row_not_a_dead_run():
+    """`Private Law` resolves as a slug and has no GovInfo package; that is one printing's problem.
+
+    Measured on the first cold-start walk of the 119th
+    (`~/Work/corpora/supply-2026-09-02/receipts/d1-measured-run-2026-09-19/`,
+    attempt 1): `bill_version_package_id` raised `VersionCodeError` for
+    `private-law` from outside any refusal boundary, and all seventeen outputs
+    were lost to it after 532 seconds and 1,802 requests. The wheel answers the
+    same refusal in `version_code_is_reprint_ambiguous` and `_sorted_versions`
+    for exactly this reason; this holds the third place to the same rule.
+
+    Without the fix this raises instead of returning, so the assertion below is
+    reached only when the refusal is caught.
+    """
+    from spicy_docs.sources.congress.bill_versions import VersionCodeError, govinfo_suffix, version_slug
+
+    from spicy_regs.transforms.build_bill_family import _version_captures
+
+    # The premise the test rests on, re-derived rather than assumed: the slug
+    # resolves and its GovInfo suffix does not.
+    assert version_slug("Private Law") == "private-law"
+    with pytest.raises(VersionCodeError):
+        govinfo_suffix("private-law")
+
+    class _Printing:
+        type = "Private Law"
+        formats = ()
+        package_id = None
+
+    class _Status:
+        identity = IDENTITY
+        text_versions = (_Printing(),)
+
+    captures = _version_captures(_Status(), acquirer=None, budget=[10])
+
+    assert [c.version_code for c in captures] == ["private-law"]
+    assert captures[0].package_id is None, "unaddressable, and the row says so rather than guessing"
+    assert captures[0].body is None and captures[0].document is None
+
+
+def test_an_unaddressable_printing_is_never_fetched_and_spends_no_budget():
+    """The `package_id is not None` guard, with a printing that gets past the other two.
+
+    The sibling test above passes no acquirer and no formats, so the guard on
+    `package_id` is never evaluated there and deleting it would survive. This
+    one gives the printing a real offered format, so `chosen` is not None and an
+    acquirer *is* present — the only remaining thing standing between the run
+    and `acquire(None)` is the guard under test.
+
+    The format's URL is a Congress.gov link rather than a canonical GovInfo one,
+    so `bill_package_id_from_url` declines it (it recognizes only the canonical
+    form) and the derivation below it raises for `private-law`. That is the real
+    shape: the publisher offers somewhere to read the printing, and nothing in
+    it addresses a GovInfo package.
+    """
+    from spicy_docs.sources.congress.bill_status import BillTextFormat, BillTextVersion
+
+    from spicy_regs.transforms.build_bill_family import _version_captures
+
+    class _RecordingAcquirer:
+        def __init__(self) -> None:
+            self.requested: list[str | None] = []
+
+        def acquire(self, package_id, *, max_bytes=None):
+            self.requested.append(package_id)
+            raise AssertionError(f"acquire must not be called for an unaddressable printing: {package_id!r}")
+
+    printing = BillTextVersion(
+        type="Private Law",
+        date="2026-09-01",
+        formats=(
+            BillTextFormat(url="https://www.congress.gov/119/bills/hr6028/BILLS-119hr6028.htm", type="HTML", package_id=None),
+        ),
+        package_id=None,
+    )
+
+    class _Status:
+        identity = IDENTITY
+        text_versions = (printing,)
+
+    acquirer = _RecordingAcquirer()
+    budget = [10]
+    captures = _version_captures(_Status(), acquirer=acquirer, budget=budget)
+
+    # The premise: the other two conditions are both satisfied, so only the
+    # package_id guard can be what stops the call.
+    from spicy_docs.sources.congress.bill_versions import DEFAULT_FORMAT_PREFERENCE, choose_format
+
+    assert choose_format(printing.formats, prefer=DEFAULT_FORMAT_PREFERENCE) is not None
+    assert acquirer is not None
+
+    assert acquirer.requested == [], "an unaddressable printing must not be handed to the acquirer"
+    assert budget == [10], "and must not spend the run's per-run fetch budget"
+    assert [c.version_code for c in captures] == ["private-law"]
+    assert captures[0].package_id is None
+    assert captures[0].source == "congress", "not fetched, so the row does not claim a GovInfo source"

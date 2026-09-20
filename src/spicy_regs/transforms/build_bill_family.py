@@ -115,6 +115,7 @@ from spicy_docs.sources.congress.bill_status import (
 from spicy_docs.sources.congress.bill_tree import engine_available, parse_bill_tree
 from spicy_docs.sources.congress.bill_versions import (
     DEFAULT_FORMAT_PREFERENCE,
+    VersionCodeError,
     bill_version_package_id,
     choose_format,
     version_slug,
@@ -499,18 +500,53 @@ def _version_captures(
         if package_id is None and chosen is not None:
             package_id = bill_package_id_from_url(status.identity, chosen.url)
         if package_id is None:
-            package_id = bill_version_package_id(status.identity, version_code)
+            try:
+                package_id = bill_version_package_id(status.identity, version_code)
+            except VersionCodeError as error:
+                # A printing whose slug the sealed vocabulary knows but whose
+                # GovInfo suffix it does not: `Private Law` is the measured case
+                # (`private-law` resolves as a slug, and `govinfo_suffix` refuses
+                # it, because GovInfo publishes private laws as PLAW `pvtl` and
+                # not as a BILLS printing). Derived here rather than inside the
+                # acquire below, this refusal used to abort the whole run --
+                # seventeen tables lost to one printing of one bill, on a
+                # cold-start walk of the 119th (receipt
+                # `d1-measured-run-2026-09-19/`, first attempt).
+                #
+                # The wheel already answers the same refusal twice for the same
+                # reason -- `BillVersionCapture.version_code_is_reprint_ambiguous`
+                # says so in as many words ("rather than left to abort a whole
+                # bill over one unrecognised printing") and `_sorted_versions`
+                # tolerates the type. This is the third place, and it answers it
+                # the way this function already handles a printing it cannot
+                # fetch: the row still carries the publisher's own facts about
+                # the printing, and the columns that need an address are NULL.
+                # `package_id` is `str | None` on the capture for exactly this.
+                logger.warning(
+                    "Bill family: {} {} names no GovInfo package: {}",
+                    bill_key(status.identity),
+                    version_code,
+                    scrub_credential(str(error), ""),
+                )
 
         body = None
         document = None
         cleanup = None
         source = "congress"
-        if acquirer is not None and chosen is not None and budget[0] > 0:
+        # ``package_id`` is what the acquirer is addressed by, so an unaddressable
+        # printing is not fetched and does not spend the run's budget; it still
+        # gets its row below from the publisher's own facts.
+        if acquirer is not None and chosen is not None and package_id is not None and budget[0] > 0:
             budget[0] -= 1
             try:
                 package = acquirer.acquire(package_id)
             except Exception as error:  # noqa: BLE001 — one printing's refusal is not the bill's
-                logger.warning("Bill family: {} {} body refused: {}", package_id, version_code, error)
+                logger.warning(
+                    "Bill family: {} {} body refused: {}",
+                    package_id,
+                    version_code,
+                    scrub_credential(str(error), ""),
+                )
             else:
                 body = package.body_capture
                 source = "govinfo"
@@ -518,7 +554,7 @@ def _version_captures(
                     try:
                         document = parse_bill_tree(body.body, version=version_code)
                     except Exception as error:  # noqa: BLE001 — an unparsed printing is a NULL tree
-                        logger.warning("Bill family: {} tree refused: {}", package_id, error)
+                        logger.warning("Bill family: {} tree refused: {}", package_id, scrub_credential(str(error), ""))
                 elif package.format == "pdf":
                     # Keyed on the rendition actually fetched, not on the link
                     # chosen: the acquirer picks from what the package MODS
@@ -534,7 +570,7 @@ def _version_captures(
                     try:
                         cleanup = body_text(package).record
                     except Exception as error:  # noqa: BLE001 — an unextracted PDF is a NULL cleanup
-                        logger.warning("Bill family: {} PDF text refused: {}", package_id, error)
+                        logger.warning("Bill family: {} PDF text refused: {}", package_id, scrub_credential(str(error), ""))
 
         captures.append(
             BillVersionCapture(
@@ -812,7 +848,7 @@ def _retained_entry(acquirer: BulkStatusSource, acquisition: Any, congress: int,
                 "Bill family: {} {} listing refused, so the next run cannot skip its zip: {}",
                 congress,
                 bill_type,
-                error,
+                scrub_credential(str(error), ""),
             )
             return None
         entry, capture = listing.listing.zip_entry, listing.capture

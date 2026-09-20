@@ -6,7 +6,7 @@
 
 One row per model-written summary of the change between two printings of a bill. All columns are stored as VARCHAR.
 
-**Coverage.** Sampled, and accumulating. No run has been measured yet, so this states the weakest true claim rather than a range it has not established; each run adds to what is published rather than replacing it, because a bill the publisher has not touched since the last run is skipped and its rows stand. Model-backed, and further limited to bills with at least two compared printings. *(measured 2026-09-19)*
+**Coverage.** Sampled, and accumulating, and empty on every run measured so far. **`measured_on` does not carry its usual meaning here**: no run has exercised this table, so the date beside this statement is the day the statement was written, not the day a run checked it against the publisher (`descriptions.yaml`'s header lists the five entries in this position). Model-backed, and further limited to bills with at least two compared printings — of which the measured cold-start run produced 128. It shares the prompt-and-reader shape that row C1 of receipt `d1-measured-run-2026-09-19/` found refuses the model's own answer on `bill_summaries`, so the same caveat applies until that is settled upstream. *(measured 2026-09-19)*
 
 - **Parquet file:** `diff_summaries.parquet`
 - **Queryable via MCP `query_sql`:** Yes

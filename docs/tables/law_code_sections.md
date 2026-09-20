@@ -6,7 +6,7 @@
 
 One row per line of an OLRC per-Congress classification table: a U.S. Code place one public law section touched, with the Statutes at Large page and the publisher's action word. All columns are stored as VARCHAR.
 
-**Coverage.** Sampled. None yet; the first run fills it. The OLRC classification index links the current Congress's session tables only; each linked public-law-order table for a scoped Congress is read whole every run (583 rows for the 119th's 2nd session on 2026-09-19) and replaces that session's rows. *(measured 2026-09-19)*
+**Coverage.** Sampled. Measured on the same run (receipt `d1-measured-run-2026-09-19/`): the OLRC classification index linked both of the 119th's session tables, and reading each whole produced 3,632 rows — 3,049 from the 1st session's table and 583 from the 2nd's. The index links the current Congress's session tables only; each linked public-law-order table for a scoped Congress is read whole every run and replaces that session's rows. *(measured 2026-09-19)*
 
 **Data quality.** A row is its position on the page (`seq`), because one line can repeat; a page read this run replaces every prior row for its Congress and session, so a line the publisher removed does not linger under a position it no longer holds. Only the public-law order is read: the code-order twin holds the same lines under positions that would collide with these. A Congress the index does not link — every Congress but the current one — gets no rows here; `table3_records` is the historical view. `action` is the page's column 3 verbatim, NULL where the page left it blank, which its legend reads as amended. All columns are stored as VARCHAR.
 

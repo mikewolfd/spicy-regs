@@ -1012,10 +1012,21 @@ def build_catalog(descriptions: dict, schemas: dict[str, list[tuple[str, str]]])
     coverage is not a check. ``MCP_QUERYABLE`` is every published table, so it
     is not that fact either and is not exported here.
 
-    ``measured_on`` is when the coverage statement was last checked against the
-    published data. It does not update itself and nothing here claims it is
-    current; it exists so a stale statement is *detectable* rather than
-    indistinguishable from a fresh one.
+    ``measured_on`` is **the day a run checked the coverage statement against
+    the publisher** — not the day the sentence was written, and not the day the
+    data was last published. The distinction is the whole value of the field and
+    it was not always true of it: until 2026-09-19 every entry held its
+    statement date, because no rollup had been run against a real publisher, so
+    a consumer reading the field as "someone verified this" would have been
+    wrong on all of them. Gap row D1 gave it the stronger meaning for the tables
+    that run exercised; ``descriptions.yaml``'s header names the five it did
+    not, which still hold a statement date.
+
+    It does not update itself and nothing here claims it is current; it exists
+    so a stale statement is *detectable* rather than indistinguishable from a
+    fresh one. A consumer that needs "was this verified at all" cannot get it
+    from the date alone — the two meanings are not distinguishable in the value
+    — and must read the statement, which says which it is.
 
     ``kind`` is the coverage statement's kind as a token. The prose still opens
     by naming it for a person, but a consumer must not have to parse a sentence
