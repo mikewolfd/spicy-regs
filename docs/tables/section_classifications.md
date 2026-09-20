@@ -6,7 +6,7 @@
 
 One row per label a model assigned to one section of one printing. `vocabulary_hash` is a digest over the sealed label list, so a vocabulary change is visible in the data rather than silently reinterpreting old rows. All columns are stored as VARCHAR.
 
-**Coverage.** Sampled, and accumulating. No run has been measured yet, so this states the weakest true claim rather than a range it has not established; each run adds to what is published rather than replacing it, because a bill the publisher has not touched since the last run is skipped and its rows stand. Model-backed: rows exist only for runs with a model key set. A keyless run publishes none, which is what continuous integration does. *(measured 2026-09-19)*
+**Coverage.** Sampled, and accumulating, and **empty on every run measured so far**. Model-backed: rows exist only for runs with a model key set, and a keyless run publishes none, which is what continuous integration does and what the measured cold-start run of the 119th did: 18,956 bills rebuilt with no Gemini key set, so this table came back empty by design. The model path's first live exercise is recorded in the same receipt under row C1, and the answer the model returned did not satisfy the reader's contract, so no model-backed row has yet been published by any run. *(measured 2026-09-19)*
 
 - **Parquet file:** `section_classifications.parquet`
 - **Queryable via MCP `query_sql`:** Yes

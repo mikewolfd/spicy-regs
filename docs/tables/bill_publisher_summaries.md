@@ -6,7 +6,7 @@
 
 One row per CRS summary the publisher states on a bill, at the version and action it describes. `summary_html` is kept exactly as the publisher escaped it. All columns are stored as VARCHAR.
 
-**Coverage.** Sampled, and accumulating. No run has been measured yet, so this states the weakest true claim rather than a range it has not established; each run adds to what is published rather than replacing it, because a bill the publisher has not touched since the last run is skipped and its rows stand. Same scope as `bill_actions`. These are the Congressional Research Service summaries the publisher states on a bill, not the model-written ones in `bill_summaries`. *(measured 2026-09-19)*
+**Coverage.** Sampled, and accumulating. Measured on one cold-start run of the 119th (receipt `d1-measured-run-2026-09-19/`): 18,956 bills rebuilt from the eight BILLSTATUS archives in 500 seconds, at 1,200 keyed and 616 keyless requests. It published 5,820 CRS summary rows. Each run adds to what is published rather than replacing it, because a bill the publisher has not touched since the last run is skipped and its rows stand. Same scope as `bill_actions`. These are the Congressional Research Service summaries the publisher states on a bill, not the model-written ones in `bill_summaries`. *(measured 2026-09-19)*
 
 - **Parquet file:** `bill_publisher_summaries.parquet`
 - **Queryable via MCP `query_sql`:** Yes

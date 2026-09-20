@@ -6,7 +6,7 @@
 
 One row per member's position on one roll call. `position` keeps the publisher's own word (the Clerk spells both Aye/No and Yea/Nay) and `position_normalized` carries the fold, so a count and a quotation are both answerable. All columns are stored as VARCHAR.
 
-**Coverage.** Sampled, and accumulating. No run has been measured yet, so this states the weakest true claim rather than a range it has not established. One row per member per roll call in `roll_call_votes`, so it inherits that table's House-only scope, per-run cap and skip-what-is-already-held behavior exactly. *(measured 2026-09-19)*
+**Coverage.** Sampled, and accumulating. Measured on the same cold-start run as `roll_call_votes` (receipt `d1-measured-run-2026-09-19/`): 249,099 member positions across its 577 roll calls, an average of 432 a roll call. One row per member per roll call in `roll_call_votes`, so it inherits that table's House-only scope, per-run cap and skip-what-is-already-held behavior exactly. *(measured 2026-09-19)*
 
 - **Parquet file:** `member_votes.parquet`
 - **Queryable via MCP `query_sql`:** Yes

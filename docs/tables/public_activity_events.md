@@ -6,7 +6,7 @@
 
 One row per change detected between two runs of the bill family. Two instants per row: `occurred_at` is the publisher's, `detected_at` is the run's. All columns are stored as VARCHAR.
 
-**Coverage.** Derived. Computed by comparing one bill-family run against the previously published one, so the first run's events are all additions and the table cannot describe anything that happened before this rollup began. A row leaving a table is not an event: the four event types are sealed. *(measured 2026-09-19)*
+**Coverage.** Derived. Computed by comparing one bill-family run against the previously published one, so the first run's events are all additions and the table cannot describe anything that happened before this rollup began. Measured on that first run (receipt `d1-measured-run-2026-09-19/`): 41,020 events, every one an addition, against an empty prior. A row leaving a table is not an event: the four event types are sealed. *(measured 2026-09-19)*
 
 - **Parquet file:** `public_activity_events.parquet`
 - **Queryable via MCP `query_sql`:** Yes

@@ -6,7 +6,7 @@
 
 One row per legislator in one capture of the community crosswalk. Split from `member_terms` because one row cannot hold a chamber switch. All columns are stored as VARCHAR.
 
-**Coverage.** Sampled. No run has been measured yet, so this states the weakest true claim rather than a range it has not established. Both roster files — current and historical — are captured whole, so this is expected to be every legislator the crosswalk knows; it is stated as sampled only because no run has been measured to confirm it. *(measured 2026-09-19)*
+**Coverage.** Sampled. Measured on one run (receipt `d1-measured-run-2026-09-19/`): both roster files — current and historical — were captured whole in two keyless requests and 2.6 seconds, yielding 12,770 legislators. The run confirms the capture is whole rather than a slice; the statement stays "Sampled" because the claim this table makes is about the crosswalk's own completeness, which no run of ours can establish, and because the machine-readable kind is a published contract value that should not move without a change in what is fetched. *(measured 2026-09-19)*
 
 - **Parquet file:** `members.parquet`
 - **Queryable via MCP `query_sql`:** Yes

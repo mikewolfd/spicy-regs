@@ -6,9 +6,10 @@
 
 One row per scheduled committee meeting, as the Congress.gov committee-meeting list and detail routes state it, keyed `(congress, chamber, event_id)`. The detail carries the hearing transcript jackets (`hearing_transcripts` joins on `event_id`), the related bills, the witnesses and every document URL. All columns are stored as VARCHAR.
 
-**Coverage.** Sampled, and accumulating. None yet: no run has been measured, and the first run fills it. Each run walks the whole `committee-meeting/{congress}` list across all three chambers for the Congresses in scope (2,754 records, 12 pages, for the 119th on 2026-09-19) and reads the detail of every meeting the table does not yet hold, newest `updateDate` first, at most 1,000 a run. *(measured 2026-09-19)*
+**Coverage.** Sampled, and accumulating. Measured on one cold-start run (receipt `d1-measured-run-2026-09-19/`): the whole `committee-meeting/119` walk across all three chambers declared 2,754 and served 2,754 over 12 pages with no repeat, all published; 993 details were read, 7 were refused and 1,754 rows were published list-only, at 1,005 keyed requests in 412 seconds. Each run walks the whole list for the Congresses in scope and reads the detail of every meeting the table does not yet hold, newest `updateDate` first, at most 1,000 a run. *(measured 2026-09-19)*
 
 **Data quality.** A row whose `committees_json` is NULL is list-only: its detail has not been read yet, and every detail-only column is NULL with it; a read detail states `[]` where it lists none. Event ids are keyed with their chamber because their uniqueness across chambers is unmeasured (spicy-docs' contract note); the 119th's House ids sit near 119,000 and its Senate ids near 338,000.
+One refusal class is the publisher's own vocabulary. Measured 2026-09-19, 7 of the 2,754 listed meetings state a chamber the detail route will not spell — the list row carries no usable chamber, so `list_route_url` refuses it with "chamber must be 'house', 'senate' or 'joint'" and the row is published list-only with its refusal counted. These 7 are permanent, not transient: the same list row will be refused every run, so they stay list-only until the publisher restates the chamber. They are visible as rows whose key names no chamber.
 
 - **Parquet file:** `committee_meetings.parquet`
 - **Queryable via MCP `query_sql`:** Yes

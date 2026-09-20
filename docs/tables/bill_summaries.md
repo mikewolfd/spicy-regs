@@ -6,7 +6,7 @@
 
 One row per plain-language summary of one printing of a bill. `frame` is stored because without it the summary is not reproducible from the row. All columns are stored as VARCHAR.
 
-**Coverage.** Sampled, and accumulating. No run has been measured yet, so this states the weakest true claim rather than a range it has not established; each run adds to what is published rather than replacing it, because a bill the publisher has not touched since the last run is skipped and its rows stand. Model-backed, same condition as `section_classifications`: no key, no rows. *(measured 2026-09-19)*
+**Coverage.** Sampled, and accumulating, and **empty on every run measured so far**. Model-backed, same condition as `section_classifications`: no key, no rows, and the measured cold-start run of the 119th was deliberately keyless. The one live call made since (receipt `d1-measured-run-2026-09-19/`, row C1) was answered by the model and then refused by `_read_answer`, because the sealed prompt asks for its three items in prose and never names the JSON keys the reader requires: the model returned `affected_audience` and `notable_provisions` where the reader wants `audience` and `topThreeProvisions`. Until that is settled upstream, a keyed run should be expected to publish no rows here either. *(measured 2026-09-19)*
 
 - **Parquet file:** `bill_summaries.parquet`
 - **Queryable via MCP `query_sql`:** Yes

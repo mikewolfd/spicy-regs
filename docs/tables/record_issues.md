@@ -6,7 +6,7 @@
 
 One row per daily Congressional Record issue, keyed `(volume, issue)`, the publisher's own identity. The detail's section names give `chambers`, the legislative-day calendar (which chambers sat), and the whole-issue link's stem gives the GovInfo CREC `package_id`. The volume is the year minus 1854 (volume 172 is 2026). All columns are stored as VARCHAR.
 
-**Coverage.** Sampled, and accumulating. None yet: no run has been measured, and the first run fills it. Each run walks the whole `daily-congressional-record/{volume}` list for each session volume of the Congresses in scope (volumes 171 and 172 for the 119th: 219 and 144 issues, one page each, on 2026-09-19) and reads the detail of every issue the table does not yet hold, newest `updateDate` first, at most 1,000 a run. *(measured 2026-09-19)*
+**Coverage.** Sampled, and accumulating. Measured on one cold-start run (receipt `d1-measured-run-2026-09-19/`): volumes 171 and 172 declared 219 and 144 and served exactly that, one page each and no repeat, and every one of the 363 details was read inside the 1,000-per-run cap — 365 keyed requests in 130 seconds, so this table reaches a complete state in a single run at the 119th's size. Each run walks the whole `daily-congressional-record/{volume}` list for each session volume of the Congresses in scope and reads the detail of every issue the table does not yet hold, newest `updateDate` first. *(measured 2026-09-19)*
 
 **Data quality.** A row whose `sections_json` is NULL is list-only: its detail has not been read yet, so `chambers`, `package_id` and every other detail-only column are NULL with it. A read detail with no chamber section (a Daily Digest only) states an empty `chambers`, distinct from NULL.
 
