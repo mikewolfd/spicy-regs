@@ -5,51 +5,46 @@ The optional `source-readers` extra enables the same readers for package install
 its wheels must be supplied explicitly until they are published in a registry.
 Base CLI and MCP installs do not require them.
 
-- `spicy_docs-0.21.2`: built with `uv build` from SpicyDocs commit
-  `3642aa1` (tag v0.21.2), 2026-09-19. SHA-256:
-  `96eb4897935998e903ed7e93ab26c120860baf3d677eeffd02599b760dbc8ca3`
-  (1,152,040 bytes). Keeps everything 0.21.1 carried — the table-contract
-  layer, the sealed body preference as `acquire`/`choose_format`'s default,
-  `extraction/body_text.py`, the bulk listing skip and the GPO normalization
-  fixes — and changes three things this repository reads:
-  - **`PackageModsIdentity.bills` and `.primary_bill`**
-    (`sources/govinfo/bodies.py`, `ModsBill`): every `<bill>` a package MODS
-    names, in document order, and the one marked `PRIMARY`.
-    `build_committee_reports.py` reads both from the package the acquirer
-    already proved and deletes the interim `_mods_bills`/`_primary_bill` parse
-    it carried. `bills` is a required field of the dataclass, so the test that
-    built a `PackageModsIdentity` by hand now runs `validate_package_mods` over
-    the fixture bytes, the same parse the acquirer runs.
-  - **Thirty-two table contracts** (was twenty-two; 617 columns). Of the ten
-    new ones, all ten are hosted: `house_communications`, `committee_meetings`,
-    `record_issues`, `treaties` and `nominations` by the rollups in
-    `pipelines/rollups/congress_index.py` (branch `hosting-rollups-index`,
-    A5/A7/A10), and `laws`, `law_code_sections`, `table3_records`,
-    `committees` and `committee_assignments` by the `laws` and
-    `committee-rosters` rollups (branch `hosting-rollups-laws-rosters`,
-    A8/A9). `data_dictionary.CONTRACT_TABLES` still enumerates the hosted
-    tables by hand, and `tests/test_contract_tables.py::UNHOSTED_CONTRACTS`
-    — now the empty set, asserted exactly — keeps the next wheel's new
-    contract a decision rather than a silent omission. Two hosted contracts
-    moved: `hearing_transcripts` appends `event_id` as its twentieth column
-    (read from the Congress.gov `hearing-detail` route by
-    `build_committee_reports` since the index branch), and
-    `congress_bills.statutes_at_large_cite`'s prose now says the host fills
-    it by joining `laws` at merge time, which
-    `transforms/table_merge.py::fill_statutes_at_large_cite` does after every
-    `congress_bills` merge from the published `laws` table; the dictionary
-    prints the wheel's sentence verbatim.
-  - **`BODY_PREFERENCE = ("xml", "uslm", "htm", "txt", "pdf")`** and
-    `DEFAULT_FORMAT_PREFERENCE = ("xml", "uslm", "html", "txt", "pdf")`: the
-    USLM rendition after XML, in both spellings. Nothing here passes a
-    preference, so both callers take the new default.
+- `spicy_docs-0.21.3`: built with `uv build` from SpicyDocs commit
+  `083b536` (tag v0.21.3), 2026-09-20. SHA-256:
+  `1f91bb70bc28a035fbeb7ca921dd3bb2b58fdc7e2fb353747dad2e365978f84b`
+  (1,181,012 bytes). A narrow release: unzipping both wheels and diffing them
+  shows exactly three modules changed and one data directory added, and
+  **the thirty-two table contracts are identical** — same 617 columns, same
+  identity, version column, grain and per-column prose, compared field by
+  field rather than inferred from the release note. `spicy-regs-dict
+  generate` accordingly moves nothing. What changed:
+  - **The prompt-shape fix** (`interpretation/model_call.py`,
+    `bill_summaries.py`, `section_classification.py`): each model-backed
+    module declares its answer's keys, types and counts once as `AnswerField`
+    records; `answer_shape_block` turns that declaration into the lines the
+    prompt sends and the reader looks values up through the same records, so
+    neither side can name a key the other does not. `PROMPT_VERSION` is `v2`
+    on all three prompts. Aliases (`top_provisions`, `section_id`) and the
+    `classifications` wrapper stay readable but are not offered. This exists
+    because the `v1` summary prompt asked for its three items in prose and
+    named none of the JSON keys: the first live call answered
+    `most_affected_audience` and `notable_provisions`, and **a keyed
+    production run here would have published zero `bill_summaries` rows**
+    (this repository's own C1 measurement; PLAN.md records it).
+  - **`schemas/document_capture/1.0/`**, a data directory of DocumentCapture
+    v1 schemas, six capture profiles and a rulespec module. It registers no
+    table contract and nothing here reads it.
 
-  `CongressListRoute.single_record` and `paged_json.page()`/`pages()`'s
-  `single_record` keyword are additive (default `False`); nothing here calls
-  either positionally. The new `reconstruct` extra (lxml) is not installed.
+  What this repository does with the fix: nothing in `transforms/model_call.py`
+  moves — the adapter already asks for `responseMimeType: application/json`,
+  which is the half that was right. `tests/test_bill_family.py` gains the
+  stubbed client the readers were never run behind, so the `v2` stamp on a
+  produced row and the refusal of the measured `v1`-era answer are both
+  asserted here, and `transforms/build_bill_family.py` wraps the three seams
+  so a refused answer costs its own rows rather than the run.
 
-  Replaces 0.21.1 (`6f8d20e`, SHA-256 `c519e231…68a6`).
-- `rulespec_artifacts-1.0.13`: required by spicy-docs 0.21.2, which pins it
+  Replaces 0.21.2 (`3642aa1`, SHA-256 `96eb4897…8ca3`, 1,152,040 bytes), which
+  carried `PackageModsIdentity.bills`/`.primary_bill`, the ten new contracts
+  this repository now hosts in full, and `uslm` in `BODY_PREFERENCE` /
+  `DEFAULT_FORMAT_PREFERENCE`; all of that stands unchanged. The `reconstruct`
+  extra (lxml) is still not installed.
+- `rulespec_artifacts-1.0.13`: required by spicy-docs 0.21.3, which pins it
   exactly; 1.0.12 no longer resolves. Nothing here imports it — it is a
   transitive pin vendored under the same discipline. Byte-identical to the
   wheel `rulespec` itself built (`dist/artifacts/`) and to the one spicy-docs
