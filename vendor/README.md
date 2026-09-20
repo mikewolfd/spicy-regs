@@ -5,11 +5,22 @@ The optional `source-readers` extra enables the same readers for package install
 its wheels must be supplied explicitly until they are published in a registry.
 Base CLI and MCP installs do not require them.
 
-- `spicy_docs-0.24.1`: SpicyDocs patch release (release commit `fc8171d`),
-  2026-09-20. Verified before and after copying: **1,321,932 bytes**, SHA-256
-  `ce25270b5328ccd4da4f51d2e241141531b4fb058313da38628c647f63531fa6`.
+- `spicy_docs-0.24.2`: SpicyDocs patch release (release commit `965776e`),
+  2026-09-20. Verified before and after copying: **1,333,353 bytes**, SHA-256
+  `cf84fb9f5ede4a53d1dca078759297b08ca30c63c82eb6343ccf53142caf72b1`.
   Both pins and the uv source move together; `uv.lock` records the same digest.
-  Replaces 0.24.0 (`713c821`, 1,319,390 bytes, `0a03ce34…680a`).
+  Replaces 0.24.1 (`fc8171d`, 1,321,932 bytes, `ce25270b…1fa6`).
+
+  No contract moves: the registry imported from this wheel is **39 contracts,
+  813 columns**, the same as 0.24.1. The patch carries two fixes this
+  repository consumes without a code change of its own. The shared retry now
+  scrubs an exception before it logs it and before it truncates it, so a
+  credential in a query string cannot stand in a log line that a later
+  successful attempt leaves behind; and a Mirrulations object rejected on its
+  advertised length has its body closed, which it did not before, so repeated
+  oversized objects can no longer hold connections open. Both came from the
+  duplication audit's correctness counterexamples in spicy-docs
+  `docs/research/dry-audit-2026-09-20.md`.
 
   Independent imports from both wheel archives establish **39 contracts,
   813 columns**, with every contract identical: column order, identity,
@@ -43,7 +54,7 @@ Base CLI and MCP installs do not require them.
   `shape_hearing_transcript` no longer accepts `bill_id`: hearing relationships
   are one-to-many and live in `hearing_bill_links`.
 
-- `rulespec_artifacts-1.0.13`: required by spicy-docs 0.24.1, which pins it
+- `rulespec_artifacts-1.0.13`: required by spicy-docs 0.24.2, which pins it
   exactly; 1.0.12 no longer resolves. Nothing here imports it — it is a
   transitive pin vendored under the same discipline. Byte-identical to the
   wheel `rulespec` itself built (`dist/artifacts/`) and to the one spicy-docs
