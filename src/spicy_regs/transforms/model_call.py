@@ -19,9 +19,10 @@ header.
 
 from __future__ import annotations
 
+import functools
 import json
 import os
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from typing import Any
 
 from spicy_docs.extraction.gemini import GenerationClient
@@ -90,3 +91,50 @@ def model_call(client: GenerationClient, *, response_mime_type: str = "applicati
         )
 
     return call
+
+
+def survive_refused_answer[T](
+    seam: Callable[..., T],
+    *,
+    empty: T,
+    refused: Callable[[ModelCallError], None],
+) -> Callable[..., T]:
+    """Wrap one interpretation seam so a refused answer costs its own rows, not the run.
+
+    ``classify_sections``, ``summarize_bill`` and ``summarize_diff`` raise
+    ``ModelCallError`` when the answer does not satisfy the shape their prompt
+    asked for — the measured failure spicy-docs 0.21.3's ``AnswerField``
+    declaration exists for, where the first live call came back spelling
+    ``audience`` as ``most_affected_audience``. All three call the model
+    *outside* ``interpretation.bill_family``'s own refusal guard, which only
+    wraps the row shapers, so without this the exception leaves
+    ``build_bill_family`` and aborts the whole rollup: one bad answer about one
+    printing would cost every status-derived row of every bill in the run. An
+    unstated key set was one defect; losing a run to it is another.
+
+    ``empty`` is what the generator's caller already reads as "nothing to
+    store" — ``()`` for the classifier, ``None`` for the two summarizers —
+    so ``bill_family`` files its own named refusal and the remaining tables
+    are published as usual. It files the summarizer's under the one reason it
+    has for a ``None``, "its text is below the minimum it will summarize",
+    which is not why this one came back empty; spicy-regs therefore logs the
+    answer's real refusal itself, and only the count reaches anything
+    retained. Naming the true reason in the record is spicy-docs' to do, by
+    catching ``ModelCallError`` in ``_summarize_version``.
+
+    Only ``ModelCallError`` is caught, and it is the narrowest catch that
+    works: ``GeminiClient`` raises ``CredentialRefusedError`` on 401/403 and
+    ``ExtractionError`` on any other HTTP status, and neither is an answer.
+    A credential refusal must abort, and an empty model table must never be
+    what a 502 looks like.
+    """
+
+    @functools.wraps(seam)
+    def guarded(*args: Any, **kwargs: Any) -> T:
+        try:
+            return seam(*args, **kwargs)
+        except ModelCallError as error:
+            refused(error)
+            return empty
+
+    return guarded

@@ -31,6 +31,10 @@ import httpx
 import pyarrow.parquet as pq
 import pytest
 from loguru import logger
+from spicy_docs.extraction import gemini
+from spicy_docs.interpretation.bill_summaries import SUMMARY_FIELDS
+from spicy_docs.interpretation.model_call import answer_shape_block
+from spicy_docs.interpretation.section_classification import CLASSIFICATION_FIELDS, LABEL_NAMES
 from spicy_docs.schemas import TABLE_CONTRACTS
 from spicy_docs.sources.congress.bill_status import BillIdentity, parse_bill_status
 from spicy_docs.sources.congress.bill_status import BillSourceError
@@ -321,6 +325,157 @@ def test_the_consecutive_pair_is_actually_compared(family):
 def test_the_model_tables_are_empty_without_a_key(family):
     for name in ("section_classifications", "bill_summaries", "diff_summaries"):
         assert pq.read_table(family[name]).to_pylist() == [], name
+
+
+# --- The model seams, stubbed at the client -------------------------------
+#
+# ``build_bill_family`` builds its own ``GeminiClient`` from the environment,
+# so the seam a test reaches is the client: a stub in its place sits behind
+# ``model_call``, both readers and every check they make, which is the whole
+# path a live answer takes. The answers are built from the shape each prompt
+# states — ``answer_shape_block`` over spicy-docs' own ``AnswerField``
+# records, which is the byte the prompt carries — rather than from key
+# spellings written out here. A stub that spelled them itself and an answer
+# the reader accepted would prove only that this file and that one agree,
+# which is precisely the failure spicy-docs 0.21.3 fixed.
+
+LABEL = LABEL_NAMES[0]
+#: Long enough for the reader's 60-character floor and short of its 1200 cap.
+GOOD_SUMMARY = (
+    "This bill directs the named agency to carry out the program it describes, "
+    "and says who is covered, for how long, and what has to be reported back."
+)
+#: What the first live call actually answered (spicy-docs receipt
+#: ``c1-provenance.json``, 2026-09-19): the summary key right and the other
+#: two invented. Not a hypothetical — it is the measured answer the declared
+#: key set exists to refuse.
+V1_ERA_SUMMARY = {
+    "summary": GOOD_SUMMARY,
+    "most_affected_audience": "people the program serves",
+    "notable_provisions": ["the first one", "the second one"],
+}
+
+
+def _section_ids(prompt: str) -> list[str]:
+    """The bracketed ids the classification prompt itself lists, in its order.
+
+    Read off the prompt rather than recomputed here: the reader refuses a row
+    naming a section outside the batch it was sent, so answering from the
+    request is what a stub must do to reach the row shapers at all.
+    """
+    body = prompt.split("Sections:\n", 1)[1]
+    return [chunk.split("]", 1)[0].removeprefix("[") for chunk in body.split("\n\n---\n\n")]
+
+
+class StubGemini:
+    """A ``GenerationClient`` that answers in the shape the prompt it was handed asks for.
+
+    One client serves every prompt, as the real one does, so which prompt
+    arrived is decided by the answer-shape block it carries.
+    ``summary_answer`` replaces the summary answer alone, which is how a
+    refusal is fed to one table without disturbing the others.
+
+    Only two prompts reach it on this fixture: the pair's three settled
+    correspondences are all ``unchanged``, so ``summarize_diff`` declines
+    before it asks anything and ``diff_summaries`` is a named refusal rather
+    than a call. There is no third branch for an answer nothing sends — the
+    closing assertion names the prompt instead if that ever changes.
+    """
+
+    def __init__(self, *, summary_answer: dict | None = None):
+        self.summary_answer = summary_answer
+        self.prompts: list[str] = []
+
+    def generate(self, model: str, body: dict) -> dict:
+        prompt = body["contents"][0]["parts"][0]["text"]
+        self.prompts.append(prompt)
+        return {"candidates": [{"content": {"parts": [{"text": json.dumps(self._answer(prompt))}]}}]}
+
+    def _answer(self, prompt: str):
+        if answer_shape_block(CLASSIFICATION_FIELDS) in prompt:
+            return [{"sectionId": ref, "label": LABEL, "confidence": 0.9} for ref in _section_ids(prompt)]
+        assert answer_shape_block(SUMMARY_FIELDS) in prompt, f"no prompt states this shape: {prompt[:120]}"
+        if self.summary_answer is not None:
+            return self.summary_answer
+        return {"summary": GOOD_SUMMARY, "audience": "people the program serves", "topThreeProvisions": ["one"]}
+
+
+def _modelled_run(tmp_path, monkeypatch, *, summary_answer: dict | None = None):
+    """One run with the model seams wired to ``StubGemini``; returns tables, warnings and the client."""
+    monkeypatch.setenv("BILL_FAMILY_CONGRESSES", "119")
+    monkeypatch.setenv("BILL_FAMILY_BILL_TYPES", "hr")
+    # Not a credential: `GeminiClient` is replaced below and never sends it.
+    # It is only what `resolve_gemini_key` reads to decide the seams are wired.
+    monkeypatch.setenv("GEMINI_API_KEY", "stub")
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+
+    client = StubGemini(summary_answer=summary_answer)
+    monkeypatch.setattr(gemini, "GeminiClient", lambda *, api_key: client)
+
+    messages: list[str] = []
+    sink = logger.add(messages.append, level="WARNING", format="{message}")
+    try:
+        paths = build_bill_family(
+            tmp_path,
+            bulk_acquirer=StubBulkAcquirer(),
+            body_acquirer=StubBodyAcquirer(),
+            download_prior=_no_prior,
+        )
+    finally:
+        logger.remove(sink)
+    return {path.stem: path for path in paths}, messages, client
+
+
+def test_a_produced_summary_row_is_stamped_with_the_prompt_version_that_asked_for_it(tmp_path, monkeypatch):
+    """The v2 prompts state their keys; a row produced under them must say ``v2``.
+
+    Asserted as the literal, not against ``bill_summaries.PROMPT_VERSION``:
+    reading the constant the column is filled from would agree with itself
+    whatever it said, and this column is how a stored row is told apart from
+    one the v1 prompt produced (``needs_regeneration`` reads it).
+    """
+    tables, _messages, _client = _modelled_run(tmp_path, monkeypatch)
+
+    summaries = pq.read_table(tables["bill_summaries"]).to_pylist()
+    assert summaries, "a wired seam over two text printings must produce summary rows"
+    assert {row["prompt_version"] for row in summaries} == {"v2"}
+    assert all(row["bill_id"] == "119-hr-6028" for row in summaries)
+    assert all(row["summary"] == GOOD_SUMMARY for row in summaries)
+
+    classifications = pq.read_table(tables["section_classifications"]).to_pylist()
+    assert classifications, "the classifier answered every section it was sent"
+    assert {row["prompt_version"] for row in classifications} == {"v2"}
+    assert {row["label"] for row in classifications} == {LABEL}
+
+
+def test_a_v1_era_answer_costs_its_own_rows_and_names_the_keys_it_left_out(tmp_path, monkeypatch):
+    """The measured failure, end to end: the run continues and says what was missing.
+
+    ``most_affected_audience`` and ``notable_provisions`` are what the first
+    live call answered. Under v2 the reader refuses it naming **both** absent
+    keys at once — v1 refused the same answer but stopped at the first — and
+    the refusal must cost the summary rows only: the status-derived tables,
+    the diff and the classifications this same client answered correctly are
+    all still published, because a rollup that loses a run to one bad answer
+    about one printing has replaced one defect with a worse one.
+    """
+    tables, warnings, client = _modelled_run(tmp_path, monkeypatch, summary_answer=V1_ERA_SUMMARY)
+
+    assert pq.read_table(tables["bill_summaries"]).to_pylist() == [], "a refused answer must not be stored"
+    refusals = [line for line in warnings if "bill_summaries answer refused" in line]
+    assert refusals, f"the refusal must be reported, not swallowed: {warnings}"
+    for line in refusals:
+        assert "audience" in line and "topThreeProvisions" in line, line
+        assert "most_affected_audience" not in line, "the answer's own spellings are not the reader's to offer"
+
+    # The run continued: everything that does not depend on that answer is here.
+    assert [row["bill_id"] for row in pq.read_table(tables["congress_bills"]).to_pylist()] == ["119-hr-6028"]
+    assert pq.read_table(tables["bill_versions"]).to_pylist()
+    assert pq.read_table(tables["section_diffs"]).to_pylist()
+    classifications = pq.read_table(tables["section_classifications"]).to_pylist()
+    assert classifications, "the classifier's own answers were fine and must still be stored"
+    assert {row["prompt_version"] for row in classifications} == {"v2"}
+    assert len(client.prompts) > 1, "the run kept asking after the first refusal"
 
 
 def test_the_first_run_reports_every_bill_as_added(family):

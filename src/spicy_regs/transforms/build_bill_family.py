@@ -92,6 +92,7 @@ from spicy_docs.interpretation.bill_family import (
 )
 from spicy_docs.interpretation.bill_family import build_bill_family as build_family
 from spicy_docs.interpretation.bill_summaries import summarize_bill, summarize_diff
+from spicy_docs.interpretation.model_call import ModelCallError
 from spicy_docs.interpretation.section_classification import classify_sections
 from spicy_docs.interpretation.vote_matching import (
     VoteMatchError,
@@ -138,7 +139,12 @@ from spicy_regs.sources.congress_bills import (
     listing_reader,
 )
 from spicy_regs.transforms.congress_scope import bill_types_from_env, congresses_from_env
-from spicy_regs.transforms.model_call import DEFAULT_MODEL, model_call, resolve_gemini_key
+from spicy_regs.transforms.model_call import (
+    DEFAULT_MODEL,
+    model_call,
+    resolve_gemini_key,
+    survive_refused_answer,
+)
 from spicy_regs.transforms.table_merge import merge_contract_table, merge_table, published_table
 
 #: The DeltaTrack commit the vendored wheel was built from. ``installed_engine_stamp``
@@ -1382,14 +1388,48 @@ def build_bill_family(
     # The model seams, wired only when a key is present.
     gemini_key = resolve_gemini_key()
     classify = summarize = summarize_diff_call = None
+    answers_refused: Counter[str] = Counter()
     if gemini_key:
         from spicy_docs.extraction.gemini import GeminiClient
 
         model = os.environ.get("GEMINI_MODEL", DEFAULT_MODEL)
         call = model_call(GeminiClient(api_key=gemini_key))
-        classify = functools.partial(classify_sections, call=call, model=model)
-        summarize = functools.partial(summarize_bill, call=call, model=model)
-        summarize_diff_call = functools.partial(summarize_diff, call=call, model=model)
+
+        def _refused(table: str) -> Callable[[ModelCallError], None]:
+            """Record one answer the reader refused, with the reason it gave and no answer text.
+
+            ``str(error)`` is the reader's own message — which keys were
+            missing, or which value was the wrong type — never ``details``,
+            which holds the model's answer: the document is what a prompt echo
+            in a log leaks. Scrubbed with the key as well as the pattern,
+            because a message is evidence like any other.
+            """
+
+            def record(error: ModelCallError) -> None:
+                answers_refused[table] += 1
+                logger.warning(
+                    "Bill family: {} answer refused, no row stored: {}",
+                    table,
+                    scrub_credential(str(error), gemini_key or ""),
+                )
+
+            return record
+
+        classify = survive_refused_answer(
+            functools.partial(classify_sections, call=call, model=model),
+            empty=(),
+            refused=_refused("section_classifications"),
+        )
+        summarize = survive_refused_answer(
+            functools.partial(summarize_bill, call=call, model=model),
+            empty=None,
+            refused=_refused("bill_summaries"),
+        )
+        summarize_diff_call = survive_refused_answer(
+            functools.partial(summarize_diff, call=call, model=model),
+            empty=None,
+            refused=_refused("diff_summaries"),
+        )
         logger.info("Bill family: model seams wired ({})", model)
     else:
         logger.info("Bill family: no Gemini key — section_classifications, bill_summaries, diff_summaries stay empty")
@@ -1541,6 +1581,11 @@ def build_bill_family(
         logger.warning("Bill family: {:,} archive entries the reader refused", skipped)
     if refusals:
         logger.warning("Bill family: refusals by table — {}", dict(refusals))
+    if answers_refused:
+        # Counted apart from `refusals`: those are rows this run shaped and
+        # then declined, these are answers the model never shaped a row from.
+        # A run whose model tables are short for this reason says so.
+        logger.warning("Bill family: model answers refused by table — {}", dict(answers_refused))
     logger.info("Bill family: {:,} recorded-vote references on this run's bills", len(vote_rows))
     if votes_refused:
         logger.warning("Bill family: {:,} recordedVotes entries refused for a missing sealed field", votes_refused)
