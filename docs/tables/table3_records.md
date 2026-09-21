@@ -15,7 +15,8 @@ The rollup's two guards did their job and bounded the damage: each refused act w
 An act's page is read once: a later edit to it (a status moving to repealed) is not picked up, and `release_point` says how current the captured page was. Private laws and pre-1957 session-law chapters are not requested. All columns are stored as VARCHAR.
 
 - **Parquet file:** `table3_records.parquet`
-- **Queryable via MCP `query_sql`:** Yes
+- **MCP `query_sql` support:** Configured; requires an available artifact.
+- **Publication status:** Not established by this schema page or its measurement date.
 
 | Column | Type | Description |
 | --- | --- | --- |

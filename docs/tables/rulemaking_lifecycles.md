@@ -9,7 +9,8 @@ Proposed→final rulemaking arcs, one row per docket, discriminated by `kind`: `
 **Coverage.** Derived. Proposed-to-final pairs over `documents`; it covers exactly what that table covers. *(measured 2026-09-06)*
 
 - **Parquet file:** `rulemaking_lifecycles.parquet`
-- **Queryable via MCP `query_sql`:** Yes
+- **MCP `query_sql` support:** Configured; requires an available artifact.
+- **Publication status:** Not established by this schema page or its measurement date.
 
 | Column | Type | Description |
 | --- | --- | --- |

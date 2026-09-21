@@ -11,7 +11,8 @@ One row per (Congress, bill type) the pre-BILLSTATUS backfill walked, recording 
 **Data quality.** `list_completed` is true only when the walk reached the route's terminal page with declared and observed counts agreeing (the reader refuses otherwise); a run that hit the per-run cap mid-unit records how far it got and `list_completed` false, and the next run walks the unit again, pages charged to the cap, because only a walk can reach the records it did not. An empty success is not absence: `declared_count` is the route's own declared total for that query on that day, recorded beside `records_walked` even when the walk stopped early, so a capped walk can never read as an empty unit; a declared 0 is the publisher's statement that the Congress has no bills of that type. The declared total counts list entries, and the route can list one bill twice across a page boundary (`repeated_count`); whether that repeat also displaced another bill off the walk is not knowable from one walk, and a settled unit is not walked again to find out. A settled unit's bills are likewise not re-checked for a moved stamp; the archive-wide `congress-bills` rollup keeps the ten-column prefix current regardless. All columns are stored as VARCHAR.
 
 - **Parquet file:** `bill_family_backfill_walks.parquet`
-- **Queryable via MCP `query_sql`:** Yes
+- **MCP `query_sql` support:** Configured; requires an available artifact.
+- **Publication status:** Not established by this schema page or its measurement date.
 
 | Column | Type | Description |
 | --- | --- | --- |

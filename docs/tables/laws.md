@@ -13,7 +13,8 @@ The measured run also showed a third way into `not_requested` that the name does
 A captured PLAW whose meta names no citation is refused, never published with a NULL citation beside a `captured` outcome. A law already captured is not re-read unless its list row's `update_date` moves. All columns are stored as VARCHAR.
 
 - **Parquet file:** `laws.parquet`
-- **Queryable via MCP `query_sql`:** Yes
+- **MCP `query_sql` support:** Configured; requires an available artifact.
+- **Publication status:** Not established by this schema page or its measurement date.
 
 | Column | Type | Description |
 | --- | --- | --- |

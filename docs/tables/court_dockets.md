@@ -9,7 +9,8 @@ One row per federal court docket challenging agency action under the Administrat
 **Coverage.** True range with a density caveat. Dockets filed 1992-08-26 to 2026-09-04 across 95 courts, but 7,743 rows over that span is a bounded slice of federal court activity rather than the full docket record. *(measured 2026-09-06)*
 
 - **Parquet file:** `court_dockets.parquet`
-- **Queryable via MCP `query_sql`:** Yes
+- **MCP `query_sql` support:** Configured; requires an available artifact.
+- **Publication status:** Not established by this schema page or its measurement date.
 
 | Column | Type | Description |
 | --- | --- | --- |

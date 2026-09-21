@@ -11,7 +11,8 @@ One row per committee or subcommittee the Congress.gov committee list route stat
 **Data quality.** The route over-declares: on 2026-09-19 `committee/119` declared 238 and served 236 on its one terminal page with no continuation. The reader's terminal-page count refusal is the one refusal this rollup reads past, publishing what the publisher served with both numbers in the run log; every other walk refusal fails the run. `detail_captured` says whether the detail's columns are the publisher's or NULL; where the detail was captured, its `subcommittees` are the row's, an empty list included. The detail's counts (`bill_count` and the rest) are that day's statement, dated by `detail_update_date`. All columns are stored as VARCHAR.
 
 - **Parquet file:** `committees.parquet`
-- **Queryable via MCP `query_sql`:** Yes
+- **MCP `query_sql` support:** Configured; requires an available artifact.
+- **Publication status:** Not established by this schema page or its measurement date.
 
 | Column | Type | Description |
 | --- | --- | --- |

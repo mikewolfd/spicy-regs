@@ -11,7 +11,8 @@ One row per package, bill and link source, shaped by spicy-docs.
 **Data quality.** mods_cover means held_on. The package measured confirmation on 19 of 20 cover pairs and 18 of 18 pairs where cover and agenda agreed. Agenda links mean noticed, not held_on: agenda-only pairs were confirmed 1 of 18, contradicted 1 and unverifiable 16. Recall is unmeasured. Only 2 of 20 sampled House hearings and 0 of 3 Senate hearings stated COVER bills; a missing row does not establish that a hearing concerned no bills. A successfully re-read cover replaces that hearing's prior links, including an empty result. Unread or refused bodies retain their prior links.
 
 - **Parquet file:** `hearing_bill_links.parquet`
-- **Queryable via MCP `query_sql`:** Yes
+- **MCP `query_sql` support:** Configured; requires an available artifact.
+- **Publication status:** Not established by this schema page or its measurement date.
 
 | Column | Type | Description |
 | --- | --- | --- |

@@ -9,7 +9,8 @@ The Federal Register ↔ docket bridge: each `federal_register` row's `docket_id
 **Coverage.** Derived, and bounded by its inputs. Links between `federal_register` and `dockets`, so it inherits the Federal Register table's 2000 floor: a rule published before 2000 has no link here because the document is not in that table. *(measured 2026-09-06)*
 
 - **Parquet file:** `fr_docket_links.parquet`
-- **Queryable via MCP `query_sql`:** Yes
+- **MCP `query_sql` support:** Configured; requires an available artifact.
+- **Publication status:** Not established by this schema page or its measurement date.
 
 | Column | Type | Description |
 | --- | --- | --- |

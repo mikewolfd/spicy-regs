@@ -11,7 +11,8 @@ One row per bill the pre-BILLSTATUS backfill has attempted, carrying the list st
 **Data quality.** A row with `refusal` NULL is a success record — the bill's `congress_bills` row is published and the stamp is what the `bill/{congress}/{type}` list stated when it was — and a row with `refusal` set is a recorded failure, which the next named run retries first, directly and without a list walk, one request each; that is the resume rule (the CRS summaries pattern: skip only a success, retry every failure). A list record whose stamp differs from its success row means the bill moved and is fetched again. The stamp is the publisher's own `updateDateIncludingText` exactly as the list stated it, compared as a string: an old Congress's list records truncate the instant to a date while its detail records do not, so only list-to-list comparison is exact. `refusal` is the error's class name only, never its message. All columns are stored as VARCHAR.
 
 - **Parquet file:** `bill_family_backfills.parquet`
-- **Queryable via MCP `query_sql`:** Yes
+- **MCP `query_sql` support:** Configured; requires an available artifact.
+- **Publication status:** Not established by this schema page or its measurement date.
 
 | Column | Type | Description |
 | --- | --- | --- |

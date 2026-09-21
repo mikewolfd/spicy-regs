@@ -11,7 +11,8 @@ One row per daily Congressional Record issue, keyed `(volume, issue)`, the publi
 **Data quality.** A row whose `sections_json` is NULL is list-only: its detail has not been read yet, so `chambers`, `package_id` and every other detail-only column are NULL with it. A read detail with no chamber section (a Daily Digest only) states an empty `chambers`, distinct from NULL.
 
 - **Parquet file:** `record_issues.parquet`
-- **Queryable via MCP `query_sql`:** Yes
+- **MCP `query_sql` support:** Configured; requires an available artifact.
+- **Publication status:** Not established by this schema page or its measurement date.
 
 | Column | Type | Description |
 | --- | --- | --- |

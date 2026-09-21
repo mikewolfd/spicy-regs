@@ -11,7 +11,8 @@ One row per bill and CBO publication, using build_bill_family's own cbo_cost_est
 **Data quality.** The bill's cbo_cost_estimates_outcome distinguishes an absent or empty element, an unexpected shape, and populated estimates. An empty index does not establish that CBO never scored the bill. Report citations are the bill's list, not proof that each publication is reprinted in each report; the report's recital gate is evaluated separately. A successfully evaluated bill replaces its prior estimate rows, including when the list is absent or empty. An unexpected list shape retains prior rows until a successful read can establish the current relationships.
 
 - **Parquet file:** `cbo_cost_estimates.parquet`
-- **Queryable via MCP `query_sql`:** Yes
+- **MCP `query_sql` support:** Configured; requires an available artifact.
+- **Publication status:** Not established by this schema page or its measurement date.
 
 | Column | Type | Description |
 | --- | --- | --- |

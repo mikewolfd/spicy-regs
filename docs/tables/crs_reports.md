@@ -9,7 +9,8 @@ One row per Congressional Research Service (CRS) report, ingested from the Congr
 **Coverage.** True range. Reports published 1993-10-22 to 2026-09-04, running about 1,100 to 1,300 a year in recent years. *(measured 2026-09-06)*
 
 - **Parquet file:** `crs_reports.parquet`
-- **Queryable via MCP `query_sql`:** Yes
+- **MCP `query_sql` support:** Configured; requires an available artifact.
+- **Publication status:** Not established by this schema page or its measurement date.
 
 | Column | Type | Description |
 | --- | --- | --- |

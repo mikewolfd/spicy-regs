@@ -9,7 +9,8 @@ Per-agency monthly document volume, broken out by document type — one row per 
 **Coverage.** Derived. Monthly counts over `documents`; it covers exactly what that table covers, including its pre-1990 date defect. *(measured 2026-09-06)*
 
 - **Parquet file:** `agency_monthly_volume.parquet`
-- **Queryable via MCP `query_sql`:** Yes
+- **MCP `query_sql` support:** Configured; requires an available artifact.
+- **Publication status:** Not established by this schema page or its measurement date.
 
 | Column | Type | Description |
 | --- | --- | --- |

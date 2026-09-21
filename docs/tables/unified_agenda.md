@@ -9,7 +9,8 @@ One row per Regulation Identifier Number (RIN) per agenda edition, ingested from
 **Coverage.** Window. The 202510 edition alone, a single semiannual snapshot rather than a history of editions, so an agenda item cannot be compared against how it read in an earlier edition. *(measured 2026-09-06)*
 
 - **Parquet file:** `unified_agenda.parquet`
-- **Queryable via MCP `query_sql`:** Yes
+- **MCP `query_sql` support:** Configured; requires an available artifact.
+- **Publication status:** Not established by this schema page or its measurement date.
 
 | Column | Type | Description |
 | --- | --- | --- |

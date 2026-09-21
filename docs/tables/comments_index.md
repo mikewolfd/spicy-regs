@@ -9,7 +9,8 @@ A tiny per-partition row-count index for the partitioned comments. It maps each 
 **Coverage.** Derived. Per-partition counts over `comments`; it covers exactly what that table covers and adds no rows of its own. *(measured 2026-09-06)*
 
 - **Parquet file:** `comments_index.parquet`
-- **Queryable via MCP `query_sql`:** Yes
+- **MCP `query_sql` support:** Configured; requires an available artifact.
+- **Publication status:** Not established by this schema page or its measurement date.
 
 | Column | Type | Description |
 | --- | --- | --- |

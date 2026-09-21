@@ -36,6 +36,8 @@ markdown_extensions:
 
 nav:
   - Overview: index.md
+  - Publication status: publication-status.md
+  - Correction handling: correction-lifecycle.md
   - Changelog: changelog.md
   - Querying with Python: querying-python.md
   - Tables:

@@ -9,7 +9,8 @@ One row per registered federal entity, ingested from the SAM.gov Entity Manageme
 **Coverage.** True range with a density caveat. Registration dates run 1949-12-14 to 2026-07-04, and the ends are real, but a scheduled run walks one rotating registration-year window, so the interior is uneven and a given year may be thinner than its neighbours. *(measured 2026-09-06)*
 
 - **Parquet file:** `sam_entities.parquet`
-- **Queryable via MCP `query_sql`:** Yes
+- **MCP `query_sql` support:** Configured; requires an available artifact.
+- **Publication status:** Not established by this schema page or its measurement date.
 
 | Column | Type | Description |
 | --- | --- | --- |

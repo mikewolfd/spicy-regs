@@ -9,7 +9,8 @@ One row per Federal Register document, ingested from the federalregister.gov RES
 **Coverage.** True range, with a boundary worth stating. Documents published from 2000-01-03 to 2026-09-04. Federal Register documents published before 2000 are not in this table at all. *(measured 2026-09-06)*
 
 - **Parquet file:** `federal_register.parquet`
-- **Queryable via MCP `query_sql`:** Yes
+- **MCP `query_sql` support:** Configured; requires an available artifact.
+- **Publication status:** Not established by this schema page or its measurement date.
 
 | Column | Type | Description |
 | --- | --- | --- |

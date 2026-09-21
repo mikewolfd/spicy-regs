@@ -9,7 +9,8 @@ One row per package observed or inherited from this rollup's prior tables. Pendi
 **Coverage.** Not a range. The adoption run retained 118 own-output checkpoints: 43 complete (30 reports and 13 hearings) and 75 pending reports under the fixed 30-per-collection body cap. Complete includes hearings with zero cover links; it does not assert a link exists. Failed or pending work is retried first. Receipt: `rollups-0-24-0-adoption-2026-09-20/`. Local output only; not uploaded. *(measured 2026-09-20)*
 
 - **Parquet file:** `committee_report_reads.parquet`
-- **Queryable via MCP `query_sql`:** Yes
+- **MCP `query_sql` support:** Configured; requires an available artifact.
+- **Publication status:** Not established by this schema page or its measurement date.
 
 | Column | Type | Description |
 | --- | --- | --- |

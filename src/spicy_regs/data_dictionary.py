@@ -886,10 +886,10 @@ def table_coverage(descriptions: dict) -> dict[str, dict[str, str]]:
     not have, and two tables carry publisher dates in the year 0000. Each
     statement opens by naming which kind it is.
 
-    This describes what spicy-regs *publishes*. Whether a class is in a search
-    index is that consumer's fact, not ours, and must not be inferred from
-    anything here — ``MCP_QUERYABLE`` in particular is every published table,
-    so reading it as "searchable" would advertise classes no index holds.
+    These are statements about supported tables and retained measurements.
+    Neither a declaration nor its measurement date establishes that an output
+    is publicly available. Publication requires a separate artifact observation;
+    inclusion in a search index is that consumer's own fact.
     """
     return {
         table: {
@@ -929,10 +929,11 @@ def _render_table_page(
     data_quality = (entry.get("data_quality") or "").strip()
     if data_quality:
         lines += [f"**Data quality.** {data_quality}", ""]
-    queryable = "Yes" if table in MCP_QUERYABLE else "No (published to R2 only)"
+    queryable = "Configured" if table in MCP_QUERYABLE else "Not configured"
     lines += [
         f"- **Parquet file:** `{table}.parquet`",
-        f"- **Queryable via MCP `query_sql`:** {queryable}",
+        f"- **MCP `query_sql` support:** {queryable}; requires an available artifact.",
+        "- **Publication status:** Not established by this schema page or its measurement date.",
     ]
     if pk:
         lines.append(f"- **Primary / dedup key:** `{pk}`")
@@ -1014,33 +1015,24 @@ def cmd_check(args: argparse.Namespace) -> int:
 
 
 def build_catalog(descriptions: dict, schemas: dict[str, list[tuple[str, str]]]) -> dict:
-    """Return the catalog document: one entry per published class, in TABLES order.
+    """Return the schema catalog: one supported class per entry, in TABLES order.
 
     This is the declaration side of a readable catalog, and it exists as a file
-    because the consumer cannot import this package. It says what spicy-regs
-    publishes, in words a person can read without knowing an identifier.
+    because the consumer cannot import this package. It describes the tables
+    this checkout supports. A separate observation of the actual output is
+    required to establish publication; local runs and declarations do not.
 
     It deliberately does **not** say whether a class is searchable. That is the
     serving side's fact, and a reader must derive it by aggregating over its own
     index rather than trusting this document — a catalog that certifies its own
-    coverage is not a check. ``MCP_QUERYABLE`` is every published table, so it
-    is not that fact either and is not exported here.
+    coverage is not a check. ``MCP_QUERYABLE`` identifies configured table
+    support, not current availability, and is not exported here.
 
-    ``measured_on`` is **the day a run checked the coverage statement against
-    the publisher** — not the day the sentence was written, and not the day the
-    data was last published. The distinction is the whole value of the field and
-    it was not always true of it: until 2026-09-19 every entry held its
-    statement date, because no rollup had been run against a real publisher, so
-    a consumer reading the field as "someone verified this" would have been
-    wrong on all of them. Gap row D1 gave it the stronger meaning for the tables
-    that run exercised; ``descriptions.yaml``'s header names the five it did
-    not, which still hold a statement date.
-
-    It does not update itself and nothing here claims it is current; it exists
-    so a stale statement is *detectable* rather than indistinguishable from a
-    fresh one. A consumer that needs "was this verified at all" cannot get it
-    from the date alone — the two meanings are not distinguishable in the value
-    — and must read the statement, which says which it is.
+    ``measured_on`` is a manually maintained date attached to the coverage
+    statement. Some statements describe source measurements, some describe
+    local bounded runs, and some remain design statements. Read the associated
+    prose and receipt to distinguish them. The date is neither a publication
+    timestamp nor an automatic freshness or quality check.
 
     ``kind`` is the coverage statement's kind as a token. The prose still opens
     by naming it for a person, but a consumer must not have to parse a sentence
@@ -1051,7 +1043,7 @@ def build_catalog(descriptions: dict, schemas: dict[str, list[tuple[str, str]]])
     coverage = table_coverage(descriptions)
     return {
         "format_version": CATALOG_FORMAT_VERSION,
-        "declares": "what spicy-regs publishes; not what any index serves",
+        "declares": "supported table schemas; publication and search availability are verified separately",
         "classes": [
             {
                 "table": table,

@@ -9,7 +9,8 @@ One row per federal lobbying-disclosure filing, ingested from the U.S. Senate Lo
 **Coverage.** True range with a density caveat. Filing years span 2000 to 2026, but 286,369 of 287,246 rows are 2023 or later; earlier years are a tail of a few hundred rows each and should not be read as coverage of that period. *(measured 2026-09-06)*
 
 - **Parquet file:** `lobbying_filings.parquet`
-- **Queryable via MCP `query_sql`:** Yes
+- **MCP `query_sql` support:** Configured; requires an available artifact.
+- **Publication status:** Not established by this schema page or its measurement date.
 
 | Column | Type | Description |
 | --- | --- | --- |

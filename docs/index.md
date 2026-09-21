@@ -4,10 +4,11 @@ This is the schema reference for the **Spicy Regs** dataset — an open mirror o
 [regulations.gov](https://www.regulations.gov) federal regulatory data,
 published as Apache Parquet on a public Cloudflare R2 bucket.
 
-It documents every published table, column by column. The schema is generated
-directly from the code that defines and produces the data, and a CI check fails
-whenever the schema and these descriptions drift apart — so this reference stays
-in step with what's actually published.
+It documents the tables supported by this checkout, column by column. The schema
+is generated from code, and the offline check keeps those declarations and their
+descriptions aligned. Availability and the schema actually served must be checked
+against public artifacts separately. A local run or `measured_on` date does not
+establish publication. See the [publication observation](publication-status.md).
 
 ## Where the data comes from
 
@@ -26,7 +27,7 @@ downstream context can all be queried from one place.
 
 ## The tables
 
-Every table below is published as `https://data.spicy-regs.dev/<name>.parquet` and
+When published, a table is available as `https://data.spicy-regs.dev/<name>.parquet` and
 is queryable through the MCP server (`list_sources` / `describe_table` /
 `query_sql`).
 

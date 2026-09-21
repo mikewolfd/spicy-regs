@@ -11,7 +11,8 @@ One row per document posted to a docket — proposed rules, final rules, notices
 **Data quality.** 52,699 rows (2.6%) carry a `posted_date` before 1990, including eight in the year 0000 and one dated in the future. These are publisher values carried through faithfully, not parse errors on our side. Filter on the date when recency matters.
 
 - **Parquet file:** `documents.parquet`
-- **Queryable via MCP `query_sql`:** Yes
+- **MCP `query_sql` support:** Configured; requires an available artifact.
+- **Publication status:** Not established by this schema page or its measurement date.
 - **Primary / dedup key:** `document_id`
 
 | Column | Type | Description |

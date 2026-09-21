@@ -13,7 +13,8 @@ One row per published volume of the President's budget, with what its print adds
 **Thirteen measured parts are accepted by spicy-docs 0.24.0.** The seven additions are `OBJCLASS`, `TAB`, `DB`, `CLIMATE`, `LRB`, `CROSSCUT` and `DOD`. On one measured volume per part, `TAB`, `DB` and `CLIMATE` offer PDF only at granule stems; `LRB` offers an XLS and no supported body. A `GovInfoFormatNotOfferedError` at the package root is counted and logged as the publisher's answer, not as a failed or missing volume. No granule route is attempted: `shape_budget_volume` takes package summary/MODS and does not support a granule identity. These observations remain eligible on the next run and produce no invented document row.
 
 - **Parquet file:** `budget_volumes.parquet`
-- **Queryable via MCP `query_sql`:** Yes
+- **MCP `query_sql` support:** Configured; requires an available artifact.
+- **Publication status:** Not established by this schema page or its measurement date.
 
 | Column | Type | Description |
 | --- | --- | --- |

@@ -9,7 +9,8 @@ One row per Code of Federal Regulations *section* (a GovInfo CFR granule), inges
 **Coverage.** Window. The 2025 and 2026 annual editions only, out of the Code's full publication history. This is the Code roughly as it stands now, not a record of how a section changed. *(measured 2026-09-06)*
 
 - **Parquet file:** `cfr_sections.parquet`
-- **Queryable via MCP `query_sql`:** Yes
+- **MCP `query_sql` support:** Configured; requires an available artifact.
+- **Publication status:** Not established by this schema page or its measurement date.
 
 | Column | Type | Description |
 | --- | --- | --- |

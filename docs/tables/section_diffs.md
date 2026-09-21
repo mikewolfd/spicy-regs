@@ -11,7 +11,8 @@ One row per compared pair of consecutive printings of one bill. `engine_name`, `
 **Data quality.** A consecutive pair that cannot be diffed — because one or both sides has no parsed tree — is a counted refusal named by table, never a row. Measured on the cold-start run of the 119th (receipt `d1-measured-run-2026-09-19/`): **3,185** refusals against 128 published comparisons, which is what a 600-printing cap over 22,064 printings implies, since a pair needs both of its sides fetched in the same run. All columns are stored as VARCHAR.
 
 - **Parquet file:** `section_diffs.parquet`
-- **Queryable via MCP `query_sql`:** Yes
+- **MCP `query_sql` support:** Configured; requires an available artifact.
+- **Publication status:** Not established by this schema page or its measurement date.
 
 | Column | Type | Description |
 | --- | --- | --- |

@@ -9,7 +9,8 @@ One row per FCC ECFS filing — the FCC's comment equivalent: comments, reply co
 **Coverage.** Window. Filings received 2026-06-30 to 2026-09-04, a sixty-seven-day slice. The rollup merges incrementally, so this is the history accumulated so far and not the ECFS archive. *(measured 2026-09-06)*
 
 - **Parquet file:** `fcc_filings.parquet`
-- **Queryable via MCP `query_sql`:** Yes
+- **MCP `query_sql` support:** Configured; requires an available artifact.
+- **Publication status:** Not established by this schema page or its measurement date.
 
 | Column | Type | Description |
 | --- | --- | --- |

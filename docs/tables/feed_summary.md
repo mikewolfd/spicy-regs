@@ -9,7 +9,8 @@ A pre-computed rollup with one row per docket, joining docket metadata to commen
 **Coverage.** Derived. One row per docket over `dockets`, `documents` and `comments`; it covers exactly what those cover. *(measured 2026-09-06)*
 
 - **Parquet file:** `feed_summary.parquet`
-- **Queryable via MCP `query_sql`:** Yes
+- **MCP `query_sql` support:** Configured; requires an available artifact.
+- **Publication status:** Not established by this schema page or its measurement date.
 
 | Column | Type | Description |
 | --- | --- | --- |

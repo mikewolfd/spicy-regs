@@ -11,7 +11,8 @@ One row per line of an OLRC per-Congress classification table: a U.S. Code place
 **Data quality.** A row is its position on the page (`seq`), because one line can repeat; a page read this run replaces every prior row for its Congress and session, so a line the publisher removed does not linger under a position it no longer holds. Only the public-law order is read: the code-order twin holds the same lines under positions that would collide with these. A Congress the index does not link — every Congress but the current one — gets no rows here; `table3_records` is the historical view. `action` is the page's column 3 verbatim, NULL where the page left it blank, which its legend reads as amended. All columns are stored as VARCHAR.
 
 - **Parquet file:** `law_code_sections.parquet`
-- **Queryable via MCP `query_sql`:** Yes
+- **MCP `query_sql` support:** Configured; requires an available artifact.
+- **Publication status:** Not established by this schema page or its measurement date.
 
 | Column | Type | Description |
 | --- | --- | --- |

@@ -11,7 +11,8 @@ One row per recorded vote on one bill action: which roll call the bill's own act
 **Data quality.** Every row is a publisher statement copied without interpretation: the six fields a `recordedVotes` entry carries, plus the position of the action it sat on. An entry missing any of the six is refused and counted in the run log rather than published with a hole in it. `full_action_name` is a seventh field the BILLSTATUS user guide documents that the publisher was not sending on any of the 58 entries measured; it is carried because the publisher may resume sending it. Both chambers appear here — 6 of the 34 measured roll calls were Senate — even though `roll_call_votes` publishes House roll calls only, so a Senate row here is a linkage for a vote this pipeline does not yet host. All columns are stored as VARCHAR.
 
 - **Parquet file:** `bill_vote_references.parquet`
-- **Queryable via MCP `query_sql`:** Yes
+- **MCP `query_sql` support:** Configured; requires an available artifact.
+- **Publication status:** Not established by this schema page or its measurement date.
 
 | Column | Type | Description |
 | --- | --- | --- |

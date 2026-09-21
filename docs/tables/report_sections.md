@@ -9,7 +9,8 @@ One row per agency block parsed out of one committee report's text. `pattern` re
 **Coverage.** Sampled. The adoption run re-read 30 reports and shaped 290 agency blocks; the merge retained 1,246 rows from this rollup's own prior and fresh output. The shared committee-reports pass used 144 requests, 101 keyed. HTML states no page boundaries, so these fresh blocks have NULL page_start and page_end. Receipt: `rollups-0-24-0-adoption-2026-09-20/`. Local output only; not uploaded. *(measured 2026-09-20)*
 
 - **Parquet file:** `report_sections.parquet`
-- **Queryable via MCP `query_sql`:** Yes
+- **MCP `query_sql` support:** Configured; requires an available artifact.
+- **Publication status:** Not established by this schema page or its measurement date.
 
 | Column | Type | Description |
 | --- | --- | --- |

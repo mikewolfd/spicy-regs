@@ -11,7 +11,8 @@ One row per captured end-of-Congress House committee activity report package, wi
 **Data quality.** **The MODS is authoritative for bills, laws and Code sections, and this table's own columns say so.** Read at full page depth across the eight reports spicy-docs sampled, the print named 0 of 1,406 bills, 0 of 174 public laws, 0 of 37 U.S. Code sections and 0 of 7 Statutes at Large pages that the package MODS does not already state — so `distinct_bills_beyond_index`, `distinct_laws_beyond_index` and `distinct_usc_sections_beyond_index` are near zero, and a nonzero one is worth reading the evidence span for rather than taking as new yield. Measured here 2026-09-20 over **41** reports rather than eight, "zero" is very nearly right and not exactly right: 7 print-only bills of 7,686 distinct, 5 print-only laws of 990, and 6 print-only Code sections. The one apparent survivor, `188-11`, was the print's own misprint of `118-11`. What the print does add is committees beyond the submitting one (27 resolved codes), 87 RINs, 38 agency dockets and 5 GAO product ids. `committees_unresolved` is **a floor, not a defect count**: the Senate `cvc` roster states only the committees its listed senators sit on, so a name it does not reach stays unresolved rather than being guessed. `stated_page_count` is the publisher's own `pages` field and is never re-derived from the bytes; `pages_read` is what the extraction saw, and the two are reported separately on purpose (CRPT-118hrpt965 states 282 and a 60-page read saw 60). `submitted_by_bioguide_id` is NULL where the publisher states the member without an id, which CRPT-118hrpt965 does.
 
 - **Parquet file:** `house_activity_reports.parquet`
-- **Queryable via MCP `query_sql`:** Yes
+- **MCP `query_sql` support:** Configured; requires an available artifact.
+- **Publication status:** Not established by this schema page or its measurement date.
 
 | Column | Type | Description |
 | --- | --- | --- |

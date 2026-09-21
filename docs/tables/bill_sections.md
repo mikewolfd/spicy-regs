@@ -11,7 +11,8 @@ One row per content-bearing node of one bill version, in document order. All col
 **Data quality.** A printing with no parsed section tree is a counted refusal, never a row with invented values. On the measured cold-start run of the 119th (receipt `d1-measured-run-2026-09-19/`) the family reported **21,466** such refusals against 6,301 published rows — one per printing whose body the 600-per-run fetch cap did not reach, plus those offered only as PDF. The refusal count is therefore a measure of how far the cap is from the corpus, not of anything wrong with the printings; it falls as successive runs spend the cap on ground earlier ones did not reach. All columns are stored as VARCHAR.
 
 - **Parquet file:** `bill_sections.parquet`
-- **Queryable via MCP `query_sql`:** Yes
+- **MCP `query_sql` support:** Configured; requires an available artifact.
+- **Publication status:** Not established by this schema page or its measurement date.
 
 | Column | Type | Description |
 | --- | --- | --- |

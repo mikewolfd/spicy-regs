@@ -11,7 +11,8 @@ One row per captured GovInfo committee report package. `bill_id` is the measure 
 **Data quality.** Only the MODS PRIMARY bill fills bill_id. The thirteen CBO columns come from spicy-docs read_cbo_estimate on the same body already acquired. The cover recital gates publication of a letter: a CBO heading alone is not an estimate. report_states_estimate=false records an absent recital; NULL means the rule has not run. A positive recital with no resolved letter span remains distinct from an extracted letter. recital_bill_id comes from the printed recital and is retained beside the MODS bill_id.
 
 - **Parquet file:** `committee_reports.parquet`
-- **Queryable via MCP `query_sql`:** Yes
+- **MCP `query_sql` support:** Configured; requires an available artifact.
+- **Publication status:** Not established by this schema page or its measurement date.
 
 | Column | Type | Description |
 | --- | --- | --- |

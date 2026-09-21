@@ -9,7 +9,8 @@ One row per (commenter organization name, FEC committee) name match, derived by 
 **Coverage.** Derived, and bounded by a small input. Name matches between commenter organizations and FEC committees, reachable only for the small share of comments that carry an `organization` value at all, so absence of a link is not evidence that a commenter has none. *(measured 2026-09-06)*
 
 - **Parquet file:** `org_committee_links.parquet`
-- **Queryable via MCP `query_sql`:** Yes
+- **MCP `query_sql` support:** Configured; requires an available artifact.
+- **Publication status:** Not established by this schema page or its measurement date.
 
 | Column | Type | Description |
 | --- | --- | --- |

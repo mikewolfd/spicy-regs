@@ -9,7 +9,8 @@ One row per regulations.gov docket. A docket is the top-level folder a federal a
 **Coverage.** True range. Dockets as mirrored from regulations.gov, with modification dates from 2006-09-26 to 2026-09-06. The date records when a docket last changed, not when it opened, so it is a freshness axis rather than a coverage one. *(measured 2026-09-06)*
 
 - **Parquet file:** `dockets.parquet`
-- **Queryable via MCP `query_sql`:** Yes
+- **MCP `query_sql` support:** Configured; requires an available artifact.
+- **Publication status:** Not established by this schema page or its measurement date.
 - **Primary / dedup key:** `docket_id`
 
 | Column | Type | Description |

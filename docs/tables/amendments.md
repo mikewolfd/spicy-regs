@@ -6,12 +6,13 @@
 
 One row per amendment, as the Congress.gov amendment list route states it. Keyed on the amendment's own identity, not the bill it amends, because an amendment can amend another amendment; `amended_bill_id` and `amended_amendment_id` are foreign keys. All columns are stored as VARCHAR.
 
-**Coverage.** Sampled, and accumulating. Measured on one cold-start run (receipt `d1-measured-run-2026-09-19/`): with no prior table the window is open, so the run was a full walk of the 119th — 7,066 amendment records over 29 pages in 101 seconds, published as 7,016 rows after 50 repeated identities were collapsed. The Congress.gov amendment route for the Congresses the rollup is scoped to, walked in an `updateDate` window that starts at the watermark this table already reached and runs forward at most ninety days. **The watermark window is design, not measurement**: the measured run had no prior table, so it took the open window and no narrowed one has been observed — the second run is what measures it. *(measured 2026-09-19)*
+**Coverage.** Sampled, and accumulating. Measured on one cold-start run (receipt `d1-measured-run-2026-09-19/`): with no prior table the window is open, so the run was a full walk of the 119th — 7,066 amendment records over 29 pages in 101 seconds, produced locally as 7,016 rows after 50 repeated identities were collapsed. The Congress.gov amendment route for the Congresses the rollup is scoped to, walked in an `updateDate` window that starts at the watermark this table already reached and runs forward at most ninety days. **The watermark window is design, not measurement**: the measured run had no prior table, so it took the open window and no narrowed one has been observed — the second run is what measures it. Local output only; not uploaded. *(measured 2026-09-19)*
 
-**Data quality.** The publisher's `updateDate desc` order repeats an amendment across a page boundary when stamps tie, the same shape measured on the bill and communication routes. On the cold-start walk of the 119th (2026-09-19) 7,066 records were served and 7,016 distinct identities published: 50 repeats were collapsed, the fresh row winning. The declared total counts entries, not amendments, so a walk whose declared and served counts agree has still not delivered 50 of the amendments it counted; the next whole walk delivers them. All columns are stored as VARCHAR.
+**Data quality.** The publisher's `updateDate desc` order repeats an amendment across a page boundary when stamps tie, the same shape measured on the bill and communication routes. On the cold-start walk of the 119th (2026-09-19) 7,066 records were served and 7,016 distinct identities retained locally: 50 repeats were collapsed, the fresh row winning. The declared total counts entries, not amendments, so a walk whose declared and served counts agree has still not delivered 50 of the amendments it counted; the next whole walk delivers them. All columns are stored as VARCHAR.
 
 - **Parquet file:** `amendments.parquet`
-- **Queryable via MCP `query_sql`:** Yes
+- **MCP `query_sql` support:** Configured; requires an available artifact.
+- **Publication status:** Not established by this schema page or its measurement date.
 
 | Column | Type | Description |
 | --- | --- | --- |

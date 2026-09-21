@@ -11,7 +11,8 @@ One row per public comment submitted to a docket — the largest table (tens of 
 **Data quality.** 33,373 rows carry a `posted_date` before 1990, the same publisher defect as `documents`. Filter on the date when recency matters.
 
 - **Parquet file:** `comments.parquet`
-- **Queryable via MCP `query_sql`:** Yes
+- **MCP `query_sql` support:** Configured; requires an available artifact.
+- **Publication status:** Not established by this schema page or its measurement date.
 - **Primary / dedup key:** `comment_id`
 
 | Column | Type | Description |

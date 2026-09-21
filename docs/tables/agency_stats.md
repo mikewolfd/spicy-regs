@@ -9,7 +9,8 @@ A per-agency dimension table — one row per agency with docket, document, and c
 **Coverage.** Derived. Totals over `dockets`, `documents` and `comments`; it covers exactly what those cover. *(measured 2026-09-06)*
 
 - **Parquet file:** `agency_stats.parquet`
-- **Queryable via MCP `query_sql`:** Yes
+- **MCP `query_sql` support:** Configured; requires an available artifact.
+- **Publication status:** Not established by this schema page or its measurement date.
 
 | Column | Type | Description |
 | --- | --- | --- |

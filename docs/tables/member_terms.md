@@ -9,7 +9,8 @@ One row per term a legislator served, in the crosswalk's own order. All columns 
 **Coverage.** Sampled. Measured on the same run as `members` (receipt `d1-measured-run-2026-09-19/`): 45,535 terms over those 12,770 legislators, an average of 3.6 terms each. Every term of every legislator in `members`, in the crosswalk's own order, from the same whole capture. *(measured 2026-09-19)*
 
 - **Parquet file:** `member_terms.parquet`
-- **Queryable via MCP `query_sql`:** Yes
+- **MCP `query_sql` support:** Configured; requires an available artifact.
+- **Publication status:** Not established by this schema page or its measurement date.
 
 | Column | Type | Description |
 | --- | --- | --- |

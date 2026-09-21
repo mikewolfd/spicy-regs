@@ -9,7 +9,8 @@ One row per legislator in one capture of the community crosswalk. Split from `me
 **Coverage.** Sampled. Measured on one run (receipt `d1-measured-run-2026-09-19/`): both roster files — current and historical — were captured whole in two keyless requests and 2.6 seconds, yielding 12,770 legislators. The run confirms the capture is whole rather than a slice; the statement stays "Sampled" because the claim this table makes is about the crosswalk's own completeness, which no run of ours can establish, and because the machine-readable kind is a published contract value that should not move without a change in what is fetched. *(measured 2026-09-19)*
 
 - **Parquet file:** `members.parquet`
-- **Queryable via MCP `query_sql`:** Yes
+- **MCP `query_sql` support:** Configured; requires an available artifact.
+- **Publication status:** Not established by this schema page or its measurement date.
 
 | Column | Type | Description |
 | --- | --- | --- |

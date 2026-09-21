@@ -11,7 +11,8 @@ One row per treaty document, as the Congress.gov treaty list and detail routes s
 **Data quality.** A row whose `titles_json` is NULL is list-only. A partitioned treaty (a non-empty `suffix`) is always list-only: the publisher's suffixed detail address has no route in spicy-docs' `LIST_ROUTES`, so its detail is never asked for and its `package_id` is NULL by the contract's own rule.
 
 - **Parquet file:** `treaties.parquet`
-- **Queryable via MCP `query_sql`:** Yes
+- **MCP `query_sql` support:** Configured; requires an available artifact.
+- **Publication status:** Not established by this schema page or its measurement date.
 
 | Column | Type | Description |
 | --- | --- | --- |

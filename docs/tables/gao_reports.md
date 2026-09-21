@@ -9,7 +9,8 @@ One row per U.S. Government Accountability Office (GAO) product, ingested from t
 **Coverage.** Window. 105 reports published 2026-07-13 to 2026-09-04, a fifty-three-day slice taken from the publisher's recent-items feed. It grows as the daily job runs and is not GAO's archive. *(measured 2026-09-06)*
 
 - **Parquet file:** `gao_reports.parquet`
-- **Queryable via MCP `query_sql`:** Yes
+- **MCP `query_sql` support:** Configured; requires an available artifact.
+- **Publication status:** Not established by this schema page or its measurement date.
 
 | Column | Type | Description |
 | --- | --- | --- |

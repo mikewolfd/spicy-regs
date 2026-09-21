@@ -9,7 +9,8 @@ One row per FCC proceeding (the FCC's docket equivalent, e.g. `17-108`), ingeste
 **Coverage.** True range. Proceedings created 1991-10-22 to 2026-09-02. *(measured 2026-09-06)*
 
 - **Parquet file:** `fcc_proceedings.parquet`
-- **Queryable via MCP `query_sql`:** Yes
+- **MCP `query_sql` support:** Configured; requires an available artifact.
+- **Publication status:** Not established by this schema page or its measurement date.
 
 | Column | Type | Description |
 | --- | --- | --- |

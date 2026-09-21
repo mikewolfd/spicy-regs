@@ -9,7 +9,8 @@ Per-agency document-output spike signal that powers the feed's discovery panel â
 **Coverage.** Not a range. A current-state signal recomputed relative to each run date, so every row turns over on every rebuild. It is not a time series and cannot be asked about the past. *(measured 2026-09-06)*
 
 - **Parquet file:** `discovery_signals.parquet`
-- **Queryable via MCP `query_sql`:** Yes
+- **MCP `query_sql` support:** Configured; requires an available artifact.
+- **Publication status:** Not established by this schema page or its measurement date.
 
 | Column | Type | Description |
 | --- | --- | --- |

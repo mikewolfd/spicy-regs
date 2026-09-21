@@ -11,7 +11,8 @@ One row per BILLSTATUS bulk folder, holding the listing entry the next `bill-fam
 **Data quality.** Only the four fields the skip compares are retained — `name` and `link`, which must name the folder's own zip or the comparison is refused outright, and `modified_at` and `size`, which must match for the zip to be skipped. The other six the publisher's listing states are deliberately absent rather than filled with guesses. All columns are stored as VARCHAR.
 
 - **Parquet file:** `bill_family_archives.parquet`
-- **Queryable via MCP `query_sql`:** Yes
+- **MCP `query_sql` support:** Configured; requires an available artifact.
+- **Publication status:** Not established by this schema page or its measurement date.
 
 | Column | Type | Description |
 | --- | --- | --- |

@@ -9,7 +9,8 @@ One row per federal-award recipient, ingested from the USASpending.gov `/api/v2/
 **Coverage.** Not a range. No date column: the table is the top recipients by all-time award amount, so it cannot be asked about a period, and a recipient below that cut is absent rather than absent from the awards data. *(measured 2026-09-06)*
 
 - **Parquet file:** `usaspending_recipients.parquet`
-- **Queryable via MCP `query_sql`:** Yes
+- **MCP `query_sql` support:** Configured; requires an available artifact.
+- **Publication status:** Not established by this schema page or its measurement date.
 
 | Column | Type | Description |
 | --- | --- | --- |

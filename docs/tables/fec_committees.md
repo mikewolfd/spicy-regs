@@ -9,7 +9,8 @@ One row per Federal Election Commission committee/PAC, ingested from the OpenFEC
 **Coverage.** Not a range. The table carries no date column: it is the committee registry as of the most recent run, with no history and no way to ask what it held before. *(measured 2026-09-06)*
 
 - **Parquet file:** `fec_committees.parquet`
-- **Queryable via MCP `query_sql`:** Yes
+- **MCP `query_sql` support:** Configured; requires an available artifact.
+- **Publication status:** Not established by this schema page or its measurement date.
 
 | Column | Type | Description |
 | --- | --- | --- |
