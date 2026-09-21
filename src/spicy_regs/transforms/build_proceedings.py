@@ -29,7 +29,7 @@ from spicy_regs.ontology.common import (
 from spicy_regs.ontology.federal_register import FederalRegisterIndex, record_id, references_json, resolved_id
 
 OUTPUT = "proceedings.parquet"
-ACTOR_ID = "spicy-regs:proceedings:v3"
+ACTOR_ID = "spicy-regs:proceedings:v4"
 
 COLUMNS = (
     "proceeding_id",
@@ -47,6 +47,7 @@ COLUMNS = (
     *ATTESTATION_COLUMNS,
     "fr_document_ids_json",
     "unresolved_fr_references_json",
+    "rins_json",
 )
 
 STAGES = frozenset({"prerule", "proposed", "supplemental", "final", "withdrawn", "longterm"})
@@ -484,6 +485,7 @@ def build_proceedings(
                 "proceeding_id": proceeding_id,
                 # Compatibility/query aid only; never the row's identity.
                 "rin": rins[0] if len(rins) == 1 else None,
+                "rins_json": canonical_json(rins),
                 "docket_ids_json": canonical_json(sorted(group["dockets"])),
                 "title": titles[-1][1] if titles else None,
                 "agency_code": (Counter(group["agencies"]).most_common(1)[0][0] if group["agencies"] else None),

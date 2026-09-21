@@ -13,6 +13,7 @@ import pyarrow.parquet as pq
 from loguru import logger
 
 from spicy_regs.ontology.citations import normalize_regsgov_identifier, normalize_rin
+from spicy_regs.ontology.rins import proceeding_rins
 from spicy_regs.ontology.common import (
     ATTESTATION_COLUMNS,
     JsonReadStats,
@@ -33,7 +34,7 @@ from spicy_regs.ontology.federal_register import (
 )
 
 OUTPUT = "comment_periods.parquet"
-ACTOR_ID = "spicy-regs:comment-periods:v3"
+ACTOR_ID = "spicy-regs:comment-periods:v4"
 
 COLUMNS = (
     "comment_period_id",
@@ -275,7 +276,7 @@ def build_comment_periods(
         resolved_rins.update(
             rin
             for proceeding_id in proceeding_ids
-            if (rin := normalize_rin(proceeding_by_id[proceeding_id].get("rin"))) is not None
+            for rin in proceeding_rins(proceeding_by_id[proceeding_id], json_stats)
         )
         intervals.append(
             _Interval(

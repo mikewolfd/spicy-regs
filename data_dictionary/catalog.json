@@ -1415,7 +1415,7 @@
     {
       "table": "house_communications",
       "label": "House executive communications",
-      "summary": "One row per House executive communication, as the Congress.gov house-communication list and detail routes state it, keyed on the publisher's own address. The regulatory bridge: `is_rulemaking`, the cited `legal_authority`, the committee referral, the matching House requirement and the RIN read from `report_nature`, which joins `federal_register.rin`. All columns are stored as VARCHAR.",
+      "summary": "One row per House executive communication, as the Congress.gov house-communication list and detail routes state it, keyed on the publisher's own address. The regulatory bridge: `is_rulemaking`, the cited `legal_authority`, the committee referral, the matching House requirement and the RIN read from `report_nature`. Complete Federal Register joins unnest `regulation_id_numbers_json` and retain number plus publication date; the first-value scalar `federal_register.rin` omits other RINs. All columns are stored as VARCHAR.",
       "coverage": "Sampled, accumulating. The adoption run used 30 keyed requests: 20 list pages and 10 details under the declared detail cap. The list declared and served 4,975 records, with 9 repeats and 4,966 distinct identities; merging its own 4,963-row prior retained 4,969 rows. All 4,969 now state the publisher source_route, 1,010 have details and 3,959 remain list-only. No Record backfill request was made and every Record evidence column remains NULL. Receipt: `rollups-0-24-0-adoption-2026-09-20/`. Local output only; not uploaded.",
       "kind": "sampled",
       "measured_on": "2026-09-20",

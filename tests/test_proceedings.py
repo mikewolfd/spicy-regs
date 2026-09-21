@@ -246,7 +246,7 @@ def test_reference_proceeding_threads_rinless_docket_and_preserves_reopening(tmp
         periods[0]["opened_by_artifact_ids_json"]
     )
     assert all(row["method"] == "deterministic" for row in periods)
-    assert all(row["actor_id"] == "spicy-regs:comment-periods:v3" for row in periods)
+    assert all(row["actor_id"] == "spicy-regs:comment-periods:v4" for row in periods)
 
 
 def test_reused_rin_does_not_collapse_or_cross_assign_distinct_dockets(tmp_path):
@@ -576,6 +576,7 @@ def test_one_docket_remains_one_proceeding_when_it_reports_multiple_rins(
     ).to_pylist()
     assert len(proceeding_rows) == 1
     assert proceeding_rows[0]["rin"] is None
+    assert json.loads(proceeding_rows[0]["rins_json"]) == list(rins)
     assert proceeding_rows[0]["current_stage"] is None
     assert json.loads(proceeding_rows[0]["stage_events_json"]) == []
 
@@ -587,6 +588,7 @@ def test_one_docket_remains_one_proceeding_when_it_reports_multiple_rins(
         )
     ).to_pylist()
     assert len(period_rows) == 1
+    assert json.loads(period_rows[0]["rins_json"]) == list(rins)
     assert json.loads(period_rows[0]["proceeding_ids_json"]) == [proceeding_rows[0]["proceeding_id"]]
     assert json.loads(period_rows[0]["docket_ids_json"]) == [docket_id]
     assert json.loads(period_rows[0]["opened_by_artifact_ids_json"]) == [
