@@ -52,6 +52,10 @@ _MAX_RETRIES = 6
 _PROGRESS_EVERY = 2_500
 
 
+class LobbyingFilingsError(RuntimeError):
+    """The requested LDA scope could not be read completely."""
+
+
 def _resolve_api_key() -> str | None:
     """Return the ``LDA_API_KEY`` if set, else None (keyless is still functional)."""
     value = os.environ.get(API_KEY_ENV_VAR)
@@ -88,6 +92,7 @@ class LobbyingFilingsReader(Reader):
         self._seen = 0
 
     def iter_records(self) -> Iterator[dict]:
+        self._seen = 0
         keyed = "with API key" if self.api_key else "keyless (lower rate limit)"
         logger.info(
             "LDA filings: fetching {} (since={}, until={}, filing_year={}, max_records={})",
@@ -116,17 +121,25 @@ class LobbyingFilingsReader(Reader):
             params["filing_dt_posted_after"] = self.since.isoformat()
         if self.until is not None:
             params["filing_dt_posted_before"] = self.until.isoformat()
+        elif self.since is None and self.filing_year is None:
+            # Pagination requires a data filter (page/ordering do not count).
+            # Hold cold starts at today's existing upper-bound meaning without
+            # guessing the first archive year or dropping historical filings.
+            params["filing_dt_posted_before"] = date.today().isoformat()
         # Oldest-first makes a partial/retried catch-up run move its watermark
         # forward instead of repeatedly spending its budget on the newest page.
         params["ordering"] = "dt_posted"
         url = f"{API_BASE}/filings/"
         first = True
+        expected_count: int | None = None
         while url:
             payload = self._get(url, params if first else None)
             first = False
-            if payload is None:
-                break
-            for filing in payload.get("results") or []:
+            if expected_count is None:
+                expected_count = payload["count"]
+            elif payload["count"] != expected_count:
+                raise LobbyingFilingsError("LDA filings count changed during pagination; retry the requested scope")
+            for filing in payload["results"]:
                 self._seen += 1
                 if self._seen % _PROGRESS_EVERY == 0:
                     logger.info("LDA filings: {:,} filings so far...", self._seen)
@@ -135,23 +148,50 @@ class LobbyingFilingsReader(Reader):
                     if self.verbose:
                         logger.debug("LDA filings: reached max_records {} — stopping", self.max_records)
                     return
-            url = payload.get("next") or ""
+            url = payload["next"] or ""
+        if self._seen != expected_count:
+            raise LobbyingFilingsError(
+                f"LDA filings ended after {self._seen} records; the API advertised {expected_count}"
+            )
 
-    def _get(self, url: str, params: dict | None) -> dict | None:
-        """GET with bounded retries + exponential backoff. Returns parsed JSON or None."""
+    def _get(self, url: str, params: dict | None) -> dict:
+        """Return a valid page or raise; failed requests are never exhaustion."""
         assert self._client is not None
         for attempt in range(1, _MAX_RETRIES + 1):
             try:
                 resp = self._client.get(url, params=params)
-                if resp.status_code == 429 or resp.status_code >= 500:
-                    raise httpx.HTTPStatusError("retryable", request=resp.request, response=resp)
                 resp.raise_for_status()
-                return resp.json()
-            except (httpx.HTTPError, ValueError) as exc:
+            except httpx.HTTPError as exc:
+                if isinstance(exc, httpx.HTTPStatusError) and not (
+                    exc.response.status_code == 429 or exc.response.status_code >= 500
+                ):
+                    raise LobbyingFilingsError(
+                        f"LDA filings request refused: HTTP {exc.response.status_code} at {url}"
+                    ) from exc
                 if attempt == _MAX_RETRIES:
-                    logger.error("LDA filings: giving up on {} after {} attempts: {}", url, attempt, exc)
-                    return None
+                    raise LobbyingFilingsError(f"LDA filings request failed after {attempt} attempts at {url}") from exc
                 backoff = min(2**attempt, 60)
                 logger.warning("LDA filings: {} (attempt {}/{}), retrying in {}s", exc, attempt, _MAX_RETRIES, backoff)
                 time.sleep(backoff)
-        return None
+                continue
+            try:
+                payload = resp.json()
+            except ValueError as exc:
+                raise LobbyingFilingsError(f"LDA filings returned invalid JSON at {url}") from exc
+            if (
+                not isinstance(payload, dict)
+                or type(payload.get("count")) is not int
+                or payload["count"] < 0
+                or not isinstance(payload.get("results"), list)
+                or not all(
+                    isinstance(filing, dict)
+                    and isinstance(filing.get("filing_uuid"), str)
+                    and filing["filing_uuid"].strip()
+                    for filing in payload["results"]
+                )
+                or "next" not in payload
+                or (payload["next"] is not None and not isinstance(payload["next"], str))
+            ):
+                raise LobbyingFilingsError(f"LDA filings returned an invalid page at {url}")
+            return payload
+        raise AssertionError("LDA retry loop exhausted without a result or error")
