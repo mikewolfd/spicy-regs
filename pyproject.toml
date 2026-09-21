@@ -20,7 +20,7 @@ dependencies = [
 
 [project.optional-dependencies]
 source-readers = [
-    "spicy-docs[acquisition,pdf,pdf-pypdf,bill-diff]==0.25.0",
+    "spicy-docs[acquisition,pdf,pdf-pypdf,bill-diff]==0.26.0",
     "pypdf==6.14.2", # Qualified PDF text and failure behavior
     "rulespec-artifacts==1.0.14",
     "deltatrack==0.1.0", # spicy-docs' bill-diff extra; git-sourced upstream, so declared here to bind the vendored wheel
@@ -33,7 +33,7 @@ embed = [
 [dependency-groups]
 # Checkout pipelines use the pinned source wheels; base CLI/MCP installs do not.
 source-readers = [
-    "spicy-docs[acquisition,pdf,pdf-pypdf,bill-diff]==0.25.0",
+    "spicy-docs[acquisition,pdf,pdf-pypdf,bill-diff]==0.26.0",
     "pypdf==6.14.2", # Qualified PDF text and failure behavior
     "rulespec-artifacts==1.0.14",
     "deltatrack==0.1.0", # spicy-docs' bill-diff extra; git-sourced upstream, so declared here to bind the vendored wheel
@@ -76,6 +76,8 @@ run-rollup-fcc-filings = "spicy_regs.pipelines.rollups.fcc_filings:app"
 run-rollup-sam-entities = "spicy_regs.pipelines.rollups.sam_entities:app"
 run-rollup-lobbying-filings = "spicy_regs.pipelines.rollups.lobbying_filings:app"
 run-rollup-fec-committees = "spicy_regs.pipelines.rollups.fec_committees:app"
+run-rollup-fec-source-catalog = "spicy_regs.pipelines.rollups.fec_source_catalog:app"
+build-fec-observations = "spicy_regs.pipelines.rollups.fec_observations:app"
 run-rollup-org-committee-links = "spicy_regs.pipelines.rollups.org_committee_links:app"
 run-rollup-gao-reports = "spicy_regs.pipelines.rollups.gao_reports:app"
 run-rollup-crs-reports = "spicy_regs.pipelines.rollups.crs_reports:app"
@@ -111,7 +113,7 @@ requires = ["uv_build"]
 build-backend = "uv_build"
 
 [tool.uv.sources]
-spicy-docs = { path = "vendor/spicy_docs-0.25.0-py3-none-any.whl" }
+spicy-docs = { path = "vendor/spicy_docs-0.26.0-py3-none-any.whl" }
 rulespec-artifacts = { path = "vendor/rulespec_artifacts-1.0.14-py3-none-any.whl" }
 deltatrack = { path = "vendor/deltatrack-0.1.0-py3-none-any.whl" }
 

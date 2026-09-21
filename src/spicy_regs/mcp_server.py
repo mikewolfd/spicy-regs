@@ -12,6 +12,7 @@ from contextlib import contextmanager
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from functools import lru_cache
+from importlib.resources import files
 from pathlib import Path
 from time import monotonic as _monotonic
 from typing import Any
@@ -46,6 +47,10 @@ TABLES = (
     "sam_entities",
     "lobbying_filings",
     "fec_committees",
+    "fec_source_catalog",
+    "fec_collections",
+    "fec_source_records",
+    "fec_relationships",
     "org_committee_links",
     "gao_reports",
     "crs_reports",
@@ -144,11 +149,12 @@ def _parse_timeout_seconds(raw: str) -> float | None:
 STATEMENT_TIMEOUT_SECONDS = _parse_timeout_seconds(STATEMENT_TIMEOUT)
 
 INSTRUCTIONS = (
-    "Query the Spicy Regs regulatory dataset (regulations.gov mirror) over "
-    "the public Cloudflare R2 parquet bucket. Use list_sources to discover "
-    "tables, describe_table for schemas, and query_sql for everything else. "
-    "Always LIMIT result sets while exploring. Cite docket IDs, document "
-    "IDs, comment IDs, agency codes, and dates from the rows you return."
+    "Query Spicy Regs public datasets across government sources. Use list_sources "
+    "to discover available tables and declared outputs, describe_table for actual "
+    "schemas, field meanings, identifiers and coverage caveats, and query_sql for "
+    "read-only queries and joins. A declared output or coverage measurement does "
+    "not establish publication or freshness. Always LIMIT exploratory results. "
+    "Cite source identifiers, evidence locators and dates from returned rows."
 )
 
 ICONS = [Icon(src=ICON_DATA_URI, mimeType="image/png", sizes=["512x512"])]
@@ -165,6 +171,28 @@ def _resolve_r2_base_url() -> str:
 
 
 R2_BASE_URL = _resolve_r2_base_url()
+
+
+def _resolve_data_dir() -> Path | None:
+    """An explicit local source replaces remote tables for the whole connection."""
+    raw = os.environ.get("SPICY_REGS_DATA_DIR")
+    if raw is None:
+        return None
+    if not raw.strip():
+        raise RuntimeError("SPICY_REGS_DATA_DIR must name a directory")
+    path = Path(raw).expanduser().resolve()
+    if not path.is_dir():
+        raise RuntimeError(f"SPICY_REGS_DATA_DIR is not a directory: {path}")
+    return path
+
+
+DATA_DIR = _resolve_data_dir()
+
+
+def _source_details() -> dict[str, str]:
+    if DATA_DIR is not None:
+        return {"source": "local", "base_path": str(DATA_DIR)}
+    return {"source": "r2", "base_url": R2_BASE_URL}
 
 
 def _resolve_home_directory() -> str:
@@ -313,15 +341,16 @@ def _attach_catalog(con: duckdb.DuckDBPyConnection, config: dict[str, str]) -> b
 
 
 def _build_connection() -> duckdb.DuckDBPyConnection:
-    from spicy_regs.sources.publication import load_index, table_location
+    from spicy_regs.sources.publication import empty_index, load_index, table_location
 
-    publication_index = load_index(R2_BASE_URL)
+    publication_index = empty_index() if DATA_DIR is not None else load_index(R2_BASE_URL)
     con = duckdb.connect()
     con.execute(f"SET home_directory='{HOME_DIRECTORY.replace(chr(39), chr(39) * 2)}'")
-    con.execute("INSTALL httpfs")
-    con.execute("LOAD httpfs")
+    if DATA_DIR is None:
+        con.execute("INSTALL httpfs")
+        con.execute("LOAD httpfs")
 
-    catalog = _resolve_catalog_config()
+    catalog = _resolve_catalog_config() if DATA_DIR is None else None
     catalog_attached = catalog is not None and _attach_catalog(con, catalog)
 
     _apply_security_settings(con)
@@ -344,7 +373,13 @@ def _build_connection() -> duckdb.DuckDBPyConnection:
                 continue
             except duckdb.Error as exc:
                 logger.warning("comments not available in catalog; falling back to monolith: %s", exc)
-        url = f"{R2_BASE_URL}/{key}"
+        if DATA_DIR is not None:
+            target = DATA_DIR / f"{name}.parquet"
+            if not target.is_file():
+                continue
+            url = str(target).replace("'", "''")
+        else:
+            url = f"{R2_BASE_URL}/{key}"
         try:
             con.execute(f'CREATE VIEW "{name}" AS SELECT * FROM read_parquet(\'{url}\')')
             if published is not None:
@@ -360,27 +395,32 @@ def _build_connection() -> duckdb.DuckDBPyConnection:
     return con
 
 
-def _publication_status(cursor: duckdb.DuckDBPyConnection) -> dict:
-    """Describe this connection's actual availability and captured generations."""
-    available = [row[0] for row in cursor.execute("SHOW TABLES").fetchall() if not row[0].startswith("_spicy_")]
+def _connection_index(cursor: duckdb.DuckDBPyConnection) -> dict:
     try:
         row = cursor.execute("SELECT snapshot FROM _spicy_publication").fetchone()
         if row is None:
             raise RuntimeError("Missing publication snapshot")
-        index = json.loads(row[0])
+        return json.loads(row[0])
     except duckdb.CatalogException:
-        # Locally injected connections have no admitted publication snapshot.
-        index = {"families": {}}
+        # Explicitly injected local connections have no publication admission.
+        return {"families": {}}
+
+
+def _publication_status(cursor: duckdb.DuckDBPyConnection) -> dict:
+    """Describe actual availability and pins from this connection's snapshot."""
+    index = _connection_index(cursor)
+    available = _available_tables(cursor)
     managed = {
         key.removesuffix(".parquet"): {"status": "managed_generation", "family": family,
                                        "artifact_digest": entry["artifactDigest"]}
         for family, entry in index["families"].items() for key in entry["tables"]
     }
+    fallback = "local_unversioned" if DATA_DIR is not None else "legacy_unversioned"
     return {
         "tables": available,
         "declared_tables": list(TABLES),
-        "publication": {name: managed.get(name, {"status": "legacy_unversioned"}) for name in available},
-        "verification": "Managed bytes verified before publication; this reader pins URLs and checks schemas.",
+        "publication": {name: managed.get(name, {"status": fallback}) for name in available},
+        "verification": "Managed remote bytes verified before publication; this reader pins URLs and checks schemas.",
     }
 
 
@@ -460,35 +500,98 @@ def _statement_timeout(cursor: duckdb.DuckDBPyConnection) -> Iterator[None]:
         timer.cancel()
 
 
+@lru_cache(maxsize=1)
+def _table_metadata() -> dict[str, dict[str, Any]]:
+    """Generated dictionary resource; requires neither spicy-docs nor a checkout."""
+    return json.loads(files("spicy_regs").joinpath("table_metadata.json").read_text(encoding="utf-8"))
+
+
+def _available_tables(cursor: duckdb.DuckDBPyConnection) -> list[str]:
+    """Tables/views registered in this connection, in declared display order."""
+    rows = cursor.execute(
+        "SELECT table_name FROM information_schema.tables "
+        "WHERE table_schema = 'main' AND table_catalog = current_database()"
+    ).fetchall()
+    registered = {row[0] for row in rows}
+    managed = [
+        key.removesuffix(".parquet")
+        for entry in _connection_index(cursor)["families"].values() for key in entry["tables"]
+    ]
+    return [name for name in dict.fromkeys((*TABLES, *managed)) if name in registered]
+
+
 def _register_tools(mcp: FastMCP) -> None:
     @mcp.tool()
     def list_sources() -> dict[str, Any]:
-        """List the logical tables available in the Spicy Regs R2 dataset."""
+        """List available tables and distinguish declared outputs without a loaded view.
+
+        Availability reflects the cached connection, rebuilt after its configured
+        lifetime. It establishes that a view loaded, not full row validation.
+        Use describe_table for meaning, coverage and schema differences.
+        """
+        cursor = _get_connection().cursor()
+        with _statement_timeout(cursor):
+            available = _available_tables(cursor)
+        metadata = _table_metadata()
         return {
-            "source": "r2",
-            "base_url": R2_BASE_URL,
-            **_publication_status(_get_connection().cursor()),
+            **_source_details(),
+            "tables": available,
+            "declared_tables": list(TABLES),
+            "unavailable_tables": [name for name in TABLES if name not in available],
+            "availability_basis": "Views loaded in the current connection; not a full data or freshness audit.",
+            "connection_ttl_seconds": _CONNECTION_TTL_SECONDS,
+            "publication": _publication_status(cursor)["publication"],
+            "datasets": [
+                {"table": name, "label": metadata.get(name, {}).get("label", name), "available": name in available}
+                for name in dict.fromkeys((*TABLES, *available))
+            ],
         }
 
     @mcp.tool()
     def describe_table(table: str) -> dict[str, Any]:
-        """Return the column schema for one Spicy Regs table.
+        """Return actual columns, field meanings, row identity and coverage caveats.
 
-        Call list_sources for the set of valid table names; an unknown name
-        returns them in the error payload.
+        Declared columns and coverage metadata describe supported output; they
+        do not certify this connection's data population or freshness. An
+        unavailable declared table still returns its dictionary description.
         """
         cursor = _get_connection().cursor()
-        status = _publication_status(cursor)
-        if table not in status["tables"]:
+        with _statement_timeout(cursor):
+            status = _publication_status(cursor)
+        if table not in TABLES and table not in status["tables"]:
             return {
                 "error": f"Unknown table '{table}'",
-                "available_tables": status["tables"],
+                "declared_tables": list(TABLES),
             }
+        entry = _table_metadata().get(table, {"table": table, "columns": []})
+        declared = {column["column_name"]: column for column in entry["columns"]}
         with _statement_timeout(cursor):
-            rows = cursor.execute(f'DESCRIBE "{table}"').fetchall()
+            available = table in status["tables"]
+            rows = cursor.execute(f'DESCRIBE "{table}"').fetchall() if available else []
+        actual = {row[0]: row[1] for row in rows}
+        differences = (
+            {
+                "missing_columns": [name for name in declared if name not in actual],
+                "unexpected_columns": [name for name in actual if name not in declared],
+                "type_differences": [
+                    {"column": name, "declared": declared[name]["column_type"], "actual": dtype}
+                    for name, dtype in actual.items()
+                    if name in declared and dtype != declared[name]["column_type"]
+                ],
+            }
+            if available and declared
+            else None
+        )
         return {
             "table": table,
-            "publication": status["publication"][table],
+            **_source_details(),
+            "available": available,
+            "publication": status["publication"].get(table, {"status": "unavailable"}),
+            "metadata": {key: value for key, value in entry.items() if key not in {"table", "columns"}},
+            "metadata_basis": "Dictionary declarations and dated coverage notes; not live population measurements.",
+            "declared_columns": entry["columns"],
+            "schema_matches_declared": not any(differences.values()) if differences is not None else None,
+            "schema_differences": differences,
             "columns": [
                 {
                     "column_name": row[0],
@@ -496,6 +599,7 @@ def _register_tools(mcp: FastMCP) -> None:
                     "null": row[2],
                     "key": row[3],
                     "default": row[4],
+                    "description": declared.get(row[0], {}).get("description"),
                 }
                 for row in rows
             ],
@@ -503,12 +607,13 @@ def _register_tools(mcp: FastMCP) -> None:
 
     @mcp.tool()
     def query_sql(sql: str, max_rows: int = 25) -> dict[str, Any]:
-        """Run a read-only SQL query against the Spicy Regs R2 tables and return up to max_rows rows.
+        """Run read-only SQL against configured Spicy Regs tables, returning up to max_rows rows.
 
         Only SELECT and EXPLAIN run; DESCRIBE, SHOW, SUMMARIZE, VALUES and the
         FROM-first shorthand are accepted as SELECT. Statements that write
         (COPY TO, ATTACH, CREATE, INSERT, DROP, EXPORT, SET, ...) are refused.
-        The connection is in-memory and read-only against R2. One view exists per
+        The connection reads either R2 or an explicitly configured local directory.
+        Local mode never falls back to remote files. One view exists per
         table listed by list_sources. Always include a LIMIT in exploratory
         queries; results past max_rows are dropped.
         """
@@ -526,8 +631,7 @@ def _register_tools(mcp: FastMCP) -> None:
             rows = cursor.fetchmany(max_rows)
         result_rows = [{col: _jsonify(val) for col, val in zip(columns, row)} for row in rows]
         return {
-            "source": "r2",
-            "base_url": R2_BASE_URL,
+            **_source_details(),
             "columns": columns,
             "row_count_shown": len(result_rows),
             "max_rows": max_rows,

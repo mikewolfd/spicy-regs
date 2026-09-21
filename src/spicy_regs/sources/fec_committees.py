@@ -1,120 +1,50 @@
-"""Reader connector for the OpenFEC ``/committees`` endpoint (v1).
+"""Unfiltered FEC committee observations through the SpicyDocs source reader.
 
-Brings Federal Election Commission committee/PAC ingestion *in-repo* as an
-external **reference dimension** complementary to the regulations.gov corpus:
-the political committees (PACs, party committees, campaign committees) whose
-filings, endorsements, and money flows sit alongside the organizations that
-comment on rulemakings. Downstream this feeds the dashboard's ally/opposition
-(stance) map — a name to resolve commenters and co-filers against.
+SpicyDocs owns pagination, HTTP retries, header-only credentials and exact raw
+response captures. This adapter selects the complete committee registry, checks
+that identifiers advance without duplication, and retains a per-run page index.
+Only normal iterator exhaustion completes an acquisition. Missing credentials,
+page bounds, changed exact counts and failed requests refuse the run.
 
-The reader is a *pure source*: it yields raw committee payloads (dicts) exactly
-as the ``/committees`` list endpoint returns them. Shaping them into the pinned
-16-column schema is the job of
-:func:`~spicy_regs.transforms.build_fec_committees.build_fec_committees`.
-
-**Scope.** Committees are a *reference dimension* (~89K rows), not itemized
-contributions. Itemized ``/schedules/schedule_a`` receipts run into the hundreds
-of millions of rows and are deliberately out of scope for this pass; a future
-bounded-by-organization contributions pass could follow, keyed on the
-``committee_id`` this table establishes.
-
-**Pagination.** We walk with a stable sort key (``sort=committee_id``) and prefer
-OpenFEC's documented **keyset (seek)** pagination: when the response envelope
-carries a non-null ``pagination.last_indexes`` cursor we pass those keys straight
-back as query params on the next request instead of incrementing ``page``. Not
-every OpenFEC endpoint offers seek pagination — ``/committees`` in particular
-returns ``last_indexes: null`` and is walked by incrementing ``page`` (the sort
-key keeps that walk stable and duplicate-free). Either way the walk terminates
-only when a page comes back **empty** (guarded by ``_MAX_PAGES``); it never stops
-early on a short page. A short page mid-walk was the old bug: OpenFEC's deep
-offset pages occasionally return fewer than ``per_page`` rows even when more
-exist, and the previous ``len(results) < per_page`` early-break truncated the
-backfill at ~26K of ~89K committees.
-
-**API key.** OpenFEC is fronted by api.data.gov, so the same api.data.gov key
-this repo already uses for regulations.gov / Congress.gov / GovInfo works here,
-sent as the ``api_key`` query param. We resolve it from a fallback chain of the
-env vars this repo already provides (:func:`_resolve_api_key`). If no key is set
-the reader logs a clear warning and yields nothing — a keyless CI run is a no-op,
-not a crash.
+Set ``FEC_CAPTURE_DIR`` or pass ``capture_dir`` to keep raw evidence outside the
+build directory. Each attempt gets its own directory; incomplete attempts remain
+marked incomplete. Source traversal is not a frozen publisher snapshot.
 """
 
 from __future__ import annotations
 
+import json
 import os
-import time
-from collections.abc import Iterator
+from collections.abc import Generator
+from pathlib import Path
+from tempfile import mkdtemp
+from typing import TYPE_CHECKING
 
-import httpx
 from loguru import logger
 
 from spicy_regs.sources.base import Reader
 
+if TYPE_CHECKING:
+    import httpx
+
 API_BASE = "https://api.open.fec.gov/v1"
-
-# Max the API accepts per page.
 PER_PAGE = 100
-
-# Env vars checked in order for the api.data.gov key (one key works across
-# regulations.gov, Congress.gov, GovInfo, and OpenFEC).
-API_KEY_ENV_VARS = (
-    "API_GOV",  # the shared api.data.gov key, under the name RefSpec/.env uses
-    "DATA_GOV_API_KEY",
-    "FEC_API_KEY",
-    "REGULATIONS_GOV_API_KEY",
-)
-
-# Transport hygiene: bound every request and retry transient failures with
-# backoff so a flaky page fails slow-then-recovers rather than dropping rows.
-_TIMEOUT = httpx.Timeout(60.0, connect=30.0)
-_MAX_RETRIES = 5
-_PROGRESS_EVERY = 5_000
-
-# Safety valve: stop after this many page fetches to avoid a runaway loop if the
-# API ever fails to return an empty terminal page. ~89K committees / 100 per page
-# is well under 1,000 pages, so this only guards against pathology.
+API_KEY_ENV_VARS = ("API_GOV", "DATA_GOV_API_KEY", "FEC_API_KEY", "REGULATIONS_GOV_API_KEY")
 _MAX_PAGES = 5_000
-
-# The stable, unique sort key we page against. Sorting by the primary key keeps
-# both the offset walk and the keyset (seek) walk deterministic and dup-free.
-_SORT_KEY = "committee_id"
-
-
-def _clean_cursor(last_indexes: object) -> dict[str, object]:
-    """Return a usable keyset cursor from ``pagination.last_indexes``, or ``{}``.
-
-    OpenFEC returns ``last_indexes`` as an object like
-    ``{"last_index": "...", "last_committee_id": "..."}`` on endpoints that
-    support seek pagination, and ``null`` on those that don't (e.g.
-    ``/committees``). Drop null-valued keys; an all-null / non-dict cursor means
-    "no seek pagination — walk by offset page instead".
-    """
-    if not isinstance(last_indexes, dict):
-        return {}
-    return {str(k): v for k, v in last_indexes.items() if v is not None}
+_PROGRESS_EVERY = 5_000
 
 
 def _resolve_api_key() -> str | None:
-    """Return the first api.data.gov key set in :data:`API_KEY_ENV_VARS`, or None.
-
-    OpenFEC is fronted by api.data.gov, so the same key that works for
-    regulations.gov, Congress.gov, and GovInfo is valid here — we accept
-    whichever the environment already provides.
-    """
-    for var in API_KEY_ENV_VARS:
-        value = os.environ.get(var)
-        if value:
-            return value
-    return None
+    """Resolve the repository's shared api.data.gov key without logging it."""
+    return next((os.environ[var] for var in API_KEY_ENV_VARS if os.environ.get(var)), None)
 
 
 class FecCommitteesReader(Reader):
-    """Yields raw OpenFEC committee dicts by walking every page of ``/committees``.
+    """Yield native committee metadata, retaining the complete original pages.
 
-    Committees are a reference dimension, not a time series, so there is no
-    ``since`` watermark: each run walks the full committee list and the transform
-    merges it with the prior published table (dedup on ``committee_id``). With no
-    key configured the reader yields nothing.
+    No cycle or activity filters apply. ``max_pages`` is a refusal bound, never
+    permission to return a partial census as a successful run. ``capture_dir``
+    defaults to ``FEC_CAPTURE_DIR`` or ``.fec-captures`` for direct consumers.
     """
 
     def __init__(
@@ -123,99 +53,110 @@ class FecCommitteesReader(Reader):
         per_page: int = PER_PAGE,
         max_pages: int | None = None,
         api_key: str | None = None,
+        capture_dir: Path | None = None,
+        transport: httpx.BaseTransport | None = None,
+        min_interval: float = 0.25,
         verbose: bool = False,
     ) -> None:
+        if type(per_page) is not int or per_page <= 0:
+            raise ValueError("per_page must be a positive integer")
+        if max_pages is not None and (type(max_pages) is not int or max_pages <= 0):
+            raise ValueError("max_pages must be a positive integer")
         self.per_page = min(per_page, PER_PAGE)
-        # ``max_pages`` lets bounded validation / tests fetch just a page or two;
-        # None means "walk to the reported last page" (capped by _MAX_PAGES).
-        self.max_pages = max_pages
-        self.api_key = api_key or _resolve_api_key()
+        self.max_pages = _MAX_PAGES if max_pages is None else min(max_pages, _MAX_PAGES)
+        self.api_key = api_key if api_key is not None else _resolve_api_key()
+        self.capture_dir = Path(capture_dir or os.environ.get("FEC_CAPTURE_DIR", ".fec-captures"))
+        self.transport = transport
+        self.min_interval = min_interval
         self.verbose = verbose
-        self._client: httpx.Client | None = None
-        self._seen = 0
+        self.last_run_path: Path | None = None
 
-    def iter_records(self) -> Iterator[dict]:
+    def iter_records(self) -> Generator[dict, None, None]:
         if not self.api_key:
-            logger.warning(
-                "FEC committees: no API key found (set one of {}) — yielding nothing",
-                ", ".join(API_KEY_ENV_VARS),
-            )
-            return
-        logger.info("FEC committees: fetching committee reference dimension")
-        with httpx.Client(timeout=_TIMEOUT, headers={"Accept": "application/json"}) as client:
-            self._client = client
-            yield from self._paginate()
-        logger.info("FEC committees: yielded {:,} committees", self._seen)
+            raise ValueError("FEC committees require an API key; no complete acquisition was attempted")
+        try:
+            from spicy_docs.sources.fec.client import FecClient
+        except ModuleNotFoundError as error:
+            if error.name == "spicy_docs":
+                raise RuntimeError(
+                    "FEC committees require spicy-regs[source-readers]; run `uv sync --frozen`."
+                ) from None
+            raise
 
-    # -- pagination ----------------------------------------------------------
-
-    def _paginate(self) -> Iterator[dict]:
-        """Walk every page, preferring keyset (seek) cursors, else offset pages.
-
-        Terminates only on an empty ``results`` page (or the ``_MAX_PAGES`` /
-        ``max_pages`` guard). A short page is *not* a stop signal — that was the
-        bug that truncated the backfill at ~26K of ~89K committees.
-        """
-        page = 1
-        # Keyset cursor carried forward from ``pagination.last_indexes`` when the
-        # endpoint offers seek pagination; empty means "walk by offset page".
-        keyset: dict[str, object] = {}
-        # Cap the number of *fetches*, honoring a caller-supplied ``max_pages``.
-        max_fetches = _MAX_PAGES if self.max_pages is None else min(self.max_pages, _MAX_PAGES)
-        for _ in range(max_fetches):
-            payload = self._get_page(page, keyset)
-            if payload is None:
-                break
-            results = payload.get("results") or []
-            if not results:
-                break
-            for committee in results:
-                self._seen += 1
-                if self._seen % _PROGRESS_EVERY == 0:
-                    logger.info("FEC committees: {:,} committees so far...", self._seen)
-                yield committee
-            # Prefer the documented keyset cursor when the envelope provides one;
-            # otherwise fall back to incrementing the offset page (what
-            # ``/committees`` uses — it returns ``last_indexes: null``).
-            last_indexes = (payload.get("pagination") or {}).get("last_indexes")
-            cursor = _clean_cursor(last_indexes)
-            if cursor:
-                keyset = cursor
-            else:
-                keyset = {}
-                page += 1
-
-    def _get_page(self, page: int, keyset: dict[str, object]) -> dict | None:
-        params: dict[str, object] = {
-            "per_page": self.per_page,
-            "sort": _SORT_KEY,
-            "api_key": self.api_key,
+        self.capture_dir.mkdir(parents=True, exist_ok=True)
+        run_path = Path(mkdtemp(prefix="committees-", dir=self.capture_dir))
+        self.last_run_path = run_path
+        state = {
+            "status": "incomplete",
+            "source": API_BASE + "/committees/",
+            "params": {"sort": "committee_id", "per_page": self.per_page, "page": 1},
+            "scope": "unfiltered source traversal; no frozen publisher snapshot",
+            "max_pages": self.max_pages,
+            "pages": 0,
+            "records": 0,
+            "declared_exact_count": None,
         }
-        if keyset:
-            # Seek pagination: the ``last_indexes`` keys (e.g. ``last_index``,
-            # ``last_committee_id``) are the exact query-param names OpenFEC wants.
-            params.update(keyset)
-        else:
-            params["page"] = page
-        return self._get(f"{API_BASE}/committees/", params)
-
-    def _get(self, url: str, params: dict | None) -> dict | None:
-        """GET with bounded retries + exponential backoff. Returns parsed JSON or None."""
-        assert self._client is not None
-        for attempt in range(1, _MAX_RETRIES + 1):
-            try:
-                resp = self._client.get(url, params=params)
-                if resp.status_code == 429 or resp.status_code >= 500:
-                    raise httpx.HTTPStatusError("retryable", request=resp.request, response=resp)
-                resp.raise_for_status()
-                return resp.json()
-            except (httpx.HTTPError, ValueError) as exc:
-                if attempt == _MAX_RETRIES:
-                    logger.error("FEC committees: giving up on {} after {} attempts: {}", url, attempt, exc)
-                    return None
-                backoff = min(2**attempt, 30)
-                logger.warning(
-                    "FEC committees: {} (attempt {}/{}), retrying in {}s", exc, attempt, _MAX_RETRIES, backoff
-                )
-                time.sleep(backoff)
-        return None
+        (run_path / "run.json").write_text(json.dumps(state, indent=2) + "\n")
+        previous_id = None
+        try:
+            with (
+                FecClient(
+                    store=run_path / "blobs",
+                    api_key=self.api_key,
+                    # Includes room for the provider's three attempts and redirects;
+                    # exhausting either request or page budget refuses acquisition.
+                    max_requests=self.max_pages * 12,
+                    min_interval=self.min_interval,
+                    transport=self.transport,
+                ) as client,
+                (run_path / "pages.jsonl").open("w") as index,
+            ):
+                for page in client.api("/v1/committees/", params=state["params"], max_pages=self.max_pages):
+                    state["pages"] += 1
+                    index.write(
+                        json.dumps(
+                            {
+                                key: page[key]
+                                for key in (
+                                    "request_url",
+                                    "resolved_url",
+                                    "observed_at",
+                                    "media_type",
+                                    "via",
+                                    "evidence",
+                                    "next_url",
+                                )
+                            }
+                            | {"records": len(page["records"])}
+                        )
+                        + "\n"
+                    )
+                    index.flush()
+                    pagination = page["pagination"]
+                    if pagination.get("is_count_exact") is True:
+                        count = pagination.get("count")
+                        if type(count) is not int or count < 0:
+                            raise ValueError("FEC exact committee count must be a nonnegative integer")
+                        if state["declared_exact_count"] not in (None, count):
+                            raise ValueError("FEC exact committee count changed during traversal")
+                        state["declared_exact_count"] = count
+                    for observation in page["records"]:
+                        record = observation["metadata"]
+                        if not isinstance(record, dict):
+                            raise ValueError("FEC committee record must be an object")
+                        committee_id = record.get("committee_id")
+                        if not isinstance(committee_id, str) or not committee_id:
+                            raise ValueError("FEC committee record omitted its identifier")
+                        if previous_id is not None and committee_id <= previous_id:
+                            raise ValueError("FEC committee identifiers repeated or ceased increasing")
+                        previous_id = committee_id
+                        state["records"] += 1
+                        if state["records"] % _PROGRESS_EVERY == 0:
+                            logger.info("FEC committees: {:,} observed so far", state["records"])
+                        yield record
+                if state["declared_exact_count"] not in (None, state["records"]):
+                    raise ValueError("FEC observed committees disagree with the declared exact count")
+                state["status"] = "complete"
+        finally:
+            (run_path / "run.json").write_text(json.dumps(state, indent=2) + "\n")
+        logger.info("FEC committees: {:,} observed; evidence at {}", state["records"], run_path)

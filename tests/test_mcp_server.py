@@ -7,6 +7,7 @@ Covers the canonical MCP server implementation in ``spicy_regs.mcp_server``
 from __future__ import annotations
 
 import asyncio
+import json
 from datetime import date, datetime
 from decimal import Decimal
 from uuid import UUID
@@ -61,6 +62,139 @@ def _tool_names(fastmcp) -> set[str]:
 def test_build_server_registers_expected_tools():
     server = mcp_server.build_server()
     assert _tool_names(server) == {"list_sources", "describe_table", "query_sql"}
+
+
+def _tool_data(server, name, arguments):
+    result = asyncio.run(server.call_tool(name, arguments))
+    # FastMCP versions can return content alone or (content, structured result).
+    if isinstance(result, tuple):
+        return result[1]
+    return json.loads(result[0].text)
+
+
+def test_discovery_reports_actual_parquet_schema_and_dictionary_caveats(tmp_path, monkeypatch):
+    """A readable old/changed artifact must not be described as the declared schema."""
+    con = duckdb.connect()
+    path = str(tmp_path / "org_committee_links.parquet").replace("'", "''")
+    con.execute(
+        "CREATE TABLE source_rows AS SELECT 'Example group' AS organization, "
+        "'C00000001' AS committee_id, 'prefix' AS match_method, "
+        "3::INTEGER AS committee_match_count, 'unmapped value' AS new_field"
+    )
+    con.execute(f"COPY source_rows TO '{path}' (FORMAT PARQUET)")
+    con.execute(f"CREATE VIEW org_committee_links AS SELECT * FROM read_parquet('{path}')")
+    monkeypatch.setattr(mcp_server, "_get_connection", lambda: con)
+    server = mcp_server.build_server()
+
+    sources = _tool_data(server, "list_sources", {})
+    assert sources["tables"] == ["org_committee_links"]
+    assert "fec_committees" in sources["unavailable_tables"]
+    assert "source_rows" not in sources["tables"]
+    assert sources["declared_tables"] == list(mcp_server.TABLES)
+
+    result = _tool_data(server, "describe_table", {"table": "org_committee_links"})
+    assert result["available"] is True
+    assert result["schema_matches_declared"] is False
+    assert result["schema_differences"]["unexpected_columns"] == ["new_field"]
+    assert result["schema_differences"]["type_differences"] == [
+        {"column": "committee_match_count", "declared": "BIGINT", "actual": "INTEGER"}
+    ]
+    assert "confidence" in result["schema_differences"]["missing_columns"]
+    assert "heuristic name matches" in result["metadata"]["data_quality"]
+    assert result["metadata"]["identity_columns"] == ["organization", "committee_id"]
+    actual_columns = {column["column_name"]: column for column in result["columns"]}
+    assert "fec_committees.committee_id" in actual_columns["committee_id"]["description"]
+    assert actual_columns["new_field"]["description"] is None
+    queried = _tool_data(server, "query_sql", {"sql": "SELECT committee_id FROM org_committee_links"})
+    assert queried["rows"] == [{"committee_id": "C00000001"}]
+
+    unavailable = _tool_data(server, "describe_table", {"table": "fec_committees"})
+    assert unavailable["available"] is False
+    assert unavailable["columns"] == []
+    assert unavailable["declared_columns"][0]["column_name"] == "committee_id"
+    assert unavailable["schema_matches_declared"] is None
+    assert unavailable["schema_differences"] is None
+
+
+def test_describe_exposes_provider_identity_without_importing_provider(monkeypatch):
+    """Source-reader definitions are bundled; reading metadata does not import them."""
+    import builtins
+
+    original_import = builtins.__import__
+
+    def without_provider(name, *args, **kwargs):
+        if name == "spicy_docs" or name.startswith("spicy_docs."):
+            raise AssertionError("MCP metadata tried to import source readers")
+        return original_import(name, *args, **kwargs)
+
+    con = duckdb.connect()
+    con.execute("CREATE TABLE members (bioguide_id VARCHAR, fec_ids_json VARCHAR)")
+    monkeypatch.setattr(mcp_server, "_get_connection", lambda: con)
+    monkeypatch.setattr(builtins, "__import__", without_provider)
+    mcp_server._table_metadata.cache_clear()
+    result = _tool_data(mcp_server.build_server(), "describe_table", {"table": "members"})
+    assert result["metadata"]["identity_columns"] == ["bioguide_id"]
+    assert result["metadata"]["grain"]
+    assert "FEC" in next(c["description"] for c in result["columns"] if c["column_name"] == "fec_ids_json")
+
+
+def test_describe_unknown_table_refuses_names_outside_declarations_and_snapshot(monkeypatch):
+    # Managed generations can introduce an output before dictionary prose is
+    # adopted, so validity now includes the captured connection's admitted names.
+    con = duckdb.connect()
+    monkeypatch.setattr(mcp_server, "_get_connection", lambda: con)
+    result = _tool_data(mcp_server.build_server(), "describe_table", {"table": "not_a_table"})
+    assert result["error"] == "Unknown table 'not_a_table'"
+    assert result["declared_tables"] == list(mcp_server.TABLES)
+    con.close()
+
+
+def test_local_directory_runs_actual_connection_without_remote_fallback(tmp_path, monkeypatch):
+    con = duckdb.connect()
+    target = str(tmp_path / "fec_committees.parquet").replace("'", "''")
+    con.execute(
+        f"COPY (SELECT 'C00000001' AS committee_id, 'Example committee' AS name) TO '{target}' (FORMAT PARQUET)"
+    )
+    con.close()
+    monkeypatch.setenv("SPICY_REGS_DATA_DIR", str(tmp_path))
+    monkeypatch.setattr(mcp_server, "DATA_DIR", mcp_server._resolve_data_dir())
+
+    def no_catalog():
+        raise AssertionError("Local mode must not access R2 catalog configuration")
+
+    monkeypatch.setattr(mcp_server, "_resolve_catalog_config", no_catalog)
+    from spicy_regs.sources import publication
+    monkeypatch.setattr(publication, "load_index", lambda url: (_ for _ in ()).throw(AssertionError("Remote index read")))
+    server = mcp_server.build_server()
+    sources = _tool_data(server, "list_sources", {})
+    assert sources["source"] == "local"
+    assert sources["base_path"] == str(tmp_path)
+    assert "base_url" not in sources
+    assert sources["tables"] == ["fec_committees"]
+    assert sources["publication"]["fec_committees"] == {"status": "local_unversioned"}
+    loaded = (
+        mcp_server._get_connection()
+        .execute(
+            "SELECT extension_name FROM duckdb_extensions() WHERE loaded AND extension_name IN ('httpfs', 'iceberg')"
+        )
+        .fetchall()
+    )
+    assert loaded == []
+    described = _tool_data(server, "describe_table", {"table": "fec_committees"})
+    assert described["available"] is True
+    assert described["source"] == "local"
+    queried = _tool_data(server, "query_sql", {"sql": "SELECT committee_id FROM fec_committees"})
+    assert queried["source"] == "local"
+    assert queried["rows"] == [{"committee_id": "C00000001"}]
+    refused = _tool_data(server, "query_sql", {"sql": "DROP VIEW fec_committees"})
+    assert "read-only" in refused["error"]
+
+
+@pytest.mark.parametrize("directory", ["", "/nonexistent-spicy-regs-directory"])
+def test_local_directory_configuration_refuses_missing_input(monkeypatch, directory):
+    monkeypatch.setenv("SPICY_REGS_DATA_DIR", directory)
+    with pytest.raises(RuntimeError, match="SPICY_REGS_DATA_DIR"):
+        mcp_server._resolve_data_dir()
 
 
 # --- catalog config resolution ----------------------------------------------

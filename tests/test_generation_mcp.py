@@ -76,3 +76,26 @@ def test_missing_or_wrong_schema_managed_member_refuses_connection(tmp_path, mon
     with pytest.raises(RuntimeError, match="Published"):
         mcp_server._build_connection()
     assert closed == [True]
+
+
+def test_admitted_table_without_dictionary_is_available_but_helpers_are_not(tmp_path, monkeypatch):
+    from tests.test_mcp_server import _tool_data
+
+    directory, _ = build(tmp_path, keys=("extra.parquet",))
+    index = publish(Store(), directory)
+    inner = duckdb.connect()
+    inner.execute("CREATE TABLE _spicy_publication (snapshot VARCHAR)")
+    inner.execute("INSERT INTO _spicy_publication VALUES (?)", [json.dumps(index)])
+    inner.execute(f"CREATE VIEW extra AS SELECT * FROM read_parquet('{directory / 'extra.parquet'}')")
+    inner.execute("CREATE TABLE unrelated_helper (id VARCHAR)")
+    monkeypatch.setattr(mcp_server, "_get_connection", lambda: inner)
+    server = mcp_server.build_server()
+    result = _tool_data(server, "list_sources", {})
+    assert result["tables"] == ["extra"]
+    assert result["publication"]["extra"]["status"] == "managed_generation"
+    described = _tool_data(server, "describe_table", {"table": "extra"})
+    assert described["available"] is True
+    assert described["columns"][0]["column_name"] == "id"
+    assert described["declared_columns"] == []
+    assert described["schema_matches_declared"] is None
+    inner.close()
