@@ -5,7 +5,24 @@ The optional `source-readers` extra enables the same readers for package install
 its wheels must be supplied explicitly until they are published in a registry.
 Base CLI and MCP installs do not require them.
 
-- `spicy_docs-0.25.0`: locally built from source commit `1c86f16`,
+- `spicy_docs-0.26.0`: locally built from isolated source commit `b618b92`,
+  2026-09-21. **1,323,662 bytes**, SHA-256
+  `31780875a7a9a5afd1b5ec93d7c987720e8e6a203365308ad8c13318df2ece23`.
+  Adds the source-owned ordered FEC bulk dictionary reader. The caller selects
+  a retained dictionary; the reader checks positions and preserves literal
+  cells and byte evidence. No dependency was added.
+
+  Compared with the previous wheel, 294 existing packaged source files are
+  byte-identical. Three previously committed schema modules correct digest
+  ordering descriptions and reject non-finite or circular JSON values. No
+  unrelated uncommitted source edits entered this wheel. The isolated source
+  checks passed **7,273 tests**, with four skipped and 46 deselected; lint and
+  formatting checks passed. Receipts and the exact wheel comparison are in
+  `receipts/fec-dictionary-adoption-2026-09-21/` under
+  `~/Work/corpora/supply-2026-09-02/`. This is a local adoption, not a registry
+  release. The prior wheel remains retained for replay.
+
+- Previous `spicy_docs-0.25.0`: locally built from source commit `1c86f16`,
   2026-09-21. **1,321,425 bytes**, SHA-256
   `3bd52a8916e8c470111dd31bcdc6cb7fa7e41c5b70011b567b78a7c1b58a5745`.
   Both reader pins and the uv source move together; the lock holds this digest.
@@ -32,7 +49,7 @@ Base CLI and MCP installs do not require them.
   Prior source/API additions and provider choices remain in Git history and
   their source guides; no new acquisition family is enabled by this adoption.
 
-- `rulespec_artifacts-1.0.14`: exact dependency of SpicyDocs 0.25.0.
+- `rulespec_artifacts-1.0.14`: exact dependency of SpicyDocs 0.26.0.
   **82,881 bytes**, SHA-256
   `f09aaf4525af3ac243d04695a8700464f06019653ac6f8fb9ed235ff0694af0b`.
   Built from Rulespec `21693e0a`; byte-identical to the SpicyDocs vendored wheel.

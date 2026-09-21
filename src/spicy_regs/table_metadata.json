@@ -1562,7 +1562,7 @@
       {
         "column_name": "collection_outcome_json",
         "column_type": "VARCHAR",
-        "description": "Complete provider outcome including requested scope, rejections and warnings when supplied."
+        "description": "Complete provider outcome including requested scope, rejections and warnings when supplied. tableFieldMapping records an explicit bulk-field mapping; tableFieldDefinitions retains verified HTML dictionary cells and source coordinates when selected."
       },
       {
         "column_name": "artifact_sha256",
@@ -1647,12 +1647,12 @@
       {
         "column_name": "source_locator_json",
         "column_type": "VARCHAR",
-        "description": "JSON source coordinates identifying the original response field, record, file or ZIP member and byte span when supplied. Optional field_mapping pins the selected header collection, record, digest and source coordinates."
+        "description": "JSON source coordinates identifying the original response field, record, file or ZIP member and byte span when supplied. Optional field_mapping pins the selected source header or HTML field dictionary; complete dictionary cells appear in the parent collection's tableFieldDefinitions."
       },
       {
         "column_name": "metadata_json",
         "column_type": "VARCHAR",
-        "description": "Complete provider-native metadata, or literal positional values named by an explicitly selected verified source header. Header and blank rows retain positional metadata; source_record_json always retains the full native wrapper."
+        "description": "Complete provider-native metadata, or literal positional values named by an explicitly selected verified source header or ordered HTML field dictionary. Header and blank rows retain positional metadata; source_record_json always retains the full native wrapper."
       },
       {
         "column_name": "assets_json",
@@ -4645,7 +4645,7 @@
       {
         "column_name": "link_rule_version",
         "column_type": "VARCHAR",
-        "description": "A digest over every link rule's name, version, publisher, relation and reader, so these rows name the rules that produced them even when someone forgets to move a rule's own version; the merge prefers the larger value.  Derived the way `citations.py` derives `CITATION_RULE_SET_VERSION`, and blind for the same reason to a change inside a reader."
+        "description": "A digest over every link rule's name, version, publisher, relation and reader, so these rows name the rules that produced them even when someone forgets to move a rule's own version; an equality token, never a freshness ordering. A successfully corrected generation supersedes its prior regardless of digest spelling. Derived the way `citations.py` derives `CITATION_RULE_SET_VERSION`, and blind for the same reason to a change inside a reader."
       }
     ],
     "grain": "One row per bill one source states a hearing was held on or noticed for: the pair, the source that stated it, and the committee-and-date key the statement was checked against.",
@@ -6488,7 +6488,7 @@
       {
         "column_name": "rule_set_version",
         "column_type": "VARCHAR",
-        "description": "Digest over every phrasing's name and pattern, so these rows name the rules that produced them even when someone forgets to move `rule_version`; the merge prefers the larger value."
+        "description": "Digest over every phrasing's name and pattern, so these rows name the rules that produced them even when someone forgets to move `rule_version`; an equality token, never a freshness ordering. A successfully corrected generation supersedes its prior regardless of digest spelling."
       },
       {
         "column_name": "citation_rule_version",

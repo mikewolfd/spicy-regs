@@ -415,3 +415,63 @@ def test_conflicting_identifier_aliases_refuse_instead_of_choosing_or_filling(tm
     with pytest.raises(ValueError, match="conflicting source aliases"):
         build_fec_observations(_manifest(tmp_path, [item]), tmp_path / "bad")
     assert not (tmp_path / "bad").exists()
+
+
+def _dictionary_mapping(tmp_path, item, html=None):
+    from spicy_docs.storage.blobs import LocalSourceNativeBlobStore
+
+    raw = (
+        html
+        or "<table><tr><td>Column name<td>Field name<td>Position<tr><td>CAND_ID<td>Candidate identifier<td>1<tr><td>TTL_RECEIPTS<td>Total receipts<td>2</table>"
+    ).encode()
+    digest = "sha256:" + hashlib.sha256(raw).hexdigest()
+    LocalSourceNativeBlobStore(tmp_path / "dictionary-blobs").put_blob(digest, len(raw), (raw,))
+    capture = {
+        "requestUrl": "https://www.fec.gov/campaign-finance-data/all-candidates-file-description/",
+        "responseSha256": digest,
+        "byteSize": len(raw),
+        "observedAt": "2026-09-21T11:00:00Z",
+        "representation": "opaque",
+    }
+    item["field_mapping"] = {
+        "dictionary": {"capture": capture, "blob_root": "dictionary-blobs"},
+        "data_has_header": False,
+    }
+    return raw
+
+
+def test_official_html_dictionary_names_source_fields_and_retains_definition_coordinates(tmp_path):
+    item = _positional(tmp_path, b"H2AK01158,-001.50\n,\n")
+    raw = _dictionary_mapping(tmp_path, item)
+    records, collections, relationships = _rows(build_fec_observations(_manifest(tmp_path, [item]), tmp_path / "out"))
+    assert json.loads(records[0]["metadata_json"]) == {"CAND_ID": "H2AK01158", "TTL_RECEIPTS": "-001.50"}
+    assert records[0]["candidate_id"] == "H2AK01158" and records[1]["candidate_id"] == ""
+    assert json.loads(records[0]["source_record_json"])["record"]["record"]["fields"] == ["H2AK01158", "-001.50"]
+    locator = json.loads(records[0]["source_locator_json"])["field_mapping"]
+    assert locator["kind"] == "official-html-dictionary"
+    assert locator["source_sha256"] == "sha256:" + hashlib.sha256(raw).hexdigest()
+    assert locator["definitions_collection_id"] == item["collection_id"]
+    definitions = json.loads(collections[0]["collection_outcome_json"])["tableFieldDefinitions"]
+    assert [field["position"] for field in definitions["fields"]] == [1, 2]
+    field = definitions["fields"][1]
+    fragment = field["cells"][0]["fragments"][0]
+    assert raw[fragment["byte_start"] : fragment["byte_end"]] == b"TTL_RECEIPTS"
+    assert relationships == []
+
+
+@pytest.mark.parametrize("mutation", ["digest", "width", "ambiguous", "embedded_header", "mixed_modes"])
+def test_dictionary_mapping_failures_leave_no_output_generation(tmp_path, mutation):
+    item = _positional(tmp_path, b"H2AK01158,-001.50\n" if mutation != "width" else b"H2AK01158\n")
+    raw = _dictionary_mapping(tmp_path, item)
+    mapping = item["field_mapping"]
+    if mutation == "digest":
+        mapping["dictionary"]["capture"]["byteSize"] += 1
+    elif mutation == "ambiguous":
+        _dictionary_mapping(tmp_path, item, raw.decode() * 2)
+    elif mutation == "embedded_header":
+        mapping["data_has_header"] = True
+    elif mutation == "mixed_modes":
+        mapping["header_collection_id"] = item["collection_id"]
+    with pytest.raises(ValueError):
+        build_fec_observations(_manifest(tmp_path, [item]), tmp_path / "bad")
+    assert not (tmp_path / "bad").exists()

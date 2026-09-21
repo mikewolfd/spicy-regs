@@ -88,6 +88,42 @@ the column does not validate a person, committee or affiliation. Conflicting
 aliases in one row refuse delivery instead of choosing one or filling a blank.
 Every original alias and field remains in the named metadata and literal record.
 
+Some summary ZIPs, including `weball`, `webl` and `webk`, publish their ordered
+field definitions on an official HTML description page. Select that retained
+dictionary directly instead of manufacturing a CSV header:
+
+```json
+{
+  "dictionary": {
+    "blob_root": "/path/to/retained-dictionaries/blobs",
+    "capture": {
+      "requestUrl": "https://www.fec.gov/campaign-finance-data/all-candidates-file-description/",
+      "responseSha256": "sha256:<exact retained digest>",
+      "byteSize": 32602,
+      "observedAt": "2026-09-12T13:42:59.888472+00:00",
+      "representation": "opaque"
+    }
+  },
+  "data_has_header": false
+}
+```
+
+Use this object as `field_mapping`; dictionary and header-collection modes are
+mutually exclusive. SpicyDocs verifies the HTML and reads one explicit
+`Column name` / `Field name` / `Position` table. Positions must run from one
+without gaps, names must be unique and nonempty, and every data row must match
+the dictionary's width. Surrounding HTML layout whitespace is removed from
+field-name keys; literal cells, fragments and source spelling remain available.
+
+Each data row retains the dictionary digest, URL and table locator. Complete
+field definitions, cell coordinates and original text fragments appear once in
+`fec_collections.collection_outcome_json.tableFieldDefinitions`; the row locator
+identifies that collection and JSON location. `definitions_pointer` is relative
+to the decoded `collection_outcome_json` value. Exact input rows remain in
+`source_record_json`. Selecting a description for a historical file is explicit;
+matching field counts does not prove historical semantic compatibility, establish
+financial types or choose an amendment policy.
+
 For API records, `metadata_json` follows SpicyDocs' metadata/body separation and
 exact decimal-string representation. Original JSON numbers and embedded bodies
 remain in the pinned original; `assets_json` and `embedded_bodies_json` retain

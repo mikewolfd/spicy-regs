@@ -28,8 +28,8 @@ Joinable metadata and retained source evidence across FEC families. collection_i
 | `source_sha256` | `VARCHAR` | Digest pinning the source bytes from which the provider observed this record. |
 | `source_url` | `VARCHAR` | Recorded source URL associated with the observation; this is evidence provenance, not a live availability check. |
 | `observed_at` | `VARCHAR` | Provider observation time when available, distinct from dates reported inside the source record. |
-| `source_locator_json` | `VARCHAR` | JSON source coordinates identifying the original response field, record, file or ZIP member and byte span when supplied. Optional field_mapping pins the selected header collection, record, digest and source coordinates. |
-| `metadata_json` | `VARCHAR` | Complete provider-native metadata, or literal positional values named by an explicitly selected verified source header. Header and blank rows retain positional metadata; source_record_json always retains the full native wrapper. |
+| `source_locator_json` | `VARCHAR` | JSON source coordinates identifying the original response field, record, file or ZIP member and byte span when supplied. Optional field_mapping pins the selected source header or HTML field dictionary; complete dictionary cells appear in the parent collection's tableFieldDefinitions. |
+| `metadata_json` | `VARCHAR` | Complete provider-native metadata, or literal positional values named by an explicitly selected verified source header or ordered HTML field dictionary. Header and blank rows retain positional metadata; source_record_json always retains the full native wrapper. |
 | `assets_json` | `VARCHAR` | JSON representation of provider asset references and evidence; an asset reference alone does not establish that its body was downloaded. |
 | `embedded_bodies_json` | `VARCHAR` | JSON representation of provider-embedded body values, retaining their supplied scope. |
 | `source_record_json` | `VARCHAR` | Complete provider source-record serialization, preserving identity, native metadata, assets, bodies and evidence. |

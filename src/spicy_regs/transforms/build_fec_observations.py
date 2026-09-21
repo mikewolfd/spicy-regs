@@ -129,7 +129,12 @@ def _load_manifest(path):
             mapping = item["field_mapping"]
             if item["profile"] != "positional" or not isinstance(mapping, dict):
                 raise ValueError("field_mapping requires positional input")
-            fields = {"header_collection_id", "header_row_ordinal", "data_has_header"}
+            dictionary = "dictionary" in mapping
+            fields = (
+                {"dictionary", "data_has_header"}
+                if dictionary
+                else {"header_collection_id", "header_row_ordinal", "data_has_header"}
+            )
             if "relationship_family" in mapping:
                 fields |= {"relationship_family", "cycle"}
                 if (
@@ -138,16 +143,24 @@ def _load_manifest(path):
                     or type(mapping.get("cycle")) is not int
                 ):
                     raise ValueError("bulk relationships require an explicit supported family and cycle")
-            if (
-                set(mapping) != fields
-                or not isinstance(mapping["header_collection_id"], str)
+            if set(mapping) != fields or type(mapping["data_has_header"]) is not bool:
+                raise ValueError("field_mapping requires an explicit dictionary or header collection and header flag")
+            if dictionary:
+                source = mapping["dictionary"]
+                if (
+                    not isinstance(source, dict)
+                    or set(source) != {"capture", "blob_root"}
+                    or mapping["data_has_header"]
+                ):
+                    raise ValueError("dictionary mapping requires a retained capture, blob root and no embedded header")
+            elif (
+                not isinstance(mapping["header_collection_id"], str)
                 or not mapping["header_collection_id"]
                 or type(mapping["header_row_ordinal"]) is not int
                 or mapping["header_row_ordinal"] != 0
-                or type(mapping["data_has_header"]) is not bool
             ):
-                raise ValueError("field_mapping requires a selected header collection, ordinal zero and header flag")
-            if mapping["data_has_header"] != (mapping["header_collection_id"] == item["collection_id"]):
+                raise ValueError("field_mapping requires a selected header collection and ordinal zero")
+            elif mapping["data_has_header"] != (mapping["header_collection_id"] == item["collection_id"]):
                 raise ValueError(
                     "embedded headers must name their own collection; external headers belong to an earlier collection"
                 )
@@ -324,7 +337,32 @@ def _shape(item, wrapped, outcome):
     return row, locator
 
 
-def _named_fields(item, wrapped, row, locator, headers):
+def _dictionary(item, base):
+    """Read an explicitly selected source dictionary using the provider parser."""
+    from spicy_docs.sources.fec.bulk_dictionary import MAX_DICTIONARY_BYTES, parse_bulk_dictionary
+    from spicy_docs.sources.fec.originals import original_capture
+    from spicy_docs.storage.blobs import LocalSourceNativeBlobStore, iter_verified_blob
+
+    selected = item["field_mapping"]["dictionary"]
+    capture = original_capture(selected["capture"])
+    if capture["representation"] != "opaque" or capture["byteSize"] > MAX_DICTIONARY_BYTES:
+        raise ValueError("dictionary requires a bounded opaque HTML original")
+    store = LocalSourceNativeBlobStore(_path(selected["blob_root"], base))
+    raw = b"".join(iter_verified_blob(store, capture["responseSha256"], capture["byteSize"]))
+    definition = parse_bulk_dictionary(raw, sha256=capture["responseSha256"])
+    evidence = {
+        "kind": "official-html-dictionary",
+        "source_sha256": capture["responseSha256"],
+        "source_url": capture["requestUrl"],
+        "observed_at": capture["observedAt"],
+        "table_locator": definition["table_locator"],
+        "definitions_collection_id": item["collection_id"],
+        "definitions_pointer": "/tableFieldDefinitions",
+    }
+    return ([field["name"] for field in definition["fields"]], evidence), definition
+
+
+def _named_fields(item, wrapped, row, locator, headers, dictionary=None):
     """Use only explicitly selected, byte-verified source header cells."""
     if item["profile"] != "positional":
         return None
@@ -344,7 +382,7 @@ def _named_fields(item, wrapped, row, locator, headers):
     mapping = item.get("field_mapping")
     if mapping is None:
         return None
-    selected = headers.get(mapping["header_collection_id"])
+    selected = dictionary if dictionary is not None else headers.get(mapping["header_collection_id"])
     if selected is None:
         raise ValueError("selected field header must be present in its own or an earlier collection")
     names, evidence = selected
@@ -432,6 +470,11 @@ def build_fec_observations(manifest: Path, output_dir: Path, *, batch_size: int 
 
             for item in collections:
                 profile, iterator = _profile(item["profile"])
+                dictionary, definitions = (
+                    _dictionary(item, manifest.parent)
+                    if "dictionary" in item.get("field_mapping", {})
+                    else (None, None)
+                )
                 if "scope" in item:
                     records, outcome = _positional(item, manifest.parent, profile)
                 elif "captures" in item:
@@ -446,7 +489,7 @@ def build_fec_observations(manifest: Path, output_dir: Path, *, batch_size: int 
                         native = wrapped["record"]["record"]
                         if native.get("kind") == "header":
                             version = native["format_version"]
-                    mapped = _named_fields(item, wrapped, row, locator, headers)
+                    mapped = _named_fields(item, wrapped, row, locator, headers, dictionary)
                     append(0, row)
                     record_count += 1
                     for relationship in _relationships(item, wrapped, row, locator, version, mapped):
@@ -456,6 +499,8 @@ def build_fec_observations(manifest: Path, output_dir: Path, *, batch_size: int 
                     raise ValueError("FEC output count differs from selected input membership")
                 if "field_mapping" in item:
                     outcome = {**outcome, "tableFieldMapping": item["field_mapping"]}
+                    if definitions is not None:
+                        outcome["tableFieldDefinitions"] = definitions
                 append(
                     1,
                     {

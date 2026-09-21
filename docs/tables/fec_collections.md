@@ -24,5 +24,5 @@ Collection-level scope, counts and evidence for fec_source_records. Join collect
 | `record_outcome` | `VARCHAR` | Provider's record outcome, such as no-record-rejections or an empty result, retained without promoting it to population completeness. |
 | `requested_scope_json` | `VARCHAR` | JSON object preserving the query, source selection or bounds requested for this collection. |
 | `coverage_limits_json` | `VARCHAR` | JSON value preserving provider-stated coverage limits for the selected input. |
-| `collection_outcome_json` | `VARCHAR` | Complete provider outcome including requested scope, rejections and warnings when supplied. |
+| `collection_outcome_json` | `VARCHAR` | Complete provider outcome including requested scope, rejections and warnings when supplied. tableFieldMapping records an explicit bulk-field mapping; tableFieldDefinitions retains verified HTML dictionary cells and source coordinates when selected. |
 | `artifact_sha256` | `VARCHAR` | Digest of the verified provider source-release artifact; null for direct retained-query input that has no release artifact. |
