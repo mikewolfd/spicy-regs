@@ -26,6 +26,8 @@ from loguru import logger
 
 from spicy_regs.sources import r2
 
+ReplacementScope = tuple[str, Collection[str]] | tuple[tuple[str, ...], Collection[tuple[str, ...]]]
+
 
 def prior_scratch_path(output_dir: Path, name: str) -> Path:
     """The local path :func:`merge_table` caches/reuses the prior table under.
@@ -72,7 +74,8 @@ def merge_table(
     download_prior: Callable[[str, Path], bool] = r2.download,
     prior_present: bool | None = None,
     coalesce_prior: bool = False,
-    replace_parents: tuple[str, Collection[str]] | None = None,
+    replace_parents: ReplacementScope | None = None,
+    parquet_metadata: Mapping[str, str] | None = None,
 ) -> Path:
     """Merge freshly fetched ``rows`` against the prior ``remote_key`` table.
 
@@ -125,6 +128,13 @@ def merge_table(
     ``replace_parents`` names a parent column and the successfully evaluated
     parent IDs. Remove their prior relationship rows before merging, including
     when their fresh result is empty. Unread or failed parents keep their rows.
+    A tuple of column names and a collection of matching value tuples replaces
+    composite scopes, such as one file within one package, without modifying
+    the retained prior file before the merge succeeds.
+
+    ``parquet_metadata`` writes processing checkpoints in the same artifact as
+    the rows, including a successful read producing zero rows. Callers supply
+    the complete metadata to retain; it is not inferred from row presence.
     """
     import duckdb
 
@@ -173,13 +183,28 @@ def merge_table(
     prior_select = ""
     prior_filter = ""
     if replace_parents is not None:
-        parent_column, parent_ids = replace_parents
-        if parent_column not in columns or not parent_column.isidentifier():
-            raise ValueError("replace_parents must name a table column")
-        con.register("replaced_parents", pa.table({"parent_id": pa.array(list(parent_ids), type=pa.string())}))
-        prior_filter = (
-            f"WHERE NOT EXISTS (SELECT 1 FROM replaced_parents r WHERE r.parent_id = p.{parent_column})"
-        )
+        scope_columns, scope_values = replace_parents
+        if isinstance(scope_columns, str):
+            scope_columns = (scope_columns,)
+            value_rows = [(value,) for value in scope_values]
+        else:
+            value_rows = list(scope_values)
+        if not scope_columns or len(set(scope_columns)) != len(scope_columns) or any(
+            column not in columns or not column.isidentifier() for column in scope_columns
+        ):
+            raise ValueError("replace_parents must name distinct table columns")
+        if any(
+            not isinstance(row, tuple) or len(row) != len(scope_columns)
+            or any(not isinstance(value, str) for value in row)
+            for row in value_rows
+        ):
+            raise ValueError("replace_parents values must match its columns")
+        con.register("replaced_parents", pa.table({
+            column: pa.array([row[i] for row in value_rows], type=pa.string())
+            for i, column in enumerate(scope_columns)
+        }))
+        scope_match = " AND ".join(f"r.{column} = p.{column}" for column in scope_columns)
+        prior_filter = f"WHERE NOT EXISTS (SELECT 1 FROM replaced_parents r WHERE {scope_match})"
     if have_prior:
         # The prior table may predate columns this contract has since gained —
         # ``congress_bills`` is the live case: its first ten columns are frozen
@@ -246,13 +271,18 @@ def merge_table(
             WHERE _rn = 1
         """
 
+    metadata_option = ", KV_METADATA ?" if parquet_metadata else ""
+    copy_parameters: list[object] = [str(out_file)]
+    if parquet_metadata:
+        copy_parameters.append(dict(parquet_metadata))
     con.execute(
         f"""
         COPY (
             SELECT {cols} FROM ({selection})
             ORDER BY {order_by}
-        ) TO '{out_file}' (FORMAT PARQUET, COMPRESSION ZSTD, ROW_GROUP_SIZE 50000);
-        """
+        ) TO ? (FORMAT PARQUET, COMPRESSION ZSTD, ROW_GROUP_SIZE 50000{metadata_option});
+        """,
+        copy_parameters,
     )
     con.close()
 
@@ -392,7 +422,8 @@ def merge_contract_table(
     *,
     download_prior: Callable[[str, Path], bool] = r2.download,
     prior_present: bool | None = None,
-    replace_parents: tuple[str, Collection[str]] | None = None,
+    replace_parents: ReplacementScope | None = None,
+    parquet_metadata: Mapping[str, str] | None = None,
 ) -> Path:
     """Merge ``rows`` for one ``spicy_docs.schemas`` table contract.
 
@@ -421,6 +452,7 @@ def merge_contract_table(
         prior_present=prior_present,
         coalesce_prior=coalesce,
         replace_parents=replace_parents,
+        parquet_metadata=parquet_metadata,
     )
     if contract_name == STATUTES_JOIN_TARGET:
         fill_statutes_at_large_cite(output_dir, out_file, contract.version_column, contract.identity, download_prior)

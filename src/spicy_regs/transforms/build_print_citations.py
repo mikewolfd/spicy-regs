@@ -3,7 +3,9 @@
 SpicyDocs owns selection, rendition preference, interpretation and row shapes.
 This host owns the issue-date window, caps, prior-output resume and publication.
 The whole published window is enumerated each run so unsuccessful packages
-remain eligible; unchanged captured packages cost no body requests. Collections
+remain eligible; held packages are also revisited when processing changes.
+An unchanged source and successful matching checkpoints across its outputs
+cost no body requests. Collections
 share the package cap round-robin so neither starves on a cold start.
 
 Print families use the package's PDF-first order because their columns state
@@ -15,17 +17,24 @@ refusals abort. Senate expenditure granules use a separate acquisition pass.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import os
 from collections import Counter
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from datetime import UTC, datetime
+from importlib.metadata import version
 from pathlib import Path
 from typing import Any, Protocol
 
 import httpx
 from loguru import logger
 from spicy_docs.extraction.body_text import BodyText, body_text
-from spicy_docs.interpretation.bill_actions import find_bill_actions
+from spicy_docs.interpretation.bill_actions import (
+    PRINT_ACTION_RULE_SET_VERSION,
+    PRINT_ACTION_VOCABULARY_VERSION,
+    find_bill_actions,
+)
 from spicy_docs.interpretation.citations import (
     CITATION_RULE_SET_VERSION,
     CITATION_RULES_BY_NAME,
@@ -60,6 +69,7 @@ from spicy_docs.transport.credentials import CredentialRefusedError, scrub_crede
 from spicy_regs.sources import r2
 from spicy_regs.sources.congress_bills import API_KEY_ENV_VARS, _resolve_api_key
 from spicy_regs.transforms.congress_scope import current_congress
+from spicy_regs.transforms.read_checkpoints import checkpoint_metadata, read_checkpoints
 from spicy_regs.transforms.table_merge import merge_contract_table, published_table
 
 #: The four tables this transform publishes, in the order ``build`` returns
@@ -68,6 +78,7 @@ ACTIVITY_REPORTS = "house_activity_reports"
 BUDGET_VOLUMES = "budget_volumes"
 BILL_ACTIONS = "bill_committee_actions"
 CITATIONS = "document_citations"
+CHECKPOINT_NAMESPACE = "print-citations"
 
 #: The two collections, with the package-id prefix each row must actually
 #: carry. The prefix check is not redundant with the request: a collection
@@ -184,13 +195,46 @@ def _today() -> str:
     return datetime.now(UTC).strftime("%Y-%m-%d")
 
 
-def _held_packages(prior_file: Path | None) -> dict[str, str | None]:
-    """``package_id`` -> published ``last_modified``, for skipping unchanged packages."""
+def _held_packages(prior_file: Path | None) -> dict[str, tuple[str | None, str | None]]:
+    """Published source timestamp and text digest, including legacy rows to reread."""
     if prior_file is None:
         return {}
     import duckdb
 
-    return dict(duckdb.sql(f"SELECT package_id, last_modified FROM read_parquet('{prior_file}')").fetchall())
+    return {
+        package_id: (modified, text_sha256)
+        for package_id, modified, text_sha256 in duckdb.sql(
+            f"SELECT package_id, last_modified, text_sha256 FROM read_parquet('{prior_file}')"
+        ).fetchall()
+    }
+
+
+def _processing_versions(vocabulary: tuple[tuple[str, str], ...]) -> dict[str, str]:
+    """Identify citation, action and body-reading inputs even when no finding exists.
+
+    The dependency release also covers body-text derivation and row shaping;
+    citation and action digests identify their rules independently. The parent
+    tables' public ``rule_set_version`` keeps its citation-only meaning.
+    """
+    common = {
+        "reader_release": version("spicy-docs"),
+        "pdf_reader_release": version("PyMuPDF"),
+        "citation_rules": CITATION_RULE_SET_VERSION,
+        "body_preference": PRINT_BODY_PREFERENCE,
+    }
+    inputs = {
+        BUDGET: common,
+        CRPT: common | {
+            "action_rules": PRINT_ACTION_RULE_SET_VERSION,
+            "action_vocabulary": PRINT_ACTION_VOCABULARY_VERSION,
+            "committee_chamber": ACTIVITY_REPORT_CHAMBER,
+            "committee_vocabulary": sorted(vocabulary),
+        },
+    }
+    return {
+        collection: hashlib.sha256(json.dumps(values, sort_keys=True).encode()).hexdigest()
+        for collection, values in inputs.items()
+    }
 
 
 def _is_budget_volume(package_id: str, title: str) -> bool:
@@ -369,10 +413,36 @@ def build_print_citations(
     }
     have_prior = {name: path is not None for name, path in priors.items()}
     held = {name: _held_packages(priors[name]) for name in (ACTIVITY_REPORTS, BUDGET_VOLUMES)}
+    checkpoints = {
+        name: {row["package_id"]: row for row in read_checkpoints(path, CHECKPOINT_NAMESPACE)
+               if isinstance(row.get("package_id"), str)}
+        for name, path in priors.items()
+    }
     since = _issue_floor()
     logger.info("BUDGET: {} measured parts admitted by the package grammar", len(MEASURED_BUDGET_PARTS))
 
     vocabulary = _roster_vocabulary(rosters, current_congress())
+    processing_versions = _processing_versions(vocabulary)
+    # A parent checkpoint alone can overtake failed child publication. Every
+    # table affected by a read must carry the same successful-read checkpoint.
+    outputs_for = {
+        CRPT: (ACTIVITY_REPORTS, BILL_ACTIONS, CITATIONS),
+        BUDGET: (BUDGET_VOLUMES, CITATIONS),
+    }
+    evaluated: dict[str, set[tuple[str, str]]] = {CRPT: set(), BUDGET: set()}
+
+    def complete(package_id: str, collection: str, last_modified: str | None) -> bool:
+        parent = outputs_for[collection][0]
+        published = held[parent].get(package_id)
+        expected = {"package_id": package_id, "last_modified": last_modified,
+                    "text_sha256": published[1] if published is not None else None,
+                    "processing_version": processing_versions[collection]}
+        return (
+            last_modified is not None
+            and published is not None
+            and published[0] == last_modified
+            and all(checkpoints[name].get(package_id) == expected for name in outputs_for[collection])
+        )
 
     activity_rows: list[dict] = []
     budget_rows: list[dict] = []
@@ -388,16 +458,20 @@ def build_print_citations(
     # whatever is left".
     outstanding: dict[str, list[str]] = {}
     for collection, table, _label, keep in _FAMILIES:
-        already = held[table]
+        # Legacy outputs have no checkpoint and need one reread. Stale held
+        # packages remain eligible even when the discovery window omits them.
+        known = {package_id: modified for package_id, (modified, _digest) in held[table].items()}
+        for name in outputs_for[collection]:
+            for package_id, state in checkpoints[name].items():
+                if package_id.startswith(collection + "-"):
+                    known.setdefault(package_id, state.get("last_modified"))
+        pending = {package_id: modified for package_id, modified in known.items()
+                   if not complete(package_id, collection, modified)}
         listed = _listed(reader, collection, since, keep)
-        outstanding[collection] = [
-            package_id
-            for package_id, last_modified in listed
-            # Published already and unmodified since; the publisher's own
-            # last_modified is the comparison, not a guess from the date.
-            if not (package_id in already and already[package_id] == last_modified)
-        ]
-        unchanged += len(listed) - len(outstanding[collection])
+        pending.update({package_id: modified for package_id, modified in listed
+                        if not complete(package_id, collection, modified)})
+        outstanding[collection] = list(pending)
+        unchanged += sum(package_id not in pending for package_id, _modified in listed)
 
     scheduled = _schedule(outstanding, max_packages)
     rows_for = {CRPT: activity_rows, BUDGET: budget_rows}
@@ -472,6 +546,16 @@ def build_print_citations(
                 for action in reading.findings
             )
 
+        # Offsets are evidence for one normalized text. Correct findings for
+        # that text, while retaining the history of different text digests.
+        if provenance.text_sha256 is not None:
+            evaluated[collection].add((package_id, provenance.text_sha256))
+        state = {"package_id": package_id, "last_modified": package.summary.last_modified,
+                 "text_sha256": provenance.text_sha256,
+                 "processing_version": processing_versions[collection]}
+        for name in outputs_for[collection]:
+            checkpoints[name][package_id] = state
+
         depth = len(derived.pages) if derived.pages is not None else 0
         pages_read += depth
         stated_pages = package.summary.pages
@@ -504,6 +588,10 @@ def build_print_citations(
         # column for the per-run distribution, so this is where it is said.
         logger.info("Print citations: citation findings by kind — {}", dict(kinds))
 
+    metadata = {
+        name: checkpoint_metadata(priors[name], CHECKPOINT_NAMESPACE, list(states.values()))
+        for name, states in checkpoints.items()
+    }
     return (
         merge_contract_table(
             output_dir,
@@ -511,6 +599,7 @@ def build_print_citations(
             activity_rows,
             download_prior=download_prior,
             prior_present=have_prior[ACTIVITY_REPORTS],
+            parquet_metadata=metadata[ACTIVITY_REPORTS],
         ),
         merge_contract_table(
             output_dir,
@@ -518,6 +607,7 @@ def build_print_citations(
             budget_rows,
             download_prior=download_prior,
             prior_present=have_prior[BUDGET_VOLUMES],
+            parquet_metadata=metadata[BUDGET_VOLUMES],
         ),
         merge_contract_table(
             output_dir,
@@ -525,6 +615,8 @@ def build_print_citations(
             action_rows,
             download_prior=download_prior,
             prior_present=have_prior[BILL_ACTIONS],
+            replace_parents=(("document_key", "text_sha256"), evaluated[CRPT]),
+            parquet_metadata=metadata[BILL_ACTIONS],
         ),
         merge_contract_table(
             output_dir,
@@ -532,5 +624,7 @@ def build_print_citations(
             citation_rows,
             download_prior=download_prior,
             prior_present=have_prior[CITATIONS],
+            replace_parents=(("document_key", "text_sha256"), evaluated[CRPT] | evaluated[BUDGET]),
+            parquet_metadata=metadata[CITATIONS],
         ),
     )

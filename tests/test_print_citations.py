@@ -22,6 +22,7 @@ from __future__ import annotations
 import pyarrow.parquet as pq
 import pytest
 from pathlib import Path
+from types import SimpleNamespace
 
 from spicy_docs.reading.paged_json import PagedJsonSourceError
 from spicy_docs.sources.govinfo.activity_reports import is_activity_report
@@ -85,7 +86,7 @@ def _mods_bytes(package_id: str) -> bytes:
     return (MODS_DIR / f"mods-{package_id}.xml").read_bytes()
 
 
-def _package(package_id: str, *, pages: list[list[str]], last_modified: str = "2026-09-18T12:00:00Z", pdf_pages=None):
+def _package(package_id: str, *, pages: list[list[str]], last_modified: str | None = "2026-09-18T12:00:00Z", pdf_pages=None):
     """A fetched package body, built the way the acquirer would have built one."""
     identity = parse_package_id(package_id)
     body = make_multiline_pdf(pdf_pages if pdf_pages is not None else pages)
@@ -191,7 +192,7 @@ def _no_download(remote_key: str, local_path: Path) -> bool:
     return False
 
 
-def _listing(package_id: str, title: str, last_modified: str = "2026-09-18T12:00:00Z") -> dict:
+def _listing(package_id: str, title: str, last_modified: str | None = "2026-09-18T12:00:00Z") -> dict:
     return {"packageId": package_id, "title": title, "lastModified": last_modified}
 
 
@@ -203,6 +204,169 @@ def _build(tmp_path, reader, acquirer, **kwargs):
 
 def _rows(path: Path) -> list[dict]:
     return pq.read_table(path).to_pylist()
+
+
+def _publish_as_prior(paths: tuple[Path, ...]) -> None:
+    for path in paths:
+        path.rename(path.with_name(f"_{path.stem}_prior.parquet"))
+
+
+def test_modified_print_preserves_findings_from_the_prior_text_digest(tmp_path):
+    listing = _listing(CRPT_ID, "ACTIVITY REPORT of the COMMITTEE")
+    acquirer = _Acquirer({CRPT_ID: _package(CRPT_ID, pages=REPORT_PAGES)})
+    paths = _build(tmp_path, _Reader({"CRPT": [listing]}), acquirer)
+    actions, citations = _rows(paths[2]), _rows(paths[3])
+    assert actions and citations, "the first read must produce findings to retain as history"
+    _publish_as_prior(paths)
+
+    modified = "2026-09-19T12:00:00Z"
+    acquirer.packages[CRPT_ID] = _package(CRPT_ID, pages=[["No bill or citation remains."]], last_modified=modified)
+    paths = _build(tmp_path, _Reader({"CRPT": [dict(listing, lastModified=modified)]}), acquirer)
+    assert _rows(paths[2]) == actions
+    assert _rows(paths[3]) == citations
+    current_digest = _rows(paths[0])[0]["text_sha256"]
+    assert all(row["text_sha256"] != current_digest for row in actions + citations)
+
+
+def test_same_text_correction_retires_current_findings_but_keeps_older_text(tmp_path, monkeypatch):
+    listing = _listing(CRPT_ID, "ACTIVITY REPORT of the COMMITTEE")
+    acquirer = _Acquirer({CRPT_ID: _package(CRPT_ID, pages=REPORT_PAGES)})
+    paths = _build(tmp_path, _Reader({"CRPT": [listing]}), acquirer)
+    old_actions, old_citations = _rows(paths[2]), _rows(paths[3])
+    _publish_as_prior(paths)
+
+    modified = "2026-09-19T12:00:00Z"
+    acquirer.packages[CRPT_ID] = _package(
+        CRPT_ID, pages=[["The Committee ordered H.R. 1093 reported on April 4, 2024."]], last_modified=modified
+    )
+    listing["lastModified"] = modified
+    paths = _build(tmp_path, _Reader({"CRPT": [listing]}), acquirer)
+    current_digest = _rows(paths[0])[0]["text_sha256"]
+    assert {row["text_sha256"] for row in _rows(paths[2])} == {old_actions[0]["text_sha256"], current_digest}
+    assert {row["text_sha256"] for row in _rows(paths[3])} == {old_citations[0]["text_sha256"], current_digest}
+    _publish_as_prior(paths)
+    monkeypatch.setattr("spicy_regs.transforms.build_print_citations.CITATION_RULE_SET_VERSION", "corrected")
+    monkeypatch.setattr("spicy_regs.transforms.build_print_citations.find_citations", lambda *_args, **_kwargs: ())
+
+    paths = _build(tmp_path, _Reader({}), acquirer)
+    assert _rows(paths[2]) == old_actions
+    assert _rows(paths[3]) == old_citations
+    assert _rows(paths[0])[0]["text_sha256"] == current_digest
+    _publish_as_prior(paths)
+    acquirer.asked.clear()
+    paths = _build(tmp_path, _Reader({"CRPT": [listing]}), acquirer)
+    assert acquirer.asked == [], "empty current-digest findings and older history share a complete checkpoint"
+    assert _rows(paths[2]) == old_actions
+    assert _rows(paths[3]) == old_citations
+
+
+@pytest.mark.parametrize("version_name", ["CITATION_RULE_SET_VERSION", "PRINT_ACTION_RULE_SET_VERSION"])
+def test_rule_correction_revisits_held_print_outside_discovery(tmp_path, monkeypatch, version_name):
+    listing = _listing(CRPT_ID, "ACTIVITY REPORT of the COMMITTEE")
+    acquirer = _Acquirer({CRPT_ID: _package(CRPT_ID, pages=REPORT_PAGES)})
+    paths = _build(tmp_path, _Reader({"CRPT": [listing]}), acquirer)
+    _publish_as_prior(paths)
+    acquirer.asked.clear()
+    monkeypatch.setattr(
+        f"spicy_regs.transforms.build_print_citations.{version_name}", "corrected-rule-version"
+    )
+    if version_name == "PRINT_ACTION_RULE_SET_VERSION":
+        monkeypatch.setattr("spicy_regs.transforms.build_print_citations.find_bill_actions",
+                            lambda *_args, **_kwargs: SimpleNamespace(findings=[]))
+    else:
+        monkeypatch.setattr("spicy_regs.transforms.build_print_citations.find_citations",
+                            lambda *_args, **_kwargs: ())
+
+    paths = _build(tmp_path, _Reader({}), acquirer)
+    assert acquirer.asked == [CRPT_ID], "a corrected rule must reach held prints outside the discovery window"
+    assert _rows(paths[2]) == [], "unchanged source bytes may produce no actions under a corrected rule"
+    if version_name == "CITATION_RULE_SET_VERSION":
+        assert _rows(paths[3]) == []
+    expected = [_rows(path) for path in paths]
+    _publish_as_prior(paths)
+    acquirer.asked.clear()
+
+    paths = _build(tmp_path, _Reader({"CRPT": [listing]}), acquirer)
+    assert acquirer.asked == [], "successful empty corrections must have a stable checkpoint"
+    assert [_rows(path) for path in paths] == expected
+
+
+def test_failed_correction_preserves_prior_findings_and_remains_pending(tmp_path, monkeypatch):
+    listing = _listing(CRPT_ID, "ACTIVITY REPORT of the COMMITTEE")
+    acquirer = _Acquirer({CRPT_ID: _package(CRPT_ID, pages=REPORT_PAGES)})
+    paths = _build(tmp_path, _Reader({"CRPT": [listing]}), acquirer)
+    expected = [_rows(path) for path in paths]
+    _publish_as_prior(paths)
+    monkeypatch.setattr("spicy_regs.transforms.build_print_citations.PRINT_ACTION_RULE_SET_VERSION", "corrected")
+    acquirer.refuse[CRPT_ID] = ConnectionError("temporary failure")
+
+    for _attempt in range(2):
+        acquirer.asked.clear()
+        paths = _build(tmp_path, _Reader({}), acquirer)
+        assert acquirer.asked == [CRPT_ID]
+        assert [_rows(path) for path in paths] == expected
+        _publish_as_prior(paths)
+
+
+@pytest.mark.parametrize("missing_checkpoint", [0, 2, 3])
+def test_every_affected_output_must_confirm_the_completed_read(tmp_path, missing_checkpoint):
+    listing = _listing(CRPT_ID, "ACTIVITY REPORT of the COMMITTEE")
+    acquirer = _Acquirer({CRPT_ID: _package(CRPT_ID, pages=REPORT_PAGES)})
+    paths = _build(tmp_path, _Reader({"CRPT": [listing]}), acquirer)
+    stale = paths[missing_checkpoint]
+    pq.write_table(pq.read_table(stale).replace_schema_metadata(None), stale)
+    _publish_as_prior(paths)
+    acquirer.asked.clear()
+
+    _build(tmp_path, _Reader({}), acquirer)
+    assert acquirer.asked == [CRPT_ID], "a partial publication must be repaired even outside discovery"
+
+
+def test_budget_correction_replaces_only_its_own_citations(tmp_path, monkeypatch):
+    from spicy_docs.interpretation.citations import find_citations
+
+    listings = {"CRPT": [_listing(CRPT_ID, "ACTIVITY REPORT of the COMMITTEE")],
+                "BUDGET": [_listing(BUDGET_ID, "Mid-Session Review")]}
+    acquirer = _Acquirer({CRPT_ID: _package(CRPT_ID, pages=REPORT_PAGES),
+                         BUDGET_ID: _package(BUDGET_ID, pages=BUDGET_PAGES)})
+    paths = _build(tmp_path, _Reader(listings), acquirer)
+    actions = _rows(paths[2])
+    activity_cites = [row for row in _rows(paths[3]) if row["document_key"] == CRPT_ID]
+    assert len(_rows(paths[3])) > len(activity_cites), "both families must begin with citations"
+    _publish_as_prior(paths)
+    monkeypatch.setattr("spicy_regs.transforms.build_print_citations.CITATION_RULE_SET_VERSION", "corrected")
+    monkeypatch.setattr(
+        "spicy_regs.transforms.build_print_citations.find_citations",
+        lambda *args, **kwargs: () if kwargs.get("congress") is None else find_citations(*args, **kwargs),
+    )
+    acquirer.asked.clear()
+
+    paths = _build(tmp_path, _Reader(listings), acquirer)
+    assert acquirer.asked == [CRPT_ID, BUDGET_ID]
+    assert _rows(paths[2]) == actions
+    assert _rows(paths[3]) == activity_cites
+
+
+def test_action_rule_change_does_not_reprocess_budget_volumes(tmp_path, monkeypatch):
+    acquirer = _Acquirer({BUDGET_ID: _package(BUDGET_ID, pages=BUDGET_PAGES)})
+    paths = _build(tmp_path, _Reader({"BUDGET": [_listing(BUDGET_ID, "Mid-Session Review")]}), acquirer)
+    _publish_as_prior(paths)
+    acquirer.asked.clear()
+    monkeypatch.setattr("spicy_regs.transforms.build_print_citations.PRINT_ACTION_RULE_SET_VERSION", "corrected")
+
+    _build(tmp_path, _Reader({}), acquirer)
+    assert acquirer.asked == [], "budget volumes do not use the action interpretation"
+
+
+def test_unknown_source_timestamp_cannot_establish_an_unchanged_print(tmp_path):
+    listing = _listing(CRPT_ID, "ACTIVITY REPORT of the COMMITTEE", last_modified=None)
+    acquirer = _Acquirer({CRPT_ID: _package(CRPT_ID, pages=REPORT_PAGES, last_modified=None)})
+    paths = _build(tmp_path, _Reader({"CRPT": [listing]}), acquirer)
+    _publish_as_prior(paths)
+    acquirer.asked.clear()
+
+    _build(tmp_path, _Reader({"CRPT": [listing]}), acquirer)
+    assert acquirer.asked == [CRPT_ID]
 
 
 # --------------------------------------------------------------------------
@@ -360,17 +524,17 @@ def test_an_unchanged_package_is_skipped_and_a_modified_one_is_re_read(tmp_path)
     listing = _listing(CRPT_ID, "ACTIVITY REPORT of the COMMITTEE ON ENERGY AND COMMERCE", "2026-09-18T12:00:00Z")
     reader = _Reader({"CRPT": [listing], "BUDGET": []})
     acquirer = _Acquirer({CRPT_ID: _package(CRPT_ID, pages=REPORT_PAGES)})
-    activity, *_ = _build(tmp_path, reader, acquirer)
+    paths = _build(tmp_path, reader, acquirer)
     assert acquirer.asked == [CRPT_ID]
 
     # The published table becomes the prior for the next run.
-    activity.rename(tmp_path / f"_{ACTIVITY_REPORTS}_prior.parquet")
+    _publish_as_prior(paths)
     acquirer.asked.clear()
-    _build(tmp_path, _Reader({"CRPT": [listing], "BUDGET": []}), acquirer)
+    paths = _build(tmp_path, _Reader({"CRPT": [listing], "BUDGET": []}), acquirer)
     assert acquirer.asked == [], "a package published at this last_modified costs nothing"
 
     moved = dict(listing, lastModified="2026-09-19T12:00:00Z")
-    (tmp_path / f"{ACTIVITY_REPORTS}.parquet").rename(tmp_path / f"_{ACTIVITY_REPORTS}_prior.parquet")
+    _publish_as_prior(paths)
     acquirer.asked.clear()
     acquirer.packages[CRPT_ID] = _package(CRPT_ID, pages=REPORT_PAGES, last_modified="2026-09-19T12:00:00Z")
     _build(tmp_path, _Reader({"CRPT": [moved], "BUDGET": []}), acquirer)
@@ -395,11 +559,11 @@ def test_a_refused_package_is_counted_and_enumerated_again_next_run(tmp_path):
         {CRPT_ID: _package(CRPT_ID, pages=REPORT_PAGES)},
         refuse={"CRPT-119hrpt9": PagedJsonSourceError("the publisher served its error page")},
     )
-    activity, *_ = _build(tmp_path, _Reader(rows), acquirer)
+    paths = _build(tmp_path, _Reader(rows), acquirer)
     assert acquirer.asked == ["CRPT-119hrpt9", CRPT_ID]
-    assert [row["package_id"] for row in _rows(activity)] == [CRPT_ID], "a refusal publishes no row"
+    assert [row["package_id"] for row in _rows(paths[0])] == [CRPT_ID], "a refusal publishes no row"
 
-    activity.rename(tmp_path / f"_{ACTIVITY_REPORTS}_prior.parquet")
+    _publish_as_prior(paths)
     acquirer.asked.clear()
     _build(tmp_path, _Reader(rows), acquirer)
     assert acquirer.asked == ["CRPT-119hrpt9"], "the refusal is retried and the published package is not"

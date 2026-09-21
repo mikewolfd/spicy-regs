@@ -70,6 +70,14 @@ printed page off the page text once per page. ``extraction_rule_version`` is
 the shaper's own constant. Nothing about a column, an identity or a
 classification is restated here.
 
+**Corrections replace the file's result.** Successful reads are checkpointed
+in this Parquet artifact's metadata, including reads yielding no tables. The
+checkpoint covers the publisher's modification values, shaper and extractor
+versions, and requested page limit. An older rule, changed source, or changed
+limit triggers a fresh read; a complete read replaces all prior rows for that
+file. A refusal or incomplete page stream preserves the previous rows and
+checkpoint. This is completion of a bounded prefix, not of the entire report.
+
 Needs an api.data.gov key: GovInfo's ``published``, granule-list, granule
 summary and granule MODS routes are keyed. The bodies are not. A ``401``/``403``
 aborts the run rather than being counted as a bad row.
@@ -82,13 +90,18 @@ import re
 from collections import Counter
 from collections.abc import Callable, Iterator, Sequence
 from datetime import UTC, datetime
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Any, Protocol
 
 import httpx
 from loguru import logger
 from spicy_docs.reading.paged_json import PagedJsonBudget, PagedJsonSourceError
-from spicy_docs.schemas.senate_expenditure_tables import page_context, shape_senate_expenditure_rows
+from spicy_docs.schemas.senate_expenditure_tables import (
+    SENATE_EXPENDITURE_RULE_VERSION,
+    page_context,
+    shape_senate_expenditure_rows,
+)
 from spicy_docs.sources.govinfo.body_acquisition import GovInfoBodyAcquirer, GovInfoBodyBudget
 from spicy_docs.sources.govinfo.bodies import parse_package_id
 from spicy_docs.sources.govinfo.discovery import GovInfoDiscoveryReader, package_granules_url, published_url
@@ -96,9 +109,12 @@ from spicy_docs.transport.credentials import CredentialRefusedError, scrub_crede
 
 from spicy_regs.sources import r2
 from spicy_regs.sources.congress_bills import API_KEY_ENV_VARS, _resolve_api_key
+from spicy_regs.transforms.read_checkpoints import checkpoint_metadata, read_checkpoints
 from spicy_regs.transforms.table_merge import merge_contract_table, published_table
 
 NAME = "senate_expenditures"
+#: Bump when this adapter changes how it reads or interprets a page stream.
+READ_POLICY_VERSION = "001"
 
 #: The collection walked, and the id prefix a row must carry to be one of
 #: these reports. The two differ on purpose — the reprints live inside the
@@ -207,24 +223,70 @@ def _extractor() -> PageSource:
     return DocumentExtractor(NativeText(), tables=True)
 
 
-def _held_files(prior_file: Path | None) -> set[tuple[str, str]]:
-    """``(package_id, file_name)`` pairs already published, so a file is read once."""
-    if prior_file is None:
+def _processing_version() -> dict[str, str | None]:
+    """Changes to shaping, extraction, or this adapter invalidate successful reads."""
+    dependencies: dict[str, str | None] = {}
+    for package in ("spicy-docs", "PyMuPDF"):
+        try:
+            dependencies[package] = version(package)
+        except PackageNotFoundError:
+            # An injected extractor may run without the optional PDF extra.
+            dependencies[package] = None
+    return {"reader": READ_POLICY_VERSION, "shaper": SENATE_EXPENDITURE_RULE_VERSION, **dependencies}
+
+
+def _complete(
+    checkpoint: dict,
+    *,
+    modified: str | None,
+    granule_modified: str | None,
+    processing_version: dict[str, str | None],
+) -> bool:
+    """A complete read of the requested prefix, never a claim to the whole volume."""
+    return (
+        (modified is not None or granule_modified is not None)
+        and checkpoint.get("last_modified") == modified
+        and checkpoint.get("granule_last_modified") == granule_modified
+        and _current_processing(checkpoint, processing_version)
+    )
+
+
+def _current_processing(checkpoint: dict, processing_version: dict[str, str | None]) -> bool:
+    """Whether the retained prefix used this rule and limit, independent of source freshness."""
+    pages_read = checkpoint.get("pages_read")
+    page_count = checkpoint.get("page_count")
+    return (
+        checkpoint.get("processing_version") == processing_version
+        and checkpoint.get("page_limit") == MAX_PAGES_PER_FILE
+        and type(pages_read) is int
+        and type(page_count) is int
+        and page_count > 0
+        and pages_read == min(page_count, MAX_PAGES_PER_FILE)
+    )
+
+
+def _prior_files(path: Path | None) -> set[tuple[str, str]]:
+    """Old output identities are correction work even if discovery no longer reaches them."""
+    if path is None:
         return set()
-    import duckdb
+    import pyarrow.parquet as pq
 
-    rows = duckdb.sql(f"SELECT DISTINCT package_id, file_name FROM read_parquet('{prior_file}')").fetchall()
-    return {(str(package), str(name)) for package, name in rows}
+    return {
+        (row["package_id"], row["file_name"])
+        for batch in pq.ParquetFile(path).iter_batches(columns=["package_id", "file_name"])
+        for row in batch.to_pylist()
+        if isinstance(row["package_id"], str) and isinstance(row["file_name"], str)
+    }
 
 
-def _listed(reader: PackageDiscoverySource, since: str) -> list[str]:
+def _listed(reader: PackageDiscoverySource, since: str) -> list[tuple[str, str | None]]:
     """Every Secretary-of-the-Senate package id the CDOC window states, newest issue first.
 
     The whole window every run, for the reason ``build_print_citations``
     states: a package refused this run must be enumerated again next run, and
     a last-modified watermark would advance past it.
     """
-    accepted: list[str] = []
+    accepted: list[tuple[str, str | None]] = []
     walked = 0
     url = published_url(since, datetime.now(UTC).strftime("%Y-%m-%d"), collections=[COLLECTION], page_size=1000)
     for page in reader.packages(url, max_pages=MAX_PAGES):
@@ -240,12 +302,12 @@ def _listed(reader: PackageDiscoverySource, since: str) -> list[str]:
                 # ``GPO-CDOC-...hdoc...``. Refused by name, never guessed at.
                 logger.warning("{}: {} is not a GPO-CDOC reprint id: {}", COLLECTION, package_id, error)
                 continue
-            accepted.append(package_id)
+            accepted.append((package_id, str(record.get("lastModified") or "") or None))
     logger.info("{}: {:,} rows walked since {}, {:,} Secretary reports", COLLECTION, walked, since, len(accepted))
     return accepted
 
 
-def _granule_ids(reader: PackageDiscoverySource, package_id: str) -> list[str]:
+def _granule_ids(reader: PackageDiscoverySource, package_id: str) -> list[tuple[str, str | None]]:
     """The report's own files, as the publisher states them — the Full Report excluded.
 
     The Full Report duplicates Part I's pages under a second ``file_name``
@@ -253,7 +315,7 @@ def _granule_ids(reader: PackageDiscoverySource, package_id: str) -> list[str]:
     this table's identity, so reading both would publish every ruled row twice.
     A granule whose id is the bare package id is that duplicate.
     """
-    ids: list[str] = []
+    ids: list[tuple[str, str | None]] = []
     for page in reader.granules(package_granules_url(package_id, page_size=100), max_pages=MAX_PAGES):
         for record in page.records:
             granule_id = str(record.get("granuleId") or "")
@@ -261,7 +323,7 @@ def _granule_ids(reader: PackageDiscoverySource, package_id: str) -> list[str]:
                 continue
             if str(record.get("granuleClass") or CONTENT_GRANULE) != CONTENT_GRANULE:
                 continue
-            ids.append(granule_id)
+            ids.append((granule_id, str(record.get("lastModified") or "") or None))
     return ids
 
 
@@ -279,7 +341,15 @@ def _read_pages(body: Any, extractor: PageSource) -> tuple[list[Any], int]:
     stream = extractor.extract(body.body_capture.body, media_type=body.body.media_type)
     try:
         for result in stream:
-            page_count = int(result.metadata["page_count"])
+            current_count = int(result.metadata["page_count"])
+            if (
+                current_count <= 0
+                or (page_count and current_count != page_count)
+                or int(result.metadata["page"]) != len(pages) + 1
+                or len(pages) >= current_count
+            ):
+                raise ValueError("PDF extraction did not return consecutive pages with a consistent extent")
+            page_count = current_count
             pages.append(result)
             if len(pages) >= MAX_PAGES_PER_FILE:
                 break
@@ -290,6 +360,8 @@ def _read_pages(body: Any, extractor: PageSource) -> tuple[list[Any], int]:
         close = getattr(stream, "close", None)
         if close is not None:
             close()
+    if not page_count or len(pages) != min(page_count, MAX_PAGES_PER_FILE):
+        raise ValueError("PDF extraction ended before the requested page range was complete")
     return pages, page_count
 
 
@@ -353,16 +425,38 @@ def build_senate_expenditures(
     extractor = extractor or _extractor()
 
     prior = published_table(output_dir, NAME, download_prior)
-    held = _held_files(prior)
+    checkpoints = {
+        (row["package_id"], row["file_name"]): row
+        for row in read_checkpoints(prior, NAME)
+        if isinstance(row.get("package_id"), str) and isinstance(row.get("file_name"), str)
+    }
+    processing_version = _processing_version()
     since = _issue_floor()
 
     rows: list[dict] = []
+    completed_files: set[tuple[str, str]] = set()
     refusals: Counter[str] = Counter()
     grids: Counter[str] = Counter()
     read_files = tables = pages = skipped = 0
     packages = held_packages = 0
 
-    for package_id in _listed(reader, since):
+    listed = _listed(reader, since)
+    discovered = {package_id for package_id, _ in listed}
+    stale_packages = sorted(
+        {
+            package_id
+            for package_id, file_name in _prior_files(prior) | checkpoints.keys()
+            if package_id not in discovered
+            and not _current_processing(checkpoints.get((package_id, file_name), {}), processing_version)
+        }
+    )
+    if stale_packages:
+        logger.info(
+            "Senate expenditures: {:,} retained packages need correction outside discovery", len(stale_packages)
+        )
+    # These packages have no freshly observed package modification date. Ask
+    # their granule list again; never substitute an old date as current proof.
+    for package_id, modified in [*listed, *((package_id, None) for package_id in stale_packages)]:
         if packages >= max_packages:
             logger.warning(
                 "Senate expenditures: per-run cap of {:,} packages reached — the rest of the window is"
@@ -385,10 +479,26 @@ def build_senate_expenditures(
             # address, and it is enumerated again next run.
             logger.warning("{}: states no content granule", package_id)
             continue
-        # The print is a fixed artifact: a published file's ruled rows do not
-        # change, so re-reading it would spend minutes of table detection to
-        # write the rows already there.
-        unheld = [gid for gid in granule_ids if (package_id, f"{gid}.pdf") not in held]
+        # Existing rows alone prove neither a complete prefix nor that they
+        # used the current rule. The checkpoint also represents empty success.
+        unheld: list[tuple[str, str | None]] = []
+        for gid, granule_modified in granule_ids:
+            checkpoint = checkpoints.get((package_id, f"{gid}.pdf"), {})
+            # Outside discovery this queue repairs processing only. A missing
+            # sibling may keep the package pending, but must not cause an
+            # already-corrected file to consume a read and a cap slot again.
+            current = (
+                _complete(
+                    checkpoint,
+                    modified=modified,
+                    granule_modified=granule_modified,
+                    processing_version=processing_version,
+                )
+                if package_id in discovered
+                else _current_processing(checkpoint, processing_version)
+            )
+            if not current:
+                unheld.append((gid, granule_modified))
         skipped += len(granule_ids) - len(unheld)
         if not unheld:
             # **A package with nothing left to read costs its granule list and
@@ -403,7 +513,7 @@ def build_senate_expenditures(
             held_packages += 1
             continue
         read_before = read_files
-        for granule_id in unheld:
+        for granule_id, granule_modified in unheld:
             file_name = f"{granule_id}.pdf"
             try:
                 body = acquirer.acquire_granule(package_id, granule_id)
@@ -425,7 +535,22 @@ def build_senate_expenditures(
                     "{}: {} refused ({}): {}", package_id, granule_id, reason, scrub_credential(str(error), "")
                 )
                 continue
+            # A successful evaluation replaces this file's entire prior
+            # result, even when a corrected rule now yields zero rows. A
+            # refused or truncated read reaches neither replacement nor the
+            # checkpoint, preserving the prior successful result for retry.
+            completed_files.add((package_id, file_name))
             rows.extend(file_rows)
+            checkpoints[(package_id, file_name)] = {
+                "package_id": package_id,
+                "file_name": file_name,
+                "last_modified": modified,
+                "granule_last_modified": granule_modified,
+                "processing_version": processing_version,
+                "page_limit": MAX_PAGES_PER_FILE,
+                "pages_read": read,
+                "page_count": page_count,
+            }
             read_files += 1
             tables += found
             pages += read
@@ -467,4 +592,13 @@ def build_senate_expenditures(
         # above zero is the signal that the print changed shape.
         logger.info("Senate expenditures: rows by grid — {}", dict(grids))
 
-    return merge_contract_table(output_dir, NAME, rows, download_prior=download_prior, prior_present=prior is not None)
+    metadata = checkpoint_metadata(prior, NAME, (checkpoints[key] for key in sorted(checkpoints)))
+    return merge_contract_table(
+        output_dir,
+        NAME,
+        rows,
+        download_prior=download_prior,
+        prior_present=prior is not None,
+        replace_parents=(("package_id", "file_name"), completed_files),
+        parquet_metadata=metadata,
+    )

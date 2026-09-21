@@ -98,6 +98,69 @@ def test_merge_tolerates_a_missing_prior(tmp_path):
     assert _read(out) == fresh
 
 
+@pytest.mark.parametrize("rows", [[], [{"id": "1", "name": "a", "version": "2024-01-01"}]])
+def test_merge_writes_processing_checkpoint_with_rows_in_same_artifact(tmp_path, rows):
+    metadata = {"spicy_regs.checkpoint": '{"source":"publisher\'s file", "rule":"α"}'}
+    out = merge_table(
+        tmp_path,
+        name=NAME,
+        columns=COLUMNS,
+        identity=("id",),
+        version_column="version",
+        rows=rows,
+        remote_key=REMOTE_KEY,
+        prior_present=False,
+        parquet_metadata=metadata,
+    )
+    assert _read(out) == rows
+    assert pq.read_metadata(out).metadata[b"spicy_regs.checkpoint"] == metadata["spicy_regs.checkpoint"].encode()
+
+
+def test_contract_merge_keeps_empty_success_checkpoint(tmp_path):
+    from spicy_regs.transforms.table_merge import merge_contract_table
+
+    out = merge_contract_table(
+        tmp_path,
+        "hearing_bill_links",
+        [],
+        prior_present=False,
+        parquet_metadata={"spicy_regs.checkpoint": '{"outcome":"complete","rows":0}'},
+    )
+    assert pq.read_metadata(out).num_rows == 0
+    assert pq.read_metadata(out).metadata[b"spicy_regs.checkpoint"] == b'{"outcome":"complete","rows":0}'
+
+
+def test_composite_replacement_retires_only_successfully_read_file(tmp_path):
+    columns = ("package_id", "file_name", "row_id", "value")
+    rows = [
+        {"package_id": "a", "file_name": "one.pdf", "row_id": "1", "value": "obsolete"},
+        {"package_id": "a", "file_name": "two.pdf", "row_id": "1", "value": "failed read"},
+        {"package_id": "b", "file_name": "one.pdf", "row_id": "1", "value": "other package"},
+    ]
+    pq.write_table(pa.Table.from_pylist(rows), prior_scratch_path(tmp_path, NAME))
+    out = merge_table(
+        tmp_path, name=NAME, columns=columns, identity=("package_id", "file_name", "row_id"),
+        version_column=None, rows=[], remote_key=REMOTE_KEY, download_prior=_never_called,
+        replace_parents=(("package_id", "file_name"), {("a", "one.pdf")}),
+        parquet_metadata={"spicy_regs.checkpoint": '{"file":"one.pdf","rows":0}'},
+    )
+    assert _read(out) == rows[1:]
+    assert b"spicy_regs.checkpoint" in pq.read_metadata(out).metadata
+
+
+@pytest.mark.parametrize("scope", [(("id", "name"), {("1",)}), (("id", "id"), {("1", "1")})])
+def test_invalid_replacement_scope_keeps_prior_bytes(tmp_path, scope):
+    _write_prior(tmp_path, _PRIOR_ROWS)
+    prior = prior_scratch_path(tmp_path, NAME)
+    retained = prior.read_bytes()
+    with pytest.raises(ValueError, match="replace_parents"):
+        merge_table(
+            tmp_path, name=NAME, columns=COLUMNS, identity=("id",), version_column="version",
+            rows=[], remote_key=REMOTE_KEY, download_prior=_never_called, replace_parents=scope,
+        )
+    assert prior.read_bytes() == retained
+
+
 def test_merge_leaves_no_scratch_files_behind(tmp_path):
     _write_prior(tmp_path, _PRIOR_ROWS)
     _merge(tmp_path, [{"id": "1", "name": "new", "version": "2024-02-01"}])
