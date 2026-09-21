@@ -95,6 +95,8 @@ def verify_local_members(selection: LocalSelection) -> dict[str, list[int]]:
         before = file_signature(path)
         if status == "managed":
             _, descriptor = table_location(selection.publication, f"{name}.parquet")
+            if descriptor is None:
+                raise RuntimeError(f"Local download member has no generation pin: {name}")
             with path.open("rb") as stream:
                 digest = "sha256:" + hashlib.file_digest(stream, "sha256").hexdigest()
             if before[2] != descriptor["byteSize"] or digest != descriptor["sha256"]:

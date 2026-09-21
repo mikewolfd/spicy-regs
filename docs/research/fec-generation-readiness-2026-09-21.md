@@ -52,22 +52,30 @@ The running MCP stdio process read the ordinary download root and verified:
 All four generation pins survive discovery and queries. Every collection joins
 its source family; every relationship observation joins its exact source record.
 Nine previously raw-audited witnesses match every output cell after the
-roundtrip, including a legacy header, narrative body, nonbreaking spaces and the
+roundtrip, including native headers, a narrative body, nonbreaking spaces and the
 malformed Senate file's first, blank and final physical lines.
 
 From SpicyRegs, the retained downloaded batch is directly usable:
 
 ```sh
-SPICY_REGS_DATA_DIR=/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/fec-generation-readiness-2026-09-21/roundtrip/download \
+SPICY_REGS_DATA_DIR=/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/fec-generation-readiness-2026-09-21/roundtrip-integrated/download \
   uv run --frozen spicy-regs-mcp
 ```
 
 Evidence is retained outside the repository:
 
 - [Generation identities, schemas and unchanged-byte checks](/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/fec-generation-readiness-2026-09-21/seal.json)
-- [Local publication and HTTP download receipt](/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/fec-generation-readiness-2026-09-21/roundtrip/summary.json)
-- [Actual MCP calls, pins, counts and witness checks](/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/fec-generation-readiness-2026-09-21/mcp-download-audit/summary.json)
+- [Local publication and HTTPS download receipt](/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/fec-generation-readiness-2026-09-21/roundtrip-integrated/summary.json)
+- [Actual MCP calls, pins, counts and witness checks](/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/fec-generation-readiness-2026-09-21/mcp-download-audit-integrated/summary.json)
 - [Source selections and coverage limits](/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/fec-senate-discovery-2026-09-21/delivery.json)
+
+The final audit includes the parallel fork-host and cache corrections merged
+from `4d588d5`. It uses the configured HTTPS data-host selection, then exercises
+the downloaded batch through MCP. The integrated repository suite passed
+**2,085 tests**, with three live integration tests deselected. A subsequent
+explicit missing-pin guard passed **116 focused reader tests**, type checking,
+lint and formatting. The 71-table dictionary check and generated-file comparison
+also passed. These are local checks; they do not report remote CI status.
 
 ## Next source gap: retained committee history
 
