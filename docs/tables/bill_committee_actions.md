@@ -38,7 +38,7 @@ One row per action phrase a committee print states about one bill it names in th
 | `evidence_page` | `VARCHAR` | The printed page the bill designator sits on, one-based, where the rendition states page boundaries; NULL where it states none. |
 | `rule_name` | `VARCHAR` | Which rule in `interpretation/bill_actions.py` fired.  Equal to `print_phrasing` today, and a separate column for the reason `document_citations.rule_name` is one: a phrasing can gain a second pattern and the row must then say which one read it. |
 | `rule_version` | `VARCHAR` | The phrasing vocabulary's own version, moved when a phrasing is appended.  Zero-padded decimal, because this column is compared as a string. |
-| `rule_set_version` | `VARCHAR` | Digest over every phrasing's name and pattern, so these rows name the rules that produced them even when someone forgets to move `rule_version`; the merge prefers the larger value. |
+| `rule_set_version` | `VARCHAR` | Digest over every phrasing's name and pattern, so these rows name the rules that produced them even when someone forgets to move `rule_version`; an equality token, never a freshness ordering. A successfully corrected generation supersedes its prior regardless of digest spelling. |
 | `citation_rule_version` | `VARCHAR` | The version of the `bill_number` citation rule that found the designator this row is attached to.  Two rule sets produced this row and a re-extraction can move either, so both are published. |
 | `body_rendition` | `VARCHAR` | Which rendition the text was derived from (pdf, htm, xml, txt). |
 | `body_derivation` | `VARCHAR` | How that rendition became text (`pdf-extraction-gpo-normalized` for a print), which is what the offsets are offsets into. |

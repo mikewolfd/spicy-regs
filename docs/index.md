@@ -128,7 +128,10 @@ of `dockets`; they join to the corpus (and to each other) on a few shared keys:
 === "AI assistant (MCP)"
 
     The hosted MCP server exposes `list_sources`, `describe_table`, and
-    `query_sql` over all of the tables above. Add
+    `query_sql`. `list_sources` distinguishes loaded tables from declared outputs
+    with no available view. `describe_table` includes actual columns, field
+    meanings, declared identifiers and coverage caveats; a listed definition
+    does not establish that its data is published. Add
     `https://mcp.spicy-regs.dev/mcp` as a connector, or run it locally:
 
     ```bash

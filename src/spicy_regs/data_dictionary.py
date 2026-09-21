@@ -44,6 +44,7 @@ DEFAULT_DESCRIPTIONS = REPO_ROOT / "data_dictionary" / "descriptions.yaml"
 DEFAULT_DOCS_TABLES_DIR = REPO_ROOT / "docs" / "tables"
 DEFAULT_CATALOG_PATH = REPO_ROOT / "data_dictionary" / "catalog.json"
 DEFAULT_CATALOG_DIGEST_PATH = REPO_ROOT / "data_dictionary" / "catalog.json.sha256"
+DEFAULT_MCP_METADATA_PATH = Path(__file__).with_name("table_metadata.json")
 
 #: Bumped when the catalog document's shape changes, so a reader can refuse a
 #: shape it does not know rather than guess at a missing field.
@@ -159,6 +160,10 @@ TABLES: tuple[str, ...] = (
     "sam_entities",
     "lobbying_filings",
     "fec_committees",
+    "fec_source_catalog",
+    "fec_collections",
+    "fec_source_records",
+    "fec_relationships",
     "org_committee_links",
     "gao_reports",
     "crs_reports",
@@ -202,6 +207,10 @@ MCP_QUERYABLE: frozenset[str] = frozenset(
         "sam_entities",
         "lobbying_filings",
         "fec_committees",
+        "fec_source_catalog",
+        "fec_collections",
+        "fec_source_records",
+        "fec_relationships",
         "org_committee_links",
         "gao_reports",
         "crs_reports",
@@ -213,7 +222,7 @@ MCP_QUERYABLE: frozenset[str] = frozenset(
         "bill_vote_references",
         "bill_family_backfills",
         "bill_family_backfill_walks",
-    "committee_report_reads",
+        "committee_report_reads",
         *CONTRACT_TABLES,
     }
 )
@@ -611,8 +620,9 @@ DERIVED_SCHEMAS: dict[str, list[tuple[str, str]]] = {
         ("refusal", "VARCHAR"),
         ("observed_at", "VARCHAR"),
     ],
-    "committee_report_reads": [(column, "VARCHAR") for column in
-                               ("package_id", "last_modified", "outcome", "rule_version", "observed_at")],
+    "committee_report_reads": [
+        (column, "VARCHAR") for column in ("package_id", "last_modified", "outcome", "rule_version", "observed_at")
+    ],
     "bill_family_backfill_walks": [
         ("congress", "VARCHAR"),
         ("bill_type", "VARCHAR"),
@@ -691,8 +701,20 @@ def expected_schemas() -> dict[str, list[tuple[str, str]]]:
     """Return ``{table: [(column, type_label), ...]}`` for all tables (offline)."""
     schemas: dict[str, list[tuple[str, str]]] = {}
     from_contracts = contract_schemas()
+    from spicy_regs.transforms.build_fec_observations import COLLECTION_COLUMNS, RECORD_COLUMNS
+    from spicy_regs.transforms.build_fec_source_catalog import COLUMNS as FEC_CATALOG_COLUMNS
+    from spicy_regs.transforms.fec_relationships import COLUMNS as FEC_RELATIONSHIP_COLUMNS
+
+    fec_schemas = {
+        "fec_source_catalog": FEC_CATALOG_COLUMNS,
+        "fec_collections": COLLECTION_COLUMNS,
+        "fec_source_records": RECORD_COLUMNS,
+        "fec_relationships": FEC_RELATIONSHIP_COLUMNS,
+    }
     for name in TABLES:
-        if name in from_contracts:
+        if name in fec_schemas:
+            schemas[name] = [(column, "VARCHAR") for column in fec_schemas[name]]
+        elif name in from_contracts:
             # Checked before DERIVED_SCHEMAS on purpose: congress_bills is in
             # both, and the contract is the longer, current one.
             schemas[name] = list(from_contracts[name])
@@ -836,6 +858,9 @@ def check_descriptions(
         if "data_quality" in entry and not (entry.get("data_quality") or "").strip():
             errors.append(f"[{table}] has an empty 'data_quality' note in descriptions.yaml")
         desc_cols = list((entry.get("columns") or {}).keys())
+        identity = entry.get("identity_columns", [])
+        if not isinstance(identity, list) or any(column not in schema_cols for column in identity):
+            errors.append(f"[{table}] 'identity_columns' must list declared columns")
         errors.extend(_reconcile_columns(table, "schema", schema_cols, "descriptions.yaml", desc_cols))
         for col in schema_cols:
             text = (entry.get("columns") or {}).get(col)
@@ -1061,6 +1086,43 @@ def build_catalog(descriptions: dict, schemas: dict[str, list[tuple[str, str]]])
     }
 
 
+def build_mcp_metadata(descriptions: dict, schemas: dict[str, list[tuple[str, str]]]) -> dict:
+    """Bundle dictionary meaning for MCP without a runtime source-reader dependency.
+
+    The public catalog keeps its existing format for downstream consumers. This
+    package resource adds field prose, expected types and declared row identity
+    from the same inputs. It describes supported output, not observed publication.
+    """
+    classes = build_catalog(descriptions, schemas)["classes"]
+    result = {}
+    for entry in classes:
+        table = entry["table"]
+        description = descriptions[table]
+        contract = _contracts().get(table) if table in CONTRACT_TABLES else None
+        record_type = RECORD_TYPES.get(table)
+        identity = (
+            list(contract.identity)
+            if contract is not None
+            else [record_type.dedup_key]
+            if record_type is not None
+            else description.get("identity_columns", [])
+        )
+        result[table] = {
+            **entry,
+            "grain": contract.grain if contract is not None else description.get("grain"),
+            "identity_columns": identity,
+            "columns": [
+                {
+                    "column_name": name,
+                    "column_type": dtype,
+                    "description": description["columns"][name],
+                }
+                for name, dtype in schemas[table]
+            ],
+        }
+    return result
+
+
 def catalog_bytes(document: dict) -> bytes:
     """Serialize the catalog to its one canonical byte form.
 
@@ -1122,6 +1184,8 @@ def cmd_generate(args: argparse.Namespace) -> int:
             f"{hashlib.sha256(payload).hexdigest()}  {DEFAULT_CATALOG_PATH.name}\n", encoding="utf-8"
         )
         print(f"  - {DEFAULT_CATALOG_PATH.relative_to(REPO_ROOT)} (+ .sha256)")
+        DEFAULT_MCP_METADATA_PATH.write_bytes(catalog_bytes(build_mcp_metadata(descriptions, schemas)))
+        print(f"  - {DEFAULT_MCP_METADATA_PATH.relative_to(REPO_ROOT)}")
     return 0
 
 

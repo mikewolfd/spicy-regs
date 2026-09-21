@@ -3,10 +3,11 @@
 The fixed all-VARCHAR columns describe committees, not transactions or proven
 organization affiliations. Candidate IDs and cycles remain JSON strings.
 
-The default builder fetches the OpenFEC committee list, merges it with the prior
-R2 table and prefers fresh rows for matching committee IDs. Keeping prior rows
-preserves observed coverage through smaller source responses and the existing
-publication shrink guard; it does not prove the new traversal is complete.
+The default builder requires a completed unfiltered SpicyDocs traversal, merges
+it with the prior R2 table and prefers fresh whole rows for matching committee
+IDs. Prior-only rows remain observed coverage; the result is not a frozen
+publisher snapshot. Raw capture evidence is retained separately, and failures
+leave any previous output intact.
 
 Call ``write_fec_committee_rows`` for an explicit retained-record slice. Its caller
 owns input verification, provenance and coverage. That path makes no HTTP request
@@ -16,8 +17,11 @@ or publication and does not merge an independently moving prior table.
 from __future__ import annotations
 
 import json
+import os
 from collections.abc import Iterable
+from contextlib import closing
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -88,10 +92,16 @@ def write_fec_committee_rows(records: Iterable[dict], destination: Path, *, batc
     return write_rows((_shape(doc) for doc in records), destination, _SCHEMA, batch_size=batch_size)
 
 
-def build_fec_committees(output_dir: Path) -> Path:
-    """Build ``fec_committees.parquet`` (full walk merged with the prior table)."""
+def build_fec_committees(output_dir: Path, *, capture_dir: Path | None = None) -> Path:
+    """Merge a completed walk; retain evidence under ``FEC_CAPTURE_DIR`` or locally.
+
+    An explicit ``capture_dir`` wins over the environment setting. Otherwise the
+    default is ``output_dir/.fec-captures``; callers should select durable storage
+    when their build directory is temporary.
+    """
     import duckdb
 
+    output_dir.mkdir(parents=True, exist_ok=True)
     out_file = output_dir / OUTPUT
     prior_file = output_dir / "_fec_prior.parquet"
 
@@ -101,30 +111,37 @@ def build_fec_committees(output_dir: Path) -> Path:
     else:
         logger.info("FEC committees: no prior table found — clean build")
 
-    reader = FecCommitteesReader()
-    new_file = write_fec_committee_rows(reader.iter_records(), output_dir / "_fec_new.parquet")
+    reader = FecCommitteesReader(
+        capture_dir=capture_dir or Path(os.environ.get("FEC_CAPTURE_DIR", output_dir / ".fec-captures"))
+    )
+    # Closing also handles a row-shaping/Arrow failure while acquisition is
+    # suspended at a yield, leaving its run marked incomplete and HTTP closed.
+    with closing(reader.iter_records()) as records:
+        new_file = write_fec_committee_rows(records, output_dir / "_fec_new.parquet")
     logger.info("FEC committees: fetched {:,} committees this run", pq.ParquetFile(new_file).metadata.num_rows)
 
     spill_dir = output_dir / ".duckdb_tmp"
     spill_dir.mkdir(exist_ok=True)
-    con = duckdb.connect()
-    con.execute("SET memory_limit='4GB'")
-    con.execute("SET preserve_insertion_order=false")
-    con.execute("SET threads=2")
-    con.execute(f"SET temp_directory='{spill_dir}'")
-
     cols = ", ".join(COLUMNS)
+    prior_sql = str(prior_file).replace("'", "''")
+    new_sql = str(new_file).replace("'", "''")
     if have_prior:
         union = (
-            f"SELECT {cols}, 0 AS _src FROM read_parquet('{prior_file}') "
+            f"SELECT {cols}, 0 AS _src FROM read_parquet('{prior_sql}') "
             f"UNION ALL BY NAME "
-            f"SELECT {cols}, 1 AS _src FROM read_parquet('{new_file}')"
+            f"SELECT {cols}, 1 AS _src FROM read_parquet('{new_sql}')"
         )
     else:
-        union = f"SELECT {cols}, 1 AS _src FROM read_parquet('{new_file}')"
+        union = f"SELECT {cols}, 1 AS _src FROM read_parquet('{new_sql}')"
 
-    con.execute(
-        f"""
+    with TemporaryDirectory(dir=output_dir) as temporary, duckdb.connect() as con:
+        staged = Path(temporary) / OUTPUT
+        staged_sql = str(staged).replace("'", "''")
+        con.execute("SET memory_limit='4GB'")
+        con.execute("SET preserve_insertion_order=false")
+        con.execute("SET threads=2")
+        con.execute("SET temp_directory=?", [str(spill_dir)])
+        con.execute(f"""
         COPY (
             SELECT {cols} FROM (
                 SELECT {cols}, ROW_NUMBER() OVER (
@@ -135,10 +152,9 @@ def build_fec_committees(output_dir: Path) -> Path:
             )
             WHERE _rn = 1
             ORDER BY committee_id
-        ) TO '{out_file}' (FORMAT PARQUET, COMPRESSION ZSTD, ROW_GROUP_SIZE 50000);
-        """
-    )
-    con.close()
+        ) TO '{staged_sql}' (FORMAT PARQUET, COMPRESSION ZSTD, ROW_GROUP_SIZE 50000);
+        """)
+        staged.replace(out_file)
 
     # Housekeeping: drop scratch files so they aren't mistaken for outputs.
     for scratch in (prior_file, new_file):

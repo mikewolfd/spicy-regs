@@ -198,6 +198,17 @@ existing subject fields. Dataset catalogs and processing remain outside it.
   The [installed-wheel delivery](/Users/mikewolfd/Documents/Codex/fec-handoff-fixes/integration/census-delivery-2026-09-12.md)
   preserves complete metadata companions and source evidence and checks every
   mapped field. No new SpicyRegs runtime dependency or default API switch was needed.
+- [x] Adopt the installed SpicyDocs reader in the default committee acquisition,
+  retaining raw pages and completion evidence. Preserve the existing reference
+  table's fields and whole-row merge; refuse incomplete traversals before replacing
+  its output. Fresh live traversal still requires a configured API credential.
+- [x] Build official source discovery metadata, selected native record companions,
+  collection coverage and reported relationships through the existing table path.
+  Bulk files support pinned original/member selections and verified source headers;
+  named fields retain their literal source records and coordinates.
+- [x] Expose dictionary meaning and actual table availability through MCP, including
+  a local Parquet directory for examining audited generations before publication.
+  See [FEC integration and checks](docs/fec-integration.md).
 - [ ] Connect a complete, verified FEC distribution to the existing rollup.
   A local selected-record table is not the full committee population or a
   globally published table. The local census release does not include the bulk,
