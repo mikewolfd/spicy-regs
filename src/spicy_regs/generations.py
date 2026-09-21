@@ -54,8 +54,10 @@ def verify_generation(directory: Path, *, expected_pin=None):
     if root["kind"] != KIND:
         raise ValueError("Not a SpicyRegs rollup generation")
     spec = root["spec"]
-    if set(spec) != {"family", "tables", "packages", "readSnapshot", "carriedForward"}:
+    if set(spec) != {"family", "tables", "packages", "readSnapshot", "carriedForward", "publicationStatus"}:
         raise ValueError("Invalid rollup generation specification")
+    if spec["publicationStatus"] not in {"complete-family", "local-partial"}:
+        raise ValueError("Invalid generation publication status")
     tables = spec["tables"]
     from spicy_regs.sources.publication import parse_index, table_location
     from rulespec_artifacts import canonical_json_bytes
@@ -99,6 +101,7 @@ def build_generation(
     schemas: Mapping[str, list[tuple[str, str]]] | None = None,
     read_snapshot: Mapping | None = None,
     carried_forward: Mapping[str, str] | None = None,
+    publication_status: str = "complete-family",
 ):
     """Snapshot exactly one declared family into a new immutable artifact.
 
@@ -157,6 +160,7 @@ def build_generation(
             "packages": {name: version(name) for name in ("spicy-regs", "spicy-docs", "rulespec-artifacts")},
             "readSnapshot": dict(read_snapshot or {}),
             "carriedForward": dict(carried_forward or {}),
+            "publicationStatus": publication_status,
         },
         producer=Producer("spicy-regs", implementation, "urn:spicy-regs:rollup-verifier", "1", implementation),
         manifests=[manifest],

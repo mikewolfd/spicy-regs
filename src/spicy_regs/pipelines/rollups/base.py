@@ -159,6 +159,7 @@ class RollupPipeline(Pipeline):
             if len(out_paths) != len(expected_keys) or {p.name for p in out_paths} != set(expected_keys):
                 raise publication.PublicationError("Build outputs differ from its declared complete set")
             carried_forward = {}
+            publication_status = "complete-family"
             if self.publication_family:
                 prior = prior_index["families"].get(self.publication_family)
                 if prior is None:
@@ -167,6 +168,7 @@ class RollupPipeline(Pipeline):
                             f"Publish a complete {self.publication_family} generation before its partial writer"
                         )
                     logger.warning("Retaining a local partial candidate; no complete publication family exists")
+                    publication_status = "local-partial"
                 else:
                     family = self.publication_family
                     expected_keys = tuple(prior["tables"])
@@ -187,6 +189,7 @@ class RollupPipeline(Pipeline):
                 directory, family=family, files=out_paths,
                 expected_keys=expected_keys, schemas=expected_schemas(),
                 read_snapshot=prior_index, carried_forward=carried_forward,
+                publication_status=publication_status,
             )
             destination = generations / artifact.pin.artifact_digest.removeprefix("sha256:")
             if destination.exists():

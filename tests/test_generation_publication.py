@@ -302,6 +302,12 @@ def test_partial_writer_carries_exact_siblings_and_refuses_cold_start(tmp_path, 
     with pytest.raises(pub.PublicationError, match="complete test"):
         Partial(output_dir=tmp_path / "cold", skip_upload=False).run()
     assert not store.writes
+    Partial(output_dir=tmp_path / "candidate", skip_upload=True).run()
+    candidate = next((tmp_path / "candidate" / "generations").iterdir())
+    assert verify_generation(candidate).root["spec"]["publicationStatus"] == "local-partial"
+    with pytest.raises(pub.PublicationError, match="partial candidate"):
+        publish(store, candidate)
+    assert not store.writes and not store.objects
     old, _ = build(tmp_path)
     index = publish(store, old)
     monkeypatch.setattr(pub, "load_index", lambda url: index)

@@ -253,6 +253,8 @@ def publish_generation(directory: Path, *, client, bucket: str, prior_index: Map
     from spicy_regs.sources.r2 import _assert_upload_safe, _get_remote_size
 
     artifact = verify_generation(directory)
+    if artifact.root["spec"]["publicationStatus"] != "complete-family":
+        raise PublicationError("A local partial candidate cannot be published")
     family = artifact.root["spec"]["family"]
     if not _NAME.fullmatch(family):
         raise PublicationError("Invalid family name")

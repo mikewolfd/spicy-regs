@@ -47,6 +47,9 @@ all sibling tables byte-for-byte from the captured complete family and records
 which generation supplied them. These siblings are carried forward, not
 reprocessed. A public cold start must first produce a complete `bill-family`
 generation; a lone bill file cannot bootstrap a complete family.
+An offline cold-start partial candidate is marked `local-partial`; the generic
+publisher refuses it too. Merely retaining a valid Parquet artifact does not
+promote that partial result to a complete family.
 
 ## Readers
 
