@@ -68,7 +68,7 @@ def test_retained_courts_exact_bytes_and_all_jurisdictions():
 
 
 @pytest.mark.parametrize("empty", [None, ""])
-def test_body_and_cluster_table_null_policy_matches_frozen_mapping(tmp_path, empty):
+def test_body_text_preserves_empty_and_null_while_metadata_matches_frozen_mapping(tmp_path, empty):
     records = [
         {
             "id": "11",
@@ -86,9 +86,11 @@ def test_body_and_cluster_table_null_policy_matches_frozen_mapping(tmp_path, emp
     [old] = old_rows(body)
     [new] = CourtListenerBulkReader("opinions", local_file=_dump(tmp_path, body)).iter_records()
     assert new == records[0]
-    assert shape_body(new, dump_date=DUMP_DATE) == old_body(old, dump_date=DUMP_DATE)
+    shaped = shape_body(new, dump_date=DUMP_DATE)
+    prior = old_body(old, dump_date=DUMP_DATE)
+    assert {k: shaped[k] for k in prior if k != "plain_text"} == {k: v for k, v in prior.items() if k != "plain_text"}
     assert _shape_bulk(new) == old_cluster(old)
-    assert shape_body(new, dump_date=None)["plain_text"] is None
+    assert shape_body(new, dump_date=None)["plain_text"] == empty
     assert _shape_bulk(new)["syllabus"] is None
 
 
@@ -425,7 +427,23 @@ def test_local_table_build_matches_frozen_mapping_by_id(tmp_path, monkeypatch, k
         dump_date=DUMP_DATE,
         **kwargs,
     )
-    expected = [old_cluster(row) if kind == "clusters" else old_body(row, dump_date=DUMP_DATE) for row in old_rows(raw)]
+    if kind == "clusters":
+        expected = [old_cluster(row) for row in old_rows(raw)]
+    else:
+        text_fields = (
+            "plain_text",
+            "html",
+            "html_lawbox",
+            "html_columbia",
+            "html_anon_2020",
+            "html_with_citations",
+            "xml_harvard",
+            "xml_scan",
+        )
+        expected = [
+            {**old_body(row, dump_date=DUMP_DATE), **{field: row.get(field) for field in text_fields}}
+            for row in records[:row_count]
+        ]
     key = "cluster_id" if kind == "clusters" else "opinion_id"
     assert {row[key]: row for row in pq.read_table(output).to_pylist()} == {row[key]: row for row in expected}
     parquet = pq.ParquetFile(output)

@@ -1,11 +1,11 @@
 """Transform: build ``court_opinion_bodies.parquet`` — actual opinion text.
 
-This is the table the ``court-opinion-v1`` profile has been forward-declaring.
-That profile lists ``html_with_citations`` and ``plain_text`` among its text
-columns, and until now no published table carried either: they are CourtListener
-opinion fields, and nothing in the corpus read CourtListener opinions. The bulk
-``opinions`` dump carries both verbatim, so this builder is where the declared
-seam finally resolves against real bytes.
+Every source text variant is retained under its CourtListener field name.
+HTML and XML remain markup, not extracted plain text. ``plain_text`` and
+``html_with_citations`` remain in their existing positions for named consumers.
+Version 2 preserves source empty strings separately from NULL in all eight text
+fields. Its Parquet metadata records the version; a version-1 prior requires an
+explicit rebuild because its discarded variants cannot be recovered by merging.
 
 **One opinion per row, not one decision per row.** A cluster (see
 ``build_court_opinion_clusters``) is the decision; an opinion is one voice within
@@ -52,14 +52,17 @@ from spicy_regs.transforms._courtlistener_writer import CourtListenerTableWriter
 
 OUTPUT = "court_opinion_bodies.parquet"
 DATASET = "opinions"
+SCHEMA_VERSION = "2"
+SCHEMA_VERSION_KEY = "spicy-regs:court-opinion-bodies-schema-version"
 
 #: Free space this project refuses to eat into, in bytes. A bulk ingest that
 #: would cross it is stopped and recorded rather than run.
 DISK_HEADROOM_FLOOR = 100 * 2**30
 
-#: Compressed parquet bytes one opinion row costs, measured on the 250,000-row
-#: 2026-08-22 build: 1,735,931,994 bytes / 250,000 = 6,944 B/row, rounded up.
-BYTES_PER_OPINION_ROW = 8 * 2**10
+#: Planning estimate, not a per-row bound. The version-2 native replay retained
+#: all eight variants: 3,626,326 bytes / 284 rows = 12,769 B/row, rounded up.
+#: The old two-variant 8 KiB estimate no longer covers even this bounded sample.
+BYTES_PER_OPINION_ROW = 16 * 2**10
 
 #: Opinions per cluster, used as a ceiling when sizing a ``cluster_ids`` pass.
 #: The most any single cluster carried in that same 250,000-row build was 8
@@ -106,12 +109,21 @@ COLUMNS = (
     "date_created",
     "date_modified",
     "dump_date",
+    "html",
+    "html_lawbox",
+    "html_columbia",
+    "html_anon_2020",
+    "xml_harvard",
+    "xml_scan",
 )
-_SCHEMA = pa.schema([(c, pa.string()) for c in COLUMNS])
+_SCHEMA = pa.schema(
+    [(c, pa.string()) for c in COLUMNS],
+    metadata={SCHEMA_VERSION_KEY.encode(): SCHEMA_VERSION.encode()},
+)
 
 
 def _s(value: object) -> str | None:
-    """Table policy: empty strings and missing values are both NULL."""
+    """Metadata policy: empty strings and missing values are both NULL."""
     if value is None:
         return None
     text = str(value)
@@ -141,26 +153,30 @@ def estimate_output_bytes(dump_size: int, cluster_ids: Container[str] | None) ->
 
     The dump is *streamed* — decompressed inline, never landed — so what the
     volume pays for is the parquet this run writes, not the 50.8 GiB it reads.
-    For an unfiltered pass those are close enough that the dump's compressed size
-    is the right stand-in (the measured output is 45-55 GiB). For a
+    For an unfiltered pass, use twice the compressed dump size: the version-2
+    native prefix produced 3.63 MB of Parquet from a 2 MiB compressed capture.
+    This is a planning estimate, not a full-population size guarantee. For a
     ``cluster_ids`` pass they are nothing alike: the same 8.6 hours of reading
     produces a table sized by the *targets*, and charging it 50.8 GiB refuses a
     run that costs megabytes.
 
-    Falling back to the dump size for a filter whose length is unknowable keeps
-    the guard conservative when it cannot do arithmetic.
+    An unsized filter uses that same unfiltered estimate.
     """
     if cluster_ids is None or not isinstance(cluster_ids, Sized):
-        return dump_size
+        return 2 * dump_size
     return len(cluster_ids) * OPINIONS_PER_CLUSTER_CEILING * BYTES_PER_OPINION_ROW
 
 
 def _shape(row: dict, *, dump_date: date | None) -> dict:
     """Map one bulk ``opinions`` CSV row onto the published columns."""
-    present = [name for name in _TEXT_FIELDS if row.get(name)]
-    plain = _s(row.get("plain_text"))
-    with_citations = _s(row.get("html_with_citations"))
-    longest = max((len(str(row[name])) for name in present), default=0)
+    text: dict[str, str | None] = {}
+    for name in _TEXT_FIELDS:
+        value = row.get(name)
+        if value is not None and not isinstance(value, str):
+            raise TypeError(f"CourtListener opinion {name} must be a string or NULL")
+        text[name] = value
+    present = [name for name, value in text.items() if value]
+    longest = max((len(value) for value in text.values() if value), default=0)
     return {
         "opinion_id": _s(row.get("id")),
         "cluster_id": _s(row.get("cluster_id")),
@@ -174,8 +190,7 @@ def _shape(row: dict, *, dump_date: date | None) -> dict:
         "download_url": _s(row.get("download_url")),
         "local_path": _s(row.get("local_path")),
         "extracted_by_ocr": _s(row.get("extracted_by_ocr")),
-        "plain_text": plain,
-        "html_with_citations": with_citations,
+        **text,
         "available_text_fields": ",".join(present) if present else None,
         "text_char_count": str(longest),
         "date_created": _s(row.get("date_created")),
@@ -192,12 +207,15 @@ def build_court_opinion_bodies(
     max_records: int | None = None,
     max_compressed_bytes: int | None = None,
     cluster_ids: Container[str] | None = None,
+    rebuild: bool = False,
 ) -> Path:
     """Build ``court_opinion_bodies.parquet`` from a bounded slice of the dump.
 
     Returns the written path. The exact bound reached is logged and is the number
     that belongs in the coverage record — this builder never claims completeness
-    it did not achieve.
+    it did not achieve. ``rebuild=True`` skips prior download/merge, including a
+    legacy prior, and replaces this output with only the explicitly selected
+    source scope. Use a fresh output directory to retain the old generation.
     """
     import duckdb
 
@@ -212,7 +230,17 @@ def build_court_opinion_bodies(
     prior_file = output_dir / "_bodies_prior.parquet"
     new_file = output_dir / "_bodies_new.parquet"
 
-    have_prior = prior_file.exists() or r2.download(OUTPUT, prior_file)
+    have_prior = not rebuild and (prior_file.exists() or r2.download(OUTPUT, prior_file))
+    if have_prior:
+        prior_schema = pq.read_schema(prior_file)
+        if (prior_schema.metadata or {}).get(
+            SCHEMA_VERSION_KEY.encode()
+        ) != SCHEMA_VERSION.encode() or prior_schema.remove_metadata() != _SCHEMA.remove_metadata():
+            raise ValueError(
+                "CourtListener opinion bodies require a version-2 prior with all eight text fields; "
+                "retain the old artifact and pass rebuild=True for the selected source scope "
+                "in a fresh output directory"
+            )
     logger.info(
         "Opinion bodies: {}",
         f"merging against prior table {prior_file}" if have_prior else "no prior table — first build",
@@ -291,7 +319,8 @@ def build_court_opinion_bodies(
     # pay for it in row order.
     if not have_prior:
         new_file.replace(out_file)
-        prior_file.unlink(missing_ok=True)
+        if not rebuild:
+            prior_file.unlink(missing_ok=True)
         total = pq.ParquetFile(out_file).metadata.num_rows
         logger.info("Court opinion bodies: {:,} rows (first build, dump order)", total)
         return out_file
@@ -326,8 +355,9 @@ def build_court_opinion_bodies(
             )
             WHERE _rn = 1
             ORDER BY CAST(opinion_id AS BIGINT) DESC
-        ) TO '{out_file}' (FORMAT PARQUET, COMPRESSION ZSTD, ROW_GROUP_SIZE 2000);
-        """
+        ) TO '{out_file}' (FORMAT PARQUET, COMPRESSION ZSTD, ROW_GROUP_SIZE 2000, KV_METADATA ?);
+        """,
+        [{SCHEMA_VERSION_KEY: SCHEMA_VERSION}],
     )
     con.close()
 

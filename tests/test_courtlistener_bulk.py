@@ -276,9 +276,10 @@ def test_body_shape_matches_the_published_schema_and_records_text_provenance():
     assert row["cluster_id"] == "10954746"
     assert row["dump_date"] == "2026-06-30"
 
-    # plain_text is empty upstream, so it stays NULL rather than becoming "".
-    assert row["plain_text"] is None
-    assert row["html_with_citations"] is None
+    # Text strings retain the source's distinction between empty and NULL.
+    assert row["plain_text"] == ""
+    assert row["html_with_citations"] == ""
+    assert row["html_lawbox"] == "<p>MEMORANDUM OPINION</p>"
     # ...but the row is not textless, and the table must say which rendering exists.
     assert row["available_text_fields"] == "html_lawbox"
     assert row["text_char_count"] == str(len("<p>MEMORANDUM OPINION</p>"))
@@ -360,8 +361,8 @@ def test_estimate_output_bytes_charges_a_targeted_pass_for_its_output():
     """
     dump = 54_561_543_156
 
-    # No filter: the output is the whole corpus, and the dump size stands in.
-    assert estimate_output_bytes(dump, None) == dump
+    # All variants take more space than the compressed input in the v2 witness.
+    assert estimate_output_bytes(dump, None) == 2 * dump
 
     # The real APA target set. Well under a gibibyte, so it clears a 7 GiB margin.
     apa = estimate_output_bytes(dump, {str(i) for i in range(1155)})
@@ -378,7 +379,7 @@ def test_estimate_output_bytes_charges_a_targeted_pass_for_its_output():
         def __contains__(self, _item: object) -> bool:
             return True
 
-    assert estimate_output_bytes(dump, _Unsized()) == dump
+    assert estimate_output_bytes(dump, _Unsized()) == 2 * dump
 
 
 # -- first build promotes rather than merges ---------------------------------

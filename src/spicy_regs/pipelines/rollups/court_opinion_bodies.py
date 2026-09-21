@@ -21,7 +21,7 @@ DEFAULT_MAX_RECORDS = 250_000
 
 
 class CourtOpinionBodiesRollup(RollupPipeline):
-    """Court opinion text (plain_text, html_with_citations) from CourtListener bulk data."""
+    """All eight original opinion text variants from CourtListener bulk data."""
 
     name: ClassVar[str] = "court-opinion-bodies"
     inputs: ClassVar[tuple[str, ...]] = ()
