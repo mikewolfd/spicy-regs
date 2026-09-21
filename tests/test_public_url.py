@@ -74,8 +74,11 @@ def test_analytics_remote_queries_use_selected_host(tmp_path, monkeypatch):
 
 def test_freshness_uses_publisher_url_and_explicit_argument(tmp_path, monkeypatch):
     from scripts import check_rollup_freshness
+    from spicy_regs.sources import publication
 
     monkeypatch.setenv("R2_PUBLIC_URL", "https://fork.example/")
+    snapshots = []
+    monkeypatch.setattr(publication, "load_index", lambda base: snapshots.append(base) or publication.empty_index())
     connection = MagicMock()
     connection.execute.return_value.fetchall.return_value = []
     monkeypatch.setattr(check_rollup_freshness.duckdb, "connect", lambda: connection)
@@ -88,6 +91,8 @@ def test_freshness_uses_publisher_url_and_explicit_argument(tmp_path, monkeypatc
         assert check_rollup_freshness.main() == 0
         query = connection.execute.call_args.args[0]
         assert expected in query and DEFAULT_R2_BASE_URL not in query
+        assert snapshots[-1] == expected
+    assert len(snapshots) == 2
 
 
 @pytest.mark.parametrize(

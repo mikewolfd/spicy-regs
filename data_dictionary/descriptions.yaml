@@ -379,6 +379,39 @@ tables:
       one — and are filled wherever the bill family has reached.
     columns_from: spicy_docs
 
+  bill_subjects:
+    label: "Bill policy areas and legislative subjects"
+    grain: "One observed subject assignment per bill_id, with the latest retained answer replacing its predecessor."
+    identity_columns: [bill_id]
+    coverage: >-
+      Sampled. The retained table inspected on 2026-09-21 has 20,013 rows
+      across Congresses 116–119; it is not a complete subject census. Each run
+      selects pending bills from congress_bills, newest Congress first, with
+      default caps of 2,000 Congress API or 5,000 GovInfo bills. Configured
+      coverage floors are Congress 93 for the API and 108 for GovInfo.
+      See docs/research/local-data-reuse-2026-09-21.md for the retained selection.
+      These measurements do not establish current public availability.
+    measured_on: "2026-09-21"
+    summary: >-
+      Subject assignments returned by Congress.gov or GovInfo BILLSTATUS,
+      keyed by bill_id for a left join to congress_bills.bill_id. policy_area
+      is one publisher category; subjects_json is a JSON array of legislative
+      subject names, not separate bill records. The consumer trims and
+      deduplicates names. All columns are VARCHAR, including subject_count.
+      carrier and enriched_at record how and when the answer was obtained.
+    data_quality: >-
+      A missing row can mean pending, failed or outside the configured scope.
+      An empty assignment can mean no assignments or that the source did not
+      hold the requested bill; those outcomes are not separately represented
+      in this table. Retained same-carrier answers are not routinely refreshed.
+      The table does not retain the original response or its digest.
+    columns:
+      bill_id: "Stable bill key shared with congress_bills.bill_id, such as 119-hr-1. Primary/dedup key; join by this identifier rather than title."
+      policy_area: "Publisher policy-area name after trimming, or NULL when the returned answer has no policy area."
+      subjects_json: "JSON array of trimmed, deduplicated legislative subject names. An empty array alone does not distinguish unassigned from not held."
+      subject_count: "Length of subjects_json, stored as a decimal string; not a count of bills or independent source responses."
+      carrier: "Source reader that answered: congress-api or govinfo-billstatus. A change of reader can retry a previously empty assignment."
+      enriched_at: "UTC timestamp when this retained answer was shaped, not the publisher's modification date."
   unified_agenda:
     label: "Planned agency actions"
     coverage: >-
@@ -879,6 +912,129 @@ tables:
       pacer_case_id: "PACER case id for the docket in its court's CM/ECF system."
       date_created: "Timestamp CourtListener first indexed the docket (ISO 8601 string, from the search-result `meta.date_created`)."
       absolute_url: "Absolute URL of the docket page on courtlistener.com."
+  court_opinion_clusters:
+    label: "Court decisions and their opinion groups"
+    grain: "One CourtListener decision cluster per cluster_id; multiple opinion bodies can belong to it."
+    identity_columns: [cluster_id]
+    coverage: >-
+      Not a range. The retained 2026-06-30 bulk materialization has 10,070,727
+      rows and the older 36-column schema without court_id, court_jurisdiction
+      or court_is_federal. The current schema declares those three columns;
+      the retained table needs the court-scope join before current-schema
+      admission. Its paired native-source agreement remains unqualified;
+      neither that count nor the configured
+      bulk-plus-search reader establishes complete court coverage. Search
+      catch-up uses filing dates with an overlap and can miss older corrections.
+      See docs/research/local-data-reuse-2026-09-21.md. No current publication
+      or full body coverage is asserted by this declaration.
+    measured_on: "2026-09-21"
+    summary: >-
+      Decision metadata from CourtListener opinion-clusters bulk data and
+      opinion-search catch-up. cluster_id joins court_opinion_bodies.cluster_id;
+      cl_docket_id joins court_dockets.cl_docket_id where that separately scoped
+      docket table contains the case. Court identity comes from a bulk docket
+      map or a search result; jurisdiction classification uses CourtListener's
+      court reference data. This table does not hold individual opinion bodies.
+      All columns are VARCHAR; native numeric and boolean spellings are strings.
+    data_quality: >-
+      Bulk and search records expose different fields. ingest_source identifies
+      the selected row's route; unavailable fields are NULL and metadata empty
+      strings are normalized to NULL. A fresh search row can replace a richer
+      bulk row. Missing court scope is unknown, not proof of a non-federal court.
+      court_dockets is a narrower selection, so unmatched docket IDs are expected.
+      Names, judge strings and citations do not establish cross-source identity.
+    columns:
+      cluster_id: "CourtListener opinion-cluster ID, the decision-level primary/dedup key. Join to court_opinion_bodies.cluster_id; not an opinion_id."
+      cl_docket_id: "CourtListener docket ID, renamed from docket_id. Join to court_dockets.cl_docket_id where present; unrelated to regulations.gov docket_id."
+      court_id: "CourtListener court identifier from the docket map or search record; NULL when unresolved."
+      court_jurisdiction: "CourtListener jurisdiction code from the court reference lookup; NULL when unavailable."
+      court_is_federal: "Derived federal classification from court jurisdiction: t or f as a string; NULL when the classification is unavailable."
+      case_name: "Source case caption; not a stable identity or affiliation link."
+      case_name_short: "Source short case caption, when supplied by bulk data."
+      case_name_full: "Source full case caption when supplied."
+      date_filed: "Source decision filing date; used by search catch-up, not an observation or correction date."
+      date_filed_is_approximate: "Source flag stating whether date_filed is approximate, stored as a string."
+      judges: "Source judge text; names are not normalized person identifiers."
+      nature_of_suit: "Source nature-of-suit text when supplied; this cluster table is not limited to the docket rollup's 899 query."
+      precedential_status: "CourtListener's source precedential-status value; this table does not independently assess legal authority."
+      citation_count: "Source citation-count value at observation time, stored as a string."
+      scdb_id: "Supreme Court Database identifier as supplied by CourtListener, when available."
+      scdb_decision_direction: "Source Supreme Court Database decision-direction code; retained without interpretation."
+      scdb_votes_majority: "Source Supreme Court Database majority-vote count, stored as a string."
+      scdb_votes_minority: "Source Supreme Court Database minority-vote count, stored as a string."
+      source: "CourtListener's source value for the cluster; distinct from the ingest_source route."
+      procedural_history: "Source procedural-history text when supplied."
+      attorneys: "Source attorney text; does not retain structured person identity."
+      posture: "Source procedural-posture text when supplied."
+      syllabus: "Source syllabus text when supplied."
+      headnotes: "Source headnotes text when supplied."
+      summary: "Source summary text when supplied; not a generated SpicyRegs summary."
+      disposition: "Source disposition text when supplied."
+      history: "Source history text when supplied."
+      other_dates: "Source other-dates text, without date normalization."
+      cross_reference: "Source cross-reference text, without inferred identifier resolution."
+      correction: "Source correction text when supplied; not proof that later corrections have been acquired."
+      arguments: "Source arguments text when supplied."
+      headmatter: "Source headmatter text when supplied."
+      blocked: "Source blocked flag as a string; not a current access check."
+      date_blocked: "Source date of blocking when supplied."
+      slug: "Source URL slug; not a stable identity."
+      absolute_url: "CourtListener decision page URL, constructed from cluster ID/slug for bulk rows or supplied by search."
+      date_created: "Source record-creation timestamp when supplied by bulk data."
+      date_modified: "Source record-modification timestamp when supplied by bulk data."
+      ingest_source: "Route for the retained row: bulk or search. The table does not itself pin the original capture bytes."
+  court_opinion_bodies:
+    label: "Individual court opinion text variants"
+    grain: "One CourtListener opinion per opinion_id; a decision cluster may have majority, concurring and dissenting opinions."
+    identity_columns: [opinion_id]
+    coverage: >-
+      Sampled. Scheduled builds default to 250,000 opinions in dump order,
+      not a random sample, date window or complete court population. The retained
+      older 250,000-row output has the former 19-column representation; the
+      corrected 25-column replay has only 284 rows. A wider corrected rebuild
+      remains required. See docs/research/local-data-reuse-2026-09-21.md.
+      Neither local count establishes current publication or cluster completeness.
+    measured_on: "2026-09-21"
+    summary: >-
+      Individual opinion metadata and all eight supported native text variants
+      from CourtListener bulk opinions. opinion_id is the primary/dedup key;
+      cluster_id joins court_opinion_clusters.cluster_id to obtain decision,
+      docket and court context. Opinion types remain literal source values.
+      Version 2 preserves NULL and empty strings separately in text variants;
+      metadata empty strings become NULL. All columns are VARCHAR.
+    data_quality: >-
+      Several text variants can represent the same opinion and must not be
+      counted as different decisions. Text may contain source markup or OCR
+      errors. Presence of text does not establish completeness or accuracy.
+      Old 19-column outputs need explicit rebuilding; they are not silently
+      admitted as the current representation. dump_date identifies the selected
+      release date, not a file digest or proof that later corrections were read.
+    columns:
+      opinion_id: "CourtListener individual opinion ID. Primary/dedup key, distinct from the parent cluster_id."
+      cluster_id: "Parent CourtListener decision-cluster ID; many opinions may join one court_opinion_clusters row."
+      opinion_type: "Literal source opinion type code, such as majority, concurrence or dissent categories; not a resolved person or decision identifier."
+      author_str: "Source author text; not normalized to a person identity."
+      author_id: "CourtListener author ID when supplied; separate from author_str and retained as a string."
+      joined_by_str: "Source text identifying judges joining the opinion; not a structured relationship table."
+      per_curiam: "Source per-curiam flag, stored as a string."
+      sha1: "Source-provided SHA-1 value; not a SpicyRegs capture digest or independently verified byte pin."
+      page_count: "Source page count, stored as a string; may be unavailable."
+      download_url: "Source original-document URL when supplied; no current accessibility claim."
+      local_path: "Path reported by CourtListener, not a path to a retained SpicyRegs file."
+      extracted_by_ocr: "Source OCR flag, stored as a string; it does not establish extraction quality."
+      plain_text: "Literal source plain_text variant, preserving NULL versus empty string."
+      html_with_citations: "Literal source HTML-with-citations variant, preserving NULL versus empty string and original markup."
+      available_text_fields: "Comma-separated names of nonempty supported text variants, or NULL if none. Empty string variants remain in their own columns."
+      text_char_count: "Length of the longest nonempty supported text variant, stored as a string. It is not a sum, token count or completeness score."
+      date_created: "Source opinion-record creation timestamp when supplied."
+      date_modified: "Source opinion-record modification timestamp when supplied."
+      dump_date: "Selected CourtListener dump date in ISO form; may be NULL for a local input without a supplied release date."
+      html: "Literal source html variant, preserving NULL versus empty string and original markup."
+      html_lawbox: "Literal source html_lawbox variant, preserving NULL versus empty string and original markup."
+      html_columbia: "Literal source html_columbia variant, preserving NULL versus empty string and original markup."
+      html_anon_2020: "Literal source html_anon_2020 variant, preserving NULL versus empty string and original markup."
+      xml_harvard: "Literal source xml_harvard variant, preserving NULL versus empty string and original markup."
+      xml_scan: "Literal source xml_scan variant, preserving NULL versus empty string and original markup."
   usaspending_recipients:
     label: "Federal award recipients"
     coverage: >-

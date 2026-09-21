@@ -7,6 +7,11 @@ source-appropriate age budgets. Sources without a meaningful update date are
 either tracked by row-count change (``usaspending_recipients``) or explicitly
 skipped with a reason. The state file lets the daily workflow remember when a row
 count last changed.
+
+One publication snapshot selects all inputs. Remote column scans check managed
+members against their declared schemas and row counts. This monitor does not
+download or hash whole files: the publisher and CLI own byte-pin verification.
+Tables outside the index keep the legacy remote column-read path.
 """
 
 from __future__ import annotations
@@ -14,14 +19,17 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
 
 import duckdb
+import httpx
 
 from spicy_regs.public_url import resolve_r2_base_url
+from spicy_regs.sources import publication
+
 FreshnessRow = tuple[str, str, str | None, int]
 FreshnessState = dict[str, dict[str, int | str]]
 
@@ -100,23 +108,60 @@ SKIPPED = {
 }
 
 
-def _query(base_url: str) -> str:
+def _query(sources: Mapping[str, str]) -> str:
     branches = []
     for check in DATE_CHECKS:
+        if check.table not in sources:
+            continue
         label = check.label or check.column
+        target = sources[check.table].replace("'", "''")
         branches.append(
             f"""SELECT '{check.table}' AS table_name, '{label}' AS metric,
                        CAST(MAX(TRY_CAST({check.column} AS TIMESTAMP)) AS VARCHAR) AS latest,
                        COUNT(*)::BIGINT AS row_count
-                FROM read_parquet('{base_url}/{check.table}.parquet')"""
+                FROM read_parquet('{target}')"""
         )
     for table in ROW_CHANGE_BUDGETS:
+        if table not in sources:
+            continue
+        target = sources[table].replace("'", "''")
         branches.append(
             f"""SELECT '{table}' AS table_name, 'row count' AS metric,
                        NULL::VARCHAR AS latest, COUNT(*)::BIGINT AS row_count
-                FROM read_parquet('{base_url}/{table}.parquet')"""
+                FROM read_parquet('{target}')"""
         )
     return "\nUNION ALL\n".join(branches)
+
+
+def read_freshness_rows(base_url: str) -> list[FreshnessRow]:
+    """Measure selected members; a broken managed target never falls back."""
+    tables = dict.fromkeys([check.table for check in DATE_CHECKS] + list(ROW_CHANGE_BUDGETS))
+    rows: list[FreshnessRow] = []
+    with publication.snapshot(base_url) as index:
+        con = duckdb.connect()
+        try:
+            for table in tables:
+                key, descriptor = publication.table_location(index, f"{table}.parquet")
+                target = f"{base_url.rstrip('/')}/{key}"
+                if descriptor is not None:
+                    actual = con.execute("DESCRIBE SELECT * FROM read_parquet(?)", [target]).fetchall()
+                    if [[row[0], row[1]] for row in actual] != descriptor["columns"]:
+                        raise publication.PublicationError(f"Published freshness schema differs from its pin: {table}")
+                    family = next(
+                        entry for entry in index["families"].values() if f"{table}.parquet" in entry["tables"]
+                    )
+                    print(
+                        f"SOURCE: {table} managed artifact={family['artifactDigest']} member={key} (byte digest not rechecked)"
+                    )
+                else:
+                    print(f"SOURCE: {table} legacy url={target} (no publication pin)")
+                measured = con.execute(_query({table: target})).fetchall()
+                if descriptor is not None and any(row[3] != descriptor["rows"] for row in measured):
+                    raise publication.PublicationError(f"Published freshness row count differs from its pin: {table}")
+                rows.extend(measured)
+        finally:
+            con.close()
+    return rows
 
 
 def _parse_latest(raw: str | None) -> date | None:
@@ -194,11 +239,11 @@ def main() -> int:
     except (OSError, json.JSONDecodeError):
         state = {}
 
-    con = duckdb.connect()
     try:
-        rows = con.execute(_query(args.base_url)).fetchall()
-    finally:
-        con.close()
+        rows = read_freshness_rows(args.base_url)
+    except (duckdb.Error, httpx.HTTPError, publication.PublicationError) as exc:
+        print(f"Freshness inputs could not be verified: {exc}", file=sys.stderr)
+        return 1
 
     failures = evaluate_date_rows(rows, args.today)
     failures.extend(evaluate_row_changes(rows, state, args.today))

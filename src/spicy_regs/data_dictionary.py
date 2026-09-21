@@ -155,6 +155,7 @@ TABLES: tuple[str, ...] = (
     "discovery_signals",
     "cfr_sections",
     "congress_bills",
+    "bill_subjects",
     "unified_agenda",
     "federal_register",
     "sam_entities",
@@ -168,6 +169,8 @@ TABLES: tuple[str, ...] = (
     "gao_reports",
     "crs_reports",
     "court_dockets",
+    "court_opinion_clusters",
+    "court_opinion_bodies",
     "usaspending_recipients",
     "fcc_proceedings",
     "fcc_filings",
@@ -202,6 +205,7 @@ MCP_QUERYABLE: frozenset[str] = frozenset(
         "discovery_signals",
         "cfr_sections",
         "congress_bills",
+        "bill_subjects",
         "unified_agenda",
         "federal_register",
         "sam_entities",
@@ -215,6 +219,8 @@ MCP_QUERYABLE: frozenset[str] = frozenset(
         "gao_reports",
         "crs_reports",
         "court_dockets",
+        "court_opinion_clusters",
+        "court_opinion_bodies",
         "usaspending_recipients",
         "fcc_proceedings",
         "fcc_filings",
@@ -704,16 +710,22 @@ def expected_schemas() -> dict[str, list[tuple[str, str]]]:
     from spicy_regs.transforms.build_fec_observations import COLLECTION_COLUMNS, RECORD_COLUMNS
     from spicy_regs.transforms.build_fec_source_catalog import COLUMNS as FEC_CATALOG_COLUMNS
     from spicy_regs.transforms.fec_relationships import COLUMNS as FEC_RELATIONSHIP_COLUMNS
+    from spicy_regs.transforms.enrich_bill_subjects import COLUMNS as BILL_SUBJECT_COLUMNS
+    from spicy_regs.transforms.build_court_opinion_clusters import COLUMNS as COURT_CLUSTER_COLUMNS
+    from spicy_regs.transforms.build_court_opinion_bodies import COLUMNS as COURT_BODY_COLUMNS
 
-    fec_schemas = {
+    builder_columns = {
         "fec_source_catalog": FEC_CATALOG_COLUMNS,
         "fec_collections": COLLECTION_COLUMNS,
         "fec_source_records": RECORD_COLUMNS,
         "fec_relationships": FEC_RELATIONSHIP_COLUMNS,
+        "bill_subjects": BILL_SUBJECT_COLUMNS,
+        "court_opinion_clusters": COURT_CLUSTER_COLUMNS,
+        "court_opinion_bodies": COURT_BODY_COLUMNS,
     }
     for name in TABLES:
-        if name in fec_schemas:
-            schemas[name] = [(column, "VARCHAR") for column in fec_schemas[name]]
+        if name in builder_columns:
+            schemas[name] = [(column, "VARCHAR") for column in builder_columns[name]]
         elif name in from_contracts:
             # Checked before DERIVED_SCHEMAS on purpose: congress_bills is in
             # both, and the contract is the longer, current one.

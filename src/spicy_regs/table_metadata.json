@@ -923,6 +923,51 @@
       "bill_id"
     ]
   },
+  "bill_subjects": {
+    "table": "bill_subjects",
+    "label": "Bill policy areas and legislative subjects",
+    "summary": "Subject assignments returned by Congress.gov or GovInfo BILLSTATUS, keyed by bill_id for a left join to congress_bills.bill_id. policy_area is one publisher category; subjects_json is a JSON array of legislative subject names, not separate bill records. The consumer trims and deduplicates names. All columns are VARCHAR, including subject_count. carrier and enriched_at record how and when the answer was obtained.",
+    "coverage": "Sampled. The retained table inspected on 2026-09-21 has 20,013 rows across Congresses 116–119; it is not a complete subject census. Each run selects pending bills from congress_bills, newest Congress first, with default caps of 2,000 Congress API or 5,000 GovInfo bills. Configured coverage floors are Congress 93 for the API and 108 for GovInfo. See docs/research/local-data-reuse-2026-09-21.md for the retained selection. These measurements do not establish current public availability.",
+    "kind": "sampled",
+    "measured_on": "2026-09-21",
+    "data_quality": "A missing row can mean pending, failed or outside the configured scope. An empty assignment can mean no assignments or that the source did not hold the requested bill; those outcomes are not separately represented in this table. Retained same-carrier answers are not routinely refreshed. The table does not retain the original response or its digest.",
+    "columns": [
+      {
+        "column_name": "bill_id",
+        "column_type": "VARCHAR",
+        "description": "Stable bill key shared with congress_bills.bill_id, such as 119-hr-1. Primary/dedup key; join by this identifier rather than title."
+      },
+      {
+        "column_name": "policy_area",
+        "column_type": "VARCHAR",
+        "description": "Publisher policy-area name after trimming, or NULL when the returned answer has no policy area."
+      },
+      {
+        "column_name": "subjects_json",
+        "column_type": "VARCHAR",
+        "description": "JSON array of trimmed, deduplicated legislative subject names. An empty array alone does not distinguish unassigned from not held."
+      },
+      {
+        "column_name": "subject_count",
+        "column_type": "VARCHAR",
+        "description": "Length of subjects_json, stored as a decimal string; not a count of bills or independent source responses."
+      },
+      {
+        "column_name": "carrier",
+        "column_type": "VARCHAR",
+        "description": "Source reader that answered: congress-api or govinfo-billstatus. A change of reader can retry a previously empty assignment."
+      },
+      {
+        "column_name": "enriched_at",
+        "column_type": "VARCHAR",
+        "description": "UTC timestamp when this retained answer was shaped, not the publisher's modification date."
+      }
+    ],
+    "grain": "One observed subject assignment per bill_id, with the latest retained answer replacing its predecessor.",
+    "identity_columns": [
+      "bill_id"
+    ]
+  },
   "unified_agenda": {
     "table": "unified_agenda",
     "label": "Planned agency actions",
@@ -2113,6 +2158,356 @@
     ],
     "grain": null,
     "identity_columns": []
+  },
+  "court_opinion_clusters": {
+    "table": "court_opinion_clusters",
+    "label": "Court decisions and their opinion groups",
+    "summary": "Decision metadata from CourtListener opinion-clusters bulk data and opinion-search catch-up. cluster_id joins court_opinion_bodies.cluster_id; cl_docket_id joins court_dockets.cl_docket_id where that separately scoped docket table contains the case. Court identity comes from a bulk docket map or a search result; jurisdiction classification uses CourtListener's court reference data. This table does not hold individual opinion bodies. All columns are VARCHAR; native numeric and boolean spellings are strings.",
+    "coverage": "Not a range. The retained 2026-06-30 bulk materialization has 10,070,727 rows and the older 36-column schema without court_id, court_jurisdiction or court_is_federal. The current schema declares those three columns; the retained table needs the court-scope join before current-schema admission. Its paired native-source agreement remains unqualified; neither that count nor the configured bulk-plus-search reader establishes complete court coverage. Search catch-up uses filing dates with an overlap and can miss older corrections. See docs/research/local-data-reuse-2026-09-21.md. No current publication or full body coverage is asserted by this declaration.",
+    "kind": "not_a_range",
+    "measured_on": "2026-09-21",
+    "data_quality": "Bulk and search records expose different fields. ingest_source identifies the selected row's route; unavailable fields are NULL and metadata empty strings are normalized to NULL. A fresh search row can replace a richer bulk row. Missing court scope is unknown, not proof of a non-federal court. court_dockets is a narrower selection, so unmatched docket IDs are expected. Names, judge strings and citations do not establish cross-source identity.",
+    "columns": [
+      {
+        "column_name": "cluster_id",
+        "column_type": "VARCHAR",
+        "description": "CourtListener opinion-cluster ID, the decision-level primary/dedup key. Join to court_opinion_bodies.cluster_id; not an opinion_id."
+      },
+      {
+        "column_name": "cl_docket_id",
+        "column_type": "VARCHAR",
+        "description": "CourtListener docket ID, renamed from docket_id. Join to court_dockets.cl_docket_id where present; unrelated to regulations.gov docket_id."
+      },
+      {
+        "column_name": "court_id",
+        "column_type": "VARCHAR",
+        "description": "CourtListener court identifier from the docket map or search record; NULL when unresolved."
+      },
+      {
+        "column_name": "court_jurisdiction",
+        "column_type": "VARCHAR",
+        "description": "CourtListener jurisdiction code from the court reference lookup; NULL when unavailable."
+      },
+      {
+        "column_name": "court_is_federal",
+        "column_type": "VARCHAR",
+        "description": "Derived federal classification from court jurisdiction: t or f as a string; NULL when the classification is unavailable."
+      },
+      {
+        "column_name": "case_name",
+        "column_type": "VARCHAR",
+        "description": "Source case caption; not a stable identity or affiliation link."
+      },
+      {
+        "column_name": "case_name_short",
+        "column_type": "VARCHAR",
+        "description": "Source short case caption, when supplied by bulk data."
+      },
+      {
+        "column_name": "case_name_full",
+        "column_type": "VARCHAR",
+        "description": "Source full case caption when supplied."
+      },
+      {
+        "column_name": "date_filed",
+        "column_type": "VARCHAR",
+        "description": "Source decision filing date; used by search catch-up, not an observation or correction date."
+      },
+      {
+        "column_name": "date_filed_is_approximate",
+        "column_type": "VARCHAR",
+        "description": "Source flag stating whether date_filed is approximate, stored as a string."
+      },
+      {
+        "column_name": "judges",
+        "column_type": "VARCHAR",
+        "description": "Source judge text; names are not normalized person identifiers."
+      },
+      {
+        "column_name": "nature_of_suit",
+        "column_type": "VARCHAR",
+        "description": "Source nature-of-suit text when supplied; this cluster table is not limited to the docket rollup's 899 query."
+      },
+      {
+        "column_name": "precedential_status",
+        "column_type": "VARCHAR",
+        "description": "CourtListener's source precedential-status value; this table does not independently assess legal authority."
+      },
+      {
+        "column_name": "citation_count",
+        "column_type": "VARCHAR",
+        "description": "Source citation-count value at observation time, stored as a string."
+      },
+      {
+        "column_name": "scdb_id",
+        "column_type": "VARCHAR",
+        "description": "Supreme Court Database identifier as supplied by CourtListener, when available."
+      },
+      {
+        "column_name": "scdb_decision_direction",
+        "column_type": "VARCHAR",
+        "description": "Source Supreme Court Database decision-direction code; retained without interpretation."
+      },
+      {
+        "column_name": "scdb_votes_majority",
+        "column_type": "VARCHAR",
+        "description": "Source Supreme Court Database majority-vote count, stored as a string."
+      },
+      {
+        "column_name": "scdb_votes_minority",
+        "column_type": "VARCHAR",
+        "description": "Source Supreme Court Database minority-vote count, stored as a string."
+      },
+      {
+        "column_name": "source",
+        "column_type": "VARCHAR",
+        "description": "CourtListener's source value for the cluster; distinct from the ingest_source route."
+      },
+      {
+        "column_name": "procedural_history",
+        "column_type": "VARCHAR",
+        "description": "Source procedural-history text when supplied."
+      },
+      {
+        "column_name": "attorneys",
+        "column_type": "VARCHAR",
+        "description": "Source attorney text; does not retain structured person identity."
+      },
+      {
+        "column_name": "posture",
+        "column_type": "VARCHAR",
+        "description": "Source procedural-posture text when supplied."
+      },
+      {
+        "column_name": "syllabus",
+        "column_type": "VARCHAR",
+        "description": "Source syllabus text when supplied."
+      },
+      {
+        "column_name": "headnotes",
+        "column_type": "VARCHAR",
+        "description": "Source headnotes text when supplied."
+      },
+      {
+        "column_name": "summary",
+        "column_type": "VARCHAR",
+        "description": "Source summary text when supplied; not a generated SpicyRegs summary."
+      },
+      {
+        "column_name": "disposition",
+        "column_type": "VARCHAR",
+        "description": "Source disposition text when supplied."
+      },
+      {
+        "column_name": "history",
+        "column_type": "VARCHAR",
+        "description": "Source history text when supplied."
+      },
+      {
+        "column_name": "other_dates",
+        "column_type": "VARCHAR",
+        "description": "Source other-dates text, without date normalization."
+      },
+      {
+        "column_name": "cross_reference",
+        "column_type": "VARCHAR",
+        "description": "Source cross-reference text, without inferred identifier resolution."
+      },
+      {
+        "column_name": "correction",
+        "column_type": "VARCHAR",
+        "description": "Source correction text when supplied; not proof that later corrections have been acquired."
+      },
+      {
+        "column_name": "arguments",
+        "column_type": "VARCHAR",
+        "description": "Source arguments text when supplied."
+      },
+      {
+        "column_name": "headmatter",
+        "column_type": "VARCHAR",
+        "description": "Source headmatter text when supplied."
+      },
+      {
+        "column_name": "blocked",
+        "column_type": "VARCHAR",
+        "description": "Source blocked flag as a string; not a current access check."
+      },
+      {
+        "column_name": "date_blocked",
+        "column_type": "VARCHAR",
+        "description": "Source date of blocking when supplied."
+      },
+      {
+        "column_name": "slug",
+        "column_type": "VARCHAR",
+        "description": "Source URL slug; not a stable identity."
+      },
+      {
+        "column_name": "absolute_url",
+        "column_type": "VARCHAR",
+        "description": "CourtListener decision page URL, constructed from cluster ID/slug for bulk rows or supplied by search."
+      },
+      {
+        "column_name": "date_created",
+        "column_type": "VARCHAR",
+        "description": "Source record-creation timestamp when supplied by bulk data."
+      },
+      {
+        "column_name": "date_modified",
+        "column_type": "VARCHAR",
+        "description": "Source record-modification timestamp when supplied by bulk data."
+      },
+      {
+        "column_name": "ingest_source",
+        "column_type": "VARCHAR",
+        "description": "Route for the retained row: bulk or search. The table does not itself pin the original capture bytes."
+      }
+    ],
+    "grain": "One CourtListener decision cluster per cluster_id; multiple opinion bodies can belong to it.",
+    "identity_columns": [
+      "cluster_id"
+    ]
+  },
+  "court_opinion_bodies": {
+    "table": "court_opinion_bodies",
+    "label": "Individual court opinion text variants",
+    "summary": "Individual opinion metadata and all eight supported native text variants from CourtListener bulk opinions. opinion_id is the primary/dedup key; cluster_id joins court_opinion_clusters.cluster_id to obtain decision, docket and court context. Opinion types remain literal source values. Version 2 preserves NULL and empty strings separately in text variants; metadata empty strings become NULL. All columns are VARCHAR.",
+    "coverage": "Sampled. Scheduled builds default to 250,000 opinions in dump order, not a random sample, date window or complete court population. The retained older 250,000-row output has the former 19-column representation; the corrected 25-column replay has only 284 rows. A wider corrected rebuild remains required. See docs/research/local-data-reuse-2026-09-21.md. Neither local count establishes current publication or cluster completeness.",
+    "kind": "sampled",
+    "measured_on": "2026-09-21",
+    "data_quality": "Several text variants can represent the same opinion and must not be counted as different decisions. Text may contain source markup or OCR errors. Presence of text does not establish completeness or accuracy. Old 19-column outputs need explicit rebuilding; they are not silently admitted as the current representation. dump_date identifies the selected release date, not a file digest or proof that later corrections were read.",
+    "columns": [
+      {
+        "column_name": "opinion_id",
+        "column_type": "VARCHAR",
+        "description": "CourtListener individual opinion ID. Primary/dedup key, distinct from the parent cluster_id."
+      },
+      {
+        "column_name": "cluster_id",
+        "column_type": "VARCHAR",
+        "description": "Parent CourtListener decision-cluster ID; many opinions may join one court_opinion_clusters row."
+      },
+      {
+        "column_name": "opinion_type",
+        "column_type": "VARCHAR",
+        "description": "Literal source opinion type code, such as majority, concurrence or dissent categories; not a resolved person or decision identifier."
+      },
+      {
+        "column_name": "author_str",
+        "column_type": "VARCHAR",
+        "description": "Source author text; not normalized to a person identity."
+      },
+      {
+        "column_name": "author_id",
+        "column_type": "VARCHAR",
+        "description": "CourtListener author ID when supplied; separate from author_str and retained as a string."
+      },
+      {
+        "column_name": "joined_by_str",
+        "column_type": "VARCHAR",
+        "description": "Source text identifying judges joining the opinion; not a structured relationship table."
+      },
+      {
+        "column_name": "per_curiam",
+        "column_type": "VARCHAR",
+        "description": "Source per-curiam flag, stored as a string."
+      },
+      {
+        "column_name": "sha1",
+        "column_type": "VARCHAR",
+        "description": "Source-provided SHA-1 value; not a SpicyRegs capture digest or independently verified byte pin."
+      },
+      {
+        "column_name": "page_count",
+        "column_type": "VARCHAR",
+        "description": "Source page count, stored as a string; may be unavailable."
+      },
+      {
+        "column_name": "download_url",
+        "column_type": "VARCHAR",
+        "description": "Source original-document URL when supplied; no current accessibility claim."
+      },
+      {
+        "column_name": "local_path",
+        "column_type": "VARCHAR",
+        "description": "Path reported by CourtListener, not a path to a retained SpicyRegs file."
+      },
+      {
+        "column_name": "extracted_by_ocr",
+        "column_type": "VARCHAR",
+        "description": "Source OCR flag, stored as a string; it does not establish extraction quality."
+      },
+      {
+        "column_name": "plain_text",
+        "column_type": "VARCHAR",
+        "description": "Literal source plain_text variant, preserving NULL versus empty string."
+      },
+      {
+        "column_name": "html_with_citations",
+        "column_type": "VARCHAR",
+        "description": "Literal source HTML-with-citations variant, preserving NULL versus empty string and original markup."
+      },
+      {
+        "column_name": "available_text_fields",
+        "column_type": "VARCHAR",
+        "description": "Comma-separated names of nonempty supported text variants, or NULL if none. Empty string variants remain in their own columns."
+      },
+      {
+        "column_name": "text_char_count",
+        "column_type": "VARCHAR",
+        "description": "Length of the longest nonempty supported text variant, stored as a string. It is not a sum, token count or completeness score."
+      },
+      {
+        "column_name": "date_created",
+        "column_type": "VARCHAR",
+        "description": "Source opinion-record creation timestamp when supplied."
+      },
+      {
+        "column_name": "date_modified",
+        "column_type": "VARCHAR",
+        "description": "Source opinion-record modification timestamp when supplied."
+      },
+      {
+        "column_name": "dump_date",
+        "column_type": "VARCHAR",
+        "description": "Selected CourtListener dump date in ISO form; may be NULL for a local input without a supplied release date."
+      },
+      {
+        "column_name": "html",
+        "column_type": "VARCHAR",
+        "description": "Literal source html variant, preserving NULL versus empty string and original markup."
+      },
+      {
+        "column_name": "html_lawbox",
+        "column_type": "VARCHAR",
+        "description": "Literal source html_lawbox variant, preserving NULL versus empty string and original markup."
+      },
+      {
+        "column_name": "html_columbia",
+        "column_type": "VARCHAR",
+        "description": "Literal source html_columbia variant, preserving NULL versus empty string and original markup."
+      },
+      {
+        "column_name": "html_anon_2020",
+        "column_type": "VARCHAR",
+        "description": "Literal source html_anon_2020 variant, preserving NULL versus empty string and original markup."
+      },
+      {
+        "column_name": "xml_harvard",
+        "column_type": "VARCHAR",
+        "description": "Literal source xml_harvard variant, preserving NULL versus empty string and original markup."
+      },
+      {
+        "column_name": "xml_scan",
+        "column_type": "VARCHAR",
+        "description": "Literal source xml_scan variant, preserving NULL versus empty string and original markup."
+      }
+    ],
+    "grain": "One CourtListener opinion per opinion_id; a decision cluster may have majority, concurring and dissenting opinions.",
+    "identity_columns": [
+      "opinion_id"
+    ]
   },
   "usaspending_recipients": {
     "table": "usaspending_recipients",
