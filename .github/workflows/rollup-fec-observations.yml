@@ -51,4 +51,5 @@ jobs:
       fec_max_archive_bytes: ${{ inputs.max_archive_bytes }}
       fec_max_extracted_bytes: ${{ inputs.max_extracted_bytes }}
       skip_upload: ${{ inputs.skip_upload }}
-      timeout_minutes: ${{ inputs.timeout_minutes }}
+      # workflow_dispatch API values can arrive as strings even for number inputs.
+      timeout_minutes: ${{ fromJSON(format('{0}', inputs.timeout_minutes)) }}
