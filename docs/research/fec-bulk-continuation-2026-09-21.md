@@ -5,6 +5,10 @@ SpicyDocs owns source acquisition and parsing. SpicyRegs exposes source metadata
 selected records and reported relationships through MCP. Files, parsed rows and
 interpreted financial totals remain separate outputs.
 
+The later [Senate archive recovery](fec-senate-recovery-2026-09-21.md) recovered
+598 live originals and one separate historical mirror. The counts and Senate
+refusal below describe this earlier delivery checkpoint.
+
 The final local generation contains **13,120,005 source records**, **51 selected
 collections** and **183,390 relationship observations**, alongside the 26-family
 source catalog. Of the 26 official bulk groups, **24 have selected parsed
