@@ -80,11 +80,11 @@ LIMIT 10;
 
 ## What's in the corpus
 
-Everything is published under `https://data.spicy-regs.dev` with public,
-anonymous read. Per-column reference and exact row counts live in the
-[data dictionary](https://docs.spicy-regs.dev/) — it's generated from the
-schemas in this repo and kept in sync by CI, so it never drifts from what's
-actually published.
+Published files are available under `https://data.spicy-regs.dev` with public,
+anonymous read. The [data dictionary](https://docs.spicy-regs.dev/) describes
+supported schemas and dated coverage observations. A declaration does not
+establish that its current output is published: use MCP `list_sources` for
+loaded availability and `describe_table` to compare the actual schema.
 
 **Core regulations.gov tables**
 
@@ -288,7 +288,7 @@ operations.
 
 ```bash
 uv run spicy-regs-dict check        # verify descriptions match the schema
-uv run spicy-regs-dict generate     # regenerate docs/tables/*.md + catalog.json
+uv run spicy-regs-dict generate     # regenerate table pages, catalog and MCP metadata
 uv run --group docs mkdocs serve    # preview at 127.0.0.1:8000
 ```
 
@@ -296,8 +296,10 @@ Edit descriptions in `data_dictionary/descriptions.yaml`. Every table needs a
 `label`, a `coverage` statement opening with its kind, and a `measured_on`
 date; `check` fails on a missing or malformed one. `generate` also rewrites
 `data_dictionary/catalog.json` and its digest — the machine-readable class
-declaration other repos vendor — so regenerating the pages keeps that in step.
-CI fails if any of it drifts from the schema.
+declaration other repos vendor — and `src/spicy_regs/table_metadata.json`, the
+field meanings and coverage notes bundled with the MCP server. This lets a base
+MCP installation describe datasets without installing the source readers.
+CI fails if any generated output drifts from its source definitions.
 
 The twenty-two hosted tables instead declare `columns_from: spicy_docs` and
 take their per-column prose from the installed spicy-docs contract, so those
@@ -314,6 +316,28 @@ and an inline `columns:` together is refused at load.
 
 A read-only MCP server exposes SQL over the corpus with three tools:
 `list_sources()`, `describe_table(table)`, and `query_sql(sql)`.
+
+`list_sources` returns queryable tables in `tables`, all supported names in
+`declared_tables`, and missing views in `unavailable_tables`. Availability
+reflects the current cached connection, which normally refreshes after five
+minutes; it does not certify population completeness or data freshness.
+`describe_table` returns the actual columns alongside dictionary field meanings,
+declared row identifiers, coverage and data-quality notes. `declared_columns`
+and `schema_differences` show when the loaded artifact differs from the supported
+schema. Unavailable tables still return their dictionary metadata with
+`available: false` and an empty actual `columns` list. Read the dated coverage
+notes and source evidence before interpreting joins or totals. These responses
+describe this checkout's server; the hosted service changes after deployment.
+
+To query locally built or audited outputs through the same MCP tools, set
+`SPICY_REGS_DATA_DIR=/absolute/path/to/parquet-directory` before starting
+`spicy-regs-mcp`. This reads only the named tables present in that directory,
+loads no remote tables or catalog, and needs no network extensions. Responses
+identify the local source directory. An invalid directory is refused rather
+than silently switching sources. The SQL write guard also applies in local mode.
+
+For the FEC source inventory, selected retained collections, relationship
+evidence and remaining coverage gaps, see [FEC integration](docs/fec-integration.md).
 
 | Client | Setup |
 |---|---|

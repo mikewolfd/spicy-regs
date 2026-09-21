@@ -209,6 +209,22 @@ def test_committed_catalog_is_up_to_date():
     assert committed == fresh, "catalog.json is stale; run 'uv run spicy-regs-dict catalog'"
 
 
+def test_bundled_mcp_metadata_matches_dictionary_and_provider():
+    """The base MCP wheel carries the same meaning as the generated docs."""
+    fresh = dd.build_mcp_metadata(dd.load_descriptions(), dd.expected_schemas())
+    committed = json.loads(dd.DEFAULT_MCP_METADATA_PATH.read_text(encoding="utf-8"))
+    assert committed == fresh, "table_metadata.json is stale; run 'uv run spicy-regs-dict generate'"
+    assert committed["dockets"]["identity_columns"] == ["docket_id"]
+    assert committed["member_votes"]["identity_columns"] == list(dd._contracts()["member_votes"].identity)
+    assert committed["member_votes"]["grain"] == dd.contract_grain("member_votes")
+
+
+def test_check_rejects_undeclared_identity_column():
+    descriptions = dd.load_descriptions()
+    descriptions["fec_committees"]["identity_columns"] = ["missing_column"]
+    assert any("identity_columns" in error for error in dd.check_descriptions(dd.expected_schemas(), descriptions))
+
+
 def test_catalog_digest_sidecar_matches_the_committed_bytes():
     """A vendored contract is pinned by digest, so the sidecar must track the file.
 

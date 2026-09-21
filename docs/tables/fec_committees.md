@@ -4,9 +4,9 @@
 
 **Political committees**
 
-One row per Federal Election Commission committee/PAC, ingested from the OpenFEC `/committees` endpoint by `build_fec_committees`. A reference dimension of the political committees — PACs, party committees, and campaign committees — that money and endorsements flow through, used to resolve commenters and co-filers against the dashboard's ally/opposition (stance) map. Scope is deliberately committees-only: itemized contributions (hundreds of millions of rows) are out of scope for this pass and could follow as a future bounded-by-organization contributions table keyed on `committee_id`. All columns are stored as VARCHAR; array-valued fields are JSON strings.
+One row per observed Federal Election Commission committee, acquired from the unfiltered OpenFEC `/v1/committees/` endpoint through SpicyDocs. SpicyRegs preserves the existing 16 fields and JSON arrays, merges complete fresh traversals with prior observations by committee_id, and lets a fresh whole row replace its prior row. Raw page captures and acquisition manifests remain in FEC_CAPTURE_DIR. This identity/reference table can join other records carrying an FEC committee identifier. All columns are VARCHAR; array-valued fields are JSON strings.
 
-**Coverage.** Not a range. The table carries no date column: it is the committee registry as of the most recent run, with no history and no way to ask what it held before. *(measured 2026-09-06)*
+**Coverage.** Not a range. Accumulated committee observations from completed traversals with no cycle or status filter. Prior-only rows remain after each merge, so this is neither a frozen source snapshot nor committee history. first_file_date and last_file_date describe committee filing activity, not when the pipeline acquired the row. This statement describes the supported acquisition behavior; it does not establish a fresh public run. *(measured 2026-09-21)*
 
 - **Parquet file:** `fec_committees.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.

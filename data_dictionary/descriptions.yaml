@@ -558,22 +558,25 @@ tables:
       url: "URL of the filing's printable document page on lda.senate.gov (`filing_document_url`)."
   fec_committees:
     label: "Political committees"
+    grain: "One row per observed FEC committee identifier."
+    identity_columns: [committee_id]
     coverage: >-
-      Not a range. The table carries no date column: it is the committee
-      registry as of the most recent run, with no history and no way to ask
-      what it held before.
-    measured_on: "2026-09-06"
+      Not a range. Accumulated committee observations from completed traversals
+      with no cycle or status filter. Prior-only rows remain after each merge,
+      so this is neither a frozen source snapshot nor committee history.
+      first_file_date and last_file_date describe committee filing activity,
+      not when the pipeline acquired the row. This statement describes the
+      supported acquisition behavior; it does not establish a fresh public run.
+    measured_on: "2026-09-21"
     summary: >-
-      One row per Federal Election Commission committee/PAC, ingested from the
-      OpenFEC `/committees` endpoint by `build_fec_committees`. A reference
-      dimension of the political committees — PACs, party committees, and
-      campaign committees — that money and endorsements flow through, used to
-      resolve commenters and co-filers against the dashboard's ally/opposition
-      (stance) map. Scope is deliberately committees-only: itemized
-      contributions (hundreds of millions of rows) are out of scope for this
-      pass and could follow as a future bounded-by-organization contributions
-      table keyed on `committee_id`. All columns are stored as VARCHAR;
-      array-valued fields are JSON strings.
+      One row per observed Federal Election Commission committee, acquired from
+      the unfiltered OpenFEC `/v1/committees/` endpoint through SpicyDocs.
+      SpicyRegs preserves the existing 16 fields and JSON arrays, merges complete
+      fresh traversals with prior observations by committee_id, and lets a fresh
+      whole row replace its prior row. Raw page captures and acquisition
+      manifests remain in FEC_CAPTURE_DIR. This identity/reference table can
+      join other records carrying an FEC committee identifier. All columns are
+      VARCHAR; array-valued fields are JSON strings.
     columns:
       committee_id: "OpenFEC committee identifier (e.g. `C00684373`). Primary key / dedup key."
       name: "Committee name as registered with the FEC."
@@ -591,14 +594,160 @@ tables:
       last_file_date: "Date of the committee's most recent filing (ISO 8601 string)."
       cycles_json: "JSON array of election-cycle years the committee was active in (e.g. `[2018, 2020, 2022]`)."
       candidate_ids_json: "JSON array of OpenFEC candidate IDs associated with the committee (e.g. `[\"P00008052\"]`). Often `[]`."
+  fec_source_catalog:
+    label: "Official FEC source families and access routes"
+    grain: "One row per official source family in the SpicyDocs FEC registry."
+    identity_columns: [source_family]
+    coverage: >-
+      Not a range. Catalogues the packaged official FEC source inventory and
+      access routes. A route being listed does not establish record acquisition,
+      a downloaded document body, historical completeness or public availability.
+      The date records this supported table description.
+    measured_on: "2026-09-21"
+    summary: >-
+      Source discovery metadata from SpicyDocs' official FEC inventory. Join
+      source_family to fec_collections and fec_source_records to inspect which
+      selected collections have been retained. The catalogue covers API, bulk,
+      legal, agency and other official access paths; each has its own scope.
+    columns:
+      source_family: "Official source-family identifier. Join to fec_collections.source_family or fec_source_records.source_family."
+      title: "Source-family title from the packaged official inventory."
+      api_routes_json: "JSON array of official API routes with the provider's route and pagination metadata. Route presence does not prove successful acquisition."
+      indexes_json: "JSON array of official indexes or discovery entry points listed for this family."
+      bulk_families_json: "JSON array of bulk file families associated with this source family."
+      references_json: "JSON array of reference pages from the packaged source inventory."
+      source_metadata_json: "Complete source-family object from the packaged official inventory, including fields not lifted into separate columns."
+      catalog_sha256: "SHA-256 digest of the exact packaged official_sources.json bytes used to build this row."
+      provider_version: "Installed SpicyDocs version supplying the source inventory."
+      catalogued_at: "Time this catalogue output was built; not the time source data was acquired or last changed."
+      coverage_note: "Explicit scope limitation: catalogue entries describe routes and do not certify underlying data acquisition or publication."
+  fec_collections:
+    label: "Retained FEC collection scopes and outcomes"
+    grain: "One row per selected verified input collection."
+    identity_columns: [collection_id]
+    coverage: >-
+      Sampled. Collections explicitly selected in a retained-input manifest;
+      these may include empty query results. Each row preserves its own requested
+      scope and outcome. This describes supported local output, not an acquired
+      census of all official source families or a public release.
+    measured_on: "2026-09-21"
+    summary: >-
+      Collection-level scope, counts and evidence for fec_source_records.
+      Join collection_id to that table to distinguish observed records from
+      empty results and uncollected populations. Join source_family to
+      fec_source_catalog for the official access routes. Counts are stored as
+      strings; cast explicitly for arithmetic.
+    columns:
+      collection_id: "Caller-supplied label unique within the selected manifest. Join to fec_source_records.collection_id."
+      source_family: "Caller-selected official FEC source-family identifier, checked against the inventory. Join to fec_source_catalog.source_family; this classification is not independently inferred from source content."
+      profile: "Provider reader profile used for this collection: committee, candidate, filing, legal, audit, bulk or positional records."
+      source_system_id: "Provider identifier for the source system represented by this collection."
+      source_state_scope: "Provider observation scope, such as observed-crawl; this does not imply a frozen publisher snapshot."
+      record_count: "Number of verified source records emitted for this selected collection, stored as a decimal integer string."
+      relationship_count: "Number of relationship observations emitted from this collection, including explicit absence states rather than only positive edges."
+      record_outcome: "Provider's record outcome, such as no-record-rejections or an empty result, retained without promoting it to population completeness."
+      requested_scope_json: "JSON object preserving the query, source selection or bounds requested for this collection."
+      coverage_limits_json: "JSON value preserving provider-stated coverage limits for the selected input."
+      collection_outcome_json: "Complete provider outcome including requested scope, rejections and warnings when supplied."
+      artifact_sha256: "Digest of the verified provider source-release artifact; null for direct retained-query input that has no release artifact."
+  fec_source_records:
+    label: "FEC source records with native metadata and evidence"
+    grain: "One row per provider source record within a selected collection."
+    identity_columns: [collection_id, source_record_id]
+    coverage: >-
+      Sampled. Verified records from selected provider releases or retained
+      query captures. Coverage comes from fec_collections, not the presence of
+      a source-family route. Overlapping collections may intentionally repeat
+      the same source observation. This is a supported local output description.
+    measured_on: "2026-09-21"
+    data_quality: >-
+      Native fields retain their source meaning. Monetary values, amendment
+      chains and record inclusion rules differ by family; generic record
+      ingestion does not select a latest amendment or establish a safe sum.
+      Unknown fields stay in native JSON. Original pinned bytes preserve numeric
+      spelling where the provider exposes exact decimal values as strings.
+    summary: >-
+      Joinable metadata and retained source evidence across FEC families.
+      collection_id joins fec_collections; source_family joins fec_source_catalog.
+      Native identifiers are lifted only when the provider reports them, and
+      committee_id can join fec_committees. metadata_json and source_record_json
+      preserve the complete provider record. Missing IDs remain missing.
+    columns:
+      collection_id: "Selected collection label. Together with source_record_id identifies this record; joins fec_collections.collection_id."
+      source_family: "Caller-selected official FEC source-family identifier, checked against the inventory. Joins fec_source_catalog.source_family; this classification is not independently inferred from source content."
+      profile: "Provider reader profile used to interpret the verified input."
+      source_record_id: "Provider source-record identity, native API identity, bulk file key or byte-evidenced positional observation ID, scoped to collection_id."
+      committee_id: "Literal committee identifier reported by API metadata or a verified named bulk field such as CMTE_ID. May join fec_committees.committee_id. Blanks remain blank; no identifier is inferred from a name or another entity's ID."
+      candidate_id: "Literal candidate identifier reported by API metadata or a verified named bulk field such as CAND_ID. Blanks and aggregate codes remain literal; an ID-shaped aggregate value does not establish a person. Names are not converted to identifiers."
+      filing_id: "Source-reported sub_id of a filing metadata row when present; not an inferred original-file number. Amendment/current-record meaning remains in native metadata."
+      legal_doc_id: "Source-reported legal document identifier when present, retained in its original source scope."
+      audit_case_id: "Source-reported audit case identifier when present."
+      source_sha256: "Digest pinning the source bytes from which the provider observed this record."
+      source_url: "Recorded source URL associated with the observation; this is evidence provenance, not a live availability check."
+      observed_at: "Provider observation time when available, distinct from dates reported inside the source record."
+      source_locator_json: "JSON source coordinates identifying the original response field, record, file or ZIP member and byte span when supplied. Optional field_mapping pins the selected header collection, record, digest and source coordinates."
+      metadata_json: "Complete provider-native metadata, or literal positional values named by an explicitly selected verified source header. Header and blank rows retain positional metadata; source_record_json always retains the full native wrapper."
+      assets_json: "JSON representation of provider asset references and evidence; an asset reference alone does not establish that its body was downloaded."
+      embedded_bodies_json: "JSON representation of provider-embedded body values, retaining their supplied scope."
+      source_record_json: "Complete provider source-record serialization, preserving identity, native metadata, assets, bodies and evidence."
+  fec_relationships:
+    label: "Source-reported FEC relationship observations"
+    grain: "One reported relationship or explicit absence state at one source location."
+    coverage: >-
+      Sampled. Relationship mappings for supported committee, candidate, bulk
+      and original filing inputs selected by the retained-input manifest.
+      The table includes missing, null, empty and reported-none observations;
+      row counts are not counts of positive relationships. Local qualification
+      does not establish complete family coverage or publication.
+    measured_on: "2026-09-21"
+    data_quality: >-
+      Names never become IDs. Identifier shape checks do not verify the named
+      entity or prove the reference resolves. Independent source fields remain
+      independent; conflicting assertions across observations and amendments
+      remain visible. This table does not infer organization affiliations or
+      replace org_committee_links name matches.
+    summary: >-
+      Source-stated roles and associations with their exact evidence. Select
+      value_status before treating rows as positive edges, then use the subject
+      and object types with their ID statuses before joining identifiers.
+      source_locator_json retains collection_id and source_record_id when
+      emitted by the retained-input rollup; extract both to join exactly to
+      fec_source_records. Standalone mapper outputs may lack those parent keys.
+      source_family identifies the mapper's native source family and need not
+      equal the official catalogue ID; use the parent record for that join.
+    columns:
+      subject_id: "Source-reported identifier of the relationship subject. Interpret with subject_type and subject_id_status."
+      subject_type: "Source entity type of the subject, such as committee or candidate."
+      subject_id_status: "Identifier observation status: source_id_shape, invalid_source_id_shape or not_reported. Shape checks do not establish reference resolution."
+      relationship_type: "Source role or association represented by this observation, preserving distinct reported meanings."
+      object_id: "Source-reported identifier of the related entity when present. No identifier is inferred from object_name."
+      object_type: "Type of related entity expected by the reported relationship."
+      object_id_status: "Identifier observation status for object_id; a valid shape is not proof of a resolved reference."
+      object_name: "Related name exactly as observed where supplied, including names with no reported identifier."
+      value_status: "Whether the source reported a value or an explicit absence such as missing_field, null, empty_string, empty_list or reported_none. Inspect before treating a row as an edge."
+      source_family: "Mapper's native source family, such as a bulk layout or API record family. For an official catalogue join, use the parent fec_source_records.source_family."
+      cycle: "Election cycle supplied for a bulk observation; current API observations may have no cycle."
+      candidate_election_year: "Candidate election year reported by the source when available."
+      source_sha256: "Digest of the exact source bytes supporting this observation."
+      source_url: "Source URL associated with the retained evidence."
+      observed_at: "Evidence observation time when supplied; not an inferred effective date of the relationship."
+      source_locator_json: "JSON source coordinates and field names; retained-input rollups also include collection_id and source_record_id for exact parent joins."
+      source_fields_json: "JSON object preserving the exact source fields used for this relationship observation."
   org_committee_links:
     label: "Commenter organizations matched to committees"
+    grain: "One row per commenter organization name and FEC committee name match."
+    identity_columns: [organization, committee_id]
     coverage: >-
       Derived, and bounded by a small input. Name matches between commenter
       organizations and FEC committees, reachable only for the small share
       of comments that carry an `organization` value at all, so absence of a
       link is not evidence that a commenter has none.
     measured_on: "2026-09-06"
+    data_quality: >-
+      These are heuristic name matches, not source-reported affiliations.
+      confidence describes the matching rule, not a measured probability of
+      accuracy. Matching names and resolvable committee IDs do not establish
+      that the commenter and committee share an organization.
     summary: >-
       One row per (commenter organization name, FEC committee) name match,
       derived by `build_org_committee_links`. Materializes the organization-name
@@ -613,9 +762,9 @@ tables:
       matcher to tune harder. Matching runs in three tiers (`exact`, `core`,
       `prefix`) and every row carries `match_method`, `confidence`, and
       `committee_match_count` so consumers pick their own precision bar instead
-      of trusting an opaque score. A high `committee_match_count` is usually a
-      real affiliate network (Planned Parenthood matches ~90 state committees),
-      not an error — which is why such rows are labelled rather than dropped.
+      of trusting an opaque score. A high `committee_match_count` can reflect
+      multiple committees sharing a name prefix; inspect the source evidence
+      before treating those matches as an affiliation network.
     columns:
       organization: "Commenter organization exactly as filed on the comment. Join key back to `comments.organization`."
       organization_norm: "`organization` uppercased with parenthetical asides, apostrophes and punctuation removed and `&` expanded to `AND`."
@@ -630,7 +779,7 @@ tables:
       committee_state: "Two-letter state on the matched committee (`fec_committees.state`). Often null."
       match_method: "How the pair matched: `exact` (full normalized names equal), `core` (decoration-stripped cores equal), or `prefix` (committee core starts with the whole organization core on a token boundary)."
       confidence: "`high` for `exact`/`core`; for `prefix`, `medium` when `committee_match_count` <= 5 and `low` above that. Filter on this to pick a precision bar."
-      committee_match_count: "How many committees this organization matched in total. High values are usually genuine affiliate networks (unions, Planned Parenthood); treat with `confidence`."
+      committee_match_count: "How many committees this organization name matched in total. A high count does not establish an affiliate network; inspect source evidence alongside the matching rule."
       comment_count: "Comments filed under this exact organization string (deduplicated on `comment_id`, newest `modify_date` wins — matching the MCP `comments` view)."
       docket_count: "Distinct dockets this organization string commented on."
       agency_codes_json: "JSON array of the distinct agency codes this organization commented to, sorted."
