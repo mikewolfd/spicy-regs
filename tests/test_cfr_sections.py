@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import datetime as dt
 
+import pytest
+
 from spicy_regs.sources.cfr_sections import API_KEY_ENV_VARS, CfrSectionsReader, _resolve_api_key
 from spicy_regs.transforms.build_cfr_sections import COLUMNS, _cfr_ref, _shape
 
@@ -141,6 +143,26 @@ def test_shape_parses_part_granule():
     assert row["cfr_ref"] == "48-700"
     assert row["structure_level"] == "CONTENT"
     assert row["edition_year"] == "2024"
+
+
+@pytest.mark.parametrize(
+    ("granule_id", "part", "cfr_ref"),
+    [
+        ("CFR-2026-title14-vol5-part1203a", "1203a", "14-1203a"),
+        ("CFR-2026-title14-vol5-part1203b", "1203b", "14-1203b"),
+        ("CFR-2026-title7-vol1-part15a-subpartA", "15a", "7-15a"),
+        ("CFR-2026-title7-vol1-part15a-toc-id785", "15a", "7-15a"),
+    ],
+)
+def test_shape_preserves_lettered_part_tokens(granule_id, part, cfr_ref):
+    # Literal IDs from the 2026-09-21 pinned public cfr_sections table. The raw
+    # table and full 336-row counterexample set are retained outside the repo:
+    # receipts/data-validation-sprint-2026-09-21/cfr-fix-review.json.
+    # Only the listed part token is under test; no source hierarchy is inferred.
+    row = _shape({"granuleId": granule_id})
+    assert row["part"] == part
+    assert row["cfr_ref"] == cfr_ref
+    assert row["section"] is None
 
 
 def test_shape_parses_appendix_granule():

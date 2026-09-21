@@ -27,7 +27,7 @@ calls the per-granule ``/summary`` endpoint (the only place ``cfrTitle`` /
 ``cfrPart`` / ``heading`` live), which would be an N+1 fetch across thousands of
 granules per package. CFR title comes from the ``title(\\d+)`` token in the
 package/granule ID, edition year from the ``CFR-(\\d{4})`` token, and part /
-section from the ``part(\\d+)`` / ``sec(…)`` tokens on the granule ID. A
+section from the ``part(\\d+[A-Za-z]*)`` / ``sec(…)`` tokens on the granule ID. A
 section-level granule carries no ``part`` token; its ``sec`` token fuses the two
 (``…-sec100-1`` is 10 CFR 100.1), so the part is split back out of it and
 ``cfr_ref`` is a section-level citation. Both stay nullable: structural granules
@@ -89,7 +89,9 @@ def _cfr_ref(title: object, part: object, section: object) -> str | None:
 # Everything the schema needs is derivable from these tokens — no /summary call.
 _EDITION_RE = re.compile(r"CFR-(\d{4})")
 _TITLE_RE = re.compile(r"title(\d+)")
-_PART_RE = re.compile(r"part(\d+)")
+# Letter suffixes are part of the publisher's identifier: Part 1203a and
+# Part 1203b must not collapse into Part 1203, including their TOC/child rows.
+_PART_RE = re.compile(r"part(\d+[A-Za-z]*)")
 _SECTION_RE = re.compile(r"sec([\w.-]+)")
 # A section-level granule carries no ``part`` token, but its ``sec`` token is the
 # part and the section fused: ``…-sec100-1`` is 10 CFR 100.1, not section "100-1".
