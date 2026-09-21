@@ -48,27 +48,9 @@ def _table_name(value: str) -> str:
 
 def _local_files(output_dir: Path) -> dict[str, tuple[Path, str]]:
     """Capture current once, then resolve selected files before legacy files."""
-    result = {}
-    current = output_dir / "current"
-    if current.is_symlink():
-        directory = current.resolve(strict=True)
-        if directory.parent != (output_dir / "download-runs").resolve():
-            raise RuntimeError("Current download points outside download-runs")
-        metadata = json.loads((directory / "download.json").read_text())
-        if metadata["version"] != 1 or metadata["status"] != "complete":
-            raise RuntimeError("Current download is incomplete")
-        for name, selection in metadata["selected"].items():
-            _table_name(name)
-            path = directory / f"{name}.parquet"
-            if not path.is_file():
-                raise RuntimeError(f"Current download is missing {name}.parquet")
-            result[name] = (path, selection["status"])
-    elif current.exists():
-        raise RuntimeError("Current download must be a symlink")
-    for path in sorted(output_dir.glob("*.parquet")):
-        if re.fullmatch(r"[a-z][a-z0-9_-]*", path.stem) and path.is_file():
-            result.setdefault(path.stem, (path, "legacy-unversioned"))
-    return result
+    from spicy_regs.local_data import local_selection
+
+    return local_selection(output_dir, include_legacy=True).files
 
 
 def get_output_dir(args) -> Path:

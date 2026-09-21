@@ -59,10 +59,19 @@ catalog together in one directory, then run the same server against that directo
 SPICY_REGS_DATA_DIR=/absolute/path/to/fec-tables uv run --frozen spicy-regs-mcp
 ```
 
-Local mode loads only that directory. It does not fill absent files from the
-public service. Keep related tables from one generation together; the ordinary
-R2 upload mechanism publishes files sequentially and does not provide an atomic
-change across all tables.
+Local mode does not fill absent files from the public service. Keep related
+tables from one generation together. The observation rollup now seals its three
+outputs as a [complete table generation](generation-publication.md), verifies
+uploaded bytes and conditionally switches `publication.json` after every member
+passes. The source catalog has its own generation; a reader captures one index
+containing both families. Complete family membership does not establish complete
+FEC history or make these local tables publicly available.
+
+The same `SPICY_REGS_DATA_DIR` setting accepts a normal CLI download directory
+containing `current`, or an exact downloaded batch. MCP verifies the selected
+managed files and returns their generation pins with discovery and query results.
+See the [full FEC download-to-MCP audit](research/fec-generation-readiness-2026-09-21.md)
+for retained local outputs, raw/output witnesses and remaining source coverage.
 
 ```sql
 SELECT s.source_family, s.title,

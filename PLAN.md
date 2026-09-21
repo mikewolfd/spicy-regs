@@ -213,8 +213,14 @@ existing subject fields. Dataset catalogs and processing remain outside it.
   retaining literal definitions, original rows and exact source coordinates.
   Keep file inventories separate from row counts and financial interpretation.
   See the [bulk expansion audit](docs/research/fec-bulk-continuation-2026-09-21.md)
-  for selected 2026 transactions, source header discrepancies and the unavailable
-  unofficial Senate directory.
+  for selected 2026 transactions and source header discrepancies. The subsequent
+  [Senate recovery](docs/research/fec-senate-recovery-2026-09-21.md) acquired 598
+  live originals and one separate archive mirror despite the broken directory.
+- [x] Seal the selected FEC tables through the shared generation path and verify
+  a complete local publication/download/MCP roundtrip. Local MCP now reads CLI
+  download batches and retains their selected table pins; loose directories
+  remain explicitly unversioned. See the
+  [generation audit](docs/research/fec-generation-readiness-2026-09-21.md).
 - [ ] Connect a complete, verified FEC distribution to the existing rollup.
   A local selected-record table is not the full committee population or a
   globally published table. The local census release does not include the bulk,

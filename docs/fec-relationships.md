@@ -133,10 +133,14 @@ functions without adding a new table schema for each source family.
 The local builder stages and validates all three outputs, then installs the new
 directory together. Any late input failure leaves earlier generations intact.
 The Python `build_fec_observations(manifest, output_dir)` API requires a fresh
-destination. The rollup creates one automatically. Optional `--no-skip-upload`
-uses the existing per-file R2 shrink guard; remote uploads are sequential, not an
-atomic three-table release. Retain the manifest and pinned originals with each
-generation. Overlapping selections remain separate observations.
+destination. The rollup creates one automatically and seals its complete output
+set through the [generation publisher](generation-publication.md). Optional
+`--no-skip-upload` checks shrink limits, uploads immutable members, verifies their
+remote bytes and conditionally switches one publication pointer. A failed member
+upload leaves the prior published family selected. Retain the input manifest and
+pinned originals with each generation; the generation artifact verifies output
+membership and bytes, not complete source coverage. Overlapping selections remain
+separate observations.
 
 Relationship locators include their exact companion identity. A consumer can
 join without guessing from names or choosing a current amendment:

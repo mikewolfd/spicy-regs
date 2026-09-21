@@ -66,6 +66,14 @@ promote that partial result to a complete family.
   records the index and selected keys, then switches `current` only on success.
   Local reads resolve this link once per command. Requested legacy members remain
   explicitly unversioned even when downloaded in that batch.
+- Local MCP accepts that download root, its `current` link, or a specific batch
+  directory through `SPICY_REGS_DATA_DIR`. A connection selects the batch once,
+  rehashes managed members and checks their schemas. It exposes only the selected
+  tables and reports their pins as `managed_download`; loose Parquet directories
+  remain `local_unversioned`. File-change checks around tool statements refuse
+  ordinary replacement or mutation after verification. A new `current` target
+  takes effect when the cached connection rebuilds. These checks do not make
+  writable local storage immutable or establish the source's completeness.
 - Dictionary remote schema discovery captures the same index. Declared schema
   pages alone continue to make no claim of production availability.
 
