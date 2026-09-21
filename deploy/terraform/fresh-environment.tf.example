@@ -1,8 +1,7 @@
 # Fresh-environment only. Rename to `.tf` ONLY when standing up a NEW bucket that
-# Terraform should create from scratch. These two resources CANNOT be imported —
-# the Cloudflare provider has no `terraform import` for `cloudflare_r2_custom_domain`
-# or `cloudflare_r2_bucket_cors` — so against the EXISTING production bucket they'd
-# show as "to create" and applying would try to re-create/overwrite live config.
+# Terraform should create from scratch. Existing settings need an explicit
+# adoption plan using the installed provider's import support; creating them
+# without adopting their current state can overwrite live configuration.
 # Leave this as `.example` for the production account; the domain + CORS there are
 # managed out-of-band.
 

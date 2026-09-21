@@ -5,7 +5,7 @@ variable "cloudflare_account_id" {
 
 variable "cloudflare_zone_id" {
   type        = string
-  description = "Zone ID for spicy-regs.dev (the cache rule + custom domain live here)."
+  description = "Zone ID for the selected data hostname (the cache rule and custom domain live here)."
 }
 
 variable "bucket_name" {
@@ -22,17 +22,10 @@ variable "bucket_location" {
 
 variable "custom_domain" {
   type        = string
-  default     = "data.spicy-regs.dev"
   description = "Public custom domain bound to the bucket (matches R2_PUBLIC_URL host)."
 }
 
 variable "cors_allowed_origins" {
-  type = list(string)
-  default = [
-    "https://spicy-regs.dev",
-    "https://app.spicy-regs.dev",
-    "https://*.vercel.app",
-    "http://localhost:3000",
-  ]
+  type        = list(string)
   description = "Origins allowed to read the corpus from a browser (DuckDB-WASM in spicy-regs-ui)."
 }

@@ -39,11 +39,16 @@ there first.
 
 ## Deploy
 
+The fork pins `174055408ff1560e60601c4d12c561c4` in `wrangler.jsonc`. Complete
+[the fork setup](../fork-setup.md) and set `vars.SPICY_REGS_R2_URL` before deploying.
+The Worker returns 503 while that URL is empty. Use the named account login so
+authentication in unrelated projects stays separate.
+
 ```bash
 cd deploy/cloudflare
-npm install
+npm ci
 npm run check          # dry-run build + typecheck (no auth, no paid plan needed)
-npx wrangler login     # interactive; or a Workers-scoped CLOUDFLARE_API_TOKEN
+npx wrangler whoami    # verify the active named login and selected account
 npm run deploy         # builds the image, pushes it, rolls out the container
 ```
 
@@ -51,15 +56,13 @@ npm run deploy         # builds the image, pushes it, rolls out the container
 
 ### Catalog (deferred, add before cutover)
 
-The first deploy omits the Iceberg catalog, so `comments` reads from the public
-`comments.parquet` mirror (the full table). To wire the catalog — the deduped
-system-of-record used by the current Vercel deploy — add the secret + non-secret
-vars, then redeploy:
+Without complete Iceberg settings, `comments` reads from the configured bucket's
+`comments.parquet` mirror. To use this account's catalog, set `R2_CATALOG_URI`,
+`R2_CATALOG_WAREHOUSE` and `R2_CATALOG_NAMESPACE` in the Wrangler `vars` block,
+install the secret, then redeploy. The Worker forwards all four into Python:
 
 ```bash
 npx wrangler secret put R2_CATALOG_TOKEN
-# add R2_CATALOG_URI / R2_CATALOG_WAREHOUSE / R2_CATALOG_NAMESPACE to the
-# McpContainer envVars in worker/index.ts (non-secret), then:
 npm run deploy
 ```
 

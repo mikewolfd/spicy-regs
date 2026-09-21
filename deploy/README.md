@@ -3,6 +3,10 @@
 Infrastructure and deployment for the parts of Spicy Regs that don't live on
 GitHub Actions (the ETL) — i.e. the public data corpus and the MCP server.
 
+For `mikewolfd/spicy-regs`, start with [the fork account setup](fork-setup.md).
+It pins the selected account and separates data, deployment and Terraform state
+from the upstream installation described below.
+
 | Dir | What | Tool | Touches |
 |---|---|---|---|
 | [`terraform/`](terraform/) | R2 bucket, public custom domain, CORS, Iceberg data catalog, and the edge **cache rule** | Terraform (Cloudflare provider) | Cloudflare account + `spicy-regs.dev` zone |

@@ -1,5 +1,5 @@
 terraform {
-  required_version = ">= 1.9"
+  required_version = ">= 1.10"
   required_providers {
     cloudflare = {
       source  = "cloudflare/cloudflare"
@@ -22,11 +22,9 @@ resource "cloudflare_r2_bucket" "corpus" {
 }
 
 # NOTE — the public custom domain (data.spicy-regs.dev) and the bucket CORS config
-# also exist in production, but the Cloudflare provider does NOT support
-# `terraform import` for `cloudflare_r2_custom_domain` or `cloudflare_r2_bucket_cors`
-# (confirmed against the provider docs). Adopting the existing ones into state is
-# therefore impossible, so they stay dashboard/API-managed here. For a FRESH
-# environment, `fresh-environment.tf.example` has Terraform create them.
+# were managed outside this state in the upstream installation. For a FRESH
+# environment, `fresh-environment.tf.example` has Terraform create them. For
+# existing resources, check the installed provider's current import support.
 
 # R2 Data Catalog (Apache Iceberg) on the bucket — the system of record for the
 # comments table (R2_CATALOG_*). Enabling it is idempotent; the REST endpoint and
