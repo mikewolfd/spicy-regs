@@ -138,14 +138,15 @@ def test_describe_exposes_provider_identity_without_importing_provider(monkeypat
     assert "FEC" in next(c["description"] for c in result["columns"] if c["column_name"] == "fec_ids_json")
 
 
-def test_describe_unknown_table_does_not_open_connection(monkeypatch):
-    def unexpected_connection():
-        raise AssertionError("unknown table should be refused before opening a connection")
-
-    monkeypatch.setattr(mcp_server, "_get_connection", unexpected_connection)
+def test_describe_unknown_table_refuses_names_outside_declarations_and_snapshot(monkeypatch):
+    # Managed generations can introduce an output before dictionary prose is
+    # adopted, so validity now includes the captured connection's admitted names.
+    con = duckdb.connect()
+    monkeypatch.setattr(mcp_server, "_get_connection", lambda: con)
     result = _tool_data(mcp_server.build_server(), "describe_table", {"table": "not_a_table"})
     assert result["error"] == "Unknown table 'not_a_table'"
     assert result["declared_tables"] == list(mcp_server.TABLES)
+    con.close()
 
 
 def test_local_directory_runs_actual_connection_without_remote_fallback(tmp_path, monkeypatch):
@@ -162,12 +163,15 @@ def test_local_directory_runs_actual_connection_without_remote_fallback(tmp_path
         raise AssertionError("Local mode must not access R2 catalog configuration")
 
     monkeypatch.setattr(mcp_server, "_resolve_catalog_config", no_catalog)
+    from spicy_regs.sources import publication
+    monkeypatch.setattr(publication, "load_index", lambda url: (_ for _ in ()).throw(AssertionError("Remote index read")))
     server = mcp_server.build_server()
     sources = _tool_data(server, "list_sources", {})
     assert sources["source"] == "local"
     assert sources["base_path"] == str(tmp_path)
     assert "base_url" not in sources
     assert sources["tables"] == ["fec_committees"]
+    assert sources["publication"]["fec_committees"] == {"status": "local_unversioned"}
     loaded = (
         mcp_server._get_connection()
         .execute(

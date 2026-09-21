@@ -743,12 +743,16 @@ def discover_schemas(source: str, base: str | None = None) -> dict[str, list[tup
     con = duckdb.connect()
     con.execute(f"SET home_directory='{tempfile.gettempdir()}'")
     if source == "r2":
+        from spicy_regs.sources.publication import load_index, table_location
+
         base_url = (base or DEFAULT_R2_BASE_URL).rstrip("/")
+        publication_index = load_index(base_url)
         con.execute("INSTALL httpfs")
         con.execute("LOAD httpfs")
 
         def url_for(name: str) -> str:
-            return f"{base_url}/{name}.parquet"
+            key, _ = table_location(publication_index, f"{name}.parquet")
+            return f"{base_url}/{key}"
 
     elif source == "local":
         base_dir = Path(base or "./spicy-regs-data")
@@ -1007,6 +1011,8 @@ EXIT_SOURCE_UNREACHABLE = 3
 
 
 def cmd_check(args: argparse.Namespace) -> int:
+    import httpx
+
     descriptions = load_descriptions(Path(args.descriptions))
     errors: list[str] = []
 
@@ -1015,7 +1021,7 @@ def cmd_check(args: argparse.Namespace) -> int:
     else:
         try:
             live = discover_schemas(args.source, args.base)
-        except (duckdb.IOException, duckdb.HTTPException, OSError) as exc:
+        except (duckdb.IOException, duckdb.HTTPException, httpx.HTTPError, OSError) as exc:
             # Only the "could not read it" failures. A malformed parquet or a
             # bad query is a real problem and must not be reported as an outage.
             print(f"! Could not read the live {args.source} schema: {exc}", file=sys.stderr)

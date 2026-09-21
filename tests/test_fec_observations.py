@@ -276,23 +276,34 @@ def test_native_filing_body_remains_a_reference_and_statement_uses_header_versio
     )
 
 
-def test_rollup_defaults_to_local_generation_and_reuses_upload_path(tmp_path, monkeypatch):
+def test_rollup_defaults_to_local_generation_and_publishes_complete_family(tmp_path, monkeypatch):
     from spicy_regs.pipelines.rollups.fec_observations import FecObservationsRollup
-    from spicy_regs.sources import r2
+    from spicy_regs.sources import r2, publication, cloudflare
+    from tests.generation_fakes import Store
 
     item, _ = _query(tmp_path)
     manifest = _manifest(tmp_path, [item])
-    uploads = []
-    monkeypatch.setattr(r2, "upload_file", lambda path, *, remote_key: uploads.append((path, remote_key)))
+    store = Store()
+    monkeypatch.setattr(r2, "get_r2_client", lambda: store)
+    monkeypatch.setattr(publication, "load_index", lambda url: publication.empty_index())
+    monkeypatch.setattr(cloudflare, "purge_urls", lambda urls: None)
     FecObservationsRollup(manifest=manifest, output_dir=tmp_path / "outputs").run()
-    assert uploads == []
+    assert store.writes == []
+    [local_generation] = list((tmp_path / "outputs" / "generations").iterdir())
+    monkeypatch.setenv("R2_ACCESS_KEY_ID", "test")
+    monkeypatch.setenv("R2_PUBLIC_URL", "https://example.test")
     FecObservationsRollup(manifest=manifest, output_dir=tmp_path / "outputs", skip_upload=False).run()
-    assert {key for _, key in uploads} == {
+    index = publication.parse_index(store.objects[publication.INDEX_KEY])
+    assert set(index["families"]["fec-observations"]["tables"]) == {
         "fec_source_records.parquet",
         "fec_collections.parquet",
         "fec_relationships.parquet",
     }
-    assert len(list((tmp_path / "outputs").iterdir())) == 2
+    assert store.writes[-1] == publication.INDEX_KEY
+    assert list((tmp_path / "outputs" / "generations").iterdir()) == [local_generation]
+    for key in index["families"]["fec-observations"]["tables"]:
+        remote_key, _ = publication.table_location(index, key)
+        assert store.objects[remote_key] == (local_generation / key).read_bytes()
 
 
 def test_selected_external_header_names_fields_and_emits_reported_bulk_relationship(tmp_path):

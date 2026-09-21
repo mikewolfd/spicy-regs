@@ -341,6 +341,9 @@ def _attach_catalog(con: duckdb.DuckDBPyConnection, config: dict[str, str]) -> b
 
 
 def _build_connection() -> duckdb.DuckDBPyConnection:
+    from spicy_regs.sources.publication import empty_index, load_index, table_location
+
+    publication_index = empty_index() if DATA_DIR is not None else load_index(R2_BASE_URL)
     con = duckdb.connect()
     con.execute(f"SET home_directory='{HOME_DIRECTORY.replace(chr(39), chr(39) * 2)}'")
     if DATA_DIR is None:
@@ -351,8 +354,14 @@ def _build_connection() -> duckdb.DuckDBPyConnection:
     catalog_attached = catalog is not None and _attach_catalog(con, catalog)
 
     _apply_security_settings(con)
-    for name in TABLES:
-        if name == "comments" and catalog_attached:
+    # Request cursors share regular in-memory tables, not connection-local
+    # temporary tables. Keep the pin alongside the views they actually query.
+    con.execute("CREATE TABLE _spicy_publication (snapshot VARCHAR)")
+    con.execute("INSERT INTO _spicy_publication VALUES (?)", [json.dumps(publication_index)])
+    managed_names = [key.removesuffix(".parquet") for e in publication_index["families"].values() for key in e["tables"]]
+    for name in dict.fromkeys((*TABLES, *managed_names)):
+        key, published = table_location(publication_index, f"{name}.parquet")
+        if name == "comments" and catalog_attached and published is None:
             namespace = catalog["namespace"]  # type: ignore[index]
             try:
                 con.execute(
@@ -370,12 +379,49 @@ def _build_connection() -> duckdb.DuckDBPyConnection:
                 continue
             url = str(target).replace("'", "''")
         else:
-            url = f"{R2_BASE_URL}/{name}.parquet"
+            url = f"{R2_BASE_URL}/{key}"
         try:
-            con.execute(f"CREATE VIEW {name} AS SELECT * FROM read_parquet('{url}')")
+            con.execute(f'CREATE VIEW "{name}" AS SELECT * FROM read_parquet(\'{url}\')')
+            if published is not None:
+                actual = con.execute(f'DESCRIBE "{name}"').fetchall()
+                if [[row[0], row[1]] for row in actual] != published["columns"]:
+                    con.close()
+                    raise RuntimeError(f"Published schema differs from admitted generation: {name}")
         except duckdb.Error as exc:
+            if published is not None:
+                con.close()
+                raise RuntimeError(f"Published generation member unavailable: {name}") from exc
             logger.warning("table %s not available at %s; skipping view: %s", name, url, exc)
     return con
+
+
+def _connection_index(cursor: duckdb.DuckDBPyConnection) -> dict:
+    try:
+        row = cursor.execute("SELECT snapshot FROM _spicy_publication").fetchone()
+        if row is None:
+            raise RuntimeError("Missing publication snapshot")
+        return json.loads(row[0])
+    except duckdb.CatalogException:
+        # Explicitly injected local connections have no publication admission.
+        return {"families": {}}
+
+
+def _publication_status(cursor: duckdb.DuckDBPyConnection) -> dict:
+    """Describe actual availability and pins from this connection's snapshot."""
+    index = _connection_index(cursor)
+    available = _available_tables(cursor)
+    managed = {
+        key.removesuffix(".parquet"): {"status": "managed_generation", "family": family,
+                                       "artifact_digest": entry["artifactDigest"]}
+        for family, entry in index["families"].items() for key in entry["tables"]
+    }
+    fallback = "local_unversioned" if DATA_DIR is not None else "legacy_unversioned"
+    return {
+        "tables": available,
+        "declared_tables": list(TABLES),
+        "publication": {name: managed.get(name, {"status": fallback}) for name in available},
+        "verification": "Managed remote bytes verified before publication; this reader pins URLs and checks schemas.",
+    }
 
 
 # Building a connection is the expensive part of a tool call — install httpfs +
@@ -467,7 +513,11 @@ def _available_tables(cursor: duckdb.DuckDBPyConnection) -> list[str]:
         "WHERE table_schema = 'main' AND table_catalog = current_database()"
     ).fetchall()
     registered = {row[0] for row in rows}
-    return [name for name in TABLES if name in registered]
+    managed = [
+        key.removesuffix(".parquet")
+        for entry in _connection_index(cursor)["families"].values() for key in entry["tables"]
+    ]
+    return [name for name in dict.fromkeys((*TABLES, *managed)) if name in registered]
 
 
 def _register_tools(mcp: FastMCP) -> None:
@@ -490,8 +540,10 @@ def _register_tools(mcp: FastMCP) -> None:
             "unavailable_tables": [name for name in TABLES if name not in available],
             "availability_basis": "Views loaded in the current connection; not a full data or freshness audit.",
             "connection_ttl_seconds": _CONNECTION_TTL_SECONDS,
+            "publication": _publication_status(cursor)["publication"],
             "datasets": [
-                {"table": name, "label": metadata[name]["label"], "available": name in available} for name in TABLES
+                {"table": name, "label": metadata.get(name, {}).get("label", name), "available": name in available}
+                for name in dict.fromkeys((*TABLES, *available))
             ],
         }
 
@@ -503,17 +555,19 @@ def _register_tools(mcp: FastMCP) -> None:
         do not certify this connection's data population or freshness. An
         unavailable declared table still returns its dictionary description.
         """
-        if table not in TABLES:
+        cursor = _get_connection().cursor()
+        with _statement_timeout(cursor):
+            status = _publication_status(cursor)
+        if table not in TABLES and table not in status["tables"]:
             return {
                 "error": f"Unknown table '{table}'",
                 "declared_tables": list(TABLES),
             }
-        entry = _table_metadata()[table]
+        entry = _table_metadata().get(table, {"table": table, "columns": []})
         declared = {column["column_name"]: column for column in entry["columns"]}
-        cursor = _get_connection().cursor()
         with _statement_timeout(cursor):
-            available = table in _available_tables(cursor)
-            rows = cursor.execute(f"DESCRIBE {table}").fetchall() if available else []
+            available = table in status["tables"]
+            rows = cursor.execute(f'DESCRIBE "{table}"').fetchall() if available else []
         actual = {row[0]: row[1] for row in rows}
         differences = (
             {
@@ -525,13 +579,14 @@ def _register_tools(mcp: FastMCP) -> None:
                     if name in declared and dtype != declared[name]["column_type"]
                 ],
             }
-            if available
+            if available and declared
             else None
         )
         return {
             "table": table,
             **_source_details(),
             "available": available,
+            "publication": status["publication"].get(table, {"status": "unavailable"}),
             "metadata": {key: value for key, value in entry.items() if key not in {"table", "columns"}},
             "metadata_basis": "Dictionary declarations and dated coverage notes; not live population measurements.",
             "declared_columns": entry["columns"],
@@ -581,6 +636,7 @@ def _register_tools(mcp: FastMCP) -> None:
             "row_count_shown": len(result_rows),
             "max_rows": max_rows,
             "rows": result_rows,
+            "connection_publication": _publication_status(cursor)["publication"],
         }
 
 
