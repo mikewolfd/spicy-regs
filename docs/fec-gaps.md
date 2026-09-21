@@ -316,13 +316,20 @@ or merge previous tables. The committee reference table has a daily workflow,
 but the new selected campaign has no recurring acquisition/refresh workflow.
 Communication-cost, electioneering and bundling refresh proofs do not establish
 replacement/deletion behavior for every family. A fresh complete committee API
-traversal still needs a configured credential and a retained run receipt.
+traversal still needs a retained complete-run receipt.
 
-This is a confirmed fork blocker: the September 21 scheduled
+The September 21 scheduled
 [committee run 35645971109](https://github.com/mikewolfd/spicy-regs/actions/runs/35645971109)
 at `43c06b6` failed with `FEC committees require an API key; no complete acquisition
 was attempted`. The workflow's evidence/debug-artifact steps succeeded. This
 records a credential refusal before acquisition, not a failed or empty census.
+The configuration gap was subsequently resolved: `DATA_GOV_API_KEY` was installed
+at 19:44:43 UTC and passed a one-record OpenFEC request. No complete traversal
+has been verified since installation. `ZYTE_TOKEN` was installed at 19:49:09 UTC
+but is not wired to a workflow or caller adapter. The
+[fork generation inventory](fork-generation.md) records these distinct states and
+the [local reuse inventory](research/local-data-reuse-2026-09-21.md) identifies
+an already qualified committee seed and sealed FEC observation families.
 
 **Complete when:** each selected source has a cadence, bounded checkpoints,
 credential setup where needed, durable original/evidence storage, failure
@@ -332,9 +339,8 @@ partial listing. Recover interrupted work without duplicate rows or erasing prio
 captures. Evidence: provider FEC09, [committee workflow](https://github.com/mikewolfd/spicy-regs/blob/7b174f1/.github/workflows/rollup-fec-committees.yml),
 [retained pipeline](https://github.com/mikewolfd/spicy-regs/blob/7b174f1/src/spicy_regs/pipelines/rollups/fec_observations.py),
 FG02 and E8 `fec-committees-workflow-failure.log`. The reusable workflow passes
-the repository's `DATA_GOV_API_KEY` secret to the reader. Configure that credential
-securely and qualify a complete traversal before claiming the fork's refresh is
-operational.
+the repository's `DATA_GOV_API_KEY` secret to the reader. Qualify a complete
+traversal and its publication before claiming the fork's refresh is operational.
 
 ### FG17 — Measure and improve bulk scale where needed
 

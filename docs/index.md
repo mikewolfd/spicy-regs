@@ -73,6 +73,10 @@ see [FEC integration](fec-integration.md). The [FEC gap register](fec-gaps.md)
 and [coverage census](research/fec-coverage-2026-09-21.md) distinguish supported
 schemas, acquired selections, remaining history and external publication.
 
+For the complete fork delivery, see the [generation plan](fork-generation.md)
+and [local reuse inventory](research/local-data-reuse-2026-09-21.md), which cover
+all rollups and distinguish usable inputs from incomplete or defective outputs.
+
 ### Outcomes & context
 
 | Table | Grain | Key |

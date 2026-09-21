@@ -136,6 +136,16 @@ successful storage and a small source sample do not establish that backfill.
 The catalog, custom domain and Worker deployment remain separate steps.
 Catalog-backed ingestion and mirror jobs need the catalog settings above.
 
+A later [full generation inventory](../docs/fork-generation.md) found a separate
+invalid active SAM family: its run lacked a source key but published a zero-row,
+575-byte file. That family has not been withdrawn. Only the lobbying schedule
+was paused; storage setup does not make the other schedules ready. The fork now
+has `DATA_GOV_API_KEY` (one-record OpenFEC check passed) and `ZYTE_TOKEN` (not yet
+wired), while full per-source acquisitions remain separately qualified.
+The [local reuse inventory](../docs/research/local-data-reuse-2026-09-21.md)
+identifies existing sealed outputs and source data available for the initial
+generation campaign.
+
 Core GitHub CI passed for the setup commit. The separate documentation build
 passed, but deployment returned 404 because GitHub Pages is not enabled on this
 fork.

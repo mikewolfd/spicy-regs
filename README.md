@@ -342,6 +342,10 @@ evidence, see [FEC integration](docs/fec-integration.md). The
 checks; the [coverage census](docs/research/fec-coverage-2026-09-21.md) accounts
 for every researched source family and official bulk group.
 
+The [fork generation plan](docs/fork-generation.md) covers all rollups and their
+dependencies. Its [local reuse inventory](docs/research/local-data-reuse-2026-09-21.md)
+identifies existing source data and audited outputs available to seed the fork.
+
 | Client | Setup |
 |---|---|
 | **Claude.ai** or any remote MCP client | Add `https://mcp.spicy-regs.dev/mcp` as a Custom Connector. Copy-paste setup for every client is at [mcp.spicy-regs.dev](https://mcp.spicy-regs.dev/). |

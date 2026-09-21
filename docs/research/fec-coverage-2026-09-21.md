@@ -158,5 +158,9 @@ documentation census.
 
 Operational follow-up: the scheduled committee job at `43c06b6` refused to start
 acquisition because its API credential was missing. [FG16](../fec-gaps.md#fg16-operate-repeatable-refresh-and-durable-recovery)
-records the confirmed blocker and [run evidence](https://github.com/mikewolfd/spicy-regs/actions/runs/35645971109).
-That failed attempt does not change any retained coverage count above.
+records the [run evidence](https://github.com/mikewolfd/spicy-regs/actions/runs/35645971109)
+and subsequent credential installation with a successful one-record request.
+A complete fresh traversal remains unverified. Neither the failed attempt nor
+the credential check changes the retained coverage counts above. See the
+[local reuse inventory](local-data-reuse-2026-09-21.md) for existing upload and
+rebuild candidates across the full fork rollup set.
