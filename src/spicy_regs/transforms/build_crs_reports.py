@@ -10,8 +10,8 @@ catastrophic-shrink guard on any short run. Instead we:
 
 1. Best-effort download the prior ``crs_reports.parquet`` from R2.
 2. Fetch only reports updated since its max ``update_date`` (minus a short
-   overlap to catch late-updated reports). Reports come newest-updated first, so
-   the reader stops as soon as it pages past that watermark.
+   overlap to catch late-updated reports). The reader follows the complete
+   filtered traversal; CRS does not honor the requested update-date sort.
 3. Dedup the union on ``report_id``, preferring the freshly fetched row.
 
 With no prior table (first run) step 2 becomes a full backfill.

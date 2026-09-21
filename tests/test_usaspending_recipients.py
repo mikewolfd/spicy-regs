@@ -1,9 +1,4 @@
-"""Hermetic tests for the USASpending.gov recipient ingest (no network).
-
-Covers the pieces with real logic: the raw-recipient → published-schema mapping
-(``_shape``), and the page/limit pagination with early stop on ``hasNext=false``,
-a short page, and the ``max_pages`` bound.
-"""
+"""USAspending field mapping and selection bounds; page failure tests are in test_reference_source_failures."""
 
 from __future__ import annotations
 
@@ -62,53 +57,3 @@ def test_reader_clamps_per_page_and_max_pages():
     reader = UsaSpendingRecipientsReader(per_page=9999)
     assert reader.per_page == PER_PAGE
     assert reader.max_pages == DEFAULT_MAX_PAGES
-
-
-# -- pagination --------------------------------------------------------------
-
-
-def _recipient(n: int) -> dict:
-    return {"id": f"r{n}-R", "uei": f"U{n}", "name": f"ORG {n}", "recipient_level": "R", "amount": n}
-
-
-def test_paginate_follows_has_next_then_stops(monkeypatch):
-    """Full pages with hasNext advance; hasNext=false ends pagination."""
-    reader = UsaSpendingRecipientsReader(per_page=2, max_pages=10)
-    pages = {
-        1: {"results": [_recipient(1), _recipient(2)], "page_metadata": {"hasNext": True}},
-        2: {"results": [_recipient(3), _recipient(4)], "page_metadata": {"hasNext": False}},
-    }
-    monkeypatch.setattr(reader, "_get_page", lambda page: pages.get(page))
-    got = [r["id"] for r in reader._paginate()]
-    assert got == ["r1-R", "r2-R", "r3-R", "r4-R"]
-
-
-def test_paginate_stops_on_short_page(monkeypatch):
-    """A page shorter than per_page ends the walk even if hasNext lies True."""
-    reader = UsaSpendingRecipientsReader(per_page=2, max_pages=10)
-    pages = {
-        1: {"results": [_recipient(1), _recipient(2)], "page_metadata": {"hasNext": True}},
-        2: {"results": [_recipient(3)], "page_metadata": {"hasNext": True}},  # short -> stop
-    }
-    monkeypatch.setattr(reader, "_get_page", lambda page: pages.get(page))
-    got = [r["id"] for r in reader._paginate()]
-    assert got == ["r1-R", "r2-R", "r3-R"]
-
-
-def test_paginate_respects_max_pages_bound(monkeypatch):
-    """The top-N bound stops the walk even when the API keeps offering more."""
-    reader = UsaSpendingRecipientsReader(per_page=2, max_pages=1)
-    pages = {
-        1: {"results": [_recipient(1), _recipient(2)], "page_metadata": {"hasNext": True}},
-        2: {"results": [_recipient(3), _recipient(4)], "page_metadata": {"hasNext": True}},
-    }
-    monkeypatch.setattr(reader, "_get_page", lambda page: pages.get(page))
-    got = [r["id"] for r in reader._paginate()]
-    assert got == ["r1-R", "r2-R"]
-
-
-def test_paginate_stops_on_none_payload(monkeypatch):
-    """A failed page (None after retries) ends pagination without crashing."""
-    reader = UsaSpendingRecipientsReader(per_page=2, max_pages=10)
-    monkeypatch.setattr(reader, "_get_page", lambda page: None)
-    assert list(reader._paginate()) == []

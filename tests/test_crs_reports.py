@@ -1,17 +1,9 @@
-"""Hermetic tests for the Congress.gov CRS report ingest (no network).
-
-Covers the pieces with real logic: the raw-report → published-schema mapping
-(``_shape``), the API-key resolution fallback chain, and the offset/limit
-pagination with early stop at the ``since`` watermark.
-"""
+"""CRS field mapping and credential resolution; source refusals are tested in test_reference_source_failures."""
 
 from __future__ import annotations
 
-from datetime import date
-
 from spicy_regs.sources.crs_reports import (
     API_KEY_ENV_VARS,
-    CrsReportsReader,
     _resolve_api_key,
 )
 from spicy_regs.transforms.build_crs_reports import COLUMNS, _shape
@@ -77,47 +69,3 @@ def test_resolve_api_key_returns_none_when_unset(monkeypatch):
     for var in API_KEY_ENV_VARS:
         monkeypatch.delenv(var, raising=False)
     assert _resolve_api_key() is None
-
-
-def test_reader_yields_nothing_without_key(monkeypatch):
-    for var in API_KEY_ENV_VARS:
-        monkeypatch.delenv(var, raising=False)
-    reader = CrsReportsReader()
-    # No key configured: a keyless run is a no-op, not a crash.
-    assert list(reader.iter_records()) == []
-
-
-# -- pagination --------------------------------------------------------------
-
-
-def _report(rid: str, day: str) -> dict:
-    return {"id": rid, "updateDate": day}
-
-
-def test_paginate_walks_offsets_until_short_page(monkeypatch):
-    """Full pages advance the offset; a short page ends pagination."""
-    reader = CrsReportsReader(api_key="test", per_page=2)
-    pages = {
-        0: {"CRSReports": [_report("R1", "2026-07-05"), _report("R2", "2026-07-04")]},
-        2: {"CRSReports": [_report("R3", "2026-07-03")]},  # short page -> stop
-    }
-    monkeypatch.setattr(reader, "_get_page", lambda offset: pages.get(offset, {"CRSReports": []}))
-    got = [r["id"] for r in reader._paginate()]
-    assert got == ["R1", "R2", "R3"]
-
-
-def test_paginate_stops_at_since_watermark(monkeypatch):
-    """Reports come newest-updated first; crossing ``since`` stops the walk."""
-    reader = CrsReportsReader(api_key="test", per_page=3, since=date(2026, 7, 4))
-    pages = {
-        0: {
-            "CRSReports": [
-                _report("R1", "2026-07-06"),  # newer -> kept
-                _report("R2", "2026-07-04"),  # == watermark -> kept
-                _report("R3", "2026-07-01"),  # older -> stop here
-            ]
-        },
-    }
-    monkeypatch.setattr(reader, "_get_page", lambda offset: pages.get(offset, {"CRSReports": []}))
-    got = [r["id"] for r in reader._paginate()]
-    assert got == ["R1", "R2"]

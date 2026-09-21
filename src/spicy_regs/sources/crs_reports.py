@@ -1,88 +1,43 @@
-"""Reader connector for Congressional Research Service (CRS) reports.
+"""CRS report lists through the SpicyDocs Congress.gov reader.
 
-CRS reports are the nonpartisan policy analyses Congress commissions on the
-same subjects the executive branch regulates. They sit alongside GAO reports
-as the *oversight/analysis* layer over the rulemakings this dataset tracks:
-where ``congress_bills`` is the legislative record and ``federal_register`` is
-the rule-publication record, CRS reports are the expert analysis of the policy
-questions behind them.
-
-There is no standalone CRS API, but the Congress.gov v3 REST API exposes CRS
-reports at ``/crsreport``. This reader is a *pure source*: it yields raw report
-payloads (dicts) exactly as the list endpoint returns them. Shaping them into
-the published schema is the job of
-:func:`~spicy_regs.transforms.build_crs_reports.build_crs_reports`.
-
-The ``/crsreport`` list endpoint is paginated by ``offset``/``limit``
-(``limit`` caps at 250) and sorted ``updateDate+desc`` so the newest activity
-comes first; an incremental run stops as soon as it walks past its ``since``
-watermark.
-
-**API key.** Congress.gov requires an api.data.gov key sent as the ``api_key``
-query param. The same key works across regulations.gov, Congress.gov, and
-GovInfo, so we resolve it from a fallback chain of the env vars this repo
-already uses (:func:`_resolve_api_key`). If no key is set the reader logs a
-clear warning and yields nothing — a keyless CI run is a no-op, not a crash.
+SpicyDocs owns requests, page parsing, declared counts and continuations. CRS
+ignores the requested sort, so the source window is explicit and a locally old
+row never ends the walk. Failed or incomplete walks raise before the transform
+can replace its prior table. Successful empty windows remain valid.
 """
 
 from __future__ import annotations
 
 import os
-import time
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from datetime import date
 
 import httpx
-from loguru import logger
+from spicy_docs.reading.paged_json import PagedJsonBudget
+from spicy_docs.sources.congress.listing import CongressListingReader, crs_report_list_url
 
 from spicy_regs.sources.base import Reader
 
 API_BASE = "https://api.congress.gov/v3"
-
-# Max the API accepts per page.
 PER_PAGE = 250
+API_KEY_ENV_VARS = ("API_GOV", "DATA_GOV_API_KEY", "CONGRESS_GOV_API_KEY", "REGULATIONS_GOV_API_KEY")
+_MAX_PAGES = 400
+_MAX_REQUESTS_PER_PAGE = 5
 
-# Env vars checked in order for the api.data.gov key (one key works across
-# regulations.gov, Congress.gov, and GovInfo).
-API_KEY_ENV_VARS = (
-    "API_GOV",  # the shared api.data.gov key, under the name RefSpec/.env uses
-    "DATA_GOV_API_KEY",
-    "CONGRESS_GOV_API_KEY",
-    "REGULATIONS_GOV_API_KEY",
-)
 
-# Transport hygiene: bound every request and retry transient failures with
-# backoff so a flaky page fails slow-then-recovers rather than dropping reports.
-_TIMEOUT = httpx.Timeout(60.0, connect=30.0)
-_MAX_RETRIES = 5
-_PROGRESS_EVERY = 2_000
-
-# The list endpoint refuses very large offsets; stop paging past this to avoid a
-# runaway loop on an unexpectedly large window. Incremental runs stop far sooner.
-_MAX_OFFSET = 100_000
+class CrsReportsError(ValueError):
+    """The selected CRS report list cannot be established."""
 
 
 def _resolve_api_key() -> str | None:
-    """Return the first api.data.gov key set in :data:`API_KEY_ENV_VARS`, or None.
-
-    The same api.data.gov key is valid across regulations.gov, Congress.gov, and
-    GovInfo, so we accept whichever the environment already provides.
-    """
     for var in API_KEY_ENV_VARS:
-        value = os.environ.get(var)
+        value = os.environ.get(var, "").strip()
         if value:
             return value
     return None
 
 
 class CrsReportsReader(Reader):
-    """Yields raw Congress.gov CRS report dicts, newest ``updateDate`` first.
-
-    ``since`` lets incremental runs stop once they page past the newest
-    ``updateDate`` already stored; the transform handles merging with the prior
-    table. With no key configured the reader yields nothing.
-    """
-
     def __init__(
         self,
         *,
@@ -90,90 +45,45 @@ class CrsReportsReader(Reader):
         per_page: int = PER_PAGE,
         api_key: str | None = None,
         verbose: bool = False,
+        transport: httpx.BaseTransport | None = None,
     ) -> None:
+        if isinstance(per_page, bool) or not isinstance(per_page, int) or per_page < 1:
+            raise ValueError("per_page must be a positive integer")
         self.since = since
         self.per_page = min(per_page, PER_PAGE)
-        self.api_key = api_key or _resolve_api_key()
+        self.api_key = api_key if api_key is not None else _resolve_api_key()
         self.verbose = verbose
-        self._client: httpx.Client | None = None
-        self._seen = 0
+        self.transport = transport
 
     def iter_records(self) -> Iterator[dict]:
         if not self.api_key:
-            logger.warning(
-                "CRS reports: no API key found (set one of {}) — yielding nothing",
-                ", ".join(API_KEY_ENV_VARS),
-            )
-            return
-        logger.info(
-            "CRS reports: fetching reports updated since {}",
-            self.since or "the beginning",
+            raise CrsReportsError("CRS reports require an api.data.gov key")
+        url = crs_report_list_url(
+            from_datetime=f"{self.since.isoformat()}T00:00:00Z" if self.since else None,
+            limit=self.per_page,
         )
-        with httpx.Client(timeout=_TIMEOUT, headers={"Accept": "application/json"}) as client:
-            self._client = client
-            yield from self._paginate()
-        logger.info("CRS reports: yielded {:,} reports", self._seen)
-
-    # -- pagination ----------------------------------------------------------
-
-    def _paginate(self) -> Iterator[dict]:
-        """Walk ``offset``/``limit`` pages, stopping at the ``since`` watermark."""
-        offset = 0
-        while offset < _MAX_OFFSET:
-            payload = self._get_page(offset)
-            if payload is None:
-                break
-            reports = payload.get("CRSReports") or []
-            if not reports:
-                break
-            for report in reports:
-                # Reports come newest-updated first; once we cross the watermark
-                # everything after is older, so we can stop early.
-                if self.since is not None and _older_than(report, self.since):
-                    if self.verbose:
-                        logger.debug("CRS reports: reached watermark {} — stopping", self.since)
-                    return
-                self._seen += 1
-                if self._seen % _PROGRESS_EVERY == 0:
-                    logger.info("CRS reports: {:,} reports so far...", self._seen)
-                yield report
-            # A short final page means the server has nothing more to give.
-            if len(reports) < self.per_page:
-                break
-            offset += self.per_page
-
-    def _get_page(self, offset: int) -> dict | None:
-        params: dict[str, object] = {
-            "offset": offset,
-            "limit": self.per_page,
-            "sort": "updateDate+desc",
-            "format": "json",
-            "api_key": self.api_key,
-        }
-        return self._get(f"{API_BASE}/crsreport", params)
-
-    def _get(self, url: str, params: dict | None) -> dict | None:
-        """GET with bounded retries + exponential backoff. Returns parsed JSON or None."""
-        assert self._client is not None
-        for attempt in range(1, _MAX_RETRIES + 1):
-            try:
-                resp = self._client.get(url, params=params)
-                if resp.status_code == 429 or resp.status_code >= 500:
-                    raise httpx.HTTPStatusError("retryable", request=resp.request, response=resp)
-                resp.raise_for_status()
-                return resp.json()
-            except (httpx.HTTPError, ValueError) as exc:
-                if attempt == _MAX_RETRIES:
-                    logger.error("CRS reports: giving up on {} after {} attempts: {}", url, attempt, exc)
-                    return None
-                backoff = min(2**attempt, 30)
-                logger.warning("CRS reports: {} (attempt {}/{}), retrying in {}s", exc, attempt, _MAX_RETRIES, backoff)
-                time.sleep(backoff)
-        return None
+        budget = PagedJsonBudget(
+            max_requests=_MAX_REQUESTS_PER_PAGE,
+            max_page_bytes=16 * 1024 * 1024,
+            timeout_seconds=60,
+            min_request_interval_seconds=0,
+        )
+        seen = set()
+        with CongressListingReader(budget=budget, api_key=self.api_key, transport=self.transport) as reader:
+            for page in reader.crs_reports(url, max_pages=_MAX_PAGES):
+                if page.declared_count is None:
+                    raise CrsReportsError("CRS page omitted its declared count")
+                for report in page.records:
+                    identity = report.get("id")
+                    if not isinstance(identity, str) or not identity.strip() or identity in seen:
+                        raise CrsReportsError("CRS page contains a missing or repeated report identity")
+                    seen.add(identity)
+                    # Do not rely on the server's ignored sort parameter.
+                    if self.since is None or not _older_than(report, self.since):
+                        yield dict(report)
 
 
-def _older_than(report: dict, since: date) -> bool:
-    """True if the report's ``updateDate`` is strictly before ``since``."""
+def _older_than(report: Mapping, since: date) -> bool:
     raw = report.get("updateDate")
     if not raw:
         return False
