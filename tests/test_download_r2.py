@@ -15,6 +15,14 @@ from spicy_regs.sources import r2 as download_r2
 from spicy_regs.sources.r2 import download_from_r2
 
 
+@pytest.fixture(autouse=True)
+def legacy_publication(monkeypatch):
+    # This module exercises legacy transfer semantics. Managed members and
+    # real index requests are exercised by test_generation_publication.
+    from spicy_regs.sources import publication
+    monkeypatch.setattr(publication, "load_index", lambda url: publication.empty_index())
+
+
 def _fake_stream(*, status_code: int = 200, body: bytes = b"", raise_exc: Exception | None = None):
     """Build a callable that mimics ``httpx.stream(...)`` as a context manager."""
 

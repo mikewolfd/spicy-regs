@@ -10,8 +10,16 @@ from contextlib import contextmanager
 from unittest.mock import MagicMock
 
 import httpx
+import pytest
 
 from spicy_regs import cli
+
+
+@pytest.fixture(autouse=True)
+def legacy_publication(monkeypatch):
+    from spicy_regs.sources import publication
+
+    monkeypatch.setattr(publication, "load_index", lambda _: publication.empty_index())
 
 
 def _fake_stream(*, status_code: int = 200, body: bytes = b"", capture: dict | None = None):

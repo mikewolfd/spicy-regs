@@ -11,8 +11,9 @@ re-run or backfilled on its own, and a failure is isolated to a single artifact.
     1. Prime — download the base tables this rollup reads from R2 (skipping any
        already present locally, so local dev and re-runs don't re-download).
     2. Build — materialize the rollup artifact(s) via a transform.
-    3. Load  — publish each artifact to R2 (shrink-guarded per file), off by
-       default while vetting.
+    3. Verify — retain one complete, immutable generation of the declared files.
+    4. Load — verify uploaded bytes, then atomically replace its public pointer;
+       publication is off by default while vetting.
 
 **Contract:** a rollup reads only tables that no other rollup *derives* — the
 ETL's published base tables (``dockets``, ``documents``, ``comments_index``)
@@ -48,17 +49,20 @@ otherwise re-run its acquisition and model calls once per table) declares
 ``outputs`` instead and returns a tuple of paths from ``build()`` — each still
 goes through the same per-file shrink guard on upload.
 
-Two notes on that per-file upload, both intentional rather than gaps: it is
-not transactional across a multi-output rollup — if a later file trips the
-shrink guard, an earlier file in the same ``build()`` result has already
-published — and each file's remote key is its own basename, so a transform
-that renames what it writes changes what gets published under, with no
-separate mapping to keep in sync.
+Every declared output must be present, including successful empty tables.
+Uploads use immutable generation paths; publication.json changes only after
+the full family passes local schema checks, shrink checks and remote byte
+verification. Readers capture that index once per operation. The old bare
+Parquet URLs are not rewritten by this path.
 """
 
 from abc import abstractmethod
+from contextlib import nullcontext
+from os import getenv
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Annotated, ClassVar
+from uuid import uuid4
 
 from cyclopts import App, Parameter
 from dotenv import load_dotenv
@@ -92,6 +96,11 @@ class RollupPipeline(Pipeline):
     #: freshness checker).
     outputs: ClassVar[tuple[str, ...]] = ()
 
+    #: A partial writer can update this existing complete family. Unchanged
+    #: siblings are carried forward from its captured generation, never rebuilt.
+    publication_family: ClassVar[str | None] = None
+    generation_tables: ClassVar[bool] = True
+
     #: The single artifact this rollup writes and publishes (e.g.
     #: ``"feed_summary.parquet"``). Its R2 remote key is the same filename.
     #: Single-output rollups set this directly, which — because Python
@@ -111,25 +120,94 @@ class RollupPipeline(Pipeline):
         self.skip_upload = skip_upload
 
     def run(self) -> None:
+        if not self.generation_tables:
+            # Docket search is a browser gzip object, not a table family. Keep
+            # its existing single-object path until that consumer is migrated.
+            output_dir = self.output_dir or (Path.cwd() / "output")
+            output_dir.mkdir(parents=True, exist_ok=True)
+            self._prime(output_dir)
+            built = self.build(output_dir)
+            if isinstance(built, tuple) or built.name != self.output or self.outputs:
+                raise ValueError("Legacy object rollups must produce exactly their declared single output")
+            if not self.skip_upload:
+                r2.upload_file(built, remote_key=self.output)
+            logger.info("Legacy unversioned object retained: {}", built)
+            return
+
+        from rulespec_artifacts import publish_directory_no_replace
+        from spicy_regs.data_dictionary import expected_schemas
+        from spicy_regs.generations import build_generation, verify_generation
+        from spicy_regs.sources import publication
+
         output_dir = self.output_dir or (Path.cwd() / "output")
         output_dir.mkdir(parents=True, exist_ok=True)
-
-        # 1. Prime: pull the base tables this rollup reads from R2.
-        self._prime(output_dir)
-
-        # 2. Build: materialize the rollup artifact(s).
-        logger.info("Building rollup {}...", self.output)
-        built = self.build(output_dir)
-        out_paths = built if isinstance(built, tuple) else (built,)
-
-        # 3. Load: publish each artifact (shrink-guarded), unless skipping.
-        for out_path in out_paths:
-            if self.skip_upload:
-                logger.info("skip_upload=True — {} left in {}", out_path.name, output_dir)
+        public_url = getenv("R2_PUBLIC_URL")
+        context = publication.snapshot(public_url) if public_url else nullcontext(publication.empty_index())
+        with context as prior_index:
+            # Bespoke ingest builders also cache priors. An isolated build
+            # directory covers all of them without deleting user evidence.
+            build_dir = output_dir
+            if public_url:
+                build_dir = output_dir / ".builds" / uuid4().hex
+                build_dir.mkdir(parents=True)
+            self._prime(build_dir)
+            logger.info("Building rollup {}...", self.output)
+            built = self.build(build_dir)
+            out_paths = built if isinstance(built, tuple) else (built,)
+            family = self.name
+            expected_keys = self.outputs or (self.output,)
+            if len(out_paths) != len(expected_keys) or {p.name for p in out_paths} != set(expected_keys):
+                raise publication.PublicationError("Build outputs differ from its declared complete set")
+            carried_forward = {}
+            publication_status = "complete-family"
+            if self.publication_family:
+                prior = prior_index["families"].get(self.publication_family)
+                if prior is None:
+                    if not self.skip_upload:
+                        raise publication.PublicationError(
+                            f"Publish a complete {self.publication_family} generation before its partial writer"
+                        )
+                    logger.warning("Retaining a local partial candidate; no complete publication family exists")
+                    publication_status = "local-partial"
+                else:
+                    family = self.publication_family
+                    expected_keys = tuple(prior["tables"])
+                    if not {p.name for p in out_paths} <= set(expected_keys):
+                        raise publication.PublicationError("Partial writer output is outside its existing family")
+                    for key in expected_keys:
+                        if key not in {p.name for p in out_paths}:
+                            path = build_dir / key
+                            if not r2.download(key, path):
+                                raise publication.PublicationError(f"Missing carried-forward member: {key}")
+                            out_paths += (path,)
+                            carried_forward[key] = prior["artifactDigest"]
+        generations = output_dir / "generations"
+        generations.mkdir(exist_ok=True)
+        with TemporaryDirectory(prefix=".generation-", dir=output_dir) as staging:
+            directory = Path(staging) / "artifact"
+            artifact = build_generation(
+                directory, family=family, files=out_paths,
+                expected_keys=expected_keys, schemas=expected_schemas(),
+                read_snapshot=prior_index, carried_forward=carried_forward,
+                publication_status=publication_status,
+            )
+            destination = generations / artifact.pin.artifact_digest.removeprefix("sha256:")
+            if destination.exists():
+                verify_generation(destination, expected_pin=artifact.pin)
             else:
-                logger.info("Uploading {} to R2...", out_path.name)
-                r2.upload_file(out_path, remote_key=out_path.name)
+                publish_directory_no_replace(directory, destination)
+        if self.skip_upload:
+            logger.info("Verified local generation {}; upload skipped", destination)
+        else:
+            if not getenv("R2_ACCESS_KEY_ID") or not public_url:
+                raise RuntimeError("Generation publication requires R2 credentials and R2_PUBLIC_URL")
+            publication.publish_generation(
+                destination, client=r2.get_r2_client(),
+                bucket=getenv("R2_BUCKET_NAME", "spicy-regs"), prior_index=prior_index,
+            )
+            from spicy_regs.sources.cloudflare import purge_urls
 
+            purge_urls([f"{public_url.rstrip('/')}/{publication.INDEX_KEY}"])
         logger.info("Done!")
 
     def _prime(self, output_dir: Path) -> None:

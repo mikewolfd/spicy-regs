@@ -12,6 +12,7 @@ historical 3.3 GB ``comments.parquet``.
 """
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import hashlib
 from os import getenv
 from pathlib import Path
 
@@ -46,12 +47,19 @@ def download_from_r2(remote_key: str, local_path: Path) -> bool:
         logger.warning("R2_PUBLIC_URL not set; cannot download {}", remote_key)
         return False
 
-    url = f"{public_url}/{remote_key}"
+    from spicy_regs.sources.publication import current_index, table_location
+
+    resolved, descriptor = table_location(current_index(public_url), remote_key)
+    url = f"{public_url.rstrip('/')}/{resolved}"
     temp_path = local_path.with_suffix(local_path.suffix + ".tmp")
+    digest = hashlib.sha256()
+    byte_size = 0
 
     try:
         with httpx.stream("GET", url, follow_redirects=True) as response:
             if response.status_code == 404:
+                if descriptor is not None:
+                    raise RuntimeError(f"Published generation member is missing: {remote_key}")
                 logger.info("{} not found on R2 (404)", remote_key)
                 return False
             if response.status_code != 200:
@@ -59,6 +67,12 @@ def download_from_r2(remote_key: str, local_path: Path) -> bool:
             with open(temp_path, "wb") as f:
                 for chunk in response.iter_bytes():
                     f.write(chunk)
+                    digest.update(chunk)
+                    byte_size += len(chunk)
+            if descriptor is not None and (
+                descriptor["byteSize"] != byte_size or descriptor["sha256"] != "sha256:" + digest.hexdigest()
+            ):
+                raise RuntimeError(f"Published generation member differs from its pin: {remote_key}")
     except BaseException:
         if temp_path.exists():
             temp_path.unlink()

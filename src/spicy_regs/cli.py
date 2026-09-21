@@ -10,9 +10,13 @@ Usage:
 """
 
 import argparse
+import hashlib
+import json
+import re
 import sys
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
+from uuid import uuid4
 
 import httpx
 from dotenv import load_dotenv
@@ -34,6 +38,39 @@ except PackageNotFoundError:
 DEFAULT_HEADERS = {"User-Agent": f"spicy-regs/{_PACKAGE_VERSION}"}
 
 
+def _table_name(value: str) -> str:
+    if not re.fullmatch(r"[a-z][a-z0-9_-]*", value):
+        raise argparse.ArgumentTypeError(
+            "Use a table name containing lowercase letters, numbers, underscores or hyphens"
+        )
+    return value
+
+
+def _local_files(output_dir: Path) -> dict[str, tuple[Path, str]]:
+    """Capture current once, then resolve selected files before legacy files."""
+    result = {}
+    current = output_dir / "current"
+    if current.is_symlink():
+        directory = current.resolve(strict=True)
+        if directory.parent != (output_dir / "download-runs").resolve():
+            raise RuntimeError("Current download points outside download-runs")
+        metadata = json.loads((directory / "download.json").read_text())
+        if metadata["version"] != 1 or metadata["status"] != "complete":
+            raise RuntimeError("Current download is incomplete")
+        for name, selection in metadata["selected"].items():
+            _table_name(name)
+            path = directory / f"{name}.parquet"
+            if not path.is_file():
+                raise RuntimeError(f"Current download is missing {name}.parquet")
+            result[name] = (path, selection["status"])
+    elif current.exists():
+        raise RuntimeError("Current download must be a symlink")
+    for path in sorted(output_dir.glob("*.parquet")):
+        if re.fullmatch(r"[a-z][a-z0-9_-]*", path.stem) and path.is_file():
+            result.setdefault(path.stem, (path, "legacy-unversioned"))
+    return result
+
+
 def get_output_dir(args) -> Path:
     """Get output directory from args or default."""
     output_dir = Path(args.output_dir) if hasattr(args, "output_dir") and args.output_dir else DEFAULT_OUTPUT_DIR
@@ -43,10 +80,14 @@ def get_output_dir(args) -> Path:
 
 def download_file(name: str, output_dir: Path, force: bool = False) -> Path | None:
     """Download a parquet file from R2."""
-    url = f"{PUBLIC_URL}/{name}.parquet"
+    from spicy_regs.sources.publication import current_index, table_location
+
+    _table_name(name)
+    key, published = table_location(current_index(PUBLIC_URL), f"{name}.parquet")
+    url = f"{PUBLIC_URL}/{key}"
     local_path = output_dir / f"{name}.parquet"
 
-    if local_path.exists() and not force:
+    if local_path.exists() and not force and published is None:
         size_mb = local_path.stat().st_size / (1024 * 1024)
         print(f"  ✓ {name}.parquet already exists ({size_mb:.1f} MB)")
         return local_path
@@ -58,16 +99,24 @@ def download_file(name: str, output_dir: Path, force: bool = False) -> Path | No
     # a truncated parquet — a real risk on comments.parquet at ~2.4 GB.
     tmp_path = local_path.with_suffix(".parquet.partial")
     try:
+        digest = hashlib.sha256()
+        size = 0
         with httpx.stream("GET", url, headers=DEFAULT_HEADERS, follow_redirects=True, timeout=60.0) as resp:
             resp.raise_for_status()
             with open(tmp_path, "wb") as f:
                 for chunk in resp.iter_bytes():
                     f.write(chunk)
+                    digest.update(chunk)
+                    size += len(chunk)
+        if published is not None and (
+            size != published["byteSize"] or "sha256:" + digest.hexdigest() != published["sha256"]
+        ):
+            raise ValueError(f"Downloaded member differs from its generation pin: {name}")
         tmp_path.replace(local_path)
         size_mb = local_path.stat().st_size / (1024 * 1024)
         print(f"  ✓ {name}.parquet ({size_mb:.1f} MB)")
         return local_path
-    except (httpx.HTTPError, OSError) as e:
+    except (httpx.HTTPError, OSError, ValueError) as e:
         tmp_path.unlink(missing_ok=True)
         print(f"  ✗ Failed to download {name}.parquet: {e}")
         return None
@@ -78,12 +127,52 @@ def cmd_download(args):
     output_dir = get_output_dir(args)
     print(f"Downloading to: {output_dir.absolute()}")
 
-    types_to_download = args.types if args.types else ["dockets", "documents", "comments"]
+    types_to_download = list(dict.fromkeys(args.types or ["dockets", "documents", "comments"]))
+    for name in types_to_download:
+        _table_name(name)
 
-    for data_type in types_to_download:
-        download_file(data_type, output_dir, force=args.force)
+    from spicy_regs.sources.publication import snapshot, table_location
 
-    print(f"\nDone! Data saved to: {output_dir.absolute()}")
+    with snapshot(PUBLIC_URL) as index:
+        selected = {}
+        for name in types_to_download:
+            key, published = table_location(index, f"{name}.parquet")
+            selected[name] = {"key": key, "status": "managed" if published is not None else "legacy-unversioned"}
+        managed = any(item["status"] == "managed" for item in selected.values())
+        if managed:
+            batch_id = uuid4().hex
+            destination = output_dir / "download-runs" / batch_id
+            destination.mkdir(parents=True, exist_ok=False)
+            metadata = {
+                "version": 1,
+                "status": "incomplete",
+                "base_url": PUBLIC_URL,
+                "publication": index,
+                "selected": selected,
+            }
+            (destination / "download.json").write_text(json.dumps(metadata, indent=2) + "\n")
+        else:
+            destination = output_dir
+        for data_type in types_to_download:
+            print(f"  {data_type}: {selected[data_type]['status']}")
+            if download_file(data_type, destination, force=args.force) is None:
+                raise RuntimeError(f"Download incomplete: {data_type}")
+        if managed:
+            metadata["status"] = "complete"
+            (destination / "download.json").write_text(json.dumps(metadata, indent=2) + "\n")
+            # The temporary link and current share a filesystem. Replace only
+            # after every selected member passed download verification.
+            link = output_dir / f".current-{batch_id}"
+            try:
+                current = output_dir / "current"
+                if current.exists() and not current.is_symlink():
+                    raise RuntimeError("Current download must be a symlink; preserving existing path")
+                link.symlink_to(Path("download-runs") / batch_id, target_is_directory=True)
+                link.replace(current)
+            finally:
+                link.unlink(missing_ok=True)
+
+    print(f"\nDone! Data saved to: {destination.absolute()}")
 
 
 def cmd_stats(args):
@@ -100,16 +189,11 @@ def cmd_stats(args):
     print("Dataset Statistics")
     print("=" * 60)
 
-    for data_type in ["dockets", "documents", "comments"]:
-        parquet_file = output_dir / f"{data_type}.parquet"
-        if not parquet_file.exists():
-            print(f"\n{data_type.upper()}: Not downloaded yet (run: spicy-regs download)")
-            continue
-
+    for data_type, (parquet_file, status) in _local_files(output_dir).items():
         df = pl.read_parquet(parquet_file)
         size_mb = parquet_file.stat().st_size / (1024 * 1024)
 
-        print(f"\n{data_type.upper()} ({size_mb:.1f} MB)")
+        print(f"\n{data_type.upper()} ({size_mb:.1f} MB; {status})")
         print("-" * 40)
         print(f"  Rows: {len(df):,}")
         print(f"  Columns: {', '.join(df.columns)}")
@@ -132,7 +216,10 @@ def cmd_sample(args):
         sys.exit(1)
 
     output_dir = get_output_dir(args)
-    parquet_file = output_dir / f"{args.data_type}.parquet"
+    _table_name(args.data_type)
+    parquet_file, status = _local_files(output_dir).get(
+        args.data_type, (output_dir / f"{args.data_type}.parquet", "legacy-unversioned")
+    )
 
     if not parquet_file.exists():
         print(f"File not found: {parquet_file}")
@@ -146,7 +233,7 @@ def cmd_sample(args):
 
     sample = df.sample(min(args.n, len(df)))
 
-    print(f"\nSample from {args.data_type} ({len(df):,} total rows):")
+    print(f"\nSample from {args.data_type} ({len(df):,} total rows; {status}):")
     print("=" * 80)
     print(sample)
 
@@ -171,12 +258,9 @@ def cmd_search(args):
         "comments": ["title", "comment", "text_content"],
     }
 
-    for data_type, columns in search_configs.items():
-        parquet_file = output_dir / f"{data_type}.parquet"
-        if not parquet_file.exists():
-            continue
-
+    for data_type, (parquet_file, status) in _local_files(output_dir).items():
         df = pl.read_parquet(parquet_file)
+        columns = search_configs.get(data_type, [name for name, dtype in df.schema.items() if dtype == pl.String])
 
         # Build filter for any column containing the query
         filters = None
@@ -188,7 +272,7 @@ def cmd_search(args):
         if filters is not None:
             matches = df.filter(filters)
             if len(matches) > 0:
-                print(f"\n{data_type.upper()}: {len(matches):,} matches")
+                print(f"\n{data_type.upper()}: {len(matches):,} matches ({status})")
                 print("-" * 40)
                 sample = matches.head(args.limit)
                 for row in sample.iter_rows(named=True):
@@ -206,15 +290,16 @@ def cmd_agencies(args):
         sys.exit(1)
 
     output_dir = get_output_dir(args)
+    files = _local_files(output_dir)
 
     # Try to get agency list from any available file
     for data_type in ["dockets", "documents", "comments"]:
-        parquet_file = output_dir / f"{data_type}.parquet"
-        if parquet_file.exists():
+        if data_type in files:
+            parquet_file, status = files[data_type]
             df = pl.read_parquet(parquet_file, columns=["agency_code"])
             agencies = df["agency_code"].unique().sort().to_list()
 
-            print(f"Agencies ({len(agencies)} total):")
+            print(f"Agencies ({len(agencies)} total; {status}):")
             print("=" * 40)
             for agency in agencies:
                 if agency:
@@ -243,7 +328,7 @@ def main():
     download_parser = subparsers.add_parser("download", help="Download parquet files")
     download_parser.add_argument("--force", "-f", action="store_true", help="Force re-download")
     download_parser.add_argument(
-        "--types", nargs="+", choices=["dockets", "documents", "comments"], help="Specific data types to download"
+        "--types", nargs="+", type=_table_name, help="Specific table names to download, including rollups"
     )
     download_parser.set_defaults(func=cmd_download)
 
@@ -253,7 +338,7 @@ def main():
 
     # Sample command
     sample_parser = subparsers.add_parser("sample", help="Show sample rows")
-    sample_parser.add_argument("data_type", choices=["dockets", "documents", "comments"])
+    sample_parser.add_argument("data_type", type=_table_name)
     sample_parser.add_argument("-n", type=int, default=5, help="Number of rows")
     sample_parser.add_argument("--agency", help="Filter by agency code")
     sample_parser.set_defaults(func=cmd_sample)

@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import json
 import os
-from collections.abc import Iterator
+from collections.abc import Generator
 from pathlib import Path
 from tempfile import mkdtemp
 from typing import TYPE_CHECKING
@@ -71,7 +71,7 @@ class FecCommitteesReader(Reader):
         self.verbose = verbose
         self.last_run_path: Path | None = None
 
-    def iter_records(self) -> Iterator[dict]:
+    def iter_records(self) -> Generator[dict, None, None]:
         if not self.api_key:
             raise ValueError("FEC committees require an API key; no complete acquisition was attempted")
         try:
