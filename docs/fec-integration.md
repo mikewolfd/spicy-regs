@@ -112,6 +112,30 @@ Historical backfills, source-specific correction rules and public refresh
 operations remain visible work items; one example investigation does not set
 the catalog's scope.
 
+## Historical unofficial Senate filings
+
+The publisher's bare `https://docquery.fec.gov/senate/` link returned 404 on
+September 21, 2026, but the explicit
+[search page](https://docquery.fec.gov/senate/index.html) and known originals under
+`https://docquery.fec.gov/senate/posted/` remained accessible. The public XML
+listing at the latter URL returned 1,000 objects with `IsTruncated=true` and
+repeated the same page when given a continuation marker. The search endpoint
+returned 403. A successful first page therefore does not establish an inventory
+of the archive.
+
+Use exact filenames from retained publisher listings or identified historical
+references, and retain the discovery evidence separately from the downloaded
+original. The existing positional reader accepts these native `.fec` files;
+select `source_family="fec_reports"` and give each collection an explicit
+`senate-unofficial-filing-...` label. Keep the archive's unofficial status and
+source scope visible. Its numeric filename belongs to the Senate archive and
+must not become the processed-filings `filing_id` merely because it is numeric.
+Preserve reported committee identifiers in their native fields until a verified
+field mapping supports lifting them.
+
+The [Senate recovery evidence](research/fec-senate-recovery-2026-09-21.md)
+records acquired originals, raw/output checks and remaining discovery limits.
+
 ## Bulk coverage
 
 The September 21, 2026 retained capture of the
