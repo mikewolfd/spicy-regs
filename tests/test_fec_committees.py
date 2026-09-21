@@ -1,9 +1,7 @@
 """Hermetic tests for the OpenFEC committees ingest (no network).
 
-Covers the pieces with real logic: the raw-committee → published-schema mapping
-(``_shape`` / ``_json_array``), the API-key resolution fallback chain, and the
-keyset-preferred / offset-fallback pagination (which must *not* stop early on a
-short page — that was the bug that truncated the backfill at ~26K of ~89K).
+Exercises the real SpicyDocs transport and pagination with supplied responses,
+raw capture evidence, refusal/cleanup paths, and the existing table merge.
 """
 
 from __future__ import annotations
@@ -11,13 +9,14 @@ from __future__ import annotations
 import json
 import importlib
 
+import httpx
+
 import pyarrow.parquet as pq
 import pytest
 
 from spicy_regs.sources.fec_committees import (
     API_KEY_ENV_VARS,
     FecCommitteesReader,
-    _clean_cursor,
     _resolve_api_key,
 )
 from spicy_regs.transforms.build_fec_committees import COLUMNS, _shape
@@ -112,7 +111,7 @@ def test_retained_input_rejects_invalid_batch_bound(tmp_path, value):
 def test_default_builder_uses_the_shared_row_writer(tmp_path, monkeypatch):
     module = importlib.import_module("spicy_regs.transforms.build_fec_committees")
     monkeypatch.setattr(module.r2, "download", lambda *a: False)
-    monkeypatch.setattr(module.FecCommitteesReader, "iter_records", lambda self: iter([_RAW_COMMITTEE]))
+    monkeypatch.setattr(module.FecCommitteesReader, "iter_records", lambda self: (row for row in [_RAW_COMMITTEE]))
     real_write = module.write_fec_committee_rows
     calls = []
 
@@ -194,104 +193,193 @@ def test_resolve_api_key_returns_none_when_unset(monkeypatch):
     assert _resolve_api_key() is None
 
 
-def test_reader_yields_nothing_without_key(monkeypatch):
+def test_reader_refuses_missing_key(monkeypatch, tmp_path):
     for var in API_KEY_ENV_VARS:
         monkeypatch.delenv(var, raising=False)
-    reader = FecCommitteesReader()
-    # No key configured: a keyless run is a no-op, not a crash.
-    assert list(reader.iter_records()) == []
+    reader = FecCommitteesReader(capture_dir=tmp_path)
+    with pytest.raises(ValueError, match="require an API key"):
+        list(reader.iter_records())
+    assert list(tmp_path.iterdir()) == []
 
 
-# -- pagination --------------------------------------------------------------
-
-
-def _committee(cid: str) -> dict:
-    return {"committee_id": cid}
-
-
-def test_clean_cursor_extracts_keyset_or_empty():
-    # A real seek cursor is returned as-is (null-valued keys dropped).
-    assert _clean_cursor({"last_index": "42", "last_committee_id": "C9", "x": None}) == {
-        "last_index": "42",
-        "last_committee_id": "C9",
-    }
-    # /committees returns last_indexes: null -> no cursor -> offset fallback.
-    assert _clean_cursor(None) == {}
-    # An all-null cursor is likewise unusable.
-    assert _clean_cursor({"last_index": None}) == {}
-
-
-def test_paginate_offset_walk_stops_only_on_empty_page(monkeypatch):
-    """With ``last_indexes: null`` (the /committees case) walk by page to empty."""
-    reader = FecCommitteesReader(api_key="test", per_page=2)
-    pages = {
-        1: {"results": [_committee("C1"), _committee("C2")], "pagination": {"page": 1, "last_indexes": None}},
-        2: {"results": [_committee("C3"), _committee("C4")], "pagination": {"page": 2, "last_indexes": None}},
-        3: {"results": [_committee("C5")], "pagination": {"page": 3, "last_indexes": None}},
-        4: {"results": [], "pagination": {"page": 4, "last_indexes": None}},
-    }
-    requested: list[tuple[int, dict]] = []
-
-    def stub(page, keyset):
-        requested.append((page, dict(keyset)))
-        return pages.get(page, {"results": []})
-
-    monkeypatch.setattr(reader, "_get_page", stub)
-    got = [c["committee_id"] for c in reader._paginate()]
-    assert got == ["C1", "C2", "C3", "C4", "C5"]
-    # Offset fallback: page increments, no keyset cursor ever passed.
-    assert [p for p, _ in requested] == [1, 2, 3, 4]
-    assert all(ks == {} for _, ks in requested)
-
-
-def test_paginate_does_not_stop_on_short_page(monkeypatch):
-    """Regression: a short mid-walk page must NOT terminate the walk (the bug)."""
-    reader = FecCommitteesReader(api_key="test", per_page=3)
-    pages = {
-        1: {"results": [_committee("C1"), _committee("C2")], "pagination": {"last_indexes": None}},  # short!
-        2: {"results": [_committee("C3"), _committee("C4"), _committee("C5")], "pagination": {"last_indexes": None}},
-        3: {"results": [], "pagination": {"last_indexes": None}},
-    }
-    monkeypatch.setattr(reader, "_get_page", lambda page, keyset: pages.get(page, {"results": []}))
-    got = [c["committee_id"] for c in reader._paginate()]
-    # Old code broke after C1/C2 on the short page; the walk must continue.
-    assert got == ["C1", "C2", "C3", "C4", "C5"]
-
-
-def test_paginate_follows_keyset_cursor_when_present(monkeypatch):
-    """When ``last_indexes`` is present, carry the cursor forward, don't page."""
-    reader = FecCommitteesReader(api_key="test", per_page=2)
-    by_cursor = {
-        None: {
-            "results": [_committee("C1"), _committee("C2")],
-            "pagination": {"last_indexes": {"last_index": "C2", "last_committee_id": "C2"}},
+def _page(records, number, *, pages=9, count=0, exact=False):
+    return {
+        "results": records,
+        "pagination": {
+            "page": number,
+            "pages": pages,
+            "count": count,
+            "is_count_exact": exact,
+            "last_indexes": None,
         },
-        "C2": {
-            "results": [_committee("C3"), _committee("C4")],
-            "pagination": {"last_indexes": {"last_index": "C4", "last_committee_id": "C4"}},
-        },
-        "C4": {"results": [], "pagination": {"last_indexes": None}},
     }
-    seen_pages: list[int] = []
-
-    def stub(page, keyset):
-        seen_pages.append(page)
-        return by_cursor.get(keyset.get("last_index"), {"results": []})
-
-    monkeypatch.setattr(reader, "_get_page", stub)
-    got = [c["committee_id"] for c in reader._paginate()]
-    assert got == ["C1", "C2", "C3", "C4"]
-    # Keyset walk: page never advances past 1 (the cursor does the seeking).
-    assert seen_pages == [1, 1, 1]
 
 
-def test_paginate_respects_max_pages_cap(monkeypatch):
-    """``max_pages`` caps the number of fetches regardless of more data."""
-    reader = FecCommitteesReader(api_key="test", per_page=1, max_pages=1)
-    pages = {
-        1: {"results": [_committee("C1")], "pagination": {"last_indexes": None}},
-        2: {"results": [_committee("C2")], "pagination": {"last_indexes": None}},
-    }
-    monkeypatch.setattr(reader, "_get_page", lambda page, keyset: pages.get(page, {"results": []}))
-    got = [c["committee_id"] for c in reader._paginate()]
-    assert got == ["C1"]
+def _reader(tmp_path, payloads, **kwargs):
+    requests = []
+
+    class ObservedTransport(httpx.MockTransport):
+        closed = False
+
+        def close(self):
+            self.closed = True
+            super().close()
+
+    def respond(request):
+        requests.append(request)
+        number = int(request.url.params["page"])
+        value = payloads[number - 1]
+        if isinstance(value, int):
+            return httpx.Response(value)
+        return httpx.Response(200, json=value)
+
+    transport = ObservedTransport(respond)
+    reader = FecCommitteesReader(
+        api_key="private-api-test-credential",
+        capture_dir=tmp_path,
+        transport=transport,
+        min_interval=0,
+        **kwargs,
+    )
+    return reader, requests, transport
+
+
+def _run_state(reader):
+    return json.loads((reader.last_run_path / "run.json").read_text())
+
+
+def test_provider_walks_past_short_pages_and_retains_credential_free_evidence(tmp_path):
+    payloads = [
+        _page([{"committee_id": "C1"}], 1),
+        _page([{"committee_id": "C2"}, {"committee_id": "C3"}], 2),
+        _page([], 3),
+    ]
+    reader, requests, transport = _reader(tmp_path, payloads, per_page=2)
+    assert list(reader.iter_records()) == [{"committee_id": c} for c in ("C1", "C2", "C3")]
+    assert len(requests) == 3
+    for request in requests:
+        assert request.url.path == "/v1/committees/"
+        assert set(request.url.params) == {"sort", "per_page", "page"}
+        assert request.url.params["sort"] == "committee_id"
+        assert request.headers["X-Api-Key"] == "private-api-test-credential"
+    state = _run_state(reader)
+    assert state["status"] == "complete"
+    assert state["records"] == 3
+    assert transport.closed
+    index = [json.loads(line) for line in (reader.last_run_path / "pages.jsonl").read_text().splitlines()]
+    import hashlib
+
+    for page, expected in zip(index, payloads, strict=True):
+        evidence = page["evidence"]
+        raw = (reader.last_run_path / "blobs" / evidence["blob_path"]).read_bytes()
+        assert json.loads(raw) == expected
+        assert "sha256:" + hashlib.sha256(raw).hexdigest() == evidence["sha256"]
+        assert len(raw) == evidence["bytes"]
+    for path in reader.last_run_path.rglob("*"):
+        if path.is_file():
+            assert b"private-api-test-credential" not in path.read_bytes()
+
+
+def test_provider_exact_count_terminates_without_unnecessary_empty_request(tmp_path):
+    reader, requests, transport = _reader(
+        tmp_path,
+        [
+            _page([{"committee_id": "C1"}], 1, pages=1, count=1, exact=True),
+        ],
+    )
+    assert len(list(reader.iter_records())) == 1
+    assert len(requests) == 1
+    assert _run_state(reader)["declared_exact_count"] == 1
+    assert transport.closed
+
+
+@pytest.mark.parametrize(
+    ("payloads", "match"),
+    [
+        ([_page([{"committee_id": "C1"}], 1), 404], "HTTP 404"),
+        ([_page([{"committee_id": "C1"}], 1), _page([{"committee_id": "C1"}], 2)], "repeated"),
+        ([_page([{"committee_id": "C2"}], 1), _page([{"committee_id": "C1"}], 2)], "ceased increasing"),
+        ([_page([{}], 1)], "identifier"),
+        ([_page(["invalid"], 1)], "object"),
+        ([_page([{"committee_id": "C1"}], 1, pages=1, count=2, exact=True)], "disagree"),
+        (
+            [
+                _page([{"committee_id": "C1"}], 1, pages=2, count=2, exact=True),
+                _page([{"committee_id": "C2"}], 2, pages=2, count=3, exact=True),
+            ],
+            "changed",
+        ),
+        ([_page([], 1, pages=2, count=2, exact=True)], "empty page"),
+        ([{"results": []}], "pagination"),
+    ],
+)
+def test_refusals_keep_attempt_incomplete_and_close_transport(tmp_path, payloads, match):
+    reader, _, transport = _reader(tmp_path, payloads)
+    with pytest.raises(ValueError, match=match):
+        list(reader.iter_records())
+    assert _run_state(reader)["status"] == "incomplete"
+    assert transport.closed
+
+
+def test_page_bound_refuses_partial_population(tmp_path):
+    reader, _, transport = _reader(tmp_path, [_page([{"committee_id": "C1"}], 1)], max_pages=1)
+    destination = write_fec_committee_rows([_RAW_COMMITTEE], tmp_path / "previous.parquet")
+    prior = destination.read_bytes()
+    with pytest.raises(ValueError, match="page bound"):
+        write_fec_committee_rows(reader.iter_records(), destination, batch_size=1)
+    assert destination.read_bytes() == prior
+    assert _run_state(reader)["status"] == "incomplete"
+    assert transport.closed
+
+
+def test_consumer_closing_iterator_marks_attempt_incomplete(tmp_path):
+    reader, _, transport = _reader(tmp_path, [_page([{"committee_id": "C1"}], 1)])
+    records = reader.iter_records()
+    next(records)
+    records.close()
+    assert _run_state(reader)["status"] == "incomplete"
+    assert transport.closed
+
+
+def test_default_merge_fresh_whole_row_wins_and_prior_only_survives(tmp_path, monkeypatch):
+    module = importlib.import_module("spicy_regs.transforms.build_fec_committees")
+    write_fec_committee_rows(
+        [
+            _RAW_COMMITTEE,
+            {**_RAW_COMMITTEE, "committee_id": "C99999999", "name": "PRIOR ONLY"},
+        ],
+        tmp_path / "_fec_prior.parquet",
+    )
+    fresh = {**_RAW_COMMITTEE, "name": "FRESH", "state": None}
+    monkeypatch.setattr(module.FecCommitteesReader, "iter_records", lambda self: (row for row in [fresh]))
+    result = module.build_fec_committees(tmp_path)
+    rows = pq.read_table(result).to_pylist()
+    assert rows == [_shape(fresh), _shape({**_RAW_COMMITTEE, "committee_id": "C99999999", "name": "PRIOR ONLY"})]
+    assert not (tmp_path / "_fec_prior.parquet").exists()
+    assert not (tmp_path / "_fec_new.parquet").exists()
+
+
+def test_builder_closes_reader_when_shaping_fails_and_preserves_output(tmp_path, monkeypatch):
+    module = importlib.import_module("spicy_regs.transforms.build_fec_committees")
+    target = write_fec_committee_rows([_RAW_COMMITTEE], tmp_path / module.OUTPUT)
+    previous = target.read_bytes()
+    closed = []
+
+    def invalid_rows(self):
+        try:
+            yield {**_RAW_COMMITTEE, "name": {"not": "a scalar"}}
+        finally:
+            closed.append(True)
+
+    monkeypatch.setattr(module.r2, "download", lambda *args: False)
+    monkeypatch.setattr(module.FecCommitteesReader, "iter_records", invalid_rows)
+    with pytest.raises((TypeError, ValueError)):
+        module.build_fec_committees(tmp_path)
+    assert closed == [True]
+    assert target.read_bytes() == previous
+
+
+@pytest.mark.parametrize("option", [{"max_pages": 0}, {"max_pages": True}, {"per_page": 0}])
+def test_reader_rejects_invalid_bounds(tmp_path, option):
+    with pytest.raises(ValueError, match="positive integer"):
+        FecCommitteesReader(capture_dir=tmp_path, **option)
