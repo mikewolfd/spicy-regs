@@ -1,5 +1,9 @@
 # Initial FEC integration audit — September 21, 2026
 
+This report records an intermediate selection. Use the
+[coverage census](fec-coverage-2026-09-21.md) and [gap register](../fec-gaps.md)
+for the reconciled selection and remaining work after bulk and Senate recovery.
+
 This records the initial selected delivery. See the subsequent
 [bulk expansion](fec-bulk-continuation-2026-09-21.md) for newer acquisition,
 named dictionary mappings and source limitations found later the same day.

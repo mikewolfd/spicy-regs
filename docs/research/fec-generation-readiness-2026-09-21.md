@@ -1,5 +1,10 @@
 # FEC generation and local MCP audit — September 21, 2026
 
+The [gap register](../fec-gaps.md) consolidates remaining source, evidence,
+integration and deployment work, including the separate real R2 setup evidence.
+The [coverage census](fec-coverage-2026-09-21.md) reconciles all source families
+and bulk groups against this selected generation.
+
 The selected FEC tables now pass the shared generation, download and MCP path
 with their exact table identities intact. This continues the
 [Senate recovery](fec-senate-recovery-2026-09-21.md); it adds no source records or

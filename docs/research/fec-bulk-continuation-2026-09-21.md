@@ -1,5 +1,10 @@
 # FEC bulk expansion — September 21, 2026
 
+This report records an intermediate selection. The subsequent
+[Senate recovery](fec-senate-recovery-2026-09-21.md) and
+[coverage census](fec-coverage-2026-09-21.md) supersede its unresolved Senate
+disposition. See the [gap register](../fec-gaps.md) for current remaining work.
+
 This continues the [initial local integration](fec-delivery-2026-09-21.md).
 SpicyDocs owns source acquisition and parsing. SpicyRegs exposes source metadata,
 selected records and reported relationships through MCP. Files, parsed rows and

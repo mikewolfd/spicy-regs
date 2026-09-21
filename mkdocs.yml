@@ -40,6 +40,11 @@ nav:
   - Correction handling: correction-lifecycle.md
   - Changelog: changelog.md
   - Querying with Python: querying-python.md
+  - FEC:
+      - Integration: fec-integration.md
+      - Reported relationships: fec-relationships.md
+      - Remaining work: fec-gaps.md
+      - Coverage census: research/fec-coverage-2026-09-21.md
   - Tables:
       - dockets: tables/dockets.md
       - documents: tables/documents.md

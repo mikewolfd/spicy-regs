@@ -336,8 +336,11 @@ loads no remote tables or catalog, and needs no network extensions. Responses
 identify the local source directory. An invalid directory is refused rather
 than silently switching sources. The SQL write guard also applies in local mode.
 
-For the FEC source inventory, selected retained collections, relationship
-evidence and remaining coverage gaps, see [FEC integration](docs/fec-integration.md).
+For the FEC source inventory, selected retained collections and relationship
+evidence, see [FEC integration](docs/fec-integration.md). The
+[FEC gap register](docs/fec-gaps.md) tracks remaining work, owners and completion
+checks; the [coverage census](docs/research/fec-coverage-2026-09-21.md) accounts
+for every researched source family and official bulk group.
 
 | Client | Setup |
 |---|---|

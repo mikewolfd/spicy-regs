@@ -68,6 +68,11 @@ is queryable through the MCP server (`list_sources` / `describe_table` /
 | [`fec_committees`](tables/fec_committees.md) | one row per FEC committee / PAC | `committee_id` |
 | [`org_committee_links`](tables/org_committee_links.md) | one row per (commenter org name, FEC committee) match | `organization` + `committee_id` |
 
+For selected native FEC records, collection coverage and reported relationships,
+see [FEC integration](fec-integration.md). The [FEC gap register](fec-gaps.md)
+and [coverage census](research/fec-coverage-2026-09-21.md) distinguish supported
+schemas, acquired selections, remaining history and external publication.
+
 ### Outcomes & context
 
 | Table | Grain | Key |

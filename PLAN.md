@@ -221,15 +221,23 @@ existing subject fields. Dataset catalogs and processing remain outside it.
   download batches and retains their selected table pins; loose directories
   remain explicitly unversioned. See the
   [generation audit](docs/research/fec-generation-readiness-2026-09-21.md).
-- [ ] Connect a complete, verified FEC distribution to the existing rollup.
-  A local selected-record table is not the full committee population or a
-  globally published table. The local census release does not include the bulk,
-  gap-status, historical or original-filing populations. Bulk masters omit some API fields, and unverified-filer
-  references require separate source status rather than invented values.
+- [ ] Make caller scope, mapping status and original evidence usable by remote
+  consumers; publish the selected audited FEC families and qualify the hosted
+  reader. See FG01–FG02 and FG21 in the [FEC gap register](docs/fec-gaps.md).
+- [ ] Adopt the assessed committee history and remaining selected retained bulk
+  populations (FG03–FG04), and qualify the existing FEC/member/vote join (FG18).
+- [ ] Select further populations and complete their source-specific acquisition,
+  native qualification, interpretation, scale and refresh work (FG05–FG17).
+  The [coverage census](docs/research/fec-coverage-2026-09-21.md) accounts for all
+  26 broad families, all 26 bulk groups and research tasks T01–T19. Wider history,
+  downstream document/search adoption and adjacent sources remain separate from
+  the completed local selection. FG19–FG24 record their limits and the shared
+  deployment issues discovered during this work.
 
-These open tasks own only SpicyRegs changes. They coordinate with DocSpec's
-dataset workflow and SpicyDocs' source work, using planning sources DocSpec
-`3e3e43e` and SpicyDocs `40921d3`. SpicyRegs remains independently usable for
+This plan owns SpicyRegs changes; the linked gap register separately assigns
+provider and operational work. The original coordination used planning sources
+DocSpec `3e3e43e` and SpicyDocs `40921d3`; the register records the newer evidence.
+SpicyRegs remains independently usable for
 public-data users. Retaining SpicyDocs separately is valid; none of these tasks
 requires moving that package into SpicyRegs. Adding the backlog does not
 establish that a capability is supported or that upstream work has been accepted.

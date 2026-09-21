@@ -1,5 +1,10 @@
 # Historical Senate filing recovery — September 21, 2026
 
+The [gap register](../fec-gaps.md) consolidates the remaining discovery,
+interpretation, evidence-portability and publication work. The
+[coverage census](fec-coverage-2026-09-21.md) places this recovery within the full
+source and bulk inventories.
+
 The Senate archive still serves original files. Its discovery interfaces fail in
 different ways; those failures do not establish that the underlying files are
 absent. This investigation continues the

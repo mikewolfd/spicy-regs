@@ -5,6 +5,11 @@ across investigations. SpicyDocs supplies the FEC source inventory, acquisition
 and parsing. SpicyRegs builds queryable tables and serves their meaning through
 MCP. Each collection retains its own selection, dates and evidence.
 
+The [remaining-work register](fec-gaps.md) records open gaps, owners, evidence
+and completion checks. Its [coverage census](research/fec-coverage-2026-09-21.md)
+separates all 26 broad source families from all 26 official bulk-page groups and
+reconciles the original research backlog with the selected delivery.
+
 ## Outputs
 
 | Table | What one row means | How to use it |
