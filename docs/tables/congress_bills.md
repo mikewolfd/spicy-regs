@@ -34,7 +34,7 @@ One row per bill or resolution. Two rollups write this table: `congress-bills` w
 | `subject_count` | `VARCHAR` | How many legislative subject terms the publisher listed. |
 | `sponsor_bioguide_id` | `VARCHAR` | Bioguide id of the first sponsor the publisher lists. |
 | `sponsor_full_name` | `VARCHAR` | Full name string of the first sponsor, exactly as the publisher spells it. |
-| `cosponsor_count` | `VARCHAR` | Sponsors after the first, which is how BILLSTATUS states cosponsors here. |
+| `cosponsor_count` | `VARCHAR` | Number of items in the publisher's separate cosponsors list, including withdrawn entries; NULL when that list was not examined. |
 | `latest_action_code` | `VARCHAR` | Action code of the actions[] entry the publisher's latestAction names; latestAction itself states no code, so the two are linked on date and text. |
 | `latest_action_time` | `VARCHAR` | The publisher's actionTime on the latestAction entry. |
 | `latest_action_source_system_code` | `VARCHAR` | Source-system code of that same actions[] entry. |

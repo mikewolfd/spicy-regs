@@ -256,6 +256,7 @@ def build_committee_reports(
     observed_at = datetime.now(UTC).isoformat()
     link_rows: list[dict] = []
     evaluated_hearings: set[str] = set()
+    evaluated_reports: set[str] = set()
     report_rows: list[dict] = []
     section_rows: list[dict] = []
     hearing_rows: list[dict] = []
@@ -311,6 +312,7 @@ def build_committee_reports(
                 section_rows.extend(shape_report_section(
                     block, package_id=package_id, seq=seq, last_modified=package.summary.last_modified
                 ) for seq, block in enumerate(parse_agency_blocks(derived.text)))
+                evaluated_reports.add(package_id)
 
     logger.info(
         "Committee reports: {:,} reports, {:,} sections, {:,} hearings, {:,} already held, {:,} refused",
@@ -335,7 +337,8 @@ def build_committee_reports(
         logger.info("Committee reports: renditions read — {}", dict(renditions))
     logger.info("Committee reports: {} cover links; agenda deferred (no verified meeting-to-jacket join)", len(link_rows))
     paths = tuple(merge_contract_table(output_dir, name, rows, download_prior=download_prior,
-                                     replace_parents=("package_id", evaluated_hearings) if name == "hearing_bill_links" else None,
+                                     replace_parents=("package_id", evaluated_hearings) if name == "hearing_bill_links"
+                                     else ("package_id", evaluated_reports) if name == "report_sections" else None,
                                      prior_present=(prior_files[name] is not None) if name in prior_files else None)
                   for name, rows in (("committee_reports", report_rows), ("report_sections", section_rows),
                                      ("hearing_transcripts", hearing_rows), ("hearing_bill_links", link_rows)))
