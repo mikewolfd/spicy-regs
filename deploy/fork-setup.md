@@ -117,6 +117,30 @@ repeat attempt with identical bytes. Browser preflight allows `Range` and
 uploads remained. Receipts are retained outside Git in
 `~/Work/corpora/fork-cloudflare-2026-09-21/`.
 
-This verifies storage setup, not source data coverage. The bucket has no
-production tables yet. The optional catalog, custom domain and Worker deployment
-remain separate steps.
+This verifies storage setup, not source data coverage. After the keys were
+installed, the existing scheduled `lobbying_filings` job published a generation
+with zero rows (422 bytes, 14 columns) after the source rejected an unfiltered
+request with HTTP 400. Its public bytes and decoded row count match the
+publication record, but the source failure did not establish absence. The
+invalid family was conditionally withdrawn from `publication.json`; its
+immutable files and receipts remain available for diagnosis.
+The reader repair in `7551f63` refuses failed, malformed and incomplete pages
+before output or publication. Independent replay verifies both former
+false-empty and false-partial failures; 63 focused tests and the full 2,107-test
+host gate pass. Two live pages yield three records whose 42 output cells match
+the native source. This qualifies the repair and sample, not a full backfill.
+The source now requires a filter for pagination. The scope-preserving date
+filter reports 1,977,046 filings, so a keyless cold start would require about
+79,082 pages. The lobbying schedule is paused pending a bounded initial backfill;
+successful storage and a small source sample do not establish that backfill.
+The catalog, custom domain and Worker deployment remain separate steps.
+Catalog-backed ingestion and mirror jobs need the catalog settings above.
+
+Core GitHub CI passed for the setup commit. The separate documentation build
+passed, but deployment returned 404 because GitHub Pages is not enabled on this
+fork.
+
+The cross-repository [remaining-gaps register](../../spicy-docs/docs/research/remaining-gaps-2026-09-21.md)
+tracks source coverage, corrected-data adoption, catalog setup and optional
+serving paths separately. The [failed Pages run](https://github.com/mikewolfd/spicy-regs/actions/runs/35642543802)
+and retained `pages-deployment-failure.log` preserve the deployment evidence.
