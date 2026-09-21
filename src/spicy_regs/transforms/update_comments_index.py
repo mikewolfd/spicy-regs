@@ -74,7 +74,11 @@ def update_comments_index(output_dir: Path, changed_files: list[Path]) -> Path:
                 "row_count": pl.Int64,
             },
         )
-        df.write_parquet(index_file, compression="zstd")
+        # Keep the readable prior if writing or promotion fails. A later repair
+        # can rebuild this temporary file from the committed partitions.
+        temp_index = index_file.with_suffix(".tmp.parquet")
+        df.write_parquet(temp_index, compression="zstd")
+        temp_index.replace(index_file)
 
     total_rows = sum(r["row_count"] for r in all_rows)
     logger.info(
