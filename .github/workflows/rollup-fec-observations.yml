@@ -1,0 +1,54 @@
+name: Rollup — retained FEC observations
+on:
+  workflow_dispatch:
+    inputs:
+      inputs_url:
+        description: 'HTTPS URL of an explicitly prepared retained-input tar; see docs/fec-retained-workflows.md'
+        required: true
+        type: string
+      inputs_sha256:
+        description: 'Exact transferred archive SHA-256'
+        required: true
+        type: string
+      manifest_sha256:
+        description: 'Exact portable manifest.json SHA-256'
+        required: true
+        type: string
+      max_archive_bytes:
+        description: 'Maximum download bytes'
+        required: false
+        default: '4000000000'
+        type: string
+      max_extracted_bytes:
+        description: 'Maximum extracted bytes; runner must also fit generated tables'
+        required: false
+        default: '8000000000'
+        type: string
+      skip_upload:
+        description: 'Build and retain a local generation without R2 publication'
+        required: false
+        default: true
+        type: boolean
+      timeout_minutes:
+        description: 'Build timeout for this explicit selection'
+        required: false
+        default: 120
+        type: number
+
+concurrency:
+  group: rollup-fec-observations
+  cancel-in-progress: false
+
+jobs:
+  run:
+    uses: ./.github/workflows/_rollup.yml
+    secrets: inherit
+    with:
+      command: build-fec-observations
+      fec_inputs_url: ${{ inputs.inputs_url }}
+      fec_inputs_sha256: ${{ inputs.inputs_sha256 }}
+      fec_manifest_sha256: ${{ inputs.manifest_sha256 }}
+      fec_max_archive_bytes: ${{ inputs.max_archive_bytes }}
+      fec_max_extracted_bytes: ${{ inputs.max_extracted_bytes }}
+      skip_upload: ${{ inputs.skip_upload }}
+      timeout_minutes: ${{ inputs.timeout_minutes }}

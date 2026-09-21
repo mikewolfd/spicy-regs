@@ -11,6 +11,10 @@ complete metadata companions through the existing rollup upload path. Local
 builds are the default. A successful local build does not establish that these
 tables are published on the public MCP server.
 
+For GitHub Actions, use the [explicit retained-input workflow](fec-retained-workflows.md)
+with pinned transfer bytes and portable manifest paths. Successful build-only
+runs retain their complete generation and input audit.
+
 ## Build selected retained inputs
 
 ```sh

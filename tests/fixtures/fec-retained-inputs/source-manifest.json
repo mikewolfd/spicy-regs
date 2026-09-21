@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "collections": [
+    {
+      "collection_id": "candidate-mixed-candidates",
+      "source_family": "fec_candidates",
+      "profile": "candidate",
+      "release_path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/fec-candidate-release-2026-09-15/mixed-candidates/release",
+      "blob_root": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/fec-candidate-release-2026-09-15/mixed-candidates/blobs",
+      "artifact_sha256": "sha256:591095df376ca11e1b2ab83b77101184c989f62aa6db2efd26ef499fb54d22cb",
+      "verifier_implementation_id": "git+file:///Users/mikewolfd/Work/.worktrees/spicy-docs-fec-interfaces@59f8e4b7360428e49635cb0f4e56d0d802fa651f"
+    },
+    {
+      "collection_id": "bulk-ccl-header",
+      "source_family": "fec_candidate_links",
+      "profile": "positional",
+      "blob_root": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/fec-bulk-release-2026-09-15/blobs",
+      "scope": {
+        "capture": {
+          "byteSize": 79,
+          "contentEncoding": "identity",
+          "contentLength": "79",
+          "etag": "\"4e1c2c1562b5b9197d3186420c3ae896\"",
+          "lastModified": "Wed, 10 Jan 2018 18:30:11 GMT",
+          "mediaType": "binary/octet-stream",
+          "objectKey": "bulk-downloads/data_dictionaries/ccl_header_file.csv",
+          "observedAt": "2026-09-12T13:43:02.324634+00:00",
+          "representation": "opaque",
+          "requestUrl": "https://cg-519a459a-0ea3-42c2-b7bc-fa1143481f74.s3-us-gov-west-1.amazonaws.com/bulk-downloads/data_dictionaries/ccl_header_file.csv",
+          "resolvedUrl": "https://cg-519a459a-0ea3-42c2-b7bc-fa1143481f74.s3-us-gov-west-1.amazonaws.com/bulk-downloads/data_dictionaries/ccl_header_file.csv",
+          "responseSha256": "sha256:9de902716f8c5086fc91cc7b26b675c49916e43c742693df939278cb7d91c633",
+          "via": "direct"
+        },
+        "format": "delimited",
+        "encoding": "utf-8",
+        "member": null,
+        "delimiter": ",",
+        "quoting": "csv",
+        "max_records_per_page": 1000,
+        "max_record_bytes": 131072,
+        "max_members": 10000,
+        "max_decoded_bytes": 1099511627776
+      }
+    }
+  ]
+}

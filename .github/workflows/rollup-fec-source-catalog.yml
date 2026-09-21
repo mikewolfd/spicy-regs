@@ -1,0 +1,21 @@
+name: Rollup — fec_source_catalog
+on:
+  workflow_dispatch:
+    inputs:
+      skip_upload:
+        description: 'Build and retain a local generation without R2 publication'
+        required: false
+        default: true
+        type: boolean
+
+concurrency:
+  group: rollup-fec-source-catalog
+  cancel-in-progress: false
+
+jobs:
+  run:
+    uses: ./.github/workflows/_rollup.yml
+    secrets: inherit
+    with:
+      command: run-rollup-fec-source-catalog
+      skip_upload: ${{ inputs.skip_upload }}

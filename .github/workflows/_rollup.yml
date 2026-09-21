@@ -18,6 +18,51 @@ on:
         required: false
         default: false
         type: boolean
+      sam_ingest_mode:
+        description: 'SAM source mode: extract or partition'
+        required: false
+        default: 'extract'
+        type: string
+      sam_since_year:
+        description: 'Optional first SAM registration year; blank uses the rotating year'
+        required: false
+        default: ''
+        type: string
+      sam_until_year:
+        description: 'Optional last SAM registration year'
+        required: false
+        default: ''
+        type: string
+      sam_max_records:
+        description: 'Optional explicit SAM record limit; blank or zero is unbounded'
+        required: false
+        default: ''
+        type: string
+      fec_inputs_url:
+        description: 'Explicit HTTPS URL of a prepared retained-input tar archive; no source acquisition'
+        required: false
+        default: ''
+        type: string
+      fec_inputs_sha256:
+        description: 'Expected SHA-256 of the exact transferred archive'
+        required: false
+        default: ''
+        type: string
+      fec_manifest_sha256:
+        description: 'Expected SHA-256 of manifest.json inside the archive'
+        required: false
+        default: ''
+        type: string
+      fec_max_archive_bytes:
+        description: 'Maximum transferred retained-input archive bytes'
+        required: false
+        default: '4000000000'
+        type: string
+      fec_max_extracted_bytes:
+        description: 'Maximum extracted retained-input bytes; leave runner space for outputs'
+        required: false
+        default: '8000000000'
+        type: string
       lda_since:
         description: 'Optional LDA catch-up start date (YYYY-MM-DD)'
         required: false
@@ -97,7 +142,52 @@ jobs:
         uses: astral-sh/setup-uv@v4
 
       - name: Install dependencies
-        run: uv sync
+        run: uv sync --frozen
+
+      - name: Retain invocation scope
+        env:
+          ROLLUP_INPUTS: ${{ toJSON(inputs) }}
+        run: |
+          mkdir -p output
+          python - <<'PY'
+          import datetime, json, os
+          from pathlib import Path
+          scope = json.loads(os.environ['ROLLUP_INPUTS'])
+          # URLs may carry temporary access tokens; digests identify transferred bytes.
+          scope.pop('fec_inputs_url', None)
+          receipt = {
+              'started_at': datetime.datetime.now(datetime.UTC).isoformat(),
+              'code_revision': os.environ['GITHUB_SHA'],
+              'run_id': os.environ['GITHUB_RUN_ID'],
+              'run_attempt': os.environ['GITHUB_RUN_ATTEMPT'],
+              'inputs': scope,
+          }
+          Path('output/invocation.json').write_text(json.dumps(receipt, indent=2) + '\n')
+          PY
+
+      - name: Prepare explicit retained FEC inputs
+        if: inputs.command == 'build-fec-observations'
+        env:
+          FEC_INPUTS_URL: ${{ inputs.fec_inputs_url }}
+          FEC_INPUTS_SHA256: ${{ inputs.fec_inputs_sha256 }}
+          FEC_MANIFEST_SHA256: ${{ inputs.fec_manifest_sha256 }}
+          MAX_ARCHIVE_BYTES: ${{ inputs.fec_max_archive_bytes }}
+          MAX_EXTRACTED_BYTES: ${{ inputs.fec_max_extracted_bytes }}
+        run: |
+          [[ "$FEC_INPUTS_URL" == https://* ]] || { echo 'An explicit HTTPS input archive is required'; exit 1; }
+          [[ "${FEC_INPUTS_SHA256#sha256:}" =~ ^[0-9a-f]{64}$ ]] || { echo 'Archive SHA-256 is required'; exit 1; }
+          [[ "${FEC_MANIFEST_SHA256#sha256:}" =~ ^[0-9a-f]{64}$ ]] || { echo 'Manifest SHA-256 is required'; exit 1; }
+          [[ "$MAX_ARCHIVE_BYTES" =~ ^[1-9][0-9]*$ ]] || exit 1
+          [[ "$MAX_EXTRACTED_BYTES" =~ ^[1-9][0-9]*$ ]] || exit 1
+          curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' \
+            --retry 3 --connect-timeout 30 --max-time 900 --max-filesize "$MAX_ARCHIVE_BYTES" \
+            --output "$RUNNER_TEMP/fec-retained-inputs.tar" "$FEC_INPUTS_URL"
+          uv run --frozen python scripts/prepare_fec_retained_inputs.py \
+            --archive "$RUNNER_TEMP/fec-retained-inputs.tar" \
+            --archive-sha256 "$FEC_INPUTS_SHA256" --manifest-sha256 "$FEC_MANIFEST_SHA256" \
+            --max-archive-bytes "$MAX_ARCHIVE_BYTES" --max-extracted-bytes "$MAX_EXTRACTED_BYTES" \
+            --output-dir "$RUNNER_TEMP/fec-retained-inputs" --audit-dir output/fec-inputs
+          rm "$RUNNER_TEMP/fec-retained-inputs.tar"
 
       - name: Run rollup
         env:
@@ -113,10 +203,12 @@ jobs:
           # Keep FEC evidence outside a hidden directory so successful and
           # interrupted traversals can be inspected after the runner exits.
           FEC_CAPTURE_DIR: output/fec-captures
-          # SAM.gov Entity API key. Unlike the generic DATA_GOV_API_KEY, SAM
-          # requires a key provisioned by a SAM.gov account (api.data.gov-backed);
-          # the sam-entities rollup is a no-op without it.
+          # SAM requires source access; missing/failed access must abort publication.
           SAM_API_KEY: ${{ secrets.SAM_API_KEY }}
+          SAM_INGEST_MODE: ${{ inputs.sam_ingest_mode }}
+          SAM_SINCE_YEAR: ${{ inputs.sam_since_year }}
+          SAM_UNTIL_YEAR: ${{ inputs.sam_until_year }}
+          SAM_MAX_RECORDS: ${{ inputs.sam_max_records }}
           # Optional: raises the Senate LDA API rate limit. The lobbying-filings
           # rollup is fully functional keyless, so an unset secret is fine.
           LDA_API_KEY: ${{ secrets.LDA_API_KEY }}
@@ -130,7 +222,7 @@ jobs:
           # (section_classifications, bill_summaries, diff_summaries —
           # spicy_docs.interpretation's classify_sections/summarize_bill/
           # summarize_diff). A keyless run skips those three rather than
-          # failing; the other ten bill-family tables still publish.
+          # failing; the other declared family outputs still build.
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           COMMITTEE_REPORTS_SINCE: ${{ inputs.committee_reports_since }}
           PRINT_CITATIONS_SINCE: ${{ inputs.print_citations_since }}
@@ -150,8 +242,11 @@ jobs:
           else
             UPLOAD_ARG="--no-skip-upload"
           fi
-          echo "Running: uv run $COMMAND $UPLOAD_ARG"
-          uv run "$COMMAND" "$UPLOAD_ARG"
+          ARGS=("$UPLOAD_ARG")
+          if [ "$COMMAND" = 'build-fec-observations' ]; then
+            ARGS+=(--manifest "$RUNNER_TEMP/fec-retained-inputs/manifest.json")
+          fi
+          uv run --frozen "$COMMAND" "${ARGS[@]}"
 
       - name: Retain FEC committee source evidence
         if: always() && inputs.command == 'run-rollup-fec-committees'
@@ -162,10 +257,23 @@ jobs:
           if-no-files-found: ignore
           retention-days: 30
 
-      - name: Upload artifacts (for debugging)
-        if: failure()
+      - name: Retain invocation and transferred-input audit
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: rollup-output
+          name: rollup-audit-${{ inputs.command }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            output/invocation.json
+            output/fec-inputs/
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Retain build-only outputs and failures
+        if: failure() || (success() && inputs.skip_upload)
+        uses: actions/upload-artifact@v4
+        with:
+          name: rollup-output-${{ inputs.command }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: output/
-          retention-days: 7
+          if-no-files-found: ignore
+          compression-level: 0
+          retention-days: 30

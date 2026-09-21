@@ -5,6 +5,29 @@ on:
     - cron: '0 19 * * *'
   workflow_dispatch:
     inputs:
+      sam_ingest_mode:
+        description: 'SAM acquisition route'
+        required: false
+        default: extract
+        type: choice
+        options:
+          - extract
+          - partition
+      sam_since_year:
+        description: 'First registration year (set both years; blank selects rotating year)'
+        required: false
+        default: ''
+        type: string
+      sam_until_year:
+        description: 'Last registration year, inclusive'
+        required: false
+        default: ''
+        type: string
+      sam_max_records:
+        description: 'Explicit record selection limit (blank or 0 completes the selected years)'
+        required: false
+        default: ''
+        type: string
       skip_upload:
         description: 'Skip R2 upload (dry run)'
         required: false
@@ -16,4 +39,8 @@ jobs:
     secrets: inherit
     with:
       command: run-rollup-sam-entities
+      sam_ingest_mode: ${{ inputs.sam_ingest_mode || 'extract' }}
+      sam_since_year: ${{ inputs.sam_since_year || '' }}
+      sam_until_year: ${{ inputs.sam_until_year || '' }}
+      sam_max_records: ${{ inputs.sam_max_records || '' }}
       skip_upload: ${{ github.event_name == 'workflow_dispatch' && inputs.skip_upload || false }}
