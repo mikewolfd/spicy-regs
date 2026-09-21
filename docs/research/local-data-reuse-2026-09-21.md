@@ -186,17 +186,20 @@ failed responses. Do not upload that directory wholesale.
 - `~/.claude/jobs/fcb997e0/tmp/` contains inventory JSONs pointing to receipt
   files, not additional Parquet data.
 
-## Reuse sequence
+## Execution tasks
 
-1. Publish the two existing audited FEC generations and verify remote pins,
-   downloads and MCP queries. Seal the schema-compatible committee seed.
-2. Select compatible retained base parents; rebuild source-field repairs from
-   pinned regulatory releases while preserving newer parent observations.
-3. Admit scoped prepared independent families. Rebuild known defective outputs
-   from retained raw sources; reconcile complete bill-family ownership and scope.
-4. Generate dependent rollups from those exact parent versions.
-5. Acquire only missing populations or required freshness deltas, then record
-   the remaining gaps against the complete fork output inventory.
+The [consolidated fork plan](../fork-generation.md#consolidated-task-queue)
+owns task status, dependencies, owners and completion checks. This dated document
+retains the measured inputs and qualification evidence. Use these task groups:
+
+- **T03–T05:** transfer selected inputs, publish the audited FEC seed, then expand
+  separately from the remaining retained FEC populations.
+- **T06–T07:** repair the regulatory parents and resolve the missing full comments
+  population without substituting samples.
+- **T08–T14:** admit, audit or rebuild the prepared legislative, regulatory,
+  court and organization families using the source-specific limits above.
+- **T15–T20:** build dependent outputs, qualify workflows and consumer access,
+  and reconcile completion across every intended output.
 
 Uploading source releases for runner access and publishing queryable rollups are
 separate steps. Transfer selected manifests and their referenced bytes with
