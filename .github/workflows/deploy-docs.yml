@@ -52,14 +52,17 @@ jobs:
         run: uv sync --group docs
 
       - name: Reconcile in-code schema against live R2 parquet
+        env:
+          R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL }}
         # A gate on drift, not on the network. `|| true` used to swallow both:
         # an unreachable bucket and a real disagreement between what we declare
         # and what we publish returned success alike, so the check could not
         # fail. The CLI now exits 3 when it could not read the source, which is
         # a warning, and 1 on drift, which fails the deploy.
         run: |
+          : "${R2_PUBLIC_URL:?Set R2_PUBLIC_URL to the public data URL for this repository}"
           set +e
-          uv run spicy-regs-dict check --source r2
+          uv run --frozen spicy-regs-dict check --source r2 --base "$R2_PUBLIC_URL"
           code=$?
           set -e
           if [ "$code" -eq 3 ]; then

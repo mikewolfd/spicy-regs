@@ -6,9 +6,18 @@
   // DuckDB can spill big aggregations to it (SPICY_REGS_TEMP_DIR=/tmp).
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "spicy-regs-mcp",
+  "account_id": "174055408ff1560e60601c4d12c561c4",
   "main": "worker/index.ts",
   "compatibility_date": "2026-08-01",
   "compatibility_flags": ["nodejs_compat"],
+  // Set these for the selected account before deploying a fork. The Worker
+  // forwards them to Python; secrets belong in Wrangler's secret store.
+  "vars": {
+    "SPICY_REGS_R2_URL": "https://pub-72e95c0c20a84508b42b03a6ff6d55f8.r2.dev",
+    "R2_CATALOG_URI": "",
+    "R2_CATALOG_WAREHOUSE": "",
+    "R2_CATALOG_NAMESPACE": "default"
+  },
   "containers": [
     {
       "class_name": "McpContainer",

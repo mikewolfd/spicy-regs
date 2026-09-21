@@ -16,7 +16,6 @@ from importlib.resources import files
 from pathlib import Path
 from time import monotonic as _monotonic
 from typing import Any
-from urllib.parse import urlparse
 from uuid import UUID
 
 import duckdb
@@ -27,8 +26,8 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 from spicy_regs._icon import ICON_DATA_URI
+from spicy_regs.public_url import resolve_r2_base_url
 
-DEFAULT_R2_BASE_URL = "https://data.spicy-regs.dev"
 TABLES = (
     "dockets",
     "documents",
@@ -161,13 +160,7 @@ ICONS = [Icon(src=ICON_DATA_URI, mimeType="image/png", sizes=["512x512"])]
 
 
 def _resolve_r2_base_url() -> str:
-    raw = os.environ.get("SPICY_REGS_R2_URL", DEFAULT_R2_BASE_URL).rstrip("/")
-    parsed = urlparse(raw)
-    if parsed.scheme != "https" or not parsed.netloc:
-        raise RuntimeError(f"SPICY_REGS_R2_URL must be an https:// URL, got: {raw!r}")
-    if any(c in raw for c in ("'", "\\", "\x00", "\n", "\r")):
-        raise RuntimeError(f"SPICY_REGS_R2_URL contains illegal characters: {raw!r}")
-    return raw
+    return resolve_r2_base_url()
 
 
 R2_BASE_URL = _resolve_r2_base_url()

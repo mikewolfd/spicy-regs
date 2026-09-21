@@ -13,25 +13,35 @@ export class McpContainer extends Container<Env> {
   // Idle timeout before the instance is reclaimed (scale-to-zero economics).
   sleepAfter = "20m";
 
-  // DuckDB tuning + R2 read config, all non-secret. Memory is capped under
+  // DuckDB tuning + R2 read config. Memory is capped under
   // standard-4's 12 GiB so a heavy query spills to the real 20 GB disk (/tmp)
   // rather than being OOM-killed.
   //
-  // The Iceberg catalog (the comments system-of-record) needs a secret token and
-  // is deferred to a pre-cutover step: without R2_CATALOG_* the server falls back
-  // to the public comments.parquet mirror (see _attach_catalog / _resolve_catalog_config),
-  // which is the full comments table too — fine for a first deploy + load test.
+  // Wrangler vars and the optional catalog secret must reach Python explicitly.
+  // Without complete catalog settings, Python uses this account's public mirror.
   envVars = {
     SPICY_REGS_MEMORY_LIMIT: "9GB",
     SPICY_REGS_TEMP_DIR: "/tmp",
     SPICY_REGS_HOME_DIR: "/tmp",
     SPICY_REGS_STATEMENT_TIMEOUT: "600s",
-    SPICY_REGS_R2_URL: "https://data.spicy-regs.dev",
+    SPICY_REGS_R2_URL: this.env.SPICY_REGS_R2_URL,
+    R2_CATALOG_URI: this.env.R2_CATALOG_URI,
+    R2_CATALOG_WAREHOUSE: this.env.R2_CATALOG_WAREHOUSE,
+    R2_CATALOG_NAMESPACE: this.env.R2_CATALOG_NAMESPACE,
+    // The optional secret is installed separately, so it is not a required
+    // binding in generated Env types. Check its runtime type before forwarding.
+    R2_CATALOG_TOKEN:
+      "R2_CATALOG_TOKEN" in this.env && typeof this.env.R2_CATALOG_TOKEN === "string"
+        ? this.env.R2_CATALOG_TOKEN
+        : "",
   };
 }
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
+    if (!env.SPICY_REGS_R2_URL) {
+      return new Response("Data is not available yet.", { status: 503 });
+    }
     const { pathname } = new URL(request.url);
     // /mcp is the protocol endpoint; / and /icon.png are the human-facing setup
     // page, which the Python server serves (see mcp_server._register_landing_page).

@@ -1,6 +1,6 @@
 # Remote Terraform state in Cloudflare R2 (S3-compatible API).
 #
-# State lives in a SEPARATE, PRIVATE bucket (spicy-regs-tfstate) — never the
+# State lives in a SEPARATE, PRIVATE bucket — never the
 # public data bucket, and never public, because state can hold sensitive values.
 # Credentials are read from the environment (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY
 # set to your R2 S3 access key + secret) and are NOT committed here.
@@ -12,13 +12,10 @@
 # DynamoDB for the classic lock table.
 terraform {
   backend "s3" {
-    bucket = "spicy-regs-tfstate"
+    # Supply bucket + endpoints through -backend-config=backend.hcl. Keeping
+    # account-specific values out of this file lets forks use separate state.
     key    = "deploy/terraform.tfstate"
     region = "auto"
-
-    endpoints = {
-      s3 = "https://a18589c7a7a0fc4febecadfc9c71b105.r2.cloudflarestorage.com"
-    }
 
     use_lockfile                = true
     use_path_style              = true

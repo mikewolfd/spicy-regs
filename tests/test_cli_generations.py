@@ -51,7 +51,7 @@ def _remote(monkeypatch, label="old", *, legacy=False):
         requests.append(url)
         name = url.rsplit("/", 1)[-1].removesuffix(".parquet")
         if name in {"a", "b"}:
-            assert url == f"{cli.PUBLIC_URL}/{index['families']['pair']['prefix']}/{name}.parquet"
+            assert url == f"{cli.resolve_r2_base_url()}/{index['families']['pair']['prefix']}/{name}.parquet"
         yield httpx.Response(200, content=bodies[name], request=httpx.Request(method, url))
 
     if legacy:
@@ -81,6 +81,62 @@ def test_complete_managed_batch_records_one_snapshot_and_switches_together(tmp_p
     assert pl.read_parquet(old / "a.parquet")["id"].to_list() == ["old-a"]
     assert pl.read_parquet(new / "a.parquet")["id"].to_list() == ["new-a"]
     assert pl.read_parquet(new / "b.parquet")["id"].to_list() == ["new-b"]
+
+
+def test_managed_batch_uses_configured_host_for_snapshot_metadata_and_members(tmp_path, monkeypatch):
+    monkeypatch.setenv("R2_PUBLIC_URL", "https://fork.example/")
+    _, _, loads, requests = _remote(monkeypatch)
+    current = _download(tmp_path, "a", "b")
+    assert len(loads) == 1
+    assert len(requests) == 2 and all(url.startswith("https://fork.example/generations/") for url in requests)
+    assert json.loads((current / "download.json").read_text())["base_url"] == "https://fork.example"
+
+
+def test_host_switch_to_legacy_replaces_current_without_losing_previous_bytes(tmp_path, monkeypatch):
+    _remote(monkeypatch)
+    old = _download(tmp_path, "a", "b")
+    monkeypatch.setattr(publication, "load_index", lambda base: publication.empty_index())
+    requests = []
+
+    @contextmanager
+    def stream(method, url, **kwargs):
+        requests.append(url)
+        buffer = io.BytesIO()
+        pl.DataFrame({"docket_id": [url]}).write_parquet(buffer)
+        yield httpx.Response(200, content=buffer.getvalue(), request=httpx.Request(method, url))
+
+    monkeypatch.setattr(cli.httpx, "stream", stream)
+    for host in ("https://fork.example", cli.PUBLIC_URL):
+        monkeypatch.setenv("R2_PUBLIC_URL", host)
+        current = _download(tmp_path, "dockets")
+        path, status = cli._local_files(tmp_path)["dockets"]
+        assert path == current / "dockets.parquet"
+        assert status == "legacy-unversioned"
+        assert pl.read_parquet(path)["docket_id"].to_list() == [f"{host}/dockets.parquet"]
+        metadata = json.loads((current / "download.json").read_text())
+        assert metadata["base_url"] == host
+        assert metadata["selected"]["dockets"]["status"] == "legacy-unversioned"
+        assert current != old
+        assert pl.read_parquet(old / "a.parquet")["id"].to_list() == ["old-a"]
+    assert requests == ["https://fork.example/dockets.parquet", f"{cli.PUBLIC_URL}/dockets.parquet"]
+
+
+def test_failed_legacy_host_switch_keeps_prior_current(tmp_path, monkeypatch):
+    _remote(monkeypatch)
+    old = _download(tmp_path, "a", "b")
+    monkeypatch.setenv("R2_PUBLIC_URL", "https://fork.example")
+    monkeypatch.setattr(publication, "load_index", lambda base: publication.empty_index())
+
+    @contextmanager
+    def unavailable(method, url, **kwargs):
+        assert url == "https://fork.example/dockets.parquet"
+        yield httpx.Response(503, request=httpx.Request(method, url))
+
+    monkeypatch.setattr(cli.httpx, "stream", unavailable)
+    with pytest.raises(RuntimeError, match="Download incomplete"):
+        _download(tmp_path, "dockets")
+    assert (tmp_path / "current").resolve() == old
+    assert pl.read_parquet(cli._local_files(tmp_path)["a"][0])["id"].to_list() == ["old-a"]
 
 
 @pytest.mark.parametrize("failure", ["hash", "http"])

@@ -23,6 +23,9 @@ site
 recovery
 .env.local
 .env*.local
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
 __pycache__
 notebooks/.cache
 # Terraform (deploy/terraform)
@@ -31,6 +34,8 @@ notebooks/.cache
 *.tfstate.*
 *.tfvars
 !*.tfvars.example
+deploy/terraform/backend.hcl
+deploy/terraform/imports.tf
 crash.log
 crash.*.log
 

@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -22,7 +21,7 @@ from pathlib import Path
 
 import duckdb
 
-DEFAULT_BASE_URL = "https://data.spicy-regs.dev"
+from spicy_regs.public_url import resolve_r2_base_url
 FreshnessRow = tuple[str, str, str | None, int]
 FreshnessState = dict[str, dict[str, int | str]]
 
@@ -184,10 +183,11 @@ def evaluate_row_changes(
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--base-url", default=os.environ.get("SPICY_REGS_R2_URL", DEFAULT_BASE_URL))
+    parser.add_argument("--base-url")
     parser.add_argument("--state-file", type=Path, default=Path(".rollup-freshness-state.json"))
     parser.add_argument("--today", type=date.fromisoformat, default=date.today(), help="Testing override (YYYY-MM-DD)")
     args = parser.parse_args()
+    args.base_url = resolve_r2_base_url(args.base_url)
 
     try:
         state = json.loads(args.state_file.read_text()) if args.state_file.exists() else {}

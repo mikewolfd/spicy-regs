@@ -1,0 +1,6 @@
+# Copy to backend.hcl (gitignored). Use a private state bucket in the selected
+# Cloudflare account, distinct from the public data bucket.
+bucket = "spicy-regs-tfstate"
+endpoints = {
+  s3 = "https://YOUR_ACCOUNT_ID.r2.cloudflarestorage.com"
+}
