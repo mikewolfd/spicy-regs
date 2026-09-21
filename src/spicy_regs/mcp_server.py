@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import json
 import logging
 import os
 import re
@@ -312,6 +313,9 @@ def _attach_catalog(con: duckdb.DuckDBPyConnection, config: dict[str, str]) -> b
 
 
 def _build_connection() -> duckdb.DuckDBPyConnection:
+    from spicy_regs.sources.publication import load_index, table_location
+
+    publication_index = load_index(R2_BASE_URL)
     con = duckdb.connect()
     con.execute(f"SET home_directory='{HOME_DIRECTORY.replace(chr(39), chr(39) * 2)}'")
     con.execute("INSTALL httpfs")
@@ -321,8 +325,14 @@ def _build_connection() -> duckdb.DuckDBPyConnection:
     catalog_attached = catalog is not None and _attach_catalog(con, catalog)
 
     _apply_security_settings(con)
-    for name in TABLES:
-        if name == "comments" and catalog_attached:
+    # Request cursors share regular in-memory tables, not connection-local
+    # temporary tables. Keep the pin alongside the views they actually query.
+    con.execute("CREATE TABLE _spicy_publication (snapshot VARCHAR)")
+    con.execute("INSERT INTO _spicy_publication VALUES (?)", [json.dumps(publication_index)])
+    managed_names = [key.removesuffix(".parquet") for e in publication_index["families"].values() for key in e["tables"]]
+    for name in dict.fromkeys((*TABLES, *managed_names)):
+        key, published = table_location(publication_index, f"{name}.parquet")
+        if name == "comments" and catalog_attached and published is None:
             namespace = catalog["namespace"]  # type: ignore[index]
             try:
                 con.execute(
@@ -334,12 +344,44 @@ def _build_connection() -> duckdb.DuckDBPyConnection:
                 continue
             except duckdb.Error as exc:
                 logger.warning("comments not available in catalog; falling back to monolith: %s", exc)
-        url = f"{R2_BASE_URL}/{name}.parquet"
+        url = f"{R2_BASE_URL}/{key}"
         try:
-            con.execute(f"CREATE VIEW {name} AS SELECT * FROM read_parquet('{url}')")
+            con.execute(f'CREATE VIEW "{name}" AS SELECT * FROM read_parquet(\'{url}\')')
+            if published is not None:
+                actual = con.execute(f'DESCRIBE "{name}"').fetchall()
+                if [[row[0], row[1]] for row in actual] != published["columns"]:
+                    con.close()
+                    raise RuntimeError(f"Published schema differs from admitted generation: {name}")
         except duckdb.Error as exc:
+            if published is not None:
+                con.close()
+                raise RuntimeError(f"Published generation member unavailable: {name}") from exc
             logger.warning("table %s not available at %s; skipping view: %s", name, url, exc)
     return con
+
+
+def _publication_status(cursor: duckdb.DuckDBPyConnection) -> dict:
+    """Describe this connection's actual availability and captured generations."""
+    available = [row[0] for row in cursor.execute("SHOW TABLES").fetchall() if not row[0].startswith("_spicy_")]
+    try:
+        row = cursor.execute("SELECT snapshot FROM _spicy_publication").fetchone()
+        if row is None:
+            raise RuntimeError("Missing publication snapshot")
+        index = json.loads(row[0])
+    except duckdb.CatalogException:
+        # Locally injected connections have no admitted publication snapshot.
+        index = {"families": {}}
+    managed = {
+        key.removesuffix(".parquet"): {"status": "managed_generation", "family": family,
+                                       "artifact_digest": entry["artifactDigest"]}
+        for family, entry in index["families"].items() for key in entry["tables"]
+    }
+    return {
+        "tables": available,
+        "declared_tables": list(TABLES),
+        "publication": {name: managed.get(name, {"status": "legacy_unversioned"}) for name in available},
+        "verification": "Managed bytes verified before publication; this reader pins URLs and checks schemas.",
+    }
 
 
 # Building a connection is the expensive part of a tool call — install httpfs +
@@ -425,7 +467,7 @@ def _register_tools(mcp: FastMCP) -> None:
         return {
             "source": "r2",
             "base_url": R2_BASE_URL,
-            "tables": list(TABLES),
+            **_publication_status(_get_connection().cursor()),
         }
 
     @mcp.tool()
@@ -435,16 +477,18 @@ def _register_tools(mcp: FastMCP) -> None:
         Call list_sources for the set of valid table names; an unknown name
         returns them in the error payload.
         """
-        if table not in TABLES:
+        cursor = _get_connection().cursor()
+        status = _publication_status(cursor)
+        if table not in status["tables"]:
             return {
                 "error": f"Unknown table '{table}'",
-                "available_tables": list(TABLES),
+                "available_tables": status["tables"],
             }
-        cursor = _get_connection().cursor()
         with _statement_timeout(cursor):
-            rows = cursor.execute(f"DESCRIBE {table}").fetchall()
+            rows = cursor.execute(f'DESCRIBE "{table}"').fetchall()
         return {
             "table": table,
+            "publication": status["publication"][table],
             "columns": [
                 {
                     "column_name": row[0],
@@ -488,6 +532,7 @@ def _register_tools(mcp: FastMCP) -> None:
             "row_count_shown": len(result_rows),
             "max_rows": max_rows,
             "rows": result_rows,
+            "connection_publication": _publication_status(cursor)["publication"],
         }
 
 

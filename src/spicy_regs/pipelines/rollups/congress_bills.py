@@ -34,6 +34,7 @@ class CongressBillsRollup(RollupPipeline):
     """Congressional bills ingested from the Congress.gov v3 API (api.data.gov key)."""
 
     name: ClassVar[str] = "congress-bills"
+    publication_family: ClassVar[str | None] = "bill-family"
     inputs: ClassVar[tuple[str, ...]] = ()
     soft_inputs: ClassVar[tuple[str, ...]] = ("laws.parquet",)
     output: ClassVar[str] = "congress_bills.parquet"

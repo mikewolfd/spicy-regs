@@ -13,6 +13,7 @@ class DocketSearchRollup(RollupPipeline):
     name: ClassVar[str] = "docket-search"
     inputs: ClassVar[tuple[str, ...]] = ("dockets.parquet",)
     output: ClassVar[str] = INDEX_FILENAME
+    generation_tables: ClassVar[bool] = False
 
     def build(self, output_dir: Path) -> Path:
         return build_search_index(output_dir)
