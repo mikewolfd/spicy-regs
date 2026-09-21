@@ -21,10 +21,12 @@ from spicy_regs.ontology.common import (
     write_parquet_rows,
 )
 
+from spicy_regs.ontology.federal_register import FederalRegisterIndex, record_id, record_url, references_json
+
 ITEMS_OUTPUT = "regulatory_agenda_items.parquet"
 RELATIONSHIPS_OUTPUT = "agenda_item_proceedings.parquet"
-ITEM_ACTOR_ID = "spicy-regs:regulatory-agenda-items:v1"
-RELATIONSHIP_ACTOR_ID = "spicy-regs:agenda-item-proceedings:v1"
+ITEM_ACTOR_ID = "spicy-regs:regulatory-agenda-items:v2"
+RELATIONSHIP_ACTOR_ID = "spicy-regs:agenda-item-proceedings:v2"
 
 ITEM_COLUMNS = (
     "agenda_item_id",
@@ -37,6 +39,7 @@ ITEM_COLUMNS = (
     "first_seen",
     "last_seen",
     *ATTESTATION_COLUMNS,
+    "unresolved_fr_references_json",
 )
 
 RELATIONSHIP_COLUMNS = (
@@ -79,7 +82,7 @@ def _source_uri(source: str, evidence_id: str) -> str:
     if source == "document_rin":
         return f"https://www.regulations.gov/document/{escaped}"
     if source == "federal_register_rin":
-        return f"https://www.federalregister.gov/d/{escaped}"
+        return record_url(evidence_id)
     raise ValueError(f"unknown agenda relationship evidence source: {source}")
 
 
@@ -128,6 +131,9 @@ def build_regulatory_agenda(
         actor_id=RELATIONSHIP_ACTOR_ID,
     )
     json_stats = JsonReadStats()
+    fr_index = FederalRegisterIndex(paths["federal_register"])
+    unresolved_by_fr: dict[str, list[dict]] = defaultdict(list)
+    unresolved_by_rin: dict[str, list[dict]] = defaultdict(list)
 
     proceedings_by_docket: dict[str, set[str]] = defaultdict(set)
     proceedings_by_fr_document: dict[str, set[str]] = defaultdict(set)
@@ -146,16 +152,12 @@ def build_regulatory_agenda(
             for value in dockets:
                 if docket := normalize_regsgov_identifier(value):
                     proceedings_by_docket[docket].add(proceeding_id)
-        fr_documents = parse_json_list(
-            row.get("fr_document_numbers_json"),
-            stats=json_stats,
-            table="proceedings",
-            row_id=proceeding_id,
-            column="fr_document_numbers_json",
-        )
-        if fr_documents is not None:
-            for value in fr_documents:
-                proceedings_by_fr_document[str(value)].add(proceeding_id)
+        fr_documents, unresolved = fr_index.proceeding_ids(row, json_stats)
+        for identity in fr_documents:
+            proceedings_by_fr_document[identity].add(proceeding_id)
+        for reference in unresolved:
+            for candidate in reference["candidate_ids"]:
+                unresolved_by_fr[candidate].append(reference)
 
     observed_rins: set[str] = set()
     seen_dates: dict[str, set[str]] = defaultdict(set)
@@ -253,6 +255,7 @@ def build_regulatory_agenda(
 
     for row in iter_parquet_rows(paths["federal_register"]):
         document_number = str(row.get("document_number") or "").strip()
+        identity = record_id(row)
         raw_rins = parse_json_list(
             row.get("regulation_id_numbers_json"),
             stats=json_stats,
@@ -267,13 +270,14 @@ def build_regulatory_agenda(
             if not rin:
                 continue
             observe(rin, row.get("publication_date"))
-            targets = proceedings_by_fr_document.get(document_number, set())
+            unresolved_by_rin[rin].extend(unresolved_by_fr[identity])
+            targets = proceedings_by_fr_document.get(identity, set())
             if len(targets) == 1:
                 add_relationship(
                     rin=rin,
                     proceeding_id=next(iter(targets)),
                     source="federal_register_rin",
-                    evidence_id=document_number,
+                    evidence_id=identity,
                     evidence_date=row.get("publication_date"),
                 )
 
@@ -328,6 +332,7 @@ def build_regulatory_agenda(
                 "first_seen": dates[0] if dates else None,
                 "last_seen": dates[-1] if dates else None,
                 **item_provenance,
+                "unresolved_fr_references_json": references_json(unresolved_by_rin[rin]),
             }
         )
 

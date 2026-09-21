@@ -295,7 +295,7 @@ DERIVED_SCHEMAS: dict[str, list[tuple[str, str]]] = {
         ("days", "BIGINT"),
     ],
     # Built by build_fr_docket_links: federal_register.docket_ids_json exploded to
-    # one row per (docket_id, FR document), carrying FR display columns.
+    # one row per (docket_id, document_number, publication_date), carrying FR display columns.
     "fr_docket_links": [
         ("docket_id", "VARCHAR"),
         ("document_number", "VARCHAR"),
@@ -343,7 +343,8 @@ DERIVED_SCHEMAS: dict[str, list[tuple[str, str]]] = {
         ("next_action_date", "VARCHAR"),
         ("url", "VARCHAR"),
     ],
-    # Ingested from federalregister.gov (build_federal_register); all columns are
+    # Composite key: (document_number, publication_date); neither column changes
+    # type or spelling. Ingested from federalregister.gov; all columns are
     # stored as VARCHAR, array fields serialized as JSON strings.
     "federal_register": [
         ("document_number", "VARCHAR"),

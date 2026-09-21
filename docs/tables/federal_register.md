@@ -4,9 +4,11 @@
 
 **Federal Register documents**
 
-One row per Federal Register document, ingested from the federalregister.gov REST API by `build_federal_register`. The authoritative rule-publication record — proposed rules, final rules, and notices — complementary to the regulations.gov `dockets`/`documents` view. `regulation_id_numbers_json` (RIN) and `cfr_references_json` are the join keys to the Unified Agenda and the CFR. All columns are stored as VARCHAR; array-valued fields are JSON.
+One row per dated Federal Register record, keyed by (`document_number`, `publication_date`), ingested from the federalregister.gov REST API by `build_federal_register`. The authoritative rule-publication record — proposed rules, final rules, and notices — complementary to the regulations.gov `dockets`/`documents` view. `regulation_id_numbers_json` (RIN) and `cfr_references_json` are the join keys to the Unified Agenda and the CFR. All columns are stored as VARCHAR; array-valued fields are JSON.
 
 **Coverage.** True range, with a boundary worth stating. Documents published from 2000-01-03 to 2026-09-04. Federal Register documents published before 2000 are not in this table at all. *(measured 2026-09-06)*
+
+**Data quality.** Document numbers are not globally unique: `00-111` names different records on 2000-01-14 and 2000-01-18. Current merging preserves both dates and replaces only the same dated record on a later successful fetch. This code correction does not restore historical records already lost from published files; those require a pinned historical replay and publication. A number-only source reference remains ambiguous when its input generation supplies multiple dated candidates.
 
 - **Parquet file:** `federal_register.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
@@ -14,11 +16,11 @@ One row per Federal Register document, ingested from the federalregister.gov RES
 
 | Column | Type | Description |
 | --- | --- | --- |
-| `document_number` | `VARCHAR` | FR document number (e.g. `2017-07442`). Primary key / dedup key. |
+| `document_number` | `VARCHAR` | Literal FR document number (e.g. `2017-07442`); one component of the primary/dedup key with `publication_date`. Preserve its spelling. |
 | `title` | `VARCHAR` | Document title. |
 | `abstract` | `VARCHAR` | Agency-written abstract of the document. Often null. |
 | `document_type` | `VARCHAR` | FR category: `Rule`, `Proposed Rule`, `Notice`, or `Presidential Document`. |
-| `publication_date` | `VARCHAR` | Date the document was published in the Federal Register (ISO 8601 string). Sort key. |
+| `publication_date` | `VARCHAR` | Date the document was published in the Federal Register (canonical YYYY-MM-DD). Primary/dedup key with `document_number`, and sort key. |
 | `effective_on` | `VARCHAR` | Date the action takes effect, when stated. Often null. |
 | `comments_close_on` | `VARCHAR` | Public comment deadline, for documents that open a comment period. Often null. |
 | `signing_date` | `VARCHAR` | Date a presidential document was signed. Null for non-presidential documents. |

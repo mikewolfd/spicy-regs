@@ -2,12 +2,12 @@
 
 Replaces the ``docket_ids_json LIKE '%"<id>"%'`` full-scan over the 793K-row
 ``federal_register.parquet`` that the docket page ran on every load. Explodes
-each FR document's ``docket_ids_json`` array into one row per (docket_id, FR
-doc), carrying the display columns the docket page needs, and sorts by
+each FR document's ``docket_ids_json`` array into one row per (docket_id,
+document_number, publication_date), carrying the display columns the docket page needs, and sorts by
 ``docket_id`` so ``WHERE docket_id = ?`` prunes row groups instead of scanning.
 
-``federal_register.parquet`` is produced by a **separate** federalregister.gov
-ingestion path (not this repo's ETL); this rollup reads it from R2 as a base
+``federal_register.parquet`` is produced by the Federal Register ingest
+rollup; this rollup reads it from R2 as a base
 input. Exploding preserves the exact matching semantics of the old ``LIKE``
 (verified equal on 200 sampled dockets), including the pre-existing quirk where
 a few array elements join two IDs — no regression introduced here.

@@ -11,9 +11,14 @@ run. Instead we:
 1. Best-effort download the prior ``federal_register.parquet`` from R2.
 2. Fetch only documents published since its max ``publication_date`` (minus a
    short overlap to catch late-posted / corrected documents).
-3. Dedup the union on ``document_number``, preferring the freshly fetched row.
+3. Dedup on ``(document_number, publication_date)``, preferring a freshly
+   fetched observation of that same dated record. Distinct dates survive,
+   including corrections republished under the same number on another date.
 
 With no prior table (first run) step 2 becomes a full backfill from the FR epoch.
+The overlap cannot recover old records already lost by a number-only merge;
+those require an explicit historical replay. Conflicting observations within
+one input generation refuse publication rather than choosing an arbitrary row.
 
 ``modify_date`` is not exposed by the REST API; freshly fetched rows carry NULL
 for it while the merge preserves whatever the prior table already had. No current
@@ -176,7 +181,9 @@ def build_federal_register(
     pq.write_table(table, new_file, compression="zstd")
     logger.info("FR: fetched {:,} documents this run", len(rows))
 
-    # 4. Merge prior + new, dedup on document_number preferring the new row.
+    # 4. Apply the SpicyDocs public-table primary key (projection 1.1).
+    # The columns and their literal values stay unchanged; this is not an IRI
+    # normalization or an assertion that two dated printings are one matter.
     spill_dir = output_dir / ".duckdb_tmp"
     spill_dir.mkdir(exist_ok=True)
     con = duckdb.connect()
@@ -190,29 +197,57 @@ def build_federal_register(
     cols = ", ".join(FETCHED_COLUMNS)
     if have_prior:
         union = (
-            f"SELECT {cols}, 0 AS _src FROM read_parquet('{prior_file}') "
+            f"SELECT {cols}, file_row_number AS _row, 0 AS _src FROM read_parquet('{prior_file}', file_row_number=true) "
             f"UNION ALL BY NAME "
-            f"SELECT {cols}, 1 AS _src FROM read_parquet('{new_file}')"
+            f"SELECT {cols}, file_row_number AS _row, 1 AS _src FROM read_parquet('{new_file}', file_row_number=true)"
         )
     else:
-        union = f"SELECT {cols}, 1 AS _src FROM read_parquet('{new_file}')"
+        union = (
+            f"SELECT {cols}, file_row_number AS _row, 1 AS _src FROM read_parquet('{new_file}', file_row_number=true)"
+        )
 
-    con.execute(
-        f"""
+    try:
+        invalid = con.execute(
+            f"""SELECT document_number, publication_date FROM ({union})
+                WHERE document_number IS NULL OR trim(document_number) = ''
+                   OR publication_date IS NULL
+                   OR try_cast(publication_date AS DATE) IS NULL
+                   OR cast(try_cast(publication_date AS DATE) AS VARCHAR) <> publication_date
+                LIMIT 1"""
+        ).fetchone()
+        if invalid:
+            raise ValueError(f"Federal Register record lacks a complete canonical identity: {invalid!r}")
+        conflict = con.execute(
+            f"""SELECT document_number, publication_date, _src FROM ({union})
+                GROUP BY document_number, publication_date, _src
+                HAVING count(DISTINCT ({cols})) > 1 LIMIT 1"""
+        ).fetchone()
+        if conflict:
+            raise ValueError(f"Federal Register conflicting observations of the same number/date: {conflict!r}")
+        # Rank positions, not the wide abstract/JSON payloads. A window over
+        # every payload column exceeds the 4GB limit on the retained public
+        # table; selecting positions first keeps the same winner semantics.
+        con.execute(
+            f"""CREATE TEMP TABLE winners AS
+                SELECT _src, _row FROM (
+                    SELECT _src, _row, row_number() OVER (
+                        PARTITION BY document_number, publication_date ORDER BY _src DESC, _row
+                    ) AS _rn FROM ({union})
+                ) WHERE _rn = 1"""
+        )
+        merged_file = output_dir / "_fr_merged.parquet"
+        con.execute(
+            f"""
         COPY (
-            SELECT {cols}, {_RIN_SQL} AS rin FROM (
-                SELECT {cols}, ROW_NUMBER() OVER (
-                    PARTITION BY document_number ORDER BY _src DESC
-                ) AS _rn
-                FROM ({union})
-                WHERE document_number IS NOT NULL
-            )
-            WHERE _rn = 1
+            SELECT {cols}, {_RIN_SQL} AS rin
+            FROM ({union}) records JOIN winners USING (_src, _row)
             ORDER BY publication_date DESC, document_number
-        ) TO '{out_file}' (FORMAT PARQUET, COMPRESSION ZSTD, ROW_GROUP_SIZE 50000);
-        """
-    )
-    con.close()
+        ) TO '{merged_file}' (FORMAT PARQUET, COMPRESSION ZSTD, ROW_GROUP_SIZE 50000);
+            """
+        )
+        merged_file.replace(out_file)
+    finally:
+        con.close()
 
     # Housekeeping: drop scratch files so they aren't mistaken for outputs.
     for scratch in (prior_file, new_file):

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections import defaultdict
 from pathlib import Path
 
@@ -18,13 +19,16 @@ from spicy_regs.ontology.common import (
     ATTESTATION_COLUMNS,
     JsonReadStats,
     RunContext,
+    canonical_json,
     iter_parquet_rows,
     parse_json_list,
     write_parquet_rows,
 )
 
+from spicy_regs.ontology.federal_register import FederalRegisterIndex, record_id, resolved_id
+
 OUTPUT = "rule_targets.parquet"
-ACTOR_ID = "spicy-regs:rule-targets:v1"
+ACTOR_ID = "spicy-regs:rule-targets:v2"
 
 COLUMNS = (
     "docket_id",
@@ -38,6 +42,7 @@ COLUMNS = (
     "first_seen",
     "last_seen",
     *ATTESTATION_COLUMNS,
+    "fr_references_json",
 )
 
 SOURCES = frozenset(
@@ -83,6 +88,7 @@ def build_rule_targets(
     context = RunContext.resolve(run_id=run_id, asserted_at=asserted_at, prefix="rule-targets")
     provenance = context.provenance(method="deterministic", actor_id=ACTOR_ID)
     json_stats = JsonReadStats()
+    fr_index = FederalRegisterIndex(paths["federal_register"])
 
     # The table's specified logical key deliberately retains corroborating
     # sources while folding repeated evidence from the same source into a date
@@ -100,6 +106,7 @@ def build_rule_targets(
         evidence_id: object,
         first_seen: object = None,
         last_seen: object = None,
+        fr_reference: dict | None = None,
     ) -> None:
         docket = normalize_regsgov_identifier(docket_id)
         if docket is None or docket not in trusted_dockets or source not in SOURCES:
@@ -120,11 +127,16 @@ def build_rule_targets(
             "first_seen": first,
             "last_seen": last,
             **provenance,
+            "fr_references_json": canonical_json([fr_reference] if fr_reference else []),
         }
         existing = edges.get(key)
         if existing is None:
             edges[key] = candidate
             return
+        references = json.loads(existing["fr_references_json"])
+        if fr_reference is not None and fr_reference not in references:
+            references.append(fr_reference)
+        existing["fr_references_json"] = canonical_json(sorted(references, key=canonical_json))
         existing["first_seen"], existing["last_seen"] = _date_bounds(
             existing.get("first_seen"),
             existing.get("last_seen"),
@@ -182,18 +194,51 @@ def build_rule_targets(
                 )
         fr_doc_num = row.get("fr_doc_num")
         if fr_doc_num and docket is not None:
-            documents_by_fr_doc[str(fr_doc_num)].append({**row, "docket_id": docket})
+            reference = {
+                "source": "documents.fr_doc_num",
+                "evidence_id": document_id,
+                **fr_index.reference(str(fr_doc_num)),
+            }
+            if identity := resolved_id(reference):
+                documents_by_fr_doc[identity].append({**row, "docket_id": docket, "fr_reference": reference})
+            else:
+                add_edge(
+                    docket_id=docket,
+                    citation=None,
+                    rin=None,
+                    source="document_fr_doc",
+                    evidence_id=document_id,
+                    first_seen=row.get("posted_date"),
+                    last_seen=row.get("modify_date"),
+                    fr_reference=reference,
+                )
 
     linked_dockets_by_fr_doc: dict[str, set[str]] = defaultdict(set)
-    for row in iter_parquet_rows(paths["fr_docket_links"], columns=("document_number", "docket_id")):
+    for row in iter_parquet_rows(paths["fr_docket_links"]):
         docket = normalize_regsgov_identifier(row.get("docket_id"))
         if row.get("document_number") and docket in trusted_dockets:
-            linked_dockets_by_fr_doc[str(row["document_number"])].add(docket)
+            reference = {
+                "source": "fr_docket_links",
+                "evidence_id": docket,
+                **fr_index.reference(str(row["document_number"]), row.get("publication_date")),
+            }
+            if identity := resolved_id(reference):
+                linked_dockets_by_fr_doc[identity].add(docket)
+            else:
+                add_edge(
+                    docket_id=docket,
+                    citation=None,
+                    rin=None,
+                    source="fr_cfr_ref",
+                    evidence_id=docket,
+                    fr_reference=reference,
+                )
 
     for row in iter_parquet_rows(paths["federal_register"]):
         document_number = row.get("document_number")
         if not document_number:
             continue
+        identity = record_id(row)
         raw_cfr = parse_json_list(
             row.get("cfr_references_json"),
             stats=json_stats,
@@ -215,7 +260,7 @@ def build_rule_targets(
         rins = list(dict.fromkeys(rin for value in raw_rins if (rin := normalize_rin(value))))
         publication_date = row.get("publication_date")
 
-        linked_dockets = linked_dockets_by_fr_doc.get(str(document_number), set())
+        linked_dockets = linked_dockets_by_fr_doc.get(identity, set())
         for docket in linked_dockets:
             for citation in citations:
                 for rin in rins or (None,):
@@ -224,14 +269,19 @@ def build_rule_targets(
                         citation=citation,
                         rin=rin,
                         source="fr_cfr_ref",
-                        evidence_id=document_number,
+                        evidence_id=identity,
+                        fr_reference={
+                            "source": "federal_register",
+                            "evidence_id": identity,
+                            **fr_index.reference(str(document_number), publication_date),
+                        },
                         first_seen=publication_date,
                         last_seen=publication_date,
                     )
 
         # A regulations.gov document's frDocNum is independent corroboration of
         # the same target, so it intentionally receives a different source value.
-        for document in documents_by_fr_doc.get(str(document_number), ()):
+        for document in documents_by_fr_doc.get(identity, ()):
             for citation in citations or (None,):
                 for rin in rins or (None,):
                     add_edge(
@@ -240,6 +290,7 @@ def build_rule_targets(
                         rin=rin,
                         source="document_fr_doc",
                         evidence_id=document.get("document_id"),
+                        fr_reference=document["fr_reference"],
                         first_seen=document.get("posted_date") or publication_date,
                         last_seen=document.get("modify_date") or publication_date,
                     )

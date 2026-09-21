@@ -4,7 +4,7 @@
 
 **Federal Register to docket links**
 
-The Federal Register ↔ docket bridge: each `federal_register` row's `docket_ids_json` array exploded to one row per (docket_id, FR document), carrying the FR display columns. Use this instead of an `ILIKE` scan over `federal_register.docket_ids_json` — it is sorted by `docket_id`, so `WHERE docket_id = ?` prunes row groups. This is the practical join from regulations.gov to the Federal Register, since `documents.fr_doc_num` is populated on only ~1% of rules. Built by `build_fr_docket_links`.
+The Federal Register ↔ docket bridge: each `federal_register` row's `docket_ids_json` array exploded to one row per (docket_id, document_number, publication_date), carrying the FR display columns. Use this instead of an `ILIKE` scan over `federal_register.docket_ids_json` — it is sorted by `docket_id`, so `WHERE docket_id = ?` prunes row groups. This is the practical join from regulations.gov to the Federal Register, since `documents.fr_doc_num` is populated on only ~1% of rules. Built by `build_fr_docket_links`.
 
 **Coverage.** Derived, and bounded by its inputs. Links between `federal_register` and `dockets`, so it inherits the Federal Register table's 2000 floor: a rule published before 2000 has no link here because the document is not in that table. *(measured 2026-09-06)*
 
@@ -15,12 +15,12 @@ The Federal Register ↔ docket bridge: each `federal_register` row's `docket_id
 | Column | Type | Description |
 | --- | --- | --- |
 | `docket_id` | `VARCHAR` | One docket ID extracted from the FR document's `docket_ids_json` array. |
-| `document_number` | `VARCHAR` | Federal Register document number (joins `federal_register.document_number`). |
+| `document_number` | `VARCHAR` | Literal Federal Register document number. Join to `federal_register` on both this value and `publication_date`; a number can name distinct dated records. |
 | `title` | `VARCHAR` | FR document title. |
 | `abstract` | `VARCHAR` | FR document abstract. |
 | `document_type` | `VARCHAR` | FR type: `Rule`, `Proposed Rule`, `Notice`, or `Presidential Document`. |
 | `subtype` | `VARCHAR` | FR subtype where the Federal Register supplies one, e.g. `Final Rule`, `Interim Final Rule`. |
-| `publication_date` | `VARCHAR` | Date the document published in the Federal Register. |
+| `publication_date` | `VARCHAR` | Date the document published in the Federal Register; required with `document_number` for the FR record join. |
 | `effective_on` | `VARCHAR` | Date the rule takes effect, when the document carries one. |
 | `comments_close_on` | `VARCHAR` | Comment period close date, when the document carries one. |
 | `signing_date` | `VARCHAR` | Signing date, for presidential documents. |

@@ -448,6 +448,11 @@ def federal_register_identifier(document_number: object) -> tuple[str, str]:
     numbers (for example ``E7-21559``) and correction identifiers (for example
     ``C1-2026-13078``). Those values remain losslessly identifiable through
     Rulespec's ``partner-defined`` escape hatch until its scheme is broadened.
+
+    This legacy lexical helper does not resolve dated source records or check
+    RefSpec collision adjudications. Materialized joins use the SpicyDocs
+    date-qualified source key in ``ontology.federal_register`` instead. Do not
+    use this helper's number-only value as a Federal Register table row key.
     """
     value = str(document_number).strip()
     if not value or any(ord(character) < 32 for character in value):

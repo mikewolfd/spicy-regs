@@ -26,8 +26,10 @@ from spicy_regs.ontology.common import (
     write_parquet_rows,
 )
 
+from spicy_regs.ontology.federal_register import FederalRegisterIndex, record_id, references_json, resolved_id
+
 OUTPUT = "proceedings.parquet"
-ACTOR_ID = "spicy-regs:proceedings:v2"
+ACTOR_ID = "spicy-regs:proceedings:v3"
 
 COLUMNS = (
     "proceeding_id",
@@ -43,6 +45,8 @@ COLUMNS = (
     "authority_refs_json",
     "identity_predecessors_json",
     *ATTESTATION_COLUMNS,
+    "fr_document_ids_json",
+    "unresolved_fr_references_json",
 )
 
 STAGES = frozenset({"prerule", "proposed", "supplemental", "final", "withdrawn", "longterm"})
@@ -128,6 +132,7 @@ def build_proceedings(
     )
     provenance = context.provenance(method="deterministic", actor_id=ACTOR_ID)
     json_stats = JsonReadStats()
+    fr_index = FederalRegisterIndex(paths["federal_register"])
     prior_file = output_dir / "_proceedings_prior.parquet"
     if not prior_file.exists() and (output_dir / OUTPUT).exists():
         prior_file = output_dir / OUTPUT
@@ -146,6 +151,8 @@ def build_proceedings(
             "agencies": [],
             "events": [],
             "fr_documents": set(),
+            "fr_document_numbers": set(),
+            "unresolved_fr_references": [],
             "cfr_refs": set(),
             "cfr_target_iris": set(),
         }
@@ -183,14 +190,20 @@ def build_proceedings(
             action_dockets.add(docket)
 
     linked_dockets_by_fr: dict[str, set[str]] = defaultdict(set)
-    for row in iter_parquet_rows(
-        paths["fr_docket_links"],
-        columns=("document_number", "docket_id"),
-    ):
+    unresolved_links_by_docket: dict[str, list[dict]] = defaultdict(list)
+    for row in iter_parquet_rows(paths["fr_docket_links"]):
         docket = normalize_regsgov_identifier(row.get("docket_id"))
         if row.get("document_number") and docket in trusted_dockets:
             document_number = str(row["document_number"])
-            linked_dockets_by_fr[document_number].add(docket)
+            reference = {
+                "source": "fr_docket_links",
+                "evidence_id": docket,
+                **fr_index.reference(document_number, row.get("publication_date")),
+            }
+            if identity := resolved_id(reference):
+                linked_dockets_by_fr[identity].add(docket)
+            else:
+                unresolved_links_by_docket[docket].append(reference)
             action_dockets.add(docket)
 
     # Docket identity is action-specific. A Federal Register document is the
@@ -235,6 +248,7 @@ def build_proceedings(
         )
         for docket in dockets:
             group_key_by_docket[docket] = key
+            groups[key]["unresolved_fr_references"].extend(unresolved_links_by_docket[docket])
 
     def ensure_fr(document_number: str) -> tuple[str, dict]:
         key = f"fr-document:{document_number}"
@@ -312,6 +326,7 @@ def build_proceedings(
         document_number = str(row.get("document_number") or "").strip()
         if not document_number:
             continue
+        identity = record_id(row)
         raw_rins = parse_json_list(
             row.get("regulation_id_numbers_json"),
             stats=json_stats,
@@ -323,7 +338,7 @@ def build_proceedings(
         stage = _stage_from_document(row.get("document_type"), row.get("title"))
         linked_keys = {
             group_key_by_docket[docket]
-            for docket in linked_dockets_by_fr.get(document_number, ())
+            for docket in linked_dockets_by_fr.get(identity, ())
             if docket in group_key_by_docket
         }
         if linked_keys:
@@ -333,10 +348,11 @@ def build_proceedings(
                 raise RuntimeError(f"FR document {document_number} spans unmerged docket components")
             group = groups[key]
         elif rins or stage:
-            _, group = ensure_fr(document_number)
+            _, group = ensure_fr(identity)
         else:
             continue
-        group["fr_documents"].add(document_number)
+        group["fr_documents"].add(identity)
+        group["fr_document_numbers"].add(document_number)
         group["rins"].update(rins)
         if row.get("title"):
             group["titles"].append((str(row.get("publication_date") or ""), str(row["title"])))
@@ -345,7 +361,7 @@ def build_proceedings(
             stage=stage,
             date=row.get("publication_date"),
             source="federal_register.document_type",
-            evidence_id=document_number,
+            evidence_id=identity,
         )
 
     for row in iter_parquet_rows(paths["rule_targets"]):
@@ -387,18 +403,20 @@ def build_proceedings(
             row_id=proceeding_id,
             column="docket_ids_json",
         )
-        raw_fr_documents = parse_json_list(
-            row.get("fr_document_numbers_json"),
-            stats=json_stats,
-            table="proceedings_prior",
-            row_id=proceeding_id,
-            column="fr_document_numbers_json",
-        )
+        prior_fr_documents, unresolved = fr_index.proceeding_ids(row, json_stats)
+        for reference in unresolved:
+            # Preserve an old ambiguous observation for every possible current
+            # group, without letting it select a predecessor or stable id.
+            for group in groups.values():
+                if group["fr_documents"].intersection(reference["candidate_ids"]) or group["dockets"].intersection(
+                    raw_dockets or []
+                ):
+                    group["unresolved_fr_references"].append(reference)
         prior_identity.append(
             (
                 proceeding_id,
                 set() if raw_dockets is None else set(map(str, raw_dockets)),
-                (set() if raw_fr_documents is None else set(map(str, raw_fr_documents))),
+                prior_fr_documents,
             )
         )
 
@@ -471,7 +489,9 @@ def build_proceedings(
                 "agency_code": (Counter(group["agencies"]).most_common(1)[0][0] if group["agencies"] else None),
                 "current_stage": _current_stage_from_events(events),
                 "stage_events_json": canonical_json(events),
-                "fr_document_numbers_json": canonical_json(sorted(group["fr_documents"])),
+                "fr_document_numbers_json": canonical_json(sorted(group["fr_document_numbers"])),
+                "fr_document_ids_json": canonical_json(sorted(group["fr_documents"])),
+                "unresolved_fr_references_json": references_json(group["unresolved_fr_references"]),
                 "cfr_refs_json": canonical_json(sorted(group["cfr_refs"])),
                 "cfr_target_iris_json": canonical_json(sorted(group["cfr_target_iris"])),
                 # Unified Agenda authority belongs to the editioned agenda
