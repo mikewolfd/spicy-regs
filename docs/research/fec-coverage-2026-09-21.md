@@ -155,3 +155,8 @@ Evidence locations:
 These are local evidence links. FG02 tracks portable evidence delivery; no new
 source acquisition, full-history claim or deployment was performed for this
 documentation census.
+
+Operational follow-up: the scheduled committee job at `43c06b6` refused to start
+acquisition because its API credential was missing. [FG16](../fec-gaps.md#fg16-operate-repeatable-refresh-and-durable-recovery)
+records the confirmed blocker and [run evidence](https://github.com/mikewolfd/spicy-regs/actions/runs/35645971109).
+That failed attempt does not change any retained coverage count above.

@@ -318,13 +318,23 @@ Communication-cost, electioneering and bundling refresh proofs do not establish
 replacement/deletion behavior for every family. A fresh complete committee API
 traversal still needs a configured credential and a retained run receipt.
 
+This is a confirmed fork blocker: the September 21 scheduled
+[committee run 35645971109](https://github.com/mikewolfd/spicy-regs/actions/runs/35645971109)
+at `43c06b6` failed with `FEC committees require an API key; no complete acquisition
+was attempted`. The workflow's evidence/debug-artifact steps succeeded. This
+records a credential refusal before acquisition, not a failed or empty census.
+
 **Complete when:** each selected source has a cadence, bounded checkpoints,
 credential setup where needed, durable original/evidence storage, failure
 reporting and a qualified publication gate. Compare at least two observations
 for changed, reused, absent and failed objects; do not infer deletion from a
 partial listing. Recover interrupted work without duplicate rows or erasing prior
 captures. Evidence: provider FEC09, [committee workflow](https://github.com/mikewolfd/spicy-regs/blob/7b174f1/.github/workflows/rollup-fec-committees.yml),
-[retained pipeline](https://github.com/mikewolfd/spicy-regs/blob/7b174f1/src/spicy_regs/pipelines/rollups/fec_observations.py) and FG02.
+[retained pipeline](https://github.com/mikewolfd/spicy-regs/blob/7b174f1/src/spicy_regs/pipelines/rollups/fec_observations.py),
+FG02 and E8 `fec-committees-workflow-failure.log`. The reusable workflow passes
+the repository's `DATA_GOV_API_KEY` secret to the reader. Configure that credential
+securely and qualify a complete traversal before claiming the fork's refresh is
+operational.
 
 ### FG17 — Measure and improve bulk scale where needed
 
