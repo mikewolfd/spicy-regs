@@ -1,7 +1,7 @@
 """Hermetic tests for the SAM.gov entity ingest (no network).
 
 Covers the pieces with real logic: the raw-entity -> published-schema mapping
-(``_shape``), the API-key resolution fallback chain, the keyless no-op, the bulk
+(``_shape``), the API-key resolution fallback chain, missing-credential refusal, the bulk
 *extract* path (trigger -> download-URL discovery -> defensive file parse, with
 ``registrationDate`` year-windowing and ``max_records`` bounding), and the
 *partition* path's adaptive date-window subdivision + paginated walk. The fixture
@@ -25,6 +25,7 @@ from spicy_regs.sources.sam_entities import (
     API_KEY_ENV_VARS,
     PER_PAGE,
     SamEntitiesReader,
+    SamEntitiesError,
     _find_download_url,
     _parse_extract_bytes,
     _range_literal,
@@ -108,15 +109,17 @@ def test_shape_handles_missing_nested_objects():
     assert row["primary_naics"] is None
     assert row["entity_url"] is None
     assert row["entity_structure_desc"] is None
-    # Fully empty payload degrades to an all-null row, not a KeyError.
-    empty = _shape({})
-    assert empty["uei"] is None
-    assert set(empty) == set(COLUMNS)
+    with pytest.raises(SamEntitiesError, match="ueiSAM"):
+        _shape({})
 
 
 def test_shape_coerces_int_scalars_to_str():
     row = _shape(
-        {"assertions": {"goodsAndServices": {"primaryNaics": 541110}}, "coreData": {"congressionalDistrict": 3}}
+        {
+            **_entity("A"),
+            "assertions": {"goodsAndServices": {"primaryNaics": 541110}},
+            "coreData": {"congressionalDistrict": 3},
+        }
     )
     assert row["primary_naics"] == "541110"
     assert row["congressional_district"] == "3"
@@ -154,12 +157,12 @@ def test_resolve_api_key_returns_none_when_unset(monkeypatch):
     assert _resolve_api_key() is None
 
 
-def test_reader_yields_nothing_without_key(monkeypatch):
+def test_reader_refuses_without_key(monkeypatch):
     for var in API_KEY_ENV_VARS:
         monkeypatch.delenv(var, raising=False)
     reader = SamEntitiesReader()
-    # No key configured: a keyless run is a no-op, not a crash.
-    assert list(reader.iter_records()) == []
+    with pytest.raises(SamEntitiesError, match="SAM-authorized"):
+        list(reader.iter_records())
 
 
 def test_reader_caps_page_size():
@@ -240,9 +243,10 @@ def test_parse_extract_zip_member():
     assert _ueis(_parse_extract_bytes(buf.getvalue())) == ["Q", "R"]
 
 
-def test_parse_extract_empty_or_garbage():
-    assert list(_parse_extract_bytes(b"")) == []
-    assert list(_parse_extract_bytes(b"not json at all")) == []
+@pytest.mark.parametrize("raw", [b"", b"not json at all"])
+def test_parse_extract_empty_or_garbage(raw):
+    with pytest.raises(SamEntitiesError):
+        list(_parse_extract_bytes(raw))
 
 
 # -- extract: orchestration (year windows + max_records) ---------------------
@@ -302,7 +306,7 @@ def test_extract_window_triggers_then_downloads(monkeypatch):
 
     def fake_get(url, params):
         triggered.append(params)
-        return {"download": "https://api.sam.gov/x/f.json?api_key=REPLACE_WITH_API_KEY"}
+        return {"totalRecords": 2, "download": "https://api.sam.gov/x/f.json?api_key=REPLACE_WITH_API_KEY"}
 
     monkeypatch.setattr(reader, "_get", fake_get)
     monkeypatch.setattr(reader, "_download_extract", lambda url: iter([_entity("A"), _entity("B")]))
@@ -313,9 +317,9 @@ def test_extract_window_triggers_then_downloads(monkeypatch):
     assert triggered[0]["registrationDate"] == "[01/01/2022,12/31/2022]"
 
 
-def test_extract_window_skips_when_no_download_url(monkeypatch):
+def test_extract_window_accepts_explicit_empty_population(monkeypatch):
     reader = SamEntitiesReader(api_key="k")
-    monkeypatch.setattr(reader, "_get", lambda url, params: {"totalRecords": 0})
+    monkeypatch.setattr(reader, "_get", lambda url, params: {"totalRecords": 0, "entityData": []})
     called = {"downloaded": False}
 
     def fake_download(url):
@@ -380,7 +384,8 @@ def test_download_extract_gives_up_after_poll_max(monkeypatch):
     reader = SamEntitiesReader(api_key="secret")
     fake = _FakeClient([_FakeResp(202), _FakeResp(202), _FakeResp(202)])
     monkeypatch.setattr(reader, "_client", fake)
-    assert list(reader._download_extract("https://api.sam.gov/x/f.json")) == []
+    with pytest.raises(SamEntitiesError, match="poll budget"):
+        list(reader._download_extract("https://api.sam.gov/x/f.json"))
 
 
 # -- reinject key ------------------------------------------------------------
@@ -458,35 +463,30 @@ def test_partition_pages_window_under_ceiling_without_split(monkeypatch):
     assert got == ["solo"]
 
 
-def test_partition_single_day_over_ceiling_warns_but_pages(monkeypatch):
-    """A single day still over the ceiling is paged (best-effort), not infinitely split."""
+def test_partition_single_day_over_ceiling_refuses(monkeypatch):
     reader = SamEntitiesReader(mode="partition", api_key="k", since_year=2020, until_year=2020)
-    monkeypatch.setattr(reader, "_window_total", lambda gte, lte: 9000)  # always over ceiling
-    paged: list[tuple[date, date]] = []
-
-    def fake_page(gte, lte):
-        paged.append((gte, lte))
-        yield from ()
-
-    monkeypatch.setattr(reader, "_page_window", fake_page)
-    list(reader._iter_partitioned())
-    # Recursion bottomed out at single days (365/366 of them), each paged once.
-    assert len(paged) >= 365
-    assert all(gte == lte for gte, lte in paged)
+    monkeypatch.setattr(reader, "_window_total", lambda gte, lte: 9000)
+    monkeypatch.setattr(reader, "_page_window", lambda *args: pytest.fail("unreachable selection must not be paged"))
+    with pytest.raises(SamEntitiesError, match="single-day"):
+        list(reader._fetch_window(date(2020, 1, 1), date(2020, 1, 1)))
 
 
 # -- partition walk: paginated nextLink follow -------------------------------
 
 
-def _page(records: list[dict], *, next_link: str | None) -> dict:
+def _page(records: list[dict], *, next_link: str | None, total: int | None = None) -> dict:
     links: dict[str, str] = {}
     if next_link is not None:
         links["nextLink"] = next_link
-    return {"entityData": records, "links": links}
+    return {"totalRecords": len(records) if total is None else total, "entityData": records, "links": links}
 
 
 def _by_page_get(pages: dict[int, dict]):
     """Fake ``_get`` that dispatches on the ``page`` value (from params or URL query)."""
+
+    total = sum(len(page["entityData"]) for page in pages.values())
+    for page in pages.values():
+        page["totalRecords"] = total
 
     def _get(url, params):
         if params is not None:
@@ -555,7 +555,8 @@ def test_int_env_parses_blank_and_bad_values(monkeypatch):
     monkeypatch.setenv("SAM_MAX_RECORDS", "  ")
     assert _int_env("SAM_MAX_RECORDS") is None
     monkeypatch.setenv("SAM_MAX_RECORDS", "not-a-number")
-    assert _int_env("SAM_MAX_RECORDS") is None
+    with pytest.raises(ValueError, match="SAM_MAX_RECORDS"):
+        _int_env("SAM_MAX_RECORDS")
     monkeypatch.setenv("SAM_MAX_RECORDS", "25000")
     assert _int_env("SAM_MAX_RECORDS") == 25000
 

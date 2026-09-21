@@ -1,68 +1,30 @@
-"""Reader connector for the SAM.gov Entity Management API (v4).
+"""SAM.gov Entity Management API v4 acquisition adapter.
 
-Brings the federal *entity registry* in-repo as an external source: the
-authoritative directory of organizations registered to do business with (or
-receive assistance from) the U.S. government, keyed by the Unique Entity ID
-(``uei``). This anchors entity resolution across the rest of the corpus — the
-same UEI the dashboard uses to tie a commenting organization to its registered
-identity.
+The reader yields raw ``entityData`` records; the transform owns table shaping.
+``extract`` requests an asynchronous JSON file for each selected registration
+year. ``partition`` subdivides date windows under a conservative page threshold
+and walks each window to its declared ``totalRecords``. Neither mode establishes
+a frozen publisher snapshot or registry-wide coverage outside its selection.
 
-The reader is a *pure source*: it yields raw entity payloads (dicts) exactly as
-the API returns them under ``entityData[]``. Shaping them into the published
-18-column schema is the job of
-:func:`~spicy_regs.transforms.build_sam_entities.build_sam_entities`.
+Missing credentials, unsuccessful requests, malformed records, unknown response
+shapes and unfinished downloads or pagination raise ``SamEntitiesError``. A
+recognized zero-count response remains valid. The transform must exhaust the
+iterator before writing output; records yielded before a failure are partial.
 
-Full coverage — the pagination ceiling problem
------------------------------------------------
-The active registry is ~765,000 entities, but the *synchronous* ``/entities``
-list endpoint cannot walk it: ``size`` hard-caps at 10 records/page and a single
-filtered query only paginates to ~5,000 records (``links.nextLink`` stops there),
-regardless of ``totalRecords``. Naively following ``nextLink`` therefore tops out
-around 5K — a tiny slice of the registry. To get (near-)full coverage this reader
-supports two mechanisms:
+Callers choose registration years and an optional ``max_records`` selection
+limit. The record limit bounds emitted records, not downloaded extract bytes.
+Every selected extract is parsed and checked against its declared count before
+records are emitted. A single-day partition above the conservative threshold
+refuses rather than publishing only the reachable records.
 
-**A. Bulk extract (default, ``mode="extract"``).** The same ``/entities`` endpoint,
-called with ``format=json``, switches to SAM's *asynchronous extract* path: instead
-of an inline page it returns a download URL (with the literal ``REPLACE_WITH_API_KEY``
-placeholder to swap for a real key), and that file can hold up to 1,000,000 records —
-far past the 5K synchronous ceiling. One extract request thus returns an entire
-partition of the registry. To keep any single downloaded file bounded in memory,
-the reader loops the extract over ``registrationDate`` *year windows* by default
-(each year is well under the 1M cap and json-loadable); each window is one extract
-request, and windows are disjoint by registration date so no dedup is needed within
-a run. A single unwindowed extract is also supported (``year_windows=False``).
+SAM requires a key authorized for its Entity API. The adapter retains the
+existing environment fallback order, but a generic data.gov key does not itself
+establish SAM access. Source links have their masked key replaced only on the
+SAM API host. Request errors and logs omit credential-bearing URLs.
 
-**B. Partitioned walk (``mode="partition"``, fallback).** When the extract path is
-unavailable, the reader partitions the query space by ``registrationDate`` window and
-walks each window with the paginated endpoint, **adaptively subdividing** any window
-whose ``totalRecords`` exceeds the ~5K reachable ceiling (halving down to a single
-day, like ``federal_register``'s date-window recursion). Because each sub-window
-stays under the ceiling, every matching entity in it is reachable via ``nextLink``.
-Windows are disjoint by registration date, so the union is the full registry.
-
-Both mechanisms accept ``max_records`` to bound a run, and an explicit
-``[since_year, until_year]`` range so scheduled runs can advance coverage window by
-window; the transform's merge accretes coverage across runs (dedup on ``uei``).
-
-Note: SAM masks the ``api_key`` in returned links (``nextLink`` for pages, the
-``REPLACE_WITH_API_KEY`` placeholder for extracts), so the reader re-injects the
-real key when following them.
-
-**API key.** SAM.gov requires an api.data.gov key sent as the ``api_key`` query
-param — but note the key must additionally be *associated with a SAM.gov account
-that has the Entity API role* (a role-holding non-federal key is rate-limited to
-1,000 requests/day; the bulk-extract path is what keeps a full backfill within that
-budget). A generic api.data.gov key that works against regulations.gov / Congress.gov
-is **not** automatically authorized here, and SAM's gateway returns a bare ``404``
-(not ``401``/``403``) for an unauthorized or invalid key. We resolve the key from a
-fallback chain of the env vars this repo already uses (:func:`_resolve_api_key`). If
-no key is set the reader logs a clear warning and yields nothing — a keyless CI run
-is a no-op, not a crash.
-
-**Bounded by default, full on request.** Callers that only need a bounded slice — the
-transform's scheduled window, validation probes, tests — pass ``max_records`` to stop
-early. A full backfill is never run implicitly by the scheduled transform, which
-always passes a bounded ``max_records``.
+SpicyDocs owns the newer evidence-preserving paged SAM reader. This legacy
+adapter also supports asynchronous extracts; these refusal repairs do not claim
+provider migration, resumable acquisition, or a qualified initial load.
 """
 
 from __future__ import annotations
@@ -75,6 +37,7 @@ import time
 import zipfile
 from collections.abc import Iterator
 from datetime import date
+from typing import cast
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
 import httpx
@@ -146,8 +109,8 @@ class SamEntitiesReader(Reader):
     up to 1M records each, well past the 5K synchronous ceiling; ``"partition"``
     walks the paginated endpoint, adaptively subdividing windows so each stays under
     that ceiling. ``max_records`` bounds a run; ``since_year``/``until_year`` bound
-    the window range so scheduled runs can advance coverage. With no key configured
-    the reader yields nothing.
+    the window range so scheduled runs can advance coverage. Missing access and
+    incomplete source responses raise ``SamEntitiesError``.
     """
 
     def __init__(
@@ -165,6 +128,15 @@ class SamEntitiesReader(Reader):
     ) -> None:
         if mode not in ("extract", "partition"):
             raise ValueError(f"mode must be 'extract' or 'partition', got {mode!r}")
+        for name, value in (("since_year", since_year), ("until_year", until_year)):
+            if value is not None and (type(value) is not int or not 1 <= value <= 9999):
+                raise ValueError(f"{name} must be a valid calendar year")
+        if (since_year or _MIN_REGISTRATION_YEAR) > (until_year or date.today().year):
+            raise ValueError("since_year must not exceed until_year")
+        if max_records is not None and (type(max_records) is not int or max_records <= 0):
+            raise ValueError("max_records must be a positive integer or None")
+        if type(per_page) is not int or per_page <= 0:
+            raise ValueError("per_page must be a positive integer")
         self.mode = mode
         self.registration_status = registration_status
         self.since_year = since_year
@@ -178,12 +150,9 @@ class SamEntitiesReader(Reader):
         self._seen = 0
 
     def iter_records(self) -> Iterator[dict]:
-        if not self.api_key:
-            logger.warning(
-                "SAM entities: no API key found (set one of {}) — yielding nothing",
-                ", ".join(API_KEY_ENV_VARS),
-            )
-            return
+        self._seen = 0
+        if not self.api_key or not self.api_key.strip():
+            raise SamEntitiesError("SAM entities require a SAM-authorized API key; set SAM_API_KEY")
         logger.info(
             "SAM entities: mode={} registrationStatus={} years={}..{} (max_records={})",
             self.mode,
@@ -216,6 +185,7 @@ class SamEntitiesReader(Reader):
         """Yield one record honouring ``max_records`` and progress logging."""
         if not self._budget_left():
             return
+        _validate_entity(record)
         self._seen += 1
         if self._seen % _PROGRESS_EVERY == 0:
             logger.info("SAM entities: {:,} entities so far...", self._seen)
@@ -254,22 +224,16 @@ class SamEntitiesReader(Reader):
         if year is not None:
             params["registrationDate"] = _year_range_literal(year)
         trigger = self._get(f"{API_BASE}/entities", params)
-        if trigger is None:
-            return
+        total = _total_records(trigger)
         download_url = _find_download_url(trigger)
         if download_url:
-            records: Iterator[dict] = self._download_extract(download_url)
+            records = list(self._download_extract(download_url))
         else:
-            # No extract URL: a small window may have come back inline instead. Fall
-            # back to any ``entityData`` in the trigger; only warn if there's nothing.
-            inline = trigger.get("entityData")
-            if not inline:
-                logger.warning(
-                    "SAM entities: extract response for year={} had no download URL or inline data — skipping",
-                    year,
-                )
-                return
-            records = iter(r for r in inline if isinstance(r, dict))
+            records = _entity_data(trigger)
+        if len(records) != total:
+            raise SamEntitiesError("SAM extract record count differs from totalRecords")
+        if len({_validate_entity(record) for record in records}) != total:
+            raise SamEntitiesError("SAM extract repeats an entity identifier")
         for record in records:
             if not self._budget_left():
                 return
@@ -282,18 +246,20 @@ class SamEntitiesReader(Reader):
         for attempt in range(1, _EXTRACT_POLL_MAX + 1):
             try:
                 resp = self._client.get(url)
-            except httpx.HTTPError as exc:
-                logger.warning("SAM entities: extract download error {} (attempt {})", exc, attempt)
+            except httpx.HTTPError:
+                if attempt == _EXTRACT_POLL_MAX:
+                    raise SamEntitiesError("SAM extract transport retries exhausted") from None
+                logger.warning("SAM entities: extract transport failed (attempt {})", attempt)
                 time.sleep(_EXTRACT_POLL_INTERVAL)
                 continue
             # The file may still be generating: SAM answers 202/404 until ready.
             if resp.status_code in (202, 404, 429) or resp.status_code >= 500:
                 if attempt == _EXTRACT_POLL_MAX:
-                    logger.error("SAM entities: extract not ready after {} polls — giving up", attempt)
-                    return
+                    raise SamEntitiesError("SAM extract did not finish within its poll budget")
                 time.sleep(_EXTRACT_POLL_INTERVAL)
                 continue
-            resp.raise_for_status()
+            if resp.status_code != 200:
+                raise SamEntitiesError(f"SAM extract refused with HTTP {resp.status_code}")
             yield from _parse_extract_bytes(resp.content)
             return
 
@@ -314,8 +280,6 @@ class SamEntitiesReader(Reader):
         if not self._budget_left():
             return
         total = self._window_total(gte, lte)
-        if total is None:
-            return
         if total > PAGE_CEILING and gte < lte:
             mid = gte + (lte - gte) // 2
             if self.verbose:
@@ -326,23 +290,21 @@ class SamEntitiesReader(Reader):
             yield from self._fetch_window(_next_day(mid), lte)
             return
         if total > PAGE_CEILING:
-            # A single day still exceeds the ceiling — accept the reachable slice but
-            # make the residual gap loud rather than silent.
-            logger.warning(
-                "SAM entities: single day {} has {} entities > {} ceiling — some unreachable", gte, total, PAGE_CEILING
-            )
+            raise SamEntitiesError("SAM single-day selection exceeds the reachable page limit; use extract mode")
         yield from self._page_window(gte, lte)
 
-    def _window_total(self, gte: date, lte: date) -> int | None:
+    def _window_total(self, gte: date, lte: date) -> int:
         """Return ``totalRecords`` for a registration-date window (a cheap size=1 probe)."""
         params = self._base_params()
         params["registrationDate"] = _range_literal(gte, lte)
         params["page"] = 0
         params["size"] = 1
         payload = self._get(f"{API_BASE}/entities", params)
-        if payload is None:
-            return None
-        return int(payload.get("totalRecords") or 0)
+        records = _entity_data(payload)
+        total = _total_records(payload)
+        if len(records) > total:
+            raise SamEntitiesError("SAM size probe contains more records than totalRecords")
+        return total
 
     def _page_window(self, gte: date, lte: date) -> Iterator[dict]:
         """Follow ``links.nextLink`` through one window until exhausted or the ceiling."""
@@ -353,26 +315,44 @@ class SamEntitiesReader(Reader):
         params["page"] = 0
         params["size"] = self.per_page
 
+        expected = None
+        observed = 0
+        seen_ids: set[str] = set()
+        seen_links: set[str] = set()
         for _ in range(_MAX_PAGES):
             if not self._budget_left():
                 return
             payload = self._get(url, params)
-            if payload is None:
-                return
-            records = payload.get("entityData") or []
-            if not records:
-                return
+            total = _total_records(payload)
+            records = _entity_data(payload)
+            if expected is None:
+                expected = total
+            if total != expected:
+                raise SamEntitiesError("SAM totalRecords changed during the selected page traversal")
+            observed += len(records)
+            if observed > total:
+                raise SamEntitiesError("SAM pages exceed totalRecords")
             for record in records:
                 if not self._budget_left():
                     return
+                identity = _validate_entity(record)
+                if identity in seen_ids:
+                    raise SamEntitiesError("SAM pages repeat an entity identifier")
+                seen_ids.add(identity)
                 yield from self._emit(record)
-            next_link = (payload.get("links") or {}).get("nextLink")
-            if not next_link or len(records) < self.per_page:
+            if observed == total or not self._budget_left():
                 return
+            links = payload.get("links")
+            next_link = links.get("nextLink") if isinstance(links, dict) else None
+            if not records or not isinstance(next_link, str) or not next_link:
+                raise SamEntitiesError("SAM pagination ended before totalRecords")
+            if next_link in seen_links:
+                raise SamEntitiesError("SAM pagination repeated its continuation")
+            seen_links.add(next_link)
             url = self._reinject_key(next_link)
             params = None  # nextLink already carries page/size/filter as a query string
         else:
-            logger.warning("SAM entities: hit the _MAX_PAGES={} runaway guard — stopping", _MAX_PAGES)
+            raise SamEntitiesError("SAM page budget exhausted before the selected traversal completed")
 
     # -- transport -----------------------------------------------------------
 
@@ -384,43 +364,81 @@ class SamEntitiesReader(Reader):
         (extract download URLs). We overwrite the query param and swap the token so
         the link is usable, leaving the rest (page/size/filter/fileName) intact.
         """
+        parts = urlparse(link)
+        if parts.scheme != "https" or parts.hostname != "api.sam.gov" or parts.username or parts.password:
+            raise SamEntitiesError("SAM response link is outside the authorized API host")
         link = link.replace(_API_KEY_PLACEHOLDER, self.api_key or "")
         parts = urlparse(link)
         query = parse_qs(parts.query, keep_blank_values=True)
         query["api_key"] = [self.api_key or ""]
         return urlunparse(parts._replace(query=urlencode(query, doseq=True)))
 
-    def _get(self, url: str, params: dict | None) -> dict | None:
-        """GET with bounded retries + exponential backoff. Returns parsed JSON or None."""
+    def _get(self, url: str, params: dict | None) -> dict:
+        """GET with bounded retries; failures never become successful empty data."""
         assert self._client is not None
         for attempt in range(1, _MAX_RETRIES + 1):
             try:
                 resp = self._client.get(url, params=params)
                 if resp.status_code == 429 or resp.status_code >= 500:
                     raise httpx.HTTPStatusError("retryable", request=resp.request, response=resp)
-                if resp.status_code == 404:
-                    # SAM returns a bare 404 for an unauthorized/invalid api_key
-                    # (rather than 401/403). Non-retryable: stop and no-op.
-                    logger.error(
-                        "SAM entities: 404 from {} — the api.data.gov key is likely not "
-                        "authorized for the SAM.gov Entity API (associate it with a SAM.gov "
-                        "account that has the Entity API role). Yielding nothing.",
-                        url,
+                if resp.status_code != 200:
+                    raise SamEntitiesError(
+                        f"SAM request refused with HTTP {resp.status_code}; verify SAM-specific access"
                     )
-                    return None
-                resp.raise_for_status()
-                return resp.json()
-            except (httpx.HTTPError, ValueError) as exc:
+                payload = resp.json()
+                if not isinstance(payload, dict):
+                    raise SamEntitiesError("SAM response must be a JSON object")
+                return payload
+            except (httpx.HTTPError, ValueError):
                 if attempt == _MAX_RETRIES:
-                    logger.error("SAM entities: giving up on {} after {} attempts: {}", url, attempt, exc)
-                    return None
+                    raise SamEntitiesError("SAM request retries exhausted without a valid response") from None
                 backoff = min(2**attempt, 30)
-                logger.warning("SAM entities: {} (attempt {}/{}), retrying in {}s", exc, attempt, _MAX_RETRIES, backoff)
+                # Exceptions and URLs may contain the query credential.
+                logger.warning(
+                    "SAM entities: request failed (attempt {}/{}), retrying in {}s", attempt, _MAX_RETRIES, backoff
+                )
                 time.sleep(backoff)
-        return None
+        raise SamEntitiesError("SAM request retry budget exhausted")
 
 
 # -- module-level pure helpers (unit-testable without a client) ---------------
+
+
+class SamEntitiesError(RuntimeError):
+    """The selected SAM population could not be acquired and validated."""
+
+
+def _total_records(payload: object) -> int:
+    _refuse_source_error(payload)
+    total = cast(dict[str, object], payload).get("totalRecords") if isinstance(payload, dict) else None
+    if type(total) is not int or total < 0:
+        raise SamEntitiesError("SAM response requires a nonnegative integer totalRecords")
+    return total
+
+
+def _validate_entity(record: object) -> str:
+    registration = cast(dict[str, object], record).get("entityRegistration") if isinstance(record, dict) else None
+    uei = cast(dict[str, object], registration).get("ueiSAM") if isinstance(registration, dict) else None
+    if not isinstance(uei, str) or not uei.strip():
+        raise SamEntitiesError("SAM entity requires a nonempty entityRegistration.ueiSAM")
+    return uei
+
+
+def _entity_data(payload: object) -> list[dict]:
+    _refuse_source_error(payload)
+    records = cast(dict[str, object], payload).get("entityData") if isinstance(payload, dict) else None
+    if not isinstance(records, list):
+        raise SamEntitiesError("SAM response requires an entityData array")
+    for record in records:
+        _validate_entity(record)
+    return cast(list[dict], records)
+
+
+def _refuse_source_error(payload: object) -> None:
+    if isinstance(payload, dict) and any(
+        cast(dict[str, object], payload).get(key) for key in ("error", "errors", "errorCode", "errorMessage")
+    ):
+        raise SamEntitiesError("SAM response reports a source error")
 
 
 def _us_date(d: date) -> str:
@@ -466,7 +484,9 @@ def _find_download_url(payload: object) -> str | None:
                 fallback = node
             return None
         if isinstance(node, dict):
-            for value in node.values():
+            for key, value in node.items():
+                if key in {"selfLink", "nextLink", "prevLink", "previousLink"}:
+                    continue
                 hit = walk(value)
                 if hit:
                     return hit
@@ -485,11 +505,11 @@ def _parse_extract_bytes(raw: bytes) -> Iterator[dict]:
 
     Handles gzip- and zip-compressed payloads, then parses the inner text as either
     a JSON envelope (``{"entityData": [...]}``), a bare JSON array of entities, or
-    newline-delimited JSON. Anything unrecognisable yields nothing.
+    newline-delimited JSON. Malformed or unrecognized input refuses the selection.
     """
     text = _decompress_extract(raw)
-    if not text:
-        return
+    if not text.strip():
+        raise SamEntitiesError("SAM extract is empty without an explicit source population")
     stripped = text.lstrip()
     if stripped[:1] in ("{", "["):
         try:
@@ -498,14 +518,21 @@ def _parse_extract_bytes(raw: bytes) -> Iterator[dict]:
             yield from _iter_ndjson(text)
             return
         if isinstance(doc, dict):
-            records = doc.get("entityData")
-            if isinstance(records, list):
-                yield from (r for r in records if isinstance(r, dict))
+            if "entityData" in doc:
+                records = _entity_data(doc)
+                if "totalRecords" in doc and len(records) != _total_records(doc):
+                    raise SamEntitiesError("SAM extract entityData differs from totalRecords")
+                yield from records
             elif _looks_like_entity(doc):
+                _validate_entity(doc)
                 yield doc
+            else:
+                raise SamEntitiesError("SAM extract has no recognized entity population")
             return
         if isinstance(doc, list):
-            yield from (r for r in doc if isinstance(r, dict))
+            for record in doc:
+                _validate_entity(record)
+                yield record
             return
     yield from _iter_ndjson(text)
 
@@ -514,19 +541,22 @@ def _decompress_extract(raw: bytes) -> str:
     """Return the extract's inner text, transparently decompressing gzip/zip."""
     if raw[:2] == b"\x1f\x8b":  # gzip magic
         try:
-            return gzip.decompress(raw).decode("utf-8", "replace")
-        except OSError:
-            return ""
+            return gzip.decompress(raw).decode("utf-8")
+        except (OSError, EOFError, UnicodeError):
+            raise SamEntitiesError("SAM gzip extract is malformed") from None
     if raw[:2] == b"PK":  # zip magic
         try:
             with zipfile.ZipFile(io.BytesIO(raw)) as zf:
-                names = zf.namelist()
-                if not names:
-                    return ""
-                return zf.read(names[0]).decode("utf-8", "replace")
-        except zipfile.BadZipFile:
-            return ""
-    return raw.decode("utf-8", "replace")
+                members = [member for member in zf.infolist() if not member.is_dir()]
+                if len(members) != 1:
+                    raise SamEntitiesError("SAM ZIP extract requires exactly one data member")
+                return zf.read(members[0]).decode("utf-8")
+        except (zipfile.BadZipFile, UnicodeError):
+            raise SamEntitiesError("SAM ZIP extract is malformed") from None
+    try:
+        return raw.decode("utf-8")
+    except UnicodeError:
+        raise SamEntitiesError("SAM extract is not valid UTF-8") from None
 
 
 def _iter_ndjson(text: str) -> Iterator[dict]:
@@ -537,9 +567,9 @@ def _iter_ndjson(text: str) -> Iterator[dict]:
         try:
             obj = json.loads(line)
         except ValueError:
-            continue
-        if isinstance(obj, dict):
-            yield obj
+            raise SamEntitiesError("SAM extract contains malformed JSON records") from None
+        _validate_entity(obj)
+        yield obj
 
 
 def _looks_like_entity(doc: dict) -> bool:

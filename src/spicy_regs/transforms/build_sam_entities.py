@@ -40,7 +40,7 @@ import pyarrow.parquet as pq
 from loguru import logger
 
 from spicy_regs.sources import r2
-from spicy_regs.sources.sam_entities import SamEntitiesReader
+from spicy_regs.sources.sam_entities import SamEntitiesReader, _validate_entity
 
 OUTPUT = "sam_entities.parquet"
 
@@ -87,7 +87,8 @@ def _shape(doc: dict) -> dict:
     registration (e.g. one with no ``coreData``) still produces a row keyed by
     its UEI.
     """
-    reg = doc.get("entityRegistration") or {}
+    _validate_entity(doc)
+    reg = doc["entityRegistration"]
     core = doc.get("coreData") or {}
     entity_info = core.get("entityInformation") or {}
     address = core.get("physicalAddress") or {}

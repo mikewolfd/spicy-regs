@@ -57,8 +57,7 @@ def _int_env(name: str) -> int | None:
     try:
         return int(raw)
     except ValueError:
-        logger.warning("SAM rollup: ignoring non-integer {}={!r}", name, raw)
-        return None
+        raise ValueError(f"{name} must be an integer or blank") from None
 
 
 class SamEntitiesRollup(RollupPipeline):
@@ -73,6 +72,10 @@ class SamEntitiesRollup(RollupPipeline):
         since = _int_env("SAM_SINCE_YEAR")
         until = _int_env("SAM_UNTIL_YEAR")
         max_records = _int_env("SAM_MAX_RECORDS")  # blank/0 -> unbounded within the window(s)
+        if (since is None) != (until is None):
+            raise ValueError("Set both SAM_SINCE_YEAR and SAM_UNTIL_YEAR for an explicit selection")
+        if max_records is not None and max_records < 0:
+            raise ValueError("SAM_MAX_RECORDS must be nonnegative")
 
         if since is None and until is None:
             # Default scheduled run: one bounded, rotating year window.
