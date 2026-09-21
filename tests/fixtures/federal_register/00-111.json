@@ -1,0 +1,111 @@
+[
+  {
+    "document_number": "00-111",
+    "title": "Compliance Monitoring and Miscellaneous Issues Relating to the Low-Income Housing Credit",
+    "abstract": "This document contains final regulations regarding the procedures for compliance monitoring by state and local housing agencies (Agencies) with the requirements of the low-income housing credit; the requirements for making carryover allocations; the rules for Agencies' correction of administrative errors or omissions; and the independent verification of information on sources and uses of funds submitted by taxpayers to Agencies. These final regulations affect owners of low-income housing projects who claim the credit and the Agencies who administer the credit.",
+    "type": "Rule",
+    "subtype": null,
+    "publication_date": "2000-01-14",
+    "effective_on": "2001-01-01",
+    "comments_close_on": null,
+    "signing_date": null,
+    "agencies": [
+      {
+        "raw_name": "DEPARTMENT OF THE TREASURY",
+        "name": "Treasury Department",
+        "id": 497,
+        "url": "https://www.federalregister.gov/agencies/treasury-department",
+        "json_url": "https://www.federalregister.gov/api/v1/agencies/497",
+        "parent_id": null,
+        "slug": "treasury-department"
+      },
+      {
+        "raw_name": "Internal Revenue Service",
+        "name": "Internal Revenue Service",
+        "id": 254,
+        "url": "https://www.federalregister.gov/agencies/internal-revenue-service",
+        "json_url": "https://www.federalregister.gov/api/v1/agencies/254",
+        "parent_id": 497,
+        "slug": "internal-revenue-service"
+      }
+    ],
+    "agency_names": [
+      "Treasury Department",
+      "Internal Revenue Service"
+    ],
+    "docket_ids": [
+      "TD 8859"
+    ],
+    "regulation_id_numbers": [
+      "1545-AV44"
+    ],
+    "cfr_references": [
+      {
+        "chapter": null,
+        "citation_url": null,
+        "part": 1,
+        "title": 26
+      },
+      {
+        "chapter": null,
+        "citation_url": null,
+        "part": 602,
+        "title": 26
+      }
+    ],
+    "html_url": "https://www.federalregister.gov/documents/2000/01/14/00-111/compliance-monitoring-and-miscellaneous-issues-relating-to-the-low-income-housing-credit",
+    "pdf_url": "https://www.govinfo.gov/content/pkg/FR-2000-01-14/pdf/00-111.pdf",
+    "body_html_url": "https://www.federalregister.gov/documents/full_text/html/2000/01/14/00-111.html",
+    "volume": 65,
+    "start_page": 2323,
+    "end_page": 2329,
+    "executive_order_number": null
+  },
+  {
+    "document_number": "00-111",
+    "title": "Notice of Filing of Plat of an Island; Minnesota",
+    "abstract": null,
+    "type": "Notice",
+    "subtype": null,
+    "publication_date": "2000-01-18",
+    "effective_on": null,
+    "comments_close_on": null,
+    "signing_date": null,
+    "agencies": [
+      {
+        "raw_name": "DEPARTMENT OF THE INTERIOR",
+        "name": "Interior Department",
+        "id": 253,
+        "url": "https://www.federalregister.gov/agencies/interior-department",
+        "json_url": "https://www.federalregister.gov/api/v1/agencies/253",
+        "parent_id": null,
+        "slug": "interior-department"
+      },
+      {
+        "raw_name": "Bureau of Land Management",
+        "name": "Land Management Bureau",
+        "id": 275,
+        "url": "https://www.federalregister.gov/agencies/land-management-bureau",
+        "json_url": "https://www.federalregister.gov/api/v1/agencies/275",
+        "parent_id": 253,
+        "slug": "land-management-bureau"
+      }
+    ],
+    "agency_names": [
+      "Interior Department",
+      "Land Management Bureau"
+    ],
+    "docket_ids": [
+      "ES-030-1430-00"
+    ],
+    "regulation_id_numbers": [],
+    "cfr_references": [],
+    "html_url": "https://www.federalregister.gov/documents/2000/01/18/00-111/notice-of-filing-of-plat-of-an-island-minnesota",
+    "pdf_url": "https://www.govinfo.gov/content/pkg/FR-2000-01-18/pdf/00-111.pdf",
+    "body_html_url": "https://www.federalregister.gov/documents/full_text/html/2000/01/18/00-111.html",
+    "volume": 65,
+    "start_page": 2638,
+    "end_page": 2639,
+    "executive_order_number": null
+  }
+]

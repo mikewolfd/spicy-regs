@@ -100,6 +100,7 @@ class RulemakingDatasetPipeline(MaterializedDatasetPipeline):
             ),
             "fr_docket_links.parquet": (
                 "document_number",
+                "publication_date",
                 "docket_id",
             ),
         }

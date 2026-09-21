@@ -165,7 +165,7 @@
     {
       "table": "fr_docket_links",
       "label": "Federal Register to docket links",
-      "summary": "The Federal Register ↔ docket bridge: each `federal_register` row's `docket_ids_json` array exploded to one row per (docket_id, FR document), carrying the FR display columns. Use this instead of an `ILIKE` scan over `federal_register.docket_ids_json` — it is sorted by `docket_id`, so `WHERE docket_id = ?` prunes row groups. This is the practical join from regulations.gov to the Federal Register, since `documents.fr_doc_num` is populated on only ~1% of rules. Built by `build_fr_docket_links`.",
+      "summary": "The Federal Register ↔ docket bridge: each `federal_register` row's `docket_ids_json` array exploded to one row per (docket_id, document_number, publication_date), carrying the FR display columns. Use this instead of an `ILIKE` scan over `federal_register.docket_ids_json` — it is sorted by `docket_id`, so `WHERE docket_id = ?` prunes row groups. This is the practical join from regulations.gov to the Federal Register, since `documents.fr_doc_num` is populated on only ~1% of rules. Built by `build_fr_docket_links`.",
       "coverage": "Derived, and bounded by its inputs. Links between `federal_register` and `dockets`, so it inherits the Federal Register table's 2000 floor: a rule published before 2000 has no link here because the document is not in that table.",
       "kind": "derived",
       "measured_on": "2026-09-06",
@@ -317,11 +317,11 @@
     {
       "table": "federal_register",
       "label": "Federal Register documents",
-      "summary": "One row per Federal Register document, ingested from the federalregister.gov REST API by `build_federal_register`. The authoritative rule-publication record — proposed rules, final rules, and notices — complementary to the regulations.gov `dockets`/`documents` view. `regulation_id_numbers_json` (RIN) and `cfr_references_json` are the join keys to the Unified Agenda and the CFR. All columns are stored as VARCHAR; array-valued fields are JSON.",
+      "summary": "One row per dated Federal Register record, keyed by (`document_number`, `publication_date`), ingested from the federalregister.gov REST API by `build_federal_register`. The authoritative rule-publication record — proposed rules, final rules, and notices — complementary to the regulations.gov `dockets`/`documents` view. `regulation_id_numbers_json` (RIN) and `cfr_references_json` are the join keys to the Unified Agenda and the CFR. All columns are stored as VARCHAR; array-valued fields are JSON.",
       "coverage": "True range, with a boundary worth stating. Documents published from 2000-01-03 to 2026-09-04. Federal Register documents published before 2000 are not in this table at all.",
       "kind": "true_range",
       "measured_on": "2026-09-06",
-      "data_quality": null,
+      "data_quality": "Document numbers are not globally unique: `00-111` names different records on 2000-01-14 and 2000-01-18. Current merging preserves both dates and replaces only the same dated record on a later successful fetch. This code correction does not restore historical records already lost from published files; those require a pinned historical replay and publication. A number-only source reference remains ambiguous when its input generation supplies multiple dated candidates.",
       "columns": [
         "document_number",
         "title",

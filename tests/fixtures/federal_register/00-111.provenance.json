@@ -1,0 +1,23 @@
+{
+  "description": "Exact selected native result objects, reserialized as JSON. All selected fields retained; no values changed. Parent daily responses were retained in the bounded read-only validation sprint.",
+  "inputs": [
+    {
+      "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/data-validation-sprint-2026-09-21/regulatory/fr-collision-response-1.bin",
+      "sha256": "75d834fe8ae3f0701606349ec2debfc22255a656360e131f87c66ee41bc86d52",
+      "selection": {
+        "document_number": "00-111",
+        "publication_date": "2000-01-14"
+      },
+      "source_rows": 124
+    },
+    {
+      "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/data-validation-sprint-2026-09-21/regulatory/fr-collision-response-2.bin",
+      "sha256": "74a9cc2e64a216b6c2d0f12f408f05c3d1000aa01a3482436018b294c23c4187",
+      "selection": {
+        "document_number": "00-111",
+        "publication_date": "2000-01-18"
+      },
+      "source_rows": 113
+    }
+  ]
+}

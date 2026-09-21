@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from datetime import date, timedelta
@@ -23,8 +24,16 @@ from spicy_regs.ontology.common import (
     write_parquet_rows,
 )
 
+from spicy_regs.ontology.federal_register import (
+    FederalRegisterIndex,
+    record_id,
+    record_url,
+    references_json,
+    resolved_id,
+)
+
 OUTPUT = "comment_periods.parquet"
-ACTOR_ID = "spicy-regs:comment-periods:v2"
+ACTOR_ID = "spicy-regs:comment-periods:v3"
 
 COLUMNS = (
     "comment_period_id",
@@ -37,6 +46,7 @@ COLUMNS = (
     "opened_by_artifact_ids_json",
     "evidence_ids_json",
     *ATTESTATION_COLUMNS,
+    "unresolved_fr_references_json",
 )
 
 
@@ -69,7 +79,7 @@ def _artifact_url(source: str, identifier: object) -> str | None:
     if source == "documents.comment_end_date":
         return f"https://www.regulations.gov/document/{escaped}"
     if source == "federal_register.comments_close_on":
-        return f"https://www.federalregister.gov/d/{escaped}"
+        return record_url(value)
     return None
 
 
@@ -84,6 +94,8 @@ def _merge_intervals(intervals: list[_Interval]) -> list[dict]:
     grouped: dict[tuple[str, tuple[str, ...]], list[_Interval]] = defaultdict(list)
     for interval in intervals:
         anchor = ("dockets", interval.docket_ids) if interval.docket_ids else ("proceedings", interval.proceeding_ids)
+        if not interval.docket_ids and not interval.proceeding_ids:
+            anchor = ("artifact", (interval.opened_by_artifact_id,))
         grouped[anchor].append(interval)
 
     merged: list[dict] = []
@@ -117,6 +129,7 @@ def _merge_intervals(intervals: list[_Interval]) -> list[dict]:
                         canonical_json(sorted_proceedings),
                         canonical_json(sorted_dockets),
                         current_start.isoformat(),
+                        *(() if sorted_proceedings or sorted_dockets else (canonical_json(sorted(opened_by)),)),
                     ),
                     "proceeding_ids_json": canonical_json(sorted_proceedings),
                     "rins_json": canonical_json(sorted(rins)),
@@ -188,6 +201,8 @@ def build_comment_periods(
     )
     provenance = context.provenance(method="deterministic", actor_id=ACTOR_ID)
     json_stats = JsonReadStats()
+    fr_index = FederalRegisterIndex(required["federal_register"])
+    unresolved_by_fr: dict[str, list[dict]] = defaultdict(list)
 
     proceeding_by_id: dict[str, dict] = {}
     dockets_by_proceeding: dict[str, set[str]] = {}
@@ -211,16 +226,12 @@ def build_comment_periods(
         dockets_by_proceeding[proceeding_id] = docket_set
         for docket in docket_set:
             proceeding_ids_by_docket[docket].add(proceeding_id)
-        fr_documents = parse_json_list(
-            row.get("fr_document_numbers_json"),
-            stats=json_stats,
-            table="proceedings",
-            row_id=proceeding_id,
-            column="fr_document_numbers_json",
-        )
-        if fr_documents is not None:
-            for document_number in fr_documents:
-                proceeding_ids_by_fr_document[str(document_number)].add(proceeding_id)
+        fr_documents, unresolved = fr_index.proceeding_ids(row, json_stats)
+        for identity in fr_documents:
+            proceeding_ids_by_fr_document[identity].add(proceeding_id)
+        for reference in unresolved:
+            for candidate in reference["candidate_ids"]:
+                unresolved_by_fr[candidate].append(reference)
 
     trusted_dockets = {
         normalized
@@ -244,6 +255,7 @@ def build_comment_periods(
         end: object,
         source: str,
         evidence_id: object,
+        retain_unresolved: bool = False,
     ) -> None:
         nonlocal unanchored_intervals
         open_date, close_date = _day(start), _day(end)
@@ -256,7 +268,7 @@ def build_comment_periods(
             if len(inverted_examples) < 5:
                 inverted_examples.append(f"{source} {evidence}: {open_date.isoformat()}..{close_date.isoformat()}")
             return
-        if not proceeding_ids and not docket_ids:
+        if not proceeding_ids and not docket_ids and not retain_unresolved:
             unanchored_intervals += 1
             return
         resolved_rins = set(rins)
@@ -310,18 +322,25 @@ def build_comment_periods(
         )
 
     linked_dockets_by_fr: dict[str, set[str]] = defaultdict(set)
-    for row in iter_parquet_rows(
-        required["fr_docket_links"],
-        columns=("document_number", "docket_id"),
-    ):
+    for row in iter_parquet_rows(required["fr_docket_links"]):
         docket = normalize_regsgov_identifier(row.get("docket_id"))
         if row.get("document_number") and docket in trusted_dockets:
-            linked_dockets_by_fr[str(row["document_number"])].add(docket)
+            reference = {
+                "source": "fr_docket_links",
+                "evidence_id": docket,
+                **fr_index.reference(str(row["document_number"]), row.get("publication_date")),
+            }
+            if identity := resolved_id(reference):
+                linked_dockets_by_fr[identity].add(docket)
+            else:
+                for candidate in reference["candidate_ids"]:
+                    unresolved_by_fr[candidate].append(reference)
 
     for row in iter_parquet_rows(required["federal_register"]):
         if not row.get("comments_close_on") or not row.get("publication_date"):
             continue
         document_number = str(row.get("document_number") or "")
+        identity = record_id(row)
         raw_rins = parse_json_list(
             row.get("regulation_id_numbers_json"),
             stats=json_stats,
@@ -330,11 +349,11 @@ def build_comment_periods(
             column="regulation_id_numbers_json",
         )
         rins = set() if raw_rins is None else {rin for value in raw_rins if (rin := normalize_rin(value)) is not None}
-        dockets = set(linked_dockets_by_fr.get(document_number, ()))
+        dockets = set(linked_dockets_by_fr.get(identity, ()))
         docket_targets: set[str] = set()
         for docket in dockets:
             docket_targets.update(proceeding_ids_by_docket.get(docket, ()))
-        artifact_targets = set(proceeding_ids_by_fr_document.get(document_number, ()))
+        artifact_targets = set(proceeding_ids_by_fr_document.get(identity, ()))
         # Direct artifact membership is strongest. Docket membership is the
         # fallback for older rows that predate the artifact projection.
         candidates = artifact_targets or docket_targets
@@ -348,12 +367,19 @@ def build_comment_periods(
             start=row.get("publication_date"),
             end=row.get("comments_close_on"),
             source="federal_register.comments_close_on",
-            evidence_id=document_number,
+            evidence_id=identity,
+            retain_unresolved=bool(unresolved_by_fr[identity]),
         )
 
     rows = _merge_intervals(intervals)
     for row in rows:
         row.update(provenance)
+        references = [
+            reference
+            for evidence in json.loads(row["evidence_ids_json"])
+            for reference in unresolved_by_fr.get(evidence, ())
+        ]
+        row["unresolved_fr_references_json"] = references_json(references)
     rows.sort(
         key=lambda row: (
             row["docket_ids_json"],

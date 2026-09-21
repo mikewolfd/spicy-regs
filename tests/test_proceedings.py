@@ -238,7 +238,7 @@ def test_reference_proceeding_threads_rinless_docket_and_preserves_reopening(tmp
     assert all(json.loads(row["proceeding_ids_json"]) == [proceeding["proceeding_id"]] for row in periods)
     assert all(json.loads(row["docket_ids_json"]) == [docket_id] for row in periods)
     assert json.loads(periods[0]["opened_by_artifact_ids_json"]) == [
-        "https://www.federalregister.gov/d/2021-24202",
+        "https://www.federalregister.gov/documents/2021/11/15/2021-24202",
         "https://www.regulations.gov/document/D-PROPOSAL",
     ]
     assert "D-EXTENSION" in json.loads(periods[0]["evidence_ids_json"])
@@ -246,7 +246,7 @@ def test_reference_proceeding_threads_rinless_docket_and_preserves_reopening(tmp
         periods[0]["opened_by_artifact_ids_json"]
     )
     assert all(row["method"] == "deterministic" for row in periods)
-    assert all(row["actor_id"] == "spicy-regs:comment-periods:v2" for row in periods)
+    assert all(row["actor_id"] == "spicy-regs:comment-periods:v3" for row in periods)
 
 
 def test_reused_rin_does_not_collapse_or_cross_assign_distinct_dockets(tmp_path):

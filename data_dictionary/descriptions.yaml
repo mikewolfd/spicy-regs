@@ -238,7 +238,8 @@ tables:
     measured_on: "2026-09-06"
     summary: >-
       The Federal Register ↔ docket bridge: each `federal_register` row's
-      `docket_ids_json` array exploded to one row per (docket_id, FR document),
+      `docket_ids_json` array exploded to one row per (docket_id, document_number,
+      publication_date),
       carrying the FR display columns. Use this instead of an `ILIKE` scan over
       `federal_register.docket_ids_json` — it is sorted by `docket_id`, so
       `WHERE docket_id = ?` prunes row groups. This is the practical join from
@@ -246,12 +247,12 @@ tables:
       populated on only ~1% of rules. Built by `build_fr_docket_links`.
     columns:
       docket_id: "One docket ID extracted from the FR document's `docket_ids_json` array."
-      document_number: "Federal Register document number (joins `federal_register.document_number`)."
+      document_number: "Literal Federal Register document number. Join to `federal_register` on both this value and `publication_date`; a number can name distinct dated records."
       title: "FR document title."
       abstract: "FR document abstract."
       document_type: "FR type: `Rule`, `Proposed Rule`, `Notice`, or `Presidential Document`."
       subtype: "FR subtype where the Federal Register supplies one, e.g. `Final Rule`, `Interim Final Rule`."
-      publication_date: "Date the document published in the Federal Register."
+      publication_date: "Date the document published in the Federal Register; required with `document_number` for the FR record join."
       effective_on: "Date the rule takes effect, when the document carries one."
       comments_close_on: "Comment period close date, when the document carries one."
       signing_date: "Signing date, for presidential documents."
@@ -420,18 +421,27 @@ tables:
       2000 are not in this table at all.
     measured_on: "2026-09-06"
     summary: >-
-      One row per Federal Register document, ingested from the federalregister.gov
+      One row per dated Federal Register record, keyed by (`document_number`,
+      `publication_date`), ingested from the federalregister.gov
       REST API by `build_federal_register`. The authoritative rule-publication
       record — proposed rules, final rules, and notices — complementary to the
       regulations.gov `dockets`/`documents` view. `regulation_id_numbers_json`
       (RIN) and `cfr_references_json` are the join keys to the Unified Agenda and
       the CFR. All columns are stored as VARCHAR; array-valued fields are JSON.
+    data_quality: >-
+      Document numbers are not globally unique: `00-111` names different
+      records on 2000-01-14 and 2000-01-18. Current merging preserves both dates
+      and replaces only the same dated record on a later successful fetch.
+      This code correction does not restore historical records already lost
+      from published files; those require a pinned historical replay and
+      publication. A number-only source reference remains ambiguous when its
+      input generation supplies multiple dated candidates.
     columns:
-      document_number: "FR document number (e.g. `2017-07442`). Primary key / dedup key."
+      document_number: "Literal FR document number (e.g. `2017-07442`); one component of the primary/dedup key with `publication_date`. Preserve its spelling."
       title: "Document title."
       abstract: "Agency-written abstract of the document. Often null."
       document_type: "FR category: `Rule`, `Proposed Rule`, `Notice`, or `Presidential Document`."
-      publication_date: "Date the document was published in the Federal Register (ISO 8601 string). Sort key."
+      publication_date: "Date the document was published in the Federal Register (canonical YYYY-MM-DD). Primary/dedup key with `document_number`, and sort key."
       effective_on: "Date the action takes effect, when stated. Often null."
       comments_close_on: "Public comment deadline, for documents that open a comment period. Often null."
       signing_date: "Date a presidential document was signed. Null for non-presidential documents."

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 from datetime import date, timedelta
+from pathlib import Path
 
 import httpx
 import pytest
@@ -48,6 +49,78 @@ def test_shape_produces_exact_schema():
     # Every fetched column present, and nothing extra; ``rin`` is derived in the merge.
     assert set(row) == set(FETCHED_COLUMNS)
     assert COLUMNS == (*FETCHED_COLUMNS, "rin")
+
+
+def _collision_documents():
+    return json.loads((Path(__file__).parent / "fixtures/federal_register/00-111.json").read_text())
+
+
+def test_dated_native_records_survive_and_same_date_correction_replaces(tmp_path):
+    import shutil
+
+    import pyarrow.parquet as pq
+
+    documents = _collision_documents()
+    out = build_federal_register(
+        tmp_path, documents=lambda start: iter(documents), download_prior=lambda key, path: False
+    )
+    first = pq.read_table(out).to_pylist()
+    assert {(r["document_number"], r["publication_date"]) for r in first} == {
+        ("00-111", "2000-01-14"),
+        ("00-111", "2000-01-18"),
+    }
+    # The correction is a controlled edit to one captured record, not a claim
+    # that the publisher changed its title. The date-distinct record is untouched.
+    correction = dict(documents[0], title="Corrected housing-credit title")
+    shutil.copyfile(out, tmp_path / "_fr_prior.parquet")
+    build_federal_register(tmp_path, documents=lambda start: iter([correction]), download_prior=lambda key, path: False)
+    corrected = pq.read_table(out).to_pylist()
+    assert len(corrected) == 2
+    by_date = {r["publication_date"]: r for r in corrected}
+    assert by_date["2000-01-14"]["title"] == correction["title"]
+    assert by_date["2000-01-18"] == next(r for r in first if r["publication_date"] == "2000-01-18")
+    shutil.copyfile(out, tmp_path / "_fr_prior.parquet")
+    build_federal_register(tmp_path, documents=lambda start: iter([correction]), download_prior=lambda key, path: False)
+    assert pq.read_table(out).to_pylist() == corrected
+
+
+def test_unreviewed_number_collision_is_not_a_special_case(tmp_path):
+    import pyarrow.parquet as pq
+
+    records = [dict(_RAW_DOC, publication_date=day) for day in ("2024-03-01", "2024-03-02")]
+    out = build_federal_register(
+        tmp_path, documents=lambda start: iter(records), download_prior=lambda key, path: False
+    )
+    assert pq.read_table(out).num_rows == 2
+
+
+def test_identical_repeated_observations_collapse_within_the_dated_key(tmp_path):
+    import pyarrow.parquet as pq
+
+    out = build_federal_register(
+        tmp_path, documents=lambda start: iter([_RAW_DOC, _RAW_DOC]), download_prior=lambda key, path: False
+    )
+    assert pq.read_table(out).num_rows == 1
+
+
+def test_conflicting_same_date_fetch_refuses_before_output(tmp_path):
+    records = [_RAW_DOC, dict(_RAW_DOC, title="Conflicting same-run observation")]
+    out = tmp_path / "federal_register.parquet"
+    out.write_bytes(b"previous output remains untouched")
+    with pytest.raises(ValueError, match="conflicting.*same.*date"):
+        build_federal_register(tmp_path, documents=lambda start: iter(records), download_prior=lambda key, path: False)
+    assert out.read_bytes() == b"previous output remains untouched"
+
+
+@pytest.mark.parametrize("date_value", [None, "", "2000-13-01", "20000114"])
+def test_unknown_or_noncanonical_date_refuses_before_output(tmp_path, date_value):
+    with pytest.raises(ValueError, match="identity"):
+        build_federal_register(
+            tmp_path,
+            documents=lambda start: iter([dict(_RAW_DOC, publication_date=date_value)]),
+            download_prior=lambda key, path: False,
+        )
+    assert not (tmp_path / "federal_register.parquet").exists()
 
 
 def test_shape_maps_and_serializes_fields():
