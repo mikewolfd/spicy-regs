@@ -1,0 +1,54 @@
+{
+  "package": {
+    "dateIssued": "2025-01-01",
+    "documentType": "CFR",
+    "partRange": {
+      "from": "200",
+      "to": "1199"
+    },
+    "packageId": "CFR-2025-title14-vol4",
+    "collectionCode": "CFR",
+    "detailsLink": "https://www.govinfo.gov/app/details/CFR-2025-title14-vol4",
+    "title": "Aeronautics and Space",
+    "branch": "executive",
+    "collectionName": "Code of Federal Regulations (annual edition)",
+    "download": {
+      "premisLink": "https://api.govinfo.gov/packages/CFR-2025-title14-vol4/premis",
+      "xmlLink": "https://api.govinfo.gov/packages/CFR-2025-title14-vol4/xml",
+      "txtLink": "https://api.govinfo.gov/packages/CFR-2025-title14-vol4/htm",
+      "zipLink": "https://api.govinfo.gov/packages/CFR-2025-title14-vol4/zip",
+      "modsLink": "https://api.govinfo.gov/packages/CFR-2025-title14-vol4/mods",
+      "pdfLink": "https://api.govinfo.gov/packages/CFR-2025-title14-vol4/pdf"
+    },
+    "pages": "1004",
+    "governmentAuthor2": "Office of the Federal Register",
+    "titleNumber": "14",
+    "governmentAuthor1": "National Archives and Records Administration",
+    "publisher": "Office of the Federal Register, National Archives and Records Administration",
+    "volumeCount": "5",
+    "suDocClassNumber": "AE 2.106/3:14/",
+    "docClass": "CFR",
+    "lastModified": "2025-06-17T21:29:08Z",
+    "category": "Regulatory Information",
+    "otherIdentifier": {
+      "migrated-doc-id": "14CFR"
+    },
+    "granulesLink": "https://api.govinfo.gov/packages/CFR-2025-title14-vol4/granules?offsetMark=*&pageSize=100"
+  },
+  "granules": [
+    {
+      "dateIssued": "2025-01-01",
+      "granuleClass": "CONTENT",
+      "granuleId": "CFR-2025-title14-vol4-sec19-8-1",
+      "granuleLink": "https://api.govinfo.gov/packages/CFR-2025-title14-vol4/granules/CFR-2025-title14-vol4-sec19-8-1/summary",
+      "title": "Purpose."
+    },
+    {
+      "dateIssued": "2025-01-01",
+      "granuleClass": "CONTENT",
+      "granuleId": "CFR-2025-title14-vol4-sec19-8-10",
+      "granuleLink": "https://api.govinfo.gov/packages/CFR-2025-title14-vol4/granules/CFR-2025-title14-vol4-sec19-8-10/summary",
+      "title": "Staff review."
+    }
+  ]
+}

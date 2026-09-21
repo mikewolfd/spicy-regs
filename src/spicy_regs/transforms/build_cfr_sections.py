@@ -18,21 +18,15 @@ Instead we:
 2. Fetch granules (bounded by ``since_year`` when provided).
 3. Dedup the union on ``granule_id``, preferring the freshly fetched row.
 
-With no prior table (first run) step 2 becomes a full backfill. Incremental
-freshness is driven by ``edition_year`` / ``last_modified``.
+With no prior table, the output covers only the requested year window. The
+default window does not establish a full historical backfill.
 
-Field derivation (live-validated, no N+1). ``_shape`` derives every published
-column from the granule's **list-level** fields plus the ID grammar — it never
-calls the per-granule ``/summary`` endpoint (the only place ``cfrTitle`` /
-``cfrPart`` / ``heading`` live), which would be an N+1 fetch across thousands of
-granules per package. CFR title comes from the ``title(\\d+)`` token in the
-package/granule ID, edition year from the ``CFR-(\\d{4})`` token, and part /
-section from the ``part(\\d+[A-Za-z]*)`` / ``sec(…)`` tokens on the granule ID. A
-section-level granule carries no ``part`` token; its ``sec`` token fuses the two
-(``…-sec100-1`` is 10 CFR 100.1), so the part is split back out of it and
-``cfr_ref`` is a section-level citation. Both stay nullable: structural granules
-(``NODE``, ``TOC``) have no section, and a handful of malformed publisher ids
-have no recoverable part.
+List-level fields establish the heading and source dates. Explicit ID tokens
+establish the edition, title and part where present. A section token alone does
+not establish part ancestry: ``sec19-8-1`` corresponds to section ``19-8.1`` in
+native Part 241, not Part 19. Preserve the token and leave part/citation unknown
+until same-edition native ancestry is available. Do not join a current eCFR
+hierarchy onto an annual CFR edition.
 """
 
 from __future__ import annotations
@@ -45,7 +39,7 @@ import pyarrow.parquet as pq
 from loguru import logger
 
 from spicy_regs.sources import r2
-from spicy_regs.sources.cfr_sections import CfrSectionsReader
+from spicy_regs.sources.cfr_sections import CfrSectionsError, CfrSectionsReader
 
 OUTPUT = "cfr_sections.parquet"
 
@@ -86,22 +80,13 @@ def _cfr_ref(title: object, part: object, section: object) -> str | None:
 # ID-grammar parsers. GovInfo CFR IDs look like:
 #   package: CFR-2024-title48-vol5
 #   granule: CFR-2024-title48-vol5-chap7-appA / …-part700 / …-sec60-1
-# Everything the schema needs is derivable from these tokens — no /summary call.
+# A section token alone does not establish its enclosing part.
 _EDITION_RE = re.compile(r"CFR-(\d{4})")
 _TITLE_RE = re.compile(r"title(\d+)")
 # Letter suffixes are part of the publisher's identifier: Part 1203a and
 # Part 1203b must not collapse into Part 1203, including their TOC/child rows.
 _PART_RE = re.compile(r"part(\d+[A-Za-z]*)")
 _SECTION_RE = re.compile(r"sec([\w.-]+)")
-# A section-level granule carries no ``part`` token, but its ``sec`` token is the
-# part and the section fused: ``…-sec100-1`` is 10 CFR 100.1, not section "100-1".
-# Split on the first hyphen to recover the part. Measured over the whole
-# published table (302,756 rows, 2026-09-06): of the 241,985 CONTENT rows with a
-# section and no part token, 241,936 match this (99.98%). The 49 that do not are
-# malformed publisher ids in title 14 volume 4 — ``secSec-1-1``, ``secSection1``
-# — with no part to recover, so they keep a null part. The part may carry a
-# letter suffix: 5 CFR 5b and 45 CFR 1203a are real parts, not typos.
-_FUSED_PART_SECTION_RE = re.compile(r"^(\d+[A-Za-z]*)-(.+)$")
 
 
 def _first(pattern: re.Pattern[str], text: str | None) -> str | None:
@@ -115,11 +100,11 @@ def _first(pattern: re.Pattern[str], text: str | None) -> str | None:
 def _shape(granule: dict) -> dict:
     """Map one raw GovInfo CFR granule onto the published all-VARCHAR shape.
 
-    Derives everything from **list-level** fields + the ID grammar (no per-granule
-    ``/summary`` call — see module docstring). Reads defensively so an unexpected
-    shape yields NULLs rather than raising.
+    Missing optional facts remain NULL; a missing source identity refuses.
     """
-    granule_id = _s(granule.get("granuleId"))
+    granule_id = granule.get("granuleId")
+    if not isinstance(granule_id, str) or not granule_id.strip():
+        raise CfrSectionsError("CFR row requires a nonempty granuleId")
     package_id = _s(granule.get("_package_id") or granule.get("packageId"))
 
     # CFR title number + edition year: prefer the package id (always well-formed),
@@ -134,10 +119,6 @@ def _shape(granule: dict) -> dict:
     # Part / section from the granule id (both nullable — see module docstring).
     part = _first(_PART_RE, granule_id)
     section = _first(_SECTION_RE, granule_id)
-    if part is None and section is not None:
-        fused = _FUSED_PART_SECTION_RE.match(section)
-        if fused:
-            part, section = fused.group(1), fused.group(2)
 
     return {
         "granule_id": granule_id,
@@ -150,7 +131,7 @@ def _shape(granule: dict) -> dict:
         "heading": _s(granule.get("title")),
         "structure_level": _s(granule.get("granuleClass")),
         "edition_year": edition_year,
-        "last_modified": _s(granule.get("_package_last_modified") or granule.get("lastModified")),
+        "last_modified": _s(granule.get("lastModified") or granule.get("_package_last_modified")),
         "url": f"https://www.govinfo.gov/app/details/{package_id}/{granule_id}" if package_id and granule_id else None,
     }
 
@@ -167,9 +148,9 @@ def build_cfr_sections(output_dir: Path, *, since_year: int | None = None) -> Pa
     if have_prior:
         logger.info("CFR: merging against prior table {}", prior_file)
     else:
-        logger.info("CFR: no prior table found — full backfill")
+        logger.info("CFR: no prior table found — output covers the selected year window")
 
-    # 2. Fetch + shape into a "new rows" parquet. (Keyless runs yield nothing.)
+    # 2. Complete the selected traversal before writing any new output.
     reader = CfrSectionsReader(since_year=since_year)
     rows = [_shape(granule) for granule in reader.iter_records()]
     new_file = output_dir / "_cfr_new.parquet"

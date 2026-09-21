@@ -4,9 +4,9 @@
 
 **Code of Federal Regulations sections**
 
-One row per Code of Federal Regulations *section* (a GovInfo CFR granule), ingested from the GovInfo API by `build_cfr_sections`. This is the codified, subject-organized body of federal regulations — `cfr_ref`/`title`/`part`/ `section` are the join keys back to Federal Register `cfr_references_json` and, transitively, to regulations.gov activity. Scope is section METADATA + CITATIONS only — the full regulatory *text* of each section is deliberately out of scope for this pass (it is far heavier). Requires an api.data.gov key (`DATA_GOV_API_KEY`); a keyless ingest run is a no-op. All columns are stored as VARCHAR. NOTE: the GovInfo traversal + field mapping await live validation with a key.
+One row per GovInfo annual CFR granule, including sections, appendices, tables of contents and other structural units. The table retains metadata and explicit identifier tokens; it does not contain regulatory body text. A section token alone cannot establish its enclosing part. The corrected mapper leaves part and citation unknown without explicit part evidence, preserving the literal section token instead of splitting its numeric prefix. Older generations can retain inferred parts until their packages are requalified. Missing credentials and incomplete source traversals refuse before output replacement. All columns are stored as VARCHAR.
 
-**Coverage.** Window. The 2025 and 2026 annual editions only, out of the Code's full publication history. This is the Code roughly as it stands now, not a record of how a section changed. *(measured 2026-09-06)*
+**Coverage.** Window. Annual-edition metadata from the selected 2025 and 2026 editions, not full publication history or a record of section changes. Native part ancestry and body text require separate source qualification. *(measured 2026-09-06)*
 
 - **Parquet file:** `cfr_sections.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
@@ -14,14 +14,14 @@ One row per Code of Federal Regulations *section* (a GovInfo CFR granule), inges
 
 | Column | Type | Description |
 | --- | --- | --- |
-| `granule_id` | `VARCHAR` | GovInfo granule id for the section. Primary key / dedup key. |
-| `package_id` | `VARCHAR` | GovInfo package id (the enclosing CFR title-year edition) the granule belongs to. |
-| `cfr_ref` | `VARCHAR` | Compact CFR citation composed from title/part/section (e.g. `40-60.1`). The join key to Federal Register `cfr_references_json`. |
-| `title` | `VARCHAR` | CFR title number (e.g. `40`). |
-| `part` | `VARCHAR` | CFR part number within the title (e.g. `60`). |
-| `section` | `VARCHAR` | CFR section number within the part (e.g. `1`). Often null for non-section granules. |
-| `heading` | `VARCHAR` | Section heading / caption text as published by GovInfo. |
-| `structure_level` | `VARCHAR` | GovInfo granule class / structural level (e.g. `SECTION`, `PART`, `APPENDIX`). |
-| `edition_year` | `VARCHAR` | Annual CFR edition the granule was issued in (from GovInfo `editionYear`/`dateIssued`). Drives incremental freshness. |
-| `last_modified` | `VARCHAR` | GovInfo last-modified timestamp for the granule. Drives incremental freshness alongside `edition_year`. |
-| `url` | `VARCHAR` | Canonical GovInfo details/link URL for the granule. |
+| `granule_id` | `VARCHAR` | GovInfo granule identifier. Primary key / dedup key, including non-section structural units. |
+| `package_id` | `VARCHAR` | GovInfo package identifier for the enclosing annual CFR title and volume. |
+| `cfr_ref` | `VARCHAR` | Compact citation composed only when an explicit part token is available (e.g. `48-700`). NULL when part ancestry is unknown; a section prefix alone does not establish a citation. |
+| `title` | `VARCHAR` | CFR title number from the package or granule identifier (e.g. `40`). |
+| `part` | `VARCHAR` | Explicit CFR part token from the granule identifier, including letter suffixes. NULL when the list metadata does not establish the part; never derived from a section prefix by the corrected mapper. |
+| `section` | `VARCHAR` | Literal section token from the granule identifier (e.g. `19-8-1`). Preserved without inventing a parent part or converting punctuation; NULL for non-section granules. |
+| `heading` | `VARCHAR` | Granule heading / caption text from GovInfo's list-level `title` field. |
+| `structure_level` | `VARCHAR` | GovInfo granule class / structural level (e.g. `CONTENT`, `NODE`, `TOC`, `APPENDIX`). |
+| `edition_year` | `VARCHAR` | Annual edition year from the package or granule identifier, falling back to the year in `dateIssued`. This is not necessarily the printed body revision year or proof of a substantive edition. |
+| `last_modified` | `VARCHAR` | Granule `lastModified` when supplied, otherwise the enclosing package's `lastModified`. A package timestamp may cover many granules. |
+| `url` | `VARCHAR` | Canonical GovInfo details URL composed from the package and granule identifiers. |

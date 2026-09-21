@@ -1,7 +1,7 @@
 """Hermetic tests for the GovInfo CFR section ingest (no network).
 
 Covers the pieces with real logic: the api.data.gov key resolution fallback
-chain, the reader's keyless no-op behavior + default edition window, and the
+chain, the reader's keyless refusal + default edition window, and the
 raw-granule → published-schema mapping (``_shape``), which derives CFR
 title/part/section purely from the granule ID grammar + list-level fields (no
 per-granule ``/summary`` call). No live network calls are made.
@@ -13,7 +13,7 @@ import datetime as dt
 
 import pytest
 
-from spicy_regs.sources.cfr_sections import API_KEY_ENV_VARS, CfrSectionsReader, _resolve_api_key
+from spicy_regs.sources.cfr_sections import API_KEY_ENV_VARS, CfrSectionsError, CfrSectionsReader, _resolve_api_key
 from spicy_regs.transforms.build_cfr_sections import COLUMNS, _cfr_ref, _shape
 
 # A CONTENT/section granule with real list-level fields + package stamps, using
@@ -92,11 +92,12 @@ def test_resolve_api_key_ignores_blank(monkeypatch):
     assert _resolve_api_key() == "real"
 
 
-def test_reader_keyless_is_noop(monkeypatch):
-    """With no key resolvable, the reader yields nothing and never hits the net."""
+def test_reader_keyless_refuses(monkeypatch):
+    """No configured credential must not become a successful empty selection."""
     _clear_key_env(monkeypatch)
     reader = CfrSectionsReader()
-    assert list(reader.iter_records()) == []
+    with pytest.raises(CfrSectionsError, match="requires an api.data.gov key"):
+        list(reader.iter_records())
 
 
 def test_reader_default_edition_window():
@@ -122,11 +123,10 @@ def test_shape_parses_section_granule():
     # CFR title number parsed from the id, not the (heading) ``title`` field.
     assert row["title"] == "40"
     assert row["edition_year"] == "2024"
-    # No ``part`` token on a section granule: the ``sec`` token fuses part and
-    # section, so ``sec1-1`` is 40 CFR 1.1 and the part is split back out.
-    assert row["part"] == "1"
-    assert row["section"] == "1"
-    assert row["cfr_ref"] == "40-1.1"
+    # The list has no native ancestry; preserve its token without inventing a part.
+    assert row["part"] is None
+    assert row["section"] == "1-1"
+    assert row["cfr_ref"] is None
     assert row["heading"] == "Definitions."
     assert row["structure_level"] == "CONTENT"
     # last_modified comes from the enclosing package stamp.
@@ -242,11 +242,11 @@ _MALFORMED_SECTION_GRANULE = {
 }
 
 
-def test_shape_splits_a_lettered_part_out_of_the_section():
+def test_shape_requires_ancestry_even_for_a_lettered_section_prefix():
     row = _shape(_LETTERED_PART_GRANULE)
-    assert row["part"] == "5b"
-    assert row["section"] == "11"
-    assert row["cfr_ref"] == "5-5b.11"
+    assert row["part"] is None
+    assert row["section"] == "5b-11"
+    assert row["cfr_ref"] is None
 
 
 def test_shape_leaves_a_malformed_section_id_unsplit():

@@ -1,92 +1,48 @@
-"""Reader connector for GovInfo CFR (Code of Federal Regulations) section metadata.
+"""GovInfo annual CFR granule listings through SpicyDocs' bounded reader.
 
-Brings CFR *structure* ingestion in-repo. The CFR is the codified, subject-organized
-body of federal regulations; this reader yields one raw record per CFR *granule*
-(a structural unit — section, appendix, node, TOC, … — within a title's annual
-edition) so downstream consumers can join regulations.gov activity and Federal
-Register citations to the codified rules they touch.
+SpicyRegs owns the selected year window and table mapping. SpicyDocs owns the
+GovInfo locators, HTTP capture, header-only credential, opaque continuations,
+retry bounds and terminal count checks. Missing credentials and failed or
+incomplete listings raise before the builder can replace its prior output.
+An explicit zero-count terminal listing is a valid empty selection.
 
-The reader is a *pure source*: it yields raw GovInfo granule payloads (dicts)
-roughly as the API returns them, plus the enclosing package's ``_package_id`` /
-``_package_last_modified`` / ``_package_title`` (stamped onto each granule).
-Shaping them into the published all-VARCHAR schema is the job of
-:func:`~spicy_regs.transforms.build_cfr_sections.build_cfr_sections`.
-
-Scope — SECTION METADATA + CITATIONS ONLY, *not* full section text.
-    We collect each granule's identity and citation (title / part / section /
-    heading / CFR reference / structure level / edition + last-modified stamps +
-    canonical URL). The full regulatory *text* of each section is far heavier
-    (hundreds of MB per title-year of XML/HTML) and is deliberately **out of
-    scope** for this pass. A future enrichment pass could hydrate section bodies
-    the way ``enrich_pdf_text`` does for attachments.
-
-API key.
-    GovInfo's ``api.govinfo.gov`` requires an api.data.gov key. We resolve it
-    from the environment in the order of :data:`API_KEY_ENV_VARS`, the shared
-    api.data.gov key first (see :func:`_resolve_api_key`); one api.data.gov key
-    serves every name in that tuple. With **no** key configured the
-    reader logs a clear warning and yields nothing, so a keyless CI run is a
-    no-op rather than a crash.
-
-Traversal (live-validated).
-    Package listing uses the ``/published/{START}/{END}?collection=CFR`` endpoint
-    (``/collections/CFR`` alone 500s — do not use it). START/END are dates in
-    ``yyyy-MM-dd`` form; the API rejects the ``…THH:mm:ssZ`` datetime form. Each
-    package carries ``packageId`` / ``lastModified`` / ``title``. Granules come
-    from ``/packages/{packageId}/granules``. Both endpoints page via
-    ``offset`` + ``pageSize`` and signal more with ``nextPage``.
-
-    Everything the published schema needs is derived from **list-level** fields
-    plus the ID grammar — we deliberately do **not** call the per-granule
-    ``/summary`` endpoint (the only place ``cfrTitle`` / ``cfrPart`` / ``heading``
-    live), because that is an N+1 fetch across thousands of granules per package.
-    Granule IDs look like ``CFR-2024-title48-vol5-chap7-appA`` (edition year, CFR
-    title number, and — for many granules — ``part`` / ``sec`` tokens); the
-    transform's ``_shape`` parses them.
-
-    Reference: https://api.govinfo.gov/docs/ and the keyless bulkdata mirror at
-    https://www.govinfo.gov/bulkdata/CFR (an alternative that needs no key but
-    exposes the data as per-title-year XML rather than a granule API).
+These are list-level metadata, not section bodies or native part ancestry.
+A section identifier's numeric prefix does not establish its enclosing part.
 """
 
 from __future__ import annotations
 
 import datetime as dt
 import os
-import time
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
+from typing import TYPE_CHECKING
 
 import httpx
 from loguru import logger
 
 from spicy_regs.sources.base import Reader
 
-# Primary (keyed) GovInfo API. Traversal: /published (packages) -> /packages/{id}/granules.
+if TYPE_CHECKING:
+    from spicy_docs.reading.paged_json import JsonPage
+    from spicy_docs.sources.govinfo.discovery import GovInfoDiscoveryReader
+
 API_BASE = "https://api.govinfo.gov"
-
-# Keyless alternative (per-title-year bulk XML). Documented for operators; this
-# reader targets the keyed API above. See module docstring.
 BULKDATA_BASE = "https://www.govinfo.gov/bulkdata/CFR"
-
-# The CFR collection code in the GovInfo published/collections API.
 COLLECTION = "CFR"
-
-# Max records the published/granules endpoints accept per page.
 PAGE_SIZE = 100
-
-# api.data.gov env var fallback chain — the same key powers all three services.
-# API_GOV is the shared api.data.gov key under the name RefSpec/.env uses.
 API_KEY_ENV_VARS = ("API_GOV", "DATA_GOV_API_KEY", "GOVINFO_API_KEY", "REGULATIONS_GOV_API_KEY")
-
-# Transport hygiene: bound every request and retry transient failures with
-# backoff so a flaky page fails slow-then-recovers rather than dropping granules.
-_TIMEOUT = httpx.Timeout(60.0, connect=30.0)
-_MAX_RETRIES = 5
+_MAX_PAGES = 2_000
+_MAX_REQUESTS_PER_PAGE = 5
+_MAX_PAGE_BYTES = 8 * 1024 * 1024
 _PROGRESS_EVERY = 5_000
 
 
+class CfrSectionsError(ValueError):
+    """The selected CFR listing cannot establish complete, identified rows."""
+
+
 def _resolve_api_key() -> str | None:
-    """Return the first non-empty value among :data:`API_KEY_ENV_VARS`, in order, or ``None``."""
+    """Return the first nonempty configured api.data.gov key."""
     for name in API_KEY_ENV_VARS:
         value = os.environ.get(name)
         if value and value.strip():
@@ -94,20 +50,33 @@ def _resolve_api_key() -> str | None:
     return None
 
 
+def _identity(record: Mapping, field: str) -> str:
+    value = record.get(field)
+    if not isinstance(value, str) or not value.strip() or value != value.strip():
+        raise CfrSectionsError(f"CFR row requires a nonempty {field}")
+    return value
+
+
+def _identified_rows(pages: Iterator[JsonPage], field: str) -> Iterator[dict]:
+    """Require counted listings and distinct source identities, without dropping rows."""
+    seen = set()
+    for page in pages:
+        if page.declared_count is None:
+            raise CfrSectionsError("CFR listing omitted its declared count")
+        for record in page.records:
+            identity = _identity(record, field)
+            if identity in seen:
+                raise CfrSectionsError(f"CFR listing repeats a {field}")
+            seen.add(identity)
+            yield dict(record)
+
+
 class CfrSectionsReader(Reader):
-    """Yields raw GovInfo CFR granule dicts for editions in ``[since_year, until_year]``.
+    """Yield raw annual CFR granules and their enclosing package's source facts.
 
-    Each yielded dict carries the granule's own list-level fields plus the
-    enclosing package's ``_package_id`` / ``_package_last_modified`` /
-    ``_package_title``. The transform maps these onto the published all-VARCHAR
-    schema, deriving the CFR title/part/section from the granule ID grammar.
-
-    CFR editions are annual, so the default window is *last year through this
-    year* (``since_year = current_year - 1``, ``until_year = current_year``); a
-    full backfill passes an early ``since_year``.
-
-    With no api.data.gov key resolvable from the environment the reader logs a
-    warning and yields nothing — a keyless run (e.g. CI) is a no-op, not a crash.
+    The default selection is last year through this year. A caller can select
+    a wider explicit window; completing that window says nothing about earlier
+    editions. ``transport`` permits hermetic replay through the owner reader.
     """
 
     def __init__(
@@ -118,114 +87,77 @@ class CfrSectionsReader(Reader):
         api_key: str | None = None,
         page_size: int = PAGE_SIZE,
         verbose: bool = False,
+        transport: httpx.BaseTransport | None = None,
     ) -> None:
         current_year = dt.date.today().year
         self.until_year = until_year if until_year is not None else current_year
         self.since_year = since_year if since_year is not None else current_year - 1
+        for year in (self.since_year, self.until_year):
+            if isinstance(year, bool) or not isinstance(year, int) or not 1 <= year <= 9999:
+                raise CfrSectionsError("CFR selection years must be integers from 1 through 9999")
+        if self.since_year > self.until_year:
+            raise CfrSectionsError("CFR selection ends before it starts")
         self.api_key = api_key if api_key is not None else _resolve_api_key()
         self.page_size = page_size
         self.verbose = verbose
-        self._client: httpx.Client | None = None
+        self.transport = transport
+        self._source: GovInfoDiscoveryReader | None = None
         self._seen = 0
 
     def iter_records(self) -> Iterator[dict]:
-        if not self.api_key:
-            logger.warning(
-                "CFR: no api.data.gov key found in {} — skipping ingest (set DATA_GOV_API_KEY). "
-                "Keyless runs are a no-op, not an error.",
-                ", ".join(API_KEY_ENV_VARS),
-            )
-            return
+        if not isinstance(self.api_key, str) or not self.api_key.strip():
+            raise CfrSectionsError("CFR requires an api.data.gov key; set DATA_GOV_API_KEY")
+        from spicy_docs.reading.paged_json import PagedJsonBudget
+        from spicy_docs.sources.govinfo.discovery import GovInfoDiscoveryReader
+
+        budget = PagedJsonBudget(
+            max_requests=_MAX_REQUESTS_PER_PAGE,
+            max_page_bytes=_MAX_PAGE_BYTES,
+            timeout_seconds=60.0,
+            min_request_interval_seconds=0.2,
+        )
+        self._seen = 0
         logger.info("CFR: fetching {} granules (editions {}..{})", COLLECTION, self.since_year, self.until_year)
-        with httpx.Client(timeout=_TIMEOUT, headers={"Accept": "application/json"}) as client:
-            self._client = client
-            for package in self._iter_packages():
-                yield from self._iter_granules(package)
+        with GovInfoDiscoveryReader(budget=budget, api_key=self.api_key, transport=self.transport) as source:
+            self._source = source
+            try:
+                for package in self._iter_packages():
+                    yield from self._iter_granules(package)
+            finally:
+                self._source = None
         logger.info("CFR: yielded {:,} granules", self._seen)
 
-    # -- traversal (live-validated; see module docstring) ----------------------
-
     def _iter_packages(self) -> Iterator[dict]:
-        """Page the ``/published/{START}/{END}?collection=CFR`` endpoint.
+        from spicy_docs.sources.govinfo.discovery import published_url
 
-        Yields one small dict per CFR package with ``packageId``, ``lastModified``
-        and ``title`` so the transform can populate ``last_modified`` without an
-        extra per-package call. START/END are ``yyyy-MM-dd`` (the API rejects the
-        ``…THH:mm:ssZ`` datetime form).
-        """
-        start = f"{self.since_year}-01-01"
-        end = f"{self.until_year}-12-31"
-        url = f"{API_BASE}/published/{start}/{end}"
-        offset = 0
-        while True:
-            payload = self._get(url, {"collection": COLLECTION, "offset": offset, "pageSize": self.page_size})
-            if payload is None:
-                return
-            packages = payload.get("packages") or []
-            for pkg in packages:
-                if not isinstance(pkg, dict):
-                    continue
-                package_id = pkg.get("packageId")
-                if package_id:
-                    yield {
-                        "packageId": package_id,
-                        "lastModified": pkg.get("lastModified"),
-                        "title": pkg.get("title"),
-                    }
-            if not payload.get("nextPage") or not packages:
-                return
-            offset += self.page_size
+        assert self._source is not None
+        url = published_url(
+            f"{self.since_year:04d}-01-01",
+            f"{self.until_year:04d}-12-31",
+            collections=[COLLECTION],
+            page_size=self.page_size,
+        )
+        for package in _identified_rows(self._source.packages(url, max_pages=_MAX_PAGES), "packageId"):
+            if not package["packageId"].startswith("CFR-"):
+                raise CfrSectionsError("CFR listing returned a package outside its collection")
+            yield package
 
     def _iter_granules(self, package: dict) -> Iterator[dict]:
-        """Page one package's granules, yielding raw granule dicts.
+        from spicy_docs.sources.govinfo.discovery import package_granules_url
 
-        Each granule is stamped with ``_package_id`` / ``_package_last_modified``
-        / ``_package_title`` from the enclosing package so the transform never
-        needs a second lookup.
-        """
+        assert self._source is not None
         package_id = package["packageId"]
-        offset = 0
-        while True:
-            payload = self._get(
-                f"{API_BASE}/packages/{package_id}/granules",
-                {"offset": offset, "pageSize": self.page_size},
-            )
-            if payload is None:
-                return
-            granules = payload.get("granules") or []
-            for granule in granules:
-                if not isinstance(granule, dict):
-                    continue
-                granule = {
-                    **granule,
-                    "_package_id": package_id,
-                    "_package_last_modified": package.get("lastModified"),
-                    "_package_title": package.get("title"),
-                }
-                self._seen += 1
-                if self._seen % _PROGRESS_EVERY == 0:
-                    logger.info("CFR: {:,} granules so far...", self._seen)
-                yield granule
-            if not payload.get("nextPage") or not granules:
-                return
-            offset += self.page_size
-
-    def _get(self, url: str, params: dict) -> dict | None:
-        """GET with the api_key attached, bounded retries + exponential backoff."""
-        assert self._client is not None
-        query = {**params, "api_key": self.api_key}
-        for attempt in range(1, _MAX_RETRIES + 1):
-            try:
-                resp = self._client.get(url, params=query)
-                if resp.status_code == 429 or resp.status_code >= 500:
-                    raise httpx.HTTPStatusError("retryable", request=resp.request, response=resp)
-                resp.raise_for_status()
-                return resp.json()
-            except (httpx.HTTPError, ValueError) as exc:
-                if attempt == _MAX_RETRIES:
-                    logger.error("CFR: giving up on {} after {} attempts: {}", url, attempt, exc)
-                    return None
-                backoff = min(2**attempt, 30)
-                logger.warning("CFR: {} (attempt {}/{}), retrying in {}s", exc, attempt, _MAX_RETRIES, backoff)
-                time.sleep(backoff)
-        return None
+        url = package_granules_url(package_id, page_size=self.page_size)
+        for granule in _identified_rows(self._source.granules(url, max_pages=_MAX_PAGES), "granuleId"):
+            if not granule["granuleId"].startswith(f"{package_id}-"):
+                raise CfrSectionsError("CFR granule identity differs from its requested package")
+            self._seen += 1
+            if self._seen % _PROGRESS_EVERY == 0:
+                logger.info("CFR: {:,} granules so far...", self._seen)
+            yield {
+                **granule,
+                "_package_id": package_id,
+                "_package_last_modified": package.get("lastModified"),
+                "_package_title": package.get("title"),
+                "_package": dict(package),
+            }

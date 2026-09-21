@@ -207,8 +207,8 @@
     {
       "table": "cfr_sections",
       "label": "Code of Federal Regulations sections",
-      "summary": "One row per Code of Federal Regulations *section* (a GovInfo CFR granule), ingested from the GovInfo API by `build_cfr_sections`. This is the codified, subject-organized body of federal regulations — `cfr_ref`/`title`/`part`/ `section` are the join keys back to Federal Register `cfr_references_json` and, transitively, to regulations.gov activity. Scope is section METADATA + CITATIONS only — the full regulatory *text* of each section is deliberately out of scope for this pass (it is far heavier). Requires an api.data.gov key (`DATA_GOV_API_KEY`); a keyless ingest run is a no-op. All columns are stored as VARCHAR. NOTE: the GovInfo traversal + field mapping await live validation with a key.",
-      "coverage": "Window. The 2025 and 2026 annual editions only, out of the Code's full publication history. This is the Code roughly as it stands now, not a record of how a section changed.",
+      "summary": "One row per GovInfo annual CFR granule, including sections, appendices, tables of contents and other structural units. The table retains metadata and explicit identifier tokens; it does not contain regulatory body text. A section token alone cannot establish its enclosing part. The corrected mapper leaves part and citation unknown without explicit part evidence, preserving the literal section token instead of splitting its numeric prefix. Older generations can retain inferred parts until their packages are requalified. Missing credentials and incomplete source traversals refuse before output replacement. All columns are stored as VARCHAR.",
+      "coverage": "Window. Annual-edition metadata from the selected 2025 and 2026 editions, not full publication history or a record of section changes. Native part ancestry and body text require separate source qualification.",
       "kind": "window",
       "measured_on": "2026-09-06",
       "data_quality": null,
