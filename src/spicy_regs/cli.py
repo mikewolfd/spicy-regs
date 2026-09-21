@@ -21,8 +21,9 @@ from uuid import uuid4
 import httpx
 from dotenv import load_dotenv
 
-# Public URL for the R2 bucket
-PUBLIC_URL = "https://data.spicy-regs.dev"
+from spicy_regs.public_url import DEFAULT_R2_BASE_URL, resolve_r2_base_url
+
+PUBLIC_URL = DEFAULT_R2_BASE_URL
 DATA_TYPES = ["dockets", "documents", "comments", "manifest"]
 DEFAULT_OUTPUT_DIR = Path("./spicy-regs-data")
 
@@ -78,16 +79,19 @@ def get_output_dir(args) -> Path:
     return output_dir
 
 
-def download_file(name: str, output_dir: Path, force: bool = False) -> Path | None:
+def download_file(name: str, output_dir: Path, force: bool = False, *, base_url: str | None = None) -> Path | None:
     """Download a parquet file from R2."""
     from spicy_regs.sources.publication import current_index, table_location
 
     _table_name(name)
-    key, published = table_location(current_index(PUBLIC_URL), f"{name}.parquet")
-    url = f"{PUBLIC_URL}/{key}"
+    base_url = resolve_r2_base_url(base_url)
+    key, published = table_location(current_index(base_url), f"{name}.parquet")
+    url = f"{base_url}/{key}"
     local_path = output_dir / f"{name}.parquet"
 
-    if local_path.exists() and not force and published is None:
+    # Existing loose files have no host provenance. Preserve the original
+    # default-host cache behavior; a different host must supply its own bytes.
+    if local_path.exists() and not force and published is None and base_url == PUBLIC_URL:
         size_mb = local_path.stat().st_size / (1024 * 1024)
         print(f"  ✓ {name}.parquet already exists ({size_mb:.1f} MB)")
         return local_path
@@ -133,20 +137,26 @@ def cmd_download(args):
 
     from spicy_regs.sources.publication import snapshot, table_location
 
-    with snapshot(PUBLIC_URL) as index:
+    base_url = resolve_r2_base_url()
+    with snapshot(base_url) as index:
         selected = {}
         for name in types_to_download:
             key, published = table_location(index, f"{name}.parquet")
             selected[name] = {"key": key, "status": "managed" if published is not None else "legacy-unversioned"}
         managed = any(item["status"] == "managed" for item in selected.values())
-        if managed:
+        current = output_dir / "current"
+        # A prior current pointer wins over loose files when reading. Stage
+        # host changes (including a return to legacy/default data) together so
+        # it cannot continue shadowing a successful new download.
+        staged = managed or base_url != PUBLIC_URL or current.is_symlink() or current.exists()
+        if staged:
             batch_id = uuid4().hex
             destination = output_dir / "download-runs" / batch_id
             destination.mkdir(parents=True, exist_ok=False)
             metadata = {
                 "version": 1,
                 "status": "incomplete",
-                "base_url": PUBLIC_URL,
+                "base_url": base_url,
                 "publication": index,
                 "selected": selected,
             }
@@ -155,9 +165,9 @@ def cmd_download(args):
             destination = output_dir
         for data_type in types_to_download:
             print(f"  {data_type}: {selected[data_type]['status']}")
-            if download_file(data_type, destination, force=args.force) is None:
+            if download_file(data_type, destination, force=args.force, base_url=base_url) is None:
                 raise RuntimeError(f"Download incomplete: {data_type}")
-        if managed:
+        if staged:
             metadata["status"] = "complete"
             (destination / "download.json").write_text(json.dumps(metadata, indent=2) + "\n")
             # The temporary link and current share a filesystem. Replace only

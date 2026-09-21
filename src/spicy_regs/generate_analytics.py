@@ -8,8 +8,7 @@ import json
 from pathlib import Path
 import duckdb
 
-# Default R2 URL (can be overridden for local testing)
-R2_BASE_URL = "https://data.spicy-regs.dev"
+from spicy_regs.public_url import resolve_r2_base_url
 
 
 def generate_analytics(parquet_dir: Path | None = None, output_dir: Path | None = None) -> dict[str, Path]:
@@ -31,11 +30,12 @@ def generate_analytics(parquet_dir: Path | None = None, output_dir: Path | None 
         dockets_src = f"'{parquet_dir}/dockets.parquet'"
         documents_src = f"'{parquet_dir}/documents.parquet'"
     else:
+        base_url = resolve_r2_base_url()
         # Install httpfs for remote access
         conn.execute("INSTALL httpfs; LOAD httpfs;")
-        comments_src = f"'{R2_BASE_URL}/comments.parquet'"
-        dockets_src = f"'{R2_BASE_URL}/dockets.parquet'"
-        documents_src = f"'{R2_BASE_URL}/documents.parquet'"
+        comments_src = f"'{base_url}/comments.parquet'"
+        dockets_src = f"'{base_url}/dockets.parquet'"
+        documents_src = f"'{base_url}/documents.parquet'"
 
     output_dir = output_dir or parquet_dir or Path.cwd()
     analytics_dir = output_dir / "analytics"

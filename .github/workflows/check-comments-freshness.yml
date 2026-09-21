@@ -49,6 +49,7 @@ jobs:
 
       - name: Check comments freshness
         env:
+          R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL }}
           # When present, the check validates the Iceberg catalog surface;
           # otherwise it falls back to the public monolithic comments.parquet.
           R2_CATALOG_URI: ${{ secrets.R2_CATALOG_URI }}
@@ -56,9 +57,10 @@ jobs:
           R2_CATALOG_TOKEN: ${{ secrets.R2_CATALOG_TOKEN }}
           R2_CATALOG_NAMESPACE: ${{ secrets.R2_CATALOG_NAMESPACE }}
         run: |
+          : "${R2_PUBLIC_URL:?Set R2_PUBLIC_URL to the public data URL for this repository}"
           ARGS=""
           if [ -n "${{ inputs.agency }}" ]; then
             ARGS="$ARGS --agency ${{ inputs.agency }}"
           fi
-          echo "Running: uv run python scripts/check_comments_freshness.py $ARGS"
-          uv run python scripts/check_comments_freshness.py $ARGS
+          echo "Running: uv run --frozen python scripts/check_comments_freshness.py $ARGS"
+          uv run --frozen python scripts/check_comments_freshness.py $ARGS

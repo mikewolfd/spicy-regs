@@ -44,6 +44,31 @@ def _fake_stream(*, status_code: int = 200, body: bytes = b"", capture: dict | N
 
 
 class TestDownloadFile:
+    @pytest.mark.parametrize("variable", ["SPICY_REGS_R2_URL", "R2_PUBLIC_URL"])
+    def test_configured_host_controls_request_url(self, tmp_path, monkeypatch, variable):
+        monkeypatch.setenv(variable, "https://fork.example/")
+        captured: dict = {}
+        monkeypatch.setattr(cli.httpx, "stream", _fake_stream(body=b"fork-bytes", capture=captured))
+
+        result = cli.download_file("dockets", tmp_path)
+
+        assert captured["url"] == "https://fork.example/dockets.parquet"
+        assert result is not None and result.read_bytes() == b"fork-bytes"
+
+    @pytest.mark.parametrize("status_code", [200, 403])
+    def test_fork_does_not_reuse_unknown_legacy_cache(self, tmp_path, monkeypatch, status_code):
+        existing = tmp_path / "dockets.parquet"
+        existing.write_bytes(b"old-host-bytes")
+        monkeypatch.setenv("R2_PUBLIC_URL", "https://fork.example")
+        captured: dict = {}
+        monkeypatch.setattr(cli.httpx, "stream", _fake_stream(status_code=status_code, body=b"fork-bytes", capture=captured))
+
+        result = cli.download_file("dockets", tmp_path)
+
+        assert captured["url"] == "https://fork.example/dockets.parquet"
+        assert (result is not None) == (status_code == 200)
+        assert existing.read_bytes() == (b"fork-bytes" if status_code == 200 else b"old-host-bytes")
+
     def test_sends_non_default_user_agent(self, tmp_path, monkeypatch):
         """The default urllib/httpx UA gets a 403 from Cloudflare on this
         bucket; the request must carry an explicit, honest identifier."""

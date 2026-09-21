@@ -94,8 +94,11 @@ jobs:
       - name: Verify freshness (index vs rows)
         if: ${{ inputs.full_load == true }}
         env:
+          R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL }}
           R2_CATALOG_URI: ${{ secrets.R2_CATALOG_URI }}
           R2_CATALOG_WAREHOUSE: ${{ secrets.R2_CATALOG_WAREHOUSE }}
           R2_CATALOG_TOKEN: ${{ secrets.R2_CATALOG_TOKEN }}
           R2_CATALOG_NAMESPACE: ${{ secrets.R2_CATALOG_NAMESPACE }}
-        run: uv run python scripts/check_comments_freshness.py
+        run: |
+          : "${R2_PUBLIC_URL:?Set R2_PUBLIC_URL to the public data URL for this repository}"
+          uv run --frozen python scripts/check_comments_freshness.py

@@ -34,7 +34,11 @@ jobs:
           restore-keys: rollup-freshness-
 
       - name: Check published tables
-        run: uv run python scripts/check_rollup_freshness.py
+        env:
+          R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL }}
+        run: |
+          : "${R2_PUBLIC_URL:?Set R2_PUBLIC_URL to the public data URL for this repository}"
+          uv run --frozen python scripts/check_rollup_freshness.py
 
       # Runs even when the freshness check failed: a dead purge credential and a
       # stale table are independent faults, and hiding one behind the other is
@@ -44,7 +48,7 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
-        run: uv run python scripts/check_purge_credential.py
+        run: uv run --frozen python scripts/check_purge_credential.py
 
       - name: Save row-count history
         if: always()

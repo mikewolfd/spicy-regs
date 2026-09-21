@@ -16,10 +16,12 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from copy import deepcopy
 from pathlib import Path
-from typing import BinaryIO
+from typing import TYPE_CHECKING, BinaryIO
 
 import httpx
-from botocore.exceptions import ClientError
+
+if TYPE_CHECKING:
+    from botocore.exceptions import ClientError
 
 INDEX_KEY = "publication.json"
 INDEX_LIMIT = 1024 * 1024
@@ -150,6 +152,8 @@ def _precondition(error: ClientError) -> bool:
 
 
 def _stored_index(client, bucket: str) -> tuple[dict, str | None]:
+    from botocore.exceptions import ClientError
+
     try:
         response = client.get_object(Bucket=bucket, Key=INDEX_KEY)
     except ClientError as exc:
@@ -169,6 +173,8 @@ def _stored_index(client, bucket: str) -> tuple[dict, str | None]:
 
 def _put_immutable(client, bucket: str, key: str, path: Path) -> None:
     """Conditional creation, including multipart completion for large tables."""
+    from botocore.exceptions import ClientError
+
     size = path.stat().st_size
     args = {"Bucket": bucket, "Key": key}
     headers = {"ContentType": "application/octet-stream", "CacheControl": "public, max-age=31536000, immutable"}
@@ -223,6 +229,7 @@ class _S3Members:
 
     @contextmanager
     def open(self, object_key: str) -> Iterator[BinaryIO]:
+        from botocore.exceptions import ClientError
         from rulespec_artifacts import MemberNotFoundError
 
         try:
@@ -248,6 +255,7 @@ def publish_generation(directory: Path, *, client, bucket: str, prior_index: Map
     attempt; it must not overwrite the other writer or silently retry a stale
     family build. Input provenance and semantic quality are separate checks.
     """
+    from botocore.exceptions import ClientError
     from rulespec_artifacts import LocalMemberSource, admit_artifact, canonical_json_bytes, iter_member_descriptors
     from spicy_regs.generations import verify_generation
     from spicy_regs.sources.r2 import _assert_upload_safe, _get_remote_size
