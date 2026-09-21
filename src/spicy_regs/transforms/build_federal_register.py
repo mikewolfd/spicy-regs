@@ -25,11 +25,9 @@ for it while the merge preserves whatever the prior table already had. No curren
 consumer reads it.
 
 ``rin`` is the one column not fetched: the first Regulation Identifier Number
-in ``regulation_id_numbers_json``, derived in the merge for every row so a
-prior table that predates the column is filled on the next run rather than
-left NULL. It is the scalar join key the regulatory bridge needs --
-``house_communications.rin`` is one RIN per communication, and a hash join
-wants one per side -- and it is a projection of the array, not a second fact.
+in ``regulation_id_numbers_json``, retained as a compatibility projection.
+Complete joins, including House communications, must unnest the source array
+and retain the dated Federal Register identity; see docs/regulatory-rins.md.
 Measured on the published table 2026-09-19 (803,996 rows): 96,060 documents
 state one RIN, 1,499 state two or more (up to 41), 9,758 state ``[]`` and
 696,679 rows from before the in-repo ingest carry no array at all; the last

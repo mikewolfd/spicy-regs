@@ -1143,7 +1143,7 @@
       {
         "column_name": "rin",
         "column_type": "VARCHAR",
-        "description": "The first Regulation Identifier Number in `regulation_id_numbers_json`, derived in the merge for every row: the scalar join key to `house_communications.rin` (the regulatory bridge, gap A5). NULL where the array is `[]` or absent. Measured on the published table 2026-09-19 (803,996 rows): 96,060 documents state one RIN, 1,499 state two or more (up to 41), 9,758 state none and 696,679 rows from before the in-repo ingest carry no array; a consumer wanting every RIN of a multi-RIN document unnests the array."
+        "description": "The first Regulation Identifier Number in `regulation_id_numbers_json`, retained as a compatibility projection. Complete joins to `house_communications.rin` must unnest the full array and retain both `document_number` and `publication_date`; see `docs/regulatory-rins.md`. NULL where the array is `[]` or absent. Measured on the published table 2026-09-19 (803,996 rows): 96,060 documents state one RIN, 1,499 state two or more (up to 41), 9,758 state none and 696,679 rows from before the in-repo ingest carry no array; a consumer wanting every RIN of a multi-RIN document unnests the array."
       }
     ],
     "grain": null,
@@ -5341,7 +5341,7 @@
   "house_communications": {
     "table": "house_communications",
     "label": "House executive communications",
-    "summary": "One row per House executive communication, as the Congress.gov house-communication list and detail routes state it, keyed on the publisher's own address. The regulatory bridge: `is_rulemaking`, the cited `legal_authority`, the committee referral, the matching House requirement and the RIN read from `report_nature`, which joins `federal_register.rin`. All columns are stored as VARCHAR.",
+    "summary": "One row per House executive communication, as the Congress.gov house-communication list and detail routes state it, keyed on the publisher's own address. The regulatory bridge: `is_rulemaking`, the cited `legal_authority`, the committee referral, the matching House requirement and the RIN read from `report_nature`. Complete Federal Register joins unnest `regulation_id_numbers_json` and retain number plus publication date; the first-value scalar `federal_register.rin` omits other RINs. All columns are stored as VARCHAR.",
     "coverage": "Sampled, accumulating. The adoption run used 30 keyed requests: 20 list pages and 10 details under the declared detail cap. The list declared and served 4,975 records, with 9 repeats and 4,966 distinct identities; merging its own 4,963-row prior retained 4,969 rows. All 4,969 now state the publisher source_route, 1,010 have details and 3,959 remain list-only. No Record backfill request was made and every Record evidence column remains NULL. Receipt: `rollups-0-24-0-adoption-2026-09-20/`. Local output only; not uploaded.",
     "kind": "sampled",
     "measured_on": "2026-09-20",

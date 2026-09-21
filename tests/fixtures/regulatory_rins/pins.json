@@ -1,0 +1,7 @@
+{
+  "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/source-fidelity-2026-09-12/federal-register-response.bin",
+  "sha256": "1a112bda252213ee5472552fa49840903ef2adf75d0745a42eec343cf7ca2d81",
+  "fixture": "federal-register-response.json",
+  "selected_document_number": "2026-17334",
+  "selected_publication_date": "2026-08-25"
+}

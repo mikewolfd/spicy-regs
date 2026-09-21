@@ -1,0 +1,1 @@
+The response fixture is an exact byte copy of the retained Federal Register API response identified in `pins.json`. Tests select native record `2026-17334@2026-08-25`, which states two RINs. House communication rows and an additional date for the same number are explicitly synthetic controls; they are not publisher observations.

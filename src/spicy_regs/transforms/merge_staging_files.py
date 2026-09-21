@@ -12,6 +12,8 @@ def merge_staging_files(
     data_types_to_merge: list[str],
     schemas: dict[str, dict],
     dedup_keys: dict[str, str],
+    *,
+    source_correction: bool = False,
 ) -> None:
     """
     Merge staging files into final output using DuckDB streaming.
@@ -53,6 +55,8 @@ def merge_staging_files(
             try:
                 pq.ParquetFile(file_path)
             except Exception as e:
+                if source_correction:
+                    raise ValueError(f"source correction cannot read {file_path}") from e
                 logger.warning(
                     "{}: skipping corrupt file {}: {}",
                     data_type,
@@ -109,13 +113,35 @@ def merge_staging_files(
             con.execute("SET preserve_insertion_order=false")
             con.execute("SET threads=2")
             con.execute(f"SET temp_directory='{spill_dir}'")
+            if source_correction:
+                from spicy_regs.transforms.regulations_correction import correction_query
+
+                fresh_paths = ", ".join(f"'{str(p).replace(chr(39), chr(39) * 2)}'" for p in staging_files)
+                fresh_sql = f"SELECT {col_select} FROM read_parquet([{fresh_paths}], union_by_name=true)"
+                if output_file.exists():
+                    present = set(pq.ParquetFile(output_file).schema_arrow.names)
+                    prior_columns = ", ".join(
+                        f'CAST("{c}" AS VARCHAR) AS "{c}"' if c in present else f'NULL::VARCHAR AS "{c}"'
+                        for c in target_columns
+                    )
+                    escaped = str(output_file).replace("'", "''")
+                    prior_sql = f"SELECT {prior_columns} FROM read_parquet('{escaped}')"
+                else:
+                    prior_sql = f"SELECT {', '.join(f'NULL::VARCHAR AS "{c}"' for c in target_columns)} WHERE false"
+                corrected = correction_query(
+                    con,
+                    fresh_sql=fresh_sql,
+                    prior_sql=prior_sql,
+                    columns=target_columns,
+                    key=key_col,
+                )
+                escaped_temp = str(temp_output).replace("'", "''")
+                query = f"COPY ({corrected} {sort_clause}) TO '{escaped_temp}' (FORMAT PARQUET, COMPRESSION ZSTD)"
             con.execute(query)
         finally:
             con.close()
 
-        if output_file.exists():
-            output_file.unlink()
-        temp_output.rename(output_file)
+        temp_output.replace(output_file)
 
         total_rows = pq.ParquetFile(output_file).metadata.num_rows
         logger.info(

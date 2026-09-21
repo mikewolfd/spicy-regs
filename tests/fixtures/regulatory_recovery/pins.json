@@ -1,0 +1,34 @@
+[
+  {
+    "source_id": "ACF-2015-0001",
+    "key": "raw-data/ACF/ACF-2015-0001/text-ACF-2015-0001/docket/ACF-2015-0001.json",
+    "etag": "\"00f3604e9cf87042dbea1bb36a2e2c98\"",
+    "raw_zip": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/blobs/sha256/8b24b3b5d1d9719e2da659ef8f0a8f0d92012fa4003f8e4d7a4763392e3f9224",
+    "raw_member": "objects/000334.json",
+    "raw_sha256": "0db0db8981f9c9b303eac8d9633f5e5c3cbf2d678a05c943e850695fa1dd5a84",
+    "fixture": "ACF-2015-0001.json"
+  },
+  {
+    "source_id": "ACF-2006-0058-0001",
+    "key": "raw-data/ACF/ACF-2006-0058/text-ACF-2006-0058/documents/ACF-2006-0058-0001.json",
+    "etag": "\"faf7e5c4c7764ca6765eb8984ea738e0\"",
+    "raw_zip": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/blobs/sha256/73ef04427e18473c500a4349399257cf716e5ca528cf97dc63fc6568c1ea405d",
+    "raw_member": "objects/000096.json",
+    "raw_sha256": "610edc1d7c1989455a9bb23b95e6e8a1b7776435c389c873c0d9fe5534b4bd62",
+    "fixture": "ACF-2006-0058-0001.json"
+  },
+  {
+    "source_id": "ACF-2019-0005-0243",
+    "key": "raw-data/ACF/ACF-2019-0005/text-ACF-2019-0005/documents/ACF-2019-0005-0243.json",
+    "etag": "\"621b54dbe2e6b433379ece09d213a6c4\"",
+    "raw_zip": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/blobs/sha256/73ef04427e18473c500a4349399257cf716e5ca528cf97dc63fc6568c1ea405d",
+    "raw_member": "objects/000367.json",
+    "raw_sha256": "30ac0caa03957e1411985a786be7acb5cfecb84ff107c0182c9e665923a26fa6",
+    "fixture": "ACF-2019-0005-0243.json"
+  },
+  {
+    "fixture": "ACF-2009-0004-0002.json",
+    "original": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/data-validation-sprint-2026-09-21/regulatory/ACF-2009-0004-0002-raw.json",
+    "raw_sha256": "b3cc5efbc82027f6fb71da1ba454661f023c6c6ec6e928d115071af03a9d370b"
+  }
+]
