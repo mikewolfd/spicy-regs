@@ -1231,16 +1231,21 @@ tables:
     columns_from: spicy_docs
 
   report_sections:
-    label: "Committee report agency blocks"
+    label: "Committee report heading and text blocks"
     coverage: >-
-      Sampled. The adoption run re-read 30 reports and shaped 290 agency blocks;
+      Sampled. The historical 2026-09-20 adoption re-read 30 reports and shaped 290 blocks;
       the merge retained 1,246 rows from this rollup's own prior and fresh output.
       The shared committee-reports pass used 144 requests, 101 keyed. HTML states
       no page boundaries, so these fresh blocks have NULL page_start and page_end.
       Receipt: `rollups-0-24-0-adoption-2026-09-20/`. Local output only; not uploaded.
+      That generation predates the heading correction. The 2026-09-21 installed-reader
+      replay corrects eight blocks in CRPT-119hrpt796 with unchanged text and spans;
+      it does not rebuild all 1,246 historical rows. Receipt:
+      `remediation-sprint-2026-09-21/source-reader-adoption/report-replay/`.
     measured_on: "2026-09-20"
     summary: >-
-      One row per agency block parsed out of one committee report's text. `pattern`
+      One row per heading or unheaded text block in one committee report. `heading`
+      preserves the source title; agency identity fields remain unresolved. `pattern`
       records which header pattern fired, which is this table's provenance column.
       All columns are stored as VARCHAR.
     columns_from: spicy_docs

@@ -1,14 +1,21 @@
 """Own-output checkpoints, including successful reads that produce no link."""
 
 from pathlib import Path
+from importlib.metadata import version
 
 import pyarrow.parquet as pq
 from spicy_docs.interpretation.cbo_estimates import CBO_ESTIMATE_RULE_VERSION
 from spicy_docs.interpretation.hearing_bill_links import HEARING_BILL_LINK_RULE_VERSION
+from spicy_docs.schemas.committee_report_tables import REPORT_SECTION_READER_VERSION
 
 READS_TABLE = "committee_report_reads"
 READ_COLUMNS = ("package_id", "last_modified", "outcome", "rule_version", "observed_at")
-RULE_VERSIONS = {"CRPT": CBO_ESTIMATE_RULE_VERSION, "CHRG": HEARING_BILL_LINK_RULE_VERSION}
+RULE_VERSIONS = {
+    "CRPT": (
+        f"spicy-docs={version('spicy-docs')};cbo={CBO_ESTIMATE_RULE_VERSION};sections={REPORT_SECTION_READER_VERSION}"
+    ),
+    "CHRG": HEARING_BILL_LINK_RULE_VERSION,
+}
 
 
 def prior_reads(path: Path | None, priors: dict[str, Path | None]) -> dict[str, dict]:

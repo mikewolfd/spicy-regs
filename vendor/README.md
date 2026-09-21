@@ -5,61 +5,42 @@ The optional `source-readers` extra enables the same readers for package install
 its wheels must be supplied explicitly until they are published in a registry.
 Base CLI and MCP installs do not require them.
 
-- `spicy_docs-0.24.2`: SpicyDocs patch release (release commit `965776e`),
-  2026-09-20. Verified before and after copying: **1,333,353 bytes**, SHA-256
-  `cf84fb9f5ede4a53d1dca078759297b08ca30c63c82eb6343ccf53142caf72b1`.
-  Both pins and the uv source move together; `uv.lock` records the same digest.
-  Replaces 0.24.1 (`fc8171d`, 1,321,932 bytes, `ce25270b…1fa6`).
+- `spicy_docs-0.25.0`: locally built from source commit `1c86f16`,
+  2026-09-21. **1,321,425 bytes**, SHA-256
+  `3bd52a8916e8c470111dd31bcdc6cb7fa7e41c5b70011b567b78a7c1b58a5745`.
+  Both reader pins and the uv source move together; the lock holds this digest.
+  This local package has not been released to an external registry.
 
-  No contract moves: the registry imported from this wheel is **39 contracts,
-  813 columns**, the same as 0.24.1. The patch carries two fixes this
-  repository consumes without a code change of its own. The shared retry now
-  scrubs an exception before it logs it and before it truncates it, so a
-  credential in a query string cannot stand in a log line that a later
-  successful attempt leaves behind; and a Mirrulations object rejected on its
-  advertised length has its body closed, which it did not before, so repeated
-  oversized objects can no longer hold connections open. Both came from the
-  duplication audit's correctness counterexamples in spicy-docs
-  `docs/research/dry-audit-2026-09-20.md`.
+  The installed registry contains **39 tables over 814 columns**. It adds the
+  literal `report_sections.heading` column after the existing twelve and leaves
+  unresolved agency identities NULL. `REPORT_SECTION_READER_VERSION` participates
+  in the host's CRPT processing checkpoint alongside the CBO rule and installed
+  package version. Corrected reads replace all old sections for that package;
+  failed reads retain prior rows and remain retryable. This repairs unchanged
+  publisher records without requiring a new publisher timestamp.
 
-  Independent imports from both wheel archives establish **39 contracts,
-  813 columns**, with every contract identical: column order, identity,
-  version column, grain and descriptions. The comparison and registry dumps
-  are retained in
-  `receipts/spicy-docs-0-24-1-adoption-2026-09-20/contracts-comparison.json`
-  under `/Users/mikewolfd/Work/corpora/supply-2026-09-02/`.
-  The Mirrulations reader now requires a nonblank `data.id` string for all
-  three ingested types and rejects publisher error bodies. This matches the
-  host's identity requirement and adds error rejection, so both ingestion
-  paths use the supplier reader directly. Publisher reasons remain scrubbed;
-  regression tests retain the missing-identity and retry cases.
+  The wheel also adopts the native BILLSTATUS cosponsor-count correction and
+  the installed Rulespec capture validator. The source gate passed 7,255 tests;
+  all 264 packaged source files matched the reviewed checkout. Native host
+  replay and installed-wheel checks are retained at
+  `receipts/remediation-sprint-2026-09-21/source-reader-adoption/` under
+  `~/Work/corpora/supply-2026-09-02/`. Installing corrected readers does not
+  backfill the full bill corpus or replace public data.
 
-  The preceding 0.24.0 adoption grew the registry from 37 contracts and 766
-  columns. It added `hearing_bill_links` (12 columns, key
-  `package_id, bill_id, link_source`) and `cbo_cost_estimates` (16, key
-  `bill_id, publication_id`). Appended: `house_communications` +5 provenance
-  columns, `committee_reports` +13 CBO letter columns, `congress_bills` +1
-  estimate outcome. Existing prefixes, keys and version columns are unchanged.
-  Prose also changes on `budget_volumes`, `hearing_transcripts` and
-  `house_activity_reports`; every other contract is identical.
+  It replaces 0.24.2 (`965776e`, 1,333,353 bytes,
+  `cf84fb9f5ede4a53d1dca078759297b08ca30c63c82eb6343ccf53142caf72b1`).
+  Prior source/API additions and provider choices remain in Git history and
+  their source guides; no new acquisition family is enabled by this adoption.
 
-  Seven modules added and twelve changed; the complete wheel and registry
-  comparison is retained in
-  `receipts/rollups-0-24-0-adoption-2026-09-20/contracts-comparison.json`.
-  The release supplies the Mirrulations refusal/retry reader, activity-report
-  selection, PDF-first print preference, thirteen measured BUDGET parts,
-  hearing cover/agenda rules and repository reader, CBO index and letter rule,
-  and Record communication reconstruction. Hosting adopts these public
-  functions; the Record acquisition backfill is a separate rollup.
-  `shape_hearing_transcript` no longer accepts `bill_id`: hearing relationships
-  are one-to-many and live in `hearing_bill_links`.
-
-- `rulespec_artifacts-1.0.13`: required by spicy-docs 0.24.2, which pins it
-  exactly; 1.0.12 no longer resolves. Nothing here imports it — it is a
-  transitive pin vendored under the same discipline. Byte-identical to the
-  wheel `rulespec` itself built (`dist/artifacts/`) and to the one spicy-docs
-  vendors. SHA-256:
-  `72d15ff9453bb819ab5945141dea92cae6c3ff5f76e1d26bb04849cf690bf377`.
+- `rulespec_artifacts-1.0.14`: exact dependency of SpicyDocs 0.25.0.
+  **82,881 bytes**, SHA-256
+  `f09aaf4525af3ac243d04695a8700464f06019653ac6f8fb9ed235ff0694af0b`.
+  Built from Rulespec `21693e0a`; byte-identical to the SpicyDocs vendored wheel.
+  It ships the parent capture schema, profile meta-schema and shared invariant
+  validator. The source consumer removes its copied schemas/checker and uses
+  the installed owner, including parent ordering and unique-node checks.
+  SpicyRegs keeps this as a transitive dependency; raw source strings do not
+  become `DocumentCapture` objects without an explicit conversion.
 - `deltatrack-0.1.0`: built with `uv build --wheel` from `civictechdc/DeltaTrack`
   commit `c636448ba08d55bba7cb8c884aad0f5ac1ccf2f6`, 2026-09-19.
   SHA-256: `7f060e30af9702f4e45c305fa93c53d1e3e59bd70858d3c6717f6fc9cf825197`.

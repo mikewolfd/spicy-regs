@@ -2,11 +2,11 @@
 
 # `report_sections`
 
-**Committee report agency blocks**
+**Committee report heading and text blocks**
 
-One row per agency block parsed out of one committee report's text. `pattern` records which header pattern fired, which is this table's provenance column. All columns are stored as VARCHAR.
+One row per heading or unheaded text block in one committee report. `heading` preserves the source title; agency identity fields remain unresolved. `pattern` records which header pattern fired, which is this table's provenance column. All columns are stored as VARCHAR.
 
-**Coverage.** Sampled. The adoption run re-read 30 reports and shaped 290 agency blocks; the merge retained 1,246 rows from this rollup's own prior and fresh output. The shared committee-reports pass used 144 requests, 101 keyed. HTML states no page boundaries, so these fresh blocks have NULL page_start and page_end. Receipt: `rollups-0-24-0-adoption-2026-09-20/`. Local output only; not uploaded. *(measured 2026-09-20)*
+**Coverage.** Sampled. The historical 2026-09-20 adoption re-read 30 reports and shaped 290 blocks; the merge retained 1,246 rows from this rollup's own prior and fresh output. The shared committee-reports pass used 144 requests, 101 keyed. HTML states no page boundaries, so these fresh blocks have NULL page_start and page_end. Receipt: `rollups-0-24-0-adoption-2026-09-20/`. Local output only; not uploaded. That generation predates the heading correction. The 2026-09-21 installed-reader replay corrects eight blocks in CRPT-119hrpt796 with unchanged text and spans; it does not rebuild all 1,246 historical rows. Receipt: `remediation-sprint-2026-09-21/source-reader-adoption/report-replay/`. *(measured 2026-09-20)*
 
 - **Parquet file:** `report_sections.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
@@ -16,8 +16,8 @@ One row per agency block parsed out of one committee report's text. `pattern` re
 | --- | --- | --- |
 | `package_id` | `VARCHAR` | The report package this block was parsed from. |
 | `seq` | `VARCHAR` | Zero-based position of this block in the report, in reading order. |
-| `agency_label` | `VARCHAR` | The agency heading this block sits under, or the `Full Report` sentinel where no header matched anywhere in the report.  NULL on a preamble block, which precedes the first header and so has neither. |
-| `agency_key` | `VARCHAR` | The normalized agency key, which is what a recurrence count groups on. |
+| `agency_label` | `VARCHAR` | NULL because heading recognition does not establish agency identity; the source heading is retained separately in heading. |
+| `agency_key` | `VARCHAR` | NULL because this reader does not resolve headings to agency identities. |
 | `body` | `VARCHAR` | The block's text, trimmed the way the original trimmed it. |
 | `pattern` | `VARCHAR` | Which header pattern fired to start this block; this table's provenance column.  Two values are not pattern names: `preamble` for the text before the first header, and `full_report` for a report where no header matched at all. |
 | `char_start` | `VARCHAR` | Start offset of this block's span in the flattened report text. |
@@ -26,3 +26,4 @@ One row per agency block parsed out of one committee report's text. `pattern` re
 | `page_end` | `VARCHAR` | Last page the span touches, where the input carried page boundaries. |
 | `body_chars` | `VARCHAR` | Character length of body, which can be shorter than the span it sits in. |
 | `last_modified` | `VARCHAR` | The parent report's last_modified, carried so this table versions with the package it came from. |
+| `heading` | `VARCHAR` | The source heading as spelled and trimmed, including actual agency names and generic titles; NULL for preamble or full_report blocks, which have no source heading. |
