@@ -209,6 +209,12 @@ existing subject fields. Dataset catalogs and processing remain outside it.
 - [x] Expose dictionary meaning and actual table availability through MCP, including
   a local Parquet directory for examining audited generations before publication.
   See [FEC integration and checks](docs/fec-integration.md).
+- [x] Map selected summary ZIP fields through verified official HTML dictionaries,
+  retaining literal definitions, original rows and exact source coordinates.
+  Keep file inventories separate from row counts and financial interpretation.
+  See the [bulk expansion audit](docs/research/fec-bulk-continuation-2026-09-21.md)
+  for selected 2026 transactions, source header discrepancies and the unavailable
+  unofficial Senate directory.
 - [ ] Connect a complete, verified FEC distribution to the existing rollup.
   A local selected-record table is not the full committee population or a
   globally published table. The local census release does not include the bulk,

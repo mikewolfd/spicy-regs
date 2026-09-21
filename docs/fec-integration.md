@@ -126,9 +126,36 @@ they supply additional fields, explicit query outcomes or other source coverage.
 The existing committee reference pipeline still walks the API because its shape
 contains fields not supplied by the committee master alone.
 
+File metadata and parsed rows serve different needs. A `bulk` record exposes an
+original file's URL, size, digest, acquisition time and verified ZIP member
+inventory. It lets a caller select the native data before expanding millions of
+records. A `positional` collection explicitly selects a file or archive member
+for row-level access. Read `profile` and the collection scope when interpreting
+record counts; a file count is not a transaction count.
+
+```sql
+SELECT collection_id, source_family, source_url, source_sha256,
+       json_extract_string(metadata_json, '$.capture.objectKey') AS object_key,
+       json_extract(metadata_json, '$.archive.members') AS archive_members
+FROM fec_source_records
+WHERE profile = 'bulk';
+```
+
+Named positional fields come from a retained source header or an explicitly
+selected official HTML dictionary. The collection keeps the dictionary's literal
+definitions and byte coordinates. Width mismatches refuse named mapping; the
+caller can retain the complete positional record with the mismatch documented.
+Correction-file insert/delete records remain separate observations until a
+caller chooses and verifies an amendment policy.
+
 Selected whole files can be complete within their declared period while the
-family's history remains incomplete. The large individual-contribution,
+family's history remains incomplete. Historical backfills of the individual,
 intercommittee and operating-expenditure archives, full schedule database dumps,
-and full daily-filing history need their own acquisition and output checks.
+and full daily-filing history need further acquisition and output checks.
 Selected `pas2` rows do not establish coverage of the broader intercommittee
 export. Financial totals also need source-specific amendment and memo rules.
+
+See the dated [bulk expansion and audits](research/fec-bulk-continuation-2026-09-21.md)
+for the selected 2026 transaction files, named summary mappings and unresolved
+publisher-format and access issues. Those retained snapshots are separate from
+complete historical backfills and public availability.

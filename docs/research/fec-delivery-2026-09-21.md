@@ -1,4 +1,8 @@
-# FEC integration audit — September 21, 2026
+# Initial FEC integration audit — September 21, 2026
+
+This records the initial selected delivery. See the subsequent
+[bulk expansion](fec-bulk-continuation-2026-09-21.md) for newer acquisition,
+named dictionary mappings and source limitations found later the same day.
 
 The local implementation now connects SpicyDocs FEC readers to reusable SpicyRegs
 metadata and relationship tables. MCP can describe those tables and query an
