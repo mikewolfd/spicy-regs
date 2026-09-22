@@ -525,3 +525,121 @@ def test_the_published_table_still_matches_its_contract(tmp_path, scoped):
         download_prior=_no_prior,
     )
     assert pq.read_table(paths[0]).schema.names == list(TABLE_CONTRACTS["roll_call_votes"].columns)
+
+
+def test_candidate_capture_merges_legacy_rows_and_is_held_on_resume(tmp_path, scoped):
+    import shutil
+
+    legacy_columns = [
+        c
+        for c in TABLE_CONTRACTS["roll_call_votes"].columns
+        if c not in {"tally_kind", "documents_json", "amendments_json"}
+    ]
+    legacy = {
+        "vote_id": "119-house-1-1",
+        "congress": "119",
+        "chamber": "house",
+        "session": "1",
+        "roll_number": "1",
+        "yea": "1",
+        "vote_date": "2025-01-03",
+    }
+
+    def legacy_prior(remote, local):
+        if remote != "roll_call_votes.parquet":
+            return False
+        pq.write_table(
+            pa.Table.from_pylist([legacy], schema=pa.schema([(c, pa.string()) for c in legacy_columns])), local
+        )
+        return True
+
+    class CandidateAcquirer(StubVoteAcquirer):
+        def acquire(self, locator, *, crosswalk=None):
+            acquired = super().acquire(locator)
+            acquired.vote.tally_kind = "candidates"
+            acquired.vote.tallies = {"Literal candidate": 1, "Present": 0, "Not Voting": 0}
+            acquired.vote.member_votes = (
+                SimpleNamespace(
+                    lis_id=None,
+                    bioguide_id="A000001",
+                    name="Member",
+                    party="D",
+                    state="CA",
+                    vote="Literal candidate",
+                    vote_normalized=None,
+                ),
+            )
+            return acquired
+
+    reader = StubListingReader([_house_listing_record(1), {"congress": 119, "sessionNumber": 1, "rollCallNumber": 2}])
+    first = tmp_path / "first"
+    first.mkdir()
+    acquirer = CandidateAcquirer()
+    paths = build_roll_call_votes(first, reader=reader, acquirer=acquirer, overlap=0, download_prior=legacy_prior)
+    rows = {row["roll_number"]: row for row in pq.read_table(paths[0]).to_pylist()}
+    assert acquirer.requested == [("house", 2)]
+    assert rows["1"]["yea"] == "1" and rows["1"]["tally_kind"] is None
+    assert rows["1"]["documents_json"] is rows["1"]["amendments_json"] is None
+    assert rows["2"]["tally_kind"] == "candidates" and rows["2"]["member_vote_count"] == "1"
+    assert all(rows["2"][field] is None for field in ("yea", "nay", "present", "not_voting"))
+    assert json.loads(rows["2"]["tallies_json"]) == {"Literal candidate": 1, "Present": 0, "Not Voting": 0}
+    member = pq.read_table(paths[1]).to_pylist()[0]
+    assert member["position"] == "Literal candidate" and member["position_normalized"] is None
+
+    def captured_prior(remote, local):
+        source = first / remote
+        if not source.exists():
+            return False
+        shutil.copyfile(source, local)
+        return True
+
+    second = tmp_path / "second"
+    second.mkdir()
+    resumed = CandidateAcquirer()
+    again = build_roll_call_votes(second, reader=reader, acquirer=resumed, overlap=0, download_prior=captured_prior)
+    assert resumed.requested == []
+    assert pq.read_table(again[0]).to_pylist() == pq.read_table(paths[0]).to_pylist()
+    assert pq.read_table(again[1]).to_pylist() == pq.read_table(paths[1]).to_pylist()
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"tallies_json": None},
+        {"tallies_json": "{}"},
+        {"tallies_json": "bad json"},
+        {"tallies_json": "[1]"},
+        {"tallies_json": '{"Candidate":true}'},
+        {"tallies_json": '{"Candidate":-1}'},
+        {"tallies_json": '{"Candidate":2}'},
+        {"tallies_json": '{"":1}'},
+        {"member_vote_count": "0"},
+        {"member_vote_count": None},
+        {"source_url": None},
+        {"tally_kind": None},
+        {"tally_kind": "unknown"},
+        {"yea": "1"},
+    ],
+)
+def test_incomplete_or_malformed_candidate_row_remains_retryable(tmp_path, overrides):
+    from spicy_regs.transforms.build_roll_call_votes import _held_votes
+
+    row = {
+        "congress": "119",
+        "chamber": "house",
+        "session": "1",
+        "roll_number": "2",
+        "tally_kind": "candidates",
+        "tallies_json": '{"Candidate":1}',
+        "member_vote_count": "1",
+        "source_url": "https://clerk.house.gov/evs/2025/roll002.xml",
+        **overrides,
+    }
+    path = tmp_path / "prior.parquet"
+    pq.write_table(
+        pa.Table.from_pylist(
+            [row], schema=pa.schema([(c, pa.string()) for c in TABLE_CONTRACTS["roll_call_votes"].columns])
+        ),
+        path,
+    )
+    assert _held_votes(path) == set()

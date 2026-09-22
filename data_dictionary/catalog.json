@@ -1235,7 +1235,10 @@
         "match_rule",
         "match_action_index",
         "match_url",
-        "conflict_count"
+        "conflict_count",
+        "tally_kind",
+        "documents_json",
+        "amendments_json"
       ]
     },
     {

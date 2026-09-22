@@ -5,7 +5,26 @@ The optional `source-readers` extra enables the same readers for package install
 its wheels must be supplied explicitly until they are published in a registry.
 Base CLI and MCP installs do not require them.
 
-- `spicy_docs-0.26.2`: locally built from isolated source commit
+- `spicy_docs-0.26.3`: locally built from isolated source commit
+  `8f5cddadb2a17e5b9c9c923bd6c520e1a5bd729f`, extending the prior wheel with
+  the reviewed native vote variants. Built September 22, 2026 UTC:
+  **1,325,593 bytes**, SHA-256
+  `06123ae683001ad4051faf72c1d91b658d589856a1c4272ddddbdaeb4cb3a082`.
+  Only `sources/congress/votes.py` and
+  `schemas/congress_activity_tables.py` change inside the package; other
+  packaged source and dependency metadata remain unchanged.
+
+  Speaker elections preserve candidate tallies and literal member choices.
+  Senate votes preserve every ordered document and amendment, including
+  nomination identifiers. New nullable vote columns carry these source facts;
+  older rows retain their existing values. Candidate totals never become
+  ordinary yea/nay counts. Source, host, installed-package and retained-input
+  checks are in
+  `~/Work/corpora/fork-execution-2026-09-21/native-vote-variants-adoption/`.
+  Complete acquisition and public rollup qualification remain separate work.
+  This is a local package adoption, not a registry release.
+
+- Previous `spicy_docs-0.26.2`: locally built from isolated source commit
   `aa2ad435df37d40e119106436d9300c4f14935ef`, extending the prior wheel source
   with the reviewed congressional vote identity and press mention fixes.
   Built September 22, 2026 UTC: **1,324,304 bytes**, SHA-256

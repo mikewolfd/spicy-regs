@@ -29,10 +29,13 @@ One row per roll call: the publisher's own tally, and the bill it refers to. The
 | `nay` | `VARCHAR` | Nay votes, from the Clerk's nay-total or the Senate's nays. |
 | `present` | `VARCHAR` | Present votes, as each publisher counts them. |
 | `not_voting` | `VARCHAR` | Members not voting: the Clerk's not-voting-total, or the Senate's absent, folded to one column. |
-| `tallies_json` | `VARCHAR` | Every count the publisher stated, under the publisher's own names, as a JSON object. The four columns above fold two vocabularies onto one; this is what was folded. |
+| `tallies_json` | `VARCHAR` | Every count the publisher stated, under the publisher's own names, as a JSON object. Candidate elections keep literal choice labels here and leave the four ordinary tally columns NULL. |
 | `member_vote_count` | `VARCHAR` | How many member positions the file carried; the member_votes row count for this roll call. |
 | `bill_id` | `VARCHAR` | The bill this roll call refers to, from a recorded-vote reference or a vote-list reference. |
 | `match_rule` | `VARCHAR` | Which vote-matching rule named that bill, including unmatched. |
 | `match_action_index` | `VARCHAR` | Position of the action whose recordedVote named this roll call, where one did. |
 | `match_url` | `VARCHAR` | The reference URL the match was read from. |
 | `conflict_count` | `VARCHAR` | How many later references disagreed with the one that won; kept, never dropped. |
+| `tally_kind` | `VARCHAR` | positions for ordinary totals, candidates for native named-choice totals; NULL on legacy or linkage-only rows. |
+| `documents_json` | `VARCHAR` | Ordered Senate document objects with native congress, type, number, name, title and short_title; [] for captured votes without documents, NULL for legacy or linkage-only rows. Numbers retain publisher spelling, including nomination suffixes; this does not assert a matched bill or nomination. |
+| `amendments_json` | `VARCHAR` | Ordered Senate amendment objects with native number, to_amendment_number, to_amendment_to_amendment_number, to_document_number, to_document_short_title and purpose; [] for captured votes without amendments, NULL for legacy or linkage-only rows. Repeated empty-ID blocks remain separate observations; no document pairing is inferred. |

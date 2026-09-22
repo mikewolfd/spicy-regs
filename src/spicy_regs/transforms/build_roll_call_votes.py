@@ -17,6 +17,7 @@ from __future__ import annotations
 
 from collections import Counter
 from collections.abc import Callable, Sequence
+import json
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol, cast
 
@@ -176,19 +177,60 @@ def _recorded_vote_references(
 
 
 def _held_votes(prior_file: Path) -> set[tuple[str, ...]]:
-    """Roll calls already published *with a tally*, keyed as the contract keys them.
+    """Captured roll calls: ordinary tallies or complete native candidate totals.
 
-    A row without a tally is a linkage-only row — the reference landed but the
-    Clerk file did not — so it is not "held" and must be tried again.
+    Legacy rows have no tally kind and keep the existing non-NULL yea rule.
+    Candidate elections have no yea/nay total; their explicit kind, native
+    count map and reconciled member count distinguish capture from linkage.
     """
     if not prior_file.exists():
         return set()
     import duckdb
 
-    rows = duckdb.sql(
-        f"SELECT congress, chamber, session, roll_number FROM read_parquet('{prior_file}') WHERE yea IS NOT NULL"
-    ).fetchall()
-    return {tuple(str(part) for part in row) for row in rows}
+    relation = duckdb.read_parquet(str(prior_file))
+    columns = set(relation.columns)
+    ordinary = "yea IS NOT NULL"
+    if "tally_kind" in columns:
+        ordinary += " AND (tally_kind IS NULL OR tally_kind = 'positions')"
+    rows = relation.filter(ordinary).project("congress, chamber, session, roll_number").fetchall()
+    held = {tuple(str(part) for part in row) for row in rows}
+    candidate_columns = {
+        "tally_kind",
+        "tallies_json",
+        "member_vote_count",
+        "source_url",
+        "nay",
+        "present",
+        "not_voting",
+    }
+    if not candidate_columns.issubset(columns):
+        return held
+    candidates = (
+        relation.filter(
+            "tally_kind = 'candidates' AND yea IS NULL AND nay IS NULL AND present IS NULL AND not_voting IS NULL"
+        )
+        .project("congress, chamber, session, roll_number, tallies_json, member_vote_count, source_url")
+        .fetchall()
+    )
+    for *parts, raw_tallies, raw_count, source_url in candidates:
+        try:
+            tallies = json.loads(raw_tallies)
+            member_count = int(raw_count)
+        except (TypeError, ValueError):
+            continue
+        if (
+            source_url
+            and member_count > 0
+            and isinstance(tallies, dict)
+            and tallies
+            and all(
+                isinstance(name, str) and name.strip() and type(count) is int and count >= 0
+                for name, count in tallies.items()
+            )
+            and sum(tallies.values()) == member_count
+        ):
+            held.add(tuple(str(part) for part in parts))
+    return held
 
 
 def build_roll_call_votes(
