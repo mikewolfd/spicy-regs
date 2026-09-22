@@ -292,9 +292,12 @@ def _build_comments_index(con, record_type: RecordType, output_dir: Path) -> Pat
 
     ``year`` / ``month`` come from ``posted_date`` to match the partitioning the
     legacy path used; ``docket_id`` is trimmed of stray quotes for the same
-    reason. Written atomically via a temp file so a crashed rebuild can't leave a
-    half-written index in place.
+    reason. NULL posted dates retain NULL year/month groups. Written atomically
+    via a temp file so a crashed rebuild can't leave a half-written index in place.
     """
+    from spicy_regs.transforms.comment_partitions import validate_comment_coordinates
+
+    validate_comment_coordinates(con, f"SELECT * FROM {_qualified(record_type)}")
     index_file = output_dir / "comments_index.parquet"
     tmp_file = index_file.with_suffix(".tmp.parquet")
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -308,9 +311,6 @@ def _build_comments_index(con, record_type: RecordType, output_dir: Path) -> Pat
                 EXTRACT(MONTH FROM CAST(posted_date AS TIMESTAMP))::BIGINT AS month,
                 CAST(COUNT(*) AS BIGINT) AS row_count
             FROM {_qualified(record_type)}
-            WHERE posted_date IS NOT NULL
-              AND agency_code IS NOT NULL
-              AND docket_id IS NOT NULL
             GROUP BY 1, 2, 3, 4
         ) TO '{_sql_str(str(tmp_file))}' (FORMAT PARQUET, COMPRESSION ZSTD);
         """

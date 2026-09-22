@@ -147,9 +147,10 @@ def test_comment_repair_preserves_local_partition_and_enrichment(tmp_path):
     assert pq.ParquetFile(path).read().to_pylist() == [row]
 
 
-def test_comment_with_missing_partition_coordinate_refuses(tmp_path):
+@pytest.mark.parametrize("coordinate", ["agencyId", "docketId"])
+def test_comment_with_missing_partition_coordinate_refuses(tmp_path, coordinate):
     value = raw("ACF-2009-0004-0002")
-    value["data"]["attributes"]["postedDate"] = None
+    value["data"]["attributes"][coordinate] = None
     with pytest.raises(ValueError, match="partition"):
         repair_records([value], table="comments", output_dir=tmp_path)
     assert not list(tmp_path.rglob("*.parquet"))
@@ -242,3 +243,33 @@ def test_literal_rin_and_placeholders_are_not_rewritten(tmp_path):
     value["data"]["attributes"]["rin"] = "Not Assigned"
     repair_records([value], table="dockets", output_dir=tmp_path)
     assert pq.read_table(tmp_path / "dockets.parquet").to_pylist()[0]["rin"] == "Not Assigned"
+
+
+def test_unknown_date_comment_repair_preserves_nulls_and_retries(tmp_path):
+    value = raw("ACF-2009-0004-0002")
+    value["data"]["attributes"]["postedDate"] = None
+    path = tmp_path / (
+        "comments/agency_code=ACF/docket_id=ACF-2009-0004/"
+        "year=__HIVE_DEFAULT_PARTITION__/month=__HIVE_DEFAULT_PARTITION__/part-0.parquet"
+    )
+    expected = shaped(value, "comments")
+    write(path, [{**expected, "organization": None, "text_content": "prior enrichment"}], "comments")
+    repair_records([value], table="comments", output_dir=tmp_path)
+    [row] = pq.ParquetFile(path).read().to_pylist()
+    assert row["organization"] == expected["organization"]
+    assert row["posted_date"] is None
+    assert row["text_content"] == "prior enrichment"
+    repair_records([value], table="comments", output_dir=tmp_path)
+    assert pq.ParquetFile(path).read().to_pylist() == [row]
+    index = pq.read_table(tmp_path / "comments_index.parquet").to_pylist()
+    assert len(index) == 1 and index[0]["year"] is None and index[0]["month"] is None
+    assert index[0]["row_count"] == 1
+
+    # A later observed date changes the partition; bounded repair must refuse
+    # rather than create a second copy of the retained identity.
+    before = path.read_bytes()
+    value["data"]["attributes"]["postedDate"] = "2009-03-01T00:00:00Z"
+    with pytest.raises(ValueError, match="relocate"):
+        repair_records([value], table="comments", output_dir=tmp_path)
+    assert path.read_bytes() == before
+    assert list((tmp_path / "comments").rglob("part-0.parquet")) == [path]

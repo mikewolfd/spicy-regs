@@ -724,3 +724,22 @@ def test_backfill_rejects_a_source_without_the_key_column(tmp_path, local_catalo
 
     with pytest.raises(RuntimeError, match="docket_id"):
         iceberg.backfill_missing_from_parquet(con, str(snapshot), DOCKET)
+
+
+def test_comments_index_retains_unknown_dates_and_refuses_malformed_rows(tmp_path, local_catalog):
+    con = local_catalog
+    iceberg._ensure_table(con, COMMENT)
+    table = iceberg._qualified(COMMENT)
+    con.execute(
+        f"INSERT INTO {table} (comment_id,agency_code,docket_id,posted_date) VALUES ('unknown','EPA','EPA-1',NULL),('known','EPA','EPA-1','2025-01-01')"
+    )
+    index = iceberg._build_comments_index(con, COMMENT, tmp_path)
+    got = {(r["year"], r["month"]): r["row_count"] for r in pl.read_parquet(index).to_dicts()}
+    assert got == {(None, None): 1, (2025, 1): 1}
+    before = index.read_bytes()
+    con.execute(
+        f"INSERT INTO {table} (comment_id,agency_code,docket_id,posted_date) VALUES ('broken','EPA','EPA-1','not-a-date')"
+    )
+    with pytest.raises(ValueError, match="invalid coordinates"):
+        iceberg._build_comments_index(con, COMMENT, tmp_path)
+    assert index.read_bytes() == before

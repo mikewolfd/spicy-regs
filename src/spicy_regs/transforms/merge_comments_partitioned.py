@@ -4,6 +4,8 @@ from pathlib import Path
 
 from loguru import logger
 
+from spicy_regs.transforms.comment_partitions import HIVE_NULL, comment_partition_path, validate_comment_coordinates
+
 
 def merge_comments_partitioned(
     staging_dir: Path,
@@ -58,16 +60,8 @@ def merge_comments_partitioned(
         con.execute("SET memory_limit='4GB'")
         con.execute("SET preserve_insertion_order=false")
 
+        validate_comment_coordinates(con, f"SELECT * FROM read_parquet([{files_sql}], union_by_name=true)")
         if source_correction:
-            invalid = con.execute(f"""
-                SELECT count(*) FROM read_parquet([{files_sql}], union_by_name=true)
-                WHERE try_cast(posted_date AS TIMESTAMP) IS NULL
-                   OR agency_code IS NULL OR docket_id IS NULL
-                   OR NOT regexp_full_match(agency_code, '[A-Za-z0-9_-]+')
-                   OR NOT regexp_full_match(trim(docket_id, '\"'), '[A-Za-z0-9_-]+')
-            """).fetchone()
-            if invalid and invalid[0]:
-                raise ValueError("source correction cannot partition comments with missing or invalid coordinates")
             duplicates = con.execute(f"""
                 SELECT count(*) - count(DISTINCT "{dedup_key}")
                 FROM read_parquet([{files_sql}], union_by_name=true)
@@ -82,9 +76,6 @@ def merge_comments_partitioned(
                 EXTRACT(YEAR FROM CAST(posted_date AS TIMESTAMP))::INT AS _year,
                 EXTRACT(MONTH FROM CAST(posted_date AS TIMESTAMP))::INT AS _month
             FROM read_parquet([{files_sql}], union_by_name=true)
-            WHERE posted_date IS NOT NULL
-              AND agency_code IS NOT NULL
-              AND docket_id IS NOT NULL
         """)
 
         if source_correction:
@@ -106,8 +97,8 @@ def merge_comments_partitioned(
                        OR f._month IS DISTINCT FROM extract(month FROM try_cast(p.posted_date AS TIMESTAMP))
                        OR p.filename IS DISTINCT FROM concat(
                            '{sql_path(comments_dir)}/agency_code=', f.agency_code,
-                           '/docket_id=', f._clean_docket, '/year=', f._year,
-                           '/month=', f._month, '/part-0.parquet'
+                           '/docket_id=', f._clean_docket, '/year=', coalesce(f._year::VARCHAR, '{HIVE_NULL}'),
+                           '/month=', coalesce(f._month::VARCHAR, '{HIVE_NULL}'), '/part-0.parquet'
                        )
                 """).fetchone()
                 if moved and moved[0]:
@@ -127,14 +118,7 @@ def merge_comments_partitioned(
 
         # Download existing partitions from R2 for dedup.
         for agency, docket, year, month in partitions:
-            partition_file = (
-                comments_dir
-                / f"agency_code={agency}"
-                / f"docket_id={docket}"
-                / f"year={year}"
-                / f"month={month}"
-                / "part-0.parquet"
-            )
+            partition_file = comment_partition_path(comments_dir, agency, docket, year, month)
             if not partition_file.exists():
                 partition_file.parent.mkdir(parents=True, exist_ok=True)
                 if download_existing:
@@ -161,14 +145,7 @@ def merge_comments_partitioned(
             return ", ".join(f'"{c}"' if c in present else f'CAST(NULL AS VARCHAR) AS "{c}"' for c in target_columns)
 
         for agency, docket, year, month in partitions:
-            partition_file = (
-                comments_dir
-                / f"agency_code={agency}"
-                / f"docket_id={docket}"
-                / f"year={year}"
-                / f"month={month}"
-                / "part-0.parquet"
-            )
+            partition_file = comment_partition_path(comments_dir, agency, docket, year, month)
             temp_file = partition_file.with_suffix(".tmp.parquet")
             docket_escaped = str(docket).replace("'", "''")
 
@@ -176,7 +153,8 @@ def merge_comments_partitioned(
                 SELECT {col_select_plain} FROM _staging
                 WHERE agency_code = '{agency}'
                   AND _clean_docket = '{docket_escaped}'
-                  AND _year = {year} AND _month = {month}
+                  AND _year IS NOT DISTINCT FROM {"NULL" if year is None else year}
+                  AND _month IS NOT DISTINCT FROM {"NULL" if month is None else month}
             """
 
             if partition_file.exists():

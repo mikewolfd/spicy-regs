@@ -6,6 +6,8 @@ import polars as pl
 import pyarrow.parquet as pq
 from loguru import logger
 
+from spicy_regs.transforms.comment_partitions import partition_date_value
+
 
 def update_comments_index(output_dir: Path, changed_files: list[Path]) -> Path:
     """Update the comments index with changed partition files.
@@ -18,7 +20,7 @@ def update_comments_index(output_dir: Path, changed_files: list[Path]) -> Path:
     index_file = output_dir / "comments_index.parquet"
 
     # Build set of changed partition keys for fast lookup.
-    changed_keys: set[tuple[str, str, int, int]] = set()
+    changed_keys: set[tuple[str, str, int | None, int | None]] = set()
     new_rows: list[dict] = []
 
     required_keys = {"agency_code", "docket_id", "year", "month"}
@@ -38,9 +40,11 @@ def update_comments_index(output_dir: Path, changed_files: list[Path]) -> Path:
         key = (
             vals["agency_code"],
             vals["docket_id"],
-            int(vals["year"]),
-            int(vals["month"]),
+            partition_date_value(vals["year"]),
+            partition_date_value(vals["month"]),
         )
+        if (key[2] is None) != (key[3] is None):
+            raise ValueError("comment partition year and month must both be NULL or both be present")
         changed_keys.add(key)
         row_count = pq.ParquetFile(pf).metadata.num_rows
         new_rows.append(

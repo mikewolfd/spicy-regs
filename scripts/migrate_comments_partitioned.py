@@ -8,6 +8,8 @@ files at:
     comments/agency_code={A}/docket_id={D}/year={Y}/month={M}/part-0.parquet
 
 Also builds the comments_index.parquet used by the frontend and feed summary.
+NULL posted dates use Hive null year/month partitions and remain NULL in the index.
+Malformed dates and missing or unsafe agency/docket coordinates refuse before writes.
 
 Usage:
     uv run python scripts/migrate_comments_partitioned.py [--output-dir output]
@@ -20,6 +22,17 @@ import duckdb
 import pyarrow.parquet as pq
 from loguru import logger
 
+from spicy_regs.transforms.comment_partitions import comment_partition_path, validate_comment_coordinates
+
+
+def validate_partition_coordinates(comments_file: Path) -> None:
+    """Refuse malformed coordinates while retaining source NULL posted dates."""
+    with duckdb.connect() as con:
+        con.execute("SET memory_limit='4GB'")
+        con.execute("SET threads=2")
+        path = str(comments_file).replace("'", "''")
+        validate_comment_coordinates(con, f"SELECT * FROM read_parquet('{path}')")
+
 
 def migrate(output_dir: Path) -> None:
     comments_file = output_dir / "comments.parquet"
@@ -27,6 +40,9 @@ def migrate(output_dir: Path) -> None:
         logger.error("comments.parquet not found in {}", output_dir)
         sys.exit(1)
 
+    # Run before creating or replacing anything: the old WHERE clause silently
+    # omitted rows with a native NULL date while still reporting success.
+    validate_partition_coordinates(comments_file)
     comments_dir = output_dir / "comments"
     comments_dir.mkdir(parents=True, exist_ok=True)
 
@@ -56,9 +72,6 @@ def migrate(output_dir: Path) -> None:
             EXTRACT(YEAR FROM CAST(posted_date AS TIMESTAMP))::INT AS year,
             EXTRACT(MONTH FROM CAST(posted_date AS TIMESTAMP))::INT AS month
         FROM read_parquet('{comments_file}')
-        WHERE posted_date IS NOT NULL
-          AND agency_code IS NOT NULL
-          AND docket_id IS NOT NULL
     """).fetchall()
 
     logger.info("Found {:,} partitions to write", len(partitions))
@@ -67,15 +80,8 @@ def migrate(output_dir: Path) -> None:
     written_files: list[Path] = []
 
     for i, (agency, docket, year, month) in enumerate(partitions):
-        partition_path = (
-            comments_dir
-            / f"agency_code={agency}"
-            / f"docket_id={docket}"
-            / f"year={year}"
-            / f"month={month}"
-        )
-        partition_path.mkdir(parents=True, exist_ok=True)
-        partition_file = partition_path / "part-0.parquet"
+        partition_file = comment_partition_path(comments_dir, agency, docket, year, month)
+        partition_file.parent.mkdir(parents=True, exist_ok=True)
 
         docket_escaped = str(docket).replace("'", "''")
 
@@ -85,8 +91,8 @@ def migrate(output_dir: Path) -> None:
                 FROM read_parquet('{comments_file}')
                 WHERE agency_code = '{agency}'
                   AND TRIM(docket_id, '"') = '{docket_escaped}'
-                  AND EXTRACT(YEAR FROM CAST(posted_date AS TIMESTAMP)) = {year}
-                  AND EXTRACT(MONTH FROM CAST(posted_date AS TIMESTAMP)) = {month}
+                  AND EXTRACT(YEAR FROM CAST(posted_date AS TIMESTAMP)) IS NOT DISTINCT FROM {"NULL" if year is None else year}
+                  AND EXTRACT(MONTH FROM CAST(posted_date AS TIMESTAMP)) IS NOT DISTINCT FROM {"NULL" if month is None else month}
                 ORDER BY posted_date
             ) TO '{partition_file}'
             (FORMAT PARQUET, COMPRESSION ZSTD);
