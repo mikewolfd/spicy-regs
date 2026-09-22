@@ -5,7 +5,27 @@ The optional `source-readers` extra enables the same readers for package install
 its wheels must be supplied explicitly until they are published in a registry.
 Base CLI and MCP installs do not require them.
 
-- `spicy_docs-0.26.3`: locally built from isolated source commit
+- `spicy_docs-0.26.4`: locally built from isolated source commit
+  `c9ce7c0f0d9f376bc8b2b71697e3e72867d28e5f`, extending the prior wheel with
+  the reviewed House select-committee code correction. Built September 22,
+  2026 UTC: **1,325,983 bytes**, SHA-256
+  `626af49d42a208c58c3d6919ff03e064f88d249cf936702c7b7ce86a1eef51ac`.
+  Only `sources/congress/committee_rosters.py` and `schemas/roster_tables.py`
+  change inside the package. All other source/resources, entry points and
+  dependency metadata remain unchanged; wheel RECORD hashes and sizes pass.
+
+  Native House committee type and parent context determine the `hl` prefix
+  for select committees and their subcommittees. Literal source codes survive.
+  The full retained roster replay repairs 110 assignment codes and 52 parent
+  codes while preserving every native identity and other source value. Joint
+  committee aliases and the unmatched Senate inaugural observations remain
+  explicit. Source main carries the same fix at `64bd903`; this wheel preserves
+  the earlier adopted package's other bytes. Exact package, source and host
+  qualification receipts are in
+  `~/Work/corpora/fork-execution-2026-09-21/rosters-qualification/select-code-fix/`.
+  This is a local package adoption, not a registry release or data publication.
+
+- Previous `spicy_docs-0.26.3`: locally built from isolated source commit
   `8f5cddadb2a17e5b9c9c923bd6c520e1a5bd729f`, extending the prior wheel with
   the reviewed native vote variants. Built September 22, 2026 UTC:
   **1,325,593 bytes**, SHA-256

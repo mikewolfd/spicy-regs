@@ -8,7 +8,7 @@ One row per member per committee or subcommittee seat a chamber roster file list
 
 **Coverage.** Sampled. Measured on the same run (receipt `d1-measured-run-2026-09-19/`): 2,966 seats from two keyless file captures — the House Clerk's file stating Congress 119 session 2 with 441 seats, 2 vacant, 2,516 assignments and 9 placeholders, and the Senate's with 100 senators over 450 seats. Today's seats: both chamber files are captured whole each run, for the current Congress only, and each capture replaces its chamber's rows for that Congress; an earlier Congress keeps its last capture. *(measured 2026-09-19)*
 
-**Data quality.** A row is a seat the file listed on its `file_date`: a seat the file no longer lists is gone on the next capture. The House file states its Congress and the reader proves it; the Senate file states none, so its rows carry the caller's Congress with `congress_basis` = `caller`. A House vacancy has no member and no row, and a seated member whose only assignment is the file's `<committee rank=""/>` placeholder has none either (nine placeholders on 2026-09-19). Only a file captured this run replaces its chamber's rows; a chamber whose file was not established keeps its prior rows. `system_code` joins `committees`; `bioguide_id` joins `members`. All columns are stored as VARCHAR.
+**Data quality.** A row is a seat the file listed on its `file_date`: a seat the file no longer lists is gone on the next capture. The House file states its Congress and the reader proves it; the Senate file states none, so its rows carry the caller's Congress with `congress_basis` = `caller`. A House vacancy has no member and no row, and a seated member whose only assignment is the file's `<committee rank=""/>` placeholder has none either (nine placeholders on 2026-09-19). Only a file captured this run replaces its chamber's rows; a chamber whose file was not established keeps its prior rows. House `system_code` derives its prefix from the native committee type and parent context; `committee_code` preserves the literal source identifier. Join matching `system_code` values to `committees` and `bioguide_id` to `members`. Unmatched joint-committee aliases and missing committee observations remain unresolved; they do not erase the reported assignment. All columns are stored as VARCHAR.
 
 - **Parquet file:** `committee_assignments.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
@@ -20,7 +20,7 @@ One row per member per committee or subcommittee seat a chamber roster file list
 | `congress_basis` | `VARCHAR` | `file` when the file states that Congress itself (the House file does), `caller` when it states none and the caller supplied it (the Senate file states only its update date). |
 | `session` | `VARCHAR` | The session the House file states; the Senate file states none. |
 | `chamber` | `VARCHAR` | Which file the seat came from: house or senate. |
-| `system_code` | `VARCHAR` | The committee's Congress.gov systemCode by the measured rule for each file's own code. |
+| `system_code` | `VARCHAR` | Derived join code: House native standing/select type selects hs/hl; the Senate code is lowercased. House joint codes keep their unresolved legacy spelling and do not establish a Congress.gov join. |
 | `committee_code` | `VARCHAR` | The file's own committee code, verbatim. |
 | `is_subcommittee` | `VARCHAR` | true for a House subcommittee seat; the Senate file lists full committees only. |
 | `parent_system_code` | `VARCHAR` | The parent committee's systemCode for a subcommittee seat. |

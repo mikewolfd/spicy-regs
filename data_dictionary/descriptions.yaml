@@ -1993,8 +1993,12 @@ tables:
       assignment is the file's `<committee rank=""/>` placeholder has none
       either (nine placeholders on 2026-09-19). Only a file captured this run
       replaces its chamber's rows; a chamber whose file was not established
-      keeps its prior rows. `system_code` joins `committees`; `bioguide_id`
-      joins `members`. All columns are stored as VARCHAR.
+      keeps its prior rows. House `system_code` derives its prefix from the
+      native committee type and parent context; `committee_code` preserves the
+      literal source identifier. Join matching `system_code` values to
+      `committees` and `bioguide_id` to `members`. Unmatched joint-committee
+      aliases and missing committee observations remain unresolved; they do
+      not erase the reported assignment. All columns are stored as VARCHAR.
     summary: >-
       One row per member per committee or subcommittee seat a chamber roster
       file lists today, from the House Clerk's MemberData.xml and the Senate's
