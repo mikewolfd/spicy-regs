@@ -5,7 +5,28 @@ The optional `source-readers` extra enables the same readers for package install
 its wheels must be supplied explicitly until they are published in a registry.
 Base CLI and MCP installs do not require them.
 
-- `spicy_docs-0.26.1`: locally built from isolated source commit
+- `spicy_docs-0.26.2`: locally built from isolated source commit
+  `aa2ad435df37d40e119106436d9300c4f14935ef`, extending the prior wheel source
+  with the reviewed congressional vote identity and press mention fixes.
+  Built September 22, 2026 UTC: **1,324,304 bytes**, SHA-256
+  `a3f8f0c33125fcc962d23459b712702792bd974bc8b826fbd3106c05e8287f19`.
+  Only `interpretation/vote_matching.py` and
+  `interpretation/release_matching.py` change inside the package. Every other
+  packaged source file is byte-identical to 0.26.1, including the court readers
+  used by the running bulk audit. Metadata changes only its version/digests;
+  dependencies are unchanged.
+
+  House vote identity no longer requires a bill relationship. The host uses
+  it to acquire procedural votes and adopts the existing Senate menu reader.
+  Press matching rejects a possessive budget year while preserving quoted
+  Senate bill citations. These code fixes do not establish complete vote
+  acquisition or historical coverage. Exact source/wheel comparisons and
+  installed-package checks are in
+  `~/Work/corpora/fork-execution-2026-09-21/congress-vote-press-adoption/`.
+  This is a local package adoption, not a registry release. Prior wheels remain
+  retained for replay.
+
+- Previous `spicy_docs-0.26.1`: locally built from isolated source commit
   `9f57934561e925dbc0447594534c0a583de727c2`, based on the prior wheel's
   `b618b922897a0b462e8d43737819288a369cf23c` source plus the reviewed CourtListener
   count fix (`11585b26f515148388b6751e9839b0f48fb2cc66` on source main).

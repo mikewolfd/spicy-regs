@@ -17,12 +17,14 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
-from spicy_docs.interpretation.vote_matching import index_vote_references, read_vote_key
+from spicy_docs.interpretation.vote_matching import VoteMatchError, index_vote_references, read_vote_key
 from spicy_docs.schemas import TABLE_CONTRACTS
+from spicy_docs.sources.congress.votes import SenateVoteMenu, SenateVoteMenuEntry, VoteRefusedError, VoteSourceError
 
 from spicy_regs.transforms.build_bill_family import VOTE_REFERENCE_COLUMNS, VOTE_REFERENCES_TABLE
 from spicy_regs.transforms.build_roll_call_votes import (
@@ -130,8 +132,19 @@ class _Acquisition:
 
 
 class StubVoteAcquirer:
-    def __init__(self):
+    def __init__(self, senate_rolls=()):
         self.requested: list[tuple[str, int]] = []
+        self.senate_rolls = senate_rolls
+
+    def list_senate_votes(self, congress, session):
+        # Empty tuples isolate House-only unit selections; the real provider
+        # refuses an empty published XML menu, covered by the failure tests.
+        entries = tuple(
+            SenateVoteMenuEntry(n, "1-Jan", None, None, None, None, {}, "Fixture")
+            for n in self.senate_rolls
+            if session == 1
+        )
+        return SimpleNamespace(menu=SenateVoteMenu(congress, session, 2025 + session - 1, entries))
 
     def acquire(self, locator, *, crosswalk=None):
         self.requested.append((locator.chamber, locator.roll_number))
@@ -269,8 +282,8 @@ def test_a_conflict_is_counted_on_the_row_it_belongs_to(tmp_path, scoped):
     assert by_roll["241"]["conflict_count"] == "0", "one contested roll call does not contest the others"
 
 
-def test_senate_references_are_indexed_but_never_fetched_or_published(tmp_path, scoped):
-    """The references reach the Senate; this rollup's coverage does not, and must not pretend to."""
+def test_senate_references_do_not_substitute_for_menu_enumeration(tmp_path, scoped):
+    """Bill-scoped references alone cannot establish a Senate acquisition population."""
     senate = [row for row in _sample_rows() if row["chamber"] == "senate"]
     assert senate, "the sample carries Senate roll calls"
     _seed_references(tmp_path, senate)
@@ -285,6 +298,198 @@ def test_senate_references_are_indexed_but_never_fetched_or_published(tmp_path, 
     )
     assert acquirer.requested == [], "no Senate roll call is fetched"
     assert pq.read_table(paths[0]).to_pylist() == []
+
+
+@pytest.mark.parametrize("link", [None, "malformed"])
+def test_unlinked_house_identity_is_acquired_once(tmp_path, scoped, link):
+    record: dict[str, object] = {"congress": 119, "sessionNumber": 1, "rollCallNumber": 7}
+    if link:
+        record.update(legislationType="not-a-bill", legislationNumber="1")
+    acquirer = StubVoteAcquirer()
+    paths = build_roll_call_votes(
+        tmp_path, reader=StubListingReader([record, record]), acquirer=acquirer, download_prior=_no_prior
+    )
+    [row] = pq.read_table(paths[0]).to_pylist()
+    assert acquirer.requested == [("house", 7)]
+    assert row["bill_id"] is None and row["match_rule"] == "unmatched"
+    assert row["yea"] == "220"
+
+
+def test_invalid_listing_identity_refuses_without_writing_outputs(tmp_path, scoped):
+    acquirer = StubVoteAcquirer()
+    with pytest.raises(VoteMatchError, match="rollCallNumber"):
+        build_roll_call_votes(
+            tmp_path,
+            reader=StubListingReader([{"congress": 119, "sessionNumber": 1}]),
+            acquirer=acquirer,
+            download_prior=_no_prior,
+        )
+    assert acquirer.requested == []
+    assert not (tmp_path / "roll_call_votes.parquet").exists()
+
+
+def test_both_chambers_keep_same_roll_number_and_native_lis_identity(tmp_path, scoped):
+    class Members(StubVoteAcquirer):
+        def acquire(self, locator, *, crosswalk=None):
+            acquired = super().acquire(locator)
+            senate = locator.chamber == "senate"
+            acquired.vote.member_votes = (
+                SimpleNamespace(
+                    lis_id="S001" if senate else None,
+                    bioguide_id=None if senate else "A000001",
+                    name="Member",
+                    party="D",
+                    state="CA",
+                    vote="Yea",
+                    vote_normalized="yea",
+                ),
+            )
+            return acquired
+
+    acquirer = Members(senate_rolls=(7, 7))
+    paths = build_roll_call_votes(
+        tmp_path, reader=StubListingReader([_house_listing_record(7)]), acquirer=acquirer, download_prior=_no_prior
+    )
+    votes = pq.read_table(paths[0]).to_pylist()
+    members = pq.read_table(paths[1]).to_pylist()
+    assert {r["vote_id"] for r in votes} == {"119-house-1-7", "119-senate-1-7"}
+    assert sorted(acquirer.requested) == [("house", 7), ("senate", 7)]
+    senate = next(row for row in members if row["chamber"] == "senate")
+    assert senate["member_key"] == "lis:S001" and senate["lis_id"] == "S001" and senate["bioguide_id"] is None
+    assert next(row for row in votes if row["chamber"] == "senate")["bill_id"] is None
+
+
+@pytest.mark.parametrize(
+    "error", [VoteSourceError("menu lists no votes"), VoteRefusedError("https://www.senate.gov/menu")]
+)
+def test_senate_menu_failure_preserves_existing_outputs(tmp_path, scoped, error):
+    class FailedMenu(StubVoteAcquirer):
+        def list_senate_votes(self, congress, session):
+            raise error
+
+    retained = tmp_path / "roll_call_votes.parquet"
+    retained.write_bytes(b"prior output")
+    acquirer = FailedMenu()
+    with pytest.raises(type(error)):
+        build_roll_call_votes(
+            tmp_path,
+            reader=StubListingReader([_house_listing_record(7)]),
+            acquirer=acquirer,
+            download_prior=_no_prior,
+        )
+    assert acquirer.requested == [] and retained.read_bytes() == b"prior output"
+
+
+def test_small_cap_prioritizes_unseen_votes_over_both_chamber_refreshes(tmp_path, scoped):
+    import shutil
+
+    reader = StubListingReader([_house_listing_record(n) for n in (1, 2)])
+    requested = []
+    for attempt in range(4):
+        run = tmp_path / str(attempt)
+        run.mkdir()
+
+        def prior(remote, local):
+            p = tmp_path / str(attempt - 1) / remote
+            if not p.exists():
+                return False
+            shutil.copyfile(p, local)
+            return True
+
+        acquirer = StubVoteAcquirer(senate_rolls=(1, 2))
+        paths = build_roll_call_votes(
+            run, reader=reader, acquirer=acquirer, max_votes=1, overlap=25, download_prior=prior
+        )
+        requested.extend(acquirer.requested)
+    assert len(requested) == len(set(requested)) == 4
+    assert len(pq.read_table(paths[0]).to_pylist()) == 4
+    # Once the backfill is held, each chamber still receives its own refresh.
+    attempt = 4
+    run = tmp_path / str(attempt)
+    run.mkdir()
+    acquirer = StubVoteAcquirer(senate_rolls=(1, 2))
+    build_roll_call_votes(run, reader=reader, acquirer=acquirer, max_votes=2, overlap=1, download_prior=prior)
+    assert set(acquirer.requested) == {("house", 2), ("senate", 2)}
+
+
+def test_successful_reacquisition_replaces_only_its_member_children(tmp_path, scoped, monkeypatch):
+    from spicy_regs.sources import r2
+
+    monkeypatch.setattr(r2, "download", lambda *_: pytest.fail("ignored injected prior reader"))
+    columns = TABLE_CONTRACTS["member_votes"].columns
+    old = [
+        {
+            "vote_id": "119-house-1-7",
+            "member_key": "old",
+            "congress": "119",
+            "chamber": "house",
+            "session": "1",
+            "roll_number": "7",
+        },
+        {
+            "vote_id": "119-house-1-8",
+            "member_key": "keep",
+            "congress": "119",
+            "chamber": "house",
+            "session": "1",
+            "roll_number": "8",
+        },
+        {
+            "vote_id": "119-house-1-6",
+            "member_key": "capped",
+            "congress": "119",
+            "chamber": "house",
+            "session": "1",
+            "roll_number": "6",
+        },
+        {
+            "vote_id": "119-house-1-9",
+            "member_key": "unselected",
+            "congress": "119",
+            "chamber": "house",
+            "session": "1",
+            "roll_number": "9",
+        },
+    ]
+
+    def prior(remote, local):
+        if remote != "member_votes.parquet":
+            return False
+        pq.write_table(pa.Table.from_pylist(old, schema=pa.schema([(c, pa.string()) for c in columns])), local)
+        return True
+
+    class FailedVote(StubVoteAcquirer):
+        def acquire(self, locator, *, crosswalk=None):
+            if locator.roll_number == 8:
+                raise VoteSourceError("retained failed scope")
+            acquired = super().acquire(locator)
+            acquired.vote.member_votes = (
+                SimpleNamespace(
+                    lis_id=None,
+                    bioguide_id="A000001",
+                    name="New member",
+                    party="D",
+                    state="CA",
+                    vote="Yea",
+                    vote_normalized="yea",
+                ),
+            )
+            return acquired
+
+    paths = build_roll_call_votes(
+        tmp_path,
+        reader=StubListingReader([_house_listing_record(n) for n in (6, 7, 8)]),
+        acquirer=FailedVote(),
+        download_prior=prior,
+        max_votes=2,
+    )
+    rows = pq.read_table(paths[1]).to_pylist()
+    assert {(r["vote_id"], r["member_key"]) for r in rows} == {
+        ("119-house-1-8", "keep"),
+        ("119-house-1-7", "A000001"),
+        ("119-house-1-6", "capped"),
+        ("119-house-1-9", "unselected"),
+    }
 
 
 def test_the_reference_scratch_file_is_not_left_beside_the_outputs(tmp_path, scoped):

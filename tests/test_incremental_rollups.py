@@ -137,6 +137,11 @@ class CountingVoteAcquirer:
         self.requested.append(locator.roll_number)
         raise _Unavailable("stub: no Clerk file in a hermetic test")
 
+    def list_senate_votes(self, congress, session):
+        from types import SimpleNamespace
+
+        return SimpleNamespace(menu=SimpleNamespace(votes=()))
+
 
 class _Unavailable(Exception):
     pass
@@ -265,10 +270,21 @@ def test_committee_reports_skips_packages_it_holds(tmp_path, monkeypatch):
 
     from spicy_regs.transforms.committee_report_reads import READS_TABLE, RULE_VERSIONS
     from spicy_regs.transforms.table_merge import prior_scratch_path
-    pq.write_table(pa.Table.from_pylist([{
-        "package_id": "CRPT-119hrpt1", "last_modified": "2026-09-10T12:00:00Z",
-        "outcome": "complete", "rule_version": RULE_VERSIONS["CRPT"], "observed_at": "2026-09-20",
-    }]), prior_scratch_path(tmp_path, READS_TABLE))
+
+    pq.write_table(
+        pa.Table.from_pylist(
+            [
+                {
+                    "package_id": "CRPT-119hrpt1",
+                    "last_modified": "2026-09-10T12:00:00Z",
+                    "outcome": "complete",
+                    "rule_version": RULE_VERSIONS["CRPT"],
+                    "observed_at": "2026-09-20",
+                }
+            ]
+        ),
+        prior_scratch_path(tmp_path, READS_TABLE),
+    )
 
     class Reader:
         """Serves each collection its own packages, as GovInfo does."""

@@ -1,83 +1,16 @@
-"""Transform: build ``roll_call_votes.parquet`` and ``member_votes.parquet``.
+"""Build roll-call and member-vote tables from complete source enumerations.
 
-Two steps, from two different publishers, because neither alone is enough:
+House listing identities and Senate LIS menus determine which votes to acquire.
+Bill references enrich those votes independently: an unlinked procedural vote
+still has its own tally and member positions. House action references may add
+keys before the listing catches up; Senate references alone never establish a
+complete Senate selection.
 
-1. **Linkage, from two publisher statements.** The Congress.gov ``house-vote``
-   list route states which bill a House roll call was about, and a bill's own
-   actions carry ``recordedVotes`` entries naming the roll calls they settled.
-   ``house_vote_references`` reads the first off the listing; the second
-   arrives with BILLSTATUS, so the ``bill-family`` rollup — which already holds
-   every bill's actions — publishes them as ``bill_vote_references`` and this
-   transform reads that table at merge time. ``index_vote_references`` settles
-   the cases where two references claim the same roll call, so a bill linkage
-   carries the rule that produced it and a count of what it beat.
-
-   The recorded-vote references are indexed **first**, so they win a
-   disagreement: a recorded vote sits on the bill's own action, which *is* the
-   join, while the listing's ``legislationType``/``legislationNumber`` is a
-   statement made about the roll call from outside it
-   (``spicy_docs.interpretation.vote_matching``'s own reasoning). A losing
-   reference is counted on the row it disagreed with, never dropped.
-2. **Counts and positions.** The tallies and every member's position come from
-   the House Clerk's own EVS XML through ``spicy_docs.sources.congress.votes``,
-   one keyless request per roll call. BillTrax published zeroes in these four
-   columns; they are real here or they are NULL.
-
-**Scope is House only, and what is fetched is the House half of the union.**
-The fetch set is every House roll call in the index — the listing's own walk,
-plus any House roll call a bill's action names that the listing has not
-indexed yet. It is a superset of the listing, never a subset, so the coverage
-claim this table makes ("every House roll call the publisher's index names,
-under the per-run cap") stays true, and a vote that arrives on a bill's action
-first is published a cron early rather than missed. Such a row is not partial:
-the Clerk file is addressable from the roll-call key alone, so it carries the
-same tally and member positions as any other, or it is counted as refused.
-
-The Senate half of that union is **not** fetched, and the asymmetry is the
-point. For the House the references can only add to a complete enumeration.
-For the Senate there is no enumeration at all — ``listing.py`` has no Senate
-index route, and the LIS menu is not a reader this repository has — so the
-Senate rows would *be* whatever the scoped bills happened to reference: 6 of
-the 34 roll calls in the measured sample, a biased sample that would read as a
-Senate vote table. Publishing that would state a coverage this has not got, so
-no Senate row is published at all, and the Senate references sit in the index
-unused until a Senate index route lands. They cost nothing.
-
-**Why the references are read rather than re-derived.** Reaching the same six
-fields inside this rollup would mean re-acquiring every scoped bill's
-BILLSTATUS — up to ~52 MB of bulk zip per run, or thousands of per-bill API
-calls — to recompute what the family already parsed an hour earlier. The read
-is the cheaper and the more consistent of the two, and it is the one the
-rollup contract permits (``pipelines/rollups/base.py``): ``bill_vote_references``
-is an *ingest* rollup's published output, with no upstream dependency inside
-this repository, so reading it is an ordering preference the crons already
-honour rather than a race. It is read best-effort and is not declared in
-``inputs``: with no family run yet published, the listing's own linkage still
-fills every House row this rollup can establish.
-
-**Incremental.** A roll call already published with a real tally has had its
-Clerk file read, and that file does not change once the vote is recorded, so it
-is not fetched again — a steady-state run costs the index walk plus the
-overlap, not one request per roll call in the Congress. Two honest limits on
-that:
-
-* The contract has no column for the publisher's ``updateDate``, so a
-  correction to an already-published roll call cannot be detected by comparing
-  it. :data:`OVERLAP_VOTES` stands in for that comparison: the newest few
-  roll calls are re-read every run whether or not they are held, which is the
-  same shape as ``build_congress_bills``' day overlap.
-* The index walk itself is **not** short-circuited. The ``house-vote`` route
-  declares ``sort_honored=False``, so the publisher's order is not guaranteed
-  monotonic in roll number, and stopping on a page of already-held votes could
-  silently drop roll calls sitting later in an unordered listing. The walk is a
-  handful of 250-row pages per session; the per-roll-call Clerk fetch is the
-  cost worth avoiding, and that is the one avoided.
-
-``MAX_VOTES_PER_RUN`` still bounds the Clerk walk: a run publishes nothing
-until it finishes, so an unbounded first pass over several Congresses would
-time out and persist nothing, the failure mode ``build_congress_bills``
-documents. Votes are acquired newest first, so a bounded run advances from the
-present and the next run resumes on ground this one did not reach.
+Acquisition is bounded by MAX_VOTES_PER_RUN. Unseen keys precede held correction
+refreshes so a small cap cannot stall backfill. OVERLAP_VOTES applies separately
+to each chamber; all keys retain the publisher's chamber namespace. A successful
+reacquisition replaces that roll call's complete member roster. Failed, capped
+or unselected roll calls retain their prior observations.
 """
 
 from __future__ import annotations
@@ -96,6 +29,7 @@ from spicy_docs.interpretation.vote_matching import (
     house_vote_references,
     index_vote_references,
     match_votes,
+    read_house_vote_key,
 )
 from spicy_docs.reading.paged_json import PagedJsonBudget
 from spicy_docs.schemas.congress_activity_tables import shape_member_vote, shape_roll_call_vote
@@ -106,7 +40,13 @@ from spicy_docs.sources.congress.listing import (
     CongressListingReader,
     list_route_url,
 )
-from spicy_docs.sources.congress.votes import VoteAcquirer, VoteBudget, VoteLocator, VoteSourceError
+from spicy_docs.sources.congress.votes import (
+    VoteAcquirer,
+    VoteBudget,
+    VoteLocator,
+    VoteSourceError,
+    locator_from_menu_entry,
+)
 
 from spicy_regs.sources import r2
 from spicy_regs.sources.congress_bills import API_KEY_ENV_VARS, _resolve_api_key
@@ -124,6 +64,8 @@ class VoteSource(Protocol):
 
     def acquire(self, locator: Any, *, crosswalk: Any = ...) -> Any: ...
 
+    def list_senate_votes(self, congress: int, session: int) -> Any: ...
+
 
 LIST_BUDGET = PagedJsonBudget(
     max_requests=500,
@@ -132,7 +74,7 @@ LIST_BUDGET = PagedJsonBudget(
     min_request_interval_seconds=0.2,
 )
 
-#: One request per roll call, paced at two a second against the Clerk.
+#: Each publisher request is paced at two a second.
 VOTE_BUDGET = VoteBudget(
     max_requests=4,
     max_bytes=4 * 1024 * 1024,  # the acquirer's own ceiling for a roll-call file
@@ -142,8 +84,7 @@ VOTE_BUDGET = VoteBudget(
 
 MAX_PAGES = 40
 
-#: ~700 House roll calls a session, so this covers a full Congress in one run
-#: (~12 minutes at the pacing above) and bounds a multi-Congress backfill.
+#: Bound per-run source requests; larger selections resume from prior outputs.
 MAX_VOTES_PER_RUN = 1_500
 
 #: The newest roll calls are re-read every run even when already published,
@@ -259,7 +200,11 @@ def build_roll_call_votes(
     overlap: int = OVERLAP_VOTES,
     download_prior: Callable[[str, Path], bool] = r2.download,
 ) -> tuple[Path, Path]:
-    """Build ``roll_call_votes.parquet`` and ``member_votes.parquet`` (House)."""
+    """Build both chambers; optional bill links never restrict native selection.
+
+    Menu/listing failures propagate before either output is written. Unseen
+    votes take priority over correction refreshes, with overlap per chamber.
+    """
     if reader is None:
         api_key = _resolve_api_key()
         if not api_key:
@@ -271,20 +216,41 @@ def build_roll_call_votes(
     congresses = congresses_from_env()
     route = LIST_ROUTES["house-vote"]
     records: list[object] = []
+    listed_keys: set[VoteKey] = set()
     for congress in congresses:
         before = len(records)
         for session in sessions_of(congress):
             url = list_route_url(route, congress=congress, session=session, limit=MAX_LIMIT)
             for page in reader.records(route, url, max_pages=MAX_PAGES):
                 records.extend(page.records)
+            # The owner reader proves menu identity and refuses empty/failed
+            # responses; a refusal cannot establish a zero-vote session.
+            menu = acquirer.list_senate_votes(congress, session).menu
+            for entry in menu.votes:
+                locator = locator_from_menu_entry(menu, entry)
+                listed_keys.add(VoteKey(locator.congress, locator.chamber, locator.session, locator.roll_number))
         logger.info("Roll-call votes: Congress {} — {:,} listed House votes", congress, len(records) - before)
+
+    listed_keys.update(read_house_vote_key(record) for record in records)
+    listing_references: list[VoteReference] = []
+    for record in records:
+        try:
+            listing_references.extend(house_vote_references((record,)))
+        except (VoteMatchError, BillSourceError) as error:
+            # The identity was validated independently. A malformed optional
+            # bill reference must not discard that source vote.
+            logger.warning(
+                "Roll-call votes: optional House bill reference refused for {}: {}",
+                read_house_vote_key(record),
+                error,
+            )
 
     # The bill's own action is the stronger statement, so it is indexed first
     # and wins a disagreement; the listing's is indexed after it.
     index = index_vote_references(
         (
             *_recorded_vote_references(output_dir, congresses, download_prior),
-            *house_vote_references(records),
+            *listing_references,
         )
     )
     # Per vote, not per run: the contract's sentence is "how many later
@@ -306,25 +272,30 @@ def build_roll_call_votes(
     have_prior = prior_file is not None
     held = _held_votes(prior_file) if prior_file is not None else set()
 
-    # Only the chamber this rollup publishes: a Senate reference is a linkage
-    # for a roll call no index route here can enumerate (see the docstring).
+    # House action references can precede the House listing. Senate scope
+    # comes from its own menu, never from a bill-only sample.
     ordered = sorted(
-        (key for key in index.by_vote if key.chamber == "house"),
-        key=lambda k: (k.congress, k.session, k.roll_number),
+        listed_keys | {key for key in index.by_vote if key.chamber == "house"},
+        key=lambda k: (k.congress, k.session, k.roll_number, k.chamber),
         reverse=True,
     )
-    # The newest few are always re-read; the rest only if not already captured.
-    keys = [
-        key
-        for position, key in enumerate(ordered)
-        if position < overlap
-        or (str(key.congress), str(key.chamber), str(key.session), str(key.roll_number)) not in held
-    ]
+    fresh_keys: list[VoteKey] = []
+    refresh_keys: list[VoteKey] = []
+    chamber_positions: Counter[str] = Counter()
+    for key in ordered:
+        position = chamber_positions[key.chamber]
+        chamber_positions[key.chamber] += 1
+        identity = (str(key.congress), str(key.chamber), str(key.session), str(key.roll_number))
+        if identity not in held:
+            fresh_keys.append(key)
+        elif position < overlap:
+            refresh_keys.append(key)
+    keys = fresh_keys + refresh_keys
     if held:
         logger.info(
             "Roll-call votes: {:,} of {:,} listed roll calls already published — fetching {:,}"
-            " (the newest {} are re-read for corrections)",
-            len(ordered) - len(keys) + min(overlap, len(ordered)),
+            " (up to {} per chamber are re-read for corrections)",
+            len(ordered) - len(fresh_keys),
             len(ordered),
             len(keys),
             overlap,
@@ -378,6 +349,12 @@ def build_roll_call_votes(
         refused,
     )
     return (
-        merge_contract_table(output_dir, NAME, vote_rows, prior_present=have_prior),
-        merge_contract_table(output_dir, "member_votes", member_rows),
+        merge_contract_table(output_dir, NAME, vote_rows, prior_present=have_prior, download_prior=download_prior),
+        merge_contract_table(
+            output_dir,
+            "member_votes",
+            member_rows,
+            download_prior=download_prior,
+            replace_parents=("vote_id", {str(row["vote_id"]) for row in vote_rows}),
+        ),
     )
