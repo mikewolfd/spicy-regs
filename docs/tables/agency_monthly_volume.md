@@ -4,9 +4,9 @@
 
 **Agency monthly volume**
 
-Per-agency monthly document volume, broken out by document type — one row per (agency, year, month, document_type). Feeds activity sparklines and profile activity panels. Built by `build_agency_rollups` from document `posted_date`.
+Per-agency monthly document volume, broken out by document type — one row per (agency, year, month, document_type). Feeds activity sparklines and profile activity panels. Built by `build_agency_monthly_volume` from document `posted_date`; missing, uncastable and year-zero dates are omitted.
 
-**Coverage.** Derived. Monthly counts over `documents`; it covers exactly what that table covers, including its pre-1990 date defect. *(measured 2026-09-06)*
+**Coverage.** Derived. On 2026-09-21, the mikewolfd/spicy-regs fork published 77,934 groups counting 1,999,503 documents from its 2,001,531-row repaired parent. The file records the exact parent digest and all 2,028 omitted dates: 2,020 NULL and eight year-zero values, with no other uncastable dates. Other literal calendar dates remain, including 52,691 pre-1990 records and one future December 2026 record. Source values remain unchanged. This is a qualified parent-derived selection, not a whole-source census. Receipts: fork-execution-2026-09-21/document-derivatives/MANUAL-AUDIT.md and publication-agency-monthly-volume.json. *(measured 2026-09-21)*
 
 - **Parquet file:** `agency_monthly_volume.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.

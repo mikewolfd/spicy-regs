@@ -26,7 +26,7 @@ foundation, each with its own inclusion and scoring rules.
 | Relationship observations | 183,390 | Includes explicit missing/empty states; not all positive relationships |
 | Official bulk-page groups represented | 26 | 25 have selected outputs; PostgreSQL has file inventory only; all decline complete-history claims |
 | Senate originals | 598 live FEC originals | 597 native parses and one physical-line fallback; one archive mirror retained separately |
-| External FEC publication | Not completed | Local output and code push do not publish the data |
+| External FEC publication | Selected seed published on the fork | Public byte checks, CLI downloads and direct fork-R2 MCP reads pass; hosted MCP deployment remains separate |
 
 The [coverage census](research/fec-coverage-2026-09-21.md) lists every broad
 family and every bulk group. These are two different classifications whose
@@ -34,6 +34,10 @@ counts happen to match. The [generation audit](research/fec-generation-readiness
 records the complete local publication/download/MCP check. A separate
 [Cloudflare R2 object-store rehearsal](https://github.com/mikewolfd/spicy-regs/blob/7b174f1/deploy/fork-setup.md) qualified synthetic objects,
 conditional publication and multipart transfer; it did not publish the FEC data.
+The later [fork execution](fork-generation.md#execution-update) published all
+five selected FEC tables and verified their public bytes, pins and actual MCP
+queries. It supersedes the rehearsal's unpublished status without changing the
+selected coverage limits above.
 
 ## How to use this register
 
@@ -406,10 +410,15 @@ building an FEC search service. Evidence: research T09/T19 and the
 
 ### FG21 — Publish the selected FEC data and qualify the hosted reader
 
-**Open deployment · Data/MCP operator.** Output sealing and the full local
-publisher/CLI/stdio-MCP path pass. The fork's real R2 rehearsal also passes for
-synthetic two-table data, stale conditional writes and a 6 MiB multipart object.
-No full selected FEC upload or matching hosted-service run is claimed.
+**Selected data published; hosted-service deployment open · Data/MCP operator.**
+The fork now serves the three complete selected families: `fec-observations`,
+`fec-source-catalog` and `fec-committees`. Full public downloads passed digest,
+size, schema and row-count checks. Actual stdio MCP passed both those downloads
+and direct fork R2 queries, preserving generation pins. All selected relationship
+parents resolve; nine raw-audited witnesses survive unchanged. This establishes
+public selected-data delivery. A matching hosted MCP service, canonical domain
+and documentation deployment remain separate work. Evidence:
+[fork execution receipts](/Users/mikewolfd/Work/corpora/fork-execution-2026-09-21).
 
 **Complete when:** publish the chosen `fec-observations` and `fec-source-catalog`
 families through the existing generation path, verify remote bytes and one

@@ -386,10 +386,10 @@
   "agency_monthly_volume": {
     "table": "agency_monthly_volume",
     "label": "Agency monthly volume",
-    "summary": "Per-agency monthly document volume, broken out by document type — one row per (agency, year, month, document_type). Feeds activity sparklines and profile activity panels. Built by `build_agency_rollups` from document `posted_date`.",
-    "coverage": "Derived. Monthly counts over `documents`; it covers exactly what that table covers, including its pre-1990 date defect.",
+    "summary": "Per-agency monthly document volume, broken out by document type — one row per (agency, year, month, document_type). Feeds activity sparklines and profile activity panels. Built by `build_agency_monthly_volume` from document `posted_date`; missing, uncastable and year-zero dates are omitted.",
+    "coverage": "Derived. On 2026-09-21, the mikewolfd/spicy-regs fork published 77,934 groups counting 1,999,503 documents from its 2,001,531-row repaired parent. The file records the exact parent digest and all 2,028 omitted dates: 2,020 NULL and eight year-zero values, with no other uncastable dates. Other literal calendar dates remain, including 52,691 pre-1990 records and one future December 2026 record. Source values remain unchanged. This is a qualified parent-derived selection, not a whole-source census. Receipts: fork-execution-2026-09-21/document-derivatives/MANUAL-AUDIT.md and publication-agency-monthly-volume.json.",
     "kind": "derived",
-    "measured_on": "2026-09-06",
+    "measured_on": "2026-09-21",
     "data_quality": null,
     "columns": [
       {
@@ -472,7 +472,7 @@
   "fr_docket_links": {
     "table": "fr_docket_links",
     "label": "Federal Register to docket links",
-    "summary": "The Federal Register ↔ docket bridge: each `federal_register` row's `docket_ids_json` array exploded to one row per (docket_id, document_number, publication_date), carrying the FR display columns. Use this instead of an `ILIKE` scan over `federal_register.docket_ids_json` — it is sorted by `docket_id`, so `WHERE docket_id = ?` prunes row groups. This is the practical join from regulations.gov to the Federal Register, since `documents.fr_doc_num` is populated on only ~1% of rules. Built by `build_fr_docket_links`.",
+    "summary": "The Federal Register ↔ docket bridge: each `federal_register` row's `docket_ids_json` array exploded to one row per (docket_id, document_number, publication_date), carrying the FR display columns. Use this instead of an `ILIKE` scan over `federal_register.docket_ids_json` — it is sorted by `docket_id`, so `WHERE docket_id = ?` prunes row groups. This is the practical join from regulations.gov to the Federal Register using the Federal Register's own stated docket links. Built by `build_fr_docket_links`.",
     "coverage": "Derived, and bounded by its inputs. Links between `federal_register` and `dockets`, so it inherits the Federal Register table's 2000 floor: a rule published before 2000 has no link here because the document is not in that table.",
     "kind": "derived",
     "measured_on": "2026-09-06",
@@ -566,10 +566,10 @@
     "table": "discovery_signals",
     "label": "Agency activity spikes",
     "summary": "Per-agency document-output spike signal that powers the feed's discovery panel — agencies whose document count in the trailing 30 days is at least 2× their prior-year monthly mean, requiring ≥24 documents in the prior year to suppress tiny-denominator noise. Recomputed relative to the run date, so rows turn over on every rebuild; it is a current-state signal, not a time series. Built by `build_discovery_signals` from `documents`.",
-    "coverage": "Not a range. A current-state signal recomputed relative to each run date, so every row turns over on every rebuild. It is not a time series and cannot be asked about the past.",
+    "coverage": "Not a range. On 2026-09-21, the mikewolfd/spicy-regs fork published eight agency signals from its repaired documents parent, calculated at 2026-09-21 20:16:37.775606-04 in America/New_York. Parquet metadata retains that exact timestamp, timezone and parent digest. All counts were independently reconstructed. Future dates are excluded from recent activity. This is a dated snapshot, not a historical series or a complete measure of agency activity. Receipt: fork-execution-2026-09-21/document-derivatives/MANUAL-AUDIT.md.",
     "kind": "not_a_range",
-    "measured_on": "2026-09-06",
-    "data_quality": null,
+    "measured_on": "2026-09-21",
+    "data_quality": "The existing TIMESTAMP cast discards source offsets before comparison in the recorded connection timezone. The calculation is reproducible under those stated semantics; source-instant normalization remains open. Corpus backfills and source date anomalies can affect these document-count signals.",
     "columns": [
       {
         "column_name": "agency_code",
