@@ -231,7 +231,9 @@ def build_court_opinion_clusters(
     max_records: int | None = None,
     skip_search_catchup: bool = False,
     docket_court_map: Path | None = None,
+    courts_local_file: Path | None = None,
     skip_court_scope: bool = False,
+    include_prior: bool = True,
 ) -> Path:
     """Build ``court_opinion_clusters.parquet`` (bulk dump + search catch-up).
 
@@ -239,6 +241,12 @@ def build_court_opinion_clusters(
     46-minute ``dockets`` read. It is the honest way to build the table without
     the scope, and it is not the default: a decision table that cannot say which
     court decided is a table nobody can ask the obvious question of.
+
+    ``courts_local_file`` pairs a retained courts dump with a supplied docket
+    map. ``include_prior=False`` builds the selected source edition alone,
+    without downloading, reading or removing a retained prior table. Combine
+    these with ``local_file`` and ``skip_search_catchup=True`` for an offline
+    build from pinned originals.
     """
     import duckdb
 
@@ -254,7 +262,7 @@ def build_court_opinion_clusters(
     new_file = output_dir / "_clusters_new.parquet"
 
     # 1. Prior table (absence just means first build).
-    have_prior = prior_file.exists() or r2.download(OUTPUT, prior_file)
+    have_prior = include_prior and (prior_file.exists() or r2.download(OUTPUT, prior_file))
     logger.info(
         "Opinion clusters: {}",
         f"merging against prior table {prior_file}" if have_prior else "no prior table — full build",
@@ -289,7 +297,9 @@ def build_court_opinion_clusters(
     scope: CourtScope | None = None
     if not skip_court_scope:
         map_file = docket_court_map or build_docket_court_map(output_dir, dump_date=resolved)
-        scope = CourtScope.from_map(map_file, court_jurisdictions(dump_date=resolved, local_file=None))
+        scope = CourtScope.from_map(
+            map_file, court_jurisdictions(dump_date=resolved, local_file=courts_local_file)
+        )
 
     # 4. Stream the dump into the staging table, batch by batch.
     writer = CourtListenerTableWriter(new_file, schema=_SCHEMA, batch_size=BATCH_ROWS)
@@ -334,7 +344,6 @@ def build_court_opinion_clusters(
     # dump order rather than date order.
     if not have_prior:
         new_file.replace(out_file)
-        prior_file.unlink(missing_ok=True)
         total = pq.ParquetFile(out_file).metadata.num_rows
         logger.info("Court opinion clusters: {:,} rows (first build, dump order)", total)
         return out_file
