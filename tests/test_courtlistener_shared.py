@@ -5,6 +5,7 @@ from __future__ import annotations
 import bz2
 import importlib
 import io
+import json
 import subprocess
 import sys
 from collections.abc import Generator
@@ -14,6 +15,8 @@ from hashlib import sha256
 from pathlib import Path
 from typing import cast
 
+import httpx
+import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 from spicy_docs.sources.courtlistener import http as owner_http
@@ -274,6 +277,74 @@ def test_source_failure_after_flush_preserves_output_and_original_error(tmp_path
     assert closed == [True]
     assert output.read_bytes() == b"previous output stays untouched"
     assert not (tmp_path / f"_{kind}_new.parquet").exists()
+
+
+@pytest.mark.parametrize("failure", ["http", "count"])
+def test_search_catchup_failure_after_flush_preserves_prior_and_output(tmp_path, monkeypatch, failure):
+    from spicy_regs.sources import courtlistener as source
+
+    module = importlib.import_module("spicy_regs.transforms.build_court_opinion_clusters")
+    monkeypatch.setattr(module, "BATCH_ROWS", 1)
+    monkeypatch.setattr(source, "_MAX_REQUESTS_PER_PAGE", 1)
+    monkeypatch.delenv(source.API_TOKEN_ENV_VAR, raising=False)
+    prior, output = tmp_path / "_clusters_prior.parquet", tmp_path / module.OUTPUT
+    table = pa.Table.from_pylist([module._shape_bulk({"id": "99", "case_name": "Prior case"})], schema=module._SCHEMA)
+    pq.write_table(table, prior)
+    pq.write_table(table, output)
+    before = prior.read_bytes(), output.read_bytes()
+    dump = _dump(tmp_path, b'id,docket_id,case_name\n"1","101","Bulk case"\n')
+    written, closed, requests = [], [], []
+    original_writer = module.pq.ParquetWriter
+
+    class Writer:
+        def __init__(self, *args, **kwargs):
+            self.writer = original_writer(*args, **kwargs)
+
+        def write_table(self, table):
+            self.writer.write_table(table)
+            written.extend(table.to_pylist())
+
+        def close(self):
+            self.writer.close()
+            closed.append(True)
+
+    monkeypatch.setattr(module.pq, "ParquetWriter", Writer)
+    next_url = f"{source.API_BASE}/search/?cursor=catchup-second"
+
+    def respond(request):
+        requests.append(request)
+        if len(requests) == 1:
+            assert [row["cluster_id"] for row in written] == ["1"]
+            payload = {"count": 2, "next": next_url, "results": [{"cluster_id": 2, "caseName": "Search case"}]}
+            status = 200
+        else:
+            assert [row["cluster_id"] for row in written] == ["1", "2"]
+            assert (tmp_path / "_clusters_new.parquet").exists()
+            payload = {"count": 3, "next": None, "results": [{"cluster_id": 3}]}
+            status = 500 if failure == "http" else 200
+        return httpx.Response(
+            status,
+            stream=httpx.ByteStream(json.dumps(payload).encode()),
+            headers={"content-type": "application/json"},
+        )
+
+    transport = httpx.MockTransport(respond)
+    monkeypatch.setattr(
+        module,
+        "CourtListenerOpinionSearchReader",
+        lambda **kwargs: source.CourtListenerOpinionSearchReader(transport=transport, **kwargs),
+    )
+    error_type, message = (httpx.HTTPStatusError, "HTTP 500") if failure == "http" else (ValueError, "declared count changed")
+    with pytest.raises(error_type, match=message):
+        module.build_court_opinion_clusters(tmp_path, local_file=dump, dump_date=DUMP_DATE, skip_court_scope=True)
+
+    assert len(requests) == 2
+    assert requests[0].url.params["type"] == "o"
+    assert str(requests[1].url) == next_url
+    assert [(row["cluster_id"], row["case_name"]) for row in written] == [("1", "Bulk case"), ("2", "Search case")]
+    assert closed == [True]
+    assert (prior.read_bytes(), output.read_bytes()) == before
+    assert not (tmp_path / "_clusters_new.parquet").exists()
 
 
 @pytest.mark.parametrize("kind", ["bodies", "clusters"])

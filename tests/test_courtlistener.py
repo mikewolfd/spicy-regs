@@ -9,8 +9,16 @@ absolutization) and the reader's cursor ``next``-following pagination +
 from __future__ import annotations
 
 import json
+import importlib
 
-from spicy_regs.sources.courtlistener import CourtListenerReader
+import httpx
+import pyarrow as pa
+import pyarrow.parquet as pq
+import pytest
+
+from spicy_docs.transport.credentials import CredentialRefusedError
+from spicy_regs.sources import courtlistener as source
+from spicy_regs.sources.courtlistener import CourtListenerReader, CourtListenerOpinionSearchReader
 from spicy_regs.transforms.build_courtlistener import COLUMNS, _shape
 
 _RAW_DOCKET = {
@@ -93,61 +101,142 @@ def test_shape_handles_missing_fields():
     assert row["date_created"] is None
 
 
-def _page(ids: list[int], next_url: str | None) -> dict:
+def _page(ids, next_url=None, *, total=None, kind="r"):
     return {
-        "count": 99,
+        "count": len(ids) if total is None else total,
         "next": next_url,
         "previous": None,
-        "results": [{"docket_id": i} for i in ids],
+        "results": [{"docket_id" if kind == "r" else "cluster_id": i} for i in ids],
     }
 
 
-def test_pagination_follows_cursor_next(monkeypatch):
-    """The reader must follow the cursor ``next`` URL until it is null."""
-    reader = CourtListenerReader()
-    pages = {
-        None: _page([1, 2], "CURSOR2"),  # first request (params carried; url is base)
-        "CURSOR2": _page([3, 4], None),
-    }
-    calls: list[str | None] = []
+class Transport(httpx.MockTransport):
+    def __init__(self, *responses):
+        self.responses = iter(responses)
+        self.calls = []
+        super().__init__(self.handle)
 
-    def fake_get(url: str, params: dict | None) -> dict | None:
-        key = None if params is not None else url
-        calls.append(key)
-        return pages[key]
-
-    monkeypatch.setattr(reader, "_get", fake_get)
-    got = [d["docket_id"] for d in reader._paginate()]
-    assert got == [1, 2, 3, 4]
-    assert calls == [None, "CURSOR2"]
+    def handle(self, request):
+        self.calls.append(request)
+        response = next(self.responses)
+        if isinstance(response, Exception):
+            raise response
+        return httpx.Response(
+            response if isinstance(response, int) else 200,
+            stream=httpx.ByteStream(json.dumps(response).encode()),
+            headers={"content-type": "application/json"},
+        )
 
 
-def test_pagination_respects_max_records(monkeypatch):
-    reader = CourtListenerReader(max_records=3)
-
-    def fake_get(url: str, params: dict | None) -> dict | None:
-        # One big page; max_records must stop iteration mid-page.
-        return _page([1, 2, 3, 4, 5], None)
-
-    monkeypatch.setattr(reader, "_get", fake_get)
-    got = [d["docket_id"] for d in reader._paginate()]
-    assert got == [1, 2, 3]
+@pytest.fixture(autouse=True)
+def bounded_requests(monkeypatch):
+    monkeypatch.setattr(source, "_MAX_REQUESTS_PER_PAGE", 1)
 
 
-def test_since_sets_filed_after_param(monkeypatch):
-    """``since`` must become a MM/DD/YYYY ``filed_after`` search param."""
+NEXT = f"{source.API_BASE}/search/?cursor=second"
+
+
+def test_pagination_follows_cursor_next():
+    transport = Transport(_page([1, 2], NEXT, total=4), _page([3, 4], total=4))
+    reader = CourtListenerReader(transport=transport, api_token="fixture-token")
+    assert [row["docket_id"] for row in reader.iter_records()] == [1, 2, 3, 4]
+    assert str(transport.calls[1].url) == NEXT
+    assert all(r.headers["Authorization"] == "Token fixture-token" for r in transport.calls)
+    assert all("fixture-token" not in str(r.url) for r in transport.calls)
+
+
+def test_pagination_respects_explicit_record_cap():
+    transport = Transport(_page([1, 2, 3, 4, 5], NEXT, total=9))
+    assert [row["docket_id"] for row in CourtListenerReader(max_records=3, transport=transport).iter_records()] == [
+        1,
+        2,
+        3,
+    ]
+    assert len(transport.calls) == 1
+
+
+def test_since_sets_filed_after_param():
     from datetime import date
 
-    reader = CourtListenerReader(since=date(2024, 7, 1))
-    captured: dict[str, object] = {}
+    transport = Transport(_page([1]))
+    list(CourtListenerReader(since=date(2024, 7, 1), transport=transport).iter_records())
+    params = transport.calls[0].url.params
+    assert params["filed_after"] == "07/01/2024"
+    assert params["type"] == "r"
+    assert params["nature_of_suit"] == "899"
 
-    def fake_get(url: str, params: dict | None) -> dict | None:
-        if params is not None:
-            captured.update(params)
-        return _page([1], None)
 
-    monkeypatch.setattr(reader, "_get", fake_get)
-    list(reader._paginate())
-    assert captured["filed_after"] == "07/01/2024"
-    assert captured["type"] == "r"
-    assert captured["nature_of_suit"] == "899"
+def test_opinion_selection_uses_cluster_identity_and_court():
+    transport = Transport(_page([4], kind="o"))
+    assert list(CourtListenerOpinionSearchReader(court="dcd", transport=transport).iter_records()) == [
+        {"cluster_id": 4}
+    ]
+    params = transport.calls[0].url.params
+    assert params["type"] == "o" and params["court"] == "dcd"
+    assert "nature_of_suit" not in params
+
+
+@pytest.mark.parametrize("status", [401, 403, 404, 429, 500])
+def test_source_refusal_is_not_empty_success(status):
+    with pytest.raises((ValueError, ConnectionError, httpx.HTTPError, CredentialRefusedError)):
+        list(CourtListenerReader(transport=Transport(status)).iter_records())
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {},
+        {"results": []},
+        _page([None]),
+        _page([True]),
+        _page([0]),
+        _page([1, 1]),
+        _page([], total=1),
+        _page([], NEXT, total=1),
+        {"count": 1, "results": "not-a-list", "next": None},
+        _page([1], "https://untrusted.example/search?cursor=x", total=2),
+    ],
+)
+def test_malformed_response_refuses(payload):
+    with pytest.raises(ValueError):
+        list(CourtListenerReader(transport=Transport(payload)).iter_records())
+
+
+@pytest.mark.parametrize("second", [500, _page([1], total=2), _page([2], total=3), _page([], total=2)])
+def test_later_page_failure_preserves_prior_and_existing_output(monkeypatch, tmp_path, second):
+    module = importlib.import_module("spicy_regs.transforms.build_courtlistener")
+    table = pa.Table.from_pylist([module._shape(_RAW_DOCKET)], schema=module._SCHEMA)
+    prior, output = tmp_path / "_cl_prior.parquet", tmp_path / "court_dockets.parquet"
+    pq.write_table(table, prior)
+    pq.write_table(table, output)
+    before = prior.read_bytes(), output.read_bytes()
+    reader = CourtListenerReader(transport=Transport(_page([1], NEXT, total=2), second))
+    monkeypatch.setattr(module, "CourtListenerReader", lambda **kwargs: reader)
+    with pytest.raises((ValueError, ConnectionError, httpx.HTTPError, CredentialRefusedError)):
+        module.build_courtlistener(tmp_path)
+    assert (prior.read_bytes(), output.read_bytes()) == before
+    assert not (tmp_path / "_cl_new.parquet").exists()
+
+
+def test_repeated_cursor_and_page_budget_refuse(monkeypatch):
+    with pytest.raises(ValueError, match="repeated its continuation"):
+        list(
+            CourtListenerReader(
+                transport=Transport(_page([1], NEXT, total=3), _page([2], NEXT, total=3))
+            ).iter_records()
+        )
+    monkeypatch.setattr(source, "_MAX_PAGES", 1)
+    with pytest.raises(ValueError, match="page bound"):
+        list(CourtListenerReader(transport=Transport(_page([1], NEXT, total=3))).iter_records())
+
+
+def test_valid_empty_selection_and_cap_page_validation():
+    assert list(CourtListenerReader(transport=Transport(_page([]))).iter_records()) == []
+    with pytest.raises(ValueError):
+        list(CourtListenerReader(max_records=1, transport=Transport(_page([1, None]))).iter_records())
+
+
+@pytest.mark.parametrize("bound", [0, -1, True, 1.5])
+def test_invalid_cap_refuses(bound):
+    with pytest.raises(ValueError):
+        CourtListenerReader(max_records=bound)

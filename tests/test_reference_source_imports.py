@@ -21,17 +21,21 @@ sys.meta_path.insert(0, NoSourceReaders())
 import spicy_regs.cli
 import spicy_regs.mcp_server
 import spicy_regs.transforms
+import spicy_regs.pipelines.rollups.courtlistener
 import spicy_regs.pipelines.rollups.crs_reports
 import spicy_regs.pipelines.rollups.gao_reports
 import spicy_regs.pipelines.rollups.fcc_filings
 import spicy_regs.pipelines.rollups.fcc_proceedings
 import spicy_regs.pipelines.rollups.usaspending_recipients
+from spicy_regs.sources.courtlistener import CourtListenerReader, CourtListenerOpinionSearchReader
 from spicy_regs.sources.crs_reports import CrsReportsReader
 from spicy_regs.sources.gao_reports import GaoReportsReader
 from spicy_regs.sources.fcc_ecfs import FccEcfsFilingsReader, FccEcfsProceedingsReader
 from spicy_regs.sources.usaspending import UsaSpendingRecipientsReader
 
 readers = (
+    CourtListenerReader(),
+    CourtListenerOpinionSearchReader(),
     CrsReportsReader(api_key="fixture-unused"),
     GaoReportsReader(),
     FccEcfsFilingsReader(api_key="fixture-unused"),
@@ -62,7 +66,7 @@ print(json.dumps(results))
 def test_base_imports_and_construction_are_optional_but_source_use_refuses(missing_name):
     result = subprocess.run([sys.executable, "-c", IMPORT_SCRIPT, missing_name], capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
-    assert len(json.loads(result.stdout)) == 5
+    assert len(json.loads(result.stdout)) == 7
 
 
 def test_inert_source_defaults_agree_with_installed_provider():
