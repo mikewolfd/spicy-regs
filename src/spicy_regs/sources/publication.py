@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, BinaryIO
 
 import httpx
+from loguru import logger
 
 if TYPE_CHECKING:
     from botocore.exceptions import ClientError
@@ -201,6 +202,26 @@ def _stored_index(client, bucket: str) -> tuple[dict, str | None]:
     return parse_index(raw), etag
 
 
+def _copy_unchanged_member(client, bucket: str, source_key: str, destination_key: str) -> None:
+    """Copy an unchanged member server-side instead of re-uploading its bytes.
+
+    Destination creation stays conditional: it HEADs first and skips when the
+    object already exists, so a resumed publication never overwrites. The
+    caller re-verifies the whole prefix afterwards (``admit_artifact``), so a
+    copy can never publish wrong bytes — a wrong source digest fails
+    verification before the pointer moves.
+    """
+    from botocore.exceptions import ClientError
+
+    try:
+        client.head_object(Bucket=bucket, Key=destination_key)
+        return
+    except ClientError as exc:
+        if not _missing(exc):
+            raise
+    client.copy_object(Bucket=bucket, Key=destination_key, CopySource={"Bucket": bucket, "Key": source_key})
+
+
 def _put_immutable(client, bucket: str, key: str, path: Path) -> None:
     """Conditional creation, including multipart completion for large tables."""
     from botocore.exceptions import ClientError
@@ -334,6 +355,27 @@ def _publish_verified_generation(
     old_family = index["families"].get(family)
     if old_family is not None and set(old_family["tables"]) != set(tables):
         raise PublicationError("Family membership changed; explicit migration is required")
+    # Members whose bytes the prior generation already holds under the same
+    # digest are copied server-side instead of re-uploaded. The copy can never
+    # publish wrong bytes: ``admit_artifact`` below re-verifies every member of
+    # the new prefix against the artifact pin before the pointer moves.
+    prior_tables = old_family.get("tables", {}) if old_family is not None else {}
+    prior_prefix = old_family.get("prefix") if old_family is not None else None
+    reused = 0
+    for key in sorted(source.keys()):
+        prior_entry = prior_tables.get(key)
+        if (
+            prior_prefix is not None
+            and prior_entry is not None
+            and prior_entry.get("sha256") == tables[key]["sha256"]
+            and prior_entry.get("byteSize") == tables[key]["byteSize"]
+        ):
+            _copy_unchanged_member(client, bucket, f"{prior_prefix}/{key}", f"{prefix}/{key}")
+            reused += 1
+        else:
+            upload_member(prefix, key)
+    if reused:
+        logger.info("publication: reused {} unchanged member(s) across generation prefixes", reused)
     updated = deepcopy(index)
     updated["families"][family] = {
         "prefix": prefix,
@@ -357,8 +399,6 @@ def _publish_verified_generation(
         for key in sorted(LocalMemberSource(path).keys()):
             _put_immutable(client, bucket, evidence_prefix + "/" + key, path / key)
         admit_artifact(_S3Members(client, bucket, evidence_prefix), expected_pin=item.pin)
-    for key in sorted(source.keys()):
-        upload_member(prefix, key)
     # S3 success or caller-supplied metadata is not byte-verification evidence.
     admit_artifact(_S3Members(client, bucket, prefix), expected_pin=artifact.pin)
     condition = {"IfMatch": etag} if etag is not None else {"IfNoneMatch": "*"}

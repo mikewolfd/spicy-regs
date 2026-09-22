@@ -280,6 +280,46 @@ def test_rollup_ignores_stale_cached_prior_and_keeps_it_as_evidence(tmp_path, mo
     assert stale.read_bytes() == stale_bytes
 
 
+def test_unchanged_members_are_copied_not_reuploaded(tmp_path):
+    old, _ = build(tmp_path, value="one")
+    # A partial-writer-shaped new generation: a changes, b is byte-identical,
+    # so the new prefix differs but b's bytes already exist under the old one.
+    source = tmp_path / "two-source"
+    source.mkdir()
+    pq.write_table(pa.table({"id": ["two"]}), source / "a.parquet", store_schema=False)
+    pq.write_table(pa.table({"id": ["one"]}), source / "b.parquet", store_schema=False)
+    new = tmp_path / "two"
+    build_generation(
+        new, family="test", files=[source / "a.parquet", source / "b.parquet"], expected_keys=("a.parquet", "b.parquet")
+    )
+    store = Store()
+    prior = publish(store, old)
+    publish(store, new, prior=prior)
+    index = pub.parse_index(store.objects[pub.INDEX_KEY])
+    b_loc, b_info = pub.table_location(index, "b.parquet")
+    assert b_info is not None
+    assert b_info["sha256"] == prior["families"]["test"]["tables"]["b.parquet"]["sha256"]
+    assert store.objects[b_loc] == (new / "b.parquet").read_bytes()
+    # b was copied server-side from the prior prefix, not uploaded as bytes;
+    # a was uploaded under the new prefix.
+    assert store.copies == [b_loc]
+    a_loc, _ = pub.table_location(index, "a.parquet")
+    assert a_loc in store.writes and a_loc not in store.copies
+
+
+def test_a_changed_member_still_uploads_bytes(tmp_path):
+    old, _ = build(tmp_path, value="one")
+    new, _ = build(tmp_path, "two", value="two")
+    store = Store()
+    prior = publish(store, old)
+    publish(store, new, prior=prior)
+    index = pub.parse_index(store.objects[pub.INDEX_KEY])
+    for key in ("a.parquet", "b.parquet"):
+        location, info = pub.table_location(index, key)
+        assert store.objects[location] == (new / key).read_bytes()
+    assert store.copies == []
+
+
 def test_partial_writer_carries_exact_siblings_and_refuses_cold_start(tmp_path, monkeypatch):
     from spicy_regs.pipelines.rollups.base import RollupPipeline
     from spicy_regs.sources import cloudflare

@@ -16,6 +16,7 @@ class Store:
     def __init__(self):
         self.objects = {}
         self.writes = []
+        self.copies = []
         self.uploads = {}
         self.before_put = None
         self.corrupt_key = None
@@ -24,6 +25,17 @@ class Store:
         if Key not in self.objects:
             raise error("NoSuchKey")
         return {"ContentLength": len(self.objects[Key])}
+
+    def copy_object(self, *, Bucket, Key, CopySource, **kwargs):
+        source_key = CopySource["Key"]
+        if source_key not in self.objects:
+            raise error("NoSuchKey")
+        if Key in self.objects:
+            raise error("PreconditionFailed")
+        self.objects[Key] = self.objects[source_key]
+        self.writes.append(Key)
+        self.copies.append(Key)
+        return {}
 
     def get_object(self, *, Bucket, Key):
         if Key not in self.objects:
