@@ -5,7 +5,28 @@ The optional `source-readers` extra enables the same readers for package install
 its wheels must be supplied explicitly until they are published in a registry.
 Base CLI and MCP installs do not require them.
 
-- `spicy_docs-0.26.0`: locally built from isolated source commit `b618b92`,
+- `spicy_docs-0.26.1`: locally built from isolated source commit
+  `9f57934561e925dbc0447594534c0a583de727c2`, based on the prior wheel's
+  `b618b922897a0b462e8d43737819288a369cf23c` source plus the reviewed CourtListener
+  count fix (`11585b26f515148388b6751e9839b0f48fb2cc66` on source main).
+  Built 2026-09-21: **1,324,207 bytes**, SHA-256
+  `09888e7967c29fd4dea3bd48300f72e087e288f2747f929e42486631bd521d4a`.
+  The only changed packaged source files are `reading/paged_json.py` and
+  `sources/courtlistener/search.py`; all other packaged source is byte-identical
+  to 0.26.0. Package metadata changes only the version and RECORD digests.
+
+  Docket counts above 2,000 may be estimates; complete walks follow explicit
+  terminal cursors. Smaller docket counts and opinion counts retain exact
+  checks. Missing cursors/counts and empty searches with positive counts refuse.
+  The host shares the source count policy and validates terminal pages before
+  applying a requested record cap. Both source-reader pins and the wheel path
+  move together; no dependency was added. The isolated source gate passed.
+  Comparison, provenance and installed-wheel checks are retained in
+  `~/Work/corpora/fork-execution-2026-09-21/courtlistener-count-adoption/`.
+  This is a local package adoption; no registry release or new data publication
+  occurs. Prior wheels remain retained for replay.
+
+- Previous `spicy_docs-0.26.0`: locally built from isolated source commit `b618b92`,
   2026-09-21. **1,323,662 bytes**, SHA-256
   `31780875a7a9a5afd1b5ec93d7c987720e8e6a203365308ad8c13318df2ece23`.
   Adds the source-owned ordered FEC bulk dictionary reader. The caller selects
@@ -49,7 +70,7 @@ Base CLI and MCP installs do not require them.
   Prior source/API additions and provider choices remain in Git history and
   their source guides; no new acquisition family is enabled by this adoption.
 
-- `rulespec_artifacts-1.0.14`: exact dependency of SpicyDocs 0.26.0.
+- `rulespec_artifacts-1.0.14`: exact dependency of SpicyDocs 0.26.1.
   **82,881 bytes**, SHA-256
   `f09aaf4525af3ac243d04695a8700464f06019653ac6f8fb9ed235ff0694af0b`.
   Built from Rulespec `21693e0a`; byte-identical to the SpicyDocs vendored wheel.

@@ -202,7 +202,17 @@ def test_malformed_response_refuses(payload):
         list(CourtListenerReader(transport=Transport(payload)).iter_records())
 
 
-@pytest.mark.parametrize("second", [500, _page([1], total=2), _page([2], total=3), _page([], total=2)])
+@pytest.mark.parametrize(
+    "second",
+    [
+        500,
+        _page([1], total=2),
+        _page([2], total=3),
+        _page([], total=2),
+        {"count": 2, "results": [{"docket_id": 2}]},
+        _page([], NEXT, total=2),
+    ],
+)
 def test_later_page_failure_preserves_prior_and_existing_output(monkeypatch, tmp_path, second):
     module = importlib.import_module("spicy_regs.transforms.build_courtlistener")
     table = pa.Table.from_pylist([module._shape(_RAW_DOCKET)], schema=module._SCHEMA)
@@ -240,3 +250,21 @@ def test_valid_empty_selection_and_cap_page_validation():
 def test_invalid_cap_refuses(bound):
     with pytest.raises(ValueError):
         CourtListenerReader(max_records=bound)
+
+
+@pytest.mark.parametrize("counts", [(2100, 2110), (2001, 2010)])
+def test_docket_estimated_count_does_not_replace_terminal_cursor(counts):
+    transport = Transport(
+        _page(list(range(1, 1001)), NEXT, total=counts[0]), _page(list(range(1001, 2051)), total=counts[1])
+    )
+    rows = list(CourtListenerReader(transport=transport).iter_records())
+    assert [row["docket_id"] for row in rows] == list(range(1, 2051))
+    assert len(transport.calls) == 2
+
+
+@pytest.mark.parametrize("cap", [None, 1])
+@pytest.mark.parametrize("kind,reader", [("r", CourtListenerReader), ("o", CourtListenerOpinionSearchReader)])
+def test_exact_terminal_count_still_refuses_before_capped_yield(cap, kind, reader):
+    transport = Transport(_page([1], total=2, kind=kind))
+    with pytest.raises(ValueError, match="terminal page disagrees"):
+        list(reader(max_records=cap, transport=transport).iter_records())

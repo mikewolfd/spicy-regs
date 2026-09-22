@@ -62,7 +62,7 @@ class CourtListenerReader(Reader):
     def iter_records(self) -> Iterator[dict]:
         try:
             from spicy_docs.reading.paged_json import PagedJsonBudget
-            from spicy_docs.sources.courtlistener.search import CourtListenerSearchReader, search_url
+            from spicy_docs.sources.courtlistener.search import CourtListenerSearchReader, is_exact_count, search_url
         except ModuleNotFoundError as error:
             if error.name == "spicy_docs":
                 raise RuntimeError(
@@ -84,10 +84,13 @@ class CourtListenerReader(Reader):
         )
         seen = set()
         yielded = 0
+        declared = None
         with CourtListenerSearchReader(budget=budget, api_key=self.api_token, transport=self.transport) as reader:
             for page in reader.search(url, max_pages=_MAX_PAGES):
                 if page.declared_count is None:
                     raise CourtListenerError("CourtListener search omitted its declared count")
+                if declared is None:
+                    declared = page.declared_count
                 # Validate the whole received page even when a record cap stops
                 # midway through it; malformed rows are not successful selection.
                 records = []
@@ -97,8 +100,12 @@ class CourtListenerReader(Reader):
                         raise CourtListenerError("CourtListener search has a missing, invalid or repeated identity")
                     seen.add(identity)
                     records.append(dict(record))
-                if page.next_url is None and len(seen) != page.declared_count:
+                if is_exact_count(self.kind, declared) and page.next_url is None and len(seen) != declared:
                     raise CourtListenerError("CourtListener terminal page disagrees with its declared count")
+                # Large RECAP counts can be cardinality estimates; the terminal cursor,
+                # not equality with that estimate, ends a nonempty docket walk.
+                if page.next_url is None and not seen and page.declared_count:
+                    raise CourtListenerError("CourtListener empty search has a positive declared count")
                 if page.next_url is not None and not records:
                     raise CourtListenerError("CourtListener continuation follows an empty page")
                 for record in records:
