@@ -20,16 +20,25 @@ catastrophic-shrink guard.
 
 from __future__ import annotations
 
+import json
+from collections.abc import Iterator
 from pathlib import Path
 
+import httpx
 import pyarrow as pa
 import pyarrow.parquet as pq
 from loguru import logger
 
 from spicy_regs.sources import r2
-from spicy_regs.sources.usaspending import UsaSpendingRecipientsReader
 
 OUTPUT = "usaspending_recipients.parquet"
+
+# The provider serves at most 100 rows per request; the default selection walks
+# the top 100 pages (at most 10,000 rows). max_pages remains an explicit
+# operational scope control over the top-N ranking, not the whole population.
+PER_PAGE = 100
+DEFAULT_MAX_PAGES = 100
+_MAX_REQUESTS_PER_PAGE = 5
 
 # The published schema: 6 columns, all VARCHAR, in a fixed order.
 # ``recipient_id`` is the primary / dedup key.
@@ -63,6 +72,59 @@ def _shape(doc: dict) -> dict:
     }
 
 
+def _iter_recipient_rows(
+    *,
+    per_page: int = PER_PAGE,
+    max_pages: int | None = None,
+    transport: httpx.BaseTransport | None = None,
+) -> Iterator[dict]:
+    """Yield the selected top-page recipient ranking through SpicyDocs' evidenced reader.
+
+    SpicyDocs owns the POST page-number walk, page parsing, declared counts,
+    continuations and exact page evidence. The walk stops after ``max_pages``
+    pages rather than refusing at the owner's page bound: a configured page cap
+    completes this selected scope, not the entire recipient population. A page
+    whose metadata omits or contradicts its continuation, a continuation that
+    skips a page or follows an empty page, and a missing or repeated recipient
+    ``id`` refuse the selection.
+    """
+    from spicy_docs.reading.paged_json import PagedJsonBudget, PagedJsonSourceError
+    from spicy_docs.sources.usaspending import UsaspendingRecipientsReader, recipients_request
+
+    pages = DEFAULT_MAX_PAGES if max_pages is None else max_pages
+    url, body = recipients_request(limit=per_page)
+    budget = PagedJsonBudget(
+        max_requests=_MAX_REQUESTS_PER_PAGE,
+        max_page_bytes=16 * 1024 * 1024,
+        timeout_seconds=60,
+        min_request_interval_seconds=0,
+    )
+    seen: set[str] = set()
+    with UsaspendingRecipientsReader(budget=budget, transport=transport) as reader:
+        for index, page in enumerate(reader.recipients(body, max_pages=pages)):
+            metadata = json.loads(page.capture.body).get("page_metadata")
+            if not isinstance(metadata, dict) or type(metadata.get("hasNext")) is not bool or "next" not in metadata:
+                raise PagedJsonSourceError("USAspending page omitted its continuation metadata")
+            if metadata["hasNext"] != (page.next_url is not None):
+                raise PagedJsonSourceError("USAspending hasNext and next disagree")
+            if page.next_url is not None:
+                if (
+                    not page.records
+                    or page.next_body is None
+                    or page.request_body is None
+                    or page.next_body["page"] != page.request_body["page"] + 1
+                ):
+                    raise PagedJsonSourceError("USAspending continuation skips a page or follows an empty page")
+            for record in page.records:
+                identity = record.get("id")
+                if not isinstance(identity, str) or not identity.strip() or identity in seen:
+                    raise PagedJsonSourceError("USAspending page contains a missing or repeated recipient identity")
+                seen.add(identity)
+                yield dict(record)
+            if index + 1 == pages and page.next_url is not None:
+                return  # the requested top-page selection is complete even when more pages exist
+
+
 def build_usaspending_recipients(output_dir: Path, *, max_pages: int | None = None) -> Path:
     """Build ``usaspending_recipients.parquet`` (top-N merged with the prior table)."""
     import duckdb
@@ -78,10 +140,7 @@ def build_usaspending_recipients(output_dir: Path, *, max_pages: int | None = No
         logger.info("USASpending recipients: no prior table found — clean build")
 
     # 2. Fetch + shape into a "new rows" parquet.
-    reader = (
-        UsaSpendingRecipientsReader(max_pages=max_pages) if max_pages is not None else UsaSpendingRecipientsReader()
-    )
-    rows = [_shape(doc) for doc in reader.iter_records()]
+    rows = [_shape(doc) for doc in _iter_recipient_rows(max_pages=max_pages)]
     new_file = output_dir / "_usaspending_new.parquet"
     table = pa.Table.from_pylist(rows, schema=_SCHEMA) if rows else _SCHEMA.empty_table()
     pq.write_table(table, new_file, compression="zstd")
