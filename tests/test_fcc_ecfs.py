@@ -4,13 +4,11 @@ from __future__ import annotations
 
 import json
 
-from spicy_regs.sources.fcc_ecfs import (
-    API_KEY_ENV_VARS,
-    _resolve_api_key,
-)
 from spicy_regs.transforms.build_fcc_ecfs import (
+    API_KEY_ENV_VARS,
     FILING_COLUMNS,
     PROCEEDING_COLUMNS,
+    _resolve_api_key,
     _shape_filing,
     _shape_proceeding,
 )
