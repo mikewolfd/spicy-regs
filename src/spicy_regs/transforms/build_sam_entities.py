@@ -15,7 +15,7 @@ year, each returning up to 1M records — full coverage of the ~765K active
 registry is reachable within the 1,000 req/day key budget (≈20 year-window
 requests) rather than the ~76,000 paginated requests a 10-record synchronous
 page would need. The ``"partition"`` fallback walks the paginated endpoint with
-adaptive date-window subdivision (see :mod:`spicy_regs.sources.sam_entities`).
+adaptive date-window subdivision (see :mod:`spicy_docs.sources.sam`).
 Both are bounded by ``max_records`` and the ``[since_year, until_year]`` range,
 so a scheduled run advances coverage and the merge accretes it across runs.
 
@@ -32,8 +32,121 @@ import pyarrow.parquet as pq
 from loguru import logger
 
 from spicy_regs.sources import r2
-from spicy_regs.sources.sam_entities import SamEntitiesReader, _validate_entity
 from spicy_regs.transforms.table_merge import merge_local_prior
+
+# Env vars checked in order for the api.data.gov key. SAM.gov needs a key that is
+# specifically associated with a SAM.gov account holding the Entity API role, so
+# the SAM-dedicated var is preferred first; a generic api.data.gov key (which
+# works against regulations.gov / Congress.gov) is only a fallback and returns a
+# bare 404 here if it isn't SAM-authorized.
+SAM_API_KEY_ENV_VARS = (
+    "SAM_API_KEY",
+    "API_GOV",  # the shared api.data.gov key, under the name RefSpec/.env uses
+    "DATA_GOV_API_KEY",
+    "REGULATIONS_GOV_API_KEY",
+)
+
+# Earliest plausible registrationDate year to window over for a full extract.
+MIN_REGISTRATION_YEAR = 2000
+
+# The paged walk's per-request budget: the same retry margin the old local
+# reader carried, with the paged reader's own page/byte bounds.
+PAGED_BUDGET = None  # built lazily beside the reader that needs it
+
+
+def _resolve_sam_api_key() -> str:
+    """The first api.data.gov key set in :data:`SAM_API_KEY_ENV_VARS`; a missing key refuses."""
+    import os
+
+    for var in SAM_API_KEY_ENV_VARS:
+        value = os.environ.get(var)
+        if value:
+            return value
+    from spicy_docs.sources.sam_extract import SamExtractError
+
+    raise SamExtractError("SAM entities require a SAM-authorized API key; set SAM_API_KEY")
+
+
+def _iter_sam_entities(
+    *,
+    mode: str,
+    registration_status: str,
+    since_year: int | None,
+    until_year: int | None,
+    year_windows: bool,
+    max_records: int | None,
+):
+    """Yield raw SAM entity dicts through the owner's two coverage mechanisms.
+
+    ``extract`` drives the spicy-docs bulk extract (one request per
+    ``registrationDate`` year); ``partition`` drives the owner's adaptive
+    windowed walk under the publisher's reach bound. The env-key chain and
+    the year-range policy stay here; the acquisition mechanics are the
+    owner's.
+    """
+    from collections.abc import Iterator
+    from datetime import date
+
+    from spicy_docs.reading.paged_json import PagedJsonBudget
+    from typing import cast
+
+    from spicy_docs.sources.sam import RegistrationStatus, SamEntitiesReader, windowed_entities
+    from spicy_docs.sources.sam_extract import SamBulkExtract
+
+    if mode not in ("extract", "partition"):
+        raise ValueError(f"mode must be 'extract' or 'partition', got {mode!r}")
+    for name, value in (("since_year", since_year), ("until_year", until_year)):
+        if value is not None and (type(value) is not int or not 1 <= value <= 9999):
+            raise ValueError(f"{name} must be a valid calendar year")
+    if (since_year or MIN_REGISTRATION_YEAR) > (until_year or date.today().year):
+        raise ValueError("since_year must not exceed until_year")
+    if max_records is not None and (type(max_records) is not int or max_records <= 0):
+        raise ValueError("max_records must be a positive integer or None")
+
+    api_key = _resolve_sam_api_key()
+    emitted = 0
+
+    def budget_left() -> bool:
+        return max_records is None or emitted < max_records
+
+    def emit(records: Iterator[dict]):
+        nonlocal emitted
+        for record in records:
+            if not budget_left():
+                return
+            emitted += 1
+            yield record
+
+    if mode == "extract":
+        years: list[int | None] = [None] if not year_windows else list(
+            range(
+                since_year if since_year is not None else MIN_REGISTRATION_YEAR,
+                (until_year if until_year is not None else date.today().year) + 1,
+            )
+        )
+        for year in years:
+            if not budget_left():
+                return
+            extractor = SamBulkExtract(
+                api_key=api_key, registration_status=registration_status, year=year
+            )
+            yield from emit(extractor.records())
+        return
+
+    # partition: the owner's adaptive windowed walk under the reach bound.
+    budget = PagedJsonBudget(max_requests=5, max_page_bytes=8 * 1024 * 1024, timeout_seconds=120.0, min_request_interval_seconds=0.2)
+    reader = SamEntitiesReader(budget=budget, api_key=api_key)
+    since = date(since_year or MIN_REGISTRATION_YEAR, 1, 1)
+    until = date(until_year or date.today().year, 12, 31)
+    yield from emit(
+        windowed_entities(
+            reader,
+            registered_from=since,
+            registered_to=until,
+            registration_status=cast(RegistrationStatus, registration_status),
+            max_records=max_records,
+        )
+    )
 
 OUTPUT = "sam_entities.parquet"
 
@@ -80,7 +193,9 @@ def _shape(doc: dict) -> dict:
     registration (e.g. one with no ``coreData``) still produces a row keyed by
     its UEI.
     """
-    _validate_entity(doc)
+    from spicy_docs.sources.sam_extract import validate_entity
+
+    validate_entity(doc)
     reg = doc["entityRegistration"]
     core = doc.get("coreData") or {}
     entity_info = core.get("entityInformation") or {}
@@ -124,7 +239,7 @@ def build_sam_entities(
     ``mode`` selects the coverage mechanism (``"extract"`` bulk async extract, the
     default, or ``"partition"`` paginated adaptive walk); ``since_year``/``until_year``
     bound the ``registrationDate`` window range walked this run. See the module
-    docstring and :mod:`spicy_regs.sources.sam_entities` for the full-coverage story.
+    docstring and :mod:`spicy_docs.sources.sam_extract` for the full-coverage story.
     """
     import duckdb
 
@@ -139,15 +254,17 @@ def build_sam_entities(
         logger.info("SAM entities: no prior table found — seeding a new table")
 
     # 2. Fetch + shape into a "new rows" parquet.
-    reader = SamEntitiesReader(
-        mode=mode,
-        registration_status=registration_status,
-        since_year=since_year,
-        until_year=until_year,
-        year_windows=year_windows,
-        max_records=max_records,
-    )
-    rows = [_shape(doc) for doc in reader.iter_records()]
+    rows = [
+        _shape(doc)
+        for doc in _iter_sam_entities(
+            mode=mode,
+            registration_status=registration_status,
+            since_year=since_year,
+            until_year=until_year,
+            year_windows=year_windows,
+            max_records=max_records,
+        )
+    ]
     new_file = output_dir / "_sam_new.parquet"
     table = pa.Table.from_pylist(rows, schema=_SCHEMA) if rows else _SCHEMA.empty_table()
     pq.write_table(table, new_file, compression="zstd")

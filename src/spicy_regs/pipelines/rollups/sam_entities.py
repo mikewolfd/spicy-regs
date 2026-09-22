@@ -6,7 +6,7 @@ table happen inside ``build_sam_entities``, and the base class still handles the
 shrink-guarded R2 upload of the single output. The active registry (~765K
 entities) is far past the ~5K synchronous pagination ceiling, so full coverage
 comes from SAM's bulk extract walked over ``registrationDate`` year windows (see
-:mod:`spicy_regs.sources.sam_entities`); to keep each *scheduled* run bounded
+:mod:`spicy_docs.sources.sam` / `spicy_docs.sources.sam_extract`); to keep each *scheduled* run bounded
 while still converging on full coverage, the default run fetches a single
 rotating year window chosen from the run date, and the transform's merge
 accretes each window into the prior table across runs. Env overrides, read here
@@ -24,7 +24,7 @@ from typing import ClassVar
 from loguru import logger
 
 from spicy_regs.pipelines.rollups.base import RollupPipeline, make_rollup_app
-from spicy_regs.sources.sam_entities import _MIN_REGISTRATION_YEAR
+from spicy_regs.transforms.build_sam_entities import MIN_REGISTRATION_YEAR as _MIN_REGISTRATION_YEAR
 from spicy_regs.transforms import build_sam_entities
 
 
