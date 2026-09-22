@@ -20,6 +20,7 @@ dependencies = [
 
 [project.optional-dependencies]
 source-readers = [
+    "smart-open[s3]==8.0.1", # Conditional seekable S3 streams for remote generation staging
     "spicy-docs[acquisition,pdf,pdf-pypdf,bill-diff]==0.26.3",
     "pypdf==6.14.2", # Qualified PDF text and failure behavior
     "rulespec-artifacts==1.0.14",
@@ -33,6 +34,7 @@ embed = [
 [dependency-groups]
 # Checkout pipelines use the pinned source wheels; base CLI/MCP installs do not.
 source-readers = [
+    "smart-open[s3]==8.0.1", # Conditional seekable S3 streams for remote generation staging
     "spicy-docs[acquisition,pdf,pdf-pypdf,bill-diff]==0.26.3",
     "pypdf==6.14.2", # Qualified PDF text and failure behavior
     "rulespec-artifacts==1.0.14",

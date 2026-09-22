@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import shutil
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from importlib.metadata import version
 from pathlib import Path
 
@@ -46,9 +46,17 @@ def _implementation_id() -> str:
 
 def verify_generation(directory: Path, *, expected_pin=None):
     """Hash every member and reconcile actual Parquet counts/shape; fail closed."""
-    from rulespec_artifacts import LocalMemberSource, admit_artifact, iter_member_descriptors
+    from rulespec_artifacts import LocalMemberSource
 
-    source = LocalMemberSource(directory)
+    return _verify_generation(
+        LocalMemberSource(directory), lambda key: _table_info(directory / key), expected_pin=expected_pin
+    )
+
+
+def _verify_generation(source, table_info: Callable[[str], dict], *, expected_pin=None):
+    """Apply the same artifact and table checks to local or pinned remote bytes."""
+    from rulespec_artifacts import admit_artifact, iter_member_descriptors
+
     artifact = admit_artifact(source, expected_pin=expected_pin)
     root = artifact.root
     if root["kind"] != KIND:
@@ -86,7 +94,7 @@ def verify_generation(directory: Path, *, expected_pin=None):
         key = member.object_key
         if key is None or Path(key).name != key or not key.endswith(".parquet"):
             raise ValueError("Generation members must be plain Parquet filenames")
-        actual = _table_info(directory / key)
+        actual = table_info(key)
         if actual != tables[key] or member.record_count != actual["rows"]:
             raise ValueError(f"Generation table shape/count mismatch: {key}")
         if key in carried:
@@ -123,11 +131,7 @@ def build_generation(
     """
     from rulespec_artifacts import (
         LocalMemberSource,
-        Producer,
-        build_artifact_root,
-        canonical_json_bytes,
         describe_member,
-        write_member_manifest,
     )
 
     expected = set(expected_keys)
@@ -159,6 +163,21 @@ def build_generation(
         )
         for key in sorted(tables)
     ]
+    _write_generation_metadata(
+        directory, family=family, tables=tables, members=members, read_snapshot=read_snapshot,
+        carried_forward=carried_forward, publication_status=publication_status, inputs=inputs,
+    )
+    return verify_generation(directory)
+
+
+def _write_generation_metadata(
+    directory: Path, *, family: str, tables: Mapping, members,
+    read_snapshot: Mapping | None = None, carried_forward: Mapping[str, str] | None = None,
+    publication_status: str = "complete-family", inputs=(), extra_packages: Sequence[str] = (),
+):
+    """Write the existing manifest/root format; callers must then verify bytes."""
+    from rulespec_artifacts import Producer, build_artifact_root, canonical_json_bytes, write_member_manifest
+
     with (directory / MANIFEST).open("wb") as stream:
         manifest = write_member_manifest(
             stream, scope_kind="global", scope_id=family, object_key=MANIFEST, members=members
@@ -169,7 +188,9 @@ def build_generation(
         spec={
             "family": family,
             "tables": tables,
-            "packages": {name: version(name) for name in ("spicy-regs", "spicy-docs", "rulespec-artifacts")},
+            "packages": {
+                name: version(name) for name in ("spicy-regs", "spicy-docs", "rulespec-artifacts", *extra_packages)
+            },
             "readSnapshot": dict(read_snapshot or {}),
             "carriedForward": dict(carried_forward or {}),
             "publicationStatus": publication_status,
@@ -179,4 +200,3 @@ def build_generation(
         inputs=inputs,
     )
     (directory / "artifact.json").write_bytes(canonical_json_bytes(root))
-    return verify_generation(directory)

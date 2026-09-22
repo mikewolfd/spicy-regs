@@ -112,3 +112,10 @@ check requires the estimated output to leave at least 100 GiB free. It is a
 preflight estimate, not a reservation: merges, publication copies, audit spill
 and concurrent work need additional capacity. Explicitly bounded runs retain
 their existing limit policy.
+
+For a complete retained original whose output does not fit locally,
+`stage_court_opinion_bodies_remote` writes the same fields and schema directly
+to unpublished remote staging. It requires the full source SHA-256 and an
+explicit serialized-output allowance. The [remote generation path](remote-generations.md)
+then applies full byte/page checks and the ordinary publication gates. Source
+qualification and prior-population preservation remain separate requirements.

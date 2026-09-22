@@ -36,10 +36,12 @@ APA docket set without keeping the other ~10 million opinions.
 from __future__ import annotations
 
 import shutil
-from collections.abc import Container, Generator, Sized
+from collections.abc import Container, Generator, Iterable, Iterator, Sized
 from contextlib import closing
 from datetime import date
+import hashlib
 from pathlib import Path
+import re
 from typing import cast
 
 import pyarrow as pa
@@ -74,6 +76,10 @@ OPINIONS_PER_CLUSTER_CEILING = 16
 #: Rows buffered before each parquet batch write. Opinion bodies are large, so
 #: this batch is much smaller than the cluster builder's.
 BATCH_ROWS = 2_000
+
+#: Bound encoded values as well as row count for remote batches. A single
+#: larger source-bounded record is emitted alone, preserving complete rows.
+REMOTE_BATCH_TEXT_BYTES = 64 * 2**20
 
 #: The raw dump columns that can hold a body. CourtListener populates whichever
 #: one the upstream source provided, so "has text" is a question about the set,
@@ -197,6 +203,67 @@ def _shape(row: dict, *, dump_date: date | None) -> dict:
         "date_modified": _s(row.get("date_modified")),
         "dump_date": dump_date.isoformat() if dump_date else None,
     }
+
+
+def _remote_opinion_batches(rows: Iterable[dict], *, dump_date: date) -> Iterator[pa.Table]:
+    """Keep row groups useful without accumulating unbounded opinion text."""
+    pending: list[dict] = []
+    text_bytes = 0
+    for raw in rows:
+        row = _shape(raw, dump_date=dump_date)
+        row_bytes = sum(len(value.encode("utf-8")) for value in row.values() if value is not None)
+        if pending and (len(pending) >= BATCH_ROWS or text_bytes + row_bytes > REMOTE_BATCH_TEXT_BYTES):
+            table = pa.Table.from_pylist(pending, schema=_SCHEMA)
+            pending = []
+            text_bytes = 0
+            yield table
+            del table
+        pending.append(row)
+        text_bytes += row_bytes
+    if pending:
+        yield pa.Table.from_pylist(pending, schema=_SCHEMA)
+
+
+def stage_court_opinion_bodies_remote(
+    *, client, bucket: str, key: str, local_file: Path, source_sha256: str,
+    dump_date: date, max_output_bytes: int,
+):
+    """Stream a complete pinned local original to an unpublished remote table.
+
+    This path uses the same source reader, mapping and version-2 schema as the
+    local builder. It has no source prefix/row cap and creates no local output
+    copy. Generation admission, full native audits, prior-population comparison
+    and publication remain separate required steps.
+    """
+    from spicy_docs.sources.courtlistener.bulk import CourtListenerBulkReader
+    from spicy_regs.sources.remote_parquet import write_remote_parquet
+
+    if not re.fullmatch(r"sha256:[0-9a-f]{64}", source_sha256):
+        raise ValueError("A complete source SHA-256 pin is required")
+    if local_file.is_symlink() or not local_file.is_file():
+        raise ValueError("Retained opinion input must be a regular file")
+
+    def identity():
+        stat = local_file.stat()
+        return stat.st_dev, stat.st_ino, stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns
+
+    before = identity()
+    with local_file.open("rb") as stream:
+        actual = "sha256:" + hashlib.file_digest(stream, "sha256").hexdigest()
+    if actual != source_sha256 or identity() != before:
+        raise ValueError("Retained opinion source differs from its pin")
+    reader = CourtListenerBulkReader(DATASET, dump_date=dump_date, local_file=local_file)
+
+    def batches():
+        with closing(cast(Generator[dict, None, None], reader.iter_records())) as source_rows:
+            yield from _remote_opinion_batches(source_rows, dump_date=dump_date)
+        if (identity() != before or reader.compressed_bytes != before[2]
+                or reader.rows_scanned != reader.rows_yielded):
+            raise ValueError("Retained opinion source changed or was not fully consumed")
+
+    return write_remote_parquet(
+        client=client, bucket=bucket, key=key, schema=_SCHEMA, batches=batches(), max_bytes=max_output_bytes,
+    )
 
 
 def build_court_opinion_bodies(

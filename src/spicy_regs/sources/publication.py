@@ -276,13 +276,27 @@ def publish_generation(directory: Path, *, client, bucket: str, prior_index: Map
     attempt; it must not overwrite the other writer or silently retry a stale
     family build. Input provenance and semantic quality are separate checks.
     """
+    from rulespec_artifacts import LocalMemberSource
+    from spicy_regs.generations import verify_generation
+
+    artifact = verify_generation(directory)
+    return _publish_verified_generation(
+        artifact, LocalMemberSource(directory), client=client, bucket=bucket, prior_index=prior_index,
+        evidence_directories=evidence_directories,
+        upload_member=lambda prefix, key: _put_immutable(client, bucket, prefix + "/" + key, directory / key),
+    )
+
+
+def _publish_verified_generation(
+    artifact, source, *, upload_member, client, bucket: str, prior_index: Mapping,
+    evidence_directories: tuple[Path, ...] = (),
+) -> dict:
+    """Shared publication gates; both callers fully verify their source first."""
     from botocore.exceptions import ClientError
     from rulespec_artifacts import LocalMemberSource, admit_artifact, canonical_json_bytes, iter_member_descriptors
-    from spicy_regs.generations import verify_generation
     from spicy_regs.sources.r2 import _assert_upload_safe, _get_remote_size
     from spicy_regs.source_evidence import INPUT_ROLE, PRIOR_ROLE, verify_evidence
 
-    artifact = verify_generation(directory)
     if artifact.root["spec"]["publicationStatus"] != "complete-family":
         raise PublicationError("A local partial candidate cannot be published")
     family = artifact.root["spec"]["family"]
@@ -292,7 +306,6 @@ def publish_generation(directory: Path, *, client, bucket: str, prior_index: Map
     if index["families"].get(family) != prior_index["families"].get(family):
         raise PublicationError("Family changed since the build read its inputs; rebuild before publishing")
     prefix = f"generations/{family}/{artifact.pin.artifact_digest.removeprefix('sha256:')}"
-    source = LocalMemberSource(directory)
     tables = {}
     for member in iter_member_descriptors(artifact, source):
         key = member.object_key
@@ -335,7 +348,7 @@ def publish_generation(directory: Path, *, client, bucket: str, prior_index: Map
             _put_immutable(client, bucket, evidence_prefix + "/" + key, path / key)
         admit_artifact(_S3Members(client, bucket, evidence_prefix), expected_pin=item.pin)
     for key in sorted(source.keys()):
-        _put_immutable(client, bucket, prefix + "/" + key, directory / key)
+        upload_member(prefix, key)
     # S3 success or caller-supplied metadata is not byte-verification evidence.
     admit_artifact(_S3Members(client, bucket, prefix), expected_pin=artifact.pin)
     condition = {"IfMatch": etag} if etag is not None else {"IfNoneMatch": "*"}
