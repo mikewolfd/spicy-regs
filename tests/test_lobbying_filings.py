@@ -1,23 +1,40 @@
 """Hermetic tests for the Senate LDA lobbying-filings ingest (no network).
 
-Covers the pieces with real logic: the raw-filing → published-schema mapping
-(``_shape``, including the nested activity/government-entity projections) and the
-reader's DRF ``next``-following pagination + ``max_records`` bound.
+The request walk itself is spicy-docs' ``LdaFilingsReader``; its retries,
+credential headers, page-shape refusals, count checks and traversal bounds are
+pinned by spicy-docs' own ``test_lda_and_courtlistener_search`` and
+``test_paged_json``. What remains here is what this repository owns on top of
+it: the raw-filing → published-schema mapping (``_shape``, including the nested
+activity/government-entity projections), the filtered-request semantics
+(bounded date window, cold-start upper bound, ``max_records``) and that a
+failed or malformed read aborts the rollup before anything is written or
+published.
 """
 
 from __future__ import annotations
 
 import json
 from datetime import date
+from importlib import import_module
 
 import httpx
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
+from spicy_docs.reading.paged_json import PagedJsonSourceError
+from spicy_docs.sources.lda import API
+from spicy_docs.transport import retry as spicy_retry
 
-from spicy_regs.sources import lobbying_filings as source
-from spicy_regs.sources.lobbying_filings import API_BASE, LobbyingFilingsError, LobbyingFilingsReader
-from spicy_regs.transforms.build_lobbying_filings import COLUMNS, _bounded_until, _shape
+from spicy_regs.transforms.build_lobbying_filings import (
+    COLUMNS,
+    LobbyingFilingsError,
+    _bounded_until,
+    _shape,
+)
+
+# ``transforms/__init__`` shadows the module name with the public function, so
+# import the module itself for attribute access (its ``MAX_REQUESTS_PER_PAGE``).
+bld = import_module("spicy_regs.transforms.build_lobbying_filings")
 
 _RAW_FILING = {
     "filing_uuid": "7866327b-c892-4430-b9f0-1f0f679c58c6",
@@ -49,10 +66,6 @@ _RAW_FILING = {
         },
     ],
 }
-
-
-def test_uses_post_sunset_lda_api_host():
-    assert API_BASE == "https://lda.gov/api/v1"
 
 
 def test_shape_produces_exact_schema():
@@ -100,53 +113,46 @@ def _page(uuids: list[str], next_url: str | None, *, count: int | None = None) -
     }
 
 
-def test_pagination_follows_next(monkeypatch):
-    """The reader must follow the DRF ``next`` URL until it is null."""
-    reader = LobbyingFilingsReader()
-    pages = {
-        None: _page(["a", "b"], "PAGE2", count=4),  # first request (params, url ignored by stub)
-        "PAGE2": _page(["c", "d"], None, count=4),
-    }
-    calls: list[str | None] = []
-
-    def fake_get(url: str, params: dict | None) -> dict | None:
-        # First call carries params (url is the base); later calls pass the next url.
-        key = None if params is not None else url
-        calls.append(key)
-        return pages[key]
-
-    monkeypatch.setattr(reader, "_get", fake_get)
-    got = [f["filing_uuid"] for f in reader._paginate()]
-    assert got == ["a", "b", "c", "d"]
-    assert calls == [None, "PAGE2"]
+def _json_response(payload, *, status: int = 200) -> httpx.Response:
+    """A streamed JSON response — the owner's capture reads bodies via ``iter_raw``."""
+    return httpx.Response(
+        status,
+        stream=httpx.ByteStream(json.dumps(payload).encode()),
+        headers={"content-type": "application/json"},
+    )
 
 
-def test_pagination_respects_max_records(monkeypatch):
-    reader = LobbyingFilingsReader(max_records=3)
+def _mock_http(monkeypatch, handler):
+    """Route every httpx client (spicy-docs' capture builds one per reader) through ``handler``."""
+    original = httpx.Client
+    calls = []
 
-    def fake_get(url: str, params: dict | None) -> dict | None:
-        # One big page; max_records must stop iteration mid-page.
-        return _page(["a", "b", "c", "d", "e"], None)
+    def record(request):
+        calls.append(request)
+        return handler(request, len(calls))
 
-    monkeypatch.setattr(reader, "_get", fake_get)
-    got = [f["filing_uuid"] for f in reader._paginate()]
-    assert got == ["a", "b", "c"]
+    def make_client(**kwargs):
+        # spicy-docs' capture always passes its own ``transport`` (None here);
+        # drop it so the mock transport is the one the requests flow through.
+        kwargs.pop("transport", None)
+        return original(transport=httpx.MockTransport(record), **kwargs)
+
+    monkeypatch.setattr(httpx, "Client", make_client)
+    return calls
 
 
-def test_pagination_sends_bounded_date_window(monkeypatch):
-    reader = LobbyingFilingsReader(since=date(2026, 4, 1), until=date(2026, 5, 1))
-    seen_params: dict[str, object] = {}
+def _no_retry_delay(monkeypatch):
+    """Deterministic retries: no jitter, sleeps recorded. Returns the sleep log."""
+    sleeps = []
+    monkeypatch.setattr(spicy_retry.random, "uniform", lambda *_: 0.0)
+    monkeypatch.setattr(spicy_retry.time, "sleep", sleeps.append)
+    return sleeps
 
-    def fake_get(url: str, params: dict | None) -> dict | None:
-        assert params is not None
-        seen_params.update(params)
-        return _page([], None)
 
-    monkeypatch.setattr(reader, "_get", fake_get)
-    assert list(reader._paginate()) == []
-    assert seen_params["filing_dt_posted_after"] == "2026-04-01"
-    assert seen_params["filing_dt_posted_before"] == "2026-05-01"
-    assert seen_params["ordering"] == "dt_posted"
+def _no_prior(monkeypatch):
+    from spicy_regs.sources import r2
+
+    monkeypatch.setattr(r2, "download", lambda *args: False)
 
 
 def test_lagging_window_is_capped_to_thirty_days():
@@ -162,55 +168,46 @@ def test_lagging_window_is_capped_to_thirty_days():
     ) == date(2026, 7, 20)
 
 
-def _mock_http(monkeypatch, handler):
-    original = httpx.Client
-    calls = []
+def test_cold_start_uses_today_filter_without_archive_year_floor(tmp_path, monkeypatch):
+    _no_prior(monkeypatch)
 
-    def record(request):
-        calls.append(request)
-        return handler(request, len(calls))
-
-    monkeypatch.setattr(
-        source.httpx, "Client", lambda **kwargs: original(transport=httpx.MockTransport(record), **kwargs)
-    )
-    return calls
-
-
-def test_cold_start_uses_today_filter_without_archive_year_floor(monkeypatch):
     def respond(request, number):
         assert request.url.params["filing_dt_posted_before"] == date.today().isoformat()
         assert "filing_year" not in request.url.params
         assert "filing_dt_posted_after" not in request.url.params
-        return httpx.Response(200, json=_page([], None))
-
-    _mock_http(monkeypatch, respond)
-    assert list(LobbyingFilingsReader().iter_records()) == []
-
-
-@pytest.mark.parametrize("status", [400, 401, 403])
-def test_permanent_request_or_credential_refusal_is_not_retried(monkeypatch, status):
-    calls = _mock_http(monkeypatch, lambda request, number: httpx.Response(status, json={"detail": "refused"}))
-    monkeypatch.setattr(source.time, "sleep", lambda seconds: pytest.fail("permanent refusal was retried"))
-    with pytest.raises(LobbyingFilingsError, match=f"HTTP {status}"):
-        list(LobbyingFilingsReader(api_key="synthetic-test-key").iter_records())
-    assert len(calls) == 1
-    assert calls[0].headers["Authorization"] == "Token synthetic-test-key"
-
-
-@pytest.mark.parametrize("failure", [429, 503, "transport"])
-def test_transient_requests_retry_and_recover(monkeypatch, failure):
-    def respond(request, number):
-        if number == 1:
-            if failure == "transport":
-                raise httpx.ReadTimeout("interrupted", request=request)
-            return httpx.Response(failure)
-        return httpx.Response(200, json=_page(["recovered"], None))
+        assert request.url.params["ordering"] == "dt_posted"
+        return _json_response(_page([], None))
 
     calls = _mock_http(monkeypatch, respond)
-    sleeps = []
-    monkeypatch.setattr(source.time, "sleep", sleeps.append)
-    assert [row["filing_uuid"] for row in LobbyingFilingsReader().iter_records()] == ["recovered"]
-    assert len(calls) == 2 and sleeps == [2]
+    bld.build_lobbying_filings(tmp_path)
+    assert len(calls) == 1
+
+
+def test_fetch_sends_bounded_date_window(tmp_path, monkeypatch):
+    _no_prior(monkeypatch)
+
+    def respond(request, number):
+        assert request.url.params["filing_dt_posted_after"] == "2026-04-01"
+        assert request.url.params["filing_dt_posted_before"] == "2026-05-01"
+        assert request.url.params["ordering"] == "dt_posted"
+        return _json_response(_page([], None))
+
+    _mock_http(monkeypatch, respond)
+    bld.build_lobbying_filings(tmp_path, since=date(2026, 4, 1), until=date(2026, 5, 1))
+
+
+def test_max_records_stops_the_walk_mid_page(tmp_path, monkeypatch):
+    """An explicit record cap is a prefix of the walk: the next page is never requested."""
+    _no_prior(monkeypatch)
+    calls = _mock_http(
+        monkeypatch,
+        lambda request, number: _json_response(
+            _page(["a", "b", "c", "d", "e"], f"{API}/filings/?page=2", count=100)
+        ),
+    )
+    out = bld.build_lobbying_filings(tmp_path, max_records=3)
+    assert len(calls) == 1
+    assert [row["filing_uuid"] for row in pq.read_table(out).to_pylist()] == ["a", "b", "c"]
 
 
 @pytest.mark.parametrize(
@@ -243,24 +240,24 @@ def test_reader_failure_aborts_actual_rollup_before_output_or_publication(
     monkeypatch.setattr(
         publication, "publish_generation", lambda *args, **kwargs: pytest.fail("failed read was published")
     )
-    monkeypatch.setattr(source, "_MAX_RETRIES", 3)
-    sleeps = []
-    monkeypatch.setattr(source.time, "sleep", sleeps.append)
+    # Three requests per page: the initial attempt plus two retries.
+    monkeypatch.setattr(bld, "MAX_REQUESTS_PER_PAGE", 3)
+    sleeps = _no_retry_delay(monkeypatch)
 
     def respond(request, number):
         if failure_page == 2 and number == 1:
-            return httpx.Response(
-                200, json={"count": 2, "next": f"{API_BASE}/filings/?page=2", "results": [_RAW_FILING]}
-            )
+            return _json_response({"count": 2, "next": f"{API}/filings/?page=2", "results": [_RAW_FILING]})
         if failure == "transport":
             raise httpx.ReadTimeout("interrupted", request=request)
-        return httpx.Response(failure, json={"detail": "failure"})
+        return _json_response({"detail": "failure"}, status=failure)
 
     calls = _mock_http(monkeypatch, respond)
-    with pytest.raises(LobbyingFilingsError):
+    retried = failure in {503, "transport"}
+    expected_error = httpx.HTTPError if failure == 503 else ConnectionError if retried else PagedJsonSourceError
+    with pytest.raises(expected_error):
         LobbyingFilingsRollup(output_dir=tmp_path, skip_upload=False).run()
-    assert len(calls) == failure_page + (2 if failure in {503, "transport"} else 0)
-    assert sleeps == ([2, 4] if failure in {503, "transport"} else [])
+    assert len(calls) == failure_page + (2 if retried else 0)
+    assert sleeps == ([0.0, 0.0] if retried else [])
     assert not (tmp_path / "generations").exists()
     assert not list((tmp_path / ".builds").rglob(OUTPUT))
     assert not list(tmp_path.rglob("_lda_new.parquet"))
@@ -273,42 +270,19 @@ def test_reader_failure_aborts_actual_rollup_before_output_or_publication(
 
 
 @pytest.mark.parametrize(
-    "payload",
+    ("payload", "error"),
     [
-        {"detail": "not a result page"},
-        {"count": 0, "results": [], "next": 2},
-        {"count": -1, "results": [], "next": None},
-        {"count": 1, "results": [{}], "next": None},
-        {"count": 1, "results": [{"filing_uuid": ""}], "next": None},
-        {"count": 12, "results": [], "next": None},
+        ({"detail": "not a result page"}, PagedJsonSourceError),
+        ({"count": 0, "results": [], "next": 2}, PagedJsonSourceError),
+        ({"count": -1, "results": [], "next": None}, PagedJsonSourceError),
+        ({"count": 1, "results": [{}], "next": None}, LobbyingFilingsError),
+        ({"count": 1, "results": [{"filing_uuid": ""}], "next": None}, LobbyingFilingsError),
+        ({"count": 12, "results": [], "next": None}, PagedJsonSourceError),
     ],
 )
-def test_malformed_success_cannot_become_empty_or_partial_output(tmp_path, monkeypatch, payload):
-    from spicy_regs.sources import r2
-    from spicy_regs.transforms.build_lobbying_filings import build_lobbying_filings
-
-    monkeypatch.setattr(r2, "download", lambda *args: False)
-    _mock_http(monkeypatch, lambda request, number: httpx.Response(200, json=payload))
-    with pytest.raises(LobbyingFilingsError):
-        build_lobbying_filings(tmp_path)
+def test_malformed_success_cannot_become_empty_or_partial_output(tmp_path, monkeypatch, payload, error):
+    _no_prior(monkeypatch)
+    _mock_http(monkeypatch, lambda request, number: _json_response(payload))
+    with pytest.raises(error):
+        bld.build_lobbying_filings(tmp_path)
     assert not list(tmp_path.glob("*.parquet"))
-
-
-def test_invalid_json_refuses_instead_of_exhausting(monkeypatch):
-    _mock_http(monkeypatch, lambda request, number: httpx.Response(200, content=b"not json"))
-    with pytest.raises(LobbyingFilingsError, match="invalid JSON"):
-        list(LobbyingFilingsReader().iter_records())
-
-
-def test_changed_count_refuses(monkeypatch):
-    def respond(request, number):
-        return httpx.Response(200, json=_page([str(number)], f"{API_BASE}/filings/?page=2", count=number + 1))
-
-    _mock_http(monkeypatch, respond)
-    with pytest.raises(LobbyingFilingsError, match="count changed"):
-        list(LobbyingFilingsReader().iter_records())
-
-
-def test_explicit_sample_can_stop_early(monkeypatch):
-    _mock_http(monkeypatch, lambda request, number: httpx.Response(200, json=_page(["sample"], "unused", count=100)))
-    assert list(LobbyingFilingsReader(max_records=1).iter_records()) == [{"filing_uuid": "sample"}]

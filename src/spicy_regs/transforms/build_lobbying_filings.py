@@ -20,16 +20,21 @@ functional keyless, so this runs in CI with or without ``LDA_API_KEY``.
 from __future__ import annotations
 
 import json
+import os
+from collections.abc import Iterator
 from datetime import date, timedelta
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pyarrow as pa
 import pyarrow.parquet as pq
 from loguru import logger
 
 from spicy_regs.sources import r2
-from spicy_regs.sources.lobbying_filings import LobbyingFilingsReader
 from spicy_regs.transforms.table_merge import merge_local_prior
+
+if TYPE_CHECKING:
+    from spicy_docs.sources.lda import LdaFilingsReader
 
 OUTPUT = "lobbying_filings.parquet"
 
@@ -37,6 +42,22 @@ OUTPUT = "lobbying_filings.parquet"
 # filings posted/amended after the watermark are picked up.
 OVERLAP_DAYS = 7
 MAX_WINDOW_DAYS = 30
+
+#: Requests per page: one attempt plus the six retries the deleted local
+#: reader made per request; keyless requests are rate-limited more
+#: aggressively, so 429s are expected and retried within this per-page budget
+#: (spicy-docs' retry policy).
+MAX_REQUESTS_PER_PAGE = 7
+
+#: The whole archive at page size 25 is ~79,082 pages (spicy-docs' SR07
+#: measurement, 2026-09-21); this bound preserves a cold-start full backfill
+#: with headroom while the walk still refuses past it rather than ending
+#: silently.
+MAX_PAGES = 100_000
+
+
+class LobbyingFilingsError(ValueError):
+    """The requested LDA scope could not be read completely."""
 
 
 def _bounded_until(since: date | None, until: date | None, *, today: date | None = None) -> date | None:
@@ -46,6 +67,48 @@ def _bounded_until(since: date | None, until: date | None, *, today: date | None
     if until is not None and until < since:
         raise ValueError(f"LDA until date {until} precedes since date {since}")
     return min(until or today or date.today(), since + timedelta(days=MAX_WINDOW_DAYS))
+
+
+def _filings_url(*, since: date | None, until: date | None, filing_year: int | None) -> str:
+    """The one filings query: a year or a posted-date window, oldest first.
+
+    Pagination requires a data filter (page/ordering do not count), so a cold
+    start with no filter holds at today's existing upper-bound meaning without
+    guessing the first archive year or dropping historical filings — the same
+    filtered-request semantics the deleted local reader carried.
+    """
+    from spicy_docs.sources.lda import filings_url
+
+    if filing_year is None and since is None and until is None:
+        until = date.today()
+    return filings_url(
+        filing_year=filing_year,
+        posted_after=since.isoformat() if since is not None else None,
+        posted_before=until.isoformat() if until is not None else None,
+        ordering="dt_posted",
+    )
+
+
+def _iter_filings(reader: LdaFilingsReader, url: str, *, max_records: int | None) -> Iterator[dict]:
+    """Yield raw filing dicts from spicy-docs' page walk, bound by ``max_records``.
+
+    Every row must carry a nonempty ``filing_uuid`` — the merge identity — so a
+    malformed row refuses instead of landing a NULL key in the published table.
+    The owner's walk already refuses a changed declared count, an observed
+    total disagreeing with it, or a page bound reached before the terminal
+    page; a ``max_records`` stop is an explicit prefix of that walk.
+    """
+    yielded = 0
+    for page in reader.filings(url, max_pages=MAX_PAGES):
+        for record in page.records:
+            filing = dict(record)
+            identity = filing.get("filing_uuid")
+            if not isinstance(identity, str) or not identity.strip():
+                raise LobbyingFilingsError("LDA filings page has a row without a nonempty filing_uuid")
+            yield filing
+            yielded += 1
+            if max_records is not None and yielded >= max_records:
+                return
 
 
 # The published schema: all VARCHAR, keyed by filing_uuid. Array/nested fields
@@ -183,14 +246,22 @@ def build_lobbying_filings(
     until = _bounded_until(since, until)
     logger.info("LDA: fetching filings posted {} through {}", since or "the beginning", until or "today")
 
-    # 3. Fetch + shape into a "new rows" parquet.
-    reader = LobbyingFilingsReader(
-        since=since,
-        until=until,
-        filing_year=filing_year,
-        max_records=max_records,
+    # 3. Fetch + shape into a "new rows" parquet. spicy-docs' LDA reader owns
+    # the requests, retries and walk refusals; an optional LDA_API_KEY raises
+    # the keyless rate limit.
+    from spicy_docs.reading.paged_json import PagedJsonBudget
+    from spicy_docs.sources.lda import LdaFilingsReader
+
+    url = _filings_url(since=since, until=until, filing_year=filing_year)
+    api_key = os.environ.get("LDA_API_KEY", "").strip() or None
+    budget = PagedJsonBudget(
+        max_requests=MAX_REQUESTS_PER_PAGE,
+        max_page_bytes=16 * 1024 * 1024,
+        timeout_seconds=60.0,
+        min_request_interval_seconds=0.0,
     )
-    rows = [_shape(f) for f in reader.iter_records()]
+    with LdaFilingsReader(budget=budget, api_key=api_key) as reader:
+        rows = [_shape(f) for f in _iter_filings(reader, url, max_records=max_records)]
     new_file = output_dir / "_lda_new.parquet"
     table = pa.Table.from_pylist(rows, schema=_SCHEMA) if rows else _SCHEMA.empty_table()
     pq.write_table(table, new_file, compression="zstd")
