@@ -130,7 +130,9 @@ def _recorded_vote_references(
     sees for a vote, so when one roll call is named by two of a bill's actions
     — the ordinary case, since the publisher records a passage vote on both the
     passage action and the motion to reconsider — the winner is the lowest
-    ``action_index``, which is the earlier action. Ordering by the identity
+    numeric ``action_index`` (the publisher’s earlier list position), even
+    though the published column is VARCHAR.
+    Unreadable indices still reach the refusal below. Ordering by the identity
     columns makes that reproducible across runs.
     """
     path = published_table(output_dir, VOTE_REFERENCES_TABLE, download_prior)
@@ -146,7 +148,8 @@ def _recorded_vote_references(
     rows = duckdb.sql(
         f"SELECT {columns} FROM read_parquet('{path}') "
         "WHERE congress IN (SELECT UNNEST(?)) "
-        "ORDER BY congress, chamber, session, roll_number, action_index, bill_id",
+        "ORDER BY congress, chamber, session, roll_number, "
+        "TRY_CAST(action_index AS BIGINT) NULLS LAST, bill_id",
         params=[[str(congress) for congress in sorted(congresses)]],
     ).fetchall()
     path.unlink(missing_ok=True)

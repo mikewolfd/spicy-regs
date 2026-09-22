@@ -194,6 +194,45 @@ def test_the_measured_sample_resolves_thirty_four_roll_calls_with_no_conflicts(t
     assert sum(1 for key in index.by_vote if key.chamber == "senate") == 6
 
 
+@pytest.mark.parametrize("earlier_index", [8, 9])
+def test_recorded_action_indices_are_numeric_in_published_linkage(tmp_path, scoped, earlier_index):
+    """The retained 119th-Congress cases contain index 10 beside 8 or 9."""
+    base = next(row for row in _sample_rows() if row["chamber"] == "house" and row["roll_number"] == "240")
+    _seed_references(tmp_path, [base | {"action_index": "10"}, base | {"action_index": str(earlier_index)}])
+    paths = build_roll_call_votes(
+        tmp_path,
+        reader=StubListingReader(),
+        acquirer=StubVoteAcquirer(),
+        download_prior=_no_prior,
+    )
+    row = pq.read_table(paths[0]).to_pylist()[0]
+    assert row["match_action_index"] == str(earlier_index)
+    assert row["bill_id"] == base["bill_id"]
+    assert row["match_url"] == base["url"]
+    assert row["conflict_count"] == "0"
+
+
+def test_numeric_action_ties_keep_bill_order_and_malformed_reference_refusal(tmp_path):
+    base = _sample_rows()[0]
+    _seed_references(
+        tmp_path,
+        [
+            base | {"action_index": "invalid", "bill_id": "119-hr-1"},
+            base | {"action_index": "10", "bill_id": "119-hr-2"},
+            base | {"action_index": "8", "bill_id": "119-hr-3"},
+            base | {"action_index": "8", "bill_id": "119-hr-2"},
+            base | {"action_index": None, "bill_id": "119-hr-1"},
+        ],
+    )
+    references = _recorded_vote_references(tmp_path, (119,), _no_prior)
+    assert [(reference.action_index, reference.bill.number) for reference in references] == [
+        (8, 2), (8, 3), (10, 2), (None, 1)
+    ]
+    index = index_vote_references(references)
+    assert next(iter(index.by_vote.values())).bill.number == 2
+    assert len(index.conflicts) == 2
+
+
 def test_the_sample_is_not_read_for_a_congress_out_of_scope(tmp_path, monkeypatch):
     """The scope bounds the read; the table accumulates across every Congress the family has run."""
     _seed_references(tmp_path, _sample_rows())
