@@ -8,8 +8,8 @@ Public data destination: `https://pub-72e95c0c20a84508b42b03a6ff6d55f8.r2.dev`. 
 
 | Task | Producer | Output | Delivery state |
 | --- | --- | --- | --- |
-| T13 | `run-rollup-court-opinion-clusters` | `court_opinion_clusters.parquet` | local candidate needs qualification |
-| T13 | `run-rollup-court-opinion-bodies` | `court_opinion_bodies.parquet` | local candidate needs qualification |
+| T13 | `run-rollup-court-opinion-clusters` | `court_opinion_clusters.parquet` | bulk acquisition/verification active; rollup not qualified |
+| T13 | `run-rollup-court-opinion-bodies` | `court_opinion_bodies.parquet` | bulk acquisition/verification active; rollup not qualified |
 | T16 | `run-rollup-bill-subjects` | `bill_subjects.parquet` | waiting for qualified parents |
 | T15 | `run-rollup-feed-summary` | `feed_summary.parquet` | waiting for qualified parents |
 | T15 | `run-rollup-agency-stats` | `agency_stats.parquet` | waiting for qualified parents |
@@ -34,7 +34,7 @@ Public data destination: `https://pub-72e95c0c20a84508b42b03a6ff6d55f8.r2.dev`. 
 | T15 | `run-rollup-org-committee-links` | `org_committee_links.parquet` | waiting for qualified parents |
 | T12 | `run-rollup-gao-reports` | `gao_reports.parquet` | local candidate needs qualification |
 | T12 | `run-rollup-crs-reports` | `crs_reports.parquet` | local candidate needs qualification |
-| T12 | `run-rollup-courtlistener` | `court_dockets.parquet` | local candidate needs qualification |
+| T12 | `run-rollup-courtlistener` | `court_dockets.parquet` | bulk acquisition/verification active; rollup not qualified |
 | T12 | `run-rollup-usaspending-recipients` | `usaspending_recipients.parquet` | local candidate needs qualification |
 | T09 | `run-rollup-bill-family` | `congress_bills.parquet` | local candidate needs qualification |
 | T09 | `run-rollup-bill-family` | `bill_actions.parquet` | local candidate needs qualification |
@@ -109,6 +109,13 @@ The continuation's [independent review reports](/Users/mikewolfd/Work/corpora/fo
 - **Press releases:** generation `sha256:c3c056ff09697aca92a3c10ab6544114212862aa06a861420cbf4bbe51d759ec` serves 28 rows from complete September 19 and September 22 UTC House/Senate Appropriations feed windows. All 952 mapped-field comparisons, public bytes and both actual MCP modes pass. Three rotated-out items survive. Optional bill links remain NULL; the old possessive-`s 2027` false match remains a documented interpretation defect for T16.
 - **Unified Agenda:** the existing `sha256:ea589343f8dcb5ffe134c5a2ac2fbf5d8856f105f296d838fe59e6330ee075b2` generation passes all 67,218 mapped-field comparisons against the complete retained 202510 XML. Actual replay is byte-identical; public and MCP reads agree. This qualifies the retained edition, without a latest-edition or historical-series claim.
 - **Comments:** six complete agency source cohorts yield a local 23,889,665-row candidate: all original parent identities plus four BOP records. Every selected native field matches, all 23,862,187 unrelated rows survive unchanged, and the independently reconciled index conserves every row including 1,555 unknown dates. Wider source repair and physical partitions remain open. ACF's fully enumerated next cohort contains 129,052 source comment objects; it has not been acquired in this batch.
-- **CourtListener:** initial loading now prioritizes the public bulk files. The complete S3 inventory selects current exports and unique supplements, with historical duplicate snapshots catalogued separately. Transfers and pins live in `courtlistener-bulk/`; downloading is not complete rollup qualification. The retained search walk stops at 54 pages/1,080 rows. Its reported count of 7,811 is approximate, so a completed cursor walk—not equality to that estimate—must establish traversal completion. Bulk files do not include the party/attorney relationship tables.
+- **CourtListener acquisition:** initial loading now prioritizes the public bulk files. The complete S3 inventory selects the latest June 30, 2026 main exports and unique supplements, with historical duplicate snapshots catalogued separately. Exact selection, transfers and pins live in `courtlistener-bulk/`. Independent review found the running multithread transfer omits its intended conditional download header. Acquisition receipts remain candidates; only `verified-manifest.json` entries that pass full-file SHA-256 and exact source ETag verification may advance. The separate verifier has passed real-file and tampering checks plus independent review. Its detached process is running; `verification-watcher-state.json` records progress and any terminal failure. No court rollup has been published from these bytes.
+- **CourtListener source behavior:** the retained search walk stops at 55 pages/1,100 unique rows. Its reported count of 7,811 is approximate. The corrected provider and host preserve exact-count checks for small docket selections and opinions, and require a completed cursor walk for large docket selections. The independently approved correction is installed through the pinned SpicyDocs 0.26.1 wheel; full provider/host gates and offline raw/output replay pass. Bulk mapping preserves RECAP source bitmasks and descriptive nature-of-suit text. Standard exports omit party/attorney relationship tables; the dated bulk selection is not assumed equal to the current search index.
+
+The [current parallel work](../fork-generation.md#current-parallel-work) assigns
+integration, comments/acquisition, source mapping and independent review. Its
+September 22, 2026, 02:00 UTC checkpoint distinguishes completed reviews from
+unfinished transfers and publication. Package integration and its installed checks are complete in `b50a9eb`. The machine ledger
+links the same receipts and records the next action for each court output.
 
 Receipts: `press-release-qualification/`, `unified-agenda-qualification/`, `full-comments/source-campaign/` and `courtlistener-bulk/` under the linked execution directory. The independent review reports state the exact approved scope and remaining limits.
