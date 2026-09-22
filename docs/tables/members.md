@@ -6,7 +6,7 @@
 
 One row per legislator in one capture of the community crosswalk. Split from `member_terms` because one row cannot hold a chamber switch. All columns are stored as VARCHAR.
 
-**Coverage.** Sampled. Measured on one run (receipt `d1-measured-run-2026-09-19/`): both roster files — current and historical — were captured whole in two keyless requests and 2.6 seconds, yielding 12,770 legislators. The run confirms the capture is whole rather than a slice; the statement stays "Sampled" because the claim this table makes is about the crosswalk's own completeness, which no run of ours can establish, and because the machine-readable kind is a published contract value that should not move without a change in what is fetched. *(measured 2026-09-19)*
+**Coverage.** Sampled. The fork selection covers both complete community crosswalk files captured September 22, 2026 UTC: 12,770 current and historical legislators. Every declared field was checked against the retained originals, and all earlier retained identities and native values survive. The source supplies 1,738 distinct FEC candidate IDs and 328 LIS IDs across both files; absent IDs remain absent. This qualifies the captured community files, not an independently complete official roster. Receipts: fork-execution-2026-09-21/members-qualification/. *(measured 2026-09-22)*
 
 - **Parquet file:** `members.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.

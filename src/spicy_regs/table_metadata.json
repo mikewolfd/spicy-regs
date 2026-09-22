@@ -4440,9 +4440,9 @@
     "table": "members",
     "label": "Legislators",
     "summary": "One row per legislator in one capture of the community crosswalk. Split from `member_terms` because one row cannot hold a chamber switch. All columns are stored as VARCHAR.",
-    "coverage": "Sampled. Measured on one run (receipt `d1-measured-run-2026-09-19/`): both roster files — current and historical — were captured whole in two keyless requests and 2.6 seconds, yielding 12,770 legislators. The run confirms the capture is whole rather than a slice; the statement stays \"Sampled\" because the claim this table makes is about the crosswalk's own completeness, which no run of ours can establish, and because the machine-readable kind is a published contract value that should not move without a change in what is fetched.",
+    "coverage": "Sampled. The fork selection covers both complete community crosswalk files captured September 22, 2026 UTC: 12,770 current and historical legislators. Every declared field was checked against the retained originals, and all earlier retained identities and native values survive. The source supplies 1,738 distinct FEC candidate IDs and 328 LIS IDs across both files; absent IDs remain absent. This qualifies the captured community files, not an independently complete official roster. Receipts: fork-execution-2026-09-21/members-qualification/.",
     "kind": "sampled",
-    "measured_on": "2026-09-19",
+    "measured_on": "2026-09-22",
     "data_quality": null,
     "columns": [
       {
@@ -4545,9 +4545,9 @@
     "table": "member_terms",
     "label": "Legislator terms",
     "summary": "One row per term a legislator served, in the crosswalk's own order. All columns are stored as VARCHAR.",
-    "coverage": "Sampled. Measured on the same run as `members` (receipt `d1-measured-run-2026-09-19/`): 45,535 terms over those 12,770 legislators, an average of 3.6 terms each. Every term of every legislator in `members`, in the crosswalk's own order, from the same whole capture.",
+    "coverage": "Sampled. The fork selection retains all 45,535 terms from the same complete September 22, 2026 UTC captures as `members`. All mapped values, parent joins and per-member term counts agree with the originals; earlier retained term identities survive. Source order defines term_index. The single party value per term does not reproduce the finer party_affiliations histories present in 29 native terms. Receipts: fork-execution-2026-09-21/members-qualification/.",
     "kind": "sampled",
-    "measured_on": "2026-09-19",
+    "measured_on": "2026-09-22",
     "data_quality": null,
     "columns": [
       {

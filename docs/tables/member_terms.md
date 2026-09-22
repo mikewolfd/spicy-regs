@@ -6,7 +6,7 @@
 
 One row per term a legislator served, in the crosswalk's own order. All columns are stored as VARCHAR.
 
-**Coverage.** Sampled. Measured on the same run as `members` (receipt `d1-measured-run-2026-09-19/`): 45,535 terms over those 12,770 legislators, an average of 3.6 terms each. Every term of every legislator in `members`, in the crosswalk's own order, from the same whole capture. *(measured 2026-09-19)*
+**Coverage.** Sampled. The fork selection retains all 45,535 terms from the same complete September 22, 2026 UTC captures as `members`. All mapped values, parent joins and per-member term counts agree with the originals; earlier retained term identities survive. Source order defines term_index. The single party value per term does not reproduce the finer party_affiliations histories present in 29 native terms. Receipts: fork-execution-2026-09-21/members-qualification/. *(measured 2026-09-22)*
 
 - **Parquet file:** `member_terms.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
