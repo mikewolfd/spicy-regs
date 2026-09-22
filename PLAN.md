@@ -62,12 +62,17 @@ Stated in full, with the measurement that makes each answerable, at the top of
    secret. The fix is squashed commit 14 on `fork/main` (`fix(fcc-ecfs): send
    the api.data.gov key as a header`) and reaches origin only through a
    re-created PR. Rotation is settled by no code change.
-2. **The eight-table registration PR.** `feat/register-eight-tables`
-   (`2854262`) is on the fork, unmerged, no PR, and based on the pre-squash
-   history; rebase its one commit onto `main` first. It is unblocked only when
-   the re-created #194/#195/#196 merge and their workflows publish the eight
-   objects — check `materialized/rulemaking/latest.json` answers 200 before
-   opening. Opening the PR is still Mike's call.
+2. **The eight-table registration — mostly landed, branch archived.** The
+   branch's materialized-dataset reader is superseded by
+   `pipelines/materialized.py` on main, and three of its eight tables
+   (`bill_subjects`, `court_opinion_clusters`, `court_opinion_bodies`) are
+   already registered by the fork-generation work. The five rulemaking-family
+   tables (`rule_targets`, `proceedings`, `regulatory_agenda_items`,
+   `agenda_item_proceedings`, `comment_periods`) register with T17's
+   publication — the same gate this item always named
+   (`materialized/rulemaking/latest.json` answering 200), now part of the
+   fork task queue rather than a rebase of `feat/register-eight-tables`
+   (archived 2026-09-22, decided: no PR to open).
 3. **`comment` and `restrictReasonType` on the `documents` table.** A schema
    revision; its cost depends on which lane sources it. The table's own
    catalog entry already states both are not carried and points readers at
