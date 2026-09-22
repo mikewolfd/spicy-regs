@@ -351,6 +351,71 @@ def test_check_headroom_refuses_an_ingest_that_would_cross_the_floor(tmp_path: P
         check_headroom(54_561_543_156, path=tmp_path)
 
 
+@pytest.mark.parametrize("source", ["local", "remote"])
+@pytest.mark.parametrize("cluster_ids", [None, {"101"}])
+def test_unbounded_body_build_checks_destination_before_staging(tmp_path, monkeypatch, source, cluster_ids):
+    import importlib
+    import shutil
+
+    from spicy_docs.sources.courtlistener import bulk
+
+    module = importlib.import_module("spicy_regs.transforms.build_court_opinion_bodies")
+    dump = _csv_bz2(tmp_path, "opinions-2026-06-30.csv.bz2", "id,cluster_id,plain_text", ['"11","101","body"'])
+    destination = tmp_path / "output"
+    destination.mkdir()
+    prior = destination / "_bodies_prior.parquet"
+    prior.write_bytes(b"retained prior")
+    output = destination / module.OUTPUT
+    output.write_bytes(b"previous output")
+    needed = estimate_output_bytes(dump.stat().st_size, cluster_ids)
+    free = DISK_HEADROOM_FLOOR + needed - 1
+    checked = []
+
+    def usage(path):
+        checked.append(path)
+        return shutil._ntuple_diskusage(total=free * 2, used=free, free=free)
+
+    monkeypatch.setattr(shutil, "disk_usage", usage)
+    monkeypatch.setattr(module, "CourtListenerTableWriter", lambda *a, **k: pytest.fail("staging opened before refusal"))
+    monkeypatch.setattr(module.r2, "download", lambda *a: pytest.fail("rebuild must not download a prior"))
+    monkeypatch.setattr(
+        bulk,
+        "list_bulk_dumps",
+        lambda: [BulkObject(f"bulk-data/{dump.name}", dump.stat().st_size, '"fixture"', "2026-06-30T00:00:00Z")],
+    )
+    with pytest.raises(RuntimeError, match="below the 100 GiB floor"):
+        module.build_court_opinion_bodies(
+            destination,
+            local_file=dump if source == "local" else None,
+            dump_date=date(2026, 6, 30),
+            cluster_ids=cluster_ids,
+            rebuild=True,
+        )
+    assert checked == [destination]
+    assert output.read_bytes() == b"previous output"
+    assert prior.read_bytes() == b"retained prior"
+    assert not (destination / "_bodies_new.parquet").exists()
+
+
+def test_local_body_build_accepts_exact_headroom_and_preserves_native_text(tmp_path, monkeypatch):
+    import shutil
+
+    from spicy_regs.transforms.build_court_opinion_bodies import build_court_opinion_bodies
+
+    dump = _csv_bz2(
+        tmp_path, "opinions-2026-06-30.csv.bz2", "id,cluster_id,plain_text,html", ['"11","101","","<p>source</p>"']
+    )
+    free = DISK_HEADROOM_FLOOR + 2 * dump.stat().st_size
+    monkeypatch.setattr(shutil, "disk_usage", lambda _: shutil._ntuple_diskusage(total=free * 2, used=free, free=free))
+    output = build_court_opinion_bodies(tmp_path, local_file=dump, dump_date=date(2026, 6, 30), rebuild=True)
+    [row] = pq.read_table(output).to_pylist()
+    assert row["opinion_id"] == "11"
+    assert row["plain_text"] == ""
+    assert row["html"] == "<p>source</p>"
+    assert row["available_text_fields"] == "html"
+    assert not (tmp_path / "_bodies_new.parquet").exists()
+
+
 def test_estimate_output_bytes_charges_a_targeted_pass_for_its_output():
     """A filtered pass reads 50.8 GiB and writes almost nothing; the guard must know.
 
@@ -385,7 +450,7 @@ def test_estimate_output_bytes_charges_a_targeted_pass_for_its_output():
 # -- first build promotes rather than merges ---------------------------------
 
 
-def test_first_build_promotes_the_staged_table_without_merging(tmp_path: Path, monkeypatch):
+def test_first_build_promotes_the_staged_table_without_merging(tmp_path: Path, monkeypatch, ample_disk_space):
     """With no prior table the merge is a sort the machine cannot always afford.
 
     One dump, whose id column is the publisher's primary key, so the dedup can

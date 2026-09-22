@@ -234,10 +234,13 @@ one unverified input; `verification-watcher-state.json` retains that terminal
 state. `opinions-resume-state.json` records the detached replacement transfer,
 which invokes full verification before accepting the completed opinions file.
 The retained body-build capacity estimate needs about 73.3 GB more space after
-the original arrives, before audit spill. Its local-file path also needs the
-same headroom check as remote acquisition. Recheck actual capacity and enforce
-the existing floor before launch; see
-`courtlistener-clusters-qualification/NEXT-WORK.md`.
+the original arrives, before audit spill. The local-file bypass is now repaired:
+both local and remote unbounded builds check estimated output space on the
+destination filesystem before source parsing or staged writes. The real retained
+opinion replay preserves its HTML exactly; current full-build capacity still
+fails the existing floor. See `courtlistener-clusters-qualification/headroom-fix/`
+and `courtlistener-clusters-qualification/NEXT-WORK.md`. This preflight does not
+reserve capacity for merges, publication copies, audit spill or concurrent work.
 Map/cluster progress and completion gates are in
 `courtlistener-clusters-qualification/HANDOFF.md`. Neither transfer completion
 nor byte verification alone completes a rollup. The cluster publication passed

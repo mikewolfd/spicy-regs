@@ -103,3 +103,12 @@ uses 16 KiB per opinion for sized cluster selections and twice the compressed
 input size for unfiltered or unsized selections. These values replace the
 smaller two-variant estimates; this sample does not establish a population
 upper bound or remove the need for operational headroom monitoring.
+
+Unbounded builds check estimated output space on the destination filesystem
+before opening the source reader or staging Parquet, for both remote streams
+and retained local files. Local input size comes from the retained compressed
+file; its existing disk usage is already reflected in available space. The
+check requires the estimated output to leave at least 100 GiB free. It is a
+preflight estimate, not a reservation: merges, publication copies, audit spill
+and concurrent work need additional capacity. Explicitly bounded runs retain
+their existing limit policy.

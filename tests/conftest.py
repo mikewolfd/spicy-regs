@@ -1,6 +1,7 @@
 """Shared fixtures for pipeline tests."""
 
 import os
+import shutil
 from pathlib import Path
 
 import polars as pl
@@ -25,6 +26,14 @@ def tmp_output(tmp_path: Path) -> Path:
     out = tmp_path / "output"
     out.mkdir()
     return out
+
+
+@pytest.fixture
+def ample_disk_space(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Give tiny materialization fixtures deterministic capacity on CI runners."""
+    monkeypatch.setattr(
+        shutil, "disk_usage", lambda _: shutil._ntuple_diskusage(total=2**41, used=2**40, free=2**40)
+    )
 
 
 @pytest.fixture

@@ -247,7 +247,9 @@ def test_concatenated_members_and_truncated_archive(tmp_path):
 
 @pytest.mark.parametrize("kind", ["bodies", "clusters"])
 @pytest.mark.parametrize("cleanup_failure", [False, True])
-def test_source_failure_after_flush_preserves_output_and_original_error(tmp_path, monkeypatch, kind, cleanup_failure):
+def test_source_failure_after_flush_preserves_output_and_original_error(
+    tmp_path, monkeypatch, kind, cleanup_failure, ample_disk_space
+):
     module = importlib.import_module(f"spicy_regs.transforms.build_court_opinion_{kind}")
     monkeypatch.setattr(module, "BATCH_ROWS", 1)
     monkeypatch.setattr(module.r2, "download", lambda *_: False)
@@ -349,7 +351,7 @@ def test_search_catchup_failure_after_flush_preserves_prior_and_output(tmp_path,
 
 @pytest.mark.parametrize("kind", ["bodies", "clusters"])
 @pytest.mark.parametrize("failure", ["shape", "write"])
-def test_receiving_failure_closes_source_iterator(tmp_path, monkeypatch, kind, failure):
+def test_receiving_failure_closes_source_iterator(tmp_path, monkeypatch, kind, failure, ample_disk_space):
     module = importlib.import_module(f"spicy_regs.transforms.build_court_opinion_{kind}")
     monkeypatch.setattr(module.r2, "download", lambda *_: False)
     closed = []
@@ -370,6 +372,7 @@ def test_receiving_failure_closes_source_iterator(tmp_path, monkeypatch, kind, f
     else:
         monkeypatch.setattr(module.CourtListenerTableWriter, "add", fail)
     kwargs = {"skip_search_catchup": True, "skip_court_scope": True} if kind == "clusters" else {}
+    (tmp_path / "unused").touch()
     with pytest.raises(ValueError, match="shaping failed"):
         getattr(module, f"build_court_opinion_{kind}")(tmp_path, local_file=tmp_path / "unused", **kwargs)
     assert closed == [True]
@@ -474,7 +477,7 @@ def test_docket_receipt_uses_shared_listing_pin_including_exact_etag(tmp_path, m
 
 @pytest.mark.parametrize("kind", ["bodies", "clusters"])
 @pytest.mark.parametrize("row_count", [0, 1, 3])
-def test_local_table_build_matches_frozen_mapping_by_id(tmp_path, monkeypatch, kind, row_count):
+def test_local_table_build_matches_frozen_mapping_by_id(tmp_path, monkeypatch, kind, row_count, ample_disk_space):
     module = importlib.import_module(f"spicy_regs.transforms.build_court_opinion_{kind}")
     monkeypatch.setattr(module.r2, "download", lambda *_: False)
     monkeypatch.setattr(module, "BATCH_ROWS", 2)

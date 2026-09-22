@@ -43,7 +43,7 @@ def _dump(path, records):
     return path
 
 
-def test_native_html_and_all_text_fields_survive_materialized_output(tmp_path):
+def test_native_html_and_all_text_fields_survive_materialized_output(tmp_path, ample_disk_space):
     assert (
         sha256(FIXTURE.read_bytes()).hexdigest() == "62cbca0ba7f3fb6c047d5e3448dbf48aad089b26bfceeaadd009d77a7fab44ab"
     )
@@ -110,7 +110,7 @@ def test_legacy_prior_refuses_before_source_read_and_preserves_artifacts(tmp_pat
     assert not (tmp_path / "_bodies_new.parquet").exists()
 
 
-def test_explicit_rebuild_skips_remote_prior_and_retains_legacy_scratch(tmp_path, monkeypatch):
+def test_explicit_rebuild_skips_remote_prior_and_retains_legacy_scratch(tmp_path, monkeypatch, ample_disk_space):
     from spicy_regs.sources import r2
 
     monkeypatch.setattr(r2, "download", lambda *_: pytest.fail("rebuild must not acquire a prior"))
@@ -121,7 +121,7 @@ def test_explicit_rebuild_skips_remote_prior_and_retains_legacy_scratch(tmp_path
     assert prior.read_bytes() == b"retained legacy artifact"
 
 
-def test_version_two_merge_replaces_removed_variants_and_preserves_unread_rows(tmp_path, monkeypatch):
+def test_version_two_merge_replaces_removed_variants_and_preserves_unread_rows(tmp_path, monkeypatch, ample_disk_space):
     from spicy_regs.sources import r2
 
     monkeypatch.setattr(r2, "download", lambda *_: pytest.fail("prior already retained"))

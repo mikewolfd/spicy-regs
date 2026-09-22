@@ -17,10 +17,10 @@ it — majority, concurrence, dissent, each with its own author and its own text
 50.8 GiB compressed and about 422 GiB decompressed at its observed 8.3x ratio.
 Two independent limits bite:
 
-* *Disk.* Landing the compressed dump alone would take this workstation below
-  the 100 GiB free-space floor the project holds itself to. It is therefore
-  streamed and never written to disk, and the full backfill is refused outright
-  when headroom is short — see ``check_headroom``.
+* *Disk.* Remote input is streamed without keeping a compressed copy. An
+  already retained local dump is also streamed through decompression. Both
+  routes check estimated output space before an unbounded pass and refuse
+  when it would cross the 100 GiB free-space floor; see ``check_headroom``.
 * *Time.* The bucket serves one connection at roughly 1.7-2.0 MiB/s, so a single
   full pass is about 8.6 hours. That is a scheduled-job cost, not a workstation
   one.
@@ -149,7 +149,7 @@ def check_headroom(needed_bytes: int, *, path: Path | None = None) -> None:
 
 
 def estimate_output_bytes(dump_size: int, cluster_ids: Container[str] | None) -> int:
-    """Bytes on disk an unbounded pass will actually cost.
+    """Estimate output bytes for planning an unbounded pass.
 
     The dump is *streamed* — decompressed inline, never landed — so what the
     volume pays for is the parquet this run writes, not the 50.8 GiB it reads.
@@ -262,18 +262,22 @@ def build_court_opinion_bodies(
             max_compressed_bytes or "unbounded",
             len(cluster_ids) if isinstance(cluster_ids, Sized) else "unbounded",
         )
-        # An unbounded pass would stream the whole dump. Check that the *output*
-        # it implies still leaves headroom before a single byte moves.
-        if max_records is None and max_compressed_bytes is None:
-            needed = estimate_output_bytes(published.size, cluster_ids)
-            logger.info(
-                "Opinion bodies: unbounded pass, estimated output {:.3f} GiB",
-                needed / 2**30,
-            )
-            check_headroom(needed, path=output_dir)
+        dump_size = published.size
     else:
         resolved = dump_date
         logger.info("Opinion bodies: reading local dump {}", local_file)
+        dump_size = local_file.stat().st_size
+
+    # Local originals consume space already, but their output still needs the
+    # same admission check as a remote stream. Check the destination volume
+    # before opening the bulk reader or writing a staged table.
+    if max_records is None and max_compressed_bytes is None:
+        needed = estimate_output_bytes(dump_size, cluster_ids)
+        logger.info(
+            "Opinion bodies: unbounded pass, estimated output {:.3f} GiB",
+            needed / 2**30,
+        )
+        check_headroom(needed, path=output_dir)
 
     row_filter = None
     if cluster_ids is not None:
