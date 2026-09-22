@@ -10,11 +10,12 @@ from __future__ import annotations
 from collections.abc import Iterator
 
 import httpx
-from spicy_docs.sources.gao.rss import GAO_REPORTS_FEED_URL, GaoFeedAcquirer, GaoFeedBudget
 
 from spicy_regs.sources.base import Reader
 
-RSS_URL = GAO_REPORTS_FEED_URL
+# An inert constructor default keeps base imports independent of source-readers.
+# The acquirer owns the actual feed request; tests check this default agrees.
+RSS_URL = "https://www.gao.gov/rss/reports.xml"
 _MAX_REQUESTS = 5
 
 
@@ -38,6 +39,14 @@ class GaoReportsReader(Reader):
         self.transport = transport
 
     def iter_records(self) -> Iterator[dict]:
+        try:
+            from spicy_docs.sources.gao.rss import GaoFeedAcquirer, GaoFeedBudget
+        except ModuleNotFoundError as error:
+            if error.name == "spicy_docs":
+                raise RuntimeError(
+                    "GAO reports require spicy-regs[source-readers]. Run `uv sync --frozen` in a SpicyRegs checkout."
+                ) from None
+            raise
         budget = GaoFeedBudget(
             max_requests=_MAX_REQUESTS, max_bytes=4 * 1024 * 1024, timeout_seconds=60, min_request_interval_seconds=0
         )

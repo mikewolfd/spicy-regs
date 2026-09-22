@@ -9,15 +9,19 @@ from __future__ import annotations
 
 import json
 from collections.abc import Iterator
+from typing import TYPE_CHECKING
 
 import httpx
-from spicy_docs.reading.paged_json import PagedJsonBudget
-from spicy_docs.sources.usaspending import AwardType, MAX_LIMIT, RESULTS_KEY, UsaspendingRecipientsReader, recipients_request
 
 from spicy_regs.sources.base import Reader
 
+if TYPE_CHECKING:
+    from spicy_docs.sources.usaspending import AwardType
+
 API_BASE = "https://api.usaspending.gov/api/v2"
-PER_PAGE = MAX_LIMIT
+# An inert host default keeps construction independent of source-readers.
+# The owner request builder still validates the selected request limit.
+PER_PAGE = 100
 # Provider-supported 100 rows per request: at most 10,000 selected rows per
 # default invocation. max_pages remains an explicit operational scope control;
 # the transform merges all prior rows even when they leave this selected ranking.
@@ -50,6 +54,15 @@ class UsaSpendingRecipientsReader(Reader):
         self.transport = transport
 
     def iter_records(self) -> Iterator[dict]:
+        try:
+            from spicy_docs.reading.paged_json import PagedJsonBudget
+            from spicy_docs.sources.usaspending import RESULTS_KEY, UsaspendingRecipientsReader, recipients_request
+        except ModuleNotFoundError as error:
+            if error.name == "spicy_docs":
+                raise RuntimeError(
+                    "USAspending requires spicy-regs[source-readers]. Run `uv sync --frozen` in a SpicyRegs checkout."
+                ) from None
+            raise
         url, body = recipients_request(limit=self.per_page, award_type=self.award_type)
         budget = PagedJsonBudget(
             max_requests=_MAX_REQUESTS_PER_PAGE,

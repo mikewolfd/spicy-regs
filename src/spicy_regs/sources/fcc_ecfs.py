@@ -11,12 +11,14 @@ from __future__ import annotations
 import os
 from collections.abc import Iterator
 from datetime import date, timedelta
+from typing import TYPE_CHECKING
 
 import httpx
-from spicy_docs.reading.paged_json import PagedJsonBudget, with_query
-from spicy_docs.sources.fcc_ecfs import FccEcfsReader, filings_url, proceedings_url
 
 from spicy_regs.sources.base import Reader
+
+if TYPE_CHECKING:
+    from spicy_docs.sources.fcc_ecfs import FccEcfsReader
 
 API_BASE = "https://publicapi.fcc.gov/ecfs"
 API_KEY_ENV_VARS = ("API_GOV", "DATA_GOV_API_KEY", "FCC_API_KEY", "REGULATIONS_GOV_API_KEY")
@@ -70,6 +72,15 @@ class _EcfsReader(Reader):
             raise FccEcfsError("ECFS requires an api.data.gov key")
         if self.since > self.until:
             raise FccEcfsError("ECFS selection start must not follow its end")
+        try:
+            from spicy_docs.reading.paged_json import PagedJsonBudget
+            from spicy_docs.sources.fcc_ecfs import FccEcfsReader
+        except ModuleNotFoundError as error:
+            if error.name == "spicy_docs":
+                raise RuntimeError(
+                    "FCC ECFS requires spicy-regs[source-readers]. Run `uv sync --frozen` in a SpicyRegs checkout."
+                ) from None
+            raise
         budget = PagedJsonBudget(
             max_requests=_MAX_REQUESTS_PER_PAGE,
             max_page_bytes=16 * 1024 * 1024,
@@ -95,6 +106,9 @@ class _EcfsReader(Reader):
         yield from records
 
     def _page_window(self, gte: date, lte: date, *, ascending: bool) -> tuple[list[dict], bool]:
+        from spicy_docs.reading.paged_json import with_query
+        from spicy_docs.sources.fcc_ecfs import filings_url, proceedings_url
+
         assert self._reader is not None
         if self.endpoint == "proceedings":
             url = proceedings_url(

@@ -13,8 +13,6 @@ from collections.abc import Iterator, Mapping
 from datetime import date
 
 import httpx
-from spicy_docs.reading.paged_json import PagedJsonBudget
-from spicy_docs.sources.congress.listing import CongressListingReader, crs_report_list_url
 
 from spicy_regs.sources.base import Reader
 
@@ -58,6 +56,15 @@ class CrsReportsReader(Reader):
     def iter_records(self) -> Iterator[dict]:
         if not self.api_key:
             raise CrsReportsError("CRS reports require an api.data.gov key")
+        try:
+            from spicy_docs.reading.paged_json import PagedJsonBudget
+            from spicy_docs.sources.congress.listing import CongressListingReader, crs_report_list_url
+        except ModuleNotFoundError as error:
+            if error.name == "spicy_docs":
+                raise RuntimeError(
+                    "CRS reports require spicy-regs[source-readers]. Run `uv sync --frozen` in a SpicyRegs checkout."
+                ) from None
+            raise
         url = crs_report_list_url(
             from_datetime=f"{self.since.isoformat()}T00:00:00Z" if self.since else None,
             limit=self.per_page,
