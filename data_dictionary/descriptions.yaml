@@ -1484,7 +1484,7 @@ tables:
     columns_from: spicy_docs
 
   roll_call_votes:
-    label: "House roll-call votes"
+    label: "House and Senate roll-call votes"
     coverage: >-
       Sampled, and accumulating. Measured on one cold-start run (receipt
       `d1-measured-run-2026-09-19/`): the `house-vote` index listed 676 House
@@ -1492,17 +1492,19 @@ tables:
       577 were fetched from the Clerk under the 1,500-per-run cap with no
       refusal — 4 keyed and 577 keyless requests in 310 seconds, 577 rows
       produced locally from an empty prior. Local output only; not uploaded.
-      House only, and bounded by that per-run
+      That measured run was House-only; the Senate LIS menu route landed
+      2026-09-21 (9c58095), so both chambers are now acquired and published,
+      bounded by the same per-run
       cap on how many roll calls are fetched, newest first. A roll call
       already published with a tally is not fetched again, so a steady-state
       run is meant to read only new ones plus the newest few, which are
       re-read in case the publisher corrected them. **The skip is design, not
       measurement**: D1 was a cold start, so nothing was held and nothing was
       skipped, and the saving described here has not been observed yet — the
-      second run is what measures it. The Senate's roll calls are not
-      published at all rather than published with empty tallies — there is no
-      Senate index route in the reader this rollup uses, and a set of Senate
-      roll calls reached from bills is not an index of a session's roll calls.
+      second run is what measures it. Senate votes are enumerated from the
+      Senate LIS menu; a set of Senate roll calls reached from bills alone is
+      not an index of a session's roll calls and never establishes a complete
+      Senate selection.
       A House roll call that a bill's own action names can be published a cron
       before the Congress.gov vote index lists it, since the two linkage
       sources are read independently and the Clerk file is addressable from
@@ -1537,7 +1539,7 @@ tables:
       `roll_call_votes` (receipt `d1-measured-run-2026-09-19/`): 249,099
       member positions across its 577 roll calls, an average of 432 a roll
       call. One row per member per roll call in `roll_call_votes`, so it
-      inherits that table's House-only scope, per-run cap and
+      inherits that table's both-chambers scope, per-run cap and
       skip-what-is-already-held behavior exactly.
     measured_on: "2026-09-19"
     summary: >-
@@ -1701,9 +1703,10 @@ tables:
       the BILLSTATUS user guide documents that the publisher was not sending on any
       of the 58 entries measured; it is carried because the publisher may resume
       sending it. Both chambers appear here — 6 of the 34 measured roll calls were
-      Senate — even though `roll_call_votes` publishes House roll calls only, so a
-      Senate row here is a linkage for a vote this pipeline does not yet host. All
-      columns are stored as VARCHAR.
+      Senate. `roll_call_votes` acquired House rows only when this was
+      measured; it hosts Senate roll calls too since the LIS menu route
+      landed (2026-09-21), so a Senate row here links a vote this pipeline
+      hosts. All columns are stored as VARCHAR.
     summary: >-
       One row per recorded vote on one bill action: which roll call the bill's own
       actions say settled it. Read by the `roll-call-votes` rollup to fill

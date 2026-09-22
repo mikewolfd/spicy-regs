@@ -44,7 +44,7 @@ file arriving in the file itself.
 git fetch origin fork --prune
 git log --oneline fork/main..main      # expect empty
 git status --porcelain                 # expect empty
-uv run pytest -q                       # 1,230 passing on this tree (2026-09-17)
+uv run pytest -q                       # count: see the full host gate entry in docs/fork-generation.md
 ```
 
 The seven PRs must be re-created. Cut each from its squashed commit as a
@@ -660,9 +660,11 @@ pushed — local commit on `hosting-sr01` only.
 
 **Not wired, with the reason:**
 
-- **Senate roll calls.** `listing.py` has a `house-vote` route and no Senate
+- **Senate roll calls.** ~~`listing.py` has a `house-vote` route and no Senate
   equivalent, and the Senate LIS menu is not a reader this repository has. No
-  Senate row is published rather than one with a NULL tally. ~~**`recordedVotes`
+  Senate row is published rather than one with a NULL tally.~~ — **wired
+  2026-09-21 (9c58095): the Senate LIS menu now enumerates Senate votes and
+  the rollup acquires them under the shared cap; see the A3 amendment below.** ~~**`recordedVotes`
   as a second vote-linkage source.**~~ and ~~**`press_releases.bill_id`**,
   **`committee_reports.bill_id` / `hearing_transcripts.bill_id`**~~ — **all
   three wired 2026-09-19, fifth part below.** `hearing_transcripts.bill_id`
@@ -1347,11 +1349,15 @@ hosted tables. None of the three added a publisher request to any run.
   indexed yet. That is a superset, never a subset, so the coverage claim holds
   and a vote reaching a bill's action first is published a cron early rather
   than missed; such a row is not partial, since the Clerk file is addressable
-  from the roll-call key alone. The Senate half is *not* fetched, and the
+  from the roll-call key alone. ~~The Senate half is *not* fetched, and the
   asymmetry is the point: for the House the references can only add to a
   complete enumeration, while for the Senate there is no enumeration at all, so
   those rows would *be* whatever the scoped bills happened to reference — 6 of
-  the 34 measured — a biased sample that would read as a Senate vote table.
+  the 34 measured — a biased sample that would read as a Senate vote table.~~
+  — **Superseded 2026-09-21 (9c58095): the Senate LIS menu landed, so the
+  Senate now has a complete enumeration of its own and its rows are acquired
+  under the shared cap. The House-superset argument above and the 6-of-34
+  measurement stay as written; the asymmetry they justified is gone.**
 
   **The proof is the measured sample, not a synthetic one.** The 58
   `recordedVotes` entries spicy-docs read off 20 bills of the 119th are copied
@@ -1420,8 +1426,9 @@ landed).
 - **The fetch set was described wrongly.** The docstring and this file said the
   votes rollup fetches "exactly what the House listing names"; it fetches the
   House half of the union with the recorded-vote references, which my own test
-  proves. Rewritten to say so, and to say why the House half is acceptable
-  where the Senate half is not — see the A3 entry above.
+  proves. Rewritten to say so, and to say why the House half was acceptable
+  where the Senate half was not until the Senate LIS menu landed — see the A3
+  entry above and its 9c58095 amendment.
 - **`test_an_ingesting_rollup_reads_no_base_table` passed by construction.** It
   asserted `inputs == ()`, which both new readers satisfy while reading a
   published table. Rollups now declare a `soft_inputs` tuple, and the retargeted
