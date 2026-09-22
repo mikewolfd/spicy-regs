@@ -69,7 +69,7 @@ import yaml
 
 DEFAULT_SOURCE_DOMAIN_DIR = Path("sample-data/source-domains")
 CAPTURE_MANIFEST_FILENAME = "documented-enumeration-capture-manifest-v1.json"
-OBSERVED_SNAPSHOT_FILENAME = "observed-domain-snapshot-2026-08-03.json"
+OBSERVED_SNAPSHOT_FILENAME = "observed-domain-snapshot-2026-09-22.json"
 
 CAPTURE_MANIFEST_FORMAT_VERSION = "spicyregs-source-domains/capture-v1"
 OBSERVED_SNAPSHOT_FORMAT_VERSION = "spicyregs-source-domains/observed-v1"
@@ -290,8 +290,8 @@ class _DomainDeclaration:
 # takes the set for a decision and knows which hole is not one:
 #
 # * ``TTBL_ACTION`` (XSD L441-448) is a decided exclusion. The publisher's own
-#   data treats the field as free text — the 2026-08-03 snapshot's
-#   ``timetable_json`` holds 1,139 distinct actions over 10,533 entries against
+#   data treats the field as free text — the 2026-08-03 observation's
+#   ``timetable_json`` held 1,139 distinct actions over 10,533 entries against
 #   34 documented ones — so checking against its list would report a thousand
 #   findings and gate nothing. Its sentence also opens "One of the following:"
 #   with unquoted values, which :func:`xsd_documented_options` could not read
@@ -304,7 +304,7 @@ class _DomainDeclaration:
 #   and ``comments.document_type`` (by ``DocumentType``, the same list already
 #   checked against ``documents``) are an open gap, not a decision. ``comments``
 #   ships as a flat ``comments.parquet`` monolith like the rest, so both are
-#   observable; they stay uncovered only because the 2026-08-03 observation
+#   observable; they stay uncovered only because the 2026-09-22 observation
 #   skipped that table. Covering them takes a re-observation, not a code change
 #   here.
 _DECLARATIONS: tuple[_DomainDeclaration, ...] = (
@@ -538,7 +538,7 @@ class AcceptedFinding:
     reason: str
 
 
-# Every finding the 2026-08-03 snapshot produces, each with the reason it stands
+# Every finding the 2026-09-22 snapshot produces, each with the reason it stands
 # recorded rather than fixed. The ledger is closed in both directions: an
 # unrecorded finding fails the gate, and so does a recorded finding the data no
 # longer produces, because an exception nothing exercises is a claim nobody

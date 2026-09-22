@@ -4,16 +4,16 @@
       "column": "docket_type",
       "key": "regulations-gov-docket-type",
       "null_count": 0,
-      "row_count": 276326,
+      "row_count": 279123,
       "table": "dockets",
       "value_counts": [
         [
           "Nonrulemaking",
-          213858
+          215999
         ],
         [
           "Rulemaking",
-          62468
+          63124
         ]
       ]
     },
@@ -21,28 +21,28 @@
       "column": "document_type",
       "key": "regulations-gov-document-type",
       "null_count": 0,
-      "row_count": 1990136,
+      "row_count": 2001598,
       "table": "documents",
       "value_counts": [
         [
           "Other",
-          725566
+          728783
         ],
         [
           "Supporting & Related Material",
-          713446
+          718365
         ],
         [
           "Notice",
-          395715
+          398181
         ],
         [
           "Rule",
-          103318
+          103847
         ],
         [
           "Proposed Rule",
-          51718
+          52049
         ],
         [
           "Public Submission",
@@ -148,21 +148,21 @@
     }
   ],
   "format_version": "spicyregs-source-domains/observed-v1",
-  "observed_at": "2026-08-03T22:35:00Z",
-  "producer_revision": "f1fcb8c9c8838071e9c45462799db788971baca4",
+  "observed_at": "2026-09-22T16:41:12Z",
+  "producer_revision": "cf38783162e6a5a853d6426485c661938429b2c9",
   "sources": [
     {
-      "byte_length": 14347053,
-      "bytes_digest": "sha256:b14cd488b7898391cff448ac4de19f85936072dcb1aa105da32eea88e6fd7938",
+      "byte_length": 11492882,
+      "bytes_digest": "sha256:ff8b1e0417c96dcccc5b60ea366d128f8721f8ff483e01c123866f301f0071a2",
       "publisher_url": "https://data.spicy-regs.dev/dockets.parquet",
-      "row_count": 276326,
+      "row_count": 279123,
       "table": "dockets"
     },
     {
-      "byte_length": 54865512,
-      "bytes_digest": "sha256:bb42f79eacd0a1bfb19b7711f5d6859d288133acffa8f585ee468acdd5cb4975",
+      "byte_length": 55293594,
+      "bytes_digest": "sha256:910b378554cc11c0c4029f69a0596e03016a9186e809a688f60d0ef763c6acc9",
       "publisher_url": "https://data.spicy-regs.dev/documents.parquet",
-      "row_count": 1990136,
+      "row_count": 2001598,
       "table": "documents"
     },
     {

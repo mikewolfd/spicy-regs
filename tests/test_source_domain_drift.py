@@ -305,8 +305,8 @@ def test_every_domain_names_a_real_published_column(documented):
 
 
 def test_the_snapshot_states_where_its_rows_came_from(snapshot):
-    assert snapshot.observed_at == "2026-08-03T22:35:00Z"
-    assert snapshot.producer_revision == "f1fcb8c9c8838071e9c45462799db788971baca4"
+    assert snapshot.observed_at == "2026-09-22T16:41:12Z"
+    assert snapshot.producer_revision == "cf38783162e6a5a853d6426485c661938429b2c9"
     sources = {str(one["table"]): one for one in snapshot.sources}
     assert sorted(sources) == ["dockets", "documents", "unified_agenda"]
     for table, source in sources.items():
@@ -317,7 +317,7 @@ def test_the_snapshot_states_where_its_rows_came_from(snapshot):
         assert source["publisher_url"] == f"{DEFAULT_R2_BASE_URL}/{table}.parquet"
         assert str(source["bytes_digest"]).startswith("sha256:")
         assert int(source["byte_length"]) > 0
-    assert sources["documents"]["row_count"] == 1_990_136
+    assert sources["documents"]["row_count"] == 2_001_598
     assert sources["unified_agenda"]["row_count"] == 3_954
 
 

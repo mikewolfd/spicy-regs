@@ -95,23 +95,24 @@ a documented domain.
 (by the same `DocumentType` list already checked against `documents`) are an open
 gap, not a decision. `comments` ships as a flat `comments.parquet` monolith like
 the other tables, so both are observable; they stay uncovered only because the
-2026-08-03 observation skipped that table. Closing the gap takes a re-observation
+2026-09-22 observation skipped that table. Closing the gap takes a re-observation
 that includes it.
 
 ## The observation
 
-`observed-domain-snapshot-2026-08-03.json` is derived, not captured: for each
+`observed-domain-snapshot-2026-09-22.json` is derived, not captured: for each
 declared column it holds the distinct values with their row support, the null
 count, and the row count of the table they came from.
 `scripts/check_source_domain_drift.py --observe --write-snapshot` generates it,
 so the code that writes it is the code that reads it back.
 
 It names its inputs: the three published tables it scanned, at
-`https://data.spicy-regs.dev/`, as of producer revision `f1fcb8c9c883`, each with
+`https://data.spicy-regs.dev/`, as of producer revision
+`cf38783162e6a5a853d6426485c661938429b2c9`, each with
 the SHA-256 and byte length the scan actually read. Those digests are provenance,
-not verification — nothing recomputes them later, because the tables run to 70 MB
+not verification — nothing recomputes them later, because the tables run to 68 MB
 and stay out of the repository. That is the whole reason a 3.7 KB summary of
-2,270,416 rows exists.
+2,284,675 rows exists.
 
 ## Refreshing it
 
