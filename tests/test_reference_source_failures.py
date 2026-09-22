@@ -197,6 +197,59 @@ def test_usa_top_page_bound_is_an_explicit_selection():
     assert len(transport.calls) == 1
 
 
+@pytest.mark.parametrize(
+    "second_page",
+    [
+        usa_page([{**RECIPIENT, "id": "r2-R"}], total=3),  # count changed
+        usa_page([RECIPIENT], total=2),  # repeated identity across pages
+        usa_page([], total=2),  # terminal count is short
+        usa_page([], total=2, next_page=3),  # empty nonterminal page
+        usa_page([{**RECIPIENT, "id": "r2-R"}], total=2, next_page=4),  # skipped page
+    ],
+)
+def test_usa_refuses_cross_page_inconsistency(second_page):
+    transport = Transport(usa_page([RECIPIENT], total=2, next_page=2), second_page)
+    records = selected("usa", transport, per_page=1).iter_records()
+    assert next(records)["id"] == RECIPIENT["id"]
+    with pytest.raises(REFUSALS):
+        list(records)
+    assert len(transport.calls) == 2
+
+
+def test_fcc_named_proceedings_keep_each_selection_and_shared_filing():
+    # A filing can legitimately appear in both selected proceedings. The reader
+    # preserves both observations; table merging owns identity deduplication.
+    shared = {**FCC_FILING, "proceedings": [{"name": "17-108"}, {"name": "23-320"}]}
+    second = {**FCC_FILING, "id_submission": "f2"}
+    transport = Transport({"filing": [shared]}, {"filing": [shared, second]})
+    reader = selected("fcc-filings", transport, proceedings=("17-108", "23-320"))
+    assert list(reader.iter_records()) == [shared, shared, second]
+    assert [r.url.params["proceedings.name"] for r in transport.calls] == ["17-108", "23-320"]
+    assert reader._current_proceeding is None
+    assert reader._reader is None
+
+
+def test_fcc_second_proceeding_failure_preserves_prior_output(monkeypatch, tmp_path):
+    module = importlib.import_module("spicy_regs.transforms.build_fcc_ecfs")
+    table = pa.Table.from_pylist([module._shape_filing(FCC_FILING)], schema=module._FILING_SCHEMA)
+    prior = tmp_path / "_fcc_filings_prior.parquet"
+    output = tmp_path / "fcc_filings.parquet"
+    pq.write_table(table, prior)
+    pq.write_table(table, output)
+    before = prior.read_bytes(), output.read_bytes()
+    transport = Transport({"filing": [FCC_FILING]}, 500)
+    reader = selected("fcc-filings", transport, proceedings=("17-108", "23-320"))
+    monkeypatch.setattr(module, "FccEcfsFilingsReader", lambda **kwargs: reader)
+
+    with pytest.raises(REFUSALS):
+        module.build_fcc_filings(tmp_path)
+
+    assert (prior.read_bytes(), output.read_bytes()) == before
+    assert [r.url.params["proceedings.name"] for r in transport.calls] == ["17-108", "23-320"]
+    assert reader._current_proceeding is None
+    assert reader._reader is None
+
+
 def test_gao_validates_whole_feed_before_applying_selected_item_bound():
     assert list(selected("gao", Transport(FEED), max_records=1).iter_records()) == [
         {
