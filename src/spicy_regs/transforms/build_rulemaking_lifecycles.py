@@ -46,17 +46,23 @@ def build_rulemaking_lifecycles(output_dir: Path) -> Path:
 
     query = f"""
     COPY (
-        WITH props AS (
+        WITH filtered AS (
+            SELECT docket_id, agency_code, title, document_type,
+                   TRY_CAST(posted_date AS DATE) AS posted
+            FROM read_parquet('{documents_file}')
+            WHERE document_type IN ('Proposed Rule', 'Rule')
+        ),
+        props AS (
             SELECT docket_id, agency_code,
                    ANY_VALUE(title) AS title,
-                   MIN(TRY_CAST(posted_date AS DATE)) AS proposed_date
-            FROM read_parquet('{documents_file}')
+                   MIN(posted) AS proposed_date
+            FROM filtered
             WHERE document_type = 'Proposed Rule'
             GROUP BY 1, 2
         ),
         finals AS (
-            SELECT docket_id, MIN(TRY_CAST(posted_date AS DATE)) AS final_date
-            FROM read_parquet('{documents_file}')
+            SELECT docket_id, MIN(posted) AS final_date
+            FROM filtered
             WHERE document_type = 'Rule'
             GROUP BY 1
         ),

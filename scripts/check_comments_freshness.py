@@ -38,10 +38,11 @@ import sys
 
 from spicy_regs import mcp_server
 
-# Per-agency: index's latest (year, month) as YYYYMM vs the latest posted_date
-# month actually present in the comments rows. A frugal aggregation — MAX is
-# streaming and the GROUP BY is ~hundreds of agencies — so it stays well within
-# memory even over tens of millions of comment rows.
+# Per-agency, one pass over the comments rows: the index's latest (year, month)
+# as YYYYMM vs the latest posted_date month actually present, plus the row and
+# distinct-id counts so the uniqueness check needs no second scan. A frugal
+# aggregation — MAX/COUNT are streaming and the GROUP BY is ~hundreds of
+# agencies — so it stays well within memory even over tens of millions of rows.
 _FRESHNESS_SQL = """
 WITH idx AS (
     SELECT agency_code,
@@ -57,7 +58,8 @@ rows AS (
                EXTRACT(YEAR FROM CAST(posted_date AS TIMESTAMP)) * 100
                + EXTRACT(MONTH FROM CAST(posted_date AS TIMESTAMP))
            ) AS rows_max_ym,
-           COUNT(*) AS actual_rows
+           COUNT(*) AS actual_rows,
+           COUNT(DISTINCT comment_id) AS distinct_ids
     FROM comments
     WHERE agency_code IS NOT NULL
     {rows_where}
@@ -67,30 +69,11 @@ SELECT i.agency_code,
        i.idx_max_ym,
        r.rows_max_ym,
        i.idx_rows,
-       COALESCE(r.actual_rows, 0) AS actual_rows
+       COALESCE(r.actual_rows, 0) AS actual_rows,
+       COALESCE(r.distinct_ids, 0) AS distinct_ids
 FROM idx i
 LEFT JOIN rows r USING (agency_code)
-WHERE r.agency_code IS NULL
-   OR (i.idx_max_ym IS NOT NULL AND (r.rows_max_ym IS NULL OR r.rows_max_ym < i.idx_max_ym))
 ORDER BY i.idx_rows DESC
-"""
-
-
-# Per-agency duplication: the row-level surface should hold exactly one row per
-# comment_id. When count(*) exceeds count(distinct comment_id) the table carries
-# duplicate rows (the one-time seed did this for agencies loaded more than once),
-# which inflates counts and repeats comments. This catches that class of bug that
-# the month-lag freshness check above can't see.
-_DUP_SQL = """
-SELECT agency_code,
-       count(*) AS rows,
-       count(DISTINCT comment_id) AS distinct_ids
-FROM comments
-WHERE agency_code IS NOT NULL
-{rows_where}
-GROUP BY agency_code
-HAVING count(*) > count(DISTINCT comment_id)
-ORDER BY count(*) - count(DISTINCT comment_id) DESC
 """
 
 
@@ -100,40 +83,40 @@ def _fmt_ym(ym: int | None) -> str:
     return f"{ym // 100:04d}-{ym % 100:02d}"
 
 
-def _check_freshness(con, idx_where: str, rows_where: str, limit: int) -> bool:
-    """Report agencies whose comment rows lag the index. Returns True if any flagged."""
-    flagged = con.execute(_FRESHNESS_SQL.format(idx_where=idx_where, rows_where=rows_where)).fetchall()
-    if not flagged:
-        print("OK (freshness): every agency's comment rows are at least as current as the index.")
-        return False
+def _check_comments(con, idx_where: str, rows_where: str, limit: int) -> tuple[bool, bool]:
+    """One pass reports both freshness lag and duplicate rows. Returns (stale, duplicated)."""
+    rows = con.execute(_FRESHNESS_SQL.format(idx_where=idx_where, rows_where=rows_where)).fetchall()
 
-    print(f"STALE: {len(flagged)} agency partition(s) lag the comments index\n")
+    stale_rows = [
+        r
+        for r in rows
+        if (r[4] == 0 and r[2] is None)  # the index knows the agency; comment rows are absent
+        or (r[1] is not None and (r[2] is None or r[2] < r[1]))  # rows absent a month or lag the index
+    ]
+    duplicated_rows = sorted((r for r in rows if r[4] > r[5]), key=lambda r: r[4] - r[5], reverse=True)
+    total_dupes = sum(r[4] - r[5] for r in duplicated_rows)
+
+    print(f"STALE: {len(stale_rows)} agency partition(s) lag the comments index\n")
     print(f"{'agency':<10} {'index_to':<9} {'rows_to':<9} {'index_rows':>12} {'actual_rows':>12}")
     print("-" * 56)
-    for agency, idx_ym, rows_ym, idx_rows, actual_rows in flagged[:limit]:
+    for agency, idx_ym, rows_ym, idx_rows, actual_rows, _distinct in stale_rows[:limit]:
         print(f"{agency:<10} {_fmt_ym(idx_ym):<9} {_fmt_ym(rows_ym):<9} {idx_rows:>12,} {actual_rows:>12,}")
-    if len(flagged) > limit:
-        print(f"... and {len(flagged) - limit} more (raise --limit to see them)")
-    return True
+    if len(stale_rows) > limit:
+        print(f"... and {len(stale_rows) - limit} more (raise --limit to see them)")
 
-
-def _check_duplicates(con, rows_where: str, limit: int) -> bool:
-    """Report agencies with duplicate comment_id rows. Returns True if any flagged."""
-    flagged = con.execute(_DUP_SQL.format(rows_where=rows_where)).fetchall()
-    if not flagged:
+    if duplicated_rows:
+        print(f"\nDUPLICATED: {len(duplicated_rows)} agency(ies) carry duplicate comment rows ({total_dupes:,} duplicate rows)\n")
+        print(f"{'agency':<10} {'rows':>14} {'distinct_ids':>14} {'factor':>8}")
+        print("-" * 48)
+        for agency, _idx, _rows_ym, _idx_rows, rows_n, distinct in duplicated_rows[:limit]:
+            factor = rows_n / distinct if distinct else 0
+            print(f"{agency:<10} {rows_n:>14,} {distinct:>14,} {factor:>7.2f}x")
+        if len(duplicated_rows) > limit:
+            print(f"... and {len(duplicated_rows) - limit} more (raise --limit to see them)")
+    else:
         print("OK (uniqueness): every agency's comment rows are unique by comment_id.")
-        return False
 
-    total_dupes = sum(rows - distinct for _, rows, distinct in flagged)
-    print(f"\nDUPLICATED: {len(flagged)} agency(ies) carry duplicate comment rows ({total_dupes:,} duplicate rows)\n")
-    print(f"{'agency':<10} {'rows':>14} {'distinct_ids':>14} {'factor':>8}")
-    print("-" * 48)
-    for agency, rows, distinct in flagged[:limit]:
-        factor = rows / distinct if distinct else 0
-        print(f"{agency:<10} {rows:>14,} {distinct:>14,} {factor:>7.2f}x")
-    if len(flagged) > limit:
-        print(f"... and {len(flagged) - limit} more (raise --limit to see them)")
-    return True
+    return bool(stale_rows), bool(duplicated_rows)
 
 
 def main() -> int:
@@ -154,8 +137,7 @@ def main() -> int:
     # directly, not the shared cached connection the MCP tools reuse.
     con = mcp_server._build_connection()
     try:
-        stale = _check_freshness(con, idx_where, rows_where, args.limit)
-        duplicated = _check_duplicates(con, rows_where, args.limit)
+        stale, duplicated = _check_comments(con, idx_where, rows_where, args.limit)
     finally:
         con.close()
 

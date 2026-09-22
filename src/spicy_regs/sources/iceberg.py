@@ -583,8 +583,6 @@ def export_public_comments(output_dir: Path, record_type: RecordType) -> dict[st
         # writable dir here — this never runs on the read-only serverless host).
         con.execute("SET preserve_insertion_order=false")
         con.execute("SET memory_limit='6GB'")
-        total = con.execute(f"SELECT count(*) FROM {_qualified(record_type)}").fetchone()[0]
-        logger.info("iceberg: exporting {:,} catalog rows to the public comments mirror", total)
         monolith = _export_parquet(con, record_type, output_dir)
         index_file = _build_comments_index(con, record_type, output_dir)
         logger.info("iceberg: wrote public monolith {} and index {}", monolith, index_file)

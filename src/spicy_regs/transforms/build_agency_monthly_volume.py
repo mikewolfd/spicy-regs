@@ -40,15 +40,22 @@ def build_agency_monthly_volume(output_dir: Path) -> Path:
         con.execute("SET preserve_insertion_order=false")
         con.execute("SET threads=2")
         con.execute(f"SET temp_directory='{spill_dir}'")
+        # One scan of the wide documents table into the three columns both
+        # queries read; the counts and the volume grouping then run over the
+        # narrow temp table instead of re-scanning the payload columns.
+        con.execute(
+            "CREATE TEMP TABLE _vol_docs AS "
+            "SELECT agency_code, posted_date, document_type FROM read_parquet($documents)",
+            {"documents": str(documents_file)},
+        )
         counts = con.execute(
             """
             SELECT COUNT(*),
                 COUNT(*) FILTER (WHERE posted_date IS NULL),
                 COUNT(*) FILTER (WHERE posted_date IS NOT NULL AND TRY_CAST(posted_date AS DATE) IS NULL),
                 COUNT(*) FILTER (WHERE EXTRACT(YEAR FROM TRY_CAST(posted_date AS DATE)) = 0)
-            FROM read_parquet($documents)
-            """,
-            {"documents": str(documents_file)},
+            FROM _vol_docs
+            """
         ).fetchone()
         assert counts is not None
         input_rows, missing_dates, invalid_dates, year_zero_dates = counts
@@ -73,7 +80,7 @@ def build_agency_monthly_volume(output_dir: Path) -> Path:
                 EXTRACT(MONTH FROM TRY_CAST(posted_date AS DATE)) AS month,
                 document_type,
                 COUNT(*) AS document_count
-            FROM read_parquet($documents)
+            FROM _vol_docs
             WHERE posted_date IS NOT NULL
               AND TRY_CAST(posted_date AS DATE) IS NOT NULL
               AND EXTRACT(YEAR FROM TRY_CAST(posted_date AS DATE)) <> 0
@@ -81,7 +88,7 @@ def build_agency_monthly_volume(output_dir: Path) -> Path:
             ORDER BY agency_code, year, month
         ) TO $output (FORMAT PARQUET, COMPRESSION ZSTD, KV_METADATA $metadata);
         """
-        con.execute(volume_query, {"documents": str(documents_file), "output": str(volume_file), "metadata": metadata})
+        con.execute(volume_query, {"output": str(volume_file), "metadata": metadata})
         con.close()
     else:
         # No documents yet — still emit the artifact with a stable schema so

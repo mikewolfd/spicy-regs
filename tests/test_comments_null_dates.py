@@ -80,7 +80,17 @@ def test_freshness_handles_unknown_only_agencies_and_still_flags_missing_or_lagg
         con.execute("INSERT INTO comments VALUES ('u','EPA',NULL),('k','FDA','2025-01-01')")
         con.execute("INSERT INTO comments_index VALUES ('EPA',NULL,NULL,1),('FDA',2025,2,1),('MISSING',NULL,NULL,1)")
         got = con.execute(_FRESHNESS_SQL.format(idx_where="", rows_where="")).fetchall()
-        assert {row[0] for row in got} == {"FDA", "MISSING"}
+        # The single query now also carries the uniqueness aggregates; the
+        # freshness set is the same predicate the script applies over them.
+        stale = {
+            row[0]
+            for row in got
+            if (row[4] == 0 and row[2] is None)
+            or (row[1] is not None and (row[2] is None or row[2] < row[1]))
+        }
+        duplicated = {row[0] for row in got if row[4] > row[5]}
+        assert stale == {"FDA", "MISSING"}
+        assert duplicated == set()
 
 
 def test_partial_null_partition_coordinates_refuse_index_replacement(tmp_path):

@@ -192,8 +192,13 @@ def build_federal_register(
         )
 
     try:
+        # Materialize the prior ∪ fresh union once: the checks, the winner
+        # window and the final COPY each scan it, and re-scanning the wide
+        # abstract/JSON payload columns four times per run was the largest
+        # cost in this rollup.
+        con.execute(f"CREATE TEMP TABLE _union AS {union}")
         invalid = con.execute(
-            f"""SELECT document_number, publication_date FROM ({union})
+            """SELECT document_number, publication_date FROM _union
                 WHERE document_number IS NULL OR trim(document_number) = ''
                    OR publication_date IS NULL
                    OR try_cast(publication_date AS DATE) IS NULL
@@ -203,7 +208,7 @@ def build_federal_register(
         if invalid:
             raise ValueError(f"Federal Register record lacks a complete canonical identity: {invalid!r}")
         conflict = con.execute(
-            f"""SELECT document_number, publication_date, _src FROM ({union})
+            f"""SELECT document_number, publication_date, _src FROM _union
                 GROUP BY document_number, publication_date, _src
                 HAVING count(DISTINCT ({cols})) > 1 LIMIT 1"""
         ).fetchone()
@@ -213,11 +218,11 @@ def build_federal_register(
         # every payload column exceeds the 4GB limit on the retained public
         # table; selecting positions first keeps the same winner semantics.
         con.execute(
-            f"""CREATE TEMP TABLE winners AS
+            """CREATE TEMP TABLE winners AS
                 SELECT _src, _row FROM (
                     SELECT _src, _row, row_number() OVER (
                         PARTITION BY document_number, publication_date ORDER BY _src DESC, _row
-                    ) AS _rn FROM ({union})
+                    ) AS _rn FROM _union
                 ) WHERE _rn = 1"""
         )
         merged_file = output_dir / "_fr_merged.parquet"
@@ -225,7 +230,7 @@ def build_federal_register(
             f"""
         COPY (
             SELECT {cols}, {_RIN_SQL} AS rin
-            FROM ({union}) records JOIN winners USING (_src, _row)
+            FROM _union records JOIN winners USING (_src, _row)
             ORDER BY publication_date DESC, document_number
         ) TO '{merged_file}' (FORMAT PARQUET, COMPRESSION ZSTD, ROW_GROUP_SIZE 50000);
             """
