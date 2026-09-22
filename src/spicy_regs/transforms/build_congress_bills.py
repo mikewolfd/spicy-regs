@@ -1,62 +1,36 @@
 """Transform: build ``congress_bills.parquet`` from the Congress.gov REST API.
 
 Produces a 10-column all-VARCHAR schema keyed on ``bill_id`` (e.g.
-``118-hr-1234``), the legislative record complementary to the regulations.gov
+``118-hr-1234``) from the ``/bill`` list payload alone — no per-bill detail
+fetches — the legislative record complementary to the regulations.gov
 ``dockets``/``documents`` view.
 
-Incremental by design. A full re-fetch of the entire bill archive every run
-would be wasteful *and* would trip the R2 catastrophic-shrink guard on any short
-run. Instead we:
+**Incremental.** Best-effort download the prior table; fetch only bills updated
+since its max ``update_date`` (minus a short overlap) through at most
+:data:`MAX_WINDOW_DAYS` later, with the bounds sent to the API as
+``fromDateTime``/``toDateTime``; dedup the union on ``bill_id``, preferring the
+fresh row. No prior table means a full backfill, and chunks can be driven
+explicitly with ``CONGRESS_SINCE``/``CONGRESS_UNTIL``. The window is capped
+because a run publishes nothing until its walk finishes, so one unbounded
+catch-up is all-or-nothing: the first 510-day attempt fetched 190,000 of
+238,197 bills, hit the job timeout and persisted nothing, and capping lets each
+run publish and advance the watermark so a deep backfill converges.
 
-1. Best-effort download the prior ``congress_bills.parquet`` from R2.
-2. Fetch only bills updated since its max ``update_date`` (minus a short overlap
-   to catch late-updated bills), through at most :data:`MAX_WINDOW_DAYS` later.
-   Those bounds go to the API as ``fromDateTime``/``toDateTime``, so the server
-   returns the window and the reader pages it to exhaustion.
-3. Dedup the union on ``bill_id``, preferring the freshly fetched row.
-
-With no prior table (first run) step 2 becomes a full backfill.
-
-**Why the window is capped.** A run publishes nothing until its walk finishes,
-so one unbounded catch-up is all-or-nothing: the first attempt at the 510-day
-freeze fetched 190,000 of 238,197 bills, hit the job timeout, and persisted
-nothing — it would have retried the same doomed walk every night. Capping the
-window makes each run publish and advance the watermark, so a deep backfill
-converges over successive runs instead of never. Chunks can also be driven
-explicitly with ``CONGRESS_SINCE``/``CONGRESS_UNTIL``.
-
-Scope is deliberately **list-level only**: every column comes from the ``/bill``
-list payload, so there are no per-bill detail fetches (no N+1).
-
-**Refuse-and-retry replaces warn-and-publish.** The old hand-rolled reader
-warned when a walk returned materially fewer bills than the server had
-advertised and published the short result anyway — the completeness-tolerance
-heuristic that let the 510-day freeze go unnoticed for as long as it did. The
-spicy-docs reader this module now fetches through (see
-:mod:`spicy_regs.sources.congress_bills`) refuses outright — raises
-``PagedJsonSourceError``, publishes nothing — the moment its declared and
-observed counts disagree, at any point in the walk, not only at the end. That
-refusal is the right *evidence* rule and stays absolute in the reader: a
-window this repo asked for and did not fully receive must never look like a
-completed run. But an absolute refusal has an operational cost the reader
-cannot see: a nightly window that closes at "now" is walked over several
-minutes, and a bill the publisher edits *during* that walk can move its own
-``updateDate`` past ``toDateTime``, drop out of the result set mid-walk, and
-shrink the declared count out from under a request already in flight — a
-transient publisher-side race, not a truncated or out-of-order walk. Retrying
-the identical window is this module's job, not the reader's: :func:`_fetch_bills`
-asks the same ``since``/``until`` window again, up to :data:`FETCH_ATTEMPTS`
-times with a short pause between attempts, on the theory that the publisher's
-state has settled by the next attempt — but only when the refusal actually
-looks like that drift (its context names both a ``declaredCount`` and an
-``observedCount``); a permanent refusal (malformed JSON, a bad date
-parameter, a 404) propagates on the first attempt rather than spend the same
-pauses reaching the same failure. A drift refusal that survives all
-:data:`FETCH_ATTEMPTS` attempts propagates and fails the run loudly — the
-run publishes nothing and the next scheduled run tries again from the same
-watermark, exactly as a first-attempt refusal always did; retrying only buys
-tolerance for a drift that resolves itself within a few attempts, not a
-license to publish a table this repo never actually walked in full.
+**Refuse-and-retry replaces warn-and-publish.** The spicy-docs reader this
+module fetches through (see :mod:`spicy_regs.sources.congress_bills`) raises
+``PagedJsonSourceError`` and publishes nothing the moment its declared and
+observed counts disagree, at any point in the walk — a window this repo asked
+for and did not fully receive must never look like a completed run. But a
+nightly window closing at "now" is walked over minutes, and a bill edited
+mid-walk moves its ``updateDate`` past ``toDateTime`` and shrinks the declared
+count out from under a request in flight, which is a transient publisher-side
+race rather than a truncated walk. :func:`_fetch_bills` therefore re-asks the
+identical window up to :data:`FETCH_ATTEMPTS` times with a pause between
+attempts — but only when the refusal's context names both a ``declaredCount``
+and an ``observedCount`` (the drift shape); a permanent refusal (malformed
+JSON, a bad date parameter, a 404) propagates on the first attempt, and a drift
+that survives every attempt propagates too, so a table never walked in full is
+never published.
 """
 
 from __future__ import annotations

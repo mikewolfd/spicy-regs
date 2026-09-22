@@ -15,6 +15,9 @@ def update_comments_index(output_dir: Path, changed_files: list[Path]) -> Path:
     The index (``comments_index.parquet``) maps each partition to its
     row count so the frontend can discover partition files and compute
     comment counts without scanning the actual data.
+
+    A partition whose year and month are not both present or both the Hive
+    NULL marker raises ValueError rather than being indexed.
     """
     comments_dir = output_dir / "comments"
     index_file = output_dir / "comments_index.parquet"

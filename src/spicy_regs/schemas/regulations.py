@@ -14,6 +14,7 @@ from spicy_regs.schemas.base import RecordType
 
 
 def _extract_comment(d: dict) -> dict:
+    """Map a regulations.gov comment payload (with its included attachments) to a flat comment record."""
     attrs = d.get("data", {}).get("attributes", {})
 
     # Build compact attachments JSON from the included array
@@ -55,6 +56,7 @@ def _extract_comment(d: dict) -> dict:
 
 
 def _extract_document(d: dict) -> dict:
+    """Map a regulations.gov document payload to a flat record, keeping every file rendition in attachments_json."""
     attrs = d.get("data", {}).get("attributes", {})
 
     # Each fileFormats entry is one downloadable rendition of the document

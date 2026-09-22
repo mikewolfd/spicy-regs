@@ -498,6 +498,7 @@ def test_fetch_does_not_retry_a_non_drift_refusal(tmp_path, monkeypatch):
 
 
 def _detail_reader(body: dict):
+    """A listing reader over a MockTransport answering the 92/hr/2185 detail route with ``body``."""
     from spicy_regs.sources.congress_bills import listing_reader
 
     def respond(request: httpx.Request) -> httpx.Response:

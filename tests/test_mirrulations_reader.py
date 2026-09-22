@@ -14,6 +14,7 @@ AGENCY = "EPA"
 
 
 def _docket_payload(docket_id: str) -> dict:
+    """One regulations.gov docket payload with only the fields the reader reads."""
     return {
         "data": {
             "id": docket_id,
@@ -64,6 +65,8 @@ class _FakeBucket:
 
 
 class _FakeS3Resource:
+    """A boto3 S3 resource facade over an in-memory key store."""
+
     def __init__(self, store: dict[str, bytes]) -> None:
         self._store = store
 
@@ -111,10 +114,12 @@ class _FlakyResource(_FakeS3Resource):
 
 
 def _docket_key(docket_id: str) -> str:
+    """The Mirrulations S3 key for a docket's JSON file."""
     return f"{PREFIX}/{AGENCY}/{docket_id}/text-{docket_id}/docket/{docket_id}.json"
 
 
 def _make_store() -> dict[str, bytes]:
+    """Two docket payloads plus non-JSON and binary keys that listing must ignore."""
     return {
         _docket_key("EPA-2024-0001"): dumps(_docket_payload("EPA-2024-0001")).encode(),
         _docket_key("EPA-2025-0002"): dumps(_docket_payload("EPA-2025-0002")).encode(),
@@ -207,6 +212,7 @@ class _CountingResource(_FakeS3Resource):
 
 
 def _typed_store() -> dict[str, bytes]:
+    """One docket, one document, one comment, and a binary key under one docket prefix."""
     base = f"{PREFIX}/{AGENCY}/EPA-2024-0001/text-EPA-2024-0001"
     return {
         f"{base}/docket/EPA-2024-0001.json": dumps(_docket_payload("EPA-2024-0001")).encode(),

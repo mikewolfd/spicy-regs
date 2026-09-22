@@ -1,3 +1,5 @@
+"""Package facade: re-exports every transform, merge helper and PDF-text entry point it defines."""
+
 from spicy_regs.transforms.base import Transform
 from spicy_regs.transforms.build_agency_monthly_volume import build_agency_monthly_volume
 from spicy_regs.transforms.build_agency_rollups import build_agency_rollups

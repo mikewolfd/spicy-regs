@@ -3,16 +3,9 @@
 Every rollup that ingests an external source and republishes an incremental
 table follows the same three steps: best-effort download the prior published
 table from R2, dedup the union of prior + freshly fetched rows on an identity
-key (preferring the fresh row), and order the result by a version column.
-Lifted out of ``build_congress_bills.py`` (its original prior-download + DuckDB
-merge, ~lines 135-210) and parameterised over the column tuple, identity, and
-version column, so a table with a different key shape than a single
-``bill_id`` does not have to copy the SQL. ``build_congress_bills`` now calls
-this directly; the behavior-preservation proof is
-``tests/test_congress_bills.py::test_build_congress_bills_merges_prior_and_fresh_rows``,
-which seeds a prior Parquet, stubs the fetch and the R2 download, and asserts
-on the merged output — the other tests in that file cover ``_shape``,
-``_bill_id`` and windowing only, never the merge itself.
+key (preferring the fresh row), and order the result by a version column. This
+is that step, parameterised over the column tuple, identity and version column
+so a table with any key shape can use it.
 """
 
 from __future__ import annotations
@@ -33,13 +26,11 @@ def prior_scratch_path(output_dir: Path, name: str) -> Path:
     """The local path :func:`merge_table` caches/reuses the prior table under.
 
     Public so a caller that must inspect the prior table *before* merging —
-    e.g. computing an incremental fetch window from its max version column —
-    can download to this exact path first. When that download *succeeds*,
-    :func:`merge_table` finds the file already present and does not re-download
-    it. When it fails (no prior table exists yet — a cold start), no file is
-    written, and ``merge_table`` cannot tell "not tried" from "tried and
-    absent" from the path alone; pass its own result as ``prior_present`` to
-    ``merge_table`` so a known-absent prior isn't downloaded a second time.
+    e.g. to size an incremental fetch window from its max version column — can
+    download to this exact path first; a successful download means
+    :func:`merge_table` finds the file present and does not re-download it. A
+    failed download (a cold start) writes nothing, so pass the caller's own
+    result as ``prior_present`` so a known-absent prior isn't asked for twice.
     """
     return output_dir / f"_{name}_prior.parquet"
 
@@ -51,12 +42,11 @@ def published_table(
 
     ``None`` when nothing is published yet, which every caller treats as a cold
     start rather than an error. This is the one idiom behind every "read a
-    published table before merging" — a transform's own prior, for a watermark
-    or a held-set, and the two merge-time joins against another rollup's
-    published output (``press_releases`` against ``congress_bills``,
-    ``roll_call_votes`` against ``bill_vote_references``). Pass the result's
-    presence on to :func:`merge_table` as ``prior_present`` when the table is
-    the caller's own, so a known-absent prior is not asked for twice.
+    published table before merging": a transform's own prior, for a watermark
+    or a held-set, and the merge-time joins against another rollup's published
+    output. Pass the result's presence on to :func:`merge_table` as
+    ``prior_present`` when the table is the caller's own, so a known-absent
+    prior is not asked for twice.
     """
     path = prior_scratch_path(output_dir, name)
     return path if (path.exists() or download_prior(f"{name}.parquet", path)) else None
@@ -79,62 +69,53 @@ def merge_table(
 ) -> Path:
     """Merge freshly fetched ``rows`` against the prior ``remote_key`` table.
 
-    Writes ``output_dir / remote_key``: the union of the prior table (best-effort
-    downloaded via ``download_prior``, defaulting to :func:`spicy_regs.sources.r2.download`)
-    and ``rows``, deduplicated on ``identity`` (all columns must be non-null;
-    the fresh row wins over the prior one on a repeated identity), ordered by
-    ``version_column`` descending then ``identity`` — or by ``identity`` alone
-    when ``version_column`` is ``None``, which is how the two contracts with no
+    Writes ``output_dir / remote_key``: the union of the prior table
+    (best-effort downloaded via ``download_prior``, defaulting to
+    :func:`spicy_regs.sources.r2.download`) and ``rows``, deduplicated on
+    ``identity`` (every identity column must be non-null; the fresh row wins
+    over the prior one on a repeated identity), ordered by ``version_column``
+    descending then ``identity`` — or by ``identity`` alone when
+    ``version_column`` is ``None``, which is how the two contracts with no
     freshness axis (``section_diff_items``, ``financial_changes``, both ordered
-    within their parent by a sequence number) publish.
-
-    ``columns`` becomes an all-VARCHAR Arrow schema — every published table in
-    this pipeline is string-typed, so callers coerce before calling this. An
-    absent prior table (first run, or ``download_prior`` returning ``False``)
-    degrades to publishing ``rows`` alone, which is a full backfill, not an
-    error.
+    by a sequence number within their parent) publish.
+    ``columns`` becomes an all-VARCHAR Arrow schema, so callers coerce before
+    calling. An absent prior table (first run, or ``download_prior`` returning
+    ``False``) degrades to publishing ``rows`` alone, which is a full backfill,
+    not an error.
 
     A prior table missing some of ``columns`` is also not an error: each absent
     column is selected as a VARCHAR NULL, so appending a column to a contract
     is a NULL backfill on the rows already published rather than a migration.
     ``congress_bills`` is the live case — its first ten columns are frozen
     because other repositories pin that prefix by digest, and the bill family
-    appends thirty-eight more, so the first family run merges 48-column rows
-    onto a 10-column published table.
+    appends thirty-eight more.
 
     ``coalesce_prior``: merge column-wise instead of row-wise. The default
-    (``False``) is row replacement — a fresh row wins whole, and a NULL in it is
-    a real value that overwrites. Set it when a table has **two writers that own
-    different column subsets**, where a fresh NULL means "I do not populate this
-    column" rather than "this is now empty": the merge becomes a FULL OUTER JOIN
-    on the identity emitting ``COALESCE(fresh, prior)`` per column, so the narrow
-    writer updates its own columns and leaves the others standing.
-    ``congress_bills`` is the only such table — ``congress-bills`` walks the whole
-    archive for the frozen ten while ``bill-family`` fills all forty-eight — and
-    :func:`merge_contract_table` sets the flag for it alone. Without it, a
-    narrow run does not merely NULL the appended columns, it *drops* them: the
-    projection onto ``columns`` rewrites the file at the narrow writer's width,
-    and at realistic scale the result is 96.6% of the prior bytes, which the R2
-    shrink guard (0.5) does not notice.
+    (``False``) is row replacement — a fresh row wins whole, and a NULL in it
+    is a real value that overwrites. Set it when a table has **two writers that
+    own different column subsets**, where a fresh NULL means "I do not populate
+    this column" rather than "this is now empty": the merge becomes a FULL
+    OUTER JOIN on the identity emitting ``COALESCE(fresh, prior)`` per column.
+    Without it, a narrow run does not merely NULL the appended columns, it
+    *drops* them, and the loss is small enough that the R2 shrink guard (0.5)
+    does not notice. :func:`merge_contract_table` sets the flag for
+    ``congress_bills`` alone.
 
     ``prior_present``: pass ``False`` when the caller already tried
-    :func:`prior_scratch_path` and knows the prior is absent (e.g. it read the
-    prior table's max version to size an incremental fetch window first, and
-    that download itself returned ``False``) — this skips calling
-    ``download_prior`` a second time for the same known-absent object.
-    ``True`` or the default ``None`` leave the existing
-    "already on disk, else ask ``download_prior``" behavior unchanged.
+    :func:`prior_scratch_path` and knows the prior is absent, skipping a second
+    ``download_prior`` call for the same known-absent object; ``True`` or the
+    default ``None`` leave the disk-then-download behavior unchanged.
 
     ``replace_parents`` names a parent column and the successfully evaluated
-    parent IDs. Remove their prior relationship rows before merging, including
-    when their fresh result is empty. Unread or failed parents keep their rows.
-    A tuple of column names and a collection of matching value tuples replaces
-    composite scopes, such as one file within one package, without modifying
-    the retained prior file before the merge succeeds.
+    parent IDs: remove their prior relationship rows before merging, including
+    when their fresh result is empty, while unread or failed parents keep their
+    rows. A tuple of column names and a collection of matching value tuples
+    replaces composite scopes, such as one file within one package, without
+    modifying the retained prior file before the merge succeeds.
 
     ``parquet_metadata`` writes processing checkpoints in the same artifact as
-    the rows, including a successful read producing zero rows. Callers supply
-    the complete metadata to retain; it is not inferred from row presence.
+    the rows, including a successful read producing zero rows; callers supply
+    the complete metadata to retain, it is not inferred from row presence.
     """
     import duckdb
 
@@ -337,23 +318,20 @@ def fill_statutes_at_large_cite(
 ) -> int:
     """Fill ``statutes_at_large_cite`` on a merged ``congress_bills`` from the published ``laws`` table.
 
-    A merge-time join of the kind ``pipelines/rollups/base.py`` permits: ``laws``
-    is an ingest rollup's output, read best-effort, and both writers of
-    ``congress_bills`` declare it in ``soft_inputs``. Runs *after* the
-    column-wise merge so the coalesce semantics that protect the two writers'
-    columns are untouched, and takes the law's citation where ``laws`` states
-    one, keeping a citation already here where it does not — ``laws`` never
-    publishes a captured citation as NULL, so nothing is ever cleared. One law
-    per bill: where the route lists two law entries for one bill (measured 0
-    of 108 on the 119th), the larger ``update_date`` wins, then the key.
+    A merge-time join of the kind ``pipelines/rollups/base.py`` permits:
+    ``laws`` is an ingest rollup's output, read best-effort, and both writers
+    of ``congress_bills`` declare it in ``soft_inputs``. Runs *after* the
+    column-wise merge so the coalesce semantics protecting the two writers'
+    columns are untouched, and keeps a citation already on the row where
+    ``laws`` states none (``laws`` never publishes a captured citation as NULL,
+    so nothing is ever cleared). One law per bill: where the route lists two
+    law entries for one bill, the larger ``update_date`` wins, then the key.
 
     Best-effort end to end, which is the ``soft_inputs`` promise: an absent
     ``laws`` table, and equally a corrupt, truncated or column-short one,
     leaves ``out_file`` exactly as :func:`merge_table` wrote it, with the
-    failure logged, rather than failing a ``congress-bills`` or
-    ``bill-family`` run after its own merge has already succeeded. The
-    scratch copy of ``laws`` is removed either way. Returns how many rows
-    now carry a citation.
+    failure logged, rather than failing the run after its own merge has
+    succeeded. Returns how many rows now carry a citation.
     """
     import duckdb
     from spicy_docs.transport.credentials import scrub_credential
@@ -469,7 +447,8 @@ def retire_prior_rows(prior_file: Path, **scope: str) -> int:
     scratch file without the scope's rows before the merge makes that merge
     "replace the scope", and leaves every other scope's rows standing (an
     earlier Congress keeps its last capture). ``scope`` names columns of the
-    prior table; values are bound as parameters.
+    prior table; values are bound as parameters, and an empty scope or a
+    non-snake_case column refuses.
     """
     import duckdb
 

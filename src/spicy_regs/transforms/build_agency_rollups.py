@@ -1,11 +1,9 @@
 """Transform: build the per-agency materialized rollups (stats + monthly volume).
 
-Thin orchestrator retained for backward compatibility. The logic now lives in
-two focused, independently-runnable transforms so each can be materialized by
-its own decoupled rollup pipeline:
-
-* :func:`build_agency_stats` → ``agency_stats.parquet``
-* :func:`build_agency_monthly_volume` → ``agency_monthly_volume.parquet``
+Thin backward-compatibility wrapper: the logic lives in two independently
+runnable transforms, :func:`build_agency_stats` (``agency_stats.parquet``) and
+:func:`build_agency_monthly_volume` (``agency_monthly_volume.parquet``), which
+new code should call directly.
 """
 
 from pathlib import Path

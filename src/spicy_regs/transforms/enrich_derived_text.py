@@ -1,18 +1,17 @@
 """Transform: fill comment ``text_content`` from Mirrulations derived-data.
 
 Sits after :class:`~spicy_regs.transforms.extract.ExtractRecords` in the comment
-stream. For each flattened comment that has an attachment but no text yet, it
+stream: for each flattened comment that has an attachment but no text yet, it
 pulls the attachment text Mirrulations already extracted (via
 :class:`~spicy_regs.sources.derived_text.DerivedCommentText`) and sets
 ``text_content`` / ``text_extraction_status``.
 
-This is the *primary* source of comment attachment text: it is free (the same
-anonymous S3 bucket the ETL already reads), needs no PDF download or parsing,
-and runs inline during staging — so ``comments.parquet`` ships with attachment
-text already populated. Comments whose attachment text is absent from
-derived-data are left untouched (``text_extraction_status`` stays ``None``) so
-the on-demand PDF-download fallback (:mod:`spicy_regs.enrich_pdf`) can
-still backfill them.
+This is the *primary* source of comment attachment text — free (the same
+anonymous S3 bucket the ETL already reads), no PDF download or parsing, and
+inline during staging, so ``comments.parquet`` ships with attachment text
+populated. Comments whose attachment text is absent from derived-data are left
+untouched (``text_extraction_status`` stays ``None``) so the on-demand
+PDF-download fallback (:mod:`spicy_regs.enrich_pdf`) can still backfill them.
 """
 
 from __future__ import annotations

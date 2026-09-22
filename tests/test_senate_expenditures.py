@@ -95,6 +95,8 @@ class _Page:
 
 
 class _Reader:
+    """Serves one package page and per-package granule pages; an ``Exception`` value for ``granules`` is raised."""
+
     def __init__(self, packages, granules):
         self._packages = packages
         self._granules = granules
@@ -122,6 +124,8 @@ class _Body:
 
 
 class _Acquirer:
+    """Serves a PDF body per granule, raising the configured refusal for chosen granule ids."""
+
     def __init__(self, refuse: dict[str, Exception] | None = None):
         self.refuse = refuse or {}
         self.asked: list[str] = []
@@ -150,6 +154,7 @@ def _granule(granule_id, granule_class="CONTENT"):
 
 
 def _build(tmp_path, reader, acquirer, extractor, **kwargs):
+    """Run the transform over the given stubs and no prior download."""
     return build_senate_expenditures(
         tmp_path, reader=reader, acquirer=acquirer, extractor=extractor, download_prior=_no_download, **kwargs
     )

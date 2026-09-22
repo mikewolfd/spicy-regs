@@ -28,6 +28,11 @@ def merge_staging_files(
     dedup_keys: mapping of data_type name -> primary-key column name
                 (e.g. ``"dockets": "docket_id"``).  Dedup is by
                 (primary key) keeping ``MAX(modify_date)``.
+
+    With ``source_correction=True`` an unreadable file raises instead of being
+    skipped, and the merge runs through ``regulations_correction.correction_query``,
+    which refuses conflicting identities and unorderable dates before replacing
+    the output.
     """
     import duckdb
 

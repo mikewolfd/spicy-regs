@@ -40,6 +40,7 @@ def empty_index() -> dict:
 
 
 def _pairs(pairs):
+    """JSON object-pairs hook that refuses a repeated key."""
     result = {}
     for key, value in pairs:
         if key in result:
@@ -121,6 +122,7 @@ def load_index(base_url: str) -> dict:
 
 
 def current_index(base_url: str) -> dict:
+    """Return the index bound by the active ``snapshot`` for ``base_url``, otherwise load it."""
     held = _snapshot.get()
     return held[1] if held is not None and held[0] == base_url.rstrip("/") else load_index(base_url)
 
@@ -157,6 +159,10 @@ def snapshot(base_url: str) -> Iterator[dict]:
 
 
 def table_location(index: Mapping, key: str) -> tuple[str, dict | None]:
+    """Resolve a table key to ``(generation path, descriptor)``, or ``(key, None)`` when unpublished.
+
+    The bare-key fallback is what keeps legacy table URLs readable.
+    """
     for entry in index["families"].values():
         if key in entry["tables"]:
             return f"{entry['prefix']}/{key}", entry["tables"][key]
@@ -172,6 +178,10 @@ def _precondition(error: ClientError) -> bool:
 
 
 def _stored_index(client, bucket: str) -> tuple[dict, str | None]:
+    """Read the stored index and its conditional-write token; absent means empty and unpinned.
+
+    A response without an ETag refuses.
+    """
     from botocore.exceptions import ClientError
 
     try:

@@ -1,4 +1,8 @@
-"""Tests for the RecordType dataclass."""
+"""Tests for the RecordType dataclass.
+
+Pins its frozen-ness and the constructor's schema invariants: ``dedup_key`` and
+``modify_date`` must be schema columns.
+"""
 
 from dataclasses import FrozenInstanceError
 from typing import Any

@@ -40,6 +40,7 @@ DEFAULT_HEADERS = {"User-Agent": f"spicy-regs/{_PACKAGE_VERSION}"}
 
 
 def _table_name(value: str) -> str:
+    """Argparse type for a table name: lowercase letters, digits, underscores or hyphens."""
     if not re.fullmatch(r"[a-z][a-z0-9_-]*", value):
         raise argparse.ArgumentTypeError(
             "Use a table name containing lowercase letters, numbers, underscores or hyphens"

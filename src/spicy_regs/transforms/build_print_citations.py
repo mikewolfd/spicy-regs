@@ -1,18 +1,22 @@
 """Build activity reports, budget volumes, bill actions and citations in one pass.
 
-SpicyDocs owns selection, rendition preference, interpretation and row shapes.
-This host owns the issue-date window, caps, prior-output resume and publication.
-The whole published window is enumerated each run so unsuccessful packages
-remain eligible; held packages are also revisited when processing changes.
-An unchanged source and successful matching checkpoints across its outputs
-cost no body requests. Collections
-share the package cap round-robin so neither starves on a cold start.
+Publishes ``house_activity_reports``, ``budget_volumes``,
+``bill_committee_actions`` and ``document_citations`` (in that order) from
+GovInfo's CRPT and BUDGET collections. SpicyDocs owns selection, rendition
+preference, interpretation and row shapes; this host owns the issue-date
+window, caps, prior-output resume and publication.
 
-Print families use the package's PDF-first order because their columns state
-pages. Bodies are read whole; read_depth reports the publisher's stated extent
-against pages actually extracted. The two keyless chamber rosters supply the
-committee vocabulary. A roster failure leaves its names unresolved; access
-refusals abort. Senate expenditure granules use a separate acquisition pass.
+The whole published window is enumerated each run so unsuccessful packages
+remain eligible, and held packages are revisited when processing changes; an
+unchanged source with successful matching checkpoints across all its outputs
+costs no body requests. Collections share the package cap round-robin so
+neither starves on a cold start. Print families read the package's PDF-first
+order because their columns state pages; bodies are read whole and
+``read_depth`` reports the publisher's stated extent against pages actually
+extracted. The two keyless chamber rosters supply the committee vocabulary — a
+roster failure leaves its names unresolved, while access refusals abort.
+Senate expenditure granules use a separate acquisition pass
+(:mod:`spicy_regs.transforms.build_senate_expenditures`).
 """
 
 from __future__ import annotations
@@ -343,22 +347,13 @@ def _schedule(outstanding: Mapping[str, Sequence[str]], cap: int) -> list[tuple[
 
     **Why not simply walk one collection and then the other.** The cap is
     shared, so walking CRPT first spends all of it on CRPT whenever CRPT has
-    more outstanding packages than the cap — and then the run publishes an
-    *empty* ``budget_volumes``. That is what the first measured run did
-    (2026-09-20: 40 activity reports, 0 budget volumes), and an empty contract
-    table is worse than a partial one, because a consumer cannot tell "this
-    family published nothing" from "this family has nothing". The second run
-    filled it, so the outcome converged, but a cold deploy should not have to
-    run twice to publish a table at all.
-
-    Round-robin fixes that without touching the cap: the same total is
-    fetched, both families make progress every run, and a family with more
-    outstanding work keeps the slack once the other is exhausted. With 41
-    activity reports and 23 budget volumes against a cap of 40 this schedules
-    20 and 20; the next run takes the remaining 21 and 3.
-
-    ``O(cap)`` in time, and the order within a collection is the publisher's
-    own listing order, untouched.
+    more outstanding packages than the cap — and the run then publishes an
+    *empty* ``budget_volumes``, which is worse than a partial table because a
+    consumer cannot tell "this family published nothing" from "this family has
+    nothing". Round-robin fetches the same total, makes progress on both
+    families every run, and a family with more outstanding work keeps the
+    slack once the other is exhausted. ``O(cap)`` in time, and the order
+    within a collection is the publisher's own listing order, untouched.
     """
     queues = {collection: list(packages) for collection, packages in outstanding.items() if packages}
     scheduled: list[tuple[str, str]] = []

@@ -1,18 +1,16 @@
 """Transform: build the discovery *spike* signal rollup.
 
 Of the four feed discovery signals, only **spike** scans ``documents.parquet``
-in the browser (surge / closing / discussed already ride ``comments_index`` /
-``feed_summary``). This bakes the per-agency spike so the feed stops scanning
-the ~57 MB documents file on every load.
-
-Spike = agencies whose document output in the last 30 days is ≥ 2× their
-prior-year monthly mean (requiring ≥ 24 documents in the prior year to avoid
-tiny-denominator noise). Recomputed each run since it is CURRENT_TIMESTAMP-relative;
-the full qualifying set is baked (no LIMIT) so the UI applies its own top-N.
-Future publisher dates do not contribute to these activity windows.
-Windows use UTC instants, preserving explicit source offsets. Dates and timestamps
-without an offset are interpreted as UTC; literal source values stay unchanged.
-Parquet metadata records the exact evaluation time, timezone and parent digest.
+in the browser (surge / closing / discussed ride ``comments_index`` /
+``feed_summary``), so this bakes the per-agency spike into
+``discovery_signals.parquet`` to stop the feed scanning the documents file on
+every load. Spike = agencies whose document output in the last 30 days is ≥ 2×
+their prior-year monthly mean, requiring ≥ 24 documents in the prior year to
+avoid tiny-denominator noise; it is CURRENT_TIMESTAMP-relative and recomputed
+every run, and the full qualifying set is baked (no LIMIT) so the UI applies
+its own top-N. Future publisher dates do not contribute, windows use UTC
+instants with explicit source offsets preserved, and the file's metadata
+records the evaluation time, timezone and parent digest.
 """
 
 from hashlib import file_digest

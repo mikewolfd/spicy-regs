@@ -1,58 +1,34 @@
-"""Base class for decoupled, per-rollup pipelines.
+"""Base class for decoupled, per-rollup pipelines, each on its own cron.
 
 Each rollup (``feed_summary``, ``agency_stats``, ``rulemaking_lifecycles``, ...)
 is materialized by its own :class:`RollupPipeline` subclass with its own console
-entry (``run-rollup-*``) and its own GitHub Actions workflow on an independent
-cron. This keeps rollup logic out of the extract/merge ETL: a rollup can be
-re-run or backfilled on its own, and a failure is isolated to a single artifact.
+entry (``run-rollup-*``) and GitHub Actions workflow, so it can be re-run or
+backfilled alone and a failure stays isolated to one artifact. ``run()`` reads
+top-to-bottom as the data flow: prime the base tables this rollup reads from R2
+(skipping any already present locally), materialize the artifact(s) via a
+transform, retain one complete immutable generation, then — unless
+``skip_upload`` is set — verify uploaded bytes before atomically replacing its
+public pointer.
 
-``run()`` reads top-to-bottom as the data flow:
-
-    1. Prime — download the base tables this rollup reads from R2 (skipping any
-       already present locally, so local dev and re-runs don't re-download).
-    2. Build — materialize the rollup artifact(s) via a transform.
-    3. Verify — retain one complete, immutable generation of the declared files.
-    4. Load — verify uploaded bytes, then atomically replace its public pointer;
-       publication is off by default while vetting.
-
-**Contract:** a rollup reads only tables that no other rollup *derives* — the
-ETL's published base tables (``dockets``, ``documents``, ``comments_index``)
-and the published output of an **ingest** rollup, which fetches from a
-publisher and has no upstream dependency inside this repository. Reading a
-derived rollup's output is what stays forbidden, because that is the read
-that makes two pipelines race: an ingest table's content comes from outside,
-so the worst a stale copy costs is one cron's lag, which the offsets already
-handle.
-
-The rule was first written as "never another rollup's output" and listed
-``federal_register`` among the base tables; four rollups have since read an
-ingest output for the reason above, each recording it —
-``fr_docket_links`` (``federal_register``), ``bill_subjects``
-(``congress_bills``), ``org_committee_links`` (``fec_committees``) and now
-``press-releases`` and ``roll-call-votes``, which join at merge time against
-``congress_bills`` and ``bill_vote_references`` to fill a bill linkage the
-publisher states but their own source does not carry. The wording here now
-says what those four do and what the race argument actually permits; nothing
-about the guarantee changed.
-
-A merge-time join of this kind is read **best-effort**, not declared in
-``inputs``: ``inputs`` is for a table whose absence should fail the run,
-and a linkage input's absence must instead leave the linkage columns NULL so
-the rollup still publishes everything its own source establishes. It is
-declared in ``soft_inputs`` instead, which primes nothing and fails nothing —
-it exists so the read is *stated* rather than buried in a transform, and so a
-test can hold each one to the two things that make it safe: the table is an
-ingest rollup's output, and this rollup's cron runs after that rollup's.
-Most rollups build one artifact (``output``); one that
-builds several from a single expensive pass (e.g. the bill family, which would
-otherwise re-run its acquisition and model calls once per table) declares
-``outputs`` instead and returns a tuple of paths from ``build()`` — each still
-goes through the same per-file shrink guard on upload.
-
-Every declared output must be present, including successful empty tables.
-Uploads use immutable generation paths; publication.json changes only after
-the full family passes local schema checks, shrink checks and remote byte
-verification. Readers capture that index once per operation. The old bare
+**Contract:** a rollup reads only tables no other rollup *derives* — the ETL's
+published base tables (``dockets``, ``documents``, ``comments_index``) and the
+published output of an **ingest** rollup, which fetches from a publisher and
+has no upstream dependency inside this repository. Reading a derived rollup's
+output stays forbidden, because that is the read that makes two pipelines race,
+whereas an ingest table's content comes from outside, so the worst a stale copy
+costs is one cron's lag, which the offsets already handle. A best-effort
+merge-time join whose absence must not fail the run is declared in
+``soft_inputs``, not ``inputs``: it primes nothing, fails nothing, and leaves
+the linkage columns NULL so the rollup still publishes everything its own
+source establishes — it exists so the read is *stated* rather than buried in a
+transform, and so ``tests/test_hosted_rollups.py`` can hold each entry to being
+an ingest rollup's output whose cron runs before this one's. Multi-output
+rollups declare ``outputs`` instead of ``output`` and return a tuple of paths
+from ``build()``; every declared output must be present, including successful
+empty tables, and each goes through the same per-file shrink guard on upload.
+Uploads use immutable generation paths, and ``publication.json`` changes only
+after the full family passes local schema checks, shrink checks and remote byte
+verification; readers capture that index once per operation. The old bare
 Parquet URLs are not rewritten by this path.
 """
 

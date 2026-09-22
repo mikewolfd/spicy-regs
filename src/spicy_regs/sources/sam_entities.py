@@ -409,6 +409,7 @@ class SamEntitiesError(RuntimeError):
 
 
 def _total_records(payload: object) -> int:
+    """Return the payload's nonnegative integer ``totalRecords``; a reported source error refuses."""
     _refuse_source_error(payload)
     total = cast(dict[str, object], payload).get("totalRecords") if isinstance(payload, dict) else None
     if type(total) is not int or total < 0:
@@ -417,6 +418,7 @@ def _total_records(payload: object) -> int:
 
 
 def _validate_entity(record: object) -> str:
+    """Return the record's nonempty ``entityRegistration.ueiSAM`` or refuse the record."""
     registration = cast(dict[str, object], record).get("entityRegistration") if isinstance(record, dict) else None
     uei = cast(dict[str, object], registration).get("ueiSAM") if isinstance(registration, dict) else None
     if not isinstance(uei, str) or not uei.strip():
@@ -425,6 +427,7 @@ def _validate_entity(record: object) -> str:
 
 
 def _entity_data(payload: object) -> list[dict]:
+    """Return the payload's ``entityData`` list after validating every record; a missing array refuses."""
     _refuse_source_error(payload)
     records = cast(dict[str, object], payload).get("entityData") if isinstance(payload, dict) else None
     if not isinstance(records, list):
@@ -560,6 +563,7 @@ def _decompress_extract(raw: bytes) -> str:
 
 
 def _iter_ndjson(text: str) -> Iterator[dict]:
+    """Yield each non-blank line as a validated entity; malformed JSON refuses the extract."""
     for raw_line in text.splitlines():
         line = raw_line.strip()
         if not line:

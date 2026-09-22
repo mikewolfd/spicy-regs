@@ -9,6 +9,8 @@ from spicy_regs.source_evidence import CaptureEvidence
 
 
 class RetainedLegislatorsAcquirer(LegislatorsAcquirer):
+    """A LegislatorsAcquirer that records every acquired capture into ``evidence``."""
+
     def __init__(self, *, evidence: CaptureEvidence, **kwargs):
         super().__init__(**kwargs)
         self.evidence = evidence
@@ -21,6 +23,8 @@ class RetainedLegislatorsAcquirer(LegislatorsAcquirer):
 
 
 class RetainedGovInfoBodyAcquirer(GovInfoBodyAcquirer):
+    """A GovInfoBodyAcquirer that records each body capture into ``evidence`` and shares its credential."""
+
     def __init__(self, *, evidence: CaptureEvidence, **kwargs):
         super().__init__(**kwargs)
         self.evidence = evidence
@@ -33,6 +37,8 @@ class RetainedGovInfoBodyAcquirer(GovInfoBodyAcquirer):
 
 
 class RetainedGovInfoDiscoveryReader(GovInfoDiscoveryReader):
+    """A GovInfoDiscoveryReader that records every page capture into ``evidence`` and shares its key."""
+
     def __init__(self, *, evidence: CaptureEvidence, **kwargs):
         super().__init__(**kwargs)
         self.evidence = evidence
@@ -46,6 +52,8 @@ class RetainedGovInfoDiscoveryReader(GovInfoDiscoveryReader):
 
 
 class RetainedCongressListingReader(CongressListingReader):
+    """A CongressListingReader that records every page capture into ``evidence`` and shares its key."""
+
     def __init__(self, *, evidence: CaptureEvidence, **kwargs):
         super().__init__(**kwargs)
         self.evidence = evidence

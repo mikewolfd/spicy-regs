@@ -1,4 +1,10 @@
-"""Discovery counts activity within its run-time windows, excluding future dates."""
+"""Discovery counts activity within its run-time windows, excluding future dates.
+
+Window boundaries are inclusive and evaluated in UTC whatever the source
+representation or host timezone; the monthly-volume builder separately pins
+that year-zero, missing and invalid dates are omitted and counted per row
+instead of silently dropped.
+"""
 
 from datetime import datetime, timedelta
 from hashlib import sha256

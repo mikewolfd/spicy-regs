@@ -1,30 +1,19 @@
 """Rollup pipeline: sam_entities.parquet (SAM.gov Entity API v4 ingest).
 
-Unlike the derived rollups, this one *ingests* an external source rather than
-reading base tables from R2, so ``inputs`` is empty — the bounded fetch +
-incremental merge with the prior published table happens inside
-``build_sam_entities``. The base class still handles the shrink-guarded R2 upload
-of the single output.
-
-**Bounded, accretive scheduled run.** The active registry (~765K entities) is far
-past the ~5K synchronous pagination ceiling, so full coverage comes from SAM's bulk
-extract walked over ``registrationDate`` year windows (see
-:mod:`spicy_regs.sources.sam_entities`). To keep each *scheduled* run bounded while
-still converging on full coverage, the default run fetches a **single rotating
-year window** (chosen from the run date), and the transform's merge accretes each
-window into the prior table across runs. Over one rotation period every year is
-covered; subsequent cycles refresh it.
-
-**Full backfill / overrides** via env vars (read here so the shared rollup CLI stays
-minimal):
-
-- ``SAM_INGEST_MODE``   — ``extract`` (default) or ``partition``.
-- ``SAM_SINCE_YEAR`` / ``SAM_UNTIL_YEAR`` — explicit registrationDate year range;
-  set both to walk a range in one run (e.g. ``2000``..current for a full backfill).
-- ``SAM_MAX_RECORDS``   — bound the run (blank/``0`` = unbounded).
-
-A full backfill is therefore a single ``workflow_dispatch`` (or local) run with
-``SAM_SINCE_YEAR=2000 SAM_UNTIL_YEAR=<current-year>`` and ``SAM_MAX_RECORDS`` unset.
+Unlike the derived rollups this one *ingests* an external source, so ``inputs``
+is empty — the bounded fetch and the incremental merge with the prior published
+table happen inside ``build_sam_entities``, and the base class still handles the
+shrink-guarded R2 upload of the single output. The active registry (~765K
+entities) is far past the ~5K synchronous pagination ceiling, so full coverage
+comes from SAM's bulk extract walked over ``registrationDate`` year windows (see
+:mod:`spicy_regs.sources.sam_entities`); to keep each *scheduled* run bounded
+while still converging on full coverage, the default run fetches a single
+rotating year window chosen from the run date, and the transform's merge
+accretes each window into the prior table across runs. Env overrides, read here
+so the shared rollup CLI stays minimal: ``SAM_INGEST_MODE`` (``extract``
+default or ``partition``), ``SAM_SINCE_YEAR``/``SAM_UNTIL_YEAR`` (both required
+together for an explicit range; e.g. ``2000``..current for a full backfill),
+and ``SAM_MAX_RECORDS`` (blank/``0`` = unbounded).
 """
 
 import os

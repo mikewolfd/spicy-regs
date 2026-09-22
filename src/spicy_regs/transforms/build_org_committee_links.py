@@ -1,78 +1,51 @@
-"""Transform: build the commenter-organization ↔ FEC committee link table.
+"""Transform: build ``org_committee_links.parquet``, the commenter-organization ↔ FEC committee name bridge.
 
-Materializes the name bridge that ``docs/index.md`` describes but nothing
-implemented: *"Organization name bridges the softer influence sources —
-``lobbying_filings`` (registrant/client), ``fec_committees``, and comment filers
-— where no shared id exists."* Until now that join was left to whoever wrote the
-query, so every consumer re-invented its own normalization (and got different
-answers). This rollup does it once, publishes the result, and shows its work in
-``match_method`` / ``confidence`` so a consumer can pick a precision bar instead
-of trusting an opaque score.
+Materializes the bridge ``docs/index.md`` describes but nothing implemented —
+organization name links ``lobbying_filings``, ``fec_committees`` and comment
+filers where no shared id exists — once, instead of every consumer re-inventing
+its own normalization, and shows its work in ``match_method`` / ``confidence`` so
+a consumer can pick a precision bar.
 
 **Grain.** One row per (``organization`` string as filed on a comment,
-``committee_id``). Not one row per comment: the same organization string is
-reused across many comments, so the org string is the natural unit of
-resolution. ``comment_count`` / ``docket_count`` / ``agency_codes_json`` carry
-the corpus-side weight, and ``organization`` joins straight back to
-``comments.organization``.
-
-**Coverage is small, and that is the upstream reality, not a bug.**
-``comments.organization`` is populated on ~20.7K of ~25.8M comments (0.08%) —
-regulations.gov only captures it when a submitter fills the field in, and mass
-comment campaigns leave it blank. Of the ~14.2K distinct organization strings,
-~12.7K clear the junk guards and a few hundred resolve to a committee. Most
-commenting organizations (hospitals, clinics, local firms) simply do not run a
-federal PAC, so a low match rate is the correct answer rather than a matcher to
-tune harder. ``name_source`` is stamped on every row so that names recovered
-from other fields later (comment title, letterhead, signature block) can be
-added as extra rows without breaking existing consumers.
+``committee_id``); the org string is reused across comments and so is the unit
+of resolution, and it joins straight back to ``comments.organization``.
 
 **Matching.** Both sides are normalized the same way (uppercase, drop
-parenthetical asides and apostrophes, ``&`` → ``AND``, punctuation → space), then
-the committee side is stripped of PAC decorations (``... POLITICAL ACTION
-COMMITTEE``, ``... PAC``, ``... GOOD GOVERNMENT FUND``, ...) to recover the
-sponsoring organization's name. Three tiers, strongest first:
-
-``exact``
-    Full normalized names are equal. Rare, and unambiguous.
-``core``
-    The decoration-stripped cores are equal — the workhorse.
-    ``NATIONAL ASSOCIATION OF REALTORS POLITICAL ACTION COMMITTEE`` → core
-    ``NATIONAL ASSOCIATION OF REALTORS`` matches the commenter of that name.
-``prefix``
-    The committee core *starts with* the whole organization core on a token
-    boundary — ``AMERICAN PHYSICAL THERAPY ASSOCIATION`` → ``AMERICAN PHYSICAL
-    THERAPY ASSOCIATION PHYSICAL THERAPY POLITICAL ACTION COMMITTEE``. Matched
-    by equality against pre-generated committee token prefixes rather than a
-    ``LIKE`` nested loop, which would be ~1.3B comparisons.
+parenthetical asides and apostrophes, ``&`` → ``AND``, punctuation → space),
+then the committee side is stripped of PAC decorations (``... POLITICAL ACTION
+COMMITTEE``, ``... PAC``, ...) to recover the sponsoring organization's name.
+Three tiers, strongest first: ``exact`` (full normalized names equal), ``core``
+(decoration-stripped cores equal), ``prefix`` (the committee core *starts with*
+the whole organization core on a token boundary, matched by equality against
+pre-generated committee token prefixes rather than a ``LIKE`` nested loop,
+which would be ~1.3B comparisons).
 
 **Fan-out is a signal, not an error.** One organization legitimately matching
-many committees is usually a real affiliate network: *Planned Parenthood* hits
-~90 state affiliate committees, SEIU ~16 locals, IBEW ~15. Truncating those
-would discard true positives, so every row instead carries
-``committee_match_count`` and a ``confidence`` that degrades with fan-out —
-consumers filter on the bar they need.
+many committees is usually a real affiliate network (*Planned Parenthood* hits
+~90 state affiliate committees, SEIU ~16 locals, IBEW ~15), so rows are never
+truncated: each carries ``committee_match_count`` and a ``confidence`` that
+degrades with fan-out.
 
-**Junk guards.** Free-text ``organization`` is full of non-organizations. A core
-must be ≥ :data:`MIN_CORE_LENGTH` chars and ≥ :data:`MIN_CORE_TOKENS` tokens
-(which also blocks bare acronyms like ``NRDC`` from matching wildly), and must
-not be a :data:`GENERIC_ORG_CORES` entry. That blocklist is matched on the
-*whole* core only, so blocking ``NEW MEXICO`` (a commenter's state, which
-otherwise prefix-matched 51 committees) still leaves ``NEW MEXICO CATTLE
+**Junk guards.** A core must be ≥ :data:`MIN_CORE_LENGTH` chars and ≥
+:data:`MIN_CORE_TOKENS` tokens (which also blocks bare acronyms like ``NRDC``),
+and must not be a :data:`GENERIC_ORG_CORES` entry; the blocklist matches the
+*whole* core only, so blocking ``NEW MEXICO`` still leaves ``NEW MEXICO CATTLE
 GROWERS ASSOCIATION`` free to match.
 
-**Reading comments.** ``comments.parquet`` is ~3.3 GB of mostly comment text,
-and this transform needs five narrow columns from it. Downloading the whole
-monolith to a rollup runner to extract them would dominate the job, so comments
-are read straight from the public R2 URL over ``httpfs``: Parquet projection
-pushdown fetches only the column chunks named in the SELECT. A local
-``comments.parquet`` in ``output_dir`` is preferred when present, so local dev
-and a primed run work without touching the network. ``fec_committees.parquet``
-is small and is primed to disk by the pipeline as usual.
+**Coverage is small by upstream reality, not a bug.** ``comments.organization``
+is populated on ~20.7K of ~25.8M comments (0.08%) — the field is only captured
+when a submitter fills it in, and mass comment campaigns leave it blank — and of
+the ~14.2K distinct strings, ~12.7K clear the guards and a few hundred resolve.
+Most commenting organizations run no federal PAC, so a low match rate is the
+correct answer rather than a matcher to tune harder; ``name_source`` is stamped
+on every row so text-derived names added later (comment title, letterhead,
+signature block) can arrive as extra rows without breaking consumers.
 
-Comment rows are deduplicated on ``comment_id`` (newest ``modify_date`` wins),
-matching the MCP server's ``comments`` view so counts here agree with counts a
-consumer computes there.
+``comments.parquet`` is read from ``output_dir`` when present, otherwise
+straight from the public R2 URL over ``httpfs`` so Parquet projection pushdown
+fetches only the five named columns rather than the multi-GB table. Comment
+rows are deduplicated on ``comment_id`` (newest ``modify_date`` wins), matching
+the MCP server's ``comments`` view so counts here agree with counts there.
 """
 
 from __future__ import annotations

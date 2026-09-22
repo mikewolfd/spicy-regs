@@ -1,4 +1,4 @@
-"""Refuse incomplete CFR source walks before replacing an existing table."""
+"""Refuse incomplete CFR source walks before replacing an existing table, leaving the output byte-identical."""
 
 import importlib
 import json
@@ -24,10 +24,17 @@ KEY = "test-key-never-in-query"
 
 
 def page(key, records, *, count=None, next_page=None):
+    """Build a paged-JSON envelope for ``key`` whose ``count`` defaults to the record count."""
     return {key: records, "count": len(records) if count is None else count, "nextPage": next_page}
 
 
 class Transport(httpx.MockTransport):
+    """Queued-body mock transport.
+
+    An ``int`` body becomes an error response with that status, ``bytes`` are
+    served verbatim, and anything else is JSON-encoded.
+    """
+
     def __init__(self, *bodies):
         self.bodies = iter(bodies)
         self.calls = []
@@ -51,15 +58,18 @@ class Transport(httpx.MockTransport):
 
 @pytest.fixture(autouse=True)
 def no_delay(monkeypatch):
+    """Zero retry jitter and cap requests per page so refusals are deterministic and immediate."""
     monkeypatch.setattr(retry.random, "uniform", lambda *_: 0)
     monkeypatch.setattr(cfr, "_MAX_REQUESTS_PER_PAGE", 1)
 
 
 def reader(transport):
+    """A ``cfr.CfrSectionsReader`` over ``transport`` pinned to the 2025 edition."""
     return cfr.CfrSectionsReader(api_key=KEY, since_year=2025, until_year=2025, transport=transport)
 
 
 def test_replays_native_granules_and_keeps_all_package_fields():
+    """Pins header-only API key, native granule replay, full package retention, and the ``offsetMark=*`` start."""
     native = json.loads((FIXTURES / "govinfo-package-granules.json").read_bytes())
     # Keep the two native rows, explicitly make this a synthetic terminal fixture.
     native.update(count=2, nextPage=None)
@@ -147,6 +157,7 @@ def test_page_bound_refuses(monkeypatch):
 
 @pytest.mark.parametrize("status", [401, 403, 404, 429, 500])
 def test_http_failures_are_not_empty_selections(status):
+    """An HTTP status must raise (never an empty selection), make one call, and keep the API key out of the error."""
     transport = Transport(status)
     with pytest.raises((CredentialRefusedError, PagedJsonSourceError, httpx.HTTPError)) as refused:
         list(reader(transport).iter_records())
@@ -161,6 +172,10 @@ def test_explicit_empty_selection_is_valid():
 
 @pytest.mark.parametrize("failure", ["missing-key", "http", "partial", "missing-identity"])
 def test_source_failure_preserves_prior_output_byte_for_byte(monkeypatch, tmp_path, failure):
+    """Every failure mode leaves the published output and ``_cfr_prior.parquet`` unchanged.
+
+    No ``_cfr_new.parquet`` is left behind either.
+    """
     prior_row = build._shape({**GRANULE, "_package_id": PACKAGE_ID})
     prior_file = tmp_path / "_cfr_prior.parquet"
     output = tmp_path / build.OUTPUT
@@ -196,6 +211,10 @@ def test_explicit_empty_build_preserves_prior_rows(monkeypatch, tmp_path):
 
 
 def test_native_ancestry_disproves_section_prefix_inference():
+    """Pins that ``part``/``cfr_ref`` are not prefix-inferred from a section id.
+
+    Native eCFR ancestry puts N=19-8.1 under part 241, so the ID prefix would be wrong.
+    """
     root = ElementTree.fromstring((FIXTURES / "ecfr-api-title14-numbering.xml").read_bytes())
     native_part = root.find(".//*[@TYPE='PART']")
     assert native_part is not None
@@ -225,6 +244,7 @@ def test_shaper_refuses_missing_or_malformed_identity(identity):
 
 
 def test_fresh_annual_records_keep_native_tokens_without_false_part_19():
+    """Pins that granule token ``19-8-1`` is section 19-8-1, not part 19, and ``part``/``cfr_ref`` stay null."""
     fixture = json.loads((FIXTURES / "govinfo-title14-counterexamples.json").read_bytes())
     package = fixture["package"]
     assert package["packageId"] == "CFR-2025-title14-vol4"

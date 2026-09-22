@@ -15,6 +15,8 @@ _NAME = re.compile(r"[a-z][a-z0-9_-]*\Z")
 
 @dataclass(frozen=True)
 class LocalSelection:
+    """One resolved local download: its files by name, publication index, and whether it is a batch."""
+
     directory: Path
     files: dict[str, tuple[Path, str]]
     publication: dict
@@ -22,6 +24,7 @@ class LocalSelection:
 
 
 def _unique_pairs(pairs):
+    """JSON object hook that refuses a metadata document repeating a key."""
     result = {}
     for key, value in pairs:
         if key in result:
@@ -108,6 +111,7 @@ def verify_local_members(selection: LocalSelection) -> dict[str, list[int]]:
 
 
 def assert_local_members_unchanged(signatures: dict[str, list[int]]) -> None:
+    """Raise when a member taken signatures from has since changed or vanished."""
     for name, expected in signatures.items():
         try:
             actual = file_signature(Path(name))

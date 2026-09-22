@@ -96,6 +96,7 @@ _FIXTURE_XML = b"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 
 
 def _read_fixture(edition: str = "202510") -> list[dict]:
+    """Read the two-record fixture through a MockTransport serving ``edition``'s XML."""
     def respond(request: httpx.Request) -> httpx.Response:
         assert request.url.params["f"] == f"REGINFO_RIN_DATA_{edition}.xml"
         return httpx.Response(200, stream=httpx.ByteStream(_FIXTURE_XML), headers={"content-type": "application/xml"})

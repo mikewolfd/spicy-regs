@@ -1,4 +1,4 @@
-"""Tests for the Cloudflare cache-purge helper (sources/cloudflare.py)."""
+"""Tests for the Cloudflare cache-purge helper (sources/cloudflare.py) and its purge-token watchdog."""
 
 from __future__ import annotations
 
@@ -11,6 +11,7 @@ from spicy_regs.sources import cloudflare
 
 
 def _creds(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Set both Cloudflare purge credentials in the environment."""
     monkeypatch.setenv("CLOUDFLARE_API_TOKEN", "tok-123")
     monkeypatch.setenv("CLOUDFLARE_ZONE_ID", "zone-abc")
 

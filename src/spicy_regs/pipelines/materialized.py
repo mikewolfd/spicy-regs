@@ -1,21 +1,14 @@
 """Contract for multi-stage, multi-artifact materialized datasets.
 
-Ordinary :class:`~spicy_regs.pipelines.rollups.base.RollupPipeline` jobs publish
-one independently schedulable artifact.  This module owns the different case:
-derived tables that depend on one another, share prior state, or must become
-visible as one coherent generation.
-
-Each run:
-
-1. downloads every source input once into a local snapshot;
-2. restores state from one previously published dataset generation;
-3. executes an explicit, cycle-checked stage DAG against those local files; and
-4. uploads immutable versioned artifacts before atomically replacing one small
-   ``latest.json`` pointer.
-
-Readers that resolve the pointer see either the complete prior generation or the
-complete new generation. A failed build or partial upload never exposes a mixed
-set of tables.
+Where a :class:`~spicy_regs.pipelines.rollups.base.RollupPipeline` publishes one
+independently schedulable artifact, this module owns derived tables that depend
+on one another, share prior state, and must become visible as one coherent
+generation: each run snapshots every source input once, restores state from one
+previously published generation, executes an explicit cycle-checked stage DAG,
+and uploads immutable versioned artifacts before atomically replacing the small
+``latest.json`` pointer. Readers that resolve the pointer see either the
+complete prior generation or the complete new one, never a mixed set of tables
+from a failed build or partial upload.
 """
 
 from __future__ import annotations

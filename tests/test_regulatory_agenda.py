@@ -1,4 +1,9 @@
-"""Agenda-item identity and qualified Proceeding relationship tests."""
+"""Agenda-item identity and qualified Proceeding relationship tests.
+
+Pins scope classification (recurring/single_observed/unresolved) with the RIN
+as agenda-item identity rather than action identity, and that only
+evidence-linked proceedings become relationship rows.
+"""
 
 from __future__ import annotations
 

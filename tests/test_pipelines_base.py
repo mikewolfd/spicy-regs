@@ -1,4 +1,8 @@
-"""Tests for the Pipeline base class."""
+"""Tests for the Pipeline base class.
+
+Pins that ``run`` is abstract and that ``name`` is declared by each subclass
+and addressable without instantiation.
+"""
 
 import pytest
 

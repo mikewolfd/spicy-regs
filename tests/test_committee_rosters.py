@@ -45,6 +45,8 @@ DECLARED = len(LISTED) + (LIST_PAGE["pagination"]["count"] - 236)
 
 
 class _Page:
+    """One list page: its records and the route's declared total."""
+
     def __init__(self, records, declared):
         self.records = tuple(records)
         self.declared_count = declared
@@ -83,6 +85,8 @@ class StubListingReader:
 
 
 class StubRosters:
+    """Serves both chamber files, raising ``house_error``/``senate_error`` when set."""
+
     def __init__(self, *, house_error=None, senate_error=None):
         self.house_error = house_error
         self.senate_error = senate_error
@@ -103,10 +107,12 @@ class StubRosters:
 
 
 def _rows(path: Path) -> list[dict]:
+    """Read a published Parquet table as a list of dicts."""
     return pq.read_table(path).to_pylist()
 
 
 def _by_code(path: Path) -> dict[str, dict]:
+    """Index a published table's rows by ``system_code``."""
     return {row["system_code"]: row for row in _rows(path)}
 
 
@@ -118,6 +124,7 @@ def scoped(monkeypatch):
 
 
 def _build(tmp_path, *, reader=None, rosters=None, **kw):
+    """Run the rosters transform over the stubs and no prior download."""
     return bcr.build_committee_rosters(
         tmp_path,
         reader=reader or StubListingReader(),

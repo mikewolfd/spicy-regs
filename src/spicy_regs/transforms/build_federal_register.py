@@ -1,38 +1,25 @@
 """Transform: build ``federal_register.parquet`` from the FR REST API.
 
-Produces the exact 22 all-VARCHAR columns the existing consumers expect (the
-``fr-docket-links`` rollup and the UI's ``normalizeFRRow``), so bringing FR
-ingestion in-repo is a drop-in replacement for the former external path.
+Produces the exact 22 all-VARCHAR columns existing consumers expect (the
+``fr-docket-links`` rollup and the UI's ``normalizeFRRow``), so in-repo
+ingestion is a drop-in replacement for the former external path.
 
-Incremental by design. A full re-fetch of the ~793K-document archive every run
-would be wasteful *and* would trip the R2 catastrophic-shrink guard on any short
-run. Instead we:
-
-1. Best-effort download the prior ``federal_register.parquet`` from R2.
-2. Fetch only documents published since its max ``publication_date`` (minus a
-   short overlap to catch late-posted / corrected documents).
-3. Dedup on ``(document_number, publication_date)``, preferring a freshly
-   fetched observation of that same dated record. Distinct dates survive,
-   including corrections republished under the same number on another date.
-
-With no prior table (first run) step 2 becomes a full backfill from the FR epoch.
-The overlap cannot recover old records already lost by a number-only merge;
-those require an explicit historical replay. Conflicting observations within
-one input generation refuse publication rather than choosing an arbitrary row.
-
-``modify_date`` is not exposed by the REST API; freshly fetched rows carry NULL
-for it while the merge preserves whatever the prior table already had. No current
-consumer reads it.
+Incremental by design: best-effort prior from R2, fetch documents published
+since its max ``publication_date`` minus a short overlap, then dedup on
+``(document_number, publication_date)`` preferring a fresh observation of that
+same dated record, so corrections republished under the same number on another
+date survive as distinct rows. With no prior table it is a full backfill from
+the FR epoch; the overlap cannot recover old records already lost by a
+number-only merge — those take an explicit historical replay. Conflicting
+observations within one input generation refuse publication rather than
+choosing an arbitrary row.
 
 ``rin`` is the one column not fetched: the first Regulation Identifier Number
-in ``regulation_id_numbers_json``, retained as a compatibility projection.
-Complete joins, including House communications, must unnest the source array
-and retain the dated Federal Register identity; see docs/regulatory-rins.md.
-Measured on the published table 2026-09-19 (803,996 rows): 96,060 documents
-state one RIN, 1,499 state two or more (up to 41), 9,758 state ``[]`` and
-696,679 rows from before the in-repo ingest carry no array at all; the last
-two are NULL here alike, and a consumer wanting every RIN of a multi-RIN
-document unnests the array.
+in ``regulation_id_numbers_json``, retained as a compatibility projection — an
+empty array and NULL both give NULL — while a consumer wanting every RIN of a
+multi-RIN document unnests the array (see docs/regulatory-rins.md).
+``modify_date`` is not exposed by the REST API, so fresh rows carry NULL for it
+while the merge preserves whatever the prior table had.
 """
 
 from __future__ import annotations

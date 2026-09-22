@@ -1,4 +1,10 @@
-"""Explicit retained inputs reach the existing rollup without changing source facts."""
+"""Explicit retained inputs reach the existing rollup without changing source facts.
+
+Also pins ``prepare_inputs``: archive and manifest pins and size limits refuse
+before install while retaining a ``refused`` receipt, archive paths and links
+cannot escape the output, and relocation is path-only with existing sources
+re-verified.
+"""
 
 import hashlib
 import io

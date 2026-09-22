@@ -13,6 +13,7 @@ _DEFINITIONS = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
 
 
 def _module_scope_dotenv_calls(path: Path) -> list[int]:
+    """Line numbers of ``load_dotenv()`` calls outside any function or class body."""
     tree = ast.parse(path.read_text())
     lines = []
     for node in tree.body:
@@ -25,6 +26,7 @@ def _module_scope_dotenv_calls(path: Path) -> list[int]:
 
 
 def _python_files() -> list[Path]:
+    """Every Python file under the searched source and script roots."""
     return [p for root in SEARCH_ROOTS if root.is_dir() for p in sorted(root.rglob("*.py"))]
 
 

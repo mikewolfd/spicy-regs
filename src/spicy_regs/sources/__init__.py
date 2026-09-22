@@ -30,6 +30,7 @@ _CONNECTORS = {
 
 
 def __getattr__(name: str):
+    """Lazily import and cache a connector or submodule on first attribute access."""
     if name in {"r2", "iceberg"}:
         value = import_module(f"{__name__}.{name}")
     elif name in _CONNECTORS:

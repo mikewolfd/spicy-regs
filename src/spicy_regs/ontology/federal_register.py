@@ -29,6 +29,13 @@ class FederalRegisterIndex:
             self.by_number[row["document_number"]].add(record_id(row))
 
     def reference(self, number: str, publication_date: str | None = None) -> dict:
+        """Classify a number (optionally dated) reference against this generation's held keys.
+
+        ``status`` is ``missing`` when the number is unknown, ``ambiguous`` when
+        it maps to more than one held record, ``dated`` when the supplied
+        publication date resolves it, and ``single_candidate_in_input`` when
+        exactly one candidate is held and no date was supplied.
+        """
         candidates = sorted(self.by_number.get(number, ()))
         if publication_date:
             dated = record_id({"document_number": number, "publication_date": publication_date})
@@ -95,6 +102,7 @@ def references_json(references: list[dict]) -> str:
 
 
 def resolved_id(reference: dict) -> str | None:
+    """The one candidate id, or ``None`` when the reference is missing or ambiguous."""
     candidates = reference["candidate_ids"]
     return candidates[0] if len(candidates) == 1 else None
 

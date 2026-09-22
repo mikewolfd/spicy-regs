@@ -1,4 +1,8 @@
-"""Tests for StagingWriter (Writer connector over write_staging)."""
+"""Tests for StagingWriter (Writer connector over write_staging).
+
+Pins the staging layout (``dockets/{agency}.parquet``), that a generator is
+accepted and that an empty write creates no file.
+"""
 
 from pathlib import Path
 

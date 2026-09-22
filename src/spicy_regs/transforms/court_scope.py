@@ -1,24 +1,18 @@
 """Where a decision was decided — the court scope the cluster dump omits.
 
-``court_opinion_clusters`` is the whole CourtListener corpus: ten million
-decisions from 3,361 courts, of which 397 are federal and 2,618 are state. A
-consumer asking "what have the federal courts said" has no way to ask it,
-because the ``opinion-clusters`` dump carries no ``court_id`` at all. That
-column lives on the *docket*, one join away and in a different 4.67 GiB file.
-
-This module is that join, in two pieces:
-
-* :func:`build_docket_court_map` streams the ``dockets`` dump for two columns
-  and throws the other fifty away. It is 46 minutes of reading to produce a few
-  hundred megabytes, which is the cheapest form the answer comes in — there is
-  no smaller published dataset that maps a docket to its court (checked against
-  the publisher's own listing of 46 datasets, 2026-08-22).
-* :func:`court_jurisdictions` reads the 81 KB ``courts`` dump, which is where
-  ``F``/``FD``/``FB``/``FS``/``FBP`` (federal) part company with ``ST``/``S``
-  (state) and the tribal, territorial and military codes.
+``court_opinion_clusters`` is the whole CourtListener corpus (ten million
+decisions from 3,361 courts), and the ``opinion-clusters`` dump carries no
+``court_id``: that column lives on the *docket*, one join away in a different
+4.67 GiB file. This module is that join, in two pieces:
+:func:`build_docket_court_map` streams the ``dockets`` dump for two columns (46
+minutes of reading for a few hundred megabytes — no smaller published dataset
+maps a docket to its court, checked against the publisher's own listing of 46
+datasets, 2026-08-22), and :func:`court_jurisdictions` reads the 81 KB
+``courts`` dump where ``F``/``FD``/``FB``/``FS``/``FBP`` (federal) part company
+with ``ST``/``S`` (state) and the tribal, territorial and military codes.
 
 **"Federal" here means the publisher's jurisdiction code begins with F.** That
-is a decision about someone else's taxonomy, so it is one function
+is a decision about someone else's taxonomy, so it lives in one function
 (:func:`is_federal`) rather than a condition spelled out at each call site, and
 the raw code travels alongside the boolean so a consumer who disagrees can
 reclassify without re-reading 4.67 GiB.

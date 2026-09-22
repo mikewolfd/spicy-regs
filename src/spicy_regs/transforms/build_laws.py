@@ -1,58 +1,39 @@
 """Transform: build ``laws``, ``law_code_sections`` and ``table3_records``.
 
 Three tables from three publishers in one pass, because the second and third
-are addressed by what the first enumerates:
+are addressed by what the first enumerates. **``laws``**: the Congress.gov
+``law/{congress}`` list route walked whole per scoped Congress (it lists
+private laws too when ``law_type`` is omitted), one row per
+``laws[]`` entry, each joined to the GovInfo PLAW USLM file whose ``<meta>``
+states the Statutes at Large citation (one keyless request per law, under the
+per-run cap); ``shape_law`` refuses a meta that states another law and a
+captured file whose ``citableAs`` names no ``NNN Stat. NNN``, so a citation
+never lands on the wrong row and ``captured`` always carries one.
+**``law_code_sections``**: the OLRC per-Congress classification table, read in
+the publisher's public-law order alone (the index links the current Congress's
+session tables only) — the two orders hold the same rows, but the contract
+keys a row on its position in one page, so the code-order twin would collide.
+**``table3_records``**: one act's Table III page per public law
+the route listed, oldest first per Congress, under its own cap; Table III lags
+enactment and answers an act it does not hold with a page cut off inside the
+site menu that the reader refuses, so :data:`TABLE3_STOP_AFTER` consecutive
+refusals end that Congress's walk for the run and it resumes there next run.
 
-* **``laws``** — the Congress.gov ``law/{congress}`` list route, walked whole
-  per scoped Congress (108 rows for the 119th on 2026-09-19, one page; the
-  route lists both public and private laws when ``law_type`` is omitted), one
-  row per ``laws[]`` entry of each record. Each row is then joined to the
-  GovInfo PLAW USLM file whose ``<meta>`` states the Statutes at Large
-  citation — one keyless request per law, the leg the per-run cap bounds.
-  ``shape_law`` refuses a USLM meta that states another law and a captured
-  file whose ``citableAs`` names no ``NNN Stat. NNN``, so a citation never
-  lands on the wrong row and ``captured`` always carries one.
-* **``law_code_sections``** — the OLRC per-Congress classification table:
-  one keyless request for the index, which links the *current* Congress's
-  session tables only, then one per linked table for a scoped Congress, in
-  the publisher's public-law order alone — the two orders hold the same rows
-  (measured 2026-09-19: the same 583-row multiset) and the contract keys a
-  row on its position in one page, so the code-order twin would collide.
-* **``table3_records``** — one act's Table III page per public law the route
-  listed, one keyless request each, oldest first per Congress, under its own
-  cap. Table III lags enactment by tens of laws (the 119th stood at 119-73
-  there while the route reached 119-110, 2026-09-14) and answers an act it
-  does not hold with a page cut off inside the site menu, which the reader
-  refuses; :data:`TABLE3_STOP_AFTER` consecutive refusals end that
-  Congress's walk for the run, which resumes there next run, so the lag
-  costs three requests a run rather than one per lagging act.
-
-**Incremental.** The list is small and is re-walked whole every run; the
-PLAW is what is not re-read. Per listed law: a row already published with
-``uslm_outcome = captured`` and the same ``update_date`` is left standing (no
-request, no fresh row — the merge keeps it); one whose list row moved, or
-whose outcome is ``unavailable`` (the bulk folder had not served it: 4 of 108
-on 2026-09-19, all the newest) or ``not_requested``, is asked for again,
-newest first, under :data:`MAX_USLM_PER_RUN`. When the cap or a transport
-failure stops the ask, a law not yet published gets its list row with
-``not_requested`` — the list fact is real, the USLM leg honestly unmade —
-and a law already published keeps its prior row until the next run reaches
-it. ``unavailable`` is only a ``404``/``410`` from the exact PLAW locator; a
-transport failure or a refused body is not a record of absence and is
-logged, not published as one. A ``401``/``403`` from any of the three
-publishers aborts the run.
-
-A session's classification page is a snapshot: a page read this run replaces
-every prior row for its Congress and session (:func:`retire_prior_rows`), so
-a line the publisher removed does not linger under a position it no longer
-holds. An act's Table III page is read once and never retired: an act already
-published is not re-read, and ``release_point`` says how current its page
-was. A refused act is stepped past, so one act the table never serves cannot
-hold every later act behind it; :data:`TABLE3_STOP_AFTER` consecutive
-refusals is the lag, and that Congress's walk stops there for the run.
-
-Needs an api.data.gov key for the list route; the PLAW and OLRC routes are
-keyless.
+**Incremental.** The list is re-walked whole every run; the PLAW is what is
+not re-read. A law already published with ``uslm_outcome = captured`` and the
+same ``update_date`` is left standing; one whose list row moved, or whose
+outcome is ``unavailable`` (only a ``404``/``410`` from the exact PLAW locator
+— a transport failure or refused body is logged, never published as absence)
+or ``not_requested``, is asked for again, newest first, under
+:data:`MAX_USLM_PER_RUN`. When the cap or a failure stops the ask, a law not
+yet published gets its list row with ``not_requested`` and one already
+published keeps its prior row. A classification page read this run replaces
+every prior row for its Congress and session (:func:`retire_prior_rows`),
+while a Table III page is read once and never retired (its ``release_point``
+says how current it was), and a refused act is stepped past so one act the
+table never serves cannot hold every later act behind it. A ``401``/``403``
+from any of the three publishers aborts the run. Needs an api.data.gov key for
+the list route; the PLAW and OLRC routes are keyless.
 """
 
 from __future__ import annotations
@@ -149,6 +130,8 @@ TABLE_ORDER = "public-law"
 
 
 class HeldLaw(NamedTuple):
+    """The prior table's state for one ``law_id``: its list ``update_date`` and USLM outcome."""
+
     update_date: str | None
     uslm_outcome: str | None
 

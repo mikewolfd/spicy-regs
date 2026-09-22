@@ -1,4 +1,4 @@
-"""Frozen ee933b7 row aggregation; test-only, independent of new attempt storage."""
+"""Frozen oracle for a row's per-PDF text/status aggregation at ee933b7; test-only, independent of new storage."""
 
 from enum import Enum
 

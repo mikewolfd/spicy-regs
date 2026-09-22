@@ -45,6 +45,7 @@ class RunContext:
         asserted_at: str | None = None,
         prefix: str = "ontology",
     ) -> RunContext:
+        """Use the given run id or ``ONTOLOGY_RUN_ID``; otherwise mint ``<prefix>-<UTC timestamp>``."""
         now = asserted_at or iso_now()
         configured = run_id or os.environ.get("ONTOLOGY_RUN_ID")
         if configured:
@@ -59,6 +60,7 @@ class RunContext:
         actor_id: str,
         supersedes_id: str | None = None,
     ) -> dict[str, str | None]:
+        """Build the ``ATTESTATION_COLUMNS``-shaped provenance mapping for one assertion."""
         return {
             "method": method,
             "actor_id": actor_id,

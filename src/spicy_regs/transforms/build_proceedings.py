@@ -1,4 +1,4 @@
-"""Transform: promote action-specific evidence into first-class proceedings."""
+"""Transform: build ``proceedings.parquet`` by promoting action-specific evidence into durable proceedings."""
 
 from __future__ import annotations
 
@@ -109,8 +109,8 @@ def build_proceedings(
 ) -> Path:
     """Build proceedings from dockets and Federal Register action artifacts.
 
-    A RIN identifies a Regulatory Agenda item, not an action. It is retained as
-    denormalized evidence when exactly one RIN is observed for an action, but
+    A RIN identifies a Regulatory Agenda item, not an action: when exactly one
+    RIN is observed for an action it is retained as denormalized evidence, but
     it never groups dockets, creates an agenda-only proceeding, or preserves a
     stable proceeding id. One Federal Register artifact may explicitly connect
     multiple trusted dockets; otherwise docket and artifact identities stay

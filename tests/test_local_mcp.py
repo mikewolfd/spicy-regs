@@ -1,4 +1,9 @@
-"""Exercise CLI download receipts through the real local DuckDB/MCP reader."""
+"""Exercise CLI download receipts through the real local DuckDB/MCP reader.
+
+Pins the managed-batch exposure — selected members only, pins rehashed and
+verified — alongside the refusals: a damaged, incomplete or switched batch must
+never fall back to stale root files or an unverified member.
+"""
 
 import builtins
 import json

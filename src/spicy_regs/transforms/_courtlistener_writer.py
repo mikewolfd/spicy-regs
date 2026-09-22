@@ -33,6 +33,7 @@ class CourtListenerTableWriter:
         self.rows.clear()
 
     def close(self) -> None:
+        """Flush and finish the file, writing an empty table when nothing was added."""
         self.flush()
         if self._writer is None:
             pq.write_table(self.schema.empty_table(), self.path, compression="zstd")

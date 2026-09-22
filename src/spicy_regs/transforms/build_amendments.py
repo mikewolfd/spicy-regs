@@ -86,6 +86,7 @@ def _prior_max_update_date(prior_file: Path) -> date | None:
 
 
 def _date_env(name: str) -> date | None:
+    """Parse a ``YYYY-MM-DD`` env var, or None when unset; a malformed value raises ValueError naming it."""
     raw = os.environ.get(name, "").strip()
     if not raw:
         return None

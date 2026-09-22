@@ -1,4 +1,4 @@
-"""In-memory conditional object store; no credentials or network access."""
+"""In-memory S3 fake for tests: conditional puts, multipart uploads, pagination; no credentials or network access."""
 
 from hashlib import sha256
 from io import BytesIO
@@ -11,6 +11,8 @@ def error(code):
 
 
 class Store:
+    """Records successful put keys in order; ``before_put`` and ``corrupt_key`` are fault-injection hooks."""
+
     def __init__(self):
         self.objects = {}
         self.writes = []

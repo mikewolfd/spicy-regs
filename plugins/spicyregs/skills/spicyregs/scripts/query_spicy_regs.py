@@ -5,7 +5,15 @@
 # ]
 # ///
 #
-"""Inspect Spicy Regs parquet data with DuckDB, locally or from Cloudflare R2."""
+"""Inspect Spicy Regs parquet data with DuckDB, locally or from Cloudflare R2.
+
+Exposes ``dockets``, ``documents``, ``comments``, ``comments_index`` and
+``feed_summary`` as DuckDB views — the published objects under the R2 base URL
+for ``--source r2``, or the parquet files in ``--output-dir`` for ``--source
+local`` — then lists the available tables, describes one, or runs a single
+``--sql`` query, printing JSON. The three commands return 1 when the requested
+table, or any table, is unavailable.
+"""
 
 from __future__ import annotations
 
@@ -39,6 +47,10 @@ def _import_duckdb():
 
 
 def _local_view_specs(output_dir: Path) -> dict[str, str]:
+    """DuckDB view SQL for each table present under *output_dir*.
+
+    Falls back to the partitioned ``comments/`` tree when ``comments.parquet`` is absent.
+    """
     specs: dict[str, str] = {}
 
     dockets = output_dir / "dockets.parquet"
@@ -73,6 +85,7 @@ def _local_view_specs(output_dir: Path) -> dict[str, str]:
 
 
 def _remote_view_specs(base_url: str) -> dict[str, str]:
+    """DuckDB view SQL for the five published parquet objects under *base_url*."""
     url = base_url.rstrip("/")
     return {
         "dockets": f"SELECT * FROM read_parquet('{_escape_sql_string(f'{url}/dockets.parquet')}')",
@@ -84,6 +97,10 @@ def _remote_view_specs(base_url: str) -> dict[str, str]:
 
 
 def _connect_with_views(source: str, output_dir: Path, base_url: str):
+    """An in-memory DuckDB with one view per available table, httpfs installed for ``r2``.
+
+    Returns the connection and the ``{table: SQL}`` specs it created.
+    """
     duckdb = _import_duckdb()
     con = duckdb.connect()
     con.execute("SET preserve_insertion_order=false")

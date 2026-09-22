@@ -1,4 +1,10 @@
-"""Real local batch selection with hermetic remote bytes and failure injection."""
+"""Real local batch selection with hermetic remote bytes and failure injection.
+
+Pins ``cli.cmd_download``'s managed-batch semantics: one content-named snapshot
+directory per batch, switched by replacing ``current`` only after every member
+verifies, with member, pointer and user-path failures leaving the prior batch,
+its bytes and its incomplete-run evidence intact.
+"""
 
 import argparse
 import builtins

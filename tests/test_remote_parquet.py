@@ -17,6 +17,8 @@ from spicy_regs.sources import remote_parquet as remote
 
 
 class Store:
+    """In-memory S3 stand-in: conditional range gets and puts, multipart upload with aborts, and failure switches."""
+
     def __init__(self):
         self.objects = {}
         self.uploads = {}
@@ -99,6 +101,7 @@ SCHEMA = pa.schema([("id", pa.int64()), ("text", pa.string())])
 
 
 def write(store, batches, **kwargs):
+    """Write ``batches`` through ``write_remote_parquet`` to the fixed staging key."""
     return remote.write_remote_parquet(
         client=store,
         bucket="fork",

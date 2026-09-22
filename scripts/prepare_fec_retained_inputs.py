@@ -1,4 +1,14 @@
-"""Verify and unpack an explicitly transferred FEC input selection, without HTTP."""
+"""Verify and unpack an explicitly transferred FEC input selection, without HTTP.
+
+Validates the tar archive and its portable ``manifest.json`` against
+caller-supplied SHA-256 digests, refuses unsafe member paths, links, duplicate
+members and over-limit byte/member counts, then relocates the manifest's
+filesystem paths into the staged selection and renames it into place —
+acquisition facts and source pins must be unchanged, and an existing output
+directory is refused rather than overwritten. Membership, digest and semantic
+verification of the inputs themselves stays with the retained builder; a
+transfer receipt is not a new acquisition observation.
+"""
 
 from __future__ import annotations
 
@@ -22,6 +32,7 @@ MAX_MANIFEST_BYTES = 16 * 1024 * 1024
 
 
 def _digest(value: str) -> str:
+    """Strip an optional ``sha256:`` prefix, requiring 64 lowercase hex digits, else ``ValueError``."""
     value = value.removeprefix("sha256:")
     if re.fullmatch(r"[0-9a-f]{64}", value) is None:
         raise ValueError("expected a lowercase SHA-256 digest")
@@ -34,6 +45,7 @@ def _sha256(path: Path) -> str:
 
 
 def _relative(value: str) -> Path:
+    """Validate a bundle member name as a normalized relative POSIX path and return it as a ``Path``."""
     path = PurePosixPath(value)
     if not path.parts or path.is_absolute() or ".." in path.parts or "\\" in value or path.as_posix() != value:
         raise ValueError("bundle paths must be normalized relative POSIX paths")
@@ -41,6 +53,7 @@ def _relative(value: str) -> Path:
 
 
 def _path_fields(value: dict):
+    """Yield ``(pointer, mapping, key)`` for each manifest path field a transfer may relocate."""
     for ordinal, item in enumerate(value["collections"]):
         for key in ("blob_root", "release_path"):
             if key in item:

@@ -1,4 +1,7 @@
-"""Shared PDF reading preserves normalization and records page failures."""
+"""Pins the shared PDF reader against the frozen oracle: equal normalization and explicit failures.
+
+A failed page is an error, not a successful blank page.
+"""
 
 import subprocess
 import sys
@@ -16,6 +19,7 @@ SAMPLES = Path(__file__).parents[1] / "sample-data/mirrulations"
 
 
 def _rewrite(source: bytes, *, password: str | None = None, broken_page: int | None = None) -> bytes:
+    """Copy ``source``, optionally encrypting it or corrupting one page's resources."""
     from pypdf.generic import NameObject, NumberObject
 
     with pypdf.PdfReader(BytesIO(source)) as reader, pypdf.PdfWriter() as writer:

@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""
-Migrate comments.parquet → partitioned comments structure.
+"""Migrate comments.parquet → partitioned comments structure.
 
 Reads the monolithic comments.parquet and writes it into Hive-partitioned
 files at:
@@ -35,6 +34,11 @@ def validate_partition_coordinates(comments_file: Path) -> None:
 
 
 def migrate(output_dir: Path) -> None:
+    """Write every partition, then rebuild the comments index.
+
+    Validates coordinates before creating anything and exits 1 when
+    ``comments.parquet`` is missing.
+    """
     comments_file = output_dir / "comments.parquet"
     if not comments_file.exists():
         logger.error("comments.parquet not found in {}", output_dir)

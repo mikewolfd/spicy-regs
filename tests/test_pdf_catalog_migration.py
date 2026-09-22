@@ -14,6 +14,7 @@ FIELD = "pdf_extraction_results_json"
 
 
 class CachedConnection:
+    """A fake catalog connection whose DESCRIBE still reports the pre-ADD schema, as the real one did."""
     def __init__(self, field_type, *, refusal=None):
         self.field_type = field_type
         self.refusal = refusal

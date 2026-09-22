@@ -15,6 +15,7 @@ from spicy_regs.transforms.build_agency_stats import build_agency_stats
 
 
 def comment(identity, date):
+    """Build one comment row with schema columns defaulted null and the identity, agency, docket, and dates set."""
     return {
         **dict.fromkeys(COMMENT.schema),
         "comment_id": identity,
@@ -26,6 +27,7 @@ def comment(identity, date):
 
 
 def test_unknown_dates_survive_partition_merge_catalog_seed_and_agency_mirror(tmp_path):
+    """A retry must find the unknown-date partition rather than duplicate its one row."""
     output = tmp_path / "output"
     output.mkdir()
     stage = tmp_path / "stage"

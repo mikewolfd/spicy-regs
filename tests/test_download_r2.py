@@ -39,6 +39,11 @@ def _fake_stream(*, status_code: int = 200, body: bytes = b"", raise_exc: Except
 
 
 class TestDownloadFromR2:
+    """Pins download_from_r2's contract: False only for an unset URL or a 404.
+
+    Anything else — 5xx, a mid-stream drop, a connection error — raises and
+    leaves no new or partial target and no ``.tmp`` staging file behind.
+    """
     def test_returns_false_when_r2_url_not_set(self, tmp_path, monkeypatch):
         monkeypatch.delenv("R2_PUBLIC_URL", raising=False)
         target = tmp_path / "foo.parquet"

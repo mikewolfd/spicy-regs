@@ -1,30 +1,27 @@
 """Walk one Congress.gov list route whole, keeping the declared total beside what was served.
 
 Two routes this repository reads are complete enumerations per Congress —
-``law/{congress}`` and ``committee/{congress}`` — and a complete enumeration is
-read the same way every run: every page to the terminal one, no window, no
-``sort``. spicy-docs' reader walks that and *refuses* at the terminal page when
-the publisher's declared count and the observed total disagree, which is the
-right answer for a walk that may have been cut short.
+``law/{congress}`` and ``committee/{congress}`` — read the same way every run:
+every page to the terminal one, no window, no ``sort``. spicy-docs' reader
+*refuses* at the terminal page when the publisher's declared count and the
+observed total disagree, which is the right answer for a walk that may have
+been cut short.
 
-The ``committee`` route over-declares. Measured 2026-09-19 (receipt
-``roster-comparison-2026-09-19/``): ``committee/119`` declared 238 and served
-236 on its one terminal page with no continuation, and the reader refused the
-walk. That is not a short walk — the publisher's count and the publisher's
-list disagree with each other, and only the list can be published. So
+The ``committee`` route over-declares: measured 2026-09-19,
+``committee/119`` declared 238 and served 236 on its one terminal page with no
+continuation, and the reader refused the walk. That is not a short walk — the
+publisher's count and list disagree, and only the list can be published — so
 :func:`walk_route` consumes the walk and, for that one refusal alone, keeps
-both numbers on the result and returns what was served; every other refusal —
-a repeated continuation, a count that changed mid-walk, the page bound, a
-``401``/``403`` — propagates and fails the run, as the A11 backfill's list
-walk does. The two numbers are logged at WARNING so a run that met the
-over-declaration says so.
+both numbers on the result and returns what was served. Every other refusal — a
+repeated continuation, a count that changed mid-walk, the page bound, a
+``401``/``403`` — propagates and fails the run, and the two numbers are logged
+at WARNING so a run that met the over-declaration says so.
 
-The guard is narrow in kind *and* in size. The refusal's own context always
-carries the served count, so "1 served of 238" would satisfy a kind-only
-predicate exactly as 236 of 238 does; :data:`MAX_OVER_DECLARATION` bounds
-the shortfall to a handful of entries, which is the shape of the measured
-finding (a count that includes what the list omits) and not the shape of a
-page missing from the walk.
+The guard is narrow in kind *and* in size: the refusal's context always carries
+the served count, so "1 served of 238" would satisfy a kind-only predicate
+exactly as 236 of 238 does; :data:`MAX_OVER_DECLARATION` bounds the shortfall
+to a handful of entries — the shape of a count that includes what the list
+omits, not of a page missing from the walk.
 
 :class:`PerRunCap` sits here because both walkers bound their per-record leg
 the same way: a cap that says once, at WARNING, when it stopped that leg.
@@ -60,6 +57,7 @@ class PerRunCap:
         self.exhausted_logged = False
 
     def take(self) -> bool:
+        """Spend one unit of the cap, logging once at WARNING when it is exhausted and returning False thereafter."""
         if self.remaining <= 0:
             if not self.exhausted_logged:
                 logger.warning("{}: per-run cap reached — the next run resumes where this one stopped", self.label)
@@ -93,6 +91,7 @@ class RouteWalk:
 
 
 def _terminal_over_declaration(error: PagedJsonSourceError, served: int) -> bool:
+    """Whether a refusal is the terminal over-declaration this walk keeps what it served for."""
     context = error.__dict__.get(TRAVERSAL_CONTEXT)
     if not (
         isinstance(context, Mapping)

@@ -1,3 +1,12 @@
+"""Pins the Parquet-metadata read checkpoint contract.
+
+``checkpoint_metadata`` writes one JSON key while preserving unrelated
+metadata (a non-UTF-8 value raises rather than being silently dropped);
+``read_checkpoints`` returns [] for an absent or malformed value so an
+unreadable checkpoint can never establish a successful prior read, and
+non-finite values are refused at write time.
+"""
+
 from pathlib import Path
 
 import pyarrow as pa

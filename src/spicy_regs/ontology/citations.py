@@ -180,6 +180,7 @@ _IGNORABLE_TAIL = re.compile(
 
 
 def _digits(value: object) -> str | None:
+    """Normalize a digit string, dropping leading zeros; ``None`` when not all digits."""
     if value is None:
         return None
     text = str(value).strip()
@@ -187,6 +188,7 @@ def _digits(value: object) -> str | None:
 
 
 def _section(value: object) -> str | None:
+    """Lowercase a section token and drop any parenthetical subsection detail."""
     if value is None:
         return None
     text = str(value).strip().lower()
@@ -279,6 +281,8 @@ def usc_section_covers(section: object, *, start: object, end: object = None) ->
 
 @dataclass(frozen=True)
 class CfrCitation:
+    """A parsed CFR citation; ``section`` is ``None`` when the text named only a part."""
+
     title: str
     part: str
     section: str | None = None
@@ -361,6 +365,12 @@ class ExecutiveOrderCompilation:
 
 @dataclass(frozen=True)
 class AuthorityCitation:
+    """One parsed legal-authority citation.
+
+    ``canonical_iri`` is ``None`` when the type and fields do not form an
+    identifier (for example a Statutes at Large locator).
+    """
+
     authority_type: str
     parse_status: str
     usc_title: str | None = None
@@ -382,6 +392,7 @@ class AuthorityCitation:
 
 
 def canonical_cfr_iri(title: object, part: object, section: object = None) -> str:
+    """Expand a CFR title/part/section to its IRI; malformed components raise ValueError."""
     title_number = _digits(title)
     part_number = _digits(part)
     section_number = _cfr_section(section)
@@ -610,6 +621,7 @@ def canonical_pl_iri(pl_number: object) -> str:
 
 
 def _cfr_from_match(match: re.Match[str]) -> CfrCitation | None:
+    """Build a citation from a match, refusing an out-of-range title or an unreadable stated section."""
     title = _digits(match.group("title"))
     part = _digits(match.group("part"))
     raw_section = match.groupdict().get("section")

@@ -55,6 +55,7 @@ def test_resolve_r2_base_url_strips_trailing_slash(monkeypatch):
 
 
 def _tool_names(fastmcp) -> set[str]:
+    """The names of the tools registered on ``fastmcp``."""
     tools = asyncio.run(fastmcp.list_tools())
     return {t.name for t in tools}
 
@@ -65,6 +66,7 @@ def test_build_server_registers_expected_tools():
 
 
 def _tool_data(server, name, arguments):
+    """Call a tool and return its structured result; FastMCP may return content alone or ``(content, result)``."""
     result = asyncio.run(server.call_tool(name, arguments))
     # FastMCP versions can return content alone or (content, structured result).
     if isinstance(result, tuple):
@@ -635,6 +637,7 @@ def test_resolve_temp_dir_rejects_injection(monkeypatch):
 
 
 def _setting(con: duckdb.DuckDBPyConnection, name: str) -> str:
+    """Read the current value of a DuckDB setting."""
     row = con.execute(f"SELECT current_setting('{name}')").fetchone()
     assert row is not None
     return row[0]

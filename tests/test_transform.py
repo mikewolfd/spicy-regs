@@ -1,4 +1,9 @@
-"""Tests for transform module: staging, merging, partitioning, feed summary."""
+"""Pins the transform layer: staging, merge dedup, partitions, feed summary, and rollups.
+
+Merges keep the latest modify_date per identity, missing columns backfill NULL,
+agency_code lives in the partition path rather than the Parquet columns, and
+the comments index updates incrementally.
+"""
 
 import json
 from pathlib import Path

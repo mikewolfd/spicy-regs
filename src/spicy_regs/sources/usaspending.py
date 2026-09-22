@@ -35,6 +35,12 @@ class UsaSpendingError(ValueError):
 
 
 class UsaSpendingRecipientsReader(Reader):
+    """Walk the selected top-page recipient ranking, validating identity and continuation metadata.
+
+    ``max_pages`` bounds this selected scope, not the whole population. A missing, changed or
+    inconsistent count/continuation, or a missing or repeated ``id``, raises ``UsaSpendingError``.
+    """
+
     def __init__(
         self,
         *,

@@ -1,32 +1,20 @@
 """Transform: build ``cfr_sections.parquet`` from the GovInfo CFR API.
 
-Produces an all-VARCHAR, section-metadata-only view of the Code of Federal
-Regulations: one row per CFR granule (a section-level unit within a title's
-annual edition), keyed on ``granule_id``. Section citations (``cfr_ref``,
-``title``, ``part``, ``section``) are the join keys back to Federal Register
-``cfr_references_json`` and, transitively, to regulations.gov activity.
+All-VARCHAR section metadata, one row per CFR granule (a section-level unit
+within a title's annual edition) keyed on ``granule_id``; the citation columns
+(``cfr_ref``, ``title``, ``part``, ``section``) are the join keys back to
+Federal Register ``cfr_references_json``. SECTION METADATA ONLY — the full
+regulatory text is deliberately out of scope (see ``sources/cfr_sections.py``).
 
-Scope note: SECTION METADATA + CITATIONS ONLY — the full regulatory *text* of
-each section is deliberately out of scope for this pass (it is far heavier). See
-``sources/cfr_sections.py`` for the rationale.
+Incremental by design: best-effort prior from R2, fetch bounded by
+``since_year``, dedup on ``granule_id`` preferring the fresh row, so a short
+run never trips the R2 catastrophic-shrink guard. With no prior table the
+output covers only the requested year window, not a full historical backfill.
 
-Incremental by design. A full re-fetch of every CFR title-year every run would
-be wasteful *and* would trip the R2 catastrophic-shrink guard on any short run.
-Instead we:
-
-1. Best-effort download the prior ``cfr_sections.parquet`` from R2.
-2. Fetch granules (bounded by ``since_year`` when provided).
-3. Dedup the union on ``granule_id``, preferring the freshly fetched row.
-
-With no prior table, the output covers only the requested year window. The
-default window does not establish a full historical backfill.
-
-List-level fields establish the heading and source dates. Explicit ID tokens
-establish the edition, title and part where present. A section token alone does
-not establish part ancestry: ``sec19-8-1`` corresponds to section ``19-8.1`` in
-native Part 241, not Part 19. Preserve the token and leave part/citation unknown
-until same-edition native ancestry is available. Do not join a current eCFR
-hierarchy onto an annual CFR edition.
+A section token does not establish part ancestry — ``sec19-8-1`` is section
+``19-8.1`` in native Part 241, not Part 19 — so the token is preserved and
+part/citation stay unknown until same-edition native ancestry is available; a
+current eCFR hierarchy is never joined onto an annual CFR edition.
 """
 
 from __future__ import annotations

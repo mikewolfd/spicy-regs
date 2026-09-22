@@ -1,3 +1,8 @@
+"""Pins rollup freshness checks: date watermarks, row-count budgets, and refusal of a damaged managed member.
+
+A failed read must not move the recorded history.
+"""
+
 from datetime import date
 import json
 

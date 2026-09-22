@@ -1,4 +1,7 @@
-"""Shared fixtures for pipeline tests."""
+"""Shared pytest fixtures for pipeline tests; the autouse env fixture strips pipeline environment variables.
+
+Tests marked ``integration`` are exempt.
+"""
 
 import os
 import shutil
@@ -13,6 +16,7 @@ _ISOLATED_NAMES = frozenset({"AGENCIES", "API_GOV", "DATA_GOV_API_KEY", "SAM_API
 
 @pytest.fixture(autouse=True)
 def isolate_env(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Delete pipeline environment variables before each non-``integration`` test."""
     if "integration" in request.keywords:
         return
     for name in list(os.environ):
@@ -38,6 +42,7 @@ def ample_disk_space(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.fixture
 def sample_dockets() -> list[dict]:
+    """Three docket records across EPA and FDA, one with a null abstract and RIN."""
     return [
         {
             "docket_id": "EPA-2024-0001",
@@ -71,6 +76,7 @@ def sample_dockets() -> list[dict]:
 
 @pytest.fixture
 def sample_comments() -> list[dict]:
+    """Four comment records across three dockets, mixing individual, organizational, and missing attribution."""
     return [
         {"comment_id": "C-001", "docket_id": "EPA-2024-0001", "agency_code": "EPA", "first_name": "Ada", "last_name": "Lovelace", "organization": None, "category": "Individual", "title": "Support", "comment": "I support this", "document_type": "Public Comment", "posted_date": "2024-06-20", "modify_date": "2024-06-20", "receive_date": "2024-06-20", "attachments_json": None},
         {"comment_id": "C-002", "docket_id": "EPA-2024-0001", "agency_code": "EPA", "first_name": None, "last_name": None, "organization": "Sierra Club", "category": "Organization", "title": "Oppose", "comment": "I oppose this", "document_type": "Public Comment", "posted_date": "2024-06-21", "modify_date": "2024-06-21", "receive_date": "2024-06-21", "attachments_json": None},
@@ -81,6 +87,7 @@ def sample_comments() -> list[dict]:
 
 @pytest.fixture
 def sample_documents() -> list[dict]:
+    """Two document records: one proposed rule and one withdrawn notice carrying an additional RIN."""
     return [
         {"document_id": "D-001", "docket_id": "EPA-2024-0001", "agency_code": "EPA", "title": "Proposed Rule", "document_type": "Proposed Rule", "posted_date": "2024-06-01", "modify_date": "2024-06-01", "comment_start_date": "2024-06-01", "comment_end_date": "2024-07-01", "file_url": None, "attachments_json": None, "fr_doc_num": None, "withdrawn": "false", "reason_withdrawn": None, "additional_rins": None, "text_content": None, "text_extraction_status": None},
         {"document_id": "D-002", "docket_id": "FDA-2024-0010", "agency_code": "FDA", "title": "Notice", "document_type": "Notice", "posted_date": "2024-04-15", "modify_date": "2024-04-15", "comment_start_date": "2024-04-15", "comment_end_date": "2024-05-15", "file_url": None, "attachments_json": None, "fr_doc_num": "2025-13790", "withdrawn": "true", "reason_withdrawn": "Superseded by revised proposal", "additional_rins": "[\"0910-AH35\"]", "text_content": None, "text_extraction_status": None},
@@ -138,6 +145,6 @@ DOCUMENT_SCHEMA = {
 
 
 def write_parquet_from_dicts(path: Path, records: list[dict], schema: dict) -> None:
-    """Helper to write a list of dicts as a Parquet file using Polars."""
+    """Write ``records`` to ``path`` as a zstd-compressed Parquet file under ``schema``."""
     df = pl.DataFrame(records, schema=schema)
     df.write_parquet(path, compression="zstd")

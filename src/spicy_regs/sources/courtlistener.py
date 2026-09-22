@@ -34,7 +34,12 @@ def _resolve_api_token() -> str | None:
 
 
 class CourtListenerReader(Reader):
-    """Select RECAP dockets; a record cap is an explicit prefix, not a full walk."""
+    """Select RECAP dockets; a record cap is an explicit prefix, not a full walk.
+
+    Every record needs a distinct positive integer identity; an omitted count, a terminal page
+    that disagrees with an exact declared count, or a continuation after an empty page raises
+    ``CourtListenerError`` rather than truncating the selection.
+    """
 
     kind: Literal["r", "o"] = "r"
     identity_field = "docket_id"

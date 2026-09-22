@@ -2,33 +2,20 @@
 
 Produces a pinned 6-column all-VARCHAR schema keyed on ``recipient_id`` — the
 federal-award **recipient** reference dimension that sits alongside the
-regulations.gov corpus. Keyed by UEI + name, it complements the SAM entity
-registry and the FEC committee table for resolving and enriching the
-organizations that comment on rulemakings by their federal funding.
+regulations.gov corpus and complements the SAM entity registry and FEC
+committee table for resolving organization commenters by their federal
+funding. The same UEI can appear at multiple ``recipient_level`` values (parent
+``P`` / child ``C`` / standalone ``R``), so ``recipient_id``, unique per level,
+is the primary/dedup key; consumers filter by level and join on ``uei``.
 
 Scope is deliberately bounded to the **top-N recipients by all-time federal
-award amount** (see :mod:`spicy_regs.sources.usaspending`): the endpoint reports
-~18M recipients across all history, so a full daily walk is infeasible. The
-largest-funded organizations are both the most resolution-useful and a naturally
-bounded fetch.
-
-Incremental by design. Recipients are a reference dimension, not a time series,
-so there is no watermark: each run fetches the current top-N and merges it with
-the prior published table. A run that produced *fewer* rows than before (e.g. a
-truncated fetch, or ranking drift dropping entities out of the top-N) would trip
-the R2 catastrophic-shrink guard, so merging against the prior table both
-preserves coverage and keeps the row count monotonic. Concretely we:
-
-1. Best-effort download the prior ``usaspending_recipients.parquet`` from R2.
-2. Fetch the current top-N recipients and shape the rows.
-3. Dedup the union on ``recipient_id``, preferring the freshly fetched row (so a
-   recipient's ``total_award_amount`` refreshes when it's re-fetched).
-
-With no prior table (first run) step 3 is just the fresh fetch.
-
-The same UEI can appear at multiple ``recipient_level`` values (parent ``P`` /
-child ``C`` / standalone ``R``), so ``recipient_id`` — unique per level — is the
-primary/dedup key; consumers filter by ``recipient_level`` and join on ``uei``.
+award amount**: the endpoint reports ~18M recipients across all history, so a
+full walk is infeasible and the largest-funded organizations are both the most
+resolution-useful and naturally bounded. There is no watermark — recipients
+are a reference dimension, not a time series — so each run fetches the current
+top-N and merges it with the prior table, dedup on ``recipient_id`` preferring
+the fresh row, which keeps the row count monotonic and clear of the R2
+catastrophic-shrink guard.
 """
 
 from __future__ import annotations

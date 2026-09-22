@@ -73,6 +73,7 @@ def _day(value: object) -> date | None:
 
 
 def _artifact_url(source: str, identifier: object) -> str | None:
+    """The public URL of the artifact that opened the period, or None for a source with no URL rule."""
     value = str(identifier or "").strip()
     if not value:
         return None

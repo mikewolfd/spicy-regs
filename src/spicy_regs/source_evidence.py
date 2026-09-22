@@ -58,6 +58,7 @@ class CaptureEvidence:
         )
 
     def _safe(self, value):
+        """Recursively redact the run's credential from a value before it is journaled."""
         if isinstance(value, str):
             # The owner scrubber handles named query credentials. The literal
             # replacement also covers short injected test credentials.
@@ -70,6 +71,7 @@ class CaptureEvidence:
         return value
 
     def event(self, event: str, **fields) -> None:
+        """Append one fsynced journal event; refuses once the artifact has been sealed."""
         if self.artifact is not None:
             raise SourceEvidenceError("Cannot append to sealed source evidence")
         try:
@@ -84,6 +86,7 @@ class CaptureEvidence:
             raise SourceEvidenceError("Cannot retain source evidence journal") from error
 
     def _blob(self, body: bytes) -> dict:
+        """Store response bytes content-addressed; refuses once the artifact has been sealed."""
         if self.artifact is not None:
             raise SourceEvidenceError("Cannot append to sealed source evidence")
         digest = "sha256:" + hashlib.sha256(body).hexdigest()
@@ -94,6 +97,12 @@ class CaptureEvidence:
         return {"sha256": digest, "byte_size": len(body)}
 
     def capture(self, capture: CapturedBodyResponse, *, stage: str) -> None:
+        """Retain one owner capture's body (and request body) into the evidence store.
+
+        Anything that is not a ``CapturedBodyResponse`` raises
+        ``SourceEvidenceError``; a credential-bearing or 401/403 response raises
+        ``CredentialRefusedError`` and stores nothing.
+        """
         if not isinstance(capture, CapturedBodyResponse):
             raise SourceEvidenceError("Source result has no owner capture")
         if capture.status_code in (401, 403) or (
@@ -120,6 +129,11 @@ class CaptureEvidence:
         )
 
     def refusal(self, error: BaseException, *, stage: str) -> None:
+        """Retain a refusal event, attaching any capture the error carries.
+
+        A ``SourceEvidenceError`` is re-raised unchanged, and a retention
+        failure is wrapped in one.
+        """
         if self.artifact is not None:
             raise SourceEvidenceError("Cannot append to sealed source evidence")
         if isinstance(error, SourceEvidenceError):
@@ -146,6 +160,7 @@ class CaptureEvidence:
         )
 
     def inherit(self, prior_index: dict, *, public_url: str | None) -> None:
+        """Record the prior generation's pins; a managed prior without its immutable root raises."""
         from spicy_regs.sources.publication import load_family_root
 
         prior = prior_index["families"].get(self.family)
@@ -174,6 +189,7 @@ class CaptureEvidence:
         )
 
     def seal(self, *, outcome: str):
+        """Build and admit the immutable artifact, returning the cached one on repeat calls."""
         if self.artifact is not None:
             return self.artifact
         self.event("build-outcome", outcome=outcome)
@@ -205,6 +221,7 @@ class CaptureEvidence:
         return self.artifact
 
     def inputs(self) -> list[ArtifactInput]:
+        """Seal as build-complete and return this run's artifact inputs for a generation."""
         artifact = self.seal(outcome="build-complete")
         return [
             ArtifactInput(INPUT_ROLE, artifact.pin.logical_id, artifact.pin.artifact_digest),

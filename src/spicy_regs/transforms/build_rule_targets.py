@@ -1,4 +1,4 @@
-"""Transform: build the normalized docket ↔ CFR ↔ RIN rule-identity spine."""
+"""Transform: build ``rule_targets.parquet`` — the normalized docket ↔ CFR ↔ RIN rule-identity spine."""
 
 from __future__ import annotations
 
@@ -77,7 +77,7 @@ def build_rule_targets(
     """Build action-specific docket-to-RIN and docket-to-CFR evidence.
 
     Unified Agenda values describe an editioned observation of a durable
-    agenda item. They are deliberately absent here: equality on a RIN does not
+    agenda item and are deliberately absent here: equality on a RIN does not
     authorize projecting an agenda-level CFR reference onto every docket that
     happens to carry that RIN.
     """

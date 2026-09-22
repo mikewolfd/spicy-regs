@@ -6,6 +6,7 @@ from spicy_regs.sources.pdf import fetch_pdf_bytes
 
 
 def _client(handler) -> httpx.Client:
+    """A redirect-following client over ``handler`` used as a MockTransport."""
     return httpx.Client(transport=httpx.MockTransport(handler), follow_redirects=True)
 
 

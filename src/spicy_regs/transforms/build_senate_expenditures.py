@@ -1,86 +1,33 @@
-"""Transform: build ``senate_expenditures`` — the Secretary of the Senate's ruled tables.
+"""Transform: build ``senate_expenditures.parquet`` — the Secretary of the Senate's ruled tables, its own rollup.
 
-One table, its own rollup, because its acquisition pass is nothing like the
-other PDF families'. ``build_print_citations`` reads a package body once with
-table detection **off** at 9.8 ms a page; this reads *granule* bodies with
-PyMuPDF's ``find_tables()`` **on**, which costs 26.5 to 84.6 ms a page
-(spicy-docs ``docs/research/pdf-yield-mods-recheck-2026-09-20.md``), over
-volumes of 1,259 to 3,018 pages published twice a year. Grouping the two would
-put a per-page cap the citation families do not need onto families that are
-measurably worse for having one.
+Its acquisition is unlike the other PDF families': *granule* bodies read with
+PyMuPDF table detection **on** (26.5–84.6 ms a page) over volumes of 1,259 to
+3,018 pages published twice a year, so reads are capped at
+:data:`MAX_PAGES_PER_FILE` and ``pages_capped`` is true on every row — every
+count over this table is a floor. The semiannual reports (2 U.S.C. 104a) are
+carried as ``GPO-CDOC-{congress}sdoc{number}`` ``CDOC`` packages; the
+``published`` window is filtered by the report's own title and then by the
+package-id grammar, and the issue-date floor (``SENATE_EXPENDITURES_SINCE``,
+default :data:`DEFAULT_ISSUE_FLOOR`) is a scope, not a coverage claim.
 
-**What the publisher actually publishes.** The Secretary of the Senate reports
-semiannually under 2 U.S.C. 104a, each report covering October 1 – March 31 or
-April 1 – September 30. GovInfo carries them as ``CDOC`` packages under the
-``GPO-`` prefixed reprint id — ``GPO-CDOC-{congress}sdoc{number}``, never the
-bare ``CDOC-119sdoc3`` — and each package publishes the report as several PDFs:
-a Full Report and one file per Part.
+The publisher's own ``packages/{id}/granules`` route states which files exist
+and each is fetched through ``acquire_granule`` so the granule summary proves
+it belongs to the package asked for; the **Full Report is skipped** because it
+duplicates Part I's pages byte-identically under a second ``file_name``, and
+``file_name`` is in the row identity. senate.gov's own index page is keyless
+and links the same PDFs, but states no package identity, granule list or
+last-modified, so it is deliberately not the route here. No citation extractor
+runs over these volumes (the MODS yield is zero at full depth) — only the ruled
+grid is published, one row per ruled row (header and total rows included) in
+spicy-docs' own row shape. Successful reads, including reads yielding no
+tables, are checkpointed in the Parquet metadata along with the publisher's
+modification values, rule/extractor versions and page limit: a changed rule,
+source or limit triggers a fresh read that replaces all prior rows for that
+file, while a refusal or incomplete page stream preserves the prior rows and
+checkpoint. This is completion of a bounded prefix, never of the whole report.
 
-**Enumeration, and its floor.** The ``published`` route scoped to ``CDOC``,
-filtered by the report's own title and then by the package-id grammar. Measured
-live 2026-09-20 over issue dates 2024-01-01..2026-09-20: **291 CDOC rows
-walked, 5 matched** — ``GPO-CDOC-119sdoc3``, ``119sdoc5``, ``119sdoc6``,
-``118sdoc11`` and ``118sdoc13`` — so the title rule is selective on real data
-and the floor this repository has *measured* is the 118th Congress. The floor
-is a scope and not a coverage claim: GovInfo's CDOC collection reaches 1817 and
-nobody has walked an earlier window. ``SENATE_EXPENDITURES_SINCE`` moves it.
-
-senate.gov's own index page (``legislative/common/generic/report_secsen.htm``)
-links the same PDFs and is keyless, and is deliberately **not** the route
-here: it states two fields — an href and its link text — where GovInfo states
-the package identity, the granule list and a last-modified, which is what lets
-a run skip a file it has already read.
-
-**The files come from the granules route, never derived.** ``-1.pdf`` and
-``-2.pdf`` look derivable from the package id and are not derived: the
-publisher's own ``packages/{id}/granules`` route states which files exist, one
-keyed request per package, and each is then fetched through
-``acquire_granule`` so the granule summary proves the file belongs to the
-package asked for. Measured 2026-09-20: ``GPO-CDOC-119sdoc3`` and
-``GPO-CDOC-119sdoc6`` each state exactly two ``CONTENT`` granules, Part I and
-Part II.
-
-The **Full Report is skipped**, and skipping it is the point of reading
-granules rather than the package body: ``GPO-CDOC-119sdoc3.pdf`` and
-``GPO-CDOC-119sdoc3-1.pdf`` are different files with different digests whose
-first 60 pages extract to byte-identical text. Reading both would publish the
-same ruled rows twice under two ``file_name`` values, and ``file_name`` is in
-the identity precisely because the publisher does this.
-
-**Pages are capped here, unlike the citation families, and the cap is the
-measurement's own.** spicy-docs read pages 1–80 of two volumes and found 139
-tables and 673 ruled rows in them; the ``C-`` compensation and ``D-``
-mail-allocation sections its contents page names sit past page 2,000 and are
-**not** reached by any cap this rollup could afford. ``pages_capped`` is
-``true`` on every row for that reason, and every count over this table is a
-floor on the volume. Raising ``MAX_PAGES_PER_FILE`` is a wall-time decision,
-not a correctness one.
-
-**What this table is not.** No citation extractor runs over these volumes. The
-MODS yield is zero at full page depth across all eight volumes spicy-docs
-sampled — no public law, no U.S. Code section, no bill that survived
-inspection — so extracting citations here would recreate what the index
-already has, which is the owner's first rule. What only the print holds is the
-ruled grid, and that is what is published.
-
-**The row shape is spicy-docs'.** ``shape_senate_expenditure_rows`` returns one
-row per ruled row of one table, including its header and total rows, and
-``page_context`` reads the office, funding year, appropriation title and
-printed page off the page text once per page. ``extraction_rule_version`` is
-the shaper's own constant. Nothing about a column, an identity or a
-classification is restated here.
-
-**Corrections replace the file's result.** Successful reads are checkpointed
-in this Parquet artifact's metadata, including reads yielding no tables. The
-checkpoint covers the publisher's modification values, shaper and extractor
-versions, and requested page limit. An older rule, changed source, or changed
-limit triggers a fresh read; a complete read replaces all prior rows for that
-file. A refusal or incomplete page stream preserves the previous rows and
-checkpoint. This is completion of a bounded prefix, not of the entire report.
-
-Needs an api.data.gov key: GovInfo's ``published``, granule-list, granule
-summary and granule MODS routes are keyed. The bodies are not. A ``401``/``403``
-aborts the run rather than being counted as a bad row.
+Needs an api.data.gov key for the ``published``, granule-list, granule-summary
+and granule-MODS routes (bodies are keyless); a ``401``/``403`` aborts the run.
 """
 
 from __future__ import annotations

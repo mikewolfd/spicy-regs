@@ -1,4 +1,9 @@
-"""A capped or failed body pass stays retryable despite unchanged BILLSTATUS."""
+"""Bill-family retry contracts for build_bill_family and its rollup.
+
+A capped or failed body pass stays retryable despite an unchanged BILLSTATUS;
+completed scopes skip only while their published evidence verifies, and an
+invalid budget is refused before any acquisition or output.
+"""
 
 import importlib
 import json

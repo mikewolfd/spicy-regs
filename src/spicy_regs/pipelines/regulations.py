@@ -1,26 +1,17 @@
 """The regulations.gov ETL, expressed through the Reader/Writer/Pipeline base classes.
 
-This is also the run file. Invoke it via the ``run-pipeline`` console script::
-
-    uv run run-pipeline --skip-upload --since-year 2025
-    uv run run-pipeline --agency EPA --no-skip-upload
-
-``RegulationsPipeline.run()`` reads top-to-bottom as the data flow:
-
-    1. Prime      — load the incremental Manifest and existing output.
-    2. Extract → stage  — ``stage_agencies`` fans agencies out in parallel; each
-       record stream flows Mirrulations Reader (raw JSON) -> ExtractRecords
-       transform (flatten) -> StagingWriter (local Parquet).
-    3. Merge      — merge and deduplicate the per-agency staging Parquet in one
-       whole-dataset transform.
-    4. Load       — save the Manifest, then publish to R2 (``_publish``, which
-       advances the manifest strictly last). Publishing stays off until this
-       path is vetted; pass ``--no-skip-upload`` to turn it on.
-
-The reusable pieces live elsewhere: connection details + the reader factory in
-``spicy_docs.sources.mirrulations``, the json→record transform in ``transforms.extract``,
-the parallel fan-out in ``pipelines.staging``, R2 in ``sources.r2``, and
-processed-key tracking in ``manifest``. This module is just the wiring.
+This is also the run file: invoke it via the ``run-pipeline`` console script,
+e.g. ``uv run run-pipeline --skip-upload --since-year 2025``. ``run()`` reads
+top-to-bottom as the data flow: prime the incremental Manifest and existing
+output, extract every agency's record streams in parallel into staging Parquet,
+merge and deduplicate the staging, then save the Manifest and publish to R2
+(``_publish``, which advances the manifest strictly last). Publishing stays off
+until this path is vetted; pass ``--no-skip-upload`` to turn it on. The
+reusable pieces live elsewhere — connection details and the reader factory in
+``spicy_docs.sources.mirrulations``, the json→record transform in
+``transforms.extract``, the parallel fan-out in ``pipelines.staging``, R2 in
+``sources.r2``, processed-key tracking in ``manifest`` — so this module is just
+the wiring.
 """
 
 from os import getenv

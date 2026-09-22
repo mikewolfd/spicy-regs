@@ -152,6 +152,7 @@ def test_successful_empty_table_is_a_member(tmp_path):
 
 
 def test_multipart_completion_is_conditional_and_replayable(tmp_path, monkeypatch):
+    """Replaying an already-published generation returns the prior index and uploads nothing."""
     monkeypatch.setattr(pub, "PART_BYTES", 100)
     directory, _ = build(tmp_path)
     store = Store()

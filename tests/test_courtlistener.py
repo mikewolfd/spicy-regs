@@ -102,6 +102,7 @@ def test_shape_handles_missing_fields():
 
 
 def _page(ids, next_url=None, *, total=None, kind="r"):
+    """A search-response envelope; ``kind`` selects docket (``r``) or cluster (``o``) ids."""
     return {
         "count": len(ids) if total is None else total,
         "next": next_url,
@@ -111,6 +112,8 @@ def _page(ids, next_url=None, *, total=None, kind="r"):
 
 
 class Transport(httpx.MockTransport):
+    """Queued-response mock transport; an ``Exception`` or ``int`` entry is raised or served as that status."""
+
     def __init__(self, *responses):
         self.responses = iter(responses)
         self.calls = []
@@ -130,6 +133,7 @@ class Transport(httpx.MockTransport):
 
 @pytest.fixture(autouse=True)
 def bounded_requests(monkeypatch):
+    """Cap the reader's per-page retry budget so a transport failure surfaces immediately."""
     monkeypatch.setattr(source, "_MAX_REQUESTS_PER_PAGE", 1)
 
 
@@ -137,6 +141,7 @@ NEXT = f"{source.API_BASE}/search/?cursor=second"
 
 
 def test_pagination_follows_cursor_next():
+    """Pins the bearer-style ``Authorization`` header and that the token never enters the URL."""
     transport = Transport(_page([1, 2], NEXT, total=4), _page([3, 4], total=4))
     reader = CourtListenerReader(transport=transport, api_token="fixture-token")
     assert [row["docket_id"] for row in reader.iter_records()] == [1, 2, 3, 4]
@@ -254,6 +259,7 @@ def test_invalid_cap_refuses(bound):
 
 @pytest.mark.parametrize("counts", [(2100, 2110), (2001, 2010)])
 def test_docket_estimated_count_does_not_replace_terminal_cursor(counts):
+    """A later total that disagrees with the first page's estimate must not invalidate the walk."""
     transport = Transport(
         _page(list(range(1, 1001)), NEXT, total=counts[0]), _page(list(range(1001, 2051)), total=counts[1])
     )

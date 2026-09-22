@@ -51,6 +51,7 @@ def _resolve_api_key() -> str | None:
 
 
 def _identity(record: Mapping, field: str) -> str:
+    """Return the row's nonempty, unpadded ``field`` value, refusing a missing or padded one."""
     value = record.get(field)
     if not isinstance(value, str) or not value.strip() or value != value.strip():
         raise CfrSectionsError(f"CFR row requires a nonempty {field}")
@@ -128,6 +129,7 @@ class CfrSectionsReader(Reader):
         logger.info("CFR: yielded {:,} granules", self._seen)
 
     def _iter_packages(self) -> Iterator[dict]:
+        """Yield identified package rows, refusing any package outside the CFR collection."""
         from spicy_docs.sources.govinfo.discovery import published_url
 
         assert self._source is not None
@@ -143,6 +145,10 @@ class CfrSectionsReader(Reader):
             yield package
 
     def _iter_granules(self, package: dict) -> Iterator[dict]:
+        """Yield each granule with its package id, lastModified and title attached.
+
+        Refuses a granule whose identity does not belong to the requested package.
+        """
         from spicy_docs.sources.govinfo.discovery import package_granules_url
 
         assert self._source is not None

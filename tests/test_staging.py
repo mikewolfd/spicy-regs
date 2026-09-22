@@ -1,4 +1,8 @@
-"""Tests for the reusable stage_agencies engine (spicy_regs.pipelines.staging)."""
+"""Pins the reusable stage_agencies engine (spicy_regs.pipelines.staging).
+
+Per-agency rows, consumed keys, transient failures, and parse failures are
+aggregated separately, and an agency that yields nothing writes no file.
+"""
 
 from collections.abc import Iterator
 from pathlib import Path

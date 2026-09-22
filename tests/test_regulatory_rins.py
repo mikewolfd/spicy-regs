@@ -1,4 +1,9 @@
-"""Native multi-RIN preservation and explicit synthetic join controls."""
+"""Pins multi-RIN handling end to end.
+
+Every native RIN survives federal-register shaping and proceedings, ``Not
+Assigned`` placeholders are dropped by the reader, and the documented all-RIN
+join keeps dated identities instead of collapsing them.
+"""
 
 import hashlib
 import json
@@ -66,6 +71,7 @@ def test_native_federal_register_keeps_every_rin_in_proceeding(tmp_path):
     ],
 )
 def test_complete_rin_reader_and_legacy_limit(row, expected, malformed):
+    """``rins_json`` wins over the scalar ``rin`` legacy fallback; malformed JSON counts one malformed row."""
     stats = JsonReadStats()
     assert proceeding_rins(row, stats) == expected
     assert stats.malformed_rows == malformed

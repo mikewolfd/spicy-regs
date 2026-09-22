@@ -1,4 +1,4 @@
-"""Tests for the BloomFilter used by the manifest loader."""
+"""Pins the manifest loader's BloomFilter: membership, empty misses, low false positives, ``in`` lookups."""
 
 
 from spicy_regs.manifest import BloomFilter

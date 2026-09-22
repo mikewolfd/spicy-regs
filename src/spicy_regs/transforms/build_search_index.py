@@ -1,24 +1,12 @@
-"""Transform: build docket_search.json, the data blob powering client-side search.
+"""Transform: build ``docket_search.json.gz``, the gzipped JSON blob the frontend loads into MiniSearch.
 
-Produces a single gzipped JSON file the frontend loads into MiniSearch at
-runtime. We emit raw docket records (not a pre-serialized MiniSearch index)
-to avoid coupling the ETL to the frontend's search-library version.
-
-Shape:
-    {
-      "version": "2026-04-14T16:00:00Z",
-      "generated_from": "dockets.parquet",
-      "count": 273163,
-      "docs": [
-        {"id": "EPA-HQ-OW-2022-0801", "a": "EPA", "t": "Lead and Copper ...",
-         "x": "Proposed Rule", "d": "2023-12-06T05:00:00Z", "s": "The U.S. ..."},
-        ...
-      ]
-    }
-
-Field names are abbreviated (`id`, `a`, `t`, `x`, `d`, `s`) to shave a
-~5% JSON size win across 273K records. Frontend expands them back at load
-time — see `frontend/src/lib/search/index.ts`.
+Emits raw docket records (not a pre-serialized MiniSearch index) to avoid
+coupling the ETL to the frontend's search-library version: a payload of
+``{"version", "generated_from": "dockets.parquet", "count", "docs"}`` whose
+docs are abbreviated to ``id``/``a``/``t``/``x``/``d``/``s`` (~5% smaller) and
+expanded back at load time — see ``frontend/src/lib/search/index.ts``. Rows
+duplicating a ``docket_id`` keep the latest ``modify_date``, and rows with no
+searchable title or abstract are skipped.
 """
 
 from __future__ import annotations

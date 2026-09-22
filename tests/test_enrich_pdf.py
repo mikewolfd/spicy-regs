@@ -1,4 +1,7 @@
-"""Tests for the documents PDF-text enrichment step."""
+"""Tests for documents/comments PDF-text enrichment: URL selection, dedupe, status, and the in-catalog upsert.
+
+Extraction runs against synthetic PDFs; the catalog upsert uses a local DuckDB.
+"""
 
 import json
 
@@ -41,6 +44,7 @@ def test_pdf_urls_dedupes_and_handles_bad_json() -> None:
 
 
 def _docs_frame() -> pl.DataFrame:
+    """The three-document fixture frame: one good PDF, one textless PDF, and one with no rendition."""
     return pl.DataFrame(
         {
             "document_id": ["D-pdf", "D-scan", "D-none"],
@@ -163,6 +167,7 @@ def test_comment_pdf_urls_none_and_bad_json() -> None:
 
 
 def _comments_frame() -> pl.DataFrame:
+    """The two-comment fixture frame: one with a PDF attachment and one without."""
     return pl.DataFrame(
         {
             "comment_id": ["C-pdf", "C-plain"],
@@ -196,6 +201,7 @@ def test_enrich_comments_fills_attachment_text() -> None:
 
 
 def _pdf_attach(url: str) -> str:
+    """Serialize one PDF attachment in the comment attachments' nested ``formats`` shape."""
     return json.dumps([{"title": "Letter", "formats": [{"url": url, "format": "pdf"}]}])
 
 

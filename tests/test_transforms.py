@@ -1,4 +1,8 @@
-"""Tests for the Transform base class and the ExtractRecords transform."""
+"""Pins Transform's abstractness and ExtractRecords' flattening of raw JSON.
+
+Surrounding quotes are stripped, the transform streams lazily, and source
+order is preserved.
+"""
 
 import pytest
 

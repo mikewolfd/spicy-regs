@@ -1,4 +1,8 @@
-"""Tests for the Reader and Writer base classes."""
+"""Tests for the Reader and Writer base classes.
+
+Pins the abstract contract: neither base class instantiates directly, and a
+subclass must implement ``iter_records`` and/or ``write``.
+"""
 
 from collections.abc import Iterable, Iterator
 

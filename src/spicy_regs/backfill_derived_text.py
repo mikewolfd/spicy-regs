@@ -225,6 +225,7 @@ def _backfill_file(
     overwrite: bool,
     discover_from_derived: bool = False,
 ) -> dict[str, int]:
+    """Enrich one published Parquet file in place; returns stats, writing only when a row was filled."""
     df = pl.read_parquet(path)
     enriched, stats = enrich_comments_with_derived_text(
         df,

@@ -1,4 +1,4 @@
-"""Serve actual local Parquet behind captured immutable remote URLs."""
+"""Pins that MCP views and publication status read one captured generation, with local Parquet standing in for R2."""
 
 import json
 import re
@@ -15,6 +15,7 @@ from tests.test_generation_publication import build, publish
 
 
 def connection_fixture(tmp_path, monkeypatch, index, locations):
+    """Patch a fake DuckDB connection that rewrites captured R2 URLs to ``locations``, with index and table scope."""
     inner = duckdb.connect()
     seen = []
     closed = []

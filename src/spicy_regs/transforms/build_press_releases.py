@@ -1,50 +1,39 @@
-"""Transform: build ``press_releases.parquet``.
-
-One row per item in one capture of an appropriations committee press-release
-feed, through ``spicy_docs.sources.congress.press_releases`` (House and Senate).
+"""Transform: build ``press_releases.parquet`` from the House/Senate appropriations press-release feeds.
 
 The identity is ``release_id = sha256(chamber \\x1f link)``, computed by the
 contract's own ``press_release_id`` rather than here: BillTrax keyed these on a
 255-byte prefix of the source URL, which collides on feeds whose links share a
-long prefix. The full ``link`` stays its own column.
+long prefix. The full ``link`` stays its own column. A feed is a rotating
+window, so this table is append-only by nature: the merge keeps every release
+ever captured and prefers the fresh copy of one seen again.
 
-A feed is a rotating window — the publisher drops older items off the end — so
-this table is append-only by nature: the merge keeps every release ever
-captured and prefers the fresh copy of one seen again.
-
-**The bill linkage.** ``bill_id`` and the three match provenance columns are
-filled by ``spicy_docs.interpretation.release_matching``: one pattern is
-compiled per published bill, and each release's title, then its description
-text, is searched for a mention. The bills come from the published
-``congress_bills`` table, read once at merge time through the same best-effort
-download every prior table goes through. That is a read of another rollup's
-published output, which the rollup contract (``pipelines/rollups/base.py``)
-allows for an *ingest* table — it has no upstream dependency inside this
-repository, so reading it is an ordering preference the crons already honour,
-not a race.
+**The bill linkage.** ``bill_id`` and the match provenance columns are filled
+by ``spicy_docs.interpretation.release_matching``: one pattern is compiled per
+published bill, and each release's title, then its description text, is
+searched for a mention. The bills come from the published ``congress_bills``
+table, read at merge time through the same best-effort download every prior
+table goes through — a read of another rollup's published output, which the
+rollup contract (``pipelines/rollups/base.py``) allows for an *ingest* table.
 
 **Each release is scoped by its own publication date, not by a run-wide
-Congress.** A feed is a rotating window roughly two months deep, so through
-every January it still carries December's releases, which name the *previous*
-Congress's bills. Scoping the whole run to one Congress — the current one, or
-an env override — would leave those releases unmatchable for as long as they
-stay in the window, and worse: the run would still publish them with
-``match_rule = unmatched``, overwriting the correct ``bill_id`` a December run
-had already published, because this table merges row-wise and a fresh NULL
-wins. So the Congress is computed per release from ``pub_date``
-(``congress_scope.current_congress``, which knows a Congress convenes on 3
-January), the bills are read for exactly the Congresses the run's releases fall
-in, and each release is matched only against its own.
+Congress.** A feed roughly two months deep still carries December's releases
+through every January, and those name the *previous* Congress's bills. Scoping
+the whole run to one Congress would leave them unmatchable while they stay in
+the window and, worse, publish them with ``match_rule = unmatched``,
+overwriting the correct ``bill_id`` an earlier run held, because this table
+merges row-wise and a fresh NULL wins. The Congress is therefore computed per
+release from ``pub_date`` (``congress_scope.current_congress``, which knows a
+Congress convenes on 3 January), and each release is matched only against its
+own.
 
 **Three row states, deliberately distinct.** A ``bill_id`` with a
-``bill_number_in_*`` rule is a match. ``match_rule = unmatched`` means the
-matcher ran against a real set of published bills and none was named. An
-all-NULL ``match_rule`` means no matching pass could run for that release —
-no ``congress_bills`` table was published, or none was published for that
-release's Congress, or the release carries no readable ``pub_date`` to scope
-by. The third must never be published as the second: asserting "no bill names
-this" on the strength of an empty bill list is a false measurement, and one
-that erases a true one.
+``bill_number_in_*`` rule is a match; ``match_rule = unmatched`` means the
+matcher ran against a real set of published bills and none was named; an
+all-NULL ``match_rule`` means no matching pass could run — no
+``congress_bills`` table published, none for that release's Congress, or no
+readable ``pub_date`` to scope by. The third must never be published as the
+second: asserting "no bill names this" on an empty bill list is a false
+measurement, and one that erases a true one.
 
 Keyless: both feeds are public RSS; the bills table is read from R2.
 """

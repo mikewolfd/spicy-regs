@@ -1,19 +1,14 @@
 """Pure PDF byte → text extraction.
 
-This is the core of the "extract PDF text" pipeline step (issue #9). It takes
-the *bytes* of a PDF and returns the embedded text, page by page. Fetching
-those bytes from a URL is a :mod:`spicy_regs.sources` concern, not a transform —
-keeping this module pure (bytes in, text out) means it has no network or
-filesystem dependency and is trivially testable.
-
-Scope notes (matching the issue):
-  * Embedded text only. Scanned/image-only PDFs carry no text layer and come
-    back :attr:`PdfTextStatus.EMPTY` — OCR is explicitly out of scope.
-  * Basic structure is preserved by joining pages with :data:`PAGE_SEPARATOR`;
-    table/column reconstruction is out of scope.
-  * Corrupt, truncated, or password-protected PDFs never raise — they return a
-    result with a non-OK status so a batch enrichment run can record the
-    outcome and move on.
+The core of the "extract PDF text" pipeline step: bytes in, embedded text out,
+with no network or filesystem dependency, so it is trivially testable.
+Fetching those bytes from a URL is a :mod:`spicy_regs.sources` concern.
+Embedded text only — scanned/image-only PDFs carry no text layer and come back
+:attr:`PdfTextStatus.EMPTY`, OCR being explicitly out of scope; basic structure
+is preserved by joining pages with :data:`PAGE_SEPARATOR`, while table/column
+reconstruction is out of scope; corrupt, truncated or password-protected PDFs
+never raise — they return a result with a non-OK status so a batch enrichment
+run can record the outcome and move on.
 """
 
 from __future__ import annotations

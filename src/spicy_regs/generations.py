@@ -21,6 +21,7 @@ MANIFEST = "members.json"
 
 
 def _table_info(path: Path) -> dict:
+    """Observed columns and row count for one Parquet file; decoding all pages catches a body/footer mismatch."""
     with duckdb.connect() as con:
         columns = con.execute("DESCRIBE SELECT * FROM read_parquet(?)", [str(path)]).fetchall()
     # A readable footer does not establish readable data pages. Decode every
@@ -36,6 +37,7 @@ def _table_info(path: Path) -> dict:
 
 
 def _implementation_id() -> str:
+    """Content digest of this package's Python sources, recorded in every generation root."""
     digest = hashlib.sha256()
     root = Path(__file__).parent
     for path in sorted(root.rglob("*.py")):

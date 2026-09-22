@@ -20,6 +20,11 @@ _MAX_REQUESTS = 5
 
 
 class GaoReportsReader(Reader):
+    """Yield GAO report items (title, link, description, pub_date) from the reports RSS feed.
+
+    Refuses any ``url`` other than ``RSS_URL``; ``max_records`` yields only the feed's first items.
+    """
+
     def __init__(
         self,
         *,

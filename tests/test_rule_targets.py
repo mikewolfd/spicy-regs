@@ -1,4 +1,9 @@
-"""Golden-file-style fixture test for every rule-target evidence source."""
+"""Golden-file-style fixture test for every rule-target evidence source.
+
+Pins which source edges become rows, that malformed JSON is skipped and counted
+without dropping the other sources, and that only dockets present in the source
+corpus join — never an unbacked or untrusted link.
+"""
 
 from __future__ import annotations
 

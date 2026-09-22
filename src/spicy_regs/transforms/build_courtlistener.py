@@ -1,36 +1,18 @@
 """Transform: build ``court_dockets.parquet`` from the CourtListener v4 API.
 
-Produces a pinned, all-VARCHAR schema keyed by ``cl_docket_id`` (the CourtListener
-docket id). Array-valued fields (parties, attorneys, law firms) are serialized as
-JSON strings so the published table stays flat and portable; the large per-entry
-``recap_documents`` blob is intentionally dropped (it is document-level, not
-docket-level metadata).
+Pinned all-VARCHAR schema keyed by ``cl_docket_id``; array-valued fields
+(parties, attorneys, law firms) are JSON strings and the document-level
+``recap_documents`` blob is intentionally dropped. Scope is APA / agency-review
+litigation: RECAP dockets with nature-of-suit 899, the litigation counterpart
+to the rulemakings in ``dockets``/``documents``. There is no machine RIN/FR key
+on a docket, so links are name- and topic-based (agency in ``case_name`` /
+``parties_json``, statute in ``cause``).
 
-Scope is APA / agency-review litigation: RECAP dockets with nature-of-suit 899
-("Administrative Procedures Act/Review or Appeal of Agency Decision"). These are
-the suits challenging federal agency action — the litigation counterpart to the
-rulemakings in ``dockets``/``documents``.
-
-**How it joins the corpus.** There is no machine RIN/FR key on a court docket, so
-the links are name- and topic-based:
-
-* by **agency** — the defendant agency appears in ``case_name`` and ``parties_json``
-  (e.g. "U.S. DEPARTMENT OF HEALTH AND HUMAN SERVICES"), joinable by name to
-  ``agency_stats`` / the FR ``agency_slugs``;
-* by **topic/statute** — ``cause`` names the statute invoked (e.g. "05:551
-  Administrative Procedure Act") and ``case_name`` names the challenged program.
-
-Incremental by design (mirrors ``build_lobbying_filings``): a full re-fetch every
-run would be wasteful *and* would trip the R2 catastrophic-shrink guard on any
-short run. Instead we:
-
-1. Best-effort download the prior ``court_dockets.parquet`` from R2.
-2. Fetch only dockets filed since its max ``date_filed`` (minus a short overlap to
-   catch newly-indexed / corrected dockets).
-3. Dedup the union on ``cl_docket_id``, preferring the freshly fetched row.
-
-With no prior table (first run) step 2 becomes a full backfill. The reader is
-functional keyless, so this runs in CI with or without ``COURTLISTENER_API_TOKEN``.
+Incremental by design: best-effort prior from R2, fetch only dockets filed
+since its max ``date_filed`` minus a short overlap, then dedup on
+``cl_docket_id`` preferring the fresh row. With no prior table it is a full
+backfill. The reader is functionally keyless, so this runs with or without
+``COURTLISTENER_API_TOKEN``.
 """
 
 from __future__ import annotations

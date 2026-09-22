@@ -1,36 +1,29 @@
-"""Transform: build ``court_opinion_bodies.parquet`` — actual opinion text.
+"""Transform: build ``court_opinion_bodies.parquet`` — the actual opinion text.
 
-Every source text variant is retained under its CourtListener field name.
-HTML and XML remain markup, not extracted plain text. ``plain_text`` and
-``html_with_citations`` remain in their existing positions for named consumers.
-Version 2 preserves source empty strings separately from NULL in all eight text
-fields. Its Parquet metadata records the version; a version-1 prior requires an
+Every CourtListener source text variant is retained under its own field name
+(HTML and XML stay markup, not extracted plain text), ``plain_text`` and
+``html_with_citations`` keep their existing positions for named consumers, and
+version 2 preserves source empty strings separately from NULL in all eight text
+fields. The Parquet metadata records the version; a version-1 prior requires an
 explicit rebuild because its discarded variants cannot be recovered by merging.
 
 **One opinion per row, not one decision per row.** A cluster (see
-``build_court_opinion_clusters``) is the decision; an opinion is one voice within
-it — majority, concurrence, dissent, each with its own author and its own text.
+``build_court_opinion_clusters``) is the decision; an opinion is one voice
+within it — majority, concurrence, dissent — with its own author and text.
 ``cluster_id`` joins the two, and through the cluster's ``cl_docket_id`` to
 ``court_dockets``.
 
-**Why this ingest is bounded, and by what.** The 2026-06-30 ``opinions`` dump is
-50.8 GiB compressed and about 422 GiB decompressed at its observed 8.3x ratio.
-Two independent limits bite:
-
-* *Disk.* Remote input is streamed without keeping a compressed copy. An
-  already retained local dump is also streamed through decompression. Both
-  routes check estimated output space before an unbounded pass and refuse
-  when it would cross the 100 GiB free-space floor; see ``check_headroom``.
-* *Time.* The bucket serves one connection at roughly 1.7-2.0 MiB/s, so a single
-  full pass is about 8.6 hours. That is a scheduled-job cost, not a workstation
-  one.
-
-So a local run takes a *recorded slice*: ``max_records`` and/or
-``max_compressed_bytes`` bound it, and the builder logs exactly what the bound
-produced — rows, id range, date range, bytes read — so the resulting table's
-coverage is a stated number rather than an impression. ``cluster_ids`` narrows a
-pass to specific decisions, which is how the documented full backfill targets the
-APA docket set without keeping the other ~10 million opinions.
+**The ingest is bounded because the dump is 50.8 GiB compressed (~8.3x, about
+422 GiB decompressed) and one connection is served at ~1.7-2.0 MiB/s.** Remote
+input is streamed without keeping a compressed copy and a retained local dump is
+streamed through decompression, but both routes check estimated output space
+before an unbounded pass and refuse to cross the 100 GiB free-space floor (see
+``check_headroom``). A bounded run instead takes a *recorded slice*
+(``max_records`` and/or ``max_compressed_bytes``) and logs exactly what the
+bound produced — rows, id range, date range, bytes read — so coverage is a
+stated number rather than an impression; ``cluster_ids`` narrows a pass to
+specific decisions, which is how the documented full backfill targets the APA
+docket set without keeping the other ~10 million opinions.
 """
 
 from __future__ import annotations

@@ -7,7 +7,7 @@ sources are addressed that way — the BILLSTATUS bulk archive is one zip per
 ``house-vote/{congress}/{session}``. Stating the rule once here keeps three
 transforms from each carrying their own copy of it.
 
-``uv run`` reads the workflow inputs from the environment
+The workflow runners read their inputs from the environment
 (``BILL_FAMILY_CONGRESSES``, ``BILL_FAMILY_BILL_TYPES``); an unset or blank
 value means "the default", never "none", so a cron with no inputs still runs.
 """

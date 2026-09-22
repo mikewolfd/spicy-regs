@@ -1,4 +1,9 @@
-"""Tests for the R2 storage connector (sources/r2.py)."""
+"""Pins the R2 storage connector's shrink guards and publication behavior.
+
+Preflight runs before the first write, a partition upload refuses a missing
+index before writing, purge targets the exact URL, and per-table failures are
+all reported.
+"""
 
 from pathlib import Path
 

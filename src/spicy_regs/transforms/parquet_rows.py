@@ -10,6 +10,10 @@ import pyarrow.parquet as pq
 
 
 def write_rows(records: Iterable[dict], destination: Path, schema: pa.Schema, *, batch_size: int = 2_000) -> Path:
+    """Write ``records`` through ``schema`` in ``batch_size`` batches, replacing ``destination`` only when consumed.
+
+    A non-integer or non-positive ``batch_size`` raises ValueError.
+    """
     if type(batch_size) is not int or batch_size <= 0:
         raise ValueError("batch_size must be a positive integer")
     rows = iter(records)

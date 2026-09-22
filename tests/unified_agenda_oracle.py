@@ -1,63 +1,15 @@
 # Frozen verbatim from 78c90f9:src/spicy_regs/sources/unified_agenda.py.
 # Test-only independent mapping/walk oracle; do not refactor with production.
-"""Reader connector for the OIRA/OMB Unified Agenda published at reginfo.gov.
+"""Frozen pre-migration Unified Agenda reader kept as a test-only oracle.
 
-The Unified Agenda of Regulatory and Deregulatory Actions is the semiannual
-catalog, edited by the Office of Information and Regulatory Affairs (OIRA), of
-the rulemakings each federal agency has under active development. Every entry is
-keyed by a **Regulation Identifier Number (RIN)** — the same RIN that appears in
-the Federal Register (``regulation_id_numbers``) — which makes the Unified Agenda
-the upstream, forward-looking view of the rulemaking lifecycle: it lists actions
-that are *planned* long before any proposed or final rule reaches the Federal
-Register or opens a comment period on regulations.gov.
-
-The reader is a *pure source*: it yields one dict per RIN record, with keys
-normalized to what :func:`~spicy_regs.transforms.build_unified_agenda._shape`
-reads. Shaping those dicts into the published 17-column schema is the job of
-that transform.
-
-Source of truth — the per-edition XML export
---------------------------------------------
-reginfo.gov publishes each agenda edition as a single machine-readable XML file
-downloaded through ``XMLViewFileAction``::
-
-    https://www.reginfo.gov/public/do/XMLViewFileAction?f=REGINFO_RIN_DATA_{EDITION}.xml
-
-where ``EDITION`` is ``YYYYMM`` with MM in {04 (Spring), 10 (Fall)} — e.g.
-``REGINFO_RIN_DATA_202510.xml`` (Fall 2025), ``REGINFO_RIN_DATA_202410.xml``
-(Fall 2024). (One legacy file is ``REGINFO_RIN_DATA_2012.xml``.) No API key is
-required; reginfo.gov is fully open.
-
-.. note::
-   The older ``eAgendaXmlReport`` endpoint returns the **HTML listing page**, not
-   data — it is not a machine-readable export. ``XMLViewFileAction`` is the real
-   export and is what this reader fetches.
-
-Each file is a single ``<REGINFO_RIN_DATA>`` root containing many ``<RIN_INFO>``
-records. Files run to tens of MB, so the reader stream-parses with
-:func:`xml.etree.ElementTree.iterparse` and clears each record (and the root's
-accumulated child shells) as it goes, keeping memory bounded regardless of file
-size. Observed per-record structure (see ``_normalize``)::
-
-    <RIN_INFO>
-      <RIN>0503-AA80</RIN>
-      <PUBLICATION><PUBLICATION_ID>202410</PUBLICATION_ID>...</PUBLICATION>
-      <AGENCY><CODE>0503</CODE><NAME>...</NAME><ACRONYM>AgSEC</ACRONYM></AGENCY>
-      <PARENT_AGENCY>...</PARENT_AGENCY>
-      <RULE_TITLE>...</RULE_TITLE>
-      <ABSTRACT>...</ABSTRACT>
-      <PRIORITY_CATEGORY>...</PRIORITY_CATEGORY>
-      <RIN_STATUS>...</RIN_STATUS>
-      <RULE_STAGE>...</RULE_STAGE>
-      <MAJOR>No</MAJOR>
-      <CFR_LIST><CFR>7 CFR 1.900-1.903</CFR>...</CFR_LIST>
-      <LEGAL_AUTHORITY_LIST><LEGAL_AUTHORITY>5 U.S.C. 301</LEGAL_AUTHORITY>...</LEGAL_AUTHORITY_LIST>
-      <TIMETABLE_LIST>
-        <TIMETABLE><TTBL_ACTION>...</TTBL_ACTION><TTBL_DATE>11/20/2024</TTBL_DATE>
-                   <FR_CITATION>89 FR 91529</FR_CITATION></TIMETABLE>
-        ...
-      </TIMETABLE_LIST>
-    </RIN_INFO>
+Its reader logic is verbatim from
+``78c90f9:src/spicy_regs/sources/unified_agenda.py`` (pinned by the header
+comment above) and must not be refactored with production: the tests compare
+the current shared reader and its normalization against it. It stream-parses
+each edition's public ``REGINFO_RIN_DATA_{edition}.xml`` export from
+reginfo.gov with :func:`xml.etree.ElementTree.iterparse`, yielding one
+normalized RIN dict per record with exactly the keys
+:func:`~spicy_regs.transforms.build_unified_agenda._shape` reads.
 """
 
 from __future__ import annotations

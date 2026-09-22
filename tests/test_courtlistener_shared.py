@@ -1,4 +1,11 @@
-"""SR04: installed source reader, table policies and failed-attempt cleanup."""
+"""SR04: installed source reader, table policies and failed-attempt cleanup.
+
+Pins the CourtListener bulk reader end to end — exact retained bytes and
+jurisdictions, strict CSV refusals replacing the old lossy admission, and
+compressed-offset resume verified against the publisher's ETag and byte range —
+plus the local tables' parity with the frozen mapping and that a failure after
+flush leaves the prior output and the original error untouched.
+"""
 
 from __future__ import annotations
 

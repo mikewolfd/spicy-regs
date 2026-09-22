@@ -9,18 +9,23 @@ from spicy_regs.transforms.congress_walk import COUNT_MISMATCH, MAX_OVER_DECLARA
 
 
 class _Page:
+    """One page: its records and the route's declared count."""
+
     def __init__(self, records, declared):
         self.records = tuple(records)
         self.declared_count = declared
 
 
 def _refusal(message: str, *, declared: int, observed: int) -> PagedJsonSourceError:
+    """Build a paged-JSON error carrying the walk's ``declaredCount``/``observedCount`` context."""
     error = PagedJsonSourceError(f"Congress.gov {message}")
     error.__dict__[TRAVERSAL_CONTEXT] = {"operation": "traversal", "declaredCount": declared, "observedCount": observed}
     return error
 
 
 class Reader:
+    """Yields the given pages, then raises ``refusal`` when one is set."""
+
     def __init__(self, pages, refusal=None):
         self.pages = pages
         self.refusal = refusal

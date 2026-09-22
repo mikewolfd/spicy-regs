@@ -1,34 +1,26 @@
 """Transform: build ``sam_entities.parquet`` from the SAM.gov Entity API (v4).
 
-Produces an 18-column all-VARCHAR schema keyed on ``uei`` (the Unique Entity ID),
-the federal entity registry that anchors organization/entity resolution across
-the corpus — the same UEI the dashboard uses to tie a commenting organization to
-its registered identity.
+Produces an 18-column all-VARCHAR schema keyed on ``uei``, the federal entity
+registry anchoring organization/entity resolution across the corpus.
 
-Incremental by design. A full re-fetch of the entire registry every run would be
-wasteful, rate-limited, *and* would trip the R2 catastrophic-shrink guard on any
-short run. Instead we:
+**Incremental and bounded.** Best-effort download the prior table; fetch a
+bounded window of active registrations (``max_records``); dedup the union on
+``uei`` preferring the fresh row. A first run seeds the table where later runs
+refresh and extend it, and a full backfill is never triggered implicitly —
+raise ``max_records`` (and widen the year range) deliberately for a wider pull.
 
-1. Best-effort download the prior ``sam_entities.parquet`` from R2.
-2. Fetch a *bounded* window of active registrations (``max_records``) this run.
-3. Dedup the union on ``uei``, preferring the freshly fetched row.
+**Coverage mechanism (``mode``).** The default ``"extract"`` fetches via SAM's
+bulk async extract (``format=json``), one request per ``registrationDate``
+year, each returning up to 1M records — full coverage of the ~765K active
+registry is reachable within the 1,000 req/day key budget (≈20 year-window
+requests) rather than the ~76,000 paginated requests a 10-record synchronous
+page would need. The ``"partition"`` fallback walks the paginated endpoint with
+adaptive date-window subdivision (see :mod:`spicy_regs.sources.sam_entities`).
+Both are bounded by ``max_records`` and the ``[since_year, until_year]`` range,
+so a scheduled run advances coverage and the merge accretes it across runs.
 
-With no prior table (first run) step 2 seeds the table; subsequent runs refresh
-and extend coverage. A full backfill is never triggered implicitly — raise
-``max_records`` (and widen the year range) deliberately for a wider pull.
-
-Coverage mechanism (``mode``). The default ``"extract"`` mode fetches via SAM's
-bulk async extract (``format=json``), one request per ``registrationDate`` year,
-each returning up to 1M records — so full coverage of the ~765K active registry
-is reachable within the 1,000 req/day key budget (≈20 year-window requests) rather
-than the ~76,000 paginated requests the 10-record synchronous page would need. The
-``"partition"`` fallback walks the paginated endpoint with adaptive date-window
-subdivision (see :mod:`spicy_regs.sources.sam_entities`). Both are bounded by
-``max_records`` and the ``[since_year, until_year]`` window range, so a scheduled
-run advances coverage and the merge accretes it across runs.
-
-Scope is deliberately **list-level only**: every column comes from the
-``/entities`` payload, so there are no per-entity detail fetches.
+Every column comes from the ``/entities`` payload: no per-entity detail
+fetches.
 """
 
 from __future__ import annotations

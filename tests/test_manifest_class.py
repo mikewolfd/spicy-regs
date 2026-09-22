@@ -1,4 +1,9 @@
-"""Tests for the incremental-processing Manifest (spicy_regs.manifest.Manifest)."""
+"""Tests for the incremental-processing Manifest (spicy_regs.manifest.Manifest).
+
+Pins additive key recording (``new_keys`` is a copy), the save/load round-trip,
+the fail-soft empty load when R2 is unconfigured, and that saving an empty
+manifest writes nothing.
+"""
 
 from pathlib import Path
 

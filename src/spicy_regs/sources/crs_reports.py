@@ -36,6 +36,12 @@ def _resolve_api_key() -> str | None:
 
 
 class CrsReportsReader(Reader):
+    """Yield raw CRS report dicts, filtering locally to ``since`` or later.
+
+    Requires an api.data.gov key; a page omitting its declared count or carrying a missing or
+    repeated ``id`` raises ``CrsReportsError``. ``per_page`` is clamped to ``PER_PAGE``.
+    """
+
     def __init__(
         self,
         *,
@@ -91,6 +97,7 @@ class CrsReportsReader(Reader):
 
 
 def _older_than(report: Mapping, since: date) -> bool:
+    """True when ``updateDate`` parses to a date before ``since``; missing or invalid dates are not older."""
     raw = report.get("updateDate")
     if not raw:
         return False

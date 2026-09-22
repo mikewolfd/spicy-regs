@@ -1,4 +1,7 @@
-"""Test-only SR04 oracle from SpicyRegs 8b383714; never imported by production."""
+"""Test-only SR04 oracle: maps bulk CourtListener CSV rows to the columns SpicyRegs 8b383714 published.
+
+Never imported by production.
+"""
 
 import csv
 import io
@@ -22,6 +25,7 @@ _TEXT_FIELDS = (
 
 
 def _s(value: object) -> str | None:
+    """Coerce a CSV cell to a non-empty string, or ``None`` when blank."""
     if value is None:
         return None
     text = str(value)
@@ -29,7 +33,11 @@ def _s(value: object) -> str | None:
 
 
 def old_body(row: dict, *, dump_date: date | None) -> dict:
-    """Map one bulk ``opinions`` CSV row onto the published columns."""
+    """Map one bulk ``opinions`` CSV row onto the published columns.
+
+    ``text_char_count`` is the longest present text field's length and
+    ``available_text_fields`` lists the present fields in canonical order.
+    """
     present = [name for name in _TEXT_FIELDS if row.get(name)]
     plain = _s(row.get("plain_text"))
     with_citations = _s(row.get("html_with_citations"))
@@ -65,7 +73,10 @@ def _cluster_url(cluster_id: str | None, slug: str | None) -> str | None:
 
 
 def old_cluster(row: dict, *, scope=None) -> dict:
-    """Map one bulk ``opinion-clusters`` CSV row onto the published columns."""
+    """Map one bulk ``opinion-clusters`` CSV row onto the published columns.
+
+    Court fields come from ``scope.for_docket`` when a scope is given.
+    """
     cluster_id = _s(row.get("id"))
     slug = _s(row.get("slug"))
     cl_docket_id = _s(row.get("docket_id"))
@@ -114,7 +125,7 @@ def old_cluster(row: dict, *, scope=None) -> dict:
 
 
 def old_rows(body: bytes) -> list[dict]:
-    """Frozen old CSV dialect, decoding and null conversion."""
+    """Parse bulk CSV bytes with the frozen old dialect: backslash-escaped quotes and empty cells as ``None``."""
 
     previous_limit = csv.field_size_limit(sys.maxsize)
     try:

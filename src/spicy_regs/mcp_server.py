@@ -1,3 +1,11 @@
+"""MCP server exposing the published Spicy Regs tables as read-only SQL tools.
+
+The tools (``list_sources``, ``describe_table``, ``query_sql``) run over a
+cached DuckDB connection whose views are pinned to one publication snapshot,
+reading either the public R2 bucket or an explicitly configured local directory
+(``SPICY_REGS_DATA_DIR``). The HTTP app also serves the human setup page at ``/``.
+"""
+
 from __future__ import annotations
 
 import base64
@@ -130,6 +138,7 @@ DEFAULT_CATALOG_NAMESPACE = "default"
 
 
 def _parse_timeout_seconds(raw: str) -> float | None:
+    """Parse a ``ms``/``s``/``m`` duration; an invalid spelling raises RuntimeError, non-positive means no timeout."""
     text = raw.strip().lower()
     if not text:
         return None
@@ -187,6 +196,7 @@ DATA_DIR = _resolve_data_dir()
 
 
 def _source_details(cursor: duckdb.DuckDBPyConnection | None = None) -> dict[str, str]:
+    """Describe the active data source (local directory or R2) for tool replies."""
     if DATA_DIR is not None:
         selection = _connection_local_selection(cursor) if cursor is not None else None
         if selection is not None:
@@ -242,6 +252,10 @@ TEMP_DIR = _resolve_temp_dir()
 
 
 def _resolve_catalog_config() -> dict[str, str] | None:
+    """R2 catalog config from the environment, or None when a credential is missing.
+
+    Values are interpolated into SQL, so illegal characters raise RuntimeError.
+    """
     uri = os.environ.get("R2_CATALOG_URI")
     warehouse = os.environ.get("R2_CATALOG_WAREHOUSE")
     token = os.environ.get("R2_CATALOG_TOKEN")
@@ -324,6 +338,7 @@ def _apply_security_settings(con: duckdb.DuckDBPyConnection) -> None:
 
 
 def _attach_catalog(con: duckdb.DuckDBPyConnection, config: dict[str, str]) -> bool:
+    """Attach the R2 Iceberg catalog under CATALOG_ALIAS; returns False (logged) when the attach fails."""
     try:
         try:
             con.execute("INSTALL avro")
@@ -341,6 +356,12 @@ def _attach_catalog(con: duckdb.DuckDBPyConnection, config: dict[str, str]) -> b
 
 
 def _build_connection() -> duckdb.DuckDBPyConnection:
+    """Open a DuckDB connection with one view per available table, pinned to one publication snapshot.
+
+    Local managed bytes are rehashed before their views are created; a view
+    whose schema differs from its admitted generation, or a managed member that
+    cannot be read, raises RuntimeError.
+    """
     from spicy_regs.sources.publication import load_index, table_location
 
     local = None
@@ -525,6 +546,11 @@ def _reset_connection_cache() -> None:
 
 @contextmanager
 def _statement_timeout(cursor: duckdb.DuckDBPyConnection) -> Iterator[None]:
+    """Bound one cursor's statement runtime, raising TimeoutError when its timer trips.
+
+    Local member signatures are re-checked before and after the statement; with
+    no configured timeout this is only the signature check.
+    """
     local = _connection_local_selection(cursor) if DATA_DIR is not None else None
     if local is not None:
         from spicy_regs.local_data import assert_local_members_unchanged
@@ -755,6 +781,7 @@ def _register_landing_page(mcp: FastMCP) -> None:
 
 
 def build_app():
+    """Build the stateless streamable-HTTP ASGI app (tools plus the landing page)."""
     mcp = FastMCP(
         "spicy-regs",
         instructions=INSTRUCTIONS,

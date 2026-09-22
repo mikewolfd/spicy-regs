@@ -30,6 +30,12 @@ if TYPE_CHECKING:
 
 
 class _RemoteGenerationSource:
+    """Member source over staged remote Parquet plus local artifact metadata.
+
+    Refuses an unnamed staging prefix, a member key outside it, duplicate names,
+    an empty member set, or a member without a source etag.
+    """
+
     def __init__(self, directory: Path, *, client, bucket: str, staging_prefix: str,
                  members: Sequence[StoredParquet]):
         from rulespec_artifacts import LocalMemberSource
@@ -51,6 +57,7 @@ class _RemoteGenerationSource:
             raise ValueError("A remote generation cannot omit all tables")
 
     def keys(self):
+        """List all local and staged keys; a local/remote collision is refused so undeclared staging fails admission."""
         local = set(self.local.keys())
         remote = set(self.remote.keys())
         if local & remote:
@@ -60,6 +67,7 @@ class _RemoteGenerationSource:
 
     @contextmanager
     def open(self, key):
+        """Stream one member: pinned remote bytes for staged tables, else local artifact metadata."""
         from spicy_regs.sources.remote_parquet import open_pinned_s3
 
         if key not in self.members:
@@ -71,6 +79,7 @@ class _RemoteGenerationSource:
             yield stream
 
     def table_info(self, key):
+        """Observed columns and row count for a member; decoding all pages catches a body/footer mismatch."""
         with self.open(key) as stream, pq.ParquetFile(stream) as parquet:
             with duckdb.connect() as con:
                 con.register("generation_schema", parquet.schema_arrow.empty_table())
@@ -82,6 +91,7 @@ class _RemoteGenerationSource:
 
 
 def _verify_remote(source, *, expected_pin=None):
+    """Admit the artifact, then require staged receipts to equal independently verified bytes."""
     from rulespec_artifacts import iter_member_descriptors
 
     artifact = _verify_generation(source, source.table_info, expected_pin=expected_pin)

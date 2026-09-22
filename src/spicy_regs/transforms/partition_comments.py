@@ -9,17 +9,17 @@ from loguru import logger
 
 
 def partition_comments(output_dir: Path) -> Path:
-    """Partition comments.parquet by agency_code into Hive-style directory.
+    """Partition ``comments.parquet`` by agency_code into a Hive-style directory.
 
-    Streams the file in batches, groups each batch by agency_code, and
-    appends to per-agency Parquet files.  After all batches, each file is
-    re-read, sorted by (docket_id, posted_date), and rewritten.
-
-    Peak memory ≈ batch_size rows + largest single-agency file during the
-    final sort pass, rather than the full 24.7M-row table.
-
-    Output: comments/agency/agency_code={X}/part-0.parquet
-    Returns the partition output directory.
+    Streams the file in batches, grouping each batch into per-agency Parquet
+    files, then re-reads and sorts each file by ``(docket_id, posted_date)``
+    with DuckDB (PyArrow's 32-bit string offsets overflow while concatenating a
+    multi-million-row agency) and rewrites it with 20k-row groups so scoped
+    ``WHERE docket_id = ?`` range reads prune tightly. Peak memory is about a
+    batch plus the largest single-agency file, not the whole table. Output:
+    ``comments/agency/agency_code={X}/part-0.parquet``; returns the partition
+    output directory. Raises ``FileNotFoundError`` when ``comments.parquet`` is
+    absent.
     """
     comments_file = output_dir / "comments.parquet"
     if not comments_file.exists():

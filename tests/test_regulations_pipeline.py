@@ -1,8 +1,8 @@
-"""Tests for RegulationsPipeline and the run-pipeline CLI.
+"""Pins RegulationsPipeline and the run-pipeline CLI.
 
-The composition test wires the real MirrulationsReader → StagingWriter →
-merge transforms together against a fake in-memory S3 resource, so it
-exercises the actual source→transform→sink flow without any network.
+The real reader → staging → merge composition runs against a fake in-memory S3
+resource, alongside manifest incremental dedup, failed-key retry, chunked
+comment commits, and publication ordering with the manifest published last.
 """
 
 from json import dumps

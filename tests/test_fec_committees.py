@@ -203,6 +203,7 @@ def test_reader_refuses_missing_key(monkeypatch, tmp_path):
 
 
 def _page(records, number, *, pages=9, count=0, exact=False):
+    """One OpenFEC response page for ``number`` with the given declared pagination."""
     return {
         "results": records,
         "pagination": {
@@ -216,6 +217,7 @@ def _page(records, number, *, pages=9, count=0, exact=False):
 
 
 def _reader(tmp_path, payloads, **kwargs):
+    """A reader over a mock transport serving ``payloads`` by page number, recording requests."""
     requests = []
 
     class ObservedTransport(httpx.MockTransport):
@@ -245,6 +247,7 @@ def _reader(tmp_path, payloads, **kwargs):
 
 
 def _run_state(reader):
+    """The reader's captured ``run.json`` state for the last attempt."""
     return json.loads((reader.last_run_path / "run.json").read_text())
 
 

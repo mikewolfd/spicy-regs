@@ -38,6 +38,7 @@ _ID = {"candidate": r"[HPS][A-Za-z0-9]{8}", "committee": r"C[0-9]{8}"}
 
 
 def _id_status(value, kind):
+    """Classify an identifier as not_reported, source_id_shape or invalid_source_id_shape."""
     if value in (None, ""):
         return "not_reported"
     return "source_id_shape" if kind in _ID and re.fullmatch(_ID[kind], value) else "invalid_source_id_shape"
@@ -59,6 +60,7 @@ def _observation(
     value_status=None,
     election_year=None,
 ):
+    """Build one observation row, refusing when the evidence states no full digest or no locator."""
     if not re.fullmatch(r"sha256:[0-9a-f]{64}", evidence["sha256"]) or not evidence["locator"]:
         raise ValueError("relationship requires a source digest and locator")
     if value_status is None:

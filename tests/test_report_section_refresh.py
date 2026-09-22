@@ -15,11 +15,15 @@ from tests.test_committee_reports import CRPT_ID, StubHearings, _no_prior, _pack
 
 
 class NoDiscovery:
+    """A discovery reader that lists nothing, so only retained evidence can trigger a read."""
+
     def packages(self, url, *, max_pages=40):
         return iter(())
 
 
 class RetainedReport:
+    """Serves the retained report body, optionally failing or returning an empty body."""
+
     def __init__(self, fail=False, empty=False):
         self.requested = []
         self.fail = fail
@@ -36,6 +40,7 @@ class RetainedReport:
 
 
 def _write_prior(directory, name, columns, rows):
+    """Write a prior published table where the merge and the reads checkpoint will find it."""
     schema = pa.schema([(column, pa.string()) for column in columns])
     pq.write_table(pa.Table.from_pylist(rows, schema=schema), prior_scratch_path(directory, name))
 

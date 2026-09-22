@@ -1,13 +1,10 @@
 """Where this host's Gemini key comes from.
 
-The adapter these tests used to cover — the request body, the schema on the
-request, the candidate envelope, the refusal that does not echo model prose,
-the token counts — moved to ``spicy_docs.interpretation.gemini_call`` in
-0.22.0 and is proved in that repository's
-``tests/test_interpretation_gemini_call.py``, beside the code that decides it.
-Re-asserting it here would be a second copy of the same claim that can only
-drift, so it went with the code. What is owned here is which environment
-variable this application reads.
+The adapter these tests used to cover moved to
+``spicy_docs.interpretation.gemini_call`` in 0.22.0 and is proved beside that
+code; re-asserting it here would only drift. What is owned here is which
+environment variable this application reads, and that an empty one is not a
+key.
 """
 
 from __future__ import annotations

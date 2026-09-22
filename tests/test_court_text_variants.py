@@ -34,6 +34,7 @@ DUMP_DATE = date(2026, 6, 30)
 
 
 def _dump(path, records):
+    """Write ``records`` as a bz2 CSV dump in the reader's quoted, backslash-escaped dialect."""
     def cell(value):
         return "" if value is None else '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
@@ -44,6 +45,7 @@ def _dump(path, records):
 
 
 def test_native_html_and_all_text_fields_survive_materialized_output(tmp_path, ample_disk_space):
+    """Pins the fixture and html digests, byte-equal text fields, and the ``version=2`` schema metadata."""
     assert (
         sha256(FIXTURE.read_bytes()).hexdigest() == "62cbca0ba7f3fb6c047d5e3448dbf48aad089b26bfceeaadd009d77a7fab44ab"
     )

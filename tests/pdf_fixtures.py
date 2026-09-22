@@ -50,14 +50,12 @@ def make_pdf(pages_text: list[str]) -> bytes:
 def make_multiline_pdf(pages_lines: list[list[str]]) -> bytes:
     """Return the bytes of a minimal PDF with several physical text lines per page.
 
-    ``make_pdf`` puts a whole page's text in one ``Tj`` call, which is enough
-    for the pypdf-oriented tests it serves but reads back as a single physical
-    line — no adjacency for ``gpo_normalize`` to see. This writes each line
-    with its own ``Td`` vertical move, so a real PDF reader's line-grouped
-    text extraction (PyMuPDF's ``get_text("dict")``, which ``body_text``'s
-    default extractor uses) reports one line per list entry, the shape a real
-    GPO gutter-numbered page has: a content line immediately followed by its
-    own bare digit line.
+    Unlike ``make_pdf`` — one ``Tj`` per page, which reads back as a single
+    physical line with no adjacency for ``gpo_normalize`` to see — each line
+    gets its own ``Td`` vertical move, so a line-grouped extractor (PyMuPDF's
+    ``get_text("dict")``, used by ``body_text``) reports one line per list
+    entry, the shape a real GPO gutter-numbered page has: a content line
+    immediately followed by its own bare digit line.
     """
     n_pages = len(pages_lines)
     font_obj = 3

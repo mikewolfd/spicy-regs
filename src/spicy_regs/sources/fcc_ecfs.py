@@ -41,6 +41,8 @@ def _resolve_api_key() -> str | None:
 
 
 class _EcfsReader(Reader):
+    """Shared date-window walk; subclasses set the endpoint, record key, date and identity fields."""
+
     endpoint: str
     record_key: str
     date_field: str
@@ -95,6 +97,7 @@ class _EcfsReader(Reader):
                 self._reader = None
 
     def _fetch_window(self, gte: date, lte: date) -> Iterator[dict]:
+        """Yield one window, bisecting an over-ceiling span; a single over-ceiling day refuses."""
         records, exhausted = self._page_window(gte, lte, ascending=True)
         if not exhausted:
             if gte == lte:
@@ -106,6 +109,10 @@ class _EcfsReader(Reader):
         yield from records
 
     def _page_window(self, gte: date, lte: date, *, ascending: bool) -> tuple[list[dict], bool]:
+        """Page one window; return its records and whether the walk exhausted it rather than the ceiling.
+
+        A missing or repeated identity refuses the window.
+        """
         from spicy_docs.reading.paged_json import with_query
         from spicy_docs.sources.fcc_ecfs import filings_url, proceedings_url
 

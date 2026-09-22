@@ -1,35 +1,22 @@
 """Transform: build ``court_opinion_clusters.parquet`` from the CourtListener bulk dumps.
 
-A CourtListener *cluster* is one decision — the case-level record that a set of
-sibling opinions (majority, concurrence, dissent) hang off. It is the join that
-the corpus was missing: a cluster carries ``docket_id``, so it is what connects
-opinion text to the APA litigation already in ``court_dockets``, and through the
-docket's party names to the agencies in ``agency_stats``.
+A CourtListener *cluster* is one decision — the case-level record that sibling
+opinions hang off — and its ``docket_id`` is what connects opinion text to the
+APA litigation in ``court_dockets`` and, through the docket's party names, to
+the agencies in ``agency_stats``.
 
 **Bulk-first, because bulk is the only road.** The v4 ``/clusters/`` endpoint
-answers ``401`` without an API token, so the quarterly CSV dump is not a
-performance choice — it is the only keyless source. An incremental
-``/search/?type=o`` catch-up (keyless, cursor-paginated) tops the table up for
-decisions filed after the dump date, mirroring the incremental-merge idiom in
-``build_courtlistener`` / ``build_lobbying_filings``:
-
-1. Best-effort download the prior ``court_opinion_clusters.parquet`` from R2.
-2. Read the bulk dump (whole file — clusters are ~2.3 GiB compressed, which
-   streams in about 20 minutes and never lands decompressed).
-3. Fetch clusters filed since the dump date over the search API.
-4. Dedup the union on ``cluster_id``, preferring the freshest row.
-
-Rows are written in batches rather than materialized at once: the dump is on the
-order of ten million clusters, and one ``from_pylist`` over that is an
-out-of-memory error, not a table.
-
-**Which court decided it.** The dump has no ``court_id``: it lives on the
-docket, in a different 4.67 GiB file. Without it this table is ten million
-decisions from 3,361 courts with no way to ask for the 397 federal ones, so the
-build resolves ``court_id`` / ``court_jurisdiction`` / ``court_is_federal``
-from a docket→court map (see :mod:`spicy_regs.transforms.court_scope`) while
-each row is shaped. The map costs 46 minutes of streaming and is cached by dump
-date; ``skip_court_scope`` opts out and leaves the three columns NULL.
+answers ``401`` without a token, so the quarterly CSV dump is the only keyless
+source; an incremental ``/search/?type=o`` catch-up (keyless, cursor-paginated)
+tops the table up for decisions filed after the dump date. Best-effort prior
+from R2, then dedup on ``cluster_id`` preferring the freshest row; rows are
+written in batches because the dump runs to ten million clusters and one
+``from_pylist`` over that is an out-of-memory error. The dump has no
+``court_id`` — it lives on the docket, in a different multi-GiB file — so
+``court_id`` / ``court_jurisdiction`` / ``court_is_federal`` are resolved from
+a docket→court map (see :mod:`spicy_regs.transforms.court_scope`) while each
+row is shaped; ``skip_court_scope`` opts out and leaves the three columns NULL
+at the cost of a ~46-minute map build.
 """
 
 from __future__ import annotations

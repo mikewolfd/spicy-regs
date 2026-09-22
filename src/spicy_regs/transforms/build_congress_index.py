@@ -1,4 +1,5 @@
-"""Congress.gov index tables, with bounded detail reads and own-output resume.
+"""Congress.gov index tables — house communications, committee meetings, record issues, treaties and nominations —
+built with bounded detail reads and own-output resume keyed on each table's marker column.
 
 House communications retain the publisher route on historical rows. The
 Congressional Record reconstruction is a separate, deferred acquisition.

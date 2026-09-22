@@ -1,16 +1,13 @@
-"""Transform: build the Federal Register ↔ docket link table.
+"""Transform: build ``fr_docket_links.parquet``, the Federal Register ↔ docket link table.
 
-Replaces the ``docket_ids_json LIKE '%"<id>"%'`` full-scan over the 793K-row
-``federal_register.parquet`` that the docket page ran on every load. Explodes
-each FR document's ``docket_ids_json`` array into one row per (docket_id,
-document_number, publication_date), carrying the display columns the docket page needs, and sorts by
-``docket_id`` so ``WHERE docket_id = ?`` prunes row groups instead of scanning.
-
-``federal_register.parquet`` is produced by the Federal Register ingest
-rollup; this rollup reads it from R2 as a base
-input. Exploding preserves the exact matching semantics of the old ``LIKE``
-(verified equal on 200 sampled dockets), including the pre-existing quirk where
-a few array elements join two IDs — no regression introduced here.
+Explodes each FR document's ``docket_ids_json`` array into one row per
+(docket_id, document_number, publication_date) carrying the display columns the
+docket page needs, sorted by ``docket_id`` so ``WHERE docket_id = ?`` prunes row
+groups instead of scanning; it replaces the ``docket_ids_json LIKE '%"<id>"%'``
+full-scan the docket page used to run on every load. Reading the published
+``federal_register.parquet`` as a base input, the explosion preserves the exact
+matching semantics of the old ``LIKE``, including the quirk where a few array
+elements join two IDs.
 """
 
 from pathlib import Path

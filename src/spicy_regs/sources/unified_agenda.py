@@ -97,6 +97,7 @@ def _items(fields: Sequence[UnifiedAgendaField], container: str, name: str) -> I
 
 
 def _normalize(record: UnifiedAgendaRecordObservation, edition: str) -> dict:
+    """Shape one observed record into the published row, preferring agency ``ACRONYM`` over ``CODE``."""
     fields = record.fields
     agency = _find(fields, "AGENCY")
     agency_fields = agency.children if agency is not None else ()

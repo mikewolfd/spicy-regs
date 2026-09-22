@@ -18,17 +18,19 @@ def merge_comments_partitioned(
 ) -> list[Path]:
     """Merge staging comments into partitioned output by agency/docket/year/month.
 
-    Instead of merging all 24.7M comments into one monolithic file (which
-    OOM's on CI runners), this writes each batch's comments directly into
-    small Hive-partitioned files::
+    Instead of merging all comments into one monolithic file (which OOM's on CI
+    runners), each batch's comments go into small Hive-partitioned files
+    (``comments/agency_code={A}/docket_id={D}/year={Y}/month={M}/part-0.parquet``):
+    coordinates are validated first, then for each affected partition the
+    existing file is downloaded from R2 (if it exists), merged with the new
+    staging data, deduplicated by ``dedup_key`` keeping the latest
+    ``modify_date``, and written back. Returns the list of changed partition
+    file paths.
 
-        comments/agency_code={A}/docket_id={D}/year={Y}/month={M}/part-0.parquet
-
-    For each affected partition, the existing partition file is downloaded
-    from R2 (if it exists), merged with the new staging data, deduplicated
-    by ``dedup_key`` (keeping the latest ``modify_date``), and written back.
-
-    Returns the list of changed partition file paths.
+    ``source_correction`` additionally refuses duplicate identities in the
+    staging input and any relocation of an existing identity to another
+    partition: moving or removing old partitions requires a coherent generation
+    rebuild, not a bounded repair.
     """
     import duckdb
 

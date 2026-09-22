@@ -127,11 +127,15 @@ class _Tallied:
 
 
 class _Acquisition:
+    """One acquired vote as the transform's acquirer returns it."""
+
     def __init__(self, vote):
         self.vote = vote
 
 
 class StubVoteAcquirer:
+    """Serves House acquisitions and a Senate menu, recording every locator requested."""
+
     def __init__(self, senate_rolls=()):
         self.requested: list[tuple[str, int]] = []
         self.senate_rolls = senate_rolls
@@ -153,10 +157,12 @@ class StubVoteAcquirer:
 
 @pytest.fixture
 def scoped(monkeypatch):
+    """Scope the bill family to the 119th Congress."""
     monkeypatch.setenv("BILL_FAMILY_CONGRESSES", "119")
 
 
 def _house_listing_record(roll_number: int, *, bill_type: str = "HR", number: str = "3424") -> dict:
+    """One Clerk listing record linking ``roll_number`` to a bill."""
     return {
         "congress": 119,
         "sessionNumber": 1,

@@ -1,39 +1,28 @@
-"""Transform: build ``bill_subjects.parquet`` — one bill's subject assignment.
+"""Transform: build ``bill_subjects.parquet`` — the Library of Congress subject assignment per bill.
 
-The seam this closes is stated in :mod:`~spicy_regs.transforms.build_congress_bills`:
-``congress_bills`` is list-level only, and the Library of Congress subject
-assignment (one ``policy_area`` from a ~33-term controlled list, plus any number
-of ``legislative subjects``) is detail-endpoint-only. This is the per-bill
-enrichment pass that fetches it, via
-:class:`~spicy_regs.sources.bill_subjects.BillSubjectsFetcher`.
+Closes the seam stated in :mod:`~spicy_regs.transforms.build_congress_bills`:
+``congress_bills`` is list-level only, and the subject assignment (one
+``policy_area`` from a ~33-term controlled list, plus any number of legislative
+subjects) is detail-endpoint-only, fetched per bill via
+:class:`~spicy_regs.sources.bill_subjects.BillSubjectsFetcher`. A sibling table
+rather than extra columns, because the two artifacts have utterly different
+fetch economics — the list ingest walks a handful of pages a day while
+enrichment is one request per bill across a 192k-row archive, so folding them
+together would put a multi-week backfill inside a daily job and give one R2 key
+two writers. It publishes on its own cron, keyed by the same ``bill_id`` as
+``congress_bills``, joined with a one-line ``LEFT JOIN``.
 
-**Why a sibling table and not extra columns on ``congress_bills``.** The two
-artifacts have utterly different fetch economics: the list ingest walks a handful
-of pages a day, while enrichment is one request per bill across a 192k-row
-archive. Folding them together would put a multi-week backfill inside a daily
-30-minute job, and would give one R2 key two writers. So this publishes its own
-artifact on its own cron, keyed by the same ``bill_id`` — the ``fr_docket_links``
-shape, joined with a one-line ``LEFT JOIN``::
-
-    SELECT b.*, s.policy_area, s.subjects_json
-    FROM congress_bills b LEFT JOIN bill_subjects s USING (bill_id)
-
-**Incremental, resumable, bounded.** Each run:
-
-1. Best-effort downloads the prior ``bill_subjects.parquet`` from R2.
-2. Selects bills in ``congress_bills.parquet`` that the current carrier has not
-   answered for yet, newest Congress first, capped at :data:`MAX_BILLS_PER_RUN`
-   so the run fits inside the CI timeout (the ``build_lobbying_filings``
-   ``MAX_WINDOW_DAYS`` idea, counted in bills rather than days).
-3. Fetches each, writing a row only when the carrier *answered*. A timeout or a
-   5xx writes nothing, so the bill is simply picked up next run — no half-written
-   state, and a re-run is never wasted work.
-4. Merges prior + new on ``bill_id``, preferring the fresh row.
-
-A bill the carrier definitively 404s gets a row with a null ``policy_area`` and
-its carrier recorded, so the next run does not ask again. Should a key later
-appear and switch the run to the deeper Congress.gov carrier, those rows *are*
-re-asked — the carrier that had nothing is not the carrier that might.
+**Incremental, resumable, bounded.** Best-effort prior from R2; select bills
+``congress_bills.parquet`` that this carrier has not answered for yet, newest
+Congress first, capped at :data:`MAX_BILLS_PER_RUN` so the run fits inside the
+CI timeout; fetch each, writing a row only when the carrier *answered* (a
+timeout or 5xx writes nothing, so the bill is picked up next run and a re-run
+is never wasted work); then merge prior + new on ``bill_id`` preferring the
+fresh row. A bill the carrier definitively 404s gets a row with a null
+``policy_area`` and its carrier recorded so the next run does not ask again —
+though if a key later appears and switches the run to the deeper Congress.gov
+carrier, those rows *are* re-asked, because the carrier that had nothing is not
+the carrier that might.
 """
 
 from __future__ import annotations

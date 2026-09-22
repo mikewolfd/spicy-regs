@@ -86,6 +86,7 @@ def _path(value, base):
 
 
 def _load_manifest(path):
+    """Read a version-1 FEC manifest, refusing unknown families, profiles, modes or digests with ``ValueError``."""
     from spicy_docs.sources.fec.catalog import official_sources
 
     value = json.loads(path.read_bytes())
@@ -175,6 +176,7 @@ def _load_manifest(path):
 
 
 def _release(item, base, profile):
+    """Open a pinned SourceNative release, refusing one with failed or discarded records."""
     from rulespec_artifacts import ArtifactPin, LocalMemberSource
     from spicy_docs.source_native import SourceNativeReleaseReader
     from spicy_docs.storage.blobs import LocalSourceNativeBlobStore
@@ -194,6 +196,7 @@ def _release(item, base, profile):
 
 
 def _query(item, base, profile, iterator):
+    """Iterate a retained API-query capture set, refusing a page outside it and a repeated source identity."""
     from spicy_docs.storage.blobs import LocalSourceNativeBlobStore
 
     scope = profile.validate_query_scope({"captures": item["captures"]})
@@ -239,6 +242,7 @@ def _query(item, base, profile, iterator):
 
 
 def _positional(item, base, profile):
+    """Iterate a retained positional row stream, refusing an ordinal that skips or repeats."""
     from spicy_docs.sources.fec.row_profile import iter_retained_positional_rows
     from spicy_docs.storage.blobs import LocalSourceNativeBlobStore, iter_verified_blob
 
@@ -292,6 +296,7 @@ def _positional(item, base, profile):
 
 
 def _shape(item, wrapped, outcome):
+    """Map one wrapped source record onto the published columns, returning the row and its evidence locator."""
     record = wrapped["record"]
     scope = outcome["requestedScope"]
     capture = record.get("capture", scope.get("capture"))
@@ -411,6 +416,7 @@ def _named_fields(item, wrapped, row, locator, headers, dictionary=None):
 
 
 def _relationships(item, wrapped, row, locator, version, mapped):
+    """Yield every relationship this record's profile and field mapping authorize."""
     evidence = {
         "sha256": row["source_sha256"],
         "url": row["source_url"],

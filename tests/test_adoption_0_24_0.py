@@ -1,4 +1,7 @@
-"""Rollup wiring and resume proofs; upstream owns the interpretation rules."""
+"""0.24.0 adoption proofs for committee-report and bill-family rollups: resume, partial corrections, and refusals.
+
+Upstream owns the interpretation rules; this suite pins the wiring.
+"""
 
 import html
 import shutil
@@ -28,11 +31,13 @@ FIXTURES = Path(__file__).parent / "fixtures" / "adoption_0_24_0"
 
 
 def retain(paths):
+    """Simulate a retained prior run by copying each output to its prior-scratch path."""
     for path in paths:
         shutil.copyfile(path, prior_scratch_path(path.parent, path.stem))
 
 
 def test_cover_links_use_mods_and_empty_covers_resume_without_body_requests(tmp_path):
+    """Pins ``mods_cover`` linkage with no bill, complete outcomes, and a second run that requests no bodies."""
     package_id = "CHRG-118hhrg56198"
 
     class Discovery(StubDiscovery):
@@ -73,6 +78,7 @@ def test_cover_links_use_mods_and_empty_covers_resume_without_body_requests(tmp_
     ("CRPT-118hrpt53.txt", "true", True), ("CRPT-118hrpt18.txt", "false", False),
 ])
 def test_report_pass_runs_the_recital_gate_on_its_existing_body(tmp_path, fixture, states, has_span):
+    """A retained report body, not synthetic package metadata, is what the recital gate reads."""
     # Deliberately synthetic package metadata; the retained excerpt exercises body-to-rule wiring.
     body = ("<html><body><pre>" + html.escape((FIXTURES / fixture).read_text()) + "</pre></body></html>").encode()
     class Acquirer:
@@ -116,6 +122,7 @@ def test_pending_packages_survive_an_advanced_window_and_the_cap(tmp_path):
 
 @pytest.mark.parametrize("status", [401, 403])
 def test_report_body_credential_refusal_aborts_without_checkpoint(tmp_path, status):
+    """A 401/403 body fetch raises before any capture table or checkpoint is written."""
     class Refusing:
         def acquire(self, package_id, *, max_bytes=None):
             raise CredentialRefusedError(f"HTTP {status}")
@@ -127,6 +134,7 @@ def test_report_body_credential_refusal_aborts_without_checkpoint(tmp_path, stat
 
 
 def test_bill_family_emits_provider_estimates_and_refreshes_old_unchanged_rows(tmp_path, monkeypatch):
+    """A prior archive missing the newly adopted field must be re-read; only then may an unchanged one be skipped."""
     monkeypatch.setenv("BILL_FAMILY_CONGRESSES", "118")
     monkeypatch.setenv("BILL_FAMILY_BILL_TYPES", "hr")
     monkeypatch.setattr("spicy_regs.transforms.build_bill_family.resolve_gemini_key", lambda: None)
@@ -161,6 +169,7 @@ def test_bill_family_emits_provider_estimates_and_refreshes_old_unchanged_rows(t
 
 
 def test_communication_route_is_filled_on_unchanged_old_rows(tmp_path):
+    """A held row gains its route fields without any detail request (``max_details=0``)."""
     rows, _ = _run(tmp_path, "house_communications")
     path = tmp_path / "house_communications.parquet"
     old = pq.read_table(path).drop(["source_route", "record_package_id", "record_granule_id",
@@ -175,6 +184,7 @@ def test_communication_route_is_filled_on_unchanged_old_rows(tmp_path):
 
 @pytest.mark.parametrize("correction", ["empty", "partial", "refused"])
 def test_hearing_correction_replaces_only_evaluated_parent_links(tmp_path, correction):
+    """Empty/partial/refused corrections replace only the evaluated parent's links; other rows and refusals stand."""
     package_id = "CHRG-118hhrg56198"
     modified = "2026-09-18T12:00:00Z"
     mods = (FIXTURES / f"mods-{package_id}.excerpt.xml").read_bytes()
@@ -225,6 +235,7 @@ def test_hearing_correction_replaces_only_evaluated_parent_links(tmp_path, corre
 
 @pytest.mark.parametrize("correction", ["absent", "empty", "replacement", "unexpected"])
 def test_cbo_correction_replaces_only_successfully_evaluated_bill_estimates(tmp_path, monkeypatch, correction):
+    """A correction touches only the evaluated bill; an unreadable answer keeps the old estimate, other bills stand."""
     monkeypatch.setenv("BILL_FAMILY_CONGRESSES", "118")
     monkeypatch.setenv("BILL_FAMILY_BILL_TYPES", "hr")
     monkeypatch.setattr("spicy_regs.transforms.build_bill_family.resolve_gemini_key", lambda: None)

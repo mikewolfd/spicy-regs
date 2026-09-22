@@ -1,25 +1,16 @@
 """Transform: build ``crs_reports.parquet`` from the Congress.gov REST API.
 
 Produces an 8-column all-VARCHAR schema keyed on ``report_id`` (e.g. ``R48641``,
-``IN12713``) — the Congressional Research Service analysis layer over the
-policy questions behind the rulemakings this dataset tracks.
+``IN12713``) — the Congressional Research Service analysis layer over the policy
+questions behind the rulemakings this dataset tracks.
 
-Incremental by design (mirrors ``build_congress_bills``). A full re-fetch of the
-entire CRS archive every run would be wasteful *and* would trip the R2
-catastrophic-shrink guard on any short run. Instead we:
-
-1. Best-effort download the prior ``crs_reports.parquet`` from R2.
-2. Fetch only reports updated since its max ``update_date`` (minus a short
-   overlap to catch late-updated reports). The reader follows the complete
-   filtered traversal; CRS does not honor the requested update-date sort.
-3. Dedup the union on ``report_id``, preferring the freshly fetched row.
-
-With no prior table (first run) step 2 becomes a full backfill.
-
-Scope is deliberately **list-level only**: every column comes from the
-``/crsreport`` list payload, so there are no per-report detail fetches (no N+1).
-The per-report detail endpoint carries authors, formats, and related materials
-that a later enrichment pass could add.
+Incremental by design: best-effort prior from R2, fetch only reports updated
+since its max ``update_date`` minus a short overlap, then dedup on
+``report_id`` preferring the fresh row. With no prior table it is a full
+backfill. Scope is deliberately **list-level only** — every column comes from
+the ``/crsreport`` list payload, so there are no per-report detail fetches; the
+detail endpoint's authors, formats and related materials are left to a later
+enrichment pass.
 """
 
 from __future__ import annotations

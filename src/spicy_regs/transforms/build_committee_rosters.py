@@ -1,51 +1,38 @@
-"""Transform: build ``committees`` and ``committee_assignments``.
+"""Transform: build ``committees`` and ``committee_assignments`` from three publishers.
 
-Two tables from three publishers, in one pass because the second is keyed on
-what the first enumerates:
-
-* **``committees``** — the Congress.gov ``committee/{congress}`` list route,
-  walked whole per scoped Congress with no ``sort`` (its ``sort_honored`` is
-  carried from the data map, not probed, so nothing here relies on order),
-  one row per ``systemCode``; the ``committee/{chamber}/{system_code}``
-  detail record — history, subcommittees, parent, currency and that day's
-  counts — is folded onto the row where captured, one keyed request per
-  committee under the per-run cap. ``shape_committee`` refuses a detail whose
-  ``systemCode`` is not the row's, so a fold never lands on the wrong row.
-* **``committee_assignments``** — who sits where *today*, from the House
-  Clerk's ``MemberData.xml`` and the Senate's ``cvc_member_data.xml``: two
-  keyless requests, for the current Congress only, because that is the only
-  Congress the files describe. The House file states its Congress and the
-  reader proves it against the request; the Senate file states none, so its
-  rows carry the caller's Congress with ``congress_basis = caller``. A
-  vacancy has no member and no row; a seated member whose only assignment is
-  the file's ``<committee rank=""/>`` placeholder has none either.
-
-**The route over-declares.** Measured 2026-09-19, ``committee/119`` declared
-238 and served 236 on its one terminal page with no continuation, and
-spicy-docs' reader refused the walk. :func:`walk_route` reads past that one
-terminal-page refusal — both numbers logged, what was served published — and
-lets every other refusal fail the run.
-
-**Incremental.** The list is one page and is re-walked whole every run; the
-detail is what is not re-read. Per listed committee: a row already published
-with its detail and the same list ``update_date`` is left standing (no
-request, no fresh row); one not yet published, or published without a
-detail, or whose list row moved, is asked for, newest ``update_date`` first,
-under :data:`MAX_DETAILS_PER_RUN`. When the cap or a refusal stops the ask, a
-committee not yet published gets its list row with ``detail_captured =
-false``, and one already published keeps its prior row until the next run
-reaches it — a fresh list-only row must never overwrite a held detail,
-because the merge replaces rows whole. A ``401``/``403`` aborts the run.
-
-The assignment tables are snapshots: each file captured this run replaces
-every prior row for its chamber and Congress (:func:`retire_prior_rows`), so
-a seat the file no longer lists is gone on the next capture, and an earlier
-Congress keeps its last capture. A chamber whose file was not established
-this run — a transport failure or a refused body — keeps its prior rows; a
-keyless ``401``/``403`` (``CommitteeRosterRefusedError``) aborts.
-
+``committees`` is the Congress.gov ``committee/{congress}`` list route walked
+whole per scoped Congress, one row per ``systemCode``, with the
+``committee/{chamber}/{system_code}`` detail folded on where captured under the
+per-run cap; ``shape_committee`` refuses a detail whose ``systemCode`` is not
+the row's, so a fold never lands on the wrong row. ``committee_assignments`` is
+who sits where *today*, from the House Clerk's ``MemberData.xml`` and the
+Senate's ``cvc_member_data.xml``: two keyless requests for the current Congress
+only, because that is the only Congress those files describe. The House file
+states its Congress and the reader proves it against the request; the Senate
+file states none, so its rows carry the caller's Congress with
+``congress_basis = caller``. A vacancy, and a seated member whose only
+assignment is the file's ``<committee rank=""/>`` placeholder, have no row.
 Needs an api.data.gov key for the two Congress.gov routes; the chamber files
 are keyless.
+
+**The route over-declares.** :func:`walk_route` reads past a single
+terminal-page count mismatch (what was served is published, both numbers
+logged); every other refusal fails the run.
+
+**Incremental.** The list is re-walked whole every run; per listed committee, a
+row already published with its detail and the same list ``update_date`` is left
+standing (no request, no fresh row), anything else is asked for newest
+``update_date`` first under :data:`MAX_DETAILS_PER_RUN`. When the cap or a
+refusal stops the ask, a committee not yet published gets its list row with
+``detail_captured = false``, and one already published keeps its prior row — a
+fresh list-only row must never overwrite a held detail, because the merge
+replaces rows whole. A ``401``/``403`` aborts the run.
+
+**Assignments are snapshots.** Each file captured this run replaces every prior
+row for its chamber and Congress (:func:`retire_prior_rows`), so a seat the
+file no longer lists is gone on the next capture and an earlier Congress keeps
+its last capture. A chamber whose file was not established this run keeps its
+prior rows; a keyless ``401``/``403`` (``CommitteeRosterRefusedError``) aborts.
 """
 
 from __future__ import annotations
@@ -113,6 +100,8 @@ TRUE = "true"
 
 
 class HeldCommittee(NamedTuple):
+    """The prior table's state for one ``system_code``: list ``update_date`` and whether a detail was captured."""
+
     update_date: str | None
     detail_captured: str | None
 

@@ -4,20 +4,16 @@ Produces an 8-column all-VARCHAR schema keyed on ``report_id`` (e.g.
 ``gao-26-107974``) — the Government Accountability Office oversight layer over
 the rulemakings this dataset tracks.
 
-**Incremental accumulator.** The GAO RSS feed is a recent-items window (~25
-newest products), not the full archive, and GAO's bulk/search surfaces are
-bot-blocked (see :mod:`spicy_regs.sources.gao_reports`). So rather than a
-watermark-bounded re-fetch, each run parses the whole feed and *appends* any
-previously unseen products to the prior published table, deduping on
-``report_id`` and preferring the freshly fetched row. Over successive daily runs
-the table grows into a rolling history.
-
-Because the merge is append-only against a growing table, this never shrinks the
-output — so it stays clear of the R2 catastrophic-shrink guard.
-
-``agencies_json`` and ``topics_json`` are pinned but reserved: the RSS feed does
-not carry structured agency/topic tags, so they default to ``[]`` today and a
-later enrichment pass (or a future non-blocked GAO source) can populate them.
+**Incremental accumulator.** The GAO RSS feed is a recent-items window, not the
+full archive, and GAO's bulk/search surfaces are bot-blocked (see
+:mod:`spicy_regs.sources.gao_reports`). So rather than a watermark-bounded
+re-fetch, each run parses the whole feed and appends previously unseen products
+to the prior published table, deduping on ``report_id`` and preferring the
+fresh row; over successive runs the table grows into a rolling history. Because
+the merge is append-only against a growing table it never shrinks the output,
+so it stays clear of the R2 catastrophic-shrink guard. ``agencies_json`` and
+``topics_json`` are pinned but reserved: the feed carries no structured
+agency/topic tags, so they default to ``[]`` until a later enrichment pass.
 """
 
 from __future__ import annotations

@@ -1,4 +1,8 @@
-"""Transform: materialize durable agenda items and qualified action links."""
+"""Transform: build ``regulatory_agenda_items.parquet`` and ``agenda_item_proceedings.parquet``.
+
+Materializes durable agenda items (one per RIN) and provenance-bearing action
+links from Unified Agenda observations and independently assembled proceedings.
+"""
 
 from __future__ import annotations
 
@@ -103,7 +107,7 @@ def build_regulatory_agenda(
     """Build one agenda item per RIN and provenance-bearing action links.
 
     Unified Agenda equality creates the item and its editioned observations,
-    but never an action relationship. Only a docket, regulations.gov document,
+    but never an action relationship: only a docket, regulations.gov document,
     or Federal Register artifact that directly reports the RIN can link the
     agenda item to an independently assembled Proceeding.
     """

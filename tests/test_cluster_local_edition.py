@@ -17,6 +17,7 @@ from spicy_regs.transforms.build_court_opinion_clusters import build_court_opini
 
 @pytest.mark.parametrize("retained_prior", [False, True])
 def test_local_edition_uses_pinned_scope_and_preserves_prior(tmp_path: Path, monkeypatch, retained_prior):
+    """Pins that a retained prior stays byte-identical, a missing one is not created, and no remote source is read."""
     def forbidden(*args, **kwargs):
         pytest.fail("local edition attempted remote acquisition or search")
 

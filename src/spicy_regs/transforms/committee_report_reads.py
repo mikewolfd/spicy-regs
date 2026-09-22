@@ -1,4 +1,8 @@
-"""Own-output checkpoints, including successful reads that produce no link."""
+"""Own-output checkpoints for the committee-report rollups, including successful reads that produce no link.
+
+``RULE_VERSIONS`` is the rule set that invalidates a prior read for each
+collection, and ``complete`` is the completeness test over a checkpoint row.
+"""
 
 from pathlib import Path
 from importlib.metadata import version
@@ -29,6 +33,7 @@ def prior_reads(path: Path | None, priors: dict[str, Path | None]) -> dict[str, 
 
 
 def complete(row: dict, collection: str, modified: str | None = None) -> bool:
+    """Whether a recorded read is complete under this collection's rule version, optionally at a source stamp."""
     return (
         row.get("outcome") == "complete"
         and row.get("rule_version") == RULE_VERSIONS[collection]

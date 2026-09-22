@@ -1,4 +1,4 @@
-"""Transform: build the pre-computed feed summary rollup."""
+"""Transform: build the pre-computed ``feed_summary.parquet`` rollup."""
 
 from pathlib import Path
 
@@ -7,15 +7,13 @@ from loguru import logger
 
 
 def build_feed_summary(output_dir: Path) -> Path:
-    """Build pre-computed feed summary with docket info, comment counts, and comment end dates.
+    """Build ``feed_summary.parquet``: dockets joined to comment counts and document dates, sorted ``modify_date`` DESC.
 
-    Comment counts come from ``comments_index.parquet`` (a tiny file with
-    per-partition row counts) rather than scanning the full 24.7M-row
-    comments dataset.  Falls back to the monolithic ``comments.parquet``
-    if the index doesn't exist yet.
-
-    Joins dockets + comments (counts) + documents (max comment_end_date)
-    into a single small Parquet file sorted by modify_date DESC.
+    Comment counts come from ``comments_index.parquet`` (per-partition row
+    counts) when present, falling back to the monolithic ``comments.parquet``;
+    ``comment_end_date`` and ``date_created`` come from ``documents.parquet``
+    when present, otherwise NULL. Raises ``FileNotFoundError`` when
+    ``dockets.parquet`` is missing.
     """
     import duckdb
 

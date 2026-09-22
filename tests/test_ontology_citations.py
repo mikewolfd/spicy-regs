@@ -1,4 +1,10 @@
-"""Fixture coverage for CFR/U.S.C./Public-Law citation grammars."""
+"""Fixture coverage for CFR/U.S.C./Public-Law citation grammars.
+
+Regression cases come from the measured bakeoff corpus and the named boundary
+defects; every refusal is pinned so a phantom identity — a title, chapter or
+part the source never stated — cannot be minted, while each variant spelling
+must reach the standard spelling's identity, status and all.
+"""
 
 from __future__ import annotations
 

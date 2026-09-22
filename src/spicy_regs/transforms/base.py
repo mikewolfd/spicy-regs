@@ -1,19 +1,11 @@
 """Base class for record-stream transforms.
 
 A ``Transform`` sits between a Reader and a Writer in the record-stream
-vocabulary::
-
-    Reader.iter_records()  ->  Transform.apply(...)  ->  Writer.write(...)
-
-Subclass it to map, filter, or enrich records as they flow past — for example
-flattening a raw JSON payload into a schema-shaped row. Transforms operate on a
-record stream (lazily, one at a time), so they compose and stay memory-light.
-
-Bulk, whole-dataset operations — deduplicating by key, partitioning, building
-summaries — are *not* Transforms: they need every row at once and are done
-columnar/out-of-core (the bulk modules in :mod:`spicy_regs.transforms`).
-Keeping that line
-sharp is deliberate: a Transform never has to buffer the whole dataset.
+vocabulary (``Reader.iter_records() -> Transform.apply(...) -> Writer.write(...)``)
+and maps, filters, or enriches records lazily, one at a time, so it never
+buffers the whole dataset. Bulk, whole-dataset operations — deduplicating by
+key, partitioning, building summaries — are deliberately *not* Transforms:
+they live in the columnar bulk modules of :mod:`spicy_regs.transforms`.
 """
 
 from abc import ABC, abstractmethod

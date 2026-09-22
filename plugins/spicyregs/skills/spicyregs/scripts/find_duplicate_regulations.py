@@ -5,7 +5,16 @@
 # ]
 # ///
 #
-"""Detect likely duplicate or coordinated cross-agency regulations in Spicy Regs."""
+"""Detect likely duplicate or coordinated cross-agency regulations in Spicy Regs.
+
+Reads the ``dockets`` table through DuckDB — the published parquet on Cloudflare
+R2 (``--source r2``) or a local output directory (``--source local``) — scores
+pairs of dockets on normalized title, token overlap, abstract similarity and
+modification-date proximity, and prints cross-agency clusters as text, JSON or
+CSV. Candidate pairs come from exact-title and 3-token phrase blocks, skipping
+blocks larger than ``--max-block-size``; boilerplate procedural titles and
+same-agency pairs are excluded unless the corresponding flags say otherwise.
+"""
 
 from __future__ import annotations
 
@@ -104,6 +113,7 @@ def _escape_sql_string(value: str) -> str:
 
 
 def _import_duckdb():
+    """Import ``duckdb``, or print a JSON hint and exit 1 when it is not installed."""
     try:
         import duckdb
     except ModuleNotFoundError:
@@ -121,6 +131,10 @@ def _import_duckdb():
 
 
 def _local_view_specs(output_dir: Path) -> dict[str, str]:
+    """DuckDB view SQL for each table present under *output_dir*.
+
+    Falls back to the partitioned ``comments/`` tree when ``comments.parquet`` is absent.
+    """
     specs: dict[str, str] = {}
 
     dockets = output_dir / "dockets.parquet"
@@ -155,6 +169,7 @@ def _local_view_specs(output_dir: Path) -> dict[str, str]:
 
 
 def _remote_view_specs(base_url: str) -> dict[str, str]:
+    """DuckDB view SQL for the five published parquet objects under *base_url*."""
     url = base_url.rstrip("/")
     return {
         "dockets": f"SELECT * FROM read_parquet('{_escape_sql_string(f'{url}/dockets.parquet')}')",
@@ -166,6 +181,10 @@ def _remote_view_specs(base_url: str) -> dict[str, str]:
 
 
 def _connect_with_views(source: str, output_dir: Path, base_url: str):
+    """An in-memory DuckDB with one view per available table, httpfs installed for ``r2``.
+
+    Returns the connection and the ``{table: SQL}`` specs it created.
+    """
     duckdb = _import_duckdb()
     con = duckdb.connect()
     con.execute("SET preserve_insertion_order=false")
@@ -192,6 +211,7 @@ def informative_tokens(text: str) -> list[str]:
 
 
 def parse_modify_date(value: str | None) -> datetime | None:
+    """UTC midnight from the leading ``YYYY-MM-DD``, or ``None`` when the value is empty or malformed."""
     if not value:
         return None
     match = DATE_RE.match(value)
@@ -259,6 +279,10 @@ class UnionFind:
 
 
 def build_phrase_keys(tokens: list[str], shingle_size: int) -> tuple[str, ...]:
+    """Sorted unique windows of *shingle_size* consecutive tokens.
+
+    Empty when the tokens are fewer than one window.
+    """
     if len(tokens) < shingle_size:
         return ()
     keys = {" ".join(tokens[i : i + shingle_size]) for i in range(len(tokens) - shingle_size + 1)}
@@ -275,6 +299,12 @@ def load_dockets(
     min_year: int | None,
     exclude_boilerplate: bool,
 ) -> list[DocketRecord]:
+    """Fetch and filter the source ``dockets`` into records.
+
+    Raises ``SystemExit`` when the selected source exposes no ``dockets`` view; rows
+    whose normalized title is blank are dropped, and boilerplate titles are dropped
+    unless *exclude_boilerplate* is false.
+    """
     con, specs = _connect_with_views(source, output_dir, base_url)
     if "dockets" not in specs:
         raise SystemExit("The selected source does not expose a dockets table.")
@@ -333,6 +363,10 @@ def iter_candidate_pairs(
     *,
     max_block_size: int,
 ) -> set[tuple[int, int]]:
+    """Index pairs sharing an exact normalized title or one 3-token phrase.
+
+    Blocks larger than *max_block_size* are skipped as too common to compare pairwise.
+    """
     by_exact_title: dict[str, list[int]] = defaultdict(list)
     by_phrase: dict[str, list[int]] = defaultdict(list)
 
@@ -369,6 +403,12 @@ def score_pair(
     abstract_similarity_floor: float,
     allow_same_agency: bool,
 ) -> PairScore | None:
+    """Score one candidate pair, or ``None`` when it must be refused.
+
+    Refused when it is same-agency and *allow_same_agency* is false, or when both
+    title ratio and token overlap fall below *title_similarity_floor*; a weak
+    abstract is refused only when neither title ratio nor token overlap reaches 0.92.
+    """
     if not allow_same_agency and left.agency_code == right.agency_code:
         return None
 
@@ -428,6 +468,11 @@ def cluster_pairs(
     min_agencies: int,
     max_dominant_agency_share: float,
 ) -> list[dict[str, Any]]:
+    """Union-find clusters of pairs scoring at least *min_score*, sorted best first.
+
+    Clusters are dropped when they span fewer than *min_agencies* agencies or when one
+    agency accounts for more than *max_dominant_agency_share* of the members.
+    """
     uf = UnionFind(len(records))
     for pair in scored_pairs:
         if pair.score >= min_score:

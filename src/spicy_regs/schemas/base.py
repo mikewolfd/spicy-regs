@@ -27,6 +27,7 @@ class RecordType:
     path_pattern: str | None = None
 
     def __post_init__(self) -> None:
+        """Reject a schema that omits the dedup key or 'modify_date'."""
         if self.dedup_key not in self.schema:
             raise ValueError(
                 f"RecordType {self.name!r}: dedup_key {self.dedup_key!r} "

@@ -52,6 +52,8 @@ UrlsFn = Callable[[Mapping[str, object]], list[str]]
 
 @dataclass(frozen=True)
 class _PdfAttempt:
+    """One fetched PDF URL's retained source digest and extraction result."""
+
     source_sha256: str | None
     extraction: PdfTextResult | None
 
@@ -346,6 +348,7 @@ def _enrich_parquet_file(
     path: Path,
     enrich: Callable[[pl.DataFrame], tuple[pl.DataFrame, dict[str, int]]],
 ) -> dict[str, int]:
+    """Read a Parquet file, enrich it in place, write it back, and return the stats."""
     df = pl.read_parquet(path)
     enriched, stats = enrich(df)
     enriched.write_parquet(path, compression="zstd")

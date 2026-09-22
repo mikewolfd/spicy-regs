@@ -563,6 +563,7 @@ def _ordered_printings(status: Any) -> list[Any]:
 
 
 def _body_kind(content_type: str | None, format_name: str | None) -> str | None:
+    """Classify a fetched body as ``pdf``, ``xml``, or the source's own format name."""
     media = (content_type or "").split(";", 1)[0].strip().lower()
     if media == "application/pdf":
         return "pdf"
@@ -572,6 +573,7 @@ def _body_kind(content_type: str | None, format_name: str | None) -> str | None:
 
 
 def _processed_capture(entry: BillVersionCapture) -> bool:
+    """Whether a captured body carries the derived artifact its kind needs (XML tree or PDF cleanup)."""
     if entry.body is None:
         return False
     kind = _body_kind(entry.body.content_type, entry.format_name)
@@ -594,19 +596,23 @@ class PriorIndex:
 
     @property
     def is_cold(self) -> bool:
+        """True when the prior tables held no bills and no processed printings."""
         return not self.bill_text_dates and not self.printings
 
     def held_codes(self, bill_id: str) -> set[str]:
+        """The version codes this bill has a published processed body for."""
         prefix = f"{bill_id}\x1f"
         return {key[len(prefix) :] for key in self.printings if key.startswith(prefix)}
 
     def xml_codes(self, bill_id: str) -> set[str]:
+        """The version codes this bill has a complete published XML body and section rows for."""
         prefix = f"{bill_id}\x1f"
         return {key[len(prefix) :] for key in self.xml_printings if key.startswith(prefix)}
 
     def pending_pairs(
         self, status: Any, xml_codes: Collection[str] | None = None, completed: Collection[tuple[str, str, str]] = ()
     ) -> set[tuple[str, str]]:
+        """The consecutive XML printing pairs of this bill that have no published diff yet."""
         identifier = bill_key(status.identity)
         xml = self.xml_codes(identifier) if xml_codes is None else xml_codes
         codes = [version_slug(version.type) for version in _ordered_printings(status)]
@@ -1198,6 +1204,7 @@ def _prior_walks(path: Path | None) -> dict[tuple[str, str], dict[str, Any]]:
 
 
 def _int_or_none(value: Any) -> int | None:
+    """Parse a value's text as an int, or None when it does not spell one."""
     try:
         return int(str(value))
     except (TypeError, ValueError):
