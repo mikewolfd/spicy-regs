@@ -15,13 +15,21 @@ value means "the default", never "none", so a cron with no inputs still runs.
 from __future__ import annotations
 
 import os
-from datetime import date
+from datetime import date, timedelta
 
 #: Congress 1 convened in 1789 and each runs two calendar years, session 1 in
 #: the odd year. This is the inverse of the rule ``spicy_docs.sources.congress
 #: .votes`` states for building Clerk URLs (``_FIRST_SESSION_YEAR``); it is
 #: private there, so it is restated — once — rather than reached into.
 FIRST_CONGRESS_YEAR = 1789
+
+#: How long after a Congress boundary the outgoing Congress stays in the
+#: default scope. A Congress convenes 3 January of an odd year, so this window
+#: carries the outgoing Congress through mid-February. Chosen by the plan's
+#: "first weeks of a new Congress" instruction rather than by a measurement of
+#: the publisher's correction lag; a correction-lag measurement would replace
+#: this placeholder.
+CONGRESS_BOUNDARY_OVERLAP_DAYS = 45
 
 #: Every bill and resolution type the BILLSTATUS bulk archive publishes a
 #: folder for. The default scope is all eight.
@@ -49,11 +57,28 @@ def session_of(congress: int, year: int) -> int:
     return session
 
 
+def default_congresses(today: date | None = None) -> tuple[int, ...]:
+    """The default Congress scope: current, plus the outgoing one across a boundary.
+
+    From 3 January of an odd year the outgoing Congress drops out of
+    ``current_congress``, so a late correction to a December record would
+    never be re-read. While ``today`` sits in the first
+    ``CONGRESS_BOUNDARY_OVERLAP_DAYS`` after the boundary, the default names
+    both Congresses; after the window it names only the current one.
+    """
+    day = today or date.today()
+    congress = current_congress(day)
+    convenes = date(FIRST_CONGRESS_YEAR + 2 * (congress - 1), 1, 3)
+    if congress > 1 and day < convenes + timedelta(days=CONGRESS_BOUNDARY_OVERLAP_DAYS):
+        return (congress, congress - 1)
+    return (congress,)
+
+
 def congresses_from_env(var: str = "BILL_FAMILY_CONGRESSES", *, today: date | None = None) -> tuple[int, ...]:
-    """Congress numbers from a comma-separated env var, defaulting to the current one."""
+    """Congress numbers from a comma-separated env var, defaulting to :func:`default_congresses`."""
     raw = os.environ.get(var, "").strip()
     if not raw:
-        return (current_congress(today),)
+        return default_congresses(today)
     congresses = []
     for part in raw.split(","):
         part = part.strip()
@@ -64,7 +89,7 @@ def congresses_from_env(var: str = "BILL_FAMILY_CONGRESSES", *, today: date | No
         except ValueError as exc:
             raise ValueError(f"{var} must be comma-separated Congress numbers, got {part!r}") from exc
     if not congresses:
-        return (current_congress(today),)
+        return default_congresses(today)
     return tuple(congresses)
 
 

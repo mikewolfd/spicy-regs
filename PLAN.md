@@ -88,6 +88,12 @@ late correction to a December Record issue is never re-read (the index
 review, 2026-09-19). The workflows already expose the scope as a dispatch
 input; set it to both Congresses on the cron for the first weeks of a new
 Congress, or derive the overlap in `congress_scope`, and say which.
+**Chosen: derived in `congress_scope`** — `default_congresses` names both
+Congresses for `CONGRESS_BOUNDARY_OVERLAP_DAYS` (45, through mid-February)
+after the boundary; a workflow that sets `BILL_FAMILY_CONGRESSES` explicitly
+must name both during the window, since the derivation only fills the unset
+default. The 45 days are the plan's "first weeks" instruction and a
+placeholder until a publisher correction-lag measurement replaces it.
 
 **Host the document-to-RIN links as their own table.** `federal_register.rin`
 is the first RIN of `regulation_id_numbers_json`; 1,499 documents carry two or

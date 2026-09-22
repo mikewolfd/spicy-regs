@@ -7,15 +7,17 @@ one. Getting that wrong points a January run at a Congress with no bills in it.
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 
 import pytest
 
 from spicy_regs.transforms.congress_scope import (
+    CONGRESS_BOUNDARY_OVERLAP_DAYS,
     DEFAULT_BILL_TYPES,
     bill_types_from_env,
     congresses_from_env,
     current_congress,
+    default_congresses,
     session_of,
     sessions_of,
 )
@@ -58,6 +60,26 @@ def test_scope_defaults_to_the_current_congress_and_all_types(monkeypatch):
     assert congresses_from_env(today=date(2026, 9, 19)) == (119,)
     assert bill_types_from_env() == DEFAULT_BILL_TYPES
     assert len(DEFAULT_BILL_TYPES) == 8
+
+
+def test_the_default_names_both_congresses_across_the_boundary():
+    """A December correction is still re-read after 3 January: the outgoing Congress stays in scope."""
+    assert default_congresses(date(2025, 1, 3)) == (119, 118)  # the day the 119th convened
+    assert default_congresses(date(2025, 1, 2)) == (118,)  # still the 118th's own tail
+    last = date(2025, 1, 3) + timedelta(days=CONGRESS_BOUNDARY_OVERLAP_DAYS - 1)
+    assert default_congresses(last) == (119, 118)  # last day of the window
+    assert default_congresses(last + timedelta(days=1)) == (119,)  # the window closes
+
+
+def test_the_overlap_window_does_not_name_a_congress_before_the_first():
+    assert default_congresses(date(1789, 6, 1)) == (1,)
+
+
+def test_the_overlap_never_overrides_an_explicit_scope(monkeypatch):
+    monkeypatch.setenv("BILL_FAMILY_CONGRESSES", "119")
+    assert congresses_from_env(today=date(2025, 1, 15)) == (119,)
+    monkeypatch.setenv("BILL_FAMILY_CONGRESSES", "119, 118")
+    assert congresses_from_env(today=date(2025, 1, 15)) == (119, 118)
 
 
 @pytest.mark.parametrize("blank", ["", "   ", ","])
