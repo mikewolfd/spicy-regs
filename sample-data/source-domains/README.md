@@ -106,13 +106,18 @@ count, and the row count of the table they came from.
 `scripts/check_source_domain_drift.py --observe --write-snapshot` generates it,
 so the code that writes it is the code that reads it back.
 
-It names its inputs: the three published tables it scanned, at
-`https://data.spicy-regs.dev/`, as of producer revision
-`cf38783162e6a5a853d6426485c661938429b2c9`, each with
-the SHA-256 and byte length the scan actually read. Those digests are provenance,
-not verification — nothing recomputes them later, because the tables run to 68 MB
-and stay out of the repository. That is the whole reason a 3.7 KB summary of
-2,284,675 rows exists.
+It names its inputs: the three published tables it scanned, at the fork's
+public bucket (`https://pub-72e95c0c20a84508b42b03a6ff6d55f8.r2.dev`, the
+`R2_PUBLIC_URL` the fork's workflows publish to), as of producer revision
+`ae1c4e108bf764b2d15370c11832cfeff11487d1`, each with
+the SHA-256 and byte length the scan actually read. Where each table lives comes
+from the publication index, not from this file: `documents` and `dockets` sit at
+the bucket root, `unified_agenda` under its generation prefix, and a fragment of
+the index (`published-index-fragment-2026-09-22.json`) is checked in beside the
+snapshot so the recorded URLs stay verifiable offline. Those digests are
+provenance, not verification — nothing recomputes them later, because the tables
+run to 90 MB and stay out of the repository. That is the whole reason a 3.7 KB
+summary of 2,284,609 rows exists.
 
 ## Refreshing it
 
@@ -124,9 +129,14 @@ whose two inputs are both checked in.
 Re-observe against a fresh download of the published tables:
 
 ```
+SPICY_REGS_R2_URL=https://pub-72e95c0c20a84508b42b03a6ff6d55f8.r2.dev \
 scripts/check_source_domain_drift.py --observe --data-dir <dir of published parquet> \
     --observed-at <ISO-8601> --producer-revision <sha> --write-snapshot
 ```
+
+The URLs the observation records resolve through the publication index of that
+host; if a table's generation advanced, refresh the checked-in index fragment
+too, or the URL assertions fail.
 
 Re-pin a capture by refetching it from the `source_url` its manifest entry names,
 then recording the digest and byte length of what came back. Either step surfaces

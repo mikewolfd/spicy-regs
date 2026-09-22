@@ -1,0 +1,88 @@
+{
+  "format": "spicy-regs-publication",
+  "version": 1,
+  "families": {
+    "unified-agenda": {
+      "artifactDigest": "sha256:ea589343f8dcb5ffe134c5a2ac2fbf5d8856f105f296d838fe59e6330ee075b2",
+      "logicalId": "urn:spicy:artifact:spicy-regs-rollup-generation:f9c7c95a289e81e9a4963d33189ca65c4574c60049f447178ff3d53f33523a74",
+      "prefix": "generations/unified-agenda/ea589343f8dcb5ffe134c5a2ac2fbf5d8856f105f296d838fe59e6330ee075b2",
+      "tables": {
+        "unified_agenda.parquet": {
+          "byteSize": 1017557,
+          "columns": [
+            [
+              "rin",
+              "VARCHAR"
+            ],
+            [
+              "agency_code",
+              "VARCHAR"
+            ],
+            [
+              "agency_name",
+              "VARCHAR"
+            ],
+            [
+              "title",
+              "VARCHAR"
+            ],
+            [
+              "abstract",
+              "VARCHAR"
+            ],
+            [
+              "rin_status",
+              "VARCHAR"
+            ],
+            [
+              "rule_stage",
+              "VARCHAR"
+            ],
+            [
+              "priority_category",
+              "VARCHAR"
+            ],
+            [
+              "agenda_edition",
+              "VARCHAR"
+            ],
+            [
+              "major",
+              "VARCHAR"
+            ],
+            [
+              "publication_id",
+              "VARCHAR"
+            ],
+            [
+              "timetable_json",
+              "VARCHAR"
+            ],
+            [
+              "cfr_references_json",
+              "VARCHAR"
+            ],
+            [
+              "legal_authority_json",
+              "VARCHAR"
+            ],
+            [
+              "first_action_date",
+              "VARCHAR"
+            ],
+            [
+              "next_action_date",
+              "VARCHAR"
+            ],
+            [
+              "url",
+              "VARCHAR"
+            ]
+          ],
+          "rows": 3954,
+          "sha256": "sha256:52775a37b2ecb68e3e1a1a3a418ce034bd4c5cf36a9569c14e878be373fa4bd0"
+        }
+      }
+    }
+  }
+}

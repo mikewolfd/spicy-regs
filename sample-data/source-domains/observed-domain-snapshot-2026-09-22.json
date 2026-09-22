@@ -4,16 +4,16 @@
       "column": "docket_type",
       "key": "regulations-gov-docket-type",
       "null_count": 0,
-      "row_count": 279123,
+      "row_count": 279124,
       "table": "dockets",
       "value_counts": [
         [
           "Nonrulemaking",
-          215999
+          215997
         ],
         [
           "Rulemaking",
-          63124
+          63127
         ]
       ]
     },
@@ -21,32 +21,32 @@
       "column": "document_type",
       "key": "regulations-gov-document-type",
       "null_count": 0,
-      "row_count": 2001598,
+      "row_count": 2001531,
       "table": "documents",
       "value_counts": [
         [
           "Other",
-          728783
+          728805
         ],
         [
           "Supporting & Related Material",
-          718365
+          718205
         ],
         [
           "Notice",
-          398181
+          398236
         ],
         [
           "Rule",
-          103847
+          103870
         ],
         [
           "Proposed Rule",
-          52049
+          52041
         ],
         [
           "Public Submission",
-          373
+          374
         ]
       ]
     },
@@ -148,27 +148,27 @@
     }
   ],
   "format_version": "spicyregs-source-domains/observed-v1",
-  "observed_at": "2026-09-22T16:41:12Z",
-  "producer_revision": "cf38783162e6a5a853d6426485c661938429b2c9",
+  "observed_at": "2026-09-22T16:50:25Z",
+  "producer_revision": "ae1c4e108bf764b2d15370c11832cfeff11487d1",
   "sources": [
     {
-      "byte_length": 11492882,
-      "bytes_digest": "sha256:ff8b1e0417c96dcccc5b60ea366d128f8721f8ff483e01c123866f301f0071a2",
-      "publisher_url": "https://data.spicy-regs.dev/dockets.parquet",
-      "row_count": 279123,
+      "byte_length": 11282840,
+      "bytes_digest": "sha256:27a2ed4a850c91e1a724fa61691c0bf80fc6885d2c2587a2b26ed8a6d265ae65",
+      "publisher_url": "https://pub-72e95c0c20a84508b42b03a6ff6d55f8.r2.dev/dockets.parquet",
+      "row_count": 279124,
       "table": "dockets"
     },
     {
-      "byte_length": 55293594,
-      "bytes_digest": "sha256:910b378554cc11c0c4029f69a0596e03016a9186e809a688f60d0ef763c6acc9",
-      "publisher_url": "https://data.spicy-regs.dev/documents.parquet",
-      "row_count": 2001598,
+      "byte_length": 77297233,
+      "bytes_digest": "sha256:7907ebe3d49fbf82ec7eaf029b07bec1f53c649363a762d555582ba7dd6c1365",
+      "publisher_url": "https://pub-72e95c0c20a84508b42b03a6ff6d55f8.r2.dev/documents.parquet",
+      "row_count": 2001531,
       "table": "documents"
     },
     {
-      "byte_length": 1017503,
-      "bytes_digest": "sha256:e6862d5d6a5300f10c70eeaf321f1e82e1f5332f71069d07723cc584ee6a85ae",
-      "publisher_url": "https://data.spicy-regs.dev/unified_agenda.parquet",
+      "byte_length": 1017557,
+      "bytes_digest": "sha256:52775a37b2ecb68e3e1a1a3a418ce034bd4c5cf36a9569c14e878be373fa4bd0",
+      "publisher_url": "https://pub-72e95c0c20a84508b42b03a6ff6d55f8.r2.dev/generations/unified-agenda/ea589343f8dcb5ffe134c5a2ac2fbf5d8856f105f296d838fe59e6330ee075b2/unified_agenda.parquet",
       "row_count": 3954,
       "table": "unified_agenda"
     }

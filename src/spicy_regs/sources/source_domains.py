@@ -549,7 +549,7 @@ ACCEPTED_DOMAIN_FINDINGS: tuple[AcceptedFinding, ...] = (
         kind=UNDOCUMENTED,
         value="Public Submission",
         reason=(
-            "regulations.gov returns this documentType on 373 document rows and labels it in its own web UI, "
+            "regulations.gov returns this documentType on 374 document rows and labels it in its own web UI, "
             "but the pinned v4 OpenAPI DocumentType enum lists only five values and does not include it. "
             "The publisher's documentation is incomplete; the data is not wrong."
         ),

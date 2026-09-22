@@ -22,8 +22,9 @@ from pathlib import Path
 
 import pytest
 
-from scripts.check_source_domain_drift import published_table_url
-from spicy_regs.data_dictionary import DEFAULT_R2_BASE_URL, expected_schemas
+from scripts.check_source_domain_drift import table_urls
+from spicy_regs.data_dictionary import expected_schemas
+from spicy_regs.sources.publication import parse_index, table_location
 from spicy_regs.sources.source_domains import (
     ACCEPTED_DOMAIN_FINDINGS,
     DEFAULT_SOURCE_DOMAIN_DIR,
@@ -46,6 +47,18 @@ from spicy_regs.sources.source_domains import (
 ROOT = Path(__file__).resolve().parents[1]
 DOMAIN_DIR = ROOT / DEFAULT_SOURCE_DOMAIN_DIR
 TOOL = ROOT / "scripts" / "check_source_domain_drift.py"
+
+#: The host this fork's workflows publish to (``R2_PUBLIC_URL`` in the fork's
+#: secrets); the snapshot records its URLs, resolved through the publication index.
+FORK_PUBLIC_URL = "https://pub-72e95c0c20a84508b42b03a6ff6d55f8.r2.dev"
+
+#: The live publication index is a network fetch, so a fragment of it is checked
+#: in beside the snapshot for the offline URL assertions.
+PUBLISHED_INDEX_FRAGMENT = "published-index-fragment-2026-09-22.json"
+
+
+def _published_index() -> dict:
+    return parse_index((DOMAIN_DIR / PUBLISHED_INDEX_FRAGMENT).read_bytes())
 
 
 @pytest.fixture(scope="module")
@@ -116,7 +129,7 @@ def test_public_submission_carries_its_row_support(findings):
 
     (finding,) = [one for one in findings if one.value == "Public Submission"]
     assert finding.kind == UNDOCUMENTED
-    assert finding.row_count == 373
+    assert finding.row_count == 374
 
 
 def test_two_domains_agree_completely(findings):
@@ -305,19 +318,22 @@ def test_every_domain_names_a_real_published_column(documented):
 
 
 def test_the_snapshot_states_where_its_rows_came_from(snapshot):
-    assert snapshot.observed_at == "2026-09-22T16:41:12Z"
-    assert snapshot.producer_revision == "cf38783162e6a5a853d6426485c661938429b2c9"
+    assert snapshot.observed_at == "2026-09-22T16:50:25Z"
+    assert snapshot.producer_revision == "ae1c4e108bf764b2d15370c11832cfeff11487d1"
     sources = {str(one["table"]): one for one in snapshot.sources}
     assert sorted(sources) == ["dockets", "documents", "unified_agenda"]
+    index = _published_index()
     for table, source in sources.items():
         # The recorded URL is a string in a checked-in data file; the expected one
-        # comes from the registry that publishes the corpus. Two different origins,
-        # so this fails when the corpus moves and nobody re-pins the snapshot —
-        # exactly how this file first shipped naming a host we never served.
-        assert source["publisher_url"] == f"{DEFAULT_R2_BASE_URL}/{table}.parquet"
+        # resolves through the publisher's own index (checked in as a fragment).
+        # Two origins, so this fails when the corpus moves or a generation
+        # advances and nobody re-pins the snapshot — exactly how this file first
+        # shipped naming a host we never served.
+        key, _ = table_location(index, f"{table}.parquet")
+        assert source["publisher_url"] == f"{FORK_PUBLIC_URL}/{key}"
         assert str(source["bytes_digest"]).startswith("sha256:")
         assert int(source["byte_length"]) > 0
-    assert sources["documents"]["row_count"] == 2_001_598
+    assert sources["documents"]["row_count"] == 2_001_531
     assert sources["unified_agenda"]["row_count"] == 3_954
 
 
@@ -360,17 +376,21 @@ def test_the_tool_passes_on_the_committed_inputs():
     assert "UNRECORDED" not in result.stdout
 
 
-def test_the_tool_would_record_the_urls_the_snapshot_already_carries(snapshot):
-    """Close the loop on the writer: what ``--observe`` would record must equal what is pinned.
+def test_the_recorded_urls_resolve_through_the_pinned_index(snapshot):
+    """Close the loop on the writer: what ``--observe`` recorded must equal what the pinned index fragment resolves.
 
-    ``observe()`` needs parquet, so it cannot run here — but the one part of it that
-    shipped wrong was the URL it stamps into the snapshot. That URL comes from a pure
-    function, so run it over every table the snapshot names and require a match.
+    The live index is a network fetch, so a fragment of it is checked in beside
+    the snapshot. The snapshot's URL is a string in a checked-in data file and
+    the fragment is a captured index entry — two origins, so a moved host or an
+    advanced generation fails here until the snapshot is re-pinned.
     """
 
+    index = _published_index()
     for source in snapshot.sources:
-        assert published_table_url(str(source["table"])) == source["publisher_url"]
-    assert published_table_url("documents") == "https://data.spicy-regs.dev/documents.parquet"
+        key, _ = table_location(index, f"{source['table']}.parquet")
+        assert source["publisher_url"] == f"{FORK_PUBLIC_URL}/{key}"
+    urls = table_urls(index, FORK_PUBLIC_URL, sorted({str(one["table"]) for one in snapshot.sources}))
+    assert urls["documents"] == f"{FORK_PUBLIC_URL}/documents.parquet"
 
 
 def test_the_tool_refuses_to_write_a_snapshot_without_provenance():

@@ -21,7 +21,10 @@ the observed half is the manual step below.
 prints the same report against that data; add ``--write-snapshot`` to re-pin the
 checked-in snapshot from that observation. ``DIR`` holds the published tables
 under their own names (``documents.parquet`` and so on) — a fresh download of
-the published corpus, or any directory built from it. Re-pinning a capture is
+the published corpus, or any directory built from it. The recorded publisher
+URLs resolve through the publication index of the host the reader chain selects
+(``SPICY_REGS_R2_URL``, then ``R2_PUBLIC_URL``), so an observation records where
+the bytes actually live. Re-pinning a capture is
 the other manual step: refetch it from the ``source_url`` its manifest entry
 names, and record the digest and length of what came back.
 
@@ -35,10 +38,12 @@ import hashlib
 import json
 import sys
 import tempfile
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from pathlib import Path
 
-from spicy_regs.data_dictionary import DEFAULT_R2_BASE_URL, TABLES
+from spicy_regs.data_dictionary import TABLES
+from spicy_regs.public_url import resolve_r2_base_url
+from spicy_regs.sources.publication import current_index, table_location
 from spicy_regs.sources.source_domains import (
     DEFAULT_SOURCE_DOMAIN_DIR,
     OBSERVED_SNAPSHOT_FILENAME,
@@ -59,10 +64,16 @@ ROOT = Path(__file__).resolve().parents[1]
 SOURCE_DOMAIN_DIR = ROOT / DEFAULT_SOURCE_DOMAIN_DIR
 
 
-def published_table_url(table: str) -> str:
-    """Where a published table is served, derived from the registry that publishes it."""
+def table_urls(index: Mapping, base_url: str, tables: Iterable[str]) -> dict[str, str]:
+    """Where each published table is served, resolved through the publication index.
 
-    return f"{DEFAULT_R2_BASE_URL}/{table}.parquet"
+    A family-published table lives under its generation prefix; a legacy table
+    resolves to its root name. Only the ``--observe`` path calls this, so the
+    default run's offline property is untouched.
+    """
+
+    base = base_url.rstrip("/")
+    return {table: f"{base}/{table_location(index, f'{table}.parquet')[0]}" for table in tables}
 
 
 def _connect():
@@ -87,6 +98,7 @@ def observe(
     data_dir: Path,
     documented: Mapping[str, DocumentedDomain],
     *,
+    base_url: str,
     observed_at: str,
     producer_revision: str,
 ) -> ObservedSnapshot:
@@ -97,6 +109,7 @@ def observe(
     """
 
     tables = sorted({domain.table for domain in documented.values()})
+    urls = table_urls(current_index(base_url), base_url, tables)
     connection = _connect()
     sources = []
     row_counts: dict[str, int] = {}
@@ -116,7 +129,7 @@ def observe(
             {
                 "byte_length": byte_length,
                 "bytes_digest": digest,
-                "publisher_url": published_table_url(table),
+                "publisher_url": urls[table],
                 "row_count": int(row_count),
                 "table": table,
             }
@@ -189,6 +202,7 @@ def main(argv: list[str] | None = None) -> int:
         snapshot = observe(
             Path(args.data_dir),
             documented,
+            base_url=resolve_r2_base_url(),
             observed_at=args.observed_at,
             producer_revision=args.producer_revision,
         )
