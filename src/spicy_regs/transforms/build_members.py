@@ -24,6 +24,8 @@ from spicy_docs.schemas.legislator_tables import shape_member, shape_member_term
 from spicy_docs.sources.legislators import LegislatorsAcquirer, LegislatorsBudget
 
 from spicy_regs.transforms.table_merge import merge_contract_table
+from spicy_regs.source_evidence import CaptureEvidence
+from spicy_regs.sources.retained import RetainedLegislatorsAcquirer
 
 # Two requests, paced. The historical file is the large one (~12 MB); the
 # acquirer's own ``max_historical_bytes`` default covers it.
@@ -35,14 +37,23 @@ BUDGET = LegislatorsBudget(
 )
 
 
-def build_members(output_dir: Path, *, acquirer: LegislatorsAcquirer | None = None) -> tuple[Path, Path]:
+def build_members(output_dir: Path, *, acquirer: LegislatorsAcquirer | None = None,
+                  evidence: CaptureEvidence | None = None) -> tuple[Path, Path]:
     """Build ``members.parquet`` and ``member_terms.parquet`` from both rosters."""
-    acquirer = acquirer or LegislatorsAcquirer(budget=BUDGET)
+    acquirer = acquirer or (RetainedLegislatorsAcquirer(budget=BUDGET, evidence=evidence)
+                           if evidence else LegislatorsAcquirer(budget=BUDGET))
 
     member_rows: list[dict] = []
     term_rows: list[dict] = []
     for roster, acquire in (("current", acquirer.acquire_current), ("historical", acquirer.acquire_historical)):
-        acquisition = acquire()
+        try:
+            acquisition = acquire()
+        except Exception as error:
+            if evidence:
+                evidence.refusal(error, stage=roster)
+            raise
+        if evidence:
+            evidence.capture(acquisition.capture, stage=roster + ":used")
         observed_at = acquisition.capture.observed_at
         records = acquisition.file.records
         logger.info("Members: {} roster — {:,} legislators", roster, len(records))

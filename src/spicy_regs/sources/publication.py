@@ -125,6 +125,26 @@ def current_index(base_url: str) -> dict:
     return held[1] if held is not None and held[0] == base_url.rstrip("/") else load_index(base_url)
 
 
+def load_family_root(base_url: str, entry: Mapping) -> tuple[bytes, dict]:
+    """Read only the pinned prior root for lineage; this does not re-admit its tables."""
+    from rulespec_artifacts import expected_artifact_digest
+
+    with httpx.stream("GET", f"{base_url.rstrip('/')}/{entry['prefix']}/artifact.json",
+                      headers={"User-Agent": "spicy-regs"}, follow_redirects=True, timeout=60) as response:
+        response.raise_for_status()
+        raw = bytearray()
+        for chunk in response.iter_bytes():
+            raw.extend(chunk)
+            if len(raw) > INDEX_LIMIT:
+                raise PublicationError("Prior generation root exceeds its byte limit")
+    root = json.loads(raw, object_pairs_hook=_pairs)
+    if (root.get("artifactDigest") != entry["artifactDigest"]
+            or expected_artifact_digest(root) != entry["artifactDigest"]
+            or root.get("logicalId") != entry["logicalId"] or not isinstance(root.get("inputs"), list)):
+        raise PublicationError("Prior generation root differs from its captured pin")
+    return bytes(raw), root
+
+
 @contextmanager
 def snapshot(base_url: str) -> Iterator[dict]:
     """Bind all member reads in this operation to one pointer observation."""
@@ -245,7 +265,8 @@ class _S3Members:
             body.close()
 
 
-def publish_generation(directory: Path, *, client, bucket: str, prior_index: Mapping) -> dict:
+def publish_generation(directory: Path, *, client, bucket: str, prior_index: Mapping,
+                       evidence_directories: tuple[Path, ...] = ()) -> dict:
     """Verify/upload/verify, then compare-and-swap the publication pointer.
 
     Validation and conditional-write refusals preserve the current pointer.
@@ -259,6 +280,7 @@ def publish_generation(directory: Path, *, client, bucket: str, prior_index: Map
     from rulespec_artifacts import LocalMemberSource, admit_artifact, canonical_json_bytes, iter_member_descriptors
     from spicy_regs.generations import verify_generation
     from spicy_regs.sources.r2 import _assert_upload_safe, _get_remote_size
+    from spicy_regs.source_evidence import INPUT_ROLE, PRIOR_ROLE, verify_evidence
 
     artifact = verify_generation(directory)
     if artifact.root["spec"]["publicationStatus"] != "complete-family":
@@ -298,6 +320,20 @@ def publish_generation(directory: Path, *, client, bucket: str, prior_index: Map
     }
     raw = canonical_json_bytes(updated)
     parse_index(raw)
+    evidence = [verify_evidence(path) for path in evidence_directories]
+    declared = [item for item in artifact.root["inputs"] if item["role"] == INPUT_ROLE]
+    actual = [{"role": INPUT_ROLE, **item.pin.as_dict()} for item in evidence]
+    if actual != declared:
+        raise PublicationError("Generation source evidence is missing or differs from its input pins")
+    for path, item in zip(evidence_directories, evidence, strict=True):
+        if item.root["spec"]["family"] != family:
+            raise PublicationError("Source evidence belongs to a different family")
+        if item.root["inputs"] != [value for value in artifact.root["inputs"] if value["role"] == PRIOR_ROLE]:
+            raise PublicationError("Source evidence and generation name different inherited inputs")
+        evidence_prefix = "source-evidence/" + item.pin.artifact_digest.removeprefix("sha256:")
+        for key in sorted(LocalMemberSource(path).keys()):
+            _put_immutable(client, bucket, evidence_prefix + "/" + key, path / key)
+        admit_artifact(_S3Members(client, bucket, evidence_prefix), expected_pin=item.pin)
     for key in sorted(source.keys()):
         _put_immutable(client, bucket, prefix + "/" + key, directory / key)
     # S3 success or caller-supplied metadata is not byte-verification evidence.

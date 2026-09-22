@@ -42,6 +42,8 @@ from spicy_regs.sources import r2
 from spicy_regs.sources.congress_bills import API_KEY_ENV_VARS, _resolve_api_key, listing_reader
 from spicy_regs.transforms.table_merge import merge_contract_table, merge_table, published_table
 from spicy_regs.transforms.committee_report_reads import READS_TABLE, READ_COLUMNS, RULE_VERSIONS, complete, prior_reads
+from spicy_regs.source_evidence import CaptureEvidence, SourceEvidenceError
+from spicy_regs.sources.retained import RetainedGovInfoBodyAcquirer, RetainedGovInfoDiscoveryReader
 
 
 class PackageDiscoverySource(Protocol):
@@ -126,11 +128,14 @@ def _since(prior_file: Path | None = None, window_days: int = DEFAULT_WINDOW_DAY
     return start.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def _package_ids(reader: PackageDiscoverySource, collection: str, since: str) -> dict[str, str | None]:
+def _package_ids(reader: PackageDiscoverySource, collection: str, since: str,
+                 evidence: CaptureEvidence | None = None) -> dict[str, str | None]:
     """Enumerate within the page cap; use the package grammar before spending body requests."""
     found = {}
     unsupported = 0
     for page in reader.packages(collection_url(collection, since), max_pages=MAX_PAGES):
+        if evidence:
+            evidence.capture(page.capture, stage=collection + ":listing")
         for record in page.records:
             package_id = record.get("packageId")
             try:
@@ -144,7 +149,8 @@ def _package_ids(reader: PackageDiscoverySource, collection: str, since: str) ->
     return found
 
 
-def _read_body(acquirer: PackageBodySource, package_id: str) -> tuple[Any, BodyText]:
+def _read_body(acquirer: PackageBodySource, package_id: str,
+               evidence: CaptureEvidence | None = None) -> tuple[Any, BodyText]:
     """One package's fetched body and the one text derivation for its rendition.
 
     Takes the narrow Protocol rather than the concrete acquirer, the way the
@@ -153,6 +159,9 @@ def _read_body(acquirer: PackageBodySource, package_id: str) -> tuple[Any, BodyT
     it was fetched in is the body's own, never this caller's guess.
     """
     package = acquirer.acquire(package_id)
+    if evidence:
+        for capture in package.captures:
+            evidence.capture(capture, stage=package_id + ":used")
     # No extractor argument: ``body_text``'s default (``DocumentExtractor(NativeText())``,
     # PyMuPDF) is the pipeline ``gpo_normalize`` was derived on — the GPO
     # gutter-numbered layout only comes through on PyMuPDF's own line
@@ -196,7 +205,8 @@ _CHAMBER_OF_DOCUMENT_TYPE = {"h": "house", "s": "senate", "j": "joint"}
 _HEARING_REFUSALS = (PagedJsonSourceError, httpx.HTTPError, ConnectionError, ValueError, TypeError, KeyError)
 
 
-def _event_id(hearings: HearingDetailSource, package: Any) -> tuple[str | None, str]:
+def _event_id(hearings: HearingDetailSource, package: Any,
+              evidence: CaptureEvidence | None = None) -> tuple[str | None, str]:
     """``(event_id, outcome)`` for one CHRG package from its Congress.gov hearing detail.
 
     ``outcome`` is ``meeting``, ``no_meeting`` or ``refused``, so the run log
@@ -211,6 +221,8 @@ def _event_id(hearings: HearingDetailSource, package: Any) -> tuple[str | None, 
             raise ValueError(f"document type {identity.document_type!r} names no chamber")
         url = list_route_url(route, congress=identity.congress, chamber=chamber, number=int(identity.number), limit=1)
         page = next(iter(hearings.records(route, url, max_pages=1)))
+        if evidence:
+            evidence.capture(page.capture, stage=identity.package_id + ":hearing-detail")
         if len(page.records) != 1:
             raise PagedJsonSourceError(f"hearing-detail answered {len(page.records)} records, not one")
         record = page.records[0]
@@ -221,7 +233,10 @@ def _event_id(hearings: HearingDetailSource, package: Any) -> tuple[str | None, 
     except CredentialRefusedError:
         raise
     except _HEARING_REFUSALS as error:
-        logger.warning("CHRG: {} hearing detail refused: {}", identity.package_id, scrub_credential(str(error), ""))
+        if evidence:
+            evidence.refusal(error, stage=identity.package_id + ":hearing-detail")
+        logger.warning("CHRG: {} hearing detail refused: {}", identity.package_id,
+                       scrub_credential(str(error), evidence.credential if evidence else ""))
         return None, "refused"
     meeting = record.get("associatedMeeting")
     event_id = text(meeting.get("eventId")) if isinstance(meeting, dict) else None
@@ -236,15 +251,20 @@ def build_committee_reports(
     hearings: HearingDetailSource | None = None,
     max_packages: int = MAX_PACKAGES_PER_RUN,
     download_prior: Callable[[str, Path], bool] = r2.download,
+    evidence: CaptureEvidence | None = None,
 ) -> tuple[Path, ...]:
     """Build four contract tables and the acquisition checkpoint, with one owner."""
     if reader is None or acquirer is None or hearings is None:
         api_key = _resolve_api_key()
         if not api_key:
             raise RuntimeError(f"Committee reports need an api.data.gov key (set one of {', '.join(API_KEY_ENV_VARS)})")
-        reader = reader or GovInfoDiscoveryReader(budget=DISCOVERY_BUDGET, api_key=api_key)
-        acquirer = acquirer or GovInfoBodyAcquirer(budget=BODY_BUDGET, api_key=api_key)
-        hearings = hearings or listing_reader(api_key)
+        reader = reader or (RetainedGovInfoDiscoveryReader(budget=DISCOVERY_BUDGET, api_key=api_key, evidence=evidence)
+                            if evidence else GovInfoDiscoveryReader(budget=DISCOVERY_BUDGET, api_key=api_key))
+        if evidence:
+            evidence.credential = api_key
+        acquirer = acquirer or (RetainedGovInfoBodyAcquirer(budget=BODY_BUDGET, api_key=api_key, evidence=evidence)
+                               if evidence else GovInfoBodyAcquirer(budget=BODY_BUDGET, api_key=api_key))
+        hearings = hearings or listing_reader(api_key, evidence=evidence)
 
     prior_files = {
         name: published_table(output_dir, name, download_prior) for name in ("committee_reports", "hearing_transcripts")
@@ -254,6 +274,9 @@ def build_committee_reports(
     since = _since(prior_files["committee_reports"])
     logger.info("Committee reports: modified since {}; cap {} per collection; agenda cap 0", since, max_packages)
     observed_at = datetime.now(UTC).isoformat()
+    if evidence:
+        evidence.event("selection", since=since, max_packages_per_collection=max_packages, max_pages=MAX_PAGES,
+                       agenda_cap=0, checkpoint_observed_at=observed_at)
     link_rows: list[dict] = []
     evaluated_hearings: set[str] = set()
     evaluated_reports: set[str] = set()
@@ -266,12 +289,21 @@ def build_committee_reports(
     refused = unchanged = linked = 0
 
     for collection in ("CRPT", "CHRG"):
-        listed = _package_ids(reader, collection, since)
+        try:
+            listed = _package_ids(reader, collection, since, evidence)
+        except Exception as error:
+            if evidence:
+                evidence.refusal(error, stage=collection + ":listing")
+            raise
         pending = {key: row.get("last_modified") for key, row in reads.items()
                    if key.startswith(collection + "-") and not complete(row, collection)}
         pending.update({key: modified for key, modified in listed.items()
                         if not complete(reads.get(key, {}), collection, modified)})
         unchanged += len(listed) - sum(key in pending for key in listed)
+        if evidence:
+            evidence.event("package-selection", collection=collection, listed=listed,
+                           selected=list(pending)[:max_packages], deferred=list(pending)[max_packages:],
+                           unchanged=[key for key in listed if key not in pending])
         for package_id, modified in pending.items():
             reads[package_id] = {"package_id": package_id, "last_modified": modified,
                                  "outcome": "pending", "rule_version": RULE_VERSIONS[collection],
@@ -280,13 +312,16 @@ def build_committee_reports(
         for package_id in list(pending)[:max_packages]:
             state = reads[package_id]
             try:
-                package, derived = _read_body(acquirer, package_id)
-            except CredentialRefusedError:
+                package, derived = _read_body(acquirer, package_id, evidence)
+            except (CredentialRefusedError, SourceEvidenceError):
                 raise
             except Exception as error:  # noqa: BLE001 — retained for the next run
+                if evidence:
+                    evidence.refusal(error, stage=package_id)
                 refused += 1
                 state["outcome"] = "refused"
-                logger.warning("{}: {} refused: {}", collection, package_id, scrub_credential(str(error), ""))
+                logger.warning("{}: {} refused: {}", collection, package_id,
+                               scrub_credential(str(error), evidence.credential if evidence else ""))
                 continue
             renditions[derived.rendition] += 1
             primary = package.mods.primary_bill
@@ -297,7 +332,7 @@ def build_committee_reports(
                       "text_sha256": "sha256:" + hashlib.sha256(derived.text.encode("utf-8")).hexdigest()}
             state.update(last_modified=package.summary.last_modified, outcome="complete")
             if collection == "CHRG":
-                event_id, outcome = _event_id(hearings, package)
+                event_id, outcome = _event_id(hearings, package, evidence)
                 meetings[outcome] += 1
                 if outcome == "refused":
                     state["outcome"] = "detail_refused"
@@ -313,6 +348,8 @@ def build_committee_reports(
                     block, package_id=package_id, seq=seq, last_modified=package.summary.last_modified
                 ) for seq, block in enumerate(parse_agency_blocks(derived.text)))
                 evaluated_reports.add(package_id)
+            if evidence:
+                evidence.event("package-outcome", **state)
 
     logger.info(
         "Committee reports: {:,} reports, {:,} sections, {:,} hearings, {:,} already held, {:,} refused",

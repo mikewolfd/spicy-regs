@@ -100,6 +100,7 @@ class RollupPipeline(Pipeline):
     #: siblings are carried forward from its captured generation, never rebuilt.
     publication_family: ClassVar[str | None] = None
     generation_tables: ClassVar[bool] = True
+    retain_source_evidence: ClassVar[bool] = False
 
     #: The single artifact this rollup writes and publishes (e.g.
     #: ``"feed_summary.parquet"``). Its R2 remote key is the same filename.
@@ -118,6 +119,7 @@ class RollupPipeline(Pipeline):
     def __init__(self, *, output_dir: Path | None = None, skip_upload: bool = True) -> None:
         self.output_dir = output_dir
         self.skip_upload = skip_upload
+        self.source_evidence = None
 
     def run(self) -> None:
         if not self.generation_tables:
@@ -134,6 +136,23 @@ class RollupPipeline(Pipeline):
             logger.info("Legacy unversioned object retained: {}", built)
             return
 
+        from spicy_regs.source_evidence import CaptureEvidence
+
+        output_dir = self.output_dir or (Path.cwd() / "output")
+        output_dir.mkdir(parents=True, exist_ok=True)
+        if self.retain_source_evidence:
+            self.source_evidence = CaptureEvidence(output_dir, self.publication_family or self.name)
+        try:
+            self._run_tables(output_dir)
+        except BaseException as error:
+            if self.source_evidence:
+                self.source_evidence.finish(error)
+            raise
+        else:
+            if self.source_evidence:
+                self.source_evidence.finish()
+
+    def _run_tables(self, output_dir: Path) -> None:
         from rulespec_artifacts import publish_directory_no_replace
         from spicy_regs.data_dictionary import expected_schemas
         from spicy_regs.generations import build_generation, verify_generation
@@ -144,6 +163,8 @@ class RollupPipeline(Pipeline):
         public_url = getenv("R2_PUBLIC_URL")
         context = publication.snapshot(public_url) if public_url else nullcontext(publication.empty_index())
         with context as prior_index:
+            if self.source_evidence:
+                self.source_evidence.inherit(prior_index, public_url=public_url)
             # Bespoke ingest builders also cache priors. An isolated build
             # directory covers all of them without deleting user evidence.
             build_dir = output_dir
@@ -190,6 +211,7 @@ class RollupPipeline(Pipeline):
                 expected_keys=expected_keys, schemas=expected_schemas(),
                 read_snapshot=prior_index, carried_forward=carried_forward,
                 publication_status=publication_status,
+                inputs=self.source_evidence.inputs() if self.source_evidence else (),
             )
             destination = generations / artifact.pin.artifact_digest.removeprefix("sha256:")
             if destination.exists():
@@ -204,6 +226,7 @@ class RollupPipeline(Pipeline):
             publication.publish_generation(
                 destination, client=r2.get_r2_client(),
                 bucket=getenv("R2_BUCKET_NAME", "spicy-regs"), prior_index=prior_index,
+                evidence_directories=(self.source_evidence.artifact_dir,) if self.source_evidence else (),
             )
             from spicy_regs.sources.cloudflare import purge_urls
 

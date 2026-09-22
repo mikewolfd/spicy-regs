@@ -16,6 +16,7 @@ class CommitteeReportsRollup(RollupPipeline):
     """GovInfo committee reports, their agency blocks, and hearing transcripts (api.data.gov key)."""
 
     name: ClassVar[str] = "committee-reports"
+    retain_source_evidence: ClassVar[bool] = True
     inputs: ClassVar[tuple[str, ...]] = ()
     outputs: ClassVar[tuple[str, ...]] = (
         "committee_reports.parquet",
@@ -26,7 +27,7 @@ class CommitteeReportsRollup(RollupPipeline):
     )
 
     def build(self, output_dir: Path) -> tuple[Path, ...]:
-        return build_committee_reports(output_dir)
+        return build_committee_reports(output_dir, evidence=self.source_evidence)
 
 
 app = make_rollup_app(CommitteeReportsRollup)

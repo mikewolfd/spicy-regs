@@ -1,4 +1,14 @@
-# GovInfo package MODS fixtures
+# GovInfo package fixtures
+
+The source-retention tests also use the complete `CRPT-119hrpt1` summary and
+HTML body copied byte-for-byte from spicy-docs at commit
+`5f4720f6338b82597163f946d0cfbcd9ebf7cdb6`. Their upstream fixture provenance
+records acquisition on 2026-09-19. This local copy makes no new request.
+
+| File | Publisher response | Bytes | SHA-256 |
+| --- | --- | --- | --- |
+| `summary-CRPT-119hrpt1.json` | [Package summary](https://api.govinfo.gov/packages/CRPT-119hrpt1/summary) | 1,800 | `818d6a4dc8678a6b2972eb2f0e4596be2c576087508bb49caeb5d8be588e5bc1` |
+| `body-CRPT-119hrpt1.htm` | [HTML body](https://www.govinfo.gov/content/pkg/CRPT-119hrpt1/html/CRPT-119hrpt1.htm) | 13,953 | `d2575146c81d989831fd08e8f424eddb048346bfe78670db994c0a107b584ad9` |
 
 Two complete, unchanged MODS responses, one per collection the
 `committee-reports` rollup publishes. They exist so

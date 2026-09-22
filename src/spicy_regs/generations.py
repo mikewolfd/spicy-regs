@@ -66,6 +66,17 @@ def verify_generation(directory: Path, *, expected_pin=None):
     if snapshot:
         parse_index(canonical_json_bytes(snapshot))
     carried = spec["carriedForward"]
+    from spicy_regs.source_evidence import INPUT_ROLE, PRIOR_ROLE
+
+    inputs = root["inputs"]
+    evidence = [item for item in inputs if item["role"] == INPUT_ROLE]
+    prior_inputs = [item for item in inputs if item["role"] == PRIOR_ROLE]
+    if inputs:
+        prior = snapshot.get("families", {}).get(spec["family"])
+        expected_prior = ([{"role": PRIOR_ROLE, "logicalId": prior["logicalId"],
+                            "artifactDigest": prior["artifactDigest"]}] if prior else [])
+        if len(evidence) != 1 or prior_inputs != expected_prior or len(inputs) != 1 + len(prior_inputs):
+            raise ValueError("Generation evidence lineage differs from its captured prior")
     if not isinstance(carried, dict) or not set(carried) <= set(tables):
         raise ValueError("Invalid carried-forward declarations")
     members = list(iter_member_descriptors(artifact, source))
@@ -102,6 +113,7 @@ def build_generation(
     read_snapshot: Mapping | None = None,
     carried_forward: Mapping[str, str] | None = None,
     publication_status: str = "complete-family",
+    inputs=(),
 ):
     """Snapshot exactly one declared family into a new immutable artifact.
 
@@ -164,6 +176,7 @@ def build_generation(
         },
         producer=Producer("spicy-regs", implementation, "urn:spicy-regs:rollup-verifier", "1", implementation),
         manifests=[manifest],
+        inputs=inputs,
     )
     (directory / "artifact.json").write_bytes(canonical_json_bytes(root))
     return verify_generation(directory)

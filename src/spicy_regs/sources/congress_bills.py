@@ -93,6 +93,7 @@ from loguru import logger
 from spicy_regs.sources.base import Reader
 
 if TYPE_CHECKING:
+    from spicy_regs.source_evidence import CaptureEvidence
     from spicy_docs.sources.congress.bill_status import BillIdentity
     from spicy_docs.sources.congress.listing import CongressListingReader
     from spicy_docs.transport.captured import CapturedBodyResponse
@@ -133,7 +134,8 @@ _TIMEOUT_SECONDS = 60.0
 _MIN_REQUEST_INTERVAL_SECONDS = 0.2
 
 
-def listing_reader(api_key: str, transport: httpx.BaseTransport | None = None) -> CongressListingReader:
+def listing_reader(api_key: str, transport: httpx.BaseTransport | None = None, *,
+                   evidence: CaptureEvidence | None = None) -> CongressListingReader:
     """spicy-docs' reader over the Congress.gov list routes, with this repo's page budget and header-only key.
 
     Imported lazily on purpose: base CLI/MCP installations import this module
@@ -159,6 +161,10 @@ def listing_reader(api_key: str, transport: httpx.BaseTransport | None = None) -
         timeout_seconds=_TIMEOUT_SECONDS,
         min_request_interval_seconds=_MIN_REQUEST_INTERVAL_SECONDS,
     )
+    if evidence is not None:
+        from spicy_regs.sources.retained import RetainedCongressListingReader
+
+        return RetainedCongressListingReader(budget=budget, api_key=api_key, transport=transport, evidence=evidence)
     return CongressListingReader(budget=budget, api_key=api_key, transport=transport)
 
 

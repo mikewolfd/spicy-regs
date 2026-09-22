@@ -1,0 +1,33 @@
+{
+    "dateIssued": "2025-01-21",
+    "documentType": "HRPT",
+    "congress": "119",
+    "session": "1",
+    "documentNumber": "1",
+    "packageId": "CRPT-119hrpt1",
+    "collectionCode": "CRPT",
+    "detailsLink": "https://www.govinfo.gov/app/details/CRPT-119hrpt1",
+    "title": "PROVIDING FOR CONSIDERATION OF THE BILL (H.R. 471) TO EXPEDITE UNDER THE NATIONAL ENVIRONMENTAL POLICY ACT OF 1969 AND IMPROVE FOREST MANAGEMENT ACTIVITIES ON NATIONAL FOREST SYSTEM LANDS, ON PUBLIC LANDS UNDER THE JURISDICTION OF THE BUREAU OF LAND MANAGEMENT, AND ON TRIBAL LANDS TO RETURN RESILIENCE TO OVERGROWN, FIRE-PRONE FORESTED LANDS, AND FOR OTHER PURPOSES, AND PROVIDING FOR CONSIDERATION OF THE BILL (S. 5) TO REQUIRE THE SECRETARY OF HOMELAND SECURITY TO TAKE INTO CUSTODY ALIENS WHO HAVE BEEN CHARGED IN THE UNITED STATES WITH THEFT, AND FOR OTHER PURPOSES",
+    "branch": "legislative",
+    "collectionName": "Congressional Reports",
+    "download": {
+        "premisLink": "https://api.govinfo.gov/packages/CRPT-119hrpt1/premis",
+        "zipLink": "https://api.govinfo.gov/packages/CRPT-119hrpt1/zip",
+        "modsLink": "https://api.govinfo.gov/packages/CRPT-119hrpt1/mods"
+    },
+    "pages": "4",
+    "governmentAuthor2": "House of Representatives",
+    "chamber": "HOUSE",
+    "subtitle": "Report to accompany H. Res. 53",
+    "governmentAuthor1": "Congress",
+    "publisher": "U.S. Government Publishing Office",
+    "suDocClassNumber": "Y 1.1/8:119-1",
+    "docClass": "HRPT",
+    "lastModified": "2025-05-16T15:44:06Z",
+    "category": "Congressional Committee Materials",
+    "otherIdentifier": {
+        "migrated-doc-id": "f:hr001.119.txt",
+        "ils-system-id": "001445851"
+    },
+    "granulesLink": "https://api.govinfo.gov/packages/CRPT-119hrpt1/granules?offsetMark=*&pageSize=100"
+}

@@ -271,6 +271,7 @@ jobs:
           path: |
             output/invocation.json
             output/fec-inputs/
+            output/source-evidence/
           if-no-files-found: ignore
           retention-days: 30
 

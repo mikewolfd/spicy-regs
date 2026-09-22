@@ -15,11 +15,12 @@ class MembersRollup(RollupPipeline):
     """Legislators and their terms, from the @unitedstates community crosswalk."""
 
     name: ClassVar[str] = "members"
+    retain_source_evidence: ClassVar[bool] = True
     inputs: ClassVar[tuple[str, ...]] = ()
     outputs: ClassVar[tuple[str, ...]] = ("members.parquet", "member_terms.parquet")
 
     def build(self, output_dir: Path) -> tuple[Path, ...]:
-        return build_members(output_dir)
+        return build_members(output_dir, evidence=self.source_evidence)
 
 
 app = make_rollup_app(MembersRollup)
