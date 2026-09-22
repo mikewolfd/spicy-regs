@@ -80,31 +80,31 @@ def migrate(output_dir: Path) -> None:
 
     logger.info("Found {:,} partitions to write", len(partitions))
 
-    # Write each partition
-    written_files: list[Path] = []
+    # Write every partition in one ordered pass: the query orders by the
+    # group keys and rows stream into one writer per group, so the parent
+    # is scanned once instead of once per partition.
+    from spicy_regs.transforms.partition_stream import write_partition_stream
 
-    for i, (agency, docket, year, month) in enumerate(partitions):
-        partition_file = comment_partition_path(comments_dir, agency, docket, year, month)
-        partition_file.parent.mkdir(parents=True, exist_ok=True)
+    def path_of(key: tuple) -> Path:
+        return comment_partition_path(comments_dir, key[0], key[1], key[2], key[3])
 
-        docket_escaped = str(docket).replace("'", "''")
-
-        con.execute(f"""
-            COPY (
-                SELECT {col_select}
-                FROM read_parquet('{comments_file}')
-                WHERE agency_code = '{agency}'
-                  AND TRIM(docket_id, '"') = '{docket_escaped}'
-                  AND EXTRACT(YEAR FROM CAST(posted_date AS TIMESTAMP)) IS NOT DISTINCT FROM {"NULL" if year is None else year}
-                  AND EXTRACT(MONTH FROM CAST(posted_date AS TIMESTAMP)) IS NOT DISTINCT FROM {"NULL" if month is None else month}
-                ORDER BY posted_date
-            ) TO '{partition_file}'
-            (FORMAT PARQUET, COMPRESSION ZSTD);
-        """)
-
-        written_files.append(partition_file)
-        if len(written_files) % 1000 == 0:
-            logger.info("  written {:,}/{:,} partitions", len(written_files), len(partitions))
+    source_path = str(comments_file).replace("'", "''")
+    written_files = write_partition_stream(
+        con,
+        f"""
+            SELECT {col_select},
+                   TRIM(docket_id, '"') AS _clean_docket,
+                   EXTRACT(YEAR FROM CAST(posted_date AS TIMESTAMP))::INT AS _year,
+                   EXTRACT(MONTH FROM CAST(posted_date AS TIMESTAMP))::INT AS _month
+            FROM read_parquet('{source_path}')
+            ORDER BY agency_code, _clean_docket, _year NULLS FIRST, _month NULLS FIRST,
+                     CAST(posted_date AS VARCHAR)
+        """,
+        key_columns=("agency_code", "_clean_docket", "_year", "_month"),
+        path_of=path_of,
+        drop_columns=("_clean_docket", "_year", "_month"),
+        label="comments",
+    )
 
     con.close()
 
@@ -113,7 +113,6 @@ def migrate(output_dir: Path) -> None:
     # Build the index
     logger.info("Building comments index...")
     from spicy_regs.transforms import update_comments_index
-
     index_path = update_comments_index(output_dir, written_files)
     logger.info("Index written to {}", index_path)
 

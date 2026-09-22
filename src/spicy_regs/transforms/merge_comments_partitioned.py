@@ -80,10 +80,20 @@ def merge_comments_partitioned(
             FROM read_parquet([{files_sql}], union_by_name=true)
         """)
 
+        partitions = con.execute("""
+            SELECT DISTINCT agency_code, _clean_docket, _year, _month
+            FROM _staging
+        """).fetchall()
+
+        if not partitions:
+            return []
+
         if source_correction:
             # The bounded local repair cannot leave a corrected identity behind in
             # a different old partition. Refuse relocation before writing any file;
             # moving/removing old partitions requires a coherent generation rebuild.
+            # The guard must read the whole tree: a corrected identity's current
+            # home can be any partition, not only one this staging touches.
             # An interrupted replacement can leave our temporary write behind;
             # it has never become part of the committed local prior.
             prior_files = [p for p in comments_dir.rglob("part-*.parquet") if not p.name.endswith(".tmp.parquet")]
@@ -101,20 +111,12 @@ def merge_comments_partitioned(
                            '{sql_path(comments_dir)}/agency_code=', f.agency_code,
                            '/docket_id=', f._clean_docket, '/year=', coalesce(f._year::VARCHAR, '{HIVE_NULL}'),
                            '/month=', coalesce(f._month::VARCHAR, '{HIVE_NULL}'), '/part-0.parquet'
-                       )
+                        )
                 """).fetchone()
                 if moved and moved[0]:
                     raise ValueError(
                         "source correction cannot relocate an existing comment partition; rebuild its generation"
                     )
-
-        partitions = con.execute("""
-            SELECT DISTINCT agency_code, _clean_docket, _year, _month
-            FROM _staging
-        """).fetchall()
-
-        if not partitions:
-            return []
 
         logger.info("Found {} affected comment partitions", len(partitions))
 
@@ -127,7 +129,6 @@ def merge_comments_partitioned(
                     r2_key = str(partition_file.relative_to(output_dir))
                     download_from_r2(r2_key, partition_file)
 
-        # Merge each partition: staging rows + existing → dedup → write.
         col_select_plain = ", ".join(f'"{c}"' for c in target_columns)
         changed: list[Path] = []
 
@@ -146,35 +147,26 @@ def merge_comments_partitioned(
             }
             return ", ".join(f'"{c}"' if c in present else f'CAST(NULL AS VARCHAR) AS "{c}"' for c in target_columns)
 
-        for agency, docket, year, month in partitions:
-            partition_file = comment_partition_path(comments_dir, agency, docket, year, month)
-            temp_file = partition_file.with_suffix(".tmp.parquet")
-            docket_escaped = str(docket).replace("'", "''")
+        if source_correction:
+            for agency, docket, year, month in partitions:
+                partition_file = comment_partition_path(comments_dir, agency, docket, year, month)
+                temp_file = partition_file.with_suffix(".tmp.parquet")
+                docket_escaped = str(docket).replace("'", "''")
 
-            staging_sql = f"""
-                SELECT {col_select_plain} FROM _staging
-                WHERE agency_code = '{agency}'
-                  AND _clean_docket = '{docket_escaped}'
-                  AND _year IS NOT DISTINCT FROM {"NULL" if year is None else year}
-                  AND _month IS NOT DISTINCT FROM {"NULL" if month is None else month}
-            """
-
-            if partition_file.exists():
-                existing_sql = f"""
-                    UNION ALL
-                    SELECT {existing_partition_select(partition_file)}
-                    FROM read_parquet('{sql_path(partition_file)}')
+                staging_sql = f"""
+                    SELECT {col_select_plain} FROM _staging
+                    WHERE agency_code = '{agency}'
+                      AND _clean_docket = '{docket_escaped}'
+                      AND _year IS NOT DISTINCT FROM {"NULL" if year is None else year}
+                      AND _month IS NOT DISTINCT FROM {"NULL" if month is None else month}
                 """
-            else:
-                existing_sql = ""
-
-            if source_correction:
-                from spicy_regs.transforms.regulations_correction import correction_query
 
                 if partition_file.exists():
                     prior_sql = f"SELECT {existing_partition_select(partition_file)} FROM read_parquet('{sql_path(partition_file)}')"
                 else:
                     prior_sql = f"SELECT {', '.join(f'NULL::VARCHAR AS "{c}"' for c in target_columns)} WHERE false"
+                from spicy_regs.transforms.regulations_correction import correction_query
+
                 corrected = correction_query(
                     con,
                     fresh_sql=staging_sql,
@@ -185,24 +177,57 @@ def merge_comments_partitioned(
                 con.execute(
                     f"COPY ({corrected} ORDER BY posted_date) TO '{sql_path(temp_file)}' (FORMAT PARQUET, COMPRESSION ZSTD)"
                 )
-            else:
-                con.execute(f"""
-                COPY (
-                    SELECT {col_select_plain} FROM (
-                        {staging_sql}
-                        {existing_sql}
-                    )
-                    QUALIFY ROW_NUMBER() OVER (
-                        PARTITION BY "{dedup_key}"
-                        ORDER BY modify_date DESC NULLS LAST
-                    ) = 1
-                    ORDER BY posted_date
-                ) TO '{sql_path(temp_file)}'
-                (FORMAT PARQUET, COMPRESSION ZSTD);
-                """)
+                temp_file.replace(partition_file)
+                changed.append(partition_file)
+        else:
+            # One merge for every affected partition: staging rows plus the
+            # existing files (multi-file read fills columns absent from older
+            # files), deduplicated once by key keeping the latest modify_date,
+            # then written in one ordered pass instead of one scan per group.
+            from spicy_regs.transforms.partition_stream import write_partition_stream
 
-            temp_file.replace(partition_file)
-            changed.append(partition_file)
+            existing_files = [
+                comment_partition_path(comments_dir, agency, docket, year, month)
+                for agency, docket, year, month in partitions
+                if comment_partition_path(comments_dir, agency, docket, year, month).exists()
+            ]
+            # One SELECT per existing file: older files may lack columns this
+            # schema added later, and union_by_name only fills NULLs across a
+            # multi-file read, so each file projects its own missing columns.
+            existing_selects = [
+                f"""
+                SELECT {existing_partition_select(path)},
+                       TRIM(docket_id, '"') AS _clean_docket,
+                       EXTRACT(YEAR FROM CAST(posted_date AS TIMESTAMP))::INT AS _year,
+                       EXTRACT(MONTH FROM CAST(posted_date AS TIMESTAMP))::INT AS _month
+                FROM read_parquet('{sql_path(path)}')
+                """
+                for path in existing_files
+            ]
+            existing_select = "\nUNION ALL BY NAME\n".join(existing_selects)
+            con.execute(f"""
+                CREATE TEMP TABLE _merged AS
+                SELECT {col_select_plain}, _clean_docket, _year, _month FROM (
+                    SELECT {col_select_plain}, _clean_docket, _year, _month FROM _staging
+                    {"UNION ALL BY NAME " if existing_select else ""}{existing_select}
+                )
+                QUALIFY ROW_NUMBER() OVER (
+                    PARTITION BY "{dedup_key}"
+                    ORDER BY modify_date DESC NULLS LAST
+                ) = 1
+            """)
+            written = write_partition_stream(
+                con,
+                """
+                    SELECT * FROM _merged
+                    ORDER BY agency_code, _clean_docket, _year NULLS FIRST, _month NULLS FIRST, posted_date
+                """,
+                key_columns=("agency_code", "_clean_docket", "_year", "_month"),
+                path_of=lambda key: comment_partition_path(comments_dir, key[0], key[1], key[2], key[3]),
+                drop_columns=("_clean_docket", "_year", "_month"),
+                label="comments",
+            )
+            changed.extend(written)
 
     finally:
         con.close()

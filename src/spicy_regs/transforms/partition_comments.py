@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+import numpy as np
 import pyarrow as pa
 import pyarrow.compute
 import pyarrow.parquet as pq
@@ -45,14 +46,21 @@ def partition_comments(output_dir: Path) -> Path:
         if target_schema is None:
             target_schema = pa.schema([f for f in table.schema if f.name != "agency_code"])
 
-        # Group by agency_code
-        agencies = table.column("agency_code").to_pylist()
-        unique_agencies = set(a for a in agencies if a is not None)
+        # One pass per batch: sort by agency_code so each agency's rows are
+        # contiguous, then slice spans instead of filtering per agency (which
+        # re-scanned the batch once per agency).
+        order = pa.compute.sort_indices(table, sort_keys=[("agency_code", "ascending")])  # ty: ignore[unresolved-attribute]
+        table = table.take(order)
+        agencies = table.column("agency_code").to_numpy(zero_copy_only=False)
+        boundaries = [0]
+        boundaries.extend(int(i) for i in np.nonzero(agencies[1:] != agencies[:-1])[0] + 1)
+        boundaries.append(table.num_rows)
 
-        for agency in unique_agencies:
-            mask = pa.compute.equal(table.column("agency_code"), agency)  # ty: ignore[unresolved-attribute]
-            agency_table = table.filter(mask).drop(["agency_code"])
-            agency_table = agency_table.cast(target_schema)
+        for start, end in zip(boundaries, boundaries[1:]):
+            agency = agencies[start]
+            if agency is None:
+                continue
+            agency_table = table.slice(start, end - start).drop(["agency_code"]).cast(target_schema)
 
             if agency not in writers:
                 agency_dir = partition_dir / f"agency_code={agency}"
