@@ -108,6 +108,17 @@ def main() -> int:
         logger.info("Seeding {} agency partition set(s) into the catalog", len(agencies))
 
         qualified = iceberg._qualified(COMMENT)
+        # Resume check in one grouped scan: the catalog is unpartitioned, so a
+        # per-agency count(*) would re-read the whole table once per agency.
+        present: dict[str, int] = {}
+        if agencies:
+            agency_list = ", ".join(f"'{iceberg._sql_str(agency)}'" for agency in agencies)
+            present = dict(
+                con.execute(
+                    f"SELECT agency_code, count(*) FROM {qualified} "
+                    f"WHERE agency_code IN ({agency_list}) GROUP BY agency_code"
+                ).fetchall()
+            )
         loaded = skipped = 0
         for i, agency in enumerate(agencies, 1):
             safe = iceberg._sql_str(agency)
@@ -116,7 +127,7 @@ def main() -> int:
             # agency loads via a single atomic INSERT, so a nonzero count that
             # matches means it completed — no partial-agency state to worry about.
             want = expected.get(agency)
-            have = con.execute(f"SELECT count(*) FROM {qualified} WHERE agency_code = '{safe}'").fetchone()[0]
+            have = present.get(agency, 0)
             if want is not None and have == want and have > 0:
                 logger.info("  [{}/{}] {}: already loaded ({:,} rows) — skipping", i, len(agencies), agency, have)
                 skipped += 1
