@@ -5,7 +5,20 @@ The optional `source-readers` extra enables the same readers for package install
 its wheels must be supplied explicitly until they are published in a registry.
 Base CLI and MCP installs do not require them.
 
-- `spicy_docs-0.26.4`: locally built from isolated source commit
+- `spicy_docs-0.26.5`: built from SpicyDocs `main` at `1dc77011d79eeef26024396626a1200059a6e09a`, with
+  Rulespec Artifacts 1.1.0. Built September 22, 2026 UTC: **1,272,996 bytes**,
+  SHA-256 `c17453a827f45c514196ac8dace414a4f50b6f8859b5fb8f2d0153d1a32e3a5d`.
+  Main contains every fix in the isolated 0.26.1–0.26.4 builds; each of their
+  patches reverse-applies to main, so this supersedes that lineage instead of
+  extending it. It adds main's U.S. Code module split, docstrings and other
+  reviewed fixes, and is the same wheel DocSpec, RefSpec, SpicySearch and
+  SpicyEngine pin. Qualified by the SpicyRegs source gate.
+
+- `rulespec_artifacts-1.1.0`: exact dependency of SpicyDocs 0.26.5. SHA-256
+  `3b2abcdcfa082f34baa3b03042c54fcc4e5e713901cd505cbd777dfd9bdf23cd`. Adds opt-in DocumentCapture v2; v1 parent,
+  meta-schema and validator bytes are unchanged.
+
+- Previous `spicy_docs-0.26.4`: locally built from isolated source commit
   `c9ce7c0f0d9f376bc8b2b71697e3e72867d28e5f`, extending the prior wheel with
   the reviewed House select-committee code correction. Built September 22,
   2026 UTC: **1,325,983 bytes**, SHA-256
