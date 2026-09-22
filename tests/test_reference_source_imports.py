@@ -30,7 +30,6 @@ import spicy_regs.pipelines.rollups.usaspending_recipients
 from spicy_regs.sources.courtlistener import CourtListenerReader, CourtListenerOpinionSearchReader
 from spicy_regs.sources.crs_reports import CrsReportsReader
 from spicy_regs.sources.gao_reports import GaoReportsReader
-from spicy_regs.sources.usaspending import UsaSpendingRecipientsReader
 from spicy_regs.transforms.build_fcc_ecfs import _fetch_fcc
 
 sources = (
@@ -38,7 +37,6 @@ sources = (
     ("CourtListenerOpinionSearchReader", CourtListenerOpinionSearchReader().iter_records()),
     ("CrsReportsReader", CrsReportsReader(api_key="fixture-unused").iter_records()),
     ("GaoReportsReader", GaoReportsReader().iter_records()),
-    ("UsaSpendingRecipientsReader", UsaSpendingRecipientsReader().iter_records()),
     ("FccEcfsFetch", _fetch_fcc("filings", api_key="fixture-unused")),
 )
 assert not any(name == "spicy_docs" or name.startswith("spicy_docs.") for name in sys.modules)
@@ -65,14 +63,11 @@ print(json.dumps(results))
 def test_base_imports_and_construction_are_optional_but_source_use_refuses(missing_name):
     result = subprocess.run([sys.executable, "-c", IMPORT_SCRIPT, missing_name], capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
-    assert len(json.loads(result.stdout)) == 6
+    assert len(json.loads(result.stdout)) == 5
 
 
 def test_inert_source_defaults_agree_with_installed_provider():
     from spicy_docs.sources.gao.rss import GAO_REPORTS_FEED_URL
-    from spicy_docs.sources.usaspending import MAX_LIMIT
     from spicy_regs.sources.gao_reports import RSS_URL
-    from spicy_regs.sources.usaspending import PER_PAGE
 
     assert RSS_URL == GAO_REPORTS_FEED_URL
-    assert PER_PAGE == MAX_LIMIT

@@ -39,12 +39,6 @@ __all__ = [
     "CfrSectionsReader",
     "CongressBillsReader",
     "UnifiedAgendaReader",
-<<<<<<< HEAD
-    "FccEcfsProceedingsReader",
-    "FccEcfsFilingsReader",
-=======
-    "FederalRegisterReader",
->>>>>>> phase3/fcc-ecfs
     "DerivedCommentText",
     "StagingWriter",
     "r2",

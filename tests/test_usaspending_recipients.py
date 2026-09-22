@@ -1,12 +1,7 @@
-"""USAspending field mapping and selection bounds; page failure tests are in test_reference_source_failures."""
+"""USAspending field mapping; page failure and selection bound tests are in test_reference_source_failures."""
 
 from __future__ import annotations
 
-from spicy_regs.sources.usaspending import (
-    DEFAULT_MAX_PAGES,
-    PER_PAGE,
-    UsaSpendingRecipientsReader,
-)
 from spicy_regs.transforms.build_usaspending_recipients import COLUMNS, _shape
 
 _RAW_RECIPIENT = {
@@ -47,13 +42,3 @@ def test_shape_handles_missing_fields():
     assert row["recipient_level"] is None
     # Missing amount stays None (not the string "None").
     assert row["total_award_amount"] is None
-
-
-# -- construction ------------------------------------------------------------
-
-
-def test_reader_clamps_per_page_and_max_pages():
-    # per_page is capped at the API max; max_pages defaults to the top-N bound.
-    reader = UsaSpendingRecipientsReader(per_page=9999)
-    assert reader.per_page == PER_PAGE
-    assert reader.max_pages == DEFAULT_MAX_PAGES

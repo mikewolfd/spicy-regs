@@ -14,8 +14,10 @@ from spicy_docs.reading.paged_json import PagedJsonSourceError
 from spicy_docs.sources.gao.rss import GaoFeedSourceError
 from spicy_docs.transport.credentials import CredentialRefusedError
 from spicy_docs.transport import retry
-from spicy_regs.sources import crs_reports as crs, gao_reports as gao, usaspending as usa
+from spicy_regs.sources import crs_reports as crs, gao_reports as gao
 from spicy_regs.transforms import build_fcc_ecfs as fcc
+
+usa = importlib.import_module("spicy_regs.transforms.build_usaspending_recipients")
 
 KEY = "fixture-key-never-in-url"
 DAY = date(2026, 9, 8)
@@ -98,9 +100,14 @@ def selected(kind, transport, **kwargs):
     if kind == "gao":
         return gao.GaoReportsReader(transport=transport, **kwargs)
     if kind == "usa":
-        return usa.UsaSpendingRecipientsReader(transport=transport, **kwargs)
+        return usa._iter_recipient_rows(transport=transport, **kwargs)
     endpoint = "filings" if kind == "fcc-filings" else "proceedings"
     return FccFetch(endpoint=endpoint, since=DAY, until=DAY, api_key=KEY, transport=transport, **kwargs)
+
+
+def records(kind, transport, **kwargs):
+    source = selected(kind, transport, **kwargs)
+    return iter(source) if kind == "usa" else source.iter_records()
 
 
 @pytest.mark.parametrize("kind", ["crs", "gao", "usa", "fcc-filings", "fcc-proceedings"])
@@ -108,7 +115,7 @@ def selected(kind, transport, **kwargs):
 def test_http_refusal_is_not_empty_success(kind, status):
     transport = Transport(status)
     with pytest.raises(REFUSALS) as error:
-        list(selected(kind, transport).iter_records())
+        list(records(kind, transport))
     assert KEY not in str(error.value)
     assert len(transport.calls) == 1
 
@@ -116,7 +123,7 @@ def test_http_refusal_is_not_empty_success(kind, status):
 @pytest.mark.parametrize("kind", ["crs", "gao", "usa", "fcc-filings", "fcc-proceedings"])
 def test_transport_failure_is_not_empty_success(kind):
     with pytest.raises(REFUSALS):
-        list(selected(kind, Transport(httpx.ReadTimeout("fixture interruption"))).iter_records())
+        list(records(kind, Transport(httpx.ReadTimeout("fixture interruption"))))
 
 
 @pytest.mark.parametrize(
@@ -142,7 +149,7 @@ def test_transport_failure_is_not_empty_success(kind):
 )
 def test_malformed_or_incomplete_source_is_refused(kind, payload):
     with pytest.raises(REFUSALS):
-        list(selected(kind, Transport(payload)).iter_records())
+        list(records(kind, Transport(payload)))
 
 
 @pytest.mark.parametrize(
@@ -156,7 +163,7 @@ def test_malformed_or_incomplete_source_is_refused(kind, payload):
     ],
 )
 def test_confirmed_empty_selection_is_valid(kind, payload):
-    assert list(selected(kind, Transport(payload)).iter_records()) == []
+    assert list(records(kind, Transport(payload))) == []
 
 
 def test_crs_follows_continuation_and_never_stops_at_an_old_row():
@@ -200,7 +207,7 @@ def test_fcc_subdivides_full_window_but_refuses_full_single_day(monkeypatch):
 
 def test_usa_short_nonterminal_page_continues_and_preserves_amount():
     transport = Transport(usa_page([RECIPIENT], total=2, next_page=2), usa_page([{**RECIPIENT, "id": "r2-R"}], total=2))
-    rows = list(selected("usa", transport, per_page=2).iter_records())
+    rows = list(records("usa", transport, per_page=2))
     assert [x["id"] for x in rows] == ["r1-R", "r2-R"]
     assert rows[0]["amount"] == Decimal("1.25")
     assert json.loads(transport.calls[1].content)["page"] == 2
@@ -208,7 +215,7 @@ def test_usa_short_nonterminal_page_continues_and_preserves_amount():
 
 def test_usa_top_page_bound_is_an_explicit_selection():
     transport = Transport(usa_page([RECIPIENT], total=20, next_page=2))
-    assert len(list(selected("usa", transport, per_page=1, max_pages=1).iter_records())) == 1
+    assert len(list(records("usa", transport, per_page=1, max_pages=1))) == 1
     assert len(transport.calls) == 1
 
 
@@ -224,10 +231,10 @@ def test_usa_top_page_bound_is_an_explicit_selection():
 )
 def test_usa_refuses_cross_page_inconsistency(second_page):
     transport = Transport(usa_page([RECIPIENT], total=2, next_page=2), second_page)
-    records = selected("usa", transport, per_page=1).iter_records()
-    assert next(records)["id"] == RECIPIENT["id"]
+    rows = records("usa", transport, per_page=1)
+    assert next(rows)["id"] == RECIPIENT["id"]
     with pytest.raises(REFUSALS):
-        list(records)
+        list(rows)
     assert len(transport.calls) == 2
 
 
@@ -299,7 +306,7 @@ CASES = {
     "usa": (
         "build_usaspending_recipients",
         "build_usaspending_recipients",
-        "UsaSpendingRecipientsReader",
+        "_iter_recipient_rows",
         "_usaspending_prior.parquet",
         "usaspending_recipients.parquet",
         "_SCHEMA",
