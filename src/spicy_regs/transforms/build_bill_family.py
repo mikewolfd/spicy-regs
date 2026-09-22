@@ -628,6 +628,7 @@ def _download_prior(output_dir: Path, download_prior: Callable[[str, Path], bool
             *SNAPSHOT_TABLES,
             "bill_sections",
             "section_diffs",
+            "section_diff_items",
             "cbo_cost_estimates",
             ARCHIVES_TABLE,
             BACKFILLS_TABLE,
@@ -641,7 +642,15 @@ def _prior_index(paths: Mapping[str, Path | None]) -> PriorIndex:
     import duckdb
 
     text_dates: dict[str, str | None] = {}
+    version_counts: dict[str, int | None] = {}
     bills_path = paths.get("congress_bills")
+    if bills_path is not None and _has_columns(bills_path, ("bill_id", "version_count")):
+        version_counts = {
+            bill: _int_or_none(count)
+            for bill, count in duckdb.sql(
+                f"SELECT bill_id, version_count FROM read_parquet('{bills_path}')"
+            ).fetchall()
+        }
     if (
         bills_path is not None
         and paths.get("cbo_cost_estimates") is not None
@@ -660,6 +669,8 @@ def _prior_index(paths: Mapping[str, Path | None]) -> PriorIndex:
     xml_printings: set[str] = set()
     section_counts = {}
     sections_path = paths.get("bill_sections")
+    if sections_path is not None and not _has_columns(sections_path, ("bill_id", "version_code", "source")):
+        sections_path = None
     if sections_path is not None:
         section_counts = {
             (bill, code): count
@@ -681,12 +692,14 @@ def _prior_index(paths: Mapping[str, Path | None]) -> PriorIndex:
         "cleanup_json",
         "version_date",
     )
-    if versions_path is not None and _has_columns(versions_path, needed):
+    versions_qualified = versions_path is not None and _has_columns(versions_path, needed)
+    if versions_qualified:
         for row in (
             duckdb.sql(f"SELECT {', '.join(needed)} FROM read_parquet('{versions_path}')").to_arrow_table().to_pylist()
         ):
-            listed.setdefault(row["bill_id"], set()).add(row["version_code"])
-            dates[(row["bill_id"], row["version_code"])] = row["version_date"] or ""
+            if row["source"] in {"congress", ACQUIRED_SOURCE}:
+                listed.setdefault(row["bill_id"], set()).add(row["version_code"])
+                dates[(row["bill_id"], row["version_code"])] = row["version_date"] or ""
             if row["source"] != ACQUIRED_SOURCE or not row["sha256"] or not row["byte_size"]:
                 continue
             key = f"{row['bill_id']}\x1f{row['version_code']}"
@@ -705,17 +718,44 @@ def _prior_index(paths: Mapping[str, Path | None]) -> PriorIndex:
             printings.add(key)
     pairs: set[tuple[str, str, str]] = set()
     diffs_path = paths.get("section_diffs")
-    if diffs_path is not None:
-        pairs = set(
-            duckdb.sql(
-                f"SELECT bill_id, from_version_code, to_version_code FROM read_parquet('{diffs_path}') "
-                "WHERE from_source = 'govinfo' AND to_source = 'govinfo'"
+    items_path = paths.get("section_diff_items")
+    pair_identity = TABLE_CONTRACTS["section_diffs"].identity
+    if (
+        diffs_path is not None
+        and items_path is not None
+        and _has_columns(diffs_path, (*pair_identity, "item_count"))
+        and _has_columns(items_path, (*pair_identity, "seq"))
+    ):
+        columns = ", ".join(pair_identity)
+        child_counts = {
+            tuple(row[:-1]): row[-1]
+            for row in duckdb.sql(
+                f"SELECT {columns}, count(*) FROM read_parquet('{items_path}') GROUP BY {columns}"
             ).fetchall()
-        )
+        }
+        for row in duckdb.sql(f"SELECT {columns}, item_count FROM read_parquet('{diffs_path}')").fetchall():
+            key, count = tuple(row[:-1]), _int_or_none(row[-1])
+            if (
+                key[2] == ACQUIRED_SOURCE
+                and key[4] == ACQUIRED_SOURCE
+                and count is not None
+                and count >= 0
+                and count == child_counts.get(key, 0)
+            ):
+                pairs.add((key[0], key[1], key[3]))
     logger.info("Bill family: prior holds {:,} bills and {:,} processed printings", len(text_dates), len(printings))
     pending_bills = {
         bill for bill, codes in listed.items() if any(f"{bill}\x1f{code}" not in printings for code in codes)
     }
+    # The surviving version rows cannot establish which source rows were lost.
+    # Source counts are independent of acquisition paths: congress/govinfo
+    # duplicates count once, and uploaded/PDF-twin rows never fill a source gap.
+    pending_bills.update(
+        bill
+        for bill in text_dates
+        if not versions_qualified
+        or version_counts.get(bill) != len(listed.get(bill, ()))
+    )
     order = {entry.slug: position for position, entry in enumerate(VERSION_CODES)}
     for bill, codes in listed.items():
         ordered = sorted(codes, key=lambda code: (dates[(bill, code)], order.get(code, len(order))))
@@ -727,6 +767,24 @@ def _prior_index(paths: Mapping[str, Path | None]) -> PriorIndex:
         ):
             pending_bills.add(bill)
     return PriorIndex(text_dates, printings, xml_printings, pairs, pending_bills)
+
+
+def _complete_child_scopes(
+    parent: str,
+    parents: Sequence[Mapping[str, Any]],
+    children: Sequence[Mapping[str, Any]],
+    count_column: str,
+) -> set[tuple[str, ...]]:
+    """Successfully shaped child scopes, including explicitly empty results."""
+    identity = TABLE_CONTRACTS[parent].identity
+    counts = Counter(tuple(row[column] for column in identity) for row in children)
+    complete = set()
+    for row in parents:
+        key = tuple(row[column] for column in identity)
+        count = _int_or_none(row[count_column])
+        if all(isinstance(value, str) for value in key) and count is not None and count >= 0 and count == counts[key]:
+            complete.add(key)
+    return complete
 
 
 def _has_columns(path: Path, needed: Sequence[str]) -> bool:
@@ -1500,7 +1558,7 @@ def build_bill_family(
             if row["bill_id"] not in index.bill_text_dates or row["bill_id"] in index.pending_bills:
                 held_archives.pop((row.get("congress"), row.get("bill_type")), None)
 
-    if prior_paths.get("bill_versions") is None:
+    if prior_paths.get("bill_versions") is None or bills_prior is None:
         held_archives.clear()
     completed_archives = set(held_archives)
     visited_archives: set[tuple[str, str]] = set()
@@ -1558,6 +1616,7 @@ def build_bill_family(
                     and published == member.status.update_date_including_text
                     and codes <= held
                     and not pending_pairs
+                    and identifier not in index.pending_bills
                 ):
                     unchanged += 1
                     continue
@@ -1585,17 +1644,13 @@ def build_bill_family(
                 xml_codes = index.xml_codes(identifier) | {
                     entry.version_code for entry in capture.versions if entry.document is not None
                 }
-                completed_pairs: set[tuple[str, str, str]] = set()
-                for pair in tables.section_diffs:
-                    bill, older, newer = pair["bill_id"], pair["from_version_code"], pair["to_version_code"]
-                    if (
-                        pair["from_source"] == ACQUIRED_SOURCE
-                        and pair["to_source"] == ACQUIRED_SOURCE
-                        and isinstance(bill, str)
-                        and isinstance(older, str)
-                        and isinstance(newer, str)
-                    ):
-                        completed_pairs.add((bill, older, newer))
+                completed_pairs = {
+                    (bill, older, newer)
+                    for bill, older, older_source, newer, newer_source in _complete_child_scopes(
+                        "section_diffs", tables.section_diffs, tables.section_diff_items, "item_count"
+                    )
+                    if older_source == ACQUIRED_SOURCE and newer_source == ACQUIRED_SOURCE
+                }
                 if (
                     not tables.bills
                     or not codes <= (held | processed)
@@ -1709,6 +1764,9 @@ def build_bill_family(
     # 4. Publish. Every table goes through the one merge helper. Each prior was
     # either downloaded above or found absent, so the merge is told rather than
     # left to retry a download that already failed.
+    section_scopes = _complete_child_scopes("bill_versions", folded.bill_versions, folded.bill_sections, "section_count")
+    item_scopes = _complete_child_scopes("section_diffs", folded.section_diffs, folded.section_diff_items, "item_count")
+
     def publish(contract: str, rows: Any) -> Path:
         return merge_contract_table(
             output_dir,
@@ -1731,6 +1789,10 @@ def build_bill_family(
                 },
             )
             if contract == "cbo_cost_estimates"
+            else (TABLE_CONTRACTS["bill_versions"].identity, section_scopes)
+            if contract == "bill_sections"
+            else (TABLE_CONTRACTS["section_diffs"].identity, item_scopes)
+            if contract == "section_diff_items"
             else None,
         )
 

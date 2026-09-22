@@ -6,6 +6,7 @@ from dataclasses import replace
 from pathlib import Path
 
 import pyarrow.parquet as pq
+import pyarrow as pa
 import pytest
 import yaml
 
@@ -16,6 +17,7 @@ from tests.test_bill_family import (
     IDENTITY,
     StubBodyAcquirer,
     StubBulkAcquirer,
+    StubChangedBodyAcquirer,
     StubPdfBodyAcquirer,
     _no_prior,
     _pdf_only_status,
@@ -262,3 +264,117 @@ def test_dispatch_forwards_zero_as_a_string_without_unlimited_semantics():
         "BILL_FAMILY_MAX_VERSION_FETCHES: ${{ inputs.bill_family_max_version_fetches }}"
         in (root / ".github/workflows/_rollup.yml").read_text()
     )
+
+
+@pytest.mark.parametrize("missing", ["all", "one", "schema"])
+def test_missing_source_versions_reopen_completed_archive(tmp_path, scoped, missing):
+    first, _, _ = run(tmp_path / "first")
+    versions = pq.read_table(first["bill_versions"])
+    damaged = versions.slice(0, 0) if missing == "all" else versions.slice(0, 1)
+    if missing == "schema":
+        damaged = versions.drop(["sha256"])
+    pq.write_table(damaged, first["bill_versions"])
+
+    second, bulk, bodies = run(tmp_path / "second", prior=tmp_path / "first")
+    assert bulk.zip_downloads == [(119, "hr")]
+    assert bodies.requested
+    assert set(acquired(second)) == {"introduced-in-house", "engrossed-in-house"}
+    assert completed_scopes(second) == [["119", "hr"]]
+    _, next_bulk, next_bodies = run(tmp_path / "third", prior=tmp_path / "second")
+    assert next_bulk.zip_downloads == [] and next_bodies.requested == []
+
+
+def test_uploaded_version_does_not_conceal_missing_source_version(tmp_path, scoped):
+    first, _, _ = run(tmp_path / "first")
+    versions = pq.read_table(first["bill_versions"])
+    rows = versions.to_pylist()
+    rows[0]["source"] = "upload"
+    pq.write_table(pa.Table.from_pylist(rows, schema=versions.schema), first["bill_versions"])
+    second, bulk, bodies = run(tmp_path / "second", prior=tmp_path / "first")
+    assert bulk.zip_downloads == [(119, "hr")] and bodies.requested
+    assert set(acquired(second)) == {"introduced-in-house", "engrossed-in-house"}
+    assert any(row["source"] == "upload" for row in pq.read_table(second["bill_versions"]).to_pylist())
+
+
+@pytest.mark.parametrize("missing", ["all", "one", "file", "schema"])
+def test_missing_diff_children_reopen_completed_archive(tmp_path, scoped, missing):
+    first, _, _ = run(tmp_path / "first", body=StubChangedBodyAcquirer())
+    items = pq.read_table(first["section_diff_items"])
+    assert items.num_rows > 1
+    if missing == "file":
+        first["section_diff_items"].unlink()
+    else:
+        damaged = items.slice(0, 0) if missing == "all" else items.slice(0, 1)
+        if missing == "schema":
+            damaged = items.drop(["seq"])
+        pq.write_table(damaged, first["section_diff_items"])
+    second, bulk, bodies = run(tmp_path / "second", prior=tmp_path / "first", body=StubChangedBodyAcquirer())
+    assert bulk.zip_downloads == [(119, "hr")] and len(bodies.requested) == 2
+    assert pq.read_table(second["section_diff_items"]).to_pylist() == items.to_pylist()
+    assert completed_scopes(second) == [["119", "hr"]]
+    _, next_bulk, next_bodies = run(tmp_path / "third", prior=tmp_path / "second")
+    assert next_bulk.zip_downloads == [] and next_bodies.requested == []
+
+
+def test_missing_source_version_count_is_requalified_from_status(tmp_path, scoped):
+    first, _, _ = run(tmp_path / "first")
+    bills = pq.read_table(first["congress_bills"])
+    pq.write_table(bills.drop(["version_count"]), first["congress_bills"])
+    second, bulk, bodies = run(tmp_path / "second", prior=tmp_path / "first")
+    assert bulk.zip_downloads == [(119, "hr")] and bodies.requested == []
+    assert pq.read_table(second["congress_bills"])["version_count"].to_pylist() == ["2"]
+    _, next_bulk, _ = run(tmp_path / "third", prior=tmp_path / "second")
+    assert next_bulk.zip_downloads == []
+
+
+def test_corrected_retry_replaces_removed_sections_and_diff_items_only_in_successful_scopes(tmp_path, scoped):
+    first, _, _ = run(tmp_path / "first", body=StubChangedBodyAcquirer())
+    preserved = {}
+    for name in ("bill_sections", "section_diffs", "section_diff_items"):
+        table = pq.read_table(first[name])
+        rows = table.to_pylist()
+        preserved[name] = [{**row, "bill_id": "118-hr-99"} for row in rows]
+        pq.write_table(pa.Table.from_pylist(rows + preserved[name], schema=table.schema), first[name])
+
+    # A missing child makes the existing XML pair retryable. The source now
+    # returns the original short bill, which has fewer sections and diff items.
+    items = pq.read_table(first["section_diff_items"])
+    rows = [row for row in items.to_pylist() if row["bill_id"] == "118-hr-99" or row["seq"] != "0"]
+    pq.write_table(pa.Table.from_pylist(rows, schema=items.schema), first["section_diff_items"])
+    second, _, bodies = run(tmp_path / "second", prior=tmp_path / "first")
+    assert len(bodies.requested) == 2
+    for name in preserved:
+        rows = pq.read_table(second[name]).to_pylist()
+        assert [row for row in rows if row["bill_id"] == "118-hr-99"] == preserved[name]
+    sections = [row for row in pq.read_table(second["bill_sections"]).to_pylist() if row["bill_id"] == "119-hr-6028"]
+    # Each original printing has a masthead, enacting clause and short-title node.
+    assert len(sections) == 6 and all(row["heading"] != "Funding" for row in sections)
+    items = [row for row in pq.read_table(second["section_diff_items"]).to_pylist() if row["bill_id"] == "119-hr-6028"]
+    assert len(items) == 3 and all(row["heading"] != "Funding" for row in items)
+    parent = next(row for row in pq.read_table(second["section_diffs"]).to_pylist() if row["bill_id"] == "119-hr-6028")
+    assert parent["item_count"] == "3"
+    assert completed_scopes(second) == [["119", "hr"]]
+    _, next_bulk, next_bodies = run(tmp_path / "third", prior=tmp_path / "second")
+    assert next_bulk.zip_downloads == [] and next_bodies.requested == []
+
+
+@pytest.mark.parametrize("budget", [0, 2])
+def test_failed_or_unattempted_retry_preserves_retained_child_scopes(tmp_path, scoped, budget):
+    first, _, _ = run(tmp_path / "first", body=StubChangedBodyAcquirer())
+    # Force a retry without destroying the retained body/section evidence.
+    path = first["section_diffs"]
+    parents = pq.read_table(path)
+    pq.write_table(parents.slice(0, 0), path)
+    before_sections = pq.read_table(first["bill_sections"]).to_pylist()
+    before_items = pq.read_table(first["section_diff_items"]).to_pylist()
+
+    class Refused(StubBodyAcquirer):
+        def acquire(self, package_id, **kwargs):
+            self.requested.append(package_id)
+            raise ValueError("temporary source refusal")
+
+    second, _, bodies = run(tmp_path / "second", prior=tmp_path / "first", body=Refused(), budget=budget)
+    assert len(bodies.requested) == budget
+    assert pq.read_table(second["bill_sections"]).to_pylist() == before_sections
+    assert pq.read_table(second["section_diff_items"]).to_pylist() == before_items
+    assert completed_scopes(second) == []
