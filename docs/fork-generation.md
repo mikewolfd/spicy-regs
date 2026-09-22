@@ -131,7 +131,10 @@ unfinished populations remain explicit.
   assertions; zero cover links is scoped to the selected root metadata. The
   newer scheduled generation preserves that content and adds six hearings:
   their native fields and root-COVER results now match retained originals. Its
-  changed capture/checkpoint metadata remains separately unqualified.
+  changed capture/checkpoint metadata remains separately unqualified. Two new
+  hearings print Congress 118 while their structured identities say 119; both
+  observations are retained without changing the structured identity. See
+  `scheduled-members-reports-audit/MANUAL-AUDIT.md`.
 - **T11:** current FR/CFR/Agenda remote bytes and counts pass. CFR traversal now
   refuses incomplete responses. A source-qualified correction to exactly
   `CFR-2025-title14-vol4` repairs 1,444 section mappings and preserves 318,063
