@@ -494,8 +494,9 @@ def _publication_status(cursor: duckdb.DuckDBPyConnection) -> dict:
 
 
 # Building a connection is the expensive part of a tool call — install httpfs +
-# iceberg, attach the R2 catalog over REST, and CREATE VIEW over all 23 tables
-# (each reads a parquet footer over HTTPS), ~35s on a cold serverless instance.
+# iceberg, attach the R2 catalog over REST, and CREATE VIEW over every table in
+# ``TABLES`` (each reads a parquet footer over HTTPS), ~35s on a cold serverless
+# instance.
 # The query that follows is milliseconds. So we build once and reuse: Fluid
 # Compute keeps a warmed instance's module state across invocations, and the
 # stdio server is a single long-lived process, so a module-level connection

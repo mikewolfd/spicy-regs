@@ -96,7 +96,11 @@ def main() -> int:
             logger.info("Audit only (pass --apply to rebuild the table deduplicated).")
             return 0
 
-        logger.info("Rebuilding {} deduplicated (CREATE OR REPLACE, keeping latest modify_date per comment_id)...", comments_rt.name)
+        logger.info(
+            "Rebuilding {} deduplicated (sibling table, then DROP + CREATE + "
+            "per-agency INSERT; latest modify_date wins)...",
+            comments_rt.name,
+        )
         before, after = iceberg.dedupe_table(con, comments_rt)
         logger.info("Rebuilt: {:,} rows -> {:,} rows ({:,} duplicates removed)", before, after, before - after)
 
