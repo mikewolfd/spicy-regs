@@ -95,9 +95,12 @@ unfinished populations remain explicit.
 - **T08/T16 continuation:** the fork now serves 28 press releases: every item
   in the complete retained and fresh Appropriations RSS captures, including
   three items that rotated out. All mapped values, public bytes and both MCP
-  paths pass. Optional bill links remain NULL. The old local matcher incorrectly
-  read `s 2027` in a reference to the President's budget as Senate bill 2027;
-  repair and qualify that interpretation before enabling bill enrichment.
+  paths passed for that captured union. A later scheduled run added bill links
+  and repeated the known possessive-year false match. A reviewed bounded
+  correction now removes that one link while preserving four literal H.R.
+  citations and every other public value. All current public rows pass both
+  MCP modes. Newer scheduled capture metadata remains outside the earlier
+  full raw-field qualification; see `press-link-repair/`.
 - **T09:** unchanged-source runs now retry unfinished bill bodies and XML
   comparisons. A workflow budget defaults to 600 acquisitions; zero disables
   them. Four offline fixture runs manually verify progress and preservation of
@@ -116,7 +119,7 @@ unfinished populations remain explicit.
   prior-row preservation pass. Native-field review found 11,021 bill URLs
   inherited from the prior API table where the retained BILLSTATUS field is
   absent. Their same-identity lineage is proven; they remain outside fresh
-  raw-field equality. Independent review accepts this partial qualification. No bill-family generation is published. Historical body capture,
+  raw-field equality. Independent review accepts this partial qualification. A separate scheduled 119th Congress generation is now public with 18,956 bills and all 18 outputs; complete byte checks pass, but source qualification and reconciliation with this broader private candidate remain open. Historical body capture,
   richer text/diff coverage, backfills and model outputs remain unfinished.
 - **T10:** all 118 selected report/hearing packages have been retained; 116 were
   freshly acquired and two reused exact retained inputs. One hearing body
@@ -198,16 +201,16 @@ See `full-comments/source-campaign/` for raw originals, audits and receipts.
 
 ### Current parallel work
 
-Status checked September 22, 2026, 02:35 UTC. The following workstreams own the
+Status checked September 22, 2026, 02:56 UTC. The following workstreams own the
 next actions; their receipts establish the completed scope.
 
 | Workstream | Completed | Current or next action |
 | --- | --- | --- |
-| Integration and delivery | Members/terms published and source-audited; public bytes, both MCP modes and literal FEC joins pass. Press and Agenda remain qualified. | Qualify laws/rosters already published by schedules; continue other congressional families. Keep both ledgers synchronized. |
-| Bill family | Complete local 18-output replay preserves the broad parent and its text/diff rows. | Independently qualify retained 118th HR/S fields and inherited URL lineage. The known 40 retained XML originals match none of the 604 held body-record digests. Broader source provenance, missing text, models and backfills remain open; no family publication yet. |
+| Integration and delivery | Members/terms published and source-audited; public bytes, both MCP modes and literal FEC joins pass. Agenda source qualification and the bounded press-link repair pass. | Qualify laws/rosters already published by schedules; continue other congressional families. Keep both ledgers synchronized. |
+| Bill family | Complete local 18-output replay preserves the broad parent and its text/diff rows. | Reconcile the new public 119th generation with the broader private candidate. Selected 118th fields and inherited URL lineage are audited separately. The known 40 retained XML originals match none of the 604 held body-record digests. Broader source provenance, missing text, models and backfills remain open; the separate scheduled family is public but source-unqualified. |
 | CourtListener bulk and clusters | 45 selected source files verified. Local-input controls and durable map/cluster workers passed independent review and tests. | Full docket-map stream is running; the dependent worker waits for its audit, then builds and compares the complete cluster edition with every old identity/field. The separate opinions transfer remains active. |
-| Votes and comments | Six comment cohorts repaired; full-parent candidate/index retained. Existing House vote candidates located. | Audit retained vote originals and measure House/Senate coverage. Wider comments, partitions and publication remain open; ACF is inventoried, not acquired. |
-| Independent review | Member candidate/publication, cluster controls/worker and bill continuation plan approved for their stated scopes. | Final real cluster/bill/vote evidence remains pending. Opinions recovery must inspect the authoritative verification manifest before reporting completion. |
+| Votes and comments | Six comment cohorts repaired; full-parent candidate/index retained. Existing House vote candidates located. | The vote selection audit is complete. Independent House enumeration, Senate menu adoption and successful-child replacement are reviewed and installed through 0.26.2; retained capture is being prepared. Wider comments, partitions and publication remain open; ACF is inventoried, not acquired. |
+| Independent review | Member candidate/publication, cluster controls/worker and bill continuation plan approved for their stated scopes. | Local bill and bounded press-link reviews passed. Final whole-population court/vote evidence remains pending. Opinions recovery must inspect the authoritative verification manifest before reporting completion. |
 
 Bulk acquisition progress is recorded in `courtlistener-bulk/acquisition.json`;
 authoritative byte verification is recorded separately in
@@ -226,8 +229,8 @@ nor byte verification marks T12/T13 complete.
 | Members and terms | Published generation `a0140c2f…`; full captured community files and declared fields qualified, with raw/public/MCP witnesses. | Official-roster reconciliation and finer within-term party history are separate limits. |
 | Nominations, treaties, reports/hearings and press | Published and audited for the declared selections above. | Broader history/detail/granule coverage; optional press bill links. |
 | Laws and committee rosters | Scheduled publications exist: 113 laws, 3,655 law/code links, 65 Table III records; 236 committees and 2,966 assignments. Every public file matches its recorded digest, size, schema and count. | Full raw-source field/population qualification remains open. Publication alone does not qualify these outputs. |
-| Bills, text and differences | Broad retained inventory; complete local family replay and preservation checks pass. | Final field/lineage review before publication, then missing bodies and histories. The 119th parent lists 22,064 printing records but marks only 600 captured; retained 118th HR/S lists 19,687 and marks four captured. Those output flags do not prove all original bodies are retained or newly qualified. |
-| Votes | House candidates cover 577 roll calls and 249,099 member-vote rows; source audit is active. | Decouple acquisition from optional bill references, which currently exclude procedural votes. Measure retained originals, Senate scope and member/bill links. Full voting history and dynamic scorecards are not delivered. |
+| Bills, text and differences | Scheduled 119th generation: 18,956 bills, all 18 public outputs byte-verified but source-unqualified. Separately, the broader 419,839-bill private candidate passes preservation and partial native checks. | Reconcile newer public rows with the wider private population, then finish source/body qualification. The 119th parent lists 22,064 printing records but marks only 600 captured; retained 118th HR/S lists 19,687 and marks four captured. The 604 capture-marked records represent 601 packages/digests; the known 40 XML originals are different printings, with no package overlap. Capture flags do not prove available originals. |
+| Votes | House candidates cover 577 roll calls and 249,099 member-vote rows; source audit is active. | The reviewed fix now separates identity enumeration from bill links and includes Senate menus. Acquire retained originals, then qualify the complete selected populations and date-aware member joins. Full voting history and dynamic scorecards are not delivered. |
 | Amendments, communications, meetings, record issues, print citations and Senate expenditures | Local candidates remain unqualified and unpublished as managed families. | Family-specific raw/output audits, missing detail bodies and source/schema gaps. |
 
 Exact current publication pins and byte audits are in `congressional-status/`;
@@ -252,13 +255,16 @@ The continuation passed the full unit suite, the added CourtListener catch-up
 regressions, Ruff, type checks and dictionary checks. Test logs and independent
 review conclusions are retained in the execution `reviews/` directory. These
 checks establish implementation behavior, not completion of the open datasets.
-The member metadata and local cluster controls pass the full host gate
-(2,403 tests), Ruff, types and dictionary validation. Source-library CI repairs
+The installed 0.26.2 vote/press adoption passes the full host gate
+(2,411 tests), Ruff, types and dictionary validation. Source main and isolated
+wheel builds each pass 7,308 tests. Only the two reviewed interpretation modules
+change in the wheel; every running court producer file remains byte-identical.
+Acquisition and population qualification remain separate. Source-library CI repairs
 at `51c87a1` and isolated wheel-branch descendant `b0a8e6e` passed their
 [main](https://github.com/mikewolfd/spicy-docs/actions/runs/35679643578) and
 [branch](https://github.com/mikewolfd/spicy-docs/actions/runs/35679652261) GitHub
-checks. These fixes affect checkout/test behavior; the adopted wheel's runtime
-bytes and source pin remain unchanged.
+checks. Those CI fixes affect checkout/test behavior. The later 0.26.2 source adoption
+is recorded separately in `congress-vote-press-adoption/`.
 
 Earlier local code gates passed at `5028ed5`: **2,326 tests**, Ruff and type checks.
 The coverage update at `dd73a7d` passed the dictionary check and 108 focused
