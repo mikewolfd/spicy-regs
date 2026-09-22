@@ -23,6 +23,11 @@ name: Dedupe comments catalog
 # Requires: R2_CATALOG_URI, R2_CATALOG_WAREHOUSE, R2_CATALOG_TOKEN (+ optional
 # R2_CATALOG_NAMESPACE) to read/write the catalog; plus R2_ACCESS_KEY_ID,
 # R2_SECRET_ACCESS_KEY, R2_ENDPOINT, R2_BUCKET_NAME, R2_PUBLIC_URL for the mirror.
+#
+# Manual dispatch also runs a probe-partition job: it creates a scratch
+# partitioned table on the catalog, reads it back through an agency predicate
+# and drops it, printing PASS/FAIL — the pre-verified step for the
+# PARTITION BY (agency_code) restructure recorded in docs/fork-generation.md.
 on:
   schedule:
     - cron: '0 9 * * 0'  # weekly compaction, Sunday 09:00 UTC
@@ -105,3 +110,34 @@ jobs:
         run: |
           echo "Running: uv run python scripts/publish_comments_mirror.py"
           uv run python scripts/publish_comments_mirror.py
+
+  probe-partition:
+    # Manual-dispatch only: the one-command verification for the comments
+    # catalog PARTITION BY restructure (see docs/fork-generation.md). Creates
+    # a scratch table, reads it back through an agency predicate, drops it.
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Probe partitioned Iceberg table support
+        env:
+          R2_CATALOG_URI: ${{ secrets.R2_CATALOG_URI }}
+          R2_CATALOG_WAREHOUSE: ${{ secrets.R2_CATALOG_WAREHOUSE }}
+          R2_CATALOG_TOKEN: ${{ secrets.R2_CATALOG_TOKEN }}
+          R2_CATALOG_NAMESPACE: ${{ secrets.R2_CATALOG_NAMESPACE }}
+        run: uv run python scripts/probe_iceberg_partition.py
