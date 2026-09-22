@@ -228,14 +228,14 @@ nor byte verification marks T12/T13 complete.
 | --- | --- | --- |
 | Members and terms | Published generation `a0140c2f…`; full captured community files and declared fields qualified, with raw/public/MCP witnesses. | Official-roster reconciliation and finer within-term party history are separate limits. |
 | Nominations, treaties, reports/hearings and press | Published and audited for the declared selections above. | Broader history/detail/granule coverage; optional press bill links. |
-| Laws and committee rosters | Scheduled publications exist: 113 laws, 3,655 law/code links, 65 Table III records; 236 committees and 2,966 assignments. Every public file matches its recorded digest, size, schema and count. | Full raw-source field/population qualification remains open. Publication alone does not qualify these outputs. |
+| Laws, committee rosters and amendments | Scheduled publications exist: 113 laws, 3,655 law/code links, 65 Table III records; 236 committees and 2,966 assignments; 7,014 amendments. Every public file matches its recorded digest, size, schema and count. | Full raw-source field/population qualification remains open. Publication alone does not qualify these outputs. |
 | Bills, text and differences | Scheduled 119th generation: 18,956 bills, all 18 public outputs byte-verified but source-unqualified. Separately, the broader 419,839-bill private candidate passes preservation and partial native checks. | Reconcile newer public rows with the wider private population, then finish source/body qualification. The 119th parent lists 22,064 printing records but marks only 600 captured; retained 118th HR/S lists 19,687 and marks four captured. The 604 capture-marked records represent 601 packages/digests; the known 40 XML originals are different printings, with no package overlap. Capture flags do not prove available originals. |
 | Votes | House candidates cover 577 roll calls and 249,099 member-vote rows; source audit is active. | The reviewed fix now separates identity enumeration from bill links and includes Senate menus. Acquire retained originals, then qualify the complete selected populations and date-aware member joins. Full voting history and dynamic scorecards are not delivered. |
-| Amendments, communications, meetings, record issues, print citations and Senate expenditures | Local candidates remain unqualified and unpublished as managed families. | Family-specific raw/output audits, missing detail bodies and source/schema gaps. |
+| Communications, meetings, record issues, print citations and Senate expenditures | Local candidates remain unqualified and unpublished as managed families. | Family-specific raw/output audits, missing detail bodies and source/schema gaps. |
 
 Exact current publication pins and byte audits are in `congressional-status/`;
 new source and consumer evidence is in `members-qualification/` and
-`bill-family-continuation/` under the execution receipts. Laws and roster pins
+`bill-family-continuation/` under the execution receipts. Laws, roster and amendment pins
 are recorded as published-awaiting-source-audit in the output ledger.
 
 The continuation uses independent [semi-formal reviews](/Users/mikewolfd/Work/corpora/fork-execution-2026-09-21/reviews)
