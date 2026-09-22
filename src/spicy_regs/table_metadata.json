@@ -1035,7 +1035,7 @@
       {
         "column_name": "timetable_json",
         "column_type": "VARCHAR",
-        "description": "JSON array of timetable entries — the planned/actual milestone actions and their dates for the rulemaking."
+        "description": "JSON array of planned and actual milestone actions with literal source dates and Federal Register citations. A date with day 00 has month precision; labels such as To Be Determined remain unchanged."
       },
       {
         "column_name": "cfr_references_json",
@@ -1050,12 +1050,12 @@
       {
         "column_name": "first_action_date",
         "column_type": "VARCHAR",
-        "description": "Date of the earliest timetable action, when derivable. Often null."
+        "description": "Earliest distinct calendar date derived from the timetable, or NULL when none is derivable. Source month-only dates (MM/00/YYYY) use day 01 here; timetable_json retains their original precision."
       },
       {
         "column_name": "next_action_date",
         "column_type": "VARCHAR",
-        "description": "Date of the next planned timetable action, when derivable. Often null."
+        "description": "Second distinct calendar date derived from the timetable, or NULL when fewer than two dates are derivable. May be historical; it is not selected relative to today. Source month-only dates use day 01 here; timetable_json retains the literal dates."
       },
       {
         "column_name": "url",

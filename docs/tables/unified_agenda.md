@@ -25,9 +25,9 @@ One row per Regulation Identifier Number (RIN) per agenda edition, ingested from
 | `agenda_edition` | `VARCHAR` | Semiannual agenda edition the row was published in, as `YYYYMM` (MM 04=Spring, 10=Fall). Half of the primary/dedup key. |
 | `major` | `VARCHAR` | Whether the action is a major rule, as reported by the agenda (e.g. `Yes`/`No`). Often null. |
 | `publication_id` | `VARCHAR` | reginfo.gov publication identifier for this agenda entry, when present. |
-| `timetable_json` | `VARCHAR` | JSON array of timetable entries — the planned/actual milestone actions and their dates for the rulemaking. |
+| `timetable_json` | `VARCHAR` | JSON array of planned and actual milestone actions with literal source dates and Federal Register citations. A date with day 00 has month precision; labels such as To Be Determined remain unchanged. |
 | `cfr_references_json` | `VARCHAR` | JSON array of CFR citations affected by the rulemaking. The join key to the CFR. |
 | `legal_authority_json` | `VARCHAR` | JSON array of legal-authority citations the agency cites for the rulemaking. |
-| `first_action_date` | `VARCHAR` | Date of the earliest timetable action, when derivable. Often null. |
-| `next_action_date` | `VARCHAR` | Date of the next planned timetable action, when derivable. Often null. |
+| `first_action_date` | `VARCHAR` | Earliest distinct calendar date derived from the timetable, or NULL when none is derivable. Source month-only dates (MM/00/YYYY) use day 01 here; timetable_json retains their original precision. |
+| `next_action_date` | `VARCHAR` | Second distinct calendar date derived from the timetable, or NULL when fewer than two dates are derivable. May be historical; it is not selected relative to today. Source month-only dates use day 01 here; timetable_json retains the literal dates. |
 | `url` | `VARCHAR` | URL of the entry's detail page on reginfo.gov. |
