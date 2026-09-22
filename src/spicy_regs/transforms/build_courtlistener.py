@@ -27,6 +27,7 @@ from loguru import logger
 
 from spicy_regs.sources import r2
 from spicy_regs.sources.courtlistener import CourtListenerReader
+from spicy_regs.transforms.table_merge import merge_local_prior
 
 OUTPUT = "court_dockets.parquet"
 
@@ -173,30 +174,14 @@ def build_courtlistener(
     con.execute("SET threads=2")
     con.execute(f"SET temp_directory='{spill_dir}'")
 
-    cols = ", ".join(COLUMNS)
-    if have_prior:
-        union = (
-            f"SELECT {cols}, 0 AS _src FROM read_parquet('{prior_file}') "
-            f"UNION ALL BY NAME "
-            f"SELECT {cols}, 1 AS _src FROM read_parquet('{new_file}')"
-        )
-    else:
-        union = f"SELECT {cols}, 1 AS _src FROM read_parquet('{new_file}')"
-
-    con.execute(
-        f"""
-        COPY (
-            SELECT {cols} FROM (
-                SELECT {cols}, ROW_NUMBER() OVER (
-                    PARTITION BY cl_docket_id ORDER BY _src DESC
-                ) AS _rn
-                FROM ({union})
-                WHERE cl_docket_id IS NOT NULL
-            )
-            WHERE _rn = 1
-            ORDER BY date_filed DESC, cl_docket_id
-        ) TO '{out_file}' (FORMAT PARQUET, COMPRESSION ZSTD, ROW_GROUP_SIZE 50000);
-        """
+    merge_local_prior(
+        con,
+        columns=COLUMNS,
+        identity="cl_docket_id",
+        order_by="date_filed DESC, cl_docket_id",
+        prior_file=prior_file if have_prior else None,
+        new_file=new_file,
+        out_file=out_file,
     )
     con.close()
 

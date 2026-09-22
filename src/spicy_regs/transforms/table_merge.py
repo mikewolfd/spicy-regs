@@ -22,6 +22,60 @@ from spicy_regs.sources import r2
 ReplacementScope = tuple[str, Collection[str]] | tuple[tuple[str, ...], Collection[tuple[str, ...]]]
 
 
+def merge_local_prior(
+    con,
+    *,
+    columns: tuple[str, ...],
+    identity: str,
+    order_by: str,
+    prior_file: Path | None,
+    new_file: Path,
+    out_file: Path,
+    row_group_size: int = 50_000,
+    kv_metadata: Mapping[str, str] | None = None,
+) -> None:
+    """Merge the fresh ``new_file`` over a local prior on one identity column.
+
+    The shared idiom behind the ingest rollups: union the prior file (when it
+    exists — the caller already downloaded it where it downloads one) with the
+    fresh rows, keep the fresh row on a repeated identity, refuse a NULL
+    identity, and publish ordered by ``order_by`` with small row groups for
+    scoped reads. One scan per side, deduplicated once, instead of one
+    hand-rolled copy per rollup.
+    """
+    cols = ", ".join(f'"{c}"' for c in columns)
+    new_path = str(new_file).replace("'", "''")
+    if prior_file is not None and prior_file.exists():
+        prior_path = str(prior_file).replace("'", "''")
+        union = (
+            f"SELECT {cols}, 0 AS _src FROM read_parquet('{prior_path}') "
+            f"UNION ALL BY NAME "
+            f"SELECT {cols}, 1 AS _src FROM read_parquet('{new_path}')"
+        )
+    else:
+        union = f"SELECT {cols}, 1 AS _src FROM read_parquet('{new_path}')"
+    out_path = str(out_file).replace("'", "''")
+    metadata_clause = ""
+    if kv_metadata is not None:
+        metadata_clause = ", KV_METADATA ?"
+    con.execute(
+        f"""
+        COPY (
+            SELECT {cols} FROM (
+                SELECT {cols}, ROW_NUMBER() OVER (
+                    PARTITION BY "{identity}" ORDER BY _src DESC
+                ) AS _rn
+                FROM ({union})
+                WHERE "{identity}" IS NOT NULL
+            )
+            WHERE _rn = 1
+            ORDER BY {order_by}
+        ) TO '{out_path}' (FORMAT PARQUET, COMPRESSION ZSTD, ROW_GROUP_SIZE {row_group_size}{metadata_clause});
+        """,
+        ([kv_metadata] if kv_metadata is not None else None),
+    )
+
+
 def prior_scratch_path(output_dir: Path, name: str) -> Path:
     """The local path :func:`merge_table` caches/reuses the prior table under.
 

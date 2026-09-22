@@ -30,6 +30,7 @@ from loguru import logger
 from spicy_regs.sources import r2
 from spicy_regs.sources.fec_committees import FecCommitteesReader
 from spicy_regs.transforms.parquet_rows import write_rows
+from spicy_regs.transforms.table_merge import merge_local_prior
 
 OUTPUT = "fec_committees.parquet"
 
@@ -122,38 +123,21 @@ def build_fec_committees(output_dir: Path, *, capture_dir: Path | None = None) -
 
     spill_dir = output_dir / ".duckdb_tmp"
     spill_dir.mkdir(exist_ok=True)
-    cols = ", ".join(COLUMNS)
-    prior_sql = str(prior_file).replace("'", "''")
-    new_sql = str(new_file).replace("'", "''")
-    if have_prior:
-        union = (
-            f"SELECT {cols}, 0 AS _src FROM read_parquet('{prior_sql}') "
-            f"UNION ALL BY NAME "
-            f"SELECT {cols}, 1 AS _src FROM read_parquet('{new_sql}')"
-        )
-    else:
-        union = f"SELECT {cols}, 1 AS _src FROM read_parquet('{new_sql}')"
-
     with TemporaryDirectory(dir=output_dir) as temporary, duckdb.connect() as con:
         staged = Path(temporary) / OUTPUT
-        staged_sql = str(staged).replace("'", "''")
         con.execute("SET memory_limit='4GB'")
         con.execute("SET preserve_insertion_order=false")
         con.execute("SET threads=2")
         con.execute("SET temp_directory=?", [str(spill_dir)])
-        con.execute(f"""
-        COPY (
-            SELECT {cols} FROM (
-                SELECT {cols}, ROW_NUMBER() OVER (
-                    PARTITION BY committee_id ORDER BY _src DESC
-                ) AS _rn
-                FROM ({union})
-                WHERE committee_id IS NOT NULL
-            )
-            WHERE _rn = 1
-            ORDER BY committee_id
-        ) TO '{staged_sql}' (FORMAT PARQUET, COMPRESSION ZSTD, ROW_GROUP_SIZE 50000);
-        """)
+        merge_local_prior(
+            con,
+            columns=COLUMNS,
+            identity="committee_id",
+            order_by="committee_id",
+            prior_file=prior_file if have_prior else None,
+            new_file=new_file,
+            out_file=staged,
+        )
         staged.replace(out_file)
 
     # Housekeeping: drop scratch files so they aren't mistaken for outputs.

@@ -31,6 +31,7 @@ from loguru import logger
 
 from spicy_regs.sources import r2
 from spicy_regs.sources.fcc_ecfs import ECFS_EPOCH, FccEcfsFilingsReader, FccEcfsProceedingsReader
+from spicy_regs.transforms.table_merge import merge_local_prior
 
 PROCEEDINGS_OUTPUT = "fcc_proceedings.parquet"
 FILINGS_OUTPUT = "fcc_filings.parquet"
@@ -211,30 +212,14 @@ def _merge_incremental(
     con.execute("SET threads=2")
     con.execute(f"SET temp_directory='{spill_dir}'")
 
-    cols = ", ".join(columns)
-    if have_prior:
-        union = (
-            f"SELECT {cols}, 0 AS _src FROM read_parquet('{prior_file}') "
-            f"UNION ALL BY NAME "
-            f"SELECT {cols}, 1 AS _src FROM read_parquet('{new_file}')"
-        )
-    else:
-        union = f"SELECT {cols}, 1 AS _src FROM read_parquet('{new_file}')"
-
-    con.execute(
-        f"""
-        COPY (
-            SELECT {cols} FROM (
-                SELECT {cols}, ROW_NUMBER() OVER (
-                    PARTITION BY {key} ORDER BY _src DESC
-                ) AS _rn
-                FROM ({union})
-                WHERE {key} IS NOT NULL
-            )
-            WHERE _rn = 1
-            ORDER BY {order_by} DESC, {key}
-        ) TO '{out_file}' (FORMAT PARQUET, COMPRESSION ZSTD, ROW_GROUP_SIZE 50000);
-        """
+    merge_local_prior(
+        con,
+        columns=columns,
+        identity=key,
+        order_by=f"{order_by} DESC, {key}",
+        prior_file=prior_file if have_prior else None,
+        new_file=new_file,
+        out_file=out_file,
     )
     con.close()
 

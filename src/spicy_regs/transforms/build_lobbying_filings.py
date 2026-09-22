@@ -29,6 +29,7 @@ from loguru import logger
 
 from spicy_regs.sources import r2
 from spicy_regs.sources.lobbying_filings import LobbyingFilingsReader
+from spicy_regs.transforms.table_merge import merge_local_prior
 
 OUTPUT = "lobbying_filings.parquet"
 
@@ -204,30 +205,14 @@ def build_lobbying_filings(
     con.execute("SET threads=2")
     con.execute(f"SET temp_directory='{spill_dir}'")
 
-    cols = ", ".join(COLUMNS)
-    if have_prior:
-        union = (
-            f"SELECT {cols}, 0 AS _src FROM read_parquet('{prior_file}') "
-            f"UNION ALL BY NAME "
-            f"SELECT {cols}, 1 AS _src FROM read_parquet('{new_file}')"
-        )
-    else:
-        union = f"SELECT {cols}, 1 AS _src FROM read_parquet('{new_file}')"
-
-    con.execute(
-        f"""
-        COPY (
-            SELECT {cols} FROM (
-                SELECT {cols}, ROW_NUMBER() OVER (
-                    PARTITION BY filing_uuid ORDER BY _src DESC
-                ) AS _rn
-                FROM ({union})
-                WHERE filing_uuid IS NOT NULL
-            )
-            WHERE _rn = 1
-            ORDER BY dt_posted DESC, filing_uuid
-        ) TO '{out_file}' (FORMAT PARQUET, COMPRESSION ZSTD, ROW_GROUP_SIZE 50000);
-        """
+    merge_local_prior(
+        con,
+        columns=COLUMNS,
+        identity="filing_uuid",
+        order_by="dt_posted DESC, filing_uuid",
+        prior_file=prior_file if have_prior else None,
+        new_file=new_file,
+        out_file=out_file,
     )
     con.close()
 
