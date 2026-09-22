@@ -84,8 +84,14 @@ unfinished populations remain explicit.
   still need source qualification. Comments remain unadmitted.
 - **T08:** **2,204 nominations** and **two treaties** are published, with complete
   native-field comparisons, public byte checks and direct/downloaded MCP reads.
-  Both are explicit 119th Congress selections; other legislative families and
-  missing detail histories remain open.
+  Both are explicit 119th Congress selections. Members/terms are now also
+  published: both complete captured community crosswalk files yield **12,770
+  legislators** and **45,535 terms**. All 639,675 declared cells match the raw
+  JSON; prior identities and native values survive. Public bytes and both actual
+  MCP modes pass, including 1,126 literal FEC candidate/committee/member links
+  covering 889 legislators. This is a community identity crosswalk, not official
+  roster completeness; 29 native within-term party histories remain outside the
+  single-party term representation. Other families and detail histories remain open.
 - **T08/T16 continuation:** the fork now serves 28 press releases: every item
   in the complete retained and fresh Appropriations RSS captures, including
   three items that rotated out. All mapped values, public bytes and both MCP
@@ -104,6 +110,14 @@ unfinished populations remain explicit.
   the following unchanged run stops retrying. Completing a missing XML pair
   requires two body slots in one pass because original bodies are not retained
   across runs.
+  The next local continuation preserves the broad parent and replays all
+  16,213 receipt-pinned 118th Congress HR/S records through the ordinary owner,
+  producing all 18 family members and a 419,839-bill parent. Full identity and
+  prior-row preservation pass. Native-field review found 11,021 bill URLs
+  inherited from the prior API table where the retained BILLSTATUS field is
+  absent. Their same-identity lineage is proven; they remain outside fresh
+  raw-field equality. Independent review accepts this partial qualification. No bill-family generation is published. Historical body capture,
+  richer text/diff coverage, backfills and model outputs remain unfinished.
 - **T10:** all 118 selected report/hearing packages have been retained; 116 were
   freshly acquired and two reused exact retained inputs. One hearing body
   changed from its old pin and is recorded as a fresh observation. All five
@@ -144,11 +158,15 @@ unfinished populations remain explicit.
   snapshots remain catalogued. Acquisition is separate from parsing and rollup
   publication. The selection contains the latest June 30, 2026 main datasets
   and unique supplements; exact keys, sizes and pins are in `selection.json`.
-  Independent review found that the running transfer's multithread requests
+  Independent review found that the initial transfer's multithread requests
   omit the intended conditional download header. Its receipts are candidates:
   only `verified-manifest.json` entries that pass full-file SHA-256 and exact
   source ETag verification may advance. `ACQUISITION-GATE.md` records the issue
-  and corrected future invocation. Bulk dockets include all source classes;
+  and corrected future invocation. That downloader exited before finishing the
+  opinions object; its partial remains retained. The other 45 selected files
+  passed verification. A detached sequential transfer now resumes only its own
+  opinions partial, with conditional requests and the same full-file acceptance
+  gate. Bulk dockets include all source classes;
   RECAP uses the source bitmask and nature-of-suit values contain descriptive
   text. These exports omit the party/attorney relationship tables; those fields
   need another source. See `courtlistener-refusal/BULK-MAPPING.md`.
@@ -180,22 +198,42 @@ See `full-comments/source-campaign/` for raw originals, audits and receipts.
 
 ### Current parallel work
 
-Status checked September 22, 2026, 02:00 UTC. The following workstreams own the
+Status checked September 22, 2026, 02:35 UTC. The following workstreams own the
 next actions; their receipts establish the completed scope.
 
 | Workstream | Completed | Current or next action |
 | --- | --- | --- |
-| Integration and delivery | Press-feed publication and full retained Agenda qualification, including raw/output comparisons and both MCP modes. | The reviewed provider wheel and installed-package checks pass; adoption is committed at `b50a9eb`. Continue source qualification and update delivery evidence as each family advances. Keep this backlog and the output ledger synchronized. |
-| Comments and bulk acquisition | Six complete comment cohorts repaired and independently approved; coherent full-parent candidate and index retained locally. Bulk inventory, courts/schema inspection and first full-file integrity verification retained. | Bulk transfers and the independently approved periodic verifier are running. ACF is inventoried, not acquired. Wider comments, partitions and publication remain open. |
-| CourtListener source and mapping | Count correction and restart-safe API replay passed review; search checkpoint is 55 pages/1,100 unique rows. Bulk mapping and missing relationship fields are documented. | The 0.26.1 package is installed and qualified; build from verified bulk files and qualify the dated source selection next. API catch-up is deferred. |
-| Independent review | Agenda, press, comments and final CourtListener count checks approved for their stated scopes. | Bulk verifier review also approved; no review blockers remain. Full raw/output qualification is still required before court rollup publication. |
+| Integration and delivery | Members/terms published and source-audited; public bytes, both MCP modes and literal FEC joins pass. Press and Agenda remain qualified. | Qualify laws/rosters already published by schedules; continue other congressional families. Keep both ledgers synchronized. |
+| Bill family | Complete local 18-output replay preserves the broad parent and its text/diff rows. | Independently qualify retained 118th HR/S fields and inherited URL lineage. The known 40 retained XML originals match none of the 604 held body-record digests. Broader source provenance, missing text, models and backfills remain open; no family publication yet. |
+| CourtListener bulk and clusters | 45 selected source files verified. Local-input controls and durable map/cluster workers passed independent review and tests. | Full docket-map stream is running; the dependent worker waits for its audit, then builds and compares the complete cluster edition with every old identity/field. The separate opinions transfer remains active. |
+| Votes and comments | Six comment cohorts repaired; full-parent candidate/index retained. Existing House vote candidates located. | Audit retained vote originals and measure House/Senate coverage. Wider comments, partitions and publication remain open; ACF is inventoried, not acquired. |
+| Independent review | Member candidate/publication, cluster controls/worker and bill continuation plan approved for their stated scopes. | Final real cluster/bill/vote evidence remains pending. Opinions recovery must inspect the authoritative verification manifest before reporting completion. |
 
 Bulk acquisition progress is recorded in `courtlistener-bulk/acquisition.json`;
 authoritative byte verification is recorded separately in
-`courtlistener-bulk/verified-manifest.json`. The detached verifier runs every
-minute and records its process and terminal state in
-`courtlistener-bulk/verification-watcher-state.json`. Neither transfer completion
+`courtlistener-bulk/verified-manifest.json`. The original verifier stopped with
+one unverified input; `verification-watcher-state.json` retains that terminal
+state. `opinions-resume-state.json` records the detached replacement transfer,
+which invokes full verification before accepting the completed opinions file.
+Map/cluster progress and completion gates are in
+`courtlistener-clusters-qualification/HANDOFF.md`. Neither transfer completion
 nor byte verification marks T12/T13 complete.
+
+### Congressional delivery checkpoint
+
+| Family | Verified current position | Remaining work |
+| --- | --- | --- |
+| Members and terms | Published generation `a0140c2f…`; full captured community files and declared fields qualified, with raw/public/MCP witnesses. | Official-roster reconciliation and finer within-term party history are separate limits. |
+| Nominations, treaties, reports/hearings and press | Published and audited for the declared selections above. | Broader history/detail/granule coverage; optional press bill links. |
+| Laws and committee rosters | Scheduled publications exist: 113 laws, 3,655 law/code links, 65 Table III records; 236 committees and 2,966 assignments. Every public file matches its recorded digest, size, schema and count. | Full raw-source field/population qualification remains open. Publication alone does not qualify these outputs. |
+| Bills, text and differences | Broad retained inventory; complete local family replay and preservation checks pass. | Final field/lineage review before publication, then missing bodies and histories. The 119th parent lists 22,064 printing records but marks only 600 captured; retained 118th HR/S lists 19,687 and marks four captured. Those output flags do not prove all original bodies are retained or newly qualified. |
+| Votes | House candidates cover 577 roll calls and 249,099 member-vote rows; source audit is active. | Decouple acquisition from optional bill references, which currently exclude procedural votes. Measure retained originals, Senate scope and member/bill links. Full voting history and dynamic scorecards are not delivered. |
+| Amendments, communications, meetings, record issues, print citations and Senate expenditures | Local candidates remain unqualified and unpublished as managed families. | Family-specific raw/output audits, missing detail bodies and source/schema gaps. |
+
+Exact current publication pins and byte audits are in `congressional-status/`;
+new source and consumer evidence is in `members-qualification/` and
+`bill-family-continuation/` under the execution receipts. Laws and roster pins
+are recorded as published-awaiting-source-audit in the output ledger.
 
 The continuation uses independent [semi-formal reviews](/Users/mikewolfd/Work/corpora/fork-execution-2026-09-21/reviews)
 for the source readers, discovery dates, bill recovery and comments partition
@@ -214,6 +252,13 @@ The continuation passed the full unit suite, the added CourtListener catch-up
 regressions, Ruff, type checks and dictionary checks. Test logs and independent
 review conclusions are retained in the execution `reviews/` directory. These
 checks establish implementation behavior, not completion of the open datasets.
+The member metadata and local cluster controls pass the full host gate
+(2,403 tests), Ruff, types and dictionary validation. Source-library CI repairs
+at `51c87a1` and isolated wheel-branch descendant `b0a8e6e` passed their
+[main](https://github.com/mikewolfd/spicy-docs/actions/runs/35679643578) and
+[branch](https://github.com/mikewolfd/spicy-docs/actions/runs/35679652261) GitHub
+checks. These fixes affect checkout/test behavior; the adopted wheel's runtime
+bytes and source pin remain unchanged.
 
 Earlier local code gates passed at `5028ed5`: **2,326 tests**, Ruff and type checks.
 The coverage update at `dd73a7d` passed the dictionary check and 108 focused
@@ -308,8 +353,8 @@ is the evidence for valid emptiness; a generic nonempty-file check is insufficie
 | **T05 · Follow-on** | **Expand FEC from other retained sources.** SpicyDocs + SpicyRegs. | T02/T03; audited 2024/2026 tables, complete financial ZIPs, committee-history dump and retained filing/legal/agency captures. | Reconcile what is already in T04; adopt missing selected tables, expand the **32,034,987-row** individual base, and implement/adopt the assessed committee history. Track correction streams separately. Gate further inaugural, enforcement and agency adoption on their documented parser/identity limits. Wider history remains explicit; this does not block publishing T04. |
 | **T06 · Dockets/documents delivered; comments/index open** | **Build corrected regulatory base parents.** SpicyDocs + SpicyRegs. | T02/T03; retained public dockets/documents/comments index plus the **13.8 GB** source-release set. | Apply the qualified repair paths to the intended populations, preserve newer parent observations and unrelated rows, and verify the fork's base `dockets`, `documents`, `comments_index` and selected partitions. The 392/547/3 repair cohort is evidence for the fix, not the full replacement. Use the existing base publication path; these outputs are outside managed rollup families. |
 | **T07 · Six-cohort repair verified locally; wider coverage open** | **Establish the full selected comments representation.** SpicyDocs + SpicyRegs + operations. | T02; a full pinned 23,889,661-row public parent is now retained. Repair its demonstrated native-field omissions and qualify the complete selected source population. Catalog configuration is required if using the current Iceberg mirror workflow. | Retain and audit the complete chosen population, publish its index/partitions and the public comments representation needed by consumers, and verify counts agree at their declared grains. The 212,733-row sample cannot stand in for the 23,889,661-row source object. Missing full comments blocks its consumers, not independent sources. |
-| **T08 · Nominations/treaties/press windows delivered; other families open** | **Admit prepared independent legislative families.** SpicyRegs. | T02/T03; measured members/terms, rosters, laws, amendments, meetings, nominations, record issues, treaties; newer communications/print outputs; corrected Senate expenditures. | Current schemas, complete family membership and raw/output audits pass for each selected scope; publish and read back each family. Keep current-only, House-only and unavailable-package limits visible. Prepare votes and press releases here if useful; finalize optional bill links in T16. |
-| **T09 · Retry controls implemented; complete family open** | **Build the complete bill family.** SpicyDocs + SpicyRegs. | T02/T03; corrected five-table 118th HR/S cohort; receipt-pinned 118th ZIPs; preserved 119th ZIPs and 40 body files. Qualify temporary ZIP provenance/freshness. T08 laws supplies optional links. | Reconcile all 18 family members under the ordinary `bill-family` owner, preserve intended coverage outside the repaired cohort, and acquire missing types/periods/bodies. Resolve the 600-body cap and unchanged-input skips so missing work is retried. Verify access for older backfills and models; keep uncomputed model outputs blocked, not falsely complete. Do not publish `qualified-bill-status-118-hr-s` as a competing owner. |
+| **T08 · Members/nominations/treaties/press delivered; other families open** | **Admit prepared independent legislative families.** SpicyRegs. | T02/T03; measured members/terms, rosters, laws, amendments, meetings, nominations, record issues, treaties; newer communications/print outputs; corrected Senate expenditures. | Current schemas, complete family membership and raw/output audits pass for each selected scope; publish and read back each family. Keep current-only, House-only and unavailable-package limits visible. Prepare votes and press releases here if useful; finalize optional bill links in T16. |
+| **T09 · Broad local family rebuilt; qualification open** | **Build the complete bill family.** SpicyDocs + SpicyRegs. | T02/T03; corrected five-table 118th HR/S cohort; receipt-pinned 118th ZIPs; preserved 119th ZIPs and 40 body files. Qualify temporary ZIP provenance/freshness. T08 laws supplies optional links. | Reconcile all 18 family members under the ordinary `bill-family` owner, preserve intended coverage outside the repaired cohort, and acquire missing types/periods/bodies. Resolve the 600-body cap and unchanged-input skips so missing work is retried. Verify access for older backfills and models; keep uncomputed model outputs blocked, not falsely complete. Do not publish `qualified-bill-status-118-hr-s` as a competing owner. |
 | **T10 · Complete for the selected 118-package family** | **Rebuild the report family with corrected sections.** SpicyDocs + SpicyRegs. | T02/T03; retained report/hearing inputs and the corrected section replay; acquire missing selected inputs as needed. | Rebuild and qualify reports, sections, hearings, bill links and read-status outputs together. The 11-section correction sample and the old defective family cannot substitute for the intended corpus. |
 | **T11 · Agenda edition qualified; bounded CFR repair delivered; wider work open** | **Audit current Federal Register, CFR and Agenda generations.** SpicyDocs + SpicyRegs. | T02; current scheduled publication pins, retained public/corrected FR parents and source releases. | Verify actual remote bytes and source/output agreement. Qualify or repair CFR's failure-to-empty/partial paths before further unattended acquisition; failed sources must preserve prior valid data. Reuse passing current generations. Repair CFR's demonstrated part-ancestry mapping and recover required source fields before claiming qualified coverage. Do not replace the newer FR population wholesale with the older 803,997-row repair parent. Regenerate only affected representations or missing scope. |
 | **T12 · Court bulk acquisition active; other source gaps remain** | **Qualify FCC, CRS, GAO, USAspending and CourtListener docket families.** SpicyDocs + SpicyRegs. | T02/T03; retained public files and source-specific evidence. Court bulk selection, mapping and integrity receipts are linked above; the count fix is adopted and verified through the installed package. | Qualify source failure paths and complete selected populations. For courts, verify bulk bytes, map native fields and source/court selection, preserve prior observations, and acquire missing participant relationships separately. Resolve each family's field/grain defects before audited publication. A nonzero retained table is not source-completeness evidence. |
