@@ -112,7 +112,10 @@ before it dies. The A11 review found this through the backfill's own 2,400
 override, which is removed; the three pre-existing bounds are the repo's
 convention and stand until measured. Pick one bound from a measured retry
 distribution, or make the reader's cap a run cap, and say which in the
-decision record.
+decision record. **Decided 2026-09-22: measure first** — one bounded
+credentialed run records the actual retry distribution with a receipt, then
+the three bounds become one from that distribution; the run-cap change is
+the fallback if the measurement cannot run.
 
 **Add `full_text_xml_url` to the Federal Register ingest.** A person cannot
 search inside a rule today, and whoever builds that first will take the pointer
@@ -136,8 +139,17 @@ present on every month probed from 2000 to 2009. The field goes in the source's
 field list and the published schema; the backfill is a full-range run of the
 existing rollup, which is a publish and therefore Mike's.
 
-## Downstream consumers
+### Accepted costs (decided 2026-09-22)
 
+**The rollup repeated passes stay.** `build_proceedings` reads `documents`
+twice and `build_bill_family` reads its prior a few times; both are linear
+and bounded, and each merge would break a load-bearing property — the first
+documents pass builds the trusted set that gates the FR-links loop before
+the groups it would enrich exist, and the statutes-at-large join must stay
+a best-effort post-merge step so a corrupt `laws` table cannot fail the
+bill run. Re-measure before re-opening.
+
+## Downstream consumers
 `data_dictionary/catalog.json` is a **vendored contract**, not a fetched one.
 spicysearch holds a copy pinned by the digest in `catalog.json.sha256`; it
 cannot import `spicy_regs`. Changing the file means the consumer must
