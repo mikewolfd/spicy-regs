@@ -73,9 +73,15 @@ unfinished populations remain explicit.
   locally with its response pin and digest. All IDs are unique. Three retained
   native witnesses confirm missing attachments, names or organizations; the
   current extraction-evidence column is also absent. The separately retained
-  index has 112,861 groups totaling 23,888,128 comments, 1,533 fewer than the
-  independently pinned full object. A common generation is unproved; this does
-  not establish missing comments in one generation. The input remains unadmitted.
+  index has 112,861 groups totaling 23,888,128 comments. Full reconciliation
+  explains the net difference: the old partition rule omitted 1,555 native
+  NULL-date comments, while three index groups contain 22 extra counts. Every
+  NULL-date original was acquired; all preserve a literal NULL posted date.
+  The corrected writers retain those rows in standard Hive null partitions,
+  with NULL year/month in the index. The full local index now reconciles exactly
+  to the parent, and all 24 undated partitions pass raw/output audits. The wider
+  dated partition tree, known field omissions and the three surplus index groups
+  still need source qualification. Comments remain unadmitted.
 - **T08:** **2,204 nominations** and **two treaties** are published, with complete
   native-field comparisons, public byte checks and direct/downloaded MCP reads.
   Both are explicit 119th Congress selections; other legislative families and
@@ -84,8 +90,14 @@ unfinished populations remain explicit.
   comparisons. A workflow budget defaults to 600 acquisitions; zero disables
   them. Four offline fixture runs manually verify progress and preservation of
   completed bodies. Full 18-table qualification, older backfills and model
-  access/retry policy remain open. Completing a missing XML pair requires two
-  body slots in one pass because original bodies are not retained across runs.
+  access/retry policy remain open. Independent review also found incomplete
+  checkpoints and stale child rows after correction. Missing source versions or
+  diff children now reopen the archive, and successful parses replace their
+  exact section/diff-child scopes; failed, capped and unrelated scopes survive.
+  A retained XML correction audit verifies that removed sections disappear and
+  the following unchanged run stops retrying. Completing a missing XML pair
+  requires two body slots in one pass because original bodies are not retained
+  across runs.
 - **T10:** all 118 selected report/hearing packages have been retained; 116 were
   freshly acquired and two reused exact retained inputs. One hearing body
   changed from its old pin and is recorded as a fresh observation. All five
@@ -100,11 +112,17 @@ unfinished populations remain explicit.
   other rows; all repaired rows pass direct MCP reads. Unknown annual-edition
   ancestry remains null in the corrected rows. Whole-population native
   qualification remains open.
-- **T12:** CRS, GAO, FCC and USAspending use the installed source-owned readers
-  and refuse invalid/incomplete responses before publication. Failure audits
+- **T12:** CRS, GAO, FCC, USAspending and CourtListener search use the installed
+  source-owned readers and refuse invalid/incomplete responses before publication. Failure audits
   preserve prior outputs. Optional imports remain lazy. Full source populations,
-  native field/grain gaps, FCC crowded-single-day recovery and court-docket
-  refusal handling remain separate work. USAspending's supported 100-row pages
+  native field/grain gaps and FCC crowded-single-day recovery remain separate
+  work. CourtListener now refuses failed pages, inconsistent counts, invalid
+  identities and unfinished cursor walks; explicit record caps remain selected
+  prefixes. Ordinary scheduled readers still need successful raw-response
+  retention for replayable source audits. A full keyless CourtListener attempt
+  retained 34 pages/680 records before HTTP 429; exact replay verifies refusal
+  without replacing prior bytes. Rate/access budgeting and resumable retained
+  acquisition remain open. USAspending's supported 100-row pages
   retain the existing 100-page default, selecting at most 10,000 rows per run;
   prior rows remain in the merge.
 - **T15:** monthly volume now serves **77,934 groups** counting 1,999,503
@@ -112,12 +130,21 @@ unfinished populations remain explicit.
   exclusions. Discovery serves **eight agencies** at the exact recorded
   calculation time. Public bytes, schemas, counts and provenance metadata pass;
   direct/downloaded MCP reads also match all nine raw-audited witness outcomes.
-  Source values remain unchanged; discovery excludes future dates. Its existing
-  cast discards source offsets before comparison in the recorded connection
-  timezone, so source-instant normalization remains open. Lifecycles remains
-  unadmitted: its current grouping turns unrelated null-docket proposals into shared buckets and drops proposals when
+  Source values remain unchanged; discovery excludes future dates. Its reviewed
+  UTC correction is published: explicit offsets survive, offset-free values use
+  UTC, and the date policy is retained with the parent pin and calculation time.
+  Independent full-parent counts and direct/downloaded MCP reads pass. Lifecycles
+  remains unadmitted: its current grouping combines unrelated null-docket proposals
+  and drops proposals when
   the earliest final predates the earliest proposal. It needs defined pairing
   rules and participating document IDs before completion claims.
+
+The continuation uses independent [semi-formal reviews](/Users/mikewolfd/Work/corpora/fork-execution-2026-09-21/reviews)
+for the source readers, discovery dates, bill recovery and comments partition
+changes. Review findings are repaired and regression-tested separately from
+whole-population qualification. Detailed new evidence is under `discovery-utc/`,
+`bill-resume-fix-audit/`, `full-comments/reconciliation/` and
+`courtlistener-refusal/` in the execution receipts below.
 
 [Execution receipts](/Users/mikewolfd/Work/corpora/fork-execution-2026-09-21)
 retain conditional withdrawal, exact generation pins, public downloads, MCP
@@ -125,7 +152,12 @@ responses, current regulatory byte checks and the detailed output ledger.
 The campaign remains open for the unfinished tasks below. Storage success is
 separate from hosted MCP, custom-domain, catalog and documentation deployment.
 
-Local code gates passed at `5028ed5`: **2,326 tests**, Ruff and type checks.
+The continuation passed the full unit suite, the added CourtListener catch-up
+regressions, Ruff, type checks and dictionary checks. Test logs and independent
+review conclusions are retained in the execution `reviews/` directory. These
+checks establish implementation behavior, not completion of the open datasets.
+
+Earlier local code gates passed at `5028ed5`: **2,326 tests**, Ruff and type checks.
 The coverage update at `dd73a7d` passed the dictionary check and 108 focused
 dictionary/MCP tests. [GitHub CI](https://github.com/mikewolfd/spicy-regs/actions/runs/35671496725)
 also passed. [Pages deployment](https://github.com/mikewolfd/spicy-regs/actions/runs/35671496631)
@@ -222,7 +254,7 @@ is the evidence for valid emptiness; a generic nonempty-file check is insufficie
 | **T09 · Retry controls implemented; complete family open** | **Build the complete bill family.** SpicyDocs + SpicyRegs. | T02/T03; corrected five-table 118th HR/S cohort; receipt-pinned 118th ZIPs; preserved 119th ZIPs and 40 body files. Qualify temporary ZIP provenance/freshness. T08 laws supplies optional links. | Reconcile all 18 family members under the ordinary `bill-family` owner, preserve intended coverage outside the repaired cohort, and acquire missing types/periods/bodies. Resolve the 600-body cap and unchanged-input skips so missing work is retried. Verify access for older backfills and models; keep uncomputed model outputs blocked, not falsely complete. Do not publish `qualified-bill-status-118-hr-s` as a competing owner. |
 | **T10 · Complete for the selected 118-package family** | **Rebuild the report family with corrected sections.** SpicyDocs + SpicyRegs. | T02/T03; retained report/hearing inputs and the corrected section replay; acquire missing selected inputs as needed. | Rebuild and qualify reports, sections, hearings, bill links and read-status outputs together. The 11-section correction sample and the old defective family cannot substitute for the intended corpus. |
 | **T11 · Bounded CFR correction delivered; wider qualification open** | **Audit current Federal Register, CFR and Agenda generations.** SpicyDocs + SpicyRegs. | T02; current scheduled publication pins, retained public/corrected FR parents and source releases. | Verify actual remote bytes and source/output agreement. Qualify or repair CFR's failure-to-empty/partial paths before further unattended acquisition; failed sources must preserve prior valid data. Reuse passing current generations. Repair CFR's demonstrated part-ancestry mapping and recover required source fields before claiming qualified coverage. Do not replace the newer FR population wholesale with the older 803,997-row repair parent. Regenerate only affected representations or missing scope. |
-| **T12 · Four refusal adapters repaired; source gaps remain** | **Qualify FCC, CRS, GAO, USAspending and CourtListener docket families.** SpicyDocs + SpicyRegs. | T02/T03; retained public files and source-specific evidence where available. | Verify or repair failure-to-empty/partial paths before acquisition. Locate or acquire missing paired originals, resolve each family's known field/grain defects from the master register, build only where needed, and publish audited complete selections. Source success and completeness must be explicit; a nonzero retained table is not enough. |
+| **T12 · Refusal adapters repaired; source gaps remain** | **Qualify FCC, CRS, GAO, USAspending and CourtListener docket families.** SpicyDocs + SpicyRegs. | T02/T03; retained public files and source-specific evidence where available. | Verify or repair failure-to-empty/partial paths before acquisition. Locate or acquire missing paired originals, resolve each family's known field/grain defects from the master register, build only where needed, and publish audited complete selections. Source success and completeness must be explicit; a nonzero retained table is not enough. |
 | **T13 · Review / rebuild required** | **Qualify court clusters and rebuild court bodies.** SpicyDocs + SpicyRegs. | T02/T03; 10.1M-cluster materialization, 250K old bodies, scope/join companions and 284-row corrected replay. | Find or reacquire required native originals, establish cluster/source agreement and rebuild the selected body population with all supported native text variants. Auxiliary joins are inputs, not extra hosted datasets. Do not promote the 284-row replay to full coverage. |
 | **T14 · Waiting: source qualification/access** | **Complete SAM and lobbying initial loads.** SpicyDocs + operations + SpicyRegs. | T01 for SAM; T02/T03; retained nonempty tables as comparison candidates, not source proof. Verify SAM-specific authorization; use the repaired filtered LDA reader. | Explicit bounded scopes, rate budgets and resumable checkpoints produce source-proven outputs. Wire SAM year/mode/record controls into dispatch. Retain source codes, dates and field meanings. Qualify and publish each family before resuming its schedule; the existing lobbying pause remains until its initial load succeeds. |
 

@@ -276,12 +276,12 @@
       {
         "column_name": "year",
         "column_type": "BIGINT",
-        "description": "Year of the partition, from `posted_date` (the `year=` path segment)."
+        "description": "Year from `posted_date`. NULL when the source posted date is unknown; both year and month then use `__HIVE_DEFAULT_PARTITION__` in their path segments."
       },
       {
         "column_name": "month",
         "column_type": "BIGINT",
-        "description": "Month (1–12) of the partition (the `month=` path segment)."
+        "description": "Month (1–12) from `posted_date`. NULL together with year when the source posted date is unknown; the path segment uses `__HIVE_DEFAULT_PARTITION__`."
       },
       {
         "column_name": "row_count",
@@ -566,10 +566,10 @@
     "table": "discovery_signals",
     "label": "Agency activity spikes",
     "summary": "Per-agency document-output spike signal that powers the feed's discovery panel — agencies whose document count in the trailing 30 days is at least 2× their prior-year monthly mean, requiring ≥24 documents in the prior year to suppress tiny-denominator noise. Recomputed relative to the run date, so rows turn over on every rebuild; it is a current-state signal, not a time series. Built by `build_discovery_signals` from `documents`.",
-    "coverage": "Not a range. On 2026-09-21, the mikewolfd/spicy-regs fork published eight agency signals from its repaired documents parent, calculated at 2026-09-21 20:16:37.775606-04 in America/New_York. Parquet metadata retains that exact timestamp, timezone and parent digest. All counts were independently reconstructed. Future dates are excluded from recent activity. This is a dated snapshot, not a historical series or a complete measure of agency activity. Receipt: fork-execution-2026-09-21/document-derivatives/MANUAL-AUDIT.md.",
+    "coverage": "Not a range. On 2026-09-21, the mikewolfd/spicy-regs fork published eight agency signals from its repaired documents parent, calculated at 2026-09-22 00:45:24.030240+00 in UTC. Parquet metadata retains that exact timestamp, date policy and parent digest. All counts were independently reconstructed. Future dates are excluded from recent activity. This is a dated snapshot, not a historical series or a complete measure of agency activity. Receipt: fork-execution-2026-09-21/discovery-utc/MANUAL-AUDIT.md.",
     "kind": "not_a_range",
     "measured_on": "2026-09-21",
-    "data_quality": "The existing TIMESTAMP cast discards source offsets before comparison in the recorded connection timezone. The calculation is reproducible under those stated semantics; source-instant normalization remains open. Corpus backfills and source date anomalies can affect these document-count signals.",
+    "data_quality": "Activity windows use UTC instants and preserve explicit source offsets. Dates and timestamps without offsets use UTC; source values remain unchanged. Corpus backfills and source date anomalies can affect these document-count signals.",
     "columns": [
       {
         "column_name": "agency_code",
