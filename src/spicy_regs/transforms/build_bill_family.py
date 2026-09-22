@@ -650,18 +650,29 @@ def _prior_index(paths: Mapping[str, Path | None]) -> PriorIndex:
     text_dates: dict[str, str | None] = {}
     version_counts: dict[str, int | None] = {}
     bills_path = paths.get("congress_bills")
-    if bills_path is not None and _has_columns(bills_path, ("bill_id", "version_count")):
+    wants_versions = bills_path is not None and _has_columns(bills_path, ("bill_id", "version_count"))
+    wants_text = (
+        bills_path is not None
+        and paths.get("cbo_cost_estimates") is not None
+        and _has_columns(bills_path, ("bill_id", "update_date_including_text", "cbo_cost_estimates_outcome"))
+    )
+    if wants_versions and wants_text:
+        # One scan serves both lookups where the prior used two: the text-dates
+        # subset is split out of the same rows instead of re-reading the file.
+        rows = duckdb.sql(
+            f"SELECT bill_id, version_count, update_date_including_text, cbo_cost_estimates_outcome "
+            f"FROM read_parquet('{bills_path}')"
+        ).fetchall()
+        version_counts = {bill: _int_or_none(count) for bill, count, _text, _outcome in rows}
+        text_dates = {bill: text for bill, _count, text, outcome in rows if outcome is not None}
+    elif wants_versions:
         version_counts = {
             bill: _int_or_none(count)
             for bill, count in duckdb.sql(
                 f"SELECT bill_id, version_count FROM read_parquet('{bills_path}')"
             ).fetchall()
         }
-    if (
-        bills_path is not None
-        and paths.get("cbo_cost_estimates") is not None
-        and _has_columns(bills_path, ("bill_id", "update_date_including_text", "cbo_cost_estimates_outcome"))
-    ):
+    elif wants_text:
         text_dates = dict(
             duckdb.sql(
                 f"SELECT bill_id, update_date_including_text FROM read_parquet('{bills_path}') "
@@ -1559,11 +1570,23 @@ def build_bill_family(
     # An unchanged archive still needs a read for legacy status rows or pending bodies/pairs.
     bills_prior = prior_paths.get("congress_bills")
     if bills_prior is not None:
-        import pyarrow.parquet as pq
+        # A narrow projection replaces materialising every prior row into Python
+        # dicts: only the three columns the prune decides on are read.
+        if _has_columns(bills_prior, ("bill_id", "congress", "bill_type")):
+            import duckdb
 
-        for row in pq.read_table(bills_prior).to_pylist():
-            if row["bill_id"] not in index.bill_text_dates or row["bill_id"] in index.pending_bills:
-                held_archives.pop((row.get("congress"), row.get("bill_type")), None)
+            rows = duckdb.sql(
+                f"SELECT bill_id, congress, bill_type FROM read_parquet('{bills_prior}')"
+            ).fetchall()
+            for bill_id, congress, bill_type in rows:
+                if bill_id not in index.bill_text_dates or bill_id in index.pending_bills:
+                    held_archives.pop((congress, bill_type), None)
+        else:
+            import pyarrow.parquet as pq
+
+            for row in pq.read_table(bills_prior).to_pylist():
+                if row["bill_id"] not in index.bill_text_dates or row["bill_id"] in index.pending_bills:
+                    held_archives.pop((row.get("congress"), row.get("bill_type")), None)
 
     if prior_paths.get("bill_versions") is None or bills_prior is None:
         held_archives.clear()
