@@ -16,6 +16,11 @@ on:
         required: false
         default: ''
         type: string
+      max_version_fetches:
+        description: 'Maximum printing fetches / pre-108 backfill requests (0 disables both; never unlimited)'
+        required: false
+        default: '600'
+        type: string
       bill_types:
         description: 'Comma-separated bill types (e.g. hr,s,hres); blank uses all eight'
         required: false
@@ -30,8 +35,9 @@ jobs:
       skip_upload: ${{ github.event_name == 'workflow_dispatch' && inputs.skip_upload || false }}
       bill_family_congresses: ${{ inputs.congresses || '' }}
       bill_family_bill_types: ${{ inputs.bill_types || '' }}
-      # Fourteen contract tables, including cbo_cost_estimates, from one pass: eight bulk archives, up to
-      # MAX_VERSION_FETCHES GovInfo packages at three requests each, the diff
+      bill_family_max_version_fetches: ${{ inputs.max_version_fetches || '600' }}
+      # Eighteen family outputs, including cbo_cost_estimates, from one pass: eight bulk archives, up to
+      # the selected number of GovInfo packages, the diff
       # engine over consecutive printings, and the model calls when a key is
       # set. The per-run caps bound the work; this bounds the job.
       timeout_minutes: 180

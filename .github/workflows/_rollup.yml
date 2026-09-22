@@ -88,6 +88,11 @@ on:
         required: false
         default: ''
         type: string
+      bill_family_max_version_fetches:
+        description: 'Bill-family printing / pre-108 backfill acquisition cap; 0 disables those requests'
+        required: false
+        default: '600'
+        type: string
       bill_family_bill_types:
         description: 'Optional comma-separated bill types to scope the bill-family rollup (e.g. hr,s,hres)'
         required: false
@@ -218,6 +223,7 @@ jobs:
           CONGRESS_UNTIL: ${{ inputs.congress_until }}
           BILL_FAMILY_CONGRESSES: ${{ inputs.bill_family_congresses }}
           BILL_FAMILY_BILL_TYPES: ${{ inputs.bill_family_bill_types }}
+          BILL_FAMILY_MAX_VERSION_FETCHES: ${{ inputs.bill_family_max_version_fetches }}
           # Gemini API key for the bill-family rollup's model-backed tables
           # (section_classifications, bill_summaries, diff_summaries —
           # spicy_docs.interpretation's classify_sections/summarize_bill/

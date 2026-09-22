@@ -228,8 +228,13 @@ def test_printing_403_aborts_run_before_any_further_capture(tmp_path, monkeypatc
 
     bodies = Refused()
     with pytest.raises(CredentialRefusedError, match="403"):
-        build_bill_family(tmp_path, bulk_acquirer=StubBulkAcquirer(), body_acquirer=bodies,
-                          max_version_fetches=10, download_prior=_no_prior)
+        build_bill_family(
+            tmp_path,
+            bulk_acquirer=StubBulkAcquirer(),
+            body_acquirer=bodies,
+            max_version_fetches=10,
+            download_prior=_no_prior,
+        )
     assert len(bodies.requested) == 1, "the fixture offers two printings; the second must never be attempted"
     assert not list(tmp_path.glob("*.parquet")), "an aborted run must produce no capture tables or checkpoints"
 
@@ -448,10 +453,10 @@ def _changed_eh() -> bytes:
         "<header>Short title and purpose</header>",
     ).replace(
         "</legis-body>",
-        "    <section id=\"HADDEDSECTION0000000000000000001\">\n"
+        '    <section id="HADDEDSECTION0000000000000000001">\n'
         "      <enum>2.</enum>\n"
         "      <header>Funding</header>\n"
-        "      <text display-inline=\"no-display-inline\">There is authorized to be appropriated "
+        '      <text display-inline="no-display-inline">There is authorized to be appropriated '
         "$1,400,000 to carry out this Act.</text>\n"
         "    </section>\n"
         "  </legis-body>",
@@ -661,19 +666,16 @@ def scoped(monkeypatch):
 
 
 def test_an_unchanged_bill_costs_no_requests(tmp_path, scoped):
-    """The steady state: the publisher's text stamp is unchanged, so nothing is fetched."""
-    _seed_prior(
-        tmp_path,
-        "congress_bills",
-        [{"bill_id": "119-hr-6028", "update_date_including_text": _status_text_date(),
-          "cbo_cost_estimates_outcome": "requested-empty:absent"}],
-    )
-    _seed_prior(
-        tmp_path, "cbo_cost_estimates", [],
-    )
+    """A completed bill skips bodies even when its folder's listing has moved."""
+    first = tmp_path / "first"
+    _run(first, StubBulkAcquirer(), _no_prior)
+    second = tmp_path / "second"
+    second.mkdir()
     body = StubBodyAcquirer()
-    build_bill_family(tmp_path, bulk_acquirer=StubBulkAcquirer(), body_acquirer=body, download_prior=_no_prior)
-    assert body.requested == [], "an unchanged bill must not fetch a single printing"
+    bulk = StubBulkAcquirer(entry=lambda c, t: zip_entry(c, t, size=31_658_670))
+    build_bill_family(second, bulk_acquirer=bulk, body_acquirer=body, download_prior=_prior_from(first))
+    assert bulk.zip_downloads == [(119, "hr")]
+    assert body.requested == [], "completed status, bodies and diffs need no repeated body fetch"
 
 
 def test_a_changed_bill_is_rebuilt(tmp_path, scoped):
@@ -689,32 +691,23 @@ def test_a_changed_bill_is_rebuilt(tmp_path, scoped):
 
 
 def test_printings_already_held_are_not_refetched(tmp_path, scoped):
-    """Both printings published: a changed bill re-reads its status, not its bodies."""
-    _seed_prior(
-        tmp_path,
-        "congress_bills",
-        [{"bill_id": "119-hr-6028", "update_date_including_text": "1999-01-01T00:00:00Z"}],
-    )
-    _seed_prior(
-        tmp_path,
-        "bill_versions",
-        [
-            {"bill_id": "119-hr-6028", "version_code": code, "source": "govinfo", "sha256": "sha256:x"}
-            for code in ("introduced-in-house", "engrossed-in-house")
-        ],
-    )
+    """Both processed printings published: changed metadata keeps their acquired facts."""
+    first = tmp_path / "first"
+    prior = _run(first, StubBulkAcquirer(), _no_prior)
+    held = pq.read_table(prior["bill_versions"]).to_pylist()
+    stamp = _status_text_date()
+    assert stamp is not None
+    changed_status = (FIXTURES / "status-119hr6028.xml").read_bytes().replace(stamp.encode(), b"2026-09-20T00:00:00Z")
     body = StubBodyAcquirer()
+    second = tmp_path / "second"
+    second.mkdir()
+    bulk = StubBulkAcquirer(entry=lambda c, t: zip_entry(c, t, size=31_658_670), status=changed_status)
     paths = {
         p.stem: p
-        for p in build_bill_family(
-            tmp_path, bulk_acquirer=StubBulkAcquirer(), body_acquirer=body, download_prior=_no_prior
-        )
+        for p in build_bill_family(second, bulk_acquirer=bulk, body_acquirer=body, download_prior=_prior_from(first))
     }
-    assert body.requested == [], "a held printing needs no second fetch"
-    # And the published rows are the prior ones, not degraded re-emissions.
-    versions = pq.read_table(paths["bill_versions"]).to_pylist()
-    assert len(versions) == 2
-    assert all(row["sha256"] == "sha256:x" for row in versions), "a held row must not be overwritten with NULLs"
+    assert body.requested == [], "a completed printing needs no second fetch"
+    assert pq.read_table(paths["bill_versions"]).to_pylist() == held
 
 
 def test_a_new_printing_pulls_its_neighbour_so_the_diff_still_happens(tmp_path, scoped):
@@ -1205,7 +1198,9 @@ def _unsettle(tmp_path: Path) -> None:
 
     path = tmp_path / f"{BACKFILL_WALKS_TABLE}.parquet"
     rows = [{**row, "list_completed": "false"} for row in pq.read_table(path).to_pylist()]
-    pq.write_table(pa.Table.from_pylist(rows, schema=pa.schema([(c, pa.string()) for c in BACKFILL_WALK_COLUMNS])), path)
+    pq.write_table(
+        pa.Table.from_pylist(rows, schema=pa.schema([(c, pa.string()) for c in BACKFILL_WALK_COLUMNS])), path
+    )
 
 
 def _state(tmp_path: Path) -> list[dict]:
@@ -1392,7 +1387,10 @@ def test_a_permanent_gap_costs_one_request_a_run_not_a_walk(tmp_path, scoped_92)
     third = _stub_source(_two_bills(), detail_error=always)
     build_bill_family(tmp_path, list_source=third, download_prior=_prior_from(tmp_path))
     assert third.paged == [] and _numbers(third.requested) == [2185]
-    assert [(row["number"], row["refusal"]) for row in _state(tmp_path)] == [("2185", "ConnectionError"), ("2190", None)]
+    assert [(row["number"], row["refusal"]) for row in _state(tmp_path)] == [
+        ("2185", "ConnectionError"),
+        ("2190", None),
+    ]
 
 
 def test_a_moved_stamp_is_refetched_once_and_counted_once(tmp_path, scoped_92):
@@ -1416,7 +1414,9 @@ def test_a_moved_stamp_is_refetched_once_and_counted_once(tmp_path, scoped_92):
 
 def test_an_unwalkable_record_is_counted_and_settles_the_unit(tmp_path, scoped_92):
     stray = {**_DETAIL_92_HR_2185, "type": "S", "number": "9"}  # a Senate bill on the hr walk
-    source = StubListSource({(92, "hr"): [_Page([dict(_DETAIL_92_HR_2185), stray], 2)]}, {(92, "hr", 2185): _DETAIL_92_HR_2185})
+    source = StubListSource(
+        {(92, "hr"): [_Page([dict(_DETAIL_92_HR_2185), stray], 2)]}, {(92, "hr", 2185): _DETAIL_92_HR_2185}
+    )
     build_bill_family(tmp_path, list_source=source, download_prior=_no_prior)
     walk = _walk_row(tmp_path)
     assert walk["unwalkable_count"] == "1" and walk["backfilled_count"] == "1" and walk["declared_count"] == "2"
@@ -1449,7 +1449,10 @@ def test_a_refusal_retried_at_the_start_is_not_asked_for_again_by_the_walk(tmp_p
     always = lambda identity: ConnectionError("still down") if identity.number == 2185 else None  # noqa: E731
     # A cap of 2 (one page, one detail) leaves the unit unsettled with 2185 refused.
     build_bill_family(
-        tmp_path, list_source=_stub_source(_two_bills(), detail_error=always), max_version_fetches=2, download_prior=_no_prior
+        tmp_path,
+        list_source=_stub_source(_two_bills(), detail_error=always),
+        max_version_fetches=2,
+        download_prior=_no_prior,
     )
     second = _stub_source(_two_bills(), detail_error=always)
     build_bill_family(tmp_path, list_source=second, download_prior=_prior_from(tmp_path))
@@ -1563,7 +1566,9 @@ def test_an_unaddressable_printing_is_never_fetched_and_spends_no_budget():
         type="Private Law",
         date="2026-09-01",
         formats=(
-            BillTextFormat(url="https://www.congress.gov/119/bills/hr6028/BILLS-119hr6028.htm", type="HTML", package_id=None),
+            BillTextFormat(
+                url="https://www.congress.gov/119/bills/hr6028/BILLS-119hr6028.htm", type="HTML", package_id=None
+            ),
         ),
         package_id=None,
     )

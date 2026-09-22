@@ -27,7 +27,10 @@ for the same reason every other output is — something reads them back from R2:
 
 Scope comes from the workflow inputs ``BILL_FAMILY_CONGRESSES`` and
 ``BILL_FAMILY_BILL_TYPES``, defaulting to the current Congress and all eight
-bill types.
+bill types. ``BILL_FAMILY_MAX_VERSION_FETCHES`` bounds printing acquisitions
+and the existing pre-108 metadata-backfill request budget. It defaults to 600;
+zero disables those requests, without disabling BILLSTATUS metadata reads.
+Model-call policy is separate from this acquisition cap.
 
 The ``congress_bills`` merge reads the published ``laws`` table best-effort to
 fill ``statutes_at_large_cite`` (``transforms/table_merge.py``) — a
@@ -35,6 +38,7 @@ fill ``statutes_at_large_cite`` (``transforms/table_merge.py``) — a
 rollup's cron fires before this one's for that reason.
 """
 
+import os
 from pathlib import Path
 from typing import ClassVar
 
@@ -44,6 +48,7 @@ from spicy_regs.transforms.build_bill_family import (
     BACKFILLS_TABLE,
     BACKFILL_WALKS_TABLE,
     FAMILY_TABLES,
+    MAX_VERSION_FETCHES,
     VOTE_REFERENCES_TABLE,
     build_bill_family,
 )
@@ -64,7 +69,11 @@ class BillFamilyRollup(RollupPipeline):
     )
 
     def build(self, output_dir: Path) -> tuple[Path, ...]:
-        return build_bill_family(output_dir)
+        raw = os.environ.get("BILL_FAMILY_MAX_VERSION_FETCHES", "").strip()
+        if raw and (not raw.isascii() or not raw.isdecimal()):
+            raise ValueError("BILL_FAMILY_MAX_VERSION_FETCHES must be a nonnegative integer; zero disables acquisition")
+        budget = int(raw) if raw else MAX_VERSION_FETCHES
+        return build_bill_family(output_dir, max_version_fetches=budget)
 
 
 app = make_rollup_app(BillFamilyRollup)
