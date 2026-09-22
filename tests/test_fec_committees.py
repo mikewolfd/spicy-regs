@@ -14,12 +14,13 @@ import httpx
 import pyarrow.parquet as pq
 import pytest
 
-from spicy_regs.sources.fec_committees import (
+from spicy_regs.transforms.build_fec_committees import (
     API_KEY_ENV_VARS,
-    FecCommitteesReader,
+    COLUMNS,
     _resolve_api_key,
+    _shape,
+    iter_fec_committee_records,
 )
-from spicy_regs.transforms.build_fec_committees import COLUMNS, _shape
 from spicy_regs.transforms.build_fec_committees import write_fec_committee_rows
 
 _RAW_COMMITTEE = {
@@ -111,7 +112,9 @@ def test_retained_input_rejects_invalid_batch_bound(tmp_path, value):
 def test_default_builder_uses_the_shared_row_writer(tmp_path, monkeypatch):
     module = importlib.import_module("spicy_regs.transforms.build_fec_committees")
     monkeypatch.setattr(module.r2, "download", lambda *a: False)
-    monkeypatch.setattr(module.FecCommitteesReader, "iter_records", lambda self: (row for row in [_RAW_COMMITTEE]))
+    monkeypatch.setattr(
+        module, "iter_fec_committee_records", lambda **kwargs: (row for row in [_RAW_COMMITTEE])
+    )
     real_write = module.write_fec_committee_rows
     calls = []
 
@@ -120,7 +123,6 @@ def test_default_builder_uses_the_shared_row_writer(tmp_path, monkeypatch):
         return real_write(records, destination, batch_size=1)
 
     monkeypatch.setattr(module, "write_fec_committee_rows", write)
-    monkeypatch.setenv("FEC_API_KEY", "test-key")
     result = module.build_fec_committees(tmp_path)
     assert calls == ["_fec_new.parquet"]
     assert pq.read_table(result).to_pylist() == [_shape(_RAW_COMMITTEE)]
@@ -193,12 +195,11 @@ def test_resolve_api_key_returns_none_when_unset(monkeypatch):
     assert _resolve_api_key() is None
 
 
-def test_reader_refuses_missing_key(monkeypatch, tmp_path):
+def test_walker_refuses_missing_key(monkeypatch, tmp_path):
     for var in API_KEY_ENV_VARS:
         monkeypatch.delenv(var, raising=False)
-    reader = FecCommitteesReader(capture_dir=tmp_path)
     with pytest.raises(ValueError, match="require an API key"):
-        list(reader.iter_records())
+        list(iter_fec_committee_records(capture_dir=tmp_path))
     assert list(tmp_path.iterdir()) == []
 
 
@@ -216,8 +217,8 @@ def _page(records, number, *, pages=9, count=0, exact=False):
     }
 
 
-def _reader(tmp_path, payloads, **kwargs):
-    """A reader over a mock transport serving ``payloads`` by page number, recording requests."""
+def _records(tmp_path, payloads, **kwargs):
+    """A walker over a mock transport serving ``payloads`` by page number, recording requests."""
     requests = []
 
     class ObservedTransport(httpx.MockTransport):
@@ -236,19 +237,25 @@ def _reader(tmp_path, payloads, **kwargs):
         return httpx.Response(200, json=value)
 
     transport = ObservedTransport(respond)
-    reader = FecCommitteesReader(
+    records = iter_fec_committee_records(
         api_key="private-api-test-credential",
         capture_dir=tmp_path,
         transport=transport,
         min_interval=0,
         **kwargs,
     )
-    return reader, requests, transport
+    return records, requests, transport
 
 
-def _run_state(reader):
-    """The reader's captured ``run.json`` state for the last attempt."""
-    return json.loads((reader.last_run_path / "run.json").read_text())
+def _run_path(tmp_path):
+    """The walker's per-attempt capture directory."""
+    (path,) = tmp_path.glob("committees-*")
+    return path
+
+
+def _run_state(tmp_path):
+    """The walker's captured ``run.json`` state for the last attempt."""
+    return json.loads((_run_path(tmp_path) / "run.json").read_text())
 
 
 def test_provider_walks_past_short_pages_and_retains_credential_free_evidence(tmp_path):
@@ -257,42 +264,43 @@ def test_provider_walks_past_short_pages_and_retains_credential_free_evidence(tm
         _page([{"committee_id": "C2"}, {"committee_id": "C3"}], 2),
         _page([], 3),
     ]
-    reader, requests, transport = _reader(tmp_path, payloads, per_page=2)
-    assert list(reader.iter_records()) == [{"committee_id": c} for c in ("C1", "C2", "C3")]
+    records, requests, transport = _records(tmp_path, payloads, per_page=2)
+    assert list(records) == [{"committee_id": c} for c in ("C1", "C2", "C3")]
     assert len(requests) == 3
     for request in requests:
         assert request.url.path == "/v1/committees/"
         assert set(request.url.params) == {"sort", "per_page", "page"}
         assert request.url.params["sort"] == "committee_id"
         assert request.headers["X-Api-Key"] == "private-api-test-credential"
-    state = _run_state(reader)
+    state = _run_state(tmp_path)
     assert state["status"] == "complete"
     assert state["records"] == 3
     assert transport.closed
-    index = [json.loads(line) for line in (reader.last_run_path / "pages.jsonl").read_text().splitlines()]
+    run_path = _run_path(tmp_path)
+    index = [json.loads(line) for line in (run_path / "pages.jsonl").read_text().splitlines()]
     import hashlib
 
     for page, expected in zip(index, payloads, strict=True):
         evidence = page["evidence"]
-        raw = (reader.last_run_path / "blobs" / evidence["blob_path"]).read_bytes()
+        raw = (run_path / "blobs" / evidence["blob_path"]).read_bytes()
         assert json.loads(raw) == expected
         assert "sha256:" + hashlib.sha256(raw).hexdigest() == evidence["sha256"]
         assert len(raw) == evidence["bytes"]
-    for path in reader.last_run_path.rglob("*"):
+    for path in run_path.rglob("*"):
         if path.is_file():
             assert b"private-api-test-credential" not in path.read_bytes()
 
 
 def test_provider_exact_count_terminates_without_unnecessary_empty_request(tmp_path):
-    reader, requests, transport = _reader(
+    records, requests, transport = _records(
         tmp_path,
         [
             _page([{"committee_id": "C1"}], 1, pages=1, count=1, exact=True),
         ],
     )
-    assert len(list(reader.iter_records())) == 1
+    assert len(list(records)) == 1
     assert len(requests) == 1
-    assert _run_state(reader)["declared_exact_count"] == 1
+    assert _run_state(tmp_path)["declared_exact_count"] == 1
     assert transport.closed
 
 
@@ -317,30 +325,29 @@ def test_provider_exact_count_terminates_without_unnecessary_empty_request(tmp_p
     ],
 )
 def test_refusals_keep_attempt_incomplete_and_close_transport(tmp_path, payloads, match):
-    reader, _, transport = _reader(tmp_path, payloads)
+    records, _, transport = _records(tmp_path, payloads)
     with pytest.raises(ValueError, match=match):
-        list(reader.iter_records())
-    assert _run_state(reader)["status"] == "incomplete"
+        list(records)
+    assert _run_state(tmp_path)["status"] == "incomplete"
     assert transport.closed
 
 
 def test_page_bound_refuses_partial_population(tmp_path):
-    reader, _, transport = _reader(tmp_path, [_page([{"committee_id": "C1"}], 1)], max_pages=1)
+    records, _, transport = _records(tmp_path, [_page([{"committee_id": "C1"}], 1)], max_pages=1)
     destination = write_fec_committee_rows([_RAW_COMMITTEE], tmp_path / "previous.parquet")
     prior = destination.read_bytes()
     with pytest.raises(ValueError, match="page bound"):
-        write_fec_committee_rows(reader.iter_records(), destination, batch_size=1)
+        write_fec_committee_rows(records, destination, batch_size=1)
     assert destination.read_bytes() == prior
-    assert _run_state(reader)["status"] == "incomplete"
+    assert _run_state(tmp_path)["status"] == "incomplete"
     assert transport.closed
 
 
 def test_consumer_closing_iterator_marks_attempt_incomplete(tmp_path):
-    reader, _, transport = _reader(tmp_path, [_page([{"committee_id": "C1"}], 1)])
-    records = reader.iter_records()
+    records, _, transport = _records(tmp_path, [_page([{"committee_id": "C1"}], 1)])
     next(records)
     records.close()
-    assert _run_state(reader)["status"] == "incomplete"
+    assert _run_state(tmp_path)["status"] == "incomplete"
     assert transport.closed
 
 
@@ -354,7 +361,7 @@ def test_default_merge_fresh_whole_row_wins_and_prior_only_survives(tmp_path, mo
         tmp_path / "_fec_prior.parquet",
     )
     fresh = {**_RAW_COMMITTEE, "name": "FRESH", "state": None}
-    monkeypatch.setattr(module.FecCommitteesReader, "iter_records", lambda self: (row for row in [fresh]))
+    monkeypatch.setattr(module, "iter_fec_committee_records", lambda **kwargs: (row for row in [fresh]))
     result = module.build_fec_committees(tmp_path)
     rows = pq.read_table(result).to_pylist()
     assert rows == [_shape(fresh), _shape({**_RAW_COMMITTEE, "committee_id": "C99999999", "name": "PRIOR ONLY"})]
@@ -362,20 +369,20 @@ def test_default_merge_fresh_whole_row_wins_and_prior_only_survives(tmp_path, mo
     assert not (tmp_path / "_fec_new.parquet").exists()
 
 
-def test_builder_closes_reader_when_shaping_fails_and_preserves_output(tmp_path, monkeypatch):
+def test_builder_closes_walker_when_shaping_fails_and_preserves_output(tmp_path, monkeypatch):
     module = importlib.import_module("spicy_regs.transforms.build_fec_committees")
     target = write_fec_committee_rows([_RAW_COMMITTEE], tmp_path / module.OUTPUT)
     previous = target.read_bytes()
     closed = []
 
-    def invalid_rows(self):
+    def invalid_rows(**kwargs):
         try:
             yield {**_RAW_COMMITTEE, "name": {"not": "a scalar"}}
         finally:
             closed.append(True)
 
     monkeypatch.setattr(module.r2, "download", lambda *args: False)
-    monkeypatch.setattr(module.FecCommitteesReader, "iter_records", invalid_rows)
+    monkeypatch.setattr(module, "iter_fec_committee_records", invalid_rows)
     with pytest.raises((TypeError, ValueError)):
         module.build_fec_committees(tmp_path)
     assert closed == [True]
@@ -383,6 +390,6 @@ def test_builder_closes_reader_when_shaping_fails_and_preserves_output(tmp_path,
 
 
 @pytest.mark.parametrize("option", [{"max_pages": 0}, {"max_pages": True}, {"per_page": 0}])
-def test_reader_rejects_invalid_bounds(tmp_path, option):
+def test_walker_rejects_invalid_bounds(tmp_path, option):
     with pytest.raises(ValueError, match="positive integer"):
-        FecCommitteesReader(capture_dir=tmp_path, **option)
+        iter_fec_committee_records(capture_dir=tmp_path, **option)
