@@ -203,10 +203,10 @@ def preflight_uploads(output_dir: Path, files: list[Path]) -> None:
     A transfer can still fail after a clean preflight, so callers must leave the
     manifest unpublished until every data upload succeeds.
 
-    Costs one serial HEAD per file, and :func:`upload_file` HEADs each again:
-    2N round-trips where it was N. N is unbounded for comment partitions, so
-    profile this loop first when a comment-heavy run drags — the fix is a
-    fixed-width thread pool, not ``max_workers=len(files)``.
+    Costs one HEAD per file over a fixed-width pool (8 workers), and
+    :func:`upload_file` HEADs each again during the upload itself: the
+    upload-time check stays because it is every caller's own shrink guard,
+    not just this preflight's.
     """
     if not getenv("R2_ACCESS_KEY_ID"):
         return
@@ -215,13 +215,19 @@ def preflight_uploads(output_dir: Path, files: list[Path]) -> None:
     client = get_r2_client()
     failures: list[tuple[str, BaseException]] = []
 
-    for local_path in files:
+    def preflight_one(local_path: Path) -> None:
         remote_key = _remote_key(output_dir, local_path)
         try:
             remote_size = _get_remote_size(client, bucket, remote_key)
             _assert_upload_safe(local_path.stat().st_size, remote_size, remote_key)
         except Exception as error:
             failures.append((remote_key, error))
+
+    # Fixed-width pool: the preflight is one HEAD per file and N is unbounded
+    # for comment partitions; a pool sized to the file count would still burst
+    # thousands of round trips at once.
+    with ThreadPoolExecutor(max_workers=min(8, len(files) or 1)) as executor:
+        list(executor.map(preflight_one, files))
 
     _raise_for_failures("Publication preflight", failures, len(files))
 
@@ -360,8 +366,16 @@ def upload_comment_partitions(output_dir: Path, changed_files: list[Path]) -> No
     if not index_file.exists():
         raise RuntimeError("Expected comments_index.parquet beside the changed partitions")
 
-    for local_path in changed_files:
-        upload_file(local_path, remote_key=_remote_key(output_dir, local_path))
+    # Fixed-width pool for the partitions; the index uploads last so a
+    # published index can never name partitions that are not yet there.
+    with ThreadPoolExecutor(max_workers=min(8, len(changed_files) or 1)) as executor:
+        futures = {
+            executor.submit(upload_file, local_path, _remote_key(output_dir, local_path)): local_path
+            for local_path in changed_files
+        }
+        for future in as_completed(futures):
+            if (error := future.exception()) is not None:
+                raise RuntimeError(f"partition upload failed for {futures[future].name}") from error
     upload_file(index_file, remote_key="comments_index.parquet")
 
     logger.info("Uploaded {} comment partitions + index", len(changed_files))
