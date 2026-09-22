@@ -6,7 +6,7 @@
 
 One row per regulations.gov docket. A docket is the top-level folder a federal agency opens for a rulemaking or other action; it groups the documents the agency posts and the public comments it receives.
 
-**Coverage.** True range. Dockets as mirrored from regulations.gov, with modification dates from 2006-09-26 to 2026-09-06. The date records when a docket last changed, not when it opened, so it is a freshness axis rather than a coverage one. *(measured 2026-09-06)*
+**Coverage.** Sampled repair with retained prior rows. On 2026-09-21, the mikewolfd/spicy-regs fork published and verified 279,124 rows: 278,607 native records from all 335 selected retained docket releases merged into the 279,085-row prior, preserving newer and unrelated rows. This is a legacy/base Parquet publication outside the managed generation index. It does not establish a fresh regulations.gov census or publication at the upstream/default source. modify_date records source modification, not docket opening or acquisition. Receipts: fork-execution-2026-09-21/publication-dockets.json and fork-base-repair-2026-09-21/repair-audit.json. *(measured 2026-09-21)*
 
 - **Parquet file:** `dockets.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.

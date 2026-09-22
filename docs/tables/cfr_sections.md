@@ -6,7 +6,7 @@
 
 One row per GovInfo annual CFR granule, including sections, appendices, tables of contents and other structural units. The table retains metadata and explicit identifier tokens; it does not contain regulatory body text. A section token alone cannot establish its enclosing part. The corrected mapper leaves part and citation unknown without explicit part evidence, preserving the literal section token instead of splitting its numeric prefix. Older generations can retain inferred parts until their packages are requalified. Missing credentials and incomplete source traversals refuse before output replacement. All columns are stored as VARCHAR.
 
-**Coverage.** Window. Annual-edition metadata from the selected 2025 and 2026 editions, not full publication history or a record of section changes. Native part ancestry and body text require separate source qualification. *(measured 2026-09-06)*
+**Coverage.** Window. Annual-edition metadata from selected 2025 and 2026 editions. On 2026-09-21, the mikewolfd/spicy-regs fork published a 319,507-row generation correcting exactly 1,444 rows for CFR-2025-title14-vol4; all 318,063 unrelated current rows were preserved. This qualifies that package's same-version mapping correction, not every retained row, full publication history, native part ancestry or body text. Older inferred parts can remain outside the repaired scope. No upstream/default publication is asserted. Receipt: fork-execution-2026-09-21/publication-cfr-correction.json. *(measured 2026-09-21)*
 
 - **Parquet file:** `cfr_sections.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.

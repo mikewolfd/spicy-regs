@@ -6,7 +6,7 @@
 
 One row per captured GovInfo hearing transcript. bill_id is always NULL: a hearing can concern several bills, represented in hearing_bill_links. All columns are stored as VARCHAR.
 
-**Coverage.** Sampled. The adoption run re-read all 13 prior hearings under the 30-body CHRG cap, retaining 13 rows. Two details named a meeting and 11 named none; none refused. The shared committee-reports pass used 144 requests, 101 keyed. Unsupported IDs are filtered through the provider grammar before the body cap. Receipt: `rollups-0-24-0-adoption-2026-09-20/`. Local output only; not uploaded. *(measured 2026-09-20)*
+**Coverage.** Sampled. The 2026-09-21 mikewolfd/spicy-regs fork delivery rebuilt and published all 13 selected hearing packages within the five-table report family. All 13 exact hearing-detail requests were accepted and their native event identifiers checked. One body changed bytes from its prior pin while its normalized text digest stayed identical; the fresh capture remains distinct. These are package/body metadata rows, not speaker turns or complete hearing history. No upstream/default publication is asserted. Receipts: fork-execution-2026-09-21/report-family/rebuild-audit.json, publication-report-family.json and report-family-mcp-audit/. *(measured 2026-09-21)*
 
 **Data quality.** Cover bills come from the package's MODS and cost no extra requests. BODY mentions do not become hearing links. event_id comes from a verified Congress.gov hearing detail; NULL can mean no meeting or a refused detail. committee_report_reads distinguishes a completed read from a refused one.
 

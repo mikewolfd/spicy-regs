@@ -6,7 +6,7 @@
 
 Joinable metadata and retained source evidence across FEC families. collection_id joins fec_collections; source_family joins fec_source_catalog. Native identifiers are lifted only when the provider reports them, and committee_id can join fec_committees. metadata_json and source_record_json preserve the complete provider record. Missing IDs remain missing.
 
-**Coverage.** Sampled. Verified records from selected provider releases or retained query captures. Coverage comes from fec_collections, not the presence of a source-family route. Overlapping collections may intentionally repeat the same source observation. This is a supported local output description. *(measured 2026-09-21)*
+**Coverage.** Sampled. On 2026-09-21, the mikewolfd/spicy-regs fork published and verified 13,717,161 provider records in 649 selected retained collections. Coverage comes from fec_collections, not the presence of a catalog route. Overlapping collections may intentionally repeat observations; native rows and file-level original metadata have different grains. Retaining a bulk file inventory does not imply every member is expanded into this table. This selected seed is not complete FEC history or upstream/default publication. Receipts: fork-execution-2026-09-21/fec-publication-summary.json and remote-mcp-audit/. *(measured 2026-09-21)*
 
 **Data quality.** Native fields retain their source meaning. Monetary values, amendment chains and record inclusion rules differ by family; generic record ingestion does not select a latest amendment or establish a safe sum. Unknown fields stay in native JSON. Original pinned bytes preserve numeric spelling where the provider exposes exact decimal values as strings.
 

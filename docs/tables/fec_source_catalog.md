@@ -6,7 +6,7 @@
 
 Source discovery metadata from SpicyDocs' official FEC inventory. Join source_family to fec_collections and fec_source_records to inspect which selected collections have been retained. The catalogue covers API, bulk, legal, agency and other official access paths; each has its own scope.
 
-**Coverage.** Not a range. Catalogues the packaged official FEC source inventory and access routes. A route being listed does not establish record acquisition, a downloaded document body, historical completeness or public availability. The date records this supported table description. *(measured 2026-09-21)*
+**Coverage.** Not a range. On 2026-09-21, the mikewolfd/spicy-regs fork published and verified 26 source-family entries from the packaged SpicyDocs official FEC registry. The catalog itself is available in that fork; a listed route does not establish record acquisition, downloaded document bodies, historical completeness or availability of every source population. No upstream/default publication is asserted. Receipts: fork-execution-2026-09-21/fec-publication-summary.json and remote-mcp-audit/. *(measured 2026-09-21)*
 
 - **Parquet file:** `fec_source_catalog.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
