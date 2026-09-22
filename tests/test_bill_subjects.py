@@ -197,6 +197,15 @@ def test_the_api_carrier_refuses_to_run_without_a_key(monkeypatch):
         BillSubjectsFetcher(carrier=CARRIER_API)
 
 
+def test_an_unknown_carrier_is_refused_at_construction(monkeypatch):
+    """A typo must not fall through to the BILLSTATUS path and be published as a third carrier name."""
+    _keyless(monkeypatch)
+    with pytest.raises(ValueError, match="unknown carrier"):
+        BillSubjectsFetcher(carrier="congress_api")
+    with pytest.raises(ValueError, match="unknown carrier"):
+        BillSubjectsFetcher(carrier="congress_api", delay=0)
+
+
 def test_each_carrier_declares_its_coverage_floor(monkeypatch):
     _keyless(monkeypatch)
     # GPO's bulk data starts at the 108th Congress; the API reaches back to CRS's

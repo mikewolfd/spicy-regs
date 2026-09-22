@@ -151,7 +151,8 @@ class BillSubjectsFetcher:
 
     Build one per run and reuse it: the HTTP client is opened lazily on the
     first fetch and held for connection reuse, and the run tallies accumulate on
-    :attr:`counts`. Not shared-safe across threads.
+    :attr:`counts`. Not shared-safe across threads. An unknown carrier name is
+    refused at construction rather than falling through to the BILLSTATUS path.
     """
 
     def __init__(
@@ -165,6 +166,8 @@ class BillSubjectsFetcher:
     ) -> None:
         self.api_key = api_key if api_key is not None else _resolve_api_key()
         self.carrier = carrier or (CARRIER_API if self.api_key else CARRIER_BULKDATA)
+        if self.carrier not in (CARRIER_API, CARRIER_BULKDATA):
+            raise ValueError(f"unknown carrier {self.carrier!r}; expected {CARRIER_API!r} or {CARRIER_BULKDATA!r}")
         if self.carrier == CARRIER_API and not self.api_key:
             raise ValueError(
                 f"carrier {CARRIER_API!r} needs an api.data.gov key (set one of {', '.join(API_KEY_ENV_VARS)})"
