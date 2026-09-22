@@ -50,7 +50,7 @@ OUTPUT = "amendments.parquet"
 
 
 BUDGET = PagedJsonBudget(
-    max_requests=2_000,
+    max_requests=5,  # measured retry bound: see fork-execution-2026-09-21/retry-measurement-2026-09-22
     max_page_bytes=8 * 1024 * 1024,
     timeout_seconds=60.0,
     min_request_interval_seconds=0.2,

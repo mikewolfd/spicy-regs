@@ -112,10 +112,15 @@ before it dies. The A11 review found this through the backfill's own 2,400
 override, which is removed; the three pre-existing bounds are the repo's
 convention and stand until measured. Pick one bound from a measured retry
 distribution, or make the reader's cap a run cap, and say which in the
-decision record. **Decided 2026-09-22: measure first** — one bounded
-credentialed run records the actual retry distribution with a receipt, then
-the three bounds become one from that distribution; the run-cap change is
-the fallback if the measurement cannot run.
+decision record. **Decided 2026-09-22: measured, and the three bounds are
+now one.** A bounded credentialed run over the bill and house-vote routes
+(receipt `~/Work/corpora/fork-execution-2026-09-21/retry-measurement-2026-09-22/attempt-distribution.json`)
+observed 18/18 requests succeed on the first attempt — a fair-weather
+sample; the tail it cannot see is exactly what the bound exists for. The
+shared per-request bound is therefore **5** (observed 1 plus four jittered
+retries, ~32s worst-case at the 60s ceiling): a stuck request now fails
+within about a minute instead of hours, applied to the bill reader, the
+roll-call rollup and the amendments rollup. Re-measure before re-opening.
 
 **Add `full_text_xml_url` to the Federal Register ingest.** A person cannot
 search inside a rule today, and whoever builds that first will take the pointer

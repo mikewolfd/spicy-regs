@@ -128,7 +128,7 @@ _MAX_PAGES = 2_000
 # resets the request count per page, not per walk) and pacing. Mirrors the
 # budget already used by every other Congress.gov/GovInfo listing consumer in
 # this repo (build_amendments, build_committee_reports, build_roll_call_votes).
-_MAX_REQUESTS_PER_PAGE = 500
+_MAX_REQUESTS_PER_PAGE = 5  # measured retry bound: see fork-execution-2026-09-21/retry-measurement-2026-09-22
 _MAX_PAGE_BYTES = 8 * 1024 * 1024
 _TIMEOUT_SECONDS = 60.0
 _MIN_REQUEST_INTERVAL_SECONDS = 0.2
