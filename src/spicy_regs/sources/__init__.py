@@ -11,7 +11,6 @@ if TYPE_CHECKING:
     from spicy_regs.sources.congress_bills import CongressBillsReader
     from spicy_regs.sources.derived_text import DerivedCommentText
     from spicy_regs.sources.fcc_ecfs import FccEcfsFilingsReader, FccEcfsProceedingsReader
-    from spicy_regs.sources.federal_register import FederalRegisterReader
     from spicy_regs.sources.parquet import StagingWriter
     from spicy_regs.sources.unified_agenda import UnifiedAgendaReader
 
@@ -21,7 +20,6 @@ _CONNECTORS = {
     "DerivedCommentText": "derived_text",
     "FccEcfsFilingsReader": "fcc_ecfs",
     "FccEcfsProceedingsReader": "fcc_ecfs",
-    "FederalRegisterReader": "federal_register",
     "StagingWriter": "parquet",
     "UnifiedAgendaReader": "unified_agenda",
 }
@@ -44,7 +42,6 @@ __all__ = [
     "CfrSectionsReader",
     "CongressBillsReader",
     "UnifiedAgendaReader",
-    "FederalRegisterReader",
     "FccEcfsProceedingsReader",
     "FccEcfsFilingsReader",
     "DerivedCommentText",

@@ -25,7 +25,7 @@ while the merge preserves whatever the prior table had.
 from __future__ import annotations
 
 import json
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Iterator
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -34,9 +34,11 @@ import pyarrow.parquet as pq
 from loguru import logger
 
 from spicy_regs.sources import r2
-from spicy_regs.sources.federal_register import FR_EPOCH, FederalRegisterReader
 
 OUTPUT = "federal_register.parquet"
+
+# The oldest documents the API serves. A backfill with no prior table starts here.
+FR_EPOCH = date(1994, 1, 1)
 
 # Re-scan this many days before the last stored publication_date on each run, so
 # documents added/corrected after their nominal publication date are picked up.
@@ -128,6 +130,42 @@ def _prior_max_publication_date(prior_file: Path) -> date | None:
         return None
 
 
+def _live_federal_register_documents(since: date) -> Iterator[dict]:
+    """Yield raw FR document dicts published in ``[since, today]`` through the SpicyDocs owner.
+
+    The owner acquires exact API pages with its cap-safe date-window traversal:
+    a window whose ``count`` reaches the 10,000-result cap is split, and a
+    single day that still reads capped refuses the run rather than publish a
+    hole. Pages the owner declares included carry the raw API results unchanged;
+    capped probe pages carry none (their halves do), so those are skipped here.
+
+    One traversal: the merge below deduplicates repeated observations and
+    refuses conflicting ones itself, so the owner's two-traversal
+    reconciliation would double the request budget for a contract this
+    transform already checks.
+    """
+    try:
+        from spicy_docs.sources.federal_register import native as federal_register
+        from spicy_docs.transport.acquisition import federal_register_fetcher
+    except ModuleNotFoundError as error:
+        if error.name == "spicy_docs":
+            raise RuntimeError(
+                "The Federal Register acquisition requires spicy-regs[source-readers]. "
+                "Run `uv sync --frozen` in a SpicyRegs checkout."
+            ) from None
+        raise
+    scope = {
+        "publishedFrom": since.isoformat(),
+        "publishedThrough": date.today().isoformat(),
+    }
+    with federal_register_fetcher(None) as fetch:
+        for page in federal_register.iter_federal_register_pages(fetch, query_scope=scope, traversals=1):
+            response = federal_register.parse_page_response(page.response_bytes)
+            if not federal_register.federal_register_records_included(response, query_scope=scope, page_window=None):
+                continue
+            yield from response["results"]
+
+
 def build_federal_register(
     output_dir: Path,
     *,
@@ -137,8 +175,8 @@ def build_federal_register(
 ) -> Path:
     """Build ``federal_register.parquet`` (incremental merge with the prior table).
 
-    ``documents`` is the raw API records published since a date; the default
-    is the live reader, and a hermetic test passes its own.
+    ``documents`` is the raw API records published since a date; the default is
+    SpicyDocs' Federal Register acquisition, and a hermetic test passes its own.
     """
     import duckdb
 
@@ -159,7 +197,7 @@ def build_federal_register(
     logger.info("FR: fetching documents published since {}", since)
 
     # 3. Fetch + shape into a "new rows" parquet.
-    fetch = documents or (lambda start: FederalRegisterReader(since=start).iter_records())
+    fetch = documents or _live_federal_register_documents
     rows = [_shape(doc) for doc in fetch(since)]
     new_file = output_dir / "_fr_new.parquet"
     table = pa.Table.from_pylist(rows, schema=_SCHEMA) if rows else _SCHEMA.empty_table()
