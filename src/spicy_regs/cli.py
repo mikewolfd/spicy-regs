@@ -34,7 +34,7 @@ except PackageNotFoundError:
 
 # Cloudflare rejects the default `Python-urllib/*` / blank User-Agent with a 403
 # on this bucket; send an honest identifier instead (this is our own data, so
-# there's no need to spoof a browser UA the way sources/pdf.py does for
+# there's no need to spoof a browser UA the way the PDF enrichment does for
 # downloads.regulations.gov).
 DEFAULT_HEADERS = {"User-Agent": f"spicy-regs/{_PACKAGE_VERSION}"}
 

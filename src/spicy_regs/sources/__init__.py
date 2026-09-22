@@ -13,7 +13,6 @@ if TYPE_CHECKING:
     from spicy_regs.sources.fcc_ecfs import FccEcfsFilingsReader, FccEcfsProceedingsReader
     from spicy_regs.sources.federal_register import FederalRegisterReader
     from spicy_regs.sources.parquet import StagingWriter
-    from spicy_regs.sources.pdf import fetch_pdf_bytes
     from spicy_regs.sources.unified_agenda import UnifiedAgendaReader
 
 _CONNECTORS = {
@@ -24,7 +23,6 @@ _CONNECTORS = {
     "FccEcfsProceedingsReader": "fcc_ecfs",
     "FederalRegisterReader": "federal_register",
     "StagingWriter": "parquet",
-    "fetch_pdf_bytes": "pdf",
     "UnifiedAgendaReader": "unified_agenda",
 }
 
@@ -51,7 +49,6 @@ __all__ = [
     "FccEcfsFilingsReader",
     "DerivedCommentText",
     "StagingWriter",
-    "fetch_pdf_bytes",
     "r2",
     "iceberg",
 ]

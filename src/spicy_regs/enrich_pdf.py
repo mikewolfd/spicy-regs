@@ -37,13 +37,52 @@ from dotenv import load_dotenv
 from loguru import logger
 
 from spicy_regs.schemas import RecordType
-from spicy_regs.sources.pdf import fetch_pdf_bytes
 from spicy_regs.transforms.pdf_text import (
     PAGE_SEPARATOR,
     PdfTextResult,
     PdfTextStatus,
     extract_pdf_text,
 )
+#: downloads.regulations.gov returns 403 to default/spicy-docs User-Agents; a
+#: browser-like UA gets 200. The quirk lives beside the call that needs it.
+_BROWSER_USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
+)
+
+#: The same cap the local fetch used: a guard against a pathological
+#: multi-hundred-MB attachment blowing up a batch run.
+_MAX_PDF_BYTES = 100 * 1024 * 1024
+
+
+def _attachment_url(url: str) -> str:
+    """Accept any credential-free https URL; the fetch follows up to the bounded redirect chain."""
+    from urllib.parse import urlsplit
+
+    parts = urlsplit(url)
+    if parts.scheme != "https" or parts.username or parts.password:
+        raise ValueError("attachment URL must be credential-free https")
+    return url
+
+
+def fetch_pdf_bytes(url: str) -> bytes | None:
+    """Bounded attachment fetch through spicy-docs' transport; ``None`` on any refusal.
+
+    Returns ``None`` (rather than raising) on HTTP errors, timeouts, transport
+    problems, or a body exceeding the bound, so a batch enrichment run can skip
+    the document and keep going — the contract the deleted ``sources/pdf.py``
+    copy pinned, now served by the owner's bounded capture.
+    """
+    from spicy_docs.transport.download import AcquisitionError, BoundedAcquirer
+
+    try:
+        with BoundedAcquirer(validate_url=_attachment_url, timeout=30.0) as acquirer:
+            capture = acquirer.capture(
+                url, max_bytes=_MAX_PDF_BYTES, extra_headers={"User-Agent": _BROWSER_USER_AGENT}
+            )
+    except (AcquisitionError, ValueError, OSError):
+        return None
+    return capture.body
 
 FetchFn = Callable[[str], bytes | None]
 ExtractFn = Callable[[bytes], PdfTextResult]
