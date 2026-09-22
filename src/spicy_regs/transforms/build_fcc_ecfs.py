@@ -2,7 +2,8 @@
 
 The FCC layer of the dataset: proceedings are the FCC's docket equivalent and
 filings are its comment equivalent, both ingested from the ECFS public API
-(see :mod:`spicy_regs.sources.fcc_ecfs`). Column conventions match the other
+through spicy-docs' evidenced page reader
+(see :mod:`spicy_docs.sources.fcc_ecfs`). Column conventions match the other
 external-source tables — all VARCHAR, array fields serialized as JSON strings.
 
 Both tables are incremental, following the federal_register pattern:
@@ -22,16 +23,23 @@ run scoped to specific proceedings (``FCC_PROCEEDINGS``) and/or in date slices.
 from __future__ import annotations
 
 import json
+import os
+from collections.abc import Iterator
 from datetime import date, timedelta
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pyarrow as pa
 import pyarrow.parquet as pq
 from loguru import logger
 
 from spicy_regs.sources import r2
-from spicy_regs.sources.fcc_ecfs import ECFS_EPOCH, FccEcfsFilingsReader, FccEcfsProceedingsReader
 from spicy_regs.transforms.table_merge import merge_local_prior
+
+if TYPE_CHECKING:
+    import httpx
+
+    from spicy_docs.sources.fcc_ecfs import FccEcfsReader
 
 PROCEEDINGS_OUTPUT = "fcc_proceedings.parquet"
 FILINGS_OUTPUT = "fcc_filings.parquet"
@@ -168,6 +176,190 @@ def _shape_filing(raw: dict) -> dict:
     }
 
 
+# -- source fetch ---------------------------------------------------------------
+# spicy-docs owns the ECFS transport, offset walk, credential header and
+# inclusive-day URL bounds (:mod:`spicy_docs.sources.fcc_ecfs`). The walk below
+# is this host's window policy on top of it: spans whose reach would pass the
+# publisher's 10,000-record result ceiling bisect on their dates, and a single
+# day that still hits the ceiling refuses, because two sorted slices cannot
+# prove coverage when source timestamps tie. Source-confirmed empty windows are
+# valid.
+
+ECFS_EPOCH = date(1990, 1, 1)
+API_KEY_ENV_VARS = ("API_GOV", "DATA_GOV_API_KEY", "FCC_API_KEY", "REGULATIONS_GOV_API_KEY")
+PER_PAGE = 250
+MAX_RESULT_WINDOW = 10_000
+_MAX_REQUESTS_PER_PAGE = 5
+
+
+class FccEcfsError(ValueError):
+    """The selected date window cannot be completely traversed."""
+
+
+def _resolve_api_key() -> str | None:
+    for name in API_KEY_ENV_VARS:
+        value = os.environ.get(name, "").strip()
+        if value:
+            return value
+    return None
+
+
+def _fetch_fcc(
+    endpoint: str,
+    *,
+    since: date | None = None,
+    until: date | None = None,
+    api_key: str | None = None,
+    per_page: int = PER_PAGE,
+    proceedings: tuple[str, ...] = (),
+    transport: httpx.BaseTransport | None = None,
+) -> Iterator[dict]:
+    """Yield raw ECFS records for ``endpoint`` ("proceedings" or "filings").
+
+    ``proceedings`` scopes a filings selection to named proceedings, one full
+    window walk each; a filing legitimately shared by two selected proceedings
+    is yielded for each, and table merging owns identity deduplication.
+    """
+    if isinstance(per_page, bool) or not isinstance(per_page, int) or per_page < 1:
+        raise ValueError("per_page must be a positive integer")
+    since = since or ECFS_EPOCH
+    until = until or date.today()
+    api_key = api_key if api_key is not None else _resolve_api_key()
+    per_page = min(per_page, PER_PAGE)
+    if not api_key:
+        raise FccEcfsError("ECFS requires an api.data.gov key")
+    if since > until:
+        raise FccEcfsError("ECFS selection start must not follow its end")
+    try:
+        from spicy_docs.reading.paged_json import PagedJsonBudget
+        from spicy_docs.sources.fcc_ecfs import FccEcfsReader
+    except ModuleNotFoundError as error:
+        if error.name == "spicy_docs":
+            raise RuntimeError(
+                "FCC ECFS requires spicy-regs[source-readers]. Run `uv sync --frozen` in a SpicyRegs checkout."
+            ) from None
+        raise
+    if endpoint == "proceedings":
+        record_key, identity_field = "proceeding", "name"
+    elif endpoint == "filings":
+        record_key, identity_field = "filing", "id_submission"
+    else:
+        raise ValueError(f"unknown ECFS endpoint {endpoint!r}")
+    budget = PagedJsonBudget(
+        max_requests=_MAX_REQUESTS_PER_PAGE,
+        max_page_bytes=16 * 1024 * 1024,
+        timeout_seconds=60,
+        min_request_interval_seconds=0,
+    )
+    with FccEcfsReader(budget=budget, api_key=api_key, transport=transport) as reader:
+        for name in proceedings or (None,):
+            extra = {"proceedings.name": name} if name else {}
+            yield from _fetch_window(
+                reader,
+                endpoint=endpoint,
+                record_key=record_key,
+                identity_field=identity_field,
+                gte=since,
+                lte=until,
+                per_page=per_page,
+                extra=extra,
+            )
+
+
+def _fetch_window(
+    reader: FccEcfsReader,
+    *,
+    endpoint: str,
+    record_key: str,
+    identity_field: str,
+    gte: date,
+    lte: date,
+    per_page: int,
+    extra: dict[str, str],
+) -> Iterator[dict]:
+    """Yield one window, bisecting an over-ceiling span; a single over-ceiling day refuses."""
+    records, exhausted = _page_window(
+        reader,
+        endpoint=endpoint,
+        record_key=record_key,
+        identity_field=identity_field,
+        gte=gte,
+        lte=lte,
+        per_page=per_page,
+        extra=extra,
+    )
+    if not exhausted:
+        if gte == lte:
+            raise FccEcfsError(f"ECFS {endpoint} reaches the result ceiling on {gte}; narrow the selection")
+        mid = gte + (lte - gte) // 2
+        yield from _fetch_window(
+            reader,
+            endpoint=endpoint,
+            record_key=record_key,
+            identity_field=identity_field,
+            gte=gte,
+            lte=mid,
+            per_page=per_page,
+            extra=extra,
+        )
+        yield from _fetch_window(
+            reader,
+            endpoint=endpoint,
+            record_key=record_key,
+            identity_field=identity_field,
+            gte=mid + timedelta(days=1),
+            lte=lte,
+            per_page=per_page,
+            extra=extra,
+        )
+        return
+    yield from records
+
+
+def _page_window(
+    reader: FccEcfsReader,
+    *,
+    endpoint: str,
+    record_key: str,
+    identity_field: str,
+    gte: date,
+    lte: date,
+    per_page: int,
+    extra: dict[str, str],
+) -> tuple[list[dict], bool]:
+    """Page one window through the owner's offset walk; return its records and whether it exhausted.
+
+    A missing or repeated identity refuses the window.
+    """
+    from spicy_docs.reading.paged_json import with_query
+    from spicy_docs.sources.fcc_ecfs import filings_url, proceedings_url
+
+    if endpoint == "proceedings":
+        url = proceedings_url(created_from=gte.isoformat(), created_to=lte.isoformat(), limit=per_page, descending=False)
+    else:
+        url = filings_url(received_from=gte.isoformat(), received_to=lte.isoformat(), limit=per_page, descending=False)
+    for key, value in extra.items():
+        url = with_query(url, key, value)
+    records: list[dict] = []
+    seen: set[str] = set()
+    while True:
+        page = reader.page(url, records_key=record_key)
+        for record in page.records:
+            identity = record.get(identity_field)
+            if not isinstance(identity, (str, int)) or isinstance(identity, bool) or not str(identity).strip():
+                raise FccEcfsError(f"ECFS {endpoint} record omitted its {identity_field}")
+            identity = str(identity)
+            if identity in seen:
+                raise FccEcfsError(f"ECFS {endpoint} repeated an identity within one window")
+            seen.add(identity)
+            records.append(dict(record))
+        if page.next_url is None:
+            return records, True
+        if len(records) + per_page > MAX_RESULT_WINDOW:
+            return records, False
+        url = page.next_url
+
+
 def _prior_max_date(prior_file: Path, column: str) -> date | None:
     """Largest ``column`` value in the prior table, or None if empty/absent."""
     if not prior_file.exists():
@@ -238,8 +430,7 @@ def build_fcc_proceedings(output_dir: Path, *, since: date | None = None) -> Pat
         since = (prior_max - timedelta(days=OVERLAP_DAYS)) if prior_max else ECFS_EPOCH
     logger.info("FCC proceedings: fetching proceedings created since {}", since)
 
-    reader = FccEcfsProceedingsReader(since=since)
-    rows = [_shape_proceeding(p) for p in reader.iter_records()]
+    rows = [_shape_proceeding(p) for p in _fetch_fcc("proceedings", since=since)]
     logger.info("FCC proceedings: fetched {:,} proceedings this run", len(rows))
 
     out = _merge_incremental(
@@ -287,8 +478,7 @@ def build_fcc_filings(
             )
     logger.info("FCC filings: fetching filings received since {} (proceedings={})", since, proceedings or "all")
 
-    reader = FccEcfsFilingsReader(since=since, proceedings=proceedings)
-    rows = [_shape_filing(f) for f in reader.iter_records()]
+    rows = [_shape_filing(f) for f in _fetch_fcc("filings", since=since, proceedings=proceedings)]
     logger.info("FCC filings: fetched {:,} filings this run", len(rows))
 
     out = _merge_incremental(

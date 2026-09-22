@@ -14,7 +14,8 @@ from spicy_docs.reading.paged_json import PagedJsonSourceError
 from spicy_docs.sources.gao.rss import GaoFeedSourceError
 from spicy_docs.transport.credentials import CredentialRefusedError
 from spicy_docs.transport import retry
-from spicy_regs.sources import crs_reports as crs, fcc_ecfs as fcc, gao_reports as gao, usaspending as usa
+from spicy_regs.sources import crs_reports as crs, gao_reports as gao, usaspending as usa
+from spicy_regs.transforms import build_fcc_ecfs as fcc
 
 KEY = "fixture-key-never-in-url"
 DAY = date(2026, 9, 8)
@@ -67,6 +68,30 @@ def usa_page(records, *, total=None, next_page=None):
     }
 
 
+class FccFetch:
+    """One FCC selection against the transform's adopted fetch; ``api_key`` stays mutable for the missing-key case.
+
+    The fetch function is captured at construction so tests that monkeypatch
+    ``build_fcc_ecfs._fetch_fcc`` still reach the real walk through this handle.
+    """
+
+    def __init__(self, *, endpoint: str, **kwargs):
+        self.endpoint = endpoint
+        self.kwargs = kwargs
+        self._fetch = fcc._fetch_fcc
+
+    @property
+    def api_key(self) -> str | None:
+        return self.kwargs.get("api_key")
+
+    @api_key.setter
+    def api_key(self, value: str | None) -> None:
+        self.kwargs["api_key"] = value
+
+    def iter_records(self):
+        return self._fetch(self.endpoint, **self.kwargs)
+
+
 def selected(kind, transport, **kwargs):
     if kind == "crs":
         return crs.CrsReportsReader(api_key=KEY, transport=transport, **kwargs)
@@ -74,8 +99,8 @@ def selected(kind, transport, **kwargs):
         return gao.GaoReportsReader(transport=transport, **kwargs)
     if kind == "usa":
         return usa.UsaSpendingRecipientsReader(transport=transport, **kwargs)
-    cls = fcc.FccEcfsFilingsReader if kind == "fcc-filings" else fcc.FccEcfsProceedingsReader
-    return cls(since=DAY, until=DAY, api_key=KEY, transport=transport, **kwargs)
+    endpoint = "filings" if kind == "fcc-filings" else "proceedings"
+    return FccFetch(endpoint=endpoint, since=DAY, until=DAY, api_key=KEY, transport=transport, **kwargs)
 
 
 @pytest.mark.parametrize("kind", ["crs", "gao", "usa", "fcc-filings", "fcc-proceedings"])
@@ -108,10 +133,6 @@ def test_transport_failure_is_not_empty_success(kind):
         ("usa", usa_page([RECIPIENT, RECIPIENT])),
         ("usa", usa_page([], total=1)),
         ("usa", {"results": [], "page_metadata": {"total": 0, "hasNext": True, "next": None}}),
-        ("fcc-filings", {}),
-        ("fcc-filings", {"filing": [None]}),
-        ("fcc-filings", {"filing": [{}]}),
-        ("fcc-proceedings", {"proceeding": [{}]}),
         ("fcc-filings", {"filing": [FCC_FILING, FCC_FILING]}),
         ("gao", b"<html><body>Denied</body></html>"),
         ("gao", b"<rss>"),
@@ -157,14 +178,6 @@ def test_crs_page_bound_refuses_partial_walk(monkeypatch):
         list(selected("crs", Transport(crs_page([CRS], total=2, next_url=next_url)), per_page=1).iter_records())
 
 
-def test_fcc_provider_window_includes_end_day_and_credentials_stay_in_header():
-    transport = Transport({"filing": [FCC_FILING]})
-    assert list(selected("fcc-filings", transport).iter_records()) == [FCC_FILING]
-    request = transport.calls[0]
-    assert request.url.params["date_received"] == "[gte]2026-09-08[lte]2026-09-09"
-    assert request.headers["x-api-key"] == KEY and KEY not in str(request.url)
-
-
 def test_fcc_subdivides_full_window_but_refuses_full_single_day(monkeypatch):
     monkeypatch.setattr(fcc, "MAX_RESULT_WINDOW", 2)
     transport = Transport(
@@ -172,8 +185,10 @@ def test_fcc_subdivides_full_window_but_refuses_full_single_day(monkeypatch):
         {"filing": [FCC_FILING]},
         {"filing": [{**FCC_FILING, "id_submission": "f2"}]},
     )
-    reader = fcc.FccEcfsFilingsReader(since=DAY, until=date(2026, 9, 9), api_key=KEY, per_page=2, transport=transport)
-    assert len(list(reader.iter_records())) == 2
+    records = fcc._fetch_fcc(
+        "filings", since=DAY, until=date(2026, 9, 9), api_key=KEY, per_page=2, transport=transport
+    )
+    assert len(list(records)) == 2
     assert len(transport.calls) == 3
     with pytest.raises(fcc.FccEcfsError, match="result ceiling"):
         list(
@@ -217,7 +232,7 @@ def test_usa_refuses_cross_page_inconsistency(second_page):
 
 
 def test_fcc_named_proceedings_keep_each_selection_and_shared_filing():
-    # A filing can legitimately appear in both selected proceedings. The reader
+    # A filing can legitimately appear in both selected proceedings. The fetch
     # preserves both observations; table merging owns identity deduplication.
     shared = {**FCC_FILING, "proceedings": [{"name": "17-108"}, {"name": "23-320"}]}
     second = {**FCC_FILING, "id_submission": "f2"}
@@ -225,8 +240,6 @@ def test_fcc_named_proceedings_keep_each_selection_and_shared_filing():
     reader = selected("fcc-filings", transport, proceedings=("17-108", "23-320"))
     assert list(reader.iter_records()) == [shared, shared, second]
     assert [r.url.params["proceedings.name"] for r in transport.calls] == ["17-108", "23-320"]
-    assert reader._current_proceeding is None
-    assert reader._reader is None
 
 
 def test_fcc_second_proceeding_failure_preserves_prior_output(monkeypatch, tmp_path):
@@ -239,15 +252,13 @@ def test_fcc_second_proceeding_failure_preserves_prior_output(monkeypatch, tmp_p
     before = prior.read_bytes(), output.read_bytes()
     transport = Transport({"filing": [FCC_FILING]}, 500)
     reader = selected("fcc-filings", transport, proceedings=("17-108", "23-320"))
-    monkeypatch.setattr(module, "FccEcfsFilingsReader", lambda **kwargs: reader)
+    monkeypatch.setattr(module, "_fetch_fcc", lambda *args, **kwargs: reader.iter_records())
 
     with pytest.raises(REFUSALS):
         module.build_fcc_filings(tmp_path)
 
     assert (prior.read_bytes(), output.read_bytes()) == before
     assert [r.url.params["proceedings.name"] for r in transport.calls] == ["17-108", "23-320"]
-    assert reader._current_proceeding is None
-    assert reader._reader is None
 
 
 def test_gao_validates_whole_feed_before_applying_selected_item_bound():
@@ -298,7 +309,7 @@ CASES = {
     "fcc-filings": (
         "build_fcc_ecfs",
         "build_fcc_filings",
-        "FccEcfsFilingsReader",
+        "_fetch_fcc",
         "_fcc_filings_prior.parquet",
         "fcc_filings.parquet",
         "_FILING_SCHEMA",
@@ -308,7 +319,7 @@ CASES = {
     "fcc-proceedings": (
         "build_fcc_ecfs",
         "build_fcc_proceedings",
-        "FccEcfsProceedingsReader",
+        "_fetch_fcc",
         "_fcc_proceedings_prior.parquet",
         "fcc_proceedings.parquet",
         "_PROCEEDING_SCHEMA",
@@ -352,7 +363,10 @@ def test_failed_build_preserves_prior_and_existing_output_bytes(monkeypatch, tmp
         source.api_key = ""
     else:
         source = selected(kind, Transport(500 if failure == "http" else b"not a source response"))
-    monkeypatch.setattr(module, reader_name, lambda **_: source)
+    if kind.startswith("fcc"):
+        monkeypatch.setattr(module, reader_name, lambda *args, **kwargs: source.iter_records())
+    else:
+        monkeypatch.setattr(module, reader_name, lambda **_: source)
     with pytest.raises(REFUSALS):
         getattr(module, builder_name)(tmp_path)
     assert (prior.read_bytes(), output.read_bytes()) == before
@@ -377,7 +391,10 @@ def test_empty_success_keeps_prior_rows_or_builds_zero(monkeypatch, tmp_path, ki
     if have_prior:
         pq.write_table(pa.Table.from_pylist(expected, schema=getattr(module, schema_name)), tmp_path / prior_name)
     source = selected(kind, Transport(payload))
-    monkeypatch.setattr(module, reader_name, lambda **_: source)
+    if kind.startswith("fcc"):
+        monkeypatch.setattr(module, reader_name, lambda *args, **kwargs: source.iter_records())
+    else:
+        monkeypatch.setattr(module, reader_name, lambda **_: source)
     monkeypatch.setattr(module.r2, "download", lambda *_: False)
     out = getattr(module, builder_name)(tmp_path)
     assert out.name == output_name

@@ -30,31 +30,30 @@ import spicy_regs.pipelines.rollups.usaspending_recipients
 from spicy_regs.sources.courtlistener import CourtListenerReader, CourtListenerOpinionSearchReader
 from spicy_regs.sources.crs_reports import CrsReportsReader
 from spicy_regs.sources.gao_reports import GaoReportsReader
-from spicy_regs.sources.fcc_ecfs import FccEcfsFilingsReader, FccEcfsProceedingsReader
 from spicy_regs.sources.usaspending import UsaSpendingRecipientsReader
+from spicy_regs.transforms.build_fcc_ecfs import _fetch_fcc
 
-readers = (
-    CourtListenerReader(),
-    CourtListenerOpinionSearchReader(),
-    CrsReportsReader(api_key="fixture-unused"),
-    GaoReportsReader(),
-    FccEcfsFilingsReader(api_key="fixture-unused"),
-    FccEcfsProceedingsReader(api_key="fixture-unused"),
-    UsaSpendingRecipientsReader(),
+sources = (
+    ("CourtListenerReader", CourtListenerReader().iter_records()),
+    ("CourtListenerOpinionSearchReader", CourtListenerOpinionSearchReader().iter_records()),
+    ("CrsReportsReader", CrsReportsReader(api_key="fixture-unused").iter_records()),
+    ("GaoReportsReader", GaoReportsReader().iter_records()),
+    ("UsaSpendingRecipientsReader", UsaSpendingRecipientsReader().iter_records()),
+    ("FccEcfsFetch", _fetch_fcc("filings", api_key="fixture-unused")),
 )
 assert not any(name == "spicy_docs" or name.startswith("spicy_docs.") for name in sys.modules)
 results = []
-for reader in readers:
+for label, records in sources:
     try:
-        next(reader.iter_records())
+        next(records)
     except RuntimeError as error:
         assert sys.argv[1] == "spicy_docs"
         assert "spicy-regs[source-readers]" in str(error)
         assert "uv sync --frozen" in str(error)
-        results.append({"reader": type(reader).__name__, "error": str(error)})
+        results.append({"reader": label, "error": str(error)})
     except ModuleNotFoundError as error:
         assert sys.argv[1] != "spicy_docs" and error.name == sys.argv[1]
-        results.append({"reader": type(reader).__name__, "missing_dependency": error.name})
+        results.append({"reader": label, "missing_dependency": error.name})
     else:
         raise AssertionError("missing reader dependency became an empty success")
 assert not any(name == "spicy_docs" or name.startswith("spicy_docs.") for name in sys.modules)
@@ -66,7 +65,7 @@ print(json.dumps(results))
 def test_base_imports_and_construction_are_optional_but_source_use_refuses(missing_name):
     result = subprocess.run([sys.executable, "-c", IMPORT_SCRIPT, missing_name], capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
-    assert len(json.loads(result.stdout)) == 7
+    assert len(json.loads(result.stdout)) == 6
 
 
 def test_inert_source_defaults_agree_with_installed_provider():
