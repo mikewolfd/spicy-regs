@@ -131,7 +131,9 @@ unfinished populations remain explicit.
   assertions; zero cover links is scoped to the selected root metadata. The
   newer scheduled generation preserves that content and adds six hearings:
   their native fields and root-COVER results now match retained originals. Its
-  changed capture/checkpoint metadata remains separately unqualified. Two new
+  changed capture/checkpoint metadata initially remained unqualified. The latest
+  retained run now qualifies report clocks; inherited hearing clocks remain open,
+  as recorded in the current checkpoint below. Two new
   hearings print Congress 118 while their structured identities say 119; both
   observations are retained without changing the structured identity. See
   `scheduled-members-reports-audit/MANUAL-AUDIT.md`.
@@ -216,25 +218,32 @@ See `full-comments/source-campaign/` for raw originals, audits and receipts.
 
 ### Current parallel work
 
-The [retained status snapshot](/Users/mikewolfd/Work/corpora/fork-execution-2026-09-21/status-20260922T0453-summary.json)
-records 82 unique outputs: 15 generated and verified, two published bounded
-corrections verified, 34 published awaiting source or parent audit, 15 local
-candidates awaiting qualification, and 16 otherwise unfinished. The 83 producer
-rows include two writers for `congress_bills.parquet`. Thus 51 outputs are
-published and 17 have the stated verification; these are output counts, not
-percentages of effort or full-history coverage. A fresh public-index read is
-byte-identical to the retained 04:33 UTC snapshot.
+The [retained status snapshot](/Users/mikewolfd/Work/corpora/fork-execution-2026-09-21/status-20260922T0530-summary.json)
+records 82 unique outputs: 20 generated and verified, two published bounded
+corrections verified, 29 published awaiting source or parent audit, 15 local
+candidates awaiting qualification, and 16 otherwise unfinished. The duplicate
+bill writer adds no output. Thus 51 outputs are published and 22 have the
+stated verification; these are output counts, not percentages of effort or
+full-history coverage. The current index has 48 managed outputs; the other
+three are base objects with retained public-byte audits.
 
-Status checked September 22, 2026, 04:53 UTC. The following workstreams own the
+Status checked September 22, 2026, 05:30 UTC. The following workstreams own the
 next actions; their receipts establish the completed scope.
 
 | Workstream | Completed | Current or next action |
 | --- | --- | --- |
-| Integration and delivery | Prior member/term source and consumer audits pass; newer native content reconciles. Forward raw-response retention for scheduled members/reports passes independent review, including the repaired pre-yield pagination gap. | Full host, lint, type and dictionary gates pass; implementation is committed at `9be5784`. Qualify an actual retained scheduled run. Earlier missing capture evidence remains a gap. Resolve committee identities and continue laws/amendments audits. |
-| Bill family | Complete local 18-output replay preserves the broad parent and its text/diff rows. | Reconcile the new public 119th generation with the broader private candidate. Selected 118th fields and inherited URL lineage are audited separately. The known 40 retained XML originals match none of the 604 held body-record digests. Broader source provenance, missing text, models and backfills remain open; the separate scheduled family is public but source-unqualified. |
-| CourtListener bulk and clusters | Complete dated clusters published and verified; 45 selected source files verified. Local body-build capacity refusal is repaired and audited. | Opinions transfer remains active. A reviewed private build is processing every native docket and all 54 fields; complete readback precedes host qualification. Full opinion-body generation still needs additional storage or a reviewed remote-output path. |
-| Votes and comments | All 1,573 selected votes and 381,936 member rows pass complete native-field, roster and tally audit; independent review approves that private scope. Numeric bill-action ordering is repaired and pushed. Six comment cohorts are repaired in a full-parent candidate. | The ordinary offline replay now passes complete native/linkage checks and prior-row preservation; independently review the candidate, then publish/read back. Term-date joins remain unresolved. Wider comments, partitions and publication remain open; ACF is inventoried, not acquired. |
-| Independent review | Complete native vote data, numeric action ordering, court capacity repair, docket-cache driver and forward scheduled retention are approved within their stated scopes. | Ordinary vote replay is approved; review its outputs and publication. Independently review the complete member/term join findings; verify finished docket-cache output. |
+| Integration and delivery | Actual ordinary fork member/report runs retain originals on the fork and pass source, public-byte and both MCP-mode audits with independent approval. Current members/terms, reports/sections and selected hearing links are qualified. | Retain fresh observations and checkpoints for the 19 inherited hearings; finish committee identities and law/amendment audits. The isolated House select-code repair is under source/output qualification and is not adopted yet. |
+| Bill family | Complete local 18-output replay preserves the broad parent and its text/diff rows. | Reconcile the public 119th generation with the broader private candidate. Selected 118th fields and inherited URL lineage are audited separately. Broader source provenance, missing text, models and backfills remain open; the public family is source-unqualified. |
+| CourtListener bulk and clusters | Complete dated clusters published and verified; 45 selected source files verified. Remote generation code passes host checks, isolated real-storage replay and independent integration review. | Opinions download: about 21.0 of 54.6 GB at this snapshot. Private native docket cache: 51.6 of 71.7 million rows written, with full readback still pending. Remote generation is committed at `413b3ab`; bounded batching and retained-input layout measurements pass independent review. Full body launch needs complete original verification and the reviewed population audit driver. Host mapping, prior preservation and public qualification follow. |
+| Votes and comments | All 1,573 selected votes and 381,936 member rows are published; native, preservation, public-byte and both MCP audits pass. Full term-join findings are independently reproduced. Six comment cohorts are repaired in a full-parent candidate. | Qualify vote bill-reference originals, publish portable vote evidence, and define term-date interpretation before scorecards. Wider comments, partitions and publication remain open; ACF is inventoried, not acquired. |
+| Independent review | Actual scheduled member/report runs, vote candidate/publication/MCP, member-term measurements and remote generation integration are approved within their stated scopes. | Review the full opinion execution plan and scaling evidence, source-owned committee repair, and completed native docket output before promotion. |
+
+The remote-output implementation and bounded-batching follow-up are committed
+at `413b3ab`. Full host, lint/type, dictionary and lock checks pass. Final
+isolated R2 replay preserves every native field and passes full-byte admission.
+A retained-row layout experiment reduces footer overhead while preserving all
+values; it does not predict the full population. Exact receipts and independent
+reviews are in `court-body-remote-probe/` and `reviews/remote-opinion-batching-review.md`.
 
 Bulk acquisition progress is recorded in `courtlistener-bulk/acquisition.json`;
 authoritative byte verification is recorded separately in
@@ -244,8 +253,8 @@ state. `opinions-resume-state.json` records the detached replacement transfer,
 which invokes full verification before accepting the completed opinions file.
 The retained body-build capacity estimate needs about 73.3 GB more space after
 the original arrives, before audit spill. The local-file bypass is now repaired:
-both local and remote unbounded builds check estimated output space on the
-destination filesystem before source parsing or staged writes. The real retained
+local-output builds using either local or network source input check estimated
+output space on the destination filesystem before source parsing or staged writes. The real retained
 opinion replay preserves its HTML exactly; current full-build capacity still
 fails the existing floor. See `courtlistener-clusters-qualification/headroom-fix/`
 and `courtlistener-clusters-qualification/NEXT-WORK.md`. This preflight does not
@@ -260,16 +269,16 @@ remain open.
 
 | Family | Verified current position | Remaining work |
 | --- | --- | --- |
-| Members and terms | Generation `a0140c2f…` is fully qualified for the captured community files and declared fields, with raw/public/MCP witnesses. | Scheduled generation `0b0588cc…` now supersedes it. Full byte/field comparison confirms every native value is unchanged; only capture timestamps differ, without retained scheduled HTTP evidence. Official-roster reconciliation and finer within-term party history remain separate limits. |
-| Nominations, treaties, reports/hearings and press | Published and audited for the declared selections above. | Scheduled report generation `925b2451…` preserves every report value except capture time, all sections and all thirteen prior hearings; all six new hearings now match retained native originals, including the root-COVER selection. Changed scheduled capture/checkpoint metadata still lacks original HTTP evidence. Broader history/detail/granule coverage and optional press bill links remain separate. |
+| Members and terms | Current generation `c4b48900…` qualifies all 12,770 members and 45,535 terms against fresh retained community responses, including capture times. Public evidence, bytes and both MCP modes pass. | Official-roster reconciliation and finer within-term party history remain separate limits. Earlier missing capture evidence remains historical. |
+| Nominations, treaties, reports/hearings and press | Nominations/treaties retain their qualified selections. Current report generation `f5f16948…` qualifies all 105 reports, 1,246 sections and the selected empty root-COVER result across 19 hearing parents. Press retains its verified bounded correction. | The 19 inherited hearing capture/checkpoint clocks remain unqualified. Broader history/detail/granule coverage and newer press capture metadata remain open. |
 | Laws, committee rosters and amendments | Scheduled publications exist: 113 laws, 3,655 law/code links, 65 Table III records; 236 committees and 2,966 assignments; 7,014 amendments. Every public file matches its recorded digest, size, schema and count. | Every current chamber assignment matches retained source fields and declared mappings, excluding the earlier capture timestamp. All member joins resolve; 138 assignments lack a committee-table match. Committee detail and law/amendment source qualification remain open. |
 | Bills, text and differences | Scheduled 119th generation: 18,956 bills, all 18 public outputs byte-verified but source-unqualified. Separately, the broader 419,839-bill private candidate passes preservation and partial native checks. | Reconcile newer public rows with the wider private population, then finish source/body qualification. The prior 119th parent lists 22,064 printing records but marks only 600 captured; retained 118th HR/S lists 19,687 and marks four captured. The 604 capture-marked records represent 601 packages/digests; the known 40 XML originals are different printings, with no package overlap. Capture flags do not prove available originals. |
-| Votes | Complete private native audit passes for 1,573 votes and 381,936 member rows, including 5,383,283 cell comparisons. The current public family still has 1,487 votes and 361,014 members. | Ordinary offline host replay now preserves every prior row and passes all 7,865 derived-link cell comparisons. Independent candidate review, publication and consumer checks remain before delivering the additional 86 votes and 20,922 member rows. All voter identities resolve; an initial complete join audit finds 18 half-open term-date gaps. Inclusive ends leave three gaps and create 1,855 ambiguous House matches; independent review remains pending. Full voting history and dynamic scorecards are not delivered. |
+| Votes | Current generation `80028c18…` publishes all 1,573 votes and 381,936 member rows. Complete native/prior audits and public/MCP reads pass independent review. | Derived bill links still depend on source-unqualified bill references; portable public source evidence remains open. Full term-join replay confirms 18 half-open gaps; inclusive ends leave three gaps and create 1,855 ambiguities. Full history and dynamic scorecards are not delivered. |
 | Communications, meetings, record issues, print citations and Senate expenditures | Local candidates remain unqualified and unpublished as managed families. | Family-specific raw/output audits, missing detail bodies and source/schema gaps. |
 
 Exact current publication pins and byte audits are in `congressional-status/`;
-new source and consumer evidence is in `members-qualification/` and
-`bill-family-continuation/` under the execution receipts. Laws, roster and amendment pins
+new source and consumer evidence is in `scheduled-retention-live-qualification/`,
+`votes-qualification/`, `members-qualification/` and `bill-family-continuation/` under the execution receipts. Laws, roster and amendment pins
 are recorded as published-awaiting-source-audit in the output ledger.
 
 The continuation uses independent [semi-formal reviews](/Users/mikewolfd/Work/corpora/fork-execution-2026-09-21/reviews)
