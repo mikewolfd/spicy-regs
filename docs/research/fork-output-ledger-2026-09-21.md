@@ -4,7 +4,7 @@ This dated ledger accounts for every declared rollup output plus base regulatory
 
 The [consolidated backlog](../fork-generation.md) remains the task list. [Machine-readable evidence](/Users/mikewolfd/Work/corpora/fork-execution-2026-09-21/output-ledger.json) records each candidate path, measured size/count/schema, source assessment, scope, required and optional inputs, observed publication pins, next action and receipt. A missing pin or unresolved scope remains a blocker. Existing populations must survive narrower repairs.
 
-Public data destination: `https://pub-72e95c0c20a84508b42b03a6ff6d55f8.r2.dev`. Local candidates are not fork publications. Verified selections include FEC, nominations, treaties, the five-member report family, repaired dockets/documents, docket search and two document-derived tables. CFR has a verified bounded correction; broader populations remain open as listed.
+Public data destination: `https://pub-72e95c0c20a84508b42b03a6ff6d55f8.r2.dev`. Local candidates are not fork publications. Verified selections include FEC, nominations, treaties, the five-member report family, repaired dockets/documents, docket search, two document-derived tables, Appropriations press-feed windows and the retained Agenda edition. CFR has a verified bounded correction; broader populations remain open as listed.
 
 | Task | Producer | Output | Delivery state |
 | --- | --- | --- | --- |
@@ -20,7 +20,7 @@ Public data destination: `https://pub-72e95c0c20a84508b42b03a6ff6d55f8.r2.dev`. 
 | T15 | `run-rollup-fr-docket-links` | `fr_docket_links.parquet` | published awaiting parent audit |
 | T11 | `run-rollup-cfr-sections` | `cfr_sections.parquet` | published bounded correction verified |
 | T16 | `run-rollup-congress-bills` | `congress_bills.parquet` | waiting for qualified parents |
-| T11 | `run-rollup-unified-agenda` | `unified_agenda.parquet` | published awaiting source audit |
+| T11 | `run-rollup-unified-agenda` | `unified_agenda.parquet` | generated and verified for retained edition |
 | T11 | `run-rollup-federal-register` | `federal_register.parquet` | published awaiting source audit |
 | T12 | `run-rollup-fcc-proceedings` | `fcc_proceedings.parquet` | local candidate needs qualification |
 | T12 | `run-rollup-fcc-filings` | `fcc_filings.parquet` | local candidate needs qualification |
@@ -54,7 +54,7 @@ Public data destination: `https://pub-72e95c0c20a84508b42b03a6ff6d55f8.r2.dev`. 
 | T09 | `run-rollup-bill-family` | `bill_vote_references.parquet` | local candidate needs qualification |
 | T09 | `run-rollup-bill-family` | `bill_family_backfills.parquet` | local candidate needs qualification |
 | T09 | `run-rollup-bill-family` | `bill_family_backfill_walks.parquet` | local candidate needs qualification |
-| T08 | `run-rollup-press-releases` | `press_releases.parquet` | local candidate needs qualification |
+| T08 | `run-rollup-press-releases` | `press_releases.parquet` | generated and verified for captured feed windows |
 | T08 | `run-rollup-amendments` | `amendments.parquet` | local candidate needs qualification |
 | T08 | `run-rollup-roll-call-votes` | `roll_call_votes.parquet` | local candidate needs qualification |
 | T08 | `run-rollup-roll-call-votes` | `member_votes.parquet` | local candidate needs qualification |
@@ -84,7 +84,7 @@ Public data destination: `https://pub-72e95c0c20a84508b42b03a6ff6d55f8.r2.dev`. 
 | T06 | `run-pipeline` | `documents.parquet` | generated and verified |
 | T06 | `run-pipeline` | `comments_index.parquet` | local candidate needs qualification |
 | T06 | `run-pipeline` | `comments/agency_code=<agency>/docket_id=<docket>/year=<year>/month=<month>/part-0.parquet` | local undated cohort; wider partitions unproduced |
-| T07 | `publish-comments-mirror.yml` | `comments.parquet` | full parent retained not admitted |
+| T07 | `publish-comments-mirror.yml` | `comments.parquet` | six-agency repair candidate; full parent not admitted |
 | T07 | `publish-comments-mirror.yml` | `comments/by-agency/<agency>.parquet` | waiting for qualified comments parent |
 | T17 | `materialize-rulemaking` | `rule_targets.parquet` | waiting for qualified parents |
 | T17 | `materialize-rulemaking` | `proceedings.parquet` | waiting for qualified parents |
@@ -98,8 +98,17 @@ Public data destination: `https://pub-72e95c0c20a84508b42b03a6ff6d55f8.r2.dev`. 
 - Full docket/document repairs and docket search are published. All 670 selected source releases replayed; newer and unrelated prior observations survive. This is metadata repair: all document body-text, extraction-status and PDF-extraction-evidence values remain null; acquiring and extracting bodies remains open. The full 23,889,661-row comments object is now retained locally, but three raw witnesses still demonstrate omitted attachments/names/organizations; the current extraction-evidence column is missing. The separate 112,861-group index totals 23,888,128 comments, 1,533 below the independently pinned full object; a common generation is unproved. Comments remain unadmitted. Full reconciliation now identifies 1,555 native NULL-date rows omitted by the old partition rule, offset by 22 surplus counts in three older index groups. All 1,555 originals were acquired and match the parent. Standard Hive null partitions now retain those rows; the local full index conserves every parent row. Wider source-field repairs and the complete dated partition tree remain open.
 - Nominations (2,204) and treaties (2) are published with public-byte and MCP verification at their declared 119th Congress scopes. Record issues still lack 360 paired detail bodies; the other T08 families retain their source/schema/field gaps.
 - Bill-body retry/budget handling is implemented and manually audited across four retained-fixture runs. Independent review found and repaired missing-version/diff-child checkpoints and stale child rows after successful correction. Exact successful scopes now replace their children while failed, capped and unrelated scopes survive. Full 18-table coverage, older backfills and model retry/access remain open. All five report-family members are rebuilt and published for exactly 118 selected packages; one hearing is a fresh source observation with changed bytes.
-- CFR failure paths refuse partial output. Its title 14, volume 4 correction preserves 318,063 unrelated rows and verifies 1,444 repaired rows; source ancestry and other packages remain open. CRS/FCC/GAO/USAspending refusal fixes do not qualify their full populations. CourtListener now uses the source-owned strict reader. A full keyless attempt stopped at HTTP 429 after 34 retained pages/680 records; an exact failure replay preserved prior output. Full scope, usable rate/access budgets and ordinary successful-source retention remain open. Current FR/Agenda byte checks are not native-source qualification.
+- CFR failure paths refuse partial output. Its title 14, volume 4 correction preserves 318,063 unrelated rows and verifies 1,444 repaired rows; source ancestry and other packages remain open. CRS/FCC/GAO/USAspending refusal fixes do not qualify their full populations. CourtListener now uses the source-owned strict reader. A full keyless attempt stopped at HTTP 429 after 34 retained pages/680 records; an exact failure replay preserved prior output. Full scope, usable rate/access budgets and ordinary successful-source retention remain open. The retained Agenda edition now passes full native-field qualification; FR still needs it.
 - SAM remains withdrawn and disabled pending a qualified initial load; lobbying remains paused. Missing source-specific access and resumable retained acquisition remain explicit.
 - Derived tables need verified parent pins. Monthly volume and discovery are published from the exact repaired parent with accounting/as_of metadata. Discovery's reviewed UTC correction is published and passes independent full-parent counting plus both MCP read paths. Explicit source offsets survive; offset-free dates use UTC, with the policy stored in Parquet metadata. Lifecycles needs a defined pairing/unknown-docket policy: 19 prior null-docket groups collapsed unrelated proposals and 647 groups were lost when the earliest final predated the earliest proposal. The ledger adds the hidden public-comments dependency of organization links and the complete-family publication prerequisite of the narrow bill writer.
 
 The continuation's [independent review reports](/Users/mikewolfd/Work/corpora/fork-execution-2026-09-21/reviews) and exact raw/output receipts are linked from the machine ledger. See `discovery-utc/`, `bill-resume-fix-audit/`, `full-comments/reconciliation/` and `courtlistener-refusal/` under the execution receipt directory. These repairs do not mark the unfinished populations complete.
+
+## Latest continuation
+
+- **Press releases:** generation `sha256:c3c056ff09697aca92a3c10ab6544114212862aa06a861420cbf4bbe51d759ec` serves 28 rows from complete September 19 and September 22 UTC House/Senate Appropriations feed windows. All 952 mapped-field comparisons, public bytes and both actual MCP modes pass. Three rotated-out items survive. Optional bill links remain NULL; the old possessive-`s 2027` false match remains a documented interpretation defect for T16.
+- **Unified Agenda:** the existing `sha256:ea589343f8dcb5ffe134c5a2ac2fbf5d8856f105f296d838fe59e6330ee075b2` generation passes all 67,218 mapped-field comparisons against the complete retained 202510 XML. Actual replay is byte-identical; public and MCP reads agree. This qualifies the retained edition, without a latest-edition or historical-series claim.
+- **Comments:** six complete agency source cohorts yield a local 23,889,665-row candidate: all original parent identities plus four BOP records. Every selected native field matches, all 23,862,187 unrelated rows survive unchanged, and the independently reconciled index conserves every row including 1,555 unknown dates. Wider source repair and physical partitions remain open. ACF's fully enumerated next cohort contains 129,052 source comment objects; it has not been acquired in this batch.
+- **CourtListener:** initial loading now prioritizes the public bulk files. The complete S3 inventory selects current exports and unique supplements, with historical duplicate snapshots catalogued separately. Transfers and pins live in `courtlistener-bulk/`; downloading is not complete rollup qualification. The retained search walk stops at 54 pages/1,080 rows. Its reported count of 7,811 is approximate, so a completed cursor walk—not equality to that estimate—must establish traversal completion. Bulk files do not include the party/attorney relationship tables.
+
+Receipts: `press-release-qualification/`, `unified-agenda-qualification/`, `full-comments/source-campaign/` and `courtlistener-bulk/` under the linked execution directory. The independent review reports state the exact approved scope and remaining limits.

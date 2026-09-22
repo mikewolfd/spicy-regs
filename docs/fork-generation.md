@@ -86,6 +86,12 @@ unfinished populations remain explicit.
   native-field comparisons, public byte checks and direct/downloaded MCP reads.
   Both are explicit 119th Congress selections; other legislative families and
   missing detail histories remain open.
+- **T08/T16 continuation:** the fork now serves 28 press releases: every item
+  in the complete retained and fresh Appropriations RSS captures, including
+  three items that rotated out. All mapped values, public bytes and both MCP
+  paths pass. Optional bill links remain NULL. The old local matcher incorrectly
+  read `s 2027` in a reference to the President's budget as Senate bill 2027;
+  repair and qualify that interpretation before enabling bill enrichment.
 - **T09:** unchanged-source runs now retry unfinished bill bodies and XML
   comparisons. A workflow budget defaults to 600 acquisitions; zero disables
   them. Four offline fixture runs manually verify progress and preservation of
@@ -110,8 +116,13 @@ unfinished populations remain explicit.
   refuses incomplete responses. A source-qualified correction to exactly
   `CFR-2025-title14-vol4` repairs 1,444 section mappings and preserves 318,063
   other rows; all repaired rows pass direct MCP reads. Unknown annual-edition
-  ancestry remains null in the corrected rows. Whole-population native
-  qualification remains open.
+  ancestry remains null in the corrected rows. The complete retained Agenda
+  edition `202510` now passes all source-identity and mapped-field comparisons;
+  replay reproduces the existing published bytes exactly, and both MCP modes
+  match. Its dictionary now describes `next_action_date` as the second distinct
+  timetable date, which may be historical, and preserves month-only precision
+  in the literal JSON. Wider FR/CFR qualification and newer Agenda editions
+  remain open.
 - **T12:** CRS, GAO, FCC, USAspending and CourtListener search use the installed
   source-owned readers and refuse invalid/incomplete responses before publication. Failure audits
   preserve prior outputs. Optional imports remain lazy. Full source populations,
@@ -120,9 +131,18 @@ unfinished populations remain explicit.
   identities and unfinished cursor walks; explicit record caps remain selected
   prefixes. Ordinary scheduled readers still need successful raw-response
   retention for replayable source audits. A full keyless CourtListener attempt
-  retained 34 pages/680 records before HTTP 429; exact replay verifies refusal
-  without replacing prior bytes. Rate/access budgeting and resumable retained
-  acquisition remain open. USAspending's supported 100-row pages
+  originally retained 34 pages/680 records before HTTP 429; exact replay
+  verifies refusal without replacing prior bytes. Resumable acquisition later
+  reached 54 pages/1,080 records and was stopped to prioritize bulk acquisition.
+  The publisher documents docket counts above 2,000 as cardinality estimates:
+  7,811 is not an exact denominator, and the earlier exact-count guard requires
+  correction. Cursor completion, source success and unique IDs remain required.
+  `courtlistener-bulk/` now records the complete S3 inventory and active transfer
+  of the latest main export plus unique supplemental files; older duplicate
+  snapshots remain catalogued. Acquisition is separate from parsing and rollup
+  publication. Bulk dockets include all source classes, but these exports omit
+  the party/attorney relationship tables; those fields need another source.
+  Retained API catch-up remains useful after the dated bulk snapshot. USAspending's supported 100-row pages
   retain the existing 100-page default, selecting at most 10,000 rows per run;
   prior rows remain in the merge.
 - **T15:** monthly volume now serves **77,934 groups** counting 1,999,503
@@ -138,6 +158,15 @@ unfinished populations remain explicit.
   and drops proposals when
   the earliest final predates the earliest proposal. It needs defined pairing
   rules and participating document IDs before completion claims.
+
+The comments continuation acquired every listed original for six complete
+agency cohorts and admitted their source releases. The full-parent candidate
+repairs missing names, organizations and attachments, adds four newly observed
+BOP records, and preserves every unrelated row. Its coherent index conserves
+all rows, including unknown dates. This remains a local candidate: other
+agencies, body extraction, the full partition tree and publication are open.
+The complete ACF listing provides an exact next-cohort acquisition budget.
+See `full-comments/source-campaign/` for raw originals, audits and receipts.
 
 The continuation uses independent [semi-formal reviews](/Users/mikewolfd/Work/corpora/fork-execution-2026-09-21/reviews)
 for the source readers, discovery dates, bill recovery and comments partition
@@ -250,10 +279,10 @@ is the evidence for valid emptiness; a generic nonempty-file check is insufficie
 | **T05 · Follow-on** | **Expand FEC from other retained sources.** SpicyDocs + SpicyRegs. | T02/T03; audited 2024/2026 tables, complete financial ZIPs, committee-history dump and retained filing/legal/agency captures. | Reconcile what is already in T04; adopt missing selected tables, expand the **32,034,987-row** individual base, and implement/adopt the assessed committee history. Track correction streams separately. Gate further inaugural, enforcement and agency adoption on their documented parser/identity limits. Wider history remains explicit; this does not block publishing T04. |
 | **T06 · Dockets/documents delivered; comments/index open** | **Build corrected regulatory base parents.** SpicyDocs + SpicyRegs. | T02/T03; retained public dockets/documents/comments index plus the **13.8 GB** source-release set. | Apply the qualified repair paths to the intended populations, preserve newer parent observations and unrelated rows, and verify the fork's base `dockets`, `documents`, `comments_index` and selected partitions. The 392/547/3 repair cohort is evidence for the fix, not the full replacement. Use the existing base publication path; these outputs are outside managed rollup families. |
 | **T07 · Full parent retained; repair/reconciliation open** | **Establish the full selected comments representation.** SpicyDocs + SpicyRegs + operations. | T02; a full pinned 23,889,661-row public parent is now retained. Repair its demonstrated native-field omissions and qualify the complete selected source population. Catalog configuration is required if using the current Iceberg mirror workflow. | Retain and audit the complete chosen population, publish its index/partitions and the public comments representation needed by consumers, and verify counts agree at their declared grains. The 212,733-row sample cannot stand in for the 23,889,661-row source object. Missing full comments blocks its consumers, not independent sources. |
-| **T08 · Nominations/treaties delivered; other families open** | **Admit prepared independent legislative families.** SpicyRegs. | T02/T03; measured members/terms, rosters, laws, amendments, meetings, nominations, record issues, treaties; newer communications/print outputs; corrected Senate expenditures. | Current schemas, complete family membership and raw/output audits pass for each selected scope; publish and read back each family. Keep current-only, House-only and unavailable-package limits visible. Prepare votes and press releases here if useful; finalize optional bill links in T16. |
+| **T08 · Nominations/treaties/press windows delivered; other families open** | **Admit prepared independent legislative families.** SpicyRegs. | T02/T03; measured members/terms, rosters, laws, amendments, meetings, nominations, record issues, treaties; newer communications/print outputs; corrected Senate expenditures. | Current schemas, complete family membership and raw/output audits pass for each selected scope; publish and read back each family. Keep current-only, House-only and unavailable-package limits visible. Prepare votes and press releases here if useful; finalize optional bill links in T16. |
 | **T09 · Retry controls implemented; complete family open** | **Build the complete bill family.** SpicyDocs + SpicyRegs. | T02/T03; corrected five-table 118th HR/S cohort; receipt-pinned 118th ZIPs; preserved 119th ZIPs and 40 body files. Qualify temporary ZIP provenance/freshness. T08 laws supplies optional links. | Reconcile all 18 family members under the ordinary `bill-family` owner, preserve intended coverage outside the repaired cohort, and acquire missing types/periods/bodies. Resolve the 600-body cap and unchanged-input skips so missing work is retried. Verify access for older backfills and models; keep uncomputed model outputs blocked, not falsely complete. Do not publish `qualified-bill-status-118-hr-s` as a competing owner. |
 | **T10 · Complete for the selected 118-package family** | **Rebuild the report family with corrected sections.** SpicyDocs + SpicyRegs. | T02/T03; retained report/hearing inputs and the corrected section replay; acquire missing selected inputs as needed. | Rebuild and qualify reports, sections, hearings, bill links and read-status outputs together. The 11-section correction sample and the old defective family cannot substitute for the intended corpus. |
-| **T11 · Bounded CFR correction delivered; wider qualification open** | **Audit current Federal Register, CFR and Agenda generations.** SpicyDocs + SpicyRegs. | T02; current scheduled publication pins, retained public/corrected FR parents and source releases. | Verify actual remote bytes and source/output agreement. Qualify or repair CFR's failure-to-empty/partial paths before further unattended acquisition; failed sources must preserve prior valid data. Reuse passing current generations. Repair CFR's demonstrated part-ancestry mapping and recover required source fields before claiming qualified coverage. Do not replace the newer FR population wholesale with the older 803,997-row repair parent. Regenerate only affected representations or missing scope. |
+| **T11 · Agenda edition qualified; bounded CFR repair delivered; wider work open** | **Audit current Federal Register, CFR and Agenda generations.** SpicyDocs + SpicyRegs. | T02; current scheduled publication pins, retained public/corrected FR parents and source releases. | Verify actual remote bytes and source/output agreement. Qualify or repair CFR's failure-to-empty/partial paths before further unattended acquisition; failed sources must preserve prior valid data. Reuse passing current generations. Repair CFR's demonstrated part-ancestry mapping and recover required source fields before claiming qualified coverage. Do not replace the newer FR population wholesale with the older 803,997-row repair parent. Regenerate only affected representations or missing scope. |
 | **T12 · Refusal adapters repaired; source gaps remain** | **Qualify FCC, CRS, GAO, USAspending and CourtListener docket families.** SpicyDocs + SpicyRegs. | T02/T03; retained public files and source-specific evidence where available. | Verify or repair failure-to-empty/partial paths before acquisition. Locate or acquire missing paired originals, resolve each family's known field/grain defects from the master register, build only where needed, and publish audited complete selections. Source success and completeness must be explicit; a nonzero retained table is not enough. |
 | **T13 · Review / rebuild required** | **Qualify court clusters and rebuild court bodies.** SpicyDocs + SpicyRegs. | T02/T03; 10.1M-cluster materialization, 250K old bodies, scope/join companions and 284-row corrected replay. | Find or reacquire required native originals, establish cluster/source agreement and rebuild the selected body population with all supported native text variants. Auxiliary joins are inputs, not extra hosted datasets. Do not promote the 284-row replay to full coverage. |
 | **T14 · Waiting: source qualification/access** | **Complete SAM and lobbying initial loads.** SpicyDocs + operations + SpicyRegs. | T01 for SAM; T02/T03; retained nonempty tables as comparison candidates, not source proof. Verify SAM-specific authorization; use the repaired filtered LDA reader. | Explicit bounded scopes, rate budgets and resumable checkpoints produce source-proven outputs. Wire SAM year/mode/record controls into dispatch. Retain source codes, dates and field meanings. Qualify and publish each family before resuming its schedule; the existing lobbying pause remains until its initial load succeeds. |
