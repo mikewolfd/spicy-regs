@@ -109,7 +109,7 @@ The fenced block below is normative and machine-audited by Rulespec's
 `tools/l0_mapping_audit.py`.
 
 ```yaml rkaf-l0-mapping
-rulespec_version: "sha256:e0f219f4bbbf8743975640e44d40a6b5cdb20cd1a420864add43394e49046304"
+rulespec_version: "sha256:2d82f1fca983462089b6a078ba4918bc1f5f0385cde176afe15c97ded471a6d7"
 mappings:
   - table: rule_targets
     column: docket_id
