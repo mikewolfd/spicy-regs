@@ -25,11 +25,10 @@ from spicy_docs.sources.courtlistener.bulk import (
 from spicy_regs.transforms.build_court_opinion_bodies import (
     COLUMNS as BODY_COLUMNS,
 )
+from spicy_regs.transforms._courtlistener_writer import DISK_HEADROOM_FLOOR, check_headroom
 from spicy_regs.transforms.build_court_opinion_bodies import (
     BYTES_PER_OPINION_ROW,
-    DISK_HEADROOM_FLOOR,
     OPINIONS_PER_CLUSTER_CEILING,
-    check_headroom,
     estimate_output_bytes,
 )
 from spicy_regs.transforms.build_court_opinion_bodies import _shape as shape_body

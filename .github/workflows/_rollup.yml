@@ -205,6 +205,9 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
           DATA_GOV_API_KEY: ${{ secrets.DATA_GOV_API_KEY }}
+          # A hosted runner has tens of GB in total, so the workstation's 100 GiB
+          # free-space floor would refuse any download; keep 4 GiB free instead.
+          SPICY_REGS_DISK_FLOOR_GIB: '4'
           # Keep FEC evidence outside a hidden directory so successful and
           # interrupted traversals can be inspected after the runner exits.
           FEC_CAPTURE_DIR: output/fec-captures

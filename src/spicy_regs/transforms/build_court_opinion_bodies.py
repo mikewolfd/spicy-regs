@@ -28,7 +28,6 @@ docket set without keeping the other ~10 million opinions.
 
 from __future__ import annotations
 
-import shutil
 from collections.abc import Container, Generator, Iterable, Iterator, Sized
 from contextlib import closing
 from datetime import date
@@ -42,7 +41,7 @@ import pyarrow.parquet as pq
 from loguru import logger
 
 from spicy_regs.sources import r2
-from spicy_regs.transforms._courtlistener_writer import CourtListenerTableWriter
+from spicy_regs.transforms._courtlistener_writer import CourtListenerTableWriter, check_headroom
 from spicy_regs.transforms.table_merge import merge_local_prior
 
 
@@ -50,10 +49,6 @@ OUTPUT = "court_opinion_bodies.parquet"
 DATASET = "opinions"
 SCHEMA_VERSION = "2"
 SCHEMA_VERSION_KEY = "spicy-regs:court-opinion-bodies-schema-version"
-
-#: Free space this project refuses to eat into, in bytes. A bulk ingest that
-#: would cross it is stopped and recorded rather than run.
-DISK_HEADROOM_FLOOR = 100 * 2**30
 
 #: Planning estimate, not a per-row bound. The version-2 native replay retained
 #: all eight variants: 3,626,326 bytes / 284 rows = 12,769 B/row, rounded up.
@@ -128,24 +123,6 @@ def _s(value: object) -> str | None:
         return None
     text = str(value)
     return text if text != "" else None
-
-
-def check_headroom(needed_bytes: int, *, path: Path | None = None) -> None:
-    """Refuse an ingest that would take free space below the project floor.
-
-    Raises rather than warning: a run that silently fills the disk is worse than
-    a run that did not happen, and the whole point of recording sizes first is to
-    be able to make this call before the bytes arrive.
-    """
-    usage = shutil.disk_usage(path or Path.home())
-    remaining = usage.free - needed_bytes
-    if remaining < DISK_HEADROOM_FLOOR:
-        raise RuntimeError(
-            f"CourtListener bulk: refusing to ingest {needed_bytes / 2**30:.1f} GiB — "
-            f"would leave {remaining / 2**30:.1f} GiB free, below the "
-            f"{DISK_HEADROOM_FLOOR / 2**30:.0f} GiB floor "
-            f"(currently {usage.free / 2**30:.1f} GiB free)"
-        )
 
 
 def estimate_output_bytes(dump_size: int, cluster_ids: Container[str] | None) -> int:

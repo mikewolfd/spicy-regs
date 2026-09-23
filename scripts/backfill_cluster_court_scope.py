@@ -33,7 +33,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 from loguru import logger
 
-from spicy_regs.transforms.build_court_opinion_bodies import DISK_HEADROOM_FLOOR, check_headroom
+from spicy_regs.transforms._courtlistener_writer import check_headroom, disk_floor
 from spicy_regs.transforms.court_scope import CourtScope, court_jurisdictions
 
 SCOPE_COLUMNS = (
@@ -86,7 +86,7 @@ def backfill(
         "Court scope backfill: {:,} clusters, mode={} (floor {:.0f} GiB)",
         total_rows,
         mode,
-        DISK_HEADROOM_FLOOR / 2**30,
+        disk_floor() / 2**30,
     )
 
     args = argparse.Namespace(
