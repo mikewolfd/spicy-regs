@@ -29,3 +29,9 @@ keeping the 0.26.5 label, so two different wheels now carry that name across the
 (DocSpec, SpicySearch and Engine vendor the release built from `1dc7701`). Every
 `spicy_regs.sources` and `spicy_regs.transforms` module imports against it; the next
 SpicyDocs release should carry a new version and a recorded source commit.
+
+Resolved the same day: SpicyDocs 0.26.6 (`6673fa3`) and Rulespec Artifacts 1.1.1 (`a3acb04`)
+carry the changed code under new versions, with DocSpec 0.9.1 (`2cdde74`) and RefSpec
+0.1.0.dev14 (`1e1d2d7`) rebuilt on them. This repository, DocSpec, RefSpec, SpicySearch and
+Engine now vendor byte-identical copies, each recorded with its source commit; the
+mislabelled 0.26.5 wheel stays here only for replay.
