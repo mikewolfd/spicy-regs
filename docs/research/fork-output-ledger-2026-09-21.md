@@ -6,8 +6,8 @@ The [consolidated backlog](../fork-generation.md) remains the task list. [Machin
 
 Public data destination: `https://pub-72e95c0c20a84508b42b03a6ff6d55f8.r2.dev`. Local candidates are not fork publications. Retained qualified generations include FEC, members/terms, nominations, treaties, the five-member report family, repaired dockets/documents, docket search, two document-derived tables, Appropriations press-feed windows, the retained Agenda edition and complete June 30 court clusters. As of 2026-09-23 the following are also source-qualified or validated against raw data and live:
 - **Regulatory:** the Federal Register and its docket links; the rulemaking dataset; the comments table (all 133 comment-bearing agencies, with six plus ACF re-verified and repaired from native source) with its index and the three T15 summaries.
-- **Legislative:** laws; committee rosters; amendments; the reconciled bill family (decision 1) and its subjects; member vote terms (decision 2); roll-call bill links.
-- **Courts and other sources:** the court citation tables and opinion index; CRS reports; FCC proceedings and filings; a bounded SAM load (decision 10).
+- **Legislative:** laws; committee rosters; amendments with their sponsor and amended-bill detail; the reconciled bill family (decision 1) and its subjects; member vote terms (decision 2); roll-call bill links.
+- **Courts and other sources:** the court citation tables and opinion index; CRS reports; FCC proceedings and filings; bounded SAM and lobbying loads (decision 10).
 
 CFR has a verified bounded correction; its wider ancestry rule is open (see the September 23 continuation). Committee meetings, house communications, record issues, print citations, Senate expenditures and GAO reports were published by scheduled runs and are source-qualified; the qualification receipts are in `scheduled-published-qualification/` under the execution receipts. The latest press generation has a verified bounded relationship correction. Several fork workflows are disabled until this session's commits are pushed; the continuation names each one.
 
@@ -503,7 +503,8 @@ Receipts: `members-qualification/`, `congressional-status/`, `native-vote-varian
     - The mirror path is `comments/agency/agency_code=<agency>/part-0.parquet`.
     - `pdf_extraction_results_json` is null on every comment, but 70,845
       comments carry text.
-  - **Operations:** 10 fork workflows are disabled on purpose until the push
-    (35 spicy-regs and 15 spicy-docs commits unpushed). `GEMINI_API_KEY` and
+  - **Operations:** 10 fork workflows are disabled on purpose; decision 11's
+    later change says which resume after the push (35 spicy-regs and 15
+    spicy-docs commits were unpushed at the sweep). `GEMINI_API_KEY` and
     `R2_CATALOG_*` are absent, Zyte is unwired, Pages is not enabled, and every
     recent dictionary deploy fails. See `rerun-check-2026-09-23/`.

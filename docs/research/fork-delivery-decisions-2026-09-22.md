@@ -87,4 +87,18 @@ mislabelled 0.26.5 wheel stays here only for replay.
   lda.gov key: accepted, where a wrong key answers 401). Both workflows stay
   disabled until this session's fixes are pushed. Local runs read
   `LDA_API_KEY`; the workspace `.env` names the key `LDA_KEY`.
+- **Decision 11, 2026-09-23:** the September 23 work is committed locally but
+  not pushed: spicy-regs after the fork's `a9c794e`, and spicy-docs after
+  `civictechdc/spicy-docs`'s `dca01d4` through release 0.29.0 (`58a68b7`).
+  Both push as fast-forwards. Until they are pushed, scheduled runs use the older code.
+  Ten fork workflows are disabled, for three different reasons:
+  - Seven resume after the push, because their pushed code would overwrite a
+    corrected table: `Materialize — rulemaking join surface`, `Rollup —
+    amendments`, `bill family`, `congress_bills`, `fcc_proceedings`,
+    `lobbying_filings` and `sam_entities`.
+  - `Rollup — cfr_sections` stays off after the push too: the local code still
+    nulls the part of most section granules (`cac7615`) until the ancestry
+    rule is fixed (T11).
+  - `court_opinion_bodies` (decision 6; the push deletes it) and
+    `rulemaking_lifecycles` (decision 4) stay off by decision.
 
