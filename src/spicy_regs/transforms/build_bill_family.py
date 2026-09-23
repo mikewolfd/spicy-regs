@@ -64,7 +64,6 @@ from spicy_docs.sources.congress.bill_versions import (
 from spicy_docs.sources.congress.bulk_status import (
     BulkListingEntry,
     BulkStatusAcquirer,
-    BulkStatusBudget,
     bulk_status_locator,
 )
 from spicy_docs.sources.govinfo.body_acquisition import GovInfoBodyAcquirer, GovInfoBodyBudget
@@ -78,7 +77,12 @@ from spicy_regs.sources.congress_bills import (
     bill_detail,
     listing_reader,
 )
-from spicy_regs.transforms.congress_scope import bill_types_from_env, congresses_from_env
+from spicy_regs.transforms.congress_scope import (
+    BULK_STATUS_FLOOR,
+    bill_types_from_env,
+    bulk_status_budget,
+    congresses_from_env,
+)
 from spicy_regs.transforms.model_call import resolve_gemini_key
 from spicy_regs.transforms.table_merge import merge_contract_table, merge_table, published_table
 
@@ -90,14 +94,6 @@ from spicy_regs.transforms.table_merge import merge_contract_table, merge_table,
 #: than left blank — ``section_diffs.engine_revision`` is the column that says
 #: which engine produced a diff.
 DELTATRACK_REVISION = "c636448ba08d55bba7cb8c884aad0f5ac1ccf2f6"
-
-#: One zip per (congress, bill_type); the archive bounds live on the budget.
-BULK_BUDGET = BulkStatusBudget(
-    max_requests=4,
-    max_bytes=256 * 1024 * 1024,
-    timeout_seconds=300.0,
-    min_request_interval_seconds=1.0,
-)
 
 #: Three requests per printing (summary, MODS, body), paced at ~3/s.
 BODY_BUDGET = GovInfoBodyBudget(
@@ -173,13 +169,6 @@ VOTE_REFERENCE_COLUMNS: tuple[str, ...] = (
 #: ``full_action_name`` is NULL on every entry measured, and a NULL key part
 #: would have ``merge_table`` drop the row rather than publish it.
 VOTE_REFERENCE_IDENTITY: tuple[str, ...] = ("bill_id", "chamber", "congress", "session", "roll_number", "action_index")
-
-#: The Congress where BILLSTATUS bulk begins (spicy-docs'
-#: ``docs/research/closing-the-gaps-2026-09-19.md`` §2, row A11: bulk is
-#: 108-119). A scope Congress at or above it is filled from the zips as
-#: always; one below it is filled from the API ``bill`` route instead. Which
-#: route fills a Congress is a fact of the publisher, not a second scope knob.
-BULK_STATUS_FLOOR = 108
 
 #: The oldest Congress the ``bill`` list route reaches (measured:
 #: ``bill/{congress}?format=json&limit=1`` answers a declared count for every
@@ -1532,7 +1521,7 @@ def build_bill_family(
         )
 
     api_key = _resolve_api_key()
-    bulk_acquirer = bulk_acquirer or BulkStatusAcquirer(budget=BULK_BUDGET)
+    bulk_acquirer = bulk_acquirer or BulkStatusAcquirer(budget=bulk_status_budget())
     if body_acquirer is None and max_version_fetches > 0:
         if api_key:
             body_acquirer = GovInfoBodyAcquirer(budget=BODY_BUDGET, api_key=api_key)

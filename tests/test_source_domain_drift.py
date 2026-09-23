@@ -307,6 +307,21 @@ def test_an_xsd_with_a_doctype_is_refused():
         xsd_documented_options(payload, "MAJOR")
 
 
+@pytest.mark.parametrize(
+    "payload,reason",
+    [
+        (b'<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">&x;</xs:schema>', "malformed"),
+        (b'<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">', "malformed"),
+        (b"<a>" + b" " * (1024 * 1024) + b"</a>", "within max_bytes"),
+        (b"<a>" * 300 + b"</a>" * 300, "nesting depth"),
+    ],
+)
+def test_an_xsd_the_shared_reader_refuses_is_a_source_domain_error(payload, reason):
+    """spicy-docs' bounded reader: an undefined entity, broken XML, an oversize or over-deep document all refuse."""
+    with pytest.raises(SourceDomainError, match=reason):
+        xsd_documented_options(payload, "MAJOR")
+
+
 # --- the observed snapshot's own provenance ---------------------------------
 
 

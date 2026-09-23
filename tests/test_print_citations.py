@@ -504,6 +504,34 @@ def test_a_neighbouring_collections_id_is_dropped_by_name_and_never_fetched(tmp_
     assert acquirer.asked == [CRPT_ID], "an id the grammar refuses must not cost a request"
 
 
+def test_the_id_grammar_not_the_request_places_each_row_in_its_collection(tmp_path):
+    """A BUDGET walk drops a CRPT row, and a BUDGET-shaped id the grammar refuses is named, not skipped quietly."""
+    from loguru import logger
+
+    from spicy_regs.transforms.build_print_citations import _collection
+
+    reader = _Reader(
+        {
+            "CRPT": [],
+            "BUDGET": [
+                _listing(CRPT_ID, "ACTIVITY REPORT of the COMMITTEE ON ENERGY AND COMMERCE"),
+                _listing("BUDGET-2026-NOTAPART", "Appendix"),
+                _listing(BUDGET_ID, "Mid-Session Review"),
+            ],
+        }
+    )
+    acquirer = _Acquirer({BUDGET_ID: _package(BUDGET_ID, pages=BUDGET_PAGES)})
+    messages: list[str] = []
+    sink = logger.add(lambda message: messages.append(message.record["message"]), level="WARNING")
+    try:
+        _build(tmp_path, reader, acquirer)
+    finally:
+        logger.remove(sink)
+    assert acquirer.asked == [BUDGET_ID]
+    assert any("BUDGET-2026-NOTAPART is not a BUDGET package id" in message for message in messages)
+    assert (_collection(BUDGET_ID), _collection(CRPT_ID), _collection("GPO-J6-REPORT")) == ("BUDGET", "CRPT", None)
+
+
 def test_a_title_that_is_not_an_activity_report_is_never_fetched(tmp_path):
     reader = _Reader(
         {

@@ -241,11 +241,12 @@ def _processing_versions(vocabulary: tuple[tuple[str, str], ...]) -> dict[str, s
     }
 
 
-def _is_budget_volume(package_id: str, title: str) -> bool:
-    # The title says nothing useful here — "Appendix", "Mid-Session Review" —
-    # so the id's own prefix is the whole rule, checked against the row rather
-    # than assumed from the request.
-    return package_id.startswith(f"{BUDGET}-")
+def _collection(package_id: str) -> str | None:
+    """The collection spicy-docs' package-id grammar places this id in, or None when it refuses the id."""
+    try:
+        return parse_package_id(package_id).collection
+    except ValueError:
+        return None
 
 
 def _listed(
@@ -256,8 +257,10 @@ def _listed(
 ) -> list[tuple[str, str | None]]:
     """``(package_id, last_modified)`` for every row of one collection window this run accepts.
 
-    The whole window, every run — see the module docstring. A row whose id the
-    grammar refuses is dropped by name and counted, never fetched.
+    The whole window, every run — see the module docstring. The id grammar,
+    not the request, says which collection a row belongs to: a row whose id it
+    refuses is dropped by name and counted, and one it places in another
+    collection is dropped; neither is fetched.
     """
     accepted: list[tuple[str, str | None]] = []
     walked = refused_id = activity_named = 0
@@ -268,16 +271,15 @@ def _listed(
             package_id = str(record.get("packageId") or "")
             title = str(record.get("title") or "")
             activity_named += int(names_activity(title))
-            if not keep(package_id, title):
-                continue
             try:
-                parse_package_id(package_id)
+                identity = parse_package_id(package_id)
             except ValueError as error:
                 # A neighbouring collection's id inside this collection's walk.
                 refused_id += 1
                 logger.warning("{}: {} is not a {} package id: {}", collection, package_id, collection, error)
                 continue
-            accepted.append((package_id, record.get("lastModified")))
+            if identity.collection == collection and keep(package_id, title):
+                accepted.append((package_id, record.get("lastModified")))
     logger.info(
         "{}: {:,} rows walked since {}, {:,} accepted, {:,} refused by id grammar",
         collection,
@@ -338,7 +340,9 @@ def _read_body(acquirer: PackageBodySource, package_id: str) -> tuple[Any, BodyT
 #: scheduling and the row lists cannot disagree about which families exist.
 _FAMILIES: tuple[tuple[str, str, str, Callable[[str, str], bool]], ...] = (
     (CRPT, ACTIVITY_REPORTS, "activity", is_activity_report),
-    (BUDGET, BUDGET_VOLUMES, "budget", _is_budget_volume),
+    # A BUDGET title says nothing useful ("Appendix", "Mid-Session Review"), so
+    # the collection ``_listed`` reads from the id's grammar is the whole rule.
+    (BUDGET, BUDGET_VOLUMES, "budget", lambda _package_id, _title: True),
 )
 
 
@@ -458,7 +462,7 @@ def build_print_citations(
         known = {package_id: modified for package_id, (modified, _digest) in held[table].items()}
         for name in outputs_for[collection]:
             for package_id, state in checkpoints[name].items():
-                if package_id.startswith(collection + "-"):
+                if _collection(package_id) == collection:
                     known.setdefault(package_id, state.get("last_modified"))
         pending = {package_id: modified for package_id, modified in known.items()
                    if not complete(package_id, collection, modified)}
