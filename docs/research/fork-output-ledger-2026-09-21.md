@@ -13,8 +13,8 @@ Public data destination: `https://pub-72e95c0c20a84508b42b03a6ff6d55f8.r2.dev`. 
 | T13 | `run-rollup-court-citations` | `court_citations.parquet`, `court_citation_map.parquet`, `court_parentheticals.parquet` | added and published 2026-09-22 for the complete 2026-06-30 edition: generation `f1e2e523…`; public row counts verified |
 | T13 | `run-rollup-court-opinions` | `court_opinions.parquet` | added and published 2026-09-22 for the complete 2026-06-30 edition (text-free): generation `f7cc67cc…`; public row counts verified; no scheduled workflow (54.6 GB source) |
 | T16 | `run-rollup-bill-subjects` | `bill_subjects.parquet` | waiting for qualified parents |
-| T15 | `run-rollup-feed-summary` | `feed_summary.parquet` | waiting for qualified parents |
-| T15 | `run-rollup-agency-stats` | `agency_stats.parquet` | waiting for qualified parents |
+| T15 | `run-rollup-feed-summary` | `feed_summary.parquet` | published 2026-09-23: generation `1a833d52…`, 279,124 dockets; every comment count and document date equals a direct recount from the parents |
+| T15 | `run-rollup-agency-stats` | `agency_stats.parquet` | published 2026-09-23: generation `d4fa809a…`, 316 agencies; every count equals a direct recount |
 | T15 | `run-rollup-agency-monthly-volume` | `agency_monthly_volume.parquet` | generated and verified |
 | T15 | `run-rollup-docket-search` | `docket_search.json.gz` | generated and verified |
 | T15 | `run-rollup-lifecycles` | `rulemaking_lifecycles.parquet` | withdrawn 2026-09-23 (decision 4): the 2026-09-22 scheduled run had published generation `2f001194…` (26,519 rows); the family was conditionally removed from the index, the workflow disabled and unscheduled; pairing semantics remain blocked |
@@ -33,7 +33,7 @@ Public data destination: `https://pub-72e95c0c20a84508b42b03a6ff6d55f8.r2.dev`. 
 | T04 | `build-fec-observations` | `fec_source_records.parquet` | generated and verified |
 | T04 | `build-fec-observations` | `fec_collections.parquet` | generated and verified |
 | T04 | `build-fec-observations` | `fec_relationships.parquet` | generated and verified |
-| T15 | `run-rollup-org-committee-links` | `org_committee_links.parquet` | waiting for qualified parents |
+| T15 | `run-rollup-org-committee-links` | `org_committee_links.parquet` | published 2026-09-23: generation `7dd4e95a…`, 1,114 name-matched links; every committee and comment count verified (the match itself is a stated heuristic with confidence tiers) |
 | T12 | `run-rollup-gao-reports` | `gao_reports.parquet` | generated and verified |
 | T12 | `run-rollup-crs-reports` | `crs_reports.parquet` | published 2026-09-23 after a source replay validated against raw pages: generation `6c15aac2…`, 14,137 reports (details below) |
 | T12 | `run-rollup-courtlistener` | `court_dockets.parquet` | generated and verified: enriched APA selection published (11,459 rows) |
@@ -86,9 +86,9 @@ Public data destination: `https://pub-72e95c0c20a84508b42b03a6ff6d55f8.r2.dev`. 
 | T08 | `run-rollup-nominations` | `nominations.parquet` | generated and verified; new pin re-qualified |
 | T06 | `run-pipeline` | `dockets.parquet` | generated and verified |
 | T06 | `run-pipeline` | `documents.parquet` | generated and verified |
-| T06 | `run-pipeline` | `comments_index.parquet` | local candidate needs qualification |
+| T06 | `run-pipeline` | `comments_index.parquet` | published 2026-09-23 with the six-agency comments cohort: 112,885 groups summing to all 23,889,665 comments (reviewed candidate `28e5cf9c…`) |
 | T06 | `run-pipeline` | `comments/agency_code=<agency>/docket_id=<docket>/year=<year>/month=<month>/part-0.parquet` | local undated cohort; wider partitions unproduced |
-| T07 | `publish-comments-mirror.yml` | `comments.parquet` | six-agency repair candidate; full parent not admitted |
+| T07 | `publish-comments-mirror.yml` | `comments.parquet` | six-agency cohort published 2026-09-23 (decision 7) as the fork's first base comments object: reviewed candidate `a72a08e9…`, 23,889,665 rows; wider agencies continue by cohort, ACF next |
 | T07 | `publish-comments-mirror.yml` | `comments/by-agency/<agency>.parquet` | waiting for qualified comments parent |
 | T17 | `materialize-rulemaking` | `rule_targets.parquet` | bootstrapped 2026-09-23 as snapshot `snapshot_0e799850…` (517,311 rows across 142,525 dockets) against the five audited parents; references, intervals and sampled source rows verified (details below) |
 | T17 | `materialize-rulemaking` | `proceedings.parquet` | bootstrapped 2026-09-23 as snapshot `snapshot_0e799850…` (515,121 rows) against the five audited parents; references, intervals and sampled source rows verified (details below) |
@@ -333,3 +333,24 @@ Receipts: `members-qualification/`, `congressional-status/`, `native-vote-varian
   independent replay's 18 exceptions, and all 1,855 boundary-day House rows
   take the new term. Generation `890481eb…` equals the validated build (`c113329`).
   Its fork workflow exists only once pushed. See `vote-terms-2026-09-23/`.
+- **Comments cohort and T15 rollups (decision 7).** The six-agency candidate
+  (DOL, FMC, ITA, BOP, ONCD, PCSCOTUS) was approved by independent review
+  (`reviews/comments-six-agency-review.md`). On 2026-09-23, 300 random rows
+  re-matched their raw originals on all twelve native fields. The fork bucket
+  held no comments objects, so this was a first publication. `comments.parquet`
+  (`a72a08e9…`, 23,889,665 rows) and `comments_index.parquet` (`28e5cf9c…`) are
+  live, with S3 read-back and public download digests equal to the reviewed
+  files. The mirror workflow still fails daily for want of its catalog and does
+  not overwrite them. That unblocked three T15 rollups, each rebuilt and
+  recounted independently from the parents:
+  - **`feed_summary`** (`1a833d52…`): comment counts per docket equal a direct
+    count over `comments.parquet`, not the index, and document dates equal
+    `documents`.
+  - **`agency_stats`** (`d4fa809a…`): every docket, document and comment count
+    matches; the totals are 279,124, 2,001,531 and 23,889,665.
+  - **`org_committee_links`** (`7dd4e95a…`): every committee resolves with its
+    stated name, and every organization's comment and docket counts match.
+
+  80 comments in five dockets absent from `dockets` are counted by agency but
+  cannot appear in `feed_summary`, which lists dockets. See
+  `full-comments/publication-comments.json` and `t15-2026-09-23/`.

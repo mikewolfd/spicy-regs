@@ -65,4 +65,7 @@ mislabelled 0.26.5 wheel stays here only for replay.
   `member_vote_terms` (generation `890481eb…`), leaving `member_votes`
   unchanged. It reproduces the decision's numbers on the current votes: 15 of
   18 half-open misses resolved, the three `Not Voting` rows unmatched.
+- **Decision 7, 2026-09-23:** the reviewed six-agency cohort is published as the
+  fork's `comments.parquet` and `comments_index.parquet` (23,889,665 rows). ACF
+  (129,052 originals, fully listed) is the next cohort and is not yet acquired.
 
