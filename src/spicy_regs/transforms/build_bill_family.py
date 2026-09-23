@@ -1153,6 +1153,8 @@ def _backfill_bill_row(row: Any, record: Mapping[str, Any]) -> Any:
     for column in BACKFILL_UNSUBSTANTIATED:
         adjusted[column] = None
     adjusted["cosponsor_count"] = _sub_route_count(record, "cosponsors")
+    # The shaper labels any stated url as BILLSTATUS's; this row's came from the detail record.
+    adjusted["url_source"] = "congress_api" if adjusted.get("url") else None
     return TABLE_CONTRACTS["congress_bills"].checked(adjusted)
 
 

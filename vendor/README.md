@@ -5,7 +5,17 @@ The optional `source-readers` extra enables the same readers for package install
 its wheels must be supplied explicitly until they are published in a registry.
 Base CLI and MCP installs do not require them.
 
-- `spicy_docs-0.27.0`: built from SpicyDocs `main` at `1b4285a69428364cef0ee3349f4b68aaaf4b50ef`, with
+- `spicy_docs-0.28.0`: built from SpicyDocs `main` at `767c945`, with Rulespec Artifacts 1.1.1.
+  Built September 23, 2026 UTC: **1,288,534 bytes**, SHA-256
+  `7456db35b358e3f648796b795b88817cb6ec63d23f2026292dbecd87ad4bc611`. Appends
+  `congress_bills.url_source` (who stated `url`), the label delivery decision 1
+  requires on inherited URLs, and fixes the SAM bulk extract so it keeps its
+  selection filters, reads the publisher's sentence trigger and polls through
+  its `FSP` in-progress answer (all measured against the live API). DocSpec,
+  RefSpec, SpicySearch and SpicyEngine still pin 0.26.6. Qualified by the
+  SpicyDocs and SpicyRegs gates.
+
+- Previous `spicy_docs-0.27.0`: built from SpicyDocs `main` at `1b4285a69428364cef0ee3349f4b68aaaf4b50ef`, with
   Rulespec Artifacts 1.1.1. Built September 23, 2026 UTC: **1,287,487 bytes**,
   SHA-256 `c6133e34c646378bf9f133395f13f376ae80d2e2b77c79645bfbd6ab703e2029`. Its
   `courtlistener-local` extra (which this host installs) adds

@@ -283,7 +283,8 @@
         "short_title",
         "related_bills_json",
         "related_bill_count",
-        "cbo_cost_estimates_outcome"
+        "cbo_cost_estimates_outcome",
+        "url_source"
       ]
     },
     {

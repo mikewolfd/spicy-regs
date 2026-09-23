@@ -266,7 +266,7 @@ def test_the_narrow_writer_does_not_drop_the_familys_columns(tmp_path):
         prior_scratch_path(tmp_path, NAME),
     )
 
-    # Rows exactly as the narrow writer shapes them: ten keys, no more.
+    # Rows exactly as the narrow writer shapes them: the frozen ten and the url's label.
     fresh = _shape(
         {
             "congress": 119,
@@ -279,7 +279,7 @@ def test_the_narrow_writer_does_not_drop_the_familys_columns(tmp_path):
             "url": "https://api.congress.gov/v3/bill/119/hr/6028",
         }
     )
-    assert len(fresh) == 10, "the narrow writer still shapes ten columns"
+    assert set(fresh) == set(contract.columns[:10]) | {"url_source"}, "the frozen ten and the url's label"
 
     out = merge_contract_table(tmp_path, NAME, [fresh], download_prior=lambda key, path: False, prior_present=True)
     published = pq.read_table(out)
@@ -293,6 +293,46 @@ def test_the_narrow_writer_does_not_drop_the_familys_columns(tmp_path):
     # ...and what the narrow writer owns is still updated by it.
     assert row["title"] == "A bill (updated)"
     assert row["update_date"] == "2026-09-02"
+
+
+def test_url_source_follows_the_url_the_merge_keeps(tmp_path):
+    """Decision 1: an inherited url carries the label ``inherited``; a stated one carries its writer's."""
+    from spicy_docs.schemas import TABLE_CONTRACTS
+
+    from spicy_regs.transforms.table_merge import merge_contract_table, prior_scratch_path
+
+    contract = TABLE_CONTRACTS["congress_bills"]
+
+    def row(bill, **values):
+        base = {c: None for c in contract.columns}
+        number = bill.split("-")[-1]
+        base.update(bill_id=bill, congress="118", bill_type="hr", bill_number=number, update_date="2026-01-01")
+        return base | values
+
+    api = "https://api.congress.gov/v3/bill/118/hr/{}?format=json"
+    prior = [
+        row("118-hr-1", url=api.format(1), url_source="congress_api_list"),  # fresh states none: inherited
+        row("118-hr-2", url=api.format(2), url_source="congress_api_list"),  # fresh states its own
+        row("118-hr-3", url=api.format(3), url_source="congress_api_list"),  # untouched: keeps its label
+        row("118-hr-4", url=api.format(4)),  # predates the label: stays NULL when untouched
+    ]
+    schema = pa.schema([(c, pa.string()) for c in contract.columns])
+    pq.write_table(pa.Table.from_pylist(prior, schema=schema), prior_scratch_path(tmp_path, "congress_bills"))
+    page = "https://www.congress.gov/bill/118th-congress/house-bill/2"
+    fresh = [
+        row("118-hr-1", update_date="2026-02-01"),
+        row("118-hr-2", update_date="2026-02-01", url=page, url_source="billstatus"),
+        row("118-hr-5", update_date="2026-02-01"),  # no url anywhere: no label
+    ]
+    out = merge_contract_table(tmp_path, "congress_bills", fresh, download_prior=lambda *_: False, prior_present=True)
+    got = {r["bill_id"]: (r["url"], r["url_source"]) for r in pq.read_table(out).to_pylist()}
+    assert got == {
+        "118-hr-1": (api.format(1), "inherited"),
+        "118-hr-2": (page, "billstatus"),
+        "118-hr-3": (api.format(3), "congress_api_list"),
+        "118-hr-4": (api.format(4), None),
+        "118-hr-5": (None, None),
+    }
 
 
 def test_only_congress_bills_merges_column_wise():

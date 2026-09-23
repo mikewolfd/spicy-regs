@@ -122,6 +122,8 @@ def _shape(doc: dict) -> dict:
         "latest_action_text": latest_action.get("text"),
         "update_date": doc.get("updateDate"),
         "url": doc.get("url"),
+        # The list route's url is the API resource, not the congress.gov page BILLSTATUS names.
+        "url_source": "congress_api_list" if doc.get("url") else None,
     }
 
 

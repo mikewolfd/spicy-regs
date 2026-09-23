@@ -284,7 +284,11 @@ def merge_table(
         )
         prior_q = (f"SELECT * FROM (SELECT {prior_select} FROM read_parquet('{prior_file}') p {prior_filter}) "
                    f"WHERE {not_null}")
-        merged = ", ".join(c if c in identity else f"COALESCE(f.{c}, p.{c}) AS {c}" for c in columns)
+        rules = COALESCE_RULES.get(name, {})
+        merged = ", ".join(
+            c if c in identity else f"{rules[c]} AS {c}" if c in rules else f"COALESCE(f.{c}, p.{c}) AS {c}"
+            for c in columns
+        )
         selection = f"SELECT {merged} FROM ({fresh_q}) f FULL OUTER JOIN ({prior_q}) p USING ({key_cols})"
     else:
         if have_prior:
@@ -338,6 +342,20 @@ def merge_table(
 #: where it simply has nothing to say. Adding a table here is a claim that a
 #: NULL from one of its writers means "not mine", never "now empty".
 COALESCED_TABLES: frozenset[str] = frozenset({"congress_bills"})
+
+#: Columns a column-wise merge derives instead of coalescing. ``url_source`` names who stated
+#: ``url``, so it follows the url the merge keeps: the fresh writer's label when it stated one,
+#: ``inherited`` when a fresh row stated none and the prior value survives, and the prior label
+#: on a row this run did not touch. Delivery decision 1 (2026-09-22) accepts inherited URLs only
+#: with this label.
+COALESCE_RULES: dict[str, dict[str, str]] = {
+    "congress_bills": {
+        "url_source": (
+            "CASE WHEN f.url IS NOT NULL THEN f.url_source WHEN p.url IS NULL THEN NULL "
+            "WHEN f.bill_id IS NULL THEN p.url_source ELSE 'inherited' END"
+        ),
+    },
+}
 
 #: ``congress_bills.statutes_at_large_cite`` is filled from ``laws`` at this
 #: table's merge — the contract's own sentence for the column — and from

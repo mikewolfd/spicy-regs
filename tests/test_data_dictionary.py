@@ -337,4 +337,4 @@ def test_congress_bills_keeps_the_frozen_prefix_in_the_dictionary():
 
     columns = [c for c, _ in dd.expected_schemas()["congress_bills"]]
     assert tuple(columns[:10]) == COLUMNS
-    assert len(columns) == 49
+    assert len(columns) == 50 and columns[-1] == "url_source"

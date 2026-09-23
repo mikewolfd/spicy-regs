@@ -72,9 +72,10 @@ _RAW_BILL = {
 
 def test_shape_produces_exact_schema():
     row = _shape(_RAW_BILL)
-    # Every published column present, and nothing extra (10-column schema).
-    assert set(row) == set(COLUMNS)
+    # The frozen ten, plus the label naming who stated url (the list route's API resource).
+    assert set(row) == set(COLUMNS) | {"url_source"}
     assert len(COLUMNS) == 10
+    assert row["url_source"] == ("congress_api_list" if row["url"] else None)
 
 
 def test_shape_maps_and_serializes_fields():
