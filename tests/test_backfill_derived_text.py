@@ -530,17 +530,48 @@ def test_an_access_refusal_ends_the_run_while_other_dockets_are_in_flight(tmp_pa
     assert pq.read_table(updates).num_rows == len(listed) - 1  # the in-flight fills, in a closed file
 
 
-@pytest.mark.parametrize("refused", [0, 2])
-def test_the_command_fails_after_writing_when_a_docket_was_refused(tmp_path, monkeypatch, refused) -> None:
+@pytest.mark.parametrize(
+    "failed,failed_dockets,message", [(0, 0, None), (2, 2, "2 docket listing"), (1, 0, "1 comment")]
+)
+def test_the_command_fails_after_writing_when_a_fetch_or_listing_failed(
+    tmp_path, monkeypatch, failed, failed_dockets, message
+) -> None:
     monkeypatch.setattr(backfill_derived_text, "load_dotenv", lambda: None)
     monkeypatch.setattr(
         backfill_derived_text,
         "backfill_comments_parquet",
-        lambda *a, **k: _counts(3, failed=refused, failed_dockets=refused),
+        lambda *a, **k: _counts(3, failed=failed, failed_dockets=failed_dockets),
     )
     monkeypatch.setattr("sys.argv", ["backfill-comment-text", "--output-dir", str(tmp_path)])
-    if refused:
-        with pytest.raises(SystemExit, match="2 docket listing"):
+    if message:
+        with pytest.raises(SystemExit, match=message):
             backfill_derived_text.main()
     else:
         backfill_derived_text.main()
+
+
+def test_workers_are_capped_at_the_s3_pool(monkeypatch, tmp_path) -> None:
+    """More threads than the shared resource's 16 connections stall, so the pool bounds them."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    from spicy_docs.sources.mirrulations import DEFAULT_DOWNLOAD_WORKERS
+
+    sizes: list[int] = []
+
+    class _Recording(ThreadPoolExecutor):
+        def __init__(self, max_workers: int) -> None:
+            sizes.append(max_workers)
+            super().__init__(max_workers=max_workers)
+
+    monkeypatch.setattr(backfill_derived_text, "ThreadPoolExecutor", _Recording)
+    for requested in (4, 64):
+        _derived_text_updates(
+            _frame([_acf("0004")]),
+            agency=None,
+            resource_factory=_factory(),
+            limit=None,
+            max_workers=requested,
+            overwrite=False,
+            updates_path=tmp_path / f"{requested}.parquet",
+        )
+    assert sizes == [4, DEFAULT_DOWNLOAD_WORKERS]

@@ -199,7 +199,16 @@ def _derived_text_updates(
 
     # One S3 resource for the call, shared by the workers (botocore's client and
     # pool are thread-safe); one fetcher per docket keeps each listing cache local.
+    # More workers than the resource's connection pool churn connections and stall.
     resource = resource_factory()
+    if max_workers > mirrulations.DEFAULT_DOWNLOAD_WORKERS:
+        logger.warning(
+            "{} workers exceed the S3 pool of {}; using {}",
+            max_workers,
+            mirrulations.DEFAULT_DOWNLOAD_WORKERS,
+            mirrulations.DEFAULT_DOWNLOAD_WORKERS,
+        )
+        max_workers = mirrulations.DEFAULT_DOWNLOAD_WORKERS
 
     def _fill_docket(item: tuple[tuple[str, str], list[str]]) -> Counter[str]:
         (docket_agency, docket_id), comment_ids = item
@@ -543,7 +552,9 @@ def main() -> None:
     )
     parser.add_argument("--output-dir", type=Path, default=Path("output"))
     parser.add_argument("--limit", type=int, default=None, help="Max comments to backfill this run")
-    parser.add_argument("--max-workers", type=int, default=8)
+    parser.add_argument(
+        "--max-workers", type=int, default=8, help="Dockets fetched at once; at most the S3 connection pool (16)"
+    )
     parser.add_argument(
         "--overwrite",
         action="store_true",
@@ -590,7 +601,7 @@ def main() -> None:
             overwrite=args.overwrite,
             discover_from_derived=args.discover_from_derived,
         )
-        _exit_on_refused_dockets(stats)
+        _exit_on_failures(stats)
         return
 
     # Prefer the Hive-partitioned layout, fall back to the monolithic file.
@@ -619,14 +630,15 @@ def main() -> None:
             from spicy_regs.sources.r2 import upload_file
 
             upload_file(args.output_dir / "comments.parquet")
-    _exit_on_refused_dockets(stats)
+    _exit_on_failures(stats)
 
 
-def _exit_on_refused_dockets(stats: dict[str, int]) -> None:
-    """Fail the command, after its fills are written, when any docket listing was refused."""
-    if stats["failed_dockets"]:
+def _exit_on_failures(stats: dict[str, int]) -> None:
+    """Fail the command, after its fills are written, when a docket listing was refused or a fetch failed."""
+    if stats["failed"]:
         raise SystemExit(
-            f"{stats['failed_dockets']} docket listing(s) refused; {stats['failed']} comment(s) left pending"
+            f"{stats['failed']} comment(s) left pending after a failed fetch or listing "
+            f"({stats['failed_dockets']} docket listing(s) refused)"
         )
 
 

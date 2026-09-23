@@ -1,9 +1,19 @@
 """Transform: merge per-agency staging Parquet into the deduplicated dataset."""
 
+import os
 from pathlib import Path
 
 import pyarrow.parquet as pq
 from loguru import logger
+
+from spicy_regs.duckdb_settings import memory_limit as validated_memory_limit
+
+#: Environment override for the merge's DuckDB ``memory_limit`` when no argument is given.
+MEMORY_LIMIT_ENV = "SPICY_REGS_MERGE_MEMORY_LIMIT"
+
+#: The ceiling every merge ran under before it was configurable. A source correction over
+#: the whole 23.9M-row comments parent needs about 16GB (17 GB peak, 2026-09-23).
+DEFAULT_MEMORY_LIMIT = "4GB"
 
 
 def merge_staging_files(
@@ -14,6 +24,7 @@ def merge_staging_files(
     dedup_keys: dict[str, str],
     *,
     source_correction: bool = False,
+    memory_limit: str | None = None,
 ) -> None:
     """
     Merge staging files into final output using DuckDB streaming.
@@ -33,8 +44,17 @@ def merge_staging_files(
     skipped, and the merge runs through ``regulations_correction.correction_query``,
     which refuses conflicting identities and unorderable dates before replacing
     the output.
+
+    ``memory_limit`` is DuckDB's ceiling (``"16GB"``); without it the
+    ``SPICY_REGS_MERGE_MEMORY_LIMIT`` environment variable, then ``DEFAULT_MEMORY_LIMIT``.
+    Over it the merge spills, then fails without replacing the output.
     """
     import duckdb
+
+    limit = validated_memory_limit(
+        memory_limit or os.environ.get(MEMORY_LIMIT_ENV) or DEFAULT_MEMORY_LIMIT,
+        "memory_limit" if memory_limit else MEMORY_LIMIT_ENV,
+    )
 
     for data_type in data_types_to_merge:
         staging_type_dir = staging_dir / data_type
@@ -114,7 +134,7 @@ def merge_staging_files(
 
         con = duckdb.connect()
         try:
-            con.execute("SET memory_limit='4GB'")
+            con.execute(f"SET memory_limit='{limit}'")
             con.execute("SET preserve_insertion_order=false")
             con.execute("SET threads=2")
             con.execute(f"SET temp_directory='{spill_dir}'")

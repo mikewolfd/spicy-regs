@@ -12,7 +12,6 @@ import base64
 import json
 import logging
 import os
-import re
 import tempfile
 import threading
 from collections.abc import Iterator
@@ -34,6 +33,7 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 from spicy_regs._icon import ICON_DATA_URI
+from spicy_regs.duckdb_settings import memory_limit
 from spicy_regs.public_url import resolve_r2_base_url
 
 TABLES = (
@@ -222,7 +222,7 @@ HOME_DIRECTORY = _resolve_home_directory()
 
 
 def _resolve_memory_limit() -> str | None:
-    """DuckDB memory ceiling from SPICY_REGS_MEMORY_LIMIT (e.g. '12GB', '75%').
+    """DuckDB memory ceiling from SPICY_REGS_MEMORY_LIMIT (e.g. '12GB', '16GiB').
 
     Unset => None => DuckDB's own default (~80% of detected RAM). Set it on hosts
     where DuckDB can't see the real allocation (containers detect host RAM, not
@@ -232,9 +232,7 @@ def _resolve_memory_limit() -> str | None:
     raw = os.environ.get("SPICY_REGS_MEMORY_LIMIT", "").strip()
     if not raw:
         return None
-    if not re.fullmatch(r"\d+(\.\d+)?\s*(%|[KMGT]?i?B)?", raw, re.IGNORECASE):
-        raise RuntimeError(f"SPICY_REGS_MEMORY_LIMIT is not a valid size/percent: {raw!r}")
-    return raw
+    return memory_limit(raw, "SPICY_REGS_MEMORY_LIMIT")
 
 
 def _resolve_temp_dir() -> str:
