@@ -2133,9 +2133,14 @@ tables:
       keeps its prior rows. House `system_code` derives its prefix from the
       native committee type and parent context; `committee_code` preserves the
       literal source identifier. Join matching `system_code` values to
-      `committees` and `bioguide_id` to `members`. Unmatched joint-committee
-      aliases and missing committee observations remain unresolved; they do
-      not erase the reported assignment. All columns are stored as VARCHAR.
+      `committees` and `bioguide_id` to `members`. Rows whose `system_code`
+      matches no committee stay listed and are never matched by name (the
+      Joint Economic Committee has three Congress.gov codes). On 2026-09-23
+      that is 28 rows: 25 House seats on the Clerk's four joint committees
+      (`EC00`, `IT00`, `JL00`, `JP00`, typed `joint` in the Clerk file with no
+      Congress.gov code), and three Senate seats on `JSIK00`, the 2024
+      inaugural committee, which Congress.gov does not list in any Congress.
+      All columns are stored as VARCHAR.
     summary: >-
       One row per member per committee or subcommittee seat a chamber roster
       file lists today, from the House Clerk's MemberData.xml and the Senate's

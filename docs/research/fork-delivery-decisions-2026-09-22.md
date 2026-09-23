@@ -46,4 +46,19 @@ mislabelled 0.26.5 wheel stays here only for replay.
   the family is withdrawn from the index and its workflow disabled and unscheduled.
 - **Decision 6, 2026-09-23:** the opinion-body builder, rollup, workflow and
   registration are removed; the fork workflow is disabled.
+- **Decision 5, 2026-09-23:** the House select aliases (110 seats, `hs`/`hl`
+  prefixes from the native committee type and parent) are live through the
+  SpicyDocs roster fix. 28 seats remain unlisted for want of a publisher link,
+  not a policy choice:
+  - 25 House seats on the Clerk's `EC00`, `IT00`, `JL00` and `JP00`. The Clerk
+    types them `joint` but carries no Congress.gov code, and Congress.gov's two
+    main JEC codes (`jsec00`, `jjec00`) even share one website.
+  - Three Senate seats on `JSIK00`. Congress.gov lists no such committee in the
+    118th or 119th Congress, and its detail route answers none.
+
+  They stay in `committee_assignments`, unmatched and documented; nothing is
+  matched by name.
+- **Decisions 4 and T17, 2026-09-23:** all five rulemaking parents qualified and
+  the rulemaking dataset is bootstrapped (`snapshot_0e799850…`), so agency timing
+  can now come from `proceedings` and `comment_periods` as decided.
 
