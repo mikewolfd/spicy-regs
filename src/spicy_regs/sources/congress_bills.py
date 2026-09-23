@@ -292,7 +292,7 @@ class CongressBillsReader(Reader):
                 LIST_ROUTES["bill"], url, key=list_identity, version=itemgetter("updateDate"), max_pages=_MAX_PAGES
             )
         logger.info(
-            "Congress bills: {:,} bills of {:,} declared, in {} walks",
+            "Congress bills: {:,} bills of {:,} declared, in {} walk(s)",
             len(pooled.records),
             pooled.declared,
             pooled.passes,

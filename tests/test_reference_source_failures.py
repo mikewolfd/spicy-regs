@@ -436,23 +436,60 @@ def test_fcc_proceedings_refuse_an_empty_whole_walk_and_keep_the_output(monkeypa
 def test_crs_pools_a_shifted_walk_until_its_declared_count():
     """A pass that repeats one report and skips another still serves the declared rows; pooling catches it.
 
-    CRS ignores ``sort``, so the second walk moves its page boundaries by page size alone.
+    Neither walk is clean, so the pool of both settles. CRS ignores ``sort``, so the second walk moves its page
+    boundaries by page size alone.
     """
     second = {**CRS, "id": "R2"}
-    transport = Transport(crs_page([CRS, CRS], total=2), crs_page([second, CRS], total=2))
+    transport = Transport(crs_page([CRS, CRS], total=2), crs_page([second, second], total=2))
     assert sorted(x["id"] for x in selected("crs", transport).iter_records()) == ["R1", "R2"]
     assert [call.url.params["limit"] for call in transport.calls] == ["250", "237"]
 
 
 def test_fcc_pools_a_window_until_its_aggregate_count():
-    """ECFS states no total; the aggregation it answers beside the rows counts the window."""
+    """ECFS states no total; the aggregation it answers beside the rows counts the window.
+
+    Neither walk is clean, so the pool of both settles; the second walk takes a smaller page, so its boundaries
+    fall on other filings.
+    """
     second = {**FCC_FILING, "id_submission": "f2", "express_comment": 0}
     first = {**FCC_FILING, "express_comment": 1}
     transport = Transport(
-        fcc_page("fcc-filings", [first, first], counted=2), fcc_page("fcc-filings", [second, first], counted=2)
+        fcc_page("fcc-filings", [first, first], counted=2), fcc_page("fcc-filings", [second, second], counted=2)
     )
     assert sorted(x["id_submission"] for x in selected("fcc-filings", transport).iter_records()) == ["f1", "f2"]
-    assert len(transport.calls) == 2
+    assert [call.url.params["limit"] for call in transport.calls] == ["250", "237"]
+
+
+def test_fcc_walks_cycle_through_three_page_sizes():
+    """Every walk after the first moves its page boundaries; the cycle repeats once all three sizes are spent."""
+    dirty = fcc_page("fcc-filings", [FCC_FILING, FCC_FILING], counted=2)
+    transport = Transport(*[dirty] * DEFAULT_POOL_PASSES)
+    with pytest.raises(IncompleteWalkError):
+        list(records("fcc-filings", transport))
+    assert [call.url.params["limit"] for call in transport.calls] == ["250", "237", "223", "250"][:DEFAULT_POOL_PASSES]
+
+
+def test_fcc_bisects_a_window_a_smaller_walk_could_not_exhaust(monkeypatch):
+    """A window the first walk exhausts but a later, smaller walk would stop short of is split at once.
+
+    Otherwise a second walk would meet the result ceiling and refuse as if the window had grown.
+    """
+    monkeypatch.setattr(fcc, "MAX_RESULT_WINDOW", 20)
+    filings = [{**FCC_FILING, "id_submission": f"f{number}"} for number in range(18)]
+    transport = Transport(
+        fcc_page("fcc-filings", filings, counted=0),  # 18 of 19 a page: exhausted, but a 17-row walk reaches 17
+        fcc_page("fcc-filings", filings[:9], counted=0),
+        fcc_page("fcc-filings", filings[9:], counted=0),
+    )
+    rows = list(
+        fcc._fetch_fcc("filings", since=DAY, until=date(2026, 9, 9), api_key=KEY, per_page=19, transport=transport)
+    )
+    assert [row["id_submission"] for row in rows] == [filing["id_submission"] for filing in filings]
+    assert [call.url.params["date_received"] for call in transport.calls] == [
+        "[gte]2026-09-08[lte]2026-09-10",
+        "[gte]2026-09-08[lte]2026-09-09",
+        "[gte]2026-09-09[lte]2026-09-10",
+    ]
 
 
 def _proceeding(name, **fields):
@@ -466,17 +503,30 @@ def _proceeding(name, **fields):
     }
 
 
-def test_fcc_proceedings_pool_by_document_not_by_filing_activity():
-    """A proceeding's filing counters move between walks while its document does not; the pool keys the document."""
-    held, other, skipped = _proceeding("17-108"), _proceeding("23-320"), _proceeding("24-1")
-    busier = {**held, "total_filing_count": 2, "last_30_days": "2026-09-09T00:00:00Z"}
+@pytest.mark.parametrize(
+    "field,before,after",
+    [
+        # Measured 2026-09-23: 14-58 carried total 10,777, recent_filings 39 over days 30, beside
+        # total_filing_count 4,642 and recent_filing_count 106.
+        ("total", 10_777, 10_778),
+        ("recent_filings", 39, 40),
+        ("days", 30, 31),
+        ("total_filing_count", 4_642, 4_643),
+        ("recent_filing_count", 106, 107),
+        ("last_30_days", "2026-09-23T01:31:31.756Z", "2026-09-23T02:00:00.000Z"),
+    ],
+)
+def test_fcc_proceedings_pool_by_document_not_by_filing_activity(field, before, after):
+    """A proceeding's filing activity moves between walks while its document does not; the pool keys the document."""
+    held, other, skipped = (_proceeding(name, **{field: before}) for name in ("17-108", "23-320", "24-1"))
+    busier = {**held, field: after}
     transport = Transport(
         fcc_page("fcc-proceedings", [held, held, other], counted=3),
         fcc_page("fcc-proceedings", [skipped, skipped, busier], counted=3),
     )
     rows = list(records("fcc-proceedings", transport))
     assert sorted(row["name"] for row in rows) == ["17-108", "23-320", "24-1"]
-    assert next(row for row in rows if row["name"] == "17-108")["total_filing_count"] == 2, "the latest observation"
+    assert next(row for row in rows if row["name"] == "17-108")[field] == after, "the latest observation"
     assert len(transport.calls) == 2
 
 

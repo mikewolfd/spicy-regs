@@ -155,7 +155,7 @@ class ShiftingListingReader(PageStubReader):
 def test_amendments_pool_opposite_sort_passes_until_the_declared_count(tmp_path, monkeypatch):
     """A single pass that repeats #2 and skips #3 still matches the declared count by rows; pooling catches it.
 
-    The second walk is clean, so it settles the query; each amendment keeps its newest ``updateDate``.
+    Neither walk is clean, so the pool of both settles the query; each amendment keeps its newest ``updateDate``.
     """
     from spicy_regs.transforms.build_amendments import build_amendments
 
@@ -163,7 +163,7 @@ def test_amendments_pool_opposite_sort_passes_until_the_declared_count(tmp_path,
     reader = ShiftingListingReader(
         [
             ([_amendment(1), _amendment(2), _amendment(2)], 3),
-            ([_amendment(3), _amendment(2, "2026-02-01T00:00:00Z"), _amendment(1)], 3),
+            ([_amendment(3), _amendment(3), _amendment(2, "2026-02-01T00:00:00Z")], 3),
         ]
     )
     out = build_amendments(tmp_path, reader=reader, download_prior=no_download)

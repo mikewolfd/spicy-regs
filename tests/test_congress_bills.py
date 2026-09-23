@@ -222,11 +222,14 @@ def test_walk_refuses_when_declared_and_observed_counts_disagree():
 
 
 def test_a_walk_that_repeats_one_bill_and_skips_another_is_pooled_to_the_declared_count():
-    """Rows equal to the declared count prove only the row count; the next walk, other order and page size, fills the pool."""
+    """Rows equal to the declared count prove only the row count; neither walk is clean, and the pool of both settles.
+
+    The second walk takes the other order and page size; each bill keeps its newest ``updateDate``.
+    """
     b1, b2, b3 = _bill(1, "2025-04-07"), _bill(2, "2025-04-06"), _bill(3, "2025-04-05")
     edited = {**b2, "updateDate": "2025-04-08"}
     transport = _Walks(
-        {"bills": [b1, b2, b2], "pagination": {"count": 3}}, {"bills": [b3, edited, b1], "pagination": {"count": 3}}
+        {"bills": [b1, b2, b2], "pagination": {"count": 3}}, {"bills": [b3, b3, edited], "pagination": {"count": 3}}
     )
     assert sorted(_bills(transport), key=lambda bill: bill["number"]) == [b1, edited, b3]
     assert transport.asked == [("updateDate desc", "250"), ("updateDate asc", "237")]
@@ -298,11 +301,6 @@ def test_caught_up_run_stops_at_today():
 def test_backwards_window_is_rejected():
     with pytest.raises(ValueError, match="precedes"):
         _bounded_until(date(2026, 8, 10), date(2026, 8, 1))
-
-
-def test_full_backfill_has_no_upper_bound():
-    """No prior table means no watermark to window from."""
-    assert _bounded_until(None, None) is None
 
 
 # -- end-to-end merge (build_congress_bills) ----------------------------------
@@ -410,6 +408,28 @@ def test_build_congress_bills_merges_prior_and_fresh_rows(tmp_path, monkeypatch)
 
     # Ordered by update_date DESC, then bill_id.
     assert [row["bill_id"] for row in rows] == ["118-hr-1", "119-hr-99", "118-s-2"]
+
+
+@pytest.mark.parametrize("until", [None, date(2026, 8, 30)])
+def test_a_cold_start_without_since_refuses_before_walking(tmp_path, monkeypatch, until):
+    """No prior table means no watermark to window from; walking the whole archive does not fit the job."""
+    monkeypatch.setattr(bcb.r2, "download", lambda remote_key, local_path: False)
+    monkeypatch.setattr(bcb, "CongressBillsReader", lambda **_: pytest.fail("a cold start must not walk"))
+    with pytest.raises(ValueError, match="CONGRESS_SINCE"):
+        bcb.build_congress_bills(tmp_path, until=until)
+
+
+def test_a_cold_start_with_since_walks_one_window(tmp_path, monkeypatch):
+    monkeypatch.setattr(bcb.r2, "download", lambda remote_key, local_path: False)
+    windows = []
+
+    class Reader(_FakeReader):
+        def __init__(self, *, since=None, until=None):
+            windows.append((since, until))
+
+    monkeypatch.setattr(bcb, "CongressBillsReader", Reader)
+    bcb.build_congress_bills(tmp_path, since=date(2025, 1, 1), until=date(2026, 8, 30))
+    assert windows == [(date(2025, 1, 1), date(2025, 1, 1) + timedelta(days=MAX_WINDOW_DAYS))]
 
 
 # --------------------------------------------------------------------------- #

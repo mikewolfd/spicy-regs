@@ -289,16 +289,21 @@ def _fetch_window(
 
     A window within the ceiling is pooled over whole walks until one is clean or the pool
     holds exactly the window's aggregate count (:data:`_COUNTED_BY`, spicy-docs ``pool_walks``).
+    Each walk takes the next of :func:`_walk_page_sizes`, so its page boundaries fall on other
+    records; a window is within the ceiling only if a walk at the smallest of them can exhaust
+    it, so a later, smaller walk never meets the ceiling the first walk did not.
     """
     from spicy_docs.reading.paged_json import WalkPass, pool_walks
 
-    def walk() -> tuple[list[dict], bool, int]:
+    sizes = _walk_page_sizes(per_page)
+
+    def walk(size: int) -> tuple[list[dict], bool, int]:
         return _page_window(
-            reader, endpoint=endpoint, record_key=record_key, gte=gte, lte=lte, per_page=per_page, extra=extra
+            reader, endpoint=endpoint, record_key=record_key, gte=gte, lte=lte, per_page=size, extra=extra
         )
 
-    records, exhausted, counted = walk()
-    if not exhausted:
+    records, exhausted, counted = walk(sizes[0])
+    if not exhausted or len(records) >= MAX_RESULT_WINDOW // sizes[-1] * sizes[-1]:
         if gte == lte:
             raise FccEcfsError(f"ECFS {endpoint} reaches the result ceiling on {gte}; narrow the selection")
         mid = gte + (lte - gte) // 2
@@ -317,18 +322,39 @@ def _fetch_window(
     def walk_pass(index: int) -> WalkPass:
         if index == 0:
             return WalkPass(tuple(records), counted)
-        again, exhausted, count = walk()
+        again, exhausted, count = walk(sizes[index % len(sizes)])
         if not exhausted:
             raise FccEcfsError(f"ECFS {endpoint} {gte}..{lte} grew past the result ceiling between passes")
         return WalkPass(tuple(again), count)
 
-    pooled = pool_walks(walk_pass, key=partial(_identity, endpoint), label=f"ECFS {endpoint} {gte}..{lte}")
+    label = f"ECFS {endpoint} {gte}..{lte}"
+    pooled = pool_walks(walk_pass, key=partial(_identity, endpoint), label=label)
+    logger.info(
+        "{}: {:,} records of {:,} counted, in {} walk(s)", label, len(pooled.records), pooled.declared, pooled.passes
+    )
     yield from (dict(record) for record in pooled.records)
 
 
-#: Proceeding fields that count filing activity. They change between two walks of one window
-#: while the document does not, so a key covering them would never settle a pool.
-_PROCEEDING_ACTIVITY = frozenset({"last_30_days", "recent_filing_count", "total_filing_count"})
+def _walk_page_sizes(per_page: int) -> tuple[int, ...]:
+    """The page sizes successive walks of one window cycle through: 250 gives 250, 237 and 223.
+
+    A walk that repeats one record and skips another does so at its page boundaries, so a
+    second walk with the same boundaries tends to skip the same record. This is the rule
+    spicy-docs' Congress reader applies (``CongressListingReader.pooled``), restated because
+    spicy-docs does not export it; B7 moves ECFS pooling there, where the two can share it.
+    """
+    return tuple(dict.fromkeys((per_page, per_page - per_page // 19, per_page - per_page // 9)))
+
+
+#: Proceeding fields that summarize filing activity. They change between two walks of one window
+#: while the document does not, so a key covering them would never settle a pool. Measured
+#: 2026-09-23 on 21,691 documents: ``total_filing_count`` and ``recent_filing_count`` on 16,850,
+#: ``last_30_days`` on 2,034, and ``total``, ``recent_filings`` and ``days`` (the span
+#: ``recent_filings`` counts over) on 1,515; 14-58 carried ``total`` 10,777 beside
+#: ``total_filing_count`` 4,642.
+_PROCEEDING_ACTIVITY = frozenset(
+    {"days", "last_30_days", "recent_filing_count", "recent_filings", "total", "total_filing_count"}
+)
 
 
 def _identity(endpoint: str, record: Mapping[str, Any]) -> Hashable:
@@ -341,7 +367,10 @@ def _identity(endpoint: str, record: Mapping[str, Any]) -> Hashable:
     the filing-activity counters (:data:`_PROCEEDING_ACTIVITY`), which move as filings arrive
     while the document does not; :func:`build_fcc_proceedings` chooses among a docket's
     documents. An edit to any other field between two walks reads as another document, so the
-    pool then overfills and only a clean walk settles that window.
+    pool then overfills and only a clean walk settles that window. Within one walk, a document
+    edited mid-walk and served in both versions reads as two documents, so it can fill the slot
+    of one the walk skipped and the walk still looks clean; excluding the activity fields
+    narrows that to edits of the document itself.
     """
     if endpoint == "proceedings":
         document = {field: value for field, value in record.items() if field not in _PROCEEDING_ACTIVITY}

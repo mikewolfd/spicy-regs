@@ -191,7 +191,7 @@ def build_amendments(
         pooled = reader.pooled(route, url, key=list_identity, version=itemgetter("updateDate"), max_pages=MAX_PAGES)
         rows.extend(shape_amendment(_with_detail(reader, dict(record))) for record in pooled.records)
         logger.info(
-            "Amendments: Congress {} — {:,} amendments in window, in {} walks",
+            "Amendments: Congress {} — {:,} amendments in window, in {} walk(s)",
             congress,
             len(pooled.records),
             pooled.passes,

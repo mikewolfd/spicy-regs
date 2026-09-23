@@ -9,12 +9,15 @@ fetches — the legislative record complementary to the regulations.gov
 since its max ``update_date`` (minus a short overlap) through at most
 :data:`MAX_WINDOW_DAYS` later, with the bounds sent to the API as
 ``fromDateTime``/``toDateTime``; dedup the union on ``bill_id``, preferring the
-fresh row. No prior table means a full backfill, and chunks can be driven
-explicitly with ``CONGRESS_SINCE``/``CONGRESS_UNTIL``. The window is capped
-because a run publishes nothing until its walk finishes, so one unbounded
-catch-up is all-or-nothing: the first 510-day attempt fetched 190,000 of
-238,197 bills, hit the job timeout and persisted nothing, and capping lets each
-run publish and advance the watermark so a deep backfill converges.
+fresh row. Chunks can be driven explicitly with ``CONGRESS_SINCE``/
+``CONGRESS_UNTIL``, and a run with no prior table to window from must be: it
+refuses rather than walk the whole ~430k-bill archive, about 140 minutes a
+walk, which a pooled read may need to repeat inside a 180-minute job. The
+window is capped because a run publishes nothing until its walk finishes, so
+one unbounded catch-up is all-or-nothing: the first 510-day attempt fetched
+190,000 of 238,197 bills, hit the job timeout and persisted nothing, and
+capping lets each run publish and advance the watermark so a deep backfill
+converges.
 
 **Pooled, not warn-and-publish.** A table this repo asked for and did not
 fully receive must never look like a completed run, and a walk that agrees
@@ -108,10 +111,8 @@ def _shape(doc: dict) -> dict:
     }
 
 
-def _bounded_until(since: date | None, until: date | None, *, today: date | None = None) -> date | None:
+def _bounded_until(since: date, until: date | None, *, today: date | None = None) -> date:
     """Return a deterministic end date no more than one catch-up window ahead."""
-    if since is None:
-        return until
     if until is not None and until < since:
         raise ValueError(f"Congress until date {until} precedes since date {since}")
     return min(until or today or date.today(), since + timedelta(days=MAX_WINDOW_DAYS))
@@ -134,7 +135,7 @@ def _prior_max_update_date(prior_file: Path) -> date | None:
 
 def build_congress_bills(output_dir: Path, *, since: date | None = None, until: date | None = None) -> Path:
     """Build ``congress_bills.parquet`` (incremental merge with the prior table)."""
-    # 1. Pull the prior table (best effort — absence just means full backfill). Downloaded
+    # 1. Pull the prior table (best effort — absence means the window must be given). Downloaded
     # to table_merge's own scratch path so merge_table() below reuses it in place instead
     # of downloading it again.
     prior_file = prior_scratch_path(output_dir, NAME)
@@ -142,18 +143,19 @@ def build_congress_bills(output_dir: Path, *, since: date | None = None, until: 
     if have_prior:
         logger.info("Congress bills: merging against prior table {}", prior_file)
     else:
-        logger.info("Congress bills: no prior table found — full backfill")
+        logger.info("Congress bills: no prior table found")
 
     # 2. Decide the fetch window start.
     if since is None:
         prior_max = _prior_max_update_date(prior_file) if have_prior else None
         since = (prior_max - timedelta(days=OVERLAP_DAYS)) if prior_max else None
+    if since is None:
+        raise ValueError(
+            "Congress bills: no prior table to window from and no CONGRESS_SINCE; walking the whole "
+            "archive does not fit the job, so drive a cold start in CONGRESS_SINCE/CONGRESS_UNTIL windows"
+        )
     until = _bounded_until(since, until)
-    logger.info(
-        "Congress bills: fetching bills updated {} through {}",
-        since or "the beginning",
-        until or "now",
-    )
+    logger.info("Congress bills: fetching bills updated {} through {}", since, until)
 
     # 3. Fetch + shape the freshly fetched rows; the reader pools the window's walks.
     rows = [_shape(doc) for doc in CongressBillsReader(since=since, until=until).iter_records()]
