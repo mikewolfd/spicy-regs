@@ -20,7 +20,7 @@ Public data destination: `https://pub-72e95c0c20a84508b42b03a6ff6d55f8.r2.dev`. 
 | T15 | `run-rollup-lifecycles` | `rulemaking_lifecycles.parquet` | withdrawn 2026-09-23 (decision 4): the 2026-09-22 scheduled run had published generation `2f001194…` (26,519 rows); the family was conditionally removed from the index, the workflow disabled and unscheduled; pairing semantics remain blocked |
 | T15 | `run-rollup-discovery-signals` | `discovery_signals.parquet` | generated and verified |
 | T15 | `run-rollup-fr-docket-links` | `fr_docket_links.parquet` | qualified 2026-09-23 against the audited parent: generation `92f99b00…` (899,227 rows) equals a separate re-derivation from `federal_register` `731984ca…` row for row |
-| T11 | `run-rollup-cfr-sections` | `cfr_sections.parquet` | published bounded correction verified |
+| T11 | `run-rollup-cfr-sections` | `cfr_sections.parquet` | published bounded correction verified; the current code's rule (`cac7615`) would null part and citation on 253,758 of 319,507 rows, most of them correct, so it is not applied further (details below) |
 | T16 | `run-rollup-congress-bills` | `congress_bills.parquet` | the narrow writer's table is the reconciled family's `congress_bills` (`a846cb44…`); its workflow is disabled until `6d34a1b` (url_source) is pushed |
 | T11 | `run-rollup-unified-agenda` | `unified_agenda.parquet` | generated and verified for retained edition |
 | T11 | `run-rollup-federal-register` | `federal_register.parquet` | source-audited 2026-09-23: generation `731984ca…` (1,009,005 rows, 1994-01-03 to 2026-09-22); every month's rows equal the publisher's facet and 74 whole days match in identity and every cell (details below) |
@@ -436,3 +436,20 @@ Receipts: `members-qualification/`, `congressional-status/`, `native-vote-varian
     `feed_summary`'s ordering broke `modify_date` ties arbitrarily, so equal
     inputs gave different bytes; `87cf257` orders by `docket_id` as well. See
     `full-comments/acf-campaign/`.
+- **CFR part ancestry (T11): not extended; the current rule regresses.**
+  - **What the rule does.** Since `cac7615`, the builder takes no part from a
+    section granule id ("a section token alone does not establish its enclosing
+    part"). Re-applying that rule to every row of the live `cfr_sections`
+    (`8fb97150…`) changes 253,758 of 319,507 rows across 260 packages, nulling
+    part and `cfr_ref`.
+  - **Why that is wrong.** Most of those citations are correct. GovInfo's
+    granule summary states the literal designation: `CFR-2026-title10-vol2-sec100-1`
+    has `granuleNumber` `§ 100.1` (part 100), while
+    `CFR-2025-title14-vol4-sec19-8-1` has `19-8.1`, no `§` and no part. The
+    title-14 correction was right for that volume and wrong as a general rule.
+  - **What a source-backed rule needs.** The granule list does not carry
+    `granuleNumber`, and the id cannot tell the two shapes apart. Getting it
+    means one summary request per granule (about 64 hours at the key's rate) or
+    parsing each volume's XML section numbers (about 260 packages).
+  - **Hazard.** Until then, a scheduled rebuild with the current code would
+    publish nulls where the table now holds correct parts.
