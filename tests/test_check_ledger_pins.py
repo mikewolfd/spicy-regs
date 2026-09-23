@@ -72,11 +72,15 @@ LEDGER = """\
 | T11 | `materialize-rulemaking` | `comment_periods.parquet` | qualified at `snapshot_12345678…` (2026-09-21) |
 | T11 | `materialize-rulemaking` | `_proceedings_state.parquet` | qualified at `snapshot_0e799850…` (2026-09-23) |
 | T08 | `run-rollup-treaties` | `treaties.parquet` | re-qualified at `7007ca03…`; live not re-qualified |
+| T06 | `run-pipeline` | `dockets.parquet` | verified at table digest `27a2ed4a…` (2026-09-21; ETag `0a1b2c3d…`) |
+| T06 | `run-pipeline` | `documents.parquet` | verified at table digest `7907ebe3…` (2026-09-22; ETag `0a1b2c3d…`) |
+| T07 | `publish-comments-mirror.yml` | `comments.parquet` | verified at table digest `fca7afb7…` (2026-09-23) |
 """
+OBJECTS = {"dockets.parquet": ("0a1b2c3d", 1000), "documents.parquet": ("ffffffff", 2000)}
 
 
 def _results() -> dict[str, tuple[str, str]]:
-    rows = pins.check(LEDGER, pins.rollup_pins(INDEX), pins.snapshot_pins(POINTER, MANIFEST))
+    rows = pins.check(LEDGER, pins.rollup_pins(INDEX), pins.snapshot_pins(POINTER, MANIFEST), OBJECTS)
     return {detail.split()[1].rstrip(","): (status, detail) for status, detail in rows}
 
 
@@ -92,6 +96,9 @@ def test_each_row_is_classified_against_its_own_live_source():
         "comment_periods.parquet": "DRIFT",
         "_proceedings_state.parquet": "NOT-LIVE",  # internal artifacts are not live
         "treaties.parquet": "MALFORMED",  # a pin mention without the dated phrase is not NO-PIN
+        "dockets.parquet": "OK",
+        "documents.parquet": "DRIFT",  # the object was re-uploaded since its digest was verified
+        "comments.parquet": "NO-PIN",  # a table digest without an ETag cannot be checked by HEAD
     }
 
 
@@ -103,6 +110,7 @@ def test_details_carry_both_pins_and_live_rows():
     assert "live=f1e2e523  rows=10/20" in multi
     assert "live=snapshot_0e799850  rows=517,311/515,121" in results["rule_targets.parquet"][1]
     assert "qualified=-  live=abcdef01  rows=3" in results["court_opinion_bodies.parquet"][1]
+    assert "qualified=0a1b2c3d (2026-09-22)  live=ffffffff  bytes=2,000" in results["documents.parquet"][1]
 
 
 def test_a_row_with_two_conforming_phrases_is_malformed():
@@ -120,20 +128,32 @@ def test_fetch_live_follows_the_pointer_to_its_manifest(monkeypatch):
     documents = {f"{base}/{pins.SNAPSHOT_POINTER}": POINTER, f"{base}/{POINTER['manifest_key']}": MANIFEST}
     monkeypatch.setattr(publication, "load_index", lambda url: INDEX if url == base else pytest.fail(url))
     monkeypatch.setattr(pins, "_get_json", documents.get)
-    rollups, snapshots = pins.fetch_live(base)
+    heads = {f"{base}/dockets.parquet": ('"0a1b2c3d9e8f7a6b5c4d3e2f1a0b9c8d-303"', "1000")}
+    monkeypatch.setattr(pins.httpx, "head", lambda url, **_: _Head(*heads[url]) if url in heads else _Head())
+    rollups, snapshots, objects = pins.fetch_live(base, LEDGER)
     assert rollups["court_citation_map.parquet"] == ("f1e2e523", 20)
     assert snapshots["proceedings.parquet"] == ("snapshot_0e799850", 515121)
+    assert objects == {"dockets.parquet": ("0a1b2c3d", 1000)}  # documents answers 404; comments records no ETag
+
+
+class _Head:
+    def __init__(self, etag: str | None = None, length: str | None = None) -> None:
+        self.status_code = 200 if etag else 404
+        self.headers = {"ETag": etag, "Content-Length": length}
+
+    def raise_for_status(self) -> None:
+        pass
 
 
 def test_exit_code_fails_only_on_drift_not_live_or_malformed(monkeypatch, tmp_path, capsys):
     monkeypatch.setattr(pins, "load_dotenv", lambda: None)
     monkeypatch.setattr(
-        pins, "fetch_live", lambda url: (pins.rollup_pins(INDEX), pins.snapshot_pins(POINTER, MANIFEST))
+        pins, "fetch_live", lambda url, text: (pins.rollup_pins(INDEX), pins.snapshot_pins(POINTER, MANIFEST), OBJECTS)
     )
     ledger = tmp_path / "ledger.md"
     ledger.write_text(LEDGER, encoding="utf-8")
     assert pins.main(["--ledger", str(ledger), "--index-url", "https://data.example"]) == 1
-    assert "OK=3 NO-PIN=1 DRIFT=2 NOT-LIVE=2 MALFORMED=1" in capsys.readouterr().out
+    assert "OK=4 NO-PIN=2 DRIFT=3 NOT-LIVE=2 MALFORMED=1" in capsys.readouterr().out
     clean = [line for line in LEDGER.splitlines() if "amendments" in line or "withdrawn" in line]
     ledger.write_text("\n".join(clean), encoding="utf-8")
     assert pins.main(["--ledger", str(ledger), "--index-url", "https://data.example"]) == 0
