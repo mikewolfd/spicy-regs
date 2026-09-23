@@ -452,4 +452,6 @@ Receipts: `members-qualification/`, `congressional-status/`, `native-vote-varian
     means one summary request per granule (about 64 hours at the key's rate) or
     parsing each volume's XML section numbers (about 260 packages).
   - **Hazard.** Until then, a scheduled rebuild with the current code would
-    publish nulls where the table now holds correct parts.
+    publish nulls where the table now holds correct parts. `Rollup —
+    cfr_sections` is therefore disabled on the fork: its pushed code includes
+    `cac7615`, and its last run, on 2026-09-22, failed.
