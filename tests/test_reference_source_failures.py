@@ -59,6 +59,16 @@ def crs_page(records, *, total=None, next_url=None):
     return {"CRSReports": records, "pagination": {"count": len(records) if total is None else total, "next": next_url}}
 
 
+def fcc_page(kind, records, *, counted=0):
+    """An ECFS page with the aggregation ECFS answers beside every response; ``counted`` records carry its field."""
+    key, field = ("filing", "express_comment") if kind == "fcc-filings" else ("proceeding", "bureau_name")
+    buckets = [{"key": 1, "doc_count": counted}] if counted else []
+    return {
+        key: records,
+        "aggregations": {field: {"doc_count_error_upper_bound": 0, "sum_other_doc_count": 0, "buckets": buckets}},
+    }
+
+
 def usa_page(records, *, total=None, next_page=None):
     return {
         "results": records,
@@ -140,7 +150,11 @@ def test_transport_failure_is_not_empty_success(kind):
         ("usa", usa_page([RECIPIENT, RECIPIENT])),
         ("usa", usa_page([], total=1)),
         ("usa", {"results": [], "page_metadata": {"total": 0, "hasNext": True, "next": None}}),
-        ("fcc-filings", {"filing": [FCC_FILING, FCC_FILING]}),
+        ("fcc-filings", fcc_page("fcc-filings", [FCC_FILING, FCC_FILING])),
+        ("fcc-filings", {"filing": [FCC_FILING]}),
+        ("fcc-filings", fcc_page("fcc-filings", [{**FCC_FILING, "id_submission": ""}])),
+        ("fcc-filings", fcc_page("fcc-filings", [{**FCC_FILING, "express_comment": 1}], counted=2)),
+        ("fcc-proceedings", {"proceeding": [FCC_PROCEEDING]}),
         ("gao", b"<html><body>Denied</body></html>"),
         ("gao", b"<rss>"),
         ("gao", b'<!DOCTYPE rss [<!ENTITY x "boom">]><rss version="2.0"><channel/></rss>'),
@@ -148,8 +162,9 @@ def test_transport_failure_is_not_empty_success(kind):
     ],
 )
 def test_malformed_or_incomplete_source_is_refused(kind, payload):
+    # A walk short of its count is pooled over further passes before it refuses.
     with pytest.raises(REFUSALS):
-        list(records(kind, Transport(payload)))
+        list(records(kind, Transport(*[payload] * 3)))
 
 
 @pytest.mark.parametrize(
@@ -158,8 +173,8 @@ def test_malformed_or_incomplete_source_is_refused(kind, payload):
         ("crs", crs_page([])),
         ("usa", usa_page([])),
         ("gao", EMPTY_FEED),
-        ("fcc-filings", {"filing": []}),
-        ("fcc-proceedings", {"proceeding": []}),
+        ("fcc-filings", fcc_page("fcc-filings", [])),
+        ("fcc-proceedings", fcc_page("fcc-proceedings", [])),
     ],
 )
 def test_confirmed_empty_selection_is_valid(kind, payload):
@@ -189,12 +204,10 @@ def test_fcc_subdivides_full_window_but_refuses_full_single_day(monkeypatch):
     monkeypatch.setattr(fcc, "MAX_RESULT_WINDOW", 2)
     transport = Transport(
         {"filing": [FCC_FILING, {**FCC_FILING, "id_submission": "f2"}]},
-        {"filing": [FCC_FILING]},
-        {"filing": [{**FCC_FILING, "id_submission": "f2"}]},
+        fcc_page("fcc-filings", [FCC_FILING]),
+        fcc_page("fcc-filings", [{**FCC_FILING, "id_submission": "f2"}]),
     )
-    records = fcc._fetch_fcc(
-        "filings", since=DAY, until=date(2026, 9, 9), api_key=KEY, per_page=2, transport=transport
-    )
+    records = fcc._fetch_fcc("filings", since=DAY, until=date(2026, 9, 9), api_key=KEY, per_page=2, transport=transport)
     assert len(list(records)) == 2
     assert len(transport.calls) == 3
     with pytest.raises(fcc.FccEcfsError, match="result ceiling"):
@@ -243,7 +256,7 @@ def test_fcc_named_proceedings_keep_each_selection_and_shared_filing():
     # preserves both observations; table merging owns identity deduplication.
     shared = {**FCC_FILING, "proceedings": [{"name": "17-108"}, {"name": "23-320"}]}
     second = {**FCC_FILING, "id_submission": "f2"}
-    transport = Transport({"filing": [shared]}, {"filing": [shared, second]})
+    transport = Transport(fcc_page("fcc-filings", [shared]), fcc_page("fcc-filings", [shared, second]))
     reader = selected("fcc-filings", transport, proceedings=("17-108", "23-320"))
     assert list(reader.iter_records()) == [shared, shared, second]
     assert [r.url.params["proceedings.name"] for r in transport.calls] == ["17-108", "23-320"]
@@ -257,7 +270,7 @@ def test_fcc_second_proceeding_failure_preserves_prior_output(monkeypatch, tmp_p
     pq.write_table(table, prior)
     pq.write_table(table, output)
     before = prior.read_bytes(), output.read_bytes()
-    transport = Transport({"filing": [FCC_FILING]}, 500)
+    transport = Transport(fcc_page("fcc-filings", [FCC_FILING]), 500)
     reader = selected("fcc-filings", transport, proceedings=("17-108", "23-320"))
     monkeypatch.setattr(module, "_fetch_fcc", lambda *args, **kwargs: reader.iter_records())
 
@@ -386,8 +399,7 @@ def test_failed_build_preserves_prior_and_existing_output_bytes(monkeypatch, tmp
         ("crs", crs_page([])),
         ("usa", usa_page([])),
         ("gao", EMPTY_FEED),
-        ("fcc-filings", {"filing": []}),
-        ("fcc-proceedings", {"proceeding": []}),
+        ("fcc-filings", fcc_page("fcc-filings", [])),
     ],
 )
 @pytest.mark.parametrize("have_prior", [False, True])
@@ -408,3 +420,71 @@ def test_empty_success_keeps_prior_rows_or_builds_zero(monkeypatch, tmp_path, ki
     result = pq.read_table(out)
     assert result.to_pylist() == expected
     assert result.schema == getattr(module, schema_name)
+
+
+def test_fcc_proceedings_refuse_an_empty_whole_walk_and_keep_the_output(monkeypatch, tmp_path):
+    output = tmp_path / fcc.PROCEEDINGS_OUTPUT
+    output.write_bytes(b"previous generation")
+    source = selected("fcc-proceedings", Transport(fcc_page("fcc-proceedings", [])))
+    monkeypatch.setattr(fcc, "_fetch_fcc", lambda *args, **kwargs: source.iter_records())
+    with pytest.raises(fcc.FccEcfsError, match="empty whole walk"):
+        fcc.build_fcc_proceedings(tmp_path)
+    assert output.read_bytes() == b"previous generation"
+
+
+def test_crs_pools_a_shifted_walk_until_its_declared_count():
+    """A pass that repeats one report and skips another still serves the declared rows; pooling catches it."""
+    second = {**CRS, "id": "R2"}
+    transport = Transport(crs_page([CRS, CRS], total=2), crs_page([second, CRS], total=2))
+    assert sorted(x["id"] for x in selected("crs", transport).iter_records()) == ["R1", "R2"]
+    assert len(transport.calls) == 2
+
+
+def test_fcc_pools_a_window_until_its_aggregate_count():
+    """ECFS states no total; the aggregation it answers beside the rows counts the window."""
+    second = {**FCC_FILING, "id_submission": "f2", "express_comment": 0}
+    first = {**FCC_FILING, "express_comment": 1}
+    transport = Transport(
+        fcc_page("fcc-filings", [first, first], counted=2), fcc_page("fcc-filings", [second, first], counted=2)
+    )
+    assert sorted(x["id_submission"] for x in selected("fcc-filings", transport).iter_records()) == ["f1", "f2"]
+    assert len(transport.calls) == 2
+
+
+def test_fcc_proceedings_publish_one_row_per_docket_name(monkeypatch, tmp_path):
+    """ECFS holds more than one document for some dockets; the original (or last edited) is published."""
+    original = {
+        "name": "13-84",
+        "id_proceeding": 1012202662,
+        "date_proceeding_created": "2013-03-27T15:50:47.000-04:00",
+        "description": "RF exposure",
+        "total_filing_count": 994,
+    }
+    recreated = {
+        "name": "13-84",
+        "id_proceeding": 1789995656032,
+        "date_proceeding_created": "2026-09-21T13:00:56.032Z",
+        "filingStatus": "OPENALL",
+    }
+    edited = {
+        "name": "24-89",
+        "id_proceeding": 1710787523643,
+        "date_proceeding_created": "2024-03-18T16:24:02.000Z",
+        "date_closed": "2024-12-09T05:00:00.000Z",
+        "date_last_modified": "2024-12-09T19:33:20.191Z",
+    }
+    unedited = {
+        "name": "24-89",
+        "id_proceeding": 1710787523643,
+        "date_proceeding_created": "2024-03-18T16:24:02.000Z",
+        "filingStatus": "OPENALL",
+    }
+    nameless = {"id_proceeding": "0621042517382", "date_proceeding_created": "2017-06-21T21:12:23.075Z"}
+    documents = [recreated, unedited, nameless, original, edited]
+    monkeypatch.setattr(fcc, "_fetch_fcc", lambda *args, **kwargs: iter(documents))
+    rows = pq.read_table(fcc.build_fcc_proceedings(tmp_path)).to_pylist()
+    assert [(row["name"], row["id_proceeding"], row["date_closed"]) for row in rows] == [
+        ("24-89", "1710787523643", "2024-12-09T05:00:00.000Z"),
+        ("13-84", "1012202662", None),
+    ]
+    assert not list(tmp_path.glob(".*partial"))

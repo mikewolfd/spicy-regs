@@ -146,11 +146,12 @@ def test_amendments_pool_opposite_sort_passes_until_the_declared_count(tmp_path,
 
 
 def test_amendments_refuse_a_walk_that_never_reaches_its_declared_count(tmp_path, monkeypatch):
+    from spicy_regs.sources.pooled_walk import IncompleteWalkError
     from spicy_regs.transforms.build_amendments import POOLED_SORTS, build_amendments
 
     monkeypatch.setenv("BILL_FAMILY_CONGRESSES", "119")
     reader = ShiftingListingReader([([_amendment(1), _amendment(1)], 2)] * len(POOLED_SORTS))
-    with pytest.raises(RuntimeError, match="pooled 1 of 2 declared"):
+    with pytest.raises(IncompleteWalkError, match="pooled 1 of 2 declared"):
         build_amendments(tmp_path, reader=reader, download_prior=no_download)
     assert len(reader.urls) == len(POOLED_SORTS)
 

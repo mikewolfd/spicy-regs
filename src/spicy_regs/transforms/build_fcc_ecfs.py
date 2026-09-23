@@ -6,18 +6,22 @@ through spicy-docs' evidenced page reader
 (see :mod:`spicy_docs.sources.fcc_ecfs`). Column conventions match the other
 external-source tables — all VARCHAR, array fields serialized as JSON strings.
 
-Both tables are incremental, following the federal_register pattern:
+Proceedings are walked whole every run (see :func:`build_fcc_proceedings`).
+Filings are incremental, following the federal_register pattern:
 
 1. Best-effort download the prior parquet from R2.
-2. Fetch only records dated since the prior table's max date (minus a short
+2. Fetch only filings received since the prior table's max date (minus a short
    overlap to catch late-disseminated / corrected records).
-3. Dedup the union on the table key, preferring the freshly fetched row.
+3. Dedup the union on ``id_submission``, preferring the freshly fetched row.
 
-With no prior table, proceedings backfill from the ECFS epoch (~20K records —
-cheap). Filings do NOT: ECFS holds tens of millions of filings, so a filings
-first run is bounded to the last :data:`FILINGS_FIRST_RUN_DAYS` days unless an
-explicit ``since`` (``FCC_SINCE``) is passed. Deeper backfills are expected to
-run scoped to specific proceedings (``FCC_PROCEEDINGS``) and/or in date slices.
+ECFS holds tens of millions of filings, so a filings first run is bounded to
+the last :data:`FILINGS_FIRST_RUN_DAYS` days unless an explicit ``since``
+(``FCC_SINCE``) is passed. Deeper backfills are expected to run scoped to
+specific proceedings (``FCC_PROCEEDINGS``) and/or in date slices.
+
+Every window is pooled over passes until its records reach the count ECFS
+aggregates for it (:data:`_COUNTED_BY`); the 2026-09-22 scheduled filings run
+met an identity repeated within one window.
 """
 
 from __future__ import annotations
@@ -25,7 +29,8 @@ from __future__ import annotations
 import json
 import os
 from collections.abc import Iterator
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
+from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -34,6 +39,7 @@ import pyarrow.parquet as pq
 from loguru import logger
 
 from spicy_regs.sources import r2
+from spicy_regs.sources.pooled_walk import IncompleteWalkError, pool_passes
 from spicy_regs.transforms.table_merge import merge_local_prior
 
 if TYPE_CHECKING:
@@ -190,6 +196,15 @@ API_KEY_ENV_VARS = ("API_GOV", "DATA_GOV_API_KEY", "FCC_API_KEY", "REGULATIONS_G
 PER_PAGE = 250
 MAX_RESULT_WINDOW = 10_000
 _MAX_REQUESTS_PER_PAGE = 5
+#: Passes over one window before a walk still short of its count refuses; see pooled_walk.
+_PASSES = 3
+
+#: ECFS states no total, but every response, empty ones included, carries Elasticsearch term
+#: aggregations over the whole query. One field's buckets plus ``sum_other_doc_count`` count the
+#: records carrying that field; a record without it is counted as observed. Measured 2026-09-23:
+#: filings' ``express_comment`` summed to all 5,137 filings received 2026-08-23..09-22, and
+#: proceedings' ``bureau_name`` to every proceeding walked but the one with no bureau.
+_COUNTED_BY = {"proceedings": "bureau_name", "filings": "express_comment"}
 
 
 class FccEcfsError(ValueError):
@@ -239,12 +254,9 @@ def _fetch_fcc(
                 "FCC ECFS requires spicy-regs[source-readers]. Run `uv sync --frozen` in a SpicyRegs checkout."
             ) from None
         raise
-    if endpoint == "proceedings":
-        record_key, identity_field = "proceeding", "name"
-    elif endpoint == "filings":
-        record_key, identity_field = "filing", "id_submission"
-    else:
+    if endpoint not in _COUNTED_BY:
         raise ValueError(f"unknown ECFS endpoint {endpoint!r}")
+    record_key = "proceeding" if endpoint == "proceedings" else "filing"
     budget = PagedJsonBudget(
         max_requests=_MAX_REQUESTS_PER_PAGE,
         max_page_bytes=16 * 1024 * 1024,
@@ -258,7 +270,6 @@ def _fetch_fcc(
                 reader,
                 endpoint=endpoint,
                 record_key=record_key,
-                identity_field=identity_field,
                 gte=since,
                 lte=until,
                 per_page=per_page,
@@ -271,49 +282,83 @@ def _fetch_window(
     *,
     endpoint: str,
     record_key: str,
-    identity_field: str,
     gte: date,
     lte: date,
     per_page: int,
     extra: dict[str, str],
 ) -> Iterator[dict]:
-    """Yield one window, bisecting an over-ceiling span; a single over-ceiling day refuses."""
-    records, exhausted = _page_window(
-        reader,
-        endpoint=endpoint,
-        record_key=record_key,
-        identity_field=identity_field,
-        gte=gte,
-        lte=lte,
-        per_page=per_page,
-        extra=extra,
-    )
+    """Yield one window, bisecting a span past the result ceiling; a single over-ceiling day refuses.
+
+    A window within the ceiling is pooled over passes until its distinct records reach the
+    window's aggregate count (:data:`_COUNTED_BY`, :func:`pool_passes`).
+    """
+
+    def walk() -> tuple[list[dict], bool, int]:
+        return _page_window(
+            reader, endpoint=endpoint, record_key=record_key, gte=gte, lte=lte, per_page=per_page, extra=extra
+        )
+
+    records, exhausted, counted = walk()
     if not exhausted:
         if gte == lte:
             raise FccEcfsError(f"ECFS {endpoint} reaches the result ceiling on {gte}; narrow the selection")
         mid = gte + (lte - gte) // 2
-        yield from _fetch_window(
-            reader,
-            endpoint=endpoint,
-            record_key=record_key,
-            identity_field=identity_field,
-            gte=gte,
-            lte=mid,
-            per_page=per_page,
-            extra=extra,
-        )
-        yield from _fetch_window(
-            reader,
-            endpoint=endpoint,
-            record_key=record_key,
-            identity_field=identity_field,
-            gte=mid + timedelta(days=1),
-            lte=lte,
-            per_page=per_page,
-            extra=extra,
-        )
+        for start, end in ((gte, mid), (mid + timedelta(days=1), lte)):
+            yield from _fetch_window(
+                reader,
+                endpoint=endpoint,
+                record_key=record_key,
+                gte=start,
+                lte=end,
+                per_page=per_page,
+                extra=extra,
+            )
         return
-    yield from records
+
+    def passes():
+        yield records, counted
+        for _ in range(_PASSES - 1):
+            again, exhausted, count = walk()
+            if not exhausted:
+                raise FccEcfsError(f"ECFS {endpoint} {gte}..{lte} grew past the result ceiling between passes")
+            yield again, count
+
+    try:
+        yield from pool_passes(passes(), key=partial(_identity, endpoint), label=f"ECFS {endpoint} {gte}..{lte}")
+    except IncompleteWalkError as error:
+        raise FccEcfsError(str(error)) from None
+
+
+def _identity(endpoint: str, record: dict) -> str:
+    """The record's identity within one window.
+
+    A filing is its ``id_submission``. ECFS holds more than one document for some dockets, some
+    under one ``id_proceeding`` (measured 2026-09-23: 24-89, 25-12), so a proceeding is its whole
+    document; :func:`build_fcc_proceedings` chooses among a docket's documents.
+    """
+    if endpoint == "proceedings":
+        return json.dumps(record, sort_keys=True, default=str)
+    identity = record.get("id_submission")
+    if not isinstance(identity, (str, int)) or isinstance(identity, bool) or not str(identity).strip():
+        raise FccEcfsError(f"ECFS {endpoint} record omitted its id_submission")
+    return str(identity)
+
+
+def _carries_counted_field(endpoint: str, record: dict) -> bool:
+    if endpoint == "proceedings":
+        return bool(_dict_field(record, "bureau").get("name"))
+    return record.get("express_comment") is not None
+
+
+def _window_count(endpoint: str, page, records: list[dict]) -> int:
+    """The window's record count: its aggregate over :data:`_COUNTED_BY` plus the records without that field."""
+    field = _COUNTED_BY[endpoint]
+    try:
+        aggregation = json.loads(page.capture.body)["aggregations"][field]
+        counted = sum(bucket["doc_count"] for bucket in aggregation["buckets"]) + aggregation["sum_other_doc_count"]
+    except (KeyError, TypeError, ValueError):
+        raise FccEcfsError(f"ECFS {endpoint} answered no {field} aggregation to count its window by") from None
+    return counted + sum(1 for record in records if not _carries_counted_field(endpoint, record))
 
 
 def _page_window(
@@ -321,42 +366,31 @@ def _page_window(
     *,
     endpoint: str,
     record_key: str,
-    identity_field: str,
     gte: date,
     lte: date,
     per_page: int,
     extra: dict[str, str],
-) -> tuple[list[dict], bool]:
-    """Page one window through the owner's offset walk; return its records and whether it exhausted.
-
-    A missing or repeated identity refuses the window.
-    """
+) -> tuple[list[dict], bool, int]:
+    """Page one window through the owner's offset walk; return its records, whether it exhausted, and its count."""
     from spicy_docs.reading.paged_json import with_query
     from spicy_docs.sources.fcc_ecfs import filings_url, proceedings_url
 
     if endpoint == "proceedings":
-        url = proceedings_url(created_from=gte.isoformat(), created_to=lte.isoformat(), limit=per_page, descending=False)
+        url = proceedings_url(
+            created_from=gte.isoformat(), created_to=lte.isoformat(), limit=per_page, descending=False
+        )
     else:
         url = filings_url(received_from=gte.isoformat(), received_to=lte.isoformat(), limit=per_page, descending=False)
     for key, value in extra.items():
         url = with_query(url, key, value)
     records: list[dict] = []
-    seen: set[str] = set()
     while True:
         page = reader.page(url, records_key=record_key)
-        for record in page.records:
-            identity = record.get(identity_field)
-            if not isinstance(identity, (str, int)) or isinstance(identity, bool) or not str(identity).strip():
-                raise FccEcfsError(f"ECFS {endpoint} record omitted its {identity_field}")
-            identity = str(identity)
-            if identity in seen:
-                raise FccEcfsError(f"ECFS {endpoint} repeated an identity within one window")
-            seen.add(identity)
-            records.append(dict(record))
+        records.extend(dict(record) for record in page.records)
         if page.next_url is None:
-            return records, True
+            return records, True, _window_count(endpoint, page, records)
         if len(records) + per_page > MAX_RESULT_WINDOW:
-            return records, False
+            return records, False, 0
         url = page.next_url
 
 
@@ -420,34 +454,77 @@ def _merge_incremental(
     return out_file
 
 
-def build_fcc_proceedings(output_dir: Path, *, since: date | None = None) -> Path:
-    """Build ``fcc_proceedings.parquet`` (incremental merge with the prior table)."""
-    prior_file = output_dir / "_fcc_proceedings_prior.parquet"
+def _instant(value: object) -> datetime | None:
+    try:
+        return datetime.fromisoformat(str(value)) if value else None
+    except ValueError:
+        return None
 
-    have_prior = prior_file.exists() or r2.download(PROCEEDINGS_OUTPUT, prior_file)
-    if since is None:
-        prior_max = _prior_max_date(prior_file, "date_created") if have_prior else None
-        since = (prior_max - timedelta(days=OVERLAP_DAYS)) if prior_max else ECFS_EPOCH
-    logger.info("FCC proceedings: fetching proceedings created since {}", since)
 
-    rows = [_shape_proceeding(p) for p in _fetch_fcc("proceedings", since=since)]
-    logger.info("FCC proceedings: fetched {:,} proceedings this run", len(rows))
+def _populated(value: object) -> int:
+    """How many leaf values a document fills."""
+    if isinstance(value, dict):
+        return sum(_populated(v) for v in value.values())
+    if isinstance(value, list):
+        return sum(_populated(v) for v in value)
+    return int(value not in (None, ""))
 
-    out = _merge_incremental(
-        output_dir,
-        output=PROCEEDINGS_OUTPUT,
-        scratch_prefix="_fcc_proceedings",
-        columns=PROCEEDING_COLUMNS,
-        schema=_PROCEEDING_SCHEMA,
-        key="name",
-        order_by="date_created",
-        rows=rows,
-        prior_file=prior_file,
-        have_prior=have_prior,
+
+def _docket_documents_in_preference(documents: list[dict]) -> list[dict]:
+    """One docket name's ECFS documents, the one to publish first.
+
+    ECFS re-created 13-84, 15-91 and 15-94 on 2026-09-21 as second, sparser documents beside
+    the originals, and holds two documents for 21-62, 24-89 and 25-12 (measured 2026-09-23).
+    The published row is the original docket (earliest created), then the one ECFS edited
+    last, then the fuller document, then the lowest ``id_proceeding``, which picks the original
+    or the edited document in every measured case.
+    """
+    never = datetime.max.replace(tzinfo=UTC)
+    ordered = sorted(documents, key=lambda d: str(d.get("id_proceeding")))
+    ordered.sort(key=_populated, reverse=True)
+    ordered.sort(key=lambda d: _instant(d.get("date_last_modified")) or datetime.min.replace(tzinfo=UTC), reverse=True)
+    ordered.sort(key=lambda d: _instant(d.get("date_proceeding_created")) or never)
+    return ordered
+
+
+def build_fcc_proceedings(output_dir: Path) -> Path:
+    """Build ``fcc_proceedings.parquet`` from a whole walk of ECFS proceedings, one row per docket name.
+
+    A whole walk (21,691 documents in three windows, measured 2026-09-23) rather than an
+    increment: windows on creation date never refresh a proceeding's later closing or status,
+    and a window holding only a docket's re-created document would publish it over the
+    original. An empty whole walk refuses; a document with no docket name cannot be cited or
+    joined and is left out, by ``id_proceeding``, at WARNING.
+    """
+    out_file = output_dir / PROCEEDINGS_OUTPUT
+    logger.info("FCC proceedings: walking every proceeding created since {}", ECFS_EPOCH)
+    documents = list(_fetch_fcc("proceedings"))
+    if not documents:
+        raise FccEcfsError("ECFS answered no proceedings at all; an empty whole walk is not an empty table")
+    by_name: dict[str, list[dict]] = {}
+    nameless = []
+    for document in documents:
+        name = document.get("name")
+        if isinstance(name, str) and name.strip():
+            by_name.setdefault(name, []).append(document)
+        else:
+            nameless.append(str(document.get("id_proceeding")))
+    if nameless:
+        logger.warning("FCC proceedings: left out {} documents with no docket name: {}", len(nameless), nameless)
+    repeated = sorted(name for name, docs in by_name.items() if len(docs) > 1)
+    if repeated:
+        logger.info("FCC proceedings: {} docket names hold more than one document: {}", len(repeated), repeated)
+    rows = [_shape_proceeding(_docket_documents_in_preference(docs)[0]) for docs in by_name.values()]
+    rows.sort(key=lambda row: row["name"])
+    rows.sort(key=lambda row: row["date_created"] or "", reverse=True)
+
+    staged = output_dir / f".{PROCEEDINGS_OUTPUT}.partial"
+    pq.write_table(
+        pa.Table.from_pylist(rows, schema=_PROCEEDING_SCHEMA), staged, compression="zstd", row_group_size=50_000
     )
-    total = pq.ParquetFile(out).metadata.num_rows
-    logger.info("FCC proceedings: {:,} rows", total)
-    return out
+    staged.replace(out_file)
+    logger.info("FCC proceedings: {:,} rows from {:,} documents", len(rows), len(documents))
+    return out_file
 
 
 def build_fcc_filings(

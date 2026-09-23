@@ -40,6 +40,7 @@ from spicy_docs.sources.congress.listing import (
 )
 
 from spicy_regs.sources import r2
+from spicy_regs.sources.pooled_walk import pool_passes
 from spicy_regs.sources.congress_bills import API_KEY_ENV_VARS, _resolve_api_key
 from spicy_regs.transforms.congress_scope import congresses_from_env
 from spicy_regs.transforms.congress_walk import ListingSource
@@ -112,43 +113,31 @@ POOLED_SORTS = ("updateDate desc", "updateDate asc", "updateDate desc", "updateD
 
 
 def _pooled_walk(reader: ListingSource, route, *, congress, since: date | None, until: date | None) -> list[dict]:
-    """Every amendment the query declares, pooled over passes until the distinct count reaches it.
+    """Every amendment the query declares, pooled over :data:`POOLED_SORTS` passes; the later ``update_date`` wins."""
 
-    Where one amendment is seen twice, the row with the later ``update_date`` wins. A query that
-    declares no count ends after one pass; one that stays short after every pass refuses.
-    """
-    pooled: dict[tuple, dict] = {}
-    declared: int | None = None
-    passes = 0
-    for sort in POOLED_SORTS:
-        passes += 1
-        url = list_route_url(
-            route,
-            congress=congress,
-            limit=MAX_LIMIT,
-            sort=sort,
-            from_datetime=_instant(since),
-            to_datetime=_instant(until, end=True),
-        )
-        for page in reader.records(route, url, max_pages=MAX_PAGES):
-            if getattr(page, "declared_count", None) is not None:
-                declared = page.declared_count
-            for record in page.records:
-                row = shape_amendment(record)
-                key = (row["congress"], row["amendment_type"], row["amendment_number"])
-                held = pooled.get(key)
-                if held is None or (row["update_date"] or "") >= (held["update_date"] or ""):
-                    pooled[key] = row
-        if declared is None or len(pooled) >= declared:
-            break
-    if declared is not None and len(pooled) < declared:
-        raise RuntimeError(
-            f"Amendments: Congress {congress} pooled {len(pooled):,} of {declared:,} declared amendments "
-            f"after {passes} passes"
-        )
-    if passes > 1:
-        logger.info("Amendments: Congress {} needed {} passes to reach {:,}", congress, passes, len(pooled))
-    return list(pooled.values())
+    def passes():
+        for sort in POOLED_SORTS:
+            url = list_route_url(
+                route,
+                congress=congress,
+                limit=MAX_LIMIT,
+                sort=sort,
+                from_datetime=_instant(since),
+                to_datetime=_instant(until, end=True),
+            )
+            rows, declared = [], None
+            for page in reader.records(route, url, max_pages=MAX_PAGES):
+                if getattr(page, "declared_count", None) is not None:
+                    declared = page.declared_count
+                rows.extend(shape_amendment(record) for record in page.records)
+            yield rows, declared
+
+    return pool_passes(
+        passes(),
+        key=lambda row: (row["congress"], row["amendment_type"], row["amendment_number"]),
+        newer=lambda held, row: (row["update_date"] or "") >= (held["update_date"] or ""),
+        label=f"Amendments: Congress {congress}",
+    )
 
 
 def build_amendments(
