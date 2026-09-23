@@ -72,4 +72,8 @@ mislabelled 0.26.5 wheel stays here only for replay.
   (419,866 bills, eighteen tables). Every inherited URL carries
   `url_source = inherited` (SpicyDocs 0.28.0, `6d34a1b`). The newer live 119th
   rows are reconciled in; nothing from either input was lost.
+- **Decision 10, 2026-09-23:** SAM access is confirmed, and the bulk-extract
+  path is repaired (SpicyDocs 0.28.0 and 0.28.2). The bounded retained initial
+  load of 147,254 active 2026 registrations is published (`56dd0f65…`). Wider
+  years, the fork's `SAM_API_KEY` secret and lobbying remain.
 

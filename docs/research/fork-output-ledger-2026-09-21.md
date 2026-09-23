@@ -26,7 +26,7 @@ Public data destination: `https://pub-72e95c0c20a84508b42b03a6ff6d55f8.r2.dev`. 
 | T11 | `run-rollup-federal-register` | `federal_register.parquet` | source-audited 2026-09-23: generation `731984ca…` (1,009,005 rows, 1994-01-03 to 2026-09-22); every month's rows equal the publisher's facet and 74 whole days match in identity and every cell (details below) |
 | T12 | `run-rollup-fcc-proceedings` | `fcc_proceedings.parquet` | published 2026-09-23 after a source replay validated against raw pages: generation `a1116f71…`, 21,683 docket names from 21,691 ECFS documents; walked whole, one row per docket (details below) |
 | T12 | `run-rollup-fcc-filings` | `fcc_filings.parquet` | published 2026-09-23 after a source replay validated against raw pages: generation `c0c1aa4e…`, 5,137 filings received 2026-08-24 to 09-22 (the bounded first run); incremental from here |
-| T14 | `run-rollup-sam-entities` | `sam_entities.parquet` | withdrawn blocked |
+| T14 | `run-rollup-sam-entities` | `sam_entities.parquet` | bounded initial load published 2026-09-23 (decision 10): generation `56dd0f65…`, all 147,254 active registrations dated 2026 from one retained bulk extract, cell-for-cell equal to it; the fork workflow stays disabled until the fixes are pushed and `SAM_API_KEY` is set |
 | T14 | `run-rollup-lobbying-filings` | `lobbying_filings.parquet` | local candidate needs qualification |
 | T04 | `run-rollup-fec-committees` | `fec_committees.parquet` | generated and verified |
 | T04 | `run-rollup-fec-source-catalog` | `fec_source_catalog.parquet` | generated and verified |
@@ -380,3 +380,25 @@ Receipts: `members-qualification/`, `congressional-status/`, `native-vote-varian
     are disabled on the fork until `6d34a1b` is pushed. Their pushed contract
     lacks `url_source`, and their merge drops prior columns it does not know.
     See `bill-family-publication-2026-09-23/`.
+- **SAM initial load (decision 10).** A one-record request confirmed that the
+  workspace SAM key reaches the Entity API: 788,978 active registrations.
+  Retained raw responses then exposed four defects in the bulk-extract path,
+  each fixed in SpicyDocs and adopted here:
+  - **Filters dropped.** httpx `params=` replaced the trigger's query, so every
+    selection filter was lost and the API answered its unfiltered default page
+    (0.28.0).
+  - **Wrong trigger shape.** The trigger answers a plain-text sentence, not JSON
+    with a count (0.28.0).
+  - **In-progress read as refusal.** A generating file answers HTTP 400 with
+    `errorCode` `FSP` (0.28.0).
+  - **Wrong identity and count.** Registrations are keyed by UEI and EFT
+    indicator: 187 UEIs in 2026 carry several. The file is written while
+    registrations change, so its declared count is a floor: 147,250 declared,
+    147,256 rows, 147,254 registrations, two held twice (0.28.2; host `ebf5c7e`
+    adds `entity_eft_indicator` and a composite merge key).
+
+  The bounded load is every active registration dated 2026: one retained
+  71.5 MB extract (`sam-initial-load-2026-09-23/raw/`, plus a 508-record one-day
+  extract that matched its paged count exactly). The table equals an
+  independent mapping of the raw file in all 147,254 keys and every cell.
+  Generation `56dd0f65…` is live, and its public bytes equal the build.
