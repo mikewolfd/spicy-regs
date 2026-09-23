@@ -18,8 +18,8 @@ The term each member vote counts toward (delivery decision 2). A vote on `vote_d
 | `member_key` | `VARCHAR` | The member's key within the roll call, as in `member_votes`. |
 | `chamber` | `VARCHAR` | `house` or `senate`. |
 | `bioguide_id` | `VARCHAR` | The member's Bioguide id: native for the House, resolved from the LIS id through `members` for the Senate. NULL when the LIS id resolves to no member. |
-| `vote_day` | `VARCHAR` | The vote's calendar day (YYYY-MM-DD), parsed from the chamber's literal date. |
-| `term_match` | `VARCHAR` | `half_open` (one term with start <= day < end), `inclusive_end` (none half-open, exactly one with the end day included), `ambiguous` (more than one term either way), `unmatched` (none), or `unresolved_member`. |
+| `vote_day` | `VARCHAR` | The vote's day (YYYY-MM-DD) as the chamber printed it in Eastern time, read from `member_votes.vote_date` by the same rule as `roll_call_votes.vote_day`; NULL when the file prints no date. |
+| `term_match` | `VARCHAR` | `half_open` (one term with start <= day < end), `inclusive_end` (none half-open, exactly one with the end day included), `ambiguous` (more than one term either way), `unmatched` (none), `unresolved_member`, or `undated` (the file prints no date, so no term is chosen). `undated` wins over `unresolved_member`; such a row still carries `bioguide_id` wherever the member resolves. |
 | `term_index` | `VARCHAR` | The matched term's `term_index` in `member_terms`; NULL unless matched. |
 | `term_start` | `VARCHAR` | The matched term's start date; NULL unless matched. |
 | `term_end` | `VARCHAR` | The matched term's end date; NULL unless matched. |

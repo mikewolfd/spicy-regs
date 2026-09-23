@@ -15,7 +15,9 @@ way.
 
 from __future__ import annotations
 
+import hashlib
 import json
+import re
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -24,7 +26,15 @@ import pyarrow.parquet as pq
 import pytest
 from spicy_docs.interpretation.vote_matching import VoteMatchError, index_vote_references, read_vote_key
 from spicy_docs.schemas import TABLE_CONTRACTS
-from spicy_docs.sources.congress.votes import SenateVoteMenu, SenateVoteMenuEntry, VoteRefusedError, VoteSourceError
+from spicy_docs.sources.congress.votes import (
+    SenateVoteMenu,
+    SenateVoteMenuEntry,
+    VoteRefusedError,
+    VoteSourceError,
+    parse_clerk_vote,
+    parse_senate_vote,
+    vote_day,
+)
 
 from spicy_regs.transforms.build_bill_family import VOTE_REFERENCE_COLUMNS, VOTE_REFERENCES_TABLE
 from spicy_regs.transforms.build_roll_call_votes import (
@@ -33,7 +43,13 @@ from spicy_regs.transforms.build_roll_call_votes import (
 )
 from spicy_regs.transforms.table_merge import prior_scratch_path
 
-SAMPLE = Path(__file__).parent / "fixtures" / "congress_votes" / "recorded-votes-119-sample.json"
+FIXTURES = Path(__file__).parent / "fixtures" / "congress_votes"
+SAMPLE = FIXTURES / "recorded-votes-119-sample.json"
+#: Real publisher bodies (README beside them): House 119-1-240 and Senate 119-1-1.
+REAL_BODIES = {
+    ("house", 240): (FIXTURES / "clerk-roll240.xml", parse_clerk_vote),
+    ("senate", 1): (FIXTURES / "senate-vote-119-1-00001.xml", parse_senate_vote),
+}
 OBSERVED_AT = "2026-09-19T00:00:00Z"
 
 
@@ -111,19 +127,23 @@ class StubListingReader:
 
 
 class _Tallied:
-    """The facts ``shape_roll_call_vote`` and ``shape_member_vote`` read off a Clerk file."""
+    """The facts ``shape_roll_call_vote`` and ``shape_member_vote`` read off a vote file, date in its chamber's spelling."""
 
     def __init__(self, locator):
         self.congress = locator.congress
         self.chamber = locator.chamber
         self.session = locator.session
         self.roll_number = locator.roll_number
-        self.date = "2025-09-08"
+        self.date = "8-Sep-2025" if locator.chamber == "house" else "September 8, 2025,  06:56 PM"
         self.source_url = locator.url()
         self.question = "On Passage"
         self.result = "Passed"
         self.tallies = {"yea-total": 220, "nay-total": 210}
         self.member_votes = ()
+
+    @property
+    def day(self):
+        return vote_day(self.chamber, self.date)
 
 
 class _Acquisition:
@@ -232,7 +252,10 @@ def test_numeric_action_ties_keep_bill_order_and_malformed_reference_refusal(tmp
     )
     references = _recorded_vote_references(tmp_path, (119,), _no_prior)
     assert [(reference.action_index, reference.bill.number) for reference in references] == [
-        (8, 2), (8, 3), (10, 2), (None, 1)
+        (8, 2),
+        (8, 3),
+        (10, 2),
+        (None, 1),
     ]
     index = index_vote_references(references)
     assert next(iter(index.by_vote.values())).bill.number == 2
@@ -688,3 +711,133 @@ def test_incomplete_or_malformed_candidate_row_remains_retryable(tmp_path, overr
         path,
     )
     assert _held_votes(path) == set()
+
+
+# --------------------------------------------------------------------------- #
+# vote_day: the chamber's printed day, fresh from the file or backfilled.
+# --------------------------------------------------------------------------- #
+class RealBodyAcquirer(StubVoteAcquirer):
+    """Serves the two real publisher bodies, parsed by spicy-docs, instead of a stub vote."""
+
+    def acquire(self, locator, *, crosswalk=None):
+        self.requested.append((locator.chamber, locator.roll_number))
+        path, parse = REAL_BODIES[(locator.chamber, locator.roll_number)]
+        return _Acquisition(parse(path.read_bytes(), locator))
+
+
+def _real_run(output_dir, download_prior, *, acquirer=None, overlap=25):
+    acquirer = acquirer or RealBodyAcquirer(senate_rolls=(1,))
+    paths = build_roll_call_votes(
+        output_dir,
+        reader=StubListingReader([_house_listing_record(240)]),
+        acquirer=acquirer,
+        overlap=overlap,
+        download_prior=download_prior,
+    )
+    return {row["vote_id"]: row for row in pq.read_table(paths[0]).to_pylist()}
+
+
+def test_a_real_body_publishes_its_chambers_printed_day(tmp_path, scoped):
+    rows = _real_run(tmp_path, _no_prior)
+    assert {vote_id: (row["vote_date"], row["vote_day"]) for vote_id, row in rows.items()} == {
+        "119-house-1-240": ("8-Sep-2025", "2025-09-08"),
+        "119-senate-1-1": ("January 9, 2025,  02:54 PM", "2025-01-09"),
+    }
+
+
+def test_a_prior_published_before_vote_day_is_backfilled_without_a_refetch(tmp_path, scoped):
+    """Held rows gain the day the shaper would have given them; linkage-only and unreadable rows stay NULL.
+
+    The prior is the real bodies' own published rows with ``vote_day`` removed
+    (as every row published before the column existed looks), plus three
+    House roll calls the listing no longer reaches: one linkage-only (no
+    tally, though its date is readable), one held with a Congress.gov UTC
+    instant, and one held with no date at all.
+    """
+    first = tmp_path / "first"
+    first.mkdir()
+    published = _real_run(first, _no_prior)
+    legacy_columns = [c for c in TABLE_CONTRACTS["roll_call_votes"].columns if c != "vote_day"]
+
+    def unreached(roll, *, yea, vote_date):
+        key = {"congress": "119", "chamber": "house", "session": "1", "roll_number": str(roll)}
+        return {
+            "vote_id": f"119-house-1-{roll}",
+            **key,
+            "yea": yea,
+            "tally_kind": "positions" if yea else None,
+            "vote_date": vote_date,
+        }
+
+    prior = [{c: row[c] for c in legacy_columns} for row in published.values()] + [
+        unreached(7, yea=None, vote_date="8-Sep-2025"),
+        unreached(8, yea="220", vote_date="2025-09-08T22:56:00Z"),
+        unreached(9, yea="220", vote_date=None),
+    ]
+
+    def legacy_prior(remote, local):
+        if remote != "roll_call_votes.parquet":
+            return False
+        schema = pa.schema([(c, pa.string()) for c in legacy_columns])
+        pq.write_table(pa.Table.from_pylist(prior, schema=schema), local)
+        return True
+
+    second = tmp_path / "second"
+    second.mkdir()
+    acquirer = RealBodyAcquirer(senate_rolls=(1,))
+    rows = _real_run(second, legacy_prior, acquirer=acquirer, overlap=0)
+    assert acquirer.requested == [], "both real roll calls are held, so neither is fetched again"
+    assert {vote_id: row["vote_day"] for vote_id, row in rows.items()} == {
+        "119-house-1-240": "2025-09-08",
+        "119-senate-1-1": "2025-01-09",
+        "119-house-1-7": None,  # linkage-only: never filled, however readable its date
+        "119-house-1-8": None,  # a UTC instant is not the chamber's printed day
+        "119-house-1-9": None,  # the file printed no date
+    }
+    assert all(rows[vote_id] == row for vote_id, row in published.items()), "backfill equals a fresh shape"
+
+
+def test_the_copied_publisher_bodies_match_the_digests_their_readme_records():
+    readme = (FIXTURES / "README.md").read_text().splitlines()
+    for path, _ in REAL_BODIES.values():
+        [row] = [line for line in readme if line.startswith(f"| `{path.name}` |")]
+        assert re.findall(r"`([0-9a-f]{64})`", row) == [hashlib.sha256(path.read_bytes()).hexdigest()], path.name
+
+
+def test_a_prior_that_has_vote_day_fills_only_its_nulls_and_is_not_rewritten_when_complete(tmp_path):
+    """Every run after the first: the column exists, so the fill replaces it in place."""
+    from spicy_regs.transforms.build_roll_call_votes import _backfill_vote_day, _held_votes
+
+    columns = TABLE_CONTRACTS["roll_call_votes"].columns
+
+    def row(roll, *, yea, vote_date, day):
+        key = {"congress": "119", "chamber": "house", "session": "1", "roll_number": str(roll)}
+        return {
+            "vote_id": f"119-house-1-{roll}",
+            **key,
+            "yea": yea,
+            "tally_kind": "positions" if yea else None,
+            "vote_date": vote_date,
+            "vote_day": day,
+        }
+
+    prior = tmp_path / "prior.parquet"
+    rows = [
+        row(1, yea="220", vote_date="8-Sep-2025", day=None),  # held with NULL: filled
+        row(2, yea="220", vote_date="9-Sep-2025", day="2025-09-01"),  # a stated day is never rewritten
+        row(3, yea=None, vote_date="10-Sep-2025", day=None),  # linkage-only: left NULL
+    ]
+    pq.write_table(pa.Table.from_pylist(rows, schema=pa.schema([(c, pa.string()) for c in columns])), prior)
+
+    assert _backfill_vote_day(prior, _held_votes(prior)) == 1
+    table = pq.read_table(prior)
+    assert table.column_names == list(columns), "vote_day keeps its contract position"
+    assert {r["roll_number"]: r["vote_day"] for r in table.to_pylist()} == {
+        "1": "2025-09-08",
+        "2": "2025-09-01",
+        "3": None,
+    }
+
+    before = (prior.read_bytes(), prior.stat().st_ino, prior.stat().st_mtime_ns)
+    assert _backfill_vote_day(prior, _held_votes(prior)) == 0
+    assert (prior.read_bytes(), prior.stat().st_ino, prior.stat().st_mtime_ns) == before, "nothing to fill, no rewrite"

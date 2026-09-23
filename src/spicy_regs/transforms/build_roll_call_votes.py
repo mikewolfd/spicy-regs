@@ -10,7 +10,8 @@ Acquisition is bounded by MAX_VOTES_PER_RUN. Unseen keys precede held correction
 refreshes so a small cap cannot stall backfill. OVERLAP_VOTES applies separately
 to each chamber; all keys retain the publisher's chamber namespace. A successful
 reacquisition replaces that roll call's complete member roster. Failed, capped
-or unselected roll calls retain their prior observations.
+or unselected roll calls retain their prior observations; a held one published
+before ``vote_day`` existed gains it from its own ``vote_date`` before the merge.
 """
 
 from __future__ import annotations
@@ -47,6 +48,7 @@ from spicy_docs.sources.congress.votes import (
     VoteLocator,
     VoteSourceError,
     locator_from_menu_entry,
+    vote_day,
 )
 
 from spicy_regs.sources import r2
@@ -236,6 +238,54 @@ def _held_votes(prior_file: Path) -> set[tuple[str, ...]]:
     return held
 
 
+def _backfill_vote_day(prior_file: Path, held: set[tuple[str, ...]]) -> int:
+    """Fill a NULL ``vote_day`` on each held prior roll call from its own ``vote_date``; return how many were filled.
+
+    Published roll calls are re-read only within ``OVERLAP_VOTES``, so a row
+    published before the contract gained ``vote_day`` would otherwise keep
+    NULL indefinitely, and NULL would mean "no printed date", "linkage only"
+    and "published too early" at once. A held row's ``vote_date`` is the
+    chamber's printed literal, read by the same spicy-docs ``vote_day`` the
+    contract shaper uses for a fresh row. A linkage-only row is not held and is
+    left alone; a held row whose date that function refuses (a stored UTC
+    instant) stays NULL and is counted. Rewrites ``prior_file`` only when a row
+    was filled, so the merge that follows reads the filled rows.
+    """
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    table = pq.read_table(prior_file)
+    names = table.column_names
+    days = table.column("vote_day").to_pylist() if "vote_day" in names else [None] * table.num_rows
+    identities = zip(*(table.column(c).to_pylist() for c in ("congress", "chamber", "session", "roll_number")))
+    filled = refused = 0
+    for row, (identity, literal) in enumerate(zip(identities, table.column("vote_date").to_pylist())):
+        if days[row] is not None or tuple(str(part) for part in identity) not in held:
+            continue
+        try:
+            days[row] = vote_day(identity[1], literal)
+        except VoteSourceError:
+            refused += 1
+            continue
+        filled += days[row] is not None
+    if refused:
+        logger.warning(
+            "Roll-call votes: vote_day left NULL on {:,} held roll call(s) whose vote_date it refuses", refused
+        )
+    logger.info("Roll-call votes: vote_day backfilled on {:,} prior roll call(s)", filled)
+    if filled:
+        column = pa.array(days, type=pa.string())
+        table = (
+            table.set_column(names.index("vote_day"), "vote_day", column)
+            if "vote_day" in names
+            else table.append_column("vote_day", column)
+        )
+        staged = prior_file.with_name(f".{prior_file.name}.partial")
+        pq.write_table(table, staged, compression="zstd")
+        staged.replace(prior_file)
+    return filled
+
+
 def build_roll_call_votes(
     output_dir: Path,
     *,
@@ -315,7 +365,10 @@ def build_roll_call_votes(
     # 2. Counts and positions, newest first, bounded, and skipping what is held.
     prior_file = published_table(output_dir, NAME, download_prior)
     have_prior = prior_file is not None
-    held = _held_votes(prior_file) if prior_file is not None else set()
+    held: set[tuple[str, ...]] = set()
+    if prior_file is not None:
+        held = _held_votes(prior_file)
+        _backfill_vote_day(prior_file, held)
 
     # House action references can precede the House listing. Senate scope
     # comes from its own menu, never from a bill-only sample.
