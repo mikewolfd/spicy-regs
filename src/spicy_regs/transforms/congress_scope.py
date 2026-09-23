@@ -35,6 +35,13 @@ CONGRESS_BOUNDARY_OVERLAP_DAYS = 45
 #: folder for. The default scope is all eight.
 DEFAULT_BILL_TYPES: tuple[str, ...] = ("hr", "s", "hjres", "sjres", "hres", "sres", "hconres", "sconres")
 
+#: The Congress where BILLSTATUS bulk begins (spicy-docs'
+#: ``docs/research/closing-the-gaps-2026-09-19.md`` §2, row A11: bulk is
+#: 108-119). A Congress at or above it is read from the zips; one below it
+#: from the Congress.gov API. Which route fills a Congress is a fact of the
+#: publisher, not a scope knob, so the bill family and bill subjects share it.
+BULK_STATUS_FLOOR = 108
+
 
 def current_congress(today: date | None = None) -> int:
     """The Congress sitting on ``today`` (default: the system date).

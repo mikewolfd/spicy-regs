@@ -12,7 +12,7 @@ on:
         default: false
         type: boolean
       max_bills:
-        description: "Bills to enrich this run; blank uses the carrier's own cap (5000 keyless, 2000 keyed)"
+        description: 'Congress.gov bills (below the 108th Congress) to ask this run; blank uses 2000'
         required: false
         default: ''
         type: string

@@ -6,9 +6,9 @@
 
 Subject assignments returned by Congress.gov or GovInfo BILLSTATUS, keyed by bill_id for a left join to congress_bills.bill_id. policy_area is one publisher category; subjects_json is a JSON array of legislative subject names, not separate bill records. The consumer trims and deduplicates names. All columns are VARCHAR, including subject_count. carrier and enriched_at record how and when the answer was obtained.
 
-**Coverage.** Sampled. The retained table inspected on 2026-09-21 has 20,013 rows across Congresses 116–119; it is not a complete subject census. Each run selects pending bills from congress_bills, newest Congress first, with default caps of 2,000 Congress API or 5,000 GovInfo bills. Configured coverage floors are Congress 93 for the API and 108 for GovInfo. See docs/research/local-data-reuse-2026-09-21.md for the retained selection. These measurements do not establish current public availability. *(measured 2026-09-21)*
+**Coverage.** Sampled. The table published on 2026-09-23 has 20,013 rows across Congresses 116–119; it is not a complete subject census. Each run selects pending bills from congress_bills, newest Congress first. From the 108th Congress the answer is GovInfo BILLSTATUS: the bill family's own row, or the folder's bulk zip, up to 32 folders a run. Below it, up to 2,000 Congress API bills a run, from the 93rd Congress, with a key. See docs/research/local-data-reuse-2026-09-21.md for the retained selection. These measurements do not establish current public availability. *(measured 2026-09-23)*
 
-**Data quality.** A missing row can mean pending, failed or outside the configured scope. An empty assignment can mean no assignments or that the source did not hold the requested bill; those outcomes are not separately represented in this table. Retained same-carrier answers are not routinely refreshed. The table does not retain the original response or its digest.
+**Data quality.** A missing row can mean pending, failed or outside the configured scope. An empty assignment can mean no assignments or that the source did not hold the requested bill; those outcomes are not separately represented in this table. Retained same-carrier answers are not routinely refreshed. A list-level bill in a folder the bill family reads has no row until the family fills it. The table does not retain the original response or its digest.
 
 - **Parquet file:** `bill_subjects.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
@@ -20,5 +20,5 @@ Subject assignments returned by Congress.gov or GovInfo BILLSTATUS, keyed by bil
 | `policy_area` | `VARCHAR` | Publisher policy-area name after trimming, or NULL when the returned answer has no policy area. |
 | `subjects_json` | `VARCHAR` | JSON array of trimmed, deduplicated legislative subject names. An empty array alone does not distinguish unassigned from not held. |
 | `subject_count` | `VARCHAR` | Length of subjects_json, stored as a decimal string; not a count of bills or independent source responses. |
-| `carrier` | `VARCHAR` | Source reader that answered: congress-api or govinfo-billstatus. A change of reader can retry a previously empty assignment. |
+| `carrier` | `VARCHAR` | Source reader that answered: govinfo-billstatus from the 108th Congress on, congress-api below it. An empty answer from the other reader is asked again. |
 | `enriched_at` | `VARCHAR` | UTC timestamp when this retained answer was shaped, not the publisher's modification date. |

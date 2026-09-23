@@ -78,7 +78,7 @@ from spicy_regs.sources.congress_bills import (
     bill_detail,
     listing_reader,
 )
-from spicy_regs.transforms.congress_scope import bill_types_from_env, congresses_from_env
+from spicy_regs.transforms.congress_scope import BULK_STATUS_FLOOR, bill_types_from_env, congresses_from_env
 from spicy_regs.transforms.model_call import resolve_gemini_key
 from spicy_regs.transforms.table_merge import merge_contract_table, merge_table, published_table
 
@@ -173,13 +173,6 @@ VOTE_REFERENCE_COLUMNS: tuple[str, ...] = (
 #: ``full_action_name`` is NULL on every entry measured, and a NULL key part
 #: would have ``merge_table`` drop the row rather than publish it.
 VOTE_REFERENCE_IDENTITY: tuple[str, ...] = ("bill_id", "chamber", "congress", "session", "roll_number", "action_index")
-
-#: The Congress where BILLSTATUS bulk begins (spicy-docs'
-#: ``docs/research/closing-the-gaps-2026-09-19.md`` §2, row A11: bulk is
-#: 108-119). A scope Congress at or above it is filled from the zips as
-#: always; one below it is filled from the API ``bill`` route instead. Which
-#: route fills a Congress is a fact of the publisher, not a second scope knob.
-BULK_STATUS_FLOOR = 108
 
 #: The oldest Congress the ``bill`` list route reaches (measured:
 #: ``bill/{congress}?format=json&limit=1`` answers a declared count for every
