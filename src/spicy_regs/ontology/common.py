@@ -86,6 +86,9 @@ def eastern_day(value: object) -> date | None:
     starts equal their FR publication date; the Eastern day, 6). Federal Register and Unified
     Agenda dates are date-only and pass through unchanged. ``None`` for an empty or unreadable
     value.
+
+    TODO(spicy-docs 0.31.0): at the re-vendor, replace this with SpicyDocs'
+    ``regulations_gov_day``, identical on all 1,484,082 distinct parent values (2026-09-23).
     """
     text = str(value or "").strip()
     try:

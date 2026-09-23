@@ -10,7 +10,9 @@ import sys
 
 import pyarrow.parquet as pq
 import pytest
+from loguru import logger
 
+from spicy_regs.ontology.citations import normalize_regsgov_identifier
 from spicy_regs.ontology.common import RunContext, write_parquet_rows
 from spicy_regs.ontology.federal_register import FederalRegisterIndex, linked_docket_id
 from spicy_regs.pipelines import rulemaking_dataset
@@ -173,7 +175,7 @@ def _index(root, rows):
     return FederalRegisterIndex(root / "federal_register.parquet")
 
 
-def test_a_padded_number_resolves_on_its_unpadded_key_only_when_the_key_names_one_document(tmp_path):
+def test_a_number_resolves_on_its_comparison_key_only_when_the_key_names_one_document(tmp_path):
     index = _index(
         tmp_path,
         [
@@ -183,6 +185,11 @@ def test_a_padded_number_resolves_on_its_unpadded_key_only_when_the_key_names_on
             # Two documents the Register itself numbers apart, one key once unpadded.
             {"document_number": "94-0190", "publication_date": "1994-04-26"},
             {"document_number": "94-190", "publication_date": "1994-01-05"},
+            {"document_number": "2018-28359", "publication_date": "2018-12-31"},
+            {"document_number": "2015-00674", "publication_date": "2015-01-14"},
+            # Corrections: a five-digit tail keys; the Register's short-tail form does not.
+            {"document_number": "C1-2013-00123", "publication_date": "2013-02-01"},
+            {"document_number": "C1-2012-9978", "publication_date": "2012-05-01"},
         ],
     )
 
@@ -206,6 +213,18 @@ def test_a_padded_number_resolves_on_its_unpadded_key_only_when_the_key_names_on
     assert resolve("94-00190", "1994-04-26") == ("ambiguous", ["94-0190@1994-04-26", "94-190@1994-01-05"])
     assert resolve("2010-09999") == ("missing", [])
     assert resolve("SSA-2010-0037") == ("missing", [])
+    # Only a dash or case differs: a fold, not an unpadding, and the status says so.
+    assert resolve("2018–28359") == ("folded_single_candidate_in_input", ["2018-28359@2018-12-31"])
+    assert resolve("2018–28359", "2018-12-31") == ("folded_dated", ["2018-28359@2018-12-31"])
+    assert resolve("c1-2013-00123") == ("folded_single_candidate_in_input", ["C1-2013-00123@2013-02-01"])
+    # Both sides padded, to different widths: neither is the unpadded number, so no match.
+    assert resolve("2015-0674") == ("missing", [])
+    assert resolve("2015–0674") == ("missing", [])
+    assert resolve("2015-674") == ("unpadded_single_candidate_in_input", ["2015-00674@2015-01-14"])
+    # A correction's short tail has no key: C1-2012-09978 keys to C1-2012-9978, which the
+    # Register holds but cannot key, so it joins only exactly.
+    assert resolve("C1-2012-09978") == ("missing", [])
+    assert resolve("C1-2012-9978") == ("single_candidate_in_input", ["C1-2012-9978@2012-05-01"])
 
 
 def test_the_index_answers_its_own_rows_record_ids(tmp_path):
@@ -363,3 +382,45 @@ def test_the_rulemaking_generation_builds_one_federal_register_index(tmp_path, m
 
     assert built == [tmp_path / "federal_register.parquet"]
     assert all((tmp_path / name).exists() for name in pipeline.published_outputs)
+
+
+def test_a_proceeding_merged_by_a_label_join_lists_the_old_ids_as_predecessors(tmp_path, monkeypatch):
+    """The FR-only proceeding a label join absorbs survives as a predecessor, not as a lost id."""
+    _labelled_inputs(tmp_path)
+    build_rule_targets(tmp_path)
+    # The prior generation read FR docket values syntax-only, so 2010-2394 stood alone.
+    with monkeypatch.context() as before:
+        before.setattr(sys.modules[build_proceedings.__module__], "linked_docket_id", normalize_regsgov_identifier)
+        prior = pq.read_table(build_proceedings(tmp_path)).to_pylist()
+    prior_docket = next(r for r in prior if json.loads(r["docket_ids_json"]) == ["SSA-2010-0037"])
+    prior_fr_only = next(r for r in prior if json.loads(r["fr_document_ids_json"]) == ["2010-2394@2010-02-05"])
+    assert prior_fr_only["docket_ids_json"] == "[]"
+    shutil.copyfile(tmp_path / "proceedings.parquet", tmp_path / "_proceedings_prior.parquet")
+
+    merged = pq.read_table(build_proceedings(tmp_path)).to_pylist()
+    ssa = next(r for r in merged if "SSA-2010-0037" in json.loads(r["docket_ids_json"]))
+    # Docket overlap outranks FR overlap, so the docket's id continues ...
+    assert ssa["proceeding_id"] == prior_docket["proceeding_id"]
+    assert ssa["supersedes_id"] == prior_docket["proceeding_id"]
+    # ... and the absorbed FR-only id is named, never silently dropped.
+    assert json.loads(ssa["identity_predecessors_json"]) == [prior_fr_only["proceeding_id"]]
+    assert prior_fr_only["proceeding_id"] not in {r["proceeding_id"] for r in merged}
+    assert len(merged) == len(prior) - 1
+
+
+def test_rule_targets_count_the_cfr_references_they_cannot_read(tmp_path):
+    _labelled_inputs(tmp_path)
+    fr = pq.read_table(tmp_path / "federal_register.parquet").to_pylist()
+    for row in fr:
+        if row["document_number"] == "2010-2394":
+            row["cfr_references_json"] = '[{"title": 20, "part": 404}, "20 CFR 416"]'
+    _write(tmp_path, "federal_register", tuple(fr[0]), fr)
+    messages: list[str] = []
+    sink = logger.add(messages.append, level="WARNING", format="{message}")
+    try:
+        targets = pq.read_table(build_rule_targets(tmp_path)).to_pylist()
+    finally:
+        logger.remove(sink)
+
+    assert {r["cfr_ref"] for r in targets if r["docket_id"] == "SSA-2010-0037"} == {None, "20-404"}
+    assert any("dropped 1 Federal Register CFR references that are not objects" in m for m in messages)

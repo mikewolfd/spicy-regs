@@ -32,7 +32,8 @@ mapped no longer exist.
   (`federal_register_source_record_id` under SpicyDocs' own classification);
   `FederalRegisterIndex`, built once per generation, which resolves
   number-only references against the held generation and retains ambiguity
-  (the literal number first, then SpicyDocs' unpadded comparison key); and
+  (the literal number first, then SpicyDocs' folded and unpadded comparison
+  key, with the method in each reference's status); and
   `linked_docket_id`, which reads a Federal Register docket value through its
   label with SpicyDocs' `normalize_docket_reference`.
 - `ontology/common.py` — storage and provenance shared by the ontology

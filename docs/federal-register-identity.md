@@ -41,11 +41,15 @@ Resolution statuses are `dated`, `single_candidate_in_input`, `ambiguous` and
 `missing`. A single candidate means only one candidate exists in the held input;
 it does not certify worldwide number uniqueness or complete historical coverage.
 The literal number is matched first; a number the generation does not hold is
-compared on SpicyDocs' unpadded key (`unpadded_federal_register_document_number`,
-both sides reduced), because Regulations.gov pads numbers the Register did not
-(`2010-02394` for `2010-2394`). Such a match is `unpadded_dated` or
-`unpadded_single_candidate_in_input`, and a key two held numbers share (five
-1994–1997 pairs) is `ambiguous` with both candidates (fork delivery decision 18).
+compared on SpicyDocs' comparison key (`unpadded_federal_register_document_number`:
+dashes and case folded, the sequence's zero padding removed, both sides reduced),
+because Regulations.gov pads numbers the Register did not (`2010-02394` for
+`2010-2394`) and writes en dashes (`2018–28359`). A match that only folds is
+`folded_dated` or `folded_single_candidate_in_input`; one that unpads is
+`unpadded_dated` or `unpadded_single_candidate_in_input`. Two sequences both padded
+to different widths (`2015-0674` against `2015-00674`) do not match, and a key two
+held numbers share (five 1994–1997 pairs) is `ambiguous` with both candidates, even
+when a publication date would pick one (fork delivery decision 18).
 Federal Register docket values are read through their label ("Docket No.
 SSA-2010-0037") with SpicyDocs' `normalize_docket_reference`, keeping a literal
 Regulations.gov identifier as itself; a link joins only a docket the

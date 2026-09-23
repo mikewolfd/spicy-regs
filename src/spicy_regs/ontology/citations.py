@@ -89,7 +89,8 @@ def parse_cfr_citation(value: object) -> list[CfrCitation]:
     """Read a Federal Register CFR reference object (``{"title": 40, "part": 60}``).
 
     Anything else reads as no citation: the Register states its references as objects,
-    and a string would need a prose grammar this module does not carry.
+    and a string would need a prose grammar this module does not carry. The caller counts
+    and logs what this drops (``build_rule_targets``).
     """
     if not isinstance(value, dict):
         return []

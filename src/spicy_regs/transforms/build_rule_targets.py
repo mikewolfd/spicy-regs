@@ -32,8 +32,8 @@ from spicy_regs.ontology.common import (
 from spicy_regs.ontology.federal_register import FederalRegisterIndex, linked_docket_id, resolved_id
 
 OUTPUT = "rule_targets.parquet"
-# v3: labelled FR docket values join (linked_docket_id), zero-padded FR numbers resolve on
-# their unpadded key, and first_seen/last_seen are Eastern days rather than mixed instants.
+# v3: labelled FR docket values join (linked_docket_id), zero-padded and en-dash FR numbers
+# resolve on their comparison key, and first_seen/last_seen are Eastern days, not instants.
 ACTOR_ID = "spicy-regs:rule-targets:v3"
 
 COLUMNS = (
@@ -245,6 +245,8 @@ def build_rule_targets(
                     fr_reference=with_form(reference),
                 )
 
+    # parse_cfr_citation reads only the Register's CFR objects; count anything else it drops.
+    unread_cfr: list[object] = []
     linked_dockets_by_fr_doc: dict[str, set[str]] = defaultdict(set)
     for row in iter_parquet_rows(
         paths["fr_docket_links"], columns=("docket_id", "document_number", "publication_date")
@@ -296,6 +298,7 @@ def build_rule_targets(
         )
         if raw_cfr is None or raw_rins is None:
             continue
+        unread_cfr.extend(raw for raw in raw_cfr if not isinstance(raw, dict))
         citations = list(dict.fromkeys(citation for raw in raw_cfr for citation in parse_cfr_citation(raw)))
         rins = list(dict.fromkeys(rin for value in raw_rins if (rin := normalize_rin(value)))) or [None]
         publication_date = row.get("publication_date")
@@ -354,6 +357,12 @@ def build_rule_targets(
     )
     out_file = write_parquet_rows(output_dir / OUTPUT, columns=COLUMNS, rows=rows)
     json_stats.log("rule_targets")
+    if unread_cfr:
+        logger.warning(
+            "rule_targets: dropped {:,} Federal Register CFR references that are not objects; examples: {}",
+            len(unread_cfr),
+            "; ".join(repr(raw)[:80] for raw in unread_cfr[:5]),
+        )
     logger.info("Rule targets: {:,} rows across {:,} dockets", len(rows), len({r["docket_id"] for r in rows}))
     assert pq.ParquetFile(out_file).schema_arrow.names == list(COLUMNS)
     return out_file
