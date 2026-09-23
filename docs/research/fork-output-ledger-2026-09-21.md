@@ -12,7 +12,7 @@ Public data destination: `https://pub-72e95c0c20a84508b42b03a6ff6d55f8.r2.dev`. 
 | T13 | `run-rollup-court-opinion-bodies` | `court_opinion_bodies.parquet` | withdrawn 2026-09-22 and removed 2026-09-23: builder, rollup, workflow and catalog/MCP registration deleted and the fork workflow disabled; text links out through the clusters' `absolute_url` |
 | T13 | `run-rollup-court-citations` | `court_citations.parquet`, `court_citation_map.parquet`, `court_parentheticals.parquet` | added and published 2026-09-22 for the complete 2026-06-30 edition: generation `f1e2e523…`; public row counts verified |
 | T13 | `run-rollup-court-opinions` | `court_opinions.parquet` | added and published 2026-09-22 for the complete 2026-06-30 edition (text-free): generation `f7cc67cc…`; public row counts verified; no scheduled workflow (54.6 GB source) |
-| T16 | `run-rollup-bill-subjects` | `bill_subjects.parquet` | waiting for qualified parents |
+| T16 | `run-rollup-bill-subjects` | `bill_subjects.parquet` | published 2026-09-23: generation `86137cc2…`, the retained 20,013-bill enrichment (GovInfo BILLSTATUS, enriched 2026-08-22); every bill exists in the reconciled family, its 5,965 BILLSTATUS-bearing bills agree on every policy area and all but one subject set, and 25 random others match raw BILLSTATUS exactly; later runs extend it |
 | T15 | `run-rollup-feed-summary` | `feed_summary.parquet` | published 2026-09-23: generation `1a833d52…`, 279,124 dockets; every comment count and document date equals a direct recount from the parents |
 | T15 | `run-rollup-agency-stats` | `agency_stats.parquet` | published 2026-09-23: generation `d4fa809a…`, 316 agencies; every count equals a direct recount |
 | T15 | `run-rollup-agency-monthly-volume` | `agency_monthly_volume.parquet` | generated and verified |
@@ -21,7 +21,7 @@ Public data destination: `https://pub-72e95c0c20a84508b42b03a6ff6d55f8.r2.dev`. 
 | T15 | `run-rollup-discovery-signals` | `discovery_signals.parquet` | generated and verified |
 | T15 | `run-rollup-fr-docket-links` | `fr_docket_links.parquet` | qualified 2026-09-23 against the audited parent: generation `92f99b00…` (899,227 rows) equals a separate re-derivation from `federal_register` `731984ca…` row for row |
 | T11 | `run-rollup-cfr-sections` | `cfr_sections.parquet` | published bounded correction verified |
-| T16 | `run-rollup-congress-bills` | `congress_bills.parquet` | waiting for qualified parents |
+| T16 | `run-rollup-congress-bills` | `congress_bills.parquet` | the narrow writer's table is the reconciled family's `congress_bills` (`a846cb44…`); its workflow is disabled until `6d34a1b` (url_source) is pushed |
 | T11 | `run-rollup-unified-agenda` | `unified_agenda.parquet` | generated and verified for retained edition |
 | T11 | `run-rollup-federal-register` | `federal_register.parquet` | source-audited 2026-09-23: generation `731984ca…` (1,009,005 rows, 1994-01-03 to 2026-09-22); every month's rows equal the publisher's facet and 74 whole days match in identity and every cell (details below) |
 | T12 | `run-rollup-fcc-proceedings` | `fcc_proceedings.parquet` | published 2026-09-23 after a source replay validated against raw pages: generation `a1116f71…`, 21,683 docket names from 21,691 ECFS documents; walked whole, one row per docket (details below) |
@@ -78,7 +78,7 @@ Public data destination: `https://pub-72e95c0c20a84508b42b03a6ff6d55f8.r2.dev`. 
 | T08 | `run-rollup-laws` | `law_code_sections.parquet` | qualified 2026-09-23 by clean source replay: all 3,655 rows match in every native cell |
 | T08 | `run-rollup-laws` | `table3_records.parquet` | qualified 2026-09-23 by clean source replay: all 65 rows match in every native cell |
 | T08 | `run-rollup-committee-rosters` | `committees.parquet` | qualified 2026-09-23 by clean source replay: all 236 committees match; only publisher activity counts grew since publication |
-| T08 | `run-rollup-committee-rosters` | `committee_assignments.parquet` | qualified 2026-09-23 by clean source replay: all 2,966 assignments match in every native cell; 138 committee joins await decision 5's aliases |
+| T08 | `run-rollup-committee-rosters` | `committee_assignments.parquet` | qualified 2026-09-23 by clean source replay: all 2,966 assignments match in every native cell; decision 5: House select aliases live, 28 seats stay unlisted for want of a publisher link (documented) |
 | T08 | `run-rollup-house-communications` | `house_communications.parquet` | generated and verified; 15 publisher-withdrawn identities |
 | T08 | `run-rollup-committee-meetings` | `committee_meetings.parquet` | generated and verified; 4 rows carry post-publication publisher updates |
 | T08 | `run-rollup-record-issues` | `record_issues.parquet` | generated and verified |
