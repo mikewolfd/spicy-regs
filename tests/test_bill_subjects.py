@@ -16,6 +16,7 @@ import httpx
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
+from loguru import logger
 from spicy_docs.sources.congress.bill_acquisition import BillAcquirer, BillAcquisitionBudget
 from spicy_docs.transport.credentials import CredentialRefusedError
 
@@ -303,6 +304,73 @@ def test_a_failed_later_page_publishes_nothing_rather_than_a_truncated_list(monk
     )
     assert fetcher.subjects_for("118", "HR", "1") is None
     assert fetcher.counts.failed == 1
+
+
+# -- the API transport: the key stays out of URLs and logs --------------------
+
+_KEY = "fixture-congress-key-0123456789"
+
+
+@pytest.fixture
+def api_transport(monkeypatch):
+    """The API carrier over a MockTransport of ``httpx.Response`` kwargs; the last repeats, backoff does not sleep."""
+    monkeypatch.setattr("spicy_regs.sources.bill_subjects.time.sleep", lambda _seconds: None)
+    clients = []
+
+    def create(*actions):
+        calls = []
+
+        def respond(request):
+            calls.append(request)
+            return httpx.Response(**actions[min(len(calls), len(actions)) - 1])
+
+        client = httpx.Client(transport=httpx.MockTransport(respond))
+        clients.append(client)
+        return BillSubjectsFetcher(api_key=_KEY, carrier=CARRIER_API, delay=0, client=client), calls
+
+    yield create
+    for client in clients:
+        client.close()
+
+
+def test_the_api_key_travels_only_in_the_header(api_transport):
+    answer = {"pagination": {"count": 1}, "subjects": {"legislativeSubjects": [{"name": "Medicare"}]}}
+    fetcher, calls = api_transport({"status_code": 200, "json": answer})
+    assert fetcher.subjects_for("118", "HR", "1") == BillSubjects(None, ("Medicare",), CARRIER_API)
+    [request] = calls
+    assert "api_key" not in request.url.params
+    assert _KEY not in str(request.url)
+    assert request.headers["X-Api-Key"] == _KEY
+
+
+@pytest.mark.parametrize("status", [401, 403])
+def test_api_access_refusal_stops_without_an_empty_result_or_retry(api_transport, status):
+    fetcher, calls = api_transport({"status_code": status, "json": {"error": "refused"}})
+    with pytest.raises(CredentialRefusedError) as refused:
+        fetcher.subjects_for("118", "hr", "1")
+    assert len(calls) == 1
+    assert (fetcher.counts.answered, fetcher.counts.failed) == (0, 0)
+    assert _KEY not in str(refused.value)
+
+
+def test_a_failed_request_logs_neither_the_key_nor_the_query(api_transport):
+    """Checks the query string too: the key is header-only, so its absence alone cannot catch a URL in a log line."""
+    fetcher, calls = api_transport({"status_code": 400, "json": {"error": "bad request"}})
+    messages: list[str] = []
+    sink = logger.add(messages.append, level="WARNING", format="{message}")
+    try:
+        assert fetcher.subjects_for("118", "hr", "1") is None
+    finally:
+        logger.remove(sink)
+    assert len(messages) == len(calls) > 1
+    assert all("api.congress.gov/v3/bill/118/hr/1/subjects" in m and "HTTP 400" in m for m in messages)
+    assert not any(_KEY in m or "?" in m or "offset=" in m for m in messages)
+
+
+def test_a_redirect_is_not_followed_so_the_key_header_stays_on_the_api_host(api_transport):
+    fetcher, calls = api_transport({"status_code": 302, "headers": {"location": "https://elsewhere.example/collect"}})
+    assert fetcher.subjects_for("118", "hr", "1") is None
+    assert {request.url.host for request in calls} == {"api.congress.gov"}
 
 
 # -- the three outcomes ------------------------------------------------------

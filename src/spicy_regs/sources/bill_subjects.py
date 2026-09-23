@@ -18,7 +18,8 @@ assignments, and the reader picks whichever the environment can actually reach:
     two — the ``/bill/{congress}/{type}/{number}` detail endpoint carries only
     the policy area and is not needed. Coverage runs back to the 93rd Congress.
     Requires an api.data.gov key, resolved through the same fallback chain as
-    :mod:`spicy_regs.sources.congress_bills`. Pagination defaults to 20 subjects
+    :mod:`spicy_regs.sources.congress_bills` and sent, like there, only as the
+    ``X-Api-Key`` header, never in the URL. Pagination defaults to 20 subjects
     per page, so the request asks for the 250-item maximum and walks ``offset``
     for the rare bill that carries more.
 
@@ -36,8 +37,9 @@ a no-op — it just enriches a shallower slice of the archive.
 assignments"), and ``None`` when it did not (timeout, 5xx, exhausted retries).
 The transform writes a row only for an answer, so a network wobble leaves the
 bill un-enriched for the next run instead of pinning an empty answer to it.
-Malformed or wrong-bill XML also leaves no row; credential refusal aborts the
-bulk operation. The subject table retains carrier/time, not captured XML bytes.
+Malformed or wrong-bill XML also leaves no row; credential refusal (401/403)
+from either carrier aborts the run on the first answer, without retry. The
+subject table retains carrier/time, not captured XML bytes.
 """
 
 from __future__ import annotations
@@ -239,7 +241,6 @@ class BillSubjectsFetcher:
                 "offset": page * _SUBJECTS_PER_PAGE,
                 "limit": _SUBJECTS_PER_PAGE,
                 "format": "json",
-                "api_key": self.api_key,
             }
             payload = self._get_json(url, params=params)
             if isinstance(payload, _Absent):
@@ -324,18 +325,32 @@ class BillSubjectsFetcher:
         """GET with bounded retries + exponential backoff.
 
         Returns the response, :data:`_ABSENT` on a definitive 404 (the carrier
-        does not hold this bill), or ``None`` when no answer was obtained.
+        does not hold this bill), or ``None`` when no answer was obtained. A
+        401/403 raises ``CredentialRefusedError`` on the first answer: a refused
+        key is not transient, and every retry spends the hourly budget.
+
+        The key travels only as the ``X-Api-Key`` header, and redirects are not
+        followed because httpx forwards custom headers to a cross-origin
+        redirect. Logs name method, host, path and status, never the exception
+        text, which renders the whole request URL.
         """
+        from spicy_docs.transport.credentials import ACCESS_REFUSED_STATUSES, CredentialRefusedError, refusal_message
+
         if self._client is None:
             self._client = httpx.Client(
                 timeout=_TIMEOUT,
                 headers={"User-Agent": _USER_AGENT, "Accept": "application/json, text/xml"},
             )
+        target = httpx.URL(url)
+        where = f"GET {target.host}{target.path}"
+        key_header = {"X-Api-Key": self.api_key} if self.api_key else {}
         for attempt in range(1, _MAX_RETRIES + 1):
             if self.delay:
                 time.sleep(self.delay)
             try:
-                resp = self._client.get(url, params=params, follow_redirects=True)
+                resp = self._client.get(url, params=params, headers=key_header, follow_redirects=False)
+                if resp.status_code in ACCESS_REFUSED_STATUSES:
+                    raise CredentialRefusedError(refusal_message("congress.gov", resp.status_code, target.path))
                 if resp.status_code == 404:
                     return _ABSENT
                 if resp.status_code == 429 or resp.status_code >= 500:
@@ -343,12 +358,20 @@ class BillSubjectsFetcher:
                 resp.raise_for_status()
                 return resp
             except httpx.HTTPError as exc:
+                reason = (
+                    f"HTTP {exc.response.status_code}" if isinstance(exc, httpx.HTTPStatusError) else type(exc).__name__
+                )
                 if attempt == _MAX_RETRIES:
-                    logger.error("Bill subjects: giving up on {} after {} attempts: {}", url, attempt, exc)
+                    logger.error("Bill subjects: giving up on {} after {} attempts: {}", where, attempt, reason)
                     return None
                 backoff = min(2**attempt, 30)
                 logger.warning(
-                    "Bill subjects: {} (attempt {}/{}), retrying in {}s", exc, attempt, _MAX_RETRIES, backoff
+                    "Bill subjects: {} {} (attempt {}/{}), retrying in {}s",
+                    where,
+                    reason,
+                    attempt,
+                    _MAX_RETRIES,
+                    backoff,
                 )
                 time.sleep(backoff)
         return None
