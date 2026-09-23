@@ -59,6 +59,7 @@ Public data destination: `https://pub-72e95c0c20a84508b42b03a6ff6d55f8.r2.dev`. 
 | T09 | `run-rollup-bill-family` | `bill_family_backfill_walks.parquet` | published awaiting source audit; broader local candidate retained |
 | T08 | `run-rollup-press-releases` | `press_releases.parquet` | published bounded relationship correction verified |
 | T08 | `run-rollup-amendments` | `amendments.parquet` | republished complete 2026-09-23: generation `52d60a8f…`, 7,066 = the source's declared 119th count; every list-route cell matches a clean replay; detail-only fields (sponsors, amended bill) remain unacquired |
+| T08 | `run-rollup-member-vote-terms` | `member_vote_terms.parquet` | added and published 2026-09-23 (decision 2): generation `890481eb…`, 382,136 rows; exceptions equal the independent join replay row for row |
 | T08 | `run-rollup-roll-call-votes` | `roll_call_votes.parquet` | native fields verified; derived bill links await parent source audit |
 | T08 | `run-rollup-roll-call-votes` | `member_votes.parquet` | generated and verified for frozen 119th Congress selection |
 | T08 | `run-rollup-members` | `members.parquet` | generated and verified; fresh retained source observations |
@@ -322,3 +323,13 @@ Receipts: `members-qualification/`, `congressional-status/`, `native-vote-varian
     predates `0a898be` and `b2534aa` and would republish the one-day-late
     closes, and the ECFS re-created dockets over their originals. Re-enable both
     after pushing. See `rulemaking-2026-09-23/`.
+- **Vote terms (decision 2).** `member_vote_terms` assigns every `member_votes`
+  row the term it counts toward: half-open `term_start <= vote_day < term_end`,
+  then a unique inclusive end, with the term type following the chamber and a
+  Senate LIS id resolved through `members`. Built from the published votes
+  (`3204b8fc…`), members and terms, it has 382,136 rows: 382,118 half-open, 15
+  inclusive-end and 3 unmatched (`G000578` on 2025-01-03, `S001157` twice on
+  2026-04-22, all native `Not Voting`). The non-half-open rows equal the
+  independent replay's 18 exceptions, and all 1,855 boundary-day House rows
+  take the new term. Generation `890481eb…` equals the validated build (`c113329`).
+  Its fork workflow exists only once pushed. See `vote-terms-2026-09-23/`.

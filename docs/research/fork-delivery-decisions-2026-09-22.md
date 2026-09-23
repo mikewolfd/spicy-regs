@@ -61,4 +61,8 @@ mislabelled 0.26.5 wheel stays here only for replay.
 - **Decisions 4 and T17, 2026-09-23:** all five rulemaking parents qualified and
   the rulemaking dataset is bootstrapped (`snapshot_0e799850…`), so agency timing
   can now come from `proceedings` and `comment_periods` as decided.
+- **Decision 2, 2026-09-23 (`c113329`):** implemented as the derived table
+  `member_vote_terms` (generation `890481eb…`), leaving `member_votes`
+  unchanged. It reproduces the decision's numbers on the current votes: 15 of
+  18 half-open misses resolved, the three `Not Voting` rows unmatched.
 
