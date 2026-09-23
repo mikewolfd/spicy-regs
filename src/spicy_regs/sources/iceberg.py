@@ -34,11 +34,15 @@ Credentials are read from the environment, alongside the existing ``R2_*`` vars:
 
 from os import getenv
 from pathlib import Path
+from typing import TYPE_CHECKING
 from urllib.parse import urlparse
 
 from loguru import logger
 
 from spicy_regs.schemas import RecordType
+
+if TYPE_CHECKING:
+    import polars as pl
 
 # DuckDB alias the attached catalog is addressed by (``<alias>.<namespace>.<table>``).
 _CATALOG_ALIAS = "reg_catalog"
@@ -459,14 +463,14 @@ def backfill_missing_from_parquet(con, source_uri: str, record_type: RecordType)
     return total - before, total
 
 
-def upsert_comment_text(con, record_type: RecordType, agency: str, updates) -> None:
+def upsert_comment_text(con, record_type: RecordType, agency: str, updates: "pl.DataFrame | Path") -> None:
     """Upsert filled ``text_content`` / ``text_extraction_status`` for one agency.
 
     Shared helper for the durable text-fill paths (derived-data backfill and PDF
-    enrichment). ``updates`` is a polars DataFrame with columns
-    ``comment_id, _new_text, _new_status``. PDF enrichment also supplies
-    ``_new_pdf_results``; derived-data updates preserve prior PDF attempts.
-    Every row whose ``comment_id`` matches
+    enrichment). ``updates`` is a polars DataFrame, or a Parquet file read without
+    loading it into Python, with columns ``comment_id, _new_text, _new_status``
+    and optionally ``_new_pdf_results`` (both fill paths supply it: PDF attempts,
+    or the derived-text provenance). Every row whose ``comment_id`` matches
     the agency's rows gets ``text_content`` / ``text_extraction_status`` refreshed
     (``COALESCE`` keeps the existing value when the incoming column is NULL). The
     upsert is scoped to a single ``agency_code`` so it never touches the whole
@@ -486,23 +490,30 @@ def upsert_comment_text(con, record_type: RecordType, agency: str, updates) -> N
     the catalog behavior, so this invariant is verified by a scoped catalog run,
     not the unit test — keep the ``_uct_replacement`` indirection intact.
     """
-    if updates.is_empty():
+    if isinstance(updates, Path):
+        con.execute(
+            f"CREATE OR REPLACE TEMP TABLE _uct_updates AS SELECT * FROM read_parquet('{_sql_str(str(updates))}');"
+        )
+    else:
+        con.register("_uct_updates_src", updates.to_arrow())
+        try:
+            con.execute("CREATE OR REPLACE TEMP TABLE _uct_updates AS SELECT * FROM _uct_updates_src;")
+        finally:
+            con.unregister("_uct_updates_src")
+    if not con.execute("SELECT count(*) FROM _uct_updates").fetchone()[0]:
+        con.execute("DROP TABLE _uct_updates;")
         return
 
     tbl = _qualified(record_type)
     ag = _sql_str(agency)
     col_list = ", ".join(f'"{c}"' for c in record_type.schema)
+    update_columns = {row[0] for row in con.execute("DESCRIBE _uct_updates").fetchall()}
     pdf_assignment = (
         ", pdf_extraction_results_json = COALESCE(u._new_pdf_results, r.pdf_extraction_results_json)"
-        if "_new_pdf_results" in updates.columns
+        if "_new_pdf_results" in update_columns
         else ""
     )
 
-    con.register("_uct_updates_src", updates.to_arrow())
-    try:
-        con.execute("CREATE OR REPLACE TEMP TABLE _uct_updates AS SELECT * FROM _uct_updates_src;")
-    finally:
-        con.unregister("_uct_updates_src")
     con.execute(
         f"""
         CREATE OR REPLACE TEMP TABLE _uct_replacement AS

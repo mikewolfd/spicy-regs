@@ -273,3 +273,37 @@ def test_unknown_date_comment_repair_preserves_nulls_and_retries(tmp_path):
         repair_records([value], table="comments", output_dir=tmp_path)
     assert path.read_bytes() == before
     assert list((tmp_path / "comments").rglob("part-0.parquet")) == [path]
+
+
+@pytest.mark.parametrize(
+    "fresh_text,expected",
+    [
+        # A pre-A6 reread carrying its own text and status replaces all three, provenance included.
+        (("old derived text", "ok", None), ("old derived text", "ok", None)),
+        # A PDF outcome without text is still a fill: its status and results replace the prior's.
+        ((None, "empty", '[{"status":"empty"}]'), (None, "empty", '[{"status":"empty"}]')),
+        # Neither text nor status: the prior's fill is kept whole.
+        ((None, None, '[{"stray":"results"}]'), ("repaired text", "derived", '{"tool":"pypdf"}')),
+    ],
+)
+def test_correction_takes_the_text_columns_together(fresh_text, expected):
+    import duckdb
+
+    from spicy_regs.transforms.regulations_correction import correction_query
+
+    columns = ["comment_id", "modify_date", "text_content", "text_extraction_status", "pdf_extraction_results_json"]
+    con = duckdb.connect()
+    con.execute(
+        "CREATE TABLE prior AS SELECT 'C1' comment_id, '2026-01-01T00:00:00Z' modify_date, "
+        "'repaired text' text_content, 'derived' text_extraction_status, '{\"tool\":\"pypdf\"}' pdf_extraction_results_json"
+    )
+    con.execute(
+        "CREATE TABLE fresh AS SELECT 'C1' comment_id, '2026-01-01T00:00:00Z' modify_date, "
+        "?::VARCHAR text_content, ?::VARCHAR text_extraction_status, ?::VARCHAR pdf_extraction_results_json",
+        list(fresh_text),
+    )
+    query = correction_query(
+        con, fresh_sql="SELECT * FROM fresh", prior_sql="SELECT * FROM prior", columns=columns, key="comment_id"
+    )
+    row = con.execute(query).fetchone()
+    assert row is not None and row[2:] == expected

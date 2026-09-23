@@ -61,7 +61,7 @@ on:
         default: true
         type: boolean
       overwrite:
-        description: 'Re-process rows that already have a text_extraction_status'
+        description: 'Re-process rows that already have a text_extraction_status (step 1 re-fills only derived rows)'
         required: false
         default: false
         type: boolean

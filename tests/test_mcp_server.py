@@ -166,7 +166,10 @@ def test_local_directory_runs_actual_connection_without_remote_fallback(tmp_path
 
     monkeypatch.setattr(mcp_server, "_resolve_catalog_config", no_catalog)
     from spicy_regs.sources import publication
-    monkeypatch.setattr(publication, "load_index", lambda url: (_ for _ in ()).throw(AssertionError("Remote index read")))
+
+    monkeypatch.setattr(
+        publication, "load_index", lambda url: (_ for _ in ()).throw(AssertionError("Remote index read"))
+    )
     server = mcp_server.build_server()
     sources = _tool_data(server, "list_sources", {})
     assert sources["source"] == "local"
@@ -607,18 +610,19 @@ def test_resolve_memory_limit_unset_is_none(monkeypatch):
     assert module._resolve_memory_limit() is None
 
 
-@pytest.mark.parametrize("value", ["12GB", "2048MB", "75%", "16GiB"])
+@pytest.mark.parametrize("value", ["12GB", "2048MB", "16GiB", "1.5 GB"])
 def test_resolve_memory_limit_valid(value, monkeypatch):
     module = mcp_server
     monkeypatch.setenv("SPICY_REGS_MEMORY_LIMIT", value)
     assert module._resolve_memory_limit() == value
 
 
-@pytest.mark.parametrize("value", ["12GB'; SET x=1", "lots", "'"])
+# DuckDB refuses a percentage at SET and reads a bare number as bytes.
+@pytest.mark.parametrize("value", ["12GB'; SET x=1", "lots", "'", "75%", "4"])
 def test_resolve_memory_limit_rejects_junk(value, monkeypatch):
     module = mcp_server
     monkeypatch.setenv("SPICY_REGS_MEMORY_LIMIT", value)
-    with pytest.raises(RuntimeError, match="valid size/percent"):
+    with pytest.raises(RuntimeError, match="valid size"):
         module._resolve_memory_limit()
 
 
