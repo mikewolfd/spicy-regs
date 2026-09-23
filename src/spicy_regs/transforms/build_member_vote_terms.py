@@ -15,8 +15,8 @@ recorded term, which stay ``unmatched``. Inclusive ends alone would have made 1,
 The day is spicy-docs' ``vote_day`` over ``member_votes.vote_date``, the chamber's printed
 Eastern date; a spelling it cannot read refuses the build, and a vote whose file prints no date is
 ``undated`` with no term rather than matched against a guessed day. A House row carries its
-Bioguide id; a Senate row carries only a LIS id, resolved through ``members``. Every vote row
-appears exactly once, matched or not.
+Bioguide id; a Senate row carries only a LIS id, which spicy-docs' ``match_member`` resolves
+through ``members``. Every vote row appears exactly once, matched or not.
 """
 
 from __future__ import annotations
@@ -24,6 +24,7 @@ from __future__ import annotations
 from collections import defaultdict
 from datetime import date
 from pathlib import Path
+from types import SimpleNamespace
 
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -72,18 +73,21 @@ def build_member_vote_terms(output_dir: Path) -> Path:
     """
     # Local, like every spicy-docs use reachable from the transforms facade: a base
     # install imports this module without the source-readers group.
+    from spicy_docs.interpretation.member_matching import MemberQuery, match_member
     from spicy_docs.sources.congress.votes import vote_day
 
     missing = [name for name in INPUTS if not (output_dir / name).exists()]
     if missing:
         raise FileNotFoundError(f"member_vote_terms needs {', '.join(missing)} in {output_dir}")
 
-    bioguide_by_lis: dict[str, str] = {}
+    senators: dict[str, SimpleNamespace] = {}
     for member in _rows(output_dir / "members.parquet", ["bioguide_id", "lis_id"]):
         lis, bioguide = member["lis_id"], member["bioguide_id"]
         if lis and bioguide:
-            if bioguide_by_lis.setdefault(lis, bioguide) != bioguide:
+            if senators.setdefault(lis, SimpleNamespace(bioguide=bioguide)).bioguide != bioguide:
                 raise ValueError(f"LIS id {lis} names two members")
+    # A crosswalk with no ``by_bioguide``: the publisher's own Bioguide id stands as stated.
+    crosswalk = SimpleNamespace(by_lis=senators)
 
     terms: dict[tuple[str, str], list[tuple[date, date, dict]]] = defaultdict(list)
     for term in _rows(
@@ -94,8 +98,10 @@ def build_member_vote_terms(output_dir: Path) -> Path:
             terms[(term["bioguide_id"], term["term_type"])].append((start, end, term))
 
     rows, seen, counts = [], set(), defaultdict(int)
-    # One roll call's literal repeats on every member row; read each once.
+    # One roll call's literal repeats on every member row, and one member's ids on
+    # every vote they cast; read each once.
     days: dict[tuple[str, str | None], date | None] = {}
+    members: dict[tuple[str | None, str | None], str | None] = {}
     votes = _rows(
         output_dir / "member_votes.parquet", ["vote_id", "member_key", "chamber", "bioguide_id", "lis_id", "vote_date"]
     )
@@ -110,7 +116,10 @@ def build_member_vote_terms(output_dir: Path) -> Path:
             iso = vote_day(*literal)
             days[literal] = None if iso is None else date.fromisoformat(iso)
         day = days[literal]
-        bioguide = vote["bioguide_id"] or bioguide_by_lis.get(vote["lis_id"] or "")
+        ids = (vote["bioguide_id"], vote["lis_id"])
+        if ids not in members:
+            members[ids] = match_member(MemberQuery(*ids), crosswalk=crosswalk).bioguide
+        bioguide = members[ids]
         term, match = None, UNRESOLVED_MEMBER
         if day is None:  # decided before the member: no day, no term, whoever voted
             match = UNDATED

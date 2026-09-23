@@ -63,9 +63,10 @@ from dataclasses import dataclass, fields
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
-from xml.etree import ElementTree as ET
+from xml.etree.ElementTree import Element
 
 import yaml
+from spicy_docs.reading.xml import parse_xml
 
 DEFAULT_SOURCE_DOMAIN_DIR = Path("sample-data/source-domains")
 CAPTURE_MANIFEST_FILENAME = "documented-enumeration-capture-manifest-v1.json"
@@ -77,7 +78,7 @@ OBSERVED_SNAPSHOT_FORMAT_VERSION = "spicyregs-source-domains/observed-v1"
 _XSD_NS = "{http://www.w3.org/2001/XMLSchema}"
 
 
-class SourceDomainError(Exception):
+class SourceDomainError(ValueError):
     """A capture failed verification, or a publisher document drifted from its captured shape."""
 
 
@@ -210,23 +211,17 @@ def openapi_schema_enum(payload: bytes, schema_name: str) -> tuple[str, ...]:
 _XSD_OPTIONS_PREFIX = re.compile(r"^One of the following options:\s*")
 _XSD_QUOTED_OPTION = re.compile(r'"([^"]+)"')
 
-# A DOCTYPE is where entity-expansion and XXE payloads live, and this publisher
-# emits none. The document-population readers apply the same guard.
-_ROOT_ELEMENT_START = re.compile(rb"<[A-Za-z_]")
+#: The pinned capture is 22,730 bytes; a document forty times that is not the one pinned.
+_MAX_XSD_BYTES = 1024 * 1024
 
 
 # Memoized like the YAML parse above and for the same reason: four documented
-# domains come out of this one document. Callers only read the tree.
+# domains come out of this one document. Callers only read the tree. spicy-docs'
+# reader refuses any DOCTYPE, where entity-expansion and XXE payloads live, and
+# every entity declaration or reference; this publisher emits none.
 @lru_cache(maxsize=4)
-def _parse_xsd(payload: bytes) -> ET.Element:
-    match = _ROOT_ELEMENT_START.search(payload)
-    prolog = payload if match is None else payload[: match.start()]
-    if b"<!doctype" in prolog.lower():
-        raise SourceDomainError("reginfo XSD contains a DOCTYPE declaration — refusing to parse")
-    try:
-        return ET.fromstring(payload)
-    except ET.ParseError as error:
-        raise SourceDomainError(f"reginfo XSD is not well-formed XML: {error}") from error
+def _parse_xsd(payload: bytes) -> Element:
+    return parse_xml(payload, max_bytes=_MAX_XSD_BYTES, error_type=SourceDomainError, label="reginfo XSD")
 
 
 def xsd_documented_options(payload: bytes, element_name: str) -> tuple[tuple[str, ...], int]:

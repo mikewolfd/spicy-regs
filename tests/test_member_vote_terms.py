@@ -127,6 +127,26 @@ def test_a_vote_whose_file_prints_no_date_is_undated_not_matched(tmp_path, liter
     }
 
 
+def test_a_stated_bioguide_id_stands_before_the_lis_crosswalk(tmp_path):
+    """spicy-docs' rule order: a Bioguide id the row states wins, even one members does not hold."""
+    rows = _build(
+        tmp_path,
+        [
+            _vote("119-senate-1-1", "S421", "senate", "January 9, 2025,  02:54 PM", bioguide="X000001", lis="S421"),
+            _vote("119-senate-1-1", "S422", "senate", "January 9, 2025,  02:54 PM", lis="S422"),
+        ],
+        [
+            _term("X000001", "0", "sen", "2025-01-03", "2031-01-03"),
+            _term("V000137", "0", "sen", "2025-01-03", "2031-01-03"),
+        ],
+        members=[{"bioguide_id": "V000137", "lis_id": "S421"}, {"bioguide_id": None, "lis_id": "S422"}],
+    )
+    assert {k[1]: (r["bioguide_id"], r["term_match"]) for k, r in rows.items()} == {
+        "S421": ("X000001", "half_open"),
+        "S422": (None, "unresolved_member"),
+    }
+
+
 def test_a_repeated_vote_row_or_a_shared_lis_id_refuses(tmp_path):
     vote = _vote("v", "M", "house", "10-Feb-2025", bioguide="M")
     with pytest.raises(ValueError, match="appears twice"):
