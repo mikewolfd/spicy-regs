@@ -21,7 +21,10 @@ def correction_query(
     Fresh source fields, including NULL, win at an equal source instant. An
     older or undated reread cannot displace a dated newer prior. Both undated
     rows permit the explicit correction. Only independently produced text and
-    extraction fields coalesce from the prior; source facts never coalesce.
+    extraction fields fall back to the prior, and only together: a fresh row
+    with neither text nor status keeps the prior's text, status and results,
+    and any other fresh row replaces all three, so text never pairs with
+    another fill's status or provenance. Source facts never fall back.
     Conflicting/duplicate input identities and unorderable dates refuse before
     output replacement, so an incomplete correction remains retryable.
     """
@@ -50,11 +53,12 @@ def correction_query(
         p."{key}" IS NULL OR p.modify_date IS NULL OR
         try_cast(f.modify_date AS TIMESTAMPTZ) >= try_cast(p.modify_date AS TIMESTAMPTZ)
     )'''
+    unfilled = 'f."text_content" IS NULL AND f."text_extraction_status" IS NULL'
     projection = []
     for column in columns:
         fresh = f'f."{column}"'
         if column in ENRICHMENT_COLUMNS:
-            fresh = f'coalesce({fresh}, p."{column}")'
+            fresh = f'CASE WHEN {unfilled} THEN p."{column}" ELSE {fresh} END'
         projection.append(f'CASE WHEN {wins} THEN {fresh} ELSE p."{column}" END AS "{column}"')
     return f'''SELECT {", ".join(projection)} FROM _correction_fresh f
                FULL OUTER JOIN _correction_prior p ON f."{key}" = p."{key}"'''

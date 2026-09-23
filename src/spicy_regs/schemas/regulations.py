@@ -137,7 +137,8 @@ DOCUMENT = RecordType(
         "reason_withdrawn": pl.Utf8,
         "additional_rins": pl.Utf8,
         # Text extracted from the document's PDF rendition, plus the outcome
-        # of that extraction ("ok"/"empty"/"encrypted"/"error"/None if not yet run).
+        # of that extraction ("ok"/"empty"/"encrypted"/"error"/None if not yet run;
+        # documents never take Mirrulations' "derived" comment text).
         "text_content": pl.Utf8,
         "text_extraction_status": pl.Utf8,
         # Latest per-URL PDF attempt; independent of retained or derived text.
@@ -166,8 +167,10 @@ COMMENT = RecordType(
         "modify_date": pl.Utf8,
         "receive_date": pl.Utf8,
         "attachments_json": pl.Utf8,
-        # Text extracted from the comment's PDF attachment(s), plus the outcome
-        # ("ok"/"empty"/"encrypted"/"error"/None if not yet run).
+        # Text of the comment's attachment(s), plus where it came from: "derived"
+        # (Mirrulations' own extraction) or our PDF outcome ("ok"/"empty"/
+        # "encrypted"/"error"); None if neither has run. The results column holds
+        # the derived provenance object or the per-URL PDF attempts.
         "text_content": pl.Utf8,
         "text_extraction_status": pl.Utf8,
         "pdf_extraction_results_json": pl.Utf8,

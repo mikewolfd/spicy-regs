@@ -82,6 +82,15 @@ _UPDATES_SCHEMA = pa.schema([("comment_id", pa.string()), *((name, pa.string()) 
 _FLUSH_CHARACTERS = 64 * 1024 * 1024
 
 
+def _pending(status: str | None, overwrite: bool) -> bool:
+    """Whether a row may be filled: no status yet, or with ``overwrite`` a previous derived fill.
+
+    Rows the PDF path filled (``ok``, ``empty``, ``encrypted``, ``error``) are never
+    candidates: Spicy Regs' own extraction is not replaced by Mirrulations'.
+    """
+    return status is None or status == "" or (overwrite and status == DERIVED_STATUS)
+
+
 def _stats() -> dict[str, int]:
     """Counters every path reports: ``missing`` comments have no text in their listing; ``failed`` ones are unknown."""
     return {"selected": 0, "derived": 0, "missing": 0, "failed": 0, "failed_dockets": 0}
@@ -142,9 +151,10 @@ def _derived_text_updates(
     candidate, and the per-docket derived-data listing (via
     :meth:`~spicy_regs.sources.derived_text.DerivedCommentText.fill_for`)
     is what actually decides whether extracted text exists. This is how rows
-    ingested before ``attachments_json`` was recorded get found at all. Unless
-    ``overwrite`` is set, rows that already have a ``text_extraction_status``
-    are skipped either way so repeated runs are incremental. ``agency``
+    ingested before ``attachments_json`` was recorded get found at all. Rows
+    that already have a ``text_extraction_status`` are skipped either way, so
+    repeated runs are incremental; ``overwrite`` re-fills only rows already
+    ``derived`` (:func:`_pending`). ``agency``
     overrides the per-row ``agency_code`` (the Hive partitions don't carry
     that column); when ``None`` it is read from the frame. Work is grouped by
     docket and fanned out across ``max_workers`` so each docket's extraction
@@ -166,7 +176,7 @@ def _derived_text_updates(
             continue
         if not discover_from_derived and not row["attachments_json"]:
             continue
-        if not overwrite and row["text_extraction_status"] is not None:
+        if not _pending(row["text_extraction_status"], overwrite):
             continue
         row_agency = agency or row.get("agency_code")
         docket_id = row["docket_id"]
@@ -187,11 +197,13 @@ def _derived_text_updates(
         max_workers,
     )
 
+    # One S3 resource for the call, shared by the workers (botocore's client and
+    # pool are thread-safe); one fetcher per docket keeps each listing cache local.
+    resource = resource_factory()
+
     def _fill_docket(item: tuple[tuple[str, str], list[str]]) -> Counter[str]:
         (docket_agency, docket_id), comment_ids = item
-        # One fetcher (and S3 resource) per task keeps the per-docket listing
-        # cache thread-local; DerivedCommentText is not shared-safe.
-        fetcher = DerivedCommentText(resource_factory())
+        fetcher = DerivedCommentText(resource)
         try:
             fetcher.listed(docket_agency, docket_id)
         except DerivedTextUnavailable:
@@ -396,7 +408,8 @@ def _backfill_agency_in_catalog(
     """Fill + upsert one agency's candidate comments in the attached catalog.
 
     Selects the agency's candidate rows from the catalog table (by default,
-    attachment-bearing with no ``text_extraction_status`` unless ``overwrite``;
+    attachment-bearing with no ``text_extraction_status``, or already ``derived``
+    with ``overwrite``;
     with ``discover_from_derived`` the ``attachments_json`` requirement is
     dropped so legacy rows ingested before that column existed are candidates
     too — see :func:`_derived_text_updates`), fetches derived text, and upserts
@@ -411,7 +424,8 @@ def _backfill_agency_in_catalog(
 
     tbl = iceberg._qualified(record_type)
     ag = iceberg._sql_str(agency)
-    status_filter = "" if overwrite else "AND (text_extraction_status IS NULL OR text_extraction_status = '')"
+    rederive = f" OR text_extraction_status = '{DERIVED_STATUS}'" if overwrite else ""
+    status_filter = f"AND (text_extraction_status IS NULL OR text_extraction_status = ''{rederive})"
     attachment_filter = (
         "" if discover_from_derived else "AND attachments_json IS NOT NULL AND TRIM(attachments_json) NOT IN ('', '[]')"
     )
@@ -530,7 +544,11 @@ def main() -> None:
     parser.add_argument("--output-dir", type=Path, default=Path("output"))
     parser.add_argument("--limit", type=int, default=None, help="Max comments to backfill this run")
     parser.add_argument("--max-workers", type=int, default=8)
-    parser.add_argument("--overwrite", action="store_true", help="Re-fill rows that already have a status")
+    parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Also re-fill rows already marked derived; rows the PDF path filled are never replaced",
+    )
     parser.add_argument(
         "--use-iceberg",
         action="store_true",
@@ -564,7 +582,7 @@ def main() -> None:
         from spicy_regs.schemas.regulations import RECORD_TYPES
 
         agencies = [a for a in args.agency.split(",")] if args.agency else None
-        backfill_comments_catalog(
+        stats = backfill_comments_catalog(
             RECORD_TYPES["comments"],
             agencies=agencies,
             limit=args.limit,
@@ -572,12 +590,13 @@ def main() -> None:
             overwrite=args.overwrite,
             discover_from_derived=args.discover_from_derived,
         )
+        _exit_on_refused_dockets(stats)
         return
 
     # Prefer the Hive-partitioned layout, fall back to the monolithic file.
     partition_dir = args.output_dir / "comments" / "agency"
     if partition_dir.exists():
-        _, changed = backfill_comment_partitions(
+        stats, changed = backfill_comment_partitions(
             partition_dir,
             limit=args.limit,
             max_workers=args.max_workers,
@@ -589,7 +608,7 @@ def main() -> None:
 
             upload_comment_partitions(args.output_dir, changed)
     else:
-        backfill_comments_parquet(
+        stats = backfill_comments_parquet(
             args.output_dir / "comments.parquet",
             limit=args.limit,
             max_workers=args.max_workers,
@@ -600,6 +619,15 @@ def main() -> None:
             from spicy_regs.sources.r2 import upload_file
 
             upload_file(args.output_dir / "comments.parquet")
+    _exit_on_refused_dockets(stats)
+
+
+def _exit_on_refused_dockets(stats: dict[str, int]) -> None:
+    """Fail the command, after its fills are written, when any docket listing was refused."""
+    if stats["failed_dockets"]:
+        raise SystemExit(
+            f"{stats['failed_dockets']} docket listing(s) refused; {stats['failed']} comment(s) left pending"
+        )
 
 
 if __name__ == "__main__":

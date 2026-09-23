@@ -334,3 +334,22 @@ def test_chain_extract_then_enrich_end_to_end() -> None:
     assert out["comment_id"] == "ACF-2025-0038-0004"
     assert out["text_content"] == "Wisconsin DCF comment body"
     assert out["text_extraction_status"] == "derived"
+
+
+def test_a_listing_error_answer_fails_the_docket_but_a_defect_propagates() -> None:
+    """Only the reader's own failures mark a docket failed; a bug is not hidden as a refused listing."""
+    with pytest.raises(DerivedTextUnavailable, match="500"):
+        _fill(_FakeS3Resource(_store(), listing_status=500), "0004")
+
+    class _Broken(_FakeS3Resource):
+        def Bucket(self, name: str) -> _FakeBucket:  # noqa: N802
+            raise TypeError("a defect, not an answer")
+
+    with pytest.raises(TypeError):
+        _fill(_Broken(_store()), "0004")
+
+
+def test_a_blank_object_from_the_chosen_tool_is_not_replaced_by_the_other_tool() -> None:
+    """The tool is chosen by which objects exist, so blank pypdf text is no fill, not pdfminer's text."""
+    store = {derived_key(*ACF, "pypdf", "0060", 1): b"", derived_key(*ACF, "pdfminer", "0060", 1): b"pdfminer text"}
+    assert _fill(_FakeS3Resource(store), "0060") is None

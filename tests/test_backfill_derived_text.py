@@ -428,3 +428,119 @@ def test_file_backfill_keeps_row_order_and_untouched_rows(tmp_path) -> None:
     assert written["comment_id"].to_list() == [r["comment_id"] for r in rows] + ["ACF-2025-0038-0015"]
     assert written["text_extraction_status"].to_list() == ["derived", None, "derived", None, "ok"]
     assert written["text_content"][4] == "kept"
+
+
+def test_overwrite_refills_derived_rows_and_never_pdf_fills() -> None:
+    pdf_rows = [
+        _acf("0015", text_extraction_status=status, text_content=text, pdf_extraction_results_json="[]")
+        for status, text in (("ok", "extracted by spicy-regs"), ("empty", None), ("error", None))
+    ]
+    stale = _acf("0004", text_extraction_status="derived", text_content="stale", pdf_extraction_results_json="{}")
+    for rows, expected in (([stale], _counts(1, derived=1)), (pdf_rows, _counts(0))):
+        frame = _frame(rows)
+        out, stats = enrich_comments_with_derived_text(frame, resource_factory=_factory(), overwrite=True)
+        assert stats == expected
+        if rows is pdf_rows:
+            assert out.select(frame.columns).equals(frame)
+        else:
+            assert out["text_content"][0] == "Wisconsin DCF comment body"
+            assert json.loads(out["pdf_extraction_results_json"][0])["tool"] == "pypdf"
+
+
+def test_catalog_overwrite_refills_derived_rows_and_never_pdf_fills() -> None:
+    con = duckdb.connect()
+    con.execute(f"ATTACH ':memory:' AS {iceberg._CATALOG_ALIAS};")
+    try:
+        _seed_catalog(
+            con,
+            [
+                _acf("0004", modify_date="2025-01-01", text_extraction_status="derived", text_content="stale"),
+                _acf("0015", modify_date="2025-01-01", text_extraction_status="ok", text_content="extracted by us"),
+            ],
+        )
+        stats = _backfill_agency_in_catalog(con, COMMENT, "ACF", resource_factory=_factory(), overwrite=True)
+        assert stats == _counts(1, derived=1)
+        rows = dict(con.execute(f"SELECT comment_id, text_content FROM {iceberg._qualified(COMMENT)}").fetchall())
+        assert rows == {"ACF-2025-0038-0004": "Wisconsin DCF comment body", "ACF-2025-0038-0015": "extracted by us"}
+    finally:
+        con.close()
+
+
+def test_a_failed_attachment_fails_only_its_comment() -> None:
+    """A comment whose object changed since the listing is `failed` and pending; its docket's others fill."""
+
+    class _Replaced(_FakeS3Resource):
+        def Object(self, name, key):  # noqa: N802
+            obj = super().Object(name, key)
+            if key.endswith("-0015_attachment_2_extracted.txt"):
+                obj.e_tag = '"replaced after listing"'
+            return obj
+
+    df = _frame([_acf("0004"), _acf("0015"), _acf("0030")])
+    out, stats = enrich_comments_with_derived_text(df, resource_factory=lambda: _Replaced(_store()))
+    assert stats == _counts(3, derived=2, failed=1)
+    by_id = {r["comment_id"]: r for r in out.iter_rows(named=True)}
+    assert by_id["ACF-2025-0038-0015"]["text_extraction_status"] is None
+    assert by_id["ACF-2025-0038-0030"]["text_extraction_status"] == "derived"
+
+
+def test_an_access_refusal_ends_the_run_while_other_dockets_are_in_flight(tmp_path) -> None:
+    """The refusal propagates, queued dockets are never listed, and the in-flight ones finish into a closed file."""
+    import threading
+
+    from botocore.exceptions import ClientError
+
+    from tests.test_derived_text import _FakeObjects, derived_key
+
+    dockets = [f"ACF-2025-00{n}" for n in range(40, 45)]  # two workers: 40 refuses while 41 is in flight
+    store = {derived_key("ACF", d, "pypdf", "0001", 1): b"text" for d in dockets}
+    release = threading.Event()
+
+    class _Gated(_FakeObjects):
+        def filter(self, Prefix):  # noqa: N803
+            if dockets[0] in Prefix:
+                self._resource.listed.append(Prefix)
+                threading.Timer(0.2, release.set).start()  # hold the others until the refusal has landed
+                raise ClientError(
+                    {"Error": {"Code": "403"}, "ResponseMetadata": {"HTTPStatusCode": 403}}, "ListObjects"
+                )
+            release.wait(5)
+            yield from super().filter(Prefix)
+
+    class _GatedResource(_FakeS3Resource):
+        def Bucket(self, name):  # noqa: N802
+            return type("_Bucket", (), {"objects": _Gated(self)})()
+
+    resource = _GatedResource(store)
+    frame = _frame([_acf("0001") | {"comment_id": f"{d}-0001", "docket_id": d} for d in dockets])
+    updates = tmp_path / "updates.parquet"
+    with pytest.raises(MirrulationsAccessRefusedError):
+        _derived_text_updates(
+            frame,
+            agency=None,
+            resource_factory=lambda: resource,
+            limit=None,
+            max_workers=2,
+            overwrite=False,
+            updates_path=updates,
+        )
+    listed = {prefix.split("/")[2] for prefix in resource.listed}
+    # 41 was in flight; 42 may have started in the refused docket's freed worker before the cancel.
+    assert set(dockets[:2]) <= listed <= set(dockets[:3])
+    assert pq.read_table(updates).num_rows == len(listed) - 1  # the in-flight fills, in a closed file
+
+
+@pytest.mark.parametrize("refused", [0, 2])
+def test_the_command_fails_after_writing_when_a_docket_was_refused(tmp_path, monkeypatch, refused) -> None:
+    monkeypatch.setattr(backfill_derived_text, "load_dotenv", lambda: None)
+    monkeypatch.setattr(
+        backfill_derived_text,
+        "backfill_comments_parquet",
+        lambda *a, **k: _counts(3, failed=refused, failed_dockets=refused),
+    )
+    monkeypatch.setattr("sys.argv", ["backfill-comment-text", "--output-dir", str(tmp_path)])
+    if refused:
+        with pytest.raises(SystemExit, match="2 docket listing"):
+            backfill_derived_text.main()
+    else:
+        backfill_derived_text.main()

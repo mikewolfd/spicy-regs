@@ -3,6 +3,8 @@
 spicy-docs lists a docket's extracted text once, picks one tool per comment by its
 pinned ``DERIVED_TEXT_TOOLS`` order, orders attachments by number and fetches them
 pinned to their listed ETags (``list_docket_derived_text``, ``fetch_derived_text``).
+The tool is chosen by which objects exist, not by what they hold, so when the chosen
+tool's objects are all blank the comment gets no fill, never the other tool's text.
 This module decides what a comment row gets from that:
 
 * ``text_content`` -- the chosen tool's attachments, each stripped, blank ones dropped,
@@ -65,8 +67,16 @@ def derived_fill(comment: CommentDerivedText) -> DerivedFill | None:
     return DerivedFill(PART_SEPARATOR.join(parts), provenance_json(comment)) if parts else None
 
 
-def _mirrulations() -> ModuleType:
-    """spicy-docs' Mirrulations reader, or a refusal naming the install that provides it."""
+def _mirrulations() -> tuple[ModuleType, tuple[type[Exception], ...]]:
+    """spicy-docs' Mirrulations reader and the failures it reports, or a refusal naming the install.
+
+    The failures are what the reader raises for a docket or object it will not vouch
+    for: a key outside the layout, or an object over the cap or not at its listed size
+    or ETag (``ValueError``); an S3 error answer, such as a vanished (404) or replaced
+    (412) object (``ClientError``); a transport failure left after its retries
+    (``BotoCoreError``). Anything else is a defect and propagates; a 401/403 is the
+    reader's ``MirrulationsAccessRefusedError`` and ends the run.
+    """
     try:
         from spicy_docs.sources import mirrulations
     except ModuleNotFoundError as error:
@@ -76,7 +86,9 @@ def _mirrulations() -> ModuleType:
                 "Run `uv sync --frozen` in a SpicyRegs checkout."
             ) from None
         raise
-    return mirrulations
+    from botocore.exceptions import BotoCoreError, ClientError
+
+    return mirrulations, (ValueError, ClientError, BotoCoreError)
 
 
 class DerivedCommentText:
@@ -88,7 +100,7 @@ class DerivedCommentText:
     """
 
     def __init__(self, s3_resource: Any, bucket: str | None = None, *, max_bytes: int = MAX_ATTACHMENT_BYTES) -> None:
-        self._reader = _mirrulations()
+        self._reader, self._failures = _mirrulations()
         self._resource = s3_resource
         self._bucket = self._reader.BUCKET if bucket is None else bucket
         self._max_bytes = max_bytes
@@ -102,9 +114,7 @@ class DerivedCommentText:
                 self._dockets[key] = self._reader.list_docket_derived_text(
                     self._resource, agency, docket_id, bucket=self._bucket
                 ).comments
-            except self._reader.MirrulationsAccessRefusedError:
-                raise
-            except Exception as exc:  # noqa: BLE001 -- any refusal leaves the docket pending
+            except self._failures as exc:
                 logger.warning(
                     "derived-data listing refused for {}/{}; its comments stay pending: {}", agency, docket_id, exc
                 )
@@ -125,9 +135,7 @@ class DerivedCommentText:
             fetched = self._reader.fetch_derived_text(
                 self._resource, comment, bucket=self._bucket, max_bytes=self._max_bytes
             )
-        except self._reader.MirrulationsAccessRefusedError:
-            raise
-        except Exception as exc:  # noqa: BLE001 -- a failed attachment fails the comment, never drops a part
+        except self._failures as exc:  # a failed attachment fails the comment, never drops a part
             logger.warning("derived-data fetch failed for {}; it stays pending: {}", comment_id, exc)
             raise DerivedTextUnavailable(f"{comment_id}: {exc}") from exc
         return derived_fill(fetched)

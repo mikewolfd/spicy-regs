@@ -242,26 +242,28 @@ def test_catalog_mixed_pdf_results_survive_export_and_derived_text_update(catalo
     assert exported.filter(pl.col("comment_id") == "C1")[FIELD][0] == attempted
 
 
-def test_frame_derived_overwrite_replaces_prior_pdf_diagnostics_with_its_provenance():
-    """The column describes the text the row holds: a derived fill's provenance, not the PDF attempt it replaced."""
+@pytest.mark.parametrize("status", ["ok", "empty", "encrypted", "error"])
+def test_frame_derived_overwrite_never_replaces_a_pdf_fill(status):
+    """Spicy Regs' own extraction outcome, its text and its diagnostics survive a derived --overwrite."""
     from tests.test_derived_text import _FakeS3Resource, _store
 
-    prior = '[{"url":"prior","status":"error"}]'
+    prior = f'[{{"url":"prior","status":"{status}"}}]'
+    text = "spicy-regs extracted text" if status == "ok" else None
     source = frame(
         "comments",
         ["https://source.invalid/a.pdf"],
         comment_id="ACF-2025-0038-0004",
         docket_id="ACF-2025-0038",
         agency_code="ACF",
-        text_extraction_status="error",
+        text_content=text,
+        text_extraction_status=status,
         pdf_extraction_results_json=prior,
     )
-    output, _ = enrich_comments_with_derived_text(
+    output, stats = enrich_comments_with_derived_text(
         source, resource_factory=lambda: _FakeS3Resource(_store()), overwrite=True
     )
-    assert output["text_content"][0] == "Wisconsin DCF comment body"
-    assert output["text_extraction_status"][0] == "derived"
-    assert json.loads(output[FIELD][0])["attachments"][0]["tool"] == "pypdf"
+    assert stats["selected"] == 0
+    assert output.row(0, named=True) == source.row(0, named=True)
 
 
 def test_combined_no_text_precedence_matches_the_frozen_policy():
