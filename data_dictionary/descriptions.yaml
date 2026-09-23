@@ -1232,7 +1232,7 @@ tables:
     label: "Federal award recipients"
     coverage: >-
       Not a range. No date column: the table is the top recipients by
-      all-time award amount, so it cannot be asked about a period, and a
+      trailing-12-month award amount (the list endpoint's amount, which equals the detail endpoint's `year=latest` total, not `year=all`), so it cannot be asked about a period, and a
       recipient below that cut is absent rather than absent from the awards
       data.
     measured_on: "2026-09-06"
@@ -1243,7 +1243,7 @@ tables:
       name — the organizations that receive federal money — complementary to the
       SAM entity registry and the `fec_committees` table for resolving and
       enriching the organizations that comment on rulemakings by their federal
-      funding. Scope is deliberately bounded to the top-N recipients by all-time
+      funding. Scope is deliberately bounded to the top-N recipients by trailing-12-month
       federal award amount (the endpoint reports ~18M recipients, too many for a
       daily full walk); the transform merges each run's top-N with the prior
       table so coverage stays monotonic. All columns are stored as VARCHAR.

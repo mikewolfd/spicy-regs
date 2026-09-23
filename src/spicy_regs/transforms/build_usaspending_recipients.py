@@ -8,7 +8,7 @@ funding. The same UEI can appear at multiple ``recipient_level`` values (parent
 ``P`` / child ``C`` / standalone ``R``), so ``recipient_id``, unique per level,
 is the primary/dedup key; consumers filter by level and join on ``uei``.
 
-Scope is deliberately bounded to the **top-N recipients by all-time federal
+Scope is deliberately bounded to the **top-N recipients by trailing-12-month federal
 award amount**: the endpoint reports ~18M recipients across all history, so a
 full walk is infeasible and the largest-funded organizations are both the most
 resolution-useful and naturally bounded. There is no watermark — recipients

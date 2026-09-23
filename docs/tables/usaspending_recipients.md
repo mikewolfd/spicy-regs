@@ -4,9 +4,9 @@
 
 **Federal award recipients**
 
-One row per federal-award recipient, ingested from the USASpending.gov `/api/v2/recipient/` endpoint by `build_usaspending_recipients`. A keyless (no API key) org-resolution reference dimension keyed by UEI and name — the organizations that receive federal money — complementary to the SAM entity registry and the `fec_committees` table for resolving and enriching the organizations that comment on rulemakings by their federal funding. Scope is deliberately bounded to the top-N recipients by all-time federal award amount (the endpoint reports ~18M recipients, too many for a daily full walk); the transform merges each run's top-N with the prior table so coverage stays monotonic. All columns are stored as VARCHAR.
+One row per federal-award recipient, ingested from the USASpending.gov `/api/v2/recipient/` endpoint by `build_usaspending_recipients`. A keyless (no API key) org-resolution reference dimension keyed by UEI and name — the organizations that receive federal money — complementary to the SAM entity registry and the `fec_committees` table for resolving and enriching the organizations that comment on rulemakings by their federal funding. Scope is deliberately bounded to the top-N recipients by trailing-12-month federal award amount (the endpoint reports ~18M recipients, too many for a daily full walk); the transform merges each run's top-N with the prior table so coverage stays monotonic. All columns are stored as VARCHAR.
 
-**Coverage.** Not a range. No date column: the table is the top recipients by all-time award amount, so it cannot be asked about a period, and a recipient below that cut is absent rather than absent from the awards data. *(measured 2026-09-06)*
+**Coverage.** Not a range. No date column: the table is the top recipients by trailing-12-month award amount (the list endpoint's amount, which equals the detail endpoint's `year=latest` total, not `year=all`), so it cannot be asked about a period, and a recipient below that cut is absent rather than absent from the awards data. *(measured 2026-09-06)*
 
 - **Parquet file:** `usaspending_recipients.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
