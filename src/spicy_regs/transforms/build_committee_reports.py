@@ -243,6 +243,20 @@ def _event_id(hearings: HearingDetailSource, package: Any,
     return event_id, "meeting" if event_id is not None else "no_meeting"
 
 
+def _refuse_unsafe_reread(reread: Collection[str], checkpointed: set[str], reads: dict[str, dict]) -> None:
+    """Refuse, before any source request, a named re-read that would publish state no read established.
+
+    An id without a prior checkpoint (a typo, or no prior at all) would publish
+    a refused checkpoint that every scheduled run retries; a prior row without
+    one would publish the pending checkpoint :func:`prior_reads` invents for it,
+    with no clock, since only discovery reads it.
+    """
+    if unknown := sorted(set(reread) - checkpointed):
+        raise ValueError(f"reread names packages with no prior checkpoint: {unknown}")
+    if unchecked := sorted(set(reads) - checkpointed):
+        raise ValueError(f"reread needs every prior row checkpointed; run discovery first: {unchecked}")
+
+
 def build_committee_reports(
     output_dir: Path,
     *,
@@ -256,13 +270,17 @@ def build_committee_reports(
 ) -> tuple[Path, ...]:
     """Build four contract tables and the acquisition checkpoint, with one owner.
 
-    ``reread`` names packages to read again whatever their checkpoints say, and
+    ``reread`` names hearings to read again whatever their checkpoints say, and
     nothing else: discovery is skipped, so every other row and checkpoint is
-    carried from the prior unchanged. It re-establishes the named packages'
-    capture evidence without moving the rest of the family.
+    carried from the prior unchanged. It re-establishes the named hearings'
+    capture evidence without moving the rest of the family, and refuses
+    (see :func:`_refuse_unsafe_reread`) rather than publish a state only a
+    discovery run can settle.
     """
-    if outside := sorted(key for key in reread if not key.startswith(("CRPT-", "CHRG-"))):
-        raise ValueError(f"reread names packages outside CRPT and CHRG: {outside}")
+    if outside := sorted(key for key in reread if not key.startswith("CHRG-")):
+        # A report's re-read can move the ``committee_reports`` watermark past
+        # packages changed since the last listing, which this run never asks for.
+        raise ValueError(f"reread takes hearings only; a report would move the discovery watermark: {outside}")
     if reader is None or acquirer is None or hearings is None:
         api_key = _resolve_api_key()
         if not api_key:
@@ -280,6 +298,8 @@ def build_committee_reports(
     }
     checkpoint = published_table(output_dir, READS_TABLE, download_prior)
     reads = prior_reads(checkpoint, prior_files)
+    if reread:
+        _refuse_unsafe_reread(reread, set(prior_reads(checkpoint, {})), reads)
     since = _since(prior_files["committee_reports"])
     logger.info("Committee reports: {}; cap {} per collection; agenda cap 0",
                 f"re-reading only {sorted(reread)}" if reread else f"modified since {since}", max_packages)
@@ -367,6 +387,10 @@ def build_committee_reports(
             if evidence:
                 evidence.event("package-outcome", **state)
 
+    if unfinished := sorted(key for key in reread if reads[key]["outcome"] != "complete"):
+        # A refused named read would publish a checkpoint every later run
+        # retries, and a refused hearing detail would drop the prior event_id.
+        raise RuntimeError(f"reread did not complete, so nothing is merged: {unfinished}")
     logger.info(
         "Committee reports: {:,} reports, {:,} sections, {:,} hearings, {:,} already held, {:,} refused",
         len(report_rows),

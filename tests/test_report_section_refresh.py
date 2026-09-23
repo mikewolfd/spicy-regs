@@ -138,15 +138,17 @@ class NoListing:
         raise AssertionError("a named re-read lists nothing")
 
 
-def test_a_named_reread_reads_only_those_packages_and_carries_every_other_checkpoint(tmp_path):
-    """A complete checkpoint is forced pending by name; a refused one not named stays unread."""
-    held, refused = "CHRG-119hhrg64431", "CRPT-119hrpt2"
-    prior_hearings = [
+HELD, REFUSED = "CHRG-119hhrg64431", "CRPT-119hrpt2"
+
+
+def _reread_priors(directory, *, unchecked=()):
+    """Two checkpointed hearings and a refused report; ``unchecked`` hearings have a row but no checkpoint."""
+    hearings = [
         {"package_id": package_id, "last_modified": "2026-09-18T12:00:00Z", "observed_at": "2026-09-20T00:00:00Z"}
-        for package_id in (CHRG_ID, held)
+        for package_id in (CHRG_ID, HELD, *unchecked)
     ]
-    _write_prior(tmp_path, "hearing_transcripts", ("package_id", "last_modified", "observed_at"), prior_hearings)
-    prior_reads = [
+    _write_prior(directory, "hearing_transcripts", ("package_id", "last_modified", "observed_at"), hearings)
+    reads = [
         {
             "package_id": package_id,
             "last_modified": "2026-09-18T12:00:00Z",
@@ -154,36 +156,92 @@ def test_a_named_reread_reads_only_those_packages_and_carries_every_other_checkp
             "rule_version": RULE_VERSIONS[package_id[:4]],
             "observed_at": "2026-09-20T00:00:00+00:00",
         }
-        for package_id, outcome in ((CHRG_ID, "complete"), (held, "complete"), (refused, "refused"))
+        for package_id, outcome in ((CHRG_ID, "complete"), (HELD, "complete"), (REFUSED, "refused"))
     ]
-    _write_prior(tmp_path, READS_TABLE, READ_COLUMNS, prior_reads)
-    acquirer = HearingBodyAcquirer()
-    paths = build_committee_reports(
-        tmp_path,
+    _write_prior(directory, READS_TABLE, READ_COLUMNS, reads)
+    return hearings, reads
+
+
+def _reread(directory, reread, *, acquirer=None, hearings=None):
+    return build_committee_reports(
+        directory,
         reader=NoListing(),
-        acquirer=acquirer,
-        hearings=StubHearings(),
+        acquirer=acquirer or HearingBodyAcquirer(),
+        hearings=hearings or StubHearings(),
         download_prior=_no_prior,
-        reread=[CHRG_ID],
+        reread=reread,
     )
+
+
+def test_a_named_reread_reads_only_those_packages_and_carries_every_other_checkpoint(tmp_path):
+    """A complete checkpoint is forced pending by name; a refused one not named stays unread."""
+    prior_hearings, prior_reads = _reread_priors(tmp_path)
+    acquirer = HearingBodyAcquirer()
+    files = {path.stem: path for path in _reread(tmp_path, [CHRG_ID], acquirer=acquirer)}
     assert acquirer.requested == [CHRG_ID]
-    files = {path.stem: path for path in paths}
     reads = {row["package_id"]: row for row in pq.read_table(files[READS_TABLE]).to_pylist()}
     assert [reads[row["package_id"]] for row in prior_reads[1:]] == prior_reads[1:]
     assert reads[CHRG_ID]["outcome"] == "complete"
     assert reads[CHRG_ID]["observed_at"] != prior_reads[0]["observed_at"]
     hearings = {row["package_id"]: row for row in pq.read_table(files["hearing_transcripts"]).to_pylist()}
-    assert hearings[held]["observed_at"] == prior_hearings[1]["observed_at"]
+    assert hearings[HELD]["observed_at"] == prior_hearings[1]["observed_at"]
     assert hearings[CHRG_ID]["observed_at"] == OBSERVED_AT, "the re-read row carries its new capture time"
 
 
-def test_a_reread_outside_the_two_collections_is_refused(tmp_path):
-    with pytest.raises(ValueError, match="outside CRPT and CHRG"):
-        build_committee_reports(
-            tmp_path,
-            reader=NoListing(),
-            acquirer=HearingBodyAcquirer(),
-            hearings=StubHearings(),
-            download_prior=_no_prior,
-            reread=["PLAW-119publ1"],
-        )
+#: (named ids, whether priors exist, a prior hearing without a checkpoint, the refusal)
+UNSAFE_REREADS = {
+    "a report would move the discovery watermark": ([REFUSED], True, (), "hearings only"),
+    "an id outside both collections": (["PLAW-119publ1"], True, (), "hearings only"),
+    "a typo'd hearing": (["CHRG-119hhrg99999"], True, (), "no prior checkpoint"),
+    "no prior at all": ([CHRG_ID], False, (), "no prior checkpoint"),
+    "a prior row without a checkpoint": ([CHRG_ID], True, ("CHRG-119hhrg63968",), "run discovery first"),
+}
+
+
+@pytest.mark.parametrize(("reread", "priors", "unchecked", "refusal"), UNSAFE_REREADS.values(), ids=UNSAFE_REREADS)
+def test_an_unsafe_named_reread_is_refused_before_any_source_request(tmp_path, reread, priors, unchecked, refusal):
+    if priors:
+        _reread_priors(tmp_path, unchecked=unchecked)
+    acquirer, hearings = HearingBodyAcquirer(), StubHearings()
+    with pytest.raises(ValueError, match=refusal):
+        _reread(tmp_path, reread, acquirer=acquirer, hearings=hearings)
+    assert acquirer.requested == [] and hearings.requested == []
+
+
+class RefusingAcquirer(HearingBodyAcquirer):
+    def acquire(self, package_id, *, max_bytes=None):
+        self.requested.append(package_id)
+        raise ConnectionError("stub: body unavailable")
+
+
+@pytest.mark.parametrize(
+    ("acquirer", "hearings"),
+    [(RefusingAcquirer(), StubHearings()), (HearingBodyAcquirer(), StubHearings(details={}))],
+    ids=["the body is refused", "the hearing detail is refused"],
+)
+def test_a_named_read_that_does_not_complete_fails_the_run_before_any_merge(tmp_path, acquirer, hearings):
+    """A refused body would publish a retried-forever checkpoint; a refused detail would drop the prior event_id."""
+    _reread_priors(tmp_path)
+    with pytest.raises(RuntimeError, match="did not complete"):
+        _reread(tmp_path, [CHRG_ID], acquirer=acquirer, hearings=hearings)
+    assert acquirer.requested == [CHRG_ID]
+    assert not (tmp_path / "hearing_transcripts.parquet").exists()
+    assert not (tmp_path / f"{READS_TABLE}.parquet").exists()
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [(None, []), ("", []), (" CHRG-1, ,CHRG-2,", ["CHRG-1", "CHRG-2"])],
+    ids=["unset", "blank", "list"],
+)
+def test_the_rollup_reads_its_reread_list_from_the_environment(tmp_path, monkeypatch, raw, expected):
+    from spicy_regs.pipelines.rollups import committee_reports
+
+    if raw is None:
+        monkeypatch.delenv("COMMITTEE_REPORTS_REREAD", raising=False)
+    else:
+        monkeypatch.setenv("COMMITTEE_REPORTS_REREAD", raw)
+    calls = []
+    monkeypatch.setattr(committee_reports, "build_committee_reports", lambda *args, **kwargs: calls.append(kwargs))
+    committee_reports.CommitteeReportsRollup().build(tmp_path)
+    assert [call["reread"] for call in calls] == [expected]
