@@ -401,6 +401,8 @@ import spicy_regs.mcp_server
 import spicy_regs.transforms
 import spicy_regs.pipelines.rollups.court_opinion_bodies
 import spicy_regs.pipelines.rollups.court_opinion_clusters
+import spicy_regs.pipelines.rollups.court_citations
+import spicy_regs.pipelines.rollups.court_opinions
 assert not any(name == "spicy_docs" or name.startswith("spicy_docs.") for name in sys.modules)
 """
     result = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True)

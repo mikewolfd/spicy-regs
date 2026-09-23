@@ -1,0 +1,28 @@
+name: Rollup — court_citations, court_citation_map, court_parentheticals
+on:
+  schedule:
+    # 04:50 UTC on the 2nd and 9th of January, April, July and October. The
+    # publisher cuts its bulk export on the last day of each quarter and says it
+    # finishes by the next day; each export is a full snapshot, so the 2nd picks
+    # it up and the 9th retries a late one. Any other week would republish the
+    # same edition.
+    - cron: '50 4 2,9 1,4,7,10 *'
+  workflow_dispatch:
+    inputs:
+      skip_upload:
+        description: 'Skip R2 upload (dry run)'
+        required: false
+        default: false
+        type: boolean
+jobs:
+  run:
+    uses: ./.github/workflows/_rollup.yml
+    secrets: inherit
+    with:
+      command: run-rollup-court-citations
+      skip_upload: ${{ github.event_name == 'workflow_dispatch' && inputs.skip_upload || false }}
+      # Downloads three exports (about 0.9 GB at the bucket's ~1.75 MiB/s, nine
+      # minutes) and decodes 102 million rows through the strict reader, about 17
+      # minutes on a workstation core (2026-09-22) and slower on a hosted runner;
+      # publication follows. The default 30 cannot hold that.
+      timeout_minutes: 90

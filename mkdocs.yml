@@ -71,8 +71,13 @@ nav:
       - gao_reports: tables/gao_reports.md
       - crs_reports: tables/crs_reports.md
       - court_dockets: tables/court_dockets.md
+      - court_docket_groups: tables/court_docket_groups.md
       - court_opinion_clusters: tables/court_opinion_clusters.md
       - court_opinion_bodies: tables/court_opinion_bodies.md
+      - court_citations: tables/court_citations.md
+      - court_citation_map: tables/court_citation_map.md
+      - court_parentheticals: tables/court_parentheticals.md
+      - court_opinions: tables/court_opinions.md
       - usaspending_recipients: tables/usaspending_recipients.md
       - fcc_proceedings: tables/fcc_proceedings.md
       - fcc_filings: tables/fcc_filings.md

@@ -2554,6 +2554,242 @@
       "opinion_id"
     ]
   },
+  "court_citations": {
+    "table": "court_citations",
+    "label": "Court reporter citations",
+    "summary": "Every reporter citation CourtListener records for a decision, such as \"410 U.S. 113\", \"93 S. Ct. 705\" or a WestLaw or neutral cite. Join cluster_id to court_opinion_clusters.cluster_id to reach the decision; a U.S. Reports citation found in a document (SpicyDocs' us_reports_cite rule) resolves through the row with reporter 'U.S.'. Rebuilt whole from each quarterly export. All columns are VARCHAR, copied as the publisher wrote them.",
+    "coverage": "Not a range. The complete 2026-06-30 CourtListener citations export, copied field for field: 18,123,788 citations of 7,844,636 decisions, every (cluster_id, volume, reporter, page) unique as the publisher's schema requires, 456,590 of them in the U.S. Reports. All but 63 name a cluster present in the published court_opinion_clusters edition. Published on the fork as generation f1e2e523631ed4e291f85e4350c917bdabcb06bfa75ad47e12ac0e1d4c865415 (family court-citations) on 2026-09-22.",
+    "kind": "not_a_range",
+    "measured_on": "2026-09-22",
+    "data_quality": "Citations are the publisher's, not re-derived from opinion text; a decision missing a citation here may still carry one in print. Reporter strings are the publisher's abbreviations and are not normalized. page is text because some reporters page with letters or asterisks.",
+    "columns": [
+      {
+        "column_name": "citation_id",
+        "column_type": "VARCHAR",
+        "description": "CourtListener citation ID. Primary key within one export."
+      },
+      {
+        "column_name": "cluster_id",
+        "column_type": "VARCHAR",
+        "description": "CourtListener decision-cluster ID the citation names; joins court_opinion_clusters.cluster_id."
+      },
+      {
+        "column_name": "volume",
+        "column_type": "VARCHAR",
+        "description": "Reporter volume as the publisher records it (a string; some volumes are years)."
+      },
+      {
+        "column_name": "reporter",
+        "column_type": "VARCHAR",
+        "description": "Reporter abbreviation, such as `U.S.`, `F.3d` or `WL`, as the publisher records it."
+      },
+      {
+        "column_name": "page",
+        "column_type": "VARCHAR",
+        "description": "Starting page or equivalent locator in the reporter, as text."
+      },
+      {
+        "column_name": "citation_type",
+        "column_type": "VARCHAR",
+        "description": "Publisher citation type code: 1 federal reporter, 2 state, 3 state regional, 4 specialty, 5 early U.S. Supreme Court, 6 Lexis, 7 WestLaw, 8 vendor-neutral, 9 law journal."
+      },
+      {
+        "column_name": "date_created",
+        "column_type": "VARCHAR",
+        "description": "Timestamp the publisher created the citation record."
+      },
+      {
+        "column_name": "date_modified",
+        "column_type": "VARCHAR",
+        "description": "Timestamp the publisher last modified the citation record."
+      },
+      {
+        "column_name": "dump_date",
+        "column_type": "VARCHAR",
+        "description": "The CourtListener bulk export the row was copied from (ISO date)."
+      }
+    ],
+    "grain": "One reporter citation of one CourtListener decision (cluster); a decision can have several.",
+    "identity_columns": [
+      "citation_id"
+    ]
+  },
+  "court_citation_map": {
+    "table": "court_citation_map",
+    "label": "Court opinion citation map",
+    "summary": "Which court opinion cites which, and how often, as CourtListener's citator resolved it. Both ids are opinion ids, not decision ids: join each to court_opinions.opinion_id, then court_opinions.cluster_id to court_opinion_clusters, to ask what cites a decision or which decisions are cited most. Rebuilt whole from each quarterly export. All columns are VARCHAR.",
+    "coverage": "Not a range. The complete 2026-06-30 CourtListener citation-map export: 77,460,014 citing/cited opinion pairs, each pair unique as the publisher's schema requires, and no NULL depth. Only the publisher's surrogate row id is dropped. Through court_opinions of the same edition, all but 3,758 citing and all but 1 cited opinion ids resolve, and the cited opinions belong to 4,509,544 distinct decisions. Published on the fork as generation f1e2e523631ed4e291f85e4350c917bdabcb06bfa75ad47e12ac0e1d4c865415 (family court-citations) on 2026-09-22.",
+    "kind": "not_a_range",
+    "measured_on": "2026-09-22",
+    "data_quality": "The edges are the publisher's automated citation resolution, not a reviewed citator: citations it could not resolve are absent, and depth counts mentions, not treatment (followed, distinguished or overruled are not recorded). Several opinions of one decision each carry their own edges, so count distinct clusters, not rows, when ranking decisions.",
+    "columns": [
+      {
+        "column_name": "citing_opinion_id",
+        "column_type": "VARCHAR",
+        "description": "CourtListener opinion ID of the opinion that cites. Joins court_opinions.opinion_id."
+      },
+      {
+        "column_name": "cited_opinion_id",
+        "column_type": "VARCHAR",
+        "description": "CourtListener opinion ID of the opinion cited. Joins court_opinions.opinion_id."
+      },
+      {
+        "column_name": "depth",
+        "column_type": "VARCHAR",
+        "description": "Number of times the citing opinion cites the cited one, as text."
+      },
+      {
+        "column_name": "dump_date",
+        "column_type": "VARCHAR",
+        "description": "The CourtListener bulk export the row was copied from (ISO date)."
+      }
+    ],
+    "grain": "One citing opinion's citation of one cited opinion, with how many times it cites it.",
+    "identity_columns": [
+      "citing_opinion_id",
+      "cited_opinion_id"
+    ]
+  },
+  "court_parentheticals": {
+    "table": "court_parentheticals",
+    "label": "Court opinion parentheticals",
+    "summary": "Short summaries of a decision written by the courts that later cite it, the text in parentheses after a citation, such as \"(holding that an agency must explain a change in position)\". described_opinion_id is the opinion summarized and describing_opinion_id the one that wrote it; join either to court_opinions.opinion_id to reach its decision. score is the publisher's estimate of how descriptive the text is. Rebuilt whole from each quarterly export. All columns are VARCHAR.",
+    "coverage": "Not a range. The complete 2026-06-30 CourtListener parentheticals export: 6,408,887 parentheticals, none with empty text, 6,193 without a group. Every described opinion id and all but 618 describing ids resolve through court_opinions of the same edition. Published on the fork as generation f1e2e523631ed4e291f85e4350c917bdabcb06bfa75ad47e12ac0e1d4c865415 (family court-citations) on 2026-09-22.",
+    "kind": "not_a_range",
+    "measured_on": "2026-09-22",
+    "data_quality": "The text is the citing court's own words, extracted automatically by the publisher, so it can describe a holding, a fact or a procedural point, and score is a model estimate, not a review. Several parentheticals can summarize the same point; group_id links those the publisher grouped.",
+    "columns": [
+      {
+        "column_name": "parenthetical_id",
+        "column_type": "VARCHAR",
+        "description": "CourtListener parenthetical ID. Primary key within one export."
+      },
+      {
+        "column_name": "described_opinion_id",
+        "column_type": "VARCHAR",
+        "description": "CourtListener opinion ID of the opinion the parenthetical summarizes. Joins court_opinions.opinion_id."
+      },
+      {
+        "column_name": "describing_opinion_id",
+        "column_type": "VARCHAR",
+        "description": "CourtListener opinion ID of the opinion that wrote the parenthetical. Joins court_opinions.opinion_id."
+      },
+      {
+        "column_name": "text",
+        "column_type": "VARCHAR",
+        "description": "The parenthetical as the describing opinion wrote it."
+      },
+      {
+        "column_name": "score",
+        "column_type": "VARCHAR",
+        "description": "Publisher's 0-to-1 estimate of how descriptive the text is, as text."
+      },
+      {
+        "column_name": "group_id",
+        "column_type": "VARCHAR",
+        "description": "Publisher's group of parentheticals making the same point; NULL when ungrouped."
+      },
+      {
+        "column_name": "dump_date",
+        "column_type": "VARCHAR",
+        "description": "The CourtListener bulk export the row was copied from (ISO date)."
+      }
+    ],
+    "grain": "One parenthetical summary one opinion wrote about another.",
+    "identity_columns": [
+      "parenthetical_id"
+    ]
+  },
+  "court_opinions": {
+    "table": "court_opinions",
+    "label": "Court opinions (index, no text)",
+    "summary": "Every CourtListener opinion's decision, type and author, without its text. It is what connects court_citation_map and court_parentheticals, which name opinions, to court_opinion_clusters, which holds decisions: join opinion_id from either, then cluster_id to court_opinion_clusters.cluster_id. local_path and download_url locate the original document. Rebuilt whole from each quarterly export, locally rather than on a schedule, because the source export is 54.6 GB. All columns are VARCHAR.",
+    "coverage": "Not a range. The complete 2026-06-30 CourtListener opinions export without its eight text fields: 10,798,347 opinions, every opinion_id unique and every cluster_id set, belonging to 10,069,107 decisions; all but 21 name a decision present in the published court_opinion_clusters edition. Decoded in record-aligned pieces, each piece's row count held to the export's record starts and its opening rows to the reference decoder. Published on the fork as generation f7cc67cc03bf7ef1a7d976d6eb74bf2654f7212b66ad785c633331a4cf377d41 (family court-opinions) on 2026-09-22. Opinion text is not included: the fork links out to CourtListener instead.",
+    "kind": "not_a_range",
+    "measured_on": "2026-09-22",
+    "data_quality": "Author strings are the publisher's text and are not resolved to people; author_id is set only where the publisher linked a judge. opinion_type is the publisher's code, such as 010combined or 040dissent.",
+    "columns": [
+      {
+        "column_name": "opinion_id",
+        "column_type": "VARCHAR",
+        "description": "CourtListener opinion ID. Primary key; joins court_citation_map and court_parentheticals opinion ids."
+      },
+      {
+        "column_name": "cluster_id",
+        "column_type": "VARCHAR",
+        "description": "CourtListener decision-cluster ID the opinion belongs to; joins court_opinion_clusters.cluster_id."
+      },
+      {
+        "column_name": "opinion_type",
+        "column_type": "VARCHAR",
+        "description": "Publisher opinion type code, such as `010combined`, `020lead`, `030concurrence` or `040dissent`."
+      },
+      {
+        "column_name": "author_id",
+        "column_type": "VARCHAR",
+        "description": "CourtListener judge ID of the author, when the publisher linked one."
+      },
+      {
+        "column_name": "author_str",
+        "column_type": "VARCHAR",
+        "description": "Author as the publisher's source text names them; not resolved to a person."
+      },
+      {
+        "column_name": "per_curiam",
+        "column_type": "VARCHAR",
+        "description": "Publisher per-curiam flag (`t` or `f`)."
+      },
+      {
+        "column_name": "joined_by_str",
+        "column_type": "VARCHAR",
+        "description": "Judges joining the opinion, as the publisher's source text names them."
+      },
+      {
+        "column_name": "page_count",
+        "column_type": "VARCHAR",
+        "description": "Page count of the original document when known, as text."
+      },
+      {
+        "column_name": "sha1",
+        "column_type": "VARCHAR",
+        "description": "Publisher's SHA-1 of the original document; not a SpicyRegs capture digest."
+      },
+      {
+        "column_name": "download_url",
+        "column_type": "VARCHAR",
+        "description": "Where the publisher obtained the original document, when recorded; no current accessibility claim."
+      },
+      {
+        "column_name": "local_path",
+        "column_type": "VARCHAR",
+        "description": "Path of the original document in CourtListener's storage, not a SpicyRegs file."
+      },
+      {
+        "column_name": "extracted_by_ocr",
+        "column_type": "VARCHAR",
+        "description": "Publisher flag for text extracted by OCR (`t` or `f`)."
+      },
+      {
+        "column_name": "date_created",
+        "column_type": "VARCHAR",
+        "description": "Timestamp the publisher created the opinion record."
+      },
+      {
+        "column_name": "date_modified",
+        "column_type": "VARCHAR",
+        "description": "Timestamp the publisher last modified the opinion record."
+      },
+      {
+        "column_name": "dump_date",
+        "column_type": "VARCHAR",
+        "description": "The CourtListener bulk export the row was copied from (ISO date)."
+      }
+    ],
+    "grain": "One CourtListener opinion (a majority, concurrence or dissent) of one decision.",
+    "identity_columns": [
+      "opinion_id"
+    ]
+  },
   "usaspending_recipients": {
     "table": "usaspending_recipients",
     "label": "Federal award recipients",

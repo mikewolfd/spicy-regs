@@ -10,6 +10,8 @@ Public data destination: `https://pub-72e95c0c20a84508b42b03a6ff6d55f8.r2.dev`. 
 | --- | --- | --- | --- |
 | T13 | `run-rollup-court-opinion-clusters` | `court_opinion_clusters.parquet` | generated and verified for complete 2026-06-30 edition |
 | T13 | `run-rollup-court-opinion-bodies` | `court_opinion_bodies.parquet` | withdrawn 2026-09-22: text links out through the clusters' `absolute_url` |
+| T13 | `run-rollup-court-citations` | `court_citations.parquet`, `court_citation_map.parquet`, `court_parentheticals.parquet` | added and published 2026-09-22 for the complete 2026-06-30 edition: generation `f1e2e523…`; public row counts verified |
+| T13 | `run-rollup-court-opinions` | `court_opinions.parquet` | added and published 2026-09-22 for the complete 2026-06-30 edition (text-free): generation `f7cc67cc…`; public row counts verified; no scheduled workflow (54.6 GB source) |
 | T16 | `run-rollup-bill-subjects` | `bill_subjects.parquet` | waiting for qualified parents |
 | T15 | `run-rollup-feed-summary` | `feed_summary.parquet` | waiting for qualified parents |
 | T15 | `run-rollup-agency-stats` | `agency_stats.parquet` | waiting for qualified parents |

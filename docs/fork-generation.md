@@ -560,7 +560,7 @@ wait for verified parents before starting dependents.
 | T10 | `committee-reports` | Rebuild the complete report/hearing family with corrected sections and source-specific qualification. |
 | T11 | `federal-register`, `cfr-sections`, `unified-agenda` | Audit the current scheduled generations first; reuse passing data and repair or rebuild the affected outputs. |
 | T12 | `fcc-proceedings`, `fcc-filings`, `crs-reports`, `gao-reports`, `usaspending-recipients`, `courtlistener` | Own-source inputs and success checks; `courtlistener` produces `court_dockets`. Its dedicated token is optional. |
-| T13 | `court-opinion-clusters`, `court-opinion-bodies` | Native source qualification and complete selected body rebuild; retain cluster/scope/join inputs. |
+| T13 | `court-opinion-clusters`, `court-opinion-bodies`, `court-citations`, `court-opinions` | Native source qualification and complete selected body rebuild; retain cluster/scope/join inputs. The citation tables and the text-free opinion index copy one whole export each; `court-opinions` runs only where the 54.6 GB original is retained. |
 | T01/T14 | `sam-entities`, `lobbying-filings` | Source refusal repair/access and bounded resumable initial acquisition. SAM defaults to one rotating registration-year window; LDA schedule remains paused. |
 | T15 | `feed-summary`, `agency-stats` | Require `dockets`, `documents`, `comments_index`. |
 | T15 | `agency-monthly-volume`, `discovery-signals`, `lifecycles` | Require `documents`; `lifecycles` produces `rulemaking_lifecycles`. |
