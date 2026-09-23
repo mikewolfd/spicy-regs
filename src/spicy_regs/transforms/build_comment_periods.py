@@ -1,4 +1,9 @@
-"""Transform: materialize continuous and reopened public-comment intervals."""
+"""Transform: materialize continuous and reopened public-comment intervals.
+
+Reads the proceedings, dockets, documents, federal_register and fr_docket_links
+parquet inputs from ``output_dir`` and writes ``comment_periods.parquet``; a missing
+input raises FileNotFoundError.
+"""
 
 from __future__ import annotations
 

@@ -345,6 +345,7 @@ def _identity(endpoint: str, record: dict) -> str:
 
 
 def _carries_counted_field(endpoint: str, record: dict) -> bool:
+    """Whether ``record`` carries the field its endpoint's window count is aggregated over."""
     if endpoint == "proceedings":
         return bool(_dict_field(record, "bureau").get("name"))
     return record.get("express_comment") is not None

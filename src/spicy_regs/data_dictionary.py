@@ -961,6 +961,7 @@ def _render_table_page(
     columns: list[tuple[str, str]],
     entry: dict,
 ) -> str:
+    """Render one table's docs page: banner, label, coverage stamp, column table."""
     summary = (entry.get("summary") or "").strip()
     col_desc = entry.get("columns") or {}
     pk = None
@@ -1034,6 +1035,10 @@ EXIT_SOURCE_UNREACHABLE = 3
 
 
 def cmd_check(args: argparse.Namespace) -> int:
+    """Reconcile descriptions against the chosen schema source and report drift.
+
+    Exit 1 on drift; a live source that cannot be read exits EXIT_SOURCE_UNREACHABLE (3), not 1.
+    """
     import httpx
 
     descriptions = load_descriptions(Path(args.descriptions))
@@ -1164,6 +1169,7 @@ def catalog_bytes(document: dict) -> bytes:
 
 
 def cmd_catalog(args: argparse.Namespace) -> int:
+    """Write catalog.json plus its sha256 sidecar, refusing (exit 1) when descriptions disagree with the schema."""
     descriptions = load_descriptions(Path(args.descriptions))
     schemas = _schemas_for_source(args.source, args.base)
     errors = check_descriptions(schemas, descriptions)
@@ -1188,6 +1194,10 @@ def cmd_catalog(args: argparse.Namespace) -> int:
 
 
 def cmd_generate(args: argparse.Namespace) -> int:
+    """Render the table pages, refusing (exit 1) when descriptions are out of sync with the schema.
+
+    Writing the default docs dir also refreshes catalog.json (+ .sha256) and table_metadata.json.
+    """
     descriptions = load_descriptions(Path(args.descriptions))
     schemas = _schemas_for_source(args.source, args.base)
     # Fail rather than emit a dictionary that disagrees with itself.

@@ -1,4 +1,8 @@
-"""Transform: build ``rule_targets.parquet`` — the normalized docket ↔ CFR ↔ RIN rule-identity spine."""
+"""Transform: build ``rule_targets.parquet`` — the normalized docket ↔ CFR ↔ RIN rule-identity spine.
+
+Reads the dockets, documents, federal_register and fr_docket_links parquet inputs from
+``output_dir``; a missing input raises FileNotFoundError.
+"""
 
 from __future__ import annotations
 

@@ -211,6 +211,7 @@ def _source_details(cursor: duckdb.DuckDBPyConnection | None = None) -> dict[str
 
 
 def _resolve_home_directory() -> str:
+    """DuckDB home directory from SPICY_REGS_HOME_DIR (default system temp); rejects control characters."""
     raw = os.environ.get("SPICY_REGS_HOME_DIR", tempfile.gettempdir())
     if any(c in raw for c in ("\x00", "\n", "\r")):
         raise RuntimeError(f"SPICY_REGS_HOME_DIR contains illegal characters: {raw!r}")
@@ -279,6 +280,7 @@ def _resolve_catalog_config() -> dict[str, str] | None:
 
 
 def _jsonify(value: Any) -> Any:
+    """Convert a DuckDB result value (dates, Decimal, UUID, bytes, containers) to a JSON-safe value."""
     if value is None or isinstance(value, (str, int, float, bool)):
         return value
     if isinstance(value, (datetime, date, time)):
@@ -332,6 +334,7 @@ def _first_write_statement(cursor: duckdb.DuckDBPyConnection, sql: str) -> str |
 
 
 def _apply_security_settings(con: duckdb.DuckDBPyConnection) -> None:
+    """Apply the hardened DuckDB session settings (no extension autoloading, locked config, memory/temp)."""
     con.execute("SET preserve_insertion_order=false")
     con.execute("SET autoinstall_known_extensions=false")
     con.execute("SET autoload_known_extensions=false")
@@ -446,6 +449,7 @@ def _build_connection() -> duckdb.DuckDBPyConnection:
 
 
 def _connection_index(cursor: duckdb.DuckDBPyConnection) -> dict:
+    """The publication snapshot pinned in this connection; injected local connections report an empty family map."""
     try:
         row = cursor.execute("SELECT snapshot FROM _spicy_publication").fetchone()
         if row is None:
@@ -457,6 +461,7 @@ def _connection_index(cursor: duckdb.DuckDBPyConnection) -> dict:
 
 
 def _connection_local_selection(cursor: duckdb.DuckDBPyConnection) -> dict | None:
+    """The local-selection snapshot pinned in this connection, or None when it has none."""
     try:
         row = cursor.execute("SELECT snapshot FROM _spicy_local_selection").fetchone()
         return json.loads(row[0]) if row is not None else None
@@ -733,6 +738,7 @@ def _register_tools(mcp: FastMCP) -> None:
 
 
 def build_server() -> FastMCP:
+    """Build the stdio FastMCP server with the three read-only table tools."""
     mcp = FastMCP("spicy-regs", instructions=INSTRUCTIONS, icons=ICONS)
     _register_tools(mcp)
     return mcp

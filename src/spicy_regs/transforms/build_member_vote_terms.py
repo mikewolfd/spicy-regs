@@ -74,7 +74,11 @@ def _rows(path: Path, columns: list[str]) -> list[dict]:
 
 
 def build_member_vote_terms(output_dir: Path) -> Path:
-    """Build ``member_vote_terms.parquet`` from the three published inputs in ``output_dir``."""
+    """Build ``member_vote_terms.parquet`` from the three published inputs in ``output_dir``.
+
+    Raises FileNotFoundError for a missing input, ValueError for a duplicated member
+    vote or a LIS id naming two members.
+    """
     missing = [name for name in INPUTS if not (output_dir / name).exists()]
     if missing:
         raise FileNotFoundError(f"member_vote_terms needs {', '.join(missing)} in {output_dir}")
