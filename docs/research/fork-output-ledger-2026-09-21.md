@@ -39,24 +39,24 @@ Public data destination: `https://pub-72e95c0c20a84508b42b03a6ff6d55f8.r2.dev`. 
 | T12 | `run-rollup-courtlistener` | `court_dockets.parquet` | generated and verified: enriched APA selection published (11,459 rows) |
 | T12 | `build_court_docket_groups` | `court_docket_groups.parquet` | republished 2026-09-23 with numeric parent order: generation `0f855eb1…`, 901 rows; raw-validated against the native docket edition and public readback identical |
 | T12 | `run-rollup-usaspending-recipients` | `usaspending_recipients.parquet` | published by schedule; qualified 2026-09-23 with recorded source drift against a fresh capture (details below) |
-| T09 | `run-rollup-bill-family` | `congress_bills.parquet` | published awaiting source audit; broader local candidate retained |
-| T09 | `run-rollup-bill-family` | `bill_actions.parquet` | published awaiting source audit; broader local candidate retained |
-| T09 | `run-rollup-bill-family` | `bill_committees.parquet` | published awaiting source audit; broader local candidate retained |
-| T09 | `run-rollup-bill-family` | `bill_publisher_summaries.parquet` | published awaiting source audit; broader local candidate retained |
-| T09 | `run-rollup-bill-family` | `bill_versions.parquet` | published awaiting source audit; broader local candidate retained |
-| T09 | `run-rollup-bill-family` | `bill_sections.parquet` | published awaiting source audit; broader local candidate retained |
-| T09 | `run-rollup-bill-family` | `section_diffs.parquet` | published awaiting source audit; broader local candidate retained |
-| T09 | `run-rollup-bill-family` | `section_diff_items.parquet` | published awaiting source audit; broader local candidate retained |
-| T09 | `run-rollup-bill-family` | `financial_changes.parquet` | published awaiting source audit; broader local candidate retained |
-| T09 | `run-rollup-bill-family` | `section_classifications.parquet` | published awaiting source audit; broader local candidate retained |
-| T09 | `run-rollup-bill-family` | `bill_summaries.parquet` | published awaiting source audit; broader local candidate retained |
-| T09 | `run-rollup-bill-family` | `diff_summaries.parquet` | published awaiting source audit; broader local candidate retained |
-| T09 | `run-rollup-bill-family` | `cbo_cost_estimates.parquet` | published awaiting source audit; broader local candidate retained |
-| T09 | `run-rollup-bill-family` | `public_activity_events.parquet` | published awaiting source audit; broader local candidate retained |
-| T09 | `run-rollup-bill-family` | `bill_family_archives.parquet` | published awaiting source audit; broader local candidate retained |
-| T09 | `run-rollup-bill-family` | `bill_vote_references.parquet` | published awaiting source audit; broader local candidate retained |
-| T09 | `run-rollup-bill-family` | `bill_family_backfills.parquet` | published awaiting source audit; broader local candidate retained |
-| T09 | `run-rollup-bill-family` | `bill_family_backfill_walks.parquet` | published awaiting source audit; broader local candidate retained |
+| T09 | `run-rollup-bill-family` | `congress_bills.parquet` | published 2026-09-23 (decision 1) in reconciled generation `a846cb44…`: the accepted 419,839-bill candidate plus the live scheduled 119th rows; conservation and row provenance verified (details below) |
+| T09 | `run-rollup-bill-family` | `bill_actions.parquet` | published 2026-09-23 (decision 1) in reconciled generation `a846cb44…`: the accepted 419,839-bill candidate plus the live scheduled 119th rows; conservation and row provenance verified (details below) |
+| T09 | `run-rollup-bill-family` | `bill_committees.parquet` | published 2026-09-23 (decision 1) in reconciled generation `a846cb44…`: the accepted 419,839-bill candidate plus the live scheduled 119th rows; conservation and row provenance verified (details below) |
+| T09 | `run-rollup-bill-family` | `bill_publisher_summaries.parquet` | published 2026-09-23 (decision 1) in reconciled generation `a846cb44…`: the accepted 419,839-bill candidate plus the live scheduled 119th rows; conservation and row provenance verified (details below) |
+| T09 | `run-rollup-bill-family` | `bill_versions.parquet` | published 2026-09-23 (decision 1) in reconciled generation `a846cb44…`: the accepted 419,839-bill candidate plus the live scheduled 119th rows; conservation and row provenance verified (details below) |
+| T09 | `run-rollup-bill-family` | `bill_sections.parquet` | published 2026-09-23 (decision 1) in reconciled generation `a846cb44…`: the accepted 419,839-bill candidate plus the live scheduled 119th rows; conservation and row provenance verified (details below) |
+| T09 | `run-rollup-bill-family` | `section_diffs.parquet` | published 2026-09-23 (decision 1) in reconciled generation `a846cb44…`: the accepted 419,839-bill candidate plus the live scheduled 119th rows; conservation and row provenance verified (details below) |
+| T09 | `run-rollup-bill-family` | `section_diff_items.parquet` | published 2026-09-23 (decision 1) in reconciled generation `a846cb44…`: the accepted 419,839-bill candidate plus the live scheduled 119th rows; conservation and row provenance verified (details below) |
+| T09 | `run-rollup-bill-family` | `financial_changes.parquet` | published 2026-09-23 (decision 1) in reconciled generation `a846cb44…`: the accepted 419,839-bill candidate plus the live scheduled 119th rows; conservation and row provenance verified (details below) |
+| T09 | `run-rollup-bill-family` | `section_classifications.parquet` | published 2026-09-23 (decision 1) in reconciled generation `a846cb44…`: the accepted 419,839-bill candidate plus the live scheduled 119th rows; conservation and row provenance verified (details below) |
+| T09 | `run-rollup-bill-family` | `bill_summaries.parquet` | published 2026-09-23 (decision 1) in reconciled generation `a846cb44…`: the accepted 419,839-bill candidate plus the live scheduled 119th rows; conservation and row provenance verified (details below) |
+| T09 | `run-rollup-bill-family` | `diff_summaries.parquet` | published 2026-09-23 (decision 1) in reconciled generation `a846cb44…`: the accepted 419,839-bill candidate plus the live scheduled 119th rows; conservation and row provenance verified (details below) |
+| T09 | `run-rollup-bill-family` | `cbo_cost_estimates.parquet` | published 2026-09-23 (decision 1) in reconciled generation `a846cb44…`: the accepted 419,839-bill candidate plus the live scheduled 119th rows; conservation and row provenance verified (details below) |
+| T09 | `run-rollup-bill-family` | `public_activity_events.parquet` | published 2026-09-23 (decision 1) in reconciled generation `a846cb44…`: the accepted 419,839-bill candidate plus the live scheduled 119th rows; conservation and row provenance verified (details below) |
+| T09 | `run-rollup-bill-family` | `bill_family_archives.parquet` | published 2026-09-23 (decision 1) in reconciled generation `a846cb44…`: the accepted 419,839-bill candidate plus the live scheduled 119th rows; conservation and row provenance verified (details below) |
+| T09 | `run-rollup-bill-family` | `bill_vote_references.parquet` | published 2026-09-23 (decision 1) in reconciled generation `a846cb44…`: the accepted 419,839-bill candidate plus the live scheduled 119th rows; conservation and row provenance verified (details below) |
+| T09 | `run-rollup-bill-family` | `bill_family_backfills.parquet` | published 2026-09-23 (decision 1) in reconciled generation `a846cb44…`: the accepted 419,839-bill candidate plus the live scheduled 119th rows; conservation and row provenance verified (details below) |
+| T09 | `run-rollup-bill-family` | `bill_family_backfill_walks.parquet` | published 2026-09-23 (decision 1) in reconciled generation `a846cb44…`: the accepted 419,839-bill candidate plus the live scheduled 119th rows; conservation and row provenance verified (details below) |
 | T08 | `run-rollup-press-releases` | `press_releases.parquet` | published bounded relationship correction verified |
 | T08 | `run-rollup-amendments` | `amendments.parquet` | republished complete 2026-09-23: generation `52d60a8f…`, 7,066 = the source's declared 119th count; every list-route cell matches a clean replay; detail-only fields (sponsors, amended bill) remain unacquired |
 | T08 | `run-rollup-member-vote-terms` | `member_vote_terms.parquet` | added and published 2026-09-23 (decision 2): generation `890481eb…`, 382,136 rows; exceptions equal the independent join replay row for row |
@@ -354,3 +354,29 @@ Receipts: `members-qualification/`, `congressional-status/`, `native-vote-varian
   80 comments in five dockets absent from `dockets` are counted by agency but
   cannot appear in `feed_summary`, which lists dockets. See
   `full-comments/publication-comments.json` and `t15-2026-09-23/`.
+- **Bill family (decision 1).** Generation `a846cb44…` publishes all eighteen
+  family tables and 419,866 bills.
+  - **Inputs.** It reconciles the reviewed 419,839-bill candidate
+    (`bill-family-continuation/`) with the live scheduled generation `83d20e77…`
+    (18,998 mostly 119th-Congress bills). The reconciliation used the family's
+    own merge helpers and parameters, with the candidate as prior and the live
+    rows as fresh. At day grain, no live row is older than its candidate
+    counterpart: 1,839 are newer and 17,132 same-day rows are identical in
+    content. (A lexical comparison had flagged 132, which were timestamp against
+    date-only spellings of the same day.)
+  - **Checks, every table.** No duplicate keys. Every candidate and every live
+    identity survives, and no row appears in neither input. Every live-keyed row
+    equals the live row, and every candidate-only row equals the candidate's.
+    The one exception is 1,752 `congress_bills` rows, where live NULLs were
+    filled from the candidate by the column-wise merge (1,749 of them `url`).
+  - **URL labels.** SpicyDocs 0.28.0 appends `congress_bills.url_source`, the
+    inherited-provenance label the decision requires (`6d34a1b`). 12,767 URLs are
+    labelled `inherited`: 11,018 of the 11,021 lineage bills, plus the 1,749 live
+    rows above. The other three lineage bills were restated by the live narrow
+    writer on 2026-09-18, so they are fresh statements. 5,005 are labelled
+    `billstatus`, matching the raw archives. Rows that predate the label are NULL.
+  - **Publication.** All 18 public members equal the reconciled files.
+  - **Fork workflows.** `Rollup — bill family` and `Rollup — congress_bills`
+    are disabled on the fork until `6d34a1b` is pushed. Their pushed contract
+    lacks `url_source`, and their merge drops prior columns it does not know.
+    See `bill-family-publication-2026-09-23/`.

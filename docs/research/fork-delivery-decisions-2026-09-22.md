@@ -68,4 +68,8 @@ mislabelled 0.26.5 wheel stays here only for replay.
 - **Decision 7, 2026-09-23:** the reviewed six-agency cohort is published as the
   fork's `comments.parquet` and `comments_index.parquet` (23,889,665 rows). ACF
   (129,052 originals, fully listed) is the next cohort and is not yet acquired.
+- **Decision 1, 2026-09-23:** published as reconciled generation `a846cb44…`
+  (419,866 bills, eighteen tables). Every inherited URL carries
+  `url_source = inherited` (SpicyDocs 0.28.0, `6d34a1b`). The newer live 119th
+  rows are reconciled in; nothing from either input was lost.
 
