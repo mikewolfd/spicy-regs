@@ -9,6 +9,7 @@ Tests that alter their counts or continuations name that synthetic change.
 | --- | --- | --- |
 | `govinfo-published-cfr.json` | [GovInfo published CFR packages](https://api.govinfo.gov/published/2025-01-01/2025-01-31?offsetMark=*&pageSize=2&collection=CFR) | `812aad43c6741776ca6791a29ceaf507706c3e45f2e729c687b8438923a4bc9e` |
 | `govinfo-package-granules.json` | [GovInfo 2025 Title 1 granules](https://api.govinfo.gov/packages/CFR-2025-title1-vol1/granules?offsetMark=*&pageSize=2) | `abcec8690f74d6741050e6dd505b59783cd9b9f4367bd5167dba54fe2a18d4ed` |
+| `annual-title1-vol1.xml` | [2025 Title 1 volume 1 bulk XML](https://www.govinfo.gov/bulkdata/CFR/2025/title-1/CFR-2025-title1-vol1.xml), captured 2026-09-12; front identity fields and § 1.1 under PART 1 | `d0ea110abbc7761d026b24bd779a14d413f2691a89ced35c0e295b4f2a364b0a` |
 
 `ecfr-api-title14-numbering.xml` is the provider's reserialized excerpt from
 a retained eCFR Title 14 request dated 2026-08-19. It preserves section
@@ -34,3 +35,15 @@ before/raw/after comparison are retained under
 - The publisher's package `lastModified` is `2025-06-17T21:29:08Z`, matching
   every row of this package in the pinned current public table. The list rows
   retain literal identifiers and headings but provide no parent part.
+
+`ancestry/` holds annual volume excerpts named by package: the element path
+to each selected PART and SECTION only. Six are copied unchanged from
+`spicy-docs/tests/fixtures/cfr/ancestry/` (spicy-docs `eae0812`; provenance in
+its README): Title 43's subpart numbering, Title 41's compound parts, Title 14
+Part 241, Title 26's parenthesized and range numbers, Title 30's publisher typo
+and Title 48's duplicate § 849.504. `CFR-2025-title34-vol4.xml` (TITLENUM
+printed twice for the combined Title 34/35 volume) and
+`CFR-2025-title40-vol9.xml` (no SECTION) are the two retained volumes SpicyDocs'
+annual validator refuses; they are cut by `cut_refused_fixtures.py` in
+`corpora/fork-execution-2026-09-21/cfr-ancestry-fix-2026-09-23/` from the
+volumes in `cfr-ancestry-2026-09-23/xml/` (digests in its `fetch.json`).

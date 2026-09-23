@@ -5,8 +5,9 @@ reading base tables from R2, so ``inputs`` is empty — the fetch + incremental
 merge with the prior published table happens inside ``build_cfr_sections``.
 The base class still handles the shrink-guarded R2 upload of the single output.
 
-Section metadata + citations only (not full section text); requires an
-api.data.gov key (``DATA_GOV_API_KEY``). A keyless run yields nothing.
+Section metadata + citations only (not full section text), with each
+package's section granules placed from one download of its annual volume XML.
+Requires an api.data.gov key (``DATA_GOV_API_KEY``); a keyless run refuses.
 """
 
 from pathlib import Path

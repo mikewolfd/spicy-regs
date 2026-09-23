@@ -1,0 +1,82 @@
+<?xml version='1.0' encoding='utf-8'?>
+<CFRDOC xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="CFRMergedXML.xsd">
+    <AMDDATE>Dec. 29, 2022</AMDDATE>
+    <FMTR><TITLEPG>
+            <CODE />
+            <PRTPAGE P="1" />
+            <TITLENUM>Title 1</TITLENUM>
+            <SUBJECT>General Provisions</SUBJECT>
+            <REVISED>Revised as of January 1, 2023</REVISED>
+            <CONTAINS>Containing a codification of documents of general applicability and future effect</CONTAINS>
+            <DATE>As of January 1, 2023</DATE>
+            <PUB>
+                <P>Published by the Office of the Federal Register National Archives and Records Administration as a Special Edition of the Federal Register</P>
+            </PUB>
+        </TITLEPG>
+        </FMTR><TITLE>
+        <LRH>1 CFR Ch. I (1-1-23 Edition)</LRH>
+        <RRH>Admin. Comm. of the Federal Register</RRH>
+        <CFRTITLE>
+            <TITLEHD>
+                <PRTPAGE P="1" />
+                <HD SOURCE="HED">Title 1—General Provisions</HD>
+            </TITLEHD>
+            <CFRTOC>
+                <PTHD>Part</PTHD>
+                <CHAPTI>
+                    <SUBJECT>
+                        <E T="04">chapter i</E>
+                        —Administrative Committee of the Federal Register
+                    </SUBJECT>
+                    <PG>1</PG>
+                </CHAPTI>
+                <CHAPTI>
+                    <SUBJECT>
+                        <E T="04">chapter ii</E>
+                        —Office of the Federal Register
+                    </SUBJECT>
+                    <PG>51</PG>
+                </CHAPTI>
+                <CHAPTI>
+                    <SUBJECT>
+                        <E T="04">chapter iii</E>
+                        —Administrative Conference of the United States
+                    </SUBJECT>
+                    <PG>301</PG>
+                </CHAPTI>
+                <CHAPTI>
+                    <SUBJECT>
+                        <E T="04">chapter iv</E>
+                        —Miscellaneous Agencies
+                    </SUBJECT>
+                    <PG>425</PG>
+                </CHAPTI>
+                <CHAPTI>
+                    <RESERVED>
+                        <E T="04">chapter v</E>
+                         [Reserved]
+                    </RESERVED>
+                </CHAPTI>
+                <CHAPTI>
+                    <SUBJECT>
+                        <E T="04">chapter vi</E>
+                        —National Capital Planning Commission
+                    </SUBJECT>
+                    <PG>602</PG>
+                </CHAPTI>
+            </CFRTOC>
+        </CFRTITLE>
+        <CHAPTER>
+            <SUBCHAP TYPE="N">
+                <HD SOURCE="HED">SUBCHAPTER A—GENERAL</HD>
+                <PART>
+                    <HD SOURCE="HED">PART 1—DEFINITIONS</HD>
+                    <AUTH>
+                        <HD SOURCE="HED">Authority:</HD>
+                        <P>44 U.S.C. 1506; sec. 6, E.O. 10530, 19 FR 2709; 3 CFR, 1954-1958 Comp., p.189.</P>
+                    </AUTH>
+                    <SECTION>
+                        <SECTNO>§ 1.1</SECTNO>
+                        <SUBJECT>Definitions.</SUBJECT>
+                        <P>As used in this chapter, unless the context requires otherwise—</P>
+                        </SECTION></PART></SUBCHAP></CHAPTER></TITLE></CFRDOC>

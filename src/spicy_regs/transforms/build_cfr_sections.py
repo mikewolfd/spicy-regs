@@ -1,9 +1,9 @@
-"""Transform: build ``cfr_sections.parquet`` from the GovInfo CFR API.
+"""Transform: build ``cfr_sections.parquet`` from the GovInfo CFR API and annual volume XML.
 
 All-VARCHAR section metadata, one row per CFR granule (a section-level unit
-within a title's annual edition) keyed on ``granule_id``; the citation columns
-(``cfr_ref``, ``title``, ``part``, ``section``) are the join keys back to
-Federal Register ``cfr_references_json``. SECTION METADATA ONLY — the full
+within a title's annual edition) keyed on ``granule_id``. ``cfr_ref`` is the
+join key back to Federal Register ``cfr_references_json``; ``title``, ``part``
+and ``section`` describe structure. SECTION METADATA ONLY — the full
 regulatory text is deliberately out of scope (see ``sources/cfr_sections.py``).
 
 Incremental by design: best-effort prior from R2, fetch bounded by
@@ -11,17 +11,33 @@ Incremental by design: best-effort prior from R2, fetch bounded by
 run never trips the R2 catastrophic-shrink guard. With no prior table the
 output covers only the requested year window, not a full historical backfill.
 
-A section token does not establish part ancestry — ``sec19-8-1`` is section
-``19-8.1`` in native Part 241, not Part 19 — so the token is preserved and
-part/citation stay unknown until same-edition native ancestry is available; a
-current eCFR hierarchy is never joined onto an annual CFR edition.
+Neither a granule id nor a printed section number establishes the enclosing
+part, so section granules are placed from their package's annual volume XML:
+one download and one streaming SpicyDocs scan per package, then a lookup per
+granule token among the scan's canonical sections, O(volume bytes + granules).
+``part`` is the innermost PART heading. Title 43 numbers sections by subpart:
+§ 1601.0-1 sits in Part 1600, so ``part`` is 1600 (structure) while only
+``cfr_ref`` (``43-1601.0-1``, the printed citation) joins the Federal Register
+side. Title 41's compound parts keep their hyphen (``50-201``) and Title 14
+Part 241 prints ``19-8.1``. ``cfr_ref`` is NULL for ranges, publisher typos,
+unprefixed numbers and parenthesized citations (SpicyDocs'
+``split_annual_cfr_section``). A volume SpicyDocs' identity validator refuses
+is still scanned and the refusal logged; an empty scan places nothing; a volume
+that cannot be downloaded or scanned keeps that package's prior rows.
+
+TOC, NODE and appendix granules, and section tokens the scan does not hold,
+keep the identifier-derived path, so Title 41's TOC and NODE parts stay cut at
+the first hyphen (``part50-201`` gives ``50``).
 """
 
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from pathlib import Path
+from typing import TYPE_CHECKING
 
+import httpx
 import pyarrow as pa
 import pyarrow.parquet as pq
 from loguru import logger
@@ -30,7 +46,19 @@ from spicy_regs.sources import r2
 from spicy_regs.sources.cfr_sections import CfrSectionsError, CfrSectionsReader
 from spicy_regs.transforms.table_merge import merge_local_prior
 
+if TYPE_CHECKING:
+    from spicy_docs.sources.cfr.acquisition import CfrAcquirer
+    from spicy_docs.sources.cfr.models import AnnualCfrSelection
+
 OUTPUT = "cfr_sections.parquet"
+
+#: Byte cap for one annual volume's download and scan. The largest retained
+#: 2025 volume (40 CFR vol 20) is 12,576,481 bytes; SpicyDocs caps any CFR
+#: capture at 256 MiB (spicy-docs docs/sources/cfr.md).
+MAX_VOLUME_BYTES = 64 * 1024 * 1024
+_VOLUME_REQUESTS = 3  # per volume, retries of a 429/5xx/transport failure included
+_VOLUME_TIMEOUT_SECONDS = 60.0
+_VOLUME_REQUEST_INTERVAL_SECONDS = 1.0
 
 # The published schema: all VARCHAR, in a fixed order. ``granule_id`` is the
 # primary/dedup key.
@@ -76,6 +104,10 @@ _TITLE_RE = re.compile(r"title(\d+)")
 # Part 1203b must not collapse into Part 1203, including their TOC/child rows.
 _PART_RE = re.compile(r"part(\d+[A-Za-z]*)")
 _SECTION_RE = re.compile(r"sec([\w.-]+)")
+_VOLUME_RE = re.compile(r"CFR-(\d{4})-title(\d+)-vol(\d+)")
+# A section granule's token, less GovInfo's duplicate suffix: ``sec849-504-id915``
+# is the same printed section as ``sec849-504``.
+_SECTION_TOKEN_RE = re.compile(r"-sec(.+?)(?:-id\d+)?$")
 
 
 def _first(pattern: re.Pattern[str], text: str | None) -> str | None:
@@ -87,9 +119,10 @@ def _first(pattern: re.Pattern[str], text: str | None) -> str | None:
 
 
 def _shape(granule: dict) -> dict:
-    """Map one raw GovInfo CFR granule onto the published all-VARCHAR shape.
+    """Map one raw GovInfo CFR granule onto the published all-VARCHAR shape, from its identifiers.
 
-    Missing optional facts remain NULL; a missing source identity refuses.
+    Section granules are placed afterwards by ``place_sections``. Missing
+    optional facts remain NULL; a missing source identity refuses.
     """
     granule_id = granule.get("granuleId")
     if not isinstance(granule_id, str) or not granule_id.strip():
@@ -105,7 +138,7 @@ def _shape(granule: dict) -> dict:
         edition_year = date_issued[:4] if date_issued else None
     title_num = _first(_TITLE_RE, id_for_meta)
 
-    # Part / section from the granule id (both nullable — see module docstring).
+    # Part / section tokens from the granule id (both nullable — see module docstring).
     part = _first(_PART_RE, granule_id)
     section = _first(_SECTION_RE, granule_id)
 
@@ -125,8 +158,102 @@ def _shape(granule: dict) -> dict:
     }
 
 
-def build_cfr_sections(output_dir: Path, *, since_year: int | None = None) -> Path:
-    """Build ``cfr_sections.parquet`` (incremental merge with the prior table)."""
+def annual_volume(package_id: str | None) -> AnnualCfrSelection | None:
+    """The annual volume a package id names; ``None`` for other CFR packages (``GPO-CFR-INDEX-2025``)."""
+    from spicy_docs.sources.cfr.models import AnnualCfrSelection
+
+    match = _VOLUME_RE.fullmatch(package_id or "")
+    return AnnualCfrSelection(int(match[1]), int(match[2]), int(match[3])) if match else None
+
+
+def place_sections(rows: Iterable[dict], xml: bytes, volume: AnnualCfrSelection) -> list[dict]:
+    """Place each section granule of one package under its PART heading in the package's volume XML.
+
+    The one placement both the scheduled build and an offline rebuild call.
+    SpicyDocs' identity validator refuses two real volumes (CFR-2025-title34-vol4
+    repeats TITLENUM for the combined Title 34/35 volume; CFR-2025-title40-vol9
+    prints no SECTION), so its refusal is logged, never a reason to skip the
+    scan. The scan itself refuses a non-volume root and unsafe or oversized XML.
+    A granule is looked up by token among the ``canonical`` sections only;
+    nested, wrapped and revised copies are current text too. Rows the scan does
+    not hold keep their identifier-derived values.
+    """
+    from spicy_docs.sources.cfr.annual import (
+        annual_cfr_xml_locator,
+        scan_annual_cfr_sections,
+        split_annual_cfr_section,
+        validate_annual_cfr_xml,
+    )
+    from spicy_docs.sources.cfr.models import CfrSourceError
+
+    locator = annual_cfr_xml_locator(volume)
+    try:
+        validate_annual_cfr_xml(xml, identity=volume, final_url=locator, max_bytes=MAX_VOLUME_BYTES)
+    except CfrSourceError as refusal:
+        logger.warning("CFR: {} fails the annual volume validator ({}); placing from its scan", locator, refusal)
+    sections = {s.granule: s for s in scan_annual_cfr_sections(xml, max_bytes=MAX_VOLUME_BYTES) if s.canonical}
+
+    placed = []
+    for row in rows:
+        token = _first(_SECTION_TOKEN_RE, row["granule_id"])
+        section = sections.get(token) if token else None
+        if section is None:
+            placed.append(row)
+            continue
+        number = split_annual_cfr_section(section.number, section.part, section.subpart)
+        joins = number.citation is not None and number.citation_joins and row["title"] is not None
+        cfr_ref = f"{row['title']}-{number.citation}" if joins else None
+        placed.append({**row, "part": section.part, "section": number.section, "cfr_ref": cfr_ref})
+    return placed
+
+
+def _placed_package(acquirer: CfrAcquirer, package_id: str | None, rows: list[dict]) -> list[dict] | None:
+    """The package's rows with section granules placed; ``None`` when its volume cannot be read.
+
+    One download per package that has section granules. A failure leaves the
+    prior table's rows for the package in place (the merge keeps them).
+    """
+    volume = annual_volume(package_id)
+    if volume is None or not any(_SECTION_TOKEN_RE.search(row["granule_id"]) for row in rows):
+        return rows
+    from spicy_docs.sources.cfr.acquisition import CfrSourceUnavailableError
+    from spicy_docs.sources.cfr.annual import annual_cfr_xml_locator
+    from spicy_docs.sources.cfr.models import CfrSourceError
+    from spicy_docs.transport.credentials import CredentialRefusedError
+
+    try:
+        xml, _capture = acquirer.capture_validated(
+            annual_cfr_xml_locator(volume),
+            media_types=("application/xml", "text/xml"),
+            parse=lambda response, _limit: response.body,
+            max_bytes=MAX_VOLUME_BYTES,
+            unavailable=CfrSourceUnavailableError,
+            context={"operation": "annual-cfr-volume", "package": package_id},
+        )
+        return place_sections(rows, xml, volume)
+    except (CfrSourceError, CredentialRefusedError, httpx.HTTPError, ConnectionError) as error:
+        logger.warning("CFR: {} volume could not be placed ({}); keeping its prior rows", package_id, error)
+        return None
+
+
+def _volume_acquirer() -> CfrAcquirer:
+    """A paced, bounded GovInfo client for annual volume XML."""
+    from spicy_docs.sources.cfr.acquisition import CfrAcquirer, CfrAcquisitionBudget
+
+    budget = CfrAcquisitionBudget(
+        max_requests=_VOLUME_REQUESTS,
+        max_bytes=MAX_VOLUME_BYTES,
+        timeout_seconds=_VOLUME_TIMEOUT_SECONDS,
+        min_request_interval_seconds=_VOLUME_REQUEST_INTERVAL_SECONDS,
+    )
+    return CfrAcquirer(budget=budget)
+
+
+def build_cfr_sections(output_dir: Path, *, since_year: int | None = None, acquirer: CfrAcquirer | None = None) -> Path:
+    """Build ``cfr_sections.parquet`` (incremental merge with the prior table).
+
+    ``acquirer`` replaces the default volume client (for hermetic replay).
+    """
     import duckdb
 
     out_file = output_dir / OUTPUT
@@ -139,15 +266,29 @@ def build_cfr_sections(output_dir: Path, *, since_year: int | None = None) -> Pa
     else:
         logger.info("CFR: no prior table found — output covers the selected year window")
 
-    # 2. Complete the selected traversal before writing any new output.
+    # 2. Complete the selected traversal before downloading any volume or writing output.
     reader = CfrSectionsReader(since_year=since_year)
-    rows = [_shape(granule) for granule in reader.iter_records()]
+    packages: dict[str | None, list[dict]] = {}
+    for granule in reader.iter_records():
+        row = _shape(granule)
+        packages.setdefault(row["package_id"], []).append(row)
+
+    # 3. Place each package's section granules from its volume; a failed volume keeps its prior rows.
+    rows: list[dict] = []
+    kept = 0
+    with acquirer or _volume_acquirer() as volumes:
+        for package_id, shaped in packages.items():
+            placed = _placed_package(volumes, package_id, shaped)
+            if placed is None:
+                kept += 1
+            else:
+                rows.extend(placed)
     new_file = output_dir / "_cfr_new.parquet"
     table = pa.Table.from_pylist(rows, schema=_SCHEMA) if rows else _SCHEMA.empty_table()
     pq.write_table(table, new_file, compression="zstd")
-    logger.info("CFR: fetched {:,} granules this run", len(rows))
+    logger.info("CFR: fetched {:,} granules this run; {} packages kept their prior rows", len(rows), kept)
 
-    # 3. Merge prior + new, dedup on granule_id preferring the new row.
+    # 4. Merge prior + new, dedup on granule_id preferring the new row.
     spill_dir = output_dir / ".duckdb_tmp"
     spill_dir.mkdir(exist_ok=True)
     con = duckdb.connect()

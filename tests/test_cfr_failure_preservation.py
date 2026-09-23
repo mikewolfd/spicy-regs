@@ -1,4 +1,7 @@
-"""Refuse incomplete CFR source walks before replacing an existing table, leaving the output byte-identical."""
+"""Refuse incomplete CFR source walks before replacing an existing table, leaving the output byte-identical.
+
+A volume that cannot be downloaded or scanned keeps that package's prior rows.
+"""
 
 import importlib
 import json
@@ -11,6 +14,7 @@ import pyarrow.parquet as pq
 import pytest
 
 from spicy_docs.reading.paged_json import PagedJsonSourceError
+from spicy_docs.sources.cfr.acquisition import CfrAcquirer, CfrAcquisitionBudget
 from spicy_docs.transport import retry
 from spicy_docs.transport.credentials import CredentialRefusedError
 from spicy_regs.sources import cfr_sections as cfr
@@ -66,6 +70,29 @@ def no_delay(monkeypatch):
 def reader(transport):
     """A ``cfr.CfrSectionsReader`` over ``transport`` pinned to the 2025 edition."""
     return cfr.CfrSectionsReader(api_key=KEY, since_year=2025, until_year=2025, transport=transport)
+
+
+VOLUME_URL = f"https://www.govinfo.gov/bulkdata/CFR/2025/title-1/{PACKAGE_ID}.xml"
+VOLUME = (FIXTURES / "annual-title1-vol1.xml").read_bytes()
+
+
+def volumes(*responses):
+    """A volume acquirer serving queued ``(status, content_type, body)`` responses, and its request log."""
+    queued = iter(responses)
+    calls = []
+
+    def handle(request):
+        calls.append(str(request.url))
+        status, content_type, body = next(queued)
+        return httpx.Response(status, stream=httpx.ByteStream(body), headers={"content-type": content_type})
+
+    budget = CfrAcquisitionBudget(
+        max_requests=build._VOLUME_REQUESTS,
+        max_bytes=build.MAX_VOLUME_BYTES,
+        timeout_seconds=5,
+        min_request_interval_seconds=0,
+    )
+    return CfrAcquirer(budget=budget, transport=httpx.MockTransport(handle)), calls
 
 
 def test_replays_native_granules_and_keeps_all_package_fields():
@@ -227,7 +254,12 @@ def test_native_ancestry_disproves_section_prefix_inference():
     assert row["part"] is None
     assert row["section"] == "19-8-1"
     assert row["cfr_ref"] is None
-    # Current eCFR ancestry is not assigned to an annual edition without evidence.
+    # Current eCFR ancestry is not assigned to an annual edition; the edition's own
+    # volume places the section, and agrees.
+    volume = build.annual_volume("CFR-2025-title14-vol4")
+    assert volume is not None
+    [placed] = build.place_sections([row], (FIXTURES / "ancestry" / "CFR-2025-title14-vol4.xml").read_bytes(), volume)
+    assert (placed["part"], placed["section"], placed["cfr_ref"]) == ("241", "19-8.1", None)
 
 
 def test_granule_modification_date_takes_precedence_over_package_date():
@@ -243,23 +275,94 @@ def test_shaper_refuses_missing_or_malformed_identity(identity):
         build._shape({"granuleId": identity})
 
 
-def test_fresh_annual_records_keep_native_tokens_without_false_part_19():
-    """Pins that granule token ``19-8-1`` is section 19-8-1, not part 19, and ``part``/``cfr_ref`` stay null."""
+def test_fresh_annual_records_are_never_placed_in_false_part_19():
+    """Pins that granule token ``19-8-1`` is section 19-8.1 of Part 241, never Part 19, with no citation.
+
+    ``19-8-10`` is not in the volume excerpt, so it keeps its token and an unknown part.
+    """
     fixture = json.loads((FIXTURES / "govinfo-title14-counterexamples.json").read_bytes())
     package = fixture["package"]
     assert package["packageId"] == "CFR-2025-title14-vol4"
     assert package["lastModified"] == "2025-06-17T21:29:08Z"
     expected = {
-        "CFR-2025-title14-vol4-sec19-8-1": ("19-8-1", "Purpose."),
-        "CFR-2025-title14-vol4-sec19-8-10": ("19-8-10", "Staff review."),
+        "CFR-2025-title14-vol4-sec19-8-1": ("241", "19-8.1", "Purpose."),
+        "CFR-2025-title14-vol4-sec19-8-10": (None, "19-8-10", "Staff review."),
     }
     assert {row["granuleId"] for row in fixture["granules"]} == set(expected)
-    for raw in fixture["granules"]:
-        row = build._shape(
-            {**raw, "_package_id": package["packageId"], "_package_last_modified": package["lastModified"]}
-        )
-        section, heading = expected[raw["granuleId"]]
-        assert (row["section"], row["heading"]) == (section, heading)
-        assert row["part"] is None and row["cfr_ref"] is None
+    shaped = [
+        build._shape({**raw, "_package_id": package["packageId"], "_package_last_modified": package["lastModified"]})
+        for raw in fixture["granules"]
+    ]
+    volume = build.annual_volume(package["packageId"])
+    assert volume is not None
+    xml = (FIXTURES / "ancestry" / "CFR-2025-title14-vol4.xml").read_bytes()
+    for row in build.place_sections(shaped, xml, volume):
+        assert (row["part"], row["section"], row["heading"]) == expected[row["granule_id"]]
+        assert row["cfr_ref"] is None
         assert row["edition_year"] == "2025" and row["title"] == "14"
         assert row["last_modified"] == package["lastModified"]
+
+
+def build_with(monkeypatch, tmp_path, walk, acquirer, prior_rows=None):
+    """Run the build over ``walk`` and ``acquirer`` against a local prior; return output rows by granule."""
+    table = pa.Table.from_pylist(prior_rows or [], schema=build._SCHEMA)
+    pq.write_table(table, tmp_path / "_cfr_prior.parquet")
+    monkeypatch.setattr(build, "CfrSectionsReader", lambda **_: reader(walk))
+    output = build.build_cfr_sections(tmp_path, since_year=2025, acquirer=acquirer)
+    return {row["granule_id"]: row for row in pq.read_table(output).to_pylist()}
+
+
+def test_build_places_section_granules_from_one_volume_download(monkeypatch, tmp_path):
+    second = {**GRANULE, "granuleId": f"{PACKAGE_ID}-sec1-2"}
+    acquirer, calls = volumes((200, "application/xml", VOLUME))
+    rows = build_with(
+        monkeypatch, tmp_path, Transport(page("packages", [PACKAGE]), page("granules", [GRANULE, second])), acquirer
+    )
+    assert calls == [VOLUME_URL]
+    placed = rows[GRANULE["granuleId"]]
+    assert (placed["part"], placed["section"], placed["cfr_ref"]) == ("1", "1", "1-1.1")
+    # § 1.2 is not in the excerpt: nothing to place, so it keeps its identifier values.
+    unplaced = rows[second["granuleId"]]
+    assert (unplaced["part"], unplaced["section"], unplaced["cfr_ref"]) == (None, "1-2", None)
+
+
+def test_build_downloads_no_volume_for_a_package_without_section_granules(monkeypatch, tmp_path):
+    node = {"granuleId": f"{PACKAGE_ID}-part1", "title": "PART 1—DEFINITIONS", "granuleClass": "NODE"}
+    acquirer, calls = volumes()
+    rows = build_with(monkeypatch, tmp_path, Transport(page("packages", [PACKAGE]), page("granules", [node])), acquirer)
+    assert calls == []
+    assert rows[node["granuleId"]]["cfr_ref"] == "1-1"
+
+
+@pytest.mark.parametrize(
+    "responses",
+    [
+        [(404, "text/html", b"not found")],
+        [(403, "text/html", b"denied")],
+        [(500, "text/plain", b"down")] * build._VOLUME_REQUESTS,
+        [(200, "text/html", b"<html>not a volume</html>")],
+        [(200, "application/xml", b"<html>not a volume</html>")],
+        [(200, "application/xml", VOLUME[: len(VOLUME) // 2])],
+    ],
+    ids=["unavailable", "refused", "server-error", "not-xml", "not-a-volume", "truncated"],
+)
+def test_failed_volume_keeps_the_package_prior_rows(monkeypatch, tmp_path, responses):
+    """The fresh listing changed the heading, but its volume failed: the prior row stands unchanged."""
+    prior_row = build._shape({**GRANULE, "_package_id": PACKAGE_ID, "title": "Prior heading."})
+    other_id = "CFR-2025-title2-vol1"
+    other = {"packageId": other_id, "lastModified": "2026-09-11T17:30:58Z"}
+    node = {"granuleId": f"{other_id}-part1", "title": "PART 1", "granuleClass": "NODE"}
+    walk = Transport(page("packages", [PACKAGE, other]), page("granules", [GRANULE]), page("granules", [node]))
+    acquirer, calls = volumes(*responses)
+    rows = build_with(monkeypatch, tmp_path, walk, acquirer, prior_rows=[prior_row])
+    assert calls == [VOLUME_URL] * len(responses)
+    assert rows[GRANULE["granuleId"]] == prior_row
+    # Another package in the same run is still refreshed.
+    assert rows[node["granuleId"]]["cfr_ref"] == "2-1"
+
+
+def test_default_volume_client_is_bounded():
+    budget = build._volume_acquirer().budget
+    assert budget.max_bytes == build.MAX_VOLUME_BYTES == 64 * 1024 * 1024
+    assert budget.max_requests == build._VOLUME_REQUESTS
+    assert budget.min_request_interval_seconds > 0
