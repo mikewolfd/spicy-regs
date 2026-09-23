@@ -166,9 +166,9 @@
       "table": "fr_docket_links",
       "label": "Federal Register to docket links",
       "summary": "The Federal Register ↔ docket bridge: each `federal_register` row's `docket_ids_json` array exploded to one row per (docket_id, document_number, publication_date), carrying the FR display columns. Use this instead of an `ILIKE` scan over `federal_register.docket_ids_json` — it is sorted by `docket_id`, so `WHERE docket_id = ?` prunes row groups. This is the practical join from regulations.gov to the Federal Register using the Federal Register's own stated docket links. Built by `build_fr_docket_links`.",
-      "coverage": "Derived, and bounded by its inputs. Links between `federal_register` and `dockets`, so it inherits the Federal Register table's 2000 floor: a rule published before 2000 has no link here because the document is not in that table.",
+      "coverage": "Derived, and bounded by its inputs. 899,227 links from 603,693 dated Federal Register records to 612,091 docket ids, published 1994-01-03 to 2026-09-22 — the `federal_register` table's own range. The table equals a separate re-derivation from that parent row for row.",
       "kind": "derived",
-      "measured_on": "2026-09-06",
+      "measured_on": "2026-09-23",
       "data_quality": null,
       "columns": [
         "docket_id",
@@ -335,9 +335,9 @@
       "table": "federal_register",
       "label": "Federal Register documents",
       "summary": "One row per dated Federal Register record, keyed by (`document_number`, `publication_date`), ingested from the federalregister.gov REST API by `build_federal_register`. The authoritative rule-publication record — proposed rules, final rules, and notices — complementary to the regulations.gov `dockets`/`documents` view. `regulation_id_numbers_json` (RIN) and `cfr_references_json` are the join keys to the Unified Agenda and the CFR. All columns are stored as VARCHAR; array-valued fields are JSON.",
-      "coverage": "True range, with a boundary worth stating. Documents published from 2000-01-03 to 2026-09-04. Federal Register documents published before 2000 are not in this table at all.",
+      "coverage": "True range. 1,009,005 dated records published 1994-01-03 to 2026-09-22, the whole span the API serves. Every month's row count equals the publisher's monthly facet, and 74 whole days (8,683 documents) match the API in identity and every cell.",
       "kind": "true_range",
-      "measured_on": "2026-09-06",
+      "measured_on": "2026-09-23",
       "data_quality": "Document numbers are not globally unique: `00-111` names different records on 2000-01-14 and 2000-01-18. Current merging preserves both dates and replaces only the same dated record on a later successful fetch. This code correction does not restore historical records already lost from published files; those require a pinned historical replay and publication. A number-only source reference remains ambiguous when its input generation supplies multiple dated candidates.",
       "columns": [
         "document_number",

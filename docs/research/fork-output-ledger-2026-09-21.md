@@ -19,11 +19,11 @@ Public data destination: `https://pub-72e95c0c20a84508b42b03a6ff6d55f8.r2.dev`. 
 | T15 | `run-rollup-docket-search` | `docket_search.json.gz` | generated and verified |
 | T15 | `run-rollup-lifecycles` | `rulemaking_lifecycles.parquet` | withdrawn 2026-09-23 (decision 4): the 2026-09-22 scheduled run had published generation `2f001194…` (26,519 rows); the family was conditionally removed from the index, the workflow disabled and unscheduled; pairing semantics remain blocked |
 | T15 | `run-rollup-discovery-signals` | `discovery_signals.parquet` | generated and verified |
-| T15 | `run-rollup-fr-docket-links` | `fr_docket_links.parquet` | published awaiting parent audit |
+| T15 | `run-rollup-fr-docket-links` | `fr_docket_links.parquet` | qualified 2026-09-23 against the audited parent: generation `92f99b00…` (899,227 rows) equals a separate re-derivation from `federal_register` `731984ca…` row for row |
 | T11 | `run-rollup-cfr-sections` | `cfr_sections.parquet` | published bounded correction verified |
 | T16 | `run-rollup-congress-bills` | `congress_bills.parquet` | waiting for qualified parents |
 | T11 | `run-rollup-unified-agenda` | `unified_agenda.parquet` | generated and verified for retained edition |
-| T11 | `run-rollup-federal-register` | `federal_register.parquet` | published awaiting source audit |
+| T11 | `run-rollup-federal-register` | `federal_register.parquet` | source-audited 2026-09-23: generation `731984ca…` (1,009,005 rows, 1994-01-03 to 2026-09-22); every month's rows equal the publisher's facet and 74 whole days match in identity and every cell (details below) |
 | T12 | `run-rollup-fcc-proceedings` | `fcc_proceedings.parquet` | published 2026-09-23 after a source replay validated against raw pages: generation `a1116f71…`, 21,683 docket names from 21,691 ECFS documents; walked whole, one row per docket (details below) |
 | T12 | `run-rollup-fcc-filings` | `fcc_filings.parquet` | published 2026-09-23 after a source replay validated against raw pages: generation `c0c1aa4e…`, 5,137 filings received 2026-08-24 to 09-22 (the bounded first run); incremental from here |
 | T14 | `run-rollup-sam-entities` | `sam_entities.parquet` | withdrawn blocked |
@@ -275,3 +275,21 @@ Receipts: `members-qualification/`, `congressional-status/`, `native-vote-varian
     `c0c1aa4e…` are live, with public bytes equal to the validated files. The
     fork's scheduled workflows run the pushed code, so they keep refusing until
     this commit is pushed. See `local-candidates-2026-09-23/`.
+- **Federal Register source audit (T11) and FR docket links (T15).**
+  - **Pin.** The live generation `731984ca…`'s public bytes match its pin
+    (1,009,005 rows, 1994-01-03 to 2026-09-22).
+  - **Completeness.** The publisher's facet endpoint states true counts where
+    the list endpoint caps at 10,000. All 393 months' row counts equal the
+    monthly facet, and the total equals it (1,009,005).
+  - **Identity and cells.** 74 whole publication days, 60 random (seed 20260923)
+    and the last 14, were fetched with raw pages kept and mapped from the
+    publisher's field names: identity sets and every cell match, 8,683 documents
+    with JSON strings byte-exact.
+  - **Derived columns.** `rin` equals the array's first element on every row.
+    `modify_date` is null on every row, because the REST API does not expose it.
+    474 numbers appear on two dates, the builder's intended (number, date) key.
+  - **FR docket links.** Generation `92f99b00…` equals a separate re-derivation
+    from this parent (Python `json`, not DuckDB `UNNEST`) as a row multiset in
+    both directions: 899,227 rows, all 16 columns.
+  - **Dictionary.** The stale "2000 floor" coverage on both tables is corrected.
+    See `fr-audit-2026-09-23/`.

@@ -361,7 +361,7 @@ runs changed that index; do not treat the earlier listing as current coverage.
 
 | Family selected at 22:28 UTC | Rows reported in the public index | Disposition |
 | --- | ---: | --- |
-| `federal-register` | 1,008,903 | Published by a scheduled job; T11 must audit this generation before adoption as a verified parent. |
+| `federal-register` | 1,008,903 | Published by a scheduled job. Superseded by generation `731984ca…` (1,009,005), source-audited 2026-09-23 (ledger). |
 | `cfr-sections` | 319,507 | Published by a scheduled job; T11 must check the known ancestry defect as well as source/output agreement. |
 | `unified-agenda` | 3,954 | Published by a scheduled job; T11 must audit this generation. |
 | `sam-entities` | 0 | Invalid **575-byte** publication; T01 must withdraw it and repair failure handling. |

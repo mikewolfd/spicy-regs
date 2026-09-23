@@ -254,11 +254,11 @@ tables:
   fr_docket_links:
     label: "Federal Register to docket links"
     coverage: >-
-      Derived, and bounded by its inputs. Links between `federal_register`
-      and `dockets`, so it inherits the Federal Register table's 2000 floor:
-      a rule published before 2000 has no link here because the document is
-      not in that table.
-    measured_on: "2026-09-06"
+      Derived, and bounded by its inputs. 899,227 links from 603,693 dated
+      Federal Register records to 612,091 docket ids, published 1994-01-03 to
+      2026-09-22 — the `federal_register` table's own range. The table equals
+      a separate re-derivation from that parent row for row.
+    measured_on: "2026-09-23"
     summary: >-
       The Federal Register ↔ docket bridge: each `federal_register` row's
       `docket_ids_json` array exploded to one row per (docket_id, document_number,
@@ -485,10 +485,11 @@ tables:
   federal_register:
     label: "Federal Register documents"
     coverage: >-
-      True range, with a boundary worth stating. Documents published from
-      2000-01-03 to 2026-09-04. Federal Register documents published before
-      2000 are not in this table at all.
-    measured_on: "2026-09-06"
+      True range. 1,009,005 dated records published 1994-01-03 to 2026-09-22,
+      the whole span the API serves. Every month's row count equals the
+      publisher's monthly facet, and 74 whole days (8,683 documents) match
+      the API in identity and every cell.
+    measured_on: "2026-09-23"
     summary: >-
       One row per dated Federal Register record, keyed by (`document_number`,
       `publication_date`), ingested from the federalregister.gov
@@ -538,17 +539,17 @@ tables:
       end_page: "Last FR page of the document."
       subtype: "FR document subtype, when set. Often null."
       executive_order_number: "Executive order number, for presidential EO documents. Null otherwise."
-      modify_date: "Processing/modification date carried from the prior published table; null for rows freshly ingested via the REST API (which does not expose it)."
+      modify_date: "Processing/modification date carried from a prior published table; null for rows ingested via the REST API, which does not expose it. Null on every row of the 2026-09-23 generation."
       rin: >-
         The first Regulation Identifier Number in `regulation_id_numbers_json`,
         retained as a compatibility projection. Complete joins to
         `house_communications.rin` must unnest the full array and retain both
         `document_number` and `publication_date`; see `docs/regulatory-rins.md`. NULL where
         the array is `[]` or absent. Measured on the published table
-        2026-09-19 (803,996 rows): 96,060 documents state one RIN, 1,499 state
-        two or more (up to 41), 9,758 state none and 696,679 rows from before
-        the in-repo ingest carry no array; a consumer wanting every RIN of a
-        multi-RIN document unnests the array.
+        2026-09-23 (1,009,005 rows, every one ingested through the REST API):
+        117,141 records state one RIN, 1,784 state two or more (up to 41) and
+        890,080 state none; a consumer wanting every RIN of a multi-RIN
+        document unnests the array.
   sam_entities:
     label: "Federal entity registry"
     coverage: >-
