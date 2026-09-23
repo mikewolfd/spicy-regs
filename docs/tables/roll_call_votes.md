@@ -21,7 +21,7 @@ One row per roll call: the publisher's own tally, and the bill it refers to. The
 | `chamber` | `VARCHAR` | house or senate. |
 | `session` | `VARCHAR` | The session number within that Congress. |
 | `roll_number` | `VARCHAR` | The roll-call number within that session. |
-| `vote_date` | `VARCHAR` | The date of the roll call; the merge prefers the larger value. |
+| `vote_date` | `VARCHAR` | The chamber's literal date; sorts as text, not by time (see `vote_day`). |
 | `source_url` | `VARCHAR` | The publisher's own URL for this roll call. |
 | `question` | `VARCHAR` | The question put to the chamber, as the publisher states it. |
 | `result` | `VARCHAR` | The stated result of the roll call. |
@@ -39,3 +39,4 @@ One row per roll call: the publisher's own tally, and the bill it refers to. The
 | `tally_kind` | `VARCHAR` | positions for ordinary totals, candidates for native named-choice totals; NULL on legacy or linkage-only rows. |
 | `documents_json` | `VARCHAR` | Ordered Senate document objects with native congress, type, number, name, title and short_title; [] for captured votes without documents, NULL for legacy or linkage-only rows. Numbers retain publisher spelling, including nomination suffixes; this does not assert a matched bill or nomination. |
 | `amendments_json` | `VARCHAR` | Ordered Senate amendment objects with native number, to_amendment_number, to_amendment_to_amendment_number, to_document_number, to_document_short_title and purpose; [] for captured votes without amendments, NULL for legacy or linkage-only rows. Repeated empty-ID blocks remain separate observations; no document pairing is inferred. |
+| `vote_day` | `VARCHAR` | The chamber's own printed vote date as an ISO day (YYYY-MM-DD) in Eastern local time, which sorts where vote_date does not and is never the UTC day of a Congress.gov recordedVotes date; NULL where the file prints no date, on linkage-only rows, and on rows published before this column until a host backfills them. |

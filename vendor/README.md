@@ -5,6 +5,13 @@ The optional `source-readers` extra enables the same readers for package install
 its wheels must be supplied explicitly until they are published in a registry.
 Base CLI and MCP installs do not require them.
 
+- `spicy_docs-0.30.0`: built from SpicyDocs `main` at `4b13c0d`, with Rulespec Artifacts 1.1.1.
+  Built September 23, 2026 UTC: **1,299,791 bytes**, SHA-256
+  `02c824eb25ff171f55c3a23967f0833422eafa4b9e54bcae354ba7247f7e49c2`. Adds CFR section ancestry from annual
+  volume headings (`scan_annual_cfr_sections`, `split_annual_cfr_section`), the roll-call
+  vote day (`vote_day`, appended to `roll_call_votes`) and the Mirrulations derived-text
+  reader with per-attachment provenance (`list_docket_derived_text`,
+  `fetch_derived_text`). Otherwise identical to 0.29.0.
 - `spicy_docs-0.29.0`: built from SpicyDocs `main` at `58a68b7`, with Rulespec Artifacts 1.1.1.
   Built September 23, 2026 UTC: **1,289,687 bytes**, SHA-256
   `78e31d490c238e47503377f3343c95ab852ce1ebb235a73fab9ea79b35e6978d`. Adds the

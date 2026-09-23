@@ -27,4 +27,4 @@ One row per member's position on one roll call. `position` keeps the publisher's
 | `state` | `VARCHAR` | The member's state as the roll-call source states it. |
 | `position` | `VARCHAR` | The member's position exactly as the publisher spelled it (Yea, Aye, Not Voting...). |
 | `position_normalized` | `VARCHAR` | That position folded onto yea, nay, present or not_voting; NULL for a named candidate choice. |
-| `vote_date` | `VARCHAR` | The date of the roll call; the merge prefers the larger value. |
+| `vote_date` | `VARCHAR` | The chamber's literal date; sorts as text, not by time (see roll_call_votes `vote_day`). |

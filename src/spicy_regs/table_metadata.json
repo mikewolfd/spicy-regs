@@ -4475,7 +4475,7 @@
       {
         "column_name": "vote_date",
         "column_type": "VARCHAR",
-        "description": "The date of the roll call; the merge prefers the larger value."
+        "description": "The chamber's literal date; sorts as text, not by time (see `vote_day`)."
       },
       {
         "column_name": "source_url",
@@ -4561,6 +4561,11 @@
         "column_name": "amendments_json",
         "column_type": "VARCHAR",
         "description": "Ordered Senate amendment objects with native number, to_amendment_number, to_amendment_to_amendment_number, to_document_number, to_document_short_title and purpose; [] for captured votes without amendments, NULL for legacy or linkage-only rows. Repeated empty-ID blocks remain separate observations; no document pairing is inferred."
+      },
+      {
+        "column_name": "vote_day",
+        "column_type": "VARCHAR",
+        "description": "The chamber's own printed vote date as an ISO day (YYYY-MM-DD) in Eastern local time, which sorts where vote_date does not and is never the UTC day of a Congress.gov recordedVotes date; NULL where the file prints no date, on linkage-only rows, and on rows published before this column until a host backfills them."
       }
     ],
     "grain": "One row per roll call: the publisher's own tally, and the bill it refers to.",
@@ -4648,7 +4653,7 @@
       {
         "column_name": "vote_date",
         "column_type": "VARCHAR",
-        "description": "The date of the roll call; the merge prefers the larger value."
+        "description": "The chamber's literal date; sorts as text, not by time (see roll_call_votes `vote_day`)."
       }
     ],
     "grain": "One row per member's position on one roll call.",
