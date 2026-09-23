@@ -42,6 +42,24 @@ def test_current_stage_requires_unique_latest_stage_family_event():
         )
 
 
+@pytest.mark.parametrize(
+    "stamp,day",
+    [
+        ("2016-11-26T04:59:59Z", "2016-11-25"),  # 11:59:59 PM EST closes the 25th
+        ("2018-09-23T03:59:59Z", "2018-09-22"),  # 11:59:59 PM EDT closes the 22nd
+        ("2016-09-27T04:00:00Z", "2016-09-27"),  # Eastern midnight opens the 27th
+        ("2020-01-06T00:00:00Z", "2020-01-06"),  # a bare UTC midnight is a date-only value
+        ("2022-01-14", "2022-01-14"),
+        ("", None),
+    ],
+)
+def test_regulations_gov_comment_instants_are_eastern_days(stamp, day):
+    from spicy_regs.transforms.build_comment_periods import _regsgov_day
+
+    result = _regsgov_day(stamp)
+    assert (result.isoformat() if result else None) == day
+
+
 def test_reference_proceeding_threads_rinless_docket_and_preserves_reopening(tmp_path):
     docket_id = "EPA-HQ-OAR-2021-0044"
     rin = "2060-AV16"
@@ -246,7 +264,7 @@ def test_reference_proceeding_threads_rinless_docket_and_preserves_reopening(tmp
         periods[0]["opened_by_artifact_ids_json"]
     )
     assert all(row["method"] == "deterministic" for row in periods)
-    assert all(row["actor_id"] == "spicy-regs:comment-periods:v4" for row in periods)
+    assert all(row["actor_id"] == "spicy-regs:comment-periods:v5" for row in periods)
 
 
 def test_reused_rin_does_not_collapse_or_cross_assign_distinct_dockets(tmp_path):

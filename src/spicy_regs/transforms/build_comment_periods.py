@@ -5,9 +5,10 @@ from __future__ import annotations
 import json
 from collections import Counter, defaultdict
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from urllib.parse import quote
+from zoneinfo import ZoneInfo
 
 import pyarrow.parquet as pq
 from loguru import logger
@@ -34,7 +35,8 @@ from spicy_regs.ontology.federal_register import (
 )
 
 OUTPUT = "comment_periods.parquet"
-ACTOR_ID = "spicy-regs:comment-periods:v4"
+# v5: regulations.gov close dates are the Eastern day, one day earlier than v4 (see _regsgov_day).
+ACTOR_ID = "spicy-regs:comment-periods:v5"
 
 COLUMNS = (
     "comment_period_id",
@@ -70,6 +72,29 @@ def _day(value: object) -> date | None:
         return date.fromisoformat(str(value)[:10])
     except ValueError:
         return None
+
+
+_EASTERN = ZoneInfo("America/New_York")
+
+
+def _regsgov_day(value: object) -> date | None:
+    """The Eastern calendar day a regulations.gov comment-window instant falls on.
+
+    Regulations.gov stamps a window at the Eastern day's bounds: a start at Eastern midnight
+    (04:00/05:00Z) and an end at 11:59:59 PM Eastern (03:59:59/04:59:59Z), so an end's UTC date
+    is the following day. Measured 2026-09-23 over the 133,006 documents that also carry a
+    Federal Register ``comments_close_on``: the Eastern day equals it for 127,361, the UTC date
+    for 118. A bare UTC midnight is a date-only value and keeps its date (5,494 of 5,551 such
+    starts equal their FR publication date; the Eastern day, 6).
+    """
+    text = str(value or "").strip()
+    if len(text) <= 10 or text.endswith("T00:00:00Z"):
+        return _day(text)
+    try:
+        instant = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    return instant.astimezone(_EASTERN).date() if instant.tzinfo else instant.date()
 
 
 def _artifact_url(source: str, identifier: object) -> str | None:
@@ -258,9 +283,10 @@ def build_comment_periods(
         source: str,
         evidence_id: object,
         retain_unresolved: bool = False,
+        day=_day,
     ) -> None:
         nonlocal unanchored_intervals
-        open_date, close_date = _day(start), _day(end)
+        open_date, close_date = day(start), day(end)
         evidence = str(evidence_id or "").strip()
         opened_by = _artifact_url(source, evidence)
         if open_date is None or close_date is None or not evidence or opened_by is None:
@@ -321,6 +347,7 @@ def build_comment_periods(
             end=row.get("comment_end_date"),
             source="documents.comment_end_date",
             evidence_id=row.get("document_id"),
+            day=_regsgov_day,
         )
 
     linked_dockets_by_fr: dict[str, set[str]] = defaultdict(set)
