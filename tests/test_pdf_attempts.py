@@ -242,16 +242,26 @@ def test_catalog_mixed_pdf_results_survive_export_and_derived_text_update(catalo
     assert exported.filter(pl.col("comment_id") == "C1")[FIELD][0] == attempted
 
 
-def test_frame_derived_backfill_preserves_prior_pdf_diagnostics(monkeypatch):
-    from spicy_regs import backfill_derived_text
+def test_frame_derived_overwrite_replaces_prior_pdf_diagnostics_with_its_provenance():
+    """The column describes the text the row holds: a derived fill's provenance, not the PDF attempt it replaced."""
+    from tests.test_derived_text import _FakeS3Resource, _store
 
     prior = '[{"url":"prior","status":"error"}]'
-    source = frame("comments", [], docket_id="D1", agency_code="ACF", pdf_extraction_results_json=prior)
-    updates = pl.DataFrame({"comment_id": ["C1"], "_new_text": ["derived text"], "_new_status": ["ok"]})
-    monkeypatch.setattr(backfill_derived_text, "_derived_text_updates", lambda *a, **kw: (updates, {"ok": 1}))
-    output, _ = enrich_comments_with_derived_text(source)
-    assert output[FIELD][0] == prior
-    assert output["text_content"][0] == "derived text"
+    source = frame(
+        "comments",
+        ["https://source.invalid/a.pdf"],
+        comment_id="ACF-2025-0038-0004",
+        docket_id="ACF-2025-0038",
+        agency_code="ACF",
+        text_extraction_status="error",
+        pdf_extraction_results_json=prior,
+    )
+    output, _ = enrich_comments_with_derived_text(
+        source, resource_factory=lambda: _FakeS3Resource(_store()), overwrite=True
+    )
+    assert output["text_content"][0] == "Wisconsin DCF comment body"
+    assert output["text_extraction_status"][0] == "derived"
+    assert json.loads(output[FIELD][0])["attachments"][0]["tool"] == "pypdf"
 
 
 def test_combined_no_text_precedence_matches_the_frozen_policy():

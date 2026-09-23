@@ -31,6 +31,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 from threading import Lock
+from typing import Any, overload
 
 import polars as pl
 from dotenv import load_dotenv
@@ -43,16 +44,47 @@ from spicy_regs.transforms.pdf_text import (
     PdfTextStatus,
     extract_pdf_text,
 )
+
 #: downloads.regulations.gov returns 403 to default/spicy-docs User-Agents; a
 #: browser-like UA gets 200. The quirk lives beside the call that needs it.
 _BROWSER_USER_AGENT = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-    "(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
 )
 
 #: The same cap the local fetch used: a guard against a pathological
 #: multi-hundred-MB attachment blowing up a batch run.
 _MAX_PDF_BYTES = 100 * 1024 * 1024
+
+
+#: Each column a text fill writes, and the update column that overrides it when non-null.
+TEXT_UPDATES = {
+    "text_content": "_new_text",
+    "text_extraction_status": "_new_status",
+    "pdf_extraction_results_json": "_new_pdf_results",
+}
+
+
+@overload
+def with_text_columns(frame: pl.DataFrame) -> pl.DataFrame: ...
+@overload
+def with_text_columns(frame: pl.LazyFrame) -> pl.LazyFrame: ...
+def with_text_columns(frame: Any) -> Any:
+    """``frame`` with any missing text-fill column added as null strings."""
+    present = frame.collect_schema().names()
+    return frame.with_columns(pl.lit(None, dtype=pl.Utf8).alias(c) for c in TEXT_UPDATES if c not in present)
+
+
+@overload
+def apply_text_updates(frame: pl.DataFrame, updates: pl.DataFrame, id_col: str) -> pl.DataFrame: ...
+@overload
+def apply_text_updates(frame: pl.LazyFrame, updates: pl.LazyFrame, id_col: str) -> pl.LazyFrame: ...
+def apply_text_updates(frame: Any, updates: Any, id_col: str) -> Any:
+    """Join a fill's ``_new_*`` columns onto ``frame``, keeping its row order; a null update keeps the row's value."""
+    return (
+        frame.join(updates, on=id_col, how="left", maintain_order="left")
+        .with_columns(pl.coalesce([new, column]).alias(column) for column, new in TEXT_UPDATES.items())
+        .drop(TEXT_UPDATES.values())
+    )
 
 
 def _attachment_url(url: str) -> str:
@@ -77,12 +109,11 @@ def fetch_pdf_bytes(url: str) -> bytes | None:
 
     try:
         with BoundedAcquirer(validate_url=_attachment_url, timeout=30.0) as acquirer:
-            capture = acquirer.capture(
-                url, max_bytes=_MAX_PDF_BYTES, extra_headers={"User-Agent": _BROWSER_USER_AGENT}
-            )
+            capture = acquirer.capture(url, max_bytes=_MAX_PDF_BYTES, extra_headers={"User-Agent": _BROWSER_USER_AGENT})
     except (AcquisitionError, ValueError, OSError):
         return None
     return capture.body
+
 
 FetchFn = Callable[[str], bytes | None]
 ExtractFn = Callable[[bytes], PdfTextResult]
@@ -307,10 +338,7 @@ def _enrich_with_pdf_text(
     that already have a ``text_extraction_status`` are skipped, so repeated runs
     are incremental.
     """
-    for col in ("text_content", "text_extraction_status", "pdf_extraction_results_json"):
-        if col not in df.columns:
-            df = df.with_columns(pl.lit(None, dtype=pl.Utf8).alias(col))
-
+    df = with_text_columns(df)
     updates, stats = _pdf_text_updates(
         df,
         id_col=id_col,
@@ -325,16 +353,7 @@ def _enrich_with_pdf_text(
     if updates.is_empty():
         return df, stats
 
-    enriched = (
-        df.join(updates, on=id_col, how="left")
-        .with_columns(
-            text_content=pl.coalesce(["_new_text", "text_content"]),
-            text_extraction_status=pl.coalesce(["_new_status", "text_extraction_status"]),
-            pdf_extraction_results_json=pl.coalesce(["_new_pdf_results", "pdf_extraction_results_json"]),
-        )
-        .drop("_new_text", "_new_status", "_new_pdf_results")
-    )
-    return enriched, stats
+    return apply_text_updates(df, updates, id_col), stats
 
 
 def enrich_documents_with_pdf_text(

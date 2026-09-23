@@ -15,6 +15,8 @@ Marked ``integration`` so it is excluded from the default hermetic suite (see
 via ``pytest -m integration``. Needs outbound access to the anonymous S3 bucket.
 """
 
+import json
+
 import boto3
 import pytest
 from botocore import UNSIGNED
@@ -28,19 +30,14 @@ from spicy_regs.transforms import Chain, EnrichCommentText, ExtractRecords
 
 BUCKET = "mirrulations"
 
-COMMENT_KEY = (
-    "raw-data/ACF/ACF-2025-0038/text-ACF-2025-0038/"
-    "comments/ACF-2025-0038-0004.json"
-)
+COMMENT_KEY = "raw-data/ACF/ACF-2025-0038/text-ACF-2025-0038/comments/ACF-2025-0038-0004.json"
 EXPECTED_COMMENT_ID = "ACF-2025-0038-0004"
 EXPECTED_DOCKET_ID = "ACF-2025-0038"
 
 
 @pytest.mark.integration
 def test_real_comment_text_filled_from_derived_data() -> None:
-    s3 = boto3.resource(
-        "s3", region_name="us-east-1", config=BotoConfig(signature_version=UNSIGNED)
-    )
+    s3 = boto3.resource("s3", region_name="us-east-1", config=BotoConfig(signature_version=UNSIGNED))
 
     logger.info("Fetching live comment s3://{}/{}", BUCKET, COMMENT_KEY)
     payload = download_and_parse(s3, BUCKET, COMMENT_KEY, lambda d: d)
@@ -53,10 +50,13 @@ def test_real_comment_text_filled_from_derived_data() -> None:
     assert record["comment_id"] == EXPECTED_COMMENT_ID
     assert record["docket_id"] == EXPECTED_DOCKET_ID
     # Inline body is just the placeholder; the real content comes from the
-    # extracted attachment text.
-    assert record["text_extraction_status"] == "ok"
+    # extracted attachment text, with the objects it came from.
+    assert record["text_extraction_status"] == "derived"
     assert record["text_content"]
     assert len(record["text_content"]) > 200
+    provenance = json.loads(record["pdf_extraction_results_json"])
+    assert provenance["comment_id"] == EXPECTED_COMMENT_ID
+    assert all(len(attachment["sha256"]) == 64 for attachment in provenance["attachments"])
     logger.success(
         "Filled text_content from derived-data for {} ({} chars)",
         record["comment_id"],

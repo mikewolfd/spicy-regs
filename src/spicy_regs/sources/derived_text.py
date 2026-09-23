@@ -1,113 +1,133 @@
-"""Reader-side helper for the Mirrulations *derived-data* extracted text.
+"""Comment ``text_content`` from Mirrulations' own attachment extraction (``derived-data``), with provenance.
 
-regulations.gov comments frequently carry their substance in an attachment
-("See attached file(s)") rather than the inline ``comment`` field. Mirrulations
-already runs text extraction over every attachment and publishes the result to
-the same public S3 bucket the ETL reads, under the ``derived-data`` prefix::
+spicy-docs lists a docket's extracted text once, picks one tool per comment by its
+pinned ``DERIVED_TEXT_TOOLS`` order, orders attachments by number and fetches them
+pinned to their listed ETags (``list_docket_derived_text``, ``fetch_derived_text``).
+This module decides what a comment row gets from that:
 
-    derived-data/<agency>/<docket>/mirrulations/extracted_txt/
-        comments_extracted_text/<tool>/<comment_id>_attachment_<n>_extracted.txt
+* ``text_content`` -- the chosen tool's attachments, each stripped, blank ones dropped,
+  joined with a blank line;
+* ``text_extraction_status`` -- ``derived``: SpicyRegs did not run the extractor, so the
+  text is not ``ok`` (decision 19, ``docs/research/fork-delivery-decisions-2026-09-22.md``);
+* ``pdf_extraction_results_json`` -- the comment's provenance record: chosen tool,
+  available tools, each attachment's key, size, ETag and SHA-256, and the attachment
+  numbers only another tool has.
 
-This module reads that pre-extracted text so the pipeline can fill a comment's
-``text_content`` straight from S3 — no PDF download, no local parsing. The
-extraction ``<tool>`` (``pypdf``, ``pdfminer``, ...) varies by docket, so it is
-discovered by listing rather than hardcoded; a comment with several attachments
-has one ``_attachment_<n>_`` file each, concatenated in attachment order.
-
-Network access lives here in ``sources`` (a Reader concern); the
-:class:`~spicy_regs.transforms.enrich_derived_text.EnrichCommentText` transform
-that uses it stays a thin stream-mapper.
+A refused docket listing or a failed fetch raises :class:`DerivedTextUnavailable`, so the
+comment stays pending rather than being recorded as having no text. A 401/403 raises
+spicy-docs' ``MirrulationsAccessRefusedError`` and ends the run. spicy-docs is imported
+when a fetcher is built, so importing the transforms needs no source readers.
 """
 
 from __future__ import annotations
 
-import re
-from typing import Any
+import json
+from dataclasses import dataclass
+from types import ModuleType
+from typing import TYPE_CHECKING, Any, Final
 
 from loguru import logger
 
-BUCKET = "mirrulations"
-DERIVED_PREFIX = "derived-data"
+if TYPE_CHECKING:
+    from spicy_docs.sources.mirrulations import CommentDerivedText
 
-# Multiple attachments on one comment are joined with a blank line — the same
-# separator the PDF-text path uses (``transforms.pdf_text.PAGE_SEPARATOR``) so
-# stored ``text_content`` reads consistently regardless of which source filled
-# it. Defined locally to keep ``sources`` independent of ``transforms``.
-PART_SEPARATOR = "\n\n"
+#: ``text_extraction_status`` for text taken from Mirrulations' extraction rather than ours.
+DERIVED_STATUS: Final = "derived"
 
-# <comment_id>_attachment_<n>_extracted.txt — comment ids never contain the
-# literal "_attachment_", so a greedy id capture up to the last such marker is
-# unambiguous.
-_EXTRACTED_RE = re.compile(r"(?P<comment_id>.+)_attachment_\d+_extracted\.txt$")
+#: Per-object GET cap. spicy-docs' 16 MiB default refuses three objects of its 2026-09-23
+#: sample, all ``pdfminer``, the largest 57,500,861 bytes; this admits them.
+MAX_ATTACHMENT_BYTES: Final = 64 * 1024 * 1024
+
+#: Attachments join with a blank line, as the PDF path joins pages (``transforms.pdf_text.PAGE_SEPARATOR``).
+PART_SEPARATOR: Final = "\n\n"
 
 
-def comments_extracted_prefix(agency: str, docket_id: str) -> str:
-    """S3 prefix holding one docket's comment-attachment extractions (all tools)."""
-    return f"{DERIVED_PREFIX}/{agency}/{docket_id}/mirrulations/extracted_txt/comments_extracted_text/"
+class DerivedTextUnavailable(Exception):
+    """A docket listing was refused or a fetch failed: the comment stays pending, never "no text"."""
+
+
+@dataclass(frozen=True, slots=True)
+class DerivedFill:
+    """The values one comment row takes: its text and the provenance JSON."""
+
+    text: str
+    provenance: str
+
+
+def provenance_json(comment: CommentDerivedText) -> str:
+    """The comment's ``pdf_extraction_results_json``; digests are null until its attachments are fetched."""
+    return json.dumps(comment.to_json())
+
+
+def derived_fill(comment: CommentDerivedText) -> DerivedFill | None:
+    """The fill for a fetched comment, or ``None`` when every chosen attachment is blank."""
+    parts = [text for attachment in comment.attachments if (text := (attachment.text or "").strip())]
+    return DerivedFill(PART_SEPARATOR.join(parts), provenance_json(comment)) if parts else None
+
+
+def _mirrulations() -> ModuleType:
+    """spicy-docs' Mirrulations reader, or a refusal naming the install that provides it."""
+    try:
+        from spicy_docs.sources import mirrulations
+    except ModuleNotFoundError as error:
+        if error.name == "spicy_docs":
+            raise RuntimeError(
+                "Mirrulations derived text requires spicy-regs[source-readers]. "
+                "Run `uv sync --frozen` in a SpicyRegs checkout."
+            ) from None
+        raise
+    return mirrulations
 
 
 class DerivedCommentText:
-    """Fetches Mirrulations pre-extracted comment-attachment text from S3.
+    """Fills comments from their docket's listing, listed once per instance.
 
-    Each docket's extraction prefix is listed once (lazily, on first access) and
-    cached as a ``comment_id -> [object keys]`` map, so enriching a whole
-    docket's comments costs one ``list_objects`` plus one ``GET`` per attachment.
-    Build one per worker thread — the listing cache is plain dict state and is
-    not shared-safe across threads.
+    The cache is plain dict state, so build one per worker thread. A refused listing
+    is cached as refused: the docket is not listed again for each of its comments.
+    ``bucket`` defaults to spicy-docs' Mirrulations bucket.
     """
 
-    def __init__(self, s3_resource: Any, bucket: str = BUCKET) -> None:
+    def __init__(self, s3_resource: Any, bucket: str | None = None, *, max_bytes: int = MAX_ATTACHMENT_BYTES) -> None:
+        self._reader = _mirrulations()
         self._resource = s3_resource
-        self._bucket_name = bucket
-        self._bucket = s3_resource.Bucket(bucket)
-        self._docket_index: dict[str, dict[str, list[str]]] = {}
+        self._bucket = self._reader.BUCKET if bucket is None else bucket
+        self._max_bytes = max_bytes
+        self._dockets: dict[tuple[str, str], dict[str, CommentDerivedText] | str] = {}
 
-    def _index_for(self, agency: str, docket_id: str) -> dict[str, list[str]]:
-        """Lazily build + cache the ``comment_id -> [keys]`` map for one docket."""
-        cached = self._docket_index.get(docket_id)
-        if cached is not None:
-            return cached
+    def listed(self, agency: str, docket_id: str) -> dict[str, CommentDerivedText]:
+        """The docket's comments with derived text, from one strict listing; raises if it was refused."""
+        key = (agency, docket_id)
+        if key not in self._dockets:
+            try:
+                self._dockets[key] = self._reader.list_docket_derived_text(
+                    self._resource, agency, docket_id, bucket=self._bucket
+                ).comments
+            except self._reader.MirrulationsAccessRefusedError:
+                raise
+            except Exception as exc:  # noqa: BLE001 -- any refusal leaves the docket pending
+                logger.warning(
+                    "derived-data listing refused for {}/{}; its comments stay pending: {}", agency, docket_id, exc
+                )
+                self._dockets[key] = f"{agency}/{docket_id}: {exc}"
+        listed = self._dockets[key]
+        if isinstance(listed, str):
+            raise DerivedTextUnavailable(listed)
+        return listed
 
-        index: dict[str, list[str]] = {}
-        prefix = comments_extracted_prefix(agency, docket_id)
-        try:
-            for obj in self._bucket.objects.filter(Prefix=prefix):
-                match = _EXTRACTED_RE.search(obj.key.rsplit("/", 1)[-1])
-                if match:
-                    index.setdefault(match.group("comment_id"), []).append(obj.key)
-        except Exception as exc:  # noqa: BLE001 — listing failure must not abort staging
-            logger.warning("derived-data listing failed for {}: {}", prefix, exc)
-
-        for keys in index.values():
-            keys.sort()  # attachment_1 before attachment_2, ...
-        self._docket_index[docket_id] = index
-        return index
-
-    def text_for(self, agency: str | None, docket_id: str | None, comment_id: str | None) -> str | None:
-        """Concatenated extracted text for one comment, or ``None`` if none exists."""
+    def fill_for(self, agency: str | None, docket_id: str | None, comment_id: str | None) -> DerivedFill | None:
+        """The comment's fill; ``None`` when the listing has no text for it or its text is blank."""
         if not (agency and docket_id and comment_id):
             return None
-
-        keys = self._index_for(agency, docket_id).get(comment_id)
-        if not keys:
+        comment = self.listed(agency, docket_id).get(comment_id)
+        if comment is None:
             return None
-
-        parts: list[str] = []
-        for key in keys:
-            try:
-                stream = self._resource.Object(self._bucket_name, key).get()["Body"]
-                # Close the body on every path — a failed read must not leak the
-                # connection into CLOSE_WAIT and eventually starve the pool.
-                try:
-                    body = stream.read()
-                finally:
-                    stream.close()
-            except Exception as exc:  # noqa: BLE001 — one bad object shouldn't sink the rest
-                logger.warning("derived-data read failed for {}: {}", key, exc)
-                continue
-            text = body.decode("utf-8", "replace") if isinstance(body, bytes) else str(body)
-            text = text.strip()
-            if text:
-                parts.append(text)
-
-        return PART_SEPARATOR.join(parts) if parts else None
+        try:
+            fetched = self._reader.fetch_derived_text(
+                self._resource, comment, bucket=self._bucket, max_bytes=self._max_bytes
+            )
+        except self._reader.MirrulationsAccessRefusedError:
+            raise
+        except Exception as exc:  # noqa: BLE001 -- a failed attachment fails the comment, never drops a part
+            logger.warning("derived-data fetch failed for {}; it stays pending: {}", comment_id, exc)
+            raise DerivedTextUnavailable(f"{comment_id}: {exc}") from exc
+        return derived_fill(fetched)

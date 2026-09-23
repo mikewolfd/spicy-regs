@@ -12,8 +12,14 @@ import json
 import duckdb
 import polars as pl
 
+import pyarrow.parquet as pq
+import pytest
+from spicy_docs.sources.mirrulations import MirrulationsAccessRefusedError, comments_extracted_prefix
+
+from spicy_regs import backfill_derived_text
 from spicy_regs.backfill_derived_text import (
     _backfill_agency_in_catalog,
+    _derived_text_updates,
     backfill_comment_partitions,
     enrich_comments_with_derived_text,
 )
@@ -22,11 +28,21 @@ from spicy_regs.sources import iceberg
 from tests.conftest import COMMENT_SCHEMA
 
 # Reuse the fake S3 surface from the derived-text unit tests.
-from tests.test_derived_text import _FakeS3Resource, _store
+from tests.test_derived_text import ACF, _FakeS3Resource, _store
 
 
-def _factory():
-    return lambda: _FakeS3Resource(_store())
+def _factory(store: dict[str, bytes] | None = None, **kwargs):
+    return lambda: _FakeS3Resource(_store() if store is None else store, **kwargs)
+
+
+def _counts(selected: int, derived: int = 0, missing: int = 0, failed: int = 0, failed_dockets: int = 0) -> dict:
+    return {
+        "selected": selected,
+        "derived": derived,
+        "missing": missing,
+        "failed": failed,
+        "failed_dockets": failed_dockets,
+    }
 
 
 def _attach() -> str:
@@ -41,16 +57,29 @@ def _frame(rows: list[dict]) -> pl.DataFrame:
 def test_enrich_fills_from_derived_data_using_agency_column() -> None:
     df = _frame(
         [
-            {"comment_id": "ACF-2025-0038-0004", "docket_id": "ACF-2025-0038", "agency_code": "ACF", "attachments_json": _attach()},
-            {"comment_id": "ACF-2025-0038-0015", "docket_id": "ACF-2025-0038", "agency_code": "ACF", "attachments_json": _attach()},
+            {
+                "comment_id": "ACF-2025-0038-0004",
+                "docket_id": "ACF-2025-0038",
+                "agency_code": "ACF",
+                "attachments_json": _attach(),
+            },
+            {
+                "comment_id": "ACF-2025-0038-0015",
+                "docket_id": "ACF-2025-0038",
+                "agency_code": "ACF",
+                "attachments_json": _attach(),
+            },
         ]
     )
     out, stats = enrich_comments_with_derived_text(df, resource_factory=_factory())
-    assert stats == {"selected": 2, "ok": 2, "missing": 0}
+    assert stats == _counts(2, derived=2)
     by_id = {r["comment_id"]: r for r in out.iter_rows(named=True)}
     assert by_id["ACF-2025-0038-0004"]["text_content"] == "Wisconsin DCF comment body"
     assert by_id["ACF-2025-0038-0015"]["text_content"] == "first attachment\n\nsecond attachment"
-    assert all(r["text_extraction_status"] == "ok" for r in out.iter_rows(named=True))
+    assert all(r["text_extraction_status"] == "derived" for r in out.iter_rows(named=True))
+    provenance = json.loads(by_id["ACF-2025-0038-0015"]["pdf_extraction_results_json"])
+    assert [(a["attachment"], a["tool"]) for a in provenance["attachments"]] == [(1, "pypdf"), (2, "pypdf")]
+    assert all(len(a["sha256"]) == 64 for a in provenance["attachments"])
 
 
 def test_enrich_with_explicit_agency_override() -> None:
@@ -59,15 +88,27 @@ def test_enrich_with_explicit_agency_override() -> None:
         [{"comment_id": "ACF-2025-0038-0004", "docket_id": "ACF-2025-0038", "attachments_json": _attach()}]
     ).drop("agency_code")
     out, stats = enrich_comments_with_derived_text(df, agency="ACF", resource_factory=_factory())
-    assert stats["ok"] == 1
+    assert stats["derived"] == 1
     assert out.row(0, named=True)["text_content"] == "Wisconsin DCF comment body"
 
 
 def test_enrich_skips_no_attachment_and_already_filled() -> None:
     df = _frame(
         [
-            {"comment_id": "ACF-2025-0038-0004", "docket_id": "ACF-2025-0038", "agency_code": "ACF", "attachments_json": None},
-            {"comment_id": "ACF-2025-0038-0015", "docket_id": "ACF-2025-0038", "agency_code": "ACF", "attachments_json": _attach(), "text_extraction_status": "ok", "text_content": "kept"},
+            {
+                "comment_id": "ACF-2025-0038-0004",
+                "docket_id": "ACF-2025-0038",
+                "agency_code": "ACF",
+                "attachments_json": None,
+            },
+            {
+                "comment_id": "ACF-2025-0038-0015",
+                "docket_id": "ACF-2025-0038",
+                "agency_code": "ACF",
+                "attachments_json": _attach(),
+                "text_extraction_status": "ok",
+                "text_content": "kept",
+            },
         ]
     )
     out, stats = enrich_comments_with_derived_text(df, resource_factory=_factory())
@@ -77,10 +118,17 @@ def test_enrich_skips_no_attachment_and_already_filled() -> None:
 
 def test_enrich_missing_derived_text_counts_as_missing() -> None:
     df = _frame(
-        [{"comment_id": "ACF-2025-0038-9999", "docket_id": "ACF-2025-0038", "agency_code": "ACF", "attachments_json": _attach()}]
+        [
+            {
+                "comment_id": "ACF-2025-0038-9999",
+                "docket_id": "ACF-2025-0038",
+                "agency_code": "ACF",
+                "attachments_json": _attach(),
+            }
+        ]
     )
     out, stats = enrich_comments_with_derived_text(df, resource_factory=_factory())
-    assert stats == {"selected": 1, "ok": 0, "missing": 1}
+    assert stats == _counts(1, missing=1)
     # Left NULL so the PDF-download fallback can still pick it up.
     assert out.row(0, named=True)["text_extraction_status"] is None
 
@@ -88,13 +136,23 @@ def test_enrich_missing_derived_text_counts_as_missing() -> None:
 def test_enrich_respects_limit() -> None:
     df = _frame(
         [
-            {"comment_id": "ACF-2025-0038-0004", "docket_id": "ACF-2025-0038", "agency_code": "ACF", "attachments_json": _attach()},
-            {"comment_id": "ACF-2025-0038-0015", "docket_id": "ACF-2025-0038", "agency_code": "ACF", "attachments_json": _attach()},
+            {
+                "comment_id": "ACF-2025-0038-0004",
+                "docket_id": "ACF-2025-0038",
+                "agency_code": "ACF",
+                "attachments_json": _attach(),
+            },
+            {
+                "comment_id": "ACF-2025-0038-0015",
+                "docket_id": "ACF-2025-0038",
+                "agency_code": "ACF",
+                "attachments_json": _attach(),
+            },
         ]
     )
     _, stats = enrich_comments_with_derived_text(df, resource_factory=_factory(), limit=1)
     assert stats["selected"] == 1
-    assert stats["ok"] == 1
+    assert stats["derived"] == 1
 
 
 def test_discover_from_derived_finds_rows_with_no_attachments_json() -> None:
@@ -102,39 +160,60 @@ def test_discover_from_derived_finds_rows_with_no_attachments_json() -> None:
     # column existed), yet the fake derived-data store has extracted text for
     # it. Default mode must skip it; discover_from_derived must find it.
     df = _frame(
-        [{"comment_id": "ACF-2025-0038-0004", "docket_id": "ACF-2025-0038", "agency_code": "ACF", "attachments_json": None}]
+        [
+            {
+                "comment_id": "ACF-2025-0038-0004",
+                "docket_id": "ACF-2025-0038",
+                "agency_code": "ACF",
+                "attachments_json": None,
+            }
+        ]
     )
 
     default_out, default_stats = enrich_comments_with_derived_text(df, resource_factory=_factory())
-    assert default_stats == {"selected": 0, "ok": 0, "missing": 0}
+    assert default_stats == _counts(0)
     assert default_out.row(0, named=True)["text_content"] is None
 
     discover_out, discover_stats = enrich_comments_with_derived_text(
         df, resource_factory=_factory(), discover_from_derived=True
     )
-    assert discover_stats == {"selected": 1, "ok": 1, "missing": 0}
+    assert discover_stats == _counts(1, derived=1)
     assert discover_out.row(0, named=True)["text_content"] == "Wisconsin DCF comment body"
-    assert discover_out.row(0, named=True)["text_extraction_status"] == "ok"
+    assert discover_out.row(0, named=True)["text_extraction_status"] == "derived"
 
 
 def test_discover_from_derived_is_incremental() -> None:
     # A second run over the already-filled frame must not reselect the row.
     df = _frame(
-        [{"comment_id": "ACF-2025-0038-0004", "docket_id": "ACF-2025-0038", "agency_code": "ACF", "attachments_json": None}]
+        [
+            {
+                "comment_id": "ACF-2025-0038-0004",
+                "docket_id": "ACF-2025-0038",
+                "agency_code": "ACF",
+                "attachments_json": None,
+            }
+        ]
     )
     filled, _ = enrich_comments_with_derived_text(df, resource_factory=_factory(), discover_from_derived=True)
 
     _, stats = enrich_comments_with_derived_text(filled, resource_factory=_factory(), discover_from_derived=True)
-    assert stats == {"selected": 0, "ok": 0, "missing": 0}
+    assert stats == _counts(0)
 
 
 def test_discover_from_derived_still_counts_true_misses() -> None:
     # No attachments_json AND no derived-data text available at all.
     df = _frame(
-        [{"comment_id": "ACF-2025-0038-9999", "docket_id": "ACF-2025-0038", "agency_code": "ACF", "attachments_json": None}]
+        [
+            {
+                "comment_id": "ACF-2025-0038-9999",
+                "docket_id": "ACF-2025-0038",
+                "agency_code": "ACF",
+                "attachments_json": None,
+            }
+        ]
     )
     _, stats = enrich_comments_with_derived_text(df, resource_factory=_factory(), discover_from_derived=True)
-    assert stats == {"selected": 1, "ok": 0, "missing": 1}
+    assert stats == _counts(1, missing=1)
 
 
 def test_backfill_partitions_reads_agency_from_path(tmp_path) -> None:
@@ -146,22 +225,20 @@ def test_backfill_partitions_reads_agency_from_path(tmp_path) -> None:
     ).drop("agency_code")
     df.write_parquet(part_dir / "part-0.parquet")
 
-    totals, changed = backfill_comment_partitions(
-        tmp_path / "comments" / "agency", resource_factory=_factory()
-    )
-    assert totals["ok"] == 1
+    totals, changed = backfill_comment_partitions(tmp_path / "comments" / "agency", resource_factory=_factory())
+    assert totals["derived"] == 1
     assert len(changed) == 1
     written = pl.read_parquet(part_dir / "part-0.parquet")
     assert "agency_code" not in written.columns  # schema preserved
     assert written.row(0, named=True)["text_content"] == "Wisconsin DCF comment body"
+    assert written.row(0, named=True)["text_extraction_status"] == "derived"
+    assert [p.name for p in part_dir.iterdir()] == ["part-0.parquet"]  # the staging directory is gone
 
 
 def _seed_catalog(con, rows: list[dict]) -> None:
     """Insert comment rows into the local catalog table (all COMMENT columns)."""
     iceberg._ensure_table(con, COMMENT)
-    frame = pl.DataFrame(
-        [{**{c: None for c in COMMENT.schema}, **r} for r in rows], schema=COMMENT.schema
-    )
+    frame = pl.DataFrame([{**{c: None for c in COMMENT.schema}, **r} for r in rows], schema=COMMENT.schema)
     col_list = ", ".join(f'"{c}"' for c in COMMENT.schema)
     con.register("_seed_src", frame.to_arrow())
     con.execute(f"INSERT INTO {iceberg._qualified(COMMENT)} ({col_list}) SELECT {col_list} FROM _seed_src;")
@@ -178,19 +255,35 @@ def test_catalog_backfill_upserts_filled_rows_in_place() -> None:
             con,
             [
                 # found in the fake derived-data store → gets filled
-                {"comment_id": "ACF-2025-0038-0004", "docket_id": "ACF-2025-0038", "agency_code": "ACF",
-                 "attachments_json": _attach(), "modify_date": "2025-01-01", "comment": "orig body"},
+                {
+                    "comment_id": "ACF-2025-0038-0004",
+                    "docket_id": "ACF-2025-0038",
+                    "agency_code": "ACF",
+                    "attachments_json": _attach(),
+                    "modify_date": "2025-01-01",
+                    "comment": "orig body",
+                },
                 # attachment but no derived text → counts as missing, stays NULL
-                {"comment_id": "ACF-2025-0038-9999", "docket_id": "ACF-2025-0038", "agency_code": "ACF",
-                 "attachments_json": _attach(), "modify_date": "2025-01-01"},
+                {
+                    "comment_id": "ACF-2025-0038-9999",
+                    "docket_id": "ACF-2025-0038",
+                    "agency_code": "ACF",
+                    "attachments_json": _attach(),
+                    "modify_date": "2025-01-01",
+                },
                 # no attachment → not a candidate at all
-                {"comment_id": "ACF-2025-0038-0007", "docket_id": "ACF-2025-0038", "agency_code": "ACF",
-                 "attachments_json": None, "modify_date": "2025-01-01"},
+                {
+                    "comment_id": "ACF-2025-0038-0007",
+                    "docket_id": "ACF-2025-0038",
+                    "agency_code": "ACF",
+                    "attachments_json": None,
+                    "modify_date": "2025-01-01",
+                },
             ],
         )
 
         stats = _backfill_agency_in_catalog(con, COMMENT, "ACF", resource_factory=_factory())
-        assert stats == {"selected": 2, "ok": 1, "missing": 1}
+        assert stats == _counts(2, derived=1, missing=1)
 
         out = dict(
             con.execute(
@@ -203,17 +296,18 @@ def test_catalog_backfill_upserts_filled_rows_in_place() -> None:
 
         # Upsert preserves other columns and doesn't duplicate the row.
         row = con.execute(
-            f"SELECT comment, text_extraction_status FROM {iceberg._qualified(COMMENT)} "
+            f"SELECT comment, text_extraction_status, pdf_extraction_results_json FROM {iceberg._qualified(COMMENT)} "
             f"WHERE comment_id = 'ACF-2025-0038-0004'"
         ).fetchall()
         assert len(row) == 1
-        assert row[0] == ("orig body", "ok")
+        assert row[0][:2] == ("orig body", "derived")
+        assert json.loads(row[0][2])["comment_id"] == "ACF-2025-0038-0004"
         count = con.execute(f"SELECT count(*) FROM {iceberg._qualified(COMMENT)}").fetchone()
         assert count is not None and count[0] == 3
 
         # Idempotent: a second run finds nothing new (the filled row now has a status).
         again = _backfill_agency_in_catalog(con, COMMENT, "ACF", resource_factory=_factory())
-        assert again == {"selected": 1, "ok": 0, "missing": 1}
+        assert again == _counts(1, missing=1)
     finally:
         con.close()
 
@@ -230,21 +324,31 @@ def test_catalog_backfill_discover_from_derived_finds_legacy_rows_without_attach
             con,
             [
                 # legacy row: attachments_json was never populated
-                {"comment_id": "ACF-2025-0038-0004", "docket_id": "ACF-2025-0038", "agency_code": "ACF",
-                 "attachments_json": None, "modify_date": "2025-01-01"},
+                {
+                    "comment_id": "ACF-2025-0038-0004",
+                    "docket_id": "ACF-2025-0038",
+                    "agency_code": "ACF",
+                    "attachments_json": None,
+                    "modify_date": "2025-01-01",
+                },
                 # legacy row with no derived-data text available either
-                {"comment_id": "ACF-2025-0038-9999", "docket_id": "ACF-2025-0038", "agency_code": "ACF",
-                 "attachments_json": None, "modify_date": "2025-01-01"},
+                {
+                    "comment_id": "ACF-2025-0038-9999",
+                    "docket_id": "ACF-2025-0038",
+                    "agency_code": "ACF",
+                    "attachments_json": None,
+                    "modify_date": "2025-01-01",
+                },
             ],
         )
 
         default_stats = _backfill_agency_in_catalog(con, COMMENT, "ACF", resource_factory=_factory())
-        assert default_stats == {"selected": 0, "ok": 0, "missing": 0}, "default mode must not touch legacy rows"
+        assert default_stats == _counts(0), "default mode must not touch legacy rows"
 
         discover_stats = _backfill_agency_in_catalog(
             con, COMMENT, "ACF", resource_factory=_factory(), discover_from_derived=True
         )
-        assert discover_stats == {"selected": 2, "ok": 1, "missing": 1}
+        assert discover_stats == _counts(2, derived=1, missing=1)
 
         out = dict(
             con.execute(
@@ -258,6 +362,69 @@ def test_catalog_backfill_discover_from_derived_finds_legacy_rows_without_attach
         again = _backfill_agency_in_catalog(
             con, COMMENT, "ACF", resource_factory=_factory(), discover_from_derived=True
         )
-        assert again == {"selected": 1, "ok": 0, "missing": 1}
+        assert again == _counts(1, missing=1)
     finally:
         con.close()
+
+
+def _acf(comment: str, **values) -> dict:
+    return {
+        "comment_id": f"ACF-2025-0038-{comment}",
+        "docket_id": "ACF-2025-0038",
+        "agency_code": "ACF",
+        "attachments_json": _attach(),
+        **values,
+    }
+
+
+def test_a_refused_docket_counts_as_failed_and_stays_pending() -> None:
+    """A strict-listing refusal is never read as "no text": nothing is written and the rows are retried."""
+    store = _store() | {comments_extracted_prefix(*ACF) + "unexpected.txt": b"?"}
+    df = _frame([_acf("0004"), _acf("9999")])
+    out, stats = enrich_comments_with_derived_text(df, resource_factory=_factory(store))
+    assert stats == _counts(2, failed=2, failed_dockets=1)
+    assert out.select("text_content", "text_extraction_status", "pdf_extraction_results_json").null_count().row(0) == (
+        2,
+        2,
+        2,
+    )
+    _, again = enrich_comments_with_derived_text(out, resource_factory=_factory())
+    assert again == _counts(2, derived=1, missing=1)
+
+
+def test_an_access_refusal_ends_the_backfill() -> None:
+    with pytest.raises(MirrulationsAccessRefusedError):
+        enrich_comments_with_derived_text(_frame([_acf("0004")]), resource_factory=_factory(listing_status=401))
+
+
+def test_fills_stream_to_staging_a_bounded_buffer_at_a_time(tmp_path, monkeypatch) -> None:
+    """With a one-character buffer every fill is its own row group: none waits for the run to end."""
+    monkeypatch.setattr(backfill_derived_text, "_FLUSH_CHARACTERS", 1)
+    updates = tmp_path / "updates.parquet"
+    stats = _derived_text_updates(
+        _frame([_acf("0004"), _acf("0015"), _acf("0030")]),
+        agency=None,
+        resource_factory=_factory(),
+        limit=None,
+        max_workers=2,
+        overwrite=False,
+        updates_path=updates,
+    )
+    assert stats == _counts(3, derived=3)
+    staged = pq.ParquetFile(updates)
+    assert staged.metadata.num_row_groups == 3
+    rows = {r["comment_id"]: r for r in staged.read().to_pylist()}
+    assert rows["ACF-2025-0038-0030"]["_new_text"] == "part 1\n\npart 2\n\npart 10"
+    assert {r["_new_status"] for r in rows.values()} == {"derived"}
+
+
+def test_file_backfill_keeps_row_order_and_untouched_rows(tmp_path) -> None:
+    rows = [_acf(c) for c in ("0030", "0001", "0004", "0002")]
+    path = tmp_path / "comments.parquet"
+    _frame([*rows, _acf("0015", text_extraction_status="ok", text_content="kept")]).write_parquet(path)
+    stats = backfill_derived_text.backfill_comments_parquet(path, resource_factory=_factory())
+    assert stats == _counts(4, derived=2, missing=2)
+    written = pl.read_parquet(path)
+    assert written["comment_id"].to_list() == [r["comment_id"] for r in rows] + ["ACF-2025-0038-0015"]
+    assert written["text_extraction_status"].to_list() == ["derived", None, "derived", None, "ok"]
+    assert written["text_content"][4] == "kept"

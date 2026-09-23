@@ -7,6 +7,10 @@ is the one-time / re-runnable backfill: it fills ``text_content`` from the
 bucket's ``derived-data`` prefix (no PDF download, no JSON re-ingest). By
 default, rows are candidates only if they already carry an ``attachments_json``
 and have no ``text_extraction_status`` yet, so repeated runs only do new work.
+A filled row gets status ``derived`` and its provenance in
+``pdf_extraction_results_json`` (:mod:`spicy_regs.sources.derived_text`). Fills
+stream to a staging Parquet file as they are fetched, so a run never holds every
+fetched text in memory.
 
 That default has a blind spot: comments ingested before the pipeline started
 recording ``attachments_json`` never get a chance, even though Mirrulations may
@@ -45,26 +49,71 @@ from __future__ import annotations
 
 import argparse
 import re
+from collections import Counter
 from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
+from tempfile import TemporaryDirectory
+from threading import Lock
 from typing import Any
 
 import polars as pl
+import pyarrow as pa
+import pyarrow.parquet as pq
 from dotenv import load_dotenv
 from loguru import logger
 
+from spicy_regs.enrich_pdf import TEXT_UPDATES, apply_text_updates, with_text_columns
 from spicy_regs.schemas import RecordType
 from spicy_docs.sources import mirrulations
-from spicy_regs.sources.derived_text import DerivedCommentText
-from spicy_regs.transforms.pdf_text import PdfTextStatus
+from spicy_regs.sources.derived_text import DERIVED_STATUS, DerivedCommentText, DerivedFill, DerivedTextUnavailable
 
 ResourceFactory = Callable[[], Any]
 
 _AGENCY_DIR_RE = re.compile(r"agency_code=([^/]+)")
 
+#: The columns candidate selection reads; ``agency_code`` only when no agency is given.
+_CANDIDATE_COLUMNS = ("comment_id", "docket_id", "agency_code", "attachments_json", "text_extraction_status")
 
-_UPDATES_SCHEMA = {"comment_id": pl.Utf8, "_new_text": pl.Utf8, "_new_status": pl.Utf8}
+_UPDATES_SCHEMA = pa.schema([("comment_id", pa.string()), *((name, pa.string()) for name in TEXT_UPDATES.values())])
+
+#: Filled text buffered before a row group is written: bounds memory to this plus the
+#: comments in flight (one sampled comment alone holds 58 MB).
+_FLUSH_CHARACTERS = 64 * 1024 * 1024
+
+
+def _stats() -> dict[str, int]:
+    """Counters every path reports: ``missing`` comments have no text in their listing; ``failed`` ones are unknown."""
+    return {"selected": 0, "derived": 0, "missing": 0, "failed": 0, "failed_dockets": 0}
+
+
+class _UpdateSink:
+    """Appends filled rows from worker threads to one Parquet file, a row group per buffer."""
+
+    def __init__(self, path: Path) -> None:
+        self._writer = pq.ParquetWriter(path, _UPDATES_SCHEMA, compression="zstd")
+        self._rows: list[tuple[str, str, str]] = []
+        self._characters = 0
+        self._lock = Lock()
+
+    def add(self, comment_id: str, fill: DerivedFill) -> None:
+        with self._lock:
+            self._rows.append((comment_id, fill.text, fill.provenance))
+            self._characters += len(fill.text)
+            if self._characters >= _FLUSH_CHARACTERS:
+                self._flush()
+
+    def _flush(self) -> None:
+        if self._rows:
+            ids, texts, provenance = zip(*self._rows, strict=True)
+            columns = [list(ids), list(texts), [DERIVED_STATUS] * len(ids), list(provenance)]
+            self._writer.write_table(pa.Table.from_arrays(columns, schema=_UPDATES_SCHEMA))
+            self._rows, self._characters = [], 0
+
+    def close(self) -> None:
+        with self._lock:
+            self._flush()
+            self._writer.close()
 
 
 def _derived_text_updates(
@@ -75,21 +124,23 @@ def _derived_text_updates(
     limit: int | None,
     max_workers: int,
     overwrite: bool,
+    updates_path: Path,
     discover_from_derived: bool = False,
-) -> tuple[pl.DataFrame, dict[str, int]]:
-    """Fetch derived-data text for a frame's candidate comments.
+) -> dict[str, int]:
+    """Fetch derived-data text for a frame's candidate comments into ``updates_path``.
 
-    Returns ``(updates, stats)`` where ``updates`` is a
-    ``(comment_id, _new_text, _new_status)`` frame of the rows that were filled
-    (empty when nothing was found). This is the shared core of both write paths:
-    the published-Parquet path (:func:`enrich_comments_with_derived_text`) joins
-    it back onto the whole frame; the catalog path upserts exactly these rows.
+    Filled rows stream to ``updates_path`` as a ``(comment_id, _new_text,
+    _new_status, _new_pdf_results)`` Parquet file while dockets are still being
+    fetched, so no run holds every fetched text; the file is written only when
+    some comment was selected. Returns the stats. This is the shared core of both
+    write paths: the published-Parquet path joins the file back onto the whole
+    frame; the catalog path upserts exactly its rows.
 
     By default only attachment-bearing comments (``attachments_json`` truthy)
     are candidates. When ``discover_from_derived`` is set, that gate is
     dropped — every comment without a ``text_extraction_status`` is a
     candidate, and the per-docket derived-data listing (via
-    :meth:`~spicy_regs.sources.derived_text.DerivedCommentText.text_for`)
+    :meth:`~spicy_regs.sources.derived_text.DerivedCommentText.fill_for`)
     is what actually decides whether extracted text exists. This is how rows
     ingested before ``attachments_json`` was recorded get found at all. Unless
     ``overwrite`` is set, rows that already have a ``text_extraction_status``
@@ -97,12 +148,11 @@ def _derived_text_updates(
     overrides the per-row ``agency_code`` (the Hive partitions don't carry
     that column); when ``None`` it is read from the frame. Work is grouped by
     docket and fanned out across ``max_workers`` so each docket's extraction
-    prefix is listed once.
+    prefix is listed once. A refused listing counts its comments as ``failed``,
+    never ``missing``, and leaves them pending; an access refusal ends the run.
     """
-    select_cols = ["comment_id", "docket_id", "attachments_json", "text_extraction_status"]
-    if agency is None:
-        select_cols.append("agency_code")
-    candidates = df.select(select_cols).unique(subset="comment_id", keep="first")
+    select_cols = [c for c in _CANDIDATE_COLUMNS if agency is None or c != "agency_code"]
+    candidates = df.select(select_cols).unique(subset="comment_id", keep="first", maintain_order=True)
 
     # Group candidate comment ids by (agency, docket) so each docket's
     # derived-data prefix is listed exactly once, honoring the row budget.
@@ -125,50 +175,63 @@ def _derived_text_updates(
         work_by_docket.setdefault((row_agency, docket_id), []).append(comment_id)
         selected += 1
 
-    stats = {"selected": selected, "ok": 0, "missing": 0}
-    empty = pl.DataFrame(schema=_UPDATES_SCHEMA)
+    stats = _stats() | {"selected": selected}
     if not work_by_docket:
         logger.info("No comments to backfill from derived-data")
-        return empty, stats
+        return stats
 
     logger.info(
         "Backfilling {} comments across {} dockets from derived-data ({} workers)...",
-        selected, len(work_by_docket), max_workers,
+        selected,
+        len(work_by_docket),
+        max_workers,
     )
 
-    def _fetch_docket(item: tuple[tuple[str, str], list[str]]) -> dict[str, str]:
+    def _fill_docket(item: tuple[tuple[str, str], list[str]]) -> Counter[str]:
         (docket_agency, docket_id), comment_ids = item
         # One fetcher (and S3 resource) per task keeps the per-docket listing
         # cache thread-local; DerivedCommentText is not shared-safe.
         fetcher = DerivedCommentText(resource_factory())
-        found: dict[str, str] = {}
+        try:
+            fetcher.listed(docket_agency, docket_id)
+        except DerivedTextUnavailable:
+            return Counter(failed=len(comment_ids), failed_dockets=1)
+        counts: Counter[str] = Counter()
         for comment_id in comment_ids:
-            text = fetcher.text_for(docket_agency, docket_id, comment_id)
-            if text:
-                found[comment_id] = text
-        return found
+            try:
+                fill = fetcher.fill_for(docket_agency, docket_id, comment_id)
+            except DerivedTextUnavailable:
+                counts["failed"] += 1
+                continue
+            if fill is None:
+                counts["missing"] += 1
+            else:
+                sink.add(comment_id, fill)
+                counts["derived"] += 1
+        return counts
 
-    ids: list[str] = []
-    texts: list[str] = []
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        for found in executor.map(_fetch_docket, work_by_docket.items()):
-            for comment_id, text in found.items():
-                ids.append(comment_id)
-                texts.append(text)
+    sink = _UpdateSink(updates_path)
+    try:
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = [executor.submit(_fill_docket, item) for item in work_by_docket.items()]
+            try:
+                for future in as_completed(futures):
+                    for key, value in future.result().items():
+                        stats[key] += value
+            except BaseException:
+                executor.shutdown(cancel_futures=True)  # an access refusal ends the run now
+                raise
+    finally:
+        sink.close()
 
-    stats["ok"] = len(ids)
-    stats["missing"] = selected - len(ids)
-
-    if not ids:
-        logger.info("Backfill: 0 ok, {} missing (no derived-data text found)", stats["missing"])
-        return empty, stats
-
-    updates = pl.DataFrame(
-        {"comment_id": ids, "_new_text": texts, "_new_status": [PdfTextStatus.OK.value] * len(ids)},
-        schema=_UPDATES_SCHEMA,
+    logger.info(
+        "Backfill: {} derived, {} missing, {} failed ({} refused dockets)",
+        stats["derived"],
+        stats["missing"],
+        stats["failed"],
+        stats["failed_dockets"],
     )
-    logger.info("Backfill: {} ok, {} missing", stats["ok"], stats["missing"])
-    return updates, stats
+    return stats
 
 
 def enrich_comments_with_derived_text(
@@ -181,38 +244,30 @@ def enrich_comments_with_derived_text(
     overwrite: bool = False,
     discover_from_derived: bool = False,
 ) -> tuple[pl.DataFrame, dict[str, int]]:
-    """Fill ``text_content`` / ``text_extraction_status`` on a comments frame.
+    """Fill ``text_content`` / ``text_extraction_status`` / provenance on an in-memory comments frame.
 
-    The published-Parquet path: fetch derived text for the frame's candidates
-    (:func:`_derived_text_updates`) and join it back onto the whole frame,
-    returning the enriched frame and stats. See ``discover_from_derived`` there
-    for the opt-in mode that finds legacy rows with no ``attachments_json``.
+    Fetch derived text for the frame's candidates (:func:`_derived_text_updates`)
+    and join it back onto the whole frame, returning the enriched frame and
+    stats. See ``discover_from_derived`` there for the opt-in mode that finds
+    legacy rows with no ``attachments_json``. Files go through
+    :func:`_backfill_file`, which never holds the frame or the texts in memory.
     """
-    for col in ("text_content", "text_extraction_status"):
-        if col not in df.columns:
-            df = df.with_columns(pl.lit(None, dtype=pl.Utf8).alias(col))
-
-    updates, stats = _derived_text_updates(
-        df,
-        agency=agency,
-        resource_factory=resource_factory,
-        limit=limit,
-        max_workers=max_workers,
-        overwrite=overwrite,
-        discover_from_derived=discover_from_derived,
-    )
-    if updates.is_empty():
-        return df, stats
-
-    enriched = (
-        df.join(updates, on="comment_id", how="left")
-        .with_columns(
-            text_content=pl.coalesce(["_new_text", "text_content"]),
-            text_extraction_status=pl.coalesce(["_new_status", "text_extraction_status"]),
+    df = with_text_columns(df)
+    with TemporaryDirectory(prefix="derived-text-") as staging:
+        updates = Path(staging) / "updates.parquet"
+        stats = _derived_text_updates(
+            df,
+            agency=agency,
+            resource_factory=resource_factory,
+            limit=limit,
+            max_workers=max_workers,
+            overwrite=overwrite,
+            updates_path=updates,
+            discover_from_derived=discover_from_derived,
         )
-        .drop("_new_text", "_new_status")
-    )
-    return enriched, stats
+        if not stats["derived"]:
+            return df, stats
+        return apply_text_updates(df, pl.read_parquet(updates), "comment_id"), stats
 
 
 def _backfill_file(
@@ -225,20 +280,32 @@ def _backfill_file(
     overwrite: bool,
     discover_from_derived: bool = False,
 ) -> dict[str, int]:
-    """Enrich one published Parquet file in place; returns stats, writing only when a row was filled."""
-    df = pl.read_parquet(path)
-    enriched, stats = enrich_comments_with_derived_text(
-        df,
-        agency=agency,
-        resource_factory=resource_factory,
-        limit=limit,
-        max_workers=max_workers,
-        overwrite=overwrite,
-        discover_from_derived=discover_from_derived,
-    )
-    if stats["ok"]:
-        enriched.write_parquet(path, compression="zstd")
-        logger.info("Wrote {} ({} rows, {} filled)", path, len(enriched), stats["ok"])
+    """Enrich one published Parquet file in place, writing only when a row was filled.
+
+    Only the candidate columns are read into memory. Fills stream to a staging
+    file beside ``path``, and the join onto the file streams to a sibling that
+    replaces it, so neither the texts nor the table are held whole.
+    """
+    present = pl.read_parquet_schema(path)
+    candidates = pl.read_parquet(path, columns=[c for c in _CANDIDATE_COLUMNS if c in present])
+    with TemporaryDirectory(dir=path.parent, prefix=".derived-text-") as staging:
+        updates = Path(staging) / "updates.parquet"
+        stats = _derived_text_updates(
+            with_text_columns(candidates),
+            agency=agency,
+            resource_factory=resource_factory,
+            limit=limit,
+            max_workers=max_workers,
+            overwrite=overwrite,
+            updates_path=updates,
+            discover_from_derived=discover_from_derived,
+        )
+        if stats["derived"]:
+            enriched = Path(staging) / path.name
+            frame = with_text_columns(pl.scan_parquet(path))
+            apply_text_updates(frame, pl.scan_parquet(updates), "comment_id").sink_parquet(enriched, compression="zstd")
+            enriched.replace(path)
+            logger.info("Wrote {} ({} filled)", path, stats["derived"])
     return stats
 
 
@@ -284,7 +351,7 @@ def backfill_comment_partitions(
     if not parts:
         raise FileNotFoundError(f"No comment partitions found under {partition_dir}")
 
-    totals = {"selected": 0, "ok": 0, "missing": 0}
+    totals = _stats()
     changed: list[Path] = []
     remaining = limit
     for part in parts:
@@ -306,7 +373,7 @@ def backfill_comment_partitions(
         )
         for key, value in stats.items():
             totals[key] += value
-        if stats["ok"]:
+        if stats["derived"]:
             changed.append(part)
         if remaining is not None:
             remaining -= stats["selected"]
@@ -360,29 +427,36 @@ def _backfill_agency_in_catalog(
         """
     ).pl()
     if candidates.is_empty():
-        return {"selected": 0, "ok": 0, "missing": 0}
+        return _stats()
 
-    updates, stats = _derived_text_updates(
-        candidates,
-        agency=agency,
-        resource_factory=resource_factory,
-        limit=limit,
-        max_workers=max_workers,
-        overwrite=overwrite,
-        discover_from_derived=discover_from_derived,
+    with TemporaryDirectory(prefix="derived-text-") as staging:
+        updates = Path(staging) / "updates.parquet"
+        stats = _derived_text_updates(
+            candidates,
+            agency=agency,
+            resource_factory=resource_factory,
+            limit=limit,
+            max_workers=max_workers,
+            overwrite=overwrite,
+            updates_path=updates,
+            discover_from_derived=discover_from_derived,
+        )
+        if not stats["derived"]:
+            return stats
+        # Durable per-agency upsert into the catalog, read from the staged file. The
+        # shared helper builds the replacement rows in a self-contained temp table
+        # before the INSERT — a rule that matters on the R2 Data Catalog (see
+        # iceberg.upsert_comment_text / PR #117). Staged rows always carry text,
+        # status and provenance, so the helper's COALESCE is a direct assignment here.
+        iceberg.upsert_comment_text(con, record_type, agency, updates)
+
+    logger.info(
+        "catalog[{}]: upserted {} derived row(s) ({} missing, {} failed)",
+        agency,
+        stats["derived"],
+        stats["missing"],
+        stats["failed"],
     )
-    if updates.is_empty():
-        return stats
-
-    # Durable per-agency upsert into the catalog. The shared helper builds the
-    # replacement rows in a self-contained temp table before the INSERT — a rule
-    # that matters on the R2 Data Catalog (see iceberg.upsert_comment_text / PR
-    # #117). The derived-text `updates` frame only ever carries non-null
-    # _new_text / _new_status (rows are appended only when text was found), so the
-    # helper's COALESCE is equivalent to a direct assignment here.
-    iceberg.upsert_comment_text(con, record_type, agency, updates)
-
-    logger.info("catalog[{}]: upserted {} filled row(s) ({} missing)", agency, stats["ok"], stats["missing"])
     return stats
 
 
@@ -420,7 +494,7 @@ def backfill_comments_catalog(
                 ).fetchall()
             ]
 
-        totals = {"selected": 0, "ok": 0, "missing": 0}
+        totals = _stats()
         remaining = limit
         for agency in agency_list:
             if remaining is not None and remaining <= 0:
