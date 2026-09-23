@@ -458,3 +458,17 @@ Receipts: `members-qualification/`, `congressional-status/`, `native-vote-varian
     because RefSpec pins SpicyDocs 0.26.6. Each table change waits on a ruling
     in the plan (5–7). The scripts and outputs are in
     `parsing-survey-2026-09-23/`.
+
+- **Derived comment text (plan A6, decision 19).** The Mirrulations derived-text
+  reader in SpicyDocs 0.30.0 (`list_docket_derived_text`, `fetch_derived_text`;
+  numeric attachment order, one tool per comment by the pinned order, strict
+  listing, a byte cap) replaced spicy-regs' string-ordered join. A first candidate
+  had labelled 4,764 spicy-regs PDF extractions as mirror rewrites; the reviewer
+  caught it by re-extracting the PDFs, and the staging was rebuilt to 65,994 rows
+  (`200c9e55…`), every one of which passes the retained validation. The merge
+  needed a configurable DuckDB memory limit (the 4 GB default OOMs on the
+  23.9M-row parent; 16 GB, 20.2 GB peak, 86 s). The candidate was published at
+  23:05 UTC after a HEAD and a full authenticated read confirmed the live object
+  was still `fca7afb7…`; readback from S3 and the public URL equals the candidate.
+  Scripts, `build.json`, `validation.json` and `publication-comments.json` are in
+  `comment-text-repair-2026-09-23/`.
