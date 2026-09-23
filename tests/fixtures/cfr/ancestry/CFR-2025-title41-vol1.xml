@@ -1,0 +1,34 @@
+<?xml version='1.0' encoding='utf-8'?>
+<CFRDOC xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="CFRMergedXML.xsd">
+ <TITLE>
+  <SUBTITLE>
+   <CHAPTER>
+    <PART>
+     <RESERVED>PARTS 50-1—50-200 [RESERVED]</RESERVED>
+    </PART>
+    <PART>
+     <EAR>Pt. 50-201</EAR>
+     <HD SOURCE="HED">PART 50-201—GENERAL REGULATIONS</HD>
+     <SECTION>
+      <SECTNO>§ 50-201.1</SECTNO>
+      <SUBJECT>The Walsh-Healey Public Contracts Act.</SUBJECT>
+     </SECTION>
+     <SECTION>
+      <SECTNO>§ 50-201.101</SECTNO>
+      <SUBJECT>Employees affected.</SUBJECT>
+     </SECTION>
+    </PART>
+   </CHAPTER>
+   <CHAPTER>
+    <PART>
+     <EAR>Pt. 51-10</EAR>
+     <HD SOURCE="HED">PART 51-10—ENFORCEMENT OF NONDISCRIMINATION ON THE BASIS OF HANDICAP IN PROGRAMS OR ACTIVITIES CONDUCTED BY THE COMMITTEE FOR PURCHASE FROM PEOPLE WHO ARE BLIND OR SEVERELY DISABLED</HD>
+     <SECTION>
+      <SECTNO>§§ 51-10.104—51-10.109</SECTNO>
+      <RESERVED>[Reserved]</RESERVED>
+     </SECTION>
+    </PART>
+   </CHAPTER>
+  </SUBTITLE>
+ </TITLE>
+</CFRDOC>

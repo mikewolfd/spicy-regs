@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import datetime as dt
 import os
+import re
 from collections.abc import Iterator, Mapping
 from typing import TYPE_CHECKING
 
@@ -35,6 +36,9 @@ _MAX_PAGES = 2_000
 _MAX_REQUESTS_PER_PAGE = 5
 _MAX_PAGE_BYTES = 8 * 1024 * 1024
 _PROGRESS_EVERY = 5_000
+#: GovInfo lists its annual CFR index in the CFR collection; it is not a title
+#: volume and holds no sections, so the walk skips it (and the table drops it).
+INDEX_PACKAGE_RE = re.compile(r"GPO-CFR-INDEX-\d{4}")
 
 
 class CfrSectionsError(ValueError):
@@ -129,7 +133,12 @@ class CfrSectionsReader(Reader):
         logger.info("CFR: yielded {:,} granules", self._seen)
 
     def _iter_packages(self) -> Iterator[dict]:
-        """Yield identified package rows, refusing any package outside the CFR collection."""
+        """Yield identified ``CFR-`` package rows, skipping GovInfo's annual index with one log line.
+
+        The CFR collection also lists ``GPO-CFR-INDEX-2025``, which is not a
+        title volume. Any other package outside the collection, and a missing,
+        padded or repeated package id, still refuses.
+        """
         from spicy_docs.sources.govinfo.discovery import published_url
 
         assert self._source is not None
@@ -139,10 +148,16 @@ class CfrSectionsReader(Reader):
             collections=[COLLECTION],
             page_size=self.page_size,
         )
+        skipped = []
         for package in _identified_rows(self._source.packages(url, max_pages=_MAX_PAGES), "packageId"):
-            if not package["packageId"].startswith("CFR-"):
+            if INDEX_PACKAGE_RE.fullmatch(package["packageId"]):
+                skipped.append(package["packageId"])
+            elif package["packageId"].startswith("CFR-"):
+                yield package
+            else:
                 raise CfrSectionsError("CFR listing returned a package outside its collection")
-            yield package
+        if skipped:
+            logger.info("CFR: skipped {} listed index package(s): {}", len(skipped), ", ".join(skipped))
 
     def _iter_granules(self, package: dict) -> Iterator[dict]:
         """Yield each granule with its package id, lastModified and title attached.

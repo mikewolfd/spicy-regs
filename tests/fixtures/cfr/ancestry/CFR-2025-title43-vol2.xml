@@ -1,0 +1,32 @@
+<?xml version='1.0' encoding='utf-8'?>
+<CFRDOC xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="CFRMergedXML.xsd">
+ <TITLE>
+  <SUBTITLE>
+   <CHAPTER>
+    <SUBCHAP TYPE="N">
+     <PART>
+      <RESERVED>PARTS 1000-1599 [RESERVED]</RESERVED>
+     </PART>
+     <PART>
+      <EAR>Pt. 1600</EAR>
+      <HD SOURCE="HED">PART 1600—PLANNING, PROGRAMMING, BUDGETING</HD>
+      <SUBPART>
+       <HD SOURCE="HED">Subpart 1601—Planning</HD>
+       <SECTION>
+        <SECTNO>§ 1601.0-1</SECTNO>
+        <SUBJECT>Purpose.</SUBJECT>
+       </SECTION>
+      </SUBPART>
+      <SUBPART>
+       <HD SOURCE="HED">Subpart 1610—Resource Management Planning</HD>
+       <SECTION>
+        <SECTNO>§ 1610.1</SECTNO>
+        <SUBJECT>Resource management planning guidance.</SUBJECT>
+       </SECTION>
+      </SUBPART>
+     </PART>
+    </SUBCHAP>
+   </CHAPTER>
+  </SUBTITLE>
+ </TITLE>
+</CFRDOC>

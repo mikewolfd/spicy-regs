@@ -1,20 +1,27 @@
 """Hermetic tests for the GovInfo CFR section ingest (no network).
 
 Covers the pieces with real logic: the api.data.gov key resolution fallback
-chain, the reader's keyless refusal + default edition window, and the
-raw-granule → published-schema mapping (``_shape``), which derives CFR
-title/part/section purely from the granule ID grammar + list-level fields (no
-per-granule ``/summary`` call). No live network calls are made.
+chain, the reader's keyless refusal + default edition window, the
+raw-granule → published-schema mapping (``_shape``), which reads the granule
+ID grammar + list-level fields (no per-granule ``/summary`` call), and the
+placement of section granules under their annual volume's PART headings
+(``place_sections``). No live network calls are made.
 """
 
 from __future__ import annotations
 
 import datetime as dt
+from pathlib import Path
 
 import pytest
+from loguru import logger
 
+from spicy_regs.ontology.citations import parse_cfr_citation
+from spicy_regs.pipelines.rollups import cfr_sections as rollup
 from spicy_regs.sources.cfr_sections import API_KEY_ENV_VARS, CfrSectionsError, CfrSectionsReader, _resolve_api_key
-from spicy_regs.transforms.build_cfr_sections import COLUMNS, _cfr_ref, _shape
+from spicy_regs.transforms.build_cfr_sections import COLUMNS, _cfr_ref, _shape, annual_volume, place_sections
+
+ANCESTRY = Path(__file__).parent / "fixtures" / "cfr" / "ancestry"
 
 # A CONTENT/section granule with real list-level fields + package stamps, using
 # the real GovInfo ID grammar. Note: no cfrTitle/cfrPart/cfrSection fields exist
@@ -123,7 +130,7 @@ def test_shape_parses_section_granule():
     # CFR title number parsed from the id, not the (heading) ``title`` field.
     assert row["title"] == "40"
     assert row["edition_year"] == "2024"
-    # The list has no native ancestry; preserve its token without inventing a part.
+    # The list has no native ancestry; the token stays until the volume places it.
     assert row["part"] is None
     assert row["section"] == "1-1"
     assert row["cfr_ref"] is None
@@ -250,8 +257,190 @@ def test_shape_requires_ancestry_even_for_a_lettered_section_prefix():
 
 
 def test_shape_leaves_a_malformed_section_id_unsplit():
-    """No recoverable part, so part stays null rather than inventing one."""
+    """The id yields no part, so part stays null until the volume places it (Part 241)."""
     row = _shape(_MALFORMED_SECTION_GRANULE)
     assert row["part"] is None
     assert row["section"] == "Sec-1-1"
     assert row["cfr_ref"] is None
+
+
+# -- section placement from the annual volume XML -----------------------------
+
+
+def _place(package_id: str, *suffixes: str) -> tuple[dict[str, dict], list[str]]:
+    """Place ``{package_id}-{suffix}`` granules against the package's retained volume excerpt.
+
+    Returns the placed rows keyed by suffix and the warnings logged while placing.
+    """
+    rows = [_shape({"granuleId": f"{package_id}-{suffix}", "_package_id": package_id}) for suffix in suffixes]
+    volume = annual_volume(package_id)
+    assert volume is not None
+    warnings: list[str] = []
+    sink = logger.add(warnings.append, level="WARNING", format="{message}")
+    try:
+        placed = place_sections(rows, (ANCESTRY / f"{package_id}.xml").read_bytes(), volume)
+    finally:
+        logger.remove(sink)
+    return {row["granule_id"].removeprefix(f"{package_id}-"): row for row in placed}, warnings
+
+
+@pytest.mark.parametrize(
+    ("package_id", "suffix", "part", "section", "cfr_ref"),
+    [
+        # Title 43 numbers sections by subpart: § 1601.0-1 is in Part 1600 and
+        # cites as printed (ruling 5), not as the nonexistent Part 1601.
+        ("CFR-2025-title43-vol2", "sec1601-0-1", "1600", "1601.0-1", "43-1601.0-1"),
+        # Title 41's compound part keeps its hyphen; the id's token splits it at 50.
+        ("CFR-2025-title41-vol1", "sec50-201-1", "50-201", "1", "41-50-201.1"),
+        # Title 14 Part 241 prints 19-8.1: part 241, never 19, and no citation.
+        ("CFR-2025-title14-vol4", "sec19-8-1", "241", "19-8.1", None),
+        # An unprefixed number in the same part has a part but no citation.
+        ("CFR-2025-title14-vol4", "secSec-1-1", "241", "Sec.1-1", None),
+        # Ranges (a §§ em-dash span and a single-§ hyphen span) cite nothing.
+        ("CFR-2025-title41-vol1", "sec51-10-104-51-10-109", "51-10", "104—51-10.109", None),
+        ("CFR-2025-title26-vol6", "sec1-404a-4-1-404a-7", "1", "404(a)-4-1.404(a)-7", None),
+        # A parenthesized citation does not join the Federal Register key yet.
+        ("CFR-2025-title26-vol6", "sec1-401k-1", "1", "401(k)-1", None),
+        # A publisher typo (§ 206.253 under PART 1206) keeps the heading's part.
+        ("CFR-2025-title30-vol3", "sec206-253", "1206", "206.253", None),
+        # GovInfo's -id duplicate reaches the canonical copy of § 849.504.
+        ("CFR-2025-title48-vol5", "sec849-504-id915", "849", "504", "48-849.504"),
+        ("CFR-2025-title48-vol5", "sec849-504", "849", "504", "48-849.504"),
+    ],
+)
+def test_section_granules_take_the_volume_part_heading(package_id, suffix, part, section, cfr_ref):
+    placed, _warnings = _place(package_id, suffix)
+    row = placed[suffix]
+    assert (row["part"], row["section"], row["cfr_ref"]) == (part, section, cfr_ref)
+
+
+def test_non_section_and_unscanned_granules_keep_the_identifier_path():
+    placed, _warnings = _place(
+        "CFR-2025-title41-vol1",
+        "part50",  # a NODE: Title 41's compound part stays cut at the hyphen (documented limit)
+        "part50-201-toc-id5",
+        "sec50-201-1-app1",  # an appendix of § 50-201.1, which the excerpt holds
+        "sec50-201-2-app1",  # an appendix of a section the excerpt does not hold
+        "sec50-201-2",  # a plain section token the excerpt does not hold
+    )
+    assert (placed["part50"]["part"], placed["part50"]["cfr_ref"]) == ("50", "41-50")
+    assert placed["part50-201-toc-id5"]["part"] == "50"
+    # The held host section lends its part; the appendix's other values stay as its identifier spells them.
+    hosted = placed["sec50-201-1-app1"]
+    assert (hosted["part"], hosted["section"], hosted["cfr_ref"]) == ("50-201", "201-1-app1", "41-50.201-1-app1")
+    appendix = placed["sec50-201-2-app1"]
+    assert (appendix["part"], appendix["section"], appendix["cfr_ref"]) == ("50", "201-2-app1", "41-50.201-2-app1")
+    unheld = placed["sec50-201-2"]
+    assert (unheld["part"], unheld["section"], unheld["cfr_ref"]) == (None, "50-201-2", None)
+
+
+@pytest.mark.parametrize(
+    ("granule_id", "part", "section", "cfr_ref"),
+    [
+        # Literal rows of the live generation 8fb97150: a section's appendix or TOC
+        # keeps its token's leading number as part, exactly as published.
+        ("CFR-2026-title15-vol3-sec746-10-app1", "746", "10-app1", "15-746.10-app1"),
+        ("CFR-2025-title13-vol1-sec117-20-appA", "117", "20-appA", "13-117.20-appA"),
+        ("CFR-2025-title10-vol5-sec1002-31-toc-id1699", "1002", "31-toc-id1699", "10-1002.31-toc-id1699"),
+        (
+            "CFR-2025-title7-vol12-sec1775-69-1775-99-toc-id178",
+            "1775",
+            "69-1775-99-toc-id178",
+            "7-1775.69-1775-99-toc-id178",
+        ),
+    ],
+)
+def test_a_section_appendix_or_toc_keeps_its_published_part(granule_id, part, section, cfr_ref):
+    row = _shape({"granuleId": granule_id})
+    assert (row["part"], row["section"], row["cfr_ref"]) == (part, section, cfr_ref)
+
+
+def test_placement_keeps_every_non_placement_column():
+    package_id = "CFR-2025-title43-vol2"
+    granule = {
+        "granuleId": f"{package_id}-sec1601-0-1",
+        "_package_id": package_id,
+        "title": "Purpose.",
+        "granuleClass": "CONTENT",
+        "lastModified": "2026-07-30T12:33:07Z",
+    }
+    shaped = _shape(granule)
+    volume = annual_volume(package_id)
+    assert volume is not None
+    [placed] = place_sections([shaped], (ANCESTRY / f"{package_id}.xml").read_bytes(), volume)
+    changed = {column for column in COLUMNS if placed[column] != shaped[column]}
+    assert changed == {"part", "section", "cfr_ref"}
+
+
+def test_a_volume_the_validator_refuses_is_still_placed_and_the_refusal_logged():
+    """CFR-2025-title34-vol4 prints TITLENUM twice (Title 34 and reserved Title 35)."""
+    placed, warnings = _place("CFR-2025-title34-vol4", "sec681-1")
+    assert (placed["sec681-1"]["part"], placed["sec681-1"]["cfr_ref"]) == ("681", "34-681.1")
+    assert len(warnings) == 1
+    assert "CFR-2025-title34-vol4" in warnings[0] and "TITLENUM" in warnings[0]
+
+
+def test_a_volume_without_sections_places_nothing():
+    """CFR-2025-title40-vol9 prints only appendices; its scan is empty, so rows keep their identifier values."""
+    placed, warnings = _place("CFR-2025-title40-vol9", "sec60-1", "part60-appA-1")
+    assert (placed["sec60-1"]["part"], placed["sec60-1"]["section"]) == (None, "60-1")
+    assert placed["part60-appA-1"]["part"] == "60"
+    assert len(warnings) == 1 and "lacks source section content" in warnings[0]
+
+
+@pytest.mark.parametrize(
+    ("package_id", "volume"),
+    [
+        ("CFR-2025-title14-vol4", (2025, 14, 4)),
+        ("CFR-2026-title14-vol0", (2026, 14, 0)),
+        ("GPO-CFR-INDEX-2025", None),
+        (None, None),
+    ],
+)
+def test_annual_volume_reads_only_volume_package_ids(package_id, volume):
+    selection = annual_volume(package_id)
+    assert (None if selection is None else (selection.year, selection.title, selection.volume)) == volume
+
+
+# -- the Federal Register join key ------------------------------------------
+
+
+def test_title_43_cfr_ref_is_the_federal_register_key():
+    """Ruling 5: the printed citation joins; the FR side reads "43 CFR 1601.0-1" as 43-1601.0-1."""
+    placed, _warnings = _place("CFR-2025-title43-vol2", "sec1601-0-1")
+    [citation] = parse_cfr_citation("43 CFR 1601.0-1")
+    assert citation.cfr_ref == placed["sec1601-0-1"]["cfr_ref"] == "43-1601.0-1"
+    assert placed["sec1601-0-1"]["part"] == "1600"
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="plan A7: the Federal Register key cuts Title 41's compound parts ('41 CFR 50-201.1' reads as 41-50)",
+)
+def test_title_41_cfr_ref_is_the_federal_register_key():
+    placed, _warnings = _place("CFR-2025-title41-vol1", "sec50-201-1")
+    [citation] = parse_cfr_citation("41 CFR 50-201.1")
+    assert citation.cfr_ref == placed["sec50-201-1"]["cfr_ref"] == "41-50-201.1"
+
+
+# -- the rollup's replace_all input ------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"), [(None, False), ("", False), ("false", False), ("true", True), ("TRUE", True)]
+)
+def test_rollup_passes_replace_all_from_the_workflow_input(monkeypatch, tmp_path, raw, expected):
+    if raw is None:
+        monkeypatch.delenv("CFR_REPLACE_ALL", raising=False)
+    else:
+        monkeypatch.setenv("CFR_REPLACE_ALL", raw)
+    calls = []
+    monkeypatch.setattr(rollup, "build_cfr_sections", lambda output_dir, **kwargs: calls.append(kwargs) or output_dir)
+    rollup.CfrSectionsRollup(output_dir=tmp_path).build(tmp_path)
+    assert calls == [{"replace_all": expected}]
+
+
+def test_rollup_refuses_an_unreadable_replace_all(monkeypatch, tmp_path):
+    monkeypatch.setenv("CFR_REPLACE_ALL", "yes")
+    with pytest.raises(ValueError, match="CFR_REPLACE_ALL"):
+        rollup.CfrSectionsRollup(output_dir=tmp_path).build(tmp_path)

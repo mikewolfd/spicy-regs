@@ -63,6 +63,11 @@ on:
         required: false
         default: '8000000000'
         type: string
+      cfr_replace_all:
+        description: 'cfr_sections: re-place every listed package, not only changed ones'
+        required: false
+        default: false
+        type: boolean
       lda_since:
         description: 'Optional LDA catch-up start date (YYYY-MM-DD)'
         required: false
@@ -220,6 +225,7 @@ jobs:
           # Optional: raises the Senate LDA API rate limit. The lobbying-filings
           # rollup is fully functional keyless, so an unset secret is fine.
           LDA_API_KEY: ${{ secrets.LDA_API_KEY }}
+          CFR_REPLACE_ALL: ${{ inputs.cfr_replace_all }}
           LDA_SINCE: ${{ inputs.lda_since }}
           LDA_UNTIL: ${{ inputs.lda_until }}
           CONGRESS_SINCE: ${{ inputs.congress_since }}

@@ -1,0 +1,24 @@
+<?xml version='1.0' encoding='utf-8'?>
+<CFRDOC xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="CFRMergedXML.xsd">
+ <TITLE>
+  <CHAPTER>
+   <SUBCHAP TYPE="N">
+    <PART>
+     <EAR>Pt. 1206</EAR>
+     <HD SOURCE="HED">PART 1206—PRODUCT VALUATION</HD>
+     <SUBPART>
+      <HD SOURCE="HED">Subpart F—Federal Coal</HD>
+      <SECTION>
+       <SECTNO>§ 1206.252</SECTNO>
+       <SUBJECT>Information collection.</SUBJECT>
+      </SECTION>
+      <SECTION>
+       <SECTNO>§ 206.253</SECTNO>
+       <SUBJECT>Coal subject to royalties—general provisions.</SUBJECT>
+      </SECTION>
+     </SUBPART>
+    </PART>
+   </SUBCHAP>
+  </CHAPTER>
+ </TITLE>
+</CFRDOC>

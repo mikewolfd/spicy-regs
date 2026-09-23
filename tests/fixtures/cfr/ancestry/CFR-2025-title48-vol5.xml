@@ -1,0 +1,27 @@
+<?xml version='1.0' encoding='utf-8'?>
+<CFRDOC xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="CFRMergedXML.xsd">
+ <TITLE>
+  <CHAPTER>
+   <SUBCHAP TYPE="P">
+    <PART>
+     <EAR>Pt. 849</EAR>
+     <HD SOURCE="HED">PART 849—TERMINATION OF CONTRACTS</HD>
+     <SUBPART>
+      <HD SOURCE="HED">Subpart 849.5—Contract Termination Clauses</HD>
+      <SECTION>
+       <SECTNO>849.504</SECTNO>
+       <SUBJECT>Termination of fixed-price contracts for default.</SUBJECT>
+      </SECTION>
+     </SUBPART>
+     <SUBPART>
+      <HD SOURCE="HED">Subpart 849.5—Contract Termination Clauses</HD>
+      <SECTION>
+       <SECTNO>849.504</SECTNO>
+       <SUBJECT>Termination of fixed-price contracts for default.</SUBJECT>
+      </SECTION>
+     </SUBPART>
+    </PART>
+   </SUBCHAP>
+  </CHAPTER>
+ </TITLE>
+</CFRDOC>
