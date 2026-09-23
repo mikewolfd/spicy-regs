@@ -317,12 +317,36 @@ def test_non_section_and_unscanned_granules_keep_the_identifier_path():
         "CFR-2025-title41-vol1",
         "part50",  # a NODE: Title 41's compound part stays cut at the hyphen (documented limit)
         "part50-201-toc-id5",
-        "sec50-201-1-app1",  # a section-token appendix the scan does not hold
+        "sec50-201-1-app1",  # a section's appendix: the scan holds only sections
+        "sec50-201-2",  # a plain section token the excerpt does not hold
     )
     assert (placed["part50"]["part"], placed["part50"]["cfr_ref"]) == ("50", "41-50")
     assert placed["part50-201-toc-id5"]["part"] == "50"
     appendix = placed["sec50-201-1-app1"]
-    assert (appendix["part"], appendix["section"], appendix["cfr_ref"]) == (None, "50-201-1-app1", None)
+    assert (appendix["part"], appendix["section"], appendix["cfr_ref"]) == ("50", "201-1-app1", "41-50.201-1-app1")
+    unheld = placed["sec50-201-2"]
+    assert (unheld["part"], unheld["section"], unheld["cfr_ref"]) == (None, "50-201-2", None)
+
+
+@pytest.mark.parametrize(
+    ("granule_id", "part", "section", "cfr_ref"),
+    [
+        # Literal rows of the live generation 8fb97150: a section's appendix or TOC
+        # keeps its token's leading number as part, exactly as published.
+        ("CFR-2026-title15-vol3-sec746-10-app1", "746", "10-app1", "15-746.10-app1"),
+        ("CFR-2025-title13-vol1-sec117-20-appA", "117", "20-appA", "13-117.20-appA"),
+        ("CFR-2025-title10-vol5-sec1002-31-toc-id1699", "1002", "31-toc-id1699", "10-1002.31-toc-id1699"),
+        (
+            "CFR-2025-title7-vol12-sec1775-69-1775-99-toc-id178",
+            "1775",
+            "69-1775-99-toc-id178",
+            "7-1775.69-1775-99-toc-id178",
+        ),
+    ],
+)
+def test_a_section_appendix_or_toc_keeps_its_published_part(granule_id, part, section, cfr_ref):
+    row = _shape({"granuleId": granule_id})
+    assert (row["part"], row["section"], row["cfr_ref"]) == (part, section, cfr_ref)
 
 
 def test_placement_keeps_every_non_placement_column():

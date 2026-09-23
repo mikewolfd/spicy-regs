@@ -337,16 +337,18 @@ tables:
       Register side. Other granules keep the part their identifier spells, so
       Title 41's TOC and NODE rows keep parts cut at the hyphen (`50`).
       Generations published before this mapper keep identifier-derived parts
-      (see coverage). Missing credentials and incomplete source traversals
-      refuse before output replacement; a volume that cannot be read keeps that
-      package's prior rows. All columns are stored as VARCHAR.
+      (see coverage). A package is re-placed only when it is new or changed
+      since the prior table; an unchanged package, or one whose volume cannot
+      be read, keeps its prior rows. Missing credentials and incomplete source
+      traversals refuse before output replacement; GovInfo's annual index
+      package is skipped. All columns are stored as VARCHAR.
     columns:
       granule_id: "GovInfo granule identifier. Primary key / dedup key, including non-section structural units."
       package_id: "GovInfo package identifier for the enclosing annual CFR title and volume."
       cfr_ref: "Join key to Federal Register `cfr_references_json`. For a section, the title and its printed citation (e.g. `43-1601.0-1`, `41-50-201.1`); Title 43 keeps its subpart-numbered spelling while `part` names the enclosing part. NULL for ranges, publisher typos, unprefixed numbers (`Sec. 1-1`) and parenthesized citations (`1.401(k)-1`), which the Federal Register key does not yet spell alike. For other granules, composed from the identifier's part token (e.g. `48-700`); NULL without one."
       title: "CFR title number from the package or granule identifier (e.g. `40`)."
-      part: "For a section, the number in the enclosing PART heading of the package's annual volume XML (e.g. `1600`, `50-201`, `241`); NULL outside a numbered PART or when the volume does not hold the section. For other granules, the identifier's part token including letter suffixes (e.g. `1203a`), which cuts Title 41's compound parts at the hyphen."
-      section: "For a section, the printed number less its `{part}.` prefix (e.g. `1` for § 50-201.1, `19-8.1` in Part 241, `1601.0-1` in Part 1600, `401(k)-1`). For a section token the volume does not hold, the literal identifier token (e.g. `746-10-app1`). NULL for other granules."
+      part: "For a section, the number in the enclosing PART heading of the package's annual volume XML (e.g. `1600`, `50-201`, `241`); NULL outside a numbered PART or when the volume does not hold the section. For other granules, the identifier's part token including letter suffixes (e.g. `1203a`), which cuts Title 41's compound parts at the hyphen; for a section's appendix or TOC, the leading number of its token (`746` for `sec746-10-app1`)."
+      section: "For a section, the printed number less its `{part}.` prefix (e.g. `1` for § 50-201.1, `19-8.1` in Part 241, `1601.0-1` in Part 1600, `401(k)-1`). For a section's appendix or TOC, the rest of its token (`10-app1`); for a section token the volume does not hold, the whole token. NULL for other granules."
       heading: "Granule heading / caption text from GovInfo's list-level `title` field."
       structure_level: "GovInfo granule class / structural level (e.g. `CONTENT`, `NODE`, `TOC`, `APPENDIX`)."
       edition_year: "Annual edition year from the package or granule identifier, falling back to the year in `dateIssued`. This is not necessarily the printed body revision year or proof of a substantive edition."

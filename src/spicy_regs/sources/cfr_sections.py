@@ -129,7 +129,12 @@ class CfrSectionsReader(Reader):
         logger.info("CFR: yielded {:,} granules", self._seen)
 
     def _iter_packages(self) -> Iterator[dict]:
-        """Yield identified package rows, refusing any package outside the CFR collection."""
+        """Yield identified ``CFR-`` package rows, skipping the listing's other packages with one log line.
+
+        GovInfo's CFR collection also lists its annual index (``GPO-CFR-INDEX-2025``),
+        which is not a title volume; skipping it keeps that package's prior rows.
+        A missing, padded or repeated package id still refuses.
+        """
         from spicy_docs.sources.govinfo.discovery import published_url
 
         assert self._source is not None
@@ -139,10 +144,14 @@ class CfrSectionsReader(Reader):
             collections=[COLLECTION],
             page_size=self.page_size,
         )
+        skipped = []
         for package in _identified_rows(self._source.packages(url, max_pages=_MAX_PAGES), "packageId"):
-            if not package["packageId"].startswith("CFR-"):
-                raise CfrSectionsError("CFR listing returned a package outside its collection")
-            yield package
+            if package["packageId"].startswith("CFR-"):
+                yield package
+            else:
+                skipped.append(package["packageId"])
+        if skipped:
+            logger.info("CFR: skipped {} listed non-volume package(s): {}", len(skipped), ", ".join(skipped))
 
     def _iter_granules(self, package: dict) -> Iterator[dict]:
         """Yield each granule with its package id, lastModified and title attached.

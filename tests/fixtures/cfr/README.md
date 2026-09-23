@@ -36,6 +36,15 @@ before/raw/after comparison are retained under
   every row of this package in the pinned current public table. The list rows
   retain literal identifiers and headings but provide no parent part.
 
+`govinfo-published-cfr-index.json` is an authored excerpt of the third page of
+GovInfo's 2025 CFR `/published` listing, captured 2026-09-23 by
+`listing_probe.py` in `corpora/fork-execution-2026-09-21/cfr-ancestry-fix-2026-09-23/`
+(raw page `listing-page-with-index.json`, SHA-256
+`269ca65103f7483b3324564b1ae40d127a29d8c9060c024e1fc63f187b94b94e`; the full
+listing declared and returned 237 packages). It keeps the two adjacent records
+`CFR-2025-title10-vol1` and `GPO-CFR-INDEX-2025` unchanged; `count` is set to 2
+to make it a synthetic terminal page.
+
 `ancestry/` holds annual volume excerpts named by package: the element path
 to each selected PART and SECTION only. Six are copied unchanged from
 `spicy-docs/tests/fixtures/cfr/ancestry/` (spicy-docs `eae0812`; provenance in

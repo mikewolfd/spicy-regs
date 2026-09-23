@@ -135,7 +135,7 @@ def test_follows_publisher_opaque_continuation_exactly():
         {"packages": {}, "count": 0},
         {"packages": [None], "count": 1},
         page("packages", [{}]),
-        page("packages", [{"packageId": "FR-2025-01-01"}]),
+        page("packages", [{"packageId": " GPO-CFR-INDEX-2025"}]),
         page("packages", [], count=1),
         page("packages", [PACKAGE], count=True),
         b"not JSON",
@@ -144,6 +144,28 @@ def test_follows_publisher_opaque_continuation_exactly():
 def test_bad_package_page_refuses(payload):
     with pytest.raises((cfr.CfrSectionsError, PagedJsonSourceError)):
         list(reader(Transport(payload)).iter_records())
+
+
+def test_listed_index_package_is_skipped_with_one_log_line():
+    """GovInfo's CFR listing includes its annual index, which is not a title volume."""
+    from loguru import logger
+
+    listing = json.loads((FIXTURES / "govinfo-published-cfr-index.json").read_bytes())
+    volume_id = "CFR-2025-title10-vol1"
+    assert [p["packageId"] for p in listing["packages"]] == [volume_id, "GPO-CFR-INDEX-2025"]
+    granule = {**GRANULE, "granuleId": f"{volume_id}-sec1-1"}
+    transport = Transport(listing, page("granules", [granule]))
+    messages: list[str] = []
+    sink = logger.add(messages.append, level="INFO", format="{message}")
+    try:
+        rows = list(reader(transport).iter_records())
+    finally:
+        logger.remove(sink)
+    assert [row["_package_id"] for row in rows] == [volume_id]
+    assert len(transport.calls) == 2 and "GPO-CFR-INDEX" not in str(transport.calls[1].url)
+    assert [m for m in messages if "skipped" in m] == [
+        "CFR: skipped 1 listed non-volume package(s): GPO-CFR-INDEX-2025\n"
+    ]
 
 
 @pytest.mark.parametrize(
@@ -347,8 +369,10 @@ def test_build_downloads_no_volume_for_a_package_without_section_granules(monkey
     ids=["unavailable", "refused", "server-error", "not-xml", "not-a-volume", "truncated"],
 )
 def test_failed_volume_keeps_the_package_prior_rows(monkeypatch, tmp_path, responses):
-    """The fresh listing changed the heading, but its volume failed: the prior row stands unchanged."""
-    prior_row = build._shape({**GRANULE, "_package_id": PACKAGE_ID, "title": "Prior heading."})
+    """The package changed since the prior table, but its volume failed: the prior row stands unchanged."""
+    prior_row = build._shape(
+        {**GRANULE, "_package_id": PACKAGE_ID, "title": "Prior heading.", "lastModified": "2025-01-02T00:00:00Z"}
+    )
     other_id = "CFR-2025-title2-vol1"
     other = {"packageId": other_id, "lastModified": "2026-09-11T17:30:58Z"}
     node = {"granuleId": f"{other_id}-part1", "title": "PART 1", "granuleClass": "NODE"}
@@ -366,3 +390,35 @@ def test_default_volume_client_is_bounded():
     assert budget.max_bytes == build.MAX_VOLUME_BYTES == 64 * 1024 * 1024
     assert budget.max_requests == build._VOLUME_REQUESTS
     assert budget.min_request_interval_seconds > 0
+
+
+def test_unchanged_package_keeps_its_prior_rows_without_a_download(monkeypatch, tmp_path):
+    """Every granule is in the prior table with the same last_modified: no volume request, prior row untouched."""
+    prior_row = {
+        **build._shape({**GRANULE, "_package_id": PACKAGE_ID, "_package_last_modified": PACKAGE["lastModified"]}),
+        "part": "1",
+        "section": "1",
+        "cfr_ref": "1-1.1",
+        "heading": "Prior heading.",
+    }
+    acquirer, calls = volumes()
+    walk = Transport(page("packages", [PACKAGE]), page("granules", [GRANULE]))
+    rows = build_with(monkeypatch, tmp_path, walk, acquirer, prior_rows=[prior_row])
+    assert calls == []
+    assert rows == {GRANULE["granuleId"]: prior_row}
+
+
+@pytest.mark.parametrize("change", ["last-modified", "new-granule"])
+def test_changed_package_is_downloaded_and_re_placed(monkeypatch, tmp_path, change):
+    """A different last_modified on any granule, or a granule the prior table lacks, re-places the package."""
+    stamp = PACKAGE["lastModified"] if change == "new-granule" else "2025-01-02T00:00:00Z"
+    prior_row = build._shape({**GRANULE, "_package_id": PACKAGE_ID, "_package_last_modified": stamp})
+    second = {**GRANULE, "granuleId": f"{PACKAGE_ID}-sec1-2"}
+    listed = [GRANULE, second] if change == "new-granule" else [GRANULE]
+    acquirer, calls = volumes((200, "application/xml", VOLUME))
+    walk = Transport(page("packages", [PACKAGE]), page("granules", listed))
+    rows = build_with(monkeypatch, tmp_path, walk, acquirer, prior_rows=[prior_row])
+    assert calls == [VOLUME_URL]
+    placed = rows[GRANULE["granuleId"]]
+    assert (placed["part"], placed["cfr_ref"], placed["last_modified"]) == ("1", "1-1.1", PACKAGE["lastModified"])
+    assert set(rows) == {row["granuleId"] for row in listed}

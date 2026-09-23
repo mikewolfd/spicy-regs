@@ -25,9 +25,20 @@ unprefixed numbers and parenthesized citations (SpicyDocs'
 is still scanned and the refusal logged; an empty scan places nothing; a volume
 that cannot be downloaded or scanned keeps that package's prior rows.
 
-TOC, NODE and appendix granules, and section tokens the scan does not hold,
-keep the identifier-derived path, so Title 41's TOC and NODE parts stay cut at
-the first hyphen (``part50-201`` gives ``50``).
+Placement changes only the rows the scan holds. Every other granule keeps its
+identifier-derived values: TOC, NODE and appendix part tokens (so Title 41's
+TOC and NODE parts stay cut at the first hyphen, ``part50-201`` gives ``50``),
+and for a section's appendix or TOC (``sec746-10-app1``) the token's leading
+number (746), as published before cac7615. A plain section token the scan does
+not hold keeps an unknown part.
+
+A package is re-placed only when it is new to the prior table or any of its
+granules is new or carries a different ``last_modified``; otherwise its prior
+rows stand and no volume is downloaded. That is safe only once the prior table
+was itself built by this placement: generations published before it
+(``8fb97150`` and earlier) hold identifier-derived parts that an unchanged
+package would keep. Publish the full rebuild (the A8 candidate) before the
+scheduled run resumes.
 """
 
 from __future__ import annotations
@@ -104,6 +115,10 @@ _TITLE_RE = re.compile(r"title(\d+)")
 # Part 1203b must not collapse into Part 1203, including their TOC/child rows.
 _PART_RE = re.compile(r"part(\d+[A-Za-z]*)")
 _SECTION_RE = re.compile(r"sec([\w.-]+)")
+# A section's appendix or TOC (``746-10-app1``, ``1002-31-toc-id1699``) is not a
+# section the volume scan holds; it keeps the part its token's leading number
+# spells and the rest as its section, as every generation before cac7615 did.
+_ATTACHED_RE = re.compile(r"^(\d+[A-Za-z]*)-(.+-(?:app|toc).*)$")
 _VOLUME_RE = re.compile(r"CFR-(\d{4})-title(\d+)-vol(\d+)")
 # A section granule's token, less GovInfo's duplicate suffix: ``sec849-504-id915``
 # is the same printed section as ``sec849-504``.
@@ -141,6 +156,9 @@ def _shape(granule: dict) -> dict:
     # Part / section tokens from the granule id (both nullable — see module docstring).
     part = _first(_PART_RE, granule_id)
     section = _first(_SECTION_RE, granule_id)
+    attached = _ATTACHED_RE.match(section) if part is None and section is not None else None
+    if attached:
+        part, section = attached.group(1), attached.group(2)
 
     return {
         "granule_id": granule_id,
@@ -236,6 +254,19 @@ def _placed_package(acquirer: CfrAcquirer, package_id: str | None, rows: list[di
         return None
 
 
+def _prior_modified(prior_file: Path | None) -> dict[str, str | None]:
+    """Each prior granule's ``last_modified``, by ``granule_id``; empty without a prior table."""
+    if prior_file is None:
+        return {}
+    table = pq.read_table(prior_file, columns=["granule_id", "last_modified"])
+    return dict(zip(table["granule_id"].to_pylist(), table["last_modified"].to_pylist(), strict=True))
+
+
+def _unchanged(rows: list[dict], prior: dict[str, str | None]) -> bool:
+    """Every granule is already in the prior table with the same ``last_modified``."""
+    return all(row["granule_id"] in prior and prior[row["granule_id"]] == row["last_modified"] for row in rows)
+
+
 def _volume_acquirer() -> CfrAcquirer:
     """A paced, bounded GovInfo client for annual volume XML."""
     from spicy_docs.sources.cfr.acquisition import CfrAcquirer, CfrAcquisitionBudget
@@ -273,20 +304,30 @@ def build_cfr_sections(output_dir: Path, *, since_year: int | None = None, acqui
         row = _shape(granule)
         packages.setdefault(row["package_id"], []).append(row)
 
-    # 3. Place each package's section granules from its volume; a failed volume keeps its prior rows.
+    # 3. Re-place only changed packages (see module docstring); an unchanged package
+    # or a failed volume keeps that package's prior rows.
+    prior = _prior_modified(prior_file if have_prior else None)
     rows: list[dict] = []
-    kept = 0
+    unchanged = failed = 0
     with acquirer or _volume_acquirer() as volumes:
         for package_id, shaped in packages.items():
+            if _unchanged(shaped, prior):
+                unchanged += 1
+                continue
             placed = _placed_package(volumes, package_id, shaped)
             if placed is None:
-                kept += 1
+                failed += 1
             else:
                 rows.extend(placed)
     new_file = output_dir / "_cfr_new.parquet"
     table = pa.Table.from_pylist(rows, schema=_SCHEMA) if rows else _SCHEMA.empty_table()
     pq.write_table(table, new_file, compression="zstd")
-    logger.info("CFR: fetched {:,} granules this run; {} packages kept their prior rows", len(rows), kept)
+    logger.info(
+        "CFR: {:,} granules re-placed this run; prior rows kept for {} unchanged and {} failed packages",
+        len(rows),
+        unchanged,
+        failed,
+    )
 
     # 4. Merge prior + new, dedup on granule_id preferring the new row.
     spill_dir = output_dir / ".duckdb_tmp"
