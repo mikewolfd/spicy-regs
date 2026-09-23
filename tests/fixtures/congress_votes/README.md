@@ -33,3 +33,16 @@ This is the JSON actions route's spelling (`rollNumber`, `sessionNumber`,
 integers), which `read_recorded_vote` accepts beside the BILLSTATUS parser's
 own snake-case attributes. An offline test over it establishes behavior for
 this shape; it says nothing about coverage or what the publisher serves today.
+
+# Roll-call vote bodies (one per chamber)
+
+Two complete, unmodified publisher bodies, copied from spicy-docs'
+`tests/fixtures/congress_votes/` (captured keyless 2026-09-19; see its README).
+The Clerk body keeps its CRLF line endings, hence `-text` in `.gitattributes`.
+They let the roll-call tests read a real `RollCallVote`, so `vote_day` is checked
+against each chamber's own printed spelling rather than a stub's.
+
+| Fixture | Publisher response | Printed date | SHA-256 |
+| --- | --- | --- | --- |
+| `clerk-roll240.xml` | `clerk.house.gov/evs/2025/roll240.xml` | `8-Sep-2025` | `0297b0c76d3c14452a91daf9828943e5669c00dcc408c07bc80870b9d8223542` |
+| `senate-vote-119-1-00001.xml` | `www.senate.gov/legislative/LIS/roll_call_votes/vote1191/vote_119_1_00001.xml` | `January 9, 2025,  02:54 PM` | `9d71d78a54c83522babd743209ca4a1a27baa2df122d6830c50ec2aa512ea17e` |

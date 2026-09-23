@@ -1662,7 +1662,11 @@ tables:
       that named a different bill for *this* roll call, and they are kept rather
       than dropped. `match_action_index` is set only on a recorded-vote match, since
       a listing reference sits on no action. With no bill-family run published, the
-      listing linkage alone fills these columns.
+      listing linkage alone fills these columns. Each run fills a NULL `vote_day` on
+      every held (completely captured) roll call from its own `vote_date` before
+      merging, so a row published before the column existed gains it without a
+      re-fetch. An incomplete capture is not held: it is re-fetched first each run
+      and takes its day from the file. A linkage-only row keeps NULL.
     columns_from: spicy_docs
 
   member_votes:
@@ -1742,8 +1746,8 @@ tables:
       member_key: "The member's key within the roll call, as in `member_votes`."
       chamber: "`house` or `senate`."
       bioguide_id: "The member's Bioguide id: native for the House, resolved from the LIS id through `members` for the Senate. NULL when the LIS id resolves to no member."
-      vote_day: "The vote's calendar day (YYYY-MM-DD), parsed from the chamber's literal date."
-      term_match: "`half_open` (one term with start <= day < end), `inclusive_end` (none half-open, exactly one with the end day included), `ambiguous` (more than one term either way), `unmatched` (none), or `unresolved_member`."
+      vote_day: "The vote's day (YYYY-MM-DD) as the chamber printed it in Eastern time, read from `member_votes.vote_date` by the same rule as `roll_call_votes.vote_day`; NULL when the file prints no date."
+      term_match: "`half_open` (one term with start <= day < end), `inclusive_end` (none half-open, exactly one with the end day included), `ambiguous` (more than one term either way), `unmatched` (none), `unresolved_member`, or `undated` (the file prints no date, so no term is chosen). `undated` wins over `unresolved_member`; such a row still carries `bioguide_id` wherever the member resolves."
       term_index: "The matched term's `term_index` in `member_terms`; NULL unless matched."
       term_start: "The matched term's start date; NULL unless matched."
       term_end: "The matched term's end date; NULL unless matched."

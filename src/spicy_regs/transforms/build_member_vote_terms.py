@@ -12,15 +12,17 @@ no ambiguity, and the other three are native ``Not Voting`` rows dated after the
 recorded term, which stay ``unmatched``. Inclusive ends alone would have made 1,855 House rows on
 2025-01-03 ambiguous.
 
-A House row carries its Bioguide id; a Senate row carries only a LIS id, resolved through
-``members``. Every vote row appears exactly once, matched or not.
+The day is spicy-docs' ``vote_day`` over ``member_votes.vote_date``, the chamber's printed
+Eastern date; a spelling it cannot read refuses the build, and a vote whose file prints no date is
+``undated`` with no term rather than matched against a guessed day. A House row carries its
+Bioguide id; a Senate row carries only a LIS id, resolved through ``members``. Every vote row
+appears exactly once, matched or not.
 """
 
 from __future__ import annotations
 
-import re
 from collections import defaultdict
-from datetime import date, datetime
+from datetime import date
 from pathlib import Path
 
 import pyarrow as pa
@@ -43,30 +45,19 @@ COLUMNS = (
 )
 _SCHEMA = pa.schema([(column, pa.string()) for column in COLUMNS])
 
-#: ``term_match`` values, in the order the rule tries them.
-HALF_OPEN, INCLUSIVE_END, AMBIGUOUS, UNMATCHED, UNRESOLVED_MEMBER = (
+#: ``term_match`` values, in the order the rule decides them: a vote with no day is ``undated``
+#: (its member is still resolved, but no term is chosen), then a member with no Bioguide id is
+#: ``unresolved_member``, and only then is a term matched, half-open before inclusive-end.
+UNDATED, UNRESOLVED_MEMBER, HALF_OPEN, INCLUSIVE_END, AMBIGUOUS, UNMATCHED = (
+    "undated",
+    "unresolved_member",
     "half_open",
     "inclusive_end",
     "ambiguous",
     "unmatched",
-    "unresolved_member",
 )
 
 _TERM_TYPE = {"house": "rep", "senate": "sen"}
-# The Clerk spells ``3-Jan-2025``; the Senate ``January 9, 2025,  02:54 PM``.
-_HOUSE_DATE = re.compile(r"(\d{1,2})-([A-Z][a-z]{2})-(\d{4})")
-_SENATE_DATE = re.compile(r"([A-Z][a-z]+) (\d{1,2}), (\d{4}),\s+(\d{1,2}):(\d{2}) ([AP]M)")
-
-
-def vote_day(chamber: str, literal: str) -> date:
-    """The calendar day of a vote's literal date, in its chamber's full spelling; anything else refuses."""
-    text = (literal or "").strip()
-    if chamber == "house" and (match := _HOUSE_DATE.fullmatch(text)):
-        return datetime.strptime("-".join(match.groups()), "%d-%b-%Y").date()
-    if chamber == "senate" and (match := _SENATE_DATE.fullmatch(text)):
-        month, day, year, hour, minute, meridiem = match.groups()
-        return datetime.strptime(f"{month} {day} {year} {hour}:{minute} {meridiem}", "%B %d %Y %I:%M %p").date()
-    raise ValueError(f"{chamber} vote date {literal!r} is not the chamber's full spelling")
 
 
 def _rows(path: Path, columns: list[str]) -> list[dict]:
@@ -77,8 +68,12 @@ def build_member_vote_terms(output_dir: Path) -> Path:
     """Build ``member_vote_terms.parquet`` from the three published inputs in ``output_dir``.
 
     Raises FileNotFoundError for a missing input, ValueError for a duplicated member
-    vote or a LIS id naming two members.
+    vote, a LIS id naming two members, or a vote date outside its chamber's spelling.
     """
+    # Local, like every spicy-docs use reachable from the transforms facade: a base
+    # install imports this module without the source-readers group.
+    from spicy_docs.sources.congress.votes import vote_day
+
     missing = [name for name in INPUTS if not (output_dir / name).exists()]
     if missing:
         raise FileNotFoundError(f"member_vote_terms needs {', '.join(missing)} in {output_dir}")
@@ -99,6 +94,8 @@ def build_member_vote_terms(output_dir: Path) -> Path:
             terms[(term["bioguide_id"], term["term_type"])].append((start, end, term))
 
     rows, seen, counts = [], set(), defaultdict(int)
+    # One roll call's literal repeats on every member row; read each once.
+    days: dict[tuple[str, str | None], date | None] = {}
     votes = _rows(
         output_dir / "member_votes.parquet", ["vote_id", "member_key", "chamber", "bioguide_id", "lis_id", "vote_date"]
     )
@@ -108,10 +105,16 @@ def build_member_vote_terms(output_dir: Path) -> Path:
             raise ValueError(f"member vote {identity} appears twice")
         seen.add(identity)
         chamber = vote["chamber"]
-        day = vote_day(chamber, vote["vote_date"])
+        literal = (chamber, vote["vote_date"])
+        if literal not in days:
+            iso = vote_day(*literal)
+            days[literal] = None if iso is None else date.fromisoformat(iso)
+        day = days[literal]
         bioguide = vote["bioguide_id"] or bioguide_by_lis.get(vote["lis_id"] or "")
         term, match = None, UNRESOLVED_MEMBER
-        if bioguide:
+        if day is None:  # decided before the member: no day, no term, whoever voted
+            match = UNDATED
+        elif bioguide:
             candidates = terms.get((bioguide, _TERM_TYPE[chamber]), ())
             half_open = [t for start, end, t in candidates if start <= day < end]
             inclusive = [t for start, end, t in candidates if start <= day <= end]
@@ -130,7 +133,7 @@ def build_member_vote_terms(output_dir: Path) -> Path:
                 "member_key": vote["member_key"],
                 "chamber": chamber,
                 "bioguide_id": bioguide,
-                "vote_day": day.isoformat(),
+                "vote_day": None if day is None else day.isoformat(),
                 "term_match": match,
                 "term_index": term["term_index"] if term else None,
                 "term_start": term["term_start"] if term else None,

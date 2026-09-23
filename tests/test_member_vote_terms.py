@@ -12,7 +12,7 @@ import yaml
 
 from spicy_regs import data_dictionary as dd
 from spicy_regs.pipelines.rollups.member_vote_terms import MemberVoteTermsRollup
-from spicy_regs.transforms.build_member_vote_terms import COLUMNS, build_member_vote_terms, vote_day
+from spicy_regs.transforms.build_member_vote_terms import COLUMNS, build_member_vote_terms
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -98,9 +98,33 @@ def test_two_terms_under_one_rule_are_ambiguous_not_chosen(tmp_path):
     "chamber,literal",
     [("house", "2025-01-03"), ("house", "3-January-2025"), ("senate", "3-Jan-2025"), ("senate", "January 9, 2025")],
 )
-def test_a_date_outside_its_chambers_spelling_refuses(chamber, literal):
-    with pytest.raises(ValueError, match="full spelling"):
-        vote_day(chamber, literal)
+def test_a_date_outside_its_chambers_spelling_refuses_the_build(tmp_path, chamber, literal):
+    with pytest.raises(ValueError, match="own spelling"):
+        _build(tmp_path, [_vote("v", "M", chamber, literal, bioguide="M")], [])
+    assert not (tmp_path / "member_vote_terms.parquet").exists()
+
+
+@pytest.mark.parametrize("literal", [None, "", "  "])
+def test_a_vote_whose_file_prints_no_date_is_undated_not_matched(tmp_path, literal):
+    """No day means no term: the row is kept, its member still resolved, and nothing is guessed."""
+    rows = _build(
+        tmp_path,
+        [
+            _vote("119-house-1-9", "A000370", "house", literal, bioguide="A000370"),
+            _vote("119-senate-1-9", "S421", "senate", literal, lis="S421"),
+            _vote("119-house-1-1", "A000370", "house", "3-Jan-2025", bioguide="A000370"),
+        ],
+        [
+            _term("A000370", "6", "rep", "2025-01-03", "2027-01-03"),
+            _term("V000137", "0", "sen", "2025-01-03", "2031-01-03"),
+        ],
+        members=[{"bioguide_id": "V000137", "lis_id": "S421"}],
+    )
+    assert {k: (r["bioguide_id"], r["vote_day"], r["term_match"], r["term_index"]) for k, r in rows.items()} == {
+        ("119-house-1-9", "A000370"): ("A000370", None, "undated", None),
+        ("119-senate-1-9", "S421"): ("V000137", None, "undated", None),
+        ("119-house-1-1", "A000370"): ("A000370", "2025-01-03", "half_open", "6"),
+    }
 
 
 def test_a_repeated_vote_row_or_a_shared_lis_id_refuses(tmp_path):
