@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from collections import defaultdict
 from pathlib import Path
 
@@ -95,6 +94,10 @@ def build_rule_targets(
     # span. ``evidence_id`` remains one concrete (lexicographically stable)
     # source row that can be inspected.
     edges: dict[tuple[str, str | None, str | None, str], dict] = {}
+    # Each edge's FR references by canonical form, serialized once after the walk: re-sorting
+    # and re-serializing on every repeat was quadratic in an edge's references and took most
+    # of this stage's 8.5 minutes (measured 2026-09-23, 517,311 edges).
+    references: dict[tuple[str, str | None, str | None, str], dict[str, dict]] = {}
     trusted_dockets: set[str] = set()
 
     def add_edge(
@@ -127,16 +130,13 @@ def build_rule_targets(
             "first_seen": first,
             "last_seen": last,
             **provenance,
-            "fr_references_json": canonical_json([fr_reference] if fr_reference else []),
         }
+        if fr_reference is not None:
+            references.setdefault(key, {})[canonical_json(fr_reference)] = fr_reference
         existing = edges.get(key)
         if existing is None:
             edges[key] = candidate
             return
-        references = json.loads(existing["fr_references_json"])
-        if fr_reference is not None and fr_reference not in references:
-            references.append(fr_reference)
-        existing["fr_references_json"] = canonical_json(sorted(references, key=canonical_json))
         existing["first_seen"], existing["last_seen"] = _date_bounds(
             existing.get("first_seen"),
             existing.get("last_seen"),
@@ -295,6 +295,9 @@ def build_rule_targets(
                         last_seen=document.get("modify_date") or publication_date,
                     )
 
+    for key, row in edges.items():
+        held = references.get(key, {})
+        row["fr_references_json"] = canonical_json([held[form] for form in sorted(held)])
     rows = sorted(
         edges.values(),
         key=lambda row: (
