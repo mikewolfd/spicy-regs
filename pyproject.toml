@@ -91,6 +91,7 @@ run-rollup-press-releases = "spicy_regs.pipelines.rollups.press_releases:app"
 run-rollup-amendments = "spicy_regs.pipelines.rollups.amendments:app"
 run-rollup-roll-call-votes = "spicy_regs.pipelines.rollups.roll_call_votes:app"
 run-rollup-members = "spicy_regs.pipelines.rollups.members:app"
+run-rollup-member-vote-terms = "spicy_regs.pipelines.rollups.member_vote_terms:app"
 run-rollup-committee-reports = "spicy_regs.pipelines.rollups.committee_reports:app"
 # The two PDF-only families: one rollup per acquisition pass.
 run-rollup-print-citations = "spicy_regs.pipelines.rollups.print_citations:app"

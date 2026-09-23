@@ -1,0 +1,23 @@
+name: Rollup — member_vote_terms
+
+# Derived rollup: assigns each member vote its term (delivery decision 2) from
+# the published member_votes, members and member_terms. Runs after the
+# roll-call-votes (03:00) and members (03:20) rollups.
+on:
+  schedule:
+    - cron: '50 3 * * *'
+  workflow_dispatch:
+    inputs:
+      skip_upload:
+        description: 'Skip R2 upload (dry run)'
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  run:
+    uses: ./.github/workflows/_rollup.yml
+    secrets: inherit
+    with:
+      command: run-rollup-member-vote-terms
+      skip_upload: ${{ github.event_name == 'workflow_dispatch' && inputs.skip_upload || false }}

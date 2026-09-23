@@ -175,6 +175,7 @@ TABLES: tuple[str, ...] = (
     "court_citation_map",
     "court_parentheticals",
     "court_opinions",
+    "member_vote_terms",
     "usaspending_recipients",
     "fcc_proceedings",
     "fcc_filings",
@@ -225,7 +226,7 @@ MCP_QUERYABLE: frozenset[str] = frozenset(
         "court_dockets",
         "court_docket_groups",
         "court_opinion_clusters",
-            "court_citations",
+        "court_citations",
         "court_citation_map",
         "court_parentheticals",
         "court_opinions",
@@ -237,6 +238,7 @@ MCP_QUERYABLE: frozenset[str] = frozenset(
         "bill_family_backfills",
         "bill_family_backfill_walks",
         "committee_report_reads",
+        "member_vote_terms",
         *CONTRACT_TABLES,
     }
 )
@@ -737,6 +739,7 @@ def expected_schemas() -> dict[str, list[tuple[str, str]]]:
     from spicy_regs.transforms.enrich_bill_subjects import COLUMNS as BILL_SUBJECT_COLUMNS
     from spicy_regs.transforms.build_court_opinion_clusters import COLUMNS as COURT_CLUSTER_COLUMNS
     from spicy_regs.transforms.build_court_bulk_tables import CITATION_MAP, CITATIONS, OPINIONS, PARENTHETICALS
+    from spicy_regs.transforms.build_member_vote_terms import COLUMNS as MEMBER_VOTE_TERM_COLUMNS
 
     builder_columns = {
         "fec_source_catalog": FEC_CATALOG_COLUMNS,
@@ -749,6 +752,7 @@ def expected_schemas() -> dict[str, list[tuple[str, str]]]:
         "court_citation_map": CITATION_MAP.columns,
         "court_parentheticals": PARENTHETICALS.columns,
         "court_opinions": OPINIONS.columns,
+        "member_vote_terms": MEMBER_VOTE_TERM_COLUMNS,
     }
     for name in TABLES:
         if name in builder_columns:

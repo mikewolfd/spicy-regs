@@ -1717,6 +1717,38 @@ tables:
       columns are stored as VARCHAR.
     columns_from: spicy_docs
 
+  member_vote_terms:
+    label: "Member vote terms"
+    coverage: >-
+      Derived, and bounded by its inputs: one row for every `member_votes`
+      row. On 2026-09-23, 382,136 rows from roll-call generation `3204b8fc…`
+      and members generation `017366cc…`: 382,118 matched a half-open term, 15
+      an inclusive end, and 3 stay unmatched. The exceptions equal those of an
+      independent replay row for row
+      (fork-execution-2026-09-21/votes-qualification/complete-member-join-replay.json).
+    measured_on: "2026-09-23"
+    summary: >-
+      The term each member vote counts toward (delivery decision 2). A vote on
+      `vote_day` counts toward the term with `term_start <= vote_day <
+      term_end`, so the day one Congress ends and the next begins belongs to
+      the new term. Only where that finds none is an inclusive end accepted,
+      and only if exactly one term qualifies. The term type follows the
+      chamber (`rep`, `sen`); a term with no end date never matches. Built by
+      `build_member_vote_terms` from `member_votes`, `members` (a Senate row's
+      LIS id resolves to its Bioguide id there) and `member_terms`. Join to
+      `member_votes` on (`vote_id`, `member_key`) and to `member_terms` on
+      (`bioguide_id`, `term_index`). All columns are stored as VARCHAR.
+    columns:
+      vote_id: "The roll call, as in `member_votes`."
+      member_key: "The member's key within the roll call, as in `member_votes`."
+      chamber: "`house` or `senate`."
+      bioguide_id: "The member's Bioguide id: native for the House, resolved from the LIS id through `members` for the Senate. NULL when the LIS id resolves to no member."
+      vote_day: "The vote's calendar day (YYYY-MM-DD), parsed from the chamber's literal date."
+      term_match: "`half_open` (one term with start <= day < end), `inclusive_end` (none half-open, exactly one with the end day included), `ambiguous` (more than one term either way), `unmatched` (none), or `unresolved_member`."
+      term_index: "The matched term's `term_index` in `member_terms`; NULL unless matched."
+      term_start: "The matched term's start date; NULL unless matched."
+      term_end: "The matched term's end date; NULL unless matched."
+
   committee_reports:
     label: "Committee reports"
     coverage: >-

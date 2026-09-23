@@ -95,6 +95,7 @@ TABLES = (
     "member_votes",
     "members",
     "member_terms",
+    "member_vote_terms",
     "committee_reports",
     "report_sections",
     "hearing_transcripts",

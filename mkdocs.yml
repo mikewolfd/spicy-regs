@@ -98,6 +98,7 @@ nav:
       - member_votes: tables/member_votes.md
       - members: tables/members.md
       - member_terms: tables/member_terms.md
+      - member_vote_terms: tables/member_vote_terms.md
       - committee_reports: tables/committee_reports.md
       - report_sections: tables/report_sections.md
       - hearing_transcripts: tables/hearing_transcripts.md
