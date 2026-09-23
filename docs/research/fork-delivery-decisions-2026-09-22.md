@@ -35,3 +35,15 @@ carry the changed code under new versions, with DocSpec 0.9.1 (`2cdde74`) and Re
 0.1.0.dev14 (`1e1d2d7`) rebuilt on them. This repository, DocSpec, RefSpec, SpicySearch and
 Engine now vendor byte-identical copies, each recorded with its source commit; the
 mislabelled 0.26.5 wheel stays here only for replay.
+
+## Later changes
+
+- **Decision 12, 2026-09-22 (`0fcbc21`):** the token now reaches only the
+  `court_dockets` rollup. A free token's measured limits (10/minute, 100/hour,
+  250/day) cover the daily docket delta but not the cluster rollup's keyless
+  search catch-up of about 660 pages, which ran keyless in about 17 minutes.
+- **Decision 4, 2026-09-23:** a scheduled run had published `rulemaking_lifecycles`;
+  the family is withdrawn from the index and its workflow disabled and unscheduled.
+- **Decision 6, 2026-09-23:** the opinion-body builder, rollup, workflow and
+  registration are removed; the fork workflow is disabled.
+

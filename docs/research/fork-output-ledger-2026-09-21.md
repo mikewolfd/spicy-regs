@@ -9,7 +9,7 @@ Public data destination: `https://pub-72e95c0c20a84508b42b03a6ff6d55f8.r2.dev`. 
 | Task | Producer | Output | Delivery state |
 | --- | --- | --- | --- |
 | T13 | `run-rollup-court-opinion-clusters` | `court_opinion_clusters.parquet` | generated and verified for complete 2026-06-30 edition |
-| T13 | `run-rollup-court-opinion-bodies` | `court_opinion_bodies.parquet` | withdrawn 2026-09-22: text links out through the clusters' `absolute_url` |
+| T13 | `run-rollup-court-opinion-bodies` | `court_opinion_bodies.parquet` | withdrawn 2026-09-22 and removed 2026-09-23: builder, rollup, workflow and catalog/MCP registration deleted and the fork workflow disabled; text links out through the clusters' `absolute_url` |
 | T13 | `run-rollup-court-citations` | `court_citations.parquet`, `court_citation_map.parquet`, `court_parentheticals.parquet` | added and published 2026-09-22 for the complete 2026-06-30 edition: generation `f1e2e523…`; public row counts verified |
 | T13 | `run-rollup-court-opinions` | `court_opinions.parquet` | added and published 2026-09-22 for the complete 2026-06-30 edition (text-free): generation `f7cc67cc…`; public row counts verified; no scheduled workflow (54.6 GB source) |
 | T16 | `run-rollup-bill-subjects` | `bill_subjects.parquet` | waiting for qualified parents |
@@ -17,7 +17,7 @@ Public data destination: `https://pub-72e95c0c20a84508b42b03a6ff6d55f8.r2.dev`. 
 | T15 | `run-rollup-agency-stats` | `agency_stats.parquet` | waiting for qualified parents |
 | T15 | `run-rollup-agency-monthly-volume` | `agency_monthly_volume.parquet` | generated and verified |
 | T15 | `run-rollup-docket-search` | `docket_search.json.gz` | generated and verified |
-| T15 | `run-rollup-lifecycles` | `rulemaking_lifecycles.parquet` | blocked on pairing semantics |
+| T15 | `run-rollup-lifecycles` | `rulemaking_lifecycles.parquet` | withdrawn 2026-09-23 (decision 4): the 2026-09-22 scheduled run had published generation `2f001194…` (26,519 rows); the family was conditionally removed from the index, the workflow disabled and unscheduled; pairing semantics remain blocked |
 | T15 | `run-rollup-discovery-signals` | `discovery_signals.parquet` | generated and verified |
 | T15 | `run-rollup-fr-docket-links` | `fr_docket_links.parquet` | published awaiting parent audit |
 | T11 | `run-rollup-cfr-sections` | `cfr_sections.parquet` | published bounded correction verified |
@@ -37,7 +37,7 @@ Public data destination: `https://pub-72e95c0c20a84508b42b03a6ff6d55f8.r2.dev`. 
 | T12 | `run-rollup-gao-reports` | `gao_reports.parquet` | generated and verified |
 | T12 | `run-rollup-crs-reports` | `crs_reports.parquet` | local candidate needs qualification |
 | T12 | `run-rollup-courtlistener` | `court_dockets.parquet` | generated and verified: enriched APA selection published (11,459 rows) |
-| T12 | `build_court_docket_groups` | `court_docket_groups.parquet` | published; 21 of 403 group parents wrong (string order), corrected builder ready, republication pending |
+| T12 | `build_court_docket_groups` | `court_docket_groups.parquet` | republished 2026-09-23 with numeric parent order: generation `0f855eb1…`, 901 rows; raw-validated against the native docket edition and public readback identical |
 | T12 | `run-rollup-usaspending-recipients` | `usaspending_recipients.parquet` | local candidate needs qualification |
 | T09 | `run-rollup-bill-family` | `congress_bills.parquet` | published awaiting source audit; broader local candidate retained |
 | T09 | `run-rollup-bill-family` | `bill_actions.parquet` | published awaiting source audit; broader local candidate retained |
@@ -193,3 +193,30 @@ qualified at `b50a9eb`. Source CI fixes at `51c87a1` and isolated branch
 machine ledger links the same receipts and records the next action per output.
 
 Receipts: `members-qualification/`, `congressional-status/`, `native-vote-variants-adoption/`, `bill-family-continuation/`, `press-release-qualification/`, `unified-agenda-qualification/`, `full-comments/source-campaign/`, `courtlistener-bulk/` and `courtlistener-clusters-qualification/` under the linked execution directory. Independent reviews state the exact approved scope and remaining limits.
+
+## September 23 continuation
+
+- **Court docket groups republished.** The repository builder's rebuild equals the
+  reviewed candidate exactly and differs from generation `32fdbde6…` only in the 21
+  groups (67 rows) whose parent had been chosen by string order. Checked against
+  the raw 71,677,647-row native docket edition: all 901 members exist; each of the
+  403 groups has one court and docket number and one caption; every parent is the
+  numerically lowest PACER case id; and each of the 21 old parents was the
+  string-lowest. Generation `sha256:0f855eb1b094d7405eac1321b276d20f8ca114165ee4c0f09409247126082d49`
+  is live and its public bytes equal the validated build. See
+  `court-dockets-qualification/republish-groups/`.
+- **`rulemaking_lifecycles` withdrawn (decision 4).** Its daily workflow published
+  generation `sha256:2f001194cff3819621847f4b5dadb48a9592414dceca2392ffbd184b6641c975`
+  (26,519 rows) at 2026-09-22 23:19 UTC. The family was removed from
+  `publication.json` by an If-Match write that left the other 31 families
+  unchanged and the immutable objects in place; the workflow is disabled on the
+  fork and no longer scheduled in code. See `lifecycles-withdrawal/`.
+- **Opinion bodies removed (decision 6).** The builder, rollup, workflow, tests and
+  catalog/MCP registration are deleted; the fork workflow is disabled.
+  `court_opinions` (text-free) now carries the opinion-to-decision map, and the
+  generic remote writer stays for other large outputs.
+- **Court citation tables and opinion index published** (rows above): generations
+  `f1e2e523…` (`court_citations`, `court_citation_map`, `court_parentheticals`) and
+  `f7cc67cc…` (`court_opinions`), the 2026-06-30 edition, public row counts equal
+  to the builds; receipts in `court-bulk-tables/`.
+
