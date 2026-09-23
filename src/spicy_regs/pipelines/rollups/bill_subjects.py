@@ -18,6 +18,7 @@ from typing import ClassVar
 
 from spicy_regs.pipelines.rollups.base import RollupPipeline, make_rollup_app
 from spicy_regs.transforms import enrich_bill_subjects
+from spicy_regs.transforms.enrich_bill_subjects import DEADLINE_SECONDS
 
 
 def _int_env(name: str) -> int | None:
@@ -42,7 +43,12 @@ class BillSubjectsRollup(RollupPipeline):
     output: ClassVar[str] = "bill_subjects.parquet"
 
     def build(self, output_dir: Path) -> Path:
-        return enrich_bill_subjects(output_dir, max_bills=_int_env("BILL_SUBJECTS_MAX"))
+        minutes = _int_env("BILL_SUBJECTS_DEADLINE_MINUTES")
+        return enrich_bill_subjects(
+            output_dir,
+            max_bills=_int_env("BILL_SUBJECTS_MAX"),
+            deadline_seconds=DEADLINE_SECONDS if minutes is None else minutes * 60,
+        )
 
 
 app = make_rollup_app(BillSubjectsRollup)

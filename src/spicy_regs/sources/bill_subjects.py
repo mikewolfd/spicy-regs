@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Iterable
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 import httpx
@@ -40,8 +41,7 @@ from loguru import logger
 from spicy_regs.sources.congress_bills import API_BASE, API_KEY_ENV_VARS, _resolve_api_key
 
 #: Carrier names, stored verbatim in ``bill_subjects.carrier`` so a reader can
-#: tell which publisher supplied a row (and the transform can re-ask a bill the
-#: *other* carrier had nothing for).
+#: tell which publisher supplied a row.
 CARRIER_API = "congress-api"
 CARRIER_BULKDATA = "govinfo-billstatus"
 
@@ -68,8 +68,11 @@ _MAX_SUBJECT_PAGES = 4
 #: budget, not a guess, and every attempt spends from it — retries included.
 API_HOURLY_BUDGET = 5_000
 
-#: Seconds between API requests: 1.33 a second, comfortably under the 1.39/s
-#: the hourly budget allows, so a run of retries cannot walk into 429s.
+#: Minimum seconds between the starts of two API requests: at most 1.33 a
+#: second, under the 1.39/s the hourly budget allows, so a run of retries
+#: cannot walk into 429s. It paces the start of each request rather than adding
+#: a sleep to it: measured 2026-09-23 over 30 bills, one ``/subjects`` round
+#: trip took 1.36 s on average, so a sleep on top made a bill cost 2.1 s.
 DELAY_SECONDS = 0.75
 
 
@@ -148,6 +151,9 @@ class BillSubjectsFetcher:
 
     Build one per run and reuse it: the HTTP client is opened lazily on the
     first fetch and held for connection reuse. Not shared-safe across threads.
+    ``deadline`` is an instant on ``clock``: no request attempt — first page,
+    later page or retry — starts at or after it, and the bill is then no
+    answer. One already started ends within its 60-second timeout.
     """
 
     def __init__(
@@ -156,6 +162,8 @@ class BillSubjectsFetcher:
         api_key: str | None = None,
         delay: float = DELAY_SECONDS,
         client: httpx.Client | None = None,
+        deadline: float | None = None,
+        clock: Callable[[], float] = time.monotonic,
     ) -> None:
         key = api_key if api_key is not None else _resolve_api_key()
         if not key:
@@ -164,6 +172,9 @@ class BillSubjectsFetcher:
             )
         self.api_key: str = key
         self.delay = delay
+        self.deadline = deadline
+        self._clock = clock
+        self._last_start = float("-inf")
         self._client = client
         self._owns_client = client is None
 
@@ -232,7 +243,8 @@ class BillSubjectsFetcher:
         """GET with bounded retries + exponential backoff.
 
         Returns the response, :data:`_ABSENT` on a definitive 404 (the carrier
-        does not hold this bill), or ``None`` when no answer was obtained. A
+        does not hold this bill), or ``None`` when no answer was obtained,
+        including when the run's deadline arrives before an attempt starts. A
         401/403 raises ``CredentialRefusedError`` on the first answer: a refused
         key is not transient, and every retry spends the hourly budget.
 
@@ -252,8 +264,13 @@ class BillSubjectsFetcher:
         where = f"GET {target.host}{target.path}"
         key_header = {"X-Api-Key": self.api_key}
         for attempt in range(1, _MAX_RETRIES + 1):
-            if self.delay:
-                time.sleep(self.delay)
+            wait = self._last_start + self.delay - self._clock()
+            if wait > 0:
+                time.sleep(wait)
+            if self.deadline is not None and self._clock() >= self.deadline:
+                logger.warning("Bill subjects: run deadline reached before {} (attempt {})", where, attempt)
+                return None
+            self._last_start = self._clock()
             try:
                 resp = self._client.get(url, params=params, headers=key_header, follow_redirects=False)
                 if resp.status_code in ACCESS_REFUSED_STATUSES:

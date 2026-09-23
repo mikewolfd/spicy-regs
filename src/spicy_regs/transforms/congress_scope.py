@@ -16,6 +16,11 @@ from __future__ import annotations
 
 import os
 from datetime import date, timedelta
+from functools import cache
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from spicy_docs.sources.congress.bulk_status import BulkStatusBudget
 
 #: Congress 1 convened in 1789 and each runs two calendar years, session 1 in
 #: the odd year. This is the inverse of the rule ``spicy_docs.sources.congress
@@ -41,6 +46,23 @@ DEFAULT_BILL_TYPES: tuple[str, ...] = ("hr", "s", "hjres", "sjres", "hres", "sre
 #: from the Congress.gov API. Which route fills a Congress is a fact of the
 #: publisher, not a scope knob, so the bill family and bill subjects share it.
 BULK_STATUS_FLOOR = 108
+
+
+@cache
+def bulk_status_budget() -> BulkStatusBudget:
+    """One BILLSTATUS folder zip per call; the archive bounds live on the budget.
+
+    Built on first use rather than at import: the transforms facade imports this
+    module on a base install, which has no spicy-docs.
+    """
+    from spicy_docs.sources.congress.bulk_status import BulkStatusBudget
+
+    return BulkStatusBudget(
+        max_requests=4,
+        max_bytes=256 * 1024 * 1024,
+        timeout_seconds=300.0,
+        min_request_interval_seconds=1.0,
+    )
 
 
 def current_congress(today: date | None = None) -> int:

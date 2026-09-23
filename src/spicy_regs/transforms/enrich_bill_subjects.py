@@ -11,31 +11,43 @@ by the same ``bill_id`` as ``congress_bills``, joined with a one-line ``LEFT JOI
 assignment is BILLSTATUS's, read without a per-bill request:
 
 * a bill whose ``congress_bills`` row the bill family filled from BILLSTATUS
-  (``schema_version`` set) is projected from that row;
+  (``schema_version`` set) is copied from that row on every run, and its row
+  here is rewritten only when the copy differs, so a policy area CRS assigns
+  after the first run arrives with the family's next read;
 * a bill in a folder (Congress and bill type) the family has read, whose own
   row is still list-level, waits for the family's next run rather than
-  downloading the zip the family is about to read;
+  downloading the zip the family is about to read — while its Congress is the
+  current or previous one. In an older Congress the family's read is settled,
+  so such a bill is one whose file the reader refused, and it goes to the API;
 * a bill in a folder the family has not read comes from that folder's bulk zip
   through spicy-docs, one request per folder, at most
-  :data:`MAX_FOLDERS_PER_RUN` folders a run.
+  :data:`MAX_FOLDERS_PER_RUN` folders a run. A bill whose file the reader
+  refuses (the superseded 1.0.0 schema) goes to the API instead.
 
 Below the 108th only Congress.gov's ``/subjects`` holds it: one keyed request
 per bill, at most :data:`MAX_API_BILLS_PER_RUN` a run; without a key those
 bills stay pending.
 
-**Incremental and resumable.** Best-effort prior from R2; a bill is pending when
-the prior has no row for it, or has an empty row from the other carrier; newest
-Congress first. Only an answer becomes a row: a failed folder, an unreadable
-BILLSTATUS member or an API timeout writes nothing, so the bill is asked again
-next run. A bill the carrier definitively lacks (an API 404, or a bulk folder
-that does not list it) gets a row with a null ``policy_area`` and its carrier,
-so it is not asked again. Prior and new rows merge on ``bill_id``, preferring
-the fresh one.
+**One deadline for the network.** No folder read and no API request attempt —
+first page, later page or retry — starts :data:`DEADLINE_SECONDS` or more after
+the run began; what it would have answered is left for the next run. One
+already started runs to its own bound: a folder read to its budget, an API
+request to its 60-second timeout.
+
+**Incremental and resumable.** Best-effort prior from R2; apart from the
+family's rows, a bill is pending while the prior has no row for it; newest
+Congress first. Only an answer becomes a row: a failed folder, an API timeout,
+or a bill missing from the current or previous Congress's zip (a folder that
+may simply lag) writes nothing, so the bill is asked again next run. A bill an
+older Congress's zip does not list, or the API answers 404 for, gets a row with
+a null ``policy_area`` and its carrier, so it is not asked again. Prior and new
+rows merge on ``bill_id``, preferring the fresh one.
 """
 
 from __future__ import annotations
 
 import json
+import time
 from collections import defaultdict
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager, nullcontext
@@ -51,7 +63,6 @@ from loguru import logger
 from spicy_regs.sources import r2
 from spicy_regs.sources.bill_subjects import (
     API_FIRST_CONGRESS,
-    CARRIER_API,
     CARRIER_BULKDATA,
     BillSubjects,
     BillSubjectsFetcher,
@@ -59,7 +70,7 @@ from spicy_regs.sources.bill_subjects import (
     assignment,
 )
 from spicy_regs.sources.congress_bills import _resolve_api_key
-from spicy_regs.transforms.congress_scope import BULK_STATUS_FLOOR
+from spicy_regs.transforms.congress_scope import BULK_STATUS_FLOOR, bulk_status_budget, current_congress
 
 if TYPE_CHECKING:
     from spicy_docs.sources.congress.bulk_status import BulkStatusArchive
@@ -67,13 +78,20 @@ if TYPE_CHECKING:
 OUTPUT = "bill_subjects.parquet"
 BILLS_INPUT = "congress_bills.parquet"
 
-#: Congress.gov bills per run. Its documented 5,000-requests-an-hour budget caps
-#: the crawl at 1.33 a second, so 2,000 bills is ~25 minutes, inside the
-#: reusable rollup workflow's 30-minute timeout, and leaves budget for retries.
+#: Congress.gov bills per run: what the documented 5,000-requests-an-hour
+#: budget allows one run at the fastest pacing (``DELAY_SECONDS``), with room
+#: left for retries. Measured 2026-09-23, a bill costs 1.36 s, so
+#: :data:`DEADLINE_SECONDS` is the bound a run meets first (~880 bills).
 MAX_API_BILLS_PER_RUN = 2_000
 
-#: BILLSTATUS folder zips per run. Measured 2026-09-23 through the family's
-#: ``BULK_BUDGET``: the 96 folders of Congresses 108-119 read in 169 s, the
+#: Seconds from the start of a run after which no folder read and no API
+#: request attempt starts. The reusable rollup workflow kills a job at 30
+#: minutes and a killed job publishes nothing; 20 minutes leaves the merge and
+#: the upload their room.
+DEADLINE_SECONDS = 20 * 60
+
+#: BILLSTATUS folder zips per run. Measured 2026-09-23 through
+#: ``bulk_status_budget``: the 96 folders of Congresses 108-119 read in 169 s, the
 #: largest (118 hr, 35.5 MB, 10,564 members) in 11 s at 343 MB peak RSS. 32
 #: folders is four Congresses, about a minute; the 108th-117th backfill is three
 #: runs.
@@ -97,7 +115,7 @@ FolderReader = Callable[[int, str], "BulkStatusArchive"]
 
 
 class PendingBill(NamedTuple):
-    """One bill this run owes an answer, with what the bill family already holds for it."""
+    """One bill this run may answer, with what the bill family and the prior table hold for it."""
 
     bill_id: str
     congress: int
@@ -107,6 +125,8 @@ class PendingBill(NamedTuple):
     family_folder: bool
     policy_area: str | None
     subjects_json: str | None
+    #: The prior row's ``(policy_area, subjects_json, subject_count, carrier)``, or None.
+    prior: tuple[str | None, str | None, str | None, str | None] | None
 
 
 class SubjectsFetcher(Protocol):
@@ -129,24 +149,20 @@ def _shape(bill_id: str, policy_area: str | None, subjects: tuple[str, ...], car
 
 
 def _pending_bills(bills_file: Path, prior_file: Path, *, have_prior: bool) -> list[PendingBill]:
-    """Bills still owed an answer, newest Congress first, with the family's BILLSTATUS fields.
+    """Bills this run may answer, newest Congress first, with the family's and the prior's fields.
 
-    A bill is pending when the prior table has no row for it, or has a row that
-    the *other* carrier left empty — the carrier its Congress now routes to may
-    well hold what that one did not. Bills below the API's floor are never
-    selected; the request could only 404.
+    Every bill the family filled from BILLSTATUS, so a changed assignment is
+    copied again, plus every other bill the prior table has no row for. Bills
+    below the API's floor are never selected; the request could only 404.
     """
     import duckdb
 
-    route = f"CASE WHEN bill.congress_number >= {BULK_STATUS_FLOOR} THEN '{CARRIER_BULKDATA}' ELSE '{CARRIER_API}' END"
-    if have_prior:
-        # The OR group is parenthesized on purpose: without it the floor filter
-        # would bind only to the second branch.
-        prior_join = f"LEFT JOIN read_parquet('{prior_file}') AS prior ON prior.bill_id = bill.bill_id"
-        pending = f"(prior.bill_id IS NULL OR (prior.policy_area IS NULL AND prior.carrier IS DISTINCT FROM {route}))"
-    else:
-        prior_join, pending = "", "TRUE"
-
+    prior = (
+        f"SELECT bill_id, policy_area, subjects_json, subject_count, carrier FROM read_parquet('{prior_file}')"
+        if have_prior
+        else "SELECT NULL::VARCHAR AS bill_id, NULL::VARCHAR AS policy_area, NULL::VARCHAR AS subjects_json, "
+        "NULL::VARCHAR AS subject_count, NULL::VARCHAR AS carrier WHERE FALSE"
+    )
     rows = duckdb.sql(
         f"""
         WITH bill AS (
@@ -156,44 +172,68 @@ def _pending_bills(bills_file: Path, prior_file: Path, *, have_prior: bool) -> l
         ),
         family_folder AS (
             SELECT DISTINCT congress_number, folder_type FROM bill WHERE schema_version IS NOT NULL
-        )
+        ),
+        prior AS ({prior})
         SELECT bill.bill_id, bill.congress_number, bill.folder_type, bill.bill_number,
                bill.schema_version IS NOT NULL, family.congress_number IS NOT NULL,
-               bill.policy_area, bill.subjects_json
+               bill.policy_area, bill.subjects_json,
+               prior.bill_id IS NOT NULL, prior.policy_area, prior.subjects_json, prior.subject_count, prior.carrier
         FROM bill
         LEFT JOIN family_folder AS family
           ON family.congress_number = bill.congress_number AND family.folder_type = bill.folder_type
-        {prior_join}
-        WHERE {pending} AND bill.congress_number >= {API_FIRST_CONGRESS}
+        LEFT JOIN prior ON prior.bill_id = bill.bill_id
+        WHERE bill.congress_number >= {API_FIRST_CONGRESS}
+          AND (prior.bill_id IS NULL OR (bill.congress_number >= {BULK_STATUS_FLOOR} AND bill.schema_version IS NOT NULL))
         ORDER BY bill.congress_number DESC, bill.bill_id
         """
     ).fetchall()
-    return [PendingBill(str(a), int(b), str(c), str(d), bool(e), bool(f), g, h) for a, b, c, d, e, f, g, h in rows]
+    return [
+        PendingBill(str(a), int(b), str(c), str(d), bool(e), bool(f), g, h, (j, k, m, n) if i else None)
+        for a, b, c, d, e, f, g, h, i, j, k, m, n in rows
+    ]
 
 
 def _read_folders(
-    folders: dict[tuple[int, str], list[PendingBill]], read_folder: FolderReader
-) -> list[tuple[str, BillSubjects | None]]:
-    """Answer each folder's pending bills from its one zip.
+    folders: dict[tuple[int, str], list[PendingBill]],
+    read_folder: FolderReader,
+    *,
+    recent: set[int],
+    past_deadline: Callable[[], bool],
+) -> tuple[list[tuple[str, BillSubjects | None]], list[PendingBill]]:
+    """Answer each folder's pending bills from its one zip; return the answers and the bills for the API.
 
-    A member the reader refuses (1.0.0-schema files, 13 of the 96 folders'
-    members on 2026-09-23) is no answer, and neither is a bill the zip might
-    hold under a name the reader could not read; a bill absent from a zip whose
-    every member was named is one the carrier does not hold.
+    A bill whose file the reader refuses (the superseded 1.0.0 schema: 13
+    members of the 96 folders on 2026-09-23, 113-hr-4200 and 115-hr-3354 among
+    them) goes to the API, and so does one missing from a zip holding a member
+    whose name the reader could not read. A bill absent from a zip whose every
+    member was named, or a folder the publisher does not publish, is not held —
+    except in the ``recent`` Congresses, whose folders can lag the bill list, so
+    there it is no answer and is asked again next run. A folder not started
+    before the deadline is left, with its bills, for the next run.
     """
     from spicy_docs.sources.congress.bill_acquisition import BillSourceUnavailableError
     from spicy_docs.sources.congress.bill_status import BillSourceError
     from spicy_docs.transport.credentials import CredentialRefusedError
 
     answers: list[tuple[str, BillSubjects | None]] = []
-    for (congress, bill_type), bills in folders.items():
+    to_api: list[PendingBill] = []
+    not_held = BillSubjects(None, (), CARRIER_BULKDATA, held=False)
+    for done, ((congress, bill_type), bills) in enumerate(folders.items()):
+        if past_deadline():
+            logger.warning(
+                "Bill subjects: run deadline reached; {:,} of {:,} folders left for the next run",
+                len(folders) - done,
+                len(folders),
+            )
+            break
+        missing = None if congress in recent else not_held
         try:
             archive = read_folder(congress, bill_type)
         except CredentialRefusedError:
             raise
         except BillSourceUnavailableError:
             logger.warning("Bill subjects: BILLSTATUS {} {} folder is not published", congress, bill_type)
-            answers.extend((bill.bill_id, BillSubjects(None, (), CARRIER_BULKDATA, held=False)) for bill in bills)
+            answers.extend((bill.bill_id, missing) for bill in bills)
             continue
         except (BillSourceError, httpx.HTTPError, ConnectionError) as error:
             logger.warning(
@@ -205,14 +245,13 @@ def _read_folders(
         every_member_named = all(m.identity is not None for m in archive.members)
         for bill in bills:
             number = int(bill.bill_number) if bill.bill_number.isdigit() else None
-            if number in statuses:
-                status = statuses[number]
-                answer = None if status is None else assignment(status.policy_area, status.subjects, CARRIER_BULKDATA)
-            elif number is not None and every_member_named:
-                answer = BillSubjects(None, (), CARRIER_BULKDATA, held=False)
+            status = statuses.get(number) if number is not None else None
+            if status is not None:
+                answers.append((bill.bill_id, assignment(status.policy_area, status.subjects, CARRIER_BULKDATA)))
+            elif number in statuses or (number is not None and not every_member_named):
+                to_api.append(bill)
             else:
-                answer = None
-            answers.append((bill.bill_id, answer))
+                answers.append((bill.bill_id, missing if number is not None else None))
         logger.info(
             "Bill subjects: BILLSTATUS {} {} read for {:,} pending bills ({:,} members, {:,} refused by the reader)",
             congress,
@@ -221,20 +260,19 @@ def _read_folders(
             len(archive.members),
             archive.refused_count,
         )
-    return answers
+        del archive, statuses  # one folder's parsed members at a time, not two
+    return answers, to_api
 
 
 @contextmanager
 def _folder_reader(injected: FolderReader | None) -> Iterator[FolderReader]:
-    """The injected reader, or the keyless bulk route on the bill family's own per-zip budget."""
+    """The injected reader, or the keyless bulk route on the bill family's per-zip budget."""
     if injected is not None:
         yield injected
         return
     from spicy_docs.sources.congress.bulk_status import BulkStatusAcquirer
 
-    from spicy_regs.transforms.build_bill_family import BULK_BUDGET
-
-    with BulkStatusAcquirer(budget=BULK_BUDGET) as acquirer:
+    with BulkStatusAcquirer(budget=bulk_status_budget()) as acquirer:
 
         def read(congress: int, bill_type: str) -> BulkStatusArchive:
             archive = acquirer.acquire(congress, bill_type).archive
@@ -300,16 +338,26 @@ def enrich_bill_subjects(
     *,
     max_bills: int | None = None,
     max_folders: int = MAX_FOLDERS_PER_RUN,
+    deadline_seconds: float = DEADLINE_SECONDS,
     fetcher: SubjectsFetcher | None = None,
     read_folder: FolderReader | None = None,
+    clock: Callable[[], float] = time.monotonic,
 ) -> Path:
     """Build ``bill_subjects.parquet`` (bounded, resumable enrichment pass).
 
     ``max_bills`` caps the Congress.gov bills asked this run (default
-    :data:`MAX_API_BILLS_PER_RUN`); ``max_folders`` caps the BILLSTATUS zips
-    read. Projecting the bill family's own rows costs no request and is not capped.
+    :data:`MAX_API_BILLS_PER_RUN`) and ``max_folders`` the BILLSTATUS zips read.
+    No folder read and no API request attempt (page or retry) starts once
+    ``deadline_seconds`` have passed on ``clock`` since the run began. Copying
+    the bill family's own rows costs no request and is not capped.
     """
     import duckdb
+
+    started = clock()
+    deadline = started + deadline_seconds
+
+    def past_deadline() -> bool:
+        return clock() >= deadline
 
     out_file = output_dir / OUTPUT
     bills_file = output_dir / BILLS_INPUT
@@ -331,8 +379,10 @@ def enrich_bill_subjects(
         logger.info("Bill subjects: no prior table found — starting the backfill")
 
     # 2. Route each pending bill by its Congress, newest first.
+    recent = {current_congress(), current_congress() - 1}
     family: list[PendingBill] = []
     folders: dict[tuple[int, str], list[PendingBill]] = defaultdict(list)
+    refused: list[PendingBill] = []
     api: list[PendingBill] = []
     waiting = 0
     for bill in _pending_bills(bills_file, prior_file, have_prior=have_prior):
@@ -340,54 +390,77 @@ def enrich_bill_subjects(
             api.append(bill)
         elif bill.from_family:
             family.append(bill)
-        elif bill.family_folder:
+        elif bill.family_folder and bill.congress in recent:
             waiting += 1
+        elif bill.family_folder:
+            refused.append(bill)  # a settled family read skipped it: the reader refused its file
         else:
             folders[(bill.congress, bill.bill_type)].append(bill)
     read = dict(list(folders.items())[:max_folders])
-    routes = {
-        "family": len(family),
-        "folders": len(read),
-        "folder_bills": sum(map(len, read.values())),
-        "folders_beyond_cap": len(folders) - len(read),
-        "waiting_on_family": waiting,
-        "api": min(len(api), max_bills),
-        "api_beyond_cap": max(len(api) - max_bills, 0),
-    }
-    logger.info("Bill subjects: pending by route {}", routes)
+    logger.info(
+        "Bill subjects: {:,} family bills, {:,} folders to read ({:,} bills; {:,} folders past the cap), "
+        "{:,} bills waiting on the family, {:,} refused by its settled read, {:,} bills below the {}th Congress",
+        len(family),
+        len(read),
+        sum(map(len, read.values())),
+        len(folders) - len(read),
+        waiting,
+        len(refused),
+        len(api),
+        BULK_STATUS_FLOOR,
+    )
 
     # 3. Answer. Only an answer becomes a row; a failure leaves the bill for next run.
     now = datetime.now(UTC).isoformat(timespec="seconds")
-    started = datetime.now(UTC)
-    counts = FetchCounts()
-    answers: list[tuple[str, BillSubjects | None]] = [
-        (bill.bill_id, assignment(bill.policy_area, json.loads(bill.subjects_json or "[]"), CARRIER_BULKDATA))
-        for bill in family
-    ]
+    answers: list[tuple[str, BillSubjects | None]] = []
+    unchanged = 0
+    for bill in family:
+        if bill.subjects_json is None:
+            # A family row that states no subject list is not an answer of "none".
+            answers.append((bill.bill_id, None))
+            continue
+        result = assignment(bill.policy_area, json.loads(bill.subjects_json), CARRIER_BULKDATA)
+        row = _shape(bill.bill_id, result.policy_area, result.subjects, result.carrier, now)
+        if bill.prior == (row["policy_area"], row["subjects_json"], row["subject_count"], row["carrier"]):
+            unchanged += 1  # the prior row, and its enriched_at, stand
+        else:
+            answers.append((bill.bill_id, result))
+    logger.info("Bill subjects: {:,} family bills changed, {:,} unchanged", len(family) - unchanged, unchanged)
     if read:
         with _folder_reader(read_folder) as reader:
-            answers += _read_folders(read, reader)
-    api = api[:max_bills]
+            folder_answers, refused_in_zip = _read_folders(read, reader, recent=recent, past_deadline=past_deadline)
+        answers += folder_answers
+        refused += refused_in_zip
+    if refused:
+        logger.info("Bill subjects: {:,} bills whose BILLSTATUS file was refused go to the API", len(refused))
+    api = (refused + api)[:max_bills]
     if api and fetcher is None and not _resolve_api_key():
-        logger.warning(
-            "Bill subjects: {:,} bills below the {}th Congress wait for an api.data.gov key",
-            len(api),
-            BULK_STATUS_FLOOR,
-        )
+        logger.warning("Bill subjects: {:,} bills wait for an api.data.gov key", len(api))
         api = []
     if api:
-        with nullcontext(fetcher) if fetcher is not None else BillSubjectsFetcher() as api_fetcher:
-            for seen, bill in enumerate(api, start=1):
-                result = api_fetcher.subjects_for(str(bill.congress), bill.bill_type, bill.bill_number)
-                answers.append((bill.bill_id, result))
-                if seen % 1_000 == 0:
-                    logger.info("Bill subjects: {:,}/{:,} API bills fetched...", seen, len(api))
+        context = nullcontext(fetcher) if fetcher is not None else BillSubjectsFetcher(deadline=deadline, clock=clock)
+        with context as api_fetcher:
+            for seen, bill in enumerate(api):
+                if past_deadline():
+                    logger.warning(
+                        "Bill subjects: run deadline ({:.0f}s) reached after {:,} API bills; {:,} left for the next run",
+                        deadline_seconds,
+                        seen,
+                        len(api) - seen,
+                    )
+                    break
+                answers.append(
+                    (bill.bill_id, api_fetcher.subjects_for(str(bill.congress), bill.bill_type, bill.bill_number))
+                )
+                if (seen + 1) % 250 == 0:
+                    logger.info("Bill subjects: {:,}/{:,} API bills fetched...", seen + 1, len(api))
+    counts = FetchCounts()
     rows = []
     for bill_id, result in answers:
         counts.record(result)
         if result is not None:
             rows.append(_shape(bill_id, result.policy_area, result.subjects, result.carrier, now))
-    _log_counts(counts, (datetime.now(UTC) - started).total_seconds())
+    _log_counts(counts, clock() - started)
 
     # 4. Merge prior + new, dedup on bill_id preferring the fresh row.
     new_file = output_dir / "_bill_subjects_new.parquet"

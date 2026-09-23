@@ -9,6 +9,7 @@ next run rather than pin an empty or truncated answer to it.
 
 from __future__ import annotations
 
+import importlib
 import io
 import json
 import zipfile
@@ -36,7 +37,9 @@ from spicy_regs.sources.bill_subjects import (
     assignment,
 )
 from spicy_regs.sources.congress_bills import API_KEY_ENV_VARS
+from spicy_regs.transforms.congress_scope import current_congress
 from spicy_regs.transforms.enrich_bill_subjects import (
+    DEADLINE_SECONDS,
     COLUMNS,
     MAX_API_BILLS_PER_RUN,
     _pending_bills,
@@ -76,6 +79,10 @@ _BILLSTATUS = """<?xml version="1.0" encoding="UTF-8"?>
 _BILLSTATUS_1_0_0 = """<billStatus><bill><billType>HR</billType><billNumber>{number}</billNumber>
 <congress>{congress}</congress><title>Reserved for the Speaker.</title></bill></billStatus>"""
 
+#: An older Congress, whose zip is settled, and the previous one, whose zip can lag its bill list.
+OLD = 110
+RECENT = current_congress() - 1
+
 _FAMILY_COLUMNS = ("bill_id", "congress", "bill_type", "bill_number", "schema_version", "policy_area", "subjects_json")
 
 
@@ -90,7 +97,8 @@ def _bill(bill_id, *, family=None):
     row = dict(bill_id=bill_id, congress=congress, bill_type=bill_type, bill_number=number)
     if family is not None:
         policy_area, subjects = family
-        row |= dict(schema_version="3.0.0", policy_area=policy_area, subjects_json=json.dumps(subjects))
+        subjects_json = None if subjects is None else json.dumps(subjects)
+        row |= dict(schema_version="3.0.0", policy_area=policy_area, subjects_json=subjects_json)
     return row
 
 
@@ -100,13 +108,19 @@ def _write_bills(path, rows):
     pq.write_table(pa.Table.from_pylist(rows, schema=schema), path)
 
 
-def _zip(congress, members):
-    """A BILLSTATUS folder zip: ``members`` maps bill number to XML template."""
+def _zip(congress, members, *, named=None):
+    """A BILLSTATUS folder zip: ``members`` maps bill number to XML template; ``named`` adds raw entry names."""
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w") as archive:
         for number, template in members.items():
             archive.writestr(f"BILLSTATUS-{congress}hr{number}.xml", template.format(congress=congress, number=number))
+        for name, body in (named or {}).items():
+            archive.writestr(name, body)
     return buffer.getvalue()
+
+
+def _write_prior(path, rows):
+    pq.write_table(pa.Table.from_pylist(rows, schema=pa.schema([(c, pa.string()) for c in COLUMNS])), path)
 
 
 class _Folders:
@@ -181,7 +195,7 @@ def test_every_result_lands_in_exactly_one_bucket():
 # -- routes: the family's rows, a folder zip, or waiting ----------------------
 
 
-def test_family_rows_are_projected_without_any_request(tmp_path):
+def test_family_rows_are_copied_without_any_request(tmp_path):
     _write_bills(
         tmp_path / "congress_bills.parquet",
         [_bill("119-hr-1", family=("Health", [" Medicare ", "Drug safety", "Medicare"]))],
@@ -198,28 +212,104 @@ def test_family_rows_are_projected_without_any_request(tmp_path):
     assert folders.read == [] and fetcher.asked == []
 
 
+def test_a_changed_family_row_is_copied_again_and_an_unchanged_one_keeps_its_time(tmp_path):
+    """119-hr-181 on 2026-09-23: published with no subjects, the family's later read lists two."""
+    earlier = "2026-08-22T04:40:39+00:00"
+    _write_prior(
+        tmp_path / "_bill_subjects_prior.parquet",
+        [
+            _shape("119-hr-181", "Environmental Protection", (), CARRIER_BULKDATA, earlier),
+            _shape("119-hr-2", "Health", ("Medicare",), CARRIER_BULKDATA, earlier),
+            _shape("119-hr-3", None, (), CARRIER_BULKDATA, earlier),
+        ],
+    )
+    _write_bills(
+        tmp_path / "congress_bills.parquet",
+        [
+            _bill("119-hr-181", family=("Environmental Protection", ["Endangered and threatened species"])),
+            _bill("119-hr-2", family=("Health", ["Medicare"])),
+            _bill("119-hr-3", family=("Taxation", [])),  # CRS assigned a policy area after the first read
+        ],
+    )
+    rows = _rows(enrich_bill_subjects(tmp_path, read_folder=_Folders(), fetcher=_StubFetcher()))
+    assert json.loads(rows["119-hr-181"]["subjects_json"]) == ["Endangered and threatened species"]
+    assert rows["119-hr-3"]["policy_area"] == "Taxation"
+    assert rows["119-hr-181"]["enriched_at"] != earlier and rows["119-hr-3"]["enriched_at"] != earlier
+    assert rows["119-hr-2"]["enriched_at"] == earlier
+
+
+def test_a_family_row_without_a_subject_list_is_no_answer(tmp_path):
+    earlier = "2026-08-22T04:40:39+00:00"
+    _write_prior(
+        tmp_path / "_bill_subjects_prior.parquet",
+        [_shape("119-hr-1", "Health", ("Medicare",), CARRIER_BULKDATA, earlier)],
+    )
+    _write_bills(
+        tmp_path / "congress_bills.parquet",
+        [_bill("119-hr-1", family=("Taxation", None)), _bill("119-hr-2", family=("Health", None))],
+    )
+    rows = _rows(enrich_bill_subjects(tmp_path, read_folder=_Folders(), fetcher=_StubFetcher()))
+    assert set(rows) == {"119-hr-1"}
+    assert (rows["119-hr-1"]["policy_area"], rows["119-hr-1"]["enriched_at"]) == ("Health", earlier)
+
+
 def test_a_folder_the_family_has_not_read_comes_from_its_zip_once(tmp_path):
-    _write_bills(tmp_path / "congress_bills.parquet", [_bill(f"118-hr-{n}") for n in (1, 2, 3, 4)])
-    folders = _Folders({(118, "hr"): _zip(118, {1: _BILLSTATUS, 2: _BILLSTATUS, 3: _BILLSTATUS_1_0_0})})
-    out = enrich_bill_subjects(tmp_path, read_folder=folders, fetcher=_StubFetcher())
-    rows = _rows(out)
-    assert folders.read == [(118, "hr")]
-    assert json.loads(rows["118-hr-1"]["subjects_json"]) == ["Air quality", "Congressional oversight"]
-    assert rows["118-hr-2"]["policy_area"] == "Environmental Protection"
-    # A member the reader refuses is no answer; a bill the zip does not list is not held.
-    assert "118-hr-3" not in rows
-    assert (rows["118-hr-4"]["policy_area"], rows["118-hr-4"]["subjects_json"]) == (None, "[]")
+    _write_bills(tmp_path / "congress_bills.parquet", [_bill(f"{OLD}-hr-{n}") for n in (1, 2, 3, 4)])
+    folders = _Folders({(OLD, "hr"): _zip(OLD, {1: _BILLSTATUS, 2: _BILLSTATUS, 3: _BILLSTATUS_1_0_0})})
+    fetcher = _StubFetcher({f"{OLD}-hr-3": BillSubjects("Health", (), CARRIER_API)})
+    rows = _rows(enrich_bill_subjects(tmp_path, read_folder=folders, fetcher=fetcher))
+    assert folders.read == [(OLD, "hr")]
+    assert json.loads(rows[f"{OLD}-hr-1"]["subjects_json"]) == ["Air quality", "Congressional oversight"]
+    assert rows[f"{OLD}-hr-2"]["policy_area"] == "Environmental Protection"
+    # A file the reader refuses goes to the API; a bill a settled zip does not list is not held.
+    assert fetcher.asked == [f"{OLD}-hr-3"]
+    assert (rows[f"{OLD}-hr-3"]["policy_area"], rows[f"{OLD}-hr-3"]["carrier"]) == ("Health", CARRIER_API)
+    assert (rows[f"{OLD}-hr-4"]["policy_area"], rows[f"{OLD}-hr-4"]["subjects_json"]) == (None, "[]")
+
+
+def test_a_bill_missing_from_a_recent_congress_zip_is_asked_again(tmp_path):
+    _write_bills(tmp_path / "congress_bills.parquet", [_bill(f"{RECENT}-hr-1"), _bill(f"{RECENT}-hr-2")])
+    zips = {(RECENT, "hr"): _zip(RECENT, {1: _BILLSTATUS})}
+    out = enrich_bill_subjects(tmp_path, read_folder=_Folders(zips), fetcher=_StubFetcher())
+    assert set(_rows(out)) == {f"{RECENT}-hr-1"}
+    zips[(RECENT, "hr")] = _zip(RECENT, {1: _BILLSTATUS, 2: _BILLSTATUS})
+    again = _Folders(zips)
+    out = enrich_bill_subjects(tmp_path, read_folder=again, fetcher=_StubFetcher())
+    assert again.read == [(RECENT, "hr")]
+    assert _rows(out)[f"{RECENT}-hr-2"]["policy_area"] == "Environmental Protection"
+
+
+def test_a_bill_a_zip_may_hold_under_an_unreadable_name_goes_to_the_api(tmp_path):
+    _write_bills(tmp_path / "congress_bills.parquet", [_bill(f"{OLD}-hr-1"), _bill(f"{OLD}-hr-2")])
+    zip_body = _zip(OLD, {1: _BILLSTATUS}, named={f"BILLSTATUS-{OLD}hr0002.xml": b"<billStatus/>"})
+    fetcher = _StubFetcher({f"{OLD}-hr-2": BillSubjects("Taxation", (), CARRIER_API)})
+    rows = _rows(enrich_bill_subjects(tmp_path, read_folder=_Folders({(OLD, "hr"): zip_body}), fetcher=fetcher))
+    assert fetcher.asked == [f"{OLD}-hr-2"]
+    assert (rows[f"{OLD}-hr-1"]["carrier"], rows[f"{OLD}-hr-2"]["carrier"]) == (CARRIER_BULKDATA, CARRIER_API)
 
 
 def test_a_list_level_bill_in_a_folder_the_family_reads_waits_for_the_family(tmp_path):
     _write_bills(
         tmp_path / "congress_bills.parquet",
-        [_bill("119-hr-1", family=("Health", [])), _bill("119-hr-2")],
+        [_bill(f"{RECENT}-hr-1", family=("Health", [])), _bill(f"{RECENT}-hr-2")],
+    )
+    folders, fetcher = _Folders(), _StubFetcher()
+    out = enrich_bill_subjects(tmp_path, read_folder=folders, fetcher=fetcher)
+    assert set(_rows(out)) == {f"{RECENT}-hr-1"}
+    assert folders.read == [] and fetcher.asked == []
+
+
+def test_a_list_level_bill_a_settled_family_read_skipped_goes_to_the_api(tmp_path):
+    """The family skips a member the reader refuses; in a settled Congress nothing else leaves a bill list-level."""
+    _write_bills(
+        tmp_path / "congress_bills.parquet",
+        [_bill(f"{OLD}-hr-1", family=("Health", [])), _bill(f"{OLD}-hr-2")],
     )
     folders = _Folders()
-    out = enrich_bill_subjects(tmp_path, read_folder=folders, fetcher=_StubFetcher())
-    assert set(_rows(out)) == {"119-hr-1"}
-    assert folders.read == []
+    fetcher = _StubFetcher({f"{OLD}-hr-2": BillSubjects("Taxation", (), CARRIER_API)})
+    rows = _rows(enrich_bill_subjects(tmp_path, read_folder=folders, fetcher=fetcher))
+    assert folders.read == [] and fetcher.asked == [f"{OLD}-hr-2"]
+    assert rows[f"{OLD}-hr-2"]["carrier"] == CARRIER_API
 
 
 def test_folders_are_read_newest_first_up_to_the_cap(tmp_path):
@@ -235,27 +325,31 @@ def test_folders_are_read_newest_first_up_to_the_cap(tmp_path):
 
 
 def _unavailable():
-    url = "https://www.govinfo.gov/bulkdata/BILLSTATUS/118/hr/BILLSTATUS-118-hr.zip"
+    url = "https://www.govinfo.gov/bulkdata/BILLSTATUS/110/hr/BILLSTATUS-110-hr.zip"
     return BillSourceUnavailableError(
         CapturedBodyResponse(url, url, 404, "text/html", "2026-09-23T00:00:00Z", body=b"")
     )
 
 
 @pytest.mark.parametrize(
-    "error,held_rows",
+    "error,congress,pinned",
     [
-        (_unavailable(), True),
-        (BillSourceError("BILLSTATUS archive exceeds its entry bound"), False),
-        (httpx.ConnectError("private transport detail"), False),
+        (_unavailable(), OLD, True),
+        (_unavailable(), RECENT, False),  # a new Congress's folder can 404 before its first bill posts
+        (BillSourceError("BILLSTATUS archive exceeds its entry bound"), OLD, False),
+        (httpx.ConnectError("private transport detail"), OLD, False),
     ],
 )
-def test_a_folder_that_is_unpublished_is_not_held_and_one_that_failed_is_retried(tmp_path, error, held_rows):
-    _write_bills(tmp_path / "congress_bills.parquet", [_bill("118-hr-1")])
-    out = enrich_bill_subjects(tmp_path, read_folder=_Folders(errors={(118, "hr"): error}), fetcher=_StubFetcher())
-    rows = _rows(out)
-    assert ("118-hr-1" in rows) is held_rows
-    if held_rows:
-        assert (rows["118-hr-1"]["policy_area"], rows["118-hr-1"]["carrier"]) == (None, CARRIER_BULKDATA)
+def test_only_a_settled_unpublished_folder_pins_not_held(tmp_path, error, congress, pinned):
+    _write_bills(tmp_path / "congress_bills.parquet", [_bill(f"{congress}-hr-1")])
+    folders = _Folders(errors={(congress, "hr"): error})
+    rows = _rows(enrich_bill_subjects(tmp_path, read_folder=folders, fetcher=_StubFetcher()))
+    assert (f"{congress}-hr-1" in rows) is pinned
+    if pinned:
+        assert (rows[f"{congress}-hr-1"]["policy_area"], rows[f"{congress}-hr-1"]["carrier"]) == (
+            None,
+            CARRIER_BULKDATA,
+        )
 
 
 def test_a_credential_refusal_from_a_folder_stops_the_run(tmp_path):
@@ -319,21 +413,24 @@ def test_a_definitive_miss_is_recorded_and_not_asked_again(tmp_path):
     assert second.asked == []
 
 
-def test_an_empty_answer_from_the_other_carrier_is_asked_again(tmp_path):
-    """A 108th-plus bill the API once left empty is re-asked from BILLSTATUS; one BILLSTATUS answered is not."""
-    prior = pa.Table.from_pylist(
+def test_a_bill_with_a_prior_row_is_selected_again_only_when_the_family_filled_it(tmp_path):
+    """An empty answer is final for the zip and API routes; only the family's own row is re-read every run."""
+    _write_prior(
+        tmp_path / "_bill_subjects_prior.parquet",
         [
             _shape("118-hr-1", None, (), CARRIER_API, "2026-08-22T00:00:00+00:00"),
             _shape("118-hr-2", None, (), CARRIER_BULKDATA, "2026-08-22T00:00:00+00:00"),
+            _shape("100-hr-1", None, (), CARRIER_API, "2026-08-22T00:00:00+00:00"),
         ],
-        schema=pa.schema([(c, pa.string()) for c in COLUMNS]),
     )
-    pq.write_table(prior, tmp_path / "_bill_subjects_prior.parquet")
-    _write_bills(tmp_path / "congress_bills.parquet", [_bill("118-hr-1"), _bill("118-hr-2")])
+    _write_bills(
+        tmp_path / "congress_bills.parquet",
+        [_bill("118-hr-1"), _bill("118-hr-2", family=("Health", [])), _bill("100-hr-1"), _bill("100-hr-2")],
+    )
     pending = _pending_bills(
         tmp_path / "congress_bills.parquet", tmp_path / "_bill_subjects_prior.parquet", have_prior=True
     )
-    assert [bill.bill_id for bill in pending] == ["118-hr-1"]
+    assert [(bill.bill_id, bill.prior is not None) for bill in pending] == [("118-hr-2", True), ("100-hr-2", False)]
 
 
 def test_bills_below_the_api_floor_or_without_a_number_are_never_selected(tmp_path):
@@ -348,13 +445,145 @@ def test_a_missing_bill_table_fails_loudly(tmp_path):
         enrich_bill_subjects(tmp_path, fetcher=_StubFetcher())
 
 
-def test_a_run_cannot_outspend_the_documented_hourly_budget():
-    """Congress.gov states 5,000 requests an hour; a capped run must fit inside it and the 30-minute job."""
+def test_a_run_cannot_outspend_the_documented_hourly_budget_or_the_job():
+    """Congress.gov states 5,000 requests an hour; the rollup workflow kills a job at 30 minutes."""
     assert 3600 / DELAY_SECONDS < API_HOURLY_BUDGET
-    assert MAX_API_BILLS_PER_RUN * DELAY_SECONDS < 30 * 60
+    assert MAX_API_BILLS_PER_RUN < API_HOURLY_BUDGET
+    assert DEADLINE_SECONDS <= 30 * 60 - 10 * 60  # merge, upload and one in-flight request keep ten minutes
+
+
+class _Clock:
+    def __init__(self):
+        self.now = 0.0
+
+    def __call__(self):
+        return self.now
+
+
+def test_the_runs_own_fetcher_carries_the_run_deadline(tmp_path, monkeypatch):
+    monkeypatch.setenv("DATA_GOV_API_KEY", "fixture-key")
+    built = []
+
+    class Recording(_StubFetcher):
+        def __init__(self, **kwargs):
+            super().__init__()
+            built.append(kwargs)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            pass
+
+    # The transforms facade exports a function under this module's name, so patch the module object.
+    module = importlib.import_module("spicy_regs.transforms.enrich_bill_subjects")
+    monkeypatch.setattr(module, "BillSubjectsFetcher", Recording)
+    _write_bills(tmp_path / "congress_bills.parquet", [_bill("100-hr-1")])
+    clock = _Clock()
+    clock.now = 50.0
+    enrich_bill_subjects(tmp_path, deadline_seconds=1_000, clock=clock)
+    assert [(kwargs["deadline"], kwargs["clock"]) for kwargs in built] == [(1_050.0, clock)]
+
+
+def test_a_folder_not_started_before_the_deadline_is_left_for_the_next_run(tmp_path):
+    _write_bills(tmp_path / "congress_bills.parquet", [_bill("117-hr-1"), _bill("118-hr-1")])
+    zips = {(congress, "hr"): _zip(congress, {1: _BILLSTATUS}) for congress in (117, 118)}
+    clock = _Clock()
+
+    class Slow(_Folders):
+        def __call__(self, congress, bill_type):
+            clock.now += 400
+            return super().__call__(congress, bill_type)
+
+    first = Slow(zips)
+    out = enrich_bill_subjects(tmp_path, deadline_seconds=300, read_folder=first, fetcher=_StubFetcher(), clock=clock)
+    assert first.read == [(118, "hr")]
+    assert set(_rows(out)) == {"118-hr-1"}
+    clock.now = 0.0
+    second = Slow(zips)
+    out = enrich_bill_subjects(tmp_path, deadline_seconds=300, read_folder=second, fetcher=_StubFetcher(), clock=clock)
+    assert second.read == [(117, "hr")]
+    assert set(_rows(out)) == {"117-hr-1", "118-hr-1"}
+
+
+def test_the_api_loop_stops_at_its_deadline_and_the_next_run_resumes(tmp_path):
+    _write_bills(tmp_path / "congress_bills.parquet", [_bill(f"100-hr-{n}") for n in range(1, 6)])
+    clock = _Clock()
+
+    class Slow(_StubFetcher):
+        def subjects_for(self, congress, bill_type, bill_number):
+            clock.now += 400  # a bill costs 400 s on this clock
+            return super().subjects_for(congress, bill_type, bill_number)
+
+    answers = {f"100-hr-{n}": BillSubjects("Health", (), CARRIER_API) for n in range(1, 6)}
+    first = Slow(answers)
+    out = enrich_bill_subjects(tmp_path, deadline_seconds=1_000, fetcher=first, clock=clock)
+    assert len(first.asked) == 3  # started at 0, 400 and 800 s; none at 1,200
+    assert len(_rows(out)) == 3
+    clock.now = 0.0
+    second = Slow(answers)
+    out = enrich_bill_subjects(tmp_path, deadline_seconds=1_000, fetcher=second, clock=clock)
+    assert len(second.asked) == 2 and set(second.asked).isdisjoint(first.asked)
+    assert len(_rows(out)) == 5
 
 
 # -- the Congress.gov fetch ---------------------------------------------------
+
+
+@pytest.fixture
+def timed_transport(monkeypatch):
+    """The API fetcher over a MockTransport on a fake clock; each action is (seconds it takes, response kwargs)."""
+    clock = _Clock()
+    sleeps: list[float] = []
+
+    def sleep(seconds):
+        sleeps.append(round(seconds, 2))
+        clock.now += seconds
+
+    monkeypatch.setattr("spicy_regs.sources.bill_subjects.time.sleep", sleep)
+    clients = []
+
+    def create(*actions, deadline=None):
+        calls = []
+
+        def respond(request):
+            calls.append(request)
+            seconds, response = actions[min(len(calls), len(actions)) - 1]
+            clock.now += seconds
+            return httpx.Response(**response)
+
+        client = httpx.Client(transport=httpx.MockTransport(respond))
+        clients.append(client)
+        fetcher = BillSubjectsFetcher(api_key=_KEY, client=client, deadline=deadline, clock=clock)
+        return fetcher, calls, clock, sleeps
+
+    yield create
+    for client in clients:
+        client.close()
+
+
+def test_requests_are_paced_from_their_start_not_slept_after(timed_transport):
+    """Measured 2026-09-23: a round trip takes 1.36 s, longer than the 0.75 s interval, so it costs no sleep."""
+    empty = {"status_code": 200, "json": _page(0, [])}
+    fetcher, _calls, _clock, sleeps = timed_transport((1.36, empty), (0.1, empty), (0.1, empty))
+    for number in (1, 2, 3):
+        assert fetcher.subjects_for("100", "hr", str(number)) is not None
+    assert sleeps == [0.65]
+
+
+def test_a_later_page_is_not_started_after_the_deadline(timed_transport):
+    """A bill whose first page ends past the deadline is no answer, never a truncated list."""
+    first = {"status_code": 200, "json": _page(400, [f"S{n}" for n in range(250)], "Taxation")}
+    fetcher, calls, _clock, _sleeps = timed_transport((61.0, first), deadline=60.0)
+    assert fetcher.subjects_for("100", "hr", "1") is None
+    assert len(calls) == 1
+
+
+def test_a_retry_is_not_started_after_the_deadline(timed_transport):
+    fetcher, calls, clock, _sleeps = timed_transport((61.0, {"status_code": 503, "json": {}}), deadline=60.0)
+    assert fetcher.subjects_for("100", "hr", "1") is None
+    assert len(calls) == 1
+    assert clock.now < 60.0 + 61.0 + 30  # one in-flight request and at most one backoff past the deadline
 
 
 def test_the_api_fetcher_refuses_to_run_without_a_key(monkeypatch):
