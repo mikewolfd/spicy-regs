@@ -144,7 +144,9 @@ unfinished populations remain explicit.
   refuses incomplete responses. A source-qualified correction to exactly
   `CFR-2025-title14-vol4` repairs 1,444 section mappings and preserves 318,063
   other rows; all repaired rows pass direct MCP reads. Unknown annual-edition
-  ancestry remains null in the corrected rows. The complete retained Agenda
+  ancestry remains null in the corrected rows. *(The September 23 parsing
+  survey found 1,434 of the 1,444 nulled parts were right; only the ten
+  `19-8.x` sections were wrong. A8 restores them.)* The complete retained Agenda
   edition `202510` now passes all source-identity and mapped-field comparisons;
   replay reproduces the existing published bytes exactly, and both MCP modes
   match. Its dictionary now describes `next_action_date` as the second distinct
@@ -162,7 +164,9 @@ unfinished populations remain explicit.
   native field/grain gaps and FCC crowded-single-day recovery remain separate
   work. CRS reports and FCC proceedings and filings were replayed, validated
   against raw pages and published 2026-09-23; offset walks now pool passes to
-  the publisher's count (ledger, September 23 continuation). CourtListener now refuses failed pages, inconsistent exact counts, invalid
+  the publisher's count (ledger, September 23 continuation). The pooling
+  compares counts, not identity sets; SpicyDocs consolidation plan B6 moves it
+  into SpicyDocs and pools by set. CourtListener now refuses failed pages, inconsistent exact counts, invalid
   identities and unfinished cursor walks; explicit record caps remain selected
   prefixes. Ordinary scheduled readers still need successful raw-response
   retention for replayable source audits. A full keyless CourtListener attempt
@@ -317,7 +321,7 @@ later scheduled runs publish new pins before audit (decision 3).
 | Nominations, treaties, reports/hearings and press | Nominations (2,204) and treaties (2) are re-qualified. Live report generation `52f30e7c…` is a strict superset of the qualified `f5f16948…`: 113 reports, 1,335 sections and 23 hearings, with nothing removed or changed. The 8 added reports and 4 added hearings match GovInfo's package summaries, and each captured body is byte-identical to a fresh download. Press retains its verified bounded correction. | Only the `observed_at` capture time on 19 inherited hearing rows (and their read checkpoints) is unqualified; their content is verified. Broader history/detail/granule coverage and newer press capture metadata remain open. |
 | Laws, committee rosters and amendments | Source-audited 2026-09-23 by clean replay: laws `08a1c0bf…` (113 laws, 3,655 code links, 65 Table III rows), rosters `e35ff03d…` (236 committees, 2,966 assignments), amendments `f8c3943a…` (7,095, the declared count, with sponsor and amended-bill detail). | Decision 5: House select aliases are live; 28 seats stay unlisted for want of a publisher link. 89 Rules Committee amendments have no member sponsor. |
 | Bills, text and differences | Reconciled generation `a846cb44…` (decision 1): 419,866 bills in all 18 tables; inherited URLs carry `url_source = inherited`. `bill_versions` lists 42,448 printings, 1,205 with a captured body; 276 diff parents with 3,479 items. | Native-field qualification beyond the audited 118th HR/S cohort, uncaptured bodies, the four model tables (empty; no `GEMINI_API_KEY` on the fork) and both backfill tables (empty) remain open. |
-| Votes | Live generation `3204b8fc…`: 1,575 votes, 382,136 member rows. The 1,573 of the qualified `80028c18…` carry over; the two added Senate cloture votes (`119-senate-2-239`, `-240`) match the Senate's raw XML in every tally and all 100 positions. All 845 bill links are recorded votes in their bill's raw BILLSTATUS. `member_vote_terms` implements decision 2. | Portable public source evidence, full history and dynamic scorecards are not delivered. |
+| Votes | Live generation `3204b8fc…`: 1,575 votes, 382,136 member rows. The 1,573 of the qualified `80028c18…` carry over; the two added Senate cloture votes (`119-senate-2-239`, `-240`) match the Senate's raw XML in every tally and all 100 positions. All 845 bill links are recorded votes in their bill's raw BILLSTATUS. `member_vote_terms` implements decision 2. | Portable public source evidence, full history and dynamic scorecards are not delivered. `bill_vote_references.date` is the UTC day, which differs from the chamber's vote day on 91 of 847 references (plan A11). |
 | Communications, meetings, record issues, print citations and Senate expenditures | Published generations qualified: record issues (every row has its detail), print citations (4 tables) and Senate expenditures reproduce exactly; house communications and committee meetings pass every still-current cell with 15 withdrawn identities and four additive publisher updates recorded as drift. | The recorded post-publication drift remains explicit; see `scheduled-published-qualification/`. |
 
 Exact current publication pins and byte audits are in `congressional-status/`;
@@ -477,7 +481,11 @@ is the evidence for valid emptiness; a generic nonempty-file check is insufficie
 ### Immediate execution order
 
 *As of 2026-09-23 the steps below are largely done; see the ledger's September 23
-continuation. What remains, in order:*
+continuation. What remains, in order. Items A5–A12 and B6–B12 are in
+SpicyDocs' consolidation plan (`spicy-docs/docs/research/consolidation-path-2026-09-22.md`),
+with their evidence in `spicy-docs/docs/research/parsing-survey-2026-09-23.md`:*
+- **Stop the key reaching logs (A5).** Route `bill_subjects` through the
+  SpicyDocs Congress reader, before the push, so the push carries the fix.
 - **Push and re-enable.** Push the local spicy-docs and spicy-regs commits, then
   re-enable the seven fork workflows waiting on them. `cfr_sections` stays off
   until the CFR ancestry fix, and `court_opinion_bodies` and
@@ -486,14 +494,12 @@ continuation. What remains, in order:*
   source, agency by agency. The table already holds their rows from the
   retained parent. Then build the dated partition tree and the
   `comments/agency/` mirror; the mirror needs `R2_CATALOG_*` secrets.
-- **Stop the key reaching logs (A5).** Route `bill_subjects` through the
-  SpicyDocs Congress reader.
 - **CFR ancestry (T11, A8).** Add the section-ancestry scan to SpicyDocs'
   annual CFR reader and read its heading part in `build_cfr_sections`; then
   republish and re-enable the workflow.
-- **Parsing consolidation.** The quiet bugs A6–A12 and the moves B6–B12 in
-  SpicyDocs' consolidation plan, with rulings 5–7 (title 43 `cfr_ref`,
-  rulemaking join changes, comment text provenance).
+- **Parsing consolidation.** The quiet bugs A6–A12 and the moves B6–B12,
+  with the plan's rulings 5–7 (title 43 `cfr_ref`, rulemaking join changes,
+  comment text provenance).
 - **Wider source populations.** SAM years, lobbying history (the key is now
   set), FCC filings history, USAspending beyond the top 10,000, court catch-up
   and parties (decision 9).

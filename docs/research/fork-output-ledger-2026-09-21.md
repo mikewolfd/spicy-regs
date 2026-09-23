@@ -107,7 +107,7 @@ CFR's parts are wrong in titles 41, 43 and 14 vol 4, and the source-backed fix i
 - Full docket/document repairs and docket search are published. All 670 selected source releases replayed; newer and unrelated prior observations survive. This is metadata repair: all document body-text, extraction-status and PDF-extraction-evidence values remain null; acquiring and extracting bodies remains open. The full 23,889,661-row comments object is now retained locally, but three raw witnesses still demonstrate omitted attachments/names/organizations; the current extraction-evidence column is missing. The separate 112,861-group index totals 23,888,128 comments, 1,533 below the independently pinned full object; a common generation is unproved. Comments remain unadmitted. Full reconciliation now identifies 1,555 native NULL-date rows omitted by the old partition rule, offset by 22 surplus counts in three older index groups. All 1,555 originals were acquired and match the parent. Standard Hive null partitions now retain those rows; the local full index conserves every parent row. Wider source-field repairs and the complete dated partition tree remain open.
 - Nominations (2,204) and treaties (2) are published with public-byte and MCP verification at their declared 119th Congress scopes. Record issues have their detail on every row (`detail_missing: 0`); the other T08 families retain their source/schema/field gaps.
 - Bill-body retry/budget handling is implemented and manually audited across four retained-fixture runs. Independent review found and repaired missing-version/diff-child checkpoints and stale child rows after successful correction. Exact successful scopes now replace their children while failed, capped and unrelated scopes survive. Full 18-table coverage, older backfills and model retry/access remain open. All five report-family members are rebuilt and published for exactly 118 selected packages; one hearing is a fresh source observation with changed bytes.
-- CFR failure paths refuse partial output. Its title 14, volume 4 correction preserves 318,063 unrelated rows and verifies 1,444 repaired rows; source ancestry and other packages remain open. CRS/FCC/GAO/USAspending refusal fixes do not qualify their full populations. CourtListener now uses the source-owned strict reader. A full keyless attempt stopped at HTTP 429 after 34 retained pages/680 records; an exact failure replay preserved prior output. Full scope, usable rate/access budgets and ordinary successful-source retention remain open. The retained Agenda edition now passes full native-field qualification; FR still needs it.
+- CFR failure paths refuse partial output. Its title 14, volume 4 correction preserves 318,063 unrelated rows and verifies 1,444 repaired rows; source ancestry and other packages remain open. *(The September 23 parsing survey found that 1,434 of those 1,444 nulled parts were right; see the CFR bullet in the continuation.)* CRS/FCC/GAO/USAspending refusal fixes do not qualify their full populations. CourtListener now uses the source-owned strict reader. A full keyless attempt stopped at HTTP 429 after 34 retained pages/680 records; an exact failure replay preserved prior output. Full scope, usable rate/access budgets and ordinary successful-source retention remain open. The retained Agenda edition now passes full native-field qualification; FR still needs it.
 - *(Superseded 2026-09-23: bounded SAM and lobbying initial loads are published; only their schedules wait on the push.)* SAM remained withdrawn and disabled pending a qualified initial load; lobbying remained paused.
 - Derived tables need verified parent pins. Monthly volume and discovery are published from the exact repaired parent with accounting/as_of metadata. Discovery's reviewed UTC correction is published and passes independent full-parent counting plus both MCP read paths. Explicit source offsets survive; offset-free dates use UTC, with the policy stored in Parquet metadata. Lifecycles needs a defined pairing/unknown-docket policy: 19 prior null-docket groups collapsed unrelated proposals and 647 groups were lost when the earliest final predated the earliest proposal. The ledger adds the hidden public-comments dependency of organization links and the complete-family publication prerequisite of the narrow bill writer.
 
@@ -264,7 +264,8 @@ Receipts: `members-qualification/`, `congressional-status/`, `native-vote-varian
     - CRS and filings repeated an identity within one offset walk; the list
       shifts while it is read, the amendments defect. `pool_passes` now pools
       passes until the distinct count reaches the publisher's count; amendments
-      moved onto it.
+      moved onto it. It compares counts, not identity sets; consolidation plan
+      B6 moves it into SpicyDocs and pools by set.
     - ECFS states no total, but every response carries term aggregations. A
       window's count is its `express_comment` (filings) or `bureau_name`
       (proceedings) buckets plus the records lacking the field, which matched
@@ -530,8 +531,9 @@ Receipts: `members-qualification/`, `congressional-status/`, `native-vote-varian
     recent dictionary deploy fails. See `rerun-check-2026-09-23/`.
 - **Parsing survey (2026-09-23 evening).** Six read-only scouts surveyed every
   parser in the stack. SpicyDocs' `docs/research/parsing-survey-2026-09-23.md`
-  records the findings, and the consolidation plan beside it carries them as
-  items A5–A12 and B6–B12. The ones that touch this fork:
+  records the findings, and the consolidation plan beside it
+  (`docs/research/consolidation-path-2026-09-22.md`) carries them as items
+  A5–A12 and B6–B12. The ones that touch this fork:
   - **A key in local logs.** `bill_subjects` sends the Congress.gov key in the
     query, and its logged 4xx errors carry the URL. No retained log holds a
     key, and GitHub Actions masks it in CI (A5).

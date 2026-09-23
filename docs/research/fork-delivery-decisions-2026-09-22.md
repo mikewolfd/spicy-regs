@@ -60,7 +60,10 @@ mislabelled 0.26.5 wheel stays here only for replay.
   matched by name.
 - **Decisions 4 and T17, 2026-09-23:** all five rulemaking parents qualified and
   the rulemaking dataset is bootstrapped (`snapshot_0e799850…`), so agency timing
-  can now come from `proceedings` and `comment_periods` as decided.
+  can now come from `proceedings` and `comment_periods` as decided. The
+  September 23 parsing survey later found both tables miss labelled FR docket
+  values and `proceedings` dates events by the UTC day; fixing either waits on
+  ruling 6 of the SpicyDocs consolidation plan (items A7 and A12).
 - **Decision 2, 2026-09-23 (`c113329`):** implemented as the derived table
   `member_vote_terms` (generation `890481eb…`), leaving `member_votes`
   unchanged. It reproduces the decision's numbers on the current votes: 15 of
