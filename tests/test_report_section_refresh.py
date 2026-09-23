@@ -1,4 +1,4 @@
-"""Corrected report readers refresh unchanged sources and replace their blocks."""
+"""Corrected report readers and named re-reads refresh unchanged sources and replace their blocks."""
 
 import shutil
 
@@ -11,7 +11,15 @@ from spicy_docs.schemas.committee_report_tables import REPORT_SECTIONS
 from spicy_regs.transforms.build_committee_reports import build_committee_reports
 from spicy_regs.transforms.committee_report_reads import READ_COLUMNS, READS_TABLE, RULE_VERSIONS
 from spicy_regs.transforms.table_merge import prior_scratch_path
-from tests.test_committee_reports import CRPT_ID, StubHearings, _no_prior, _package
+from tests.test_committee_reports import (
+    CHRG_ID,
+    CRPT_ID,
+    OBSERVED_AT,
+    HearingBodyAcquirer,
+    StubHearings,
+    _no_prior,
+    _package,
+)
 
 
 class NoDiscovery:
@@ -121,3 +129,61 @@ def test_rule_change_refreshes_outside_window_and_replaces_only_successful_repor
         download_prior=_no_prior,
     )
     assert again.requested == ([CRPT_ID] if fail else [])
+
+
+class NoListing:
+    """A discovery reader a named re-read must never reach."""
+
+    def packages(self, url, *, max_pages=40):
+        raise AssertionError("a named re-read lists nothing")
+
+
+def test_a_named_reread_reads_only_those_packages_and_carries_every_other_checkpoint(tmp_path):
+    """A complete checkpoint is forced pending by name; a refused one not named stays unread."""
+    held, refused = "CHRG-119hhrg64431", "CRPT-119hrpt2"
+    prior_hearings = [
+        {"package_id": package_id, "last_modified": "2026-09-18T12:00:00Z", "observed_at": "2026-09-20T00:00:00Z"}
+        for package_id in (CHRG_ID, held)
+    ]
+    _write_prior(tmp_path, "hearing_transcripts", ("package_id", "last_modified", "observed_at"), prior_hearings)
+    prior_reads = [
+        {
+            "package_id": package_id,
+            "last_modified": "2026-09-18T12:00:00Z",
+            "outcome": outcome,
+            "rule_version": RULE_VERSIONS[package_id[:4]],
+            "observed_at": "2026-09-20T00:00:00+00:00",
+        }
+        for package_id, outcome in ((CHRG_ID, "complete"), (held, "complete"), (refused, "refused"))
+    ]
+    _write_prior(tmp_path, READS_TABLE, READ_COLUMNS, prior_reads)
+    acquirer = HearingBodyAcquirer()
+    paths = build_committee_reports(
+        tmp_path,
+        reader=NoListing(),
+        acquirer=acquirer,
+        hearings=StubHearings(),
+        download_prior=_no_prior,
+        reread=[CHRG_ID],
+    )
+    assert acquirer.requested == [CHRG_ID]
+    files = {path.stem: path for path in paths}
+    reads = {row["package_id"]: row for row in pq.read_table(files[READS_TABLE]).to_pylist()}
+    assert [reads[row["package_id"]] for row in prior_reads[1:]] == prior_reads[1:]
+    assert reads[CHRG_ID]["outcome"] == "complete"
+    assert reads[CHRG_ID]["observed_at"] != prior_reads[0]["observed_at"]
+    hearings = {row["package_id"]: row for row in pq.read_table(files["hearing_transcripts"]).to_pylist()}
+    assert hearings[held]["observed_at"] == prior_hearings[1]["observed_at"]
+    assert hearings[CHRG_ID]["observed_at"] == OBSERVED_AT, "the re-read row carries its new capture time"
+
+
+def test_a_reread_outside_the_two_collections_is_refused(tmp_path):
+    with pytest.raises(ValueError, match="outside CRPT and CHRG"):
+        build_committee_reports(
+            tmp_path,
+            reader=NoListing(),
+            acquirer=HearingBodyAcquirer(),
+            hearings=StubHearings(),
+            download_prior=_no_prior,
+            reread=["PLAW-119publ1"],
+        )

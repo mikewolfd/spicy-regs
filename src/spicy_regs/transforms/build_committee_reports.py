@@ -11,7 +11,7 @@ from __future__ import annotations
 import hashlib
 import os
 from collections import Counter
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Collection, Iterator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Protocol
@@ -252,8 +252,17 @@ def build_committee_reports(
     max_packages: int = MAX_PACKAGES_PER_RUN,
     download_prior: Callable[[str, Path], bool] = r2.download,
     evidence: CaptureEvidence | None = None,
+    reread: Collection[str] = (),
 ) -> tuple[Path, ...]:
-    """Build four contract tables and the acquisition checkpoint, with one owner."""
+    """Build four contract tables and the acquisition checkpoint, with one owner.
+
+    ``reread`` names packages to read again whatever their checkpoints say, and
+    nothing else: discovery is skipped, so every other row and checkpoint is
+    carried from the prior unchanged. It re-establishes the named packages'
+    capture evidence without moving the rest of the family.
+    """
+    if outside := sorted(key for key in reread if not key.startswith(("CRPT-", "CHRG-"))):
+        raise ValueError(f"reread names packages outside CRPT and CHRG: {outside}")
     if reader is None or acquirer is None or hearings is None:
         api_key = _resolve_api_key()
         if not api_key:
@@ -272,10 +281,12 @@ def build_committee_reports(
     checkpoint = published_table(output_dir, READS_TABLE, download_prior)
     reads = prior_reads(checkpoint, prior_files)
     since = _since(prior_files["committee_reports"])
-    logger.info("Committee reports: modified since {}; cap {} per collection; agenda cap 0", since, max_packages)
+    logger.info("Committee reports: {}; cap {} per collection; agenda cap 0",
+                f"re-reading only {sorted(reread)}" if reread else f"modified since {since}", max_packages)
     observed_at = datetime.now(UTC).isoformat()
     if evidence:
-        evidence.event("selection", since=since, max_packages_per_collection=max_packages, max_pages=MAX_PAGES,
+        evidence.event("selection", since=None if reread else since, reread=sorted(reread),
+                       max_packages_per_collection=max_packages, max_pages=MAX_PAGES,
                        agenda_cap=0, checkpoint_observed_at=observed_at)
     link_rows: list[dict] = []
     evaluated_hearings: set[str] = set()
@@ -289,16 +300,21 @@ def build_committee_reports(
     refused = unchanged = linked = 0
 
     for collection in ("CRPT", "CHRG"):
-        try:
-            listed = _package_ids(reader, collection, since, evidence)
-        except Exception as error:
-            if evidence:
-                evidence.refusal(error, stage=collection + ":listing")
-            raise
-        pending = {key: row.get("last_modified") for key, row in reads.items()
-                   if key.startswith(collection + "-") and not complete(row, collection)}
-        pending.update({key: modified for key, modified in listed.items()
-                        if not complete(reads.get(key, {}), collection, modified)})
+        if reread:
+            listed = {}
+            pending = {key: reads.get(key, {}).get("last_modified") for key in reread
+                       if key.startswith(collection + "-")}
+        else:
+            try:
+                listed = _package_ids(reader, collection, since, evidence)
+            except Exception as error:
+                if evidence:
+                    evidence.refusal(error, stage=collection + ":listing")
+                raise
+            pending = {key: row.get("last_modified") for key, row in reads.items()
+                       if key.startswith(collection + "-") and not complete(row, collection)}
+            pending.update({key: modified for key, modified in listed.items()
+                            if not complete(reads.get(key, {}), collection, modified)})
         unchanged += len(listed) - sum(key in pending for key in listed)
         if evidence:
             evidence.event("package-selection", collection=collection, listed=listed,

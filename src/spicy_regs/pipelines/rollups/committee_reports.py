@@ -5,6 +5,7 @@ its pacing budget, and the agency blocks are parsed from a report body that is
 only in hand during the pass that fetched it.
 """
 
+import os
 from pathlib import Path
 from typing import ClassVar
 
@@ -27,7 +28,9 @@ class CommitteeReportsRollup(RollupPipeline):
     )
 
     def build(self, output_dir: Path) -> tuple[Path, ...]:
-        return build_committee_reports(output_dir, evidence=self.source_evidence)
+        # Comma-separated package ids to re-read alone; unset is the normal discovery run.
+        reread = [key.strip() for key in os.environ.get("COMMITTEE_REPORTS_REREAD", "").split(",") if key.strip()]
+        return build_committee_reports(output_dir, evidence=self.source_evidence, reread=reread)
 
 
 app = make_rollup_app(CommitteeReportsRollup)
