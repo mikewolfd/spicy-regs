@@ -95,7 +95,8 @@ def build_feed_summary(output_dir: Path) -> Path:
         ) d
         {comment_join}
         {doc_join}
-        ORDER BY d.modify_date DESC
+        -- docket_id breaks the 18,649 modify_date ties (2026-09-23), so the same inputs give the same bytes.
+        ORDER BY d.modify_date DESC, d.docket_id
     ) TO '{summary_file}' (FORMAT PARQUET, COMPRESSION ZSTD, ROW_GROUP_SIZE 50000);
     """
 
