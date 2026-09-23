@@ -103,6 +103,54 @@ def _instant(day: date | None, *, end: bool = False) -> str | None:
     return datetime.combine(day, datetime.max.time() if end else datetime.min.time()).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+#: Sort orders for successive passes over one query. A single offset-paged pass sorted by
+#: ``updateDate`` repeats about as many records as it skips, so its row count still equals the
+#: declared count: on 2026-09-23 the 119th Congress walk returned its declared 7,066 rows but
+#: only 7,013 distinct amendments, and the published table was 52 short. The two orders drop
+#: different records; one pass of each, pooled by identity, reached all 7,066.
+POOLED_SORTS = ("updateDate desc", "updateDate asc", "updateDate desc", "updateDate asc")
+
+
+def _pooled_walk(reader: ListingSource, route, *, congress, since: date | None, until: date | None) -> list[dict]:
+    """Every amendment the query declares, pooled over passes until the distinct count reaches it.
+
+    Where one amendment is seen twice, the row with the later ``update_date`` wins. A query that
+    declares no count ends after one pass; one that stays short after every pass refuses.
+    """
+    pooled: dict[tuple, dict] = {}
+    declared: int | None = None
+    passes = 0
+    for sort in POOLED_SORTS:
+        passes += 1
+        url = list_route_url(
+            route,
+            congress=congress,
+            limit=MAX_LIMIT,
+            sort=sort,
+            from_datetime=_instant(since),
+            to_datetime=_instant(until, end=True),
+        )
+        for page in reader.records(route, url, max_pages=MAX_PAGES):
+            if getattr(page, "declared_count", None) is not None:
+                declared = page.declared_count
+            for record in page.records:
+                row = shape_amendment(record)
+                key = (row["congress"], row["amendment_type"], row["amendment_number"])
+                held = pooled.get(key)
+                if held is None or (row["update_date"] or "") >= (held["update_date"] or ""):
+                    pooled[key] = row
+        if declared is None or len(pooled) >= declared:
+            break
+    if declared is not None and len(pooled) < declared:
+        raise RuntimeError(
+            f"Amendments: Congress {congress} pooled {len(pooled):,} of {declared:,} declared amendments "
+            f"after {passes} passes"
+        )
+    if passes > 1:
+        logger.info("Amendments: Congress {} needed {} passes to reach {:,}", congress, passes, len(pooled))
+    return list(pooled.values())
+
+
 def build_amendments(
     output_dir: Path,
     *,
@@ -142,20 +190,9 @@ def build_amendments(
     route = LIST_ROUTES["amendment"]
     rows: list[dict] = []
     for congress in congresses_from_env():
-        url = list_route_url(
-            route,
-            congress=congress,
-            limit=MAX_LIMIT,
-            sort="updateDate desc",
-            from_datetime=_instant(since),
-            to_datetime=_instant(until, end=True),
-        )
-        count = 0
-        for page in reader.records(route, url, max_pages=MAX_PAGES):
-            for record in page.records:
-                rows.append(shape_amendment(record))
-                count += 1
-        logger.info("Amendments: Congress {} — {:,} amendments in window", congress, count)
+        pooled = _pooled_walk(reader, route, congress=congress, since=since, until=until)
+        rows.extend(pooled)
+        logger.info("Amendments: Congress {} — {:,} amendments in window", congress, len(pooled))
 
     logger.info("Amendments: {:,} rows this run", len(rows))
     return merge_contract_table(output_dir, "amendments", rows, prior_present=have_prior)

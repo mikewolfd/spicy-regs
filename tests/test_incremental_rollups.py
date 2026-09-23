@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from datetime import date
 from pathlib import Path
+from types import SimpleNamespace
 
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -101,6 +102,57 @@ def test_amendments_caps_the_window(tmp_path, monkeypatch):
     assert "fromDateTime=2020-01-01" in url
     capped = date(2020, 1, 1).toordinal() + MAX_WINDOW_DAYS
     assert f"toDateTime={date.fromordinal(capped).isoformat()}" in url, url
+
+
+def _amendment(number: int, update: str = "2026-01-01T00:00:00Z") -> dict:
+    return {
+        "congress": 119,
+        "type": "SAMDT",
+        "number": str(number),
+        "updateDate": update,
+        "url": f"https://api.congress.gov/v3/amendment/119/samdt/{number}?format=json",
+    }
+
+
+class ShiftingListingReader:
+    """Each pass returns the declared count of rows, but repeats one amendment and skips another."""
+
+    def __init__(self, passes):
+        self.passes = list(passes)
+        self.urls: list[str] = []
+
+    def records(self, route, url, *, max_pages=100):
+        self.urls.append(url)
+        records, declared = self.passes.pop(0)
+        return iter((SimpleNamespace(records=tuple(records), declared_count=declared),))
+
+
+def test_amendments_pool_opposite_sort_passes_until_the_declared_count(tmp_path, monkeypatch):
+    """A single pass that repeats #2 and skips #3 still matches the declared count by rows; pooling catches it."""
+    from spicy_regs.transforms.build_amendments import build_amendments
+
+    monkeypatch.setenv("BILL_FAMILY_CONGRESSES", "119")
+    reader = ShiftingListingReader(
+        [
+            ([_amendment(1), _amendment(2), _amendment(2)], 3),
+            ([_amendment(3), _amendment(2, "2026-02-01T00:00:00Z"), _amendment(1)], 3),
+        ]
+    )
+    out = build_amendments(tmp_path, reader=reader, download_prior=no_download)
+    rows = {row["amendment_number"]: row for row in pq.read_table(out).to_pylist()}
+    assert sorted(rows) == ["1", "2", "3"]
+    assert rows["2"]["update_date"] == "2026-02-01T00:00:00Z", "the later observation wins"
+    assert "sort=updateDate+desc" in reader.urls[0] and "sort=updateDate+asc" in reader.urls[1]
+
+
+def test_amendments_refuse_a_walk_that_never_reaches_its_declared_count(tmp_path, monkeypatch):
+    from spicy_regs.transforms.build_amendments import POOLED_SORTS, build_amendments
+
+    monkeypatch.setenv("BILL_FAMILY_CONGRESSES", "119")
+    reader = ShiftingListingReader([([_amendment(1), _amendment(1)], 2)] * len(POOLED_SORTS))
+    with pytest.raises(RuntimeError, match="pooled 1 of 2 declared"):
+        build_amendments(tmp_path, reader=reader, download_prior=no_download)
+    assert len(reader.urls) == len(POOLED_SORTS)
 
 
 # --------------------------------------------------------------------------- #
