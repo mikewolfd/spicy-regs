@@ -11,8 +11,9 @@ on a docket, so links are name- and topic-based (agency in ``case_name`` /
 Incremental by design: best-effort prior from R2, fetch only dockets filed
 since its max ``date_filed`` minus a short overlap, then dedup on
 ``cl_docket_id`` preferring the fresh row. With no prior table it is a full
-backfill. The reader is functionally keyless, so this runs with or without
-``COURTLISTENER_API_TOKEN``.
+backfill. The scheduled run sets ``COURTLISTENER_API_TOKEN`` because keyless
+runs time out on 429s; a free token's 250-requests-a-day cap still covers the
+daily delta, but not a full backfill of several hundred pages in one day.
 """
 
 from __future__ import annotations
