@@ -2,8 +2,10 @@
 
 Mike answered the open delivery questions in the [fork output ledger](fork-output-ledger-2026-09-21.md)
 and [consolidated backlog](../fork-generation.md) on September 22, 2026. Each entry states
-the question in terms of what users get, the decision, and the work it sets. The ledger and
-backlog still own status; update their rows when the work lands.
+the question in terms of what users get, the decision, and the work it sets. The ledger owns
+status and pins, the backlog the order of work, and the execution log the dated narrative
+(decision 16); this record holds only decisions and how their meaning changed.
+Decisions 14–25 were delegated on 2026-09-23 (below).
 
 | # | Question | Decision | Consequence |
 | --- | --- | --- | --- |
@@ -38,70 +40,64 @@ mislabelled 0.26.5 wheel stays here only for replay.
 
 ## Later changes
 
-- **Decision 12, 2026-09-22 (`0fcbc21`):** the token now reaches only the
-  `court_dockets` rollup. A free token's measured limits (10/minute, 100/hour,
-  250/day) cover the daily docket delta but not the cluster rollup's keyless
-  search catch-up of about 660 pages, which ran keyless in about 17 minutes.
+Status and pins for each consequence are in the ledger; these entries record only
+what changed about a decision or its consequence.
+
+- **Decision 12, 2026-09-22 (`0fcbc21`):** the token reaches only the
+  `court_dockets` rollup. A free token's limits (10/minute, 100/hour, 250/day)
+  cover the daily docket delta but not the cluster rollup's search catch-up,
+  which stays keyless.
 - **Decision 4, 2026-09-23:** a scheduled run had published `rulemaking_lifecycles`;
-  the family is withdrawn from the index and its workflow disabled and unscheduled.
+  it is withdrawn from the index and its workflow stays off. Agency timing now
+  comes from the bootstrapped rulemaking dataset (`proceedings`,
+  `comment_periods`); its docket-join and day-rule limits are addressed by
+  decision 18.
 - **Decision 6, 2026-09-23:** the opinion-body builder, rollup, workflow and
-  registration are removed; the fork workflow is disabled.
-- **Decision 5, 2026-09-23:** the House select aliases (110 seats, `hs`/`hl`
-  prefixes from the native committee type and parent) are live through the
-  SpicyDocs roster fix. 28 seats remain unlisted for want of a publisher link,
-  not a policy choice:
-  - 25 House seats on the Clerk's `EC00`, `IT00`, `JL00` and `JP00`. The Clerk
-    types them `joint` but carries no Congress.gov code, and Congress.gov's two
-    main JEC codes (`jsec00`, `jjec00`) even share one website.
-  - Three Senate seats on `JSIK00`. Congress.gov lists no such committee in the
-    118th or 119th Congress, and its detail route answers none.
-
-  They stay in `committee_assignments`, unmatched and documented; nothing is
-  matched by name.
-- **Decisions 4 and T17, 2026-09-23:** all five rulemaking parents qualified and
-  the rulemaking dataset is bootstrapped (`snapshot_0e799850…`), so agency timing
-  can now come from `proceedings` and `comment_periods` as decided. The
-  September 23 parsing survey later found both tables miss labelled FR docket
-  values and `proceedings` dates events by the UTC day; fixing either waits on
-  ruling 6 of the SpicyDocs consolidation plan (items A7 and A12).
+  registration are deleted; the push deleted the fork workflow.
+- **Decision 5, 2026-09-23:** the House select aliases (`hs`/`hl`, from the native
+  committee type and parent) are live. 28 seats stay unlisted for want of a
+  publisher link, not by policy: 25 House seats on the Clerk's `EC00`, `IT00`,
+  `JL00` and `JP00` (typed `joint`, with no Congress.gov code) and three Senate
+  seats on `JSIK00` (no such committee on Congress.gov in the 118th or 119th).
+  Nothing is matched by name.
 - **Decision 2, 2026-09-23 (`c113329`):** implemented as the derived table
-  `member_vote_terms` (generation `890481eb…`), leaving `member_votes`
-  unchanged. It reproduces the decision's numbers on the current votes: 15 of
-  18 half-open misses resolved, the three `Not Voting` rows unmatched.
-- **Decision 7, 2026-09-23:** the reviewed six-agency cohort is published as the
-  fork's `comments.parquet` and `comments_index.parquet` (23,889,665 rows). ACF
-  (129,052 originals, fully listed) is the next cohort and is not yet acquired.
-- **Decision 1, 2026-09-23:** published as reconciled generation `a846cb44…`
-  (419,866 bills, eighteen tables). Every inherited URL carries
-  `url_source = inherited` (SpicyDocs 0.28.0, `6d34a1b`). The newer live 119th
-  rows are reconciled in; nothing from either input was lost.
-- **Decision 10, 2026-09-23:** SAM access is confirmed, and the bulk-extract
-  path is repaired (SpicyDocs 0.28.0 and 0.28.2). The bounded retained initial
-  load of 147,254 active 2026 registrations is published (`56dd0f65…`). Wider
-  years, the fork's `SAM_API_KEY` secret and lobbying remain.
-- **Decision 7, 2026-09-23 (continued):** ACF is published after its own
-  independent review (23,890,403 comments). The next cohort is the next agency
-  by the same campaign.
-- **Decision 10, 2026-09-23 (continued):** lobbying follows SAM. The keyless
-  bounded initial load of 27,863 filings posted 2026-07-01 to 2026-09-22 is
-  published (`a9fd5de6…`). Its schedule resumes once the pacing fix is pushed.
-- **Decision 10, 2026-09-23 (secrets):** the fork now has `SAM_API_KEY` (the
-  workspace SAM key, which reached the Entity API) and `LDA_API_KEY` (a new
-  lda.gov key: accepted, where a wrong key answers 401). Both workflows stay
-  disabled until this session's fixes are pushed. Local runs read
-  `LDA_API_KEY`; the workspace `.env` names the key `LDA_KEY`.
-- **Decision 11, 2026-09-23:** the September 23 work is committed locally but
-  not pushed: spicy-regs after the fork's `a9c794e`, and spicy-docs after
-  `civictechdc/spicy-docs`'s `dca01d4` through release 0.29.0 (`58a68b7`).
-  Both push as fast-forwards. Until they are pushed, scheduled runs use the older code.
-  Ten fork workflows are disabled, for three different reasons:
-  - Seven resume after the push, because their pushed code would overwrite a
-    corrected table: `Materialize — rulemaking join surface`, `Rollup —
-    amendments`, `bill family`, `congress_bills`, `fcc_proceedings`,
-    `lobbying_filings` and `sam_entities`.
-  - `Rollup — cfr_sections` stays off after the push too: the local code still
-    nulls the part of most section granules (`cac7615`) until the ancestry
-    fix lands (T11; SpicyDocs consolidation plan A8).
-  - `court_opinion_bodies` (decision 6; the push deletes it) and
-    `rulemaking_lifecycles` (decision 4) stay off by decision.
+  `member_vote_terms`; `member_votes` is unchanged.
+- **Decision 7, 2026-09-23:** the six-agency cohort and then ACF are published,
+  each after independent review. The next cohort is the next agency.
+- **Decision 1, 2026-09-23:** the reconciled family is published; every inherited
+  URL carries `url_source = inherited` (SpicyDocs 0.28.0, adopted in spicy-regs
+  `6d34a1b`).
+- **Decision 10, 2026-09-23:** SAM's and then lobbying's bounded initial loads are
+  published, and the fork has `SAM_API_KEY` and `LDA_API_KEY`. Both workflows
+  were re-enabled after the push (decision 22). Local runs read `LDA_API_KEY`;
+  the workspace `.env` names the key `LDA_KEY`.
+- **Decision 11, 2026-09-23:** pushed as fast-forwards: spicy-regs
+  `a9c794e..b89c7dc` to `mikewolfd/spicy-regs` and spicy-docs `dca01d4..1b0c6df`
+  (through release 0.29.0) to `civictechdc/spicy-docs`. The seven workflows held
+  for the push were re-enabled (decision 22). `cfr_sections` stays off until the
+  CFR ancestry fix (SpicyDocs consolidation plan A8), and `rulemaking_lifecycles`
+  by decision 4.
 
+## Delegated decisions, 2026-09-23
+
+Mike delegated the questions left open by the parsing survey and its validation to
+an independent reviewer with no prior context, which decided each from the
+evidence it was given and could read. Mike can overturn any of them. The rulings
+refer to §5 of SpicyDocs' consolidation plan
+(`spicy-docs/docs/research/consolidation-path-2026-09-22.md`), which carries the
+items; the evidence is in `spicy-docs/docs/research/parsing-survey-2026-09-23.md`.
+
+| # | Question | Decision | Why |
+| --- | --- | --- | --- |
+| 14 | Does spicysearch drop its citation grammar when RefSpec's moves into spicy-docs (plan B4)? | **No; only the data-side grammar moves.** | The plan's §11 keeps spicysearch's query grammar behind an adjudicated boundary test; `identifiers.py` detects shapes in query strings and deliberately refuses unlabelled tokens, so its differences from RefSpec are query-intent choices, not defects. |
+| 15 | The plan's suggested ids SR05–SR08 collide with spicy-docs' SR01–SR15 series. | **Keep spicy-regs' own sequential series and name the namespace.** | spicy-regs' SR01–SR04 already share the letters; renumbering the new rows would imply one series. Cross-repo cites carry the repo name, as `build_lobbying_filings.py:59` does. |
+| 16 | How should the fork docs stop drifting? | **One home per fact; qualified pins with a checking script; a units convention; the dated narrative in a versioned log; load-bearing numbers cite a script or receipt.** | Most validation errors were one fact repeated in several places, "live" claims overtaken by scheduled runs, and unit mix-ups. The log lives in `docs/research/` because the receipts directory is not versioned. |
+| 17 | Ruling 5: `cfr_ref` for title 43's subpart-numbered sections. | **The printed citation, e.g. `43-1601.0-1`, with `part` 1600.** | `cfr_ref` is a join key, and the Federal Register side composes it from printed text, so only the printed spelling joins; NULL would drop 3,018 joinable rows. `part` carries the structure and `cfr_ref` the citation, and the column description says so. |
+| 18 | Ruling 6: admit label-derived dockets and unpadded FR numbers in the rulemaking tables? | **Admit both, with one actor-id bump per table.** | Only 48,169 of 899,227 FR–docket links join today; label-aware reading roughly triples that, and unpadding resolves 40,340 of 49,403 misses with no ambiguity. Both read the publisher's own spellings. Use RefSpec's reader, delete the unused local copy, and keep unresolved links as rows. |
+| 19 | Ruling 7: comment text provenance. | **Status `derived`, not `ok`; one Mirrulations tool per comment by a fixed preference order, recorded per attachment.** | `ok` means spicy-regs ran the extractor. Pick the order by one bounded measurement of how often tools overlap, and pin it as a policy constant. |
+| 20 | Ruling 8: keep `catalog.json`? | **Keep only `table_metadata.json`.** | `catalog.json` is an exact projection of it, unpublished, and its only consumer is an unread vendored copy in spicysearch. Delete the file, its sidecar, the `catalog` subcommand, its tests and the vendored copy. |
+| 21 | Ruling 9: who normalizes Federal Register and Regulations.gov search fields? | **spicysearch keeps deriving for now; spicy-docs is the destination after D3.** | The differences with DocSpec's stored values are staleness of an older build, not disagreement. Keep the agreement measurement as a drift check. |
+| 22 | Re-enable the seven workflows held for the push? | **Yes, all seven.** | The only reason for disabling them, older code overwriting corrected tables, ended with the push. Re-enabled 2026-09-23. |
+| 23 | Fix the logged-key defect now or wait for a spicy-docs route (plan A5)? | **Now, in spicy-regs.** | Send the key only in `X-Api-Key`, never log a URL carrying it, and abort on 401/403; the other Congress readers already do this. |
+| 24 | The stale `fr-audit-2026-09-23/monthly-diff.json` receipt. | **Delete it, once Mike confirms.** | No retained script produces it and a recount confirms the ledger; the receipts directory is unversioned, so the deletion waits for Mike. |
+| 25 | The consolidation plan's §6 gate cannot pass as written. | **Compare only over the reference's keys.** | Restrict both `EXCEPT`s to the reference's (`document_number`, `publication_date`) keys and require zero rows; count generation-only keys, each of which must post-date 2026-09-14. Rebuilding the reference from the artifact under test would only check it against itself. |
