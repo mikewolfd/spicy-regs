@@ -4,12 +4,12 @@ This dated ledger accounts for every declared rollup output plus base regulatory
 
 The [consolidated backlog](../fork-generation.md) remains the task list. [Machine-readable evidence](/Users/mikewolfd/Work/corpora/fork-execution-2026-09-21/output-ledger.json) records each candidate path, measured size/count/schema, source assessment, scope, required and optional inputs, observed publication pins, next action and receipt. A missing pin or unresolved scope remains a blocker. Existing populations must survive narrower repairs.
 
-Public data destination: `https://pub-72e95c0c20a84508b42b03a6ff6d55f8.r2.dev`. Local candidates are not fork publications. Retained qualified generations include FEC, members/terms, nominations, treaties, the five-member report family, repaired dockets/documents, docket search, two document-derived tables, Appropriations press-feed windows, the retained Agenda edition and complete June 30 court clusters. CFR has a verified bounded correction; broader populations remain open as listed. The scheduled bill family, laws, committee rosters and amendments are published but still await source qualification. Native votes and member votes are qualified for the captured selection; derived vote-to-bill fields still depend on an unqualified source parent. The latest press generation has a verified bounded relationship correction.
+Public data destination: `https://pub-72e95c0c20a84508b42b03a6ff6d55f8.r2.dev`. Local candidates are not fork publications. Retained qualified generations include FEC, members/terms, nominations, treaties, the five-member report family, repaired dockets/documents, docket search, two document-derived tables, Appropriations press-feed windows, the retained Agenda edition and complete June 30 court clusters. CFR has a verified bounded correction; broader populations remain open as listed. The scheduled bill family, laws, committee rosters and amendments are published but still await source qualification. Committee meetings, house communications, record issues, print citations, Senate expenditures and GAO reports were published by scheduled runs and are now source-qualified; the qualification receipts are in `scheduled-published-qualification/` under the execution receipts. Native votes and member votes are qualified for the captured selection; derived vote-to-bill fields still depend on an unqualified source parent. The latest press generation has a verified bounded relationship correction.
 
 | Task | Producer | Output | Delivery state |
 | --- | --- | --- | --- |
 | T13 | `run-rollup-court-opinion-clusters` | `court_opinion_clusters.parquet` | generated and verified for complete 2026-06-30 edition |
-| T13 | `run-rollup-court-opinion-bodies` | `court_opinion_bodies.parquet` | bulk acquisition/verification active; rollup not qualified |
+| T13 | `run-rollup-court-opinion-bodies` | `court_opinion_bodies.parquet` | withdrawn 2026-09-22: text links out through the clusters' `absolute_url` |
 | T16 | `run-rollup-bill-subjects` | `bill_subjects.parquet` | waiting for qualified parents |
 | T15 | `run-rollup-feed-summary` | `feed_summary.parquet` | waiting for qualified parents |
 | T15 | `run-rollup-agency-stats` | `agency_stats.parquet` | waiting for qualified parents |
@@ -32,9 +32,10 @@ Public data destination: `https://pub-72e95c0c20a84508b42b03a6ff6d55f8.r2.dev`. 
 | T04 | `build-fec-observations` | `fec_collections.parquet` | generated and verified |
 | T04 | `build-fec-observations` | `fec_relationships.parquet` | generated and verified |
 | T15 | `run-rollup-org-committee-links` | `org_committee_links.parquet` | waiting for qualified parents |
-| T12 | `run-rollup-gao-reports` | `gao_reports.parquet` | local candidate needs qualification |
+| T12 | `run-rollup-gao-reports` | `gao_reports.parquet` | generated and verified |
 | T12 | `run-rollup-crs-reports` | `crs_reports.parquet` | local candidate needs qualification |
-| T12 | `run-rollup-courtlistener` | `court_dockets.parquet` | bulk acquisition/verification active; rollup not qualified |
+| T12 | `run-rollup-courtlistener` | `court_dockets.parquet` | generated and verified: enriched APA selection published (11,459 rows) |
+| T12 | `build_court_docket_groups` | `court_docket_groups.parquet` | published; 21 of 403 group parents wrong (string order), corrected builder ready, republication pending |
 | T12 | `run-rollup-usaspending-recipients` | `usaspending_recipients.parquet` | local candidate needs qualification |
 | T09 | `run-rollup-bill-family` | `congress_bills.parquet` | published awaiting source audit; broader local candidate retained |
 | T09 | `run-rollup-bill-family` | `bill_actions.parquet` | published awaiting source audit; broader local candidate retained |
@@ -65,21 +66,21 @@ Public data destination: `https://pub-72e95c0c20a84508b42b03a6ff6d55f8.r2.dev`. 
 | T10 | `run-rollup-committee-reports` | `hearing_transcripts.parquet` | published; native content verified, capture provenance open |
 | T10 | `run-rollup-committee-reports` | `hearing_bill_links.parquet` | generated and verified for selected root MODS COVER scope |
 | T10 | `run-rollup-committee-reports` | `committee_report_reads.parquet` | published; native content verified, capture provenance open |
-| T08 | `run-rollup-print-citations` | `house_activity_reports.parquet` | local candidate needs qualification |
-| T08 | `run-rollup-print-citations` | `budget_volumes.parquet` | local candidate needs qualification |
-| T08 | `run-rollup-print-citations` | `bill_committee_actions.parquet` | local candidate needs qualification |
-| T08 | `run-rollup-print-citations` | `document_citations.parquet` | local candidate needs qualification |
-| T08 | `run-rollup-senate-expenditures` | `senate_expenditures.parquet` | local candidate needs qualification |
+| T08 | `run-rollup-print-citations` | `house_activity_reports.parquet` | generated and verified; replayed byte-identical |
+| T08 | `run-rollup-print-citations` | `budget_volumes.parquet` | generated and verified; replayed byte-identical |
+| T08 | `run-rollup-print-citations` | `bill_committee_actions.parquet` | generated and verified; replayed byte-identical |
+| T08 | `run-rollup-print-citations` | `document_citations.parquet` | generated and verified; replayed byte-identical |
+| T08 | `run-rollup-senate-expenditures` | `senate_expenditures.parquet` | generated and verified; replayed byte-identical |
 | T08 | `run-rollup-laws` | `laws.parquet` | published awaiting source audit |
 | T08 | `run-rollup-laws` | `law_code_sections.parquet` | published awaiting source audit |
 | T08 | `run-rollup-laws` | `table3_records.parquet` | published awaiting source audit |
 | T08 | `run-rollup-committee-rosters` | `committees.parquet` | published awaiting source audit |
 | T08 | `run-rollup-committee-rosters` | `committee_assignments.parquet` | published awaiting source audit |
-| T08 | `run-rollup-house-communications` | `house_communications.parquet` | local candidate needs qualification |
-| T08 | `run-rollup-committee-meetings` | `committee_meetings.parquet` | local candidate needs qualification |
-| T08 | `run-rollup-record-issues` | `record_issues.parquet` | local candidate needs qualification |
-| T08 | `run-rollup-treaties` | `treaties.parquet` | generated and verified |
-| T08 | `run-rollup-nominations` | `nominations.parquet` | generated and verified |
+| T08 | `run-rollup-house-communications` | `house_communications.parquet` | generated and verified; 15 publisher-withdrawn identities |
+| T08 | `run-rollup-committee-meetings` | `committee_meetings.parquet` | generated and verified; 4 rows carry post-publication publisher updates |
+| T08 | `run-rollup-record-issues` | `record_issues.parquet` | generated and verified |
+| T08 | `run-rollup-treaties` | `treaties.parquet` | generated and verified; new pin re-qualified |
+| T08 | `run-rollup-nominations` | `nominations.parquet` | generated and verified; new pin re-qualified |
 | T06 | `run-pipeline` | `dockets.parquet` | generated and verified |
 | T06 | `run-pipeline` | `documents.parquet` | generated and verified |
 | T06 | `run-pipeline` | `comments_index.parquet` | local candidate needs qualification |
@@ -114,9 +115,58 @@ of work or historical coverage. The fork serves 51 outputs: 48 in the current
 managed publication index and three base objects with retained public-byte audits.
 The current index matches the newly reviewed member, report and vote generations.
 
+The 17:13 UTC recheck against the live index supersedes those counts. The
+index now serves 26 families with 57 table objects, plus the three base
+objects. Six former local candidates were published without qualification
+receipts: `gao_reports` (25 rows), `committee_meetings` (2,753),
+`house_communications` (4,964), the four `print-citations` tables,
+`record_issues` (363) and `senate_expenditures` (2,623). The later
+qualification audit (18:10 UTC, `scheduled-published-qualification/`) now
+qualifies all eleven objects: public-byte verification passes; fresh
+source-owned captures reproduce every published cell that still exists in the
+current source (treaties 48/48, record issues 6,171/6,171, nominations
+28,652/28,652, GAO 200/200, house communications 158,368/158,368,
+committee meetings 74,314/74,331); the two PDF rollups replay
+byte-identically through the source-owned pipeline against the fork's own
+prior tables; and actual stdio MCP reads pass in both download and direct-R2
+modes for all eleven tables. Recorded drift: 15 house-communication
+identities the publisher withdrew after the run, four meetings carrying
+additive publisher updates, plus growth rows the publisher added since. The
+re-published nominations (2,204) and treaties (2) pins are thereby
+re-qualified. CourtListener bulk acquisition is complete:
+all 46 selected objects passed full-file SHA-256 and source ETag verification
+(67.3 GB), zero pending, acceptance audit passed. The private native docket
+cache finished at 06:06 UTC with a PASS verdict — 71,677,647 rows, all IDs
+unique, semantic digest matching the expected value. The later court-dockets
+delivery (generation `sha256:cbb9924411268bae16211aa476004c565dc3a530d93de6741dfb517130a1db54`)
+publishes the enriched APA-899 selection: all 7,766 retained search rows
+cell-identical plus 3,693 bulk additions (APA-classified rows in all three
+publisher spellings, and same-case sibling records of retained cases gated on
+name/date agreement). 31 sealed and 18 docket-number-reuse rows are refused
+and witnessed; 12 prior sealed rows are preserved as captured.
+Parties/attorneys/firms stay NULL on bulk-derived rows. Public download and
+both actual MCP modes verify 11,459 rows. A derived `court_docket_groups`
+side table (generation `sha256:32fdbde6041d5aa6b2a5ca19e206a2f7d42beda8bd356c5d2225373c8a9b769f`,
+901 rows) maps the same-case doppeldocket/refiling groups: 403 parents and
+498 child links with a confidence tier, parent meant to be the lowest
+pacer_case_id among published group members because the publisher's own
+parent_docket_id is blank in the edition. That generation compared the ids as
+strings, so 21 groups (67 rows) carry a different parent; the repository's
+`build_court_docket_groups` compares them numerically and otherwise reproduces
+every value (candidate `independent-rederivation/corrected-groups-candidate/`,
+SHA-256 `54b38474…`), awaiting republication. Public download and both MCP
+modes verify the published bytes; every parent id resolves in court_dockets.
+About 730 selected rows are criminal, magistrate, petty-offense or
+miscellaneous dockets the publisher codes 899 (383 from the prior search
+selection, 382 added); excluding non-civil docket types is an open scope
+decision. Receipts in `court-dockets-qualification/`; reviews in
+`reviews/court-dockets-enrichment-review.md` (approve-with-findings, findings
+fixed) and `reviews/court-dockets-independent-addendum.md` (independent
+re-derivation: enrichment approved exactly, groups parent change requested).
+
 - **Actual scheduled evidence:** ordinary fork runs `35689287614` and `35689357725` now pass complete source, public-byte and both actual MCP-mode audits, with independent approval. Members generation `sha256:c4b489004884825c499e885a6453290bf6c0957adbbaad5b9feb0faa1ad9b4a1` freshly qualifies all 12,770 members and 45,535 terms. Report generation `sha256:f5f169482bfd2903155ebe109268d52fa9be6081061193f980bcd4c537ab129a` qualifies all 105 reports, 1,246 sections and the empty root MODS COVER link selection across all 19 hearing parents. Original responses and evidence are retained on the fork. The 19 inherited hearing capture/checkpoint clocks remain unqualified; their native content remains verified. Earlier missing capture evidence is not recreated. See `scheduled-retention-live-qualification/final-qualification.json` and its independent reviews.
-- **Remote court output:** the implementation passes focused/full host checks and an isolated real-storage input-to-publication-to-readback experiment. Independent review approves code integration and bounded experiments. Commit `413b3ab` includes bounded row/payload batching. A retained-row layout experiment and independent review verify reduced footer overhead and unchanged values; full host and dictionary gates pass. Full opinion execution still needs the verified complete original, reviewed resource limits and complete native/prior-population audits. The experiment creates no real publication-index entry. See `court-body-remote-probe/` and `reviews/remote-generations-independent-review.md`.
-- **Native docket cache:** the reviewed private build is processing the complete verified 71,677,647-row source while preserving all 54 literal columns. It enforces output capacity and reserves the remaining opinion download. Full serialized readback and identity checks must pass before this becomes qualified input. Host mapping, prior-population reconciliation and public delivery remain open. See `court-dockets-qualification/`.
+- **Remote court output:** the implementation passes focused/full host checks and an isolated real-storage input-to-publication-to-readback experiment. Independent review approves code integration and bounded experiments. Commit `413b3ab` includes bounded row/payload batching. A retained-row layout experiment and independent review verify reduced footer overhead and unchanged values; full host and dictionary gates pass. Opinion bodies were withdrawn on 2026-09-22, so no full opinion execution is planned; the reviewed remote path remains available for other large outputs. The experiment creates no real publication-index entry. See `court-body-remote-probe/` and `reviews/remote-generations-independent-review.md`.
+- **Native docket cache:** the reviewed private build completed the full verified 71,677,647-row source while preserving all 54 literal columns, with a PASS verdict, all IDs unique and the semantic digest matching the expected value. Host mapping, prior-population reconciliation and public delivery remain open. See `court-dockets-qualification/`.
 
 - **Earlier members/terms qualification:** generation `sha256:a0140c2f993e032ab53ceec6cd6e57de4b0dda8048ee3ece259d7e009ff8e758` publishes 12,770 legislators and 45,535 terms from both complete September 22 UTC community crosswalk captures. All 639,675 declared cells agree with raw JSON, prior identities/native values survive, and public bytes plus both actual MCP modes pass. The independent literal FEC join agrees on all 1,126 candidate/committee/member links, covering 889 legislators. This is not official-roster completeness; 29 native within-term party histories are not represented by the single-party term value. See `members-qualification/` and its independent review reports.
 - **Historical scheduled refresh reconciliation:** at 03:56 UTC, new member and committee-report generations replaced the previously qualified current pins: `sha256:0b0588cc96e965a914094889e23e4d4b359439317d727de05cbccdb8790c7c05` and `sha256:925b245110c59ae3a605da56c0ac95fdb79a75aa74c0ecb21868af8398bb07b5`. The earlier generations retain their qualification. Full byte/identity/field comparisons pass: every member/term native value is unchanged, and only its capture timestamp differs. All 105 report values are preserved except capture time; 1,246 sections remain byte-identical for the same report parents. All thirteen prior hearings remain unchanged, with six added hearings now matched against 24 retained source responses. All nineteen non-timestamp fields, body/text digests and event IDs agree. Literal package-root MODS inspection proves zero COVER links for all six added parents, so the expanded empty-link selection is qualified within that root-only scope. Changed capture/checkpoint metadata remains outside the earlier qualification because workflow artifacts retain invocation metadata only. The section table keeps its qualification; other current native content and selected root-COVER results are verified, while scheduled capture/checkpoint provenance remains open. See `scheduled-members-reports-audit/full-comparison.json`, `native-content-audit.json` and `congressional-status/publication-0355.json`.
@@ -128,8 +178,8 @@ The current index matches the newly reviewed member, report and vote generations
 - **Press releases:** generation `sha256:c3c056ff09697aca92a3c10ab6544114212862aa06a861420cbf4bbe51d759ec` serves 28 rows from complete September 19 and September 22 UTC House/Senate Appropriations feed windows. All 952 mapped-field comparisons, public bytes and both actual MCP modes pass. Three rotated-out items survive. That generation had NULL bill links. A later scheduled generation repeated the possessive-`s 2027` false match. The reviewed bounded repair `sha256:f9bc0f4cedb002c87ece6fd92d1acc9f8b8d53663f402b470dbfef8c193f57e8` removes only that relation, preserves four literal H.R. links and every other current value, and passes full public-byte and both MCP readbacks. Newer scheduled capture metadata is not freshly raw-qualified; the full-source claim remains tied to the earlier captured window union. See `press-link-repair/`.
 - **Unified Agenda:** the existing `sha256:ea589343f8dcb5ffe134c5a2ac2fbf5d8856f105f296d838fe59e6330ee075b2` generation passes all 67,218 mapped-field comparisons against the complete retained 202510 XML. Actual replay is byte-identical; public and MCP reads agree. This qualifies the retained edition, without a latest-edition or historical-series claim.
 - **Comments:** six complete agency source cohorts yield a local 23,889,665-row candidate: all original parent identities plus four BOP records. Every selected native field matches, all 23,862,187 unrelated rows survive unchanged, and the independently reconciled index conserves every row including 1,555 unknown dates. Wider source repair and physical partitions remain open. ACF's fully enumerated next cohort contains 129,052 source comment objects; it has not been acquired in this batch.
-- **CourtListener acquisition:** initial loading prioritizes the complete June 30, 2026 main export plus unique supplements; historical duplicates remain catalogued. Of the 46 selected objects, 45 passed full-file SHA-256 and exact source ETag verification. The original downloader exited before finishing the 54.6 GB opinions object, and its verifier stopped with that input pending. The old multithread partial is retained. A detached sequential transfer resumes only its own partial with conditional requests; `opinions-resume-state.json` records progress. Its reviewed completion check requires the exact opinions entry, selection digest, size, SHA and source/computed ETags in `verified-manifest.json`; a verifier process exiting normally is insufficient. See `opinions-resume-launch-postfix.json` and the independent transfer review. The qualified cluster metadata output is now published; opinion bodies and the separately scoped docket output remain open. A retained capacity preflight estimates about 73.3 GB more space is needed for the full body output plus the existing 100 GiB floor after the original arrives. The local-file headroom bypass is repaired: local-output builds using either local or network source input check estimated output space on the destination filesystem before parsing or staging. A retained native opinion replay preserves the exact HTML; current capacity still refuses the full build. See `courtlistener-clusters-qualification/headroom-fix/manual-audit.json`. This is a planning estimate, not a storage guarantee. See `courtlistener-clusters-qualification/NEXT-WORK.md`.
-- **Court clusters:** **generated and verified** for the complete June 30, 2026 edition. Generation `sha256:7a2cbdb72ad6a7b9c79aa7f25dfa03c4ae3fe752cdb33900cb5d6b346d299b7c` publishes 10,070,727 unique clusters in a 3,952,823,520-byte file, SHA-256 `c4189ac700bfa4610171a0ccf1642e9f27b7fdfc19c88f801e7c2c970bb927b6`. Every prior identity and all 36 old fields are preserved. The full native source agrees, and all three added court fields match the qualified 71,677,647-row docket map and native court reference. The reviewed preflight proves the one court with blank jurisdiction has no docket references; it retains that source row. Full public-download verification and actual MCP reads in both download/direct-fork modes pass, including the count, schema and all 39 fields of six native witnesses. Independent candidate, publication and final readback reviews approve this scope. Opinion bodies, the separately scoped docket output, newer catch-up and hosted MCP deployment remain separate. See `courtlistener-clusters-qualification/` and `reviews/courtlistener-clusters-public-readback-review.md`.
+- **CourtListener acquisition:** initial loading prioritizes the complete June 30, 2026 main export plus unique supplements; historical duplicates remain catalogued. All 46 selected objects (67.3 GB) passed full-file SHA-256 and exact source ETag verification; the detached sequential transfer recorded in `opinions-resume-state.json` finished the 54.6 GB opinions object, and `verified-manifest.json` holds zero pending keys. The qualified cluster metadata and the APA docket selection are published. Opinion bodies were withdrawn on 2026-09-22: readers reach the text through each cluster's `absolute_url`, so the body build and its capacity plan (about 73.3 GB beyond the 100 GiB floor) no longer apply; the retained original is kept. See `courtlistener-clusters-qualification/NEXT-WORK.md`.
+- **Court clusters:** **generated and verified** for the complete June 30, 2026 edition. Generation `sha256:7a2cbdb72ad6a7b9c79aa7f25dfa03c4ae3fe752cdb33900cb5d6b346d299b7c` publishes 10,070,727 unique clusters in a 3,952,823,520-byte file, SHA-256 `c4189ac700bfa4610171a0ccf1642e9f27b7fdfc19c88f801e7c2c970bb927b6`. Every prior identity and all 36 old fields are preserved. The full native source agrees, and all three added court fields match the qualified 71,677,647-row docket map and native court reference. The reviewed preflight proves the one court with blank jurisdiction has no docket references; it retains that source row. Full public-download verification and actual MCP reads in both download/direct-fork modes pass, including the count, schema and all 39 fields of six native witnesses. Independent candidate, publication and final readback reviews approve this scope. Opinion bodies are withdrawn (text links out through `absolute_url`); newer catch-up and hosted MCP deployment remain separate. See `courtlistener-clusters-qualification/` and `reviews/courtlistener-clusters-public-readback-review.md`.
 - **CourtListener source behavior:** the retained search walk stops at 55 pages/1,100 unique rows. Its reported count of 7,811 is approximate. The corrected provider and host preserve exact-count checks for small docket selections and opinions, and require a completed cursor walk for large docket selections. The independently approved correction was adopted through SpicyDocs 0.26.1 and remains in 0.26.3; full provider/host gates and offline raw/output replay pass. Bulk mapping preserves RECAP source bitmasks and descriptive nature-of-suit text. Standard exports omit party/attorney relationship tables; the dated bulk selection is not assumed equal to the current search index.
 
 The [current parallel work](../fork-generation.md#current-parallel-work) assigns

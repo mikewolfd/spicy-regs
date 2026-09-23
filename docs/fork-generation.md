@@ -191,8 +191,9 @@ unfinished populations remain explicit.
   every added court field agrees with the qualified 71,677,647-row docket map
   and native court reference. Full public-download verification and both actual
   MCP modes pass, including all 39 fields of six raw-input witnesses. This
-  completes the dated cluster metadata output. Opinion bodies, the separately
-  scoped docket output and newer changes remain open. See
+  completes the dated cluster metadata output. Opinion bodies were withdrawn on
+  2026-09-22 (text links out through each cluster's `absolute_url`); the APA
+  docket selection is published; newer changes remain open. See
   `courtlistener-clusters-qualification/` and the output ledger for exact pins.
 - **T15:** monthly volume now serves **77,934 groups** counting 1,999,503
   documents; its file accounts for 2,020 missing dates and eight year-zero
@@ -254,7 +255,7 @@ completed scope.
 | --- | --- | --- |
 | Integration and delivery | Actual ordinary fork member/report runs retain originals on the fork and pass source, public-byte and both MCP-mode audits with independent approval. Current members/terms, reports/sections and selected hearing links are qualified. | Retain fresh observations and checkpoints for the 19 inherited hearings; finish committee identities and law/amendment audits. The isolated House select-code repair is under source/output qualification and is not adopted yet. |
 | Bill family | Complete local 18-output replay preserves the broad parent and its text/diff rows. | Reconcile the public 119th generation with the broader private candidate. Selected 118th fields and inherited URL lineage are audited separately. Broader source provenance, missing text, models and backfills remain open; the public family is source-unqualified. |
-| CourtListener bulk and clusters | Complete dated clusters published and verified; all 46 selected source files verified. Remote generation code passes host checks, isolated real-storage replay and independent integration review. | Bulk acquisition and the private native docket cache are complete (71,677,647 rows, PASS). Remote generation is committed at `413b3ab`; bounded batching and retained-input layout measurements pass independent review. Full body launch still needs reviewed resource limits and the population audit driver. Host mapping, prior preservation and public qualification follow. |
+| CourtListener bulk and clusters | Complete dated clusters published and verified; all 46 selected source files verified. Remote generation code passes host checks, isolated real-storage replay and independent integration review. The enriched APA docket selection is published and verified (11,459 rows; public download and both MCP modes). | Opinion bodies are withdrawn (2026-09-22): text links out through `absolute_url`. Republish `court_docket_groups` with numeric parent order (21 of 403 groups differ; see `reviews/court-dockets-independent-addendum.md`), decide whether the APA selection keeps its ~730 non-civil dockets, and keep the scheduled docket refresh running now that it has a CourtListener token. |
 | Votes and comments | All 1,573 selected votes and 381,936 member rows are published; native, preservation, public-byte and both MCP audits pass. Full term-join findings are independently reproduced. Six comment cohorts are repaired in a full-parent candidate. | Qualify vote bill-reference originals, publish portable vote evidence, and define term-date interpretation before scorecards. Wider comments, partitions and publication remain open; ACF is inventoried, not acquired. |
 | Independent review | Actual scheduled member/report runs, vote candidate/publication/MCP, member-term measurements and remote generation integration are approved within their stated scopes. | Review the full opinion execution plan and scaling evidence, source-owned committee repair, and completed native docket output before promotion. |
 
@@ -274,9 +275,10 @@ The earlier verifier stop with one unverified input is historical;
 `verification-watcher-state.json` retains that terminal state, and
 `opinions-resume-state.json` records the detached sequential transfer that
 finished the opinions object.
-The retained body-build capacity estimate needs about 73.3 GB more space
-before the full body build, on top of the existing 100 GiB floor, before audit
-spill. The local-file bypass is now repaired:
+Opinion bodies were withdrawn on 2026-09-22, so the body build below is not
+planned; the record stays as evidence. The retained body-build capacity
+estimate needed about 73.3 GB more space before the full body build, on top of
+the existing 100 GiB floor, before audit spill. The local-file bypass is now repaired:
 local-output builds using either local or network source input check estimated
 output space on the destination filesystem before source parsing or staged writes. The real retained
 opinion replay preserves its HTML exactly; current full-build capacity still
@@ -596,8 +598,8 @@ does not qualify the full mirror; preserve this protection while resolving T07.
 `bill_subjects`, `court_opinion_clusters` and `court_opinion_bodies` now have
 dictionary descriptions, current schemas and MCP declarations as well as
 executable producers. The dated cluster output is now qualified and available
-on the fork. Bill subjects and opinion bodies still need their own T13/T16
-qualification and publication.
+on the fork. Bill subjects still need T16 qualification and publication;
+opinion bodies were withdrawn on 2026-09-22 in favour of linking out.
 
 ## Related plans and evidence
 
