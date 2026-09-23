@@ -5,7 +5,14 @@ The optional `source-readers` extra enables the same readers for package install
 its wheels must be supplied explicitly until they are published in a registry.
 Base CLI and MCP installs do not require them.
 
-- `spicy_docs-0.28.1`: built from SpicyDocs `main` at `ac102e4`, with Rulespec Artifacts 1.1.1.
+- `spicy_docs-0.28.2`: built from SpicyDocs `main` at `6d655ed`, with Rulespec Artifacts 1.1.1.
+  Built September 23, 2026 UTC: **1,289,256 bytes**, SHA-256
+  `0916c0f98bc5857e88d67155ab3f4617d367fa827d6aad86975509a2f3fd2cdc`. SAM extract
+  registrations are keyed by UEI and EFT indicator, a repeated registration keeps its
+  newest version, and the file's declared count is a floor (measured on the first real
+  registration-year extract). Otherwise identical to 0.28.1.
+
+- Previous `spicy_docs-0.28.1`: built from SpicyDocs `main` at `ac102e4`, with Rulespec Artifacts 1.1.1.
   Built September 23, 2026 UTC: **1,288,625 bytes**, SHA-256
   `cc59ca71354a61b5a9e88726986a970ee0fd2e010904be87a48631615397e0f1`. Identical
   comment re-observations at one instant now collapse to one observation, as

@@ -1,11 +1,12 @@
 """Transform: build ``sam_entities.parquet`` from the SAM.gov Entity API (v4).
 
-Produces an 18-column all-VARCHAR schema keyed on ``uei``, the federal entity
-registry anchoring organization/entity resolution across the corpus.
+Produces a 19-column all-VARCHAR schema keyed on ``(uei, entity_eft_indicator)`` --
+one row per registration, since an entity registers once per EFT indicator -- the
+federal entity registry anchoring organization/entity resolution across the corpus.
 
 **Incremental and bounded.** Best-effort download the prior table; fetch a
 bounded window of active registrations (``max_records``); dedup the union on
-``uei`` preferring the fresh row. A first run seeds the table where later runs
+the registration key preferring the fresh row. A first run seeds the table where later runs
 refresh and extend it, and a full backfill is never triggered implicitly —
 raise ``max_records`` (and widen the year range) deliberately for a wider pull.
 
@@ -154,10 +155,12 @@ OUTPUT = "sam_entities.parquet"
 # full ~hundreds-of-thousands-row backfill). Raise deliberately for a wider pull.
 DEFAULT_MAX_RECORDS = 5_000
 
-# The published schema: 18 columns, all VARCHAR, in a fixed order. ``uei`` is the
-# primary / dedup key. Nested paths (source field) are noted where non-obvious.
+# The published schema: 19 columns, all VARCHAR, in a fixed order. ``(uei,
+# entity_eft_indicator)`` is the registration key: one entity registers once per EFT
+# indicator (187 of 147,038 UEIs in the 2026 registration-year extract). Nested paths (source field) are noted where non-obvious.
 COLUMNS = (
     "uei",  # entityRegistration.ueiSAM
+    "entity_eft_indicator",  # entityRegistration.entityEFTIndicator; with uei, the registration key
     "cage_code",  # entityRegistration.cageCode
     "legal_business_name",  # entityRegistration.legalBusinessName
     "dba_name",  # entityRegistration.dbaName
@@ -204,6 +207,7 @@ def _shape(doc: dict) -> dict:
     goods = (doc.get("assertions") or {}).get("goodsAndServices") or {}
     return {
         "uei": reg.get("ueiSAM"),
+        "entity_eft_indicator": reg.get("entityEFTIndicator"),
         "cage_code": reg.get("cageCode"),
         "legal_business_name": reg.get("legalBusinessName"),
         "dba_name": reg.get("dbaName"),
@@ -270,7 +274,7 @@ def build_sam_entities(
     pq.write_table(table, new_file, compression="zstd")
     logger.info("SAM entities: fetched {:,} entities this run", len(rows))
 
-    # 3. Merge prior + new, dedup on uei preferring the new row.
+    # 3. Merge prior + new, dedup on the registration key preferring the new row.
     spill_dir = output_dir / ".duckdb_tmp"
     spill_dir.mkdir(exist_ok=True)
     con = duckdb.connect()
@@ -282,8 +286,8 @@ def build_sam_entities(
     merge_local_prior(
         con,
         columns=COLUMNS,
-        identity="uei",
-        order_by="legal_business_name, uei",
+        identity=("uei", "entity_eft_indicator"),
+        order_by="legal_business_name, uei, entity_eft_indicator",
         prior_file=prior_file if have_prior else None,
         new_file=new_file,
         out_file=out_file,

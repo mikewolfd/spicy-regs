@@ -59,9 +59,48 @@ _RAW_ENTITY = {
 
 def test_shape_produces_exact_schema():
     row = _shape(_RAW_ENTITY)
-    # Every published column present, and nothing extra (18-column schema).
+    # Every published column present, and nothing extra (19-column schema).
     assert set(row) == set(COLUMNS)
-    assert len(COLUMNS) == 18
+    assert len(COLUMNS) == 19
+
+
+def test_the_merge_keeps_every_registration_of_one_entity(tmp_path):
+    """An entity registers once per EFT indicator; the merge keys on both, the fresh row winning."""
+    import duckdb
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    from spicy_regs.transforms.table_merge import merge_local_prior
+
+    def rows(*specs):
+        return pa.Table.from_pylist(
+            [
+                {c: None for c in COLUMNS} | {"uei": u, "entity_eft_indicator": e, "legal_business_name": n}
+                for u, e, n in specs
+            ],
+            schema=pa.schema([(c, pa.string()) for c in COLUMNS]),
+        )
+
+    pq.write_table(
+        rows(("A", None, "old"), ("A", "0001", "kept"), ("B", None, "prior only")), tmp_path / "prior.parquet"
+    )
+    pq.write_table(rows(("A", None, "new"), ("A", "0002", "added")), tmp_path / "new.parquet")
+    merge_local_prior(
+        duckdb.connect(),
+        columns=COLUMNS,
+        identity=("uei", "entity_eft_indicator"),
+        order_by="uei, entity_eft_indicator",
+        prior_file=tmp_path / "prior.parquet",
+        new_file=tmp_path / "new.parquet",
+        out_file=tmp_path / "out.parquet",
+    )
+    got = [
+        (r["uei"], r["entity_eft_indicator"], r["legal_business_name"])
+        for r in pq.read_table(tmp_path / "out.parquet").to_pylist()
+    ]
+    assert sorted(got, key=str) == sorted(
+        [("A", None, "new"), ("A", "0001", "kept"), ("A", "0002", "added"), ("B", None, "prior only")], key=str
+    )
 
 
 def test_shape_maps_nested_fields():
@@ -152,7 +191,16 @@ def test_fetch_refuses_without_key(monkeypatch):
     for var in SAM_API_KEY_ENV_VARS:
         monkeypatch.delenv(var, raising=False)
     with pytest.raises(SamExtractError, match="SAM-authorized"):
-        list(_iter_sam_entities(mode="extract", registration_status="A", since_year=2026, until_year=2026, year_windows=True, max_records=1))
+        list(
+            _iter_sam_entities(
+                mode="extract",
+                registration_status="A",
+                since_year=2026,
+                until_year=2026,
+                year_windows=True,
+                max_records=1,
+            )
+        )
 
 
 def test_fetch_rejects_unknown_mode(monkeypatch):
@@ -160,7 +208,16 @@ def test_fetch_rejects_unknown_mode(monkeypatch):
         monkeypatch.delenv(var, raising=False)
     monkeypatch.setenv("SAM_API_KEY", "k")
     with pytest.raises(ValueError, match="mode must be"):
-        list(_iter_sam_entities(mode="bogus", registration_status="A", since_year=2026, until_year=2026, year_windows=True, max_records=1))
+        list(
+            _iter_sam_entities(
+                mode="bogus",
+                registration_status="A",
+                since_year=2026,
+                until_year=2026,
+                year_windows=True,
+                max_records=1,
+            )
+        )
 
 
 # -- date literals -----------------------------------------------------------

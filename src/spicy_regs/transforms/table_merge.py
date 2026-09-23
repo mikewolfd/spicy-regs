@@ -26,7 +26,7 @@ def merge_local_prior(
     con,
     *,
     columns: tuple[str, ...],
-    identity: str,
+    identity: str | tuple[str, ...],
     order_by: str,
     prior_file: Path | None,
     new_file: Path,
@@ -41,8 +41,11 @@ def merge_local_prior(
     fresh rows, keep the fresh row on a repeated identity, refuse a NULL
     identity, and publish ordered by ``order_by`` with small row groups for
     scoped reads. One scan per side, deduplicated once, instead of one
-    hand-rolled copy per rollup.
+    hand-rolled copy per rollup. A composite ``identity`` names its columns in
+    order; only the first must be non-NULL (a SAM registration's EFT indicator
+    is usually NULL, and NULLs partition together).
     """
+    keys = (identity,) if isinstance(identity, str) else tuple(identity)
     cols = ", ".join(f'"{c}"' for c in columns)
     new_path = str(new_file).replace("'", "''")
     if prior_file is not None and prior_file.exists():
@@ -63,10 +66,10 @@ def merge_local_prior(
         COPY (
             SELECT {cols} FROM (
                 SELECT {cols}, ROW_NUMBER() OVER (
-                    PARTITION BY "{identity}" ORDER BY _src DESC
+                    PARTITION BY {", ".join(f'"{k}"' for k in keys)} ORDER BY _src DESC
                 ) AS _rn
                 FROM ({union})
-                WHERE "{identity}" IS NOT NULL
+                WHERE "{keys[0]}" IS NOT NULL
             )
             WHERE _rn = 1
             ORDER BY {order_by}
