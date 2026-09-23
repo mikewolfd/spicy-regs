@@ -79,4 +79,7 @@ mislabelled 0.26.5 wheel stays here only for replay.
 - **Decision 7, 2026-09-23 (continued):** ACF is published after its own
   independent review (23,890,403 comments). The next cohort is the next agency
   by the same campaign.
+- **Decision 10, 2026-09-23 (continued):** lobbying follows SAM. The keyless
+  bounded initial load of 27,863 filings posted 2026-07-01 to 2026-09-22 is
+  published (`a9fd5de6…`). Its schedule resumes once the pacing fix is pushed.
 

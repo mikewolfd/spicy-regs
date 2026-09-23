@@ -32,7 +32,7 @@ CFR has a verified bounded correction; its wider ancestry rule is open (see the 
 | T12 | `run-rollup-fcc-proceedings` | `fcc_proceedings.parquet` | published 2026-09-23 after a source replay validated against raw pages: generation `a1116f71…`, 21,683 docket names from 21,691 ECFS documents; walked whole, one row per docket (details below) |
 | T12 | `run-rollup-fcc-filings` | `fcc_filings.parquet` | published 2026-09-23 after a source replay validated against raw pages: generation `c0c1aa4e…`, 5,137 filings received 2026-08-24 to 09-22 (the bounded first run); incremental from here |
 | T14 | `run-rollup-sam-entities` | `sam_entities.parquet` | bounded initial load published 2026-09-23 (decision 10): generation `56dd0f65…`, all 147,254 active registrations dated 2026 from one retained bulk extract, cell-for-cell equal to it; the fork workflow stays disabled until the fixes are pushed and `SAM_API_KEY` is set |
-| T14 | `run-rollup-lobbying-filings` | `lobbying_filings.parquet` | local candidate needs qualification |
+| T14 | `run-rollup-lobbying-filings` | `lobbying_filings.parquet` | bounded initial load published 2026-09-23 (decision 10): generation `a9fd5de6…`, all 27,863 filings posted 2026-07-01 to 2026-09-22, equal to a fresh count of that range and to the retained raw pages in every mapped cell; the workflow stays paused until pushed |
 | T04 | `run-rollup-fec-committees` | `fec_committees.parquet` | generated and verified |
 | T04 | `run-rollup-fec-source-catalog` | `fec_source_catalog.parquet` | generated and verified |
 | T04 | `build-fec-observations` | `fec_source_records.parquet` | generated and verified |
@@ -460,3 +460,12 @@ Receipts: `members-qualification/`, `congressional-status/`, `native-vote-varian
     publish nulls where the table now holds correct parts. `Rollup —
     cfr_sections` is therefore disabled on the fork: its pushed code includes
     `cac7615`, and its last run, on 2026-09-22, failed.
+- **Lobbying initial load (decision 10).** Keyless lda.gov throttles after 15
+  quick requests, so the builder now paces keyless pages at 4 s (`60443e7`).
+  The real builder ran window by window with its own 30-day bound and 7-day
+  overlap: 2026-07-01, 07-23, 08-14 and 09-05, declaring 25,385, 2,543, 803 and
+  409 filings. Every window's walk matched its declared count, and all 1,218
+  responses are retained. The table's 27,863 filings equal the distinct raw
+  records and a fresh single-query count of the whole range, with zero cell
+  differences across the mapped columns. Generation `a9fd5de6…` is live and
+  equal to the build. See `lobbying-initial-load-2026-09-23/`.
