@@ -146,6 +146,8 @@ def _no_retry_delay(monkeypatch):
     sleeps = []
     monkeypatch.setattr(spicy_retry.random, "uniform", lambda *_: 0.0)
     monkeypatch.setattr(spicy_retry.time, "sleep", sleeps.append)
+    # Page pacing waits on the same clock; these tests are about retries, so run unpaced.
+    monkeypatch.setattr(bld, "KEYLESS_INTERVAL_SECONDS", 0.0)
     return sleeps
 
 

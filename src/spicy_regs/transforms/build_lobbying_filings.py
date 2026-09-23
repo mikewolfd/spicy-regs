@@ -49,6 +49,13 @@ MAX_WINDOW_DAYS = 30
 #: (spicy-docs' retry policy).
 MAX_REQUESTS_PER_PAGE = 7
 
+#: Pacing between page requests. Keyless, lda.gov served 15 pages back to back and then
+#: answered "Request was throttled. Expected available in 44 seconds." until the per-page
+#: retries ran out (2026-09-23), so an unpaced keyless walk cannot finish; 15 a minute is
+#: what it measurably allows. A key raises the limit.
+KEYLESS_INTERVAL_SECONDS = 4.0
+KEYED_INTERVAL_SECONDS = 0.5
+
 #: The whole archive at page size 25 is ~79,082 pages (spicy-docs' SR07
 #: measurement, 2026-09-21); this bound preserves a cold-start full backfill
 #: with headroom while the walk still refuses past it rather than ending
@@ -258,7 +265,7 @@ def build_lobbying_filings(
         max_requests=MAX_REQUESTS_PER_PAGE,
         max_page_bytes=16 * 1024 * 1024,
         timeout_seconds=60.0,
-        min_request_interval_seconds=0.0,
+        min_request_interval_seconds=KEYED_INTERVAL_SECONDS if api_key else KEYLESS_INTERVAL_SECONDS,
     )
     with LdaFilingsReader(budget=budget, api_key=api_key) as reader:
         rows = [_shape(f) for f in _iter_filings(reader, url, max_records=max_records)]
