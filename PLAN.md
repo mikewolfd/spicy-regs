@@ -64,9 +64,10 @@ Stated in full, with the measurement that makes each answerable, at the top of
    re-created PR. Rotation is settled by no code change.
 2. **The eight-table registration — mostly landed, branch archived.** The
    branch's materialized-dataset reader is superseded by
-   `pipelines/materialized.py` on main, and three of its eight tables
-   (`bill_subjects`, `court_opinion_clusters`, `court_opinion_bodies`) are
-   already registered by the fork-generation work. The five rulemaking-family
+   `pipelines/materialized.py` on main, and two of its eight tables
+   (`bill_subjects`, `court_opinion_clusters`) are registered by the
+   fork-generation work; the third, `court_opinion_bodies`, was withdrawn and
+   removed (fork delivery decision 6). The five rulemaking-family
    tables (`rule_targets`, `proceedings`, `regulatory_agenda_items`,
    `agenda_item_proceedings`, `comment_periods`) register with T17's
    publication — the same gate this item always named

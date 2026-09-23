@@ -2,8 +2,8 @@
 
 Covers the pieces with real logic: parsing the publisher's S3 listing into
 dataset/date pairs (which is how coverage gets checked at all), the streaming
-bzip2 CSV reader and its two bounds, the raw-row → published-schema mappings for
-both new tables, and the disk-headroom guard that is supposed to refuse a
+bzip2 CSV reader and its two bounds, the raw-row → published-schema mapping for
+clusters, and the disk-headroom guard that is supposed to refuse a
 backfill rather than fill the volume.
 """
 
@@ -13,7 +13,6 @@ import bz2
 from datetime import date
 from pathlib import Path
 
-import pyarrow.parquet as pq
 import pytest
 
 from spicy_docs.sources.courtlistener.bulk import (
@@ -22,16 +21,7 @@ from spicy_docs.sources.courtlistener.bulk import (
     find_dump,
     latest_dump_date,
 )
-from spicy_regs.transforms.build_court_opinion_bodies import (
-    COLUMNS as BODY_COLUMNS,
-)
 from spicy_regs.transforms._courtlistener_writer import DISK_HEADROOM_FLOOR, check_headroom
-from spicy_regs.transforms.build_court_opinion_bodies import (
-    BYTES_PER_OPINION_ROW,
-    OPINIONS_PER_CLUSTER_CEILING,
-    estimate_output_bytes,
-)
-from spicy_regs.transforms.build_court_opinion_bodies import _shape as shape_body
 from spicy_regs.transforms.build_court_opinion_clusters import (
     COLUMNS as CLUSTER_COLUMNS,
 )
@@ -39,31 +29,6 @@ from spicy_regs.transforms.build_court_opinion_clusters import (
     _shape_bulk,
     _shape_search,
 )
-
-# One real row from the 2026-06-30 opinions dump's column set, trimmed to the
-# fields the transform reads. `html_lawbox` is populated while `plain_text` is
-# empty — the exact case that makes "no text" and "no plain_text" different
-# questions.
-_RAW_OPINION = {
-    "id": "11422346",
-    "cluster_id": "10954746",
-    "type": "010combined",
-    "author_str": "Amit P. Mehta",
-    "author_id": "3227",
-    "joined_by_str": "",
-    "per_curiam": "f",
-    "sha1": "f1b0a6170c709af85ed4f18f1ff2d7cbebcc697d",
-    "page_count": "17",
-    "download_url": "https://ecf.dcd.uscourts.gov/cgi-bin/show_public_doc?2025cv3854-20",
-    "local_path": "pdf/2026/08/21/zeevi_v._united_states_department_of_state.pdf",
-    "extracted_by_ocr": "f",
-    "plain_text": "",
-    "html": "",
-    "html_lawbox": "<p>MEMORANDUM OPINION</p>",
-    "html_with_citations": "",
-    "date_created": "2026-08-21T14:02:11.000Z",
-    "date_modified": "2026-08-21T14:02:11.000Z",
-}
 
 _RAW_CLUSTER = {
     "id": "10954746",
@@ -268,30 +233,6 @@ def test_reader_handles_embedded_newlines_in_opinion_text(tmp_path: Path):
 # -- shaping -----------------------------------------------------------------
 
 
-def test_body_shape_matches_the_published_schema_and_records_text_provenance():
-    row = shape_body(_RAW_OPINION, dump_date=date(2026, 6, 30))
-    assert set(row) == set(BODY_COLUMNS)
-    assert row["opinion_id"] == "11422346"
-    assert row["cluster_id"] == "10954746"
-    assert row["dump_date"] == "2026-06-30"
-
-    # Text strings retain the source's distinction between empty and NULL.
-    assert row["plain_text"] == ""
-    assert row["html_with_citations"] == ""
-    assert row["html_lawbox"] == "<p>MEMORANDUM OPINION</p>"
-    # ...but the row is not textless, and the table must say which rendering exists.
-    assert row["available_text_fields"] == "html_lawbox"
-    assert row["text_char_count"] == str(len("<p>MEMORANDUM OPINION</p>"))
-
-
-def test_body_shape_reports_a_genuinely_textless_opinion_as_zero():
-    bare = {**_RAW_OPINION, "html_lawbox": ""}
-    row = shape_body(bare, dump_date=None)
-    assert row["available_text_fields"] is None
-    assert row["text_char_count"] == "0"
-    assert row["dump_date"] is None
-
-
 def test_cluster_shape_matches_schema_and_renames_the_docket_join_key():
     row = _shape_bulk(_RAW_CLUSTER)
     assert set(row) == set(CLUSTER_COLUMNS)
@@ -350,130 +291,4 @@ def test_check_headroom_refuses_an_ingest_that_would_cross_the_floor(tmp_path: P
         check_headroom(54_561_543_156, path=tmp_path)
 
 
-@pytest.mark.parametrize("source", ["local", "remote"])
-@pytest.mark.parametrize("cluster_ids", [None, {"101"}])
-def test_unbounded_body_build_checks_destination_before_staging(tmp_path, monkeypatch, source, cluster_ids):
-    import importlib
-    import shutil
-
-    from spicy_docs.sources.courtlistener import bulk
-
-    module = importlib.import_module("spicy_regs.transforms.build_court_opinion_bodies")
-    dump = _csv_bz2(tmp_path, "opinions-2026-06-30.csv.bz2", "id,cluster_id,plain_text", ['"11","101","body"'])
-    destination = tmp_path / "output"
-    destination.mkdir()
-    prior = destination / "_bodies_prior.parquet"
-    prior.write_bytes(b"retained prior")
-    output = destination / module.OUTPUT
-    output.write_bytes(b"previous output")
-    needed = estimate_output_bytes(dump.stat().st_size, cluster_ids)
-    free = DISK_HEADROOM_FLOOR + needed - 1
-    checked = []
-
-    def usage(path):
-        checked.append(path)
-        return shutil._ntuple_diskusage(total=free * 2, used=free, free=free)
-
-    monkeypatch.setattr(shutil, "disk_usage", usage)
-    monkeypatch.setattr(module, "CourtListenerTableWriter", lambda *a, **k: pytest.fail("staging opened before refusal"))
-    monkeypatch.setattr(module.r2, "download", lambda *a: pytest.fail("rebuild must not download a prior"))
-    monkeypatch.setattr(
-        bulk,
-        "list_bulk_dumps",
-        lambda: [BulkObject(f"bulk-data/{dump.name}", dump.stat().st_size, '"fixture"', "2026-06-30T00:00:00Z")],
-    )
-    with pytest.raises(RuntimeError, match="below the 100 GiB floor"):
-        module.build_court_opinion_bodies(
-            destination,
-            local_file=dump if source == "local" else None,
-            dump_date=date(2026, 6, 30),
-            cluster_ids=cluster_ids,
-            rebuild=True,
-        )
-    assert checked == [destination]
-    assert output.read_bytes() == b"previous output"
-    assert prior.read_bytes() == b"retained prior"
-    assert not (destination / "_bodies_new.parquet").exists()
-
-
-def test_local_body_build_accepts_exact_headroom_and_preserves_native_text(tmp_path, monkeypatch):
-    import shutil
-
-    from spicy_regs.transforms.build_court_opinion_bodies import build_court_opinion_bodies
-
-    dump = _csv_bz2(
-        tmp_path, "opinions-2026-06-30.csv.bz2", "id,cluster_id,plain_text,html", ['"11","101","","<p>source</p>"']
-    )
-    free = DISK_HEADROOM_FLOOR + 2 * dump.stat().st_size
-    monkeypatch.setattr(shutil, "disk_usage", lambda _: shutil._ntuple_diskusage(total=free * 2, used=free, free=free))
-    output = build_court_opinion_bodies(tmp_path, local_file=dump, dump_date=date(2026, 6, 30), rebuild=True)
-    [row] = pq.read_table(output).to_pylist()
-    assert row["opinion_id"] == "11"
-    assert row["plain_text"] == ""
-    assert row["html"] == "<p>source</p>"
-    assert row["available_text_fields"] == "html"
-    assert not (tmp_path / "_bodies_new.parquet").exists()
-
-
-def test_estimate_output_bytes_charges_a_targeted_pass_for_its_output():
-    """A filtered pass reads 50.8 GiB and writes almost nothing; the guard must know.
-
-    The dump is streamed, never landed, so the disk cost of any pass is the
-    parquet it writes. Charging a 1,155-cluster APA pass the whole dump's size
-    refuses a run that costs tens of megabytes — the guard would be stopping the
-    single highest-value follow-up for a cost it does not incur.
-    """
-    dump = 54_561_543_156
-
-    # All variants take more space than the compressed input in the v2 witness.
-    assert estimate_output_bytes(dump, None) == 2 * dump
-
-    # The real APA target set. Well under a gibibyte, so it clears a 7 GiB margin.
-    apa = estimate_output_bytes(dump, {str(i) for i in range(1155)})
-    assert apa < 2**30
-    assert apa == 1155 * OPINIONS_PER_CLUSTER_CEILING * BYTES_PER_OPINION_ROW
-
-    # Still refuses the thing it exists to refuse: filtering on every cluster in
-    # the corpus is a backfill wearing a filter, and must be sized as one.
-    assert estimate_output_bytes(dump, {str(i) for i in range(200_000)}) > 20 * 2**30
-
-    # A filter whose size cannot be known falls back to the conservative number
-    # rather than guessing small.
-    class _Unsized:
-        def __contains__(self, _item: object) -> bool:
-            return True
-
-    assert estimate_output_bytes(dump, _Unsized()) == 2 * dump
-
-
 # -- first build promotes rather than merges ---------------------------------
-
-
-def test_first_build_promotes_the_staged_table_without_merging(tmp_path: Path, monkeypatch, ample_disk_space):
-    """With no prior table the merge is a sort the machine cannot always afford.
-
-    One dump, whose id column is the publisher's primary key, so the dedup can
-    remove nothing. Running the COPY anyway held the staged and merged copies on
-    disk at once and — on 250,000 rows carrying kilobytes of opinion text each —
-    ran duckdb's memory budget out entirely. The first build promotes instead.
-    """
-    from spicy_regs.sources import r2
-    from spicy_regs.transforms.build_court_opinion_bodies import build_court_opinion_bodies
-
-    monkeypatch.setattr(r2, "download", lambda *_: False)
-    dump = _csv_bz2(
-        tmp_path,
-        "opinions-2026-06-30.csv.bz2",
-        "id,cluster_id,type,plain_text,html_with_citations",
-        ['"11","101","010combined","body one",""', '"12","102","040dissent","","<p>body two</p>"'],
-    )
-    out = build_court_opinion_bodies(tmp_path, dump_date=date(2026, 6, 30), local_file=dump)
-
-    stored = pq.read_table(out).to_pylist()
-    assert [r["opinion_id"] for r in stored] == ["11", "12"]
-    assert set(stored[0]) == set(BODY_COLUMNS)
-    assert stored[0]["plain_text"] == "body one"
-    assert stored[1]["html_with_citations"] == "<p>body two</p>"
-    assert stored[1]["available_text_fields"] == "html_with_citations"
-    # The staged file must not survive as a second copy of the same rows.
-    assert not (tmp_path / "_bodies_new.parquet").exists()

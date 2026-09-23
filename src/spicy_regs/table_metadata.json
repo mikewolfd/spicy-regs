@@ -2207,7 +2207,7 @@
   "court_opinion_clusters": {
     "table": "court_opinion_clusters",
     "label": "Court decisions and their opinion groups",
-    "summary": "Decision metadata from CourtListener opinion-clusters bulk data and opinion-search catch-up. cluster_id joins court_opinion_bodies.cluster_id; cl_docket_id joins court_dockets.cl_docket_id where that separately scoped docket table contains the case. Court identity comes from a bulk docket map or a search result; jurisdiction classification uses CourtListener's court reference data. This table does not hold individual opinion bodies. All columns are VARCHAR; native numeric and boolean spellings are strings.",
+    "summary": "Decision metadata from CourtListener opinion-clusters bulk data and opinion-search catch-up. cluster_id joins court_opinions.cluster_id (and through it the citation map and parentheticals); cl_docket_id joins court_dockets.cl_docket_id where that separately scoped docket table contains the case. Court identity comes from a bulk docket map or a search result; jurisdiction classification uses CourtListener's court reference data. This table does not hold individual opinion bodies. All columns are VARCHAR; native numeric and boolean spellings are strings.",
     "coverage": "Not a range. The complete 2026-06-30 opinion-clusters export is qualified and published on the fork: 10,070,727 unique clusters, with every mapped source field checked against the original export. All three court fields agree with the same-edition docket map and court reference data. All prior identities and 36 existing fields are preserved. Generation 7a2cbdb72ad6a7b9c79aa7f25dfa03c4ae3fe752cdb33900cb5d6b346d299b7c passes full public-download verification and both MCP access modes, including all fields of six native witnesses. This qualifies dated decision metadata; opinion bodies, newer changes and broader historical coverage remain separate. Filing-date search catch-up can miss older corrections. See docs/research/fork-output-ledger-2026-09-21.md.",
     "kind": "not_a_range",
     "measured_on": "2026-09-22",
@@ -2216,7 +2216,7 @@
       {
         "column_name": "cluster_id",
         "column_type": "VARCHAR",
-        "description": "CourtListener opinion-cluster ID, the decision-level primary/dedup key. Join to court_opinion_bodies.cluster_id; not an opinion_id."
+        "description": "CourtListener opinion-cluster ID, the decision-level primary/dedup key. Join to court_opinions.cluster_id and court_citations.cluster_id; not an opinion_id."
       },
       {
         "column_name": "cl_docket_id",
@@ -2412,146 +2412,6 @@
     "grain": "One CourtListener decision cluster per cluster_id; multiple opinion bodies can belong to it.",
     "identity_columns": [
       "cluster_id"
-    ]
-  },
-  "court_opinion_bodies": {
-    "table": "court_opinion_bodies",
-    "label": "Individual court opinion text variants",
-    "summary": "Individual opinion metadata and all eight supported native text variants from CourtListener bulk opinions. opinion_id is the primary/dedup key; cluster_id joins court_opinion_clusters.cluster_id to obtain decision, docket and court context. Opinion types remain literal source values. Version 2 preserves NULL and empty strings separately in text variants; metadata empty strings become NULL. All columns are VARCHAR.",
-    "coverage": "Sampled. Scheduled builds default to 250,000 opinions in dump order, not a random sample, date window or complete court population. The retained older 250,000-row output has the former 19-column representation; the corrected 25-column replay has only 284 rows. A wider corrected rebuild remains required. See docs/research/local-data-reuse-2026-09-21.md. Neither local count establishes current publication or cluster completeness.",
-    "kind": "sampled",
-    "measured_on": "2026-09-21",
-    "data_quality": "Several text variants can represent the same opinion and must not be counted as different decisions. Text may contain source markup or OCR errors. Presence of text does not establish completeness or accuracy. Old 19-column outputs need explicit rebuilding; they are not silently admitted as the current representation. dump_date identifies the selected release date, not a file digest or proof that later corrections were read.",
-    "columns": [
-      {
-        "column_name": "opinion_id",
-        "column_type": "VARCHAR",
-        "description": "CourtListener individual opinion ID. Primary/dedup key, distinct from the parent cluster_id."
-      },
-      {
-        "column_name": "cluster_id",
-        "column_type": "VARCHAR",
-        "description": "Parent CourtListener decision-cluster ID; many opinions may join one court_opinion_clusters row."
-      },
-      {
-        "column_name": "opinion_type",
-        "column_type": "VARCHAR",
-        "description": "Literal source opinion type code, such as majority, concurrence or dissent categories; not a resolved person or decision identifier."
-      },
-      {
-        "column_name": "author_str",
-        "column_type": "VARCHAR",
-        "description": "Source author text; not normalized to a person identity."
-      },
-      {
-        "column_name": "author_id",
-        "column_type": "VARCHAR",
-        "description": "CourtListener author ID when supplied; separate from author_str and retained as a string."
-      },
-      {
-        "column_name": "joined_by_str",
-        "column_type": "VARCHAR",
-        "description": "Source text identifying judges joining the opinion; not a structured relationship table."
-      },
-      {
-        "column_name": "per_curiam",
-        "column_type": "VARCHAR",
-        "description": "Source per-curiam flag, stored as a string."
-      },
-      {
-        "column_name": "sha1",
-        "column_type": "VARCHAR",
-        "description": "Source-provided SHA-1 value; not a SpicyRegs capture digest or independently verified byte pin."
-      },
-      {
-        "column_name": "page_count",
-        "column_type": "VARCHAR",
-        "description": "Source page count, stored as a string; may be unavailable."
-      },
-      {
-        "column_name": "download_url",
-        "column_type": "VARCHAR",
-        "description": "Source original-document URL when supplied; no current accessibility claim."
-      },
-      {
-        "column_name": "local_path",
-        "column_type": "VARCHAR",
-        "description": "Path reported by CourtListener, not a path to a retained SpicyRegs file."
-      },
-      {
-        "column_name": "extracted_by_ocr",
-        "column_type": "VARCHAR",
-        "description": "Source OCR flag, stored as a string; it does not establish extraction quality."
-      },
-      {
-        "column_name": "plain_text",
-        "column_type": "VARCHAR",
-        "description": "Literal source plain_text variant, preserving NULL versus empty string."
-      },
-      {
-        "column_name": "html_with_citations",
-        "column_type": "VARCHAR",
-        "description": "Literal source HTML-with-citations variant, preserving NULL versus empty string and original markup."
-      },
-      {
-        "column_name": "available_text_fields",
-        "column_type": "VARCHAR",
-        "description": "Comma-separated names of nonempty supported text variants, or NULL if none. Empty string variants remain in their own columns."
-      },
-      {
-        "column_name": "text_char_count",
-        "column_type": "VARCHAR",
-        "description": "Length of the longest nonempty supported text variant, stored as a string. It is not a sum, token count or completeness score."
-      },
-      {
-        "column_name": "date_created",
-        "column_type": "VARCHAR",
-        "description": "Source opinion-record creation timestamp when supplied."
-      },
-      {
-        "column_name": "date_modified",
-        "column_type": "VARCHAR",
-        "description": "Source opinion-record modification timestamp when supplied."
-      },
-      {
-        "column_name": "dump_date",
-        "column_type": "VARCHAR",
-        "description": "Selected CourtListener dump date in ISO form; may be NULL for a local input without a supplied release date."
-      },
-      {
-        "column_name": "html",
-        "column_type": "VARCHAR",
-        "description": "Literal source html variant, preserving NULL versus empty string and original markup."
-      },
-      {
-        "column_name": "html_lawbox",
-        "column_type": "VARCHAR",
-        "description": "Literal source html_lawbox variant, preserving NULL versus empty string and original markup."
-      },
-      {
-        "column_name": "html_columbia",
-        "column_type": "VARCHAR",
-        "description": "Literal source html_columbia variant, preserving NULL versus empty string and original markup."
-      },
-      {
-        "column_name": "html_anon_2020",
-        "column_type": "VARCHAR",
-        "description": "Literal source html_anon_2020 variant, preserving NULL versus empty string and original markup."
-      },
-      {
-        "column_name": "xml_harvard",
-        "column_type": "VARCHAR",
-        "description": "Literal source xml_harvard variant, preserving NULL versus empty string and original markup."
-      },
-      {
-        "column_name": "xml_scan",
-        "column_type": "VARCHAR",
-        "description": "Literal source xml_scan variant, preserving NULL versus empty string and original markup."
-      }
-    ],
-    "grain": "One CourtListener opinion per opinion_id; a decision cluster may have majority, concurring and dissenting opinions.",
-    "identity_columns": [
-      "opinion_id"
     ]
   },
   "court_citations": {

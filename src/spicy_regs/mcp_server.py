@@ -65,7 +65,6 @@ TABLES = (
     "court_dockets",
     "court_docket_groups",
     "court_opinion_clusters",
-    "court_opinion_bodies",
     "court_citations",
     "court_citation_map",
     "court_parentheticals",

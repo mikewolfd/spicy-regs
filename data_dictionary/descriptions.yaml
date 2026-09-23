@@ -1012,7 +1012,7 @@ tables:
     measured_on: "2026-09-22"
     summary: >-
       Decision metadata from CourtListener opinion-clusters bulk data and
-      opinion-search catch-up. cluster_id joins court_opinion_bodies.cluster_id;
+      opinion-search catch-up. cluster_id joins court_opinions.cluster_id (and through it the citation map and parentheticals);
       cl_docket_id joins court_dockets.cl_docket_id where that separately scoped
       docket table contains the case. Court identity comes from a bulk docket
       map or a search result; jurisdiction classification uses CourtListener's
@@ -1026,7 +1026,7 @@ tables:
       court_dockets is a narrower selection, so unmatched docket IDs are expected.
       Names, judge strings and citations do not establish cross-source identity.
     columns:
-      cluster_id: "CourtListener opinion-cluster ID, the decision-level primary/dedup key. Join to court_opinion_bodies.cluster_id; not an opinion_id."
+      cluster_id: "CourtListener opinion-cluster ID, the decision-level primary/dedup key. Join to court_opinions.cluster_id and court_citations.cluster_id; not an opinion_id."
       cl_docket_id: "CourtListener docket ID, renamed from docket_id. Join to court_dockets.cl_docket_id where present; unrelated to regulations.gov docket_id."
       court_id: "CourtListener court identifier from the docket map or search record; NULL when unresolved."
       court_jurisdiction: "CourtListener jurisdiction code from the court reference lookup; NULL when unavailable."
@@ -1065,58 +1065,6 @@ tables:
       date_created: "Source record-creation timestamp when supplied by bulk data."
       date_modified: "Source record-modification timestamp when supplied by bulk data."
       ingest_source: "Route for the retained row: bulk or search. The table does not itself pin the original capture bytes."
-  court_opinion_bodies:
-    label: "Individual court opinion text variants"
-    grain: "One CourtListener opinion per opinion_id; a decision cluster may have majority, concurring and dissenting opinions."
-    identity_columns: [opinion_id]
-    coverage: >-
-      Sampled. Scheduled builds default to 250,000 opinions in dump order,
-      not a random sample, date window or complete court population. The retained
-      older 250,000-row output has the former 19-column representation; the
-      corrected 25-column replay has only 284 rows. A wider corrected rebuild
-      remains required. See docs/research/local-data-reuse-2026-09-21.md.
-      Neither local count establishes current publication or cluster completeness.
-    measured_on: "2026-09-21"
-    summary: >-
-      Individual opinion metadata and all eight supported native text variants
-      from CourtListener bulk opinions. opinion_id is the primary/dedup key;
-      cluster_id joins court_opinion_clusters.cluster_id to obtain decision,
-      docket and court context. Opinion types remain literal source values.
-      Version 2 preserves NULL and empty strings separately in text variants;
-      metadata empty strings become NULL. All columns are VARCHAR.
-    data_quality: >-
-      Several text variants can represent the same opinion and must not be
-      counted as different decisions. Text may contain source markup or OCR
-      errors. Presence of text does not establish completeness or accuracy.
-      Old 19-column outputs need explicit rebuilding; they are not silently
-      admitted as the current representation. dump_date identifies the selected
-      release date, not a file digest or proof that later corrections were read.
-    columns:
-      opinion_id: "CourtListener individual opinion ID. Primary/dedup key, distinct from the parent cluster_id."
-      cluster_id: "Parent CourtListener decision-cluster ID; many opinions may join one court_opinion_clusters row."
-      opinion_type: "Literal source opinion type code, such as majority, concurrence or dissent categories; not a resolved person or decision identifier."
-      author_str: "Source author text; not normalized to a person identity."
-      author_id: "CourtListener author ID when supplied; separate from author_str and retained as a string."
-      joined_by_str: "Source text identifying judges joining the opinion; not a structured relationship table."
-      per_curiam: "Source per-curiam flag, stored as a string."
-      sha1: "Source-provided SHA-1 value; not a SpicyRegs capture digest or independently verified byte pin."
-      page_count: "Source page count, stored as a string; may be unavailable."
-      download_url: "Source original-document URL when supplied; no current accessibility claim."
-      local_path: "Path reported by CourtListener, not a path to a retained SpicyRegs file."
-      extracted_by_ocr: "Source OCR flag, stored as a string; it does not establish extraction quality."
-      plain_text: "Literal source plain_text variant, preserving NULL versus empty string."
-      html_with_citations: "Literal source HTML-with-citations variant, preserving NULL versus empty string and original markup."
-      available_text_fields: "Comma-separated names of nonempty supported text variants, or NULL if none. Empty string variants remain in their own columns."
-      text_char_count: "Length of the longest nonempty supported text variant, stored as a string. It is not a sum, token count or completeness score."
-      date_created: "Source opinion-record creation timestamp when supplied."
-      date_modified: "Source opinion-record modification timestamp when supplied."
-      dump_date: "Selected CourtListener dump date in ISO form; may be NULL for a local input without a supplied release date."
-      html: "Literal source html variant, preserving NULL versus empty string and original markup."
-      html_lawbox: "Literal source html_lawbox variant, preserving NULL versus empty string and original markup."
-      html_columbia: "Literal source html_columbia variant, preserving NULL versus empty string and original markup."
-      html_anon_2020: "Literal source html_anon_2020 variant, preserving NULL versus empty string and original markup."
-      xml_harvard: "Literal source xml_harvard variant, preserving NULL versus empty string and original markup."
-      xml_scan: "Literal source xml_scan variant, preserving NULL versus empty string and original markup."
   court_citations:
     label: "Court reporter citations"
     grain: "One reporter citation of one CourtListener decision (cluster); a decision can have several."

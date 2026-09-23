@@ -668,7 +668,7 @@
     {
       "table": "court_opinion_clusters",
       "label": "Court decisions and their opinion groups",
-      "summary": "Decision metadata from CourtListener opinion-clusters bulk data and opinion-search catch-up. cluster_id joins court_opinion_bodies.cluster_id; cl_docket_id joins court_dockets.cl_docket_id where that separately scoped docket table contains the case. Court identity comes from a bulk docket map or a search result; jurisdiction classification uses CourtListener's court reference data. This table does not hold individual opinion bodies. All columns are VARCHAR; native numeric and boolean spellings are strings.",
+      "summary": "Decision metadata from CourtListener opinion-clusters bulk data and opinion-search catch-up. cluster_id joins court_opinions.cluster_id (and through it the citation map and parentheticals); cl_docket_id joins court_dockets.cl_docket_id where that separately scoped docket table contains the case. Court identity comes from a bulk docket map or a search result; jurisdiction classification uses CourtListener's court reference data. This table does not hold individual opinion bodies. All columns are VARCHAR; native numeric and boolean spellings are strings.",
       "coverage": "Not a range. The complete 2026-06-30 opinion-clusters export is qualified and published on the fork: 10,070,727 unique clusters, with every mapped source field checked against the original export. All three court fields agree with the same-edition docket map and court reference data. All prior identities and 36 existing fields are preserved. Generation 7a2cbdb72ad6a7b9c79aa7f25dfa03c4ae3fe752cdb33900cb5d6b346d299b7c passes full public-download verification and both MCP access modes, including all fields of six native witnesses. This qualifies dated decision metadata; opinion bodies, newer changes and broader historical coverage remain separate. Filing-date search catch-up can miss older corrections. See docs/research/fork-output-ledger-2026-09-21.md.",
       "kind": "not_a_range",
       "measured_on": "2026-09-22",
@@ -713,42 +713,6 @@
         "date_created",
         "date_modified",
         "ingest_source"
-      ]
-    },
-    {
-      "table": "court_opinion_bodies",
-      "label": "Individual court opinion text variants",
-      "summary": "Individual opinion metadata and all eight supported native text variants from CourtListener bulk opinions. opinion_id is the primary/dedup key; cluster_id joins court_opinion_clusters.cluster_id to obtain decision, docket and court context. Opinion types remain literal source values. Version 2 preserves NULL and empty strings separately in text variants; metadata empty strings become NULL. All columns are VARCHAR.",
-      "coverage": "Sampled. Scheduled builds default to 250,000 opinions in dump order, not a random sample, date window or complete court population. The retained older 250,000-row output has the former 19-column representation; the corrected 25-column replay has only 284 rows. A wider corrected rebuild remains required. See docs/research/local-data-reuse-2026-09-21.md. Neither local count establishes current publication or cluster completeness.",
-      "kind": "sampled",
-      "measured_on": "2026-09-21",
-      "data_quality": "Several text variants can represent the same opinion and must not be counted as different decisions. Text may contain source markup or OCR errors. Presence of text does not establish completeness or accuracy. Old 19-column outputs need explicit rebuilding; they are not silently admitted as the current representation. dump_date identifies the selected release date, not a file digest or proof that later corrections were read.",
-      "columns": [
-        "opinion_id",
-        "cluster_id",
-        "opinion_type",
-        "author_str",
-        "author_id",
-        "joined_by_str",
-        "per_curiam",
-        "sha1",
-        "page_count",
-        "download_url",
-        "local_path",
-        "extracted_by_ocr",
-        "plain_text",
-        "html_with_citations",
-        "available_text_fields",
-        "text_char_count",
-        "date_created",
-        "date_modified",
-        "dump_date",
-        "html",
-        "html_lawbox",
-        "html_columbia",
-        "html_anon_2020",
-        "xml_harvard",
-        "xml_scan"
       ]
     },
     {

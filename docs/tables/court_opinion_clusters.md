@@ -4,7 +4,7 @@
 
 **Court decisions and their opinion groups**
 
-Decision metadata from CourtListener opinion-clusters bulk data and opinion-search catch-up. cluster_id joins court_opinion_bodies.cluster_id; cl_docket_id joins court_dockets.cl_docket_id where that separately scoped docket table contains the case. Court identity comes from a bulk docket map or a search result; jurisdiction classification uses CourtListener's court reference data. This table does not hold individual opinion bodies. All columns are VARCHAR; native numeric and boolean spellings are strings.
+Decision metadata from CourtListener opinion-clusters bulk data and opinion-search catch-up. cluster_id joins court_opinions.cluster_id (and through it the citation map and parentheticals); cl_docket_id joins court_dockets.cl_docket_id where that separately scoped docket table contains the case. Court identity comes from a bulk docket map or a search result; jurisdiction classification uses CourtListener's court reference data. This table does not hold individual opinion bodies. All columns are VARCHAR; native numeric and boolean spellings are strings.
 
 **Coverage.** Not a range. The complete 2026-06-30 opinion-clusters export is qualified and published on the fork: 10,070,727 unique clusters, with every mapped source field checked against the original export. All three court fields agree with the same-edition docket map and court reference data. All prior identities and 36 existing fields are preserved. Generation 7a2cbdb72ad6a7b9c79aa7f25dfa03c4ae3fe752cdb33900cb5d6b346d299b7c passes full public-download verification and both MCP access modes, including all fields of six native witnesses. This qualifies dated decision metadata; opinion bodies, newer changes and broader historical coverage remain separate. Filing-date search catch-up can miss older corrections. See docs/research/fork-output-ledger-2026-09-21.md. *(measured 2026-09-22)*
 
@@ -16,7 +16,7 @@ Decision metadata from CourtListener opinion-clusters bulk data and opinion-sear
 
 | Column | Type | Description |
 | --- | --- | --- |
-| `cluster_id` | `VARCHAR` | CourtListener opinion-cluster ID, the decision-level primary/dedup key. Join to court_opinion_bodies.cluster_id; not an opinion_id. |
+| `cluster_id` | `VARCHAR` | CourtListener opinion-cluster ID, the decision-level primary/dedup key. Join to court_opinions.cluster_id and court_citations.cluster_id; not an opinion_id. |
 | `cl_docket_id` | `VARCHAR` | CourtListener docket ID, renamed from docket_id. Join to court_dockets.cl_docket_id where present; unrelated to regulations.gov docket_id. |
 | `court_id` | `VARCHAR` | CourtListener court identifier from the docket map or search record; NULL when unresolved. |
 | `court_jurisdiction` | `VARCHAR` | CourtListener jurisdiction code from the court reference lookup; NULL when unavailable. |

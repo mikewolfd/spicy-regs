@@ -73,7 +73,6 @@ nav:
       - court_dockets: tables/court_dockets.md
       - court_docket_groups: tables/court_docket_groups.md
       - court_opinion_clusters: tables/court_opinion_clusters.md
-      - court_opinion_bodies: tables/court_opinion_bodies.md
       - court_citations: tables/court_citations.md
       - court_citation_map: tables/court_citation_map.md
       - court_parentheticals: tables/court_parentheticals.md

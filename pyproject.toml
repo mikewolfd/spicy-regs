@@ -59,7 +59,6 @@ docs = [
 [project.scripts]
 materialize-rulemaking = "spicy_regs.pipelines.rulemaking_dataset:app"
 run-rollup-court-opinion-clusters = "spicy_regs.pipelines.rollups.court_opinion_clusters:app"
-run-rollup-court-opinion-bodies = "spicy_regs.pipelines.rollups.court_opinion_bodies:app"
 run-rollup-court-citations = "spicy_regs.pipelines.rollups.court_citations:app"
 run-rollup-court-opinions = "spicy_regs.pipelines.rollups.court_opinions:app"
 run-rollup-bill-subjects = "spicy_regs.pipelines.rollups.bill_subjects:app"

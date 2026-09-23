@@ -30,8 +30,7 @@ from spicy_docs.sources.courtlistener import http as owner_http
 from spicy_docs.sources.courtlistener.bulk import CourtListenerBulkReader
 from spicy_docs.sources.courtlistener.csv import CourtListenerCsvError
 
-from tests._courtlistener_oracle import old_body, old_cluster, old_rows
-from spicy_regs.transforms.build_court_opinion_bodies import _shape as shape_body
+from tests._courtlistener_oracle import old_cluster, old_rows
 from spicy_regs.transforms.build_court_opinion_clusters import _shape_bulk
 from spicy_regs.transforms.court_scope import CourtScope, build_docket_court_map, court_jurisdictions
 
@@ -78,7 +77,7 @@ def test_retained_courts_exact_bytes_and_all_jurisdictions():
 
 
 @pytest.mark.parametrize("empty", [None, ""])
-def test_body_text_preserves_empty_and_null_while_metadata_matches_frozen_mapping(tmp_path, empty):
+def test_cluster_metadata_matches_frozen_mapping_through_empty_and_null_fields(tmp_path, empty):
     records = [
         {
             "id": "11",
@@ -96,11 +95,7 @@ def test_body_text_preserves_empty_and_null_while_metadata_matches_frozen_mappin
     [old] = old_rows(body)
     [new] = CourtListenerBulkReader("opinions", local_file=_dump(tmp_path, body)).iter_records()
     assert new == records[0]
-    shaped = shape_body(new, dump_date=DUMP_DATE)
-    prior = old_body(old, dump_date=DUMP_DATE)
-    assert {k: shaped[k] for k in prior if k != "plain_text"} == {k: v for k, v in prior.items() if k != "plain_text"}
     assert _shape_bulk(new) == old_cluster(old)
-    assert shape_body(new, dump_date=None)["plain_text"] == empty
     assert _shape_bulk(new)["syllabus"] is None
 
 
@@ -252,7 +247,7 @@ def test_concatenated_members_and_truncated_archive(tmp_path):
         list(CourtListenerBulkReader("courts", local_file=path).iter_records())
 
 
-@pytest.mark.parametrize("kind", ["bodies", "clusters"])
+@pytest.mark.parametrize("kind", ["clusters"])
 @pytest.mark.parametrize("cleanup_failure", [False, True])
 def test_source_failure_after_flush_preserves_output_and_original_error(
     tmp_path, monkeypatch, kind, cleanup_failure, ample_disk_space
@@ -343,7 +338,9 @@ def test_search_catchup_failure_after_flush_preserves_prior_and_output(tmp_path,
         "CourtListenerOpinionSearchReader",
         lambda **kwargs: source.CourtListenerOpinionSearchReader(transport=transport, **kwargs),
     )
-    error_type, message = (httpx.HTTPStatusError, "HTTP 500") if failure == "http" else (ValueError, "declared count changed")
+    error_type, message = (
+        (httpx.HTTPStatusError, "HTTP 500") if failure == "http" else (ValueError, "declared count changed")
+    )
     with pytest.raises(error_type, match=message):
         module.build_court_opinion_clusters(tmp_path, local_file=dump, dump_date=DUMP_DATE, skip_court_scope=True)
 
@@ -356,7 +353,7 @@ def test_search_catchup_failure_after_flush_preserves_prior_and_output(tmp_path,
     assert not (tmp_path / "_clusters_new.parquet").exists()
 
 
-@pytest.mark.parametrize("kind", ["bodies", "clusters"])
+@pytest.mark.parametrize("kind", ["clusters"])
 @pytest.mark.parametrize("failure", ["shape", "write"])
 def test_receiving_failure_closes_source_iterator(tmp_path, monkeypatch, kind, failure, ample_disk_space):
     module = importlib.import_module(f"spicy_regs.transforms.build_court_opinion_{kind}")
@@ -399,7 +396,6 @@ sys.meta_path.insert(0, NoSourceReaders())
 import spicy_regs.cli
 import spicy_regs.mcp_server
 import spicy_regs.transforms
-import spicy_regs.pipelines.rollups.court_opinion_bodies
 import spicy_regs.pipelines.rollups.court_opinion_clusters
 import spicy_regs.pipelines.rollups.court_citations
 import spicy_regs.pipelines.rollups.court_opinions
@@ -484,7 +480,7 @@ def test_docket_receipt_uses_shared_listing_pin_including_exact_etag(tmp_path, m
     assert receipt["source"]["listing_object_count"] == 1
 
 
-@pytest.mark.parametrize("kind", ["bodies", "clusters"])
+@pytest.mark.parametrize("kind", ["clusters"])
 @pytest.mark.parametrize("row_count", [0, 1, 3])
 def test_local_table_build_matches_frozen_mapping_by_id(tmp_path, monkeypatch, kind, row_count, ample_disk_space):
     module = importlib.import_module(f"spicy_regs.transforms.build_court_opinion_{kind}")
@@ -510,24 +506,8 @@ def test_local_table_build_matches_frozen_mapping_by_id(tmp_path, monkeypatch, k
         dump_date=DUMP_DATE,
         **kwargs,
     )
-    if kind == "clusters":
-        expected = [old_cluster(row) for row in old_rows(raw)]
-    else:
-        text_fields = (
-            "plain_text",
-            "html",
-            "html_lawbox",
-            "html_columbia",
-            "html_anon_2020",
-            "html_with_citations",
-            "xml_harvard",
-            "xml_scan",
-        )
-        expected = [
-            {**old_body(row, dump_date=DUMP_DATE), **{field: row.get(field) for field in text_fields}}
-            for row in records[:row_count]
-        ]
-    key = "cluster_id" if kind == "clusters" else "opinion_id"
+    expected = [old_cluster(row) for row in old_rows(raw)]
+    key = "cluster_id"
     assert {row[key]: row for row in pq.read_table(output).to_pylist()} == {row[key]: row for row in expected}
     parquet = pq.ParquetFile(output)
     assert parquet.schema_arrow == module._SCHEMA
