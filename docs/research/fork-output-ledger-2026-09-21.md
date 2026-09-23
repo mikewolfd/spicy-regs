@@ -89,11 +89,11 @@ Public data destination: `https://pub-72e95c0c20a84508b42b03a6ff6d55f8.r2.dev`. 
 | T06 | `run-pipeline` | `comments/agency_code=<agency>/docket_id=<docket>/year=<year>/month=<month>/part-0.parquet` | local undated cohort; wider partitions unproduced |
 | T07 | `publish-comments-mirror.yml` | `comments.parquet` | six-agency repair candidate; full parent not admitted |
 | T07 | `publish-comments-mirror.yml` | `comments/by-agency/<agency>.parquet` | waiting for qualified comments parent |
-| T17 | `materialize-rulemaking` | `rule_targets.parquet` | waiting for qualified parents |
-| T17 | `materialize-rulemaking` | `proceedings.parquet` | waiting for qualified parents |
-| T17 | `materialize-rulemaking` | `regulatory_agenda_items.parquet` | waiting for qualified parents |
-| T17 | `materialize-rulemaking` | `agenda_item_proceedings.parquet` | waiting for qualified parents |
-| T17 | `materialize-rulemaking` | `comment_periods.parquet` | waiting for qualified parents |
+| T17 | `materialize-rulemaking` | `rule_targets.parquet` | bootstrapped 2026-09-23 as snapshot `snapshot_0e799850…` (517,311 rows across 142,525 dockets) against the five audited parents; references, intervals and sampled source rows verified (details below) |
+| T17 | `materialize-rulemaking` | `proceedings.parquet` | bootstrapped 2026-09-23 as snapshot `snapshot_0e799850…` (515,121 rows) against the five audited parents; references, intervals and sampled source rows verified (details below) |
+| T17 | `materialize-rulemaking` | `regulatory_agenda_items.parquet` | bootstrapped 2026-09-23 as snapshot `snapshot_0e799850…` (38,403 items) against the five audited parents; references, intervals and sampled source rows verified (details below) |
+| T17 | `materialize-rulemaking` | `agenda_item_proceedings.parquet` | bootstrapped 2026-09-23 as snapshot `snapshot_0e799850…` (155,628 relationships) against the five audited parents; references, intervals and sampled source rows verified (details below) |
+| T17 | `materialize-rulemaking` | `comment_periods.parquet` | bootstrapped 2026-09-23 as snapshot `snapshot_0e799850…` (306,582 periods) against the five audited parents; references, intervals and sampled source rows verified (details below) |
 
 ## Scope and evidence gaps
 
@@ -293,3 +293,32 @@ Receipts: `members-qualification/`, `congressional-status/`, `native-vote-varian
     both directions: 899,227 rows, all 16 columns.
   - **Dictionary.** The stale "2000 floor" coverage on both tables is corrected.
     See `fr-audit-2026-09-23/`.
+
+- **Rulemaking dataset bootstrapped (T17).** With `federal_register` and
+  `fr_docket_links` audited, all five parents qualified. The manifest pins them
+  exactly: FR `47ad1212…`, links `2c5f941a…`, agenda `52775a37…`, and the
+  qualified dockets `27a2ed4a…` and documents `7907ebe3…` base objects.
+  - **Date defect fixed.** The first local build exposed one: the builder read
+    regulations.gov comment-window instants by their UTC date, but every end
+    stamp is 11:59:59 PM Eastern (03:59:59/04:59:59Z). Every document-sourced
+    `close_date` was therefore one day late: over the 133,006 documents that
+    also carry an FR `comments_close_on`, the Eastern day matched for 127,361
+    and the UTC date for 118. Fixed in `0a898be` (actor `comment-periods:v5`).
+  - **Stage profiled.** `rule_targets` took 8.5 minutes, quadratic
+    re-serialization of each edge's references. `e8d3882` brings it to
+    38 seconds with byte-identical output.
+  - **Rebuild checks.** In the rebuild every check is zero: primary-id
+    duplicates; unresolved docket, RIN, FR-record, proceeding and agenda-item
+    references; FR evidence lacking the RIN it claims; inverted or unanchored
+    periods. Each period's bounds equal its evidence's earliest open and latest
+    close, recomputed in SQL with the Eastern rule.
+  - **Live-source samples.** 30 of 30 document periods match regulations.gov,
+    30 of 30 FR periods and 23 of 23 agenda-RIN links match federalregister.gov.
+  - **Publication.** The validated files were published through the pipeline's
+    own gate and publish step, with no rebuild. The public pointer, manifest
+    and five artifacts equal them.
+  - **Fork workflows.** `Materialize — rulemaking join surface` and
+    `Rollup — fcc_proceedings` are disabled on the fork. Their pushed code
+    predates `0a898be` and `b2534aa` and would republish the one-day-late
+    closes, and the ECFS re-created dockets over their originals. Re-enable both
+    after pushing. See `rulemaking-2026-09-23/`.
