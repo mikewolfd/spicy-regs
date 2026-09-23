@@ -4149,11 +4149,11 @@
   "amendments": {
     "table": "amendments",
     "label": "Amendments",
-    "summary": "One row per amendment, as the Congress.gov amendment list route states it. Keyed on the amendment's own identity, not the bill it amends, because an amendment can amend another amendment; `amended_bill_id` and `amended_amendment_id` are foreign keys. All columns are stored as VARCHAR.",
-    "coverage": "Sampled, and accumulating. Measured on one cold-start run (receipt `d1-measured-run-2026-09-19/`): with no prior table the window is open, so the run was a full walk of the 119th — 7,066 amendment records over 29 pages in 101 seconds, produced locally as 7,016 rows after 50 repeated identities were collapsed. The Congress.gov amendment route for the Congresses the rollup is scoped to, walked in an `updateDate` window that starts at the watermark this table already reached and runs forward at most ninety days. **The watermark window is design, not measurement**: the measured run had no prior table, so it took the open window and no narrowed one has been observed — the second run is what measures it. Local output only; not uploaded.",
-    "kind": "sampled",
-    "measured_on": "2026-09-19",
-    "data_quality": "The publisher's `updateDate desc` order repeats an amendment across a page boundary when stamps tie, the same shape measured on the bill and communication routes. On the cold-start walk of the 119th (2026-09-19) 7,066 records were served and 7,016 distinct identities retained locally: 50 repeats were collapsed, the fresh row winning. The declared total counts entries, not amendments, so a walk whose declared and served counts agree has still not delivered 50 of the amendments it counted; the next whole walk delivers them. All columns are stored as VARCHAR.",
+    "summary": "One row per amendment, from the Congress.gov amendment list and detail routes. Keyed on the amendment's own identity, not the bill it amends, because an amendment can amend another amendment; `amended_bill_id` and `amended_amendment_id` are foreign keys. All columns are stored as VARCHAR.",
+    "coverage": "Window: the 119th Congress, complete as of 2026-09-23: 7,095 amendments, equal to the publisher's declared count, each with its detail record. Every cell matches the retained list and detail responses (receipt `amendment-details-2026-09-23/` in the fork execution receipts). Scheduled runs walk an `updateDate` window from the table's watermark, at most ninety days, and fetch detail for each amendment in it.",
+    "kind": "window",
+    "measured_on": "2026-09-23",
+    "data_quality": "The publisher's `updateDate desc` order repeats and skips amendments across page boundaries when stamps tie, so one walk can serve the declared count while missing some amendments. The builder pools alternating-order passes until the distinct count reaches the declared count. Sponsor, chamber, submitted date and the amended bill or amendment come from each amendment's detail record; the list route carries none of them. 89 House amendments name the Rules Committee as sponsor and have no member sponsor to record. All columns are stored as VARCHAR.",
     "columns": [
       {
         "column_name": "amendment_id",

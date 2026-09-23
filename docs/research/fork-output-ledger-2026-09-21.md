@@ -63,7 +63,7 @@ CFR has a verified bounded correction; its wider ancestry rule is open (see the 
 | T09 | `run-rollup-bill-family` | `bill_family_backfills.parquet` | published 2026-09-23 (decision 1) in reconciled generation `a846cb44…`: the accepted 419,839-bill candidate plus the live scheduled 119th rows; conservation and row provenance verified (details below) |
 | T09 | `run-rollup-bill-family` | `bill_family_backfill_walks.parquet` | published 2026-09-23 (decision 1) in reconciled generation `a846cb44…`: the accepted 419,839-bill candidate plus the live scheduled 119th rows; conservation and row provenance verified (details below) |
 | T08 | `run-rollup-press-releases` | `press_releases.parquet` | published bounded relationship correction verified |
-| T08 | `run-rollup-amendments` | `amendments.parquet` | republished complete 2026-09-23: generation `52d60a8f…`, 7,066 = the source's declared 119th count; every list-route cell matches a clean replay; detail-only fields (sponsors, amended bill) remain unacquired |
+| T08 | `run-rollup-amendments` | `amendments.parquet` | republished with detail 2026-09-23: generation `f8c3943a…`, 7,095 = the source's declared 119th count, one detail response per amendment; every cell matches the retained list and detail responses; 89 Rules Committee amendments have no member sponsor |
 | T08 | `run-rollup-member-vote-terms` | `member_vote_terms.parquet` | added and published 2026-09-23 (decision 2): generation `890481eb…`, 382,136 rows; exceptions equal the independent join replay row for row |
 | T08 | `run-rollup-roll-call-votes` | `roll_call_votes.parquet` | native fields verified; derived bill links qualified 2026-09-23: in live generation `3204b8fc…` all 845 links are recorded votes in their bill's raw GovInfo BILLSTATUS (509 bills) and in the published references, no vote is claimed by two bills, and none of the 730 unmatched votes is named by any reference; the two votes added since the qualified 1,573 (`119-senate-2-239`, `-240`) match the Senate's raw XML in every tally and all 100 positions |
 | T08 | `run-rollup-roll-call-votes` | `member_votes.parquet` | generated and verified for frozen 119th Congress selection |
@@ -238,8 +238,9 @@ Receipts: `members-qualification/`, `congressional-status/`, `native-vote-varian
   declared count (`00f1144`), and the complete table (generation `52d60a8f…`) is
   a strict superset of the old one with no shared cell changed; three added
   amendments were confirmed on the detail route. Detail-only fields (sponsors,
-  amended bill) are empty on every row because the list route does not carry them.
-  See `source-audit-2026-09-23/`.
+  amended bill) were empty on every row because the list route does not carry
+  them; the continuation's detail republication fills them. See
+  `source-audit-2026-09-23/`.
 - **USAspending recipients.** A fresh capture of the same top-100-page selection
   through the builder's reader (raw pages retained) against generation
   `18e51cf5…`, whose public bytes match the index: 9,740 of 10,000 recipients
@@ -469,6 +470,18 @@ Receipts: `members-qualification/`, `congressional-status/`, `native-vote-varian
   records and a fresh single-query count of the whole range, with zero cell
   differences across the mapped columns. Generation `a9fd5de6…` is live and
   equal to the build. See `lobbying-initial-load-2026-09-23/`.
+- **Amendments with detail (T08).** The builder now reads each listed
+  amendment's detail record (SpicyDocs 0.29.0's `amendment-detail` route) and
+  takes sponsor, chamber, submitted date and amended bill or amendment from it.
+  A full 119th walk retained all 7,155 responses (two retried 502/503s). The
+  table's 7,095 rows equal the declared count, the distinct listed amendments
+  and the detail responses; mapping from the publisher's field names finds no
+  differing cell, and every one of the 7,066 live identities survives. Sponsor
+  now fills 7,006 rows, amended bill all 7,095, amended amendment 1,094. The
+  other 89 are House amendments whose detail names the Rules Committee, which
+  the member-sponsor columns cannot hold. Generation `sha256:f8c3943ace0281c542e7798188f8d64216081b5bc597e4084ee909aea6ce4873`
+  is live and equal to the build. `Rollup — amendments` stays disabled until the
+  push: its pushed code has no detail overlay. See `amendment-details-2026-09-23/`.
 - **Validation sweep (2026-09-23 afternoon).** Four independent scouts
   re-checked every open item against the live index, the fork's workflows,
   secrets and receipts, and the raw sources.
