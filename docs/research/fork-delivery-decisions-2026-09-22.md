@@ -76,4 +76,7 @@ mislabelled 0.26.5 wheel stays here only for replay.
   path is repaired (SpicyDocs 0.28.0 and 0.28.2). The bounded retained initial
   load of 147,254 active 2026 registrations is published (`56dd0f65…`). Wider
   years, the fork's `SAM_API_KEY` secret and lobbying remain.
+- **Decision 7, 2026-09-23 (continued):** ACF is published after its own
+  independent review (23,890,403 comments). The next cohort is the next agency
+  by the same campaign.
 

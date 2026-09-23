@@ -86,9 +86,9 @@ Public data destination: `https://pub-72e95c0c20a84508b42b03a6ff6d55f8.r2.dev`. 
 | T08 | `run-rollup-nominations` | `nominations.parquet` | generated and verified; new pin re-qualified |
 | T06 | `run-pipeline` | `dockets.parquet` | generated and verified |
 | T06 | `run-pipeline` | `documents.parquet` | generated and verified |
-| T06 | `run-pipeline` | `comments_index.parquet` | published 2026-09-23 with the six-agency comments cohort: 112,885 groups summing to all 23,889,665 comments (reviewed candidate `28e5cf9c…`) |
+| T06 | `run-pipeline` | `comments_index.parquet` | published 2026-09-23 with the comments cohorts: live `ba31f99f…`, 112,885 groups summing to all 23,890,403 comments |
 | T06 | `run-pipeline` | `comments/agency_code=<agency>/docket_id=<docket>/year=<year>/month=<month>/part-0.parquet` | local undated cohort; wider partitions unproduced |
-| T07 | `publish-comments-mirror.yml` | `comments.parquet` | six-agency cohort published 2026-09-23 (decision 7) as the fork's first base comments object: reviewed candidate `a72a08e9…`, 23,889,665 rows; wider agencies continue by cohort, ACF next |
+| T07 | `publish-comments-mirror.yml` | `comments.parquet` | six agencies plus ACF published 2026-09-23 (decision 7), each cohort after independent review: live `fca7afb7…`, 23,890,403 rows; further agencies continue by cohort |
 | T07 | `publish-comments-mirror.yml` | `comments/by-agency/<agency>.parquet` | waiting for qualified comments parent |
 | T17 | `materialize-rulemaking` | `rule_targets.parquet` | bootstrapped 2026-09-23 as snapshot `snapshot_0e799850…` (517,311 rows across 142,525 dockets) against the five audited parents; references, intervals and sampled source rows verified (details below) |
 | T17 | `materialize-rulemaking` | `proceedings.parquet` | bootstrapped 2026-09-23 as snapshot `snapshot_0e799850…` (515,121 rows) against the five audited parents; references, intervals and sampled source rows verified (details below) |
@@ -402,3 +402,37 @@ Receipts: `members-qualification/`, `congressional-status/`, `native-vote-varian
   extract that matched its paged count exactly). The table equals an
   independent mapping of the raw file in all 147,254 keys and every cell.
   Generation `56dd0f65…` is live, and its public bytes equal the build.
+- **ACF comments cohort (decision 7).**
+  - **Capture.** All 129,052 comment objects in the complete ACF listing were
+    captured (380,321,010 bytes), and admitted as 128,965 records with 87
+    discarded observations.
+  - **Admission fix.** The first admission refused on
+    `ACF-2026-0199-0536`: two byte-identical Mirrulations refetch files at one
+    `modifyDate`. A census found 23 such groups, all identical and none
+    differing, so SpicyDocs 0.28.1 (`6df4ae2`) extended the docket/document
+    rule to comments: identical records collapse, differing ones still refuse.
+  - **Repair.** The native source fills fields the parent held as NULL on
+    108,369 existing rows, and adds 738 comments in `ACF-2026-0595`. No existing
+    value changed, no row was lost, and every other row is preserved.
+  - **Review.** Independent review (`reviews/comments-acf-review.md`) approved.
+    It checked all 129,052 objects against S3's own checksums, all 23,761,438
+    other rows by whole-row hash, and every ACF row against its newest original.
+  - **F1, acted on.** 0.28.1 had changed the comment policy without moving its
+    version, so current readers refused the published six-agency 1.2 releases
+    with a bare digest error. 0.28.3 (`8474b5c`) moves comments to policy 1.3;
+    replaying a 1.2 release needs the retained 0.28.0 wheel. Under 1.3, ACF
+    re-admitted to byte-identical staging, and the rebuilt candidate and index
+    equal the reviewed ones as whole-row hash multisets (merge output layout is
+    not byte-stable).
+  - **F2, recorded.** 161 ACF comments exist on Mirrulations only as
+    `_UNAVAILABLE` markers, so the cohort is complete over the JSON Mirrulations
+    serves.
+  - **Publication.** `comments.parquet` (`fca7afb7…`) and `comments_index`
+    (`ba31f99f…`) replaced the six-agency objects after confirming the live
+    bytes were still those.
+  - **T15 refresh.** The three T15 tables were rebuilt and recounted on the new
+    parent, with zero mismatches: `feed_summary` `4c2e2cd9…`, `agency_stats`
+    `a9b3d6fc…`, `org_committee_links` `e3d05e5b…` (1,186 links).
+    `feed_summary`'s ordering broke `modify_date` ties arbitrarily, so equal
+    inputs gave different bytes; `87cf257` orders by `docket_id` as well. See
+    `full-comments/acf-campaign/`.
