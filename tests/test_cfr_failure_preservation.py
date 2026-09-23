@@ -135,7 +135,9 @@ def test_follows_publisher_opaque_continuation_exactly():
         {"packages": {}, "count": 0},
         {"packages": [None], "count": 1},
         page("packages", [{}]),
+        page("packages", [{"packageId": "FR-2025-01-01"}]),
         page("packages", [{"packageId": " GPO-CFR-INDEX-2025"}]),
+        page("packages", [{"packageId": "GPO-CFR-INDEX-25"}]),
         page("packages", [], count=1),
         page("packages", [PACKAGE], count=True),
         b"not JSON",
@@ -163,9 +165,7 @@ def test_listed_index_package_is_skipped_with_one_log_line():
         logger.remove(sink)
     assert [row["_package_id"] for row in rows] == [volume_id]
     assert len(transport.calls) == 2 and "GPO-CFR-INDEX" not in str(transport.calls[1].url)
-    assert [m for m in messages if "skipped" in m] == [
-        "CFR: skipped 1 listed non-volume package(s): GPO-CFR-INDEX-2025\n"
-    ]
+    assert [m for m in messages if "skipped" in m] == ["CFR: skipped 1 listed index package(s): GPO-CFR-INDEX-2025\n"]
 
 
 @pytest.mark.parametrize(
@@ -325,27 +325,47 @@ def test_fresh_annual_records_are_never_placed_in_false_part_19():
         assert row["last_modified"] == package["lastModified"]
 
 
-def build_with(monkeypatch, tmp_path, walk, acquirer, prior_rows=None):
-    """Run the build over ``walk`` and ``acquirer`` against a local prior; return output rows by granule."""
-    table = pa.Table.from_pylist(prior_rows or [], schema=build._SCHEMA)
-    pq.write_table(table, tmp_path / "_cfr_prior.parquet")
+def build_with(monkeypatch, tmp_path, walk, acquirer, prior_rows=None, *, marked=False, replace_all=False):
+    """Run the build over ``walk`` and ``acquirer``; return output rows by granule.
+
+    ``prior_rows=None`` means no prior table at all; ``marked`` stamps the prior
+    with the placement marker a generation built by this rule carries.
+    """
+    if prior_rows is None:
+        monkeypatch.setattr(build.r2, "download", lambda *_: False)
+    else:
+        table = pa.Table.from_pylist(prior_rows, schema=build._SCHEMA)
+        pq.write_table(
+            table.replace_schema_metadata(build.PLACEMENT_MARKER if marked else None), tmp_path / "_cfr_prior.parquet"
+        )
     monkeypatch.setattr(build, "CfrSectionsReader", lambda **_: reader(walk))
-    output = build.build_cfr_sections(tmp_path, since_year=2025, acquirer=acquirer)
+    output = build.build_cfr_sections(tmp_path, since_year=2025, replace_all=replace_all, acquirer=acquirer)
     return {row["granule_id"]: row for row in pq.read_table(output).to_pylist()}
+
+
+def is_marked(tmp_path):
+    [(key, value)] = build.PLACEMENT_MARKER.items()
+    return (pq.read_schema(tmp_path / build.OUTPUT).metadata or {}).get(key.encode()) == value.encode()
+
+
+def placed_prior(stamp=PACKAGE["lastModified"], heading="Prior heading."):
+    """A prior row for GRANULE as this rule places it, stamped with its package's lastModified."""
+    shaped = build._shape({**GRANULE, "_package_id": PACKAGE_ID, "_package_last_modified": stamp})
+    return {**shaped, "part": "1", "section": "1", "cfr_ref": "1-1.1", "heading": heading}
 
 
 def test_build_places_section_granules_from_one_volume_download(monkeypatch, tmp_path):
     second = {**GRANULE, "granuleId": f"{PACKAGE_ID}-sec1-2"}
     acquirer, calls = volumes((200, "application/xml", VOLUME))
-    rows = build_with(
-        monkeypatch, tmp_path, Transport(page("packages", [PACKAGE]), page("granules", [GRANULE, second])), acquirer
-    )
+    walk = Transport(page("packages", [PACKAGE]), page("granules", [GRANULE, second]))
+    rows = build_with(monkeypatch, tmp_path, walk, acquirer)
     assert calls == [VOLUME_URL]
     placed = rows[GRANULE["granuleId"]]
     assert (placed["part"], placed["section"], placed["cfr_ref"]) == ("1", "1", "1-1.1")
     # § 1.2 is not in the excerpt: nothing to place, so it keeps its identifier values.
     unplaced = rows[second["granuleId"]]
     assert (unplaced["part"], unplaced["section"], unplaced["cfr_ref"]) == (None, "1-2", None)
+    assert is_marked(tmp_path)
 
 
 def test_build_downloads_no_volume_for_a_package_without_section_granules(monkeypatch, tmp_path):
@@ -356,33 +376,64 @@ def test_build_downloads_no_volume_for_a_package_without_section_granules(monkey
     assert rows[node["granuleId"]]["cfr_ref"] == "1-1"
 
 
-@pytest.mark.parametrize(
+FAILURES = pytest.mark.parametrize(
     "responses",
     [
         [(404, "text/html", b"not found")],
-        [(403, "text/html", b"denied")],
         [(500, "text/plain", b"down")] * build._VOLUME_REQUESTS,
         [(200, "text/html", b"<html>not a volume</html>")],
         [(200, "application/xml", b"<html>not a volume</html>")],
         [(200, "application/xml", VOLUME[: len(VOLUME) // 2])],
     ],
-    ids=["unavailable", "refused", "server-error", "not-xml", "not-a-volume", "truncated"],
+    ids=["unavailable", "server-error", "not-xml", "not-a-volume", "truncated"],
 )
-def test_failed_volume_keeps_the_package_prior_rows(monkeypatch, tmp_path, responses):
+
+
+@FAILURES
+def test_failed_volume_keeps_the_package_prior_rows(monkeypatch, tmp_path, capsys, responses):
     """The package changed since the prior table, but its volume failed: the prior row stands unchanged."""
-    prior_row = build._shape(
-        {**GRANULE, "_package_id": PACKAGE_ID, "title": "Prior heading.", "lastModified": "2025-01-02T00:00:00Z"}
-    )
+    prior_row = placed_prior(stamp="2025-01-02T00:00:00Z")
     other_id = "CFR-2025-title2-vol1"
     other = {"packageId": other_id, "lastModified": "2026-09-11T17:30:58Z"}
     node = {"granuleId": f"{other_id}-part1", "title": "PART 1", "granuleClass": "NODE"}
     walk = Transport(page("packages", [PACKAGE, other]), page("granules", [GRANULE]), page("granules", [node]))
     acquirer, calls = volumes(*responses)
-    rows = build_with(monkeypatch, tmp_path, walk, acquirer, prior_rows=[prior_row])
+    rows = build_with(monkeypatch, tmp_path, walk, acquirer, prior_rows=[prior_row], marked=True)
     assert calls == [VOLUME_URL] * len(responses)
     assert rows[GRANULE["granuleId"]] == prior_row
-    # Another package in the same run is still refreshed.
+    # Another package in the same run is still refreshed, and the table stays marked.
     assert rows[node["granuleId"]]["cfr_ref"] == "2-1"
+    assert is_marked(tmp_path)
+    assert f"::warning title=cfr_sections::{PACKAGE_ID} volume failed; its prior rows stand" in capsys.readouterr().out
+
+
+@FAILURES
+def test_failed_volume_with_no_prior_table_refuses_the_run(monkeypatch, tmp_path, responses):
+    acquirer, _calls = volumes(*responses)
+    walk = Transport(page("packages", [PACKAGE]), page("granules", [GRANULE]))
+    with pytest.raises(cfr.CfrSectionsError, match="no prior table to keep"):
+        build_with(monkeypatch, tmp_path, walk, acquirer)
+    assert not (tmp_path / build.OUTPUT).exists()
+    assert not (tmp_path / "_cfr_new.parquet").exists()
+
+
+def test_failed_volume_of_a_package_new_to_the_prior_is_annotated_as_an_error(monkeypatch, tmp_path, capsys):
+    other_id = "CFR-2025-title2-vol1"
+    other_row = {**build._shape({"granuleId": f"{other_id}-part1", "_package_id": other_id}), "heading": "Kept."}
+    acquirer, _calls = volumes((404, "text/html", b"not found"))
+    walk = Transport(page("packages", [PACKAGE]), page("granules", [GRANULE]))
+    rows = build_with(monkeypatch, tmp_path, walk, acquirer, prior_rows=[other_row], marked=True)
+    assert rows == {other_row["granule_id"]: other_row}
+    out = capsys.readouterr().out
+    assert f"::error title=cfr_sections::{PACKAGE_ID} volume failed and it has no prior rows" in out
+
+
+def test_access_refusal_aborts_the_run_instead_of_keeping_prior_rows(monkeypatch, tmp_path):
+    acquirer, _calls = volumes((403, "text/html", b"denied"))
+    walk = Transport(page("packages", [PACKAGE]), page("granules", [GRANULE]))
+    with pytest.raises(CredentialRefusedError):
+        build_with(monkeypatch, tmp_path, walk, acquirer, prior_rows=[placed_prior(stamp="2025-01-02T00:00:00Z")])
+    assert not (tmp_path / build.OUTPUT).exists() and not (tmp_path / "_cfr_new.parquet").exists()
 
 
 def test_default_volume_client_is_bounded():
@@ -393,32 +444,69 @@ def test_default_volume_client_is_bounded():
 
 
 def test_unchanged_package_keeps_its_prior_rows_without_a_download(monkeypatch, tmp_path):
-    """Every granule is in the prior table with the same last_modified: no volume request, prior row untouched."""
-    prior_row = {
-        **build._shape({**GRANULE, "_package_id": PACKAGE_ID, "_package_last_modified": PACKAGE["lastModified"]}),
-        "part": "1",
-        "section": "1",
-        "cfr_ref": "1-1.1",
-        "heading": "Prior heading.",
-    }
+    """The package stamp matches a marked prior: no volume request, prior row untouched.
+
+    GovInfo's granule listing carries no lastModified, so each row's
+    last_modified is its package's and the unchanged check is per package.
+    """
+    assert "lastModified" not in GRANULE
+    prior_row = placed_prior()
     acquirer, calls = volumes()
     walk = Transport(page("packages", [PACKAGE]), page("granules", [GRANULE]))
-    rows = build_with(monkeypatch, tmp_path, walk, acquirer, prior_rows=[prior_row])
+    rows = build_with(monkeypatch, tmp_path, walk, acquirer, prior_rows=[prior_row], marked=True)
     assert calls == []
     assert rows == {GRANULE["granuleId"]: prior_row}
+    assert is_marked(tmp_path)
 
 
-@pytest.mark.parametrize("change", ["last-modified", "new-granule"])
-def test_changed_package_is_downloaded_and_re_placed(monkeypatch, tmp_path, change):
-    """A different last_modified on any granule, or a granule the prior table lacks, re-places the package."""
-    stamp = PACKAGE["lastModified"] if change == "new-granule" else "2025-01-02T00:00:00Z"
-    prior_row = build._shape({**GRANULE, "_package_id": PACKAGE_ID, "_package_last_modified": stamp})
+@pytest.mark.parametrize("change", ["package-stamp", "new-granule", "unmarked-prior", "replace-all"])
+def test_changed_or_unproven_package_is_downloaded_and_re_placed(monkeypatch, tmp_path, change):
+    """A new package stamp or granule, a prior without the placement marker, or replace_all re-places the package.
+
+    The stamp is the package's lastModified (the granule listing has none).
+    """
+    prior_row = placed_prior(stamp="2025-01-02T00:00:00Z" if change == "package-stamp" else PACKAGE["lastModified"])
     second = {**GRANULE, "granuleId": f"{PACKAGE_ID}-sec1-2"}
     listed = [GRANULE, second] if change == "new-granule" else [GRANULE]
     acquirer, calls = volumes((200, "application/xml", VOLUME))
     walk = Transport(page("packages", [PACKAGE]), page("granules", listed))
-    rows = build_with(monkeypatch, tmp_path, walk, acquirer, prior_rows=[prior_row])
+    rows = build_with(
+        monkeypatch,
+        tmp_path,
+        walk,
+        acquirer,
+        prior_rows=[prior_row],
+        marked=change != "unmarked-prior",
+        replace_all=change == "replace-all",
+    )
     assert calls == [VOLUME_URL]
     placed = rows[GRANULE["granuleId"]]
     assert (placed["part"], placed["cfr_ref"], placed["last_modified"]) == ("1", "1-1.1", PACKAGE["lastModified"])
+    assert placed["heading"] == GRANULE["title"]
     assert set(rows) == {row["granuleId"] for row in listed}
+    assert is_marked(tmp_path)
+
+
+def test_unmarked_prior_stays_unmarked_while_any_package_keeps_unplaced_rows(monkeypatch, tmp_path):
+    acquirer, _calls = volumes((404, "text/html", b"not found"))
+    walk = Transport(page("packages", [PACKAGE]), page("granules", [GRANULE]))
+    build_with(monkeypatch, tmp_path, walk, acquirer, prior_rows=[placed_prior()], marked=False)
+    assert not is_marked(tmp_path)
+
+
+def test_prior_index_package_rows_are_dropped(monkeypatch, tmp_path):
+    """GPO-CFR-INDEX-2025's rows are not CFR sections; the walk skips the package and the table drops them."""
+    index = build._shape(
+        {"granuleId": "GPO-CFR-INDEX-2025-1", "_package_id": "GPO-CFR-INDEX-2025", "dateIssued": "2025"}
+    )
+    acquirer, _calls = volumes()
+    rows = build_with(
+        monkeypatch,
+        tmp_path,
+        Transport(page("packages", [])),
+        acquirer,
+        prior_rows=[index, placed_prior()],
+        marked=True,
+    )
+    assert set(rows) == {GRANULE["granuleId"]}
+    assert is_marked(tmp_path)

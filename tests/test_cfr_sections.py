@@ -16,6 +16,8 @@ from pathlib import Path
 import pytest
 from loguru import logger
 
+from spicy_regs.ontology.citations import parse_cfr_citation
+from spicy_regs.pipelines.rollups import cfr_sections as rollup
 from spicy_regs.sources.cfr_sections import API_KEY_ENV_VARS, CfrSectionsError, CfrSectionsReader, _resolve_api_key
 from spicy_regs.transforms.build_cfr_sections import COLUMNS, _cfr_ref, _shape, annual_volume, place_sections
 
@@ -317,13 +319,17 @@ def test_non_section_and_unscanned_granules_keep_the_identifier_path():
         "CFR-2025-title41-vol1",
         "part50",  # a NODE: Title 41's compound part stays cut at the hyphen (documented limit)
         "part50-201-toc-id5",
-        "sec50-201-1-app1",  # a section's appendix: the scan holds only sections
+        "sec50-201-1-app1",  # an appendix of § 50-201.1, which the excerpt holds
+        "sec50-201-2-app1",  # an appendix of a section the excerpt does not hold
         "sec50-201-2",  # a plain section token the excerpt does not hold
     )
     assert (placed["part50"]["part"], placed["part50"]["cfr_ref"]) == ("50", "41-50")
     assert placed["part50-201-toc-id5"]["part"] == "50"
-    appendix = placed["sec50-201-1-app1"]
-    assert (appendix["part"], appendix["section"], appendix["cfr_ref"]) == ("50", "201-1-app1", "41-50.201-1-app1")
+    # The held host section lends its part; the appendix's other values stay as its identifier spells them.
+    hosted = placed["sec50-201-1-app1"]
+    assert (hosted["part"], hosted["section"], hosted["cfr_ref"]) == ("50-201", "201-1-app1", "41-50.201-1-app1")
+    appendix = placed["sec50-201-2-app1"]
+    assert (appendix["part"], appendix["section"], appendix["cfr_ref"]) == ("50", "201-2-app1", "41-50.201-2-app1")
     unheld = placed["sec50-201-2"]
     assert (unheld["part"], unheld["section"], unheld["cfr_ref"]) == (None, "50-201-2", None)
 
@@ -394,3 +400,47 @@ def test_a_volume_without_sections_places_nothing():
 def test_annual_volume_reads_only_volume_package_ids(package_id, volume):
     selection = annual_volume(package_id)
     assert (None if selection is None else (selection.year, selection.title, selection.volume)) == volume
+
+
+# -- the Federal Register join key ------------------------------------------
+
+
+def test_title_43_cfr_ref_is_the_federal_register_key():
+    """Ruling 5: the printed citation joins; the FR side reads "43 CFR 1601.0-1" as 43-1601.0-1."""
+    placed, _warnings = _place("CFR-2025-title43-vol2", "sec1601-0-1")
+    [citation] = parse_cfr_citation("43 CFR 1601.0-1")
+    assert citation.cfr_ref == placed["sec1601-0-1"]["cfr_ref"] == "43-1601.0-1"
+    assert placed["sec1601-0-1"]["part"] == "1600"
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="plan A7: the Federal Register key cuts Title 41's compound parts ('41 CFR 50-201.1' reads as 41-50)",
+)
+def test_title_41_cfr_ref_is_the_federal_register_key():
+    placed, _warnings = _place("CFR-2025-title41-vol1", "sec50-201-1")
+    [citation] = parse_cfr_citation("41 CFR 50-201.1")
+    assert citation.cfr_ref == placed["sec50-201-1"]["cfr_ref"] == "41-50-201.1"
+
+
+# -- the rollup's replace_all input ------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"), [(None, False), ("", False), ("false", False), ("true", True), ("TRUE", True)]
+)
+def test_rollup_passes_replace_all_from_the_workflow_input(monkeypatch, tmp_path, raw, expected):
+    if raw is None:
+        monkeypatch.delenv("CFR_REPLACE_ALL", raising=False)
+    else:
+        monkeypatch.setenv("CFR_REPLACE_ALL", raw)
+    calls = []
+    monkeypatch.setattr(rollup, "build_cfr_sections", lambda output_dir, **kwargs: calls.append(kwargs) or output_dir)
+    rollup.CfrSectionsRollup(output_dir=tmp_path).build(tmp_path)
+    assert calls == [{"replace_all": expected}]
+
+
+def test_rollup_refuses_an_unreadable_replace_all(monkeypatch, tmp_path):
+    monkeypatch.setenv("CFR_REPLACE_ALL", "yes")
+    with pytest.raises(ValueError, match="CFR_REPLACE_ALL"):
+        rollup.CfrSectionsRollup(output_dir=tmp_path).build(tmp_path)

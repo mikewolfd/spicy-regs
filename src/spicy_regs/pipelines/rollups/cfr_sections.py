@@ -8,8 +8,11 @@ The base class still handles the shrink-guarded R2 upload of the single output.
 Section metadata + citations only (not full section text), with each
 package's section granules placed from one download of its annual volume XML.
 Requires an api.data.gov key (``DATA_GOV_API_KEY``); a keyless run refuses.
+``CFR_REPLACE_ALL=true`` (the workflow's ``replace_all`` dispatch input)
+re-places every listed package instead of only the changed ones.
 """
 
+import os
 from pathlib import Path
 from typing import ClassVar
 
@@ -25,7 +28,15 @@ class CfrSectionsRollup(RollupPipeline):
     output: ClassVar[str] = "cfr_sections.parquet"
 
     def build(self, output_dir: Path) -> Path:
-        return build_cfr_sections(output_dir)
+        return build_cfr_sections(output_dir, replace_all=_flag_env("CFR_REPLACE_ALL"))
+
+
+def _flag_env(name: str) -> bool:
+    """``true`` or ``false`` (any case; blank is false), refusing anything else."""
+    raw = os.environ.get(name, "").strip().lower()
+    if raw not in ("", "true", "false"):
+        raise ValueError(f"{name} must be true or false, got {raw!r}")
+    return raw == "true"
 
 
 app = make_rollup_app(CfrSectionsRollup)
