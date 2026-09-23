@@ -537,6 +537,23 @@ wheels = [
 ]
 
 [[package]]
+name = "indexed-bzip2"
+version = "1.7.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/3a/cd/2b9b5b0ecc9a646e33ba6bfcd53af055c3ee04955b539d0ab9c41202b0bc/indexed_bzip2-1.7.0.tar.gz", hash = "sha256:3fcdf8edf5d846c17d7200c024d447581a0723b55746d6fdcc610856ac33d42b", size = 254436 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/89/12/460771e117c9fe760244f1726be5850df1b0612a3059d033b5a9acf194b9/indexed_bzip2-1.7.0-cp312-cp312-macosx_10_15_x86_64.whl", hash = "sha256:33e906aa52a7d58c05b974dc21dac010415d6eb6bc5319db47cc975d37454a1e", size = 309554 },
+    { url = "https://files.pythonhosted.org/packages/19/cc/1a85c1883c2129f84441089aa8a0f36dcacdb2c19e6b3741f7a09ed69297/indexed_bzip2-1.7.0-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:77bd1567386c18a1cdc5e07e1bef8635731418e37ac75fb2c222d3316abd195e", size = 285851 },
+    { url = "https://files.pythonhosted.org/packages/0a/51/2a61ec85fee25295010006b20ce855ae8d74fb9b0ec87d29119c10cb44ab/indexed_bzip2-1.7.0-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:cf08be3e60e84a42e3f60a941020516c3b42ab129f573da642043183c30e2803", size = 3688512 },
+    { url = "https://files.pythonhosted.org/packages/97/b9/7cf79c04d883a997480003e6dcefeaaa1f78ea194b2abdb288470d8ae88b/indexed_bzip2-1.7.0-cp312-cp312-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:6a5a40d7f88836b5162df8bc4dcec5d309a1e511a090683c9a00794a842259c2", size = 3734217 },
+    { url = "https://files.pythonhosted.org/packages/b0/77/974285b9a4867fc04369ccbe463aa7497e47e95a007f9712be17dad6df58/indexed_bzip2-1.7.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:741dfc6beda9ffd35969585ffb0f6d7f5507033bae9d327e591bc4079a0f3492", size = 3577433 },
+    { url = "https://files.pythonhosted.org/packages/9f/a0/b9a72987fe6c267ae3e13848212e0aa86f99768bca839b56ef60cda0b251/indexed_bzip2-1.7.0-cp312-cp312-musllinux_1_2_aarch64.whl", hash = "sha256:80cafbac79ee52a0fbc4ef51fde384ec8d18b82595692d40e799a54b70720f89", size = 4273572 },
+    { url = "https://files.pythonhosted.org/packages/e7/b9/72f6f48682a8643e9c8c5f3449ca6afe6f4df7f92fac9c1c1a3f3f7b06d7/indexed_bzip2-1.7.0-cp312-cp312-musllinux_1_2_i686.whl", hash = "sha256:6243bcf9c49543bbf7914564b371aadebc6b6e76144bccfe799e3e9083828b02", size = 4553064 },
+    { url = "https://files.pythonhosted.org/packages/60/43/7bcc3babc2c1c17ecc568bbc12df6f05ba88ef40aca31502738b405dcc06/indexed_bzip2-1.7.0-cp312-cp312-musllinux_1_2_x86_64.whl", hash = "sha256:2cb41f771a62e8bc037878153839e056219c6b9c4e94d5776b271bc31cf0f4a3", size = 4451951 },
+    { url = "https://files.pythonhosted.org/packages/bb/41/30e24612e686847a2bf552670c2fe52f05d192307ad412756bcc2f5e2067/indexed_bzip2-1.7.0-cp312-cp312-win_amd64.whl", hash = "sha256:10ad685402183cb603862977857bb72c44ee3190515cc29fdea9fad449939057", size = 258997 },
+]
+
+[[package]]
 name = "iniconfig"
 version = "2.3.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1927,14 +1944,14 @@ s3 = [
 
 [[package]]
 name = "spicy-docs"
-version = "0.26.6"
-source = { path = "vendor/spicy_docs-0.26.6-py3-none-any.whl" }
+version = "0.27.0"
+source = { path = "vendor/spicy_docs-0.27.0-py3-none-any.whl" }
 dependencies = [
     { name = "jsonschema" },
     { name = "rulespec-artifacts" },
 ]
 wheels = [
-    { filename = "spicy_docs-0.26.6-py3-none-any.whl", hash = "sha256:ce319f2a068881abc46cc0e6eb102b318c4150f081d8497daf002214fe75bddb" },
+    { filename = "spicy_docs-0.27.0-py3-none-any.whl", hash = "sha256:c6133e34c646378bf9f133395f13f376ae80d2e2b77c79645bfbd6ab703e2029" },
 ]
 
 [package.optional-dependencies]
@@ -1946,6 +1963,11 @@ acquisition = [
 ]
 bill-diff = [
     { name = "deltatrack" },
+]
+courtlistener-local = [
+    { name = "duckdb" },
+    { name = "indexed-bzip2" },
+    { name = "pyarrow" },
 ]
 pdf = [
     { name = "pillow" },
@@ -1960,8 +1982,10 @@ requires-dist = [
     { name = "beautifulsoup4", marker = "extra == 'html'", specifier = "==4.14.3" },
     { name = "boto3", marker = "extra == 'acquisition'" },
     { name = "deltatrack", marker = "extra == 'bill-diff'", specifier = "==0.1.0" },
+    { name = "duckdb", marker = "extra == 'courtlistener-local'", specifier = ">=1.5.5,<2" },
     { name = "httpx", marker = "extra == 'acquisition'" },
     { name = "httpx", marker = "extra == 'pdf-gemini'", specifier = ">=0.28,<1" },
+    { name = "indexed-bzip2", marker = "extra == 'courtlistener-local'", specifier = ">=1.7,<2" },
     { name = "jsonschema", specifier = ">=4.23" },
     { name = "loguru", marker = "extra == 'acquisition'" },
     { name = "lxml", marker = "extra == 'reconstruct'", specifier = ">=6,<7" },
@@ -1969,6 +1993,7 @@ requires-dist = [
     { name = "ocrmac", marker = "sys_platform == 'darwin' and extra == 'pdf-apple'", specifier = ">=1.0.1,<2" },
     { name = "pillow", marker = "extra == 'pdf'", specifier = ">=12,<13" },
     { name = "polars", marker = "extra == 'public-table'" },
+    { name = "pyarrow", marker = "extra == 'courtlistener-local'" },
     { name = "pyarrow", marker = "extra == 'public-table'" },
     { name = "pymupdf", marker = "extra == 'pdf'", specifier = ">=1.28,<2" },
     { name = "pypdf", marker = "extra == 'pdf-pypdf'", specifier = ">=6,<7" },
@@ -1976,7 +2001,7 @@ requires-dist = [
     { name = "rulespec-artifacts", specifier = "==1.1.1" },
     { name = "tqdm", marker = "extra == 'acquisition'" },
 ]
-provides-extras = ["acquisition", "bill-diff", "html", "pdf", "pdf-apple", "pdf-gemini", "pdf-mlx", "pdf-pypdf", "pdf-rapidocr", "public-table", "reconstruct"]
+provides-extras = ["acquisition", "bill-diff", "courtlistener-local", "html", "pdf", "pdf-apple", "pdf-gemini", "pdf-mlx", "pdf-pypdf", "pdf-rapidocr", "public-table", "reconstruct"]
 
 [[package]]
 name = "spicy-regs"
@@ -2007,7 +2032,7 @@ source-readers = [
     { name = "pypdf" },
     { name = "rulespec-artifacts" },
     { name = "smart-open", extra = ["s3"] },
-    { name = "spicy-docs", extra = ["acquisition", "bill-diff", "pdf", "pdf-pypdf"] },
+    { name = "spicy-docs", extra = ["acquisition", "bill-diff", "courtlistener-local", "pdf", "pdf-pypdf"] },
 ]
 
 [package.dev-dependencies]
@@ -2031,7 +2056,7 @@ source-readers = [
     { name = "pypdf" },
     { name = "rulespec-artifacts" },
     { name = "smart-open", extra = ["s3"] },
-    { name = "spicy-docs", extra = ["acquisition", "bill-diff", "pdf", "pdf-pypdf"] },
+    { name = "spicy-docs", extra = ["acquisition", "bill-diff", "courtlistener-local", "pdf", "pdf-pypdf"] },
 ]
 
 [package.metadata]
@@ -2052,7 +2077,7 @@ requires-dist = [
     { name = "rulespec-artifacts", marker = "extra == 'source-readers'", path = "vendor/rulespec_artifacts-1.1.1-py3-none-any.whl" },
     { name = "sentence-transformers", marker = "extra == 'embed'" },
     { name = "smart-open", extras = ["s3"], marker = "extra == 'source-readers'", specifier = "==8.0.1" },
-    { name = "spicy-docs", extras = ["acquisition", "pdf", "pdf-pypdf", "bill-diff"], marker = "extra == 'source-readers'", path = "vendor/spicy_docs-0.26.6-py3-none-any.whl" },
+    { name = "spicy-docs", extras = ["acquisition", "pdf", "pdf-pypdf", "bill-diff", "courtlistener-local"], marker = "extra == 'source-readers'", path = "vendor/spicy_docs-0.27.0-py3-none-any.whl" },
     { name = "torch", marker = "extra == 'embed'" },
     { name = "tqdm" },
 ]
@@ -2077,7 +2102,7 @@ source-readers = [
     { name = "pypdf", specifier = "==6.14.2" },
     { name = "rulespec-artifacts", path = "vendor/rulespec_artifacts-1.1.1-py3-none-any.whl" },
     { name = "smart-open", extras = ["s3"], specifier = "==8.0.1" },
-    { name = "spicy-docs", extras = ["acquisition", "pdf", "pdf-pypdf", "bill-diff"], path = "vendor/spicy_docs-0.26.6-py3-none-any.whl" },
+    { name = "spicy-docs", extras = ["acquisition", "pdf", "pdf-pypdf", "bill-diff", "courtlistener-local"], path = "vendor/spicy_docs-0.27.0-py3-none-any.whl" },
 ]
 
 [[package]]
