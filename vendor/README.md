@@ -5,7 +5,14 @@ The optional `source-readers` extra enables the same readers for package install
 its wheels must be supplied explicitly until they are published in a registry.
 Base CLI and MCP installs do not require them.
 
-- `spicy_docs-0.28.3`: built from SpicyDocs `main` at `8474b5c`, with Rulespec Artifacts 1.1.1.
+- `spicy_docs-0.29.0`: built from SpicyDocs `main` at `58a68b7`, with Rulespec Artifacts 1.1.1.
+  Built September 23, 2026 UTC: **1,289,687 bytes**, SHA-256
+  `78e31d490c238e47503377f3343c95ab852ce1ebb235a73fab9ea79b35e6978d`. Adds the
+  Congress.gov amendment detail route (with an `amendment_type` parameter), which
+  states each amendment's sponsor and amended bill or amendment. Otherwise identical
+  to 0.28.3.
+
+- Previous `spicy_docs-0.28.3`: built from SpicyDocs `main` at `8474b5c`, with Rulespec Artifacts 1.1.1.
   Built September 23, 2026 UTC: **1,289,422 bytes**, SHA-256
   `3740987ec6d195752c8f5080e12c1c2e335de630e0b1c7fcdfc585a2223467f0`. The comment
   acquisition policy is version 1.3 now that identical same-instant re-observations

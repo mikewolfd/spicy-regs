@@ -122,6 +122,14 @@ class ShiftingListingReader:
         self.urls: list[str] = []
 
     def records(self, route, url, *, max_pages=100):
+        if route.name == "amendment-detail":
+            number = url.split("?")[0].rsplit("/", 1)[1]
+            detail = {
+                "sponsors": [{"bioguideId": f"S{number}", "fullName": f"Sen. {number}", "party": "D"}],
+                "amendedBill": {"congress": 119, "type": "HR", "number": "1"},
+                "chamber": "Senate",
+            }
+            return iter((SimpleNamespace(records=(detail,) if number != "404" else (), declared_count=None),))
         self.urls.append(url)
         records, declared = self.passes.pop(0)
         return iter((SimpleNamespace(records=tuple(records), declared_count=declared),))
@@ -372,3 +380,24 @@ def test_committee_reports_skips_packages_it_holds(tmp_path, monkeypatch):
     )
     assert "CRPT-119hrpt1" not in acquirer.requested, "a held package must not be re-fetched"
     assert "CRPT-119hrpt2" in acquirer.requested
+
+
+def test_amendments_carry_the_detail_routes_sponsor_and_amended_bill(tmp_path, monkeypatch):
+    """The list route states neither; each amendment's detail record does."""
+    from spicy_regs.transforms.build_amendments import build_amendments
+
+    monkeypatch.setenv("BILL_FAMILY_CONGRESSES", "119")
+    reader = ShiftingListingReader([([_amendment(7)], 1)])
+    rows = pq.read_table(build_amendments(tmp_path, reader=reader, download_prior=no_download)).to_pylist()
+    assert [(r["sponsor_bioguide_id"], r["amended_bill_id"], r["chamber"], r["url"]) for r in rows] == [
+        ("S7", "119-hr-1", "Senate", "https://api.congress.gov/v3/amendment/119/samdt/7?format=json")
+    ]
+
+
+def test_amendments_refuse_a_detail_that_answers_nothing(tmp_path, monkeypatch):
+    from spicy_regs.transforms.build_amendments import build_amendments
+
+    monkeypatch.setenv("BILL_FAMILY_CONGRESSES", "119")
+    reader = ShiftingListingReader([([_amendment(404)], 1)])
+    with pytest.raises(RuntimeError, match="answered 0 records"):
+        build_amendments(tmp_path, reader=reader, download_prior=no_download)

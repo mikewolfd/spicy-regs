@@ -17,6 +17,10 @@ not a client-side filter over a full walk. With no prior table the window is
 open and the run is a full backfill. ``AMENDMENTS_SINCE``/``AMENDMENTS_UNTIL``
 drive a chunk explicitly.
 
+Each amendment's list record is overlaid with its detail record, which alone
+states the sponsor and the amended bill or amendment: one paced detail request
+per amendment in the window.
+
 Needs an api.data.gov key, resolved from the environment by the same helper
 the existing Congress.gov ingest uses. A keyless run raises rather than
 publishing a truncated table.
@@ -54,7 +58,9 @@ BUDGET = PagedJsonBudget(
     max_requests=5,  # measured retry bound: see fork-execution-2026-09-21/retry-measurement-2026-09-22
     max_page_bytes=8 * 1024 * 1024,
     timeout_seconds=60.0,
-    min_request_interval_seconds=0.2,
+    # Every amendment in the window costs one detail request; api.data.gov allows 5,000 an
+    # hour per key, so a full Congress (7,066 in the 119th) paces under that bound.
+    min_request_interval_seconds=0.75,
 )
 
 #: Pages of ``MAX_LIMIT`` records per Congress. The 119th had ~5,600 amendments
@@ -113,7 +119,7 @@ POOLED_SORTS = ("updateDate desc", "updateDate asc", "updateDate desc", "updateD
 
 
 def _pooled_walk(reader: ListingSource, route, *, congress, since: date | None, until: date | None) -> list[dict]:
-    """Every amendment the query declares, pooled over :data:`POOLED_SORTS` passes; the later ``update_date`` wins."""
+    """Every list record the query declares, pooled over :data:`POOLED_SORTS` passes; the later ``updateDate`` wins."""
 
     def passes():
         for sort in POOLED_SORTS:
@@ -125,19 +131,40 @@ def _pooled_walk(reader: ListingSource, route, *, congress, since: date | None, 
                 from_datetime=_instant(since),
                 to_datetime=_instant(until, end=True),
             )
-            rows, declared = [], None
+            records, declared = [], None
             for page in reader.records(route, url, max_pages=MAX_PAGES):
                 if getattr(page, "declared_count", None) is not None:
                     declared = page.declared_count
-                rows.extend(shape_amendment(record) for record in page.records)
-            yield rows, declared
+                records.extend(dict(record) for record in page.records)
+            yield records, declared
 
     return pool_passes(
         passes(),
-        key=lambda row: (row["congress"], row["amendment_type"], row["amendment_number"]),
-        newer=lambda held, row: (row["update_date"] or "") >= (held["update_date"] or ""),
+        key=lambda r: (str(r.get("congress")), str(r.get("type") or "").lower(), str(r.get("number"))),
+        newer=lambda held, r: str(r.get("updateDate") or "") >= str(held.get("updateDate") or ""),
         label=f"Amendments: Congress {congress}",
     )
+
+
+def _with_detail(reader: ListingSource, record: dict) -> dict:
+    """The list record overlaid with its detail record.
+
+    The list route states no sponsors and no amended bill or amendment; the detail route
+    states them and omits ``latestAction`` and ``description``, which the list states
+    (measured 2026-09-23), so each keeps what the other lacks. A detail that answers
+    nothing refuses the run rather than publishing a row without its sponsor.
+    """
+    route = LIST_ROUTES["amendment-detail"]
+    url = list_route_url(
+        route,
+        congress=int(record["congress"]),
+        amendment_type=str(record["type"]).lower(),
+        number=int(record["number"]),
+    )
+    details = [detail for page in reader.records(route, url, max_pages=1) for detail in page.records]
+    if len(details) != 1:
+        raise RuntimeError(f"Amendments: detail for {url} answered {len(details)} records")
+    return {**record, **details[0]}
 
 
 def build_amendments(
@@ -180,7 +207,7 @@ def build_amendments(
     rows: list[dict] = []
     for congress in congresses_from_env():
         pooled = _pooled_walk(reader, route, congress=congress, since=since, until=until)
-        rows.extend(pooled)
+        rows.extend(shape_amendment(_with_detail(reader, record)) for record in pooled)
         logger.info("Amendments: Congress {} — {:,} amendments in window", congress, len(pooled))
 
     logger.info("Amendments: {:,} rows this run", len(rows))
