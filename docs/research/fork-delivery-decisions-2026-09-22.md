@@ -82,4 +82,9 @@ mislabelled 0.26.5 wheel stays here only for replay.
 - **Decision 10, 2026-09-23 (continued):** lobbying follows SAM. The keyless
   bounded initial load of 27,863 filings posted 2026-07-01 to 2026-09-22 is
   published (`a9fd5de6…`). Its schedule resumes once the pacing fix is pushed.
+- **Decision 10, 2026-09-23 (secrets):** the fork now has `SAM_API_KEY` (the
+  workspace SAM key, which reached the Entity API) and `LDA_API_KEY` (a new
+  lda.gov key: accepted, where a wrong key answers 401). Both workflows stay
+  disabled until this session's fixes are pushed. Local runs read
+  `LDA_API_KEY`; the workspace `.env` names the key `LDA_KEY`.
 
