@@ -165,27 +165,16 @@ spicysearch holds a copy pinned by the digest in `catalog.json.sha256`; it
 cannot import `spicy_regs`. Changing the file means the consumer must
 re-vendor, so bump `CATALOG_FORMAT_VERSION` when the shape changes and say so.
 
-**Outstanding as of 2026-09-19: spicysearch must re-vendor.** Hosting the
-BillTrax-derived tables took the catalog from 24 classes to 45 and
-`congress_bills` from 10 columns to 48.
-`spicysearch/vendor/spicy-regs-catalog-dictionary.json` is still the 24-class
-copy (`01c77a4a…`, verified 2026-09-19) and no longer matches the 47-class
-catalog this repository publishes. **The current digest is whatever
-`data_dictionary/catalog.json.sha256` holds** — read the file; it moves
-whenever the dictionary does, which is often, and a value quoted here is stale
-by the next `generate`. This paragraph quoted one twice and was wrong both
-times: it recorded `d08822d8…`, which `2eaffe0` had already moved by wiring the
-sealed body preference and `473966f` again by correcting coverage statements;
-the linkage work below moved it again by adding `bill_vote_references`; and the
-commit that wrote "a note quoting one is stale as soon as it is written" quoted
-one, which the very next `generate` in the same review round invalidated. The
-commit chain is the durable part, because those are facts that do not move — a
-consumer re-vendoring reads the file.
-`CATALOG_FORMAT_VERSION` stays `3` on
-purpose — no field changed shape, so a reader that only reads fields keeps
-working — but the `kind` vocabulary gained a fifth value, `sampled`, which a
-consumer branching on `kind` must handle before it re-vendors. This is a
-consumer-side change in another repository and is not done here.
+**The current digest is whatever `data_dictionary/catalog.json.sha256`
+holds** — read the file. It moves whenever the dictionary does, and a digest
+quoted in prose is stale by the next `generate`; this section quoted one
+several times and was wrong each time. SpicySearch records the commit it copied
+in `vendor/spicy-regs-dictionary-source-commit.txt`; when
+`git diff <that commit> HEAD -- data_dictionary/catalog.json` is non-empty, it
+must re-vendor. Nothing in SpicySearch reads the file today and no consumer
+branches on `kind`, so the fifth `kind` value, `sampled` (added with
+`CATALOG_FORMAT_VERSION` kept at `3` because no field changed shape), needs no
+handling there; a future reader that branches on `kind` must handle it.
 It declares only what this repo *publishes* — it carries no searchability
 field, and a test forbids even the words, because whether a class is indexed is
 the serving side's fact.
