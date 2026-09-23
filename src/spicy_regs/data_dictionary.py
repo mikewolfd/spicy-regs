@@ -169,6 +169,7 @@ TABLES: tuple[str, ...] = (
     "gao_reports",
     "crs_reports",
     "court_dockets",
+    "court_docket_groups",
     "court_opinion_clusters",
     "court_opinion_bodies",
     "usaspending_recipients",
@@ -219,6 +220,7 @@ MCP_QUERYABLE: frozenset[str] = frozenset(
         "gao_reports",
         "crs_reports",
         "court_dockets",
+        "court_docket_groups",
         "court_opinion_clusters",
         "court_opinion_bodies",
         "usaspending_recipients",
@@ -523,6 +525,22 @@ DERIVED_SCHEMAS: dict[str, list[tuple[str, str]]] = {
         ("pacer_case_id", "VARCHAR"),
         ("date_created", "VARCHAR"),
         ("absolute_url", "VARCHAR"),
+    ],
+    # Derived from the verified CourtListener bulk dockets edition: same-case
+    # record groups for court_dockets (the publisher's doppeldocket problem —
+    # PACER main + per-defendant sub-dockets, FLP wiki / issue #2185). The
+    # publisher's own parent_docket_id is blank in the edition, so the parent
+    # is inferred: lowest pacer_case_id among the group's published members.
+    # Rows only exist for grouped dockets; the parent row carries
+    # parent_cl_docket_id = cl_docket_id. confidence_tier separates tight-pacer
+    # doppeldockets from wide-spread refilings.
+    "court_docket_groups": [
+        ("cl_docket_id", "VARCHAR"),
+        ("parent_cl_docket_id", "VARCHAR"),
+        ("confidence_tier", "VARCHAR"),
+        ("group_size", "BIGINT"),
+        ("edition", "VARCHAR"),
+        ("rule_version", "VARCHAR"),
     ],
     # Ingested from the USASpending.gov /api/v2/recipient/ endpoint
     # (build_usaspending_recipients); a federal-award recipient reference

@@ -2159,6 +2159,51 @@
     "grain": null,
     "identity_columns": []
   },
+  "court_docket_groups": {
+    "table": "court_docket_groups",
+    "label": "Court docket same-case groups",
+    "summary": "Same-case record groups for the APA litigation dockets: which published docket rows are alternative records of one case, and which row is the group's parent. Join on cl_docket_id; the parent row carries parent_cl_docket_id equal to cl_docket_id. This is an inferred mapping, not publisher data; it is edition-scoped (2026-06-30) and does not cover dockets published after the edition until recomputed.",
+    "coverage": "Not a range. A derived mapping over the published enriched `court_dockets` selection (11,459 rows): 403 same-case groups link 901 docket rows. The CourtListener bulk edition leaves its own parent_docket_id blank in every row, so the parent is inferred from the publisher's PACER mechanics (one main case created first, plus per-defendant sub-dockets — the documented doppeldocket problem, FLP wiki / GitHub issue #2185): group by (court_id, docket_number) with a single caption among published members, parent = lowest pacer_case_id in the group. confidence_tier separates tight-pacer doppeldockets from wide-spread refilings of one case. Groups with multiple captions (docket-number reuse) or no pacer ids stay ungrouped and have no row.",
+    "kind": "not_a_range",
+    "measured_on": "2026-09-22",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "cl_docket_id",
+        "column_type": "VARCHAR",
+        "description": "CourtListener docket id of a grouped row in `court_dockets`. Primary key."
+      },
+      {
+        "column_name": "parent_cl_docket_id",
+        "column_type": "VARCHAR",
+        "description": "The group's parent docket id (lowest pacer_case_id among published group members). Equal to cl_docket_id on the parent's own row."
+      },
+      {
+        "column_name": "confidence_tier",
+        "column_type": "VARCHAR",
+        "description": "`doppeldocket` when the group's pacer ids are contiguous (spread <= 5), `refiled` when the same case was refiled across a wider pacer spread."
+      },
+      {
+        "column_name": "group_size",
+        "column_type": "BIGINT",
+        "description": "Number of published court_dockets rows in the same-case group."
+      },
+      {
+        "column_name": "edition",
+        "column_type": "VARCHAR",
+        "description": "The CourtListener bulk edition the grouping was computed from (`2026-06-30`)."
+      },
+      {
+        "column_name": "rule_version",
+        "column_type": "VARCHAR",
+        "description": "Version of the grouping rule (1: single-caption group, parent = lowest pacer_case_id)."
+      }
+    ],
+    "grain": "One row per grouped court_dockets row; absent rows have no group.",
+    "identity_columns": [
+      "cl_docket_id"
+    ]
+  },
   "court_opinion_clusters": {
     "table": "court_opinion_clusters",
     "label": "Court decisions and their opinion groups",

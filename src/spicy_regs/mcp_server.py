@@ -63,6 +63,7 @@ TABLES = (
     "gao_reports",
     "crs_reports",
     "court_dockets",
+    "court_docket_groups",
     "court_opinion_clusters",
     "court_opinion_bodies",
     "usaspending_recipients",
