@@ -9,7 +9,7 @@ Public data destination: `https://pub-72e95c0c20a84508b42b03a6ff6d55f8.r2.dev`. 
 - **Legislative:** laws; committee rosters; amendments with their sponsor and amended-bill detail; the reconciled bill family (decision 1) and its subjects; member vote terms (decision 2); roll-call bill links.
 - **Courts and other sources:** the court citation tables and opinion index; CRS reports; FCC proceedings and filings; bounded SAM and lobbying loads (decision 10).
 
-CFR has a verified bounded correction; its wider ancestry rule is open (see the September 23 continuation). Committee meetings, house communications, record issues, print citations, Senate expenditures and GAO reports were published by scheduled runs and are source-qualified; the qualification receipts are in `scheduled-published-qualification/` under the execution receipts. The latest press generation has a verified bounded relationship correction. Several fork workflows are disabled until this session's commits are pushed; the continuation names each one.
+CFR's parts are wrong in titles 41, 43 and 14 vol 4, and the source-backed fix is designed (see the September 23 continuation). The September 23 parsing survey found join, text and key limits in some qualified tables; each affected row names them. Committee meetings, house communications, record issues, print citations, Senate expenditures and GAO reports were published by scheduled runs and are source-qualified; the qualification receipts are in `scheduled-published-qualification/` under the execution receipts. The latest press generation has a verified bounded relationship correction. Several fork workflows are disabled until this session's commits are pushed; the continuation names each one.
 
 | Task | Producer | Output | Delivery state |
 | --- | --- | --- | --- |
@@ -25,7 +25,7 @@ CFR has a verified bounded correction; its wider ancestry rule is open (see the 
 | T15 | `run-rollup-lifecycles` | `rulemaking_lifecycles.parquet` | withdrawn 2026-09-23 (decision 4): the 2026-09-22 scheduled run had published generation `2f001194…` (26,519 rows); the family was conditionally removed from the index, the workflow disabled and unscheduled; pairing semantics remain blocked |
 | T15 | `run-rollup-discovery-signals` | `discovery_signals.parquet` | generated and verified |
 | T15 | `run-rollup-fr-docket-links` | `fr_docket_links.parquet` | qualified 2026-09-23 against the audited parent: generation `92f99b00…` (899,227 rows) equals a separate re-derivation from `federal_register` `731984ca…` row for row |
-| T11 | `run-rollup-cfr-sections` | `cfr_sections.parquet` | published bounded correction verified; the current code's rule (`cac7615`) would null part and citation on 253,758 of 319,507 rows, most of them correct, so it is not applied further (details below) |
+| T11 | `run-rollup-cfr-sections` | `cfr_sections.parquet` | published bounded correction verified, but parts are wrong in three shapes: title 43's subpart numbers read as parts (3,018 sections), title 41's compound parts cut at the hyphen (4,732 rows), and the title 14 vol 4 correction, which nulled 1,434 parts that were right. The fix reads each volume's `PART` heading (details below). The current code's rule (`cac7615`) would null 253,758 rows, so the workflow stays off |
 | T16 | `run-rollup-congress-bills` | `congress_bills.parquet` | the narrow writer's table is the reconciled family's `congress_bills` (`a846cb44…`); its workflow is disabled until `6d34a1b` (url_source) is pushed |
 | T11 | `run-rollup-unified-agenda` | `unified_agenda.parquet` | generated and verified for retained edition |
 | T11 | `run-rollup-federal-register` | `federal_register.parquet` | source-audited 2026-09-23: generation `731984ca…` (1,009,005 rows, 1994-01-03 to 2026-09-22); every month's rows equal the publisher's facet and 74 whole days match in identity and every cell (details below) |
@@ -61,7 +61,7 @@ CFR has a verified bounded correction; its wider ancestry rule is open (see the 
 | T09 | `run-rollup-bill-family` | `bill_family_archives.parquet` | published 2026-09-23 (decision 1) in reconciled generation `a846cb44…`: the accepted 419,839-bill candidate plus the live scheduled 119th rows; conservation and row provenance verified (details below) |
 | T09 | `run-rollup-bill-family` | `bill_vote_references.parquet` | published 2026-09-23 (decision 1) in reconciled generation `a846cb44…`: the accepted 419,839-bill candidate plus the live scheduled 119th rows; conservation and row provenance verified (details below) |
 | T09 | `run-rollup-bill-family` | `bill_family_backfills.parquet` | published 2026-09-23 (decision 1) in reconciled generation `a846cb44…`: the accepted 419,839-bill candidate plus the live scheduled 119th rows; conservation and row provenance verified (details below) |
-| T09 | `run-rollup-bill-family` | `bill_family_backfill_walks.parquet` | published 2026-09-23 (decision 1) in reconciled generation `a846cb44…`: the accepted 419,839-bill candidate plus the live scheduled 119th rows; conservation and row provenance verified (details below) |
+| T09 | `run-rollup-bill-family` | `bill_family_backfill_walks.parquet` | published 2026-09-23 (decision 1) in reconciled generation `a846cb44…`: the accepted 419,839-bill candidate plus the live scheduled 119th rows; conservation and row provenance verified (details below); its `date` is the UTC day, which differs from the chamber's vote day on 91 of 847 references (survey A11) |
 | T08 | `run-rollup-press-releases` | `press_releases.parquet` | published bounded relationship correction verified |
 | T08 | `run-rollup-amendments` | `amendments.parquet` | republished with detail 2026-09-23: generation `f8c3943a…`, 7,095 = the source's declared 119th count, one detail response per amendment; every cell matches the retained list and detail responses; 89 Rules Committee amendments have no member sponsor |
 | T08 | `run-rollup-member-vote-terms` | `member_vote_terms.parquet` | added and published 2026-09-23 (decision 2): generation `890481eb…`, 382,136 rows; exceptions equal the independent join replay row for row |
@@ -77,7 +77,7 @@ CFR has a verified bounded correction; its wider ancestry rule is open (see the 
 | T08 | `run-rollup-print-citations` | `house_activity_reports.parquet` | generated and verified; replayed byte-identical |
 | T08 | `run-rollup-print-citations` | `budget_volumes.parquet` | generated and verified; replayed byte-identical |
 | T08 | `run-rollup-print-citations` | `bill_committee_actions.parquet` | generated and verified; replayed byte-identical |
-| T08 | `run-rollup-print-citations` | `document_citations.parquet` | generated and verified; replayed byte-identical |
+| T08 | `run-rollup-print-citations` | `document_citations.parquet` | generated and verified; replayed byte-identical. SpicyDocs' reader leaves 301 of 2,741 `usc_section` and 4 of 41 `cfr_section` keys unjoinable (trailing punctuation, dashes, unsplit ranges; survey A10) |
 | T08 | `run-rollup-senate-expenditures` | `senate_expenditures.parquet` | generated and verified; replayed byte-identical |
 | T08 | `run-rollup-laws` | `laws.parquet` | qualified 2026-09-23 by clean source replay: all 113 laws match in every native cell; only capture times differ |
 | T08 | `run-rollup-laws` | `law_code_sections.parquet` | qualified 2026-09-23 by clean source replay: all 3,655 rows match in every native cell |
@@ -93,13 +93,13 @@ CFR has a verified bounded correction; its wider ancestry rule is open (see the 
 | T06 | `run-pipeline` | `documents.parquet` | generated and verified |
 | T06 | `run-pipeline` | `comments_index.parquet` | published 2026-09-23 with the comments cohorts: live `ba31f99f…`, 112,885 groups summing to all 23,890,403 comments |
 | T06 | `run-pipeline` | `comments/agency_code=<agency>/docket_id=<docket>/year=<year>/month=<month>/part-0.parquet` | unproduced on the fork (probed keys answer 404); the comments deliveries wrote `comments.parquet` and its index directly |
-| T07 | `publish-comments-mirror.yml` | `comments.parquet` | published 2026-09-23 (decision 7): live `fca7afb7…`, 23,890,403 rows across all 133 comment-bearing agencies; six plus ACF re-verified and repaired from native source after independent review; the other ~126 carry the retained parent's rows and await the same repair |
+| T07 | `publish-comments-mirror.yml` | `comments.parquet` | published 2026-09-23 (decision 7): live `fca7afb7…`, 23,890,403 rows across all 133 comment-bearing agencies; six plus ACF re-verified and repaired from native source after independent review; the other ~126 carry the retained parent's rows and await the same repair. Attachment text is joined in string order, so up to 597 comments with 10 or more attachments may read out of order, and no text carries its extraction record (survey A6) |
 | T07 | `publish-comments-mirror.yml` | `comments/agency/agency_code=<agency>/part-0.parquet` | blocked: the mirror refuses without `R2_CATALOG_*`, which the fork lacks, and every scheduled run fails on that check |
-| T17 | `materialize-rulemaking` | `rule_targets.parquet` | bootstrapped 2026-09-23 as snapshot `snapshot_0e799850…` (517,311 rows across 142,525 dockets) against the five audited parents; references, intervals and sampled source rows verified (details below) |
-| T17 | `materialize-rulemaking` | `proceedings.parquet` | bootstrapped 2026-09-23 as snapshot `snapshot_0e799850…` (515,121 rows) against the five audited parents; references, intervals and sampled source rows verified (details below) |
+| T17 | `materialize-rulemaking` | `rule_targets.parquet` | bootstrapped 2026-09-23 as snapshot `snapshot_0e799850…` (517,311 rows across 142,525 dockets) against the five audited parents; references, intervals and sampled source rows verified (details below). Joins are under-resolved: 40,340 of its 49,403 `missing` FR references exist once zero-padding is removed, and labelled FR docket values never join (survey A7) |
+| T17 | `materialize-rulemaking` | `proceedings.parquet` | bootstrapped 2026-09-23 as snapshot `snapshot_0e799850…` (515,121 rows) against the five audited parents; references, intervals and sampled source rows verified (details below). Labelled FR docket values never join, and event days are UTC days (survey A7, A12) |
 | T17 | `materialize-rulemaking` | `regulatory_agenda_items.parquet` | bootstrapped 2026-09-23 as snapshot `snapshot_0e799850…` (38,403 items) against the five audited parents; references, intervals and sampled source rows verified (details below) |
 | T17 | `materialize-rulemaking` | `agenda_item_proceedings.parquet` | bootstrapped 2026-09-23 as snapshot `snapshot_0e799850…` (155,628 relationships) against the five audited parents; references, intervals and sampled source rows verified (details below) |
-| T17 | `materialize-rulemaking` | `comment_periods.parquet` | bootstrapped 2026-09-23 as snapshot `snapshot_0e799850…` (306,582 periods) against the five audited parents; references, intervals and sampled source rows verified (details below) |
+| T17 | `materialize-rulemaking` | `comment_periods.parquet` | bootstrapped 2026-09-23 as snapshot `snapshot_0e799850…` (306,582 periods) against the five audited parents; references, intervals and sampled source rows verified (details below). Labelled FR docket values never join (survey A7) |
 
 ## Scope and evidence gaps
 
@@ -442,7 +442,7 @@ Receipts: `members-qualification/`, `congressional-status/`, `native-vote-varian
     `feed_summary`'s ordering broke `modify_date` ties arbitrarily, so equal
     inputs gave different bytes; `87cf257` orders by `docket_id` as well. See
     `full-comments/acf-campaign/`.
-- **CFR part ancestry (T11): not extended; the current rule regresses.**
+- **CFR part ancestry (T11): the live parts are wrong in three shapes; the fix is designed.**
   - **What the rule does.** Since `cac7615`, the builder takes no part from a
     section granule id ("a section token alone does not establish its enclosing
     part"). Re-applying that rule to every row of the live `cfr_sections`
@@ -452,15 +452,35 @@ Receipts: `members-qualification/`, `congressional-status/`, `native-vote-varian
     granule summary states the literal designation: `CFR-2026-title10-vol2-sec100-1`
     has `granuleNumber` `§ 100.1` (part 100), while
     `CFR-2025-title14-vol4-sec19-8-1` has `19-8.1`, no `§` and no part. The
-    title-14 correction was right for that volume and wrong as a general rule.
-  - **What a source-backed rule needs.** The granule list does not carry
-    `granuleNumber`, and the id cannot tell the two shapes apart. Getting it
-    means one summary request per granule (about 64 hours at the key's rate) or
-    parsing each volume's XML section numbers (about 260 packages).
+    granule list does not carry `granuleNumber`, and the id cannot tell the two
+    shapes apart.
+  - **What the volume XML shows.** The 262 annual volume XMLs are retained, and
+    one streaming scan compared each section's printed number with its
+    enclosing `PART` heading. (A 263rd download, `GPO-CFR-INDEX-2025.xml`, is
+    an HTML page the fetch recorded as a 200 with a digest; it is not a
+    volume.) The live parts are wrong in three shapes:
+    - Title 43 numbers sections by subpart: § 1601.0-1 is in part 1600, not
+      1601 (3,018 sections). eCFR's ancestry API confirms it.
+    - Title 41's compound parts are cut at the hyphen: `50` for `50-201`
+      (4,732 rows). Every GovInfo-derived field splits there too; the heading
+      and eCFR keep `50-201`.
+    - The title 14 vol 4 correction nulled 1,444 parts, but 1,434 of them
+      matched the heading; only the ten `19-8.x` sections (part 241, not 19)
+      were wrong.
+
+    A first rule that took the part from the section number's prefix was
+    rejected: it keeps title 43's error and title 41's truncation, and agreeing
+    with RefSpec's grammar proved nothing because both read the same prefix.
+  - **The fix.** A section-ancestry scan in SpicyDocs' annual CFR reader
+    returns each section's heading part, and `build_cfr_sections` reads it:
+    9,250 part changes against the live table (consolidation plan A8; ruling 5
+    decides title 43's `cfr_ref`). See `cfr-ancestry-2026-09-23/` and
+    the parsing survey (spicy-docs `docs/research/parsing-survey-2026-09-23.md`) §4.
   - **Hazard.** Until then, a scheduled rebuild with the current code would
     publish nulls where the table now holds correct parts. `Rollup —
-    cfr_sections` is therefore disabled on the fork: its pushed code includes
-    `cac7615`, and its last run, on 2026-09-22, failed.
+    cfr_sections` is therefore disabled on the fork, and stays off after the
+    push until the fix lands: both the pushed and the local code include
+    `cac7615`. Its last run, on 2026-09-22, failed.
 - **Lobbying initial load (decision 10).** Keyless lda.gov throttles after 15
   quick requests, so the builder now paces keyless pages at 4 s (`60443e7`).
   The real builder ran window by window with its own 30-day bound and 7-day
@@ -508,3 +528,22 @@ Receipts: `members-qualification/`, `congressional-status/`, `native-vote-varian
     spicy-docs commits were unpushed at the sweep). `GEMINI_API_KEY` and
     `R2_CATALOG_*` are absent, Zyte is unwired, Pages is not enabled, and every
     recent dictionary deploy fails. See `rerun-check-2026-09-23/`.
+- **Parsing survey (2026-09-23 evening).** Six read-only scouts surveyed every
+  parser in the stack. SpicyDocs' `docs/research/parsing-survey-2026-09-23.md`
+  records the findings, and the consolidation plan beside it carries them as
+  items A5–A12 and B6–B12. The ones that touch this fork:
+  - **A key in local logs.** `bill_subjects` sends the Congress.gov key in the
+    query, and its logged 4xx errors carry the URL. No retained log holds a
+    key, and GitHub Actions masks it in CI (A5).
+  - **Published tables with limits.** `rule_targets`, `proceedings` and
+    `comment_periods` drop labelled FR docket values (48,003 FR–docket link
+    rows join as written; 86,787 more would join without the label), and
+    `rule_targets` misses zero-padded FR numbers (A7). Comment attachment text
+    can be out of order (A6). `document_citations` keys and
+    `bill_vote_references` days are recorded on their rows (A10, A11). The CFR
+    parts are in the CFR bullet above (A8).
+  - **Where the fixes go.** SpicyDocs is the only place shared parsing can live
+    without a dependency cycle, and spicy-regs cannot install RefSpec today
+    because RefSpec pins SpicyDocs 0.26.6. Each table change waits on a ruling
+    in the plan (5–7). The scripts and outputs are in
+    `parsing-survey-2026-09-23/`.

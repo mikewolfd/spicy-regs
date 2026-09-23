@@ -98,7 +98,7 @@ mislabelled 0.26.5 wheel stays here only for replay.
     `lobbying_filings` and `sam_entities`.
   - `Rollup — cfr_sections` stays off after the push too: the local code still
     nulls the part of most section granules (`cac7615`) until the ancestry
-    rule is fixed (T11).
+    fix lands (T11; SpicyDocs consolidation plan A8).
   - `court_opinion_bodies` (decision 6; the push deletes it) and
     `rulemaking_lifecycles` (decision 4) stay off by decision.
 
