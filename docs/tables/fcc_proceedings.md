@@ -4,9 +4,9 @@
 
 **FCC proceedings**
 
-One row per FCC proceeding (the FCC's docket equivalent, e.g. `17-108`), ingested from the FCC ECFS public API (`/proceedings`) by `build_fcc_proceedings`. The FCC does not participate in regulations.gov — its rulemaking dockets and public comments live in ECFS — so this table extends the dataset's docket universe to the FCC. Requires an api.data.gov key (`DATA_GOV_API_KEY`). Incremental by `date_created`, deduped on `name`. Proceedings with no created date are unreachable through the API's date-range queries and are not included (legacy shells with no filing activity). All columns are stored as VARCHAR.
+One row per FCC proceeding (the FCC's docket equivalent, e.g. `17-108`), ingested from the FCC ECFS public API (`/proceedings`) by `build_fcc_proceedings`. The FCC does not participate in regulations.gov — its rulemaking dockets and public comments live in ECFS — so this table extends the dataset's docket universe to the FCC. Requires an api.data.gov key (`DATA_GOV_API_KEY`). Walked whole every run, so later closings and status changes are current. One row per docket `name`: ECFS holds more than one document for a few dockets (seven on 2026-09-23, three of them re-created 2026-09-21), and the row is the original docket, then the one ECFS edited last. A document with no docket name is left out (one, a 2017 stub). Proceedings with no created date are unreachable through the API's date-range queries and are not included (legacy shells with no filing activity). All columns are stored as VARCHAR.
 
-**Coverage.** True range. Proceedings created 1991-10-22 to 2026-09-02. *(measured 2026-09-06)*
+**Coverage.** True range. 21,683 docket names from 21,691 ECFS documents, created 1991-10-22 to 2026-09-22; single-document names matched the raw pages cell for cell. *(measured 2026-09-23)*
 
 - **Parquet file:** `fcc_proceedings.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
@@ -21,7 +21,7 @@ One row per FCC proceeding (the FCC's docket equivalent, e.g. `17-108`), ingeste
 | `bureau_name` | `VARCHAR` | Name of the FCC bureau that owns the proceeding (e.g. `Wireline Competition Bureau`). |
 | `rulemaking_or_docket` | `VARCHAR` | ECFS `flag_rulemaking_or_docket`: `R` for rulemakings (RM- numbers), `D` for dockets. |
 | `filing_status` | `VARCHAR` | ECFS filing-window status for the proceeding (e.g. `OPENALL`). |
-| `date_created` | `VARCHAR` | Timestamp the proceeding was created in ECFS (ISO 8601 string). Incremental cursor and sort key. |
+| `date_created` | `VARCHAR` | Timestamp the proceeding was created in ECFS (ISO 8601 string). Sort key. |
 | `date_closed` | `VARCHAR` | Timestamp the proceeding was closed, if it has been (open proceedings carry null or a far-future sentinel like `2099-12-31`). |
 | `comment_start_date` | `VARCHAR` | Start of the initial comment window, when ECFS records one. Often null. |
 | `comment_end_date` | `VARCHAR` | End of the initial comment window, when ECFS records one. Often null. |

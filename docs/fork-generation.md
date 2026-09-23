@@ -152,7 +152,9 @@ unfinished populations remain explicit.
   source-owned readers and refuse invalid/incomplete responses before publication. Failure audits
   preserve prior outputs. Optional imports remain lazy. Full source populations,
   native field/grain gaps and FCC crowded-single-day recovery remain separate
-  work. CourtListener now refuses failed pages, inconsistent exact counts, invalid
+  work. CRS reports and FCC proceedings and filings were replayed, validated
+  against raw pages and published 2026-09-23; offset walks now pool passes to
+  the publisher's count (ledger, September 23 continuation). CourtListener now refuses failed pages, inconsistent exact counts, invalid
   identities and unfinished cursor walks; explicit record caps remain selected
   prefixes. Ordinary scheduled readers still need successful raw-response
   retention for replayable source audits. A full keyless CourtListener attempt

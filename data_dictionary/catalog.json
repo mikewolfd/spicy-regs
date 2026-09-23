@@ -599,10 +599,10 @@
     {
       "table": "crs_reports",
       "label": "Congressional Research Service reports",
-      "summary": "One row per Congressional Research Service (CRS) report, ingested from the Congress.gov v3 REST API (`/crsreport` list endpoint) by `build_crs_reports`. The nonpartisan policy-analysis layer over the same subjects agencies regulate — complementary to `congress_bills` (the legislative record) and `federal_register` (the rule-publication record). Scope is deliberately list-level only (no per-report detail fetches), so every column comes from the list payload. Incremental by `update_date`, deduped on `report_id`. All columns are stored as VARCHAR.",
-      "coverage": "True range. Reports published 1993-10-22 to 2026-09-04, running about 1,100 to 1,300 a year in recent years.",
+      "summary": "One row per Congressional Research Service (CRS) report, ingested from the Congress.gov v3 REST API (`/crsreport` list endpoint) by `build_crs_reports`. The nonpartisan policy-analysis layer over the same subjects agencies regulate — complementary to `congress_bills` (the legislative record) and `federal_register` (the rule-publication record). Scope is deliberately list-level only (no per-report detail fetches), so every column comes from the list payload. Incremental by `update_date`, deduped on `report_id`; each walk is pooled over passes until its distinct reports reach the declared count, because the list shifts while it is read. All columns are stored as VARCHAR.",
+      "coverage": "True range. 14,137 reports published 1993-10-22 to 2026-09-22, running about 1,100 to 1,350 a year in recent years; every id and cell matched the raw list pages but 15 `update_date` values the publisher re-stamped between two reads.",
       "kind": "true_range",
-      "measured_on": "2026-09-06",
+      "measured_on": "2026-09-23",
       "data_quality": null,
       "columns": [
         "report_id",
@@ -814,10 +814,10 @@
     {
       "table": "fcc_proceedings",
       "label": "FCC proceedings",
-      "summary": "One row per FCC proceeding (the FCC's docket equivalent, e.g. `17-108`), ingested from the FCC ECFS public API (`/proceedings`) by `build_fcc_proceedings`. The FCC does not participate in regulations.gov — its rulemaking dockets and public comments live in ECFS — so this table extends the dataset's docket universe to the FCC. Requires an api.data.gov key (`DATA_GOV_API_KEY`). Incremental by `date_created`, deduped on `name`. Proceedings with no created date are unreachable through the API's date-range queries and are not included (legacy shells with no filing activity). All columns are stored as VARCHAR.",
-      "coverage": "True range. Proceedings created 1991-10-22 to 2026-09-02.",
+      "summary": "One row per FCC proceeding (the FCC's docket equivalent, e.g. `17-108`), ingested from the FCC ECFS public API (`/proceedings`) by `build_fcc_proceedings`. The FCC does not participate in regulations.gov — its rulemaking dockets and public comments live in ECFS — so this table extends the dataset's docket universe to the FCC. Requires an api.data.gov key (`DATA_GOV_API_KEY`). Walked whole every run, so later closings and status changes are current. One row per docket `name`: ECFS holds more than one document for a few dockets (seven on 2026-09-23, three of them re-created 2026-09-21), and the row is the original docket, then the one ECFS edited last. A document with no docket name is left out (one, a 2017 stub). Proceedings with no created date are unreachable through the API's date-range queries and are not included (legacy shells with no filing activity). All columns are stored as VARCHAR.",
+      "coverage": "True range. 21,683 docket names from 21,691 ECFS documents, created 1991-10-22 to 2026-09-22; single-document names matched the raw pages cell for cell.",
       "kind": "true_range",
-      "measured_on": "2026-09-06",
+      "measured_on": "2026-09-23",
       "data_quality": null,
       "columns": [
         "name",
@@ -839,10 +839,10 @@
     {
       "table": "fcc_filings",
       "label": "FCC filings",
-      "summary": "One row per FCC ECFS filing — the FCC's comment equivalent: comments, reply comments, ex-parte notices, letters, and other submissions — ingested from the FCC ECFS public API (`/filings`) by `build_fcc_filings`. Requires an api.data.gov key (`DATA_GOV_API_KEY`). Incremental by `date_received`, deduped on `id_submission`. Because ECFS holds tens of millions of filings, a first run with no prior table is bounded to the trailing 30 days; deeper history is backfilled in slices via `FCC_SINCE` and/or scoped to specific proceedings via `FCC_PROCEEDINGS`. All columns are stored as VARCHAR, array fields serialized as JSON strings.",
-      "coverage": "Window. Filings received 2026-06-30 to 2026-09-04, a sixty-seven-day slice. The rollup merges incrementally, so this is the history accumulated so far and not the ECFS archive.",
+      "summary": "One row per FCC ECFS filing — the FCC's comment equivalent: comments, reply comments, ex-parte notices, letters, and other submissions — ingested from the FCC ECFS public API (`/filings`) by `build_fcc_filings`. Requires an api.data.gov key (`DATA_GOV_API_KEY`). Incremental by `date_received`, deduped on `id_submission`; each window is pooled over passes until it reaches the count ECFS aggregates for it. Because ECFS holds tens of millions of filings, a first run with no prior table is bounded to the trailing 30 days; deeper history is backfilled in slices via `FCC_SINCE` and/or scoped to specific proceedings via `FCC_PROCEEDINGS`. All columns are stored as VARCHAR, array fields serialized as JSON strings.",
+      "coverage": "Window. 5,137 filings received 2026-08-24 to 2026-09-22, the bounded first run; every id and cell matched the raw pages. The rollup merges incrementally, so this is the history accumulated so far and not the ECFS archive.",
       "kind": "window",
-      "measured_on": "2026-09-06",
+      "measured_on": "2026-09-23",
       "data_quality": null,
       "columns": [
         "id_submission",

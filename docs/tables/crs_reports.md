@@ -4,9 +4,9 @@
 
 **Congressional Research Service reports**
 
-One row per Congressional Research Service (CRS) report, ingested from the Congress.gov v3 REST API (`/crsreport` list endpoint) by `build_crs_reports`. The nonpartisan policy-analysis layer over the same subjects agencies regulate — complementary to `congress_bills` (the legislative record) and `federal_register` (the rule-publication record). Scope is deliberately list-level only (no per-report detail fetches), so every column comes from the list payload. Incremental by `update_date`, deduped on `report_id`. All columns are stored as VARCHAR.
+One row per Congressional Research Service (CRS) report, ingested from the Congress.gov v3 REST API (`/crsreport` list endpoint) by `build_crs_reports`. The nonpartisan policy-analysis layer over the same subjects agencies regulate — complementary to `congress_bills` (the legislative record) and `federal_register` (the rule-publication record). Scope is deliberately list-level only (no per-report detail fetches), so every column comes from the list payload. Incremental by `update_date`, deduped on `report_id`; each walk is pooled over passes until its distinct reports reach the declared count, because the list shifts while it is read. All columns are stored as VARCHAR.
 
-**Coverage.** True range. Reports published 1993-10-22 to 2026-09-04, running about 1,100 to 1,300 a year in recent years. *(measured 2026-09-06)*
+**Coverage.** True range. 14,137 reports published 1993-10-22 to 2026-09-22, running about 1,100 to 1,350 a year in recent years; every id and cell matched the raw list pages but 15 `update_date` values the publisher re-stamped between two reads. *(measured 2026-09-23)*
 
 - **Parquet file:** `crs_reports.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.

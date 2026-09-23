@@ -24,8 +24,8 @@ Public data destination: `https://pub-72e95c0c20a84508b42b03a6ff6d55f8.r2.dev`. 
 | T16 | `run-rollup-congress-bills` | `congress_bills.parquet` | waiting for qualified parents |
 | T11 | `run-rollup-unified-agenda` | `unified_agenda.parquet` | generated and verified for retained edition |
 | T11 | `run-rollup-federal-register` | `federal_register.parquet` | published awaiting source audit |
-| T12 | `run-rollup-fcc-proceedings` | `fcc_proceedings.parquet` | local candidate needs qualification |
-| T12 | `run-rollup-fcc-filings` | `fcc_filings.parquet` | local candidate needs qualification |
+| T12 | `run-rollup-fcc-proceedings` | `fcc_proceedings.parquet` | published 2026-09-23 after a source replay validated against raw pages: generation `a1116f71…`, 21,683 docket names from 21,691 ECFS documents; walked whole, one row per docket (details below) |
+| T12 | `run-rollup-fcc-filings` | `fcc_filings.parquet` | published 2026-09-23 after a source replay validated against raw pages: generation `c0c1aa4e…`, 5,137 filings received 2026-08-24 to 09-22 (the bounded first run); incremental from here |
 | T14 | `run-rollup-sam-entities` | `sam_entities.parquet` | withdrawn blocked |
 | T14 | `run-rollup-lobbying-filings` | `lobbying_filings.parquet` | local candidate needs qualification |
 | T04 | `run-rollup-fec-committees` | `fec_committees.parquet` | generated and verified |
@@ -35,7 +35,7 @@ Public data destination: `https://pub-72e95c0c20a84508b42b03a6ff6d55f8.r2.dev`. 
 | T04 | `build-fec-observations` | `fec_relationships.parquet` | generated and verified |
 | T15 | `run-rollup-org-committee-links` | `org_committee_links.parquet` | waiting for qualified parents |
 | T12 | `run-rollup-gao-reports` | `gao_reports.parquet` | generated and verified |
-| T12 | `run-rollup-crs-reports` | `crs_reports.parquet` | local candidate needs qualification |
+| T12 | `run-rollup-crs-reports` | `crs_reports.parquet` | published 2026-09-23 after a source replay validated against raw pages: generation `6c15aac2…`, 14,137 reports (details below) |
 | T12 | `run-rollup-courtlistener` | `court_dockets.parquet` | generated and verified: enriched APA selection published (11,459 rows) |
 | T12 | `build_court_docket_groups` | `court_docket_groups.parquet` | republished 2026-09-23 with numeric parent order: generation `0f855eb1…`, 901 rows; raw-validated against the native docket edition and public readback identical |
 | T12 | `run-rollup-usaspending-recipients` | `usaspending_recipients.parquet` | published by schedule; qualified 2026-09-23 with recorded source drift against a fresh capture (details below) |
@@ -243,4 +243,35 @@ Receipts: `members-qualification/`, `congressional-status/`, `native-vote-varian
   the top ranks and 114 entered. The ranking itself drifts during a walk (146 ids
   seen twice on 2026-09-23 06:40 UTC), which the builder refuses rather than
   publishing. See `usaspending-qualification/`.
-
+- **CRS reports and FCC proceedings and filings published (T12).** All three
+  2026-09-22 scheduled runs had refused on the source's own data. Each table was
+  replayed from its live source with no prior (R2 unset) and compared with raw
+  pages walked separately, restating the column mapping from the publisher's
+  field names:
+  - **CRS reports.** All 14,137 ids and cells match, except 15 `update_date`
+    values the publisher re-stamped between the two reads (03:08 and 03:23 UTC).
+  - **FCC filings.** All 5,137 ids and cells match.
+  - **FCC proceedings.** All 21,676 single-document docket names match cell for
+    cell.
+  - **Causes.**
+    - CRS and filings repeated an identity within one offset walk; the list
+      shifts while it is read, the amendments defect. `pool_passes` now pools
+      passes until the distinct count reaches the publisher's count; amendments
+      moved onto it.
+    - ECFS states no total, but every response carries term aggregations. A
+      window's count is its `express_comment` (filings) or `bureau_name`
+      (proceedings) buckets plus the records lacking the field, which matched
+      every walked window exactly.
+    - ECFS proceedings are not unique by `name`. One 2017 document has no name
+      and is left out. Seven dockets hold two documents: 13-84, 15-91, 15-94 and
+      02-378 were re-created on 2026-09-21 as sparser copies, and 21-62, 24-89
+      and 25-12 differ in closing or status. The table keeps the original
+      docket, then the last-edited document; the validation confirms it chose
+      the original for all seven.
+    - Proceedings are now walked whole every run, because a creation-date
+      increment never refreshed closings and would publish a lone re-created
+      document over its original.
+  - **Status.** Code `b2534aa`. Generations `6c15aac2…`, `a1116f71…` and
+    `c0c1aa4e…` are live, with public bytes equal to the validated files. The
+    fork's scheduled workflows run the pushed code, so they keep refusing until
+    this commit is pushed. See `local-candidates-2026-09-23/`.
