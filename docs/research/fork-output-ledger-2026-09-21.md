@@ -60,7 +60,7 @@ Public data destination: `https://pub-72e95c0c20a84508b42b03a6ff6d55f8.r2.dev`. 
 | T08 | `run-rollup-press-releases` | `press_releases.parquet` | published bounded relationship correction verified |
 | T08 | `run-rollup-amendments` | `amendments.parquet` | republished complete 2026-09-23: generation `52d60a8f…`, 7,066 = the source's declared 119th count; every list-route cell matches a clean replay; detail-only fields (sponsors, amended bill) remain unacquired |
 | T08 | `run-rollup-member-vote-terms` | `member_vote_terms.parquet` | added and published 2026-09-23 (decision 2): generation `890481eb…`, 382,136 rows; exceptions equal the independent join replay row for row |
-| T08 | `run-rollup-roll-call-votes` | `roll_call_votes.parquet` | native fields verified; derived bill links await parent source audit |
+| T08 | `run-rollup-roll-call-votes` | `roll_call_votes.parquet` | native fields verified; derived bill links qualified 2026-09-23: in live generation `3204b8fc…` all 845 links are recorded votes in their bill's raw GovInfo BILLSTATUS (509 bills) and in the published references, no vote is claimed by two bills, and none of the 730 unmatched votes is named by any reference |
 | T08 | `run-rollup-roll-call-votes` | `member_votes.parquet` | generated and verified for frozen 119th Congress selection |
 | T08 | `run-rollup-members` | `members.parquet` | generated and verified; fresh retained source observations |
 | T08 | `run-rollup-members` | `member_terms.parquet` | generated and verified; fresh retained source observations |
