@@ -234,9 +234,6 @@ is the evidence for valid emptiness; a generic nonempty-file check is insufficie
 [execution log](research/fork-execution-log-2026-09-23.md). What remains, in order. Items A5–A12, B6 onward, C4 and D6 are in
 SpicyDocs' consolidation plan (`spicy-docs/docs/research/consolidation-path-2026-09-22.md`),
 with their evidence in `spicy-docs/docs/research/parsing-survey-2026-09-23.md`:*
-- **Push the key fix (A5).** Fixed in `81cfee7` (key only in `X-Api-Key`, no
-  URL in logs, 401/403 abort); push it, since the active `bill_subjects`
-  workflow still runs the old code. CI masks the key; local logs did not.
 - **Workflows.** The seven held for the 2026-09-23 push were re-enabled that day
   (decision 22). `cfr_sections` stays off until the CFR ancestry fix, and
   `rulemaking_lifecycles` by decision 4.
