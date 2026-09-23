@@ -5,7 +5,14 @@ The optional `source-readers` extra enables the same readers for package install
 its wheels must be supplied explicitly until they are published in a registry.
 Base CLI and MCP installs do not require them.
 
-- `spicy_docs-0.28.0`: built from SpicyDocs `main` at `767c945`, with Rulespec Artifacts 1.1.1.
+- `spicy_docs-0.28.1`: built from SpicyDocs `main` at `ac102e4`, with Rulespec Artifacts 1.1.1.
+  Built September 23, 2026 UTC: **1,288,625 bytes**, SHA-256
+  `cc59ca71354a61b5a9e88726986a970ee0fd2e010904be87a48631615397e0f1`. Identical
+  comment re-observations at one instant now collapse to one observation, as
+  dockets and documents already did; the ACF comment census found 23 such pairs,
+  all byte-identical. Otherwise identical to 0.28.0.
+
+- Previous `spicy_docs-0.28.0`: built from SpicyDocs `main` at `767c945`, with Rulespec Artifacts 1.1.1.
   Built September 23, 2026 UTC: **1,288,534 bytes**, SHA-256
   `7456db35b358e3f648796b795b88817cb6ec63d23f2026292dbecd87ad4bc611`. Appends
   `congress_bills.url_source` (who stated `url`), the label delivery decision 1
