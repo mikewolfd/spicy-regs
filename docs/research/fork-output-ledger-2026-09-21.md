@@ -38,7 +38,7 @@ Public data destination: `https://pub-72e95c0c20a84508b42b03a6ff6d55f8.r2.dev`. 
 | T12 | `run-rollup-crs-reports` | `crs_reports.parquet` | local candidate needs qualification |
 | T12 | `run-rollup-courtlistener` | `court_dockets.parquet` | generated and verified: enriched APA selection published (11,459 rows) |
 | T12 | `build_court_docket_groups` | `court_docket_groups.parquet` | republished 2026-09-23 with numeric parent order: generation `0f855eb1…`, 901 rows; raw-validated against the native docket edition and public readback identical |
-| T12 | `run-rollup-usaspending-recipients` | `usaspending_recipients.parquet` | local candidate needs qualification |
+| T12 | `run-rollup-usaspending-recipients` | `usaspending_recipients.parquet` | published by schedule; qualified 2026-09-23 with recorded source drift against a fresh capture (details below) |
 | T09 | `run-rollup-bill-family` | `congress_bills.parquet` | published awaiting source audit; broader local candidate retained |
 | T09 | `run-rollup-bill-family` | `bill_actions.parquet` | published awaiting source audit; broader local candidate retained |
 | T09 | `run-rollup-bill-family` | `bill_committees.parquet` | published awaiting source audit; broader local candidate retained |
@@ -58,7 +58,7 @@ Public data destination: `https://pub-72e95c0c20a84508b42b03a6ff6d55f8.r2.dev`. 
 | T09 | `run-rollup-bill-family` | `bill_family_backfills.parquet` | published awaiting source audit; broader local candidate retained |
 | T09 | `run-rollup-bill-family` | `bill_family_backfill_walks.parquet` | published awaiting source audit; broader local candidate retained |
 | T08 | `run-rollup-press-releases` | `press_releases.parquet` | published bounded relationship correction verified |
-| T08 | `run-rollup-amendments` | `amendments.parquet` | published awaiting source audit |
+| T08 | `run-rollup-amendments` | `amendments.parquet` | republished complete 2026-09-23: generation `52d60a8f…`, 7,066 = the source's declared 119th count; every list-route cell matches a clean replay; detail-only fields (sponsors, amended bill) remain unacquired |
 | T08 | `run-rollup-roll-call-votes` | `roll_call_votes.parquet` | native fields verified; derived bill links await parent source audit |
 | T08 | `run-rollup-roll-call-votes` | `member_votes.parquet` | generated and verified for frozen 119th Congress selection |
 | T08 | `run-rollup-members` | `members.parquet` | generated and verified; fresh retained source observations |
@@ -73,11 +73,11 @@ Public data destination: `https://pub-72e95c0c20a84508b42b03a6ff6d55f8.r2.dev`. 
 | T08 | `run-rollup-print-citations` | `bill_committee_actions.parquet` | generated and verified; replayed byte-identical |
 | T08 | `run-rollup-print-citations` | `document_citations.parquet` | generated and verified; replayed byte-identical |
 | T08 | `run-rollup-senate-expenditures` | `senate_expenditures.parquet` | generated and verified; replayed byte-identical |
-| T08 | `run-rollup-laws` | `laws.parquet` | published awaiting source audit |
-| T08 | `run-rollup-laws` | `law_code_sections.parquet` | published awaiting source audit |
-| T08 | `run-rollup-laws` | `table3_records.parquet` | published awaiting source audit |
-| T08 | `run-rollup-committee-rosters` | `committees.parquet` | published awaiting source audit |
-| T08 | `run-rollup-committee-rosters` | `committee_assignments.parquet` | published awaiting source audit |
+| T08 | `run-rollup-laws` | `laws.parquet` | qualified 2026-09-23 by clean source replay: all 113 laws match in every native cell; only capture times differ |
+| T08 | `run-rollup-laws` | `law_code_sections.parquet` | qualified 2026-09-23 by clean source replay: all 3,655 rows match in every native cell |
+| T08 | `run-rollup-laws` | `table3_records.parquet` | qualified 2026-09-23 by clean source replay: all 65 rows match in every native cell |
+| T08 | `run-rollup-committee-rosters` | `committees.parquet` | qualified 2026-09-23 by clean source replay: all 236 committees match; only publisher activity counts grew since publication |
+| T08 | `run-rollup-committee-rosters` | `committee_assignments.parquet` | qualified 2026-09-23 by clean source replay: all 2,966 assignments match in every native cell; 138 committee joins await decision 5's aliases |
 | T08 | `run-rollup-house-communications` | `house_communications.parquet` | generated and verified; 15 publisher-withdrawn identities |
 | T08 | `run-rollup-committee-meetings` | `committee_meetings.parquet` | generated and verified; 4 rows carry post-publication publisher updates |
 | T08 | `run-rollup-record-issues` | `record_issues.parquet` | generated and verified |
@@ -219,4 +219,28 @@ Receipts: `members-qualification/`, `congressional-status/`, `native-vote-varian
   `f1e2e523…` (`court_citations`, `court_citation_map`, `court_parentheticals`) and
   `f7cc67cc…` (`court_opinions`), the 2026-06-30 edition, public row counts equal
   to the builds; receipts in `court-bulk-tables/`.
+- **Congress.gov source audits (laws, committee rosters, amendments).** Each family
+  was rebuilt from its live source with no published prior (R2 unset), then
+  compared with the live generation by contract identity, cell by cell. Laws
+  (113), Code sections (3,655), Table III (65) and committee assignments (2,966)
+  match in every native cell; only capture times differ. All 236 committees match
+  except publisher activity counts that grew (15 bill counts; none fell).
+  Amendments exposed a completeness defect: an offset walk over `updateDate`
+  order repeats about as many records as it skips, so it met the declared count by
+  rows while holding 7,013 distinct of 7,066; the live table was 52 short. The
+  builder now pools alternating-order passes until the distinct count reaches the
+  declared count (`00f1144`), and the complete table (generation `52d60a8f…`) is
+  a strict superset of the old one with no shared cell changed; three added
+  amendments were confirmed on the detail route. Detail-only fields (sponsors,
+  amended bill) are empty on every row because the list route does not carry them.
+  See `source-audit-2026-09-23/`.
+- **USAspending recipients.** A fresh capture of the same top-100-page selection
+  through the builder's reader (raw pages retained) against generation
+  `18e51cf5…`, whose public bytes match the index: 9,740 of 10,000 recipients
+  remain in today's ranking, with UEI and level identical for all, DUNS for
+  9,731 and name for 9,730 (15 publisher updates: cleared DUNS, punctuation, one
+  renamed recipient); 3,787 all-time amounts moved as awards accrued; 260 left
+  the top ranks and 114 entered. The ranking itself drifts during a walk (146 ids
+  seen twice on 2026-09-23 06:40 UTC), which the builder refuses rather than
+  publishing. See `usaspending-qualification/`.
 
