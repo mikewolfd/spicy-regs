@@ -1,10 +1,15 @@
 name: Rollup — rulemaking_lifecycles
 
 # Decoupled rollup: rebuilds rulemaking_lifecycles.parquet (Proposed→Rule pairs
-# + stuck proposals) from documents.parquet. Runs after the ETL's final batch.
+# + stuck proposals) from documents.parquet.
+#
+# Not scheduled: decision 4 (docs/research/fork-delivery-decisions-2026-09-22.md)
+# keeps this table unpublished until source-linked rulemaking relationships (the
+# T17 outputs) qualify; its earliest-proposal/earliest-final pairing collapses
+# null-docket groups and drops finals that predate their proposal. The family was
+# conditionally withdrawn from the index on 2026-09-23. Run it by hand only to
+# build a local candidate (skip_upload).
 on:
-  schedule:
-    - cron: '10 23 * * *'
   workflow_dispatch:
     inputs:
       skip_upload:
