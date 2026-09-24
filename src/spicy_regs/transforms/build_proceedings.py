@@ -29,7 +29,6 @@ from spicy_regs.ontology.common import (
 
 from spicy_regs.ontology.federal_register import (
     FederalRegisterIndex,
-    linked_docket_id,
     references_json,
     resolved_id,
 )
@@ -37,7 +36,9 @@ from spicy_regs.ontology.federal_register import (
 OUTPUT = "proceedings.parquet"
 # v5: labelled FR docket values join (linked_docket_id), and stage events fall on the
 # Eastern day of a Regulations.gov instant rather than its UTC day.
-ACTOR_ID = "spicy-regs:proceedings:v5"
+# v6: a docket value naming several dockets joins each (linked_docket_ids), so one FR
+# document's list unites its trusted dockets, as separate link values always did.
+ACTOR_ID = "spicy-regs:proceedings:v6"
 
 COLUMNS = (
     "proceeding_id",
@@ -208,22 +209,14 @@ def build_proceedings(
 
     linked_dockets_by_fr: dict[str, set[str]] = defaultdict(set)
     unresolved_links_by_docket: dict[str, list[dict]] = defaultdict(list)
-    for row in iter_parquet_rows(
-        paths["fr_docket_links"], columns=("docket_id", "document_number", "publication_date")
-    ):
-        docket = linked_docket_id(row.get("docket_id"))
-        if row.get("document_number") and docket is not None and docket in trusted_dockets:
-            document_number = str(row["document_number"])
-            reference = {
-                "source": "fr_docket_links",
-                "evidence_id": docket,
-                **fr_index.reference(document_number, row.get("publication_date")),
-            }
-            if identity := resolved_id(reference):
-                linked_dockets_by_fr[identity].add(docket)
-            else:
-                unresolved_links_by_docket[docket].append(reference)
-            action_dockets.add(docket)
+    for docket, reference in fr_index.docket_links(paths["fr_docket_links"]):
+        if docket not in trusted_dockets:
+            continue
+        if identity := resolved_id(reference):
+            linked_dockets_by_fr[identity].add(docket)
+        else:
+            unresolved_links_by_docket[docket].append(reference)
+        action_dockets.add(docket)
 
     # Docket identity is action-specific. A Federal Register document is the
     # only cross-docket union signal used by this carrier.

@@ -246,7 +246,7 @@ def test_reference_proceeding_threads_rinless_docket_and_preserves_reopening(tmp
         periods[0]["opened_by_artifact_ids_json"]
     )
     assert all(row["method"] == "deterministic" for row in periods)
-    assert all(row["actor_id"] == "spicy-regs:comment-periods:v6" for row in periods)
+    assert all(row["actor_id"] == "spicy-regs:comment-periods:v7" for row in periods)
 
 
 def test_reused_rin_does_not_collapse_or_cross_assign_distinct_dockets(tmp_path):

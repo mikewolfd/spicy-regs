@@ -33,7 +33,6 @@ from spicy_regs.ontology.common import (
 
 from spicy_regs.ontology.federal_register import (
     FederalRegisterIndex,
-    linked_docket_id,
     record_url,
     references_json,
     resolved_id,
@@ -42,7 +41,8 @@ from spicy_regs.ontology.federal_register import (
 OUTPUT = "comment_periods.parquet"
 # v5: regulations.gov close dates are the Eastern day, one day earlier than v4 (see eastern_day).
 # v6: labelled FR docket values join (linked_docket_id), so more FR intervals carry a docket.
-ACTOR_ID = "spicy-regs:comment-periods:v6"
+# v7: a docket value naming several dockets joins each (linked_docket_ids).
+ACTOR_ID = "spicy-regs:comment-periods:v7"
 
 COLUMNS = (
     "comment_period_id",
@@ -351,21 +351,14 @@ def build_comment_periods(
         )
 
     linked_dockets_by_fr: dict[str, set[str]] = defaultdict(set)
-    for row in iter_parquet_rows(
-        required["fr_docket_links"], columns=("docket_id", "document_number", "publication_date")
-    ):
-        docket = linked_docket_id(row.get("docket_id"))
-        if row.get("document_number") and docket is not None and docket in trusted_dockets:
-            reference = {
-                "source": "fr_docket_links",
-                "evidence_id": docket,
-                **fr_index.reference(str(row["document_number"]), row.get("publication_date")),
-            }
-            if identity := resolved_id(reference):
-                linked_dockets_by_fr[identity].add(docket)
-            else:
-                for candidate in reference["candidate_ids"]:
-                    unresolved_by_fr[candidate].append(reference)
+    for docket, reference in fr_index.docket_links(required["fr_docket_links"]):
+        if docket not in trusted_dockets:
+            continue
+        if identity := resolved_id(reference):
+            linked_dockets_by_fr[identity].add(docket)
+        else:
+            for candidate in reference["candidate_ids"]:
+                unresolved_by_fr[candidate].append(reference)
 
     for row in iter_parquet_rows(
         required["federal_register"],

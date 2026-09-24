@@ -1,4 +1,4 @@
-"""Dated FR record keys, number-only references and the docket an FR link names.
+"""Dated FR record keys, number-only references and the dockets an FR link names.
 
 SpicyDocs owns the source key and the comparison key a reference number reduces to
 (dashes and case folded, the sequence's zero padding removed); RefSpec's number-only
@@ -8,6 +8,7 @@ matter IRIs are a separate vocabulary decision. No IRI minting happens here.
 from __future__ import annotations
 
 import re
+from collections.abc import Iterator
 from pathlib import Path
 
 from spicy_regs.ontology.common import JsonReadStats, canonical_json, iter_parquet_rows, parse_json_list
@@ -21,24 +22,28 @@ def record_id(row: dict) -> str:
     return federal_register_source_record_id(classify_document(identity))
 
 
-def linked_docket_id(value: object) -> str | None:
-    """The Regulations.gov docket id a Federal Register docket value names, or ``None``.
+def linked_docket_ids(value: object) -> tuple[str, ...]:
+    """Every Regulations.gov docket id a Federal Register docket value names, in order; ``()`` for none.
 
     The Register writes most dockets behind a label ("Docket No. SSA-2010-0037"), which
     the syntax-only :func:`~spicy_regs.ontology.citations.normalize_regsgov_identifier`
     refuses: on the 2026-09-23 parents it joined 48,169 of 899,227 link rows to a
-    Regulations.gov docket, and SpicyDocs' label-aware reader joins 154,940. Callers still
-    join only dockets the Regulations.gov records assert.
+    Regulations.gov docket, and SpicyDocs' label-aware single reader 154,941. That reader
+    keeps a ``-RULE``-family suffix and returns every held docket id but ``GSA-NA-2005``,
+    which states no sequence and is no link value.
 
-    Since SpicyDocs 0.31.0 the reader keeps a ``-RULE``/``-NONRULE``/``-RULEMAKING``/
-    ``-NONRULEMAKING`` suffix, so it returns every held docket id but ``GSA-NA-2005``, which
-    states no sequence and appears as no link value (2026-09-23 parents). The syntax-only
-    fallback this replaced changed the answer on 95,796 link rows there, none to a held docket.
+    SpicyDocs' plural reader answers the single reader's docket alone whenever there is
+    one, and otherwise reads a longer label, a note after the docket, or a list ("Docket
+    Nos. X and Y"); a value that opens on prose ("Public Notice: X") names none. On the
+    same parents it joins 160,397 link rows, 817 of them to several dockets, and loses no
+    pair the single reader joined. It reads shape, not existence: 3,239 of the dockets it
+    adds (per link row) are held by no Regulations.gov record, so callers join only the
+    dockets Regulations.gov asserts.
     """
     # SpicyDocs is the source-readers extra; a base install imports this module without it.
-    from spicy_docs.interpretation.identifier_shapes import normalize_docket_reference
+    from spicy_docs.interpretation.identifier_shapes import normalize_docket_references
 
-    return normalize_docket_reference(value)
+    return normalize_docket_references(value)
 
 
 #: The digits a document number ends on: its sequence, whatever separates it.
@@ -100,6 +105,8 @@ class FederalRegisterIndex:
             held = self._number_by_key.setdefault(key, number)
             if held != number:
                 self._colliding_keys.setdefault(key, [held]).append(number)
+        # fr_docket_links path -> each row's dockets and its resolved reference; see docket_links.
+        self._docket_links: dict[Path, list[tuple[tuple[str, ...], dict]]] = {}
 
     def record_id(self, row: dict) -> str:
         """The dated id of a row of the indexed table, validated once when the index was built."""
@@ -158,6 +165,31 @@ class FederalRegisterIndex:
             "status": status,
             "candidate_ids": candidates,
         }
+
+    def docket_links(self, path: Path) -> Iterator[tuple[str, dict]]:
+        """Each docket an ``fr_docket_links`` row names, with that row's reference resolved here.
+
+        A value naming several dockets (:func:`linked_docket_ids`) yields one pair per docket,
+        each reference carrying its own docket as ``evidence_id`` and the row's document
+        number, date and status otherwise; a value naming none, or a row with no number,
+        yields nothing. So a stage keys a link by its (FR document, docket) pair, as it did
+        when a value named one docket. Every docket-shaped value comes back: which dockets a
+        stage trusts is its own join.
+
+        The table is read once per index and replayed to every stage that shares it: read
+        per stage, the plural reader alone cost 19.5 s over 899,227 values (measured
+        2026-09-24), three times a generation.
+        """
+        rows = self._docket_links.get(path)
+        if rows is None:
+            rows = self._docket_links[path] = [
+                (dockets, self.reference(str(row["document_number"]), row.get("publication_date")))
+                for row in iter_parquet_rows(path, columns=("docket_id", "document_number", "publication_date"))
+                if row.get("document_number") and (dockets := linked_docket_ids(row.get("docket_id")))
+            ]
+        for dockets, reference in rows:
+            for docket in dockets:
+                yield docket, {"source": "fr_docket_links", "evidence_id": docket, **reference}
 
     def proceeding_ids(self, row: dict, stats: JsonReadStats) -> tuple[set[str], list[dict]]:
         """Read dated keys; migrate old number-only rows only when unambiguous.
