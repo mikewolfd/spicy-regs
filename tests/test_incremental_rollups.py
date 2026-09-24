@@ -15,7 +15,14 @@ from types import SimpleNamespace
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
+from spicy_docs.reading.paged_json import (
+    DEFAULT_POOL_PASSES,
+    IncompleteWalkError,
+    PagedJsonBudget,
+    PagedJsonSourceError,
+)
 from spicy_docs.schemas import TABLE_CONTRACTS
+from spicy_docs.sources.congress.listing import CongressListingReader
 
 from spicy_regs.transforms.table_merge import prior_scratch_path
 
@@ -37,15 +44,25 @@ def no_download(remote_key: str, local_path: Path) -> bool:
 # --------------------------------------------------------------------------- #
 # Amendments: a window, not a full walk.
 # --------------------------------------------------------------------------- #
-class StubListingReader:
-    """Records the URLs asked for and serves nothing."""
+class PageStubReader(CongressListingReader):
+    """spicy-docs' reader with its pages stubbed, so ``pooled`` (walk order, page size, settling) runs for real."""
 
     def __init__(self):
+        super().__init__(
+            budget=PagedJsonBudget(
+                max_requests=1, max_page_bytes=1024, timeout_seconds=1, min_request_interval_seconds=0
+            ),
+            api_key="stub-key",
+        )
         self.urls: list[str] = []
+
+
+class StubListingReader(PageStubReader):
+    """Records the URLs asked for and serves an empty window."""
 
     def records(self, route, url, *, max_pages=100):
         self.urls.append(url)
-        return iter(())
+        return iter((SimpleNamespace(records=(), declared_count=0),))
 
 
 def test_amendments_windows_from_the_prior_watermark(tmp_path, monkeypatch):
@@ -114,12 +131,12 @@ def _amendment(number: int, update: str = "2026-01-01T00:00:00Z") -> dict:
     }
 
 
-class ShiftingListingReader:
+class ShiftingListingReader(PageStubReader):
     """Each pass returns the declared count of rows, but repeats one amendment and skips another."""
 
     def __init__(self, passes):
+        super().__init__()
         self.passes = list(passes)
-        self.urls: list[str] = []
 
     def records(self, route, url, *, max_pages=100):
         if route.name == "amendment-detail":
@@ -136,14 +153,17 @@ class ShiftingListingReader:
 
 
 def test_amendments_pool_opposite_sort_passes_until_the_declared_count(tmp_path, monkeypatch):
-    """A single pass that repeats #2 and skips #3 still matches the declared count by rows; pooling catches it."""
+    """A single pass that repeats #2 and skips #3 still matches the declared count by rows; pooling catches it.
+
+    Neither walk is clean, so the pool of both settles the query; each amendment keeps its newest ``updateDate``.
+    """
     from spicy_regs.transforms.build_amendments import build_amendments
 
     monkeypatch.setenv("BILL_FAMILY_CONGRESSES", "119")
     reader = ShiftingListingReader(
         [
             ([_amendment(1), _amendment(2), _amendment(2)], 3),
-            ([_amendment(3), _amendment(2, "2026-02-01T00:00:00Z"), _amendment(1)], 3),
+            ([_amendment(3), _amendment(3), _amendment(2, "2026-02-01T00:00:00Z")], 3),
         ]
     )
     out = build_amendments(tmp_path, reader=reader, download_prior=no_download)
@@ -151,17 +171,41 @@ def test_amendments_pool_opposite_sort_passes_until_the_declared_count(tmp_path,
     assert sorted(rows) == ["1", "2", "3"]
     assert rows["2"]["update_date"] == "2026-02-01T00:00:00Z", "the later observation wins"
     assert "sort=updateDate+desc" in reader.urls[0] and "sort=updateDate+asc" in reader.urls[1]
+    assert "limit=250" in reader.urls[0] and "limit=237" in reader.urls[1], "each walk moves its page boundaries"
 
 
 def test_amendments_refuse_a_walk_that_never_reaches_its_declared_count(tmp_path, monkeypatch):
-    from spicy_regs.sources.pooled_walk import IncompleteWalkError
-    from spicy_regs.transforms.build_amendments import POOLED_SORTS, build_amendments
+    from spicy_regs.transforms.build_amendments import build_amendments
 
     monkeypatch.setenv("BILL_FAMILY_CONGRESSES", "119")
-    reader = ShiftingListingReader([([_amendment(1), _amendment(1)], 2)] * len(POOLED_SORTS))
+    reader = ShiftingListingReader([([_amendment(1), _amendment(1)], 2)] * DEFAULT_POOL_PASSES)
     with pytest.raises(IncompleteWalkError, match="pooled 1 of 2 declared"):
         build_amendments(tmp_path, reader=reader, download_prior=no_download)
-    assert len(reader.urls) == len(POOLED_SORTS)
+    assert len(reader.urls) == DEFAULT_POOL_PASSES
+
+
+def test_amendments_refuse_a_record_without_an_update_date(tmp_path, monkeypatch):
+    """The version ranks two observations of one amendment; a missing one refuses rather than ranking first."""
+    from spicy_regs.transforms.build_amendments import build_amendments
+
+    monkeypatch.setenv("BILL_FAMILY_CONGRESSES", "119")
+    undated = {key: value for key, value in _amendment(1).items() if key != "updateDate"}
+    reader = ShiftingListingReader([([undated], 1)])
+    with pytest.raises(PagedJsonSourceError, match="could not read a record's version"):
+        build_amendments(tmp_path, reader=reader, download_prior=no_download)
+
+
+def test_amendments_refuse_a_pool_holding_more_than_the_declared_count(tmp_path, monkeypatch):
+    """A record replaced under an unchanged total overfills the pool; it refuses rather than settling on a surplus."""
+    from spicy_regs.transforms.build_amendments import build_amendments
+
+    monkeypatch.setenv("BILL_FAMILY_CONGRESSES", "119")
+    first = [_amendment(1), _amendment(1), _amendment(2)]
+    reader = ShiftingListingReader(
+        [(first, 3), ([_amendment(3), _amendment(4), _amendment(4)], 3)] + [(first, 3)] * (DEFAULT_POOL_PASSES - 2)
+    )
+    with pytest.raises(IncompleteWalkError, match="pooled 4 records, more than the 3 declared"):
+        build_amendments(tmp_path, reader=reader, download_prior=no_download)
 
 
 # --------------------------------------------------------------------------- #

@@ -379,7 +379,9 @@ tables:
     summary: >-
       One row per bill or resolution. Two rollups write this table:
       `congress-bills` walks the Congress.gov list endpoint for the ten-column
-      prefix across the whole archive, and `bill-family` fills the full contract
+      prefix across the whole archive, pooling whole walks of each window by
+      bill until one is clean or they hold exactly the declared count, and
+      `bill-family` fills the full contract
       for the Congresses it is scoped to — from a BILLSTATUS document for the
       108th onward, and from the API bill detail route for the 82nd through the
       107th, where no BILLSTATUS bulk exists. A consumer tells the two family
@@ -932,9 +934,10 @@ tables:
       legislative record) and `federal_register` (the rule-publication record).
       Scope is deliberately list-level only (no per-report detail fetches), so
       every column comes from the list payload. Incremental by `update_date`,
-      deduped on `report_id`; each walk is pooled over passes until its
-      distinct reports reach the declared count, because the list shifts while
-      it is read. All columns are stored as VARCHAR.
+      deduped on `report_id`; each query is pooled over whole walks, varying
+      the page size, until one walk is clean or the pool holds exactly the
+      declared count, because the list shifts while it is read. All columns
+      are stored as VARCHAR.
     columns:
       report_id: "CRS report id (e.g. `R48641`, `IN12713`). Primary key / dedup key."
       title: "Report title as returned by the list endpoint."
@@ -1272,7 +1275,10 @@ tables:
       its rulemaking dockets and public comments live in ECFS — so this table
       extends the dataset's docket universe to the FCC. Requires an api.data.gov
       key (`DATA_GOV_API_KEY`). Walked whole every run, so later closings and
-      status changes are current. One row per docket `name`: ECFS holds more
+      status changes are current. Each creation-date window is pooled over
+      whole walks by document, less its filing-activity counters, until one
+      walk is clean or the pool holds exactly the count ECFS aggregates for
+      it. One row per docket `name`: ECFS holds more
       than one document for a few dockets (seven on 2026-09-23, three of them
       re-created 2026-09-21), and the row is the original docket, then the one
       ECFS edited last. A document with no docket name is left out (one, a
@@ -1308,7 +1314,8 @@ tables:
       ingested from the FCC ECFS public API (`/filings`) by `build_fcc_filings`.
       Requires an api.data.gov key (`DATA_GOV_API_KEY`). Incremental by
       `date_received`, deduped on `id_submission`; each window is pooled over
-      passes until it reaches the count ECFS aggregates for it. Because ECFS holds tens of
+      whole walks until one is clean or the pool holds exactly the count ECFS
+      aggregates for it. Because ECFS holds tens of
       millions of filings, a first run with no prior table is bounded to the
       trailing 30 days; deeper history is backfilled in slices via `FCC_SINCE`
       and/or scoped to specific proceedings via `FCC_PROCEEDINGS`. All columns
@@ -1563,9 +1570,10 @@ tables:
     data_quality: >-
       The publisher's `updateDate desc` order repeats and skips amendments
       across page boundaries when stamps tie, so one walk can serve the
-      declared count while missing some amendments. The builder pools
-      alternating-order passes until the distinct count reaches the declared
-      count. Sponsor, chamber, submitted date and the amended bill or
+      declared count while missing some amendments. The builder pools whole
+      walks, alternating order and page size, until one walk is clean or the
+      pool holds exactly the declared count; a record without an `updateDate`,
+      or a pool larger than the count, refuses the run. Sponsor, chamber, submitted date and the amended bill or
       amendment come from each amendment's detail record; the list route
       carries none of them. 89 House amendments name the Rules Committee as
       sponsor and have no member sponsor to record. All columns are stored as

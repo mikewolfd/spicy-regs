@@ -10,7 +10,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 
-from spicy_docs.reading.paged_json import PagedJsonSourceError
+from spicy_docs.reading.paged_json import DEFAULT_POOL_PASSES, IncompleteWalkError, PagedJsonSourceError
 from spicy_docs.sources.gao.rss import GaoFeedSourceError
 from spicy_docs.transport.credentials import CredentialRefusedError
 from spicy_docs.transport import retry
@@ -144,6 +144,7 @@ def test_transport_failure_is_not_empty_success(kind):
         ("crs", crs_page([{}])),
         ("crs", crs_page([CRS, CRS])),
         ("crs", crs_page([], total=1)),
+        ("crs", crs_page([{"id": "R1", "title": "No update date"}])),
         ("usa", {}),
         ("usa", {"results": []}),
         ("usa", usa_page([{}])),
@@ -164,7 +165,7 @@ def test_transport_failure_is_not_empty_success(kind):
 def test_malformed_or_incomplete_source_is_refused(kind, payload):
     # A walk short of its count is pooled over further passes before it refuses.
     with pytest.raises(REFUSALS):
-        list(records(kind, Transport(*[payload] * 3)))
+        list(records(kind, Transport(*[payload] * DEFAULT_POOL_PASSES)))
 
 
 @pytest.mark.parametrize(
@@ -433,22 +434,112 @@ def test_fcc_proceedings_refuse_an_empty_whole_walk_and_keep_the_output(monkeypa
 
 
 def test_crs_pools_a_shifted_walk_until_its_declared_count():
-    """A pass that repeats one report and skips another still serves the declared rows; pooling catches it."""
+    """A pass that repeats one report and skips another still serves the declared rows; pooling catches it.
+
+    Neither walk is clean, so the pool of both settles. CRS ignores ``sort``, so the second walk moves its page
+    boundaries by page size alone.
+    """
     second = {**CRS, "id": "R2"}
-    transport = Transport(crs_page([CRS, CRS], total=2), crs_page([second, CRS], total=2))
+    transport = Transport(crs_page([CRS, CRS], total=2), crs_page([second, second], total=2))
     assert sorted(x["id"] for x in selected("crs", transport).iter_records()) == ["R1", "R2"]
-    assert len(transport.calls) == 2
+    assert [call.url.params["limit"] for call in transport.calls] == ["250", "237"]
 
 
 def test_fcc_pools_a_window_until_its_aggregate_count():
-    """ECFS states no total; the aggregation it answers beside the rows counts the window."""
+    """ECFS states no total; the aggregation it answers beside the rows counts the window.
+
+    Neither walk is clean, so the pool of both settles; the second walk takes a smaller page, so its boundaries
+    fall on other filings.
+    """
     second = {**FCC_FILING, "id_submission": "f2", "express_comment": 0}
     first = {**FCC_FILING, "express_comment": 1}
     transport = Transport(
-        fcc_page("fcc-filings", [first, first], counted=2), fcc_page("fcc-filings", [second, first], counted=2)
+        fcc_page("fcc-filings", [first, first], counted=2), fcc_page("fcc-filings", [second, second], counted=2)
     )
     assert sorted(x["id_submission"] for x in selected("fcc-filings", transport).iter_records()) == ["f1", "f2"]
+    assert [call.url.params["limit"] for call in transport.calls] == ["250", "237"]
+
+
+def test_fcc_walks_cycle_through_three_page_sizes():
+    """Every walk after the first moves its page boundaries; the cycle repeats once all three sizes are spent."""
+    dirty = fcc_page("fcc-filings", [FCC_FILING, FCC_FILING], counted=2)
+    transport = Transport(*[dirty] * DEFAULT_POOL_PASSES)
+    with pytest.raises(IncompleteWalkError):
+        list(records("fcc-filings", transport))
+    assert [call.url.params["limit"] for call in transport.calls] == ["250", "237", "223", "250"][:DEFAULT_POOL_PASSES]
+
+
+def test_fcc_bisects_a_window_a_smaller_walk_could_not_exhaust(monkeypatch):
+    """A window the first walk exhausts but a later, smaller walk would stop short of is split at once.
+
+    Otherwise a second walk would meet the result ceiling and refuse as if the window had grown.
+    """
+    monkeypatch.setattr(fcc, "MAX_RESULT_WINDOW", 20)
+    filings = [{**FCC_FILING, "id_submission": f"f{number}"} for number in range(18)]
+    transport = Transport(
+        fcc_page("fcc-filings", filings, counted=0),  # 18 of 19 a page: exhausted, but a 17-row walk reaches 17
+        fcc_page("fcc-filings", filings[:9], counted=0),
+        fcc_page("fcc-filings", filings[9:], counted=0),
+    )
+    rows = list(
+        fcc._fetch_fcc("filings", since=DAY, until=date(2026, 9, 9), api_key=KEY, per_page=19, transport=transport)
+    )
+    assert [row["id_submission"] for row in rows] == [filing["id_submission"] for filing in filings]
+    assert [call.url.params["date_received"] for call in transport.calls] == [
+        "[gte]2026-09-08[lte]2026-09-10",
+        "[gte]2026-09-08[lte]2026-09-09",
+        "[gte]2026-09-09[lte]2026-09-10",
+    ]
+
+
+def _proceeding(name, **fields):
+    """An ECFS proceeding document carrying the bureau its window's count is aggregated over."""
+    return {
+        **FCC_PROCEEDING,
+        "name": name,
+        "bureau": {"code": "WCB", "name": "Wireline"},
+        "total_filing_count": 1,
+        **fields,
+    }
+
+
+@pytest.mark.parametrize(
+    "field,before,after",
+    [
+        # Measured 2026-09-23: 14-58 carried total 10,777, recent_filings 39 over days 30, beside
+        # total_filing_count 4,642 and recent_filing_count 106.
+        ("total", 10_777, 10_778),
+        ("recent_filings", 39, 40),
+        ("days", 30, 31),
+        ("total_filing_count", 4_642, 4_643),
+        ("recent_filing_count", 106, 107),
+        ("last_30_days", "2026-09-23T01:31:31.756Z", "2026-09-23T02:00:00.000Z"),
+    ],
+)
+def test_fcc_proceedings_pool_by_document_not_by_filing_activity(field, before, after):
+    """A proceeding's filing activity moves between walks while its document does not; the pool keys the document."""
+    held, other, skipped = (_proceeding(name, **{field: before}) for name in ("17-108", "23-320", "24-1"))
+    busier = {**held, field: after}
+    transport = Transport(
+        fcc_page("fcc-proceedings", [held, held, other], counted=3),
+        fcc_page("fcc-proceedings", [skipped, skipped, busier], counted=3),
+    )
+    rows = list(records("fcc-proceedings", transport))
+    assert sorted(row["name"] for row in rows) == ["17-108", "23-320", "24-1"]
+    assert next(row for row in rows if row["name"] == "17-108")[field] == after, "the latest observation"
     assert len(transport.calls) == 2
+
+
+def test_fcc_proceedings_edited_between_walks_refuse_rather_than_settle_on_a_surplus():
+    """Any other change reads as another document: the pool overfills its count and only a clean walk could settle it."""
+    held, other, skipped = _proceeding("17-108"), _proceeding("23-320"), _proceeding("24-1")
+    closed = {**held, "date_closed": "2026-09-09T00:00:00Z"}
+    dirty = fcc_page("fcc-proceedings", [held, held, other], counted=3)
+    transport = Transport(
+        dirty, fcc_page("fcc-proceedings", [skipped, skipped, closed], counted=3), *[dirty] * (DEFAULT_POOL_PASSES - 2)
+    )
+    with pytest.raises(IncompleteWalkError, match="pooled 4 records, more than the 3 declared"):
+        list(records("fcc-proceedings", transport))
 
 
 def test_fcc_proceedings_publish_one_row_per_docket_name(monkeypatch, tmp_path):
