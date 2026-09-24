@@ -43,6 +43,13 @@ from spicy_regs.transforms import (
     write_staging,
 )
 
+# With ``batch_count``, a batch's size is derived from the discovered agencies so
+# none falls off the end: a fixed ``--batch-size 22`` over 15 batches (330 slots)
+# silently left VCNP, VETS, WAPA, WCPO and WHD in no batch once discovery
+# returned 335 agencies (2026-09-24). The ceiling makes a jump in the mirror's
+# agency list a refusal to act on (add batches) instead of quietly longer jobs.
+MAX_DERIVED_BATCH_SIZE = 25
+
 
 class RegulationsPipeline(Pipeline):
     """Mirrulations S3 → Parquet ETL, composed from Readers, Writers, and transforms."""
@@ -60,7 +67,9 @@ class RegulationsPipeline(Pipeline):
         only_comments: bool = False,
         batch_number: int | None = None,
         batch_size: int = 45,
+        batch_count: int | None = None,
         full_refresh: bool = False,
+        allow_fresh_start: bool = False,
         max_workers: int = 4,
         use_iceberg: bool = False,
         enrich_text: bool = True,
@@ -75,7 +84,9 @@ class RegulationsPipeline(Pipeline):
         self.only_comments = only_comments
         self.batch_number = batch_number
         self.batch_size = batch_size
+        self.batch_count = batch_count
         self.full_refresh = full_refresh
+        self.allow_fresh_start = allow_fresh_start
         self.max_workers = max_workers
         self.use_iceberg = use_iceberg
         self.enrich_text = enrich_text
@@ -94,7 +105,11 @@ class RegulationsPipeline(Pipeline):
         # comments-only case can use it: the catalog is a row-level upsert
         # surface, so each chunk commits on its own.
         if self.chunk_size and self.only_comments and self.use_iceberg:
-            manifest = Manifest.empty() if self.full_refresh else Manifest.load(output_dir)
+            manifest = (
+                Manifest.empty()
+                if self.full_refresh
+                else Manifest.load(output_dir, allow_fresh_start=self.allow_fresh_start)
+            )
             for agency in agencies:
                 self._ingest_comments_chunked(agency, output_dir, staging_dir, manifest)
             rmtree(staging_dir, ignore_errors=True)
@@ -106,7 +121,7 @@ class RegulationsPipeline(Pipeline):
             logger.info("Full refresh — ignoring manifest and existing output")
             manifest = Manifest.empty()
         else:
-            manifest = Manifest.load(output_dir)
+            manifest = Manifest.load(output_dir, allow_fresh_start=self.allow_fresh_start)
             self._download_existing(output_dir, record_types)
 
         # 2. Extract → stage: fan agencies out, pumping each source into staging.
@@ -290,7 +305,11 @@ class RegulationsPipeline(Pipeline):
         return [RECORD_TYPES[n] for n in names]
 
     def _agencies(self) -> list[str]:
-        """Agencies to process: explicit, AGENCIES env, or S3 discovery; then batched."""
+        """Agencies to process: explicit, AGENCIES env, or S3 discovery; then batched.
+
+        ``batch_count`` splits the list into that many contiguous batches of
+        ``ceil(len / batch_count)`` agencies, overriding ``batch_size``.
+        """
         if self.agency is not None:
             agencies = [self.agency]
         elif (agencies_env := getenv("AGENCIES")) is not None:
@@ -299,8 +318,18 @@ class RegulationsPipeline(Pipeline):
             agencies = mirrulations.discover_agencies()
 
         if self.batch_number is not None:
-            start = self.batch_number * self.batch_size
-            agencies = agencies[start : start + self.batch_size]
+            size = self.batch_size
+            if self.batch_count is not None:
+                if not 0 <= self.batch_number < self.batch_count:
+                    raise ValueError(f"batch_number {self.batch_number} is outside 0..{self.batch_count - 1}")
+                size = -(-len(agencies) // self.batch_count)
+                if size > MAX_DERIVED_BATCH_SIZE:
+                    raise RuntimeError(
+                        f"{len(agencies)} agencies over {self.batch_count} batches needs {size} per batch, "
+                        f"above the ceiling of {MAX_DERIVED_BATCH_SIZE}; add batches"
+                    )
+            start = self.batch_number * size
+            agencies = agencies[start : start + size]
         return agencies
 
     def _download_existing(self, output_dir: Path, record_types: list[RecordType]) -> None:
@@ -401,7 +430,15 @@ def main(
     only_comments: Annotated[bool, Parameter(help="Only process comments")] = False,
     batch_number: Annotated[int | None, Parameter(help="Batch number (0-indexed)")] = None,
     batch_size: Annotated[int, Parameter(help="Agencies per batch")] = 45,
+    batch_count: Annotated[
+        int | None,
+        Parameter(help="Split the agencies into this many batches, deriving each batch's size (overrides batch-size)"),
+    ] = None,
     full_refresh: Annotated[bool, Parameter(help="Ignore manifest + existing output")] = False,
+    allow_fresh_start: Annotated[
+        bool,
+        Parameter(help="Start from an empty manifest when none exists locally or on R2 (first run or bootstrap)"),
+    ] = False,
     max_workers: Annotated[int, Parameter(help="Agencies processed in parallel")] = 4,
     use_iceberg: Annotated[bool, Parameter(help="Route the dockets table through R2 Data Catalog (Iceberg)")] = False,
     enrich_text: Annotated[
@@ -428,7 +465,9 @@ def main(
         only_comments=only_comments,
         batch_number=batch_number,
         batch_size=batch_size,
+        batch_count=batch_count,
         full_refresh=full_refresh,
+        allow_fresh_start=allow_fresh_start,
         max_workers=max_workers,
         use_iceberg=use_iceberg,
         enrich_text=enrich_text,

@@ -1,15 +1,16 @@
 """Tests for the incremental-processing Manifest (spicy_regs.manifest.Manifest).
 
 Pins additive key recording (``new_keys`` is a copy), the save/load round-trip,
-the fail-soft empty load when R2 is unconfigured, and that saving an empty
-manifest writes nothing.
+the refusal to start empty unless a fresh start is allowed, and that saving an
+empty manifest writes nothing.
 """
 
 from pathlib import Path
 
 import pytest
 
-from spicy_regs.manifest import Manifest
+from spicy_regs import manifest as manifest_module
+from spicy_regs.manifest import Manifest, MissingManifestError
 
 
 def test_empty_manifest_contains_nothing() -> None:
@@ -43,10 +44,25 @@ def test_save_then_load_roundtrips_keys(tmp_output: Path) -> None:
     assert "raw-data/EPA/never.json" not in reloaded
 
 
-def test_load_with_no_manifest_is_empty(tmp_output: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    # No local manifest and R2 not configured -> empty (fail-soft bootstrap).
+def test_load_refuses_when_r2_has_no_manifest(tmp_output: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # The fork's failure: R2 answered 404 and every batch silently re-read its
+    # agencies' whole history. A missing manifest is an error, not a fresh start.
+    asked: list[str] = []
+    monkeypatch.setattr(manifest_module, "download_from_r2", lambda key, path: asked.append(key) or False)
+    with pytest.raises(MissingManifestError, match="allow-fresh-start"):
+        Manifest.load(tmp_output)
+    assert asked == ["manifest.parquet"]
+
+
+def test_load_refuses_when_r2_is_unconfigured(tmp_output: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("R2_PUBLIC_URL", raising=False)
-    assert "anything" not in Manifest.load(tmp_output)
+    with pytest.raises(MissingManifestError):
+        Manifest.load(tmp_output)
+
+
+def test_load_allowing_a_fresh_start_is_empty(tmp_output: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("R2_PUBLIC_URL", raising=False)
+    assert "anything" not in Manifest.load(tmp_output, allow_fresh_start=True)
 
 
 def test_empty_save_is_noop(tmp_output: Path) -> None:

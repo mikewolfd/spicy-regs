@@ -11,7 +11,8 @@ It plays two composable roles:
   the persisted manifest.
 
 Membership is backed by a Bloom filter loaded from ``manifest.parquet`` (fetched
-from R2 when not present locally). Bloom hashing is deterministic, so a false
+from R2 when not present locally; with neither, :class:`MissingManifestError`
+unless the caller allows a fresh start). Bloom hashing is deterministic, so a false
 positive is *sticky*: the same never-seen key tests positive on every run and is
 skipped until a ``--full-refresh`` rebuilds the filter. At the 1e-7 rate over
 ~30M keys the expected count is a handful of keys total — an accepted tradeoff
@@ -30,6 +31,22 @@ import pyarrow.parquet as pq
 from loguru import logger
 
 from spicy_regs.sources.r2 import download_from_r2
+
+MANIFEST_FILE = "manifest.parquet"
+#: The persisted manifest's one column, shared by :func:`save_manifest` and the
+#: seed built from published ids (``scripts/seed_manifest_from_published.py``).
+MANIFEST_SCHEMA = pa.schema([("key", pa.large_string())])
+
+
+class MissingManifestError(RuntimeError):
+    """No manifest locally or on R2, and the caller did not allow a fresh start.
+
+    An empty manifest makes every key in the mirror new. On the fork that
+    happened silently: each scheduled batch logged "starting fresh", re-read its
+    agencies' whole history at ~280 keys/s and was cancelled at 60 minutes with
+    nothing persisted (run 35828391248, 2026-09-23). So a run starts empty only
+    when it asks to (``allow_fresh_start``).
+    """
 
 
 # ---------------------------------------------------------------------------
@@ -82,22 +99,21 @@ def save_manifest(output_dir: Path, new_keys: set[str]) -> None:
     plus the new keys to a temp file, then replaces the original.
     This avoids loading the full 27M-key manifest into memory.
     """
-    manifest_file = output_dir / "manifest.parquet"
+    manifest_file = output_dir / MANIFEST_FILE
     temp_file = output_dir / "manifest_new.parquet"
-    schema = pa.schema([("key", pa.large_string())])
 
     existing_rows = 0
-    with pq.ParquetWriter(temp_file, schema, compression="zstd") as writer:
+    with pq.ParquetWriter(temp_file, MANIFEST_SCHEMA, compression="zstd") as writer:
         # Stream existing manifest rows
         if manifest_file.exists():
             pf = pq.ParquetFile(manifest_file)
             for batch in pf.iter_batches(batch_size=500_000, columns=["key"]):
-                table = pa.Table.from_batches([batch]).cast(schema)
+                table = pa.Table.from_batches([batch]).cast(MANIFEST_SCHEMA)
                 writer.write_table(table)
                 existing_rows += batch.num_rows
 
         # Append new keys
-        new_table = pa.table({"key": list(new_keys)}).cast(schema)
+        new_table = pa.table({"key": list(new_keys)}).cast(MANIFEST_SCHEMA)
         writer.write_table(new_table)
 
     if manifest_file.exists():
@@ -126,15 +142,22 @@ class Manifest:
         return cls(set())
 
     @classmethod
-    def load(cls, output_dir: Path) -> "Manifest":
+    def load(cls, output_dir: Path, *, allow_fresh_start: bool = False) -> "Manifest":
         """Build from ``manifest.parquet`` (fetched from R2 if not local).
 
-        Falls back to an empty manifest when none is available (first run, or
-        R2 not configured), so callers never special-case bootstrapping.
+        With none available (first run, R2 not configured, or never seeded) this
+        raises :class:`MissingManifestError` unless ``allow_fresh_start`` asks for
+        an empty manifest.
         """
-        manifest_file = output_dir / "manifest.parquet"
-        if not manifest_file.exists() and not download_from_r2("manifest.parquet", manifest_file):
-            logger.info("No manifest found — starting fresh")
+        manifest_file = output_dir / MANIFEST_FILE
+        if not manifest_file.exists() and not download_from_r2(MANIFEST_FILE, manifest_file):
+            if not allow_fresh_start:
+                raise MissingManifestError(
+                    f"No {MANIFEST_FILE} in {output_dir} or on R2: every source key would count as new. "
+                    "Seed it from the published ids (docs/etl-catalog-seed.md), or allow a fresh start "
+                    "(--allow-fresh-start) for a deliberate bootstrap."
+                )
+            logger.warning("No manifest found — fresh start allowed: every source key is new")
             return cls.empty()
 
         pf = pq.ParquetFile(manifest_file)
