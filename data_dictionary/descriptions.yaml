@@ -1820,7 +1820,8 @@ tables:
       fields supply the package join. CRPT-119hrpt494 has PRIMARY H.R. 3495 references in two
       constituent-granule records but none at the package root, so bill_id remains NULL; its
       separate recital_bill_id is a text interpretation. Constituent body coverage is not
-      asserted.
+      asserted. A report whose root MODS names only its part 1 (CRPT-119hrpt811) is held out
+      and refused in committee_report_reads until the tables key parts (decision 29).
     columns_from: spicy_docs
 
   report_sections:

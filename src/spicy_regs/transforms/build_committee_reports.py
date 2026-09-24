@@ -33,9 +33,11 @@ from spicy_docs.sources.agency_reports.report_blocks import parse_agency_blocks
 from spicy_docs.sources.govinfo.bodies import ModsBill, GovInfoBodySourceError, parse_package_id
 from spicy_docs.sources.govinfo.body_acquisition import GovInfoBodyAcquirer, GovInfoBodyBudget
 from spicy_docs.reading.paged_json import PagedJsonSourceError
+from spicy_docs.reading.refusals import attach_refused_response
 from spicy_docs.schemas.tables import text
 from spicy_docs.sources.congress.listing import LIST_ROUTES, list_route_url
 from spicy_docs.sources.govinfo.discovery import GovInfoDiscoveryReader, collection_url
+from spicy_docs.transport.captured import refused_capture
 from spicy_docs.transport.credentials import CredentialRefusedError, scrub_credential
 
 from spicy_regs.sources import r2
@@ -149,6 +151,22 @@ def _package_ids(reader: PackageDiscoverySource, collection: str, since: str,
     return found
 
 
+class ReportPartHeld(GovInfoBodySourceError):
+    """A report whose MODS names only its part 1, so the body read is that part's, not the package's.
+
+    spicy-docs 0.31.0 reads such a record at the part's stem and states it as
+    ``body.part_id`` (``CRPT-119hrpt811``; ``CRPT-112hrpt38`` has named only
+    its part 1 since 2011). Every table here is keyed on the package, so a row
+    would publish Part 1 under the whole report's id, and once a Part 2 appears
+    the refused refresh would keep that row stale. Decision 29 holds the
+    package out: it is refused, retried every run, and its prior rows removed.
+
+    TODO(B31): delete this hold once the report tables key
+    ``(package_id, part_id)`` (spicy-docs branch ``wt/parts``; decision 29 in
+    ``docs/research/fork-delivery-decisions-2026-09-22.md``).
+    """
+
+
 def _read_body(acquirer: PackageBodySource, package_id: str,
                evidence: CaptureEvidence | None = None) -> tuple[Any, BodyText]:
     """One package's fetched body and the one text derivation for its rendition.
@@ -156,9 +174,15 @@ def _read_body(acquirer: PackageBodySource, package_id: str,
     Takes the narrow Protocol rather than the concrete acquirer, the way the
     bill family's ``_version_captures`` does: what this transform depends on is
     the three facts ``body_text`` reads off a fetched body, and the rendition
-    it was fetched in is the body's own, never this caller's guess.
+    it was fetched in is the body's own, never this caller's guess. A body read
+    at a part's stem raises :class:`ReportPartHeld` carrying the MODS that
+    names the part, as the 2026-09-23 refusal of the same record carried it.
     """
     package = acquirer.acquire(package_id)
+    if (part := package.body.part_id) is not None:
+        held = ReportPartHeld(f"GovInfo MODS names only {part}; held until parts are keyed (decision 29)")
+        attach_refused_response(held, refused_capture(package.mods_capture, stage="source-validation"))
+        raise held
     if evidence:
         for capture in package.captures:
             evidence.capture(capture, stage=package_id + ":used")
@@ -317,6 +341,7 @@ def build_committee_reports(
     renditions: Counter[str] = Counter()
     mentions: Counter[str] = Counter()
     meetings: Counter[str] = Counter()
+    held: set[str] = set()
     refused = unchanged = linked = 0
 
     for collection in ("CRPT", "CHRG"):
@@ -356,6 +381,8 @@ def build_committee_reports(
                     evidence.refusal(error, stage=package_id)
                 refused += 1
                 state["outcome"] = "refused"
+                if isinstance(error, ReportPartHeld):
+                    held.add(package_id)
                 logger.warning("{}: {} refused: {}", collection, package_id,
                                scrub_credential(str(error), evidence.credential if evidence else ""))
                 continue
@@ -413,9 +440,14 @@ def build_committee_reports(
         # has a column for the derivation name, so this is where it is stated.
         logger.info("Committee reports: renditions read — {}", dict(renditions))
     logger.info("Committee reports: {} cover links; agenda deferred (no verified meeting-to-jacket join)", len(link_rows))
+    # A held report's prior rows go with its refusal: they held a part under
+    # the package's id, so were never valid. Only a body read and found to be a
+    # part is ``held``; a refused read never reaches that test, so it keeps its
+    # prior rows, as every refusal does.
+    replaced = {"committee_reports": held, "report_sections": evaluated_reports | held,
+                "hearing_bill_links": evaluated_hearings}
     paths = tuple(merge_contract_table(output_dir, name, rows, download_prior=download_prior,
-                                     replace_parents=("package_id", evaluated_hearings) if name == "hearing_bill_links"
-                                     else ("package_id", evaluated_reports) if name == "report_sections" else None,
+                                     replace_parents=("package_id", replaced[name]) if name in replaced else None,
                                      prior_present=(prior_files[name] is not None) if name in prior_files else None)
                   for name, rows in (("committee_reports", report_rows), ("report_sections", section_rows),
                                      ("hearing_transcripts", hearing_rows), ("hearing_bill_links", link_rows)))

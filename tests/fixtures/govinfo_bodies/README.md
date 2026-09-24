@@ -10,18 +10,23 @@ records acquisition on 2026-09-19. This local copy makes no new request.
 | `summary-CRPT-119hrpt1.json` | [Package summary](https://api.govinfo.gov/packages/CRPT-119hrpt1/summary) | 1,800 | `818d6a4dc8678a6b2972eb2f0e4596be2c576087508bb49caeb5d8be588e5bc1` |
 | `body-CRPT-119hrpt1.htm` | [HTML body](https://www.govinfo.gov/content/pkg/CRPT-119hrpt1/html/CRPT-119hrpt1.htm) | 13,953 | `d2575146c81d989831fd08e8f424eddb048346bfe78670db994c0a107b584ad9` |
 
-Two complete, unchanged MODS responses, one per collection the
-`committee-reports` rollup publishes. They exist so
+Three complete, unchanged MODS responses. The first two, one per collection the
+`committee-reports` rollup publishes, exist so
 `tests/test_committee_reports.py` can prove `bill_id` is read from the
 package's own MODS — the metadata the transform already fetches for every
 package, so the linkage costs no request — and that a hearing whose MODS
 names bills only as body mentions publishes a NULL rather than one of them.
-These U.S. government documents are public domain.
+The third is a report whose root names only its part 1
+(`CRPT-119hrpt811-pt1`, `granuleClass` `FIRSTPART`), so
+`tests/test_report_section_refresh.py` can prove such a report is held out
+until the report tables key parts (decision 29). These U.S. government
+documents are public domain.
 
 | File | Publisher response | Bytes | SHA-256 | Provenance |
 | --- | --- | --- | --- | --- |
 | `mods-CRPT-119hrpt1.xml` | [`packages/CRPT-119hrpt1/mods`](https://api.govinfo.gov/packages/CRPT-119hrpt1/mods) | 9,787 | `d73ea7b12140ca7e1ad08649092a9e14a432a9fce8948d8a4975e4f3cd43f9d2` | Copied byte-for-byte from spicy-docs `tests/fixtures/govinfo_bodies/` at tag v0.21.1 (`6f8d20e`), the release this repository pins; spicy-docs captured it 2026-09-19 with the key sent only as `X-Api-Key`. |
 | `mods-CHRG-119hhrg63127.xml` | [`packages/CHRG-119hhrg63127/mods`](https://api.govinfo.gov/packages/CHRG-119hhrg63127/mods) | 33,283 | `0070c86ed50c50331a060d692957081d1feb41c04d82742c78765f3f77d66849` | Captured 2026-09-19 for this repository with `Accept-Encoding: identity` and the api.data.gov key sent only as `X-Api-Key`; the capture refused to write any body containing the key or an `api_key=` parameter, and this one contained neither. |
+| `mods-CRPT-119hrpt811.xml` | [`packages/CRPT-119hrpt811/mods`](https://api.govinfo.gov/packages/CRPT-119hrpt811/mods) | 26,279 | `aba0227068f60977bb1ee98d58add159064bb2b38e7b235e70b8673de7b3e125` | The record the scheduled run of 2026-09-23 refused and the one of 2026-09-24 published as Part 1 (Last-Modified 2026-09-22 14:12:09 GMT). Copied byte-for-byte from `~/Work/corpora/fork-execution-2026-09-21/drift-audit-2026-09-24/reports/raw/`, captured 2026-09-24 with the key sent only as `X-Api-Key`; it contains no key and no `api_key=` parameter. |
 
 ## What each one states about a bill
 

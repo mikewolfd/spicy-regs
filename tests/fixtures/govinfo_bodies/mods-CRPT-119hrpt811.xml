@@ -1,0 +1,531 @@
+<mods xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://www.loc.gov/mods/v3" version="3.3" xsi:schemaLocation="http://www.loc.gov/mods/v3 http://www.loc.gov/standards/mods/v3/mods-3-3.xsd" ID="P0b002ee1e86b5c8e">
+    <name type="corporate">
+         <namePart>United States Government Publishing Office</namePart>
+         <role>
+              <roleTerm authority="marcrelator" type="text">publisher</roleTerm>
+              <roleTerm authority="marcrelator" type="code">pbl</roleTerm>
+        </role>
+         <role>
+              <roleTerm authority="marcrelator" type="text">distributor</roleTerm>
+              <roleTerm authority="marcrelator" type="code">dst</roleTerm>
+        </role>
+    </name>
+    <name type="corporate">
+         <namePart>United States</namePart>
+         <namePart>Congress</namePart>
+         <namePart>House of Representatives</namePart>
+         <role>
+              <roleTerm authority="marcrelator" type="text">author</roleTerm>
+              <roleTerm authority="marcrelator" type="code">aut</roleTerm>
+        </role>
+         <description>Government Organization</description>
+    </name>
+    <typeOfResource>text</typeOfResource>
+    <genre authority="marcgt">government publication</genre>
+    <language>
+         <languageTerm type="code" authority="iso639-2b">eng</languageTerm>
+    </language>
+    <extension>
+         <collectionCode>CRPT</collectionCode>
+         <category>Congressional Committee Materials</category>
+         <waisDatabaseName>119_cong_reports</waisDatabaseName>
+         <branch>legislative</branch>
+         <dateIngested>2026-09-22</dateIngested>
+    </extension>
+    <titleInfo>
+         <title>Part 1- NORTHERN NEVADA ECONOMIC DEVELOPMENT AND CONSERVATION ACT OF 2026</title>
+    </titleInfo>
+    <originInfo>
+         <publisher>U.S. Government Publishing Office</publisher>
+         <dateIssued encoding="w3cdtf">2026-09-10</dateIssued>
+         <issuance>monographic</issuance>
+    </originInfo>
+    <physicalDescription>
+         <note type="source content type">deposited</note>
+         <digitalOrigin>born digital</digitalOrigin>
+         <extent>60 digital object pages</extent>
+    </physicalDescription>
+    <classification authority="sudocs">Y 1.1/8:</classification>
+    <identifier type="uri">https://www.govinfo.gov/app/details/CRPT-119hrpt811</identifier>
+    <identifier type="local">P0b002ee1e86b5c8e</identifier>
+    <identifier type="former package identifier">f:hr811p1.119.txt</identifier>
+    <recordInfo>
+         <recordContentSource authority="marcorg">DGPO</recordContentSource>
+         <recordCreationDate encoding="w3cdtf">2026-09-22</recordCreationDate>
+         <recordChangeDate encoding="w3cdtf">2026-09-22</recordChangeDate>
+         <recordIdentifier source="DGPO">CRPT-119hrpt811</recordIdentifier>
+         <recordOrigin>machine generated</recordOrigin>
+         <languageOfCataloging>
+              <languageTerm type="code" authority="iso639-2b">eng</languageTerm>
+        </languageOfCataloging>
+    </recordInfo>
+    <accessCondition type="GPO scope determination">fdlp</accessCondition>
+    <extension>
+         <subtitle>Report together with ADDITIONAL VIEWS to accompany H.R. 2317</subtitle>
+         <docClass>HRPT</docClass>
+         <accessId>CRPT-119hrpt811</accessId>
+         <chamber>HOUSE</chamber>
+         <congress years="2025-2026">119</congress>
+         <number>811</number>
+         <session>2</session>
+         <isConferenceReport>false</isConferenceReport>
+         <isSerialSet>true</isSerialSet>
+    </extension>
+    <location>
+         <url displayLabel="Content Detail" access="object in context">https://www.govinfo.gov/app/details/CRPT-119hrpt811</url>
+    </location>
+    <identifier type="preferred citation">H. Rept. 119-811</identifier>
+    <titleInfo>
+         <title>Part 1- NORTHERN NEVADA ECONOMIC DEVELOPMENT AND CONSERVATION ACT OF 2026</title>
+    </titleInfo>
+    <relatedItem type="otherFormat" xlink:href="https://www.govinfo.gov/content/pkg/CRPT-119hrpt811/html/CRPT-119hrpt811-pt1.htm">
+         <identifier type="FDsys Unique ID">D09002ee1e86b5fe1</identifier>
+    </relatedItem>
+    <relatedItem type="otherFormat" xlink:href="https://www.govinfo.gov/content/pkg/CRPT-119hrpt811/pdf/CRPT-119hrpt811-pt1.pdf">
+         <identifier type="FDsys Unique ID">D09002ee1e86b5fe2</identifier>
+    </relatedItem>
+    <identifier type="uri">https://www.govinfo.gov/app/details/CRPT-119hrpt811/CRPT-119hrpt811-pt1</identifier>
+    <identifier type="former granule identifier">f:hr811p1.119.txt</identifier>
+    <location>
+         <url displayLabel="Content Detail" access="object in context">https://www.govinfo.gov/app/details/CRPT-119hrpt811/CRPT-119hrpt811-pt1</url>
+         <url access="raw object" displayLabel="PDF rendition">https://www.govinfo.gov/content/pkg/CRPT-119hrpt811/pdf/CRPT-119hrpt811-pt1.pdf</url>
+         <url access="raw object" displayLabel="HTML rendition">https://www.govinfo.gov/content/pkg/CRPT-119hrpt811/html/CRPT-119hrpt811-pt1.htm</url>
+    </location>
+    <identifier type="preferred citation">H. Rept. 119-811</identifier>
+    <abstract>The Committee on Natural Resources, to whom was referred the bill (H.R. 2317) to provide for transfer of ownership of certain Federal lands in northern Nevada, to authorize the disposal of certain Federal lands in northern Nevada for economic development, to promote conservation in northern Nevada, and for other purposes, having considered the same, reports favorably thereon with an amendment and recommends that the bill as amended do pass.</abstract>
+    <extension>
+         <searchTitle>Part 1- NORTHERN NEVADA ECONOMIC DEVELOPMENT AND CONSERVATION ACT OF 2026;H. Rept. 119-811</searchTitle>
+         <legislativeHistory>Committed to the Committee of the Whole House on the State of the Union and ordered to be printed</legislativeHistory>
+         <granuleClass>FIRSTPART</granuleClass>
+         <accessId>CRPT-119hrpt811-pt1</accessId>
+         <action date="2026-09-10">Committed to the Committee of the Whole House on the State of the Union and ordered to be printed</action>
+         <session>2</session>
+         <shortTitle>Northern Nevada Economic Development and Conservation Act of 2026</shortTitle>
+         <recommendation>The Committee on Natural Resources, to whom was referred the bill (H.R. 2317) to provide for transfer of ownership of certain Federal lands in northern Nevada, to authorize the disposal of certain Federal lands in northern Nevada for economic development, to promote conservation in northern Nevada, and for other purposes, having considered the same, reports favorably thereon with an amendment and recommends that the bill as amended do pass.</recommendation>
+         <submittedStatement>Mr. Westerman, from the Committee on Natural Resources, submitted the following</submittedStatement>
+         <bill congress="119" context="OTHER" number="2317" type="HR"></bill>
+         <bill congress="119" context="PRIMARY" number="2317" type="HR"></bill>
+         <bill congress="119" context="OTHER" number="2570" type="HR"></bill>
+         <bill congress="119" context="OTHER" number="3173" type="HR"></bill>
+         <congCommittee authorityId="hsii00" chamber="H" congress="119" type="S">
+                                    
+              <name type="authority-standard">Committee on Natural Resources</name>
+                                    
+              <name type="authority-short">Natural Resources</name>
+                                
+        </congCommittee>
+         <congMember bioGuideId="W000821" chamber="H" congress="119" party="R" role="SUBMITTEDBY" state="AR">
+                                    
+              <name type="parsed">Mr. Westerman</name>
+                                    
+              <name type="authority-fnf">Bruce Westerman</name>
+                                    
+              <name type="authority-lnf">Westerman, Bruce</name>
+                                
+        </congMember>
+         <law congress="95" isPrivate="false" number="220"></law>
+         <law congress="96" isPrivate="false" number="586"></law>
+         <law congress="98" isPrivate="false" number="169"></law>
+         <law congress="105" isPrivate="false" number="263"></law>
+         <law congress="108" isPrivate="false" number="67"></law>
+         <law congress="111" isPrivate="false" number="11"></law>
+         <law congress="111" isPrivate="false" number="139"></law>
+         <law congress="117" isPrivate="false" number="263"></law>
+         <law congress="118" isPrivate="false" number="63"></law>
+         <USCode title="16">
+                                    
+              <section number="1131"></section>
+                                    
+              <section detail="et seq." number="1131"></section>
+                                    
+              <section detail="(d)(1)" number="1133"></section>
+                                    
+              <section detail="(d)(4)" number="1133"></section>
+                                    
+              <section detail="(d)(7)" number="1133"></section>
+                                    
+              <section detail="et seq." number="1531"></section>
+                                    
+              <section detail="(c)" number="1533"></section>
+                                
+        </USCode>
+         <USCode title="25">
+                                    
+              <section number="2703"></section>
+                                    
+              <section number="5304"></section>
+                                
+        </USCode>
+         <USCode title="42">
+                                    
+              <section number="4321"></section>
+                                    
+              <section detail="et seq." number="4321"></section>
+                                
+        </USCode>
+         <USCode title="43">
+                                    
+              <section number="1701"></section>
+                                    
+              <section detail="et seq" number="1701"></section>
+                                    
+              <section detail="et seq." number="1701"></section>
+                                    
+              <section number="1702"></section>
+                                    
+              <section number="1712"></section>
+                                    
+              <section number="1713"></section>
+                                    
+              <section number="1716"></section>
+                                    
+              <section detail="(b)" number="1716"></section>
+                                    
+              <section number="1719"></section>
+                                    
+              <section detail="(c)" number="1782"></section>
+                                    
+              <section number="869"></section>
+                                    
+              <section detail="et seq." number="869"></section>
+                                
+        </USCode>
+         <USCode title="49">
+                                    
+              <section number="47504"></section>
+                                
+        </USCode>
+         <statuteAtLarge volume="12">
+                                    
+              <pages pages="489"></pages>
+                                
+        </statuteAtLarge>
+         <statuteAtLarge volume="44">
+                                    
+              <pages pages="741"></pages>
+                                
+        </statuteAtLarge>
+         <statuteAtLarge volume="94">
+                                    
+              <pages pages="3381"></pages>
+                                
+        </statuteAtLarge>
+         <statuteAtLarge volume="112">
+                                    
+              <pages pages="2346"></pages>
+                                
+        </statuteAtLarge>
+         <statuteAtLarge volume="116">
+                                    
+              <pages pages="2007"></pages>
+                                
+        </statuteAtLarge>
+         <statuteAtLarge volume="117">
+                                    
+              <pages pages="880"></pages>
+                                    
+              <pages pages="1317"></pages>
+                                
+        </statuteAtLarge>
+         <statuteAtLarge volume="118">
+                                    
+              <pages pages="2414"></pages>
+                                
+        </statuteAtLarge>
+         <statuteAtLarge volume="120">
+                                    
+              <pages pages="3045"></pages>
+                                
+        </statuteAtLarge>
+         <statuteAtLarge volume="123">
+                                    
+              <pages pages="1111"></pages>
+                                    
+              <pages pages="1113"></pages>
+                                
+        </statuteAtLarge>
+         <statuteAtLarge volume="128">
+                                    
+              <pages pages="3751"></pages>
+                                
+        </statuteAtLarge>
+         <congReport congress="101" number="405" type="H"></congReport>
+         <associatedBills>H.R. 2317, 119th</associatedBills>
+    </extension>
+    <name type="personal">
+         <namePart>Bruce Westerman</namePart>
+         <affiliation>United States House of Representatives</affiliation>
+         <role>
+              <roleTerm authority="marcrelator" type="text">sponsor</roleTerm>
+              <roleTerm authority="marcrelator" type="code">spn</roleTerm>
+        </role>
+         <description>United States Congress Member</description>
+    </name>
+    <name type="corporate">
+         <namePart>United States</namePart>
+         <namePart>Congress</namePart>
+         <namePart>House of Representatives</namePart>
+         <namePart>Committee on Natural Resources</namePart>
+         <role>
+              <roleTerm authority="marcrelator" type="text">associated name</roleTerm>
+              <roleTerm authority="marcrelator" type="code">asn</roleTerm>
+        </role>
+         <description>Government Organization</description>
+    </name>
+    <relatedItem type="isReferencedBy">
+         <titleInfo>
+              <title>United States House Bill 2317 (119th Congress)</title>
+        </titleInfo>
+         <identifier type="Congressional Bill citation">H.R. 2317</identifier>
+         <extension>
+              <congress>119</congress>
+              <context>OTHER</context>
+        </extension>
+    </relatedItem>
+    <relatedItem type="isReferencedBy">
+         <titleInfo>
+              <title>United States House Bill 2317 (119th Congress)</title>
+        </titleInfo>
+         <identifier type="Congressional Bill citation">H.R. 2317</identifier>
+         <extension>
+              <congress>119</congress>
+              <context>PRIMARY</context>
+        </extension>
+    </relatedItem>
+    <relatedItem type="isReferencedBy">
+         <titleInfo>
+              <title>United States House Bill 2570 (119th Congress)</title>
+        </titleInfo>
+         <identifier type="Congressional Bill citation">H.R. 2570</identifier>
+         <extension>
+              <congress>119</congress>
+              <context>OTHER</context>
+        </extension>
+    </relatedItem>
+    <relatedItem type="isReferencedBy">
+         <titleInfo>
+              <title>United States House Bill 3173 (119th Congress)</title>
+        </titleInfo>
+         <identifier type="Congressional Bill citation">H.R. 3173</identifier>
+         <extension>
+              <congress>119</congress>
+              <context>OTHER</context>
+        </extension>
+    </relatedItem>
+    <relatedItem type="isReferencedBy">
+         <titleInfo>
+              <title>United States Code</title>
+              <partNumber>Title 16 Section 1131</partNumber>
+              <partNumber>Title 16 Section 1131et seq.</partNumber>
+              <partNumber>Title 16 Section 1133(d)(1)</partNumber>
+              <partNumber>Title 16 Section 1133(d)(4)</partNumber>
+              <partNumber>Title 16 Section 1133(d)(7)</partNumber>
+              <partNumber>Title 16 Section 1531et seq.</partNumber>
+              <partNumber>Title 16 Section 1533(c)</partNumber>
+        </titleInfo>
+         <identifier type="USC citation">16 U.S.C. 1131</identifier>
+         <identifier type="USC citation">16 U.S.C. 1131et seq.</identifier>
+         <identifier type="USC citation">16 U.S.C. 1133(d)(1)</identifier>
+         <identifier type="USC citation">16 U.S.C. 1133(d)(4)</identifier>
+         <identifier type="USC citation">16 U.S.C. 1133(d)(7)</identifier>
+         <identifier type="USC citation">16 U.S.C. 1531et seq.</identifier>
+         <identifier type="USC citation">16 U.S.C. 1533(c)</identifier>
+    </relatedItem>
+    <relatedItem type="isReferencedBy">
+         <titleInfo>
+              <title>United States Code</title>
+              <partNumber>Title 25 Section 2703</partNumber>
+              <partNumber>Title 25 Section 5304</partNumber>
+        </titleInfo>
+         <identifier type="USC citation">25 U.S.C. 2703</identifier>
+         <identifier type="USC citation">25 U.S.C. 5304</identifier>
+    </relatedItem>
+    <relatedItem type="isReferencedBy">
+         <titleInfo>
+              <title>United States Code</title>
+              <partNumber>Title 42 Section 4321</partNumber>
+              <partNumber>Title 42 Section 4321et seq.</partNumber>
+        </titleInfo>
+         <identifier type="USC citation">42 U.S.C. 4321</identifier>
+         <identifier type="USC citation">42 U.S.C. 4321et seq.</identifier>
+    </relatedItem>
+    <relatedItem type="isReferencedBy">
+         <titleInfo>
+              <title>United States Code</title>
+              <partNumber>Title 43 Section 1701</partNumber>
+              <partNumber>Title 43 Section 1701et seq</partNumber>
+              <partNumber>Title 43 Section 1701et seq.</partNumber>
+              <partNumber>Title 43 Section 1702</partNumber>
+              <partNumber>Title 43 Section 1712</partNumber>
+              <partNumber>Title 43 Section 1713</partNumber>
+              <partNumber>Title 43 Section 1716</partNumber>
+              <partNumber>Title 43 Section 1716(b)</partNumber>
+              <partNumber>Title 43 Section 1719</partNumber>
+              <partNumber>Title 43 Section 1782(c)</partNumber>
+              <partNumber>Title 43 Section 869</partNumber>
+              <partNumber>Title 43 Section 869et seq.</partNumber>
+        </titleInfo>
+         <identifier type="USC citation">43 U.S.C. 1701</identifier>
+         <identifier type="USC citation">43 U.S.C. 1701et seq</identifier>
+         <identifier type="USC citation">43 U.S.C. 1701et seq.</identifier>
+         <identifier type="USC citation">43 U.S.C. 1702</identifier>
+         <identifier type="USC citation">43 U.S.C. 1712</identifier>
+         <identifier type="USC citation">43 U.S.C. 1713</identifier>
+         <identifier type="USC citation">43 U.S.C. 1716</identifier>
+         <identifier type="USC citation">43 U.S.C. 1716(b)</identifier>
+         <identifier type="USC citation">43 U.S.C. 1719</identifier>
+         <identifier type="USC citation">43 U.S.C. 1782(c)</identifier>
+         <identifier type="USC citation">43 U.S.C. 869</identifier>
+         <identifier type="USC citation">43 U.S.C. 869et seq.</identifier>
+    </relatedItem>
+    <relatedItem type="isReferencedBy">
+         <titleInfo>
+              <title>United States Code</title>
+              <partNumber>Title 49 Section 47504</partNumber>
+        </titleInfo>
+         <identifier type="USC citation">49 U.S.C. 47504</identifier>
+    </relatedItem>
+    <relatedItem type="isReferencedBy">
+         <titleInfo>
+              <title>United States Statutes at Large</title>
+              <partNumber>Volume 12 Page 489</partNumber>
+        </titleInfo>
+         <identifier type="Statute citation">12 Stat. 489</identifier>
+    </relatedItem>
+    <relatedItem type="isReferencedBy">
+         <titleInfo>
+              <title>United States Statutes at Large</title>
+              <partNumber>Volume 44 Page 741</partNumber>
+        </titleInfo>
+         <identifier type="Statute citation">44 Stat. 741</identifier>
+    </relatedItem>
+    <relatedItem type="isReferencedBy">
+         <titleInfo>
+              <title>United States Statutes at Large</title>
+              <partNumber>Volume 94 Page 3381</partNumber>
+        </titleInfo>
+         <identifier type="Statute citation">94 Stat. 3381</identifier>
+    </relatedItem>
+    <relatedItem type="isReferencedBy">
+         <titleInfo>
+              <title>United States Statutes at Large</title>
+              <partNumber>Volume 112 Page 2346</partNumber>
+        </titleInfo>
+         <identifier type="Statute citation">112 Stat. 2346</identifier>
+    </relatedItem>
+    <relatedItem type="isReferencedBy">
+         <titleInfo>
+              <title>United States Statutes at Large</title>
+              <partNumber>Volume 116 Page 2007</partNumber>
+        </titleInfo>
+         <identifier type="Statute citation">116 Stat. 2007</identifier>
+    </relatedItem>
+    <relatedItem type="isReferencedBy">
+         <titleInfo>
+              <title>United States Statutes at Large</title>
+              <partNumber>Volume 117 Page 880</partNumber>
+              <partNumber>Volume 117 Page 1317</partNumber>
+        </titleInfo>
+         <identifier type="Statute citation">117 Stat. 880</identifier>
+         <identifier type="Statute citation">117 Stat. 1317</identifier>
+    </relatedItem>
+    <relatedItem type="isReferencedBy">
+         <titleInfo>
+              <title>United States Statutes at Large</title>
+              <partNumber>Volume 118 Page 2414</partNumber>
+        </titleInfo>
+         <identifier type="Statute citation">118 Stat. 2414</identifier>
+    </relatedItem>
+    <relatedItem type="isReferencedBy">
+         <titleInfo>
+              <title>United States Statutes at Large</title>
+              <partNumber>Volume 120 Page 3045</partNumber>
+        </titleInfo>
+         <identifier type="Statute citation">120 Stat. 3045</identifier>
+    </relatedItem>
+    <relatedItem type="isReferencedBy">
+         <titleInfo>
+              <title>United States Statutes at Large</title>
+              <partNumber>Volume 123 Page 1111</partNumber>
+              <partNumber>Volume 123 Page 1113</partNumber>
+        </titleInfo>
+         <identifier type="Statute citation">123 Stat. 1111</identifier>
+         <identifier type="Statute citation">123 Stat. 1113</identifier>
+    </relatedItem>
+    <relatedItem type="isReferencedBy">
+         <titleInfo>
+              <title>United States Statutes at Large</title>
+              <partNumber>Volume 128 Page 3751</partNumber>
+        </titleInfo>
+         <identifier type="Statute citation">128 Stat. 3751</identifier>
+    </relatedItem>
+    <relatedItem type="isReferencedBy">
+         <titleInfo>
+              <title>United States Public Law 220 (95th Congress)</title>
+        </titleInfo>
+         <identifier type="public law citation">Public Law 95-220</identifier>
+         <identifier type="public law citation">Public Law No 95-220</identifier>
+    </relatedItem>
+    <relatedItem type="isReferencedBy">
+         <titleInfo>
+              <title>United States Public Law 586 (96th Congress)</title>
+        </titleInfo>
+         <identifier type="public law citation">Public Law 96-586</identifier>
+         <identifier type="public law citation">Public Law No 96-586</identifier>
+    </relatedItem>
+    <relatedItem type="isReferencedBy">
+         <titleInfo>
+              <title>United States Public Law 169 (98th Congress)</title>
+        </titleInfo>
+         <identifier type="public law citation">Public Law 98-169</identifier>
+         <identifier type="public law citation">Public Law No 98-169</identifier>
+    </relatedItem>
+    <relatedItem type="isReferencedBy">
+         <titleInfo>
+              <title>United States Public Law 263 (105th Congress)</title>
+        </titleInfo>
+         <identifier type="public law citation">Public Law 105-263</identifier>
+         <identifier type="public law citation">Public Law No 105-263</identifier>
+    </relatedItem>
+    <relatedItem type="isReferencedBy">
+         <titleInfo>
+              <title>United States Public Law 67 (108th Congress)</title>
+        </titleInfo>
+         <identifier type="public law citation">Public Law 108-67</identifier>
+         <identifier type="public law citation">Public Law No 108-67</identifier>
+    </relatedItem>
+    <relatedItem type="isReferencedBy">
+         <titleInfo>
+              <title>United States Public Law 11 (111th Congress)</title>
+        </titleInfo>
+         <identifier type="public law citation">Public Law 111-11</identifier>
+         <identifier type="public law citation">Public Law No 111-11</identifier>
+    </relatedItem>
+    <relatedItem type="isReferencedBy">
+         <titleInfo>
+              <title>United States Public Law 139 (111th Congress)</title>
+        </titleInfo>
+         <identifier type="public law citation">Public Law 111-139</identifier>
+         <identifier type="public law citation">Public Law No 111-139</identifier>
+    </relatedItem>
+    <relatedItem type="isReferencedBy">
+         <titleInfo>
+              <title>United States Public Law 263 (117th Congress)</title>
+        </titleInfo>
+         <identifier type="public law citation">Public Law 117-263</identifier>
+         <identifier type="public law citation">Public Law No 117-263</identifier>
+    </relatedItem>
+    <relatedItem type="isReferencedBy">
+         <titleInfo>
+              <title>United States Public Law 63 (118th Congress)</title>
+        </titleInfo>
+         <identifier type="public law citation">Public Law 118-63</identifier>
+         <identifier type="public law citation">Public Law No 118-63</identifier>
+    </relatedItem>
+    <relatedItem type="isReferencedBy">
+         <titleInfo>
+              <title>United States House Report 405 (101st Congress)</title>
+        </titleInfo>
+         <identifier type="congressional report citation">H. Rept. 101-405</identifier>
+    </relatedItem>
+</mods>

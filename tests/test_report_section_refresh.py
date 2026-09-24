@@ -1,15 +1,23 @@
-"""Corrected report readers and named re-reads refresh unchanged sources and replace their blocks."""
+"""Corrected report readers and named re-reads refresh unchanged sources and replace their blocks.
 
+A report whose MODS names only its part 1 is held instead: refused, and its prior rows removed.
+"""
+
+import json
 import shutil
+
+from types import SimpleNamespace
 
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 from spicy_docs.interpretation.cbo_estimates import CBO_ESTIMATE_RULE_VERSION
 from spicy_docs.schemas.committee_report_tables import REPORT_SECTIONS
+from spicy_docs.transport.captured import CapturedBodyResponse
 
+from spicy_regs.source_evidence import CaptureEvidence
 from spicy_regs.transforms.build_committee_reports import build_committee_reports
-from spicy_regs.transforms.committee_report_reads import READ_COLUMNS, READS_TABLE, RULE_VERSIONS
+from spicy_regs.transforms.committee_report_reads import READ_COLUMNS, READS_TABLE, RULE_VERSIONS, complete
 from spicy_regs.transforms.table_merge import prior_scratch_path
 from tests.test_committee_reports import (
     CHRG_ID,
@@ -245,3 +253,135 @@ def test_the_rollup_reads_its_reread_list_from_the_environment(tmp_path, monkeyp
     monkeypatch.setattr(committee_reports, "build_committee_reports", lambda *args, **kwargs: calls.append(kwargs))
     committee_reports.CommitteeReportsRollup().build(tmp_path)
     assert [call["reread"] for call in calls] == [expected]
+
+
+#: Its MODS (``tests/fixtures/govinfo_bodies/mods-CRPT-119hrpt811.xml``, the
+#: bytes refused on 2026-09-23) names only ``-pt1``, which spicy-docs 0.31.0
+#: reads at that part's stem.
+PART_ONLY = "CRPT-119hrpt811"
+PART_ONLY_MODS = "sha256:aba0227068f60977bb1ee98d58add159064bb2b38e7b235e70b8673de7b3e125"
+
+
+class PartOnlyDiscovery:
+    """Lists the part-only report beside the ordinary one, as a retained listing page."""
+
+    def packages(self, url, *, max_pages=40):
+        ids = [PART_ONLY, CRPT_ID] if "/CRPT/" in url else []
+        records = [{"packageId": key, "lastModified": "2026-09-18T12:00:00Z"} for key in ids]
+        page = CapturedBodyResponse(
+            requested_url=url,
+            resolved_url=url,
+            status_code=200,
+            observed_at=OBSERVED_AT,
+            content_type="application/json",
+            body=json.dumps(records).encode(),
+        )
+        yield SimpleNamespace(records=records, capture=page)
+
+
+class ReportsAcquirer:
+    """Serves each report from its retained MODS; ``REFUSED`` fails the way an unavailable source does."""
+
+    def __init__(self):
+        self.requested = []
+
+    def acquire(self, package_id, *, max_bytes=None):
+        self.requested.append(package_id)
+        if package_id == REFUSED:
+            raise ConnectionError("retained source unavailable")
+        return _package(package_id)
+
+
+def _tables(paths):
+    return {path.stem: pq.read_table(path).to_pylist() for path in paths}
+
+
+def test_a_report_whose_mods_names_only_its_part_1_is_held_and_refused(tmp_path):
+    evidence = CaptureEvidence(tmp_path, "committee-reports")
+    tables = _tables(
+        build_committee_reports(
+            tmp_path,
+            reader=PartOnlyDiscovery(),
+            acquirer=ReportsAcquirer(),
+            hearings=StubHearings(),
+            download_prior=_no_prior,
+            evidence=evidence,
+        )
+    )
+    assert [row["package_id"] for row in tables["committee_reports"]] == [CRPT_ID]
+    assert {row["package_id"] for row in tables["report_sections"]} == {CRPT_ID}
+    reads = {row["package_id"]: row for row in tables[READS_TABLE]}
+    assert reads[CRPT_ID]["outcome"] == "complete"
+    assert reads[PART_ONLY]["outcome"] == "refused" and not complete(reads[PART_ONLY], "CRPT")
+    events = [json.loads(line) for line in (evidence.artifact_dir / "journal.jsonl").read_bytes().splitlines()]
+    [refusal] = [row for row in events if row["event"] == "refusal"]
+    assert refusal["stage"] == PART_ONLY and refusal["error_type"] == "ReportPartHeld"
+    assert f"{PART_ONLY}-pt1" in refusal["message"] and "decision 29" in refusal["message"]
+    assert refusal["response"]["sha256"] == PART_ONLY_MODS, "the refusal retains the MODS that names the part"
+    assert not any(row.get("stage") == PART_ONLY + ":used" for row in events)
+
+
+def test_a_held_report_loses_its_prior_part_1_rows_and_a_refused_one_keeps_its_own(tmp_path):
+    """The live state of 2026-09-24: ``CRPT-119hrpt811`` complete at 0.31.0 with Part 1's row and sections."""
+    before_hold = "spicy-docs=0.31.0;cbo=cf790f0f814a;sections=report-headings-001"
+    part_url = f"https://www.govinfo.gov/content/pkg/{PART_ONLY}/html/{PART_ONLY}-pt1.htm"
+    _write_prior(
+        tmp_path,
+        "committee_reports",
+        ("package_id", "last_modified", "requested_url", "observed_at"),
+        [
+            {"package_id": key, "last_modified": "2026-09-18T12:00:00Z", "requested_url": url, "observed_at": "prior"}
+            for key, url in ((PART_ONLY, part_url), (CRPT_ID, None), (REFUSED, None))
+        ],
+    )
+    _write_prior(
+        tmp_path,
+        "report_sections",
+        REPORT_SECTIONS.columns,
+        [{"package_id": key, "seq": "0", "body": "prior block"} for key in (PART_ONLY, CRPT_ID, REFUSED)],
+    )
+    _write_prior(
+        tmp_path,
+        READS_TABLE,
+        READ_COLUMNS,
+        [
+            {
+                "package_id": key,
+                "last_modified": "2026-09-18T12:00:00Z",
+                "outcome": outcome,
+                "rule_version": before_hold,
+                "observed_at": "2026-09-24T03:47:22+00:00",
+            }
+            for key, outcome in ((PART_ONLY, "complete"), (CRPT_ID, "complete"), (REFUSED, "refused"))
+        ],
+    )
+    acquirer = ReportsAcquirer()
+    paths = build_committee_reports(
+        tmp_path, reader=NoDiscovery(), acquirer=acquirer, hearings=StubHearings(), download_prior=_no_prior
+    )
+    assert sorted(acquirer.requested) == sorted([PART_ONLY, CRPT_ID, REFUSED]), "the hold is a rule change"
+    tables = _tables(paths)
+    reports = {row["package_id"]: row for row in tables["committee_reports"]}
+    assert set(reports) == {CRPT_ID, REFUSED}
+    assert reports[CRPT_ID]["observed_at"] == OBSERVED_AT and reports[REFUSED]["observed_at"] == "prior"
+    sections = tables["report_sections"]
+    assert {row["package_id"] for row in sections} == {CRPT_ID, REFUSED}
+    assert [row["body"] for row in sections if row["package_id"] == REFUSED] == ["prior block"]
+    assert "prior block" not in [row["body"] for row in sections if row["package_id"] == CRPT_ID]
+    reads = {row["package_id"]: row for row in tables[READS_TABLE]}
+    assert {key: row["outcome"] for key, row in reads.items()} == {
+        PART_ONLY: "refused",
+        CRPT_ID: "complete",
+        REFUSED: "refused",
+    }
+    # Retried as before, and still held.
+    for name in ("committee_reports", "report_sections", READS_TABLE):
+        shutil.copyfile(tmp_path / f"{name}.parquet", prior_scratch_path(tmp_path, name))
+    again = ReportsAcquirer()
+    tables = _tables(
+        build_committee_reports(
+            tmp_path, reader=NoDiscovery(), acquirer=again, hearings=StubHearings(), download_prior=_no_prior
+        )
+    )
+    assert sorted(again.requested) == sorted([PART_ONLY, REFUSED])
+    assert PART_ONLY not in {row["package_id"] for row in tables["committee_reports"]}
