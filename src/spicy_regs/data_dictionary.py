@@ -738,6 +738,14 @@ def expected_schemas() -> dict[str, list[tuple[str, str]]]:
 # --------------------------------------------------------------------------- #
 # Live schema discovery (DuckDB DESCRIBE over R2 or a local parquet directory).
 # --------------------------------------------------------------------------- #
+class SchemaDiscoveryError(OSError):
+    """Incomplete live reads, retaining the schemas that could be checked."""
+
+    def __init__(self, schemas: dict[str, list[tuple[str, str]]], failures: list[str]) -> None:
+        self.schemas = schemas
+        super().__init__("\n".join(failures))
+
+
 def discover_schemas(source: str, base: str | None = None) -> dict[str, list[tuple[str, str]]]:
     """Discover schemas from published parquet via DuckDB ``DESCRIBE``.
 
@@ -747,15 +755,13 @@ def discover_schemas(source: str, base: str | None = None) -> dict[str, list[tup
     """
     import duckdb
 
-    con = duckdb.connect()
-    con.execute(f"SET home_directory='{tempfile.gettempdir()}'")
     if source == "r2":
-        from spicy_regs.sources.publication import load_index, table_location
+        from spicy_regs.sources.publication import load_index, parquet_tables, table_location
 
         base_url = (base or DEFAULT_R2_BASE_URL).rstrip("/")
         publication_index = load_index(base_url)
-        con.execute("INSTALL httpfs")
-        con.execute("LOAD httpfs")
+        names = tuple(dict.fromkeys(("dockets", "documents", "comments", "comments_index",
+                                     *parquet_tables(publication_index))))
 
         def url_for(name: str) -> str:
             key, _ = table_location(publication_index, f"{name}.parquet")
@@ -763,6 +769,7 @@ def discover_schemas(source: str, base: str | None = None) -> dict[str, list[tup
 
     elif source == "local":
         base_dir = Path(base or "./spicy-regs-data")
+        names = TABLES
 
         def url_for(name: str) -> str:
             return str(base_dir / f"{name}.parquet")
@@ -771,11 +778,20 @@ def discover_schemas(source: str, base: str | None = None) -> dict[str, list[tup
         raise ValueError(f"Unknown source {source!r}; expected 'r2' or 'local'")
 
     schemas: dict[str, list[tuple[str, str]]] = {}
-    for name in TABLES:
-        target = url_for(name).replace("'", "''")
-        rows = con.execute(f"DESCRIBE SELECT * FROM read_parquet('{target}')").fetchall()
-        schemas[name] = [(row[0], row[1]) for row in rows]
-    con.close()
+    failures: list[str] = []
+    with duckdb.connect() as con:
+        con.execute(f"SET home_directory='{tempfile.gettempdir()}'")
+        if source == "r2":
+            con.execute("INSTALL httpfs; LOAD httpfs")
+        for name in names:
+            target = url_for(name).replace("'", "''")
+            try:
+                rows = con.execute(f"DESCRIBE SELECT * FROM read_parquet('{target}')").fetchall()
+                schemas[name] = [(row[0], row[1]) for row in rows]
+            except (duckdb.IOException, duckdb.HTTPException, OSError) as exc:
+                failures.append(f"[{name}] {exc}")
+    if failures:
+        raise SchemaDiscoveryError(schemas, failures)
     return schemas
 
 
@@ -886,7 +902,7 @@ def check_schema_drift(
 ) -> list[str]:
     """Reconcile the in-code expected schema against a live (parquet) schema."""
     errors: list[str] = []
-    for table in TABLES:
+    for table in sorted(set(expected) | set(live)):
         exp_cols = [c for c, _ in expected.get(table, [])]
         live_cols = [c for c, _ in live.get(table, [])]
         errors.extend(_reconcile_columns(table, "in-code schema", exp_cols, "live parquet", live_cols))
@@ -1027,12 +1043,17 @@ def cmd_check(args: argparse.Namespace) -> int:
 
     descriptions = load_descriptions(Path(args.descriptions))
     errors: list[str] = []
+    unreadable = False
 
     if args.source == "schema":
         errors += check_descriptions(expected_schemas(), descriptions)
     else:
         try:
             live = discover_schemas(args.source, args.base)
+        except SchemaDiscoveryError as exc:
+            live = exc.schemas
+            unreadable = True
+            print(f"! Some live schemas could not be read:\n{exc}", file=sys.stderr)
         except (duckdb.IOException, duckdb.HTTPException, httpx.HTTPError, OSError) as exc:
             # Only the "could not read it" failures. A malformed parquet or a
             # bad query is a real problem and must not be reported as an outage.
@@ -1041,8 +1062,11 @@ def cmd_check(args: argparse.Namespace) -> int:
             return EXIT_SOURCE_UNREACHABLE
         # Descriptions must cover the live schema, and the in-code registry the
         # docs are generated from must match the live schema too.
-        errors += check_descriptions(live, descriptions)
-        errors += check_schema_drift(expected_schemas(), live)
+        # Supported but unpublished tables still receive offline checks. The
+        # live check follows actual publication, including unknown active tables.
+        errors += check_descriptions(live, {name: value for name, value in descriptions.items() if name in live})
+        expected = {name: value for name, value in expected_schemas().items() if name in live}
+        errors += check_schema_drift(expected, live)
 
     if errors:
         print(f"✗ Data dictionary check failed ({len(errors)} issue(s)):", file=sys.stderr)
@@ -1054,7 +1078,11 @@ def cmd_check(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         return 1
-    print(f"✓ Data dictionary check passed ({len(descriptions)} tables, source={args.source}).")
+    if unreadable:
+        print("Live schema verification is incomplete; this is not a pass.", file=sys.stderr)
+        return EXIT_SOURCE_UNREACHABLE
+    count = len(descriptions) if args.source == "schema" else len(live)
+    print(f"✓ Data dictionary check passed ({count} tables, source={args.source}).")
     return 0
 
 

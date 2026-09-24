@@ -1,11 +1,6 @@
 name: Rollup — fr_docket_links
-
-# Decoupled rollup: rebuilds fr_docket_links.parquet by exploding
-# federal_register.parquet's docket_ids_json. federal_register.parquet is
-# produced by a separate ingestion path; this reads it from R2 as a base input.
+# Manual repair entry point; routine execution is sequenced by its parent workflow.
 on:
-  schedule:
-    - cron: '30 23 * * *'
   workflow_dispatch:
     inputs:
       skip_upload:

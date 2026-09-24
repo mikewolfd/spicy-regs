@@ -46,9 +46,10 @@ jobs:
       - name: Check Cloudflare purge credential
         if: always()
         env:
+          R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
-        run: uv run --frozen python scripts/check_purge_credential.py
+        run: uv run --frozen python scripts/check_purge_credential.py --base-url "$R2_PUBLIC_URL"
 
       - name: Save row-count history
         if: always()

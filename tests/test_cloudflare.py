@@ -159,6 +159,20 @@ def test_verify_token_returns_none_without_credentials(monkeypatch: pytest.Monke
     assert cloudflare.verify_token() is None
 
 
+def test_purge_watchdog_skips_r2_dev_without_requesting_a_token(monkeypatch):
+    from scripts import check_purge_credential as check
+    monkeypatch.setattr('sys.argv', ['check', '--base-url', 'https://pub-example.r2.dev'])
+    monkeypatch.setattr(check, 'verify_token', lambda: pytest.fail('r2.dev has no zone cache'))
+    assert check.main() == 0
+
+
+def test_purge_watchdog_still_requires_credentials_for_custom_domain(monkeypatch):
+    from scripts import check_purge_credential as check
+    monkeypatch.setattr('sys.argv', ['check', '--base-url', 'https://data.example.org'])
+    monkeypatch.setattr(check, 'verify_token', lambda: None)
+    assert check.main() == 1
+
+
 def test_verify_token_sends_bearer_and_reads_result(monkeypatch: pytest.MonkeyPatch) -> None:
     _creds(monkeypatch)
     seen: dict = {}

@@ -16,6 +16,25 @@ from scripts.check_rollup_freshness import evaluate_date_rows, evaluate_row_chan
 from spicy_regs.sources import publication
 
 
+def test_all_published_tables_receive_integrity_checks(tmp_path, monkeypatch):
+    from contextlib import nullcontext
+
+    monkeypatch.setattr(freshness, 'DATE_CHECKS', ())
+    monkeypatch.setattr(freshness, 'ROW_CHANGE_BUDGETS', {})
+    member = tmp_path / 'generation' / 'new_family.parquet'
+    member.parent.mkdir()
+    pq.write_table(pa.table({'id': ['one']}), member)
+    index = {'families': {'new_family': {
+        'prefix': 'generation', 'artifactDigest': 'sha256:observed',
+        'tables': {'new_family.parquet': {'columns': [['id', 'VARCHAR']], 'rows': 1}}
+    }}}
+    monkeypatch.setattr(publication, 'snapshot', lambda _: nullcontext(index))
+    assert freshness.read_freshness_rows(str(tmp_path)) == [('new_family', 'publication rows', None, 1)]
+    index['families']['new_family']['tables']['new_family.parquet']['rows'] = 2
+    with pytest.raises(publication.PublicationError, match='row count'):
+        freshness.read_freshness_rows(str(tmp_path))
+
+
 def test_date_freshness_checks_both_congress_watermarks():
     rows = [
         ("congress_bills", "update watermark", "2026-07-19", 100),

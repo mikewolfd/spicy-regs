@@ -4,9 +4,9 @@
 Covers both the base tables the daily ETL publishes (``dockets``, ``documents``)
 and the external-source rollups. Date-backed sources are checked against
 source-appropriate age budgets. Sources without a meaningful update date are
-either tracked by row-count change (``usaspending_recipients``) or explicitly
-skipped with a reason. The state file lets the daily workflow remember when a row
-count last changed.
+tracked by row-count change (``usaspending_recipients``) or checked against their
+publication metadata without a date-age rule. The state file lets the daily
+workflow remember when a row count last changed.
 
 One publication snapshot selects all inputs. Remote column scans check managed
 members against their declared schemas and row counts. This monitor does not
@@ -72,6 +72,8 @@ EXTERNAL_DATE_CHECKS = (
     DateCheck("court_dockets", "date_filed", 14),
     DateCheck("gao_reports", "published_date", 14),
     DateCheck("crs_reports", "published_date", 14),
+    DateCheck("fcc_proceedings", "date_created", 14),
+    DateCheck("fcc_filings", "date_received", 7),
 )
 
 DATE_CHECKS = BASE_TABLE_CHECKS + EXTERNAL_DATE_CHECKS
@@ -80,13 +82,9 @@ ROW_CHANGE_BUDGETS = {"usaspending_recipients": 14}
 SKIPPED = {
     "hearing_bill_links": "derived cover links; recall unmeasured, no daily watermark",
     "cbo_cost_estimates": "sparse publication index; no daily publication guarantee",
-    "committee_report_reads": "own processing state; local adoption run, not yet published",
+    "committee_report_reads": "processing receipts; integrity checked, no source-date age rule",
     "unified_agenda": "semiannual edition, not a daily date watermark",
     "sam_entities": "registration_date does not change when an existing entity is refreshed",
-    # Promote these to DateChecks (date_created / date_received) once the first
-    # publish lands — checking before then would 404 the whole freshness query.
-    "fcc_proceedings": "not yet published to R2; first backfill pending",
-    "fcc_filings": "not yet published to R2; first backfill pending",
     # Derived from comments + fec_committees, so it carries no date watermark of
     # its own; both of its sources are already watched above. Its row count is a
     # better signal — promote it to ROW_CHANGE_BUDGETS once the first publish
@@ -130,6 +128,13 @@ def _query(sources: Mapping[str, str]) -> str:
                        NULL::VARCHAR AS latest, COUNT(*)::BIGINT AS row_count
                 FROM read_parquet('{target}')"""
         )
+    dated = {check.table for check in DATE_CHECKS}
+    for table in sorted(set(sources) - dated - set(ROW_CHANGE_BUDGETS)):
+        target = sources[table].replace("'", "''")
+        branches.append(
+            f"SELECT '{table}' AS table_name, 'publication rows' AS metric, "
+            f"NULL::VARCHAR AS latest, COUNT(*)::BIGINT AS row_count FROM read_parquet('{target}')"
+        )
     return "\nUNION ALL\n".join(branches)
 
 
@@ -138,6 +143,7 @@ def read_freshness_rows(base_url: str) -> list[FreshnessRow]:
     tables = dict.fromkeys([check.table for check in DATE_CHECKS] + list(ROW_CHANGE_BUDGETS))
     rows: list[FreshnessRow] = []
     with publication.snapshot(base_url) as index:
+        tables.update(dict.fromkeys(publication.parquet_tables(index)))
         con = duckdb.connect()
         try:
             for table in tables:
@@ -250,7 +256,7 @@ def main() -> int:
     args.state_file.write_text(json.dumps(state, indent=2, sort_keys=True) + "\n")
 
     for table, reason in SKIPPED.items():
-        print(f"SKIP: {table} — {reason}")
+        print(f"NO DATE BUDGET: {table} — {reason}")
     if failures:
         print("\nFreshness failures:")
         for failure in failures:

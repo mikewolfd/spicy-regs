@@ -1,10 +1,9 @@
 name: ETL (new pipeline)
 
-# Production daily ETL. Runs RegulationsPipeline.run() via the `run-pipeline` CLI
-# (which reads prime -> extract/stage -> merge -> load). This is the sole
-# scheduled ETL. Rollups (feed_summary, agency_stats, ...) are built by separate
-# `rollup-*.yml` workflows on their own crons reading the base tables this ETL
-# publishes.
+# Incremental ETL after the historical catch-up. The manifest skips completed
+# source keys; manual batch dispatch remains available for bounded repairs.
+# After all publishing batches succeed, _regulations-refresh.yml updates the
+# public comments mirror and dependent consumers under the same writer lock.
 #
 # ─────────────────────────────────────────────────────────────────────────────
 # Scheduling model (rewritten 2026-07): a single scheduled trigger fans out a
@@ -109,6 +108,7 @@ concurrency:
   # queued run waits for the in-flight one instead of cancelling it mid-write.
   group: comments-catalog-write
   cancel-in-progress: false
+  queue: max
 
 jobs:
   # Resolve the batch matrix and the upload/iceberg flags once, so the etl job's
@@ -200,7 +200,7 @@ jobs:
         uses: astral-sh/setup-uv@v4
 
       - name: Install dependencies
-        run: uv sync
+        run: uv sync --frozen
 
       - name: Run new pipeline
         env:
@@ -255,3 +255,9 @@ jobs:
           name: etl-new-pipeline-output-batch-${{ matrix.batch }}
           path: output/
           retention-days: 7
+
+  refresh-consumers:
+    needs: [setup, etl-new]
+    if: ${{ needs.setup.outputs.skip_upload == 'false' && needs.setup.outputs.use_iceberg == 'true' }}
+    uses: ./.github/workflows/_regulations-refresh.yml
+    secrets: inherit

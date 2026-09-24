@@ -22,18 +22,24 @@ from __future__ import annotations
 
 import argparse
 import sys
+from urllib.parse import urlparse
 
 from spicy_regs.sources.cloudflare import verify_token
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--base-url", help="Serving URL; r2.dev has no zone cache to purge")
     parser.add_argument(
         "--allow-unconfigured",
         action="store_true",
         help="treat absent credentials as a skip (local runs), not a failure",
     )
     args = parser.parse_args()
+
+    if args.base_url and (urlparse(args.base_url).hostname or "").endswith(".r2.dev"):
+        print("SKIP: the configured r2.dev serving URL has no zone cache to purge")
+        return 0
 
     problems = verify_token()
 

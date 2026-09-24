@@ -1,0 +1,75 @@
+name: Refresh regulatory consumers (reusable)
+# Caller holds comments-catalog-write until publication and checks finish.
+on:
+  workflow_call:
+    inputs:
+      skip_upload:
+        type: boolean
+        default: false
+jobs:
+  mirror:
+    uses: ./.github/workflows/_comments-mirror.yml
+    secrets: inherit
+    with:
+      skip_upload: ${{ inputs.skip_upload }}
+  derived:
+    needs: mirror
+    if: ${{ !inputs.skip_upload }}
+    strategy:
+      fail-fast: false
+      matrix:
+        command:
+          - run-rollup-feed-summary
+          - run-rollup-agency-stats
+          - run-rollup-agency-monthly-volume
+          - run-rollup-docket-search
+          - run-rollup-discovery-signals
+    uses: ./.github/workflows/_rollup.yml
+    secrets: inherit
+    with:
+      command: ${{ matrix.command }}
+      timeout_minutes: 60
+  org-links:
+    needs: mirror
+    if: ${{ !inputs.skip_upload }}
+    uses: ./.github/workflows/_rollup.yml
+    secrets: inherit
+    with:
+      command: run-rollup-org-committee-links
+      timeout_minutes: 60
+  rulemaking:
+    needs: derived
+    uses: ./.github/workflows/materialize-rulemaking.yml
+    secrets: inherit
+  verify:
+    needs: [mirror, derived, org-links, rulemaking]
+    if: ${{ always() && !inputs.skip_upload && needs.mirror.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@v4
+      - run: uv sync --frozen
+      - uses: actions/download-artifact@v4
+        with:
+          name: regulations-refresh-inputs-${{ github.run_id }}
+          path: output
+      - name: Confirm dependent jobs used unchanged base versions
+        env:
+          R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL }}
+        run: |
+          : "${R2_PUBLIC_URL:?Set the fork public data URL}"
+          uv run --frozen python scripts/check_refresh_inputs.py verify
+      - name: Read back public comments and verify raw catalog integrity
+        env:
+          R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL }}
+          R2_CATALOG_URI: ${{ secrets.R2_CATALOG_URI }}
+          R2_CATALOG_WAREHOUSE: ${{ secrets.R2_CATALOG_WAREHOUSE }}
+          R2_CATALOG_TOKEN: ${{ secrets.R2_CATALOG_TOKEN }}
+          R2_CATALOG_NAMESPACE: ${{ secrets.R2_CATALOG_NAMESPACE }}
+        run: |
+          : "${R2_PUBLIC_URL:?Set the fork public data URL}"
+          uv run --frozen python scripts/check_comments_freshness.py --surface both

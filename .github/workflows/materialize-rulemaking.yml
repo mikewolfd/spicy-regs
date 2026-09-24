@@ -8,8 +8,14 @@ name: Materialize — rulemaking join surface
 # not pass through.
 
 on:
-  schedule:
-    - cron: '0 3 * * *'
+  workflow_call:
+    inputs:
+      skip_upload:
+        type: boolean
+        default: false
+      allow_bootstrap:
+        type: boolean
+        default: false
   workflow_dispatch:
     inputs:
       skip_upload:
@@ -26,6 +32,7 @@ on:
 concurrency:
   group: materialize-rulemaking
   cancel-in-progress: false
+  queue: max
 
 jobs:
   materialize:
@@ -56,8 +63,8 @@ jobs:
           R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
           R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
           R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL }}
-          SKIP_UPLOAD: ${{ github.event_name == 'workflow_dispatch' && inputs.skip_upload || false }}
-          ALLOW_BOOTSTRAP: ${{ github.event_name == 'workflow_dispatch' && inputs.allow_bootstrap || false }}
+          SKIP_UPLOAD: ${{ inputs.skip_upload }}
+          ALLOW_BOOTSTRAP: ${{ inputs.allow_bootstrap }}
         run: |
           ARGS=()
           if [ "$SKIP_UPLOAD" = "true" ]; then

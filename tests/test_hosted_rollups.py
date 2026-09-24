@@ -113,6 +113,20 @@ def test_an_ingesting_rollup_primes_no_base_table(rollup):
     assert rollup.inputs == ()
 
 
+def _scheduled_workflow(rollup) -> Path:
+    """Resolve the scheduled producer, including shared refresh workflows."""
+    command = f"run-rollup-{rollup.name}"
+    matches = []
+    for workflow in WORKFLOWS.glob("*.yml"):
+        document = yaml.safe_load(workflow.read_text())
+        if not document.get(True, {}).get("schedule"):
+            continue
+        if any(job.get("with", {}).get("command") == command for job in document["jobs"].values()):
+            matches.append(workflow)
+    assert len(matches) == 1, f"{command} must have one scheduled producer, found {matches}"
+    return matches[0]
+
+
 def _cron_minutes(workflow: Path) -> int:
     """The daily minute-of-day the workflow's schedule fires at."""
     crons = re.findall(r"cron: '(\d+) (\d+) \* \* \*'", workflow.read_text())
@@ -152,14 +166,14 @@ def test_a_soft_input_is_an_ingest_output_its_writer_produces_first(rollup, soft
     writers = _writers_of(soft_input)
     assert writers, f"{soft_input} is declared a soft input but no rollup publishes it"
 
-    reader_at = _cron_minutes(WORKFLOWS / f"rollup-{rollup.name}.yml")
+    reader_at = _cron_minutes(_scheduled_workflow(rollup))
     earlier = []
     for writer in writers:
         assert writer.inputs == (), (
             f"{soft_input} is written by {writer.name}, which reads base tables — "
             "a derived rollup's output may not be a soft input"
         )
-        writer_at = _cron_minutes(WORKFLOWS / f"rollup-{writer.name}.yml")
+        writer_at = _cron_minutes(_scheduled_workflow(writer))
         if writer_at < reader_at:
             earlier.append((writer.name, reader_at - writer_at))
 
@@ -323,10 +337,8 @@ def test_each_rollup_has_a_console_script_and_a_workflow(rollup):
 
 
 @pytest.mark.parametrize("rollup", HOSTED_ROLLUPS, ids=lambda r: r.name)
-def test_each_workflow_has_its_own_cron_slot(rollup):
-    workflow = WORKFLOWS / f"rollup-{rollup.name}.yml"
-    text = workflow.read_text()
-    assert re.search(r"cron: '[\d*/ ,-]+'", text), f"{workflow.name} declares no cron"
+def test_each_rollup_has_one_scheduled_producer(rollup):
+    _scheduled_workflow(rollup)
 
 
 def test_no_two_rollup_workflows_share_a_cron_minute():

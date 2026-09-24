@@ -1,8 +1,8 @@
 name: Rollup (reusable)
 
 # Reusable workflow that runs one decoupled rollup pipeline (`run-rollup-*`).
-# Each rollup has its own thin caller workflow (rollup-*.yml) with its own cron;
-# they all delegate here so the build/publish steps live in one place.
+# Source schedules, dependency refreshes and manual callers all delegate here
+# so the build/publish steps live in one place.
 #
 # The `run-rollup-*` console scripts default to --skip-upload (vetting), so this
 # passes --no-skip-upload for real runs; callers can flip it back for dry runs.

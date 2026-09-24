@@ -1,10 +1,6 @@
 name: Rollup — docket_search
-
-# Decoupled rollup: rebuilds docket_search.json.gz (browser MiniSearch index)
-# from dockets.parquet. Runs after the ETL's final batch (20:25 UTC) closes.
+# Manual repair entry point; routine execution is sequenced by its parent workflow.
 on:
-  schedule:
-    - cron: '0 23 * * *'
   workflow_dispatch:
     inputs:
       skip_upload:

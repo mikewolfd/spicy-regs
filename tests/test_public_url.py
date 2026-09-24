@@ -102,13 +102,17 @@ def test_freshness_uses_publisher_url_and_explicit_argument(tmp_path, monkeypatc
         ("check-rollup-freshness.yml", "Check published tables"),
         ("seed-comments-catalog.yml", "Verify freshness (index vs rows)"),
         ("seed-dockets-catalog.yml", "Verify published freshness"),
-        ("deploy-docs.yml", "Reconcile in-code schema against live R2 parquet"),
+        ("deploy-docs.yml", "Verify every active published schema"),
+        ("_comments-mirror.yml", "Publish comments mirror from the catalog"),
+        ("_comments-mirror.yml", "Capture published base versions for dependent jobs"),
+        ("_regulations-refresh.yml", "Confirm dependent jobs used unchanged base versions"),
+        ("_regulations-refresh.yml", "Read back public comments and verify raw catalog integrity"),
     ],
 )
 def test_workflow_refuses_missing_public_url_before_any_reader(tmp_path, workflow, step_name):
     root = Path(__file__).resolve().parents[1]
     config = yaml.safe_load((root / ".github" / "workflows" / workflow).read_text())
-    step = next(step for job in config["jobs"].values() for step in job["steps"] if step.get("name") == step_name)
+    step = next(step for job in config["jobs"].values() for step in job.get("steps", ()) if step.get("name") == step_name)
     assert step["env"]["R2_PUBLIC_URL"] == "${{ secrets.R2_PUBLIC_URL }}"
     # Execute the actual guard and first read boundary; no GitHub expressions,
     # tools or network are evaluated. A missing URL must prevent reaching it.

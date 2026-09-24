@@ -1,11 +1,6 @@
 name: Rollup — member_vote_terms
-
-# Derived rollup: assigns each member vote its term (delivery decision 2) from
-# the published member_votes, members and member_terms. Runs after the
-# roll-call-votes (03:00) and members (03:20) rollups.
+# Manual repair entry point; routine execution is sequenced by its parent workflow.
 on:
-  schedule:
-    - cron: '50 3 * * *'
   workflow_dispatch:
     inputs:
       skip_upload:

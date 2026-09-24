@@ -1,8 +1,6 @@
 name: Rollup — roll_call_votes
+# Manual repair entry point; routine execution is sequenced by its parent workflow.
 on:
-  schedule:
-    # 03:00 UTC — one Clerk request per roll call, capped per run.
-    - cron: '0 3 * * *'
   workflow_dispatch:
     inputs:
       skip_upload:

@@ -275,6 +275,39 @@ def test_unreachable_source_is_not_reported_as_a_pass():
     assert dd.EXIT_SOURCE_UNREACHABLE not in (0, 1)
 
 
+def test_discovery_continues_after_an_unreadable_table(tmp_path, monkeypatch):
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    monkeypatch.setattr(dd, 'TABLES', ('missing', 'present'))
+    pq.write_table(pa.table({'id': ['one']}), tmp_path / 'present.parquet')
+    with pytest.raises(dd.SchemaDiscoveryError) as error:
+        dd.discover_schemas('local', str(tmp_path))
+    assert error.value.schemas == {'present': [('id', 'VARCHAR')]}
+    assert '[missing]' in str(error.value)
+
+
+def test_live_check_accepts_supported_but_unpublished_tables(monkeypatch):
+    schemas = dd.expected_schemas()
+    monkeypatch.setattr(dd, 'discover_schemas', lambda *_: {'dockets': schemas['dockets']})
+    args = dd.build_parser().parse_args(['check', '--source', 'r2'])
+    assert args.func(args) == 0
+
+
+def test_unknown_published_table_is_schema_drift(monkeypatch):
+    monkeypatch.setattr(dd, 'discover_schemas', lambda *_: {'unknown_published': [('id', 'VARCHAR')]})
+    args = dd.build_parser().parse_args(['check', '--source', 'r2'])
+    assert args.func(args) == 1
+
+
+def test_incomplete_live_check_is_not_a_pass_after_other_tables_match(monkeypatch):
+    def partial(*_):
+        raise dd.SchemaDiscoveryError({'dockets': dd.expected_schemas()['dockets']}, ['[documents] unreachable'])
+    monkeypatch.setattr(dd, 'discover_schemas', partial)
+    args = dd.build_parser().parse_args(['check', '--source', 'r2'])
+    assert args.func(args) == dd.EXIT_SOURCE_UNREACHABLE
+
+
 # --------------------------------------------------------------------------- #
 # The contract-hosted tables: prose comes from spicy-docs, not from this repo.
 # --------------------------------------------------------------------------- #

@@ -159,6 +159,13 @@ def snapshot(base_url: str) -> Iterator[dict]:
         _snapshot.reset(token)
 
 
+def parquet_tables(index: Mapping) -> tuple[str, ...]:
+    """Active Parquet table names, independent of any consumer's supported-table list."""
+    return tuple(sorted({key.removesuffix(".parquet")
+                         for family in index["families"].values()
+                         for key in family["tables"] if key.endswith(".parquet")}))
+
+
 def table_location(index: Mapping, key: str) -> tuple[str, dict | None]:
     """Resolve a table key to ``(generation path, descriptor)``, or ``(key, None)`` when unpublished.
 

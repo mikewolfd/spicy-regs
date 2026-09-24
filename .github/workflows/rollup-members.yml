@@ -1,8 +1,6 @@
 name: Rollup — members
+# Manual repair entry point; routine execution is sequenced by its parent workflow.
 on:
-  schedule:
-    # 03:20 UTC — two static roster files.
-    - cron: '20 3 * * *'
   workflow_dispatch:
     inputs:
       skip_upload:
