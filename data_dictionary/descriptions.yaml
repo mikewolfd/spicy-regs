@@ -1883,9 +1883,11 @@ tables:
       The other six the publisher's listing states are deliberately absent rather
       than filled with guesses. All columns are stored as VARCHAR.
     summary: >-
-      One row per BILLSTATUS bulk folder, holding the listing entry the next
-      `bill-family` run compares against before downloading that folder's zip. All
-      columns are stored as VARCHAR.
+      One row per BILLSTATUS bulk folder a `bill-family` run read, holding the
+      listing entry it read; the next run compares against it before downloading
+      that folder's zip only when the generation's metadata lists the folder as
+      complete (its bodies and XML pairs fetched), so a row records what was read,
+      never that the folder may be skipped. All columns are stored as VARCHAR.
     columns:
       name: "The zip's own file name in the folder listing, as the publisher spells it."
       link: "The publisher's path to that zip; it must rebuild this folder's own locator or the skip is refused."
