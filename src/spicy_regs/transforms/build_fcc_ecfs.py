@@ -19,27 +19,27 @@ the last :data:`FILINGS_FIRST_RUN_DAYS` days unless an explicit ``since``
 (``FCC_SINCE``) is passed. Deeper backfills are expected to run scoped to
 specific proceedings (``FCC_PROCEEDINGS``) and/or in date slices.
 
-Every window is pooled over passes until its records reach the count ECFS
-aggregates for it (:data:`_COUNTED_BY`); the 2026-09-22 scheduled filings run
-met an identity repeated within one window.
+Every window is pooled over whole walks (spicy-docs ``pool_walks``) until one
+walk is clean or the pool holds exactly the count ECFS aggregates for it
+(:data:`_COUNTED_BY`); the 2026-09-22 scheduled filings run met an identity
+repeated within one window.
 """
 
 from __future__ import annotations
 
 import json
 import os
-from collections.abc import Iterator
+from collections.abc import Hashable, Iterator, Mapping
 from datetime import UTC, date, datetime, timedelta
 from functools import partial
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pyarrow as pa
 import pyarrow.parquet as pq
 from loguru import logger
 
 from spicy_regs.sources import r2
-from spicy_regs.sources.pooled_walk import IncompleteWalkError, pool_passes
 from spicy_regs.transforms.table_merge import merge_local_prior
 
 if TYPE_CHECKING:
@@ -196,8 +196,6 @@ API_KEY_ENV_VARS = ("API_GOV", "DATA_GOV_API_KEY", "FCC_API_KEY", "REGULATIONS_G
 PER_PAGE = 250
 MAX_RESULT_WINDOW = 10_000
 _MAX_REQUESTS_PER_PAGE = 5
-#: Passes over one window before a walk still short of its count refuses; see pooled_walk.
-_PASSES = 3
 
 #: ECFS states no total, but every response, empty ones included, carries Elasticsearch term
 #: aggregations over the whole query. One field's buckets plus ``sum_other_doc_count`` count the
@@ -289,9 +287,10 @@ def _fetch_window(
 ) -> Iterator[dict]:
     """Yield one window, bisecting a span past the result ceiling; a single over-ceiling day refuses.
 
-    A window within the ceiling is pooled over passes until its distinct records reach the
-    window's aggregate count (:data:`_COUNTED_BY`, :func:`pool_passes`).
+    A window within the ceiling is pooled over whole walks until one is clean or the pool
+    holds exactly the window's aggregate count (:data:`_COUNTED_BY`, spicy-docs ``pool_walks``).
     """
+    from spicy_docs.reading.paged_json import WalkPass, pool_walks
 
     def walk() -> tuple[list[dict], bool, int]:
         return _page_window(
@@ -315,33 +314,39 @@ def _fetch_window(
             )
         return
 
-    def passes():
-        yield records, counted
-        for _ in range(_PASSES - 1):
-            again, exhausted, count = walk()
-            if not exhausted:
-                raise FccEcfsError(f"ECFS {endpoint} {gte}..{lte} grew past the result ceiling between passes")
-            yield again, count
+    def walk_pass(index: int) -> WalkPass:
+        if index == 0:
+            return WalkPass(tuple(records), counted)
+        again, exhausted, count = walk()
+        if not exhausted:
+            raise FccEcfsError(f"ECFS {endpoint} {gte}..{lte} grew past the result ceiling between passes")
+        return WalkPass(tuple(again), count)
 
-    try:
-        yield from pool_passes(passes(), key=partial(_identity, endpoint), label=f"ECFS {endpoint} {gte}..{lte}")
-    except IncompleteWalkError as error:
-        raise FccEcfsError(str(error)) from None
+    pooled = pool_walks(walk_pass, key=partial(_identity, endpoint), label=f"ECFS {endpoint} {gte}..{lte}")
+    yield from (dict(record) for record in pooled.records)
 
 
-def _identity(endpoint: str, record: dict) -> str:
+#: Proceeding fields that count filing activity. They change between two walks of one window
+#: while the document does not, so a key covering them would never settle a pool.
+_PROCEEDING_ACTIVITY = frozenset({"last_30_days", "recent_filing_count", "total_filing_count"})
+
+
+def _identity(endpoint: str, record: Mapping[str, Any]) -> Hashable:
     """The record's identity within one window.
 
-    A filing is its ``id_submission``. ECFS holds more than one document for some dockets, some
-    under one ``id_proceeding`` (measured 2026-09-23: 24-89, 25-12), so a proceeding is its whole
-    document; :func:`build_fcc_proceedings` chooses among a docket's documents.
+    A filing is its ``id_submission``; spicy-docs refuses a missing or blank one. A proceeding
+    has no such key: ECFS holds more than one document for some dockets and reuses one
+    ``id_proceeding`` across documents (measured 2026-09-23: 553 of 21,138 ids, two of them a
+    single docket's two documents, 24-89 and 25-12). So a proceeding is its document without
+    the filing-activity counters (:data:`_PROCEEDING_ACTIVITY`), which move as filings arrive
+    while the document does not; :func:`build_fcc_proceedings` chooses among a docket's
+    documents. An edit to any other field between two walks reads as another document, so the
+    pool then overfills and only a clean walk settles that window.
     """
     if endpoint == "proceedings":
-        return json.dumps(record, sort_keys=True, default=str)
-    identity = record.get("id_submission")
-    if not isinstance(identity, (str, int)) or isinstance(identity, bool) or not str(identity).strip():
-        raise FccEcfsError(f"ECFS {endpoint} record omitted its id_submission")
-    return str(identity)
+        document = {field: value for field, value in record.items() if field not in _PROCEEDING_ACTIVITY}
+        return json.dumps(document, sort_keys=True, default=str)
+    return record.get("id_submission")
 
 
 def _carries_counted_field(endpoint: str, record: dict) -> bool:

@@ -3,10 +3,11 @@
 SpicyDocs owns requests, page parsing, declared counts and continuations. CRS
 ignores the requested sort, so the source window is explicit and a locally old
 row never ends the walk. The list can shift while it is read (the 2026-09-22
-scheduled run met a repeated report), so passes are pooled by report id until
-the declared count is reached (:mod:`spicy_regs.sources.pooled_walk`). Failed
-or incomplete walks raise before the transform can replace its prior table.
-Successful empty windows remain valid.
+scheduled run met a repeated report), so whole walks are pooled by report id
+(``CongressListingReader.pooled``, which varies the page size per walk) until
+one is clean or the pool holds exactly the declared count. Failed or incomplete
+walks raise before the transform can replace its prior table. Successful empty
+windows remain valid.
 """
 
 from __future__ import annotations
@@ -14,19 +15,17 @@ from __future__ import annotations
 import os
 from collections.abc import Iterator, Mapping
 from datetime import date
+from operator import itemgetter
 
 import httpx
 
 from spicy_regs.sources.base import Reader
-from spicy_regs.sources.pooled_walk import IncompleteWalkError, pool_passes
 
 API_BASE = "https://api.congress.gov/v3"
 PER_PAGE = 250
 API_KEY_ENV_VARS = ("API_GOV", "DATA_GOV_API_KEY", "CONGRESS_GOV_API_KEY", "REGULATIONS_GOV_API_KEY")
 _MAX_PAGES = 400
 _MAX_REQUESTS_PER_PAGE = 5
-# Passes over one query before a walk still short of its declared count refuses; see pooled_walk.
-_PASSES = 3
 
 
 class CrsReportsError(ValueError):
@@ -44,9 +43,10 @@ def _resolve_api_key() -> str | None:
 class CrsReportsReader(Reader):
     """Yield raw CRS report dicts, filtering locally to ``since`` or later.
 
-    Requires an api.data.gov key; a page omitting its declared count or carrying a report with
-    no ``id``, or a query still short of its declared count after :data:`_PASSES` pooled
-    passes, raises ``CrsReportsError``. ``per_page`` is clamped to ``PER_PAGE``.
+    Requires an api.data.gov key (``CrsReportsError`` without one). A walk stating no
+    declared count, a report with no ``id`` or ``updateDate``, or a query spicy-docs'
+    pooled walks cannot settle raises ``PagedJsonSourceError``. ``per_page`` is clamped
+    to ``PER_PAGE``.
     """
 
     def __init__(
@@ -71,7 +71,7 @@ class CrsReportsReader(Reader):
             raise CrsReportsError("CRS reports require an api.data.gov key")
         try:
             from spicy_docs.reading.paged_json import PagedJsonBudget
-            from spicy_docs.sources.congress.listing import CongressListingReader, crs_report_list_url
+            from spicy_docs.sources.congress.listing import LIST_ROUTES, CongressListingReader, crs_report_list_url
         except ModuleNotFoundError as error:
             if error.name == "spicy_docs":
                 raise RuntimeError(
@@ -89,31 +89,14 @@ class CrsReportsReader(Reader):
             min_request_interval_seconds=0,
         )
         with CongressListingReader(budget=budget, api_key=self.api_key, transport=self.transport) as reader:
-
-            def passes():
-                for _ in range(_PASSES):
-                    reports, declared = [], None
-                    for page in reader.crs_reports(url, max_pages=_MAX_PAGES):
-                        if page.declared_count is None:
-                            raise CrsReportsError("CRS page omitted its declared count")
-                        declared = page.declared_count
-                        for report in page.records:
-                            identity = report.get("id")
-                            if not isinstance(identity, str) or not identity.strip():
-                                raise CrsReportsError("CRS page contains a report with no identity")
-                            reports.append(report)
-                    yield reports, declared
-
-            try:
-                pooled = pool_passes(
-                    passes(),
-                    key=lambda report: report["id"],
-                    newer=lambda held, report: str(report.get("updateDate") or "") >= str(held.get("updateDate") or ""),
-                    label="CRS reports",
-                )
-            except IncompleteWalkError as error:
-                raise CrsReportsError(str(error)) from None
-        for report in pooled:
+            pooled = reader.pooled(
+                LIST_ROUTES["crsreport"],
+                url,
+                key=lambda report: report.get("id"),  # a missing id refuses the walk
+                version=itemgetter("updateDate"),
+                max_pages=_MAX_PAGES,
+            )
+        for report in pooled.records:
             # Do not rely on the server's ignored sort parameter.
             if self.since is None or not _older_than(report, self.since):
                 yield dict(report)

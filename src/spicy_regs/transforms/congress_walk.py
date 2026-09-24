@@ -11,17 +11,18 @@ The ``committee`` route over-declares: measured 2026-09-19,
 ``committee/119`` declared 238 and served 236 on its one terminal page with no
 continuation, and the reader refused the walk. That is not a short walk — the
 publisher's count and list disagree, and only the list can be published — so
-:func:`walk_route` consumes the walk and, for that one refusal alone, keeps
-both numbers on the result and returns what was served. Every other refusal — a
-repeated continuation, a count that changed mid-walk, the page bound, a
-``401``/``403`` — propagates and fails the run, and the two numbers are logged
-at WARNING so a run that met the over-declaration says so.
+:func:`walk_route` consumes the walk and, for that one refusal alone
+(spicy-docs' typed ``DeclaredCountMismatch``, read by its numbers rather than
+its message), keeps both numbers on the result and returns what was served.
+Every other refusal — a repeated continuation, a count that changed mid-walk,
+the page bound, a ``401``/``403`` — propagates and fails the run, and the two
+numbers are logged at WARNING so a run that met the over-declaration says so.
 
-The guard is narrow in kind *and* in size: the refusal's context always carries
-the served count, so "1 served of 238" would satisfy a kind-only predicate
-exactly as 236 of 238 does; :data:`MAX_OVER_DECLARATION` bounds the shortfall
-to a handful of entries — the shape of a count that includes what the list
-omits, not of a page missing from the walk.
+The guard is narrow in kind *and* in size: the refusal always carries the
+served count, so "1 served of 238" would satisfy a kind-only predicate exactly
+as 236 of 238 does; :data:`MAX_OVER_DECLARATION` bounds the shortfall to a
+handful of entries — the shape of a count that includes what the list omits,
+not of a page missing from the walk.
 
 :class:`PerRunCap` sits here because both walkers bound their per-record leg
 the same way: a cap that says once, at WARNING, when it stopped that leg.
@@ -34,7 +35,7 @@ from dataclasses import dataclass
 from typing import Any, Protocol
 
 from loguru import logger
-from spicy_docs.reading.paged_json import PagedJsonSourceError
+from spicy_docs.reading.paged_json import DeclaredCountMismatch, PagedJsonSourceError
 
 
 class ListingSource(Protocol):
@@ -67,11 +68,6 @@ class PerRunCap:
         return True
 
 
-#: The reader attaches its traversal context under this key
-#: (``spicy_docs.reading.paged_json.PagedJsonReader``'s ``context_key``).
-TRAVERSAL_CONTEXT = "paged_json_acquisition"
-#: The one terminal-page refusal read past; the reader's own wording.
-COUNT_MISMATCH = "declared and observed record counts differ"
 #: How far the declared total may exceed what the terminal page served before
 #: the walk is read as short rather than over-declared. The measured delta is
 #: 2 of 238; a handful of entries the count includes and the list omits is
@@ -92,16 +88,11 @@ class RouteWalk:
 
 def _terminal_over_declaration(error: PagedJsonSourceError, served: int) -> bool:
     """Whether a refusal is the terminal over-declaration this walk keeps what it served for."""
-    context = error.__dict__.get(TRAVERSAL_CONTEXT)
-    if not (
-        isinstance(context, Mapping)
-        and context.get("operation") == "traversal"
-        and str(error).endswith(COUNT_MISMATCH)
-        and context.get("observedCount") == served
-    ):
-        return False
-    declared = context.get("declaredCount")
-    return isinstance(declared, int) and 0 < declared - served <= MAX_OVER_DECLARATION
+    return (
+        isinstance(error, DeclaredCountMismatch)
+        and error.observed == served
+        and 0 < error.declared - served <= MAX_OVER_DECLARATION
+    )
 
 
 def walk_route(reader: ListingSource, route: Any, url: str, *, max_pages: int, label: str) -> RouteWalk:

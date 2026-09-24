@@ -17,6 +17,15 @@ not a client-side filter over a full walk. With no prior table the window is
 open and the run is a full backfill. ``AMENDMENTS_SINCE``/``AMENDMENTS_UNTIL``
 drive a chunk explicitly.
 
+The list is read with ``CongressListingReader.pooled``. A single offset walk
+sorted by ``updateDate`` repeats about as many records as it skips, so its row
+count still equals the declared count: on 2026-09-23 the 119th Congress walk
+returned its declared 7,066 rows but only 7,013 distinct amendments, and the
+published table was 52 short. Whole walks, alternating order and page size, are
+pooled by the amendment's identity (the newest ``updateDate`` kept) until one
+is clean or the pool holds exactly the declared count; one walk of each order
+reached all 7,066.
+
 Each amendment's list record is overlaid with its detail record, which alone
 states the sponsor and the amended bill or amendment: one paced detail request
 per amendment in the window.
@@ -31,6 +40,7 @@ from __future__ import annotations
 import os
 from collections.abc import Callable
 from datetime import date, datetime, timedelta
+from operator import itemgetter
 from pathlib import Path
 
 from loguru import logger
@@ -44,8 +54,7 @@ from spicy_docs.sources.congress.listing import (
 )
 
 from spicy_regs.sources import r2
-from spicy_regs.sources.pooled_walk import pool_passes
-from spicy_regs.sources.congress_bills import API_KEY_ENV_VARS, _resolve_api_key
+from spicy_regs.sources.congress_bills import API_KEY_ENV_VARS, _resolve_api_key, list_identity
 from spicy_regs.transforms.congress_scope import congresses_from_env
 from spicy_regs.transforms.congress_walk import ListingSource
 from spicy_regs.transforms.table_merge import merge_contract_table, prior_scratch_path
@@ -63,9 +72,10 @@ BUDGET = PagedJsonBudget(
     min_request_interval_seconds=0.75,
 )
 
-#: Pages of ``MAX_LIMIT`` records per Congress. The 119th had ~5,600 amendments
-#: at 2026-09, so 100 pages of 250 is ~4x headroom; a Congress that exceeded it
-#: would be logged as a short walk by the reader rather than silently cut.
+#: Pages per walk of one Congress. The 119th declared 7,095 amendments on
+#: 2026-09-23, 32 pages at the smallest page a pooled walk asks for (223), so
+#: 100 is ~3x headroom; a Congress past it refuses at the page bound rather
+#: than being cut.
 MAX_PAGES = 100
 
 #: Re-ask this many days before the stored watermark, so an amendment updated
@@ -110,42 +120,6 @@ def _instant(day: date | None, *, end: bool = False) -> str | None:
     return datetime.combine(day, datetime.max.time() if end else datetime.min.time()).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-#: Sort orders for successive passes over one query. A single offset-paged pass sorted by
-#: ``updateDate`` repeats about as many records as it skips, so its row count still equals the
-#: declared count: on 2026-09-23 the 119th Congress walk returned its declared 7,066 rows but
-#: only 7,013 distinct amendments, and the published table was 52 short. The two orders drop
-#: different records; one pass of each, pooled by identity, reached all 7,066.
-POOLED_SORTS = ("updateDate desc", "updateDate asc", "updateDate desc", "updateDate asc")
-
-
-def _pooled_walk(reader: ListingSource, route, *, congress, since: date | None, until: date | None) -> list[dict]:
-    """Every list record the query declares, pooled over :data:`POOLED_SORTS` passes; the later ``updateDate`` wins."""
-
-    def passes():
-        for sort in POOLED_SORTS:
-            url = list_route_url(
-                route,
-                congress=congress,
-                limit=MAX_LIMIT,
-                sort=sort,
-                from_datetime=_instant(since),
-                to_datetime=_instant(until, end=True),
-            )
-            records, declared = [], None
-            for page in reader.records(route, url, max_pages=MAX_PAGES):
-                if getattr(page, "declared_count", None) is not None:
-                    declared = page.declared_count
-                records.extend(dict(record) for record in page.records)
-            yield records, declared
-
-    return pool_passes(
-        passes(),
-        key=lambda r: (str(r.get("congress")), str(r.get("type") or "").lower(), str(r.get("number"))),
-        newer=lambda held, r: str(r.get("updateDate") or "") >= str(held.get("updateDate") or ""),
-        label=f"Amendments: Congress {congress}",
-    )
-
-
 def _with_detail(reader: ListingSource, record: dict) -> dict:
     """The list record overlaid with its detail record.
 
@@ -170,7 +144,7 @@ def _with_detail(reader: ListingSource, record: dict) -> dict:
 def build_amendments(
     output_dir: Path,
     *,
-    reader: ListingSource | None = None,
+    reader: CongressListingReader | None = None,
     since: date | None = None,
     until: date | None = None,
     download_prior: Callable[[str, Path], bool] = r2.download,
@@ -206,9 +180,22 @@ def build_amendments(
     route = LIST_ROUTES["amendment"]
     rows: list[dict] = []
     for congress in congresses_from_env():
-        pooled = _pooled_walk(reader, route, congress=congress, since=since, until=until)
-        rows.extend(shape_amendment(_with_detail(reader, record)) for record in pooled)
-        logger.info("Amendments: Congress {} — {:,} amendments in window", congress, len(pooled))
+        url = list_route_url(
+            route,
+            congress=congress,
+            limit=MAX_LIMIT,
+            sort="updateDate desc",
+            from_datetime=_instant(since),
+            to_datetime=_instant(until, end=True),
+        )
+        pooled = reader.pooled(route, url, key=list_identity, version=itemgetter("updateDate"), max_pages=MAX_PAGES)
+        rows.extend(shape_amendment(_with_detail(reader, dict(record))) for record in pooled.records)
+        logger.info(
+            "Amendments: Congress {} — {:,} amendments in window, in {} walks",
+            congress,
+            len(pooled.records),
+            pooled.passes,
+        )
 
     logger.info("Amendments: {:,} rows this run", len(rows))
     return merge_contract_table(output_dir, "amendments", rows, prior_present=have_prior)

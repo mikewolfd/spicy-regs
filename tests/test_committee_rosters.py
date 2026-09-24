@@ -15,7 +15,7 @@ from types import SimpleNamespace
 
 import pyarrow.parquet as pq
 import pytest
-from spicy_docs.reading.paged_json import PagedJsonSourceError
+from spicy_docs.reading.paged_json import DeclaredCountMismatch, PagedJsonSourceError
 from spicy_docs.sources.congress.committee_rosters import (
     CommitteeRosterError,
     CommitteeRosterRefusedError,
@@ -25,7 +25,6 @@ from spicy_docs.sources.congress.committee_rosters import (
 from spicy_docs.transport.credentials import CredentialRefusedError
 
 from spicy_regs.transforms import build_committee_rosters as bcr
-from spicy_regs.transforms.congress_walk import COUNT_MISMATCH, TRAVERSAL_CONTEXT
 from tests.test_incremental_rollups import no_download, seed
 
 FIXTURES = Path(__file__).parent / "fixtures" / "congress_rosters"
@@ -55,22 +54,17 @@ class _Page:
 class StubListingReader:
     """The committee route as measured: one terminal page that serves fewer than it declares."""
 
-    def __init__(self, listed=LISTED, details=None, *, walk_refusal=COUNT_MISMATCH):
+    def __init__(self, listed=LISTED, details=None, *, walk_refusal=None):
         self.listed = listed
         self.details = {"hsju00": DETAIL} if details is None else details
-        self.walk_refusal = walk_refusal
+        self.walk_refusal = walk_refusal or DeclaredCountMismatch(
+            "Congress.gov declared and observed record counts differ", declared=DECLARED, observed=len(listed)
+        )
         self.detail_codes: list[str] = []
 
     def _walk(self):
         yield _Page(self.listed, DECLARED)
-        if self.walk_refusal is not None:
-            error = PagedJsonSourceError(f"Congress.gov {self.walk_refusal}")
-            error.__dict__[TRAVERSAL_CONTEXT] = {
-                "operation": "traversal",
-                "declaredCount": DECLARED,
-                "observedCount": len(self.listed),
-            }
-            raise error
+        raise self.walk_refusal
 
     def records(self, route, url, *, max_pages=100):
         if route.name == "committee":
@@ -151,7 +145,10 @@ def test_a_cold_start_folds_each_detail_newest_first_and_publishes_what_the_rout
 
 def test_every_other_walk_refusal_fails_the_run(tmp_path):
     with pytest.raises(PagedJsonSourceError, match="repeated its continuation"):
-        _build(tmp_path, reader=StubListingReader(walk_refusal="repeated its continuation"))
+        _build(
+            tmp_path,
+            reader=StubListingReader(walk_refusal=PagedJsonSourceError("Congress.gov repeated its continuation")),
+        )
 
 
 def test_a_folded_committee_is_not_re_read_unless_its_list_row_moved(tmp_path):

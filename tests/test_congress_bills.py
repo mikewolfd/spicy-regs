@@ -12,17 +12,11 @@ why). The unit tests above ``test_build_congress_bills_merges_prior_and_fresh_ro
 never call ``build_congress_bills()`` or read the merged Parquet, so only that
 test exercises the SQL merge end to end.
 
-The last section covers the retry *policy* this reader's absolute refusal
-made necessary: ``_fetch_bills`` in ``build_congress_bills.py`` retries an
-identical window a bounded number of times when the reader refuses on a
-mid-walk publisher drift, and gives up loudly — never publishing a partial
-table — once that bound is spent. It also narrows *which* refusals get
-retried: only ones whose context carries both a ``declaredCount`` and an
-``observedCount`` (the drift shapes); anything else propagates on the first
-attempt, covered by ``test_fetch_does_not_retry_a_non_drift_refusal``.
-``test_walk_refuses_when_the_declared_count_changes_mid_walk`` pins the exact
-refusal shape (a two-page walk whose declared count shrinks between pages)
-that policy exists for.
+The walk tests also cover the pooled read of a window (spicy-docs'
+``CongressListingReader.pooled``): a walk that repeats one bill and skips
+another is pooled to the declared count, a walk whose count moves mid-walk is
+spent and the next walk settles, and a window that never settles, a terminal
+count mismatch or a malformed page refuses — never publishing a partial table.
 """
 
 from __future__ import annotations
@@ -35,7 +29,12 @@ import httpx
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
-from spicy_docs.reading.paged_json import PagedJsonSourceError
+from spicy_docs.reading.paged_json import (
+    DEFAULT_POOL_PASSES,
+    DeclaredCountMismatch,
+    IncompleteWalkError,
+    PagedJsonSourceError,
+)
 
 from spicy_regs.sources.congress_bills import (
     API_KEY_ENV_VARS,
@@ -195,57 +194,73 @@ def test_no_since_or_until_sends_no_window_bound():
     assert list(reader.iter_records()) == []
 
 
+class _Walks(httpx.MockTransport):
+    """Serves the given list-page bodies in order, one a request, recording each request's sort and page size."""
+
+    def __init__(self, *bodies):
+        self.bodies = list(bodies)
+        self.asked: list[tuple[str, str]] = []
+        super().__init__(self.respond)
+
+    def respond(self, request: httpx.Request) -> httpx.Response:
+        self.asked.append((request.url.params["sort"], request.url.params["limit"]))
+        body = json.dumps(self.bodies.pop(0)).encode()
+        return httpx.Response(200, stream=httpx.ByteStream(body), headers={"content-type": "application/json"})
+
+
+def _bills(transport: _Walks) -> list[dict]:
+    return list(CongressBillsReader(api_key="test-key", transport=transport).iter_records())
+
+
 def test_walk_refuses_when_declared_and_observed_counts_disagree():
-    """Surfaces spicy-docs' own walk-consistency refusal here: this repo no
-    longer hand-rolls pagination, so the discipline against an inconsistent or
-    truncated walk — the shape of the 510-day freeze — now lives in, and is
-    enforced by, the shared spicy-docs reader rather than a local completeness
-    warning."""
-
-    def respond(request: httpx.Request) -> httpx.Response:
-        # The publisher declares 5 but the (sole, terminal) page only carries 1.
-        body = {"bills": [_bill(1, "2025-04-07")], "pagination": {"count": 5}}
-        return httpx.Response(
-            200, stream=httpx.ByteStream(json.dumps(body).encode()), headers={"content-type": "application/json"}
-        )
-
-    reader = CongressBillsReader(api_key="test-key", transport=httpx.MockTransport(respond))
-    with pytest.raises(PagedJsonSourceError, match="differ"):
-        list(reader.iter_records())
+    """A terminal mismatch is the publisher's count disagreeing with its own list, not churn: it is not walked again."""
+    # The publisher declares 5 but the (sole, terminal) page only carries 1.
+    transport = _Walks({"bills": [_bill(1, "2025-04-07")], "pagination": {"count": 5}})
+    with pytest.raises(DeclaredCountMismatch, match="differ"):
+        _bills(transport)
+    assert len(transport.asked) == 1
 
 
-def test_walk_refuses_when_the_declared_count_changes_mid_walk():
-    """The operational risk ``_fetch_bills`` retries for: a nightly window that
-    closes at "now" is walked over several minutes, and a bill the publisher
-    edits *during* that walk can move its own ``updateDate`` past
-    ``toDateTime`` and drop out of the window — the declared count shrinks
-    between page one and page two of the *same* walk, not only at the end.
-    The reader refuses immediately rather than publish a shrunk result;
-    retrying the identical window is ``build_congress_bills.py``'s job, not
-    this reader's (see ``test_congress_bills.py``'s retry-policy tests)."""
-    page_one_bills = [_bill(1, "2025-04-07"), _bill(2, "2025-04-06")]
-    page_two_bills = [_bill(3, "2025-04-05")]
+def test_a_walk_that_repeats_one_bill_and_skips_another_is_pooled_to_the_declared_count():
+    """Rows equal to the declared count prove only the row count; the next walk, other order and page size, fills the pool."""
+    b1, b2, b3 = _bill(1, "2025-04-07"), _bill(2, "2025-04-06"), _bill(3, "2025-04-05")
+    edited = {**b2, "updateDate": "2025-04-08"}
+    transport = _Walks(
+        {"bills": [b1, b2, b2], "pagination": {"count": 3}}, {"bills": [b3, edited, b1], "pagination": {"count": 3}}
+    )
+    assert sorted(_bills(transport), key=lambda bill: bill["number"]) == [b1, edited, b3]
+    assert transport.asked == [("updateDate desc", "250"), ("updateDate asc", "237")]
+
+
+def test_a_count_that_moves_mid_walk_spends_the_walk_and_the_next_one_settles():
+    """A nightly window closing at "now" is walked over minutes; a bill edited past ``toDateTime`` mid-walk shrinks the
+    declared count between two pages of one walk. That walk is spent, pooling restarts, and the next walk settles."""
     next_url = "https://api.congress.gov/v3/bill?format=json&limit=250&offset=250&sort=updateDate+desc"
-    calls = {"n": 0}
+    b1, b2, b3 = _bill(1, "2025-04-07"), _bill(2, "2025-04-06"), _bill(3, "2025-04-05")
+    transport = _Walks(
+        {"bills": [b1, b2], "pagination": {"count": 3, "next": next_url}},
+        {"bills": [b3], "pagination": {"count": 2}},  # the same walk's next page now declares one fewer
+        {"bills": [b3, b1], "pagination": {"count": 2}},
+    )
+    assert _bills(transport) == [b3, b1]
+    assert transport.asked == [("updateDate desc", "250"), ("updateDate desc", "250"), ("updateDate asc", "237")]
 
-    def respond(request: httpx.Request) -> httpx.Response:
-        calls["n"] += 1
-        if calls["n"] == 1:
-            # Page one declares 3 bills total and points at a next page.
-            body = {"bills": page_one_bills, "pagination": {"count": 3, "next": next_url}}
-        else:
-            # Page two, the walk's terminal page: the publisher now declares
-            # only 2 — one fewer than page one stated, mid-walk.
-            assert str(request.url) == next_url
-            body = {"bills": page_two_bills, "pagination": {"count": 2}}
-        return httpx.Response(
-            200, stream=httpx.ByteStream(json.dumps(body).encode()), headers={"content-type": "application/json"}
-        )
 
-    reader = CongressBillsReader(api_key="test-key", transport=httpx.MockTransport(respond))
-    with pytest.raises(PagedJsonSourceError, match="declared count changed during the traversal"):
-        list(reader.iter_records())
-    assert calls["n"] == 2
+def test_a_window_that_never_settles_refuses_after_every_walk():
+    """A table never walked in full is never published: the pooled read gives up loudly at spicy-docs' pass bound."""
+    repeated = {"bills": [_bill(1, "2025-04-07")] * 2, "pagination": {"count": 2}}
+    transport = _Walks(*[repeated] * DEFAULT_POOL_PASSES)
+    with pytest.raises(IncompleteWalkError, match="pooled 1 of 2 declared"):
+        _bills(transport)
+    assert len(transport.asked) == DEFAULT_POOL_PASSES
+
+
+def test_a_malformed_page_is_not_walked_again():
+    """A permanent refusal propagates on its first request rather than spending further walks."""
+    transport = _Walks({"bills": "not a list", "pagination": {"count": 1}})
+    with pytest.raises(PagedJsonSourceError, match="omitted its bills list"):
+        _bills(transport)
+    assert len(transport.asked) == 1
 
 
 # -- catch-up windowing ------------------------------------------------------
@@ -395,101 +410,6 @@ def test_build_congress_bills_merges_prior_and_fresh_rows(tmp_path, monkeypatch)
 
     # Ordered by update_date DESC, then bill_id.
     assert [row["bill_id"] for row in rows] == ["118-hr-1", "119-hr-99", "118-s-2"]
-
-
-# -- retrying a mid-walk publisher drift (build_congress_bills._fetch_bills) --
-
-
-def _flaky_reader_factory(*, fail_times: int, drift: bool = True) -> tuple[type, dict]:
-    """A CongressBillsReader stand-in whose first ``fail_times`` constructions
-    raise from ``iter_records()``, then succeed. Returns ``(cls, calls)``: the
-    counter dict is shared across instances — each retry attempt in
-    ``_fetch_bills`` builds a brand-new reader, exactly like a real retry
-    would — so a test can assert exactly how many attempts were made without
-    needing a class attribute (a class body cannot close over this factory's
-    locals the way a method can, so the counter travels back to the caller
-    instead).
-
-    ``drift=True`` (the default) raises with both ``declaredCount`` and
-    ``observedCount`` in the error's ``paged_json_acquisition`` context — the
-    shape of a mid-walk publisher drift ``_fetch_bills`` retries.
-    ``drift=False`` raises a permanent, non-drift refusal (a malformed page,
-    missing both counts) that must propagate on the first attempt instead.
-    """
-    calls = {"n": 0}
-
-    class _FlakyReader:
-        def __init__(self, *, since=None, until=None):
-            self.since = since
-            self.until = until
-
-        def iter_records(self):
-            calls["n"] += 1
-            if calls["n"] <= fail_times:
-                if drift:
-                    error = PagedJsonSourceError("Congress.gov declared count changed during the traversal")
-                    context = {"declaredCount": 3, "observedCount": 2}
-                else:
-                    error = PagedJsonSourceError("Congress.gov list response is not a JSON object")
-                    context = {"operation": "page", "requestCount": 1}
-                # Mirrors spicy-docs' own paged_json.py, which attaches this
-                # context via __dict__ rather than a declared attribute.
-                error.__dict__["paged_json_acquisition"] = context
-                raise error
-            return iter(_FRESH_RAW)
-
-    return _FlakyReader, calls
-
-
-def test_fetch_retries_a_walk_refusal_and_succeeds(tmp_path, monkeypatch):
-    """First attempt raises (the mid-walk drift), second succeeds — the retry
-    this reader's absolute refusal exists for; the reader itself never
-    weakens, but ``build_congress_bills`` asks the same window again."""
-    monkeypatch.setattr(bcb.r2, "download", lambda remote_key, local_path: False)
-    monkeypatch.setattr(bcb.time, "sleep", lambda seconds: None)
-    reader_cls, calls = _flaky_reader_factory(fail_times=1)
-    monkeypatch.setattr(bcb, "CongressBillsReader", reader_cls)
-
-    out_path = bcb.build_congress_bills(tmp_path)
-
-    rows = pq.read_table(out_path).to_pylist()
-    assert {row["bill_id"] for row in rows} == {"118-hr-1", "119-hr-99"}
-    assert calls["n"] == 2  # one refusal, one successful retry
-
-
-def test_fetch_gives_up_after_max_attempts(tmp_path, monkeypatch):
-    """A refusal that never clears exhausts every attempt and propagates —
-    the job fails loudly instead of publishing a table it never fully walked."""
-    monkeypatch.setattr(bcb.r2, "download", lambda remote_key, local_path: False)
-    monkeypatch.setattr(bcb.time, "sleep", lambda seconds: None)
-    reader_cls, calls = _flaky_reader_factory(fail_times=bcb.FETCH_ATTEMPTS + 10)
-    monkeypatch.setattr(bcb, "CongressBillsReader", reader_cls)
-
-    with pytest.raises(PagedJsonSourceError, match="declared count changed during the traversal"):
-        bcb.build_congress_bills(tmp_path)
-
-    # Exactly FETCH_ATTEMPTS attempts — no more (it must stop), no fewer (it
-    # must actually retry rather than propagate the first refusal).
-    assert calls["n"] == bcb.FETCH_ATTEMPTS
-
-
-def test_fetch_does_not_retry_a_non_drift_refusal(tmp_path, monkeypatch):
-    """A PagedJsonSourceError without both declaredCount and observedCount in
-    its context — malformed JSON, a bad date parameter, a 404 — is not the
-    mid-walk drift shape the retry exists for. Retrying it would only burn
-    FETCH_ATTEMPTS pauses under a misleading "walk refused, retrying" log
-    line before failing the same way on the first attempt, so it propagates
-    at once instead."""
-    monkeypatch.setattr(bcb.r2, "download", lambda remote_key, local_path: False)
-    monkeypatch.setattr(bcb.time, "sleep", lambda seconds: None)
-    reader_cls, calls = _flaky_reader_factory(fail_times=bcb.FETCH_ATTEMPTS + 10, drift=False)
-    monkeypatch.setattr(bcb, "CongressBillsReader", reader_cls)
-
-    with pytest.raises(PagedJsonSourceError, match="not a JSON object"):
-        bcb.build_congress_bills(tmp_path)
-
-    # A single attempt: no retry pause for a permanent, non-drift refusal.
-    assert calls["n"] == 1
 
 
 # --------------------------------------------------------------------------- #

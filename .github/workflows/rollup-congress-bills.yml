@@ -29,8 +29,10 @@ jobs:
       skip_upload: ${{ github.event_name == 'workflow_dispatch' && inputs.skip_upload || false }}
       congress_since: ${{ inputs.since || '' }}
       congress_until: ${{ inputs.until || '' }}
-      # MAX_WINDOW_DAYS caps an incremental run at ~90 days (~14 min at the
-      # measured ~3,050 bills/min), so this headroom is really for the one case
-      # the cap can't bound: a first-ever backfill with no prior table, which
-      # walks the whole ~430k-bill archive at ~140 min.
+      # MAX_WINDOW_DAYS caps an incremental run at ~90 days (~14 min a walk at
+      # the measured ~3,050 bills/min; the pooled read takes at most four
+      # walks), so this headroom is really for the one case the cap can't
+      # bound: a first-ever backfill with no prior table, which walks the whole
+      # ~430k-bill archive at ~140 min. A second pooled walk of the archive
+      # does not fit; drive a cold start in since/until windows instead.
       timeout_minutes: 180

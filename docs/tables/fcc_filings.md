@@ -4,7 +4,7 @@
 
 **FCC filings**
 
-One row per FCC ECFS filing — the FCC's comment equivalent: comments, reply comments, ex-parte notices, letters, and other submissions — ingested from the FCC ECFS public API (`/filings`) by `build_fcc_filings`. Requires an api.data.gov key (`DATA_GOV_API_KEY`). Incremental by `date_received`, deduped on `id_submission`; each window is pooled over passes until it reaches the count ECFS aggregates for it. Because ECFS holds tens of millions of filings, a first run with no prior table is bounded to the trailing 30 days; deeper history is backfilled in slices via `FCC_SINCE` and/or scoped to specific proceedings via `FCC_PROCEEDINGS`. All columns are stored as VARCHAR, array fields serialized as JSON strings.
+One row per FCC ECFS filing — the FCC's comment equivalent: comments, reply comments, ex-parte notices, letters, and other submissions — ingested from the FCC ECFS public API (`/filings`) by `build_fcc_filings`. Requires an api.data.gov key (`DATA_GOV_API_KEY`). Incremental by `date_received`, deduped on `id_submission`; each window is pooled over whole walks until one is clean or the pool holds exactly the count ECFS aggregates for it. Because ECFS holds tens of millions of filings, a first run with no prior table is bounded to the trailing 30 days; deeper history is backfilled in slices via `FCC_SINCE` and/or scoped to specific proceedings via `FCC_PROCEEDINGS`. All columns are stored as VARCHAR, array fields serialized as JSON strings.
 
 **Coverage.** Window. 5,137 filings received 2026-08-24 to 2026-09-22, the bounded first run; every id and cell matched the raw pages. The rollup merges incrementally, so this is the history accumulated so far and not the ECFS archive. *(measured 2026-09-23)*
 

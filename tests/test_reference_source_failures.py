@@ -10,7 +10,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 
-from spicy_docs.reading.paged_json import PagedJsonSourceError
+from spicy_docs.reading.paged_json import DEFAULT_POOL_PASSES, IncompleteWalkError, PagedJsonSourceError
 from spicy_docs.sources.gao.rss import GaoFeedSourceError
 from spicy_docs.transport.credentials import CredentialRefusedError
 from spicy_docs.transport import retry
@@ -144,6 +144,7 @@ def test_transport_failure_is_not_empty_success(kind):
         ("crs", crs_page([{}])),
         ("crs", crs_page([CRS, CRS])),
         ("crs", crs_page([], total=1)),
+        ("crs", crs_page([{"id": "R1", "title": "No update date"}])),
         ("usa", {}),
         ("usa", {"results": []}),
         ("usa", usa_page([{}])),
@@ -164,7 +165,7 @@ def test_transport_failure_is_not_empty_success(kind):
 def test_malformed_or_incomplete_source_is_refused(kind, payload):
     # A walk short of its count is pooled over further passes before it refuses.
     with pytest.raises(REFUSALS):
-        list(records(kind, Transport(*[payload] * 3)))
+        list(records(kind, Transport(*[payload] * DEFAULT_POOL_PASSES)))
 
 
 @pytest.mark.parametrize(
@@ -433,11 +434,14 @@ def test_fcc_proceedings_refuse_an_empty_whole_walk_and_keep_the_output(monkeypa
 
 
 def test_crs_pools_a_shifted_walk_until_its_declared_count():
-    """A pass that repeats one report and skips another still serves the declared rows; pooling catches it."""
+    """A pass that repeats one report and skips another still serves the declared rows; pooling catches it.
+
+    CRS ignores ``sort``, so the second walk moves its page boundaries by page size alone.
+    """
     second = {**CRS, "id": "R2"}
     transport = Transport(crs_page([CRS, CRS], total=2), crs_page([second, CRS], total=2))
     assert sorted(x["id"] for x in selected("crs", transport).iter_records()) == ["R1", "R2"]
-    assert len(transport.calls) == 2
+    assert [call.url.params["limit"] for call in transport.calls] == ["250", "237"]
 
 
 def test_fcc_pools_a_window_until_its_aggregate_count():
@@ -449,6 +453,43 @@ def test_fcc_pools_a_window_until_its_aggregate_count():
     )
     assert sorted(x["id_submission"] for x in selected("fcc-filings", transport).iter_records()) == ["f1", "f2"]
     assert len(transport.calls) == 2
+
+
+def _proceeding(name, **fields):
+    """An ECFS proceeding document carrying the bureau its window's count is aggregated over."""
+    return {
+        **FCC_PROCEEDING,
+        "name": name,
+        "bureau": {"code": "WCB", "name": "Wireline"},
+        "total_filing_count": 1,
+        **fields,
+    }
+
+
+def test_fcc_proceedings_pool_by_document_not_by_filing_activity():
+    """A proceeding's filing counters move between walks while its document does not; the pool keys the document."""
+    held, other, skipped = _proceeding("17-108"), _proceeding("23-320"), _proceeding("24-1")
+    busier = {**held, "total_filing_count": 2, "last_30_days": "2026-09-09T00:00:00Z"}
+    transport = Transport(
+        fcc_page("fcc-proceedings", [held, held, other], counted=3),
+        fcc_page("fcc-proceedings", [skipped, skipped, busier], counted=3),
+    )
+    rows = list(records("fcc-proceedings", transport))
+    assert sorted(row["name"] for row in rows) == ["17-108", "23-320", "24-1"]
+    assert next(row for row in rows if row["name"] == "17-108")["total_filing_count"] == 2, "the latest observation"
+    assert len(transport.calls) == 2
+
+
+def test_fcc_proceedings_edited_between_walks_refuse_rather_than_settle_on_a_surplus():
+    """Any other change reads as another document: the pool overfills its count and only a clean walk could settle it."""
+    held, other, skipped = _proceeding("17-108"), _proceeding("23-320"), _proceeding("24-1")
+    closed = {**held, "date_closed": "2026-09-09T00:00:00Z"}
+    dirty = fcc_page("fcc-proceedings", [held, held, other], counted=3)
+    transport = Transport(
+        dirty, fcc_page("fcc-proceedings", [skipped, skipped, closed], counted=3), *[dirty] * (DEFAULT_POOL_PASSES - 2)
+    )
+    with pytest.raises(IncompleteWalkError, match="pooled 4 records, more than the 3 declared"):
+        list(records("fcc-proceedings", transport))
 
 
 def test_fcc_proceedings_publish_one_row_per_docket_name(monkeypatch, tmp_path):

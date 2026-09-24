@@ -41,23 +41,20 @@ repo's to compute, but no longer this repo's to encode onto the wire or to
 police for completeness — that is exactly the refusal spicy-docs' walk now
 does on our behalf.
 
-**Refuse-and-retry, not warn-and-publish.** This reader's refusal is
-absolute and stays that way: it never weakens the check above, never
-retries internally, and never publishes a walk it could not complete in
-full — a window asked for and not fully received must never look like a
-completed run. But that refusal has an operational cost this reader cannot
-see or absorb on its own: a nightly window closes at "now," a walk over it
-takes minutes, and a bill the publisher edits *during* that walk can move
-its own ``updateDate`` past ``toDateTime`` and shrink the declared count out
-from under a request already in flight — a transient publisher-side race,
-not a truncated or out-of-order walk. Retrying the identical window is the
-caller's job, not this reader's:
-:func:`~spicy_regs.transforms.build_congress_bills._fetch_bills` asks a
-fresh reader for the same window a few times, with a short pause, before
-giving up. A refusal that survives every retry propagates unchanged and
-fails the run loudly; it means the window was asked for and, after every
-attempt, still not fully received — the run publishes nothing, and the next
-scheduled run tries again from the same watermark.
+**Pooled, not warn-and-publish.** A walk that agrees with its declared count
+proves only the row count: the list sorted by ``updateDate`` shifts while it is
+read, so one walk can repeat one bill and skip another (the amendments walk of
+the same API served 7,066 rows but 7,013 distinct amendments on 2026-09-23). A
+nightly window closes at "now" and a walk over it takes minutes, so a bill the
+publisher edits *during* the walk can also move its ``updateDate`` past
+``toDateTime`` and shrink the declared count mid-walk. The window is therefore
+read with ``CongressListingReader.pooled``: whole walks of the window, keyed by
+:func:`list_identity`, until one is clean or the walks since the count last
+changed hold exactly the declared number of distinct bills. A walk whose count
+moves mid-walk is spent and pooling restarts after it. A terminal count
+mismatch, a malformed page or a query still unsettled after spicy-docs' pass
+bound each fails the run, so a window never fully received never looks like a
+completed run, and the next scheduled run tries again from the same watermark.
 
 **Shared with the bill family's pre-BILLSTATUS backfill.** :func:`listing_reader`
 is the one place this repository constructs spicy-docs' reader *for the
@@ -85,6 +82,7 @@ from __future__ import annotations
 import os
 from collections.abc import Iterator, Mapping
 from datetime import date
+from operator import itemgetter
 from typing import TYPE_CHECKING, Any
 
 import httpx
@@ -115,14 +113,12 @@ API_KEY_ENV_VARS = (
     "REGULATIONS_GOV_API_KEY",
 )
 
-_PROGRESS_EVERY = 5_000
-
-# Backstop against a runaway loop, not an expected limit: at spicy-docs'
-# MAX_LIMIT (250 rows/page) this clears a full-archive backfill — ~430k bills
-# as of 2026-08, and the old offset walk this replaces paged fine past 238k —
-# with ample headroom for growth. Hitting it raises a PagedJsonSourceError
+# Backstop against a runaway loop, not an expected limit: at the smallest page
+# a pooled walk asks for (223 rows; spicy-docs varies 250, 237 and 223 per walk)
+# this clears a full-archive backfill — ~430k bills as of 2026-08, about 1,930
+# pages — with headroom for growth. Hitting it raises a PagedJsonSourceError
 # from the spicy-docs reader; it is never a quiet stop.
-_MAX_PAGES = 2_000
+_MAX_PAGES = 2_500
 
 # One page fetch's request budget (including its own retries — spicy-docs
 # resets the request count per page, not per walk) and pacing. Mirrors the
@@ -134,8 +130,9 @@ _TIMEOUT_SECONDS = 60.0
 _MIN_REQUEST_INTERVAL_SECONDS = 0.2
 
 
-def listing_reader(api_key: str, transport: httpx.BaseTransport | None = None, *,
-                   evidence: CaptureEvidence | None = None) -> CongressListingReader:
+def listing_reader(
+    api_key: str, transport: httpx.BaseTransport | None = None, *, evidence: CaptureEvidence | None = None
+) -> CongressListingReader:
     """spicy-docs' reader over the Congress.gov list routes, with this repo's page budget and header-only key.
 
     Imported lazily on purpose: base CLI/MCP installations import this module
@@ -173,7 +170,9 @@ def bill_detail_url(identity: BillIdentity) -> str:
     return f"{API_BASE}/bill/{identity.congress}/{identity.bill_type}/{identity.number}?format=json"
 
 
-def bill_detail(reader: CongressListingReader, identity: BillIdentity) -> tuple[Mapping[str, Any], CapturedBodyResponse]:
+def bill_detail(
+    reader: CongressListingReader, identity: BillIdentity
+) -> tuple[Mapping[str, Any], CapturedBodyResponse]:
     """One bill's detail record, as the publisher states it, proven to be the bill asked for.
 
     One ``capture_validated`` call on the same reader the list walk uses, so
@@ -217,6 +216,15 @@ def bill_detail(reader: CongressListingReader, identity: BillIdentity) -> tuple[
     return bill, capture
 
 
+def list_identity(record: Mapping[str, Any]) -> tuple[object, str, object]:
+    """A bill or amendment list record's own identity: its Congress, lowercased type and number.
+
+    A missing part stays ``None`` (the type blank), so a pooled walk refuses the
+    record instead of collapsing every such record into one identity.
+    """
+    return record.get("congress"), str(record.get("type") or "").lower(), record.get("number")
+
+
 def _resolve_api_key() -> str | None:
     """Return the first api.data.gov key set in :data:`API_KEY_ENV_VARS`, or None.
 
@@ -231,13 +239,15 @@ def _resolve_api_key() -> str | None:
 
 
 class CongressBillsReader(Reader):
-    """Yields raw Congress.gov bill dicts, newest ``updateDate`` first.
+    """Yields raw Congress.gov bill dicts, one per bill the window declares, each its newest version.
 
     ``since``/``until`` become the ``fromDateTime``/``toDateTime`` bounds on the
     request, so the server decides what is in the window. The walk itself —
-    pagination, retries, and refusing an inconsistent or incomplete traversal —
-    is :class:`spicy_docs.sources.congress.listing.CongressListingReader`'s job.
-    With no key configured the reader yields nothing.
+    pagination, retries, pooling whole walks and refusing an inconsistent or
+    incomplete traversal — is
+    :meth:`spicy_docs.sources.congress.listing.CongressListingReader.pooled`'s job.
+    The order is the settling walk's, not a promise. With no key configured the
+    reader yields nothing.
     """
 
     def __init__(
@@ -271,21 +281,23 @@ class CongressBillsReader(Reader):
         # Actually walking the API requires the source-readers extra, which
         # listing_reader imports only now, with a key in hand.
         reader = listing_reader(self.api_key, self.transport)
-        from spicy_docs.sources.congress.listing import bill_list_url
+        from spicy_docs.sources.congress.listing import LIST_ROUTES, bill_list_url
 
         url = bill_list_url(
             from_datetime=self.since.strftime(_FROM_DATETIME_FMT) if self.since else None,
             to_datetime=self.until.strftime(_TO_DATETIME_FMT) if self.until else None,
         )
-        seen = 0
         with reader:
-            for page in reader.bills(url, max_pages=_MAX_PAGES):
-                for bill in page.records:
-                    seen += 1
-                    if seen % _PROGRESS_EVERY == 0:
-                        logger.info("Congress bills: {:,} bills so far...", seen)
-                    # page.records is typed Mapping[str, Any] (spicy-docs reads
-                    # every row that way); this reader's contract is dict, same
-                    # as every raw payload build_congress_bills._shape() reads.
-                    yield dict(bill)
-        logger.info("Congress bills: yielded {:,} bills", seen)
+            pooled = reader.pooled(
+                LIST_ROUTES["bill"], url, key=list_identity, version=itemgetter("updateDate"), max_pages=_MAX_PAGES
+            )
+        logger.info(
+            "Congress bills: {:,} bills of {:,} declared, in {} walks",
+            len(pooled.records),
+            pooled.declared,
+            pooled.passes,
+        )
+        # page.records is typed Mapping[str, Any] (spicy-docs reads every row
+        # that way); this reader's contract is dict, same as every raw payload
+        # build_congress_bills._shape() reads.
+        yield from (dict(bill) for bill in pooled.records)
