@@ -110,7 +110,7 @@ class PendingCommentText:
                 if not path.exists():
                     continue
                 selected = with_text_columns(pl.scan_parquet(path)).select(_COLUMNS).join(
-                    pending.lazy(), on=_COORDINATES, how="semi",
+                    pending.lazy(), on=_COORDINATES, how="semi", nulls_equal=True,
                 )
                 candidates = selected.collect(engine="streaming")
                 assert isinstance(candidates, pl.DataFrame)
@@ -141,7 +141,8 @@ class PendingCommentText:
                 candidates = con.execute(f"""
                     SELECT {', '.join('r.' + column for column in _COLUMNS)}
                     FROM {iceberg._qualified(record_type)} r JOIN _text_pending p
-                    USING (agency_code, docket_id, comment_id)
+                      ON r.agency_code = p.agency_code AND r.comment_id = p.comment_id
+                     AND r.docket_id IS NOT DISTINCT FROM p.docket_id
                     WHERE r.agency_code = ?
                     QUALIFY ROW_NUMBER() OVER (PARTITION BY r.comment_id ORDER BY r.modify_date DESC NULLS LAST) = 1
                 """, [agency]).pl()
@@ -154,7 +155,8 @@ class PendingCommentText:
 
 def _partition(output_dir: Path, row: dict) -> Path:
     posted = datetime.fromisoformat(row["posted_date"]) if row["posted_date"] else None
+    docket = row["docket_id"]
     return comment_partition_path(
-        output_dir / "comments", row["agency_code"], row["docket_id"].strip('"'),
+        output_dir / "comments", row["agency_code"], docket.strip('"') if docket is not None else None,
         posted.year if posted else None, posted.month if posted else None,
     )

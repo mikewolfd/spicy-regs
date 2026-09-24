@@ -56,9 +56,9 @@ def test_reviewed_exclusions_are_checkpointed_without_catalog_writes(tmp_path, m
 
 @pytest.mark.parametrize("use_iceberg", [False, True])
 def test_invalid_comment_staging_refuses_before_any_dataset_merge(tmp_path, monkeypatch, use_iceberg):
-    """A missing docket outside the reviewed exclusions must protect every output."""
+    """An unsafe docket outside the reviewed exclusions must protect every output."""
     comment = _comment_payload("EPA-2026-0001-0001", "EPA-2026-0001", "2026-01-01")
-    comment["data"]["attributes"].update(docketId=None, title="Test of emission standards")
+    comment["data"]["attributes"].update(docketId="../unsafe", title="Test of emission standards")
     store = {
         _docket_key("EPA-2026-0001"): dumps(_docket_payload("EPA-2026-0001", "2026-01-01")).encode(),
         _comment_key("EPA-2026-0001-0001", "EPA-2026-0001"): dumps(comment).encode(),

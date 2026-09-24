@@ -7,8 +7,8 @@ files at:
     comments/agency_code={A}/docket_id={D}/year={Y}/month={M}/part-0.parquet
 
 Also builds the comments_index.parquet used by the frontend and feed summary.
-NULL posted dates use Hive null year/month partitions and remain NULL in the index.
-Malformed dates and missing or unsafe agency/docket coordinates refuse before writes.
+NULL docket IDs and posted dates use Hive null partitions and remain NULL in the index.
+Missing identities, malformed dates and unsafe coordinates refuse before writes.
 
 Usage:
     uv run python scripts/migrate_comments_partitioned.py [--output-dir output]
@@ -25,7 +25,7 @@ from spicy_regs.transforms.comment_partitions import comment_partition_path, val
 
 
 def validate_partition_coordinates(comments_file: Path) -> None:
-    """Refuse malformed coordinates while retaining source NULL posted dates."""
+    """Refuse malformed coordinates while retaining source NULL dockets and dates."""
     with duckdb.connect() as con:
         con.execute("SET memory_limit='4GB'")
         con.execute("SET threads=2")

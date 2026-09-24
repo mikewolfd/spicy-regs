@@ -298,7 +298,7 @@ def _build_comments_index(con, record_type: RecordType, output_dir: Path) -> Pat
 
     ``year`` / ``month`` come from ``posted_date`` to match the partitioning the
     legacy path used; ``docket_id`` is trimmed of stray quotes for the same
-    reason. NULL posted dates retain NULL year/month groups. Written atomically
+    reason. NULL docket IDs and dates retain NULL groups. Written atomically
     via a temp file so a crashed rebuild can't leave a half-written index in place.
     """
     from spicy_regs.transforms.comment_partitions import validate_comment_coordinates

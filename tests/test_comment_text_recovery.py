@@ -12,6 +12,7 @@ from spicy_regs.pipelines.comment_text import PENDING_TEXT_FILE, PendingCommentT
 from spicy_regs.schemas import COMMENT
 from spicy_regs.sources import iceberg, r2
 from spicy_regs.sources.derived_text import DerivedTextUnavailable
+from spicy_regs.transforms.comment_partitions import comment_partition_path
 from spicy_regs.transforms.derived_text_pool import DerivedTextPool, TextResult
 from tests.test_backfill_derived_text import _seed_catalog
 from tests.test_derived_text import ACF, _FakeS3Resource, _store, derived_key
@@ -187,3 +188,36 @@ def test_inline_access_refusal_never_advances_either_checkpoint(tmp_path, monkey
     assert not (tmp_path / "manifest.parquet").exists()
     assert not (tmp_path / PENDING_TEXT_FILE).exists()
     assert not (tmp_path / "comments").exists()
+
+
+@pytest.mark.parametrize("use_iceberg", [False, True])
+def test_null_docket_retry_matches_only_the_same_relationship(tmp_path, monkeypatch, use_iceberg):
+    monkeypatch.setattr(r2, "download", lambda *args: False)
+    actual = [
+        {**dict.fromkeys(COMMENT.schema), "comment_id": identity, "agency_code": "ODNI",
+         "docket_id": docket, "text_content": "Already recovered", "text_extraction_status": "ok"}
+        for identity, docket in [("unchanged", None), ("moved", "ODNI-known")]
+    ]
+    pending = PendingCommentText(tmp_path)
+    for row in actual:
+        pending.observe(TextResult({**row, "docket_id": None}, "failed", error=DerivedTextUnavailable("retry", phase="fetch")))
+        path = comment_partition_path(tmp_path / "comments", "ODNI", row["docket_id"], None, None)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        pl.DataFrame([row], schema=COMMENT.schema).write_parquet(path)
+    pending.save()
+
+    def connect(rt):
+        con = duckdb.connect()
+        con.execute(f"ATTACH ':memory:' AS {iceberg._CATALOG_ALIAS}")
+        _seed_catalog(con, actual)
+        return con
+
+    monkeypatch.setattr(iceberg, "_connect_for_table", connect)
+    with DerivedTextPool(lambda: _FakeS3Resource({}), max_workers=1) as pool:
+        resumed = PendingCommentText(tmp_path)
+        assert resumed.retry(pool, tmp_path, ["ODNI"], use_iceberg=use_iceberg) == []
+        resumed.save()
+    assert set(resumed.rows) == {"moved"}
+    assert pl.read_parquet(list((tmp_path / "comments").rglob("part-0.parquet")), hive_partitioning=False).sort(
+        "comment_id"
+    ).to_dicts() == sorted(actual, key=lambda row: row["comment_id"])

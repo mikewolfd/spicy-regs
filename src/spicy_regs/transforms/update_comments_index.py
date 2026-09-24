@@ -6,7 +6,7 @@ import polars as pl
 import pyarrow.parquet as pq
 from loguru import logger
 
-from spicy_regs.transforms.comment_partitions import partition_date_value
+from spicy_regs.transforms.comment_partitions import HIVE_NULL, partition_date_value
 
 
 def update_comments_index(output_dir: Path, changed_files: list[Path]) -> Path:
@@ -23,7 +23,7 @@ def update_comments_index(output_dir: Path, changed_files: list[Path]) -> Path:
     index_file = output_dir / "comments_index.parquet"
 
     # Build set of changed partition keys for fast lookup.
-    changed_keys: set[tuple[str, str, int | None, int | None]] = set()
+    changed_keys: set[tuple[str, str | None, int | None, int | None]] = set()
     new_rows: list[dict] = []
 
     required_keys = {"agency_code", "docket_id", "year", "month"}
@@ -42,7 +42,7 @@ def update_comments_index(output_dir: Path, changed_files: list[Path]) -> Path:
 
         key = (
             vals["agency_code"],
-            vals["docket_id"],
+            None if vals["docket_id"] == HIVE_NULL else vals["docket_id"],
             partition_date_value(vals["year"]),
             partition_date_value(vals["month"]),
         )

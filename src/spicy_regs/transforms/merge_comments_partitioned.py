@@ -109,7 +109,8 @@ def merge_comments_partitioned(
                        OR f._month IS DISTINCT FROM extract(month FROM try_cast(p.posted_date AS TIMESTAMP))
                        OR p.filename IS DISTINCT FROM concat(
                            '{sql_path(comments_dir)}/agency_code=', f.agency_code,
-                           '/docket_id=', f._clean_docket, '/year=', coalesce(f._year::VARCHAR, '{HIVE_NULL}'),
+                           '/docket_id=', coalesce(f._clean_docket, '{HIVE_NULL}'),
+                           '/year=', coalesce(f._year::VARCHAR, '{HIVE_NULL}'),
                            '/month=', coalesce(f._month::VARCHAR, '{HIVE_NULL}'), '/part-0.parquet'
                         )
                 """).fetchone()
@@ -151,12 +152,12 @@ def merge_comments_partitioned(
             for agency, docket, year, month in partitions:
                 partition_file = comment_partition_path(comments_dir, agency, docket, year, month)
                 temp_file = partition_file.with_suffix(".tmp.parquet")
-                docket_escaped = str(docket).replace("'", "''")
+                docket_sql = "NULL" if docket is None else "'" + docket.replace("'", "''") + "'"
 
                 staging_sql = f"""
                     SELECT {col_select_plain} FROM _staging
                     WHERE agency_code = '{agency}'
-                      AND _clean_docket = '{docket_escaped}'
+                      AND _clean_docket IS NOT DISTINCT FROM {docket_sql}
                       AND _year IS NOT DISTINCT FROM {"NULL" if year is None else year}
                       AND _month IS NOT DISTINCT FROM {"NULL" if month is None else month}
                 """

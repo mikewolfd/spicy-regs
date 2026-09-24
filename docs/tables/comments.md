@@ -4,7 +4,7 @@
 
 **Public comments**
 
-One row per public comment submitted to a docket — the largest table (tens of millions of rows). On R2 it is also published as Hive-partitioned files under `comments/agency/agency_code=.../part-0.parquet`, one file per agency, rebuilt daily — this is what `spicy-regs-ui` reads for scoped queries. (An older `comments/agency_code=.../docket_id=.../year=.../month=...` tree was abandoned when comments moved onto the Iceberg catalog and carried a reduced set of columns; prefer the per-agency tree.) Joins to `dockets` on `docket_id`.
+One row per public comment — the largest table (tens of millions of rows). On R2 it is also published as Hive-partitioned files under `comments/agency/agency_code=.../part-0.parquet`, one file per agency, rebuilt daily — this is what `spicy-regs-ui` reads for scoped queries. (An older `comments/agency_code=.../docket_id=.../year=.../month=...` tree was abandoned when comments moved onto the Iceberg catalog and carried a reduced set of columns; prefer the per-agency tree.) Joins to `dockets` on `docket_id` when the source supplies that relationship. Comments with a null docket remain in the table and agency totals.
 
 **Coverage.** True range, floored. Posted dates are stated from 1990-01-01 to 2026-09-06 rather than from the raw minimum of year 0000, on the same publisher defect as `documents`. See the data-quality note. *(measured 2026-09-06)*
 
@@ -18,7 +18,7 @@ One row per public comment submitted to a docket — the largest table (tens of 
 | Column | Type | Description |
 | --- | --- | --- |
 | `comment_id` 🔑 | `VARCHAR` | Unique comment identifier. Primary key / dedup key. |
-| `docket_id` | `VARCHAR` | Docket the comment was submitted to. Foreign key to `dockets.docket_id`. |
+| `docket_id` | `VARCHAR` | Source-supplied docket identifier for joining to `dockets.docket_id`. Null when the source does not identify a docket; mirror directory names and comment ID prefixes do not fill this field. |
 | `agency_code` | `VARCHAR` | Receiving agency's short code. |
 | `first_name` | `VARCHAR` | Commenter's first name, when provided. Often null. |
 | `last_name` | `VARCHAR` | Commenter's last name, when provided. Often null. |

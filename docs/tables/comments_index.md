@@ -15,7 +15,7 @@ A tiny per-partition row-count index for the partitioned comments. It maps each 
 | Column | Type | Description |
 | --- | --- | --- |
 | `agency_code` | `VARCHAR` | Agency code of the partition (the `agency_code=` path segment). |
-| `docket_id` | `VARCHAR` | Docket id of the partition (the `docket_id=` path segment). |
+| `docket_id` | `VARCHAR` | Source docket identifier, or NULL when unspecified. Legacy docket partitions encode NULL as `docket_id=__HIVE_DEFAULT_PARTITION__`; the stored column and index retain a true NULL. |
 | `year` | `BIGINT` | Year from `posted_date`. NULL when the source posted date is unknown; both year and month then use `__HIVE_DEFAULT_PARTITION__` in their path segments. |
 | `month` | `BIGINT` | Month (1–12) from `posted_date`. NULL together with year when the source posted date is unknown; the path segment uses `__HIVE_DEFAULT_PARTITION__`. |
 | `row_count` | `BIGINT` | Number of comment rows in that partition file. |

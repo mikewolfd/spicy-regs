@@ -4,14 +4,14 @@ from __future__ import annotations
 
 
 def check_comments(con, comments: str, index: str, *, limit: int = 20) -> list[str]:
-    """Check raw IDs and every agency/docket/month count, including NULL dates.
+    """Check raw IDs and every agency/docket/month count, including NULL dockets/dates.
 
     The arguments are caller-owned SQL relations, never user SQL. Use the raw
     catalog or public files: a consumer's deduplicating view hides corruption.
     """
     rows, ids, missing_coordinates = con.execute(f"""
         SELECT count(*), count(DISTINCT comment_id),
-               count(*) FILTER (WHERE comment_id IS NULL OR agency_code IS NULL OR docket_id IS NULL)
+               count(*) FILTER (WHERE comment_id IS NULL OR agency_code IS NULL)
         FROM ({comments})
     """).fetchone()
     errors = []

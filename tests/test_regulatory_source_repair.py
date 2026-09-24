@@ -147,10 +147,10 @@ def test_comment_repair_preserves_local_partition_and_enrichment(tmp_path):
     assert pq.ParquetFile(path).read().to_pylist() == [row]
 
 
-@pytest.mark.parametrize("coordinate", ["agencyId", "docketId"])
-def test_comment_with_missing_partition_coordinate_refuses(tmp_path, coordinate):
+@pytest.mark.parametrize("coordinate,invalid", [("agencyId", None), ("docketId", "../unsafe")])
+def test_comment_with_invalid_partition_coordinate_refuses(tmp_path, coordinate, invalid):
     value = raw("ACF-2009-0004-0002")
-    value["data"]["attributes"][coordinate] = None
+    value["data"]["attributes"][coordinate] = invalid
     with pytest.raises(ValueError, match="partition"):
         repair_records([value], table="comments", output_dir=tmp_path)
     assert not list(tmp_path.rglob("*.parquet"))

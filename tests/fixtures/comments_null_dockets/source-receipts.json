@@ -1,0 +1,29 @@
+[
+  {
+    "checked_at": "2026-09-24T23:02:26.407750+00:00",
+    "source": "s3://mirrulations/raw-data/ODNI/ODNI-2009-0003/text-ODNI-2009-0003/comments/ODNI-2009-0003-0002.json",
+    "etag": "\"f3cb74ed1bfb95467c313220b1a9f88a\"",
+    "size": 1725,
+    "sha256": "f4dd6d025d2fcf6eda2dfb47633728efa6b9dc41a41aa8c77a5dd3e61ae41832",
+    "canonical_sha256": "330f705e354dbe5e617cc96c3783bf970b444fd88346e3890ed15238e9c92642",
+    "retained_file": "ODNI-2009-0003-0002.source.json"
+  },
+  {
+    "checked_at": "2026-09-24T23:02:26.450871+00:00",
+    "source": "s3://mirrulations/raw-data/ODNI/ODNI-2009-0004/text-ODNI-2009-0004/comments/ODNI-2009-0004-0002.json",
+    "etag": "\"bf555f6cf5f3620f85a6a34161ccae10\"",
+    "size": 1697,
+    "sha256": "d5ac7aa71069e0b52efc05497f623f804118b029db76ba0a967680ed64433413",
+    "canonical_sha256": "448a8c71d0f1f9b94de5b0e1be22964a396d30a185be544b57e83d9def44dac0",
+    "retained_file": "ODNI-2009-0004-0002.source.json"
+  },
+  {
+    "checked_at": "2026-09-24T23:02:26.499025+00:00",
+    "source": "s3://mirrulations/raw-data/ODNI/ODNI-2009-0004/text-ODNI-2009-0004/comments/ODNI-2009-0004-0003.json",
+    "etag": "\"8bfd9376dfcc24799e55e21935e2281c\"",
+    "size": 1708,
+    "sha256": "84b284b310b5386e668c3374ddaac66f0c309da86543426760637150e2b17a80",
+    "canonical_sha256": "eff089206c265c7c5c612522f93ea54d4b6047647f54ddaf566bb574a04f9536",
+    "retained_file": "ODNI-2009-0004-0003.source.json"
+  }
+]

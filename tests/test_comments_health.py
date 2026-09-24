@@ -34,6 +34,16 @@ def test_missing_docket_cannot_hide_behind_same_agency_total(con):
     assert len(check_comments(con, 'SELECT * FROM comments', 'SELECT * FROM idx')) == 2
 
 
+def test_null_dockets_reconcile_and_their_missing_rows_still_fail(con):
+    con.execute("INSERT INTO comments VALUES ('a','ODNI',NULL,'2009-09-03'), ('b','ODNI',NULL,NULL)")
+    con.execute("INSERT INTO idx VALUES ('ODNI',NULL,2009,9,1), ('ODNI',NULL,NULL,NULL,1)")
+    assert check_comments(con, 'SELECT * FROM comments', 'SELECT * FROM idx') == []
+    con.execute("DELETE FROM comments WHERE comment_id = 'a'")
+    assert check_comments(con, 'SELECT * FROM comments', 'SELECT * FROM idx') == [
+        'comments coverage ODNI/None/2009-9: index=1, actual=None'
+    ]
+
+
 def test_extra_unindexed_rows_fail(con):
     con.execute("INSERT INTO comments VALUES ('a','EPA','EPA-1','2026-09-01')")
     assert check_comments(con, 'SELECT * FROM comments', 'SELECT * FROM idx')

@@ -31,7 +31,10 @@ ROW = {
         ("posted_date", "infinity"),
         ("agency_code", None),
         ("agency_code", "../EPA"),
-        ("docket_id", None),
+        ("agency_code", "__HIVE_DEFAULT_PARTITION__"),
+        ("comment_id", None),
+        ("comment_id", " "),
+        ("docket_id", "__HIVE_DEFAULT_PARTITION__"),
         ("docket_id", ""),
         ("docket_id", "../EPA-2001-0002"),
     ],
@@ -52,17 +55,21 @@ def test_invalid_coordinates_refuse_before_any_replacement(tmp_path, field, valu
     assert set(tmp_path.rglob("*")) == {parent, partition.parent.parent, partition.parent, partition, index}
 
 
-def test_null_dates_have_null_index_values_and_hive_partition_paths(tmp_path):
-    row = {**ROW, "posted_date": None}
+@pytest.mark.parametrize("docket", [ROW["docket_id"], None])
+@pytest.mark.parametrize("date", [ROW["posted_date"], None])
+def test_null_coordinates_have_null_index_values_and_hive_partition_paths(tmp_path, docket, date):
+    row = {**ROW, "posted_date": date, "docket_id": docket}
     write_parent(tmp_path, [row])
     migrate(tmp_path)
     partition = tmp_path / (
-        "comments/agency_code=EPA/docket_id=EPA-HQ-OAR-2001-0002/"
-        "year=__HIVE_DEFAULT_PARTITION__/month=__HIVE_DEFAULT_PARTITION__/part-0.parquet"
+        f"comments/agency_code=EPA/docket_id={docket if docket is not None else '__HIVE_DEFAULT_PARTITION__'}/"
+        f"year={2022 if date is not None else '__HIVE_DEFAULT_PARTITION__'}/"
+        f"month={1 if date is not None else '__HIVE_DEFAULT_PARTITION__'}/part-0.parquet"
     )
     assert pq.ParquetFile(partition).read().to_pylist() == [row]
     assert pq.read_table(tmp_path / "comments_index.parquet").to_pylist() == [
-        {"agency_code": "EPA", "docket_id": ROW["docket_id"], "year": None, "month": None, "row_count": 1}
+        {"agency_code": "EPA", "docket_id": docket, "year": 2022 if date else None,
+         "month": 1 if date else None, "row_count": 1}
     ]
 
 

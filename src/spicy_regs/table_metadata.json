@@ -157,7 +157,7 @@
   "comments": {
     "table": "comments",
     "label": "Public comments",
-    "summary": "One row per public comment submitted to a docket — the largest table (tens of millions of rows). On R2 it is also published as Hive-partitioned files under `comments/agency/agency_code=.../part-0.parquet`, one file per agency, rebuilt daily — this is what `spicy-regs-ui` reads for scoped queries. (An older `comments/agency_code=.../docket_id=.../year=.../month=...` tree was abandoned when comments moved onto the Iceberg catalog and carried a reduced set of columns; prefer the per-agency tree.) Joins to `dockets` on `docket_id`.",
+    "summary": "One row per public comment — the largest table (tens of millions of rows). On R2 it is also published as Hive-partitioned files under `comments/agency/agency_code=.../part-0.parquet`, one file per agency, rebuilt daily — this is what `spicy-regs-ui` reads for scoped queries. (An older `comments/agency_code=.../docket_id=.../year=.../month=...` tree was abandoned when comments moved onto the Iceberg catalog and carried a reduced set of columns; prefer the per-agency tree.) Joins to `dockets` on `docket_id` when the source supplies that relationship. Comments with a null docket remain in the table and agency totals.",
     "coverage": "True range, floored. Posted dates are stated from 1990-01-01 to 2026-09-06 rather than from the raw minimum of year 0000, on the same publisher defect as `documents`. See the data-quality note.",
     "kind": "true_range",
     "measured_on": "2026-09-06",
@@ -171,7 +171,7 @@
       {
         "column_name": "docket_id",
         "column_type": "VARCHAR",
-        "description": "Docket the comment was submitted to. Foreign key to `dockets.docket_id`."
+        "description": "Source-supplied docket identifier for joining to `dockets.docket_id`. Null when the source does not identify a docket; mirror directory names and comment ID prefixes do not fill this field."
       },
       {
         "column_name": "agency_code",
@@ -271,7 +271,7 @@
       {
         "column_name": "docket_id",
         "column_type": "VARCHAR",
-        "description": "Docket id of the partition (the `docket_id=` path segment)."
+        "description": "Source docket identifier, or NULL when unspecified. Legacy docket partitions encode NULL as `docket_id=__HIVE_DEFAULT_PARTITION__`; the stored column and index retain a true NULL."
       },
       {
         "column_name": "year",

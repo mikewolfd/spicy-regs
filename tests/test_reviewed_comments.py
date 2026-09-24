@@ -42,7 +42,7 @@ def test_changed_observation_requires_review_and_test_keyword_does_not_filter():
 
 
 def test_direct_catalog_entry_refuses_invalid_staging_before_connecting(tmp_path, monkeypatch):
-    row = {**dict.fromkeys(COMMENT.schema), "comment_id": "unreviewed", "agency_code": "CFTC"}
+    row = {**dict.fromkeys(COMMENT.schema), "comment_id": "unreviewed", "agency_code": "CFTC", "docket_id": "../unsafe"}
     write_staging("CFTC", "comments", [row], tmp_path / "stage", COMMENT.schema)
 
     def forbidden(*args, **kwargs):
