@@ -1,11 +1,14 @@
 # Seeding the ETL: catalog and manifest
 
-The scheduled ETL (`etl-new-pipeline.yml`) has never completed on the fork.
-Each batch found no `manifest.parquet` on R2, re-read its agencies' whole
+Before the September 24 bootstrap, each scheduled ETL batch found no
+`manifest.parquet` on R2, re-read its agencies' whole
 Mirrulations history at about 280 keys/s, and was cancelled at 60 minutes with
 nothing published. Batches that finished staging then failed because the
 `R2_CATALOG_*` settings were absent. The fork's four base objects were written
-by local deliveries.
+by local deliveries. Catalog seeding and manifest publication are now complete.
+The first hosted sweep completed batch 0; at 16:36 UTC the remaining work moved
+to a persistent local run. Its logs showed ongoing downloads, with no merge yet
+in batch 1. See [Local catch-up](#5-catch-up-locally-then-resume-scheduled-etl).
 
 The pipeline now refuses to start without a manifest. This runbook provisions
 the catalog and loads the published Parquet into it. It then publishes a
@@ -173,31 +176,49 @@ public URL, compares it with the local file, and writes `manifest-publish.json`
 beside the seed. Afterwards, `curl -sI "$R2_PUBLIC_URL/manifest.parquet"`
 should answer 200 with `content-length: 37697405`.
 
-## 5. Re-enable the ETL and run the first sweep
+## 5. Catch up locally, then resume scheduled ETL
 
-Leave `allow_fresh_start` at its default of `false`; scheduled runs never set
-it. Batches 13 and 14 need more than 60 minutes on the first sweep, and several
-others might (see [First sweep](#first-sweep)). So run the whole first sweep as
-one dispatch with a longer timeout. A job that finishes early costs nothing
-extra. A disabled workflow cannot be dispatched, so enable it first:
+Use a persistent local checkout for the historical remainder. Keep scheduled
+ETL, catalog dedupe, comments monitoring and mirror publication paused until
+the local writer finishes; GitHub's concurrency group cannot lock a local
+process. Other source acquisitions can continue independently. Do not dispatch
+catalog seeds or attachment backfills during this maintenance window.
+
+The September 24 run uses the detached checkout
+`~/Work/.worktrees/spicy-regs-local-catchup-20260924/` at `cded33d` and the
+existing `run-pipeline` command with eight agency workers. It resumes at batch
+1 after the hosted batch 0 checkpoint. Its runner, `progress.json`, per-batch
+logs and persistent output directory are retained under
+`~/Work/corpora/fork-execution-2026-09-21/etl-local-catchup-2026-09-24/`.
+It loads credentials from the fork's ignored `.env`; logs contain no credentials.
+
+For a bounded local batch, from a checkout with the fork credentials available:
 
 ```sh
-gh workflow enable etl-new-pipeline.yml --repo mikewolfd/spicy-regs
-gh workflow run etl-new-pipeline.yml --repo mikewolfd/spicy-regs \
-  -f batch_number=all -f skip_upload=false -f use_iceberg=true -f timeout_minutes=240
+uv run --frozen run-pipeline --batch-number 1 --batch-count 15 \
+  --max-workers 8 --use-iceberg --no-skip-upload --output-dir <catchup-output>
 ```
 
-- **Dispatch timing:** dispatch away from the 06:25 and 18:25 UTC crons. A
-  scheduled sweep that starts first runs under the 60-minute limit, and batches
-  13 and 14 time out in it. That wastes time but no data: the dispatch still
-  reads their keys afterwards.
-- **What `batch_number=all` does:** it runs all 15 batches in order, one at a
-  time, each under the dispatch's timeout.
-- **Resuming:** a batch appends its keys to the manifest before the next batch
-  starts, so batches never repeat each other's work. The same applies when you
-  re-dispatch one failed batch (`-f batch_number=14`).
-- **Queued crons:** a cron that fires during the dispatch waits behind it. That
-  run is an ordinary incremental sweep.
+Run batches sequentially in the same output directory. Keep attachment
+enrichment enabled and leave `full_refresh` and `allow_fresh_start` off. Each
+successful batch publishes its manifest last, preserving completed work.
+The local runner stops at the first failed batch. If publication failed, retain
+the failed directory and logs, then reconcile with the **published** manifest
+before retrying: a local manifest may already include keys whose upload failed.
+Do not blindly restart from that local manifest.
+
+Once ingestion completes, run `publish-comments-mirror.yml`. It calls the
+shared regulatory refresh: export and validate comments, record base ETags,
+refresh dependent summaries and rulemaking, then check unchanged base versions
+and read back public comments alongside the raw catalog. The publisher refuses
+lost IDs, duplicate IDs or index/partition disagreement. An unfinished dedupe
+must be recovered explicitly before normal writes or exports.
+
+Only after that refresh succeeds, re-enable scheduled ETL, the audit-only
+dedupe workflow and comments monitoring. Later scheduled sweeps use the
+published manifest to skip completed source keys; they run the same downstream
+refresh after all batches succeed. Source qualification remains a separate
+ledger review. A failed refresh leaves the schedules paused for reconciliation.
 
 ## Recognising success
 
@@ -215,8 +236,9 @@ gh workflow run etl-new-pipeline.yml --repo mikewolfd/spicy-regs \
 - **Duration:** first-sweep batch times track the table below. From the second
   sweep on, a batch spends most of its time loading the manifest (about 3
   minutes locally, likely more on a runner) and listing its agencies.
-- **Comments mirror:** the ETL does not refresh the public `comments.parquet`;
-  `publish-comments-mirror.yml` does, from the catalog.
+- **Comments mirror:** the batch command updates the catalog and index. The
+  workflow's completion step exports `comments.parquet` and agency partitions
+  through `_comments-mirror.yml`; local catch-up uses the manual refresh entry.
 
 ## First sweep
 
@@ -278,11 +300,10 @@ Each batch below has 23 agencies, except batch 14, which has 13.
 - **Batches 2, 3 and 12:** above 60 minutes only at the slowest rate.
   Batches 5 and 7 come within two minutes of it.
 
-**Timeout:** a 240-minute timeout covers every batch at the slowest rate, and
-no batch approaches the 360-minute hosted limit. A local run is therefore a
-fallback, not a requirement. Pause the schedule first, then run for example
-`uv run run-pipeline --batch-number 14 --batch-count 15 --no-skip-upload
---use-iceberg`, with R2 and catalog credentials in `.env`.
+**Planning estimate:** these rates describe metadata downloads; attachment
+text acquisition adds source-dependent work. The local catch-up avoids a
+hosted job timeout and retains batch logs and output between runs. Use measured
+local progress to revise the estimate before choosing any hosted repair timeout.
 
 **Totals:** the first sweep takes about 9.5, 12 or 16.5 hours at the three
 rates. Later sweeps read only a day's new keys. Each batch then spends 10–23
