@@ -787,19 +787,23 @@ def _prior_index(paths: Mapping[str, Path | None]) -> PriorIndex:
             for older, newer in zip(ordered, ordered[1:])
         ):
             pending_bills.add(bill)
-    if bills_path is not None and _has_columns(bills_path, ("bill_id", "url_source")):
-        relisted = {
+    if bills_path is not None and _has_columns(bills_path, ("bill_id", "url", "url_source")):
+        # Pre-label rows can carry the same API URL without the retired
+        # writer's marker. Body completion does not qualify that URL: reread
+        # its status once so the native or inherited link gets its provenance.
+        unqualified_urls = {
             bill
             for (bill,) in duckdb.sql(
-                f"SELECT bill_id FROM read_parquet('{bills_path}') WHERE url_source = '{RETIRED_LIST_URL_SOURCE}'"
+                f"SELECT bill_id FROM read_parquet('{bills_path}') "
+                f"WHERE url_source = '{RETIRED_LIST_URL_SOURCE}' OR (url IS NOT NULL AND url_source IS NULL)"
             ).fetchall()
         }
-        if relisted:
+        if unqualified_urls:
             logger.info(
-                "Bill family: {:,} bills carry the retired list writer's url label; those in scope are re-read",
-                len(relisted),
+                "Bill family: {:,} bills have retired or unlabelled URL provenance; those in scope are re-read",
+                len(unqualified_urls),
             )
-        pending_bills.update(relisted)
+        pending_bills.update(unqualified_urls)
     return PriorIndex(text_dates, printings, xml_printings, pairs, pending_bills)
 
 

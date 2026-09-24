@@ -824,12 +824,14 @@ def test_a_retained_entry_naming_another_file_does_not_wedge_the_rollup(tmp_path
     assert {row["name"] for row in rows} == {"BILLSTATUS-119-hr.zip"}, "and the bad row is replaced"
 
 
-def test_a_row_the_retired_list_writer_last_wrote_is_re_read_not_skipped(tmp_path, scoped):
+@pytest.mark.parametrize("prior_url_source", ["congress_api_list", None])
+@pytest.mark.parametrize("native_url_present", [True, False])
+def test_a_legacy_list_url_is_re_read_not_skipped(tmp_path, scoped, prior_url_source, native_url_present):
     """Plan A1's repair: the list writer's damage heals on the family's next run over the Congress.
 
     Its run of 2026-09-23 replaced BILLSTATUS instants with the list route's
     same-day dates and congress.gov page URLs with API resource URLs, labelled
-    ``congress_api_list``, and left ``update_date_including_text`` — the stamp
+    ``congress_api_list`` (or NULL before labels existed), and left ``update_date_including_text`` — the stamp
     the skip compares — alone. Without the label's re-read this bill is
     complete and its zip unchanged, so the run downloads nothing and the
     damaged cells stay (``test_a_second_run_over_an_unchanged_listing_makes_no_zip_request``).
@@ -842,21 +844,32 @@ def test_a_row_the_retired_list_writer_last_wrote_is_re_read_not_skipped(tmp_pat
     damaged = {
         "update_date": stated["update_date"][:10],
         "url": "https://api.congress.gov/v3/bill/119/hr/6028?format=json",
-        "url_source": "congress_api_list",
+        "url_source": prior_url_source,
     }
     pq.write_table(pa.Table.from_pylist([stated | damaged], schema=bills.schema), held["congress_bills"])
 
-    second = StubBulkAcquirer()
+    source = (FIXTURES / "status-119hr6028.xml").read_bytes()
+    if not native_url_present:
+        source, removed = re.subn(rb"<legislationUrl>.*?</legislationUrl>", b"", source)
+        assert removed == 1
+    second = StubBulkAcquirer(status=source)
     body = StubBodyAcquirer()
     (tmp_path / "run2").mkdir()
     paths = build_bill_family(
         tmp_path / "run2", bulk_acquirer=second, body_acquirer=body, download_prior=_prior_from(first)
     )
-    assert second.zip_downloads == [(119, "hr")], "the labelled bill's folder is read despite an unchanged zip"
+    assert second.zip_downloads == [(119, "hr")], "the legacy URL's folder is read despite an unchanged zip"
     assert body.requested == [], "and its held printings are not fetched again"
     healed = next(p for p in paths if p.stem == "congress_bills")
     row = pq.read_table(healed).to_pylist()[0]
-    assert {k: row[k] for k in damaged} == {k: stated[k] for k in damaged}
+    expected = {k: stated[k] for k in damaged}
+    if not native_url_present:
+        expected.update(url=damaged["url"], url_source="inherited")
+    assert {k: row[k] for k in damaged} == expected
+
+    third = StubBulkAcquirer(status=source)
+    _run(tmp_path / "run3", third, _prior_from(tmp_path / "run2"))
+    assert third.zip_downloads == [], "proven inherited URLs do not force repeated status reads"
 
 
 # --------------------------------------------------------------------------- #
