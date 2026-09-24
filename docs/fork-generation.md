@@ -265,8 +265,8 @@ with their evidence in `spicy-docs/docs/research/parsing-survey-2026-09-23.md`:*
   set), FCC filings history, USAspending beyond the top 10,000, court catch-up
   and parties (decision 9).
 - **Bill family (T09).** Bodies, models (needs `GEMINI_API_KEY`) and backfills.
-- **Operations and closure.** Finish the catalog and manifest seed, resume the
-  ETL and qualify its first sweep. Pages is deployed; repair the live schema
+- **Operations and closure.** Catalog and manifest seeding are complete;
+  qualify the first resumed ETL sweep. Pages is deployed; repair the live schema
   checker's handling of withdrawn outputs. Complete the remaining T18/T19
   access and consumer checks before T20.
 

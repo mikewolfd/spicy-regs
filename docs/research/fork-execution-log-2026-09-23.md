@@ -538,6 +538,16 @@ limits are in the ledger.
   a separate catalog read confirmed it created no namespace or table. Docket
   seed run 36018620120 then loaded the catalog successfully with public upload
   disabled, preserving the manifest seed's input ETag.
+- **Seed completion.** OMB smoke run 36018820705 loaded 284,591 comments.
+  Full run 36019107910 then loaded the other agencies, retaining OMB, and ended
+  with 23,890,403 comments. Its freshness check found no lagging agency and no
+  duplicate comment IDs. The manifest check independently proved that every
+  seeded docket and comment ID exists in the catalog, with no duplicate IDs
+  and all public input ETags unchanged. The publisher repeated those checks,
+  uploaded manifest `28439568…` and verified its direct public readback at
+  15:35:34 UTC (`manifest-publish.json` beside the seed). ETL was re-enabled and
+  run 36021389999 dispatched over all batches with a 240-minute per-batch limit.
+  That sweep's runtime and resulting outputs still require qualification.
 - **Remaining verification gap.** The live dictionary check stops at the
   intentionally withdrawn lifecycle table's 404. Its exit code correctly says
   drift was not checked; the Pages workflow permits that result. Deployment
