@@ -32,6 +32,8 @@ from spicy_regs.pipelines.staging import stage_agencies
 from spicy_regs.schemas import RECORD_TYPES, RecordType
 from spicy_regs.sources import iceberg, r2
 from spicy_regs.sources.derived_text import DerivedCommentText
+from spicy_regs.transforms.comment_partitions import validate_staged_comments
+from spicy_regs.transforms.reviewed_comments import ExcludeReviewedComments
 from spicy_regs.transforms import (
     Chain,
     EnrichCommentText,
@@ -289,8 +291,11 @@ class RegulationsPipeline(Pipeline):
         :class:`DerivedCommentText` — and thus a fresh S3 resource — is built per
         call so the chain is safe to run from staging's worker threads.
         """
-        extract = ExtractRecords(record_type)
-        if record_type.name == "comments" and self.enrich_text:
+        extract: Transform = ExtractRecords(record_type)
+        if record_type.name != "comments":
+            return extract
+        extract = Chain(ExcludeReviewedComments(), extract)
+        if self.enrich_text:
             fetcher = DerivedCommentText(mirrulations.s3_resource())
             return Chain(extract, EnrichCommentText(fetcher))
         return extract
@@ -376,6 +381,8 @@ class RegulationsPipeline(Pipeline):
         caller can publish exactly those to R2.
         """
         names = [rt.name for rt in record_types]
+        if "comments" in names:
+            validate_staged_comments(staging_dir)
 
         non_comment = [n for n in names if n != "comments"]
 

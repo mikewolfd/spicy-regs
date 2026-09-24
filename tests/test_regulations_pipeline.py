@@ -5,7 +5,7 @@ resource, alongside manifest incremental dedup, failed-key retry, chunked
 comment commits, and publication ordering with the manifest published last.
 """
 
-from json import dumps
+from json import dumps, loads
 from pathlib import Path
 from typing import Any
 
@@ -27,6 +27,58 @@ AGENCY = "EPA"
 def test_is_pipeline_subclass_with_name() -> None:
     assert issubclass(RegulationsPipeline, Pipeline)
     assert RegulationsPipeline.name == "regulations"
+
+
+@pytest.mark.parametrize("chunk_size", [0, 1])
+def test_reviewed_exclusions_are_checkpointed_without_catalog_writes(tmp_path, monkeypatch, chunk_size):
+    """Both ingestion modes retire reviewed keys, without staging or merging their rows."""
+    fixture_dir = Path(__file__).parent / "fixtures/reviewed_comments"
+    store = {}
+    for path in fixture_dir.glob("*.json"):
+        raw = path.read_bytes()
+        identity = loads(raw)["data"]["id"]
+        store[_comment_key(identity, "CFTC-2026-0595", agency="CFTC")] = raw
+    monkeypatch.setattr(mirrulations, "s3_resource", lambda: _FakeS3Resource(store))
+    monkeypatch.setattr(regulations.r2, "download", lambda *args, **kwargs: False)
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("Reviewed exclusions reached catalog writes")
+
+    monkeypatch.setattr(regulations.iceberg, "merge_comments", forbidden)
+    output = tmp_path / "output"
+    RegulationsPipeline(
+        allow_fresh_start=True, agency="CFTC", output_dir=output, only_comments=True,
+        use_iceberg=True, enrich_text=False, chunk_size=chunk_size, skip_upload=True,
+    ).run()
+    assert set(pl.read_parquet(output / "manifest.parquet")["key"].to_list()) == set(store)
+    assert not list(output.glob("staging/comments/*.parquet"))
+
+
+@pytest.mark.parametrize("use_iceberg", [False, True])
+def test_invalid_comment_staging_refuses_before_any_dataset_merge(tmp_path, monkeypatch, use_iceberg):
+    """A missing docket outside the reviewed exclusions must protect every output."""
+    comment = _comment_payload("EPA-2026-0001-0001", "EPA-2026-0001", "2026-01-01")
+    comment["data"]["attributes"].update(docketId=None, title="Test of emission standards")
+    store = {
+        _docket_key("EPA-2026-0001"): dumps(_docket_payload("EPA-2026-0001", "2026-01-01")).encode(),
+        _comment_key("EPA-2026-0001-0001", "EPA-2026-0001"): dumps(comment).encode(),
+    }
+    monkeypatch.setattr(mirrulations, "s3_resource", lambda: _FakeS3Resource(store))
+    monkeypatch.setattr(regulations.r2, "download", lambda *args, **kwargs: False)
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("Dataset merge began before comment preflight")
+
+    monkeypatch.setattr(regulations, "merge_staging_files", forbidden)
+    monkeypatch.setattr(regulations.iceberg, "merge_and_export", forbidden)
+    monkeypatch.setattr(regulations.iceberg, "merge_comments", forbidden)
+    output = tmp_path / "output"
+    with pytest.raises(ValueError, match="invalid coordinates"):
+        RegulationsPipeline(
+            allow_fresh_start=True, agency=AGENCY, output_dir=output,
+            use_iceberg=use_iceberg, enrich_text=False, skip_upload=True,
+        ).run()
+    assert not (output / "manifest.parquet").exists()
 
 
 # --- fake S3 ---------------------------------------------------------------

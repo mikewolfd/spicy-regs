@@ -8,6 +8,16 @@ import duckdb
 HIVE_NULL = "__HIVE_DEFAULT_PARTITION__"
 
 
+def validate_staged_comments(staging_dir: Path) -> None:
+    """Check all staged comments before any persistent table is merged."""
+    files = sorted((staging_dir / "comments").glob("*.parquet"))
+    if not files:
+        return
+    with duckdb.connect() as con:
+        con.from_parquet([str(path) for path in files], union_by_name=True).create_view("staged_comments")
+        validate_comment_coordinates(con, "SELECT * FROM staged_comments")
+
+
 def validate_comment_coordinates(con: duckdb.DuckDBPyConnection, source_sql: str) -> None:
     """Validate a trusted internal source query before any partition/index writes.
 

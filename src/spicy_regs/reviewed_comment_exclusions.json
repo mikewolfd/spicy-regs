@@ -1,0 +1,20 @@
+[
+  {
+    "comment_id": "CFTC-2026-0595-0003",
+    "canonical_sha256": "93af6b5e3be69accb8a9ce4513804735b3b159e2975db725ed0cca104cad2250",
+    "reason": "Publisher test submission: Test Comment 4-14-26, under the Test 4-14-26 docket.",
+    "source": "s3://mirrulations/raw-data/CFTC/CFTC-2026-0595/text-CFTC-2026-0595/comments/CFTC-2026-0595-0003.json",
+    "source_sha256": "be797e02303f70a50ea7142bde2e76092767d421243317e0a33316976627d43a",
+    "reviewed_at": "2026-09-24",
+    "evidence": "docs/research/fork-execution-log-2026-09-23.md#september-24-cftc-source-investigation"
+  },
+  {
+    "comment_id": "CFTC-2026-0595-0005",
+    "canonical_sha256": "06626affcedb48539892bd4bd54e7f52e96ff6c246ac0f404781e9bd1d89a17c",
+    "reason": "Publisher test submission: the body explicitly tests the ex parte meeting display.",
+    "source": "s3://mirrulations/raw-data/CFTC/CFTC-2026-0595/text-CFTC-2026-0595/comments/CFTC-2026-0595-0005.json",
+    "source_sha256": "c754790c8670a3cf1e3ad42ec0363c10817d05b29163200a70671ba3d0744254",
+    "reviewed_at": "2026-09-24",
+    "evidence": "docs/research/fork-execution-log-2026-09-23.md#september-24-cftc-source-investigation"
+  }
+]

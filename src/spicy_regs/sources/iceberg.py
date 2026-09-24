@@ -561,6 +561,9 @@ def merge_comments(staging_dir: Path, output_dir: Path, record_type: RecordType)
         logger.info("iceberg: no staging files for {}; skipping merge", record_type.name)
         return None
 
+    from spicy_regs.transforms.comment_partitions import validate_staged_comments
+
+    validate_staged_comments(staging_dir)
     con = _connect_for_table(record_type)
     try:
         logger.info(
