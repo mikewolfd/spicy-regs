@@ -6,10 +6,10 @@
 
 One row per scheduled committee meeting, as the Congress.gov committee-meeting list and detail routes state it, keyed `(congress, chamber, event_id)`. The detail carries the hearing transcript jackets (`hearing_transcripts` joins on `event_id`), the related bills, the witnesses and every document URL. All columns are stored as VARCHAR.
 
-**Coverage.** Sampled, and accumulating. Measured on one cold-start run (receipt `d1-measured-run-2026-09-19/`): the whole `committee-meeting/119` walk across all three chambers declared 2,754 and served 2,754 over 12 pages with no repeat, all retained locally; 993 details were read, 7 were refused and 1,754 rows were retained list-only, at 1,005 keyed requests in 412 seconds. Each run walks the whole list for the Congresses in scope and reads the detail of every meeting the table does not yet hold, newest `updateDate` first, at most 1,000 a run. Local output only; not uploaded. *(measured 2026-09-19)*
+**Coverage.** Sampled, and accumulating. Measured on one cold-start run (receipt `d1-measured-run-2026-09-19/`): the whole `committee-meeting/119` walk across the publisher's chamber values declared 2,754 and served 2,754 over 12 pages with no repeat, all retained locally; 993 details were read, 7 were refused and 1,754 rows were retained list-only, at 1,005 keyed requests in 412 seconds. Each run walks the whole list for the Congresses in scope and reads the detail of every meeting the table does not yet hold, newest `updateDate` first, at most 1,000 a run. Local output only; not uploaded. *(measured 2026-09-19)*
 
 **Data quality.** A row whose `committees_json` is NULL is list-only: its detail has not been read yet, and every detail-only column is NULL with it; a read detail states `[]` where it lists none. Event ids are keyed with their chamber because their uniqueness across chambers is unmeasured (spicy-docs' contract note); the 119th's House ids sit near 119,000 and its Senate ids near 338,000.
-One refusal class is the publisher's own vocabulary. Measured 2026-09-19, 7 of the 2,754 listed meetings state a chamber the detail route will not spell — the list row carries no usable chamber, so `list_route_url` refuses it with "chamber must be 'house', 'senate' or 'joint'" and the row is published list-only with its refusal counted. These 7 are permanent, not transient: the same list row will be refused every run, so they stay list-only until the publisher restates the chamber. They are visible as rows whose key names no chamber.
+The publisher's `NoChamber` value is stored as `nochamber`, matching its detail address and preserving the existing row identity. It is neither NULL nor an inferred `joint` chamber. The source reader accepts that address, so previously list-only rows can fill at an unchanged timestamp. Retained meeting `119/nochamber/338692` names the Helsinki Commission; the September 24 committee-meetings audit retains its list row and served detail.
 
 - **Parquet file:** `committee_meetings.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
@@ -18,7 +18,7 @@ One refusal class is the publisher's own vocabulary. Measured 2026-09-19, 7 of t
 | Column | Type | Description |
 | --- | --- | --- |
 | `congress` | `VARCHAR` | The numbered Congress the meeting belongs to. |
-| `chamber` | `VARCHAR` | The chamber, lowercased the way the publisher's own address spells it (house, senate, joint). |
+| `chamber` | `VARCHAR` | The publisher's chamber value, lowercased as its address spells it (house, senate, joint, nochamber). NoChamber stays nochamber, not an inferred chamber. |
 | `event_id` | `VARCHAR` | The publisher's event id, the key hearing_transcripts.event_id joins on. |
 | `title` | `VARCHAR` | The meeting title as the detail states it. |
 | `meeting_type` | `VARCHAR` | The publisher's meeting type (Hearing, Markup, ...). |

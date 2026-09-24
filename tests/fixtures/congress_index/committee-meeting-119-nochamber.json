@@ -1,0 +1,14 @@
+{
+  "committeeMeetings": [
+    {
+      "chamber": "NoChamber",
+      "congress": 119,
+      "eventId": "338692",
+      "updateDate": "2026-07-27T23:08:33Z",
+      "url": "https://api.congress.gov/v3/committee-meeting/119/nochamber/338692?format=json"
+    }
+  ],
+  "pagination": {
+    "count": 1
+  }
+}

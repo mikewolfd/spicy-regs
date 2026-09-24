@@ -5,6 +5,24 @@ The optional `source-readers` extra enables the same readers for package install
 its wheels must be supplied explicitly until they are published in a registry.
 Base CLI and MCP installs do not require them.
 
+- `spicy_docs-0.32.1`: built from clean source commit `4310647`, with Rulespec Artifacts 1.1.1.
+  Built September 24, 2026 UTC: **1,463,602 bytes**, SHA-256
+  `09d96e176a2aa6bf82d15bb37aeff63e13db78354303798fafde732f396b6c85`.
+  Every packaged source file equals the clean Git archive. The patch repairs
+  numeric schedule labels before Public Law citations and wrapped CFR headings,
+  collapses subpart-letter lists to one part link, rejects RIN-shaped fragments
+  inside slash tokens, and refuses links to damaged U.S. Code prefixes while
+  retaining their source occurrences. The changed citation rules are
+  `public_law`, `cfr_section`, `usc_section` 003 and `rin` 004.
+  The meeting-detail reader accepts the publisher's `nochamber` address and
+  keeps that value in the table identity. The package also carries the already
+  committed documentation clarifications for IRI ownership and lone `-pt1`
+  reports. The source gate and retained-corpus comparisons are recorded in
+  `~/Work/corpora/supply-2026-09-02/receipts/a10-grammar-followup-2026-09-24/`;
+  the installed-reader Congress check is in
+  `~/Work/corpora/fork-execution-2026-09-21/congress-index-fixes-2026-09-24/`.
+  This is a local package adoption; public tables require a subsequent run.
+
 - `spicy_docs-0.32.0`: built from SpicyDocs `main` at `549db06`, with Rulespec Artifacts 1.1.1.
   Built September 24, 2026 UTC: **1,462,674 bytes**, SHA-256
   `dffbcbfba8e0d857534539b803589163d42f601bc3635e6361062e07bdecd4f4`, byte-identical to a

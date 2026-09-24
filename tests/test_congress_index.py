@@ -114,6 +114,27 @@ def test_nominations_are_complete_from_the_list_and_ask_for_no_detail(tmp_path):
     assert all(row["latest_action_text"] for row in rows)
 
 
+def test_a_list_only_nochamber_meeting_fills_at_its_unchanged_stamp(tmp_path):
+    from spicy_docs.schemas.congress_index_tables import shape_committee_meeting
+
+    listed = json.loads((FIXTURES / "committee-meeting-119-nochamber.json").read_text())["committeeMeetings"][0]
+    seed(tmp_path, "committee_meetings", [shape_committee_meeting(listed, None)])
+    reader = FixtureReader(serve_as={"committee-meeting/119": "committee-meeting/119/nochamber"})
+    rows, reader = _run(tmp_path, "committee_meetings", reader=reader)
+    (row,) = rows
+    assert row["chamber"] == "nochamber"
+    assert row["event_id"] == "338692"
+    assert row["update_date"] == listed["updateDate"]
+    assert row["committee_system_code"] == "jcse00"
+    assert row["title"] == "To receive a briefing on Russia's exploitation and engagement in Africa."
+    assert reader.details == ["committee-meeting/119/nochamber/338692"]
+    seed(tmp_path, "committee_meetings", rows)
+    held_reader = FixtureReader(serve_as={"committee-meeting/119": "committee-meeting/119/nochamber"})
+    held, held_reader = _run(tmp_path, "committee_meetings", reader=held_reader)
+    assert held == rows
+    assert held_reader.details == []
+
+
 def test_the_rin_is_read_at_shape_time_from_the_detail_only(tmp_path):
     rows, _ = _run(tmp_path, "house_communications")
     by_id = {row["communication_id"]: row for row in rows}

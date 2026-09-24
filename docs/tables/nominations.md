@@ -8,7 +8,7 @@ One row per nomination or part, as the Congress.gov nomination list route states
 
 **Coverage.** Sampled. On 2026-09-21, the mikewolfd/spicy-regs fork published and verified 2,204 distinct observed 119th-Congress nomination-list identities. Nine retained pages contain 2,208 occurrences with four repeated identical records; that pagination total does not prove a stable or complete 2,208-identity population. The selected seed has latest-action fields, not nominee details, action histories, person entities or inferred confirmation outcomes. No upstream/default publication is asserted. Receipts: fork-execution-2026-09-21/legislative-publication-summary.json, legislative-seeds/sealed-candidates.json and legislative-mcp-audit/. *(measured 2026-09-21)*
 
-**Data quality.** The publisher repeats a record across a page boundary (4 of 2,208 on the 119th); the table holds each citation once. The list carries the latest action only, not the action history.
+**Data quality.** The shared Congress index reader pools complete walks with varied page sizes, keyed by `(congress, citation)`, keeping each identity's newest `updateDate`. A clean walk or a pool matching the declared total settles the query. A population change restarts pooling; incomplete or inconsistent walks exhaust the source reader's bounded attempts and fail before output is replaced. The list carries the latest action only, not the action history.
 
 - **Parquet file:** `nominations.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.

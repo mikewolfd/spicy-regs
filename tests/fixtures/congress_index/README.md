@@ -10,9 +10,19 @@ A detail file is the exact response. A list file is the unit's **first page
 trimmed** to a handful of records, so the fixture stays small: the records
 whose details are here plus the first two others, with `pagination.count`
 kept as the publisher declared it and `pagination.next` dropped -- a test
-stub serves one page, so the declared count is not walked here and the
-transform's declared-versus-walked line is a log line in the tests. The
+stub serves one page and declares the size of that trimmed population, so
+the real pooled reader checks completeness against the fixture's scope. The
 digest is the full capture's, from `requests.json`, not the trimmed file's.
+
+The `committee-meeting-119-nochamber` fixtures come from the September 24
+audit, retained under
+`~/Work/corpora/fork-execution-2026-09-21/drift-audit-2026-09-24/committee-meetings/raw/`.
+The list fixture keeps only event 338692 from response
+`ea5e513f2c489fadebea678294d2daae23f9fe9c6a6f06fdafa0782b3b1f2494`
+and declares that one-row test scope. Its detail is the whole response
+`e1ed72e385b51bf13d0b90c71541d4e1a4d9ed3ab7e88285c5bab33608341191`,
+captured September 24 at 09:55:28 UTC. The test fills a previously list-only
+row at its unchanged timestamp and then verifies that its detail is held.
 
 | File | Request | Full response bytes / SHA-256 | Kept |
 | --- | --- | --- | --- |

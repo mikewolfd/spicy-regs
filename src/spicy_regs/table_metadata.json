@@ -5008,7 +5008,7 @@
       {
         "column_name": "part_number",
         "column_type": "VARCHAR",
-        "description": "The part's number as the publisher states it (its `partNumber`, or the `-pt{N}` its id carries, which must agree).  NULL on a report published in one part, whose record numbers none."
+        "description": "The part's number as the publisher states it (its `partNumber`, or the `-pt{N}` its id carries, which must agree).  NULL on a report published in one part at the package id, whose record numbers none; a report the publisher issued as a lone `-pt1` is (`{package}-pt1`, 1), so a reader counts rows per package to tell it from Part 1 of several."
       }
     ],
     "grain": "One row per published part of a captured GovInfo committee report package, with the CBO estimate it reprints or refuses.",
@@ -5996,7 +5996,7 @@
     "coverage": "Sampled, accumulating. The adoption run used 30 keyed requests: 20 list pages and 10 details under the declared detail cap. The list declared and served 4,975 records, with 9 repeats and 4,966 distinct identities; merging its own 4,963-row prior retained 4,969 rows. All 4,969 now state the publisher source_route, 1,010 have details and 3,959 remain list-only. No Record backfill request was made and every Record evidence column remains NULL. Receipt: `rollups-0-24-0-adoption-2026-09-20/`. Local output only; not uploaded.",
     "kind": "sampled",
     "measured_on": "2026-09-20",
-    "data_quality": "A row whose `committees_json` is NULL is list-only: its detail has not been read yet (not reached under the cap, or refused), and every detail-only column is NULL with it, including the three RIN columns, because the rule was not run. A row whose detail was read states `[]` where the detail lists none. The RIN is an interpretation: `rin_rule` names the rule that fired (`report_nature_rin_label`) or `unmatched`, and `rin_matched_text` is the exact text, so a false positive is readable from the row. The publisher repeats a record across a page boundary (15 of 4,975 on the 119th); the table holds each identity once. Every existing publisher row receives source_route=congress-gov-detail. The four Record evidence columns remain NULL until the separate Record backfill, about 11,000 GovInfo requests, is acquired in the next rollup. In that future reconstruction submitting_official and submitting_agency must both remain NULL: held-out precision was 85.3% and 88.4%, below the declared 90% gate. The original sentence stays in record_entry_text.",
+    "data_quality": "A row whose `committees_json` is NULL is list-only: its detail has not been read yet (not reached under the cap, or refused), and every detail-only column is NULL with it, including the three RIN columns, because the rule was not run. A row whose detail was read states `[]` where the detail lists none. The RIN is an interpretation: `rin_rule` names the rule that fired (`report_nature_rin_label`) or `unmatched`, and `rin_matched_text` is the exact text, so a false positive is readable from the row. The publisher repeats a record across a page boundary (15 of 4,975 on the 119th); the table holds each identity once. The shared pooled list reader must settle each query by distinct identity before any output is replaced. Every existing publisher row receives source_route=congress-gov-detail. The four Record evidence columns remain NULL until the separate Record backfill, about 11,000 GovInfo requests, is acquired in the next rollup. In that future reconstruction submitting_official and submitting_agency must both remain NULL: held-out precision was 85.3% and 88.4%, below the declared 90% gate. The original sentence stays in record_entry_text.",
     "columns": [
       {
         "column_name": "communication_id",
@@ -6170,10 +6170,10 @@
     "table": "committee_meetings",
     "label": "Committee meetings",
     "summary": "One row per scheduled committee meeting, as the Congress.gov committee-meeting list and detail routes state it, keyed `(congress, chamber, event_id)`. The detail carries the hearing transcript jackets (`hearing_transcripts` joins on `event_id`), the related bills, the witnesses and every document URL. All columns are stored as VARCHAR.",
-    "coverage": "Sampled, and accumulating. Measured on one cold-start run (receipt `d1-measured-run-2026-09-19/`): the whole `committee-meeting/119` walk across all three chambers declared 2,754 and served 2,754 over 12 pages with no repeat, all retained locally; 993 details were read, 7 were refused and 1,754 rows were retained list-only, at 1,005 keyed requests in 412 seconds. Each run walks the whole list for the Congresses in scope and reads the detail of every meeting the table does not yet hold, newest `updateDate` first, at most 1,000 a run. Local output only; not uploaded.",
+    "coverage": "Sampled, and accumulating. Measured on one cold-start run (receipt `d1-measured-run-2026-09-19/`): the whole `committee-meeting/119` walk across the publisher's chamber values declared 2,754 and served 2,754 over 12 pages with no repeat, all retained locally; 993 details were read, 7 were refused and 1,754 rows were retained list-only, at 1,005 keyed requests in 412 seconds. Each run walks the whole list for the Congresses in scope and reads the detail of every meeting the table does not yet hold, newest `updateDate` first, at most 1,000 a run. Local output only; not uploaded.",
     "kind": "sampled",
     "measured_on": "2026-09-19",
-    "data_quality": "A row whose `committees_json` is NULL is list-only: its detail has not been read yet, and every detail-only column is NULL with it; a read detail states `[]` where it lists none. Event ids are keyed with their chamber because their uniqueness across chambers is unmeasured (spicy-docs' contract note); the 119th's House ids sit near 119,000 and its Senate ids near 338,000.\nOne refusal class is the publisher's own vocabulary. Measured 2026-09-19, 7 of the 2,754 listed meetings state a chamber the detail route will not spell — the list row carries no usable chamber, so `list_route_url` refuses it with \"chamber must be 'house', 'senate' or 'joint'\" and the row is published list-only with its refusal counted. These 7 are permanent, not transient: the same list row will be refused every run, so they stay list-only until the publisher restates the chamber. They are visible as rows whose key names no chamber.",
+    "data_quality": "A row whose `committees_json` is NULL is list-only: its detail has not been read yet, and every detail-only column is NULL with it; a read detail states `[]` where it lists none. Event ids are keyed with their chamber because their uniqueness across chambers is unmeasured (spicy-docs' contract note); the 119th's House ids sit near 119,000 and its Senate ids near 338,000.\nThe publisher's `NoChamber` value is stored as `nochamber`, matching its detail address and preserving the existing row identity. It is neither NULL nor an inferred `joint` chamber. The source reader accepts that address, so previously list-only rows can fill at an unchanged timestamp. Retained meeting `119/nochamber/338692` names the Helsinki Commission; the September 24 committee-meetings audit retains its list row and served detail.",
     "columns": [
       {
         "column_name": "congress",
@@ -6183,7 +6183,7 @@
       {
         "column_name": "chamber",
         "column_type": "VARCHAR",
-        "description": "The chamber, lowercased the way the publisher's own address spells it (house, senate, joint)."
+        "description": "The publisher's chamber value, lowercased as its address spells it (house, senate, joint, nochamber). NoChamber stays nochamber, not an inferred chamber."
       },
       {
         "column_name": "event_id",
@@ -6563,7 +6563,7 @@
     "coverage": "Sampled. On 2026-09-21, the mikewolfd/spicy-regs fork published and verified 2,204 distinct observed 119th-Congress nomination-list identities. Nine retained pages contain 2,208 occurrences with four repeated identical records; that pagination total does not prove a stable or complete 2,208-identity population. The selected seed has latest-action fields, not nominee details, action histories, person entities or inferred confirmation outcomes. No upstream/default publication is asserted. Receipts: fork-execution-2026-09-21/legislative-publication-summary.json, legislative-seeds/sealed-candidates.json and legislative-mcp-audit/.",
     "kind": "sampled",
     "measured_on": "2026-09-21",
-    "data_quality": "The publisher repeats a record across a page boundary (4 of 2,208 on the 119th); the table holds each citation once. The list carries the latest action only, not the action history.",
+    "data_quality": "The shared Congress index reader pools complete walks with varied page sizes, keyed by `(congress, citation)`, keeping each identity's newest `updateDate`. A clean walk or a pool matching the declared total settles the query. A population change restarts pooling; incomplete or inconsistent walks exhaust the source reader's bounded attempts and fail before output is replaced. The list carries the latest action only, not the action history.",
     "columns": [
       {
         "column_name": "citation",

@@ -1,0 +1,40 @@
+{
+    "committeeMeeting": {
+        "chamber": "NoChamber",
+        "committees": [
+            {
+                "name": "Commission on Security and Cooperation in Europe (U.S. Helsinki Commission)",
+                "systemCode": "jcse00",
+                "url": "https://api.congress.gov/v3/committee/joint/jcse00?format=json"
+            }
+        ],
+        "congress": 119,
+        "date": "2026-07-30T18:00:00Z",
+        "eventId": "338692",
+        "location": {
+            "building": "Cannon House Office Building",
+            "room": "210"
+        },
+        "meetingStatus": "Scheduled",
+        "title": "To receive a briefing on Russia's exploitation and engagement in Africa.",
+        "type": "Open Hearing",
+        "updateDate": "2026-07-27T23:08:33Z",
+        "videos": [
+            {
+                "name": "To receive a briefing on Russia's exploitation and engagement in Africa.",
+                "url": "https://www.congress.gov/event/119th-Congress/joint-event/338692"
+            },
+            {
+                "name": "To receive a briefing on Russia's exploitation and engagement in Africa.",
+                "url": "https://www.youtube.com/v/OF-F5LkXof0"
+            }
+        ]
+    },
+    "request": {
+        "chamber": "nochamber",
+        "congress": "119",
+        "contentType": "application/json",
+        "eventId": "338692",
+        "format": "json"
+    }
+}
