@@ -2,12 +2,11 @@
 
 This log holds the dated narrative moved out of the [fork output ledger](fork-output-ledger-2026-09-21.md) on 2026-09-23: the September 21–22 scope gaps and status bullets, with their "(Superseded …)" markers, and the September 23 continuation. The text moved verbatim; only one pointer changed, "(rows above)" to "(ledger rows)". The ledger keeps one row per output with its qualified pin, plus the open items, and points here for the measurements and receipts behind each row. A later entry supersedes an earlier one where it says so.
 
-The latest operational continuation is [September 24: local catch-up and
-workflow repairs](#september-24-local-catch-up-and-workflow-repairs). It records
-the paused hosted writers, completed repair checks and report migration, and
-the local batch failure that stopped automatic resumption. Earlier snapshots
-below remain dated history. The subsequent [CFTC source investigation](#september-24-cftc-source-investigation)
-identifies the source nulls and the required storage/validation repair.
+The [reviewed test exclusions and catch-up retry](#september-24-reviewed-test-exclusions-and-catch-up-retry)
+record the current regulatory recovery. The subsequent
+[source and successful-run audits](#september-24-source-and-successful-run-audits)
+record report qualification, remaining source defects and the complete daily
+rollup-log review. Earlier snapshots below remain dated history.
 
 ## Scope and evidence gaps
 
@@ -761,3 +760,98 @@ Recovery receipts are in
 `removal-started.json`, `removal-verified.json` and the verified public manifest.
 The local catch-up directory holds current `progress.json`, `completion.json`
 and `batch-*.retry-02.log` files.
+
+## September 24: source and successful-run audits
+
+The user requested delegated bill publication and report/hearing qualification,
+then a complete review of successful `Run rollup` logs over the preceding day.
+Independent agents owned those tasks; the root reconciled their evidence and
+updated the campaign ledger.
+
+- **Bill metadata repair published and qualified.** Ordinary workflow
+  [36045860325](https://github.com/mikewolfd/spicy-regs/actions/runs/36045860325)
+  at `71b78b6` published `4a1949a9…` at 19:10 UTC. Both Congresses 118/119 and
+  all bill types were selected, with new body fetches capped at zero. All 18
+  public members pass full-byte admission. Every prior identity survives;
+  no duplicate, orphan bill reference or changed row outside those Congresses
+  is found. The family has 419,978 bills. All 3,044 known damaged dates and
+  3,095 damaged URLs match current raw BILLSTATUS, including five affected
+  118th URLs. Thirty-one date repairs reflect later native publisher updates.
+  Independent native checks cover all 38,376 captured bill records and their
+  action and publisher-summary fields. Held sections, diffs and model outputs
+  stay byte-identical.
+- **Legacy URL provenance repaired at the owner.** `e69e483` makes a non-null
+  bill URL with missing provenance trigger a source reread, alongside the
+  retired list-reader label. Final publication repairs 38 additional URLs and
+  labels 546 source-present legacy rows. Of these, one has no native URL and
+  retains its prior value as `inherited`. Six reserved House bill identities
+  (6, 9, 11, 13, 16 and 19) have no record in current archives and remain
+  entirely unchanged. The initial population check conflated absent records
+  with absent URL fields; its failed qualification and corrected scope are
+  retained. Regression tests and full CI pass; the final source/public gate
+  passes at 19:13 UTC.
+- **Bill limits remain explicit.** The larger-value merge retains 389 later
+  prior timestamps. Fresh Congress.gov detail for `119-hr-3446` and
+  `119-hr-940` states September 19 while current BILLSTATUS states July 17;
+  an ordinary API delta path remains open. Historical rows, missing original
+  bodies, models, broader interpretation rules and routine source retention
+  retain their earlier qualification limits. The failed earlier run
+  35946820267 had correctly refused to drop eight archive checkpoint rows
+  under its body-fetch cap. `24eac7d` keeps every visited folder's row while
+  recording completion separately; these successful ordinary publications
+  verify that repair.
+- **Report migration qualified within its captured scope.** Public generation
+  `52325038…` and source evidence `35ab12ad…` pass byte admission and independent
+  JSON/XML/HTML checks. All 137 report parts match their own native metadata
+  and bodies; all 1,757 sections have unique identities and contiguous source
+  coordinates. Every earlier body and section content survives. The 108
+  hearings read by this run match their captured sources, while the other 25
+  retain every prior cell. All 269 read checkpoints reconcile to sources or
+  unchanged prior rows. These checks advance the qualified pins for reports,
+  sections, transcripts and read status, with the documented empty-heading
+  absorption rule preserved.
+- **Hearing-link qualification stays partial.** All 78 COVER relationships
+  match native MODS. One, `CHRG-117shrg56721` / `117-s-2792`, has 11 native
+  dates and wrongly presents the first as a unique `held_date`. Its printed
+  cover supports the relationship; deleting the link would discard source
+  evidence. Retain all dates in SpicyDocs, publish a scalar only when unique,
+  and invalidate the CHRG checkpoint rule after adopting that source change.
+  Six detail 404s remain retryable with their GovInfo bodies retained. Native
+  historical IDs `CHRG-79jhrg79716p19` and `CHRG-79jhrg79716p11` remain excluded
+  by the package grammar before acquisition/checkpointing. Fresh summaries
+  confirm both exist. No supported package was deferred by the run cap.
+- **Every successful rollup step in the fixed daily window was read.** The
+  interval is September 23 at 18:44:20 UTC through September 24 at 18:44:20 UTC,
+  using final job completion times. Full pagination yields 85 successful
+  executions: 34 have the exact step, comprising 2,489 retained lines, and
+  51 have no such step. Root independently enumerated the same run IDs and
+  checked the complete log hashes. The [audit report](rollup-success-log-audit-2026-09-24.md)
+  distinguishes current gaps, later repairs and expected reuse or caps.
+- **Current acquisition and metadata gaps.** Two private-law XML bodies were
+  captured and then refused for absent native Statutes at Large citations,
+  leaving public rows falsely marked `not_requested`. Fresh native bodies and
+  digest-verified public rows reproduce the problem. Table III's repaired
+  traversal still needs qualified publication; the successful bill-subjects
+  build had uploads disabled. Communications and print discovery have explicit
+  bounded backlogs. Most ordinary external-reader paths still need routine
+  response retention. These findings do not establish loss of prior identities.
+- **USAspending wording corrected.** The column description still called the
+  endpoint's trailing-12-month amount “all-time.” Commit `150dabc` corrects the
+  source description and generated catalog, pages and metadata; `71b78b6`
+  restores the required coverage-kind prefix after CI caught its omission.
+  Dictionary tests and full CI pass at that revision. The current 10,218-row
+  table retains 218 recipients outside the latest 10,000-row selection with
+  older amounts and no per-row observation date; that schema limitation stays
+  open.
+
+Receipts under `~/Work/corpora/fork-execution-2026-09-21/`:
+
+- `bill-family-publication-2026-09-24/`: source archives and listings, public
+  bytes, identity/value comparisons, repair qualification and explicit limits;
+  `pass-1/` retains the earlier `f1d04b73…` publication and its audit.
+- `report-hearing-qualification-2026-09-24/`: admitted public/source artifacts,
+  independent verification, fresh source captures and precise remaining limits.
+- `rollup-success-log-audit-2026-09-24/`: coverage manifest, every complete
+  step/job log, per-run dispositions, raw private-law checks and final hashes.
+- `parallel-delivery-2026-09-24/`: independent successful-run inventory and
+  log-coverage checks.
