@@ -29,12 +29,13 @@ from spicy_regs.ontology.common import (
     write_parquet_rows,
 )
 
-from spicy_regs.ontology.federal_register import FederalRegisterIndex, linked_docket_id, resolved_id
+from spicy_regs.ontology.federal_register import FederalRegisterIndex, resolved_id
 
 OUTPUT = "rule_targets.parquet"
 # v3: labelled FR docket values join (linked_docket_id), zero-padded and en-dash FR numbers
 # resolve on their comparison key, and first_seen/last_seen are Eastern days, not instants.
-ACTOR_ID = "spicy-regs:rule-targets:v3"
+# v4: a docket value naming several dockets joins each (linked_docket_ids), one edge per docket.
+ACTOR_ID = "spicy-regs:rule-targets:v4"
 
 COLUMNS = (
     "docket_id",
@@ -248,27 +249,20 @@ def build_rule_targets(
     # parse_cfr_citation reads only the Register's CFR objects; count anything else it drops.
     unread_cfr: list[object] = []
     linked_dockets_by_fr_doc: dict[str, set[str]] = defaultdict(set)
-    for row in iter_parquet_rows(
-        paths["fr_docket_links"], columns=("docket_id", "document_number", "publication_date")
-    ):
-        docket = linked_docket_id(row.get("docket_id"))
-        if row.get("document_number") and docket is not None and docket in trusted_dockets:
-            reference = {
-                "source": "fr_docket_links",
-                "evidence_id": docket,
-                **fr_index.reference(str(row["document_number"]), row.get("publication_date")),
-            }
-            if identity := resolved_id(reference):
-                linked_dockets_by_fr_doc[identity].add(docket)
-            else:
-                add_edge(
-                    docket=docket,
-                    citation=None,
-                    rin=None,
-                    source="fr_cfr_ref",
-                    evidence_id=docket,
-                    fr_reference=with_form(reference),
-                )
+    for docket, reference in fr_index.docket_links(paths["fr_docket_links"]):
+        if docket not in trusted_dockets:
+            continue
+        if identity := resolved_id(reference):
+            linked_dockets_by_fr_doc[identity].add(docket)
+        else:
+            add_edge(
+                docket=docket,
+                citation=None,
+                rin=None,
+                source="fr_cfr_ref",
+                evidence_id=docket,
+                fr_reference=with_form(reference),
+            )
 
     for row in iter_parquet_rows(
         paths["federal_register"],

@@ -3,7 +3,7 @@
 The Federal Register states every CFR reference as a structured object (all 294,501 on
 the 2026-09-23 parents), so no prose citation grammar is needed here; SpicyDocs owns the
 data-side grammar (``spicy_docs.interpretation.citation_grammar``) and the label-aware
-docket reader (see ``ontology.federal_register.linked_docket_id``).
+docket reader (see ``ontology.federal_register.linked_docket_ids``).
 """
 
 from __future__ import annotations

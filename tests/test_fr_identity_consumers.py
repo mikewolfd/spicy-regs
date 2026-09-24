@@ -1,4 +1,4 @@
-"""Dated FR joins, labelled dockets, unpadded numbers and explicit ambiguity across the materialized consumers.
+"""Dated FR joins, labelled and listed dockets, unpadded numbers and explicit ambiguity across the materialized consumers.
 
 These controlled source rows exercise joins; the unmodified native collision
 fixture and its byte provenance are tested in test_federal_register.py.
@@ -12,9 +12,12 @@ import pyarrow.parquet as pq
 import pytest
 from loguru import logger
 
+from spicy_docs.interpretation.identifier_shapes import normalize_docket_reference
+
 from spicy_regs.ontology.citations import normalize_regsgov_identifier
-from spicy_regs.ontology.common import RunContext, write_parquet_rows
-from spicy_regs.ontology.federal_register import FederalRegisterIndex, linked_docket_id
+from spicy_regs.ontology.common import RunContext, stable_id, write_parquet_rows
+from spicy_regs.ontology import federal_register
+from spicy_regs.ontology.federal_register import FederalRegisterIndex, linked_docket_ids
 from spicy_regs.pipelines import rulemaking_dataset
 from spicy_regs.transforms.build_comment_periods import build_comment_periods
 from spicy_regs.transforms.build_federal_register import build_federal_register
@@ -238,26 +241,36 @@ def test_the_index_answers_its_own_rows_record_ids(tmp_path):
 
 
 @pytest.mark.parametrize(
-    ("stated", "docket"),
+    ("stated", "dockets"),
     [
-        ("Docket No. SSA-2010-0037", "SSA-2010-0037"),
-        ("DHS Docket No. USCIS-2025-0004", "USCIS-2025-0004"),
-        ("epa-hq-oar-2021-0317", "EPA-HQ-OAR-2021-0317"),
+        ("Docket No. SSA-2010-0037", ("SSA-2010-0037",)),
+        ("DHS Docket No. USCIS-2025-0004", ("USCIS-2025-0004",)),
+        ("epa-hq-oar-2021-0317", ("EPA-HQ-OAR-2021-0317",)),
         # The -RULE-family suffix is part of the docket (SpicyDocs 0.31.0).
-        ("GIPSA-2010-FGIS-0014-NONRULEMAKING", "GIPSA-2010-FGIS-0014-NONRULEMAKING"),
+        ("GIPSA-2010-FGIS-0014-NONRULEMAKING", ("GIPSA-2010-FGIS-0014-NONRULEMAKING",)),
+        # Lists and longer labels, as the Register states them (fr_docket_links, 2026-09-23).
+        (
+            "Docket No. FDA-2000-P-0102, FDA-2000-P-0133, and FDA-2006-P-0033",
+            ("FDA-2000-P-0102", "FDA-2000-P-0133", "FDA-2006-P-0033"),
+        ),
+        ("Docket Nos. FMCSA-2001-9709 and FMCSA-00-7382", ("FMCSA-2001-9709", "FMCSA-00-7382")),
+        ("Docket ID Number: DOT-OST-2010-0054", ("DOT-OST-2010-0054",)),
+        # A value that opens on prose names nothing, whatever it goes on to mention.
+        ("Public Notice: EIB-2023-0012", ()),
+        ("Formerly Docket Nos. 2000P-1275, 2000P-1276, and 2006P-0316, Respectively", ()),
         # The one held id the reader refuses: it states no sequence, and no link names it.
-        ("GSA-NA-2005", None),
+        ("GSA-NA-2005", ()),
         # A Commerce case number, the commonest value only the removed syntax-only fallback kept.
-        ("A-570-831", None),
-        ("Docket No. RM98-1-000", None),  # a FERC docket, not a Regulations.gov one
-        ("MM Docket No. 98-213", None),
-        ("Sequence No. 1", None),
-        ("PPWOCRADI0, PCU00RP14.R50000", None),
-        (None, None),
+        ("A-570-831", ()),
+        ("Docket No. RM98-1-000", ()),  # a FERC docket, not a Regulations.gov one
+        ("MM Docket No. 98-213", ()),
+        ("Sequence No. 1", ()),
+        ("PPWOCRADI0, PCU00RP14.R50000", ()),
+        (None, ()),
     ],
 )
-def test_a_federal_register_docket_value_is_read_through_its_label(stated, docket):
-    assert linked_docket_id(stated) == docket
+def test_a_federal_register_docket_value_is_read_through_its_label_and_list(stated, dockets):
+    assert linked_docket_ids(stated) == dockets
 
 
 def _labelled_inputs(root):
@@ -338,7 +351,7 @@ def test_labelled_dockets_and_padded_numbers_join_every_rulemaking_table(tmp_pat
     assert (corroboration["first_seen"], corroboration["last_seen"]) == ("2010-02-05", "2010-02-05")
     docket_rin = edges[("SSA-2010-0037", "docket_rin", None, "0960-AG21")]
     assert (docket_rin["first_seen"], docket_rin["last_seen"]) == ("2010-03-10", "2010-03-10")
-    assert {r["actor_id"] for r in targets} == {"spicy-regs:rule-targets:v3"}
+    assert {r["actor_id"] for r in targets} == {"spicy-regs:rule-targets:v4"}
 
     proceedings = pq.read_table(build_proceedings(tmp_path)).to_pylist()
     ssa = next(r for r in proceedings if "SSA-2010-0037" in json.loads(r["docket_ids_json"]))
@@ -349,13 +362,13 @@ def test_labelled_dockets_and_padded_numbers_join_every_rulemaking_table(tmp_pat
         ("federal_register.document_type", "2010-02-05"),
     }
     assert not any(json.loads(r["docket_ids_json"]) == [] for r in proceedings)
-    assert {r["actor_id"] for r in proceedings} == {"spicy-regs:proceedings:v5"}
+    assert {r["actor_id"] for r in proceedings} == {"spicy-regs:proceedings:v6"}
 
     periods = pq.read_table(build_comment_periods(tmp_path)).to_pylist()
     (period,) = [r for r in periods if "federal_register.comments_close_on" in r["source"]]
     assert json.loads(period["docket_ids_json"]) == ["SSA-2010-0037"]
     assert json.loads(period["proceeding_ids_json"]) == [ssa["proceeding_id"]]
-    assert {r["actor_id"] for r in periods} == {"spicy-regs:comment-periods:v6"}
+    assert {r["actor_id"] for r in periods} == {"spicy-regs:comment-periods:v7"}
 
     items_path, relationships_path = build_regulatory_agenda(tmp_path)
     (item,) = pq.read_table(items_path).to_pylist()
@@ -370,6 +383,13 @@ def test_labelled_dockets_and_padded_numbers_join_every_rulemaking_table(tmp_pat
 def test_the_rulemaking_generation_builds_one_federal_register_index(tmp_path, monkeypatch):
     _labelled_inputs(tmp_path)
     built: list[object] = []
+    read: list[object] = []
+
+    def counting_reader(value):
+        read.append(value)
+        return linked_docket_ids(value)
+
+    monkeypatch.setattr(federal_register, "linked_docket_ids", counting_reader)
 
     class CountingIndex(FederalRegisterIndex):
         def __init__(self, path):
@@ -388,7 +408,309 @@ def test_the_rulemaking_generation_builds_one_federal_register_index(tmp_path, m
         stage.build(tmp_path, context)
 
     assert built == [tmp_path / "federal_register.parquet"]
+    # Three stages join the link table; each of its rows is read once for all of them.
+    assert len(read) == pq.ParquetFile(tmp_path / "fr_docket_links.parquet").metadata.num_rows == 3
     assert all((tmp_path / name).exists() for name in pipeline.published_outputs)
+
+
+#: Link values from the 2026-09-23 fr_docket_links, with their FR records' own numbers and days.
+FDA_LIST = "Docket No. FDA-2000-P-0102, FDA-2000-P-0133, and FDA-2006-P-0033"
+FDA_DOCKETS = ["FDA-2000-P-0102", "FDA-2000-P-0133", "FDA-2006-P-0033"]
+FMCSA_LIST = "Docket Nos. FMCSA-2001-9709 and FMCSA-00-7382"  # FMCSA-00-7382: no Regulations.gov record
+PROSE_FIRST = "Public Notice: EIB-2023-0012"
+
+
+def _listed_inputs(root):
+    records = [
+        {
+            "document_number": "2011-3678",
+            "publication_date": "2011-02-18",
+            "type": "Proposed Rule",
+            "title": "Health Claim; Phytosterols and Risk of Coronary Heart Disease",
+            "docket_ids": [FDA_LIST],
+            "cfr_references": [{"title": 21, "part": 101}],
+            "regulation_id_numbers": [],
+            "comments_close_on": "2011-04-19",
+        },
+        {
+            "document_number": "03-2053",
+            "publication_date": "2003-01-29",
+            "type": "Rule",
+            "title": "Commercial Driver's License Standards, Requirements, and Penalties",
+            "docket_ids": [FMCSA_LIST],
+            "cfr_references": [{"title": 49, "part": 383}],
+            "regulation_id_numbers": [],
+        },
+        {
+            "document_number": "2023-19952",
+            "publication_date": "2023-09-15",
+            "type": "Notice",
+            "title": "Receipt of Requests To Increase the Amount of the Long-Term General Guarantee",
+            "docket_ids": [PROSE_FIRST],
+            "cfr_references": [],
+            "regulation_id_numbers": [],
+            "comments_close_on": "2023-10-10",
+        },
+    ]
+    build_federal_register(root, documents=lambda start: iter(records), download_prior=lambda key, path: False)
+    build_fr_docket_links(root)
+    _write(
+        root,
+        "dockets",
+        ("docket_id", "docket_type", "rin"),
+        [
+            *({"docket_id": docket, "docket_type": "Nonrulemaking"} for docket in FDA_DOCKETS),
+            {"docket_id": "FMCSA-2001-9709", "docket_type": "Rulemaking", "rin": "2126-AA60"},
+            {"docket_id": "EIB-2023-0012", "docket_type": "Nonrulemaking"},
+        ],
+    )
+    _write(root, "documents", ("document_id", "docket_id", "fr_doc_num", "additional_rins"), [])
+    _write(root, "unified_agenda", ("rin", "agenda_edition"), [])
+
+
+def test_a_listed_docket_value_joins_each_held_docket_once(tmp_path):
+    _listed_inputs(tmp_path)
+
+    targets = pq.read_table(build_rule_targets(tmp_path)).to_pylist()
+    keys = [(r["docket_id"], r["cfr_ref"], r["rin"], r["source"]) for r in targets]
+    assert len(keys) == len(set(keys)), "one edge per docket, never a repeated pair"
+    edges = {(r["docket_id"], r["cfr_ref"]): r["evidence_id"] for r in targets if r["source"] == "fr_cfr_ref"}
+    assert edges == {
+        **{(docket, "21-101"): "2011-3678@2011-02-18" for docket in FDA_DOCKETS},
+        ("FMCSA-2001-9709", "49-383"): "03-2053@2003-01-29",
+    }, "FMCSA-00-7382 is read but held by no Regulations.gov record, and a prose-first value names none"
+
+    proceedings = pq.read_table(build_proceedings(tmp_path)).to_pylist()
+    by_dockets = {r["docket_ids_json"]: r for r in proceedings}
+    # One FR document naming three dockets unites them, as three link values always did.
+    fda = by_dockets[json.dumps(FDA_DOCKETS, separators=(",", ":"))]
+    assert json.loads(fda["fr_document_ids_json"]) == ["2011-3678@2011-02-18"]
+    assert json.loads(fda["cfr_refs_json"]) == ["21-101"]
+    fmcsa = by_dockets['["FMCSA-2001-9709"]']
+    assert json.loads(fmcsa["fr_document_ids_json"]) == ["03-2053@2003-01-29"]
+    # The prose-first value joined nothing, so its Nonrulemaking docket forms no proceeding.
+    assert not any(
+        "EIB-2023-0012" in r["docket_ids_json"] or "FMCSA-00-7382" in r["docket_ids_json"] for r in proceedings
+    )
+
+    periods = pq.read_table(build_comment_periods(tmp_path)).to_pylist()
+    (period,) = periods
+    assert json.loads(period["docket_ids_json"]) == FDA_DOCKETS
+    assert json.loads(period["proceeding_ids_json"]) == [fda["proceeding_id"]]
+    assert json.loads(period["evidence_ids_json"]) == ["2011-3678@2011-02-18"]
+
+
+def test_a_list_merging_a_multi_docket_proceeding_lists_the_absorbed_ids_as_predecessors(tmp_path, monkeypatch):
+    """Two real EPA proposals: one names four dockets apart, the other a list reaching into them."""
+    records = [
+        {
+            "document_number": "2012-5760",
+            "publication_date": "2012-03-26",
+            "type": "Proposed Rule",
+            "title": "National Uniform Emission Standards for Storage Vessel and Transfer Operations",
+            "docket_ids": [*(f"EPA-HQ-OAR-2010-08{n}" for n in (68, 69, 70, 71)), "FRL-9645-1"],
+            "cfr_references": [{"title": 40, "part": 65}],
+            "regulation_id_numbers": ["2060-AR00"],
+        },
+        {
+            "document_number": "2011-31530",
+            "publication_date": "2012-01-06",
+            "type": "Proposed Rule",
+            "title": "National Emission Standards for Hazardous Air Pollutants From Petroleum Refineries",
+            "docket_ids": ["EPA-HQ-OAR-2003-0146, EPA-HQ-OAR-2010-0870, EPA-HQ-OAR-2011-0002", "FRL-9502-9"],
+            "cfr_references": [{"title": 40, "part": 63}],
+            "regulation_id_numbers": ["2060-AP84"],
+        },
+    ]
+    build_federal_register(tmp_path, documents=lambda start: iter(records), download_prior=lambda key, path: False)
+    build_fr_docket_links(tmp_path)
+    _write(
+        tmp_path,
+        "dockets",
+        ("docket_id", "docket_type", "rin"),
+        [
+            *(
+                {"docket_id": f"EPA-HQ-OAR-2010-08{n}", "docket_type": "Rulemaking", "rin": "2060-AR00"}
+                for n in (68, 69, 70, 71)
+            ),
+            {"docket_id": "EPA-HQ-OAR-2003-0146", "docket_type": "Rulemaking", "rin": "2060-AO55"},
+            {"docket_id": "EPA-HQ-OAR-2011-0002", "docket_type": "Rulemaking", "rin": "2060-AP84"},
+        ],
+    )
+    _write(tmp_path, "documents", ("document_id", "docket_id", "fr_doc_num", "additional_rins"), [])
+    build_rule_targets(tmp_path)
+    # The prior generation read one docket per value, so the list joined nothing.
+    with monkeypatch.context() as before:
+        before.setattr(
+            federal_register,
+            "linked_docket_ids",
+            lambda value: tuple(filter(None, [normalize_docket_reference(value)])),
+        )
+        prior = pq.read_table(build_proceedings(tmp_path)).to_pylist()
+    prior_by_dockets = {r["docket_ids_json"]: r["proceeding_id"] for r in prior}
+    four = json.dumps([f"EPA-HQ-OAR-2010-08{n}" for n in (68, 69, 70, 71)], separators=(",", ":"))
+    # Absorbed: the two single-docket proceedings, and the FR-only one the unread list left.
+    (fr_only,) = [r["proceeding_id"] for r in prior if r["docket_ids_json"] == "[]"]
+    absorbed = sorted(
+        [fr_only, *(prior_by_dockets[f'["{docket}"]'] for docket in ("EPA-HQ-OAR-2003-0146", "EPA-HQ-OAR-2011-0002"))]
+    )
+    assert len(prior) == 4
+    shutil.copyfile(tmp_path / "proceedings.parquet", tmp_path / "_proceedings_prior.parquet")
+
+    (merged,) = pq.read_table(build_proceedings(tmp_path)).to_pylist()
+    assert json.loads(merged["docket_ids_json"]) == sorted(
+        ["EPA-HQ-OAR-2003-0146", "EPA-HQ-OAR-2011-0002", *json.loads(four)]
+    )
+    assert json.loads(merged["fr_document_ids_json"]) == ["2011-31530@2012-01-06", "2012-5760@2012-03-26"]
+    # The four-docket proceeding outranks the singles on docket overlap and keeps its id ...
+    assert merged["proceeding_id"] == merged["supersedes_id"] == prior_by_dockets[four]
+    # ... and each absorbed id is named, never silently dropped.
+    assert json.loads(merged["identity_predecessors_json"]) == absorbed
+
+
+#: The one RIN-less Notice of 2026-09-23's links naming three or more dockets that are all
+#: Rulemaking: each of its dockets is a proceeding of its own, whatever the notice says.
+EPA_NOTICE = ["EPA-R05-OAR-2016-0135", "EPA-R05-OAR-2016-0269", "EPA-R05-OAR-2016-0372", "EPA-R05-OAR-2016-0396"]
+
+
+def _with_records(root, records, dockets):
+    """Add real FR records (and the dockets they name) to the listed inputs, and rebuild the links."""
+    fr = pq.read_table(root / "federal_register.parquet").to_pylist()
+    fr += [
+        {**dict.fromkeys(fr[0]), "regulation_id_numbers_json": "[]", "cfr_references_json": "[]", **r} for r in records
+    ]
+    _write(root, "federal_register", tuple(fr[0]), fr)
+    build_fr_docket_links(root)
+    held = pq.read_table(root / "dockets.parquet").to_pylist()
+    held += [{**dict.fromkeys(held[0]), "docket_id": docket, "docket_type": "Rulemaking"} for docket in dockets]
+    _write(root, "dockets", tuple(held[0]), held)
+
+
+def test_only_an_action_document_merges_the_dockets_it_names(tmp_path):
+    """Decision 33: a Proposed Rule's list unites its dockets; a RIN-less Notice's list does not."""
+    _listed_inputs(tmp_path)
+    _with_records(
+        tmp_path,
+        [
+            {
+                "document_number": "2016-23295",
+                "publication_date": "2016-09-27",
+                "document_type": "Notice",
+                "title": "Adequacy Status of the Cleveland-Akron-Lorain and Columbus, Ohio Areas",
+                "docket_ids_json": json.dumps([*EPA_NOTICE, "FRL-9953-10-Region 5"]),
+            }
+        ],
+        EPA_NOTICE,
+    )
+    build_rule_targets(tmp_path)
+    # The generation before merged the Notice's dockets, under the id its second docket
+    # minted when it stood alone (as FDA-2014-E-2356 did on the 2026-09-23 parents).
+    merged_id = stable_id("proceeding", "docket", EPA_NOTICE[1])
+    _write(
+        tmp_path,
+        "_proceedings_prior",
+        ("proceeding_id", "docket_ids_json", "fr_document_ids_json"),
+        [
+            {
+                "proceeding_id": merged_id,
+                "docket_ids_json": json.dumps(EPA_NOTICE),
+                "fr_document_ids_json": '["2016-23295@2016-09-27"]',
+            }
+        ],
+    )
+
+    proceedings = pq.read_table(build_proceedings(tmp_path)).to_pylist()
+    assert len({r["proceeding_id"] for r in proceedings}) == len(proceedings)
+    by_dockets = {r["docket_ids_json"]: r for r in proceedings}
+    # The Proposed Rule (a rule stage) unites its three dockets ...
+    assert json.dumps(FDA_DOCKETS, separators=(",", ":")) in by_dockets
+    # ... the Notice (no RIN, no stage) attaches to each of its four and merges none.
+    for docket in EPA_NOTICE:
+        row = by_dockets[f'["{docket}"]']
+        assert json.loads(row["fr_document_ids_json"]) == ["2016-23295@2016-09-27"]
+        assert row["stage_events_json"] == "[]"
+        # The merged id stays with the docket that minted it; the others mint their own and
+        # name it as their predecessor.
+        if docket == EPA_NOTICE[1]:
+            assert row["proceeding_id"] == row["supersedes_id"] == merged_id
+        else:
+            assert row["proceeding_id"] == stable_id("proceeding", "docket", docket)
+            assert json.loads(row["identity_predecessors_json"]) == [merged_id]
+
+
+def test_a_notice_several_proceedings_hold_opens_a_period_listing_each(tmp_path):
+    """Decision 33 as amended: the period of a RIN-less notice naming two rulemakings lists both."""
+    _listed_inputs(tmp_path)
+    dockets = ["FMCSA-2014-0083", "NHTSA-2016-0087"]
+    _with_records(
+        tmp_path,
+        [
+            {
+                "document_number": "2016-23486",
+                "publication_date": "2016-09-29",
+                "document_type": "Notice",
+                "title": "Notice of Availability of a Draft Environmental Assessment for Rulemaking To Require "
+                "the Installation and Maintenance of Speed Limiting Devices in Heavy Vehicles",
+                "docket_ids_json": '["Docket No. NHTSA-2016-0087", "Docket No. FMCSA-2014-0083"]',
+                "comments_close_on": "2016-11-07",
+            }
+        ],
+        dockets,
+    )
+    held = pq.read_table(tmp_path / "dockets.parquet").to_pylist()
+    rins = {"FMCSA-2014-0083": "2126-AB63", "NHTSA-2016-0087": "2127-AK92"}
+    _write(
+        tmp_path, "dockets", tuple(held[0]), [{**row, "rin": rins.get(row["docket_id"], row["rin"])} for row in held]
+    )
+    build_rule_targets(tmp_path)
+
+    proceedings = pq.read_table(build_proceedings(tmp_path)).to_pylist()
+    ids = sorted(
+        row["proceeding_id"] for row in proceedings if json.loads(row["docket_ids_json"])[:1] in ([d] for d in dockets)
+    )
+    assert len(ids) == 2, "the notice merges neither"
+
+    periods = pq.read_table(build_comment_periods(tmp_path)).to_pylist()
+    (period,) = [r for r in periods if "2016-23486@2016-09-29" in json.loads(r["evidence_ids_json"])]
+    assert json.loads(period["docket_ids_json"]) == dockets
+    assert json.loads(period["proceeding_ids_json"]) == ids
+    assert json.loads(period["rins_json"]) == ["2126-AB63", "2127-AK92"]
+    assert (period["open_date"], period["close_date"]) == ("2016-09-29", "2016-11-07")
+
+
+def test_the_index_reads_each_link_row_once_and_keys_each_docket_it_names(tmp_path):
+    _listed_inputs(tmp_path)
+    links = tmp_path / "fr_docket_links.parquet"
+    # A number the generation does not hold on that day: the reference stays unresolved,
+    # and each docket of the list carries it under its own evidence id.
+    _write(
+        tmp_path,
+        "fr_docket_links",
+        ("docket_id", "document_number", "publication_date"),
+        [
+            {"docket_id": FDA_LIST, "document_number": "2011-3678", "publication_date": "2011-02-19"},
+            {"docket_id": PROSE_FIRST, "document_number": "2023-19952", "publication_date": "2023-09-15"},
+            {"docket_id": FMCSA_LIST, "document_number": None, "publication_date": "2003-01-29"},
+        ],
+    )
+    index = FederalRegisterIndex(tmp_path / "federal_register.parquet")
+    first = list(index.docket_links(links))
+    assert first == [
+        (
+            docket,
+            {
+                "source": "fr_docket_links",
+                "evidence_id": docket,
+                "document_number": "2011-3678",
+                "publication_date": "2011-02-19",
+                "status": "missing",
+                "candidate_ids": (),
+            },
+        )
+        for docket in FDA_DOCKETS
+    ]
+    links.unlink()
+    assert list(index.docket_links(links)) == first, "replayed, not re-read"
 
 
 def test_a_proceeding_merged_by_a_label_join_lists_the_old_ids_as_predecessors(tmp_path, monkeypatch):
@@ -397,7 +719,11 @@ def test_a_proceeding_merged_by_a_label_join_lists_the_old_ids_as_predecessors(t
     build_rule_targets(tmp_path)
     # The prior generation read FR docket values syntax-only, so 2010-2394 stood alone.
     with monkeypatch.context() as before:
-        before.setattr(sys.modules[build_proceedings.__module__], "linked_docket_id", normalize_regsgov_identifier)
+        before.setattr(
+            federal_register,
+            "linked_docket_ids",
+            lambda value: tuple(filter(None, [normalize_regsgov_identifier(value)])),
+        )
         prior = pq.read_table(build_proceedings(tmp_path)).to_pylist()
     prior_docket = next(r for r in prior if json.loads(r["docket_ids_json"]) == ["SSA-2010-0037"])
     prior_fr_only = next(r for r in prior if json.loads(r["fr_document_ids_json"]) == ["2010-2394@2010-02-05"])

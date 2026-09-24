@@ -33,7 +33,6 @@ from spicy_regs.ontology.common import (
 
 from spicy_regs.ontology.federal_register import (
     FederalRegisterIndex,
-    linked_docket_id,
     record_url,
     references_json,
     resolved_id,
@@ -42,7 +41,9 @@ from spicy_regs.ontology.federal_register import (
 OUTPUT = "comment_periods.parquet"
 # v5: regulations.gov close dates are the Eastern day, one day earlier than v4 (see eastern_day).
 # v6: labelled FR docket values join (linked_docket_id), so more FR intervals carry a docket.
-ACTOR_ID = "spicy-regs:comment-periods:v6"
+# v7: a docket value naming several dockets joins each (linked_docket_ids), and an FR interval
+# whose notice several proceedings hold lists every one of them (decision 33), not none.
+ACTOR_ID = "spicy-regs:comment-periods:v7"
 
 COLUMNS = (
     "comment_period_id",
@@ -262,7 +263,7 @@ def build_comment_periods(
     inverted_by_source: Counter[str] = Counter()
     inverted_examples: list[str] = []
     ambiguous_document_intervals = 0
-    ambiguous_fr_intervals = 0
+    shared_fr_intervals = 0
     unanchored_intervals = 0
 
     def add_interval(
@@ -351,21 +352,14 @@ def build_comment_periods(
         )
 
     linked_dockets_by_fr: dict[str, set[str]] = defaultdict(set)
-    for row in iter_parquet_rows(
-        required["fr_docket_links"], columns=("docket_id", "document_number", "publication_date")
-    ):
-        docket = linked_docket_id(row.get("docket_id"))
-        if row.get("document_number") and docket is not None and docket in trusted_dockets:
-            reference = {
-                "source": "fr_docket_links",
-                "evidence_id": docket,
-                **fr_index.reference(str(row["document_number"]), row.get("publication_date")),
-            }
-            if identity := resolved_id(reference):
-                linked_dockets_by_fr[identity].add(docket)
-            else:
-                for candidate in reference["candidate_ids"]:
-                    unresolved_by_fr[candidate].append(reference)
+    for docket, reference in fr_index.docket_links(required["fr_docket_links"]):
+        if docket not in trusted_dockets:
+            continue
+        if identity := resolved_id(reference):
+            linked_dockets_by_fr[identity].add(docket)
+        else:
+            for candidate in reference["candidate_ids"]:
+                unresolved_by_fr[candidate].append(reference)
 
     for row in iter_parquet_rows(
         required["federal_register"],
@@ -389,11 +383,12 @@ def build_comment_periods(
             docket_targets.update(proceeding_ids_by_docket.get(docket, ()))
         artifact_targets = set(proceeding_ids_by_fr_document.get(identity, ()))
         # Direct artifact membership is strongest. Docket membership is the
-        # fallback for older rows that predate the artifact projection.
-        candidates = artifact_targets or docket_targets
-        proceeding_ids = candidates if len(candidates) == 1 else set()
-        if len(candidates) > 1:
-            ambiguous_fr_intervals += 1
+        # fallback for older rows that predate the artifact projection. A notice that
+        # is no action evidence attaches to every proceeding whose dockets it names
+        # (decision 33), and its period opens in each of them, so it lists them all.
+        proceeding_ids = artifact_targets or docket_targets
+        if len(proceeding_ids) > 1:
+            shared_fr_intervals += 1
         add_interval(
             proceeding_ids=proceeding_ids,
             docket_ids=dockets,
@@ -430,10 +425,10 @@ def build_comment_periods(
             ", ".join(f"{source}={count:,}" for source, count in sorted(inverted_by_source.items())),
             "; ".join(inverted_examples),
         )
-    if ambiguous_fr_intervals:
-        logger.warning(
-            "comment_periods: retained {:,} ambiguous FR intervals with docket-only anchors",
-            ambiguous_fr_intervals,
+    if shared_fr_intervals:
+        logger.info(
+            "comment_periods: {:,} FR intervals open in several proceedings and list each",
+            shared_fr_intervals,
         )
     if ambiguous_document_intervals:
         logger.warning(

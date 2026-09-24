@@ -33,9 +33,10 @@ mapped no longer exist.
   `FederalRegisterIndex`, built once per generation, which resolves
   number-only references against the held generation and retains ambiguity
   (the literal number first, then SpicyDocs' folded and unpadded comparison
-  key, with the method in each reference's status); and
-  `linked_docket_id`, which reads a Federal Register docket value through its
-  label with SpicyDocs' `normalize_docket_reference`.
+  key, with the method in each reference's status), and which reads the
+  `fr_docket_links` table once for every stage that shares it; and
+  `linked_docket_ids`, which reads every docket a Federal Register docket value
+  names, behind a label or in a list, with SpicyDocs' `normalize_docket_references`.
 - `ontology/common.py` — storage and provenance shared by the ontology
   rollups: the attestation columns (`method`, `actor_id`, `run_id`,
   `asserted_at`, `supersedes_id`), `RunContext`, canonical JSON, the
@@ -47,7 +48,7 @@ mapped no longer exist.
 ## The rule_targets carrier
 
 `transforms/build_rule_targets.py` builds `rule_targets.parquet`
-(`ACTOR_ID = spicy-regs:rule-targets:v3`): one row per observed rule-identity
+(`ACTOR_ID = spicy-regs:rule-targets:v4`): one row per observed rule-identity
 edge, with `docket_id`, `cfr_ref` (+ `cfr_title`/`cfr_part`/`cfr_section`),
 `rin`, the `source` class the edge came from, `first_seen`/`last_seen` as
 Eastern days, and `fr_references_json` retaining each literal number-only

@@ -31,7 +31,9 @@ from spicy_regs.ontology.federal_register import FederalRegisterIndex, record_ur
 ITEMS_OUTPUT = "regulatory_agenda_items.parquet"
 RELATIONSHIPS_OUTPUT = "agenda_item_proceedings.parquet"
 # v3: first_seen/last_seen and evidence_date are the Eastern day of a Regulations.gov
-# instant, not its UTC day, and the proceedings they link join labelled FR dockets.
+# instant, not its UTC day. Still v3 under proceedings v6 (listed FR dockets, decisions 32
+# and 33): this code did not change, though its rows move with the proceedings they link
+# (1,834 relationship rows and 496 items on the 2026-09-23 parents from the list join alone).
 ITEM_ACTOR_ID = "spicy-regs:regulatory-agenda-items:v3"
 RELATIONSHIP_ACTOR_ID = "spicy-regs:agenda-item-proceedings:v3"
 
