@@ -924,40 +924,29 @@ def test_a_nonrulemaking_docket_is_a_proceeding_only_on_action_evidence(tmp_path
     assert (json.loads(period["docket_ids_json"]), period["proceeding_ids_json"]) == ([shell], "[]")
 
 
-def test_an_id_held_for_its_minting_group_is_released_once_that_group_takes_another(tmp_path):
-    """Prior P = {a,b,c} under b's minted id; now A = {a,c} and B = {b,d,e}, and B continues Q.
-
-    B mints P, so P is held for B while B has no id. B takes Q (more overlap), which releases
-    P, and A, whose best match P is, continues it, as plain overlap scoring always did.
-    """
-    a, b, c, d, e = (f"EPA-HQ-OAR-2020-000{n}" for n in range(1, 6))
-    p_id, q_id = stable_id("proceeding", "docket", b), stable_id("proceeding", "docket", d)
+def _identity_fixture(tmp_path, groups, prior):
+    """Rulemaking dockets, one Proposed Rule uniting each group of two or more, and prior ids."""
+    dockets = sorted({docket for group in groups for docket in group})
     _write(
         tmp_path / "dockets.parquet",
         ("docket_id", "rin", "docket_type", "title", "agency_code", "modify_date"),
-        [{"docket_id": docket, "docket_type": "Rulemaking"} for docket in (a, b, c, d, e)],
+        [{"docket_id": docket, "docket_type": "Rulemaking"} for docket in dockets],
     )
     _write(tmp_path / "documents.parquet", ("document_id", "docket_id", "additional_rins", "document_type"), [])
+    united = [group for group in groups if len(group) > 1]
+    numbers = [f"2026-{n:05d}" for n in range(1, len(united) + 1)]
     _write(
         tmp_path / "federal_register.parquet",
         ("document_number", "publication_date", "regulation_id_numbers_json", "document_type", "title"),
-        [
-            {"document_number": number, "publication_date": "2026-01-02", "document_type": "Proposed Rule"}
-            for number in ("2026-00001", "2026-00002")
-        ],
+        [{"document_number": n, "publication_date": "2026-01-02", "document_type": "Proposed Rule"} for n in numbers],
     )
     _write(
         tmp_path / "fr_docket_links.parquet",
         ("docket_id", "document_number", "publication_date"),
         [
-            *(
-                {"docket_id": docket, "document_number": "2026-00001", "publication_date": "2026-01-02"}
-                for docket in (a, c)
-            ),
-            *(
-                {"docket_id": docket, "document_number": "2026-00002", "publication_date": "2026-01-02"}
-                for docket in (b, d, e)
-            ),
+            {"docket_id": docket, "document_number": number, "publication_date": "2026-01-02"}
+            for number, group in zip(numbers, united)
+            for docket in group
         ],
     )
     _write(
@@ -966,15 +955,43 @@ def test_an_id_held_for_its_minting_group_is_released_once_that_group_takes_anot
     _write(
         tmp_path / "_proceedings_prior.parquet",
         ("proceeding_id", "docket_ids_json", "fr_document_ids_json"),
-        [
-            {"proceeding_id": p_id, "docket_ids_json": json.dumps([a, b, c]), "fr_document_ids_json": "[]"},
-            {"proceeding_id": q_id, "docket_ids_json": json.dumps([d, e]), "fr_document_ids_json": "[]"},
-        ],
+        [{"proceeding_id": pid, "docket_ids_json": json.dumps(ds), "fr_document_ids_json": "[]"} for pid, ds in prior],
     )
-
     rows = pq.read_table(build_proceedings(tmp_path)).to_pylist()
-    by_dockets = {tuple(json.loads(row["docket_ids_json"])): row for row in rows}
+    assert len({row["proceeding_id"] for row in rows}) == len(rows)
+    return {tuple(json.loads(row["docket_ids_json"])): row for row in rows}
+
+
+def test_an_id_held_for_its_minting_group_is_released_once_that_group_takes_another(tmp_path):
+    """Prior P = {a,b,c} under b's minted id; now A = {a,c} and B = {b,d,e}, and B continues Q.
+
+    B mints P, so P is held for B while B has no id. B takes Q (more overlap), which releases
+    P, and A, whose best match P is, continues it, as plain overlap scoring always did.
+    """
+    a, b, c, d, e = (f"EPA-HQ-OAR-2020-000{n}" for n in range(1, 6))
+    p_id, q_id = stable_id("proceeding", "docket", b), stable_id("proceeding", "docket", d)
+    by_dockets = _identity_fixture(tmp_path, [[a, c], [b, d, e]], [(p_id, [a, b, c]), (q_id, [d, e])])
     assert set(by_dockets) == {(a, c), (b, d, e)}
     assert by_dockets[(a, c)]["proceeding_id"] == by_dockets[(a, c)]["supersedes_id"] == p_id
     assert by_dockets[(b, d, e)]["proceeding_id"] == by_dockets[(b, d, e)]["supersedes_id"] == q_id
     assert json.loads(by_dockets[(b, d, e)]["identity_predecessors_json"]) == [p_id]
+
+
+def test_a_hold_lifted_mid_pass_lets_the_waiting_group_take_its_best_id(tmp_path):
+    """Prior P = {a,b,c} (b's minted id), Q = {b,d,e}, R = {a,f}; now A = {a,c}, B = {b,d,e}, F = {f}.
+
+    B takes Q, which lifts the hold on P within the same pass, so A takes P (overlap 200),
+    not R (100), and F continues R: what overlap alone kept before the hold existed.
+    """
+    a, b, c, d, e, f = (f"EPA-HQ-OAR-2020-000{n}" for n in range(1, 7))
+    p_id = stable_id("proceeding", "docket", b)
+    by_dockets = _identity_fixture(
+        tmp_path,
+        [[a, c], [b, d, e], [f]],
+        [(p_id, [a, b, c]), ("proceeding_q", [b, d, e]), ("proceeding_r", [a, f])],
+    )
+    assert {key: row["proceeding_id"] for key, row in by_dockets.items()} == {
+        (a, c): p_id,
+        (b, d, e): "proceeding_q",
+        (f,): "proceeding_r",
+    }
