@@ -17,36 +17,30 @@ can still fill it.
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 
-from spicy_regs.sources.derived_text import DERIVED_STATUS, DerivedCommentText, DerivedTextUnavailable
+from spicy_regs.sources.derived_text import DERIVED_STATUS
 from spicy_regs.transforms.base import Transform
+from spicy_regs.transforms.derived_text_pool import DerivedTextPool, TextResult, needs_comment_text
 
 
 class EnrichCommentText(Transform):
     """Fills ``text_content`` from Mirrulations pre-extracted attachment text."""
 
-    def __init__(self, fetcher: DerivedCommentText) -> None:
-        self.fetcher = fetcher
+    def __init__(self, pool: DerivedTextPool, *, observe: Callable[[TextResult], None] | None = None) -> None:
+        self.pool = pool
+        self.observe = observe
 
     def apply(self, records: Iterable[dict]) -> Iterator[dict]:
-        for record in records:
-            # Only attachment-bearing comments have extractable text; comments
-            # that already carry text (e.g. a re-run) are left as-is.
-            if record.get("attachments_json") and record.get("text_content") is None:
-                try:
-                    fill = self.fetcher.fill_for(
-                        record.get("agency_code"),
-                        record.get("docket_id"),
-                        record.get("comment_id"),
-                    )
-                except DerivedTextUnavailable:
-                    fill = None  # logged by the fetcher; the comment stays pending
-                if fill:
-                    record = {
-                        **record,
-                        "text_content": fill.text,
-                        "text_extraction_status": DERIVED_STATUS,
-                        "pdf_extraction_results_json": fill.provenance,
-                    }
+        for result in self.pool.map(records, select=needs_comment_text):
+            if self.observe is not None:
+                self.observe(result)
+            record = result.record
+            if result.fill is not None:
+                record = {
+                    **record,
+                    "text_content": result.fill.text,
+                    "text_extraction_status": DERIVED_STATUS,
+                    "pdf_extraction_results_json": result.fill.provenance,
+                }
             yield record

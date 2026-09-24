@@ -24,7 +24,10 @@ when a fetcher is built, so importing the transforms needs no source readers.
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
+from concurrent.futures import Future
 from dataclasses import dataclass
+from threading import Lock
 from types import ModuleType
 from typing import TYPE_CHECKING, Any, Final
 
@@ -46,6 +49,11 @@ PART_SEPARATOR: Final = "\n\n"
 
 class DerivedTextUnavailable(Exception):
     """A docket listing was refused or a fetch failed: the comment stays pending, never "no text"."""
+
+    def __init__(self, message: str, *, phase: str, source_json: str | None = None) -> None:
+        super().__init__(message)
+        self.phase = phase
+        self.source_json = source_json
 
 
 @dataclass(frozen=True, slots=True)
@@ -91,38 +99,66 @@ def _mirrulations() -> tuple[ModuleType, tuple[type[Exception], ...]]:
     return mirrulations, (ValueError, ClientError, BotoCoreError)
 
 
+class DocketListings:
+    """Share immutable source listings, including refusals, without sharing S3 resources.
+
+    The first worker lists a docket; concurrent readers await that same result.
+    Different dockets can list concurrently. A new run gets a fresh cache.
+    """
+
+    def __init__(self) -> None:
+        self._dockets: dict[tuple[str, str], Future[dict[str, CommentDerivedText]]] = {}
+        self._lock = Lock()
+
+    def get(
+        self, agency: str, docket: str, load: Callable[[], dict[str, CommentDerivedText]]
+    ) -> dict[str, CommentDerivedText]:
+        with self._lock:
+            key = (agency, docket)
+            future = self._dockets.get(key)
+            owner = future is None
+            if future is None:
+                future = self._dockets[key] = Future()
+        if owner:
+            try:
+                future.set_result(load())
+            except BaseException as error:
+                future.set_exception(error)
+        return future.result()
+
+
 class DerivedCommentText:
     """Fills comments from their docket's listing, listed once per instance.
 
-    The cache is plain dict state, so build one per worker thread. A refused listing
+    Build one per worker thread and share only ``listings``. A refused listing
     is cached as refused: the docket is not listed again for each of its comments.
     ``bucket`` defaults to spicy-docs' Mirrulations bucket.
     """
 
-    def __init__(self, s3_resource: Any, bucket: str | None = None, *, max_bytes: int = MAX_ATTACHMENT_BYTES) -> None:
+    def __init__(
+        self, s3_resource: Any, bucket: str | None = None, *,
+        max_bytes: int = MAX_ATTACHMENT_BYTES, listings: DocketListings | None = None,
+    ) -> None:
         self._reader, self._failures = _mirrulations()
         self._resource = s3_resource
         self._bucket = self._reader.BUCKET if bucket is None else bucket
         self._max_bytes = max_bytes
-        self._dockets: dict[tuple[str, str], dict[str, CommentDerivedText] | str] = {}
+        self._listings = listings if listings is not None else DocketListings()
 
     def listed(self, agency: str, docket_id: str) -> dict[str, CommentDerivedText]:
         """The docket's comments with derived text, from one strict listing; raises if it was refused."""
-        key = (agency, docket_id)
-        if key not in self._dockets:
+        def load() -> dict[str, CommentDerivedText]:
             try:
-                self._dockets[key] = self._reader.list_docket_derived_text(
+                return self._reader.list_docket_derived_text(
                     self._resource, agency, docket_id, bucket=self._bucket
                 ).comments
             except self._failures as exc:
                 logger.warning(
                     "derived-data listing refused for {}/{}; its comments stay pending: {}", agency, docket_id, exc
                 )
-                self._dockets[key] = f"{agency}/{docket_id}: {exc}"
-        listed = self._dockets[key]
-        if isinstance(listed, str):
-            raise DerivedTextUnavailable(listed)
-        return listed
+                raise DerivedTextUnavailable(f"{agency}/{docket_id}: {exc}", phase="listing") from exc
+
+        return self._listings.get(agency, docket_id, load)
 
     def fill_for(self, agency: str | None, docket_id: str | None, comment_id: str | None) -> DerivedFill | None:
         """The comment's fill; ``None`` when the listing has no text for it or its text is blank."""
@@ -137,5 +173,7 @@ class DerivedCommentText:
             )
         except self._failures as exc:  # a failed attachment fails the comment, never drops a part
             logger.warning("derived-data fetch failed for {}; it stays pending: {}", comment_id, exc)
-            raise DerivedTextUnavailable(f"{comment_id}: {exc}") from exc
+            raise DerivedTextUnavailable(
+                f"{comment_id}: {exc}", phase="fetch", source_json=provenance_json(comment)
+            ) from exc
         return derived_fill(fetched)

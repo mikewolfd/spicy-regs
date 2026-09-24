@@ -855,3 +855,28 @@ Receipts under `~/Work/corpora/fork-execution-2026-09-21/`:
   step/job log, per-run dispositions, raw private-law checks and final hashes.
 - `parallel-delivery-2026-09-24/`: independent successful-run inventory and
   log-coverage checks.
+
+
+## September 24 comment-text refactor
+
+Batch 1 completed at 19:23:44 UTC and batch 2 at 19:48:52 UTC on `3953175`;
+batch 3 then began on that same pinned checkout. Batch 1 spent 57m53s of its
+62m27s in source staging, with CFPB forming the long agency tail. That phase
+combines raw downloads and inline text reads; the log alone does not isolate
+their costs.
+
+Inline ETL and backfill now share bounded comment-level concurrency, with a
+worker-owned S3 resource and a shared once-per-docket listing cache. Independent
+text retry state survives raw-key checkpoints. Local batch drivers can reuse a
+committed manifest, avoiding its repeated rebuild. Progress and phase timings
+make the remaining work visible. The fixed CFPB comparison showed identical
+text/provenance and a 6.4-fold median text-fetch improvement at eight workers;
+see the [comparison and qualification limits](comment-text-refactor-2026-09-24.md).
+
+Local tests cover normal and chunked recovery through a fresh workspace,
+metadata preservation, access refusal, failed writes, global worker bounds and
+manifest reuse. The handoff runs the new code from a separate pinned checkout
+after a committed batch. `etl-local-catchup-2026-09-24/handoff.json` and
+`progress.json` distinguish the queued transition from the actual active
+revision. Mirror publication, dependent refreshes and source qualification
+remain separate gates.

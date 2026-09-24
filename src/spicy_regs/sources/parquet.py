@@ -29,12 +29,11 @@ class StagingWriter(Writer):
         self.rows_written = 0
 
     def write(self, records: Iterable[dict]) -> None:
-        # write_staging expects a concrete list (it checks emptiness and length).
-        materialized = list(records)
+        self.rows_written = 0
         self.rows_written = write_staging(
             self.agency,
             self.record_type.name,
-            materialized,
+            records,
             self.staging_dir,
             self.record_type.schema,
         )

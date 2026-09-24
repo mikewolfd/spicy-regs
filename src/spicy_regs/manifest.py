@@ -25,6 +25,7 @@ from hashlib import md5, sha1
 from math import log
 from pathlib import Path
 from threading import Lock
+from time import monotonic
 
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -116,9 +117,7 @@ def save_manifest(output_dir: Path, new_keys: set[str]) -> None:
         new_table = pa.table({"key": list(new_keys)}).cast(MANIFEST_SCHEMA)
         writer.write_table(new_table)
 
-    if manifest_file.exists():
-        manifest_file.unlink()
-    temp_file.rename(manifest_file)
+    temp_file.replace(manifest_file)
 
     total = existing_rows + len(new_keys)
     logger.info("Saved manifest: {:,} keys ({:,} existing + {:,} new)", total, existing_rows, len(new_keys))
@@ -134,6 +133,7 @@ class Manifest:
     def __init__(self, processed: Container[str]) -> None:
         self._processed = processed
         self._new_keys: set[str] = set()
+        self._committed_keys: set[str] = set()
         self._lock = Lock()
 
     @classmethod
@@ -165,27 +165,41 @@ class Manifest:
         # Size the filter to the keys actually loaded (with modest headroom);
         # new keys from this run are tracked separately in ``_new_keys``.
         bloom = BloomFilter(capacity=max(key_count + key_count // 10, 1000))
+        logger.info("Loading manifest: {:,} source keys", key_count)
+        loaded = 0
+        reported = monotonic()
         for batch in pf.iter_batches(batch_size=500_000, columns=["key"]):
             for key in batch.column("key").to_pylist():
                 bloom.add(key)
+            loaded += batch.num_rows
+            if monotonic() - reported >= 30:
+                logger.info("Loading manifest: {:,}/{:,} source keys", loaded, key_count)
+                reported = monotonic()
         logger.info("Loaded manifest: {:,} keys (~{:.0f} MB)", key_count, bloom.size_bytes / 1_048_576)
         return cls(bloom)
 
     def __contains__(self, key: str) -> bool:
-        return key in self._processed
+        return key in self._new_keys or key in self._committed_keys or key in self._processed
 
     def record(self, keys: Iterable[str]) -> None:
         """Mark ``keys`` as processed this run (thread-safe)."""
         with self._lock:
-            self._new_keys.update(keys)
+            self._new_keys.update(key for key in keys if key not in self)
 
     @property
     def new_keys(self) -> set[str]:
-        """Keys recorded during this run (a copy, safe to iterate)."""
+        """Keys awaiting commit (a copy, safe to iterate)."""
         with self._lock:
             return set(self._new_keys)
 
     def save(self, output_dir: Path) -> None:
-        """Append the keys recorded this run to the persisted manifest."""
-        if self._new_keys:
-            save_manifest(output_dir, self._new_keys)
+        """Commit pending keys once, retaining membership for later local batches.
+
+        An exact set tracks keys added after load without filling the Bloom
+        filter beyond its sized capacity. Failed writes keep their pending keys.
+        """
+        with self._lock:
+            if self._new_keys:
+                save_manifest(output_dir, self._new_keys)
+                self._committed_keys.update(self._new_keys)
+                self._new_keys.clear()

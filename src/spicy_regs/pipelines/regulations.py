@@ -14,9 +14,11 @@ reusable pieces live elsewhere — connection details and the reader factory in
 the wiring.
 """
 
+from contextlib import ExitStack
 from os import getenv
 from pathlib import Path
 from shutil import rmtree
+from time import monotonic
 from typing import Annotated, ClassVar
 
 from cyclopts import App, Parameter
@@ -25,13 +27,14 @@ from loguru import logger
 
 from spicy_docs.sources import mirrulations
 
-from spicy_regs.manifest import Manifest, save_manifest
+from spicy_regs.manifest import Manifest
 from spicy_regs.pipelines.regulations_state import UnresolvedKeys, source_record_type
 from spicy_regs.pipelines.base import Pipeline
 from spicy_regs.pipelines.staging import stage_agencies
 from spicy_regs.schemas import RECORD_TYPES, RecordType
 from spicy_regs.sources import iceberg, r2
-from spicy_regs.sources.derived_text import DerivedCommentText
+from spicy_regs.pipelines.comment_text import PendingCommentText, PENDING_TEXT_FILE
+from spicy_regs.transforms.derived_text_pool import DerivedTextPool
 from spicy_regs.transforms.comment_partitions import validate_staged_comments
 from spicy_regs.transforms.reviewed_comments import ExcludeReviewedComments
 from spicy_regs.transforms import (
@@ -73,6 +76,7 @@ class RegulationsPipeline(Pipeline):
         full_refresh: bool = False,
         allow_fresh_start: bool = False,
         max_workers: int = 4,
+        text_workers: int = 8,
         use_iceberg: bool = False,
         enrich_text: bool = True,
         chunk_size: int = 0,
@@ -90,12 +94,38 @@ class RegulationsPipeline(Pipeline):
         self.full_refresh = full_refresh
         self.allow_fresh_start = allow_fresh_start
         self.max_workers = max_workers
+        self.text_workers = text_workers
         self.use_iceberg = use_iceberg
         self.enrich_text = enrich_text
         self.chunk_size = chunk_size
         self.verbose = verbose
+        self._pending_text: PendingCommentText | None = None
+        self._text_pool: DerivedTextPool | None = None
 
-    def run(self) -> None:
+    def run(self, *, manifest: Manifest | None = None) -> None:
+        """Run one batch; local batches sharing output_dir may reuse their manifest."""
+        if manifest is not None and self.full_refresh:
+            raise ValueError("A reused manifest cannot be combined with full_refresh")
+        output_dir = self.output_dir or (Path.cwd() / "output")
+        output_dir.mkdir(parents=True, exist_ok=True)
+        self._pending_text: PendingCommentText | None = None
+        self._text_pool: DerivedTextPool | None = None
+        started = monotonic()
+        if manifest is None:
+            manifest = Manifest.empty() if self.full_refresh else Manifest.load(
+                output_dir, allow_fresh_start=self.allow_fresh_start,
+            )
+        logger.info("ETL manifest ready in {:.1f}s", monotonic() - started)
+        with ExitStack() as resources:
+            if self.enrich_text and not self.skip_comments:
+                self._pending_text = PendingCommentText(output_dir)
+                self._text_pool = resources.enter_context(
+                    DerivedTextPool(mirrulations.s3_resource, max_workers=self.text_workers)
+                )
+            self._run(manifest)
+        logger.info("ETL batch completed in {:.1f}s", monotonic() - started)
+
+    def _run(self, manifest: Manifest) -> None:
         output_dir = self.output_dir or (Path.cwd() / "output")
         staging_dir = output_dir / "staging"
         staging_dir.mkdir(parents=True, exist_ok=True)
@@ -107,25 +137,26 @@ class RegulationsPipeline(Pipeline):
         # comments-only case can use it: the catalog is a row-level upsert
         # surface, so each chunk commits on its own.
         if self.chunk_size and self.only_comments and self.use_iceberg:
-            manifest = (
-                Manifest.empty()
-                if self.full_refresh
-                else Manifest.load(output_dir, allow_fresh_start=self.allow_fresh_start)
-            )
             for agency in agencies:
                 self._ingest_comments_chunked(agency, output_dir, staging_dir, manifest)
+            self._retry_text(output_dir, agencies)
+            if self._pending_text is not None:
+                self._pending_text.save()
+                if not self.skip_upload:
+                    self._publish(output_dir, record_types, {}, [])
             rmtree(staging_dir, ignore_errors=True)
             logger.info("Done!")
             return
 
         # 1. Prime: load processed-key manifest + existing output for incremental work.
+        started = monotonic()
         if self.full_refresh:
             logger.info("Full refresh — ignoring manifest and existing output")
-            manifest = Manifest.empty()
         else:
-            manifest = Manifest.load(output_dir, allow_fresh_start=self.allow_fresh_start)
             self._download_existing(output_dir, record_types)
 
+        logger.info("ETL priming completed in {:.1f}s", monotonic() - started)
+        started = monotonic()
         # 2. Extract → stage: fan agencies out, pumping each source into staging.
         logger.info(
             "Processing {} agencies × {} record types ({} workers)",
@@ -147,7 +178,8 @@ class RegulationsPipeline(Pipeline):
             transform_for=self._transform_for,
             max_workers=self.max_workers,
         )
-        manifest.record(result.consumed_keys)
+        logger.info("ETL source staging completed in {:.1f}s", monotonic() - started)
+        started = monotonic()
         # 3. Transform: merge per-agency staging into the deduplicated dataset.
         staged = result.rows_by_type
         changed_comments: list[Path] = []
@@ -162,8 +194,14 @@ class RegulationsPipeline(Pipeline):
         else:
             logger.info("No new records staged; skipping merge.")
 
+        changed_comments = sorted(set(changed_comments) | set(self._retry_text(output_dir, agencies)))
+        logger.info("ETL merge and text retries completed in {:.1f}s", monotonic() - started)
+        started = monotonic()
         # 4. Load: persist the manifest, then publish to R2 (off by default while vetting).
         unresolved.update(result.consumed_keys, result.unresolved)
+        if self._pending_text is not None:
+            self._pending_text.save()
+        manifest.record(result.consumed_keys)
         manifest.save(output_dir)
         if self.skip_upload:
             logger.info("skip_upload=True — output left in {}", output_dir)
@@ -171,7 +209,13 @@ class RegulationsPipeline(Pipeline):
             logger.info("Uploading to R2...")
             self._publish(output_dir, record_types, staged, changed_comments)
 
+        logger.info("ETL checkpoint and publication completed in {:.1f}s", monotonic() - started)
         logger.info("Done!")
+
+    def _retry_text(self, output_dir: Path, agencies: list[str]) -> list[Path]:
+        if self._pending_text is None or self._text_pool is None:
+            return []
+        return self._pending_text.retry(self._text_pool, output_dir, agencies, use_iceberg=self.use_iceberg)
 
     def _publish(
         self,
@@ -194,6 +238,7 @@ class RegulationsPipeline(Pipeline):
         index_file = output_dir / "comments_index.parquet"
         manifest_file = output_dir / "manifest.parquet"
         unresolved_file = output_dir / "failed_keys.parquet"
+        text_pending_file = output_dir / PENDING_TEXT_FILE
         # The Iceberg comments path MERGEs rows through the catalog rather than
         # under the public comments/ prefix, so it changes no partition files —
         # only the refreshed index needs publishing.
@@ -209,6 +254,8 @@ class RegulationsPipeline(Pipeline):
             planned.append(index_file)
         if unresolved_file.exists():
             planned.append(unresolved_file)
+        if text_pending_file.exists():
+            planned.append(text_pending_file)
         if publish_manifest:
             planned.append(manifest_file)
         r2.preflight_uploads(output_dir, planned)
@@ -227,6 +274,8 @@ class RegulationsPipeline(Pipeline):
             r2.upload_file(index_file, remote_key="comments_index.parquet")
         if unresolved_file.exists():
             r2.upload_file(unresolved_file, remote_key=unresolved_file.name)
+        if text_pending_file.exists():
+            r2.upload_file(text_pending_file, remote_key=text_pending_file.name)
         if publish_manifest:
             logger.info("Uploading manifest after all data files succeeded...")
             r2.upload_file(manifest_file, remote_key="manifest.parquet")
@@ -273,9 +322,10 @@ class RegulationsPipeline(Pipeline):
                 rmtree(staging_dir / comment_rt.name, ignore_errors=True)
             # Only a completed read and successful merge can retire a key.
             unresolved.update(reader.last_keys, {(agency, comment_rt.name): reader.unresolved})
+            if self._pending_text is not None:
+                self._pending_text.save()
             manifest.record(reader.last_keys)
-            if reader.last_keys:
-                save_manifest(output_dir, set(reader.last_keys))
+            manifest.save(output_dir)
             if not self.skip_upload:
                 self._publish(output_dir, [comment_rt], {comment_rt.name: len(records)}, [])
             logger.info("[{}] comments: committed {}/{}", agency, start + len(chunk), total)
@@ -285,19 +335,14 @@ class RegulationsPipeline(Pipeline):
     def _transform_for(self, record_type: RecordType) -> Transform:
         """Build the staging transform for one record type.
 
-        Every type is flattened by :class:`ExtractRecords`. Comments are
-        additionally enriched inline with Mirrulations' pre-extracted attachment
-        text (the primary source for ``text_content``); a fresh
-        :class:`DerivedCommentText` — and thus a fresh S3 resource — is built per
-        call so the chain is safe to run from staging's worker threads.
+        All agencies share the run's bounded comment-text pool and retry state.
         """
         extract: Transform = ExtractRecords(record_type)
         if record_type.name != "comments":
             return extract
         extract = Chain(ExcludeReviewedComments(), extract)
-        if self.enrich_text:
-            fetcher = DerivedCommentText(mirrulations.s3_resource())
-            return Chain(extract, EnrichCommentText(fetcher))
+        if self._text_pool is not None and self._pending_text is not None:
+            return Chain(extract, EnrichCommentText(self._text_pool, observe=self._pending_text.observe))
         return extract
 
     def _record_types(self) -> list[RecordType]:
@@ -447,6 +492,7 @@ def main(
         Parameter(help="Start from an empty manifest when none exists locally or on R2 (first run or bootstrap)"),
     ] = False,
     max_workers: Annotated[int, Parameter(help="Agencies processed in parallel")] = 4,
+    text_workers: Annotated[int, Parameter(help="Comment text reads in parallel across all agencies (at most 16)")] = 8,
     use_iceberg: Annotated[bool, Parameter(help="Route the dockets table through R2 Data Catalog (Iceberg)")] = False,
     enrich_text: Annotated[
         bool,
@@ -476,6 +522,7 @@ def main(
         full_refresh=full_refresh,
         allow_fresh_start=allow_fresh_start,
         max_workers=max_workers,
+        text_workers=text_workers,
         use_iceberg=use_iceberg,
         enrich_text=enrich_text,
         chunk_size=chunk_size,

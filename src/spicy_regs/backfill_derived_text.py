@@ -49,24 +49,21 @@ from __future__ import annotations
 
 import argparse
 import re
-from collections import Counter
 from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from threading import Lock
 from typing import Any
 
 import polars as pl
-import pyarrow as pa
-import pyarrow.parquet as pq
 from dotenv import load_dotenv
 from loguru import logger
 
-from spicy_regs.enrich_pdf import TEXT_UPDATES, apply_text_updates, with_text_columns
+from spicy_regs.enrich_pdf import apply_text_updates, with_text_columns
 from spicy_regs.schemas import RecordType
 from spicy_docs.sources import mirrulations
-from spicy_regs.sources.derived_text import DERIVED_STATUS, DerivedCommentText, DerivedFill, DerivedTextUnavailable
+from spicy_regs.sources.derived_text import DERIVED_STATUS
+from spicy_regs.transforms.derived_text_pool import DerivedTextPool
+from spicy_regs.transforms.comment_text_updates import text_update_stats, write_text_updates
 
 ResourceFactory = Callable[[], Any]
 
@@ -74,12 +71,6 @@ _AGENCY_DIR_RE = re.compile(r"agency_code=([^/]+)")
 
 #: The columns candidate selection reads; ``agency_code`` only when no agency is given.
 _CANDIDATE_COLUMNS = ("comment_id", "docket_id", "agency_code", "attachments_json", "text_extraction_status")
-
-_UPDATES_SCHEMA = pa.schema([("comment_id", pa.string()), *((name, pa.string()) for name in TEXT_UPDATES.values())])
-
-#: Filled text buffered before a row group is written: bounds memory to this plus the
-#: comments in flight (one sampled comment alone holds 58 MB).
-_FLUSH_CHARACTERS = 64 * 1024 * 1024
 
 
 def _pending(status: str | None, overwrite: bool) -> bool:
@@ -89,40 +80,6 @@ def _pending(status: str | None, overwrite: bool) -> bool:
     candidates: Spicy Regs' own extraction is not replaced by Mirrulations'.
     """
     return status is None or status == "" or (overwrite and status == DERIVED_STATUS)
-
-
-def _stats() -> dict[str, int]:
-    """Counters every path reports: ``missing`` comments have no text in their listing; ``failed`` ones are unknown."""
-    return {"selected": 0, "derived": 0, "missing": 0, "failed": 0, "failed_dockets": 0}
-
-
-class _UpdateSink:
-    """Appends filled rows from worker threads to one Parquet file, a row group per buffer."""
-
-    def __init__(self, path: Path) -> None:
-        self._writer = pq.ParquetWriter(path, _UPDATES_SCHEMA, compression="zstd")
-        self._rows: list[tuple[str, str, str]] = []
-        self._characters = 0
-        self._lock = Lock()
-
-    def add(self, comment_id: str, fill: DerivedFill) -> None:
-        with self._lock:
-            self._rows.append((comment_id, fill.text, fill.provenance))
-            self._characters += len(fill.text)
-            if self._characters >= _FLUSH_CHARACTERS:
-                self._flush()
-
-    def _flush(self) -> None:
-        if self._rows:
-            ids, texts, provenance = zip(*self._rows, strict=True)
-            columns = [list(ids), list(texts), [DERIVED_STATUS] * len(ids), list(provenance)]
-            self._writer.write_table(pa.Table.from_arrays(columns, schema=_UPDATES_SCHEMA))
-            self._rows, self._characters = [], 0
-
-    def close(self) -> None:
-        with self._lock:
-            self._flush()
-            self._writer.close()
 
 
 def _derived_text_updates(
@@ -157,8 +114,8 @@ def _derived_text_updates(
     ``derived`` (:func:`_pending`). ``agency``
     overrides the per-row ``agency_code`` (the Hive partitions don't carry
     that column); when ``None`` it is read from the frame. Work is grouped by
-    docket and fanned out across ``max_workers`` so each docket's extraction
-    prefix is listed once. A refused listing counts its comments as ``failed``,
+    docket, then comments fan out across ``max_workers`` with one shared
+    listing per docket, including a single large docket. A refused listing counts its comments as ``failed``,
     never ``missing``, and leaves them pending; an access refusal ends the run.
     """
     select_cols = [c for c in _CANDIDATE_COLUMNS if agency is None or c != "agency_code"]
@@ -185,7 +142,7 @@ def _derived_text_updates(
         work_by_docket.setdefault((row_agency, docket_id), []).append(comment_id)
         selected += 1
 
-    stats = _stats() | {"selected": selected}
+    stats = text_update_stats() | {"selected": selected}
     if not work_by_docket:
         logger.info("No comments to backfill from derived-data")
         return stats
@@ -197,53 +154,13 @@ def _derived_text_updates(
         max_workers,
     )
 
-    # One S3 resource for the call, shared by the workers (botocore's client and
-    # pool are thread-safe); one fetcher per docket keeps each listing cache local.
-    # More workers than the resource's connection pool churn connections and stall.
-    resource = resource_factory()
-    if max_workers > mirrulations.DEFAULT_DOWNLOAD_WORKERS:
-        logger.warning(
-            "{} workers exceed the S3 pool of {}; using {}",
-            max_workers,
-            mirrulations.DEFAULT_DOWNLOAD_WORKERS,
-            mirrulations.DEFAULT_DOWNLOAD_WORKERS,
-        )
-        max_workers = mirrulations.DEFAULT_DOWNLOAD_WORKERS
-
-    def _fill_docket(item: tuple[tuple[str, str], list[str]]) -> Counter[str]:
-        (docket_agency, docket_id), comment_ids = item
-        fetcher = DerivedCommentText(resource)
-        try:
-            fetcher.listed(docket_agency, docket_id)
-        except DerivedTextUnavailable:
-            return Counter(failed=len(comment_ids), failed_dockets=1)
-        counts: Counter[str] = Counter()
-        for comment_id in comment_ids:
-            try:
-                fill = fetcher.fill_for(docket_agency, docket_id, comment_id)
-            except DerivedTextUnavailable:
-                counts["failed"] += 1
-                continue
-            if fill is None:
-                counts["missing"] += 1
-            else:
-                sink.add(comment_id, fill)
-                counts["derived"] += 1
-        return counts
-
-    sink = _UpdateSink(updates_path)
-    try:
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            futures = [executor.submit(_fill_docket, item) for item in work_by_docket.items()]
-            try:
-                for future in as_completed(futures):
-                    for key, value in future.result().items():
-                        stats[key] += value
-            except BaseException:
-                executor.shutdown(cancel_futures=True)  # an access refusal ends the run now
-                raise
-    finally:
-        sink.close()
+    records = (
+        {"agency_code": docket_agency, "docket_id": docket_id, "comment_id": comment_id}
+        for (docket_agency, docket_id), comment_ids in work_by_docket.items()
+        for comment_id in comment_ids
+    )
+    with DerivedTextPool(resource_factory, max_workers=max_workers) as pool:
+        stats = write_text_updates(pool.map(records), updates_path)
 
     logger.info(
         "Backfill: {} derived, {} missing, {} failed ({} refused dockets)",
@@ -372,7 +289,7 @@ def backfill_comment_partitions(
     if not parts:
         raise FileNotFoundError(f"No comment partitions found under {partition_dir}")
 
-    totals = _stats()
+    totals = text_update_stats()
     changed: list[Path] = []
     remaining = limit
     for part in parts:
@@ -450,7 +367,7 @@ def _backfill_agency_in_catalog(
         """
     ).pl()
     if candidates.is_empty():
-        return _stats()
+        return text_update_stats()
 
     with TemporaryDirectory(prefix="derived-text-") as staging:
         updates = Path(staging) / "updates.parquet"
@@ -517,7 +434,7 @@ def backfill_comments_catalog(
                 ).fetchall()
             ]
 
-        totals = _stats()
+        totals = text_update_stats()
         remaining = limit
         for agency in agency_list:
             if remaining is not None and remaining <= 0:
@@ -553,7 +470,7 @@ def main() -> None:
     parser.add_argument("--output-dir", type=Path, default=Path("output"))
     parser.add_argument("--limit", type=int, default=None, help="Max comments to backfill this run")
     parser.add_argument(
-        "--max-workers", type=int, default=8, help="Dockets fetched at once; at most the S3 connection pool (16)"
+        "--max-workers", type=int, default=8, help="Comments fetched at once, bounded to 16 workers"
     )
     parser.add_argument(
         "--overwrite",

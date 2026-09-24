@@ -134,7 +134,7 @@ def _assert_upload_safe(
     """
     # Retry state must shrink to zero when the last unresolved key recovers.
     # Dataset size guards still apply to every data table and the manifest.
-    if remote_key == "failed_keys.parquet":
+    if remote_key in {"failed_keys.parquet", "pending_comment_text.parquet"}:
         return
     if remote_size is None or remote_size == 0:
         return

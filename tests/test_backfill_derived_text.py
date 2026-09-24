@@ -399,7 +399,7 @@ def test_an_access_refusal_ends_the_backfill() -> None:
 
 def test_fills_stream_to_staging_a_bounded_buffer_at_a_time(tmp_path, monkeypatch) -> None:
     """With a one-character buffer every fill is its own row group: none waits for the run to end."""
-    monkeypatch.setattr(backfill_derived_text, "_FLUSH_CHARACTERS", 1)
+    monkeypatch.setattr("spicy_regs.transforms.comment_text_updates.FLUSH_CHARACTERS", 1)
     updates = tmp_path / "updates.parquet"
     stats = _derived_text_updates(
         _frame([_acf("0004"), _acf("0015"), _acf("0030")]),
@@ -526,8 +526,8 @@ def test_an_access_refusal_ends_the_run_while_other_dockets_are_in_flight(tmp_pa
         )
     listed = {prefix.split("/")[2] for prefix in resource.listed}
     # 41 was in flight; 42 may have started in the refused docket's freed worker before the cancel.
-    assert set(dockets[:2]) <= listed <= set(dockets[:3])
-    assert pq.read_table(updates).num_rows == len(listed) - 1  # the in-flight fills, in a closed file
+    assert dockets[0] in listed and listed <= set(dockets[:4])
+    assert pq.read_table(updates).num_rows == 0  # ordered output stops at the first access refusal
 
 
 @pytest.mark.parametrize(
@@ -551,7 +551,7 @@ def test_the_command_fails_after_writing_when_a_fetch_or_listing_failed(
 
 
 def test_workers_are_capped_at_the_s3_pool(monkeypatch, tmp_path) -> None:
-    """More threads than the shared resource's 16 connections stall, so the pool bounds them."""
+    """Backfill uses the same global worker ceiling as inline enrichment."""
     from concurrent.futures import ThreadPoolExecutor
 
     from spicy_docs.sources.mirrulations import DEFAULT_DOWNLOAD_WORKERS
@@ -559,11 +559,11 @@ def test_workers_are_capped_at_the_s3_pool(monkeypatch, tmp_path) -> None:
     sizes: list[int] = []
 
     class _Recording(ThreadPoolExecutor):
-        def __init__(self, max_workers: int) -> None:
+        def __init__(self, max_workers: int, **kwargs) -> None:
             sizes.append(max_workers)
-            super().__init__(max_workers=max_workers)
+            super().__init__(max_workers=max_workers, **kwargs)
 
-    monkeypatch.setattr(backfill_derived_text, "ThreadPoolExecutor", _Recording)
+    monkeypatch.setattr("spicy_regs.transforms.derived_text_pool.ThreadPoolExecutor", _Recording)
     for requested in (4, 64):
         _derived_text_updates(
             _frame([_acf("0004")]),

@@ -172,6 +172,14 @@ separate from the source-qualified pins in the output table.
   `cftc-test-exclusion-repair-2026-09-24/`; the
   [repair record](fork-execution-log-2026-09-23.md#september-24-reviewed-test-exclusions-and-catch-up-retry)
   explains the deletion checks and validation.
+- The comment-text refactor shares a bounded comment worker pool between ETL
+  and backfill, persists independent text retries and permits local manifest
+  reuse. The fixed CFPB sample produced identical text/provenance and a 6.4-fold
+  median text-fetch improvement with eight workers; this is not a whole-run
+  estimate. Local validation and the pinned-checkout handoff are recorded in the
+  [refactor evidence](comment-text-refactor-2026-09-24.md). The current batch
+  keeps its existing revision until it commits; `handoff.json` and `progress.json`
+  record adoption. Public mirror completion remains open.
 - Public metadata now shows 279,126 dockets (ETag `91c7ee92…`), 2,001,540
   documents (`549ec0cc…`), and an index (`b2a78582…`) with 113,008 groups
   advertising 23,904,451 comments. The public monolith remains at 23,890,403

@@ -25,7 +25,7 @@ from loguru import logger
 
 from spicy_docs.sources.mirrulations import download_and_parse
 from spicy_regs.schemas import COMMENT
-from spicy_regs.sources.derived_text import DerivedCommentText
+from spicy_regs.transforms.derived_text_pool import DerivedTextPool
 from spicy_regs.transforms import Chain, EnrichCommentText, ExtractRecords
 
 BUCKET = "mirrulations"
@@ -43,9 +43,12 @@ def test_real_comment_text_filled_from_derived_data() -> None:
     payload = download_and_parse(s3, BUCKET, COMMENT_KEY, lambda d: d)
     assert payload is not None, f"could not fetch {COMMENT_KEY} from s3://{BUCKET}"
 
-    fetcher = DerivedCommentText(s3)
-    chain = Chain(ExtractRecords(COMMENT), EnrichCommentText(fetcher))
-    (record,) = list(chain.apply([payload]))
+    with DerivedTextPool(
+        lambda: boto3.resource("s3", region_name="us-east-1", config=BotoConfig(signature_version=UNSIGNED)),
+        max_workers=2,
+    ) as pool:
+        chain = Chain(ExtractRecords(COMMENT), EnrichCommentText(pool))
+        (record,) = list(chain.apply([payload]))
 
     assert record["comment_id"] == EXPECTED_COMMENT_ID
     assert record["docket_id"] == EXPECTED_DOCKET_ID

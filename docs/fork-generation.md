@@ -56,6 +56,9 @@ the dated work and receipts.
   runs before persistent merges. The two catalog rows were removed and the
   remaining comment IDs verified unique; retry began at 18:21 UTC from the
   verified public manifest, using `3953175`.
+  The [comment-text refactor](research/comment-text-refactor-2026-09-24.md)
+  adds shared concurrent reads, independent text retries and reusable local
+  manifests; its batch-boundary handoff preserves the running batch's revision.
   Scheduled ETL stays paused until catch-up,
   mirror publication, dependent refresh and integrity checks succeed. Document
   bodies and text extraction remain open. Follow the

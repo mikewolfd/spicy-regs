@@ -318,3 +318,20 @@ it. The filter's bit array holds 241 MB, twice the ~120 MB that
 the `array("L")` items are 8 bytes on 64-bit Linux and macOS, not 4. Both costs
 grow with the manifest, and the next change to `manifest.py` should address
 them.
+
+
+## Comment-text concurrency and retries
+
+`run-pipeline --text-workers 8` shares that text-read budget across every active
+agency; `--max-workers` still controls agency staging. The derived-text backfill
+uses its existing `--max-workers` flag for the shared comment pool. Failed text
+reads persist in `pending_comment_text.parquet` and retry from stored comment
+coordinates even when the raw JSON key is already in the manifest. Retain this
+file alongside `failed_keys.parquet` and `manifest.parquet` when moving a local
+checkpoint. Successful publication uploads both retry files before the manifest.
+
+A local multi-batch driver can load `Manifest` once and pass it to each
+`RegulationsPipeline.run(manifest=manifest)` call sharing the same output
+folder. Every batch still saves its own durable checkpoint. See the
+[refactor evidence](research/comment-text-refactor-2026-09-24.md) for measurements
+and restart checks.

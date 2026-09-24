@@ -68,3 +68,36 @@ def test_load_allowing_a_fresh_start_is_empty(tmp_output: Path, monkeypatch: pyt
 def test_empty_save_is_noop(tmp_output: Path) -> None:
     Manifest.empty().save(tmp_output)
     assert not (tmp_output / "manifest.parquet").exists()
+
+
+def test_one_loaded_manifest_can_commit_many_batches_without_reappending(tmp_output: Path) -> None:
+    import pyarrow.parquet as pq
+
+    manifest = Manifest.empty()
+    for keys in (["a", "b"], ["b", "c"], ["a", "c"]):
+        manifest.record(keys)
+        assert all(key in manifest for key in keys)
+        manifest.save(tmp_output)
+        assert not manifest.new_keys
+        assert all(key in manifest for key in keys)
+    assert set(
+        pq.read_table(tmp_output / "manifest.parquet")["key"].to_pylist()
+    ) == {"a", "b", "c"}
+    assert pq.read_metadata(tmp_output / "manifest.parquet").num_rows == 3
+
+
+def test_failed_manifest_commit_keeps_old_checkpoint_and_pending_keys(tmp_output, monkeypatch):
+    manifest = Manifest.empty()
+    manifest.record(["a"])
+    manifest.save(tmp_output)
+    before = (tmp_output / "manifest.parquet").read_bytes()
+    manifest.record(["b"])
+
+    def refuse(*args):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(manifest_module, "save_manifest", refuse)
+    with pytest.raises(OSError, match="disk full"):
+        manifest.save(tmp_output)
+    assert manifest.new_keys == {"b"}
+    assert (tmp_output / "manifest.parquet").read_bytes() == before

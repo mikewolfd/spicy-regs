@@ -460,7 +460,7 @@ def test_chunked_comments_exclude_failed_keys_from_manifest(tmp_output: Path, mo
     manifest = Manifest.empty()
     pipe._ingest_comments_chunked(AGENCY, tmp_output, staging_dir, manifest)
 
-    recorded = manifest.new_keys
+    recorded = set(pl.read_parquet(tmp_output / "manifest.parquet")["key"])
     assert flaky not in recorded  # excluded -> retried next run
     assert keys["c0"] in recorded
     assert keys["c2"] in recorded

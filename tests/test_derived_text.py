@@ -27,6 +27,7 @@ from spicy_regs.sources.derived_text import (
 )
 from spicy_regs.transforms import Chain, EnrichCommentText, ExtractRecords
 from spicy_regs.transforms.base import Transform
+from spicy_regs.transforms.derived_text_pool import DerivedTextPool
 
 BUCKET = "mirrulations"
 
@@ -251,8 +252,8 @@ def _comment_record(comment_id: str, *, attachments: bool, text: str | None = No
 
 
 def _enrich(record: dict, resource: _FakeS3Resource | None = None) -> dict:
-    fetcher = DerivedCommentText(resource or _FakeS3Resource(_store()), BUCKET)
-    (out,) = list(EnrichCommentText(fetcher).apply([record]))
+    with DerivedTextPool(lambda: resource or _FakeS3Resource(_store()), max_workers=2) as pool:
+        (out,) = list(EnrichCommentText(pool).apply([record]))
     return out
 
 
@@ -328,9 +329,9 @@ def test_chain_extract_then_enrich_end_to_end() -> None:
             }
         ],
     }
-    fetcher = DerivedCommentText(_FakeS3Resource(_store()), BUCKET)
-    chain = Chain(ExtractRecords(COMMENT), EnrichCommentText(fetcher))
-    (out,) = list(chain.apply([payload]))
+    with DerivedTextPool(lambda: _FakeS3Resource(_store()), max_workers=2) as pool:
+        chain = Chain(ExtractRecords(COMMENT), EnrichCommentText(pool))
+        (out,) = list(chain.apply([payload]))
     assert out["comment_id"] == "ACF-2025-0038-0004"
     assert out["text_content"] == "Wisconsin DCF comment body"
     assert out["text_extraction_status"] == "derived"
