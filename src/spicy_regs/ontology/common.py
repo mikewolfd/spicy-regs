@@ -9,7 +9,6 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Iterable, Iterator, Sequence
-from zoneinfo import ZoneInfo
 
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -71,33 +70,21 @@ class RunContext:
         }
 
 
-_EASTERN = ZoneInfo("America/New_York")
-
-
 def eastern_day(value: object) -> date | None:
-    """The Eastern calendar day a source instant falls on; a date-only value keeps its date.
+    """SpicyDocs' ``regulations_gov_day`` of any source value: the Eastern day of an instant.
 
-    The one day rule for every event and period day in the rulemaking tables. Regulations.gov
-    stamps a comment window at the Eastern day's bounds: a start at Eastern midnight
-    (04:00/05:00Z) and an end at 11:59:59 PM Eastern (03:59:59/04:59:59Z), so an end's UTC date
-    is the following day. Measured 2026-09-23 over the 133,006 documents that also carry a
-    Federal Register ``comments_close_on``: the Eastern day equals it for 127,361, the UTC date
-    for 118. A bare UTC midnight is a date-only value and keeps its date (5,494 of 5,551 such
-    starts equal their FR publication date; the Eastern day, 6). Federal Register and Unified
-    Agenda dates are date-only and pass through unchanged. ``None`` for an empty or unreadable
-    value.
-
-    TODO(spicy-docs 0.31.0): at the re-vendor, replace this with SpicyDocs'
-    ``regulations_gov_day``, identical on all 1,484,082 distinct parent values (2026-09-23).
+    The one day rule for every event and period day in the rulemaking tables. A comment
+    window's end is 11:59:59 PM Eastern, so its UTC date is the next day: over the 133,006
+    documents that also carry a Federal Register ``comments_close_on``, the Eastern day equals
+    it for 127,361 and the UTC date for 118 (2026-09-23). A date-only value, a bare UTC
+    midnight included, keeps its date, so Federal Register and Unified Agenda dates pass
+    through. ``None`` for an empty or unreadable value. Equal to the rule this module carried
+    before on all 1,488,432 distinct values of the 2026-09-23 build's 26 date columns.
     """
-    text = str(value or "").strip()
-    try:
-        if len(text) <= 10 or text.endswith("T00:00:00Z"):
-            return date.fromisoformat(text[:10]) if text else None
-        instant = datetime.fromisoformat(text)
-    except ValueError:
-        return None
-    return instant.astimezone(_EASTERN).date() if instant.tzinfo else instant.date()
+    # SpicyDocs is the source-readers extra; a base install imports this module without it.
+    from spicy_docs.sources.regulations_gov.dates import regulations_gov_day
+
+    return regulations_gov_day(str(value or ""))
 
 
 def eastern_day_text(value: object) -> str | None:

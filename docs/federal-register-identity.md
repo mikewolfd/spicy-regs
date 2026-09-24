@@ -51,8 +51,9 @@ to different widths (`2015-0674` against `2015-00674`) do not match, and a key t
 held numbers share (five 1994–1997 pairs) is `ambiguous` with both candidates, even
 when a publication date would pick one (fork delivery decision 18).
 Federal Register docket values are read through their label ("Docket No.
-SSA-2010-0037") with SpicyDocs' `normalize_docket_reference`, keeping a literal
-Regulations.gov identifier as itself; a link joins only a docket the
+SSA-2010-0037") with SpicyDocs' `normalize_docket_reference`, which keeps a
+well-formed docket identifier, a `-RULE`-family suffix included, as itself and
+refuses a value of no docket shape; a link joins only a docket the
 Regulations.gov records assert, and a link that names none stays out as before.
 A Regulations.gov document's posting date is not used as an FR publication date.
 Old number-only proceeding identities migrate only when the held input supplies

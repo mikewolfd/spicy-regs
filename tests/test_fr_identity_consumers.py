@@ -35,7 +35,7 @@ def _inputs(root):
             "publication_date": "2000-01-14",
             "type": "Proposed Rule",
             "title": "First controlled rule",
-            "docket_ids": ["EPA-FIRST"],
+            "docket_ids": ["EPA-HQ-OAR-2000-0001"],
             "cfr_references": [{"title": 40, "part": 60}],
             "regulation_id_numbers": ["1111-AA11"],
             "comments_close_on": "2000-02-01",
@@ -45,7 +45,7 @@ def _inputs(root):
             "publication_date": "2000-01-18",
             "type": "Proposed Rule",
             "title": "Second controlled rule",
-            "docket_ids": ["FAA-SECOND"],
+            "docket_ids": ["FAA-2000-0002"],
             "cfr_references": [{"title": 49, "part": 71}],
             "regulation_id_numbers": ["2222-BB22"],
             "comments_close_on": "2000-02-01",
@@ -57,7 +57,10 @@ def _inputs(root):
         root,
         "dockets",
         ("docket_id", "docket_type", "rin"),
-        [{"docket_id": docket, "docket_type": "Rulemaking"} for docket in ("EPA-FIRST", "FAA-SECOND", "FDA-UNKNOWN")],
+        [
+            {"docket_id": docket, "docket_type": "Rulemaking"}
+            for docket in ("EPA-HQ-OAR-2000-0001", "FAA-2000-0002", "FDA-UNKNOWN")
+        ],
     )
     # A Regulations.gov posting date is not an FR publication-date qualifier.
     _write(
@@ -81,13 +84,13 @@ def test_dated_bridge_never_cross_wires_colliding_documents(tmp_path):
     _inputs(tmp_path)
     links = pq.read_table(tmp_path / "fr_docket_links.parquet").to_pylist()
     assert {(r["docket_id"], r["publication_date"]) for r in links} == {
-        ("EPA-FIRST", "2000-01-14"),
-        ("FAA-SECOND", "2000-01-18"),
+        ("EPA-HQ-OAR-2000-0001", "2000-01-14"),
+        ("FAA-2000-0002", "2000-01-18"),
     }
     targets = pq.read_table(build_rule_targets(tmp_path)).to_pylist()
     assert {(r["docket_id"], r["cfr_ref"], r["rin"]) for r in targets if r["source"] == "fr_cfr_ref"} == {
-        ("EPA-FIRST", "40-60", "1111-AA11"),
-        ("FAA-SECOND", "49-71", "2222-BB22"),
+        ("EPA-HQ-OAR-2000-0001", "40-60", "1111-AA11"),
+        ("FAA-2000-0002", "49-71", "2222-BB22"),
     }
     unknown = next(r for r in targets if r["source"] == "document_fr_doc")
     assert unknown["cfr_ref"] is None and unknown["rin"] is None
@@ -112,7 +115,7 @@ def test_dated_bridge_never_cross_wires_colliding_documents(tmp_path):
     proceedings = pq.read_table(build_proceedings(tmp_path)).to_pylist()
     by_docket = {json.loads(r["docket_ids_json"])[0]: r for r in proceedings}
     assert len(proceedings) == 3 and "legacy-collapsed" not in {r["proceeding_id"] for r in proceedings}
-    for docket, day in (("EPA-FIRST", "2000-01-14"), ("FAA-SECOND", "2000-01-18")):
+    for docket, day in (("EPA-HQ-OAR-2000-0001", "2000-01-14"), ("FAA-2000-0002", "2000-01-18")):
         row = by_docket[docket]
         assert json.loads(row["fr_document_numbers_json"]) == ["00-111"]
         assert json.loads(row["fr_document_ids_json"]) == [f"00-111@{day}"]
@@ -122,8 +125,8 @@ def test_dated_bridge_never_cross_wires_colliding_documents(tmp_path):
     _, relationships_path = build_regulatory_agenda(tmp_path)
     relationships = pq.read_table(relationships_path).to_pylist()
     assert {(r["rin"], r["proceeding_id"], r["evidence_id"]) for r in relationships} == {
-        ("1111-AA11", by_docket["EPA-FIRST"]["proceeding_id"], "00-111@2000-01-14"),
-        ("2222-BB22", by_docket["FAA-SECOND"]["proceeding_id"], "00-111@2000-01-18"),
+        ("1111-AA11", by_docket["EPA-HQ-OAR-2000-0001"]["proceeding_id"], "00-111@2000-01-14"),
+        ("2222-BB22", by_docket["FAA-2000-0002"]["proceeding_id"], "00-111@2000-01-18"),
     }
     assert all("/documents/2000/01/" in r["evidence_uri"] for r in relationships)
     periods = pq.read_table(build_comment_periods(tmp_path)).to_pylist()
@@ -155,7 +158,7 @@ def test_legacy_ambiguous_proceeding_is_unresolved_in_agenda_and_periods(tmp_pat
         tmp_path,
         "fr_docket_links",
         ("document_number", "docket_id"),
-        [{"document_number": "00-111", "docket_id": "EPA-FIRST"}],
+        [{"document_number": "00-111", "docket_id": "EPA-HQ-OAR-2000-0001"}],
     )
     items_path, relationships_path = build_regulatory_agenda(tmp_path)
     assert pq.read_table(relationships_path).num_rows == 0
@@ -187,7 +190,7 @@ def test_a_number_resolves_on_its_comparison_key_only_when_the_key_names_one_doc
             {"document_number": "94-190", "publication_date": "1994-01-05"},
             {"document_number": "2018-28359", "publication_date": "2018-12-31"},
             {"document_number": "2015-00674", "publication_date": "2015-01-14"},
-            # Corrections: a five-digit tail keys; the Register's short-tail form does not.
+            # Corrections: a five-digit tail keys, and so does the Register's short-tail form.
             {"document_number": "C1-2013-00123", "publication_date": "2013-02-01"},
             {"document_number": "C1-2012-9978", "publication_date": "2012-05-01"},
         ],
@@ -221,9 +224,9 @@ def test_a_number_resolves_on_its_comparison_key_only_when_the_key_names_one_doc
     assert resolve("2015-0674") == ("missing", [])
     assert resolve("2015–0674") == ("missing", [])
     assert resolve("2015-674") == ("unpadded_single_candidate_in_input", ["2015-00674@2015-01-14"])
-    # A correction's short tail has no key: C1-2012-09978 keys to C1-2012-9978, which the
-    # Register holds but cannot key, so it joins only exactly.
-    assert resolve("C1-2012-09978") == ("missing", [])
+    # A correction's short tail keys to itself since SpicyDocs 0.31.0 (the key is a fixed
+    # point, because C1-2012-09978 is read), so the padded spelling reaches it by unpadding.
+    assert resolve("C1-2012-09978") == ("unpadded_single_candidate_in_input", ["C1-2012-9978@2012-05-01"])
     assert resolve("C1-2012-9978") == ("single_candidate_in_input", ["C1-2012-9978@2012-05-01"])
 
 
@@ -240,8 +243,12 @@ def test_the_index_answers_its_own_rows_record_ids(tmp_path):
         ("Docket No. SSA-2010-0037", "SSA-2010-0037"),
         ("DHS Docket No. USCIS-2025-0004", "USCIS-2025-0004"),
         ("epa-hq-oar-2021-0317", "EPA-HQ-OAR-2021-0317"),
-        # SpicyDocs' column shape ends on digits; a literal identifier stays one.
+        # The -RULE-family suffix is part of the docket (SpicyDocs 0.31.0).
         ("GIPSA-2010-FGIS-0014-NONRULEMAKING", "GIPSA-2010-FGIS-0014-NONRULEMAKING"),
+        # The one held id the reader refuses: it states no sequence, and no link names it.
+        ("GSA-NA-2005", None),
+        # A Commerce case number, the commonest value only the removed syntax-only fallback kept.
+        ("A-570-831", None),
         ("Docket No. RM98-1-000", None),  # a FERC docket, not a Regulations.gov one
         ("MM Docket No. 98-213", None),
         ("Sequence No. 1", None),

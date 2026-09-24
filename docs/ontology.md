@@ -40,8 +40,9 @@ mapped no longer exist.
   rollups: the attestation columns (`method`, `actor_id`, `run_id`,
   `asserted_at`, `supersedes_id`), `RunContext`, canonical JSON, the
   counting JSON readers, and `eastern_day`, the one day rule of the
-  rulemaking tables: an instant falls on its Eastern calendar day, and a
-  date-only value (or a bare UTC midnight) keeps its date.
+  rulemaking tables (SpicyDocs' `regulations_gov_day`): an instant falls on
+  its Eastern calendar day, and a date-only value (or a bare UTC midnight)
+  keeps its date.
 
 ## The rule_targets carrier
 

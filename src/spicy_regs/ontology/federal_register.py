@@ -10,7 +10,6 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from spicy_regs.ontology.citations import normalize_regsgov_identifier
 from spicy_regs.ontology.common import JsonReadStats, canonical_json, iter_parquet_rows, parse_json_list
 
 
@@ -26,23 +25,20 @@ def linked_docket_id(value: object) -> str | None:
     """The Regulations.gov docket id a Federal Register docket value names, or ``None``.
 
     The Register writes most dockets behind a label ("Docket No. SSA-2010-0037"), which
-    the syntax-only :func:`normalize_regsgov_identifier` refuses: on the 2026-09-23 parents
-    it joined 48,169 of 899,227 link rows to a Regulations.gov docket, and SpicyDocs'
-    label-aware reader joins 154,940. Callers still join only dockets the Regulations.gov
-    records assert.
+    the syntax-only :func:`~spicy_regs.ontology.citations.normalize_regsgov_identifier`
+    refuses: on the 2026-09-23 parents it joined 48,169 of 899,227 link rows to a
+    Regulations.gov docket, and SpicyDocs' label-aware reader joins 154,940. Callers still
+    join only dockets the Regulations.gov records assert.
 
-    That reader's column shape ends on digits, so it refuses 68 held dockets (67 GIPSA ids
-    ending ``-RULE``/``-NONRULE``/``-RULEMAKING``/``-NONRULEMAKING``, and ``GSA-NA-2005``);
-    a value that is already a literal identifier therefore stays one, so no link that joined
-    before stops joining. None of the 68 appears as a bare link value, so the fallback joins
-    nothing today.
+    Since SpicyDocs 0.31.0 the reader keeps a ``-RULE``/``-NONRULE``/``-RULEMAKING``/
+    ``-NONRULEMAKING`` suffix, so it returns every held docket id but ``GSA-NA-2005``, which
+    states no sequence and appears as no link value (2026-09-23 parents). The syntax-only
+    fallback this replaced changed the answer on 95,796 link rows there, none to a held docket.
     """
     # SpicyDocs is the source-readers extra; a base install imports this module without it.
     from spicy_docs.interpretation.identifier_shapes import normalize_docket_reference
 
-    # TODO(spicy-docs 0.31.0): delete the literal fallback once the released reader admits
-    # the 68 shapes above (in progress upstream); then this is normalize_docket_reference.
-    return normalize_docket_reference(value) or normalize_regsgov_identifier(value)
+    return normalize_docket_reference(value)
 
 
 #: The digits a document number ends on: its sequence, whatever separates it.

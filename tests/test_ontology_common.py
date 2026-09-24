@@ -24,8 +24,12 @@ from spicy_regs.ontology.common import eastern_day, eastern_day_text, iter_parqu
     ],
 )
 def test_regulations_gov_comment_instants_are_eastern_days(stamp, day):
-    result = eastern_day(stamp)
-    assert (result.isoformat() if result else None) == day
+    """These days pinned the rule this repository carried; SpicyDocs' regulations_gov_day gives each."""
+    from spicy_docs.sources.regulations_gov.dates import regulations_gov_day
+
+    expected = regulations_gov_day(stamp)
+    assert (expected.isoformat() if expected else None) == day
+    assert eastern_day(stamp) == expected
     assert eastern_day_text(stamp) == day
 
 
