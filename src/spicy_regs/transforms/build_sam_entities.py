@@ -26,6 +26,7 @@ fetches.
 
 from __future__ import annotations
 
+import time
 from pathlib import Path
 
 import pyarrow as pa
@@ -50,13 +51,15 @@ SAM_API_KEY_ENV_VARS = (
 # Earliest plausible registrationDate year to window over for a full extract.
 MIN_REGISTRATION_YEAR = 2000
 
-# Wall-clock seconds from each extract's trigger to wait for its file. The 2026
-# registration-year extract (147,256 rows, 71.5 MB gzip) was still generating 21
-# minutes after its trigger and ready at the next poll, 46 minutes after it
-# (spicy-docs sam_extract.py; receipts in sam-initial-load-2026-09-23/), past
-# spicy-docs' 25-minute default. An hour clears 46 minutes and leaves 15 of
-# rollup-sam-entities.yml's 75 for setup, download, merge and upload; a scheduled
-# run fetches one rotating year, so one extract.
+# Monotonic seconds, from the run's first extract trigger, that all of its extracts
+# may take: each year's reader waits only what is left, and a year with none left
+# is refused before its trigger. The 2026 registration-year extract (147,256 rows,
+# 71.5 MB gzip) was still generating 21 minutes after its trigger and ready at the
+# next poll, 46 minutes after it (spicy-docs sam_extract.py; receipts in
+# sam-initial-load-2026-09-23/), past spicy-docs' 25-minute default. An hour clears
+# 46 minutes and leaves 15 of rollup-sam-entities.yml's 75 for setup, download,
+# merge and upload. A scheduled run fetches one rotating year; a multi-year
+# dispatch shares the hour, so it refuses rather than being cancelled by the job.
 EXTRACT_MAX_WAIT = 60 * 60.0
 
 # The paged walk's per-request budget: the same retry margin the old local
@@ -101,7 +104,7 @@ def _iter_sam_entities(
     from typing import cast
 
     from spicy_docs.sources.sam import RegistrationStatus, SamEntitiesReader, windowed_entities
-    from spicy_docs.sources.sam_extract import SamBulkExtract
+    from spicy_docs.sources.sam_extract import SamBulkExtract, SamExtractError
 
     if mode not in ("extract", "partition"):
         raise ValueError(f"mode must be 'extract' or 'partition', got {mode!r}")
@@ -134,11 +137,18 @@ def _iter_sam_entities(
                 (until_year if until_year is not None else date.today().year) + 1,
             )
         )
+        deadline = time.monotonic() + EXTRACT_MAX_WAIT
         for year in years:
             if not budget_left():
                 return
+            left = deadline - time.monotonic()
+            if left <= 0:
+                raise SamExtractError(
+                    f"SAM extract: the run's {EXTRACT_MAX_WAIT:,.0f} s wait is spent before year {year}; "
+                    "nothing is published"
+                )
             extractor = SamBulkExtract(
-                api_key=api_key, registration_status=registration_status, year=year, max_wait=EXTRACT_MAX_WAIT
+                api_key=api_key, registration_status=registration_status, year=year, max_wait=left
             )
             yield from emit(extractor.records())
         return
