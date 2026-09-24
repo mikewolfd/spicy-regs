@@ -8,8 +8,8 @@ The bounded, resumable enrichment itself lives in ``enrich_bill_subjects``; the
 base class handles priming the input and the shrink-guarded R2 upload of the
 single output.
 
-Runs on its own cron, deliberately offset from the congress_bills ingest so each
-run enriches against a table that has already been refreshed.
+Runs on its own cron, well after the bill family's, so each run enriches
+against that day's ``congress_bills``.
 """
 
 import os

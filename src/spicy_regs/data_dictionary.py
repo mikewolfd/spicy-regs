@@ -294,20 +294,6 @@ DERIVED_SCHEMAS: dict[str, list[tuple[str, str]]] = {
         ("last_modified", "VARCHAR"),
         ("url", "VARCHAR"),
     ],
-    # Ingested from the Congress.gov v3 API (build_congress_bills); list-level
-    # fields only, all stored as VARCHAR.
-    "congress_bills": [
-        ("bill_id", "VARCHAR"),
-        ("congress", "VARCHAR"),
-        ("bill_type", "VARCHAR"),
-        ("bill_number", "VARCHAR"),
-        ("title", "VARCHAR"),
-        ("origin_chamber", "VARCHAR"),
-        ("latest_action_date", "VARCHAR"),
-        ("latest_action_text", "VARCHAR"),
-        ("update_date", "VARCHAR"),
-        ("url", "VARCHAR"),
-    ],
     # Built by build_rulemaking_lifecycles from documents.parquet. Two row shapes
     # discriminated by `kind`; bounded to proposed_date >= 2010-01-01.
     "rulemaking_lifecycles": [
@@ -738,8 +724,6 @@ def expected_schemas() -> dict[str, list[tuple[str, str]]]:
         if name in builder_columns:
             schemas[name] = [(column, "VARCHAR") for column in builder_columns[name]]
         elif name in from_contracts:
-            # Checked before DERIVED_SCHEMAS on purpose: congress_bills is in
-            # both, and the contract is the longer, current one.
             schemas[name] = list(from_contracts[name])
         elif name in RECORD_TYPES:
             rt = RECORD_TYPES[name]

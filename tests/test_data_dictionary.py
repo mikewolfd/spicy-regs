@@ -329,12 +329,3 @@ def test_hosted_schemas_are_all_varchar_in_contract_order():
 
     for table, columns in dd.contract_schemas().items():
         assert columns == [(c, "VARCHAR") for c in TABLE_CONTRACTS[table].columns], table
-
-
-def test_congress_bills_keeps_the_frozen_prefix_in_the_dictionary():
-    """The digest-pinned ten stay first, in order, with the rest appended."""
-    from spicy_regs.transforms.build_congress_bills import COLUMNS
-
-    columns = [c for c, _ in dd.expected_schemas()["congress_bills"]]
-    assert tuple(columns[:10]) == COLUMNS
-    assert len(columns) == 50 and columns[-1] == "url_source"

@@ -1,9 +1,8 @@
 """Transform: build ``bill_subjects.parquet`` — the Library of Congress subject assignment per bill.
 
-Closes the seam stated in :mod:`~spicy_regs.transforms.build_congress_bills`:
-list-level ``congress_bills`` rows carry no subject assignment (one
-``policy_area`` from a ~33-term controlled list, plus any number of legislative
-subjects). A sibling table rather than extra columns, because the two artifacts
+Closes the seam the retired list writer left: list-level ``congress_bills``
+rows carry no subject assignment (one ``policy_area`` from a ~33-term
+controlled list, plus any number of legislative subjects). A sibling table rather than extra columns, because the two artifacts
 have different writers and fetch economics; it publishes on its own cron, keyed
 by the same ``bill_id`` as ``congress_bills``, joined with a one-line ``LEFT JOIN``.
 
