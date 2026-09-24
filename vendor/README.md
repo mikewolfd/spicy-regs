@@ -5,6 +5,20 @@ The optional `source-readers` extra enables the same readers for package install
 its wheels must be supplied explicitly until they are published in a registry.
 Base CLI and MCP installs do not require them.
 
+- `spicy_docs-0.32.0`: built from SpicyDocs `main` at `549db06`, with Rulespec Artifacts 1.1.1.
+  Built September 24, 2026 UTC: **1,462,674 bytes**, SHA-256
+  `dffbcbfba8e0d857534539b803589163d42f601bc3635e6361062e07bdecd4f4`, byte-identical to a
+  rebuild from a clean archive of that commit. A multi-part committee report is one row per
+  part (B31, decision 29, confirmed 2026-09-24): `committee_reports` is keyed
+  `(package_id, part_id)` with `part_number` beside it, `report_sections` is keyed
+  `(package_id, part_id, seq)`, `GovInfoBodyAcquirer.acquire_parts` reads every part of a
+  package or refuses it (`GovInfoPartsOverBudgetError` before any body request), and
+  `REPORT_SECTION_READER_VERSION` moves to `report-headings-002`. The shapers refuse the old
+  call, so a host adopts this in the release that vendors it: pass `part_id`, backfill prior
+  rows, replace a package's part rows as a set, and size the body budget per part. Also the
+  OLRC Table III chain walk (`sources.uscode.iter_table3_chain`; B32), which reads absence from
+  the chain of pages rather than from a page's bytes, and `retain_dropped_body` on keyless
+  routes, which keeps a dropped answer's bytes as `response-incomplete` refusal evidence.
 - `spicy_docs-0.31.0`: built from SpicyDocs `main` at `7b65900`, with Rulespec Artifacts 1.1.1.
   Built September 23, 2026 UTC: **1,456,368 bytes**, SHA-256
   `87ef3880ca2b79727a0f25d7eedce699c0ec42e2d31527c46bcf424d631e7d5c`. Adds the canonical

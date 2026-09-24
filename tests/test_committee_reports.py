@@ -27,6 +27,7 @@ import pytest
 from spicy_docs.sources.govinfo.bodies import (
     PackageBodyIdentity,
     PackageSummary,
+    ReportPart,
     package_body_locator,
     parse_package_id,
     validate_package_mods,
@@ -71,7 +72,9 @@ def _package(
     media_type: str = "text/html",
     body: bytes = REPORT_HTML,
     mods_bytes: bytes | None = None,
+    part: ReportPart | None = None,
 ):
+    """One acquired body: ``part``'s, or the one ``acquire`` reads, the part the root's renditions sit at."""
     identity = parse_package_id(package_id)
     mods_url = f"https://api.govinfo.gov/packages/{package_id}/mods"
     mods_capture = CapturedBodyResponse(
@@ -82,14 +85,16 @@ def _package(
         observed_at=OBSERVED_AT,
         body=(FIXTURES / f"mods-{package_id}.xml").read_bytes() if mods_bytes is None else mods_bytes,
     )
-    # The parse the acquirer itself runs on these bytes, so `mods.bills` and
-    # `mods.primary_bill` come from the real MODS rather than a hand-typed list,
-    # and a record naming only its part 1 is read at that part's stem, as the
-    # acquirer reads it.
+    # The parse the acquirer itself runs on these bytes, so the bills and the
+    # parts come from the real MODS rather than a hand-typed list, and each
+    # part is read at its own stem, as the acquirer reads it.
     mods = validate_package_mods(
         mods_capture.body, package=identity, final_url=mods_url, max_bytes=BUDGET.max_metadata_bytes
     )
-    url = package_body_locator(identity, fmt, part_id=mods.part_id)
+    if part is None:
+        part = next((each for each in mods.parts if each.part_id == (mods.part_id or package_id)), None)
+    part_id = None if part is None else part.part_id
+    url = package_body_locator(identity, fmt, part_id=part_id)
     capture = CapturedBodyResponse(
         requested_url=url,
         resolved_url=url,
@@ -118,13 +123,27 @@ def _package(
             media_type=media_type,
             final_url=url,
             byte_size=len(body),
-            part_id=mods.part_id,
+            part_id=part_id,
         ),
         summary_capture=capture,
         mods_capture=mods_capture,
         body_capture=capture,
         request_count=3,
         budget=BUDGET,
+        part=part,
+    )
+
+
+def _parts(package_id: str, *, bodies: dict[str, bytes] | None = None, **kwargs):
+    """Every part the record states, each at its own stem, as ``acquire_parts`` returns them.
+
+    ``bodies`` maps a part id to its bytes; any other part is ``body`` (default ``REPORT_HTML``).
+    """
+    record = _package(package_id, **kwargs).mods
+    default = kwargs.pop("body", REPORT_HTML)
+    return tuple(
+        _package(package_id, part=part, body=(bodies or {}).get(part.part_id, default), **kwargs)
+        for part in record.parts
     )
 
 
@@ -149,6 +168,20 @@ class CrptOnlyDiscovery(StubDiscovery):
     IDS = {"CRPT": [CRPT_ID], "CHRG": []}
 
 
+class NoBodies:
+    """An acquirer that serves nothing; a stub overrides the read its collection makes.
+
+    The transform asks ``acquire_parts`` of a report and ``acquire`` of a hearing
+    (``PackageBodySource``), so a stub for one collection still states both.
+    """
+
+    def acquire(self, package_id: str, *, max_bytes=None):
+        raise LookupError(f"stub: no hearing body for {package_id}")
+
+    def acquire_parts(self, package_id: str, *, max_bytes=None):
+        raise LookupError(f"stub: no report body for {package_id}")
+
+
 class StubBodyAcquirer:
     """Serves the htm rendition, and records that no preference was asked for.
 
@@ -163,6 +196,10 @@ class StubBodyAcquirer:
     def acquire(self, package_id: str, *, max_bytes=None):
         self.requested.append(package_id)
         return _package(package_id, mods_bytes=self.mods_bytes)
+
+    def acquire_parts(self, package_id: str, *, max_bytes=None):
+        self.requested.append(package_id)
+        return _parts(package_id, mods_bytes=self.mods_bytes)
 
 
 class StubHearings:
@@ -265,6 +302,13 @@ def test_a_report_is_linked_to_the_bill_its_mods_marks_primary(reports):
     assert rows[0]["bill_id"] == "119-hres-53"
 
 
+def test_a_report_in_one_part_is_keyed_on_its_package_id(reports):
+    """Decision 29: a report published in one part is that part, and its record numbers none."""
+    [row] = pq.read_table(reports["committee_reports"]).to_pylist()
+    assert (row["package_id"], row["part_id"], row["part_number"]) == (CRPT_ID, CRPT_ID, None)
+    assert {row["part_id"] for row in pq.read_table(reports["report_sections"]).to_pylist()} == {CRPT_ID}
+
+
 def test_a_hearing_that_only_mentions_bills_is_not_linked_to_one(reports):
     """`BODY` is a mention, not a subject: the Worldwide Threats hearing is not "about" H.R. 1."""
     rows = pq.read_table(reports["hearing_transcripts"]).to_pylist()
@@ -349,6 +393,9 @@ class StubPdfAcquirer:
     def acquire(self, package_id: str, *, max_bytes=None):
         body = make_pdf([f"{package_id} page one", "page two"])
         return _package(package_id, fmt="pdf", media_type="application/pdf", body=body)
+
+    def acquire_parts(self, package_id: str, *, max_bytes=None):
+        return (self.acquire(package_id),)
 
 
 def test_the_pdf_fallback_is_extracted_and_states_its_page_count(tmp_path, monkeypatch):

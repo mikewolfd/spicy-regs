@@ -1,0 +1,33 @@
+{
+    "dateIssued": "2026-01-14",
+    "documentType": "HRPT",
+    "congress": "119",
+    "session": "2",
+    "documentNumber": "455",
+    "packageId": "CRPT-119hrpt455",
+    "collectionCode": "CRPT",
+    "detailsLink": "https://www.govinfo.gov/app/details/CRPT-119hrpt455",
+    "title": "MAKE THE DISTRICT OF COLUMBIA SAFE AND BEAUTIFUL ACT OF 2026",
+    "branch": "legislative",
+    "collectionName": "Congressional Reports",
+    "download": {
+        "premisLink": "https://api.govinfo.gov/packages/CRPT-119hrpt455/premis",
+        "zipLink": "https://api.govinfo.gov/packages/CRPT-119hrpt455/zip",
+        "modsLink": "https://api.govinfo.gov/packages/CRPT-119hrpt455/mods"
+    },
+    "pages": "35",
+    "governmentAuthor2": "House of Representatives",
+    "chamber": "HOUSE",
+    "subtitle": "Report together with DISSENTING VIEWS to accompany H.R. 5103, including cost estimate of the Congressional Budget Office",
+    "governmentAuthor1": "Congress",
+    "publisher": "U.S. Government Publishing Office",
+    "suDocClassNumber": "Y 1.1/8:119-455",
+    "docClass": "HRPT",
+    "lastModified": "2026-06-10T20:36:42Z",
+    "category": "Congressional Committee Materials",
+    "otherIdentifier": {
+        "migrated-doc-id": "f:hr455p1.119.txt",
+        "ils-system-id": "001466415"
+    },
+    "granulesLink": "https://api.govinfo.gov/packages/CRPT-119hrpt455/granules?offsetMark=*&pageSize=100"
+}

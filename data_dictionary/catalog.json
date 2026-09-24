@@ -1401,11 +1401,11 @@
     {
       "table": "committee_reports",
       "label": "Committee reports",
-      "summary": "One row per captured GovInfo committee report package. `bill_id` is the measure the report accompanies, read from the package's own MODS metadata. All columns are stored as VARCHAR.",
+      "summary": "One row per published part of a captured GovInfo committee report package, keyed `(package_id, part_id)`. `bill_id` is the measure the report accompanies, read from the package's own MODS metadata. All columns are stored as VARCHAR.",
       "coverage": "Sampled. The 2026-09-21 mikewolfd/spicy-regs fork delivery rebuilt and published all 105 selected report packages with 13 selected hearings as one five-table generation. All 118 package bodies and 13 hearing details were accepted; two exact retained package capture sets were reused and 116 acquired fresh. Every selected report was reprocessed under SpicyDocs 0.26.0; nine letter spans reproduced their retained text digests. This is a mixed-Congress selection, not complete historical or constituent-granule coverage. No upstream/default publication is asserted. Receipts: fork-execution-2026-09-21/report-family/rebuild-audit.json, publication-report-family.json and report-family-mcp-audit/.",
       "kind": "sampled",
       "measured_on": "2026-09-21",
-      "data_quality": "Only the MODS PRIMARY bill fills bill_id. The thirteen CBO columns come from spicy-docs read_cbo_estimate on the same body already acquired. The cover recital gates publication of a letter: a CBO heading alone is not an estimate. report_states_estimate=false records an absent recital; NULL means the rule has not run. A positive recital with no resolved letter span remains distinct from an extracted letter. recital_bill_id comes from the printed recital and is retained beside the MODS bill_id. Only root-package MODS fields supply the package join. CRPT-119hrpt494 has PRIMARY H.R. 3495 references in two constituent-granule records but none at the package root, so bill_id remains NULL; its separate recital_bill_id is a text interpretation. Constituent body coverage is not asserted. A report whose root MODS names only its part 1 (CRPT-119hrpt811) is held out and refused in committee_report_reads until the tables key parts (decision 29).",
+      "data_quality": "Only the MODS PRIMARY bill fills bill_id. The thirteen CBO columns come from spicy-docs read_cbo_estimate on the same body already acquired. The cover recital gates publication of a letter: a CBO heading alone is not an estimate. report_states_estimate=false records an absent recital; NULL means the rule has not run. A positive recital with no resolved letter span remains distinct from an extracted letter. recital_bill_id comes from the printed recital and is retained beside the MODS bill_id. bill_id is the part's own PRIMARY bill: a multi-part package's root states none, so each part of CRPT-119hrpt494 carries the H.R. 3495 its constituent record names, where its row read before parts were keyed has NULL; its separate recital_bill_id is a text interpretation. Every part a record states is read, all or none: a package whose parts cannot all be read is refused in committee_report_reads and keeps its prior rows. Parts, by decision 29 (`docs/research/fork-delivery-decisions-2026-09-22.md`): a report published in one part is one row whose part_id is its package id and whose part_number is NULL; a report published as parts is one row per part, part_id the part's granule id (CRPT-119hrpt455-pt2) and part_number 1 to N, except that a Part 1 the publisher left unsuffixed (CRPT-119hrpt494) has part_id equal to the package id and part_number 1. The eight packages whose one part is spelled -pt1 (CRPT-112hrpt11, -112hrpt38, -112hrpt141, -119hrpt468, -119hrpt483, -119hrpt577, -119hrpt621, -119hrpt811) are (package-pt1, 1), the same shape as Part 1 of two, so a reader counts a package's rows to tell a lone part from Part 1 of several. title, date_issued and last_modified are the package's and repeat on every part row. A row published before part_id existed is kept as its package's one part (part_id the package id, part_number NULL) until the package is read again, which replaces its rows as a set; the committee_report_reads rule version re-reads every report once for this, which is what re-keys the CRPT-119hrpt811 row published 2026-09-24 as (CRPT-119hrpt811-pt1, 1).",
       "columns": [
         "package_id",
         "collection",
@@ -1438,17 +1438,19 @@
         "letter_end_rule",
         "letter_signatory",
         "estimate_absence_reason",
-        "estimate_absence_rule"
+        "estimate_absence_rule",
+        "part_id",
+        "part_number"
       ]
     },
     {
       "table": "report_sections",
       "label": "Committee report heading and text blocks",
-      "summary": "One row per heading or unheaded text block in one committee report. `heading` preserves the source title; agency identity fields remain unresolved. `pattern` records which header pattern fired, which is this table's provenance column. All columns are stored as VARCHAR.",
+      "summary": "One row per heading or unheaded text block in one part of a committee report, keyed `(package_id, part_id, seq)`. `heading` preserves the source title; agency identity fields remain unresolved. `pattern` records which header pattern fired, which is this table's provenance column. All columns are stored as VARCHAR.",
       "coverage": "Sampled. The 2026-09-21 mikewolfd/spicy-regs fork delivery rebuilt and published all 1,246 heading/text blocks from the 105 selected reports in one five-table generation. Every report body text digest and section span was independently checked; all 12,460 prior non-agency section values remained unchanged. heading retains the source title while agency_label and agency_key remain unresolved NULLs. All selected bodies were HTML, so no page boundaries were inferred. This is the full selected repair, not complete report history or upstream/default publication. Receipts: fork-execution-2026-09-21/report-family/rebuild-audit.json, publication-report-family.json and report-family-mcp-audit/.",
       "kind": "sampled",
       "measured_on": "2026-09-21",
-      "data_quality": null,
+      "data_quality": "part_id names the committee_reports row a block was parsed from, so (package_id, part_id) is its parent, and seq counts from zero within that part. By decision 29 (`docs/research/fork-delivery-decisions-2026-09-22.md`) part_id is the package id for a report published in one part and the part's granule id for a report published as parts, CRPT-119hrpt494's unsuffixed Part 1 aside; the eight packages whose one part is spelled -pt1 carry that spelling, so the parent's row count tells a lone part from Part 1 of several. A block published before part_id existed carries its package id there until its report is read again, which replaces every block of the package.",
       "columns": [
         "package_id",
         "seq",
@@ -1462,7 +1464,8 @@
         "page_end",
         "body_chars",
         "last_modified",
-        "heading"
+        "heading",
+        "part_id"
       ]
     },
     {

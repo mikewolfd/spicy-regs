@@ -23,7 +23,7 @@ from tests.test_bill_family import (
     StubBodyAcquirer, StubBulkAcquirer, _Acquisition, _Archive, _Member, _capture, _no_prior,
 )
 from tests.test_committee_reports import (
-    CHRG_ID, CRPT_ID, CrptOnlyDiscovery, StubDiscovery, StubHearings, _package,
+    CHRG_ID, CRPT_ID, CrptOnlyDiscovery, NoBodies, StubDiscovery, StubHearings, _package,
 )
 from tests.test_congress_index import _run
 
@@ -43,7 +43,7 @@ def test_cover_links_use_mods_and_empty_covers_resume_without_body_requests(tmp_
     class Discovery(StubDiscovery):
         IDS = {"CRPT": [], "CHRG": [package_id, CHRG_ID]}
 
-    class Bodies:
+    class Bodies(NoBodies):
         requested = []
 
         def acquire(self, package_id, *, max_bytes=None):
@@ -81,9 +81,9 @@ def test_report_pass_runs_the_recital_gate_on_its_existing_body(tmp_path, fixtur
     """A retained report body, not synthetic package metadata, is what the recital gate reads."""
     # Deliberately synthetic package metadata; the retained excerpt exercises body-to-rule wiring.
     body = ("<html><body><pre>" + html.escape((FIXTURES / fixture).read_text()) + "</pre></body></html>").encode()
-    class Acquirer:
-        def acquire(self, package_id, *, max_bytes=None):
-            return _package(package_id, body=body)
+    class Acquirer(NoBodies):
+        def acquire_parts(self, package_id, *, max_bytes=None):
+            return (_package(package_id, body=body),)
 
     acquirer = Acquirer()
     paths = build_committee_reports(tmp_path, reader=CrptOnlyDiscovery(), acquirer=acquirer,
@@ -98,10 +98,10 @@ def test_pending_packages_survive_an_advanced_window_and_the_cap(tmp_path):
     class Discovery(StubDiscovery):
         IDS = {"CRPT": [CRPT_ID, "CRPT-119hrpt2"], "CHRG": []}
 
-    class Bodies:
+    class Bodies(NoBodies):
         requested = []
 
-        def acquire(self, package_id, *, max_bytes=None):
+        def acquire_parts(self, package_id, *, max_bytes=None):
             key = package_id
             self.requested.append(key)
             raise ValueError("publisher refusal")
@@ -123,8 +123,8 @@ def test_pending_packages_survive_an_advanced_window_and_the_cap(tmp_path):
 @pytest.mark.parametrize("status", [401, 403])
 def test_report_body_credential_refusal_aborts_without_checkpoint(tmp_path, status):
     """A 401/403 body fetch raises before any capture table or checkpoint is written."""
-    class Refusing:
-        def acquire(self, package_id, *, max_bytes=None):
+    class Refusing(NoBodies):
+        def acquire_parts(self, package_id, *, max_bytes=None):
             raise CredentialRefusedError(f"HTTP {status}")
 
     with pytest.raises(CredentialRefusedError):
@@ -195,7 +195,7 @@ def test_hearing_correction_replaces_only_evaluated_parent_links(tmp_path, corre
             yield SimpleNamespace(records=[{"packageId": package_id, "lastModified": modified}]
                                   if "/CHRG/" in url else [])
 
-    class Bodies:
+    class Bodies(NoBodies):
         def acquire(self, package_id, *, max_bytes=None):
             asked.append(package_id)
             if correction == "refused" and modified.startswith("2026-09-20"):

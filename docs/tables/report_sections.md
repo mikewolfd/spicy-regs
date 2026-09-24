@@ -4,9 +4,11 @@
 
 **Committee report heading and text blocks**
 
-One row per heading or unheaded text block in one committee report. `heading` preserves the source title; agency identity fields remain unresolved. `pattern` records which header pattern fired, which is this table's provenance column. All columns are stored as VARCHAR.
+One row per heading or unheaded text block in one part of a committee report, keyed `(package_id, part_id, seq)`. `heading` preserves the source title; agency identity fields remain unresolved. `pattern` records which header pattern fired, which is this table's provenance column. All columns are stored as VARCHAR.
 
 **Coverage.** Sampled. The 2026-09-21 mikewolfd/spicy-regs fork delivery rebuilt and published all 1,246 heading/text blocks from the 105 selected reports in one five-table generation. Every report body text digest and section span was independently checked; all 12,460 prior non-agency section values remained unchanged. heading retains the source title while agency_label and agency_key remain unresolved NULLs. All selected bodies were HTML, so no page boundaries were inferred. This is the full selected repair, not complete report history or upstream/default publication. Receipts: fork-execution-2026-09-21/report-family/rebuild-audit.json, publication-report-family.json and report-family-mcp-audit/. *(measured 2026-09-21)*
+
+**Data quality.** part_id names the committee_reports row a block was parsed from, so (package_id, part_id) is its parent, and seq counts from zero within that part. By decision 29 (`docs/research/fork-delivery-decisions-2026-09-22.md`) part_id is the package id for a report published in one part and the part's granule id for a report published as parts, CRPT-119hrpt494's unsuffixed Part 1 aside; the eight packages whose one part is spelled -pt1 carry that spelling, so the parent's row count tells a lone part from Part 1 of several. A block published before part_id existed carries its package id there until its report is read again, which replaces every block of the package.
 
 - **Parquet file:** `report_sections.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
@@ -15,7 +17,7 @@ One row per heading or unheaded text block in one committee report. `heading` pr
 | Column | Type | Description |
 | --- | --- | --- |
 | `package_id` | `VARCHAR` | The report package this block was parsed from. |
-| `seq` | `VARCHAR` | Zero-based position of this block in the report, in reading order. |
+| `seq` | `VARCHAR` | Zero-based position of this block in its part, in reading order. |
 | `agency_label` | `VARCHAR` | NULL because heading recognition does not establish agency identity; the source heading is retained separately in heading. |
 | `agency_key` | `VARCHAR` | NULL because this reader does not resolve headings to agency identities. |
 | `body` | `VARCHAR` | The block's text, trimmed the way the original trimmed it. |
@@ -27,3 +29,4 @@ One row per heading or unheaded text block in one committee report. `heading` pr
 | `body_chars` | `VARCHAR` | Character length of body, which can be shorter than the span it sits in. |
 | `last_modified` | `VARCHAR` | The parent report's last_modified, carried so this table versions with the package it came from. |
 | `heading` | `VARCHAR` | The source heading as spelled and trimmed, including actual agency names and generic titles; NULL for preamble or full_report blocks, which have no source heading. |
+| `part_id` | `VARCHAR` | The report part this block was parsed from, spelled as `committee_reports.part_id`, so (package_id, part_id) is the parent row.  Appended last. |
