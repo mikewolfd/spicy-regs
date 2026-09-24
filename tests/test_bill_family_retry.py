@@ -20,6 +20,8 @@ from spicy_docs.transport.credentials import CredentialRefusedError
 from tests.test_bill_family import (
     FIXTURES,
     IDENTITY,
+    _Archive,
+    _Member,
     StubBodyAcquirer,
     StubBulkAcquirer,
     StubChangedBodyAcquirer,
@@ -61,6 +63,46 @@ def acquired(paths):
 def completed_scopes(paths):
     metadata = pq.read_schema(paths[build.ARCHIVES_TABLE]).metadata or {}
     return json.loads(metadata[build.ARCHIVE_COMPLETION_KEY.encode()])
+
+
+class SenateToo(StubBulkAcquirer):
+    """Also serves the fixture bill as 119 S 6028, so a second folder has body work to leave unfinished."""
+
+    def acquire(self, congress, bill_type, **kwargs):
+        result = super().acquire(congress, bill_type, **kwargs)
+        if (congress, bill_type) == (119, "s") and result.archive is not None:
+            body = (FIXTURES / "status-119hr6028.xml").read_bytes()
+            body = body.replace(b"<type>HR</type>", b"<type>S</type>").replace(b"119hr6028", b"119s6028")
+            result.archive = _Archive([_Member(parse_bill_status(body, identity=replace(IDENTITY, bill_type="s")))])
+        return result
+
+
+def archive_scopes(paths):
+    return {
+        (row["congress"], row["bill_type"], row["name"])
+        for row in pq.read_table(paths[build.ARCHIVES_TABLE]).to_pylist()
+    }
+
+
+def test_capped_folders_keep_their_archive_rows_without_completion(tmp_path, scoped, monkeypatch):
+    """Run 35946820267: the cap left every folder unfinished, so the table was written empty and refused."""
+    monkeypatch.setenv("BILL_FAMILY_BILL_TYPES", "hr,s")
+    first, _, body = run(tmp_path / "first", budget=1, bulk=SenateToo())
+    assert body.requested == ["BILLS-119hr6028ih"], "the cap is hit inside the first folder"
+    assert archive_scopes(first) == {("119", "hr", "BILLSTATUS-119-hr.zip"), ("119", "s", "BILLSTATUS-119-s.zip")}
+    assert completed_scopes(first) == []
+    _, bulk, _ = run(tmp_path / "second", prior=tmp_path / "first", budget=0, bulk=SenateToo())
+    assert bulk.zip_downloads == [(119, "hr"), (119, "s")], "a row without completion is no skip evidence"
+
+
+def test_a_completed_folder_is_written_and_listed_beside_an_unfinished_one(tmp_path, scoped, monkeypatch):
+    monkeypatch.setenv("BILL_FAMILY_BILL_TYPES", "hr,s")
+    first, _, body = run(tmp_path / "first", budget=2, bulk=SenateToo())
+    assert body.requested == ["BILLS-119hr6028ih", "BILLS-119hr6028eh"]
+    assert archive_scopes(first) == {("119", "hr", "BILLSTATUS-119-hr.zip"), ("119", "s", "BILLSTATUS-119-s.zip")}
+    assert completed_scopes(first) == [["119", "hr"]]
+    _, bulk, _ = run(tmp_path / "second", prior=tmp_path / "first", budget=0, bulk=SenateToo())
+    assert bulk.zip_downloads == [(119, "s")], "only the completed folder's zip is skipped"
 
 
 def test_one_body_caps_resume_then_retry_pending_pair_without_metadata_change(tmp_path, scoped):

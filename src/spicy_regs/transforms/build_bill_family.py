@@ -1712,9 +1712,14 @@ def build_bill_family(
                 votes_refused += refused
                 touched.add(identifier)
                 bills += 1
-            if archive_complete and retained is not None:
+            # Every visited folder's prior row is replaced, so each is written
+            # back: the row records the zip that was read; completion is the
+            # metadata list's alone. Gating the row on completion emptied the
+            # table whenever the fetch cap left every visited folder unfinished.
+            if retained is not None:
                 archive_rows.append(retained)
-                completed_archives.add(scope)
+                if archive_complete:
+                    completed_archives.add(scope)
 
     # 2b. The pre-BILLSTATUS backfill: same scope input, the route the
     # publisher serves below the bulk floor, the same per-run cap.
