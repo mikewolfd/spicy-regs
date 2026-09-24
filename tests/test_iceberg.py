@@ -367,6 +367,27 @@ def test_seed_comments_replace_agency_is_idempotent(tmp_path, local_catalog) -> 
     assert counts == {"EPA": 2, "DOL": 1}
 
 
+def test_seed_comments_loads_one_agency_from_a_monolithic_source(tmp_path, local_catalog) -> None:
+    """The fork has no partition tree: each agency loads from comments.parquet alone."""
+    con = local_catalog
+    iceberg._ensure_table(con, COMMENT)
+    source = tmp_path / "comments.parquet"
+    pl.DataFrame(
+        [
+            _comment("c1", "EPA-1", "EPA", "2025-01-15T00:00:00Z"),
+            _comment("d1", "DOL-1", "DOL", "2025-03-01T00:00:00Z"),
+            _comment("c2", "EPA-1", "EPA", "2025-01-20T00:00:00Z"),
+        ],
+        schema=COMMENT.schema,
+    ).write_parquet(source)
+
+    assert iceberg.seed_comments_from_parquet(con, str(source), COMMENT, replace_agency="EPA") == 2
+    assert iceberg.seed_comments_from_parquet(con, str(source), COMMENT, replace_agency="EPA") == 2
+    assert iceberg.seed_comments_from_parquet(con, str(source), COMMENT, replace_agency="DOL") == 3
+    rows = con.execute(f"SELECT comment_id FROM {iceberg._qualified(COMMENT)} ORDER BY comment_id").fetchall()
+    assert rows == [("c1",), ("c2",), ("d1",)]
+
+
 def test_seed_comments_tolerates_missing_columns(tmp_path, local_catalog) -> None:
     """An older partition missing a later-added column loads with NULLs, not an error."""
     con = local_catalog

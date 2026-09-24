@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
-"""Seed the Iceberg catalog ``comments`` table from the existing R2 partitions.
+"""Seed the Iceberg catalog ``comments`` table from the published comments on R2.
 
 One-time loader for the catalog cutover (see PR #89). The partitioned
 ``comments/`` tree on R2 is already current; this copies it into the R2 Data
 Catalog ``comments`` table so the MCP servers can serve row-level reads from the
-catalog instead of the frozen monolithic ``comments.parquet``. Loading per agency
-keeps memory bounded and gives progress. After loading it rebuilds
-``comments_index.parquet`` from the catalog so a quick diff against the published
-index confirms the load is complete.
+catalog instead of the frozen monolithic ``comments.parquet``. The fork never
+produced that tree, so ``--source-key comments.parquet`` reads each agency's
+rows from the monolithic object instead. Loading per agency keeps memory bounded
+and gives progress. After loading it rebuilds ``comments_index.parquet`` from
+the catalog so a quick diff against the published index confirms the load is
+complete.
 
 Needs both credential sets in the environment:
 
@@ -21,6 +23,7 @@ Needs both credential sets in the environment:
 Usage:
     uv run python scripts/seed_comments_catalog.py
     uv run python scripts/seed_comments_catalog.py --agency OMB        # one agency
+    uv run python scripts/seed_comments_catalog.py --source-key comments.parquet  # the fork
     uv run python scripts/seed_comments_catalog.py --append            # add to a non-empty table
     uv run python scripts/seed_comments_catalog.py --upload-index      # publish the rebuilt index
 """
@@ -71,6 +74,11 @@ def main() -> int:
     load_dotenv()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--agency", help="Load only this agency_code (default: all)")
+    parser.add_argument(
+        "--source-key",
+        help="Read every agency from this monolithic object (e.g. comments.parquet) "
+        "instead of the comments/ partition tree",
+    )
     parser.add_argument("--output-dir", type=Path, default=Path("output"))
     parser.add_argument(
         "--append",
@@ -132,11 +140,15 @@ def main() -> int:
                 logger.info("  [{}/{}] {}: already loaded ({:,} rows) — skipping", i, len(agencies), agency, have)
                 skipped += 1
                 continue
-            glob = f"s3://{bucket}/comments/agency_code={safe}/docket_id=*/year=*/month=*/part-0.parquet"
+            source = (
+                f"s3://{bucket}/{args.source_key}"
+                if args.source_key
+                else f"s3://{bucket}/comments/agency_code={safe}/docket_id=*/year=*/month=*/part-0.parquet"
+            )
             try:
                 # replace_agency makes each agency load idempotent: a re-run
                 # replaces that agency's rows rather than duplicating them.
-                total = iceberg.seed_comments_from_parquet(con, glob, COMMENT, replace_agency=agency)
+                total = iceberg.seed_comments_from_parquet(con, source, COMMENT, replace_agency=agency)
                 loaded += 1
             except Exception as exc:  # noqa: BLE001 — keep going, report at the end
                 logger.warning("  [{}/{}] {}: skipped ({})", i, len(agencies), agency, exc)

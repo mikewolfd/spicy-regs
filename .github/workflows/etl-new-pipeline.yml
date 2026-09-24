@@ -64,7 +64,7 @@ on:
         default: ''
         type: string
       batch_number:
-        description: 'Batch number (0-indexed); leave empty to run one job over all agencies'
+        description: 'Batch number (0-indexed), or all for every batch; leave empty to run one job over all agencies'
         required: false
         default: ''
         type: string
@@ -133,16 +133,21 @@ jobs:
           USE_ICEBERG: ${{ inputs.use_iceberg }}
         run: |
           set -euo pipefail
+          ALL_BATCHES="{\"batch\":[$(seq 0 $((BATCH_COUNT - 1)) | paste -sd, -)]}"
           if [ "$EVENT" = "schedule" ]; then
             # Every batch, one trigger. Scheduled runs publish to R2 and MUST route
             # through Iceberg — the comments read surface the MCP servers query is
             # the catalog now, so a batch that skipped it would drift stale again.
-            echo "matrix={\"batch\":[$(seq -s, 0 $((BATCH_COUNT - 1)))]}" >> "$GITHUB_OUTPUT"
+            echo "matrix=$ALL_BATCHES" >> "$GITHUB_OUTPUT"
             echo 'skip_upload=false' >> "$GITHUB_OUTPUT"
             echo 'use_iceberg=true' >> "$GITHUB_OUTPUT"
             echo "Scheduled sweep: all $BATCH_COUNT batches"
           else
-            if [ -n "$BATCH_NUMBER" ]; then
+            if [ "$BATCH_NUMBER" = "all" ]; then
+              # A whole sweep under the dispatch's own timeout (a first catch-up).
+              echo "matrix=$ALL_BATCHES" >> "$GITHUB_OUTPUT"
+              echo "Manual dispatch: all $BATCH_COUNT batches"
+            elif [ -n "$BATCH_NUMBER" ]; then
               if ! printf '%s' "$BATCH_NUMBER" | grep -Eq '^[0-9]+$' || [ "$BATCH_NUMBER" -ge "$BATCH_COUNT" ]; then
                 echo "batch_number must be an integer in 0..$((BATCH_COUNT - 1)), got: $BATCH_NUMBER" >&2
                 exit 1

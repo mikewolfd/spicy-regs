@@ -336,10 +336,13 @@ def seed_comments_from_parquet(
     and are not table columns).
 
     When ``replace_agency`` is given, all existing rows for that ``agency_code``
-    are deleted before the insert. The loader runs one agency at a time, so this
-    makes each agency load idempotent — re-running (after a timeout, or over an
-    already-seeded table) replaces that agency's rows instead of duplicating
-    them, since the plain ``INSERT`` does no dedup.
+    are deleted before the insert, and only that agency's source rows are
+    inserted. The loader runs one agency at a time, so this makes each agency
+    load idempotent — re-running (after a timeout, or over an already-seeded
+    table) replaces that agency's rows instead of duplicating them, since the
+    plain ``INSERT`` does no dedup — and lets a source holding every agency (the
+    fork's monolithic ``comments.parquet``, which has no partition tree) load
+    one agency at a time.
 
     Columns absent from every file in the glob (an older partition written before
     a column was added) are inserted as ``NULL`` — mirroring the schema-evolution
@@ -349,8 +352,10 @@ def seed_comments_from_parquet(
     """
     columns = list(record_type.schema)
     esc = _sql_str(source_glob)
+    agency_filter = ""
     if replace_agency is not None:
-        con.execute(f"DELETE FROM {_qualified(record_type)} WHERE agency_code = '{_sql_str(replace_agency)}';")
+        agency_filter = f"WHERE agency_code = '{_sql_str(replace_agency)}'"
+        con.execute(f"DELETE FROM {_qualified(record_type)} {agency_filter};")
     present = {
         row[0]
         for row in con.execute(
@@ -365,7 +370,8 @@ def seed_comments_from_parquet(
         f"""
         INSERT INTO {_qualified(record_type)} ({col_list})
         SELECT {projection}
-        FROM read_parquet('{esc}', union_by_name=true, hive_partitioning=false);
+        FROM read_parquet('{esc}', union_by_name=true, hive_partitioning=false)
+        {agency_filter};
         """
     )
     return con.execute(f"SELECT count(*) FROM {_qualified(record_type)}").fetchone()[0]
