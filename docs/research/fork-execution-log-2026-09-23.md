@@ -494,3 +494,51 @@ Receipts: `members-qualification/`, `congressional-status/`, `native-vote-varian
 - **CFR `replace_all` on 0.31.0.** Run 35940291235 re-placed every volume:
   321,010 rows, equal cell for cell to `f6192c07…` except `cfr_ref` on 2 rows
   (`cfr-replace-all-2026-09-23/audit.json`).
+
+## September 24: correction publication and catalog setup
+
+The continuation receipt is
+`~/Work/corpora/fork-execution-2026-09-21/ledger-continuation-2026-09-24/`.
+SpicyDocs `4310647` (0.32.1) and the adoption in SpicyRegs `2ddc313` were
+pushed; both CI runs passed. The current output pins and remaining source
+limits are in the ledger.
+
+- **Meetings and nominations.** Existing production builders read Congress.gov
+  through the source-owned pooled reader, retaining their raw responses. The
+  independent field maps from the earlier audit checked every refreshed cell.
+  Both candidates preserve every prior identity. The guarded publisher admitted
+  their source evidence and generation bytes in R2 before moving each family
+  pointer; complete direct public readbacks match the local candidates.
+- **Print corrections.** The ordinary package cap reprocessed every held print.
+  All changes match the grammar correction receipt, plus one further GSA
+  prospectus number in CRPT-118hrpt974. A second PDF extractor confirms that
+  `0072–OK24` belongs to `POK–0046/0072–OK24`, not a RIN. All parent and action
+  changes are accounted for, and successful-read checkpoints cover all affected
+  outputs. Publication and direct public readback passed.
+  The local MCP tools also queried all three corrected public families and
+  reported their new generation pins (`public-mcp-check.json`); this checks the
+  consumer implementation against R2, not a hosted MCP deployment.
+- **Docket search.** The current public gzip contains the same documents and
+  fields as the qualified delivery; its generated timestamp changed. The
+  retained comparison now records the current digest and ETag.
+- **Hosting and credentials.** The owner enabled the R2 Data Catalog and GitHub
+  Pages. Dictionary deployment 36016172994 succeeded, and the public site
+  returned HTTP 200. Wrangler's OAuth login cannot administer API tokens (403);
+  the owner's `R2_ADMIN_TOKEN` from the ignored workspace environment verified
+  as active and accessed the catalog. Its value was installed as
+  `R2_CATALOG_TOKEN` locally and in GitHub without printing it. URI and warehouse
+  settings are also configured. Catalog setup does not establish seed or ETL
+  completion; follow the ledger and seed runbook for those states.
+- **Seed preflight.** The ETL was disabled and old pending runs 35966200887 and
+  35903614693 were cancelled before seeding. The docket seed's dry run used to
+  create its namespace and table before checking the flag. `7c1431a` moves
+  writes after the preflight and dry-run return. Tests cover an absent catalog,
+  existing rows, repeated and null source keys, CLI dry runs and a refused
+  undersized source. The live dry run reported the complete source population;
+  a separate catalog read confirmed it created no namespace or table. Docket
+  seed run 36018620120 then loaded the catalog successfully with public upload
+  disabled, preserving the manifest seed's input ETag.
+- **Remaining verification gap.** The live dictionary check stops at the
+  intentionally withdrawn lifecycle table's 404. Its exit code correctly says
+  drift was not checked; the Pages workflow permits that result. Deployment
+  success therefore does not qualify all live schemas.

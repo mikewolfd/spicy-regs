@@ -10,8 +10,9 @@ by local deliveries.
 The pipeline now refuses to start without a manifest. This runbook provisions
 the catalog and loads the published Parquet into it. It then publishes a
 manifest built from the IDs those objects hold. After that, the first sweep
-reads only the records the fork lacks. The owner runs every step. Nothing here
-has been written to R2 yet.
+reads only the records the fork lacks. Follow the steps in order; the
+[current delivery state](research/fork-output-ledger-2026-09-21.md#open-items)
+records catalog setup, seeding and ETL status separately.
 
 ## What is ready
 
@@ -69,9 +70,9 @@ npx wrangler r2 bucket catalog enable spicy-regs
 npx wrangler r2 bucket catalog get spicy-regs   # prints the catalog URI and warehouse
 ```
 
-Create an R2 API token with **Admin Read & Write** on this account. It must
-cover both the R2 Data Catalog and the bucket's storage. See
-[Cloudflare's guide](https://developers.cloudflare.com/r2/data-catalog/get-started/).
+Use an existing R2 API token with **Admin Read & Write**, or create one on
+this account. It must cover both the R2 Data Catalog and the bucket's storage. See
+[Cloudflare's guide](https://developers.cloudflare.com/r2-data-catalog/manage-catalogs/#authenticate-your-iceberg-engine).
 Enter each value at the prompt:
 
 ```sh
@@ -135,7 +136,7 @@ gh workflow run seed-comments-catalog.yml --repo mikewolfd/spicy-regs \
 ## 3. Check the catalog holds every seeded ID
 
 ```sh
-uv run python scripts/seed_manifest_from_published.py \
+uv run --frozen python scripts/seed_manifest_from_published.py \
   --output-dir ~/Work/corpora/fork-execution-2026-09-21/etl-seed-2026-09-24/seed --check
 ```
 
@@ -154,14 +155,14 @@ Then run `--check` again:
 
 ```sh
 D=$(mktemp -d); for t in dockets documents comments; do curl -fsSo "$D/$t.parquet" "$R2_PUBLIC_URL/$t.parquet"; done
-uv run python scripts/seed_manifest_from_published.py --output-dir <new-dir> \
+uv run --frozen python scripts/seed_manifest_from_published.py --output-dir <new-dir> \
   --dockets "$D/dockets.parquet" --documents "$D/documents.parquet" --comments "$D/comments.parquet"
 ```
 
 ## 4. Publish the manifest
 
 ```sh
-uv run python scripts/seed_manifest_from_published.py \
+uv run --frozen python scripts/seed_manifest_from_published.py \
   --output-dir ~/Work/corpora/fork-execution-2026-09-21/etl-seed-2026-09-24/seed --publish
 ```
 

@@ -44,11 +44,10 @@ state; the ledger holds its pins and evidence, and the execution log its history
   the [FEC gap register](fec-gaps.md).
 - **T06:** dockets and documents delivered as a metadata repair; document bodies
   and text extraction remain open. The scheduled ETL has never completed a
-  sweep on the fork (no manifest, 60-minute batches, no catalog secrets); the
-  base objects were all written by local deliveries. It now refuses to start
-  without a manifest; the [catalog and manifest seed runbook](etl-catalog-seed.md)
-  holds the owner's steps and a manifest built from the published ids. See the
-  ledger.
+  sweep on the fork; the historical failures and current seed status are in the
+  ledger. The base objects were all written by local deliveries. It now refuses
+  to start without a manifest; the [catalog and manifest seed runbook](etl-catalog-seed.md)
+  holds the steps and a manifest built from the published ids.
 - **T07:** published for every comment-bearing agency, six plus ACF repaired from
   native source (decision 7), and the derived attachment text repaired in
   numeric order with one tool recorded (plan A6, decision 19); the other
@@ -256,20 +255,20 @@ with their evidence in `spicy-docs/docs/research/parsing-survey-2026-09-23.md`:*
 - **Next T07 cohorts.** Re-verify and repair the other ~126 agencies from native
   source, agency by agency. The table already holds their rows from the
   retained parent. Then build the dated partition tree and the
-  `comments/agency/` mirror; the mirror needs `R2_CATALOG_*` secrets.
-- **Parsing and metadata consolidation.** Done: A5, A6, A8, A11 and B24 in
-  spicy-regs; B4, B6, B11, B20 and decision 30 in SpicyDocs 0.31.0. Next: the
-  0.31.0 re-vendor (adopting B6 and A14, fixing SAM), then A7/A12's rulemaking
-  rebuild and snapshot, the `replace_all` CFR run, the print-citations re-read
-  (A10); B31 (decision 29) and B32 (the Table III chain walk) are adopted at
-  the 0.32.0 re-vendor; the rest (B1–B3, B5, B7–B10, B12–B19, B21–B30, C4,
-  D6) per the plan.
+  `comments/agency/` mirror; the mirror needs the populated catalog.
+- **Parsing and metadata consolidation.** SpicyDocs 0.32.1 is adopted and
+  pushed; the print, meeting and nomination corrections are published. Next:
+  audit the multipart-report, Table III, bill-family and rulemaking refreshes
+  at their new pins. The ledger records the qualified scope and outstanding
+  defects; continue the remaining source-reader work in the consolidation plan.
 - **Wider source populations.** SAM years, lobbying history (the key is now
   set), FCC filings history, USAspending beyond the top 10,000, court catch-up
   and parties (decision 9).
 - **Bill family (T09).** Bodies, models (needs `GEMINI_API_KEY`) and backfills.
-- **Operations and closure.** T18/T19 wiring (Pages is not enabled; the
-  dictionary deploy fails), then T20.
+- **Operations and closure.** Finish the catalog and manifest seed, resume the
+  ETL and qualify its first sweep. Pages is deployed; repair the live schema
+  checker's handling of withdrawn outputs. Complete the remaining T18/T19
+  access and consumer checks before T20.
 
 The original order, kept for the record:
 
