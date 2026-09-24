@@ -1,6 +1,13 @@
-# Fork execution log — September 21–23, 2026
+# Fork execution log — September 21–24, 2026
 
 This log holds the dated narrative moved out of the [fork output ledger](fork-output-ledger-2026-09-21.md) on 2026-09-23: the September 21–22 scope gaps and status bullets, with their "(Superseded …)" markers, and the September 23 continuation. The text moved verbatim; only one pointer changed, "(rows above)" to "(ledger rows)". The ledger keeps one row per output with its qualified pin, plus the open items, and points here for the measurements and receipts behind each row. A later entry supersedes an earlier one where it says so.
+
+The latest operational continuation is [September 24: local catch-up and
+workflow repairs](#september-24-local-catch-up-and-workflow-repairs). It records
+the paused hosted writers, completed repair checks and report migration, and
+the local batch failure that stopped automatic resumption. Earlier snapshots
+below remain dated history. The subsequent [CFTC source investigation](#september-24-cftc-source-investigation)
+identifies the source nulls and the required storage/validation repair.
 
 ## Scope and evidence gaps
 
@@ -548,7 +555,209 @@ limits are in the ledger.
   15:35:34 UTC (`manifest-publish.json` beside the seed). ETL was re-enabled and
   run 36021389999 dispatched over all batches with a 240-minute per-batch limit.
   That sweep's runtime and resulting outputs still require qualification.
-- **Remaining verification gap.** The live dictionary check stops at the
-  intentionally withdrawn lifecycle table's 404. Its exit code correctly says
-  drift was not checked; the Pages workflow permits that result. Deployment
-  success therefore does not qualify all live schemas.
+- **Verification gap observed before the workflow repair.** The live dictionary
+  check stopped at the intentionally withdrawn lifecycle table's 404, and Pages
+  permitted that incomplete result. The continuation below resolves this gap;
+  the earlier deployment alone did not establish complete live schema agreement.
+
+## September 24: local catch-up and workflow repairs
+
+This entry records the 17:30–17:45 UTC checks. It supersedes the earlier claims
+that catalog credentials were missing, the first hosted sweep was still active,
+and the live schema checker remained blocked by the withdrawn lifecycle table.
+The [output ledger](fork-output-ledger-2026-09-21.md) owns the current publication
+measurements and qualified pins; [fork generation](../fork-generation.md) owns
+the remaining work.
+
+- **Catch-up moved locally.** The first seeded sweep
+  [36021389999](https://github.com/mikewolfd/spicy-regs/actions/runs/36021389999)
+  completed batch 0 and published its manifest last. It was cancelled at
+  16:36 UTC while batch 1 was still staging; the logs show ongoing CFPB
+  downloads and no merge for that batch. A detached checkout at `cded33d`
+  started the remaining batches locally at 16:38 UTC, using the existing
+  pipeline with eight agency workers and attachment enrichment enabled.
+  It retains each completed checkpoint and stops at the first failed batch.
+  At 17:32 UTC batch 1 was still running. Hosted ETL, mirror publication,
+  dedupe and comments monitoring were verified disabled during the local writer.
+- **The public surfaces are temporarily at different stages.** Batch 0
+  advanced dockets, documents, the comments index and manifest. The public
+  comments monolith kept its earlier ETag and now trails the index's advertised
+  population. The ledger records the exact counts and ETags. This is pending
+  mirror publication; source qualification of the new base outputs also remains
+  open.
+- **Batch 1 stopped before publication.** At 17:42 UTC, after staging and
+  catalog merges completed, index validation refused two CFTC comments with
+  missing `docket_id` values. The failure occurred before public upload and
+  manifest save. Public ETags were unchanged at 17:45 UTC, while the catalog
+  had already advanced according to the batch log; the ledger records those
+  counts and the affected IDs. The completion watcher stopped on the failed
+  batch, and all four held workflows remained disabled. Preserve the staging
+  and checkpoints, resolve the missing values against source evidence, validate
+  staging before another catalog write, and reconcile the partial merge before
+  retrying. Neither supervisor is still running.
+- **Recovery and publication repairs.** `a5bb31d` adds an append-only dedupe
+  journal, records candidate readiness before dropping live data, and recovers
+  from a complete candidate even when the replacement live table is partial.
+  Normal writes and exports refuse unfinished recovery. Scheduled dedupe now
+  audits only and fails on duplicates; repair and the partition probe require
+  explicit inputs. Failure-injection tests pass. A real R2 scratch-table probe
+  interrupted the first agency copy and recovered every expected ID on retry;
+  its tables were removed. This establishes the repaired recovery path, without
+  implying that production data had suffered the reproduced loss.
+  The mirror now checks retained IDs, uniqueness, docket/month counts and agency
+  partitions before publication; public and raw-catalog checks share that logic.
+- **Dependent refreshes.** `5715163` connects successful ETL publication to the
+  shared mirror, regulatory summaries, organization links, rulemaking and
+  readback. Base ETags are retained and compared after dependent jobs finish.
+  Vote terms wait for votes and members; Federal Register links wait for their
+  source refresh. Independent source schedules and manual repair entries remain.
+  Shared writer queues retain pending work. The retired lifecycle workflow is
+  removed, while its research producer remains available locally. Execution of
+  the complete new regulatory chain is still pending after catch-up.
+- **Cloudflare serving path.** Wrangler verified the active catalog, enabled
+  `r2.dev` endpoint and absence of a custom bucket domain. The configured MCP
+  Worker was absent at that check. The purge credential check now skips this
+  uncached serving path and keeps credential checks for custom domains.
+  No new purge token or Worker deployment was needed for these repairs.
+- **Code checks and Pages.** The repairs and their documentation were pushed
+  through `e944365`; [CI 36033160292](https://github.com/mikewolfd/spicy-regs/actions/runs/36033160292)
+  passed lint, type checks, the full suite and dictionary validation. Strict
+  documentation generation/build also passed. Pages deployed successfully in
+  [36033160021](https://github.com/mikewolfd/spicy-regs/actions/runs/36033160021),
+  while its independent live-schema job correctly failed on the then-unpublished
+  report-part fields. The local Actions linter passed with a narrow exception
+  for its unsupported `concurrency.queue` field; GitHub's documented queue
+  policy is recorded in the workflow review.
+- **Report migration and schema closure.** The existing report workflow
+  [36032871739](https://github.com/mikewolfd/spicy-regs/actions/runs/36032871739)
+  at `cded33d` published `52325038…`. Anonymous reads verified the complete
+  family's declared schemas and row counts, including the multipart identities
+  for `CRPT-119hrpt494` and `CRPT-119hrpt811`. The generation includes more
+  reports and hearings than the earlier migration estimate, and its hearing
+  links are now nonempty. Source and conservation audits remain pending.
+  [Attempt 2 of the live schema check](https://github.com/mikewolfd/spicy-regs/actions/runs/36033160021/attempts/2)
+  passed at 17:28 UTC after this publication. Active schema agreement is now
+  established; the ledger retains the earlier qualified generation until the
+  new source audit completes.
+- **Return to incremental scheduling.** After recovery, restart the local
+  completion watcher. It requires successful batch receipts, successful CI and
+  the reviewed fork revision.
+  It then dispatches the existing manual mirror/consumer refresh and requires
+  public/catalog readback before restoring scheduled ETL and its checks. A
+  failed check or changed fork revision stops that handoff for reconciliation.
+  This is a prepared continuation; catch-up and the full refresh have not yet
+  completed. Follow the [runbook](../etl-catalog-seed.md) and retained status files.
+
+Receipts under `~/Work/corpora/fork-execution-2026-09-21/`:
+
+- `etl-local-catchup-2026-09-24/`: pinned runner, cancelled hosted log,
+  `batch-*.log`, `progress.json`, `completion.json` and completion-gate checks.
+- `workflow-audit-2026-09-24/`: initial reproductions, real-catalog recovery
+  probe, Wrangler observations, local/hosted validation and public readbacks.
+  `report-refresh-public-readback.json` records the new report family;
+  `report-refresh-verification.json` records the successful schema recheck;
+  `base-public-readback-during-catchup.json` records the base-file snapshot;
+  `local-catchup-batch-01-failure.json` records the failed batch, affected staged
+  IDs and unchanged public ETags.
+
+The [workflow review](workflow-review-2026-09-24.md) retains the original
+findings and implementation evidence. Source qualification, historical document
+enrichment, retained court-edition automation and hosted MCP deployment remain
+separate work; this operational repair does not close T20.
+
+## September 24: CFTC source investigation
+
+The 17:55–18:00 UTC investigation establishes that the missing docket IDs come
+from the archived source records. It supersedes the earlier uncertainty about
+whether extraction lost them. Production data, code and workflow state were
+unchanged during this investigation; catch-up was stopped at that checkpoint.
+
+- Both `CFTC-2026-0595-0003` and `CFTC-2026-0595-0005` explicitly contain
+  `attributes.docketId: null` in Mirrulations. The first is titled as a test;
+  the second describes testing an ex parte meeting display. All mapped native
+  fields equal the staged rows when replayed through the actual host extractor.
+  The complete batch has exactly these two missing docket IDs. A read-only
+  catalog query found one physical row for each, preserving the source nulls.
+- Both comment detail requests to the official Regulations.gov API return 404.
+  Their parent document `CFTC-2026-0595-0002`, docket `CFTC-2026-0595` and
+  neighboring comment `…-0006` return 200. The parent and docket are titled
+  `Test 4-14-26`; the docket is `Nonrulemaking`. The 404 answers establish
+  current unavailability through those routes, not why the records disappeared.
+- Both comments explicitly name the parent through `commentOnDocumentId` and
+  `commentOn`; the live parent matches both IDs and states its docket ID.
+  This supports a separately evidenced parent-derived relationship. It does not
+  replace the null docket field on the source comment, and no ID-prefix guess
+  is required.
+- The immediate failure is the null-docket refusal in
+  `transforms/comment_partitions.py`, invoked by the index builder after
+  catalog writes. The new `comments_health.py` check also treats a missing
+  docket relationship as an incomplete identity. Offline replay reproduces
+  both refusals; ordinary null-preserving grouping retains both comments in
+  one index group with exact coverage.
+
+The initial recommendation was unknown-docket support across the application.
+Review of the actual content led to the narrower decision below: retain the
+source evidence and exclude these reviewed publisher test payloads from
+application comments and counts. Missing docket IDs remain a validation error
+for unreviewed records. No derived docket relationship is needed for this fix.
+
+Evidence: `~/Work/corpora/fork-execution-2026-09-21/cftc-missing-docket-2026-09-24/`
+contains the exact mirror JSON with listed ETags and hashes, official API
+responses, staged-row comparisons, selected catalog readback, an offline replay
+and the findings in `README.md`. The source mapping and coordinate validator
+are unchanged between failed checkout `cded33d` and reviewed code `e944365`.
+
+## September 24: reviewed test exclusions and catch-up retry
+
+The user authorized the exclusion fix after reviewing the source findings.
+Commit `3953175` separates retained source evidence from application admission
+and validates staged comments before persistent dataset merges.
+
+- **Bounded admission rule.** `reviewed_comment_exclusions.json` records each
+  reviewed ID, source locator, exact raw-byte digest, canonical JSON digest,
+  reason and evidence pointer. The transform excludes a record only when its
+  ID and complete canonical payload match. A changed payload under either ID
+  fails for review. It does not filter on titles, HTTP status or missing docket
+  fields. Successful batches checkpoint the consumed source keys so deliberate
+  exclusions do not repeat indefinitely. The exact JSON is retained both in
+  the acquisition receipts and as bounded regression fixtures.
+- **Validation before writes.** The pipeline checks staged comment coordinates
+  before merging documents, dockets or comments. Direct catalog comment merges
+  perform the same check. The existing missing-docket refusal stays in force.
+  Tests cover ordinary and chunked ingestion, consumed-key accounting, changed
+  reviewed payloads and refusal before any catalog merge. The full test suite,
+  lint, types and dictionary checks pass. A built wheel includes the decision
+  file and loads the transform successfully through an isolated import.
+- **Catalog cleanup.** A real R2 scratch-table probe verified the bounded
+  deletion across a reopened connection; the scratch table was then removed.
+  This does not establish general DELETE/INSERT replacement behavior. The
+  recovery checked every mapped native field against retained source JSON and
+  saved the complete catalog rows before deleting only the reviewed IDs with
+  their observed agency, null docket and modification date. A separate reopened
+  connection at 18:18 UTC confirmed 23,972,434 rows and distinct IDs, neither
+  excluded ID present and no null docket IDs. Neither row was in the public
+  comments file. The original observations remain available for audit.
+- **Retry from a verified checkpoint.** The failed attempt's local manifest
+  matched a fresh public download exactly, SHA-256
+  `db964dd4accddf007ae4050468d424f44b0d02c428ad2a9f20661fdcac5e3b59`.
+  The detached checkout is pinned to `3953175`; retry started at 18:21 UTC.
+  It runs batches 1 through 14 through the ordinary CLI with eight agency
+  workers and enrichment enabled. `output-retry-02/` starts with only the
+  verified manifest; the pipeline downloads its other public parents normally.
+  Original staging remains in `output/`, with the first runner, status and logs
+  preserved in `attempt-01/`. At 18:28 UTC, the live retry logged both exact
+  reviewed exclusions while processing CFTC. The retry stops at its first
+  failure; this observation does not establish completed batch publication.
+- **Completion remains gated.** Hosted ETL, mirror publication, dedupe and
+  comments monitoring remain paused during the local writer. The completion
+  watcher requires every batch receipt, successful CI at its reviewed fork
+  revision and successful public/catalog readback from the existing refresh
+  workflow before restoring schedules. Catch-up, the full dependent refresh
+  and source qualification are still open; this fix does not close T20.
+
+Recovery receipts are in
+`~/Work/corpora/fork-execution-2026-09-21/cftc-test-exclusion-repair-2026-09-24/`:
+`delete-probe.json`, `recovery-preflight.json`, `excluded-catalog-rows.json`,
+`removal-started.json`, `removal-verified.json` and the verified public manifest.
+The local catch-up directory holds current `progress.json`, `completion.json`
+and `batch-*.retry-02.log` files.

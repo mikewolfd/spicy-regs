@@ -26,33 +26,47 @@ execution update below supersedes its September 21, 22:28 UTC baseline.
 
 ## Execution update
 
-The September 21 fork campaign is under way. Each line gives a task's current
-state; the ledger holds its pins and evidence, and the execution log its history.
+Updated September 24, 2026, through the 18:21 UTC catch-up retry, following
+public/source readbacks, catalog recovery and GitHub run results. The campaign
+remains open. The ledger holds output pins and qualification limits; the execution log records
+the dated work and receipts.
 
 - **T01:** complete; SAM failures now refuse publication, and its initial load
-  is T14. Every scheduled run since fails on the extract download's `Accept`
-  header (HTTP 406), fixed in SpicyDocs 0.31.0 and adopted at the re-vendor.
-  See the ledger.
+  is T14. Earlier scheduled runs failed on the extract download's `Accept`
+  header (HTTP 406). The SpicyDocs 0.31.0 repair is adopted and awaits a
+  successful scheduled refresh. See the ledger.
 - **T03/T18:** retained-input and catalog workflows, bounded transfer, invocation
   receipts and build-only artifacts are implemented, and real GitHub build-only
   runs passed for the catalog and a two-record retained fixture
   ([retained workflows](fec-retained-workflows.md)); snapshot-based freshness
   checks and SAM dispatch controls are in place. Per-family transfers and the
-  operational gaps in the execution order remain. See the ledger.
+  operational gaps in the execution order remain. Workflow repairs are pushed:
+  catalog recovery is journaled, weekly dedupe is audit-only, dependent refreshes
+  wait for completed inputs, and health checks cover raw catalog and public data.
+  The new regulatory completion chain awaits its first full run after catch-up.
+  See the [workflow review](research/workflow-review-2026-09-24.md).
 - **T04:** complete for the selected seed: all five FEC tables, from the retained
   2024/2026 committee traversal, not all FEC history (T05). See the ledger and
   the [FEC gap register](fec-gaps.md).
-- **T06:** dockets and documents delivered as a metadata repair; document bodies
-  and text extraction remain open. The scheduled ETL has never completed a
-  sweep on the fork; the historical failures and current seed status are in the
-  ledger. The base objects were all written by local deliveries. It now refuses
-  to start without a manifest; the [catalog and manifest seed runbook](etl-catalog-seed.md)
-  holds the steps and a manifest built from the published ids.
+- **T06:** the earlier docket/document metadata repair is delivered. Catalog
+  and manifest seeding are complete; hosted ETL batch 0 published a new base
+  checkpoint. Local batch 1 stopped after catalog merges on two publisher test
+  comments with source-null docket IDs. The reviewed payloads are now excluded
+  before staging, while their raw evidence is retained. Staging validation now
+  runs before persistent merges. The two catalog rows were removed and the
+  remaining comment IDs verified unique; retry began at 18:21 UTC from the
+  verified public manifest, using `3953175`.
+  Scheduled ETL stays paused until catch-up,
+  mirror publication, dependent refresh and integrity checks succeed. Document
+  bodies and text extraction remain open. Follow the
+  [catch-up runbook](etl-catalog-seed.md).
 - **T07:** published for every comment-bearing agency, six plus ACF repaired from
   native source (decision 7), and the derived attachment text repaired in
   numeric order with one tool recorded (plan A6, decision 19); the other
-  agencies, the dated partition tree, the agency mirror and bodies remain. See
-  the ledger.
+  agencies, the dated partition tree, the agency mirror and bodies remain.
+  Catalog access and seeding now permit the agency mirror; its publication
+  follows local catch-up. The public monolith still trails the updated index.
+  See the ledger for the measured difference and source-repair scope.
 - **T08:** every selected family is source-qualified at its scope; wider history
   is open, and members/terms remain a community crosswalk, not official-roster
   completeness. See the checkpoint below and the ledger.
@@ -61,13 +75,15 @@ state; the ledger holds its pins and evidence, and the execution log its history
 - **T09:** the reconciled family is published (decision 1); unfinished bodies and
   XML pairs are retried within a per-run fetch budget (`MAX_VERSION_FETCHES`).
   Remaining work is in the checkpoint below; see the ledger.
-- **T10:** complete for the selected packages; only the inherited hearing rows'
-  capture times and read checkpoints are unqualified. See the ledger.
+- **T10:** the prior selected family retains its qualification. The multipart
+  migration has now published a larger report/hearing generation; anonymous
+  row-count and schema checks pass. Source and conservation audits of that
+  generation remain open. The ledger records its measured scope.
 - **T11:** Federal Register and the retained Agenda edition (still reginfo's
   newest) are qualified. CFR parts are placed from each volume's `PART` heading
-  (plan A8, published 2026-09-23) and the workflow is re-enabled; the 12 `§§`
-  singles and title 41's Federal Register joins wait on the 0.31.0 re-vendor
-  and plan A7. See the ledger.
+  (plan A8), and the citation and rulemaking corrections have been adopted.
+  Qualify later refreshes at their own pins; the ledger records the remaining
+  join limits and the next rulemaking changes.
 - **T12:** CRS, FCC, GAO, USAspending and court dockets are published and
   qualified at their selected scopes. Still required: raw-response retention in
   the ordinary scheduled readers for replayable audits, FCC crowded-single-day
@@ -82,13 +98,15 @@ state; the ledger holds its pins and evidence, and the execution log its history
   preflight checks the destination before parsing but reserves nothing for
   merges, publication copies, audit spill or concurrent work
   (`courtlistener-clusters-qualification/headroom-fix/`). See the ledger.
-- **T15:** every summary, link table and docket search is delivered;
-  `rulemaking_lifecycles` is withdrawn (decision 4). Docket search omits the 18
-  dockets with neither title nor abstract; the other limits are in each table's
-  dictionary entry. See the ledger.
-- **T19:** dictionary/MCP metadata and fork coverage descriptions are in place
-  for the delivered tables; representative cross-source joins remain. See the
-  ledger.
+- **T15:** the existing summaries, link tables and docket search are delivered;
+  refresh against the catch-up parents is pending. `rulemaking_lifecycles` is
+  withdrawn (decision 4), and its dispatch workflow has been removed. Docket
+  search omits the 18 dockets with neither title nor abstract; the other limits
+  are in each table's dictionary entry. See the ledger.
+- **T19:** dictionary/MCP metadata and fork coverage descriptions are in place.
+  Pages deployed, and live schema verification now passes for active published
+  tables. Hosted MCP deployment and representative cross-source joins remain
+  separate from those checks. See the ledger.
 
 ### Current parallel work
 
@@ -98,16 +116,16 @@ the ledger and the [execution log](research/fork-execution-log-2026-09-23.md).
 
 ### Congressional delivery checkpoint
 
-*Updated 2026-09-23.* Status, pins and verification for each family are in the
+*Updated 2026-09-24.* Status, pins and verification for each family are in the
 ledger; scheduled runs publish new generations before audit (decision 3).
 
 | Family | Remaining work |
 | --- | --- |
 | Members and terms | Official-roster reconciliation and finer within-term party history remain separate limits. |
-| Nominations, treaties, reports/hearings and press | Qualify the inherited hearing rows' capture times and read checkpoints; audit the live scheduled nominations, treaties and press generations (decision 3). Broader history, detail and granule coverage remain open. |
+| Nominations, treaties, reports/hearings and press | Audit generations newer than the ledger's qualified pins, including the newly expanded multipart-report/hearing family (decision 3). Broader history, detail and granule coverage remain open. |
 | Laws, committee rosters and amendments | None beyond documented limits: seats without a publisher link stay unlisted (decision 5), and Rules Committee amendments have no member sponsor. |
 | Bills, text and differences | Native-field qualification beyond the audited 118th HR/S cohort, uncaptured bodies, the four model tables (no `GEMINI_API_KEY` on the fork) and both backfill tables. |
-| Votes | Portable public source evidence, full history and dynamic scorecards; `roll_call_votes.vote_day` is fixed in code (plan A11) and backfilled by the next scheduled run, after which `bill_vote_references` joins to it. |
+| Votes | Portable public source evidence, full history and dynamic scorecards. `roll_call_votes.vote_day` is backfilled at the ledger's qualified pin; consumers use it for the chamber's day. |
 | Communications, meetings, record issues, print citations and Senate expenditures | Audit the newer scheduled generations (decision 3); the recorded post-publication drift stays explicit (`scheduled-published-qualification/`). |
 
 [Execution receipts](/Users/mikewolfd/Work/corpora/fork-execution-2026-09-21)
@@ -116,16 +134,13 @@ checks and independent reviews. The campaign remains open for the unfinished
 tasks below. Storage success is separate from hosted MCP, custom-domain, catalog
 and documentation deployment.
 
-**Full host gate:** the installed SpicyDocs 0.26.3 adoption passed 2,426 host
-tests with Ruff, types and dictionary validation, and the isolated source gate
-7,330 (`native-vote-variants-adoption/`, `reviews/votes-0263-adoption-review.md`).
-Earlier: 2,326 tests at `5028ed5`; dictionary checks and 108 focused tests at
-`dd73a7d` with green [CI](https://github.com/mikewolfd/spicy-regs/actions/runs/35671496725);
-source CI repairs `51c87a1` and `b0a8e6e` passed
-([main](https://github.com/mikewolfd/spicy-docs/actions/runs/35679643578),
-[branch](https://github.com/mikewolfd/spicy-docs/actions/runs/35679652261)); the
-0.26.2 source adoption is in `congress-vote-press-adoption/`. Gates establish
-implementation behavior, not completion of the open datasets.
+**Full host gate:** workflow repairs at `e944365` passed the full test, lint,
+type and dictionary jobs in [CI](https://github.com/mikewolfd/spicy-regs/actions/runs/36033160292).
+The strict documentation build passed. After the report migration,
+[live schema verification](https://github.com/mikewolfd/spicy-regs/actions/runs/36033160021/attempts/2)
+also passed. Earlier adoption evidence remains in the execution log and
+`native-vote-variants-adoption/`. These gates establish implementation and
+schema behavior; source qualification remains specific to each output pin.
 
 ## Baseline before execution
 
@@ -162,8 +177,9 @@ The shared API key passed a one-record OpenFEC request. A complete committee run
 has not been verified after installation. Zyte is not yet wired to a workflow
 or caller adapter. At that baseline the fork had no `SAM_API_KEY`, `GEMINI_API_KEY` or R2 catalog
 secrets. `SAM_API_KEY` and `LDA_API_KEY` were added on 2026-09-23 (decision 10);
-`GEMINI_API_KEY` and `R2_CATALOG_*` are still absent. Missing optional rate
-limit credentials are different from missing required access.
+catalog credentials were added on September 24 and the seed is verified.
+`GEMINI_API_KEY` remains absent. Missing optional rate-limit credentials are
+different from missing required access.
 
 The workflow inventory recorded 38 active thin rollup workflows; lobbying alone
 was disabled. Recent
@@ -212,50 +228,60 @@ is the evidence for valid emptiness; a generic nonempty-file check is insufficie
 | --- | --- | --- | --- |
 | **T04 · Complete for selected seed** | **Publish the audited FEC seed.** SpicyRegs + operations. | T02; the two sealed families in the inventory (**1.17 GB**) and the schema-compatible **27,311-row** committee table. T03 only for bytes that need runner transfer. | Reuse the exact sealed observation/catalog artifacts, seal the committee selection, and verify publication pins, remote bytes, CLI downloads and MCP reads. Preserve the committee cycle filter and reported-relationship limits. No reacquisition is needed for this seed. |
 | **T05 · Follow-on** | **Expand FEC from other retained sources.** SpicyDocs + SpicyRegs. | T02/T03; audited 2024/2026 tables, complete financial ZIPs, committee-history dump and retained filing/legal/agency captures. | Reconcile what is already in T04; adopt missing selected tables, expand the **32,034,987-row** individual base, and implement/adopt the assessed committee history. Track correction streams separately. Gate further inaugural, enforcement and agency adoption on their documented parser/identity limits. Wider history remains explicit; this does not block publishing T04. |
-| **T06 · Dockets/documents delivered; comments and index published; partitions open** | **Build corrected regulatory base parents.** SpicyDocs + SpicyRegs. | T02/T03; retained public dockets/documents/comments index plus the **13.8 GB** source-release set. | Apply the qualified repair paths to the intended populations, preserve newer parent observations and unrelated rows, and verify the fork's base `dockets`, `documents`, `comments_index` and selected partitions. The 392/547/3 repair cohort is evidence for the fix, not the full replacement. Use the existing base publication path; these outputs are outside managed rollup families. |
-| **T07 · Published for all 133 comment-bearing agencies; six plus ACF re-verified and repaired from native source (decision 7); the other ~126, partitions, mirror and bodies open** | **Establish the full selected comments representation.** SpicyDocs + SpicyRegs + operations. | T02; a full pinned 23,889,661-row public parent is now retained. Repair its demonstrated native-field omissions and qualify the complete selected source population. Catalog configuration is required if using the current Iceberg mirror workflow. | Retain and audit the complete chosen population, publish its index/partitions and the public comments representation needed by consumers, and verify counts agree at their declared grains. The 212,733-row sample cannot stand in for the 23,889,661-row source object. Missing full comments blocks its consumers, not independent sources. |
+| **T06 · Earlier repair delivered; local catch-up resumed** | **Build corrected regulatory base parents.** SpicyDocs + SpicyRegs. | T02/T03; retained public dockets/documents/comments index plus the **13.8 GB** source-release set. | Apply the qualified repair paths to the intended populations, preserve newer parent observations and unrelated rows, and verify the fork's base `dockets`, `documents`, `comments_index` and selected partitions. The 392/547/3 repair cohort is evidence for the fix, not the full replacement. Use the existing base publication path; these outputs are outside managed rollup families. |
+| **T07 · Public parent retained; broader native repair, partitions, mirror refresh and bodies open** | **Establish the full selected comments representation.** SpicyDocs + SpicyRegs + operations. | T02; a full pinned 23,889,661-row public parent is now retained. Repair its demonstrated native-field omissions and qualify the complete selected source population. Catalog access and seeding are complete; the mirror awaits catch-up completion. | Retain and audit the complete chosen population, publish its index/partitions and the public comments representation needed by consumers, and verify counts agree at their declared grains. The 212,733-row sample cannot stand in for the 23,889,661-row source object. Missing full comments blocks its consumers, not independent sources. |
 | **T08 · Every selected family source-qualified; wider history open** | **Admit prepared independent legislative families.** SpicyRegs. | T02/T03; measured members/terms, rosters, laws, amendments, meetings, nominations, record issues, treaties; newer communications/print outputs; corrected Senate expenditures. | Current schemas, complete family membership and raw/output audits pass for each selected scope; publish and read back each family. Keep current-only, House-only and unavailable-package limits visible. Prepare votes and press releases here if useful; finalize optional bill links in T16. |
 | **T09 · Reconciled family published (decision 1); bodies, models and backfills open** | **Build the complete bill family.** SpicyDocs + SpicyRegs. | T02/T03; corrected five-table 118th HR/S cohort; receipt-pinned 118th ZIPs; preserved 119th ZIPs and 40 body files. Qualify temporary ZIP provenance/freshness. T08 laws supplies optional links. | Reconcile all 18 family members under the ordinary `bill-family` owner, preserve intended coverage outside the repaired cohort, and acquire missing types/periods/bodies. Resolve the 600-body cap and unchanged-input skips so missing work is retried. Verify access for older backfills and models; keep uncomputed model outputs blocked, not falsely complete. Do not publish `qualified-bill-status-118-hr-s` as a competing owner. |
-| **T10 · Complete for the selected 118-package family** | **Rebuild the report family with corrected sections.** SpicyDocs + SpicyRegs. | T02/T03; retained report/hearing inputs and the corrected section replay; acquire missing selected inputs as needed. | Rebuild and qualify reports, sections, hearings, bill links and read-status outputs together. The 11-section correction sample and the old defective family cannot substitute for the intended corpus. |
+| **T10 · Prior selection qualified; expanded multipart generation awaits audit** | **Rebuild the report family with corrected sections.** SpicyDocs + SpicyRegs. | T02/T03; retained report/hearing inputs and the corrected section replay; acquire missing selected inputs as needed. | Rebuild and qualify reports, sections, hearings, bill links and read-status outputs together. The 11-section correction sample and the old defective family cannot substitute for the intended corpus. |
 | **T11 · FR, Agenda and CFR parts qualified (A8 published)** | **Audit current Federal Register, CFR and Agenda generations.** SpicyDocs + SpicyRegs. | T02; current scheduled publication pins, retained public/corrected FR parents and source releases. | Verify actual remote bytes and source/output agreement. Qualify or repair CFR's failure-to-empty/partial paths before further unattended acquisition; failed sources must preserve prior valid data. Reuse passing current generations. Repair CFR's demonstrated part-ancestry mapping and recover required source fields before claiming qualified coverage. Do not replace the newer FR population wholesale with the older 803,997-row repair parent. Regenerate only affected representations or missing scope. |
 | **T12 · CRS/FCC/USAspending/GAO/court dockets published and qualified; parties and wider populations open** | **Qualify FCC, CRS, GAO, USAspending and CourtListener docket families.** SpicyDocs + SpicyRegs. | T02/T03; retained public files and source-specific evidence. Court bulk selection, mapping and integrity receipts are linked above; the count fix is adopted and verified through the installed package. | Qualify source failure paths and complete selected populations. For courts, verify bulk bytes, map native fields and source/court selection, preserve prior observations, and acquire missing participant relationships separately. Resolve each family's field/grain defects before audited publication. A nonzero retained table is not source-completeness evidence. |
 | **T13 · Clusters, citations and opinion index delivered; bodies withdrawn (decision 6)** | **Maintain qualified cluster, citation and opinion-index metadata.** SpicyDocs + SpicyRegs. | T02/T03; published qualified June 30 clusters and docket map, the verified opinions input. | Opinion text links out through each cluster's `absolute_url`; no bodies are built or hosted (decision 6). Audit joins against the same dated inputs and preserve the broader retained population. Treat newer catch-up and older corrections as separately qualified work. |
-| **T14 · Bounded SAM and lobbying loads published (decision 10); SAM's schedule fails until the re-vendor; wider years open** | **Complete SAM and lobbying initial loads.** SpicyDocs + operations + SpicyRegs. | T01 for SAM; T02/T03; retained nonempty tables as comparison candidates, not source proof. Verify SAM-specific authorization; use the repaired filtered LDA reader. | Explicit bounded scopes, rate budgets and resumable checkpoints produce source-proven outputs. Wire SAM year/mode/record controls into dispatch. Retain source codes, dates and field meanings. Qualify and publish each family before resuming its schedule; the existing lobbying pause remains until its initial load succeeds. |
+| **T14 · Bounded loads published; SAM repair awaits scheduled verification; wider years open** | **Complete SAM and lobbying initial loads.** SpicyDocs + operations + SpicyRegs. | T01 for SAM; T02/T03; retained nonempty tables as comparison candidates, not source proof. Verify SAM-specific authorization; use the repaired filtered LDA reader. | Explicit bounded scopes, rate budgets and resumable checkpoints produce source-proven outputs. Wire SAM year/mode/record controls into dispatch. Retain source codes, dates and field meanings. Qualify later scheduled generations against their declared scope; the bounded initial loads and lobbying resumption are recorded in the ledger. |
 
 ### Then: generate dependent families from verified parents
 
 | ID / status | Task and owner | Hard prerequisites | Complete when |
 | --- | --- | --- | --- |
-| **T15 · All summaries, links and search delivered; lifecycles withdrawn (decision 4)** | **Generate regulatory summaries, links and search.** SpicyRegs. | See exact producer map below: T06 base tables; T11 FR; T04 committees plus T07 public comments for organization links. | Build each eligible rollup from recorded parent pins; verify key coverage, join fan-out, source grain and date semantics. Publish the legacy `docket_search.json.gz` through its separate path. Do not carry old derivatives forward as though rebuilt against new parents. |
+| **T15 · Existing outputs delivered; refresh after catch-up pending; lifecycles withdrawn** | **Generate regulatory summaries, links and search.** SpicyRegs. | See exact producer map below: T06 base tables; T11 FR; T04 committees plus T07 public comments for organization links. | Build each eligible rollup from recorded parent pins; verify key coverage, join fan-out, source grain and date semantics. Publish the legacy `docket_search.json.gz` through its separate path. Do not carry old derivatives forward as though rebuilt against new parents. |
 | **T16 · Bills and vote links delivered; subjects first ran 2026-09-23; the narrow writer retired (decision 31 → A1)** | **Finish bill refresh, subjects, vote and press links.** SpicyRegs. | `bill-subjects` requires T09's selected bills. Bill links for votes and press are optional dependencies. `congress_bills` has one writer, `bill-family`: its 02:00 daily run reads all eight 119th BILLSTATUS folders (18,412–18,956 bills rebuilt a run, 2026-09-21..23), while the narrow writer, at 20:15 daily, read the list only through 00:00 UTC of its run day. The family re-reads every row labelled `congress_api_list` and merges `update_date` by the larger value, so its next run restores the 3,044 instants and 3,090 of the 3,095 URLs; the other five are the 118th's and wait for a run scoped to it. The 46 119th rows (and 42 older) whose list date is later than BILLSTATUS's keep that date-only value after the re-read, so until BILLSTATUS catches up they read `url_source` `billstatus` beside an `update_date` no BILLSTATUS document stated. | Subjects reconcile the retained 20,013-row enrichment with the selected bills. Votes and press retain their source populations, distinguish missing from verified bill links, and pass join audits. Optional linking must not block their own-source acquisition. |
-| **T17 · Bootstrapped `snapshot_0e799850…` against the five qualified parents; joins under-resolved (A7)** | **Materialize rulemaking relationships.** SpicyRegs + operations. | T06 dockets/documents; T11 FR/Agenda; T15 FR-docket links. | Bootstrap deliberately with `allow_bootstrap=true`, produce all five outputs, and verify references, counts and public reads against the exact parent generations. |
+| **T17 · Qualified snapshot in ledger; next normalization and identity changes await audit** | **Materialize rulemaking relationships.** SpicyRegs + operations. | T06 dockets/documents; T11 FR/Agenda; T15 FR-docket links. | Bootstrap deliberately with `allow_bootstrap=true`, produce all five outputs, and verify references, counts and public reads against the exact parent generations. |
 
 ### Finish: consumer access and repeatable refresh
 
 | ID / status | Task and owner | Dependencies | Complete when |
 | --- | --- | --- | --- |
-| **T18 · Wiring implemented; operational gaps remain** | **Complete workflow, access and monitoring wiring.** SpicyRegs + operations. | T03 retention; per-source access checks; published parents for live checks. | Add FEC catalog and explicit retained-observation workflow inputs; retain pinned input manifests and source failures. Forward Zyte only to an actually selected adapter and validate it there. Configure required catalog access if choosing Iceberg paths. Make parent completion the barrier, and make freshness checks resolve `publication.json` rather than bare table URLs. Reconcile body/model and bounded-backfill controls with their source tasks. |
-| **T19 · Metadata implemented; wider data proof pending** | **Expose accurate catalog/MCP metadata for the fork.** SpicyRegs. | T02 output ledger and selected published families. | Add missing dictionary descriptions for `bill_subjects` and `court_opinion_clusters` (`court_opinion_bodies` is withdrawn); verify actual availability, columns, stable identifiers, join meanings, coverage and evidence links. Point the tested consumer at the fork, not an upstream default. Exercise representative cross-source joins without treating inferred links or money flows as source facts. |
+| **T18 · Workflow repairs and recovery checks pass; full completion chain pending** | **Complete workflow, access and monitoring wiring.** SpicyRegs + operations. | T03 retention; per-source access checks; published parents for live checks. | Add FEC catalog and explicit retained-observation workflow inputs; retain pinned input manifests and source failures. Forward Zyte only to an actually selected adapter and validate it there. Catalog access, parent-completion barriers and publication-aware checks are implemented; qualify their full refresh and failure paths on the fork. Reconcile body/model and bounded-backfill controls with their source tasks. |
+| **T19 · Metadata and live schema checks pass; hosted MCP and wider data proof pending** | **Expose accurate catalog/MCP metadata for the fork.** SpicyRegs. | T02 output ledger and selected published families. | Keep dictionary descriptions aligned with active publication; verify stable identifiers, join meanings, coverage and evidence links. The withdrawn opinion bodies remain excluded. Point the tested consumer at the fork, not an upstream default. Exercise representative cross-source joins without treating inferred links or money flows as source facts. |
 | **T20 · Waiting on all intended outputs** | **Close the campaign and qualify refresh.** All owners. | T02 ledger and the completed family-specific tasks; T18/T19. | Every intended output has the completion evidence below or an explicit unresolved blocker. Verify public downloads and MCP reads, then repeat selected refresh/correction/failure scenarios without losing prior valid data. Keep the campaign open for missing intended outputs. Track catalog, custom domain, Worker and Pages deployment separately; storage/data success is not deployment success. |
 
 ### Immediate execution order
 
-*As of 2026-09-23 the original steps below are largely done; see the
+*Updated 2026-09-24; see the
 [execution log](research/fork-execution-log-2026-09-23.md). What remains, in order. Items A5–A12, B6 onward, C4 and D6 are in
 SpicyDocs' consolidation plan (`spicy-docs/docs/research/consolidation-path-2026-09-22.md`),
 with their evidence in `spicy-docs/docs/research/parsing-survey-2026-09-23.md`:*
-- **Workflows.** The seven held for the 2026-09-23 push were re-enabled that day
-  (decision 22), and `cfr_sections` once its ancestry fix was published. The
-  narrow `congress_bills` writer was disabled again the same day (decision 31)
-  and is now retired, decision 31 → A1: its command, workflow and tests are
-  deleted and `bill-family` owns `congress_bills` alone; `rulemaking_lifecycles`
-  stays off by decision 4.
-  `bill_subjects` first ran on 2026-09-23 (its input was undeclared since
-  09-05); the ETL, SAM and mirror failures are in the ledger's Operations item.
+
+- **Finish local catch-up and verify the handoff.** The exact reviewed test
+  payloads are excluded from application comments and counts, with raw evidence
+  retained. Catalog cleanup and pre-write validation are complete; the local
+  runner has resumed from the verified public checkpoint. The
+  [repair record](research/fork-execution-log-2026-09-23.md#september-24-reviewed-test-exclusions-and-catch-up-retry)
+  records source evidence, the bounded exclusion rule and recovery checks.
+  Keep hosted ETL, mirror publication, dedupe and comments monitoring paused
+  during catch-up. The completion watcher requires
+  successful batch receipts and CI at the reviewed workflow revision, then runs
+  mirror publication, dependent refreshes and public/catalog readback before
+  restoring incremental scheduling. See the catch-up runbook and ledger.
+- **Qualify the new workflow path.** The code and recovery checks pass;
+  execution of the complete regulatory refresh is still pending. Source schedules
+  remain independent. Vote terms now wait for votes and members, and Federal
+  Register links wait for their parent. The narrow bill writer and withdrawn
+  lifecycle workflow are retired; retain their historical evidence.
 - **Next T07 cohorts.** Re-verify and repair the other ~126 agencies from native
   source, agency by agency. The table already holds their rows from the
-  retained parent. Then build the dated partition tree and the
-  `comments/agency/` mirror; the mirror needs the populated catalog.
+  retained parent. Catch-up completion will publish the `comments/agency/`
+  mirror from the populated catalog. The dated partition tree and broader
+  native-field repairs remain separate T07 work.
 - **Parsing and metadata consolidation.** SpicyDocs 0.32.1 is adopted and
   pushed; the print, meeting and nomination corrections are published. Next:
   audit the multipart-report, Table III, bill-family and rulemaking refreshes
@@ -265,10 +291,11 @@ with their evidence in `spicy-docs/docs/research/parsing-survey-2026-09-23.md`:*
   set), FCC filings history, USAspending beyond the top 10,000, court catch-up
   and parties (decision 9).
 - **Bill family (T09).** Bodies, models (needs `GEMINI_API_KEY`) and backfills.
-- **Operations and closure.** Catalog and manifest seeding are complete;
-  qualify the first resumed ETL sweep. Pages is deployed; repair the live schema
-  checker's handling of withdrawn outputs. Complete the remaining T18/T19
-  access and consumer checks before T20.
+- **Operations and closure.** Pages and live schema verification pass. Qualify
+  catch-up outputs, the first resumed incremental sweep and representative
+  consumer reads. The configured Cloudflare MCP Worker was absent at the
+  September 24 Wrangler check; its deployment remains separate. Complete the
+  remaining T18/T19 source access and consumer work before T20.
 
 The original order, kept for the record:
 
@@ -294,34 +321,27 @@ artifacts are reusable only when the current publisher's checks accept them.
 Use the [generation publication rules](generation-publication.md), including the
 distinction between offline candidates, managed families and legacy/base paths.
 
-### Catalog performance: partition the comments table by agency
+### Catalog performance: evaluate agency partitioning
 
-The weekly dedupe rebuilds the 23.9M-row comments catalog with ~750 full-table
-statements (per-agency hash-bucket INSERTs to bound each dedup window's memory,
-then per-agency swap INSERTs), and the nightly sweep rebuilds the index with a
-full GROUP BY per batch. The restructure, verified step first:
+Agency partitioning remains an unqualified optimization. The weekly workflow
+now audits without changing the catalog; rebuilding requires explicit `apply`.
+The repair uses bounded candidate writes, a durable readiness journal and
+verified replacement. Those recovery guarantees must survive any optimization.
 
-1. Run `uv run python scripts/probe_iceberg_partition.py` with the
-   `R2_CATALOG_*` credentials — it creates a scratch partitioned table on the
-   catalog, reads it back through an agency predicate, and drops it. Only a
-   PASS authorizes the next steps (plain DuckDB does not reproduce catalog
-   behavior; see `sources/iceberg.py` PR #117 note).
-2. On PASS: create the `comments` and `comments_dedup` tables with
-   `PARTITION BY ("agency_code")` (all three creation sites in
-   `iceberg.dedupe_table`), so every per-agency statement — the bucket build,
-   the swap, `upsert_comment_text`, the seed resume counts and the
-   backfill candidates — prunes to that agency's files instead of scanning
-   the table.
-3. Replace the swap's per-agency INSERT loop with one `INSERT INTO ... SELECT`
-   from the deduped sibling (a plain copy, no dedup window, so the bucket
-   memory bound does not apply).
-4. Leave the hash-bucket dedup build as-is (its window bound is the measured
-   reason it exists) and the per-batch index rebuild as-is (with catalog
-   DELETE unreliable, the index must keep deriving from the table, not from
-   staging deltas).
-
-The weekly dedupe then costs a few full scans plus pruned per-agency writes
-instead of ~750 full scans; the nightly per-agency paths prune for free.
+1. Run the explicit scratch partition probe with catalog credentials, through
+   `scripts/probe_iceberg_partition.py` or the workflow's `probe_partition` input.
+   A successful scratch read establishes support, not production pruning or
+   capacity.
+2. Measure agency-filtered reads and bounded writes against a representative
+   partitioned candidate. Prove identity conservation and interruption recovery
+   before changing production table creation.
+3. Keep the bounded replacement copy unless a real-catalog capacity test proves
+   a larger copy safe. An ordinary `INSERT INTO ... SELECT` can still exhaust
+   memory in the Iceberg writer; removing the dedup window does not establish
+   a safe whole-table write.
+4. Continue deriving the comments index from the catalog while DELETE behavior
+   remains unreliable. Assess manifest-load and listing costs separately using
+   the measurements in the catch-up runbook.
 
 ## Completion rule
 
@@ -367,7 +387,7 @@ wait for verified parents before starting dependents.
 | Task | Producers | Required inputs and execution conditions |
 | --- | --- | --- |
 | T06/T07 | `run-pipeline` | Produces base `dockets`, `documents`, `comments_index` and selected comments partitions/catalog. Manual non-Iceberg runs are supported; scheduled runs force Iceberg and need catalog configuration. |
-| T07 | `publish-comments-mirror.yml` | Reads the populated Iceberg catalog and writes public `comments`/agency partitions. `org-committee-links` needs this public representation. |
+| T07 | `_comments-mirror.yml`, `publish-comments-mirror.yml` | The reusable exporter runs after successful ETL, or through the manual refresh entry. It validates and publishes public comments/agency partitions before the dependent regulatory jobs run. |
 | T04/T18 | `fec-committees`, `fec-source-catalog` | Reuse the qualified local seed/catalog first. Fresh committee traversal needs the configured API key and complete acquisition evidence; catalog refresh uses the pinned provider inventory. |
 | T04/T05/T18 | `build-fec-observations` | Reuse sealed artifacts first. New builds consume an explicit manifest and exact retained releases/captures/dictionaries; this command does not acquire source data. |
 | T08 | `members`, `laws`, `committee-rosters`, `house-communications`, `committee-meetings`, `record-issues`, `treaties`, `nominations`, `amendments`, `print-citations`, `senate-expenditures` | Independent source selections; reuse measured/adopted/corrected candidates from the inventory where qualified. Relevant fresh API readers receive `DATA_GOV_API_KEY`. |
@@ -376,24 +396,28 @@ wait for verified parents before starting dependents.
 | T11 | `federal-register`, `cfr-sections`, `unified-agenda` | Audit the current scheduled generations first; reuse passing data and repair or rebuild the affected outputs. |
 | T12 | `fcc-proceedings`, `fcc-filings`, `crs-reports`, `gao-reports`, `usaspending-recipients`, `courtlistener` | Own-source inputs and success checks; `courtlistener` produces `court_dockets`. Its dedicated token is optional. |
 | T13 | `court-opinion-clusters`, `court-citations`, `court-opinions` | Native source qualification; retain cluster/scope/join inputs. Opinion bodies are withdrawn (decision 6). The citation tables and the text-free opinion index copy one whole export each; `court-opinions` runs only where the 54.6 GB original is retained. |
-| T01/T14 | `sam-entities`, `lobbying-filings` | Source refusal repair/access and bounded resumable initial acquisition. SAM defaults to one rotating registration-year window; LDA schedule remains paused. |
+| T01/T14 | `sam-entities`, `lobbying-filings` | Source refusal repair/access and bounded resumable acquisition. Both schedules are active; SAM defaults to one rotating registration-year window and its adopted request repair awaits a successful scheduled refresh. |
 | T15 | `feed-summary`, `agency-stats` | Require `dockets`, `documents`, `comments_index`. |
-| T15 | `agency-monthly-volume`, `discovery-signals`, `lifecycles` | Require `documents`; `lifecycles` produces `rulemaking_lifecycles`. |
+| T15 | `agency-monthly-volume`, `discovery-signals` | Require `documents`; run in the regulatory completion chain. The lifecycle research producer remains available locally, with its publication workflow removed. |
 | T15 | `docket-search` | Requires `dockets`; produces legacy `docket_search.json.gz` outside managed Parquet-family publication. |
-| T15 | `fr-docket-links` | Requires `federal_register`. |
-| T15 | `org-committee-links` | Requires `fec_committees` and public `comments.parquet`; the transform's comments dependency is not declared in the rollup class. Make it explicit in the execution barrier. |
+| T15 | `fr-docket-links` | Runs after successful `federal-register` refresh; a manual repair entry remains available. |
+| T15 | `org-committee-links` | Requires the selected completed FEC family and public comments. The regulatory chain waits for mirror publication and verifies unchanged base ETags; the direct comments read still sits outside the rollup class's declared local inputs. |
 | T08/T16 | `press-releases`, `roll-call-votes` | Own-source acquisition can stand alone. Optional enrichment uses `congress_bills` or `bill_vote_references`; missing links stay explicit. |
+| T08 | `member-vote-terms` | The shared congressional refresh waits for both `members` and `roll-call-votes` to succeed; individual manual repair entries remain available. |
 | T16 | `bill-subjects` | Requires selected `congress_bills`, then fetches missing per-bill subjects. |
-| T17 | `materialize-rulemaking` | Requires `dockets`, `documents`, `federal_register`, `unified_agenda`, `fr_docket_links`; first publication requires `allow_bootstrap=true`. It does not depend on FEC or full comments. |
+| T17 | `materialize-rulemaking` | Requires `dockets`, `documents`, `federal_register`, `unified_agenda`, `fr_docket_links`; first publication requires `allow_bootstrap=true`. Scheduled invocation now follows the regulatory refresh, retaining the selected external-source generations. Its direct data requirements do not include FEC or full comments. |
 
 Catalog seed scripts migrate existing docket/comment snapshots. They do not
 bootstrap an empty bucket. If the campaign starts with the supported Parquet
 base path, complete and verify the comments representation needed by consumers
 before declaring those dependents ready. Do not require unrelated Iceberg work
 for a rollup that only needs verified Parquet inputs.
-The current comments mirror also refuses fewer than **1,000,000 rows**
-(`scripts/publish_comments_mirror.py:MIN_EXPECTED_ROWS`). A bounded catalog test
-does not qualify the full mirror; preserve this protection while resolving T07.
+The mirror verifies unique IDs, preservation of previously published IDs, and
+exact index/partition coverage before upload. It also rejects a changing public
+predecessor and keeps `MIN_EXPECTED_ROWS` as an early sanity check. The workflow
+then reads public files and the raw catalog back at recorded base ETags. A
+passing synthetic recovery probe establishes repair behavior; T07 still needs
+the full public readback and source qualification of its selected population.
 
 ### Complete multi-output families
 
