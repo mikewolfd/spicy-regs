@@ -220,6 +220,40 @@ def test_fetch_rejects_unknown_mode(monkeypatch):
         )
 
 
+def test_the_extract_waits_past_the_measured_generation_and_inside_the_job(monkeypatch):
+    """The 2026 extract was ready 46 minutes after its trigger; the reader must refuse before the job is cancelled."""
+    import yaml
+    from spicy_docs.sources import sam_extract
+
+    from spicy_regs.transforms.build_sam_entities import EXTRACT_MAX_WAIT
+
+    made = []
+
+    class Recorded:
+        def __init__(self, **kwargs):
+            made.append(kwargs)
+
+        def records(self):
+            return iter(())
+
+    monkeypatch.setattr(sam_extract, "SamBulkExtract", Recorded)
+    monkeypatch.setenv("SAM_API_KEY", "k")
+    list(
+        _iter_sam_entities(
+            mode="extract",
+            registration_status="A",
+            since_year=2026,
+            until_year=2026,
+            year_windows=True,
+            max_records=None,
+        )
+    )
+    assert [kwargs["max_wait"] for kwargs in made] == [EXTRACT_MAX_WAIT]
+    workflow = Path(__file__).resolve().parents[1] / ".github/workflows/rollup-sam-entities.yml"
+    job_minutes = yaml.safe_load(workflow.read_text())["jobs"]["run"]["with"]["timeout_minutes"]
+    assert 46 * 60 < EXTRACT_MAX_WAIT <= (job_minutes - 10) * 60
+
+
 # -- date literals -----------------------------------------------------------
 
 

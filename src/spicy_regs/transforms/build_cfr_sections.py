@@ -23,8 +23,8 @@ granule token among the scan's canonical sections, O(volume bytes + granules).
 side. Title 41's compound parts keep their hyphen (``50-201``) and Title 14
 Part 241 prints ``19-8.1``. ``cfr_ref`` is NULL for ranges, publisher typos,
 unprefixed numbers and parenthesized citations (SpicyDocs'
-``split_annual_cfr_section``). A volume SpicyDocs' identity validator refuses
-is still scanned and the refusal logged; an empty scan places nothing.
+``split_annual_cfr_section``). The volume passes SpicyDocs' annual identity
+validator before it is scanned; an empty scan places nothing.
 
 Placement changes only the rows the scan holds, plus the part of a section's
 appendix or TOC (``sec746-10-app1``) whose host section (``746-10``) it holds.
@@ -44,7 +44,7 @@ this rule, which the output records in its Parquet metadata
 earlier) re-places every package, and the output is marked only when no prior
 package kept unplaced rows. ``replace_all`` forces a full re-placement.
 
-A volume that cannot be downloaded or scanned keeps that package's prior rows
+A volume that cannot be downloaded, validated or scanned keeps that package's prior rows
 and is annotated in the run log (an error when the package has no prior rows).
 With no prior table at all, any failed volume refuses the run. A 401/403
 refusal aborts the run.
@@ -200,35 +200,17 @@ def annual_volume(package_id: str | None) -> AnnualCfrSelection | None:
     return AnnualCfrSelection(int(match[1]), int(match[2]), int(match[3])) if match else None
 
 
-def place_sections(rows: Iterable[dict], xml: bytes, volume: AnnualCfrSelection) -> list[dict]:
+def place_sections(rows: Iterable[dict], xml: bytes) -> list[dict]:
     """Place each section granule of one package under its PART heading in the package's volume XML.
 
-    SpicyDocs' identity validator refuses two real volumes (CFR-2025-title34-vol4
-    repeats TITLENUM for the combined Title 34/35 volume; CFR-2025-title40-vol9
-    prints no SECTION), so its refusal is logged, never a reason to skip the
-    scan. The scan itself refuses a non-volume root and unsafe or oversized XML.
-    The validator is a second streaming pass: over the 262 retained volumes
-    (1.29 GB) it costs 14.7 s against the scan's 18.2 s, small beside the
-    download (measured 2026-09-23; drop it with the TODO(A14) switch).
-
-    A granule is looked up by token among the ``canonical`` sections only;
-    nested, wrapped and revised copies are current text too. An appendix or
-    TOC of a held section takes that section's part and keeps its other
-    values; every other row the scan does not hold is returned unchanged.
+    The scan refuses a non-volume root and unsafe or oversized XML. A granule
+    is looked up by token among the ``canonical`` sections only; nested,
+    wrapped and revised copies are current text too. An appendix or TOC of a
+    held section takes that section's part and keeps its other values; every
+    other row the scan does not hold is returned unchanged.
     """
-    from spicy_docs.sources.cfr.annual import (
-        annual_cfr_xml_locator,
-        scan_annual_cfr_sections,
-        split_annual_cfr_section,
-        validate_annual_cfr_xml,
-    )
-    from spicy_docs.sources.cfr.models import CfrSourceError
+    from spicy_docs.sources.cfr.annual import scan_annual_cfr_sections, split_annual_cfr_section
 
-    locator = annual_cfr_xml_locator(volume)
-    try:
-        validate_annual_cfr_xml(xml, identity=volume, final_url=locator, max_bytes=MAX_VOLUME_BYTES)
-    except CfrSourceError as refusal:
-        logger.warning("CFR: {} fails the annual volume validator ({}); placing from its scan", locator, refusal)
     sections = {s.granule: s for s in scan_annual_cfr_sections(xml, max_bytes=MAX_VOLUME_BYTES) if s.canonical}
 
     placed = []
@@ -250,30 +232,23 @@ def place_sections(rows: Iterable[dict], xml: bytes, volume: AnnualCfrSelection)
 def _placed_package(acquirer: CfrAcquirer, package_id: str | None, rows: list[dict]) -> list[dict] | None:
     """The package's rows with section granules placed; ``None`` when its volume cannot be read.
 
-    One download per package that has section granules. A failure leaves the
-    prior table's rows for the package in place (the merge keeps them); a
-    401/403 (``CredentialRefusedError``) is not a volume failure and aborts.
+    One download per package that has section granules, through
+    ``acquire_annual``, whose identity validator is a second streaming pass
+    before the scan: over the 262 retained 2025 volumes (1.29 GB) it cost
+    14.7 s against the scan's 18.2 s, small beside the download (measured
+    2026-09-23), and SpicyDocs 0.31.0 admits all 262, the combined Title 34/35
+    and appendix-only Title 40 vol 9 included. A failure, a refused volume
+    among them, leaves the prior table's rows for the package in place (the
+    merge keeps them); a 401/403 (``CredentialRefusedError``) is not a volume
+    failure and aborts.
     """
     volume = annual_volume(package_id)
     if volume is None or not any(_SECTION_TOKEN_RE.search(row["granule_id"]) for row in rows):
         return rows
-    from spicy_docs.sources.cfr.acquisition import CfrSourceUnavailableError
-    from spicy_docs.sources.cfr.annual import annual_cfr_xml_locator
     from spicy_docs.sources.cfr.models import CfrSourceError
 
     try:
-        # TODO(A14): once spicy-docs 0.31.0's validate_annual_cfr_xml admits
-        # CFR-2025-title34-vol4 and CFR-2025-title40-vol9, fetch through
-        # CfrAcquirer.acquire_annual and drop the logged validation in place_sections.
-        xml, _capture = acquirer.capture_validated(
-            annual_cfr_xml_locator(volume),
-            media_types=("application/xml", "text/xml"),
-            parse=lambda response, _limit: response.body,
-            max_bytes=MAX_VOLUME_BYTES,
-            unavailable=CfrSourceUnavailableError,
-            context={"operation": "annual-cfr-volume", "package": package_id},
-        )
-        return place_sections(rows, xml, volume)
+        return place_sections(rows, acquirer.acquire_annual(volume, max_bytes=MAX_VOLUME_BYTES).xml)
     except (CfrSourceError, httpx.HTTPError, ConnectionError) as error:
         logger.warning("CFR: {} volume could not be placed ({})", package_id, error)
         return None

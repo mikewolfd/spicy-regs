@@ -278,9 +278,7 @@ def test_native_ancestry_disproves_section_prefix_inference():
     assert row["cfr_ref"] is None
     # Current eCFR ancestry is not assigned to an annual edition; the edition's own
     # volume places the section, and agrees.
-    volume = build.annual_volume("CFR-2025-title14-vol4")
-    assert volume is not None
-    [placed] = build.place_sections([row], (FIXTURES / "ancestry" / "CFR-2025-title14-vol4.xml").read_bytes(), volume)
+    [placed] = build.place_sections([row], (FIXTURES / "ancestry" / "CFR-2025-title14-vol4.xml").read_bytes())
     assert (placed["part"], placed["section"], placed["cfr_ref"]) == ("241", "19-8.1", None)
 
 
@@ -315,10 +313,8 @@ def test_fresh_annual_records_are_never_placed_in_false_part_19():
         build._shape({**raw, "_package_id": package["packageId"], "_package_last_modified": package["lastModified"]})
         for raw in fixture["granules"]
     ]
-    volume = build.annual_volume(package["packageId"])
-    assert volume is not None
     xml = (FIXTURES / "ancestry" / "CFR-2025-title14-vol4.xml").read_bytes()
-    for row in build.place_sections(shaped, xml, volume):
+    for row in build.place_sections(shaped, xml):
         assert (row["part"], row["section"], row["heading"]) == expected[row["granule_id"]]
         assert row["cfr_ref"] is None
         assert row["edition_year"] == "2025" and row["title"] == "14"
@@ -384,8 +380,10 @@ FAILURES = pytest.mark.parametrize(
         [(200, "text/html", b"<html>not a volume</html>")],
         [(200, "application/xml", b"<html>not a volume</html>")],
         [(200, "application/xml", VOLUME[: len(VOLUME) // 2])],
+        # Another title's volume: it scans, but the validator refuses it before placement.
+        [(200, "application/xml", (FIXTURES / "ancestry" / "CFR-2025-title14-vol4.xml").read_bytes())],
     ],
-    ids=["unavailable", "server-error", "not-xml", "not-a-volume", "truncated"],
+    ids=["unavailable", "server-error", "not-xml", "not-a-volume", "truncated", "another-title"],
 )
 
 
