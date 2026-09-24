@@ -14,9 +14,15 @@ from spicy_docs.schemas.committee_report_tables import REPORT_SECTION_READER_VER
 
 READS_TABLE = "committee_report_reads"
 READ_COLUMNS = ("package_id", "last_modified", "outcome", "rule_version", "observed_at")
+#: ``parts`` is this repository's own rule: a report read at its part 1's stem
+#: is held, not published (``build_committee_reports.ReportPartHeld``), so a
+#: prior complete read that published one, ``CRPT-119hrpt811`` at 0.31.0, is
+#: no longer complete and the next run reads it again. TODO(B31): replaced
+#: when the report tables key parts (decision 29).
 RULE_VERSIONS = {
     "CRPT": (
         f"spicy-docs={version('spicy-docs')};cbo={CBO_ESTIMATE_RULE_VERSION};sections={REPORT_SECTION_READER_VERSION}"
+        ";parts=held-001"
     ),
     "CHRG": HEARING_BILL_LINK_RULE_VERSION,
 }

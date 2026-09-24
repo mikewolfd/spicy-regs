@@ -27,6 +27,7 @@ import pytest
 from spicy_docs.sources.govinfo.bodies import (
     PackageBodyIdentity,
     PackageSummary,
+    package_body_locator,
     parse_package_id,
     validate_package_mods,
 )
@@ -63,11 +64,6 @@ BUDGET = GovInfoBodyBudget(
 )
 
 
-#: The folder and extension GovInfo serves each rendition from; not the format
-#: name (`spicy-docs/docs/sources/govinfo-bodies.md`).
-_ROUTES = {"htm": ("html", "htm"), "pdf": ("pdf", "pdf")}
-
-
 def _package(
     package_id: str,
     *,
@@ -77,16 +73,6 @@ def _package(
     mods_bytes: bytes | None = None,
 ):
     identity = parse_package_id(package_id)
-    folder, extension = _ROUTES[fmt]
-    url = f"https://www.govinfo.gov/content/pkg/{package_id}/{folder}/{package_id}.{extension}"
-    capture = CapturedBodyResponse(
-        requested_url=url,
-        resolved_url=url,
-        status_code=200,
-        content_type=media_type,
-        observed_at=OBSERVED_AT,
-        body=body,
-    )
     mods_url = f"https://api.govinfo.gov/packages/{package_id}/mods"
     mods_capture = CapturedBodyResponse(
         requested_url=mods_url,
@@ -97,9 +83,20 @@ def _package(
         body=(FIXTURES / f"mods-{package_id}.xml").read_bytes() if mods_bytes is None else mods_bytes,
     )
     # The parse the acquirer itself runs on these bytes, so `mods.bills` and
-    # `mods.primary_bill` come from the real MODS rather than a hand-typed list.
+    # `mods.primary_bill` come from the real MODS rather than a hand-typed list,
+    # and a record naming only its part 1 is read at that part's stem, as the
+    # acquirer reads it.
     mods = validate_package_mods(
         mods_capture.body, package=identity, final_url=mods_url, max_bytes=BUDGET.max_metadata_bytes
+    )
+    url = package_body_locator(identity, fmt, part_id=mods.part_id)
+    capture = CapturedBodyResponse(
+        requested_url=url,
+        resolved_url=url,
+        status_code=200,
+        content_type=media_type,
+        observed_at=OBSERVED_AT,
+        body=body,
     )
     return GovInfoPackageBody(
         identity=identity,
@@ -121,6 +118,7 @@ def _package(
             media_type=media_type,
             final_url=url,
             byte_size=len(body),
+            part_id=mods.part_id,
         ),
         summary_capture=capture,
         mods_capture=mods_capture,
