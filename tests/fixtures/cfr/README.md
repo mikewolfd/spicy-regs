@@ -58,6 +58,6 @@ unchanged from spicy-docs' `annual-title34-vol4-combined.xml` and
 `annual-title40-vol9-appendices.xml` (spicy-docs `7b65900`), which keep the
 title page and title headings the validator reads (Title 35's empty reserved
 heading among them); the element-path-only cuts made by `cut_refused_fixtures.py`
-dropped those headings. 0.31.0 admits both excerpts and all 262 retained 2025
-volumes in `cfr-ancestry-2026-09-23/xml/` (digests in its `fetch.json`,
-re-checked 2026-09-23); 0.30.0 refused these two.
+dropped those headings. 0.31.0 admits both excerpts and all 262 retained
+volumes (236 from 2025, 26 from 2026) in `cfr-ancestry-2026-09-23/xml/`
+(digests in its `fetch.json`, re-checked 2026-09-23); 0.30.0 refused these two.

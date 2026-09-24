@@ -1570,14 +1570,18 @@ tables:
     data_quality: >-
       The publisher's `updateDate desc` order repeats and skips amendments
       across page boundaries when stamps tie, so one walk can serve the
-      declared count while missing some amendments. The builder pools whole
-      walks, alternating order and page size, until one walk is clean or the
-      pool holds exactly the declared count; a record without an `updateDate`,
-      or a pool larger than the count, refuses the run. Sponsor, chamber, submitted date and the amended bill or
-      amendment come from each amendment's detail record; the list route
-      carries none of them. 89 House amendments name the Rules Committee as
-      sponsor and have no member sponsor to record. All columns are stored as
-      VARCHAR.
+      declared count while missing some amendments. The builder repeats whole
+      walks, alternating order and page size, and settles on the first of two
+      things: a clean walk (no amendment repeated, its distinct count the
+      declared count), which stands alone, or the walks since the count last
+      changed pooled to exactly the declared count. A pool larger than the
+      count is never published, but a later clean walk can still settle; a
+      query unsettled after its walks refuses the run, as does a record
+      without an `updateDate`. Sponsor, chamber, submitted date and the
+      amended bill or amendment come from each amendment's detail record; the
+      list route carries none of them. 89 House amendments name the Rules
+      Committee as sponsor and have no member sponsor to record. All columns
+      are stored as VARCHAR.
     coverage: >-
       Window: the 119th Congress, complete as of 2026-09-23: 7,095 amendments,
       equal to the publisher's declared count, each with its detail record.

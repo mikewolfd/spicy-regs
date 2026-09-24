@@ -248,10 +248,55 @@ def test_the_extract_waits_past_the_measured_generation_and_inside_the_job(monke
             max_records=None,
         )
     )
-    assert [kwargs["max_wait"] for kwargs in made] == [EXTRACT_MAX_WAIT]
+    [wait] = [kwargs["max_wait"] for kwargs in made]
+    assert EXTRACT_MAX_WAIT - 1 < wait <= EXTRACT_MAX_WAIT
     workflow = Path(__file__).resolve().parents[1] / ".github/workflows/rollup-sam-entities.yml"
     job_minutes = yaml.safe_load(workflow.read_text())["jobs"]["run"]["with"]["timeout_minutes"]
     assert 46 * 60 < EXTRACT_MAX_WAIT <= (job_minutes - 10) * 60
+
+
+def test_a_multi_year_run_shares_one_wait_and_refuses_the_year_it_cannot_reach(monkeypatch, tmp_path):
+    """The years share the run's wait: a year with none left is refused before its trigger, and nothing is published.
+
+    The refusal escapes the rollup CLI, so ``run-rollup-sam-entities`` exits 1.
+    """
+    import importlib
+    import time
+
+    from spicy_docs.sources import sam_extract
+
+    from spicy_regs.pipelines.rollups import base
+    from spicy_regs.pipelines.rollups import sam_entities as rollup
+    from spicy_regs.sources import publication
+
+    build = importlib.import_module("spicy_regs.transforms.build_sam_entities")
+    triggered = []
+
+    class SpendsTheWait:
+        def __init__(self, **kwargs):
+            triggered.append(kwargs)
+
+        def records(self):
+            time.sleep(0.2)  # the first year outlasts the whole budget below
+            yield _RAW_ENTITY
+
+    published = []
+    monkeypatch.setattr(sam_extract, "SamBulkExtract", SpendsTheWait)
+    monkeypatch.setattr(build, "EXTRACT_MAX_WAIT", 0.1)
+    monkeypatch.setattr(build.r2, "download", lambda *_: False)
+    monkeypatch.setattr(publication, "publish_generation", lambda *args, **kwargs: published.append(args))
+    monkeypatch.setattr(base, "load_dotenv", lambda *args, **kwargs: None)
+    monkeypatch.setenv("SAM_API_KEY", "k")
+    monkeypatch.setenv("SAM_SINCE_YEAR", "2025")
+    monkeypatch.setenv("SAM_UNTIL_YEAR", "2026")
+
+    with pytest.raises(SamExtractError, match="spent before year 2026"):
+        rollup.app(["--output-dir", str(tmp_path), "--no-skip-upload"])
+
+    assert [kwargs["year"] for kwargs in triggered] == [2025]
+    assert 0 < triggered[0]["max_wait"] <= 0.1
+    assert published == []
+    assert not (tmp_path / build.OUTPUT).exists() and not (tmp_path / "generations").exists()
 
 
 # -- date literals -----------------------------------------------------------
