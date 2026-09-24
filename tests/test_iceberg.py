@@ -632,6 +632,9 @@ def test_dedupe_table_resumes_interrupted_swap(tmp_path, local_catalog) -> None:
     col_list = ", ".join(f'"{c}"' for c in COMMENT.schema)
     con.execute(f"CREATE TABLE {dedup_tbl} ({col_defs});")
     con.execute(f"INSERT INTO {dedup_tbl} ({col_list}) SELECT {col_list} FROM {tbl};")
+    state_tbl = f'{iceberg._schema_ref()}."comments_dedup_state"'
+    con.execute(f"CREATE TABLE {state_tbl} (phase VARCHAR, row_count BIGINT)")
+    con.execute(f"INSERT INTO {state_tbl} VALUES ('building', 3), ('ready', 3)")
     con.execute(f"DROP TABLE {tbl};")
 
     before, after = iceberg.dedupe_table(con, COMMENT)
@@ -642,6 +645,54 @@ def test_dedupe_table_resumes_interrupted_swap(tmp_path, local_catalog) -> None:
     assert con.execute(f"SELECT count(*) FROM {tbl}").fetchone()[0] == 3
     with pytest.raises(duckdb.Error):
         con.execute(f"SELECT 1 FROM {dedup_tbl} LIMIT 1")
+
+
+@pytest.mark.parametrize("statement,occurrence", [
+    ('INSERT INTO {sibling}', 1),
+    ("INSERT INTO {state} VALUES ('ready'", 1),
+    ('DROP TABLE IF EXISTS {live}', 1),
+    ('CREATE TABLE {live}', 1),
+    ('INSERT INTO {live}', 1),
+    ('DROP TABLE IF EXISTS {sibling}', 2),
+])
+def test_dedupe_recovers_after_each_durable_phase(tmp_path, local_catalog, statement, occurrence):
+    con = local_catalog
+    iceberg._ensure_table(con, COMMENT)
+    base = tmp_path / 'seed.parquet'
+    rows = [_comment('a', 'EPA-1', 'EPA', '2025-01-01'), _comment('b', 'OMB-1', 'OMB', '2025-01-01')]
+    pl.DataFrame(rows + rows, schema=COMMENT.schema).write_parquet(base)
+    iceberg.seed_comments_from_parquet(con, str(base), COMMENT)
+    live = iceberg._qualified(COMMENT)
+    prefix = statement.format(live=live, sibling=f'{iceberg._schema_ref()}."comments_dedup"',
+                              state=f'{iceberg._schema_ref()}."comments_dedup_state"')
+
+    class InterruptedConnection:
+        seen = 0
+
+        def execute(self, sql, parameters=None):
+            result = con.execute(sql, parameters) if parameters is not None else con.execute(sql)
+            if sql.lstrip().startswith(prefix):
+                self.seen += 1
+                if self.seen == occurrence:
+                    raise RuntimeError('injected interruption after durable statement')
+            return result
+
+    with pytest.raises(RuntimeError, match='injected interruption'):
+        iceberg.dedupe_table(InterruptedConnection(), COMMENT)
+    assert iceberg.dedupe_recovery_pending(con, COMMENT)
+    assert iceberg.dedupe_table(con, COMMENT) == (4, 2)
+    assert con.execute(f'SELECT comment_id FROM {live} ORDER BY comment_id').fetchall() == [('a',), ('b',)]
+    assert not iceberg.dedupe_recovery_pending(con, COMMENT)
+
+
+def test_dedupe_preserves_unjournaled_legacy_candidate(local_catalog):
+    con = local_catalog
+    iceberg._ensure_table(con, COMMENT)
+    sibling = f'{iceberg._schema_ref()}."comments_dedup"'
+    con.execute(f'CREATE TABLE {sibling} AS SELECT * FROM {iceberg._qualified(COMMENT)}')
+    with pytest.raises(RuntimeError, match='Unjournaled'):
+        iceberg.dedupe_table(con, COMMENT)
+    assert iceberg.dedupe_recovery_pending(con, COMMENT)
 
 
 def _write_snapshot(path: Path, rows: list[dict]) -> None:

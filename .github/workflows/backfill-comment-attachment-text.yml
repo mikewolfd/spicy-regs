@@ -76,6 +76,7 @@ concurrency:
   # race on the public files.
   group: comments-catalog-write
   cancel-in-progress: false
+  queue: max
 
 jobs:
   backfill:

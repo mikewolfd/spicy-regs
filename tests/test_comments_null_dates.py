@@ -5,7 +5,7 @@ import polars as pl
 import pyarrow.parquet as pq
 import pytest
 
-from scripts.check_comments_freshness import _FRESHNESS_SQL
+from spicy_regs.comments_health import check_comments
 from spicy_regs.schemas import COMMENT, DOCKET
 from spicy_regs.sources import iceberg
 from spicy_regs.transforms import merge_comments_partitioned, update_comments_index, write_staging
@@ -75,22 +75,14 @@ def test_ordinary_merge_refuses_malformed_dates_before_writes(tmp_path, bad):
 
 def test_freshness_handles_unknown_only_agencies_and_still_flags_missing_or_lagging_rows():
     with duckdb.connect() as con:
-        con.execute("CREATE TABLE comments (comment_id VARCHAR, agency_code VARCHAR, posted_date VARCHAR)")
-        con.execute("CREATE TABLE comments_index (agency_code VARCHAR, year BIGINT, month BIGINT, row_count BIGINT)")
-        con.execute("INSERT INTO comments VALUES ('u','EPA',NULL),('k','FDA','2025-01-01')")
-        con.execute("INSERT INTO comments_index VALUES ('EPA',NULL,NULL,1),('FDA',2025,2,1),('MISSING',NULL,NULL,1)")
-        got = con.execute(_FRESHNESS_SQL.format(idx_where="", rows_where="")).fetchall()
-        # The single query now also carries the uniqueness aggregates; the
-        # freshness set is the same predicate the script applies over them.
-        stale = {
-            row[0]
-            for row in got
-            if (row[4] == 0 and row[2] is None)
-            or (row[1] is not None and (row[2] is None or row[2] < row[1]))
-        }
-        duplicated = {row[0] for row in got if row[4] > row[5]}
-        assert stale == {"FDA", "MISSING"}
-        assert duplicated == set()
+        con.execute("CREATE TABLE comments (comment_id VARCHAR, agency_code VARCHAR, docket_id VARCHAR, posted_date VARCHAR)")
+        con.execute("CREATE TABLE comments_index (agency_code VARCHAR, docket_id VARCHAR, year BIGINT, month BIGINT, row_count BIGINT)")
+        con.execute("INSERT INTO comments VALUES ('u','EPA','EPA-1',NULL),('k','FDA','FDA-1','2025-01-01')")
+        con.execute("INSERT INTO comments_index VALUES ('EPA','EPA-1',NULL,NULL,1),('FDA','FDA-1',2025,2,1),('MISSING','M-1',NULL,NULL,1)")
+        errors = check_comments(con, 'SELECT * FROM comments', 'SELECT * FROM comments_index')
+        assert any('FDA/' in error for error in errors)
+        assert any('MISSING/' in error for error in errors)
+        assert not any('EPA/' in error or 'unique IDs' in error for error in errors)
 
 
 def test_partial_null_partition_coordinates_refuse_index_replacement(tmp_path):

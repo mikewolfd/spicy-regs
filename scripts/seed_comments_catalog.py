@@ -208,7 +208,7 @@ def main() -> int:
         logger.info("Uploading rebuilt comments index to R2...")
         r2.upload_file(index_file, remote_key="comments_index.parquet")
 
-    logger.info("Done. Verify with: uv run python scripts/check_comments_freshness.py")
+    logger.info("Done. Verify with: uv run python scripts/check_comments_freshness.py --surface catalog")
     return 0
 
 

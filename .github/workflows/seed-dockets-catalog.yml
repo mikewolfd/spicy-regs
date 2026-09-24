@@ -49,6 +49,7 @@ concurrency:
   # rather than running free.
   group: ${{ inputs.dry_run == true && format('seed-dockets-dry-{0}', github.run_id) || 'comments-catalog-write' }}
   cancel-in-progress: false
+  queue: max
 
 jobs:
   seed:

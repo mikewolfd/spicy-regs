@@ -50,6 +50,7 @@ concurrency:
   # safe under concurrent writers); a seed queues behind an in-flight run.
   group: comments-catalog-write
   cancel-in-progress: false
+  queue: max
 
 jobs:
   seed:
@@ -126,4 +127,4 @@ jobs:
           R2_CATALOG_NAMESPACE: ${{ secrets.R2_CATALOG_NAMESPACE }}
         run: |
           : "${R2_PUBLIC_URL:?Set R2_PUBLIC_URL to the public data URL for this repository}"
-          uv run --frozen python scripts/check_comments_freshness.py
+          uv run --frozen python scripts/check_comments_freshness.py --surface catalog

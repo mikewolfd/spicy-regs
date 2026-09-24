@@ -1,40 +1,20 @@
 name: Dedupe comments catalog
 
-# Audits and (optionally) removes duplicate rows from the Iceberg `comments`
-# catalog table. Duplicates arise because DuckDB's Iceberg engine has no
-# MERGE INTO, so the daily upsert (iceberg._merge) removes superseded rows with a
-# plain DELETE — and DELETE does not reliably remove prior rows on the R2 Data
-# Catalog. The one-time seed hit this at large scale (agencies loaded more than
-# once kept exact copies); the daily merge hits it at small scale, so a handful
-# of re-merged comment_ids leak in per run. The read surface hides them
-# (mcp_server dedups the `comments` view on read); this job reclaims the physical
-# rows. See scripts/dedupe_comments_catalog.py.
-#
-# Runs weekly (Sunday 09:00 UTC) as physical compaction — the read-side dedup
-# already keeps queries + the freshness check correct, so this is housekeeping to
-# keep storage bounded — plus manual dispatch. Scheduled runs always `--apply`;
-# manual dispatch defaults to a read-only audit (flip `apply` on to rebuild). The
-# rebuild writes a deduped sibling per agency and swaps it in by DROP + CREATE +
-# per-agency INSERT (never DELETE, never a whole-table single write); the sibling
-# is kept until the rebuilt row count is verified, so an interrupted swap is
-# resumable. After an apply this workflow republishes the public comments mirror
-# so the UI's files reflect the cleaned catalog.
-#
-# Requires: R2_CATALOG_URI, R2_CATALOG_WAREHOUSE, R2_CATALOG_TOKEN (+ optional
-# R2_CATALOG_NAMESPACE) to read/write the catalog; plus R2_ACCESS_KEY_ID,
-# R2_SECRET_ACCESS_KEY, R2_ENDPOINT, R2_BUCKET_NAME, R2_PUBLIC_URL for the mirror.
-#
-# Manual dispatch also runs a probe-partition job: it creates a scratch
-# partitioned table on the catalog, reads it back through an agency predicate
-# and drops it, printing PASS/FAIL — the pre-verified step for the
-# PARTITION BY (agency_code) restructure recorded in docs/fork-generation.md.
+# Weekly read-only duplicate audit. Repairs and the scratch partition probe
+# require separate, explicit manual inputs. Keep automatic repair off until
+# interrupted replacement has passed an isolated real-catalog recovery check.
 on:
   schedule:
-    - cron: '0 9 * * 0'  # weekly compaction, Sunday 09:00 UTC
+    - cron: '0 9 * * 0'  # read-only audit, Sunday 09:00 UTC
   workflow_dispatch:
     inputs:
       apply:
         description: 'Rebuild the table deduplicated (off = read-only audit)'
+        required: false
+        default: false
+        type: boolean
+      probe_partition:
+        description: 'Create and remove a scratch table to check partition support'
         required: false
         default: false
         type: boolean
@@ -46,6 +26,7 @@ concurrency:
   # a writer queue behind the in-flight one instead of clobbering it.
   group: comments-catalog-write
   cancel-in-progress: false
+  queue: max
 
 jobs:
   dedupe:
@@ -66,12 +47,10 @@ jobs:
         uses: astral-sh/setup-uv@v4
 
       - name: Install dependencies
-        run: uv sync
+        run: uv sync --frozen
 
       - name: Audit / dedupe the catalog
         env:
-          # Scheduled compaction always applies; manual dispatch honors the input.
-          EVENT: ${{ github.event_name }}
           APPLY: ${{ inputs.apply }}
           R2_CATALOG_URI: ${{ secrets.R2_CATALOG_URI }}
           R2_CATALOG_WAREHOUSE: ${{ secrets.R2_CATALOG_WAREHOUSE }}
@@ -79,43 +58,19 @@ jobs:
           R2_CATALOG_NAMESPACE: ${{ secrets.R2_CATALOG_NAMESPACE }}
         run: |
           ARGS=""
-          if [ "$EVENT" = "schedule" ] || [ "$APPLY" = "true" ]; then
+          if [ "$APPLY" = "true" ]; then
             ARGS="$ARGS --apply"
           fi
           echo "Running: uv run python scripts/dedupe_comments_catalog.py $ARGS"
           uv run python scripts/dedupe_comments_catalog.py $ARGS
 
-      # After an apply the catalog is clean but the public mirror the UI reads is
-      # still the pre-dedupe export, so refresh it. Skipped on an audit-only
-      # dispatch (apply=false), where nothing changed.
-      - name: Republish the public comments mirror
-        if: ${{ github.event_name == 'schedule' || inputs.apply == true }}
-        env:
-          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
-          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
-          R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL }}
-          # Cloudflare edge-cache purge after publish (best-effort; no-op if unset).
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
-          # Re-exporting from the catalog re-sorts + re-compresses, so a partition
-          # can shrink on disk while holding more rows; the script enforces a
-          # row-count floor instead of the byte-size shrink guard.
-          R2_ALLOW_SHRINK: '1'
-          R2_CATALOG_URI: ${{ secrets.R2_CATALOG_URI }}
-          R2_CATALOG_WAREHOUSE: ${{ secrets.R2_CATALOG_WAREHOUSE }}
-          R2_CATALOG_TOKEN: ${{ secrets.R2_CATALOG_TOKEN }}
-          R2_CATALOG_NAMESPACE: ${{ secrets.R2_CATALOG_NAMESPACE }}
-        run: |
-          echo "Running: uv run python scripts/publish_comments_mirror.py"
-          uv run python scripts/publish_comments_mirror.py
+      # Public export is a separate explicit operation after verified recovery.
 
   probe-partition:
     # Manual-dispatch only: the one-command verification for the comments
     # catalog PARTITION BY restructure (see docs/fork-generation.md). Creates
     # a scratch table, reads it back through an agency predicate, drops it.
-    if: ${{ github.event_name == 'workflow_dispatch' }}
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.probe_partition }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -132,7 +87,7 @@ jobs:
         uses: astral-sh/setup-uv@v4
 
       - name: Install dependencies
-        run: uv sync
+        run: uv sync --frozen
 
       - name: Probe partitioned Iceberg table support
         env:

@@ -8,14 +8,9 @@ name: Check comments freshness
 # in `comments`) is what drove the Iceberg cutover; this check makes a recurrence
 # visible instead of silent.
 #
-# scripts/check_comments_freshness.py exits 1 when any agency's rows lag the
-# index, so a drift turns this job red (and notifies watchers). It reads whatever
-# the MCP server is configured to read: the R2 Data Catalog (Iceberg) when the
-# R2_CATALOG_* secrets are set, otherwise the public monolithic comments.parquet
-# — i.e. it validates the actual surface users query.
-#
-# Read-only: it never writes to R2 or the catalog. Runs after the day's ETL and
-# rollups have settled (last ETL batch ~20:25 UTC, feed_summary rollup 22:30).
+# Checks raw catalog uniqueness, public monolith and agency partitions, and
+# exact agency/docket/month agreement with the index. The shared writer queue
+# prevents a scheduled check from reading a catalog during replacement.
 on:
   schedule:
     - cron: '30 23 * * *'
@@ -27,10 +22,15 @@ on:
         default: ''
         type: string
 
+concurrency:
+  group: comments-catalog-write
+  cancel-in-progress: false
+  queue: max
+
 jobs:
   check:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 45
 
     steps:
       - name: Checkout
@@ -45,22 +45,21 @@ jobs:
         uses: astral-sh/setup-uv@v4
 
       - name: Install dependencies
-        run: uv sync
+        run: uv sync --frozen
 
       - name: Check comments freshness
         env:
           R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL }}
-          # When present, the check validates the Iceberg catalog surface;
-          # otherwise it falls back to the public monolithic comments.parquet.
+          # Verify both the anonymous mirror and physical catalog rows.
+          AGENCY: ${{ inputs.agency }}
           R2_CATALOG_URI: ${{ secrets.R2_CATALOG_URI }}
           R2_CATALOG_WAREHOUSE: ${{ secrets.R2_CATALOG_WAREHOUSE }}
           R2_CATALOG_TOKEN: ${{ secrets.R2_CATALOG_TOKEN }}
           R2_CATALOG_NAMESPACE: ${{ secrets.R2_CATALOG_NAMESPACE }}
         run: |
           : "${R2_PUBLIC_URL:?Set R2_PUBLIC_URL to the public data URL for this repository}"
-          ARGS=""
-          if [ -n "${{ inputs.agency }}" ]; then
-            ARGS="$ARGS --agency ${{ inputs.agency }}"
+          ARGS=(--surface both)
+          if [ -n "$AGENCY" ]; then
+            ARGS+=(--agency "$AGENCY")
           fi
-          echo "Running: uv run --frozen python scripts/check_comments_freshness.py $ARGS"
-          uv run --frozen python scripts/check_comments_freshness.py $ARGS
+          uv run --frozen python scripts/check_comments_freshness.py "${ARGS[@]}"

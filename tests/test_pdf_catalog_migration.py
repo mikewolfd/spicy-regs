@@ -21,12 +21,16 @@ class CachedConnection:
         self.commands = []
         self.closed = False
 
-    def execute(self, sql):
+    def execute(self, sql, parameters=None):
         assert not self.closed
         self.commands.append(sql)
         if self.refusal is not None and sql.startswith("ALTER TABLE"):
             raise self.refusal
         return self
+
+    def fetchone(self):
+        assert "information_schema.tables" in self.commands[-1]
+        return (0,)  # No interrupted dedupe in these migration scenarios.
 
     def fetchall(self):
         # ADD does not change this cached schema, matching the Iceberg finding.
@@ -113,3 +117,13 @@ def test_wrong_existing_type_closes_without_ddl(monkeypatch):
         iceberg._connect_for_table(COMMENT)
     assert current.closed
     assert not any(sql.startswith("ALTER TABLE") for sql in current.commands)
+
+
+def test_pending_dedupe_refuses_normal_writes_before_schema_changes(monkeypatch):
+    current = CachedConnection(None)
+    monkeypatch.setattr(current, "fetchone", lambda: (1,))
+    monkeypatch.setattr(iceberg, "_connect", lambda: current)
+    with pytest.raises(RuntimeError, match="Unfinished dedupe"):
+        iceberg._connect_for_table(COMMENT)
+    assert current.closed
+    assert all("information_schema.tables" in sql for sql in current.commands)

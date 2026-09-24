@@ -160,6 +160,8 @@ def _connect_for_table(record_type: RecordType):
     """
     con = _connect()
     try:
+        if dedupe_recovery_pending(con, record_type):
+            raise RuntimeError(f"Unfinished dedupe for {record_type.name}; recover it before writing or exporting")
         changed = _ensure_table(con, record_type)
     except Exception:
         con.close()
@@ -633,6 +635,20 @@ def audit_duplicates(con, record_type: RecordType) -> list[tuple[str, int, int]]
     return [(r[0], r[1], r[2]) for r in rows]
 
 
+def _table_exists(con, name: str) -> bool:
+    """Inspect metadata; a permission or transport failure must propagate."""
+    return bool(con.execute(
+        "SELECT count(*) FROM information_schema.tables "
+        "WHERE table_catalog = ? AND table_schema = ? AND table_name = ?",
+        [_CATALOG_ALIAS, _namespace(), name],
+    ).fetchone()[0])
+
+
+def dedupe_recovery_pending(con, record_type: RecordType) -> bool:
+    """A retained candidate or journal requires explicit recovery, even if live IDs are unique."""
+    return any(_table_exists(con, record_type.name + suffix) for suffix in ("_dedup", "_dedup_state"))
+
+
 def dedupe_table(con, record_type: RecordType) -> tuple[int, int]:
     """Collapse the catalog table to one row per ``dedup_key`` (latest modify_date).
 
@@ -657,9 +673,10 @@ def dedupe_table(con, record_type: RecordType) -> tuple[int, int]:
       replaces the live table by ``DROP`` + ``CREATE`` + per-agency ``INSERT``
       from the sibling — all operations this catalog supports. The sibling is the
       durable copy: it is dropped only after the rebuilt table's row count is
-      verified, so an interruption mid-swap loses nothing. A re-run detects the
-      live table missing (but the sibling present) and resumes from the sibling
-      instead of rebuilding it from a table that no longer exists.
+      verified. An append-only journal marks the candidate complete before
+      replacement starts. Recovery resumes from that candidate even when live
+      exists but is incomplete. Unjournaled legacy candidates require manual
+      reconciliation and are never discarded automatically.
 
     Returns ``(rows_before, rows_after)``; ``rows_after`` equals the number of
     distinct keys when the rebuild succeeds.
@@ -668,46 +685,60 @@ def dedupe_table(con, record_type: RecordType) -> tuple[int, int]:
     name = record_type.name
     tbl = _qualified(record_type)
     dedup_tbl = f'{_schema_ref()}."{name}_dedup"'
+    state_tbl = f'{_schema_ref()}."{name}_dedup_state"'
     col_defs = ", ".join(f'"{c}" VARCHAR' for c in record_type.schema)
     col_list = ", ".join(f'"{c}"' for c in record_type.schema)
 
-    def _exists(ident: str) -> bool:
-        try:
-            con.execute(f"SELECT 1 FROM {ident} LIMIT 1")
-            return True
-        except Exception:
-            return False
+    def _verify(ident: str, expected: int) -> None:
+        rows, distinct = con.execute(f'SELECT count(*), count(DISTINCT "{key}") FROM {ident}').fetchone()
+        if rows != expected or distinct != expected:
+            raise RuntimeError(f"dedupe verification failed: {ident} has {rows} rows / {distinct} IDs; expected {expected}")
 
     def _replace_live_from_sibling() -> int:
         # Swap without RENAME: rebuild the live table from the deduped sibling
         # using DROP/CREATE/INSERT (per-agency, so no whole-table statement). The
         # sibling still holds every row throughout, so this is safe to re-run if
         # interrupted; it is dropped only once the rebuilt row count matches.
-        expected = con.execute(f"SELECT count(*) FROM {dedup_tbl}").fetchone()[0]
+        expected = con.execute(f"SELECT row_count FROM {state_tbl} WHERE phase = 'ready'").fetchone()[0]
+        _verify(dedup_tbl, expected)
         sibling_agencies = [r[0] for r in con.execute(f"SELECT DISTINCT agency_code FROM {dedup_tbl}").fetchall()]
         con.execute(f"DROP TABLE IF EXISTS {tbl};")
         con.execute(f"CREATE TABLE {tbl} ({col_defs});")
         for agency in sibling_agencies:
             where = "agency_code IS NULL" if agency is None else f"agency_code = '{_sql_str(agency)}'"
             con.execute(f"INSERT INTO {tbl} ({col_list}) SELECT {col_list} FROM {dedup_tbl} WHERE {where};")
-        rebuilt = con.execute(f"SELECT count(*) FROM {tbl}").fetchone()[0]
-        if rebuilt != expected:
-            raise RuntimeError(
-                f"dedupe rebuild mismatch: {tbl} has {rebuilt:,} rows, expected {expected:,}; "
-                f"{dedup_tbl} left in place as the safe copy — re-run to retry the swap"
-            )
+        _verify(tbl, expected)
         con.execute(f"DROP TABLE IF EXISTS {dedup_tbl};")
-        return rebuilt
+        con.execute(f"DROP TABLE {state_tbl};")
+        return expected
 
-    # Resume an interrupted swap: the live table is gone but the deduped sibling
-    # is intact. Rebuild from the sibling rather than rebuilding the sibling from
-    # a missing table (which would destroy the only good copy).
-    if not _exists(tbl) and _exists(dedup_tbl):
-        logger.warning("iceberg: {} missing but {} present — resuming interrupted dedupe swap", tbl, dedup_tbl)
-        after = _replace_live_from_sibling()
-        return after, after
+    # The append-only journal distinguishes a partial candidate from a complete
+    # one. Record readiness BEFORE dropping live. Never infer readiness from
+    # whether live exists: it can exist and still be only partly restored.
+    if _table_exists(con, name + "_dedup") and not _table_exists(con, name + "_dedup_state"):
+        raise RuntimeError(f"Unjournaled dedupe candidate {dedup_tbl}; preserve it and reconcile before repair")
+    con.execute(f"CREATE TABLE IF NOT EXISTS {state_tbl} (phase VARCHAR, row_count BIGINT)")
+    journal = con.execute(f"SELECT phase, row_count FROM {state_tbl}").fetchall()
+    state = dict(journal)
+    if len(journal) != len(state) or set(state) - {"building", "ready"}:
+        raise RuntimeError(f"Invalid dedupe journal {state_tbl}; refusing to overwrite recovery data")
+    if "ready" in state:
+        if "building" not in state:
+            raise RuntimeError(f"Missing original count in {state_tbl}")
+        if _table_exists(con, name + "_dedup"):
+            after = _replace_live_from_sibling()
+        else:
+            # The copy completed and the sibling was removed, but cleanup was interrupted.
+            _verify(tbl, state["ready"])
+            after = state["ready"]
+            con.execute(f"DROP TABLE {state_tbl}")
+        return state["building"], after
 
     before = con.execute(f"SELECT count(*) FROM {tbl}").fetchone()[0]
+    if "building" in state and state["building"] != before:
+        raise RuntimeError("Live population changed during dedupe preparation; preserve recovery data")
+    if "building" not in state:
+        con.execute(f"INSERT INTO {state_tbl} VALUES ('building', {before})")
 
     # Build the deduped sibling fresh (discarding any partial one from an aborted
     # run), one agency at a time.
@@ -744,6 +775,9 @@ def dedupe_table(con, record_type: RecordType) -> tuple[int, int]:
             )
 
     after = con.execute(f"SELECT count(*) FROM {dedup_tbl}").fetchone()[0]
+    expected = con.execute(f'SELECT count(DISTINCT "{key}") FROM {tbl}').fetchone()[0]
+    _verify(dedup_tbl, expected)
+    con.execute(f"INSERT INTO {state_tbl} VALUES ('ready', {expected})")
 
     # Replace the live table with the deduped sibling (no RENAME — see docstring).
     logger.info("iceberg: swapping deduped {} into place ({:,} -> {:,} rows)", name, before, after)

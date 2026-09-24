@@ -80,8 +80,12 @@ def main() -> int:
         con.execute(f"SET threads={threads}")
         con.execute(f"SET temp_directory='{tempfile.gettempdir()}/duckdb_dedup_spill'")
 
-        dupes = iceberg.audit_duplicates(con, comments_rt)
-        if not dupes:
+        pending = iceberg.dedupe_recovery_pending(con, comments_rt)
+        if pending and not args.apply:
+            logger.error("Unfinished dedupe: preserve recovery tables and resume explicitly with --apply")
+            return 1
+        dupes = [] if pending else iceberg.audit_duplicates(con, comments_rt)
+        if not dupes and not pending:
             logger.info("No duplication: every agency's comment rows are unique by comment_id.")
             return 0
 
@@ -94,7 +98,7 @@ def main() -> int:
 
         if not args.apply:
             logger.info("Audit only (pass --apply to rebuild the table deduplicated).")
-            return 0
+            return 1
 
         logger.info(
             "Rebuilding {} deduplicated (sibling table, then DROP + CREATE + "
