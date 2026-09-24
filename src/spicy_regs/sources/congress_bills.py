@@ -63,13 +63,6 @@ API_KEY_ENV_VARS = (
     "REGULATIONS_GOV_API_KEY",
 )
 
-# Backstop against a runaway loop, not an expected limit: at the smallest page
-# a pooled walk asks for (223 rows; spicy-docs varies 250, 237 and 223 per walk)
-# this clears a full-archive backfill — ~430k bills as of 2026-08, about 1,930
-# pages — with headroom for growth. Hitting it raises a PagedJsonSourceError
-# from the spicy-docs reader; it is never a quiet stop.
-_MAX_PAGES = 2_500
-
 # One page fetch's request budget (including its own retries — spicy-docs
 # resets the request count per page, not per walk) and pacing. Mirrors the
 # budget already used by every other Congress.gov/GovInfo listing consumer in

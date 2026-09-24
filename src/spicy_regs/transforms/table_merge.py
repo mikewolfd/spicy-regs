@@ -349,6 +349,14 @@ def merge_table(
 #: empty".
 COALESCED_TABLES: frozenset[str] = frozenset({"congress_bills"})
 
+#: The two ``update_date`` shapes ``congress_bills`` holds: the list route's date and
+#: BILLSTATUS's UTC instant. Measured on the live table of 2026-09-23 (drift audit
+#: ``drift-audit-2026-09-23/``): 387,946 dates and 31,920 instants, nothing else, the earliest
+#: 2016-10-26 — so a 19xx/20xx year with valid month, day and clock fields is the whole range.
+UPDATE_DATE_SHAPE = (
+    r"(19|20)\d\d-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])(T([01]\d|2[0-3]):[0-5]\d:[0-5]\dZ)?"
+)
+
 #: Columns a column-wise merge derives instead of coalescing. ``url_source`` names who stated
 #: ``url``, so it follows the url the merge keeps: the fresh writer's label when it stated one,
 #: ``inherited`` when a fresh row stated none and the prior value survives, and the prior label
@@ -356,11 +364,17 @@ COALESCED_TABLES: frozenset[str] = frozenset({"congress_bills"})
 #: with this label. ``update_date`` keeps the larger value, as the contract's column sentence
 #: says: a fresh read that states an older stamp than the one published never moves the row
 #: backwards, and a same-day date-only value (the list route's) loses to BILLSTATUS's instant,
-#: which sorts after it. Both are ISO-8601 strings with the date first, so VARCHAR order is time
-#: order; ``GREATEST`` ignores a NULL side.
+#: which sorts after it. Only when both sides have one of :data:`UPDATE_DATE_SHAPE`'s two shapes
+#: is VARCHAR order time order, so only then is ``GREATEST`` taken; any other value on either
+#: side — a ``9999-…`` sentinel, a spaced instant — could never be displaced by it, so the
+#: fresh value wins as it does in every other column (a NULL side fails the match too).
 COALESCE_RULES: dict[str, dict[str, str]] = {
     "congress_bills": {
-        "update_date": "GREATEST(f.update_date, p.update_date)",
+        "update_date": (
+            f"CASE WHEN regexp_full_match(f.update_date, '{UPDATE_DATE_SHAPE}') "
+            f"AND regexp_full_match(p.update_date, '{UPDATE_DATE_SHAPE}') "
+            "THEN GREATEST(f.update_date, p.update_date) ELSE COALESCE(f.update_date, p.update_date) END"
+        ),
         "url_source": (
             "CASE WHEN f.url IS NOT NULL THEN f.url_source WHEN p.url IS NULL THEN NULL "
             "WHEN f.bill_id IS NULL THEN p.url_source ELSE 'inherited' END"

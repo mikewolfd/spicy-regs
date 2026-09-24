@@ -199,7 +199,7 @@ def test_every_hosted_table_has_exactly_one_writer():
     """Two rollups writing one table would overwrite each other's columns.
 
     ``congress_bills`` was the exception until plan A1 retired its archive-wide
-    list writer (decision 31): its run of 2026-09-23 replaced 3,033 BILLSTATUS
+    list writer (decision 31): its run of 2026-09-23 replaced 3,044 BILLSTATUS
     ``update_date`` instants with same-day dates and 3,095 congress.gov page
     URLs with API resource URLs.
     """
@@ -223,6 +223,9 @@ def test_update_date_keeps_the_larger_value(tmp_path):
     same-day date and ``119-hr-10432`` with a later day than BILLSTATUS then
     stated. A BILLSTATUS re-read restores the first's instant, which sorts after
     the date; a re-read stating the older stamp never moves the second back.
+    Outside the two shapes the table holds, VARCHAR order is not time order, so
+    a ``9999`` sentinel or a spaced instant in the prior loses to the fresh value
+    rather than pinning the row forever.
     """
     from spicy_docs.schemas import TABLE_CONTRACTS
 
@@ -234,15 +237,28 @@ def test_update_date_keeps_the_larger_value(tmp_path):
         return {c: None for c in contract.columns} | {"bill_id": bill, "congress": "119", "update_date": update_date}
 
     schema = pa.schema([(c, pa.string()) for c in contract.columns])
-    prior = [row("119-hconres-100", "2026-09-19"), row("119-hr-10432", "2026-09-22"), row("119-hr-1", "2026-05-08")]
+    prior = [
+        row("119-hconres-100", "2026-09-19"),
+        row("119-hr-10432", "2026-09-22"),
+        row("119-hr-1", "2026-05-08"),
+        row("119-hr-2", "9999-12-31"),
+        row("119-hr-3", "2026-09-22 23:35:29"),
+    ]
     pq.write_table(pa.Table.from_pylist(prior, schema=schema), prior_scratch_path(tmp_path, "congress_bills"))
-    fresh = [row("119-hconres-100", "2026-09-19T23:35:29Z"), row("119-hr-10432", "2026-09-18T05:23:22Z")]
+    fresh = [
+        row("119-hconres-100", "2026-09-19T23:35:29Z"),
+        row("119-hr-10432", "2026-09-18T05:23:22Z"),
+        row("119-hr-2", "2026-09-20T01:00:00Z"),
+        row("119-hr-3", "2026-09-20T01:00:00Z"),
+    ]
     out = merge_contract_table(tmp_path, "congress_bills", fresh, download_prior=lambda *_: False, prior_present=True)
     got = {r["bill_id"]: r["update_date"] for r in pq.read_table(out).to_pylist()}
     assert got == {
         "119-hconres-100": "2026-09-19T23:35:29Z",
         "119-hr-10432": "2026-09-22",
         "119-hr-1": "2026-05-08",
+        "119-hr-2": "2026-09-20T01:00:00Z",
+        "119-hr-3": "2026-09-20T01:00:00Z",
     }
 
 

@@ -426,7 +426,7 @@ tables:
       bill's own publisher record — its `laws` entry, when the publisher states
       one — and are filled wherever the bill family has reached.
       `url_source` `congress_api_list` marks a row the retired list writer last
-      wrote. Its run of 2026-09-23 replaced 3,033 BILLSTATUS `update_date`
+      wrote. Its run of 2026-09-23 replaced 3,044 BILLSTATUS `update_date`
       instants with the list route's same-day dates and 3,095 congress.gov page
       URLs with API resource URLs (receipt `drift-audit-2026-09-23/`). The bill
       family re-reads every such bill in its scope instead of skipping it as
@@ -434,7 +434,10 @@ tables:
       rows it relabelled in the 114th–118th (five of the replaced URLs among
       them) are re-read only by a run scoped to their Congress.
       `update_date` merges by the larger value, so a re-read never moves it
-      backwards.
+      backwards; the 46 rows of the 119th (and 42 older) whose list date is
+      later than BILLSTATUS's therefore keep that date-only value after the
+      re-read, and until BILLSTATUS catches up they read `url_source`
+      `billstatus` beside an `update_date` no BILLSTATUS document stated.
     columns_from: spicy_docs
 
   bill_subjects:
