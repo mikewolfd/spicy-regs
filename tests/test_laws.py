@@ -11,9 +11,11 @@ from __future__ import annotations
 
 import hashlib
 import json
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 
+import httpx
 import pyarrow.parquet as pq
 import pytest
 from spicy_docs.sources.govinfo.uslm import (
@@ -28,7 +30,8 @@ from spicy_docs.sources.uscode.classification import parse_classification_index,
 from spicy_docs.transport.captured import CapturedBodyResponse
 from spicy_docs.transport.credentials import CredentialRefusedError
 
-from spicy_regs.transforms.build_laws import build_laws
+from spicy_regs.transforms.build_laws import OLRC_BUDGET, _table3_rows, build_laws, olrc_acquirer
+from spicy_regs.transforms.congress_walk import PerRunCap
 from tests.test_incremental_rollups import no_download, seed
 
 FIXTURES = Path(__file__).parent / "fixtures" / "congress_laws"
@@ -38,6 +41,8 @@ USLM_BYTES = (FIXTURES / "plaw-119publ1.xml").read_bytes()
 INDEX_BYTES = (FIXTURES / "classification-tables-index.shtml").read_bytes()
 TABLE_BYTES = (FIXTURES / "classification-tbl119pl_2nd-head.htm").read_bytes()
 TABLE3_BYTES = (FIXTURES / "table3-111_226-head.htm").read_bytes()
+#: The fixture as the wheel's reader reads it: its page names 111-227 as the next act.
+TABLE3_PAGE = parse_table3_page(TABLE3_BYTES, key="111-226")
 OBSERVED_AT = "2026-09-19T00:00:00Z"
 #: The three listed rows plus the one law the USLM fixture states, as one page.
 LISTED_119 = [*LIST_PAGE["bills"], LAW_119_1]
@@ -100,9 +105,21 @@ class StubUslm:
         raise AssertionError(f"the stub holds no PLAW for {selection}")
 
 
+def _stated(key: str | None) -> str | None:
+    """A key as a Table III page states it, with an en dash."""
+    return key and key.replace("-", "\u2013")
+
+
 class StubOlrc:
-    def __init__(self, *, table3_pages=None, index_error=None):
-        self.table3_pages = {"111-226": TABLE3_BYTES} if table3_pages is None else table3_pages
+    """Serves a page for each act in ``chain`` (act -> the next act its page names), each stating ``release_point``.
+
+    The reader refuses the ``refusing`` acts, and every other act fails in transport.
+    """
+
+    def __init__(self, *, chain=None, release_point="119-73", refusing=(), index_error=None):
+        self.chain = {"111-226": "111-227"} if chain is None else chain
+        self.release_point = release_point
+        self.refusing = set(refusing)
         self.index_error = index_error
         self.tables: list[tuple[int, int, str]] = []
         self.acts: list[str] = []
@@ -121,10 +138,18 @@ class StubOlrc:
 
     def acquire_table3_act(self, key, *, max_bytes=None, max_rows=65536):
         self.acts.append(key)
-        body = self.table3_pages.get(key)
-        if body is None:
-            raise UsCodeSourceError("stub: the page is cut off inside the site menu")
-        return SimpleNamespace(result=parse_table3_page(body, key=key), capture=_Capture(body))
+        if key in self.refusing:
+            raise UsCodeSourceError("stub: Table III page states no act of its own")
+        if key not in self.chain:
+            raise ConnectionError("stub: Body source transport failed while acquiring a response")
+        page = replace(
+            TABLE3_PAGE,
+            key=key,
+            stated_key=_stated(key),
+            next_act=_stated(self.chain[key]),
+            release_point=self.release_point,
+        )
+        return SimpleNamespace(result=page, capture=_Capture(TABLE3_BYTES))
 
 
 def _rows(path: Path) -> list[dict]:
@@ -204,24 +229,24 @@ def test_an_index_failure_reads_no_session_table_and_is_not_a_record(tmp_path, s
     assert olrc.tables == [] and _rows(sections) == []
 
 
-def test_table_iii_reads_unread_acts_oldest_first_and_stops_at_the_lag(tmp_path, monkeypatch):
+def test_table_iii_walks_the_newest_congress_first_and_a_failure_ends_only_its_chain(tmp_path, monkeypatch):
     monkeypatch.setenv("BILL_FAMILY_CONGRESSES", "111,119")
     # The 111th is not on the stub route; its laws are known from the prior table.
     seed(tmp_path, "laws", [{"law_id": "111-public-226", "congress": "111", "law_type": "public", "number": "226"}])
     olrc = StubOlrc()
     _, _, table3 = _build(tmp_path, olrc=olrc)
 
-    # Newest Congress first; within it the oldest unread acts, which Table III
-    # does not hold yet, refuse three in a row and stop that Congress's walk
-    # short of 119-110; the 111th's act is read.
-    assert olrc.acts == ["119-1", "119-104", "119-109", "111-226"]
+    # Cold, each chain starts at the lowest act the laws table states. 119-1
+    # fails, which ends the 119th's chain; the 111th's act is read, and its
+    # page names 111-227, which the laws table does not state.
+    assert olrc.acts == ["119-1", "111-226"]
     rows = _rows(table3)
     assert {r["act_key"] for r in rows} == {"111-226"} and len(rows) == 4
     assert rows[0]["release_point"] == "119-73" and rows[0]["observed_at"] == OBSERVED_AT
     assert [r["seq"] for r in rows] == ["0", "1", "2", "3"]
 
 
-def test_table_iii_skips_acts_already_published_and_private_laws(tmp_path, monkeypatch):
+def test_table_iii_asks_a_held_act_only_for_its_chain_and_never_a_private_law(tmp_path, monkeypatch):
     monkeypatch.setenv("BILL_FAMILY_CONGRESSES", "111,119")
     seed(
         tmp_path,
@@ -234,9 +259,10 @@ def test_table_iii_skips_acts_already_published_and_private_laws(tmp_path, monke
     seed(tmp_path, "table3_records", [{"act_key": "111-226", "seq": "0", "observed_at": "2026-09-01"}])
     olrc = StubOlrc()
     _, _, table3 = _build(tmp_path, olrc=olrc)
-    # The 119th's three lagging acts are the stop; the held 111th act is not re-read and the private law never requested.
-    assert olrc.acts == ["119-1", "119-104", "119-109"]
-    assert len(_rows(table3)) == 1, "the held act's prior rows stand"
+    assert olrc.acts == ["119-1", "111-226"], "the held act is asked for the act it names, and no private law"
+    assert _rows(table3) == [
+        {**dict.fromkeys(_rows(table3)[0]), "act_key": "111-226", "seq": "0", "observed_at": "2026-09-01"}
+    ], "the held act's rows are not published again"
 
 
 def test_table_iii_honours_its_own_cap(tmp_path, scoped):
@@ -245,20 +271,124 @@ def test_table_iii_honours_its_own_cap(tmp_path, scoped):
     assert olrc.acts == []
 
 
-def test_table_iii_steps_past_one_refused_act_and_reads_the_next(tmp_path, monkeypatch):
+def _walk_111(tmp_path, monkeypatch, *, chain, numbers=range(220, 231), held=(220,), **olrc_kw):
+    """Walk the 111th's public laws ``numbers``, as the laws table states them, with ``held`` acts published.
+
+    Returns the acts asked and the act keys whose rows this run published.
+    """
     monkeypatch.setenv("BILL_FAMILY_CONGRESSES", "111")
     seed(
         tmp_path,
         "laws",
-        [
-            {"law_id": "111-public-225", "congress": "111", "law_type": "public", "number": "225"},
-            {"law_id": "111-public-226", "congress": "111", "law_type": "public", "number": "226"},
-        ],
+        [{"law_id": f"111-public-{n}", "congress": "111", "law_type": "public", "number": str(n)} for n in numbers],
     )
-    olrc = StubOlrc()  # holds 111-226 only: 111-225 refuses forever
+    if held:
+        seed(
+            tmp_path, "table3_records", [{"act_key": f"111-{n}", "seq": "0", "observed_at": "2026-09-01"} for n in held]
+        )
+    olrc = StubOlrc(chain=chain, **olrc_kw)
     _, _, table3 = _build(tmp_path, olrc=olrc)
-    assert olrc.acts == ["111-225", "111-226"]
-    assert {r["act_key"] for r in _rows(table3)} == {"111-226"}, "the refused act blocks nothing behind it"
+    return olrc.acts, {r["act_key"] for r in _rows(table3) if r["observed_at"] == OBSERVED_AT}
+
+
+def test_table_iii_follows_the_chain_from_the_highest_held_act_to_its_end(tmp_path, monkeypatch):
+    # 119-4 names 119-12 and 119-12 names 119-18: the chain skips the acts the table holds no page for.
+    chain = {"111-222": "111-224", "111-224": "111-227", "111-227": None}
+    asked, read = _walk_111(tmp_path, monkeypatch, chain=chain, held=(220, 222))
+    assert asked == ["111-222", "111-224", "111-227"], "no number the chain does not name is asked"
+    assert read == {"111-224", "111-227"}
+
+
+@pytest.mark.parametrize(
+    ("following", "numbers", "release_point"),
+    [
+        (None, range(220, 231), "119-73"),
+        ("111-226", range(220, 226), "119-73"),
+        ("111-226", range(220, 231), "111-224"),
+        ("112-226", range(220, 231), "119-73"),
+        ("111-221", range(220, 231), "119-73"),
+    ],
+    ids=["names-no-next-act", "past-the-laws-table", "past-the-release-point", "another-congress", "does-not-follow"],
+)
+def test_table_iii_chain_ends_where_the_page_leads_nowhere_it_may_ask(
+    tmp_path, monkeypatch, following, numbers, release_point
+):
+    # Every act a wrong turn would reach is served, so a missing guard shows up as an extra ask.
+    chain = {"111-220": "111-223", "111-223": following, "111-226": None, "111-221": None, "112-226": None}
+    asked, read = _walk_111(tmp_path, monkeypatch, chain=chain, numbers=numbers, release_point=release_point)
+    assert asked == ["111-220", "111-223"] and read == {"111-223"}
+
+
+@pytest.mark.parametrize(
+    ("chain", "asked"),
+    [
+        ({}, ["111-1", "110-1", "109-1"]),
+        ({"109-1": None}, ["111-1", "110-1", "109-1", "108-1", "107-1"]),
+    ],
+    ids=["three-refusals-stop-the-walk", "a-page-read-resets-the-count"],
+)
+def test_a_page_the_reader_refuses_counts_toward_the_stop(tmp_path, monkeypatch, chain, asked):
+    monkeypatch.setenv("BILL_FAMILY_CONGRESSES", "107,108,109,110,111")
+    congresses = range(107, 112)
+    seed(
+        tmp_path,
+        "laws",
+        [{"law_id": f"{c}-public-1", "congress": str(c), "law_type": "public", "number": "1"} for c in congresses],
+    )
+    olrc = StubOlrc(chain=chain, refusing={f"{c}-1" for c in congresses} - set(chain))
+    _build(tmp_path, olrc=olrc)
+    assert olrc.acts == asked
+
+
+def test_a_chain_act_that_drops_is_retried_then_counted(tmp_path, monkeypatch):
+    """Through the rollup's own acquirer: a dropped connection is retried by the transport, then is a failure."""
+    monkeypatch.setattr("time.sleep", lambda seconds: None)  # the retry backoff
+    monkeypatch.setenv("BILL_FAMILY_CONGRESSES", "108,109,110,111")
+    stated = [(111, 226), (111, 227), (110, 1), (109, 1), (108, 1)]
+    seed(
+        tmp_path,
+        "laws",
+        [{"law_id": f"{c}-public-{n}", "congress": str(c), "law_type": "public", "number": str(n)} for c, n in stated],
+    )
+    asked: list[str] = []
+
+    class Dropped(httpx.SyncByteStream):
+        def __iter__(self):
+            yield TABLE3_BYTES[:4096]
+            raise httpx.RemoteProtocolError("peer closed connection without sending complete message body")
+
+    def answer(request: httpx.Request) -> httpx.Response:
+        asked.append(request.url.path)
+        served = request.url.path == "/table3/111_226.htm"
+        stream = httpx.ByteStream(TABLE3_BYTES) if served else Dropped()
+        return httpx.Response(200, headers={"content-type": "text/html;charset=UTF-8"}, stream=stream)
+
+    unpaced = replace(OLRC_BUDGET, min_request_interval_seconds=0.0)
+    _, _, table3 = _build(tmp_path, olrc=olrc_acquirer(httpx.MockTransport(answer), budget=unpaced))
+    attempts = OLRC_BUDGET.max_requests
+    # 111-226 is read and names 111-227, which drops on every attempt; 110-1
+    # and 109-1 drop too, and three failures in a row leave 108-1 unasked.
+    assert [path for path in asked if path.startswith("/table3/")] == (
+        ["/table3/111_226.htm"]
+        + ["/table3/111_227.htm"] * attempts
+        + ["/table3/110_1.htm"] * attempts
+        + ["/table3/109_1.htm"] * attempts
+    )
+    assert {r["act_key"] for r in _rows(table3)} == {"111-226"}
+
+
+def test_table_iii_walk_stops_at_its_deadline():
+    olrc = StubOlrc(chain={"111-220": "111-223", "111-223": "111-226", "111-226": None})
+    ticks = iter([0.0, 0.0, 0.0, 60.0])  # the start, then before each request
+    rows = _table3_rows(
+        olrc,
+        {(111, n) for n in range(220, 231)},
+        {"111-220"},
+        PerRunCap(300, "Laws: Table III pages"),
+        deadline_seconds=60.0,
+        clock=lambda: next(ticks),
+    )
+    assert olrc.acts == ["111-220", "111-223"] and {r["act_key"] for r in rows} == {"111-223"}
 
 
 def test_the_citation_reaches_congress_bills_from_a_law_the_run_captured(tmp_path, scoped):

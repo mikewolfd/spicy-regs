@@ -13,11 +13,13 @@ never lands on the wrong row and ``captured`` always carries one.
 the publisher's public-law order alone (the index links the current Congress's
 session tables only) — the two orders hold the same rows, but the contract
 keys a row on its position in one page, so the code-order twin would collide.
-**``table3_records``**: one act's Table III page per public law
-the route listed, oldest first per Congress, under its own cap; Table III lags
-enactment and answers an act it does not hold with a page cut off inside the
-site menu that the reader refuses, so :data:`TABLE3_STOP_AFTER` consecutive
-refusals end that Congress's walk for the run and it resumes there next run.
+**``table3_records``**: Table III's own chain, per Congress. Every served
+act page names the next act the table holds (``Table3Page.next_act``: 119-4
+names 119-12), so the walk asks only the acts the chain names, from the
+Congress's highest held act on, under its own cap and deadline. Table III lags
+enactment and holds no page for an act that classified nothing; OLRC answers
+such an act with a connection dropped inside its site menu, which is why the
+walk never probes a number the chain does not name.
 
 **Incremental.** The list is re-walked whole every run; the PLAW is what is
 not re-read. A law already published with ``uslm_outcome = captured`` and the
@@ -29,15 +31,17 @@ or ``not_requested``, is asked for again, newest first, under
 yet published gets its list row with ``not_requested`` and one already
 published keeps its prior row. A classification page read this run replaces
 every prior row for its Congress and session (:func:`retire_prior_rows`),
-while a Table III page is read once and never retired (its ``release_point``
-says how current it was), and a refused act is stepped past so one act the
-table never serves cannot hold every later act behind it. A ``401``/``403``
+while a Table III page is published once and never retired (its
+``release_point`` says how current it was); the highest held act's page is
+asked again each run only for the next act it names. A ``401``/``403``
 from any of the three publishers aborts the run. Needs an api.data.gov key for
 the list route; the PLAW and OLRC routes are keyless.
 """
 
 from __future__ import annotations
 
+import re
+import time
 from collections import Counter
 from collections.abc import Callable, Mapping
 from pathlib import Path
@@ -136,11 +140,30 @@ class HeldLaw(NamedTuple):
     uslm_outcome: str | None
 
 
-#: Consecutive Table III refusals that end a Congress's walk for the run. The
-#: lag answers every act past the release point the same way, so three in a
-#: row is the lag; a single refusal is stepped past, so an act the table
-#: never serves costs one request a run and blocks nothing behind it.
+#: Consecutive Table III failures that end the walk for the run: the publisher
+#: is not answering. A failure is a chain act that did not serve (a transport
+#: failure the acquirer has already retried, or a page the reader refuses); it
+#: ends its own Congress's chain, since only the page names the next act, so
+#: the count runs across Congresses and a page read resets it.
 TABLE3_STOP_AFTER = 3
+
+#: Wall-clock seconds the Table III walk may start requests in. The laws job
+#: times out at 60 minutes and publishes nothing if it does, so this leaves
+#: room for the rest: the other legs took 30 seconds on 2026-09-24 (a cold
+#: PLAW leg of 300 files takes about 2.5 minutes), and one act can overrun the
+#: deadline by its four attempts at the 120-second timeout plus backoff, about
+#: 8.5 minutes. That totals under 35 minutes.
+TABLE3_DEADLINE_SECONDS = 20 * 60
+
+#: A public-law key as a Table III page states it, en dash and all.
+_PUBLIC_LAW_KEY = re.compile(r"(\d+)[-\u2013](\d+)")
+
+
+def olrc_acquirer(
+    transport: httpx.BaseTransport | None = None, *, budget: UsCodeAcquisitionBudget = OLRC_BUDGET
+) -> UsCodeAcquirer:
+    """The OLRC acquirer the rollup reads with; the arguments are for tests and measurements."""
+    return UsCodeAcquirer(budget=budget, transport=transport)
 
 
 def _transport_error(error: BaseException) -> str:
@@ -314,60 +337,113 @@ def _classification_rows(olrc: OlrcSource, congresses: tuple[int, ...], prior_fi
     return rows
 
 
-def _table3_rows(olrc: OlrcSource, acts: set[tuple[int, int]], held: set[str], cap: PerRunCap) -> list[dict]:
-    """One Table III page per unread public law, oldest first per Congress.
+# TODO(spicy-docs): expose this chain walk in spicy-docs (`iter_table3_acts`; the bulk-zip
+# streamer holds that name today) and amend `docs/sources/uscode.md:129-136` with the early-drop
+# window. An act the table does not hold answers 200, then the connection drops inside the site
+# menu, before the content div a served page opens 27,199-27,947 bytes in. The bytes are a prefix
+# of a served page, and the transport discards and retries them, so they are neither retained nor
+# distinguishable from a served page dropped early.
+def _public_law(key: str | None) -> tuple[int, int] | None:
+    """``(congress, number)`` of a public-law key such as ``119-4`` or ``119–4``; ``None`` for anything else."""
+    match = _PUBLIC_LAW_KEY.fullmatch((key or "").strip())
+    return (int(match[1]), int(match[2])) if match else None
 
-    A refused act — the lag, a cut-off page, a transport failure — is stepped
-    past and retried next run; :data:`TABLE3_STOP_AFTER` consecutive refusals
-    end that Congress's walk for the run, with the acts left unread behind the
-    stop counted at WARNING.
+
+def _chain_end(page: Any, congress: int, number: int, stated: set[int]) -> tuple[int | None, str]:
+    """The next act number the page names for this Congress's chain, or ``None`` and why the chain ends here."""
+    following = _public_law(page.next_act)
+    if following is None:
+        return None, f"names no next public law ({page.next_act!r})"
+    if following[0] != congress:
+        return None, f"names {page.next_act}, in another Congress"
+    if following[1] <= number:
+        return None, f"names {page.next_act}, which does not follow it"
+    if following[1] not in stated:
+        return None, f"names {page.next_act}, which the laws table does not state"
+    current = _public_law(page.release_point)
+    if current is not None and following > current:
+        return None, f"names {page.next_act}, past the release point {page.release_point} it states"
+    return following[1], ""
+
+
+def _table3_rows(
+    olrc: OlrcSource,
+    acts: set[tuple[int, int]],
+    held: set[str],
+    cap: PerRunCap,
+    *,
+    deadline_seconds: float = TABLE3_DEADLINE_SECONDS,
+    clock: Callable[[], float] = time.monotonic,
+) -> list[dict]:
+    """Follow each scoped Congress's Table III chain from its highest held act, newest Congress first.
+
+    The walk asks the Congress's highest held act again (only for the next act
+    its page names; its rows are not published again) or, cold, the lowest act
+    the laws table states. It then asks each next act a page names and
+    publishes that act's rows. The chain ends at a page that names no next act,
+    or names one in another Congress, one the laws table does not state, or one
+    past the release point the page states (the lag). A chain act that fails
+    ends its Congress's chain for the run, and :data:`TABLE3_STOP_AFTER`
+    failures in a row end the walk, as do the per-run cap and the deadline.
     """
+    started = clock()
     rows: list[dict] = []
-    read = 0
-    refused: list[str] = []
-    by_congress: dict[int, list[int]] = {}
-    for congress, number in sorted(acts):
-        by_congress.setdefault(congress, []).append(number)
-    capped = False
-    for congress in sorted(by_congress, reverse=True):
-        if capped:
-            break
-        pending = [number for number in by_congress[congress] if f"{congress}-{number}" not in held]
-        consecutive = 0
-        for position, number in enumerate(pending):
+    read: list[str] = []
+    failed: list[str] = []
+    stated: dict[int, set[int]] = {}
+    for congress, number in acts:
+        stated.setdefault(congress, set()).add(number)
+    held_numbers: dict[int, list[int]] = {}
+    for act in filter(None, map(_public_law, held)):
+        held_numbers.setdefault(act[0], []).append(act[1])
+    consecutive = 0
+    for congress in sorted(stated, reverse=True):
+        number = max(held_numbers[congress]) if congress in held_numbers else min(stated[congress])
+        while True:
             key = f"{congress}-{number}"
+            if clock() - started >= deadline_seconds:
+                logger.warning("Laws: Table III walk reached its {:,}-second deadline before {}", deadline_seconds, key)
+                return _table3_summary(rows, read, failed)
             if not cap.take():
-                # A run-wide stop, not this Congress's; the summary below
-                # still says how far the run got.
-                capped = True
-                break
+                return _table3_summary(rows, read, failed)
             try:
                 acquired = olrc.acquire_table3_act(key)
             except (UsCodeSourceError, httpx.HTTPError, ConnectionError) as error:
-                refused.append(key)
+                failed.append(key)
                 consecutive += 1
+                logger.warning(
+                    "Laws: Table III chain for Congress {} stops at {}: {}", congress, key, _transport_error(error)
+                )
                 if consecutive >= TABLE3_STOP_AFTER:
-                    logger.warning(
-                        "Laws: Table III stops for Congress {} after {} consecutive refusals ending at {} — "
-                        "{:,} act(s) left unread behind it: {}",
-                        congress,
-                        consecutive,
-                        key,
-                        len(pending) - position - 1,
-                        _transport_error(error),
-                    )
-                    break
-                logger.warning("Laws: Table III refused {} — stepping past it: {}", key, _transport_error(error))
-                continue
+                    logger.warning("Laws: Table III walk stops after {} failures in a row", consecutive)
+                    return _table3_summary(rows, read, failed)
+                break
             consecutive = 0
             page = acquired.result
-            observed_at = acquired.capture.observed_at
-            rows.extend(
-                shape_table3_record(record, page=page, seq=seq, observed_at=observed_at)
-                for seq, record in enumerate(page.records)
-            )
-            read += 1
-    logger.info("Laws: Table III — {:,} acts read, {:,} refused {}, {:,} rows", read, len(refused), refused, len(rows))
+            if key not in held:
+                observed_at = acquired.capture.observed_at
+                rows.extend(
+                    shape_table3_record(record, page=page, seq=seq, observed_at=observed_at)
+                    for seq, record in enumerate(page.records)
+                )
+                read.append(key)
+            following, reason = _chain_end(page, congress, number, stated[congress])
+            if following is None:
+                logger.info("Laws: Table III chain for Congress {} ends at {}: its page {}", congress, key, reason)
+                break
+            number = following
+    return _table3_summary(rows, read, failed)
+
+
+def _table3_summary(rows: list[dict], read: list[str], failed: list[str]) -> list[dict]:
+    logger.info(
+        "Laws: Table III — {:,} acts read {}, {:,} failed {}, {:,} rows",
+        len(read),
+        read,
+        len(failed),
+        failed,
+        len(rows),
+    )
     return rows
 
 
@@ -388,7 +464,7 @@ def build_laws(
             raise RuntimeError(f"Laws need an api.data.gov key (set one of {', '.join(API_KEY_ENV_VARS)})")
         reader = CongressListingReader(budget=LIST_BUDGET, api_key=api_key)
     uslm = uslm or UslmAcquirer(budget=USLM_BUDGET)
-    olrc = olrc or UsCodeAcquirer(budget=OLRC_BUDGET)
+    olrc = olrc or olrc_acquirer()
 
     congresses = congresses_from_env()
     priors = {name: published_table(output_dir, name, download_prior) for name in (NAME, CODE_SECTIONS, TABLE3)}
@@ -400,7 +476,7 @@ def build_laws(
     # 2. The per-Congress classification tables the index links.
     section_rows = _classification_rows(olrc, congresses, priors[CODE_SECTIONS])
 
-    # 3. Table III, one act per public law the route listed or the prior holds.
+    # 3. Table III, along its own chain through the public laws the route listed or the prior holds.
     acts = _held_public_laws(priors[NAME], congresses) | {
         (int(plain["congress"]), int(plain["number"])) for _, _, plain in listed if plain["law_type"] == PUBLIC
     }
