@@ -78,16 +78,6 @@ on:
         required: false
         default: ''
         type: string
-      congress_since:
-        description: 'Optional Congress.gov backfill start date (YYYY-MM-DD)'
-        required: false
-        default: ''
-        type: string
-      congress_until:
-        description: 'Optional Congress.gov backfill end date (YYYY-MM-DD; still capped to one catch-up window)'
-        required: false
-        default: ''
-        type: string
       bill_family_congresses:
         description: 'Optional comma-separated Congress numbers to scope the bill-family rollup (e.g. 118,119)'
         required: false
@@ -233,8 +223,6 @@ jobs:
           CFR_REPLACE_ALL: ${{ inputs.cfr_replace_all }}
           LDA_SINCE: ${{ inputs.lda_since }}
           LDA_UNTIL: ${{ inputs.lda_until }}
-          CONGRESS_SINCE: ${{ inputs.congress_since }}
-          CONGRESS_UNTIL: ${{ inputs.congress_until }}
           BILL_FAMILY_CONGRESSES: ${{ inputs.bill_family_congresses }}
           BILL_FAMILY_BILL_TYPES: ${{ inputs.bill_family_bill_types }}
           BILL_FAMILY_MAX_VERSION_FETCHES: ${{ inputs.bill_family_max_version_fetches }}

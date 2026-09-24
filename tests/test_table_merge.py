@@ -455,7 +455,7 @@ def test_a_recaptured_citation_in_laws_wins_over_the_one_already_here(tmp_path):
     ["truncated", "column_short"],
 )
 def test_a_laws_table_that_cannot_be_read_leaves_congress_bills_as_merged(tmp_path, laws_file):
-    """The soft-input promise: a bad ``laws`` file is logged, not a failed congress-bills or bill-family run."""
+    """The soft-input promise: a bad ``laws`` file is logged, not a failed bill-family run."""
     from spicy_regs.transforms.table_merge import merge_contract_table, prior_scratch_path
 
     laws_path = prior_scratch_path(tmp_path, "laws")

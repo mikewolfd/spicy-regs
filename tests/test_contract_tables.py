@@ -124,11 +124,28 @@ def test_every_hosted_table_is_registered_everywhere():
     assert hosted <= set(dd.load_descriptions())
 
 
-def test_congress_bills_keeps_its_frozen_prefix():
-    """Other repositories pin these ten columns by digest; the contract appends only."""
-    from spicy_regs.transforms.build_congress_bills import COLUMNS
+#: The ``congress_bills`` prefix other repositories pin by digest through
+#: ``catalog.json``, stated here because the list writer that first published
+#: it was retired by plan A1 (decision 31).
+CONGRESS_BILLS_FROZEN_PREFIX = (
+    "bill_id",
+    "congress",
+    "bill_type",
+    "bill_number",
+    "title",
+    "origin_chamber",
+    "latest_action_date",
+    "latest_action_text",
+    "update_date",
+    "url",
+)
 
+
+def test_congress_bills_keeps_its_frozen_prefix():
+    """Other repositories pin these ten columns by digest; the contract and the dictionary append only."""
     contract = TABLE_CONTRACTS["congress_bills"]
-    assert contract.columns[:10] == COLUMNS
+    assert contract.columns[:10] == CONGRESS_BILLS_FROZEN_PREFIX
     assert contract.identity == ("bill_id",)
-    assert len(contract.columns) > len(COLUMNS), "the family appends columns; it does not replace them"
+    assert len(contract.columns) > 10, "the family appends columns; it does not replace them"
+    dictionary = [column for column, _ in dd.expected_schemas()["congress_bills"]]
+    assert tuple(dictionary) == contract.columns and dictionary[-1] == "url_source"

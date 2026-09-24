@@ -3,9 +3,8 @@
 Three outputs from one pass: the enumeration on the Congress.gov law route is
 what addresses both the PLAW USLM file (the citation) and the two OLRC views
 of what each law did to the Code, and the act keys are only in hand while
-the list is. Its cron fires before the bill family's and ``congress-bills``',
-because both fill ``congress_bills.statutes_at_large_cite`` from ``laws`` at
-their merge.
+the list is. Its cron fires before the bill family's, which fills
+``congress_bills.statutes_at_large_cite`` from ``laws`` at its merge.
 """
 
 from pathlib import Path

@@ -371,18 +371,15 @@ tables:
       four printing captures and no model calls. It recorded 1,368 populated CBO
       outcomes and 14,845 requested-empty:absent outcomes, with zero NULL outcomes
       in that local output. An absent element does not mean CBO never scored a bill.
-      The first ten columns belong to the archive-index writer; all 39 appended
-      columns belong to the bill family. Its own prior is re-read once where the
+      The first ten columns were the archive-index writer's until plan A1
+      retired it (decision 31); the bill family now writes every column. Its own prior is re-read once where the
       CBO outcome is missing, even when the publisher stamp is unchanged.
       Receipt: `rollups-0-24-0-adoption-2026-09-20/`. Local output only; not uploaded.
     measured_on: "2026-09-20"
     summary: >-
-      One row per bill or resolution. Two rollups write this table:
-      `congress-bills` walks the Congress.gov list endpoint for the ten-column
-      prefix across the whole archive, pooling whole walks of each window by
-      bill until one is clean or they hold exactly the declared count, and
-      `bill-family` fills the full contract
-      for the Congresses it is scoped to — from a BILLSTATUS document for the
+      One row per bill or resolution. `bill-family` writes this table, filling
+      the full contract for the Congresses it is scoped to (the current Congress
+      on its daily schedule) — from a BILLSTATUS document for the
       108th onward, and from the API bill detail route for the 82nd through the
       107th, where no BILLSTATUS bulk exists. A consumer tells the two family
       routes apart by Congress and by the NULLs: a row for a Congress below the
@@ -402,10 +399,13 @@ tables:
       would each be a statement about the bill that nothing examined. The first
       ten columns keep the
       exact order and spelling they have always had, because other repositories
-      pin that prefix by digest; every new column is appended after them. Because
-      two rollups write it, this is the one table merged column-wise: neither
-      writer's NULL can erase the other's value. All columns are stored as
-      VARCHAR.
+      pin that prefix by digest; every new column is appended after them. Until
+      plan A1 retired it (decision 31), a second rollup, `congress-bills`, walked
+      the Congress.gov list route for that prefix across the whole archive, and
+      a row of a Congress the family has not been scoped to keeps the prefix
+      that walk last stated. Because rows from the two routes state different
+      columns, this is the one table merged column-wise: a family row's NULL
+      cannot erase a list-era value. All columns are stored as VARCHAR.
     data_quality: >-
       **Known BILLSTATUS count defect in vendored SpicyDocs 0.24.2:**
       the `cosponsor_count` description below incorrectly treats cosponsors
@@ -416,9 +416,8 @@ tables:
       entries, but the normal vendored package and prior outputs have not
       adopted that fix. Receipt: `legislative-release-candidate-2026-09-21/`.
       `statutes_at_large_cite` is filled at this table's merge by joining the
-      published `laws` table on `bill_id`, as its column sentence says: whichever
-      rollup writes this table (`congress-bills` or `bill-family`) reads `laws`
-      best-effort after its own merge and takes the law's citation where one is
+      published `laws` table on `bill_id`, as its column sentence says:
+      `bill-family` reads `laws` best-effort after its merge and takes the law's citation where one is
       published, keeping a citation already here where `laws` has none for the
       bill; with no `laws` table published the column stays as it was, NULL on a
       cold start. It is never guessed: `laws` publishes a citation only from a
@@ -426,6 +425,19 @@ tables:
       `public_law_number` and `law_type` are not that case: they come from the
       bill's own publisher record — its `laws` entry, when the publisher states
       one — and are filled wherever the bill family has reached.
+      `url_source` `congress_api_list` marks a row the retired list writer last
+      wrote. Its run of 2026-09-23 replaced 3,044 BILLSTATUS `update_date`
+      instants with the list route's same-day dates and 3,095 congress.gov page
+      URLs with API resource URLs (receipt `drift-audit-2026-09-23/`). The bill
+      family re-reads every such bill in its scope instead of skipping it as
+      unchanged, so the current Congress's rows heal on its next run; the 47
+      rows it relabelled in the 114th–118th (five of the replaced URLs among
+      them) are re-read only by a run scoped to their Congress.
+      `update_date` merges by the larger value, so a re-read never moves it
+      backwards; the 46 rows of the 119th (and 42 older) whose list date is
+      later than BILLSTATUS's therefore keep that date-only value after the
+      re-read, and until BILLSTATUS catches up they read `url_source`
+      `billstatus` beside an `update_date` no BILLSTATUS document stated.
     columns_from: spicy_docs
 
   bill_subjects:
@@ -1983,9 +1995,9 @@ tables:
       boundary (`repeated_count`); whether that repeat also displaced another
       bill off the walk is not knowable from one walk, and a settled unit is
       not walked again to find out. A settled unit's bills are likewise not
-      re-checked for a moved stamp; the archive-wide `congress-bills` rollup
-      keeps the ten-column prefix current regardless. All columns are stored
-      as VARCHAR.
+      re-checked for a moved stamp, and since plan A1 retired the archive-wide
+      `congress-bills` list writer (decision 31) nothing else refreshes their
+      ten-column prefix. All columns are stored as VARCHAR.
     summary: >-
       One row per (Congress, bill type) the pre-BILLSTATUS backfill walked,
       recording the route's declared total against what the walk reached and

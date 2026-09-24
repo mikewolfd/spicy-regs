@@ -2,8 +2,8 @@ name: Rollup — laws
 on:
   schedule:
     # 01:00 UTC — the law list per scoped Congress, one PLAW file per law and
-    # the OLRC tables, capped; before bill-family (02:00) and congress-bills
-    # (20:15), which both fill statutes_at_large_cite from this rollup's laws.
+    # the OLRC tables, capped; before bill-family (02:00), which fills
+    # statutes_at_large_cite from this rollup's laws.
     - cron: '0 1 * * *'
   workflow_dispatch:
     inputs:

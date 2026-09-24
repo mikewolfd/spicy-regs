@@ -225,7 +225,7 @@ is the evidence for valid emptiness; a generic nonempty-file check is insufficie
 | ID / status | Task and owner | Hard prerequisites | Complete when |
 | --- | --- | --- | --- |
 | **T15 · All summaries, links and search delivered; lifecycles withdrawn (decision 4)** | **Generate regulatory summaries, links and search.** SpicyRegs. | See exact producer map below: T06 base tables; T11 FR; T04 committees plus T07 public comments for organization links. | Build each eligible rollup from recorded parent pins; verify key coverage, join fan-out, source grain and date semantics. Publish the legacy `docket_search.json.gz` through its separate path. Do not carry old derivatives forward as though rebuilt against new parents. |
-| **T16 · Bills and vote links delivered; subjects first ran 2026-09-23; the narrow writer disabled (decision 31)** | **Finish bill refresh, subjects, vote and press links.** SpicyRegs. | `congress-bills` requires T09's complete published family; `bill-subjects` requires its selected bills. Bill links for votes and press are optional dependencies. | The narrow writer preserves all sibling members and their pins; subjects reconcile the retained 20,013-row enrichment with the selected bills. Votes and press retain their source populations, distinguish missing from verified bill links, and pass join audits. Optional linking must not block their own-source acquisition. |
+| **T16 · Bills and vote links delivered; subjects first ran 2026-09-23; the narrow writer retired (decision 31 → A1)** | **Finish bill refresh, subjects, vote and press links.** SpicyRegs. | `bill-subjects` requires T09's selected bills. Bill links for votes and press are optional dependencies. `congress_bills` has one writer, `bill-family`: its 02:00 daily run reads all eight 119th BILLSTATUS folders (18,412–18,956 bills rebuilt a run, 2026-09-21..23), while the narrow writer, at 20:15 daily, read the list only through 00:00 UTC of its run day. The family re-reads every row labelled `congress_api_list` and merges `update_date` by the larger value, so its next run restores the 3,044 instants and 3,090 of the 3,095 URLs; the other five are the 118th's and wait for a run scoped to it. The 46 119th rows (and 42 older) whose list date is later than BILLSTATUS's keep that date-only value after the re-read, so until BILLSTATUS catches up they read `url_source` `billstatus` beside an `update_date` no BILLSTATUS document stated. | Subjects reconcile the retained 20,013-row enrichment with the selected bills. Votes and press retain their source populations, distinguish missing from verified bill links, and pass join audits. Optional linking must not block their own-source acquisition. |
 | **T17 · Bootstrapped `snapshot_0e799850…` against the five qualified parents; joins under-resolved (A7)** | **Materialize rulemaking relationships.** SpicyRegs + operations. | T06 dockets/documents; T11 FR/Agenda; T15 FR-docket links. | Bootstrap deliberately with `allow_bootstrap=true`, produce all five outputs, and verify references, counts and public reads against the exact parent generations. |
 
 ### Finish: consumer access and repeatable refresh
@@ -245,7 +245,9 @@ with their evidence in `spicy-docs/docs/research/parsing-survey-2026-09-23.md`:*
 - **Workflows.** The seven held for the 2026-09-23 push were re-enabled that day
   (decision 22), and `cfr_sections` once its ancestry fix was published. The
   narrow `congress_bills` writer was disabled again the same day (decision 31)
-  until plan A1 restricts it; `rulemaking_lifecycles` stays off by decision 4.
+  and is now retired, decision 31 → A1: its command, workflow and tests are
+  deleted and `bill-family` owns `congress_bills` alone; `rulemaking_lifecycles`
+  stays off by decision 4.
   `bill_subjects` first ran on 2026-09-23 (its input was undeclared since
   09-05); the ETL, SAM and mirror failures are in the ledger's Operations item.
 - **Next T07 cohorts.** Re-verify and repair the other ~126 agencies from native
@@ -377,7 +379,6 @@ wait for verified parents before starting dependents.
 | T15 | `docket-search` | Requires `dockets`; produces legacy `docket_search.json.gz` outside managed Parquet-family publication. |
 | T15 | `fr-docket-links` | Requires `federal_register`. |
 | T15 | `org-committee-links` | Requires `fec_committees` and public `comments.parquet`; the transform's comments dependency is not declared in the rollup class. Make it explicit in the execution barrier. |
-| T16 | `congress-bills` | Publishing requires an existing complete `bill-family`; carries sibling members forward unchanged. A local partial build does not satisfy publication. `laws` links are optional. |
 | T08/T16 | `press-releases`, `roll-call-votes` | Own-source acquisition can stand alone. Optional enrichment uses `congress_bills` or `bill_vote_references`; missing links stay explicit. |
 | T16 | `bill-subjects` | Requires selected `congress_bills`, then fetches missing per-bill subjects. |
 | T17 | `materialize-rulemaking` | Requires `dockets`, `documents`, `federal_register`, `unified_agenda`, `fr_docket_links`; first publication requires `allow_bootstrap=true`. It does not depend on FEC or full comments. |

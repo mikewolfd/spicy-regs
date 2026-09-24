@@ -5,7 +5,6 @@ from spicy_regs.transforms.build_agency_monthly_volume import build_agency_month
 from spicy_regs.transforms.build_agency_rollups import build_agency_rollups
 from spicy_regs.transforms.build_agency_stats import build_agency_stats
 from spicy_regs.transforms.build_cfr_sections import build_cfr_sections
-from spicy_regs.transforms.build_congress_bills import build_congress_bills
 from spicy_regs.transforms.build_crs_reports import build_crs_reports
 from spicy_regs.transforms.build_courtlistener import build_courtlistener
 from spicy_regs.transforms.build_discovery_signals import build_discovery_signals
@@ -61,7 +60,6 @@ __all__ = [
     "build_agency_stats",
     "build_agency_monthly_volume",
     "build_cfr_sections",
-    "build_congress_bills",
     "merge_table",
     "prior_scratch_path",
     "build_crs_reports",

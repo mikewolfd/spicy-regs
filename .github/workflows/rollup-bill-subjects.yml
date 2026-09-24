@@ -1,8 +1,8 @@
 name: Rollup — bill_subjects
 on:
   schedule:
-    # 21:15 UTC — one hour after the congress_bills ingest, so each enrichment
-    # run walks a bill table that has already been refreshed.
+    # 21:15 UTC — well after the bill family (02:00), the one writer of
+    # congress_bills, so each enrichment run walks that day's bill table.
     - cron: '15 21 * * *'
   workflow_dispatch:
     inputs:

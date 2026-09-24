@@ -72,7 +72,6 @@ from spicy_docs.transport.credentials import CredentialRefusedError, scrub_crede
 from spicy_regs.sources import r2
 from spicy_regs.sources.congress_bills import (
     API_KEY_ENV_VARS,
-    _MAX_PAGES,
     _resolve_api_key,
     bill_detail,
     listing_reader,
@@ -177,6 +176,13 @@ VOTE_REFERENCE_IDENTITY: tuple[str, ...] = ("bill_id", "chamber", "congress", "s
 #: success that would read as absence.
 LIST_ROUTE_FLOOR = 82
 
+#: Backstop against a runaway walk of one ``bill/{congress}/{type}`` unit, not an
+#: expected limit: the whole ~430k-bill archive was about 1,930 pages at 223 rows
+#: a page (the retired list writer's measure, 2026-08), so one unit is a small
+#: fraction of this. Hitting it raises ``PagedJsonSourceError``
+#: from the spicy-docs reader; it is never a quiet stop.
+LIST_WALK_MAX_PAGES = 2_500
+
 #: The backfill's own retained state, beside ``bill_family_archives``. One row
 #: per bill the backfill has attempted: filled (``refusal`` NULL, the
 #: ``congress_bills`` row is published) or refused (``refusal`` names the
@@ -257,6 +263,15 @@ BACKFILL_UNSUBSTANTIATED: tuple[str, ...] = (
     "stage",
     "signed_date_rule",
 )
+
+#: The ``url_source`` only the retired list writer stated (``run-rollup-congress-bills``,
+#: retired by plan A1, decision 31). Its run of 2026-09-23 replaced 3,044 BILLSTATUS
+#: ``update_date`` instants with the list route's same-day dates and 3,095 congress.gov
+#: page URLs with API resource URLs (receipt ``drift-audit-2026-09-23/bill-family.json``)
+#: but left ``update_date_including_text``, the stamp the unchanged-bill skip compares,
+#: alone — so a bill carrying this label is re-read rather than skipped. The re-read
+#: states its own url and label, so the set drains in one run over the bill's Congress.
+RETIRED_LIST_URL_SOURCE = "congress_api_list"
 
 #: The three tables ``public_activity_events`` compares between runs.
 SNAPSHOT_TABLES = ("congress_bills", "bill_versions", "bill_summaries")
@@ -362,7 +377,7 @@ class CongressListBackfill:
     def pages(self, congress: int, bill_type: str) -> Iterator[Any]:
         from spicy_docs.sources.congress.listing import bill_list_url
 
-        return self._reader.bills(bill_list_url(congress=congress, bill_type=bill_type), max_pages=_MAX_PAGES)
+        return self._reader.bills(bill_list_url(congress=congress, bill_type=bill_type), max_pages=LIST_WALK_MAX_PAGES)
 
     def detail(self, identity: BillIdentity) -> tuple[Mapping[str, Any], str]:
         record, capture = bill_detail(self._reader, identity)
@@ -772,6 +787,19 @@ def _prior_index(paths: Mapping[str, Path | None]) -> PriorIndex:
             for older, newer in zip(ordered, ordered[1:])
         ):
             pending_bills.add(bill)
+    if bills_path is not None and _has_columns(bills_path, ("bill_id", "url_source")):
+        relisted = {
+            bill
+            for (bill,) in duckdb.sql(
+                f"SELECT bill_id FROM read_parquet('{bills_path}') WHERE url_source = '{RETIRED_LIST_URL_SOURCE}'"
+            ).fetchall()
+        }
+        if relisted:
+            logger.info(
+                "Bill family: {:,} bills carry the retired list writer's url label; those in scope are re-read",
+                len(relisted),
+            )
+        pending_bills.update(relisted)
     return PriorIndex(text_dates, printings, xml_printings, pairs, pending_bills)
 
 

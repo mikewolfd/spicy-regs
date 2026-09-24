@@ -29,7 +29,6 @@ from spicy_regs.pipelines.rollups.congress_index import (
     RecordIssuesRollup,
     TreatiesRollup,
 )
-from spicy_regs.pipelines.rollups.congress_bills import CongressBillsRollup
 from spicy_regs.pipelines.rollups.members import MembersRollup
 from spicy_regs.pipelines.rollups.print_citations import PrintCitationsRollup
 from spicy_regs.pipelines.rollups.press_releases import PressReleasesRollup
@@ -114,10 +113,6 @@ def test_an_ingesting_rollup_primes_no_base_table(rollup):
     assert rollup.inputs == ()
 
 
-#: Every rollup that publishes a table, so a soft input can be traced to its writer.
-ALL_ROLLUPS = (*HOSTED_ROLLUPS, CongressBillsRollup)
-
-
 def _cron_minutes(workflow: Path) -> int:
     """The daily minute-of-day the workflow's schedule fires at."""
     crons = re.findall(r"cron: '(\d+) (\d+) \* \* \*'", workflow.read_text())
@@ -127,12 +122,12 @@ def _cron_minutes(workflow: Path) -> int:
 
 
 def _writers_of(remote_key: str) -> list[type[RollupPipeline]]:
-    return [rollup for rollup in ALL_ROLLUPS if remote_key in (rollup.outputs or (rollup.output,))]
+    return [rollup for rollup in HOSTED_ROLLUPS if remote_key in (rollup.outputs or (rollup.output,))]
 
 
 @pytest.mark.parametrize(
     ("rollup", "soft_input"),
-    [(rollup, key) for rollup in ALL_ROLLUPS for key in rollup.soft_inputs],
+    [(rollup, key) for rollup in HOSTED_ROLLUPS for key in rollup.soft_inputs],
     ids=lambda value: value if isinstance(value, str) else value.name,
 )
 def test_a_soft_input_is_an_ingest_output_its_writer_produces_first(rollup, soft_input):
@@ -203,8 +198,10 @@ def test_a_non_contract_output_is_declared_once_in_each_place_that_needs_it(tabl
 def test_every_hosted_table_has_exactly_one_writer():
     """Two rollups writing one table would overwrite each other's columns.
 
-    ``congress_bills`` is the one deliberate exception and is asserted
-    separately below, with the reason.
+    ``congress_bills`` was the exception until plan A1 retired its archive-wide
+    list writer (decision 31): its run of 2026-09-23 replaced 3,044 BILLSTATUS
+    ``update_date`` instants with same-day dates and 3,095 congress.gov page
+    URLs with API resource URLs.
     """
     written: dict[str, list[str]] = {}
     for rollup in HOSTED_ROLLUPS:
@@ -218,81 +215,51 @@ def test_every_hosted_table_has_exactly_one_writer():
     assert not doubled, f"tables with more than one writer: {doubled}"
 
 
-def test_congress_bills_has_a_second_narrow_writer():
-    """The known exception, asserted so it stays deliberate rather than drifting.
+def test_update_date_keeps_the_larger_value(tmp_path):
+    """The contract's sentence for ``update_date``, as the merge applies it.
 
-    ``congress-bills`` walks the whole archive for the ten frozen columns;
-    ``bill-family`` fills all forty-eight for the Congresses it is scoped to.
-    """
-    from spicy_regs.pipelines.rollups.congress_bills import CongressBillsRollup
-
-    assert CongressBillsRollup.output == "congress_bills.parquet"
-    assert "congress_bills.parquet" in BillFamilyRollup.outputs
-
-
-def test_the_narrow_writer_does_not_drop_the_familys_columns(tmp_path):
-    """The behavioral pin for the two-writer case, not a statement about it.
-
-    Before this was fixed, the narrow writer published at its own ten-column
-    width, which *deleted* the other thirty-eight from every published row —
-    and at realistic scale the result was 96.6% of the prior bytes, well above
-    the R2 shrink guard's 0.5, so nothing refused it. This seeds a prior the
-    bill family would have written, runs the narrow writer's own merge, and
-    asserts the published schema is still the contract's and that a value only
-    the family sets is still there.
+    Rows from the drift audit of 2026-09-23 (``drift-audit-2026-09-23/bill-family``):
+    the retired list writer left ``119-hconres-100`` with the list route's
+    same-day date and ``119-hr-10432`` with a later day than BILLSTATUS then
+    stated. A BILLSTATUS re-read restores the first's instant, which sorts after
+    the date; a re-read stating the older stamp never moves the second back.
+    Outside the two shapes the table holds, VARCHAR order is not time order, so
+    a ``9999`` sentinel or a spaced instant in the prior loses to the fresh value
+    rather than pinning the row forever.
     """
     from spicy_docs.schemas import TABLE_CONTRACTS
 
-    from spicy_regs.transforms.build_congress_bills import NAME, _shape
     from spicy_regs.transforms.table_merge import merge_contract_table, prior_scratch_path
 
     contract = TABLE_CONTRACTS["congress_bills"]
-    prior = {c: None for c in contract.columns}
-    prior.update(
-        {
-            "bill_id": "119-hr-6028",
-            "congress": "119",
-            "bill_type": "hr",
-            "bill_number": "6028",
-            "title": "A bill",
-            "update_date": "2026-09-01",
-            "stage": "passed_house",
-            "stage_rule": "house_passage",
-            "money_bill_kind": "appropriations",
-        }
-    )
-    pq.write_table(
-        pa.Table.from_pylist([prior], schema=pa.schema([(c, pa.string()) for c in contract.columns])),
-        prior_scratch_path(tmp_path, NAME),
-    )
 
-    # Rows exactly as the narrow writer shapes them: the frozen ten and the url's label.
-    fresh = _shape(
-        {
-            "congress": 119,
-            "type": "HR",
-            "number": 6028,
-            "title": "A bill (updated)",
-            "originChamber": "House",
-            "updateDate": "2026-09-02",
-            "latestAction": {"actionDate": "2026-09-02", "text": "Passed Senate."},
-            "url": "https://api.congress.gov/v3/bill/119/hr/6028",
-        }
-    )
-    assert set(fresh) == set(contract.columns[:10]) | {"url_source"}, "the frozen ten and the url's label"
+    def row(bill, update_date):
+        return {c: None for c in contract.columns} | {"bill_id": bill, "congress": "119", "update_date": update_date}
 
-    out = merge_contract_table(tmp_path, NAME, [fresh], download_prior=lambda key, path: False, prior_present=True)
-    published = pq.read_table(out)
-    assert published.schema.names == list(contract.columns), "the published shape is the contract's"
-
-    row = published.to_pylist()[0]
-    # What only the family sets survives a narrow run...
-    assert row["stage"] == "passed_house"
-    assert row["stage_rule"] == "house_passage"
-    assert row["money_bill_kind"] == "appropriations"
-    # ...and what the narrow writer owns is still updated by it.
-    assert row["title"] == "A bill (updated)"
-    assert row["update_date"] == "2026-09-02"
+    schema = pa.schema([(c, pa.string()) for c in contract.columns])
+    prior = [
+        row("119-hconres-100", "2026-09-19"),
+        row("119-hr-10432", "2026-09-22"),
+        row("119-hr-1", "2026-05-08"),
+        row("119-hr-2", "9999-12-31"),
+        row("119-hr-3", "2026-09-22 23:35:29"),
+    ]
+    pq.write_table(pa.Table.from_pylist(prior, schema=schema), prior_scratch_path(tmp_path, "congress_bills"))
+    fresh = [
+        row("119-hconres-100", "2026-09-19T23:35:29Z"),
+        row("119-hr-10432", "2026-09-18T05:23:22Z"),
+        row("119-hr-2", "2026-09-20T01:00:00Z"),
+        row("119-hr-3", "2026-09-20T01:00:00Z"),
+    ]
+    out = merge_contract_table(tmp_path, "congress_bills", fresh, download_prior=lambda *_: False, prior_present=True)
+    got = {r["bill_id"]: r["update_date"] for r in pq.read_table(out).to_pylist()}
+    assert got == {
+        "119-hconres-100": "2026-09-19T23:35:29Z",
+        "119-hr-10432": "2026-09-22",
+        "119-hr-1": "2026-05-08",
+        "119-hr-2": "2026-09-20T01:00:00Z",
+        "119-hr-3": "2026-09-20T01:00:00Z",
+    }
 
 
 def test_url_source_follows_the_url_the_merge_keeps(tmp_path):
@@ -336,7 +303,7 @@ def test_url_source_follows_the_url_the_merge_keeps(tmp_path):
 
 
 def test_only_congress_bills_merges_column_wise():
-    """Coalescing is for tables with two writers; elsewhere a NULL is a value."""
+    """Coalescing is for rows from sources stating different columns; elsewhere a NULL is a value."""
     from spicy_regs.transforms.table_merge import COALESCED_TABLES
 
     assert COALESCED_TABLES == {"congress_bills"}

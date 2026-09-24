@@ -8,7 +8,7 @@ amendment stay as foreign-key columns rather than serving as the key.
 ``status`` is deliberately absent from the contract: BillTrax hardcoded it to
 ``"Proposed"`` for every row, which is a field that never carried information.
 
-Incremental on the same pattern as ``build_congress_bills``: the window starts
+Incremental by an ``update_date`` watermark: the window starts
 at the prior published table's max ``update_date`` minus a short overlap and
 runs forward at most :data:`MAX_WINDOW_DAYS`, so a steady-state run asks for
 the last few days rather than re-walking every amendment of the Congress. The

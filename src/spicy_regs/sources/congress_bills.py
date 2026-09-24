@@ -1,94 +1,48 @@
-"""Reader connector for the Congress.gov public REST API (v3).
+"""Shared Congress.gov v3 helpers: the api.data.gov key, the ``bill`` route's reader, one bill's detail.
 
-Brings congressional bill ingestion *in-repo* as an external source complementary
-to the regulations.gov ``dockets``/``documents`` view — the legislative record
-that sits upstream of the rulemakings this dataset tracks.
+Every Congress.gov/GovInfo consumer in this repository resolves its key through
+:func:`_resolve_api_key` (the same api.data.gov key works across
+regulations.gov, Congress.gov and GovInfo); the reader built by
+:func:`listing_reader` sends it only as the ``X-Api-Key`` header, never a query
+parameter. With no key set, callers log and publish nothing, and a base
+CLI/MCP install imports this module without spicy-docs' optional
+``source-readers`` extra, because :func:`listing_reader` imports it only once a
+key is in hand.
 
-The reader is a *pure source*: it yields raw bill payloads (dicts) exactly as the
-list endpoint returns them. Shaping them into the published ten-column schema is
-the job of
-:func:`~spicy_regs.transforms.build_congress_bills.build_congress_bills`.
+**The walk is spicy-docs' job** (gap D2 / SR01,
+``docs/research/closing-the-gaps-2026-09-19.md`` in spicy-docs):
+:class:`spicy_docs.sources.congress.listing.CongressListingReader` walks the
+publisher's continuations and refuses a repeated continuation, a declared count
+that moves mid-walk, or a terminal declared/observed mismatch. A walk that
+agrees with its count proves only the count — the list sorted by
+``updateDate`` shifts while it is read, so one walk can repeat one record and
+skip another — which is why a windowed list read goes through
+``CongressListingReader.pooled`` keyed by :func:`list_identity` (the
+amendments rollup is the live case). The ``sort`` encoding once sent as
+``updateDate%2Bdesc`` was silently ignored by the API and froze the retired
+list writer for 510 days; spicy-docs' ``bill_list_url`` sends
+``sort=updateDate desc`` and bounds a window server-side.
 
-**The walk is spicy-docs' job now (gap D2 / SR01,
-``docs/research/closing-the-gaps-2026-09-19.md`` in spicy-docs).** Pagination,
-the declared-vs-observed count check, and the ``sort``/window wire encoding
-used to be a hand-rolled ``offset``/``limit`` loop in this module — see this
-file's git history for that version. It is retired in favour of
-:class:`spicy_docs.sources.congress.listing.CongressListingReader` over the
-``bill`` route (``docs/sources/listings.md`` in spicy-docs; ``sort_honored=True``
-there is a 2026-09-19 measurement, not an assumption). That reader walks the
-publisher's continuations to its terminal page and *refuses* — raises, not
-logs — if a page repeats its continuation, if the declared count changes
-mid-walk, or if the declared and observed totals disagree at the end. This
-module keeps only what stays this repo's own job: the fetch window
-(``since``/``until``, computed by the caller from the prior table's watermark,
-an overlap, and
-:data:`~spicy_regs.transforms.build_congress_bills.MAX_WINDOW_DAYS`), and
-resolving the api.data.gov key from this repo's own env fallback chain
-(:func:`_resolve_api_key`) — handed to the spicy-docs reader, which sends it
-only as a request header (``X-Api-Key``), never a query parameter.
+:func:`listing_reader` is the one place this repository constructs that reader
+*for the ``bill`` route*, and :func:`bill_detail` is one bill's detail record
+fetched through the same instance (``capture_validated``, the single bounded,
+evidenced request every spicy-docs source makes). ``build_bill_family``'s
+backfill of the 82nd–107th Congresses walks ``bill/{congress}/{type}`` with the
+first and builds status from the second.
 
-**Why the window used to matter so much here.** Congress.gov's ``sort``
-parameter was once sent as ``updateDate%2Bdesc`` — the API accepts that and
-answers ``200``, but silently ignores it, so rows arrived in arbitrary order.
-A client-side "stop at the first out-of-window row" check took the second row
-of the first page as the watermark and froze this table for 510 days,
-"succeeding" at publishing one bill on every run of that freeze without ever
-failing loudly. spicy-docs' ``bill_list_url`` sends the correct
-``sort=updateDate desc`` (a literal space, not a plus) and bounds the window
-server-side with ``fromDateTime``/``toDateTime``; the window is still this
-repo's to compute, but no longer this repo's to encode onto the wire or to
-police for completeness — that is exactly the refusal spicy-docs' walk now
-does on our behalf.
-
-**Pooled, not warn-and-publish.** A walk that agrees with its declared count
-proves only the row count: the list sorted by ``updateDate`` shifts while it is
-read, so one walk can repeat one bill and skip another (the amendments walk of
-the same API served 7,066 rows but 7,013 distinct amendments on 2026-09-23). A
-nightly window closes at "now" and a walk over it takes minutes, so a bill the
-publisher edits *during* the walk can also move its ``updateDate`` past
-``toDateTime`` and shrink the declared count mid-walk. The window is therefore
-read with ``CongressListingReader.pooled``: whole walks of the window, keyed by
-:func:`list_identity`, until one is clean or the walks since the count last
-changed hold exactly the declared number of distinct bills. A walk whose count
-moves mid-walk is spent and pooling restarts after it. A terminal count
-mismatch, a malformed page or a query still unsettled after spicy-docs' pass
-bound each fails the run, so a window never fully received never looks like a
-completed run, and the next scheduled run tries again from the same watermark.
-
-**Shared with the bill family's pre-BILLSTATUS backfill.** :func:`listing_reader`
-is the one place this repository constructs spicy-docs' reader *for the
-``bill`` route* — the budget, the header-only key and the lazy import (the
-amendments and roll-call transforms construct the same class for their own
-routes) — and :func:`bill_detail` is one bill's detail record fetched through
-that same reader instance (``capture_validated``, the primitive every
-spicy-docs source makes its single bounded, evidenced request with).
-``build_bill_family``'s backfill of the 82nd–107th Congresses walks
-``bill/{congress}/{type}`` with the first and builds status from the second;
-neither is a second walk implementation of the route.
-
-**API key.** Congress.gov requires an api.data.gov key. The same key works
-across regulations.gov, Congress.gov, and GovInfo, so we resolve it from a
-fallback chain of the env vars this repo already uses (:func:`_resolve_api_key`
-— shared with :mod:`spicy_regs.sources.bill_subjects` and every other
-Congress.gov/GovInfo consumer here). If no key is set the reader logs a clear
-warning and yields nothing — a keyless CI run is a no-op, not a crash, and
-does not require spicy-docs' optional ``source-readers`` extra to even be
-installed, since the import happens only once a key is in hand.
+The archive-wide list writer that used to live here beside these helpers
+(``CongressBillsReader``, ``run-rollup-congress-bills``) was retired by plan A1
+(decision 31): the bill family refreshes ``congress_bills`` for the current
+Congress every day from BILLSTATUS.
 """
 
 from __future__ import annotations
 
 import os
-from collections.abc import Iterator, Mapping
-from datetime import date
-from operator import itemgetter
+from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
 import httpx
-from loguru import logger
-
-from spicy_regs.sources.base import Reader
 
 if TYPE_CHECKING:
     from spicy_regs.source_evidence import CaptureEvidence
@@ -97,10 +51,6 @@ if TYPE_CHECKING:
     from spicy_docs.transport.captured import CapturedBodyResponse
 
 API_BASE = "https://api.congress.gov/v3"
-
-# The API wants a full RFC3339 instant.
-_FROM_DATETIME_FMT = "%Y-%m-%dT00:00:00Z"
-_TO_DATETIME_FMT = "%Y-%m-%dT00:00:00Z"
 
 # Env vars checked in order for the api.data.gov key (one key works across
 # regulations.gov, Congress.gov, and GovInfo). Shared by every Congress.gov/
@@ -112,13 +62,6 @@ API_KEY_ENV_VARS = (
     "CONGRESS_GOV_API_KEY",
     "REGULATIONS_GOV_API_KEY",
 )
-
-# Backstop against a runaway loop, not an expected limit: at the smallest page
-# a pooled walk asks for (223 rows; spicy-docs varies 250, 237 and 223 per walk)
-# this clears a full-archive backfill — ~430k bills as of 2026-08, about 1,930
-# pages — with headroom for growth. Hitting it raises a PagedJsonSourceError
-# from the spicy-docs reader; it is never a quiet stop.
-_MAX_PAGES = 2_500
 
 # One page fetch's request budget (including its own retries — spicy-docs
 # resets the request count per page, not per walk) and pacing. Mirrors the
@@ -236,68 +179,3 @@ def _resolve_api_key() -> str | None:
         if value:
             return value
     return None
-
-
-class CongressBillsReader(Reader):
-    """Yields raw Congress.gov bill dicts, one per bill the window declares, each its newest version.
-
-    ``since``/``until`` become the ``fromDateTime``/``toDateTime`` bounds on the
-    request, so the server decides what is in the window. The walk itself —
-    pagination, retries, pooling whole walks and refusing an inconsistent or
-    incomplete traversal — is
-    :meth:`spicy_docs.sources.congress.listing.CongressListingReader.pooled`'s job.
-    The order is the settling walk's, not a promise. With no key configured the
-    reader yields nothing.
-    """
-
-    def __init__(
-        self,
-        *,
-        since: date | None = None,
-        until: date | None = None,
-        api_key: str | None = None,
-        transport: httpx.BaseTransport | None = None,
-    ) -> None:
-        self.since = since
-        self.until = until
-        self.api_key = api_key or _resolve_api_key()
-        self.transport = transport
-
-    def iter_records(self) -> Iterator[dict]:
-        if not self.api_key:
-            logger.warning(
-                "Congress bills: no API key found (set one of {}) — yielding nothing",
-                ", ".join(API_KEY_ENV_VARS),
-            )
-            return
-        logger.info(
-            "Congress bills: fetching bills updated {} through {}",
-            self.since or "the beginning",
-            self.until or "now",
-        )
-        # Base CLI/MCP installations can import source names (and this whole
-        # module — API_BASE/API_KEY_ENV_VARS/_resolve_api_key are shared by
-        # other, keyless-safe callers) without the optional owner wheel.
-        # Actually walking the API requires the source-readers extra, which
-        # listing_reader imports only now, with a key in hand.
-        reader = listing_reader(self.api_key, self.transport)
-        from spicy_docs.sources.congress.listing import LIST_ROUTES, bill_list_url
-
-        url = bill_list_url(
-            from_datetime=self.since.strftime(_FROM_DATETIME_FMT) if self.since else None,
-            to_datetime=self.until.strftime(_TO_DATETIME_FMT) if self.until else None,
-        )
-        with reader:
-            pooled = reader.pooled(
-                LIST_ROUTES["bill"], url, key=list_identity, version=itemgetter("updateDate"), max_pages=_MAX_PAGES
-            )
-        logger.info(
-            "Congress bills: {:,} bills of {:,} declared, in {} walk(s)",
-            len(pooled.records),
-            pooled.declared,
-            pooled.passes,
-        )
-        # page.records is typed Mapping[str, Any] (spicy-docs reads every row
-        # that way); this reader's contract is dict, same as every raw payload
-        # build_congress_bills._shape() reads.
-        yield from (dict(bill) for bill in pooled.records)

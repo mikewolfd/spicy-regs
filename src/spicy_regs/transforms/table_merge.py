@@ -145,18 +145,19 @@ def merge_table(
     is a NULL backfill on the rows already published rather than a migration.
     ``congress_bills`` is the live case — its first ten columns are frozen
     because other repositories pin that prefix by digest, and the bill family
-    appends thirty-eight more.
+    appends the rest.
 
     ``coalesce_prior``: merge column-wise instead of row-wise. The default
     (``False``) is row replacement — a fresh row wins whole, and a NULL in it
-    is a real value that overwrites. Set it when a table has **two writers that
-    own different column subsets**, where a fresh NULL means "I do not populate
-    this column" rather than "this is now empty": the merge becomes a FULL
-    OUTER JOIN on the identity emitting ``COALESCE(fresh, prior)`` per column.
-    Without it, a narrow run does not merely NULL the appended columns, it
-    *drops* them, and the loss is small enough that the R2 shrink guard (0.5)
-    does not notice. :func:`merge_contract_table` sets the flag for
-    ``congress_bills`` alone.
+    is a real value that overwrites. Set it when a table holds **rows from two
+    sources that state different column subsets**, where a fresh NULL means "I
+    do not populate this column" rather than "this is now empty": the merge
+    becomes a FULL OUTER JOIN on the identity emitting ``COALESCE(fresh,
+    prior)`` per column, except where :data:`COALESCE_RULES` names a column's
+    own rule. Without it, a narrower row does not merely NULL the other
+    source's columns, it *drops* them, and the loss is small enough that the R2
+    shrink guard (0.5) does not notice. :func:`merge_contract_table` sets the
+    flag for ``congress_bills`` alone.
 
     ``prior_present``: pass ``False`` when the caller already tried
     :func:`prior_scratch_path` and knows the prior is absent, skipping a second
@@ -247,7 +248,7 @@ def merge_table(
         # The prior table may predate columns this contract has since gained —
         # ``congress_bills`` is the live case: its first ten columns are frozen
         # and the bill family appends to them, so a prior published before the
-        # family ran has ten of forty-eight. Select each missing column as a
+        # family ran has only the ten. Select each missing column as a
         # typed NULL rather than letting the binder fail on it, which makes a
         # column addition a NULL backfill instead of a migration.
         prior_cols = {
@@ -276,9 +277,9 @@ def merge_table(
         prior_select = ", ".join(c if c in prior_cols else f"CAST(NULL AS VARCHAR) AS {c}" for c in columns)
 
     if have_prior and coalesce_prior:
-        # Column-wise: the narrow writer's NULL must not erase the wide
-        # writer's value, so each column takes the fresh value only where the
-        # fresh row states one.
+        # Column-wise: a fresh row's NULL must not erase a value the prior
+        # row's source stated, so each column takes the fresh value only where
+        # the fresh row states one.
         fresh_rank = f"ROW_NUMBER() OVER (PARTITION BY {key_cols} ORDER BY {newest})"
         fresh_q = (
             f"SELECT {cols} FROM ("
@@ -337,22 +338,43 @@ def merge_table(
     return out_file
 
 
-#: Tables merged column-wise rather than row-wise, because more than one
-#: rollup writes them and each owns a different subset of the columns. Only
-#: ``congress_bills`` qualifies: ``congress-bills`` walks the whole archive for
-#: the frozen ten, ``bill-family`` fills all forty-eight for the Congresses it
-#: is scoped to, and neither may erase the other's columns by publishing NULLs
-#: where it simply has nothing to say. Adding a table here is a claim that a
-#: NULL from one of its writers means "not mine", never "now empty".
+#: Tables merged column-wise rather than row-wise, because their rows come
+#: from sources that state different subsets of the columns. Only
+#: ``congress_bills`` qualifies: the retired list writer (plan A1, decision 31)
+#: left the frozen ten on every bill of the archive, ``bill-family`` — now its
+#: one writer — fills the whole contract for the Congresses it is scoped to,
+#: and a family row that states no ``url`` must not erase the list-era one
+#: (decision 1 keeps it, labelled ``inherited``). Adding a table here is a
+#: claim that a NULL from one of its sources means "not mine", never "now
+#: empty".
 COALESCED_TABLES: frozenset[str] = frozenset({"congress_bills"})
+
+#: The two ``update_date`` shapes ``congress_bills`` holds: the list route's date and
+#: BILLSTATUS's UTC instant. Measured on the live table of 2026-09-23 (drift audit
+#: ``drift-audit-2026-09-23/``): 387,946 dates and 31,920 instants, nothing else, the earliest
+#: 2016-10-26 — so a 19xx/20xx year with valid month, day and clock fields is the whole range.
+UPDATE_DATE_SHAPE = (
+    r"(19|20)\d\d-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])(T([01]\d|2[0-3]):[0-5]\d:[0-5]\dZ)?"
+)
 
 #: Columns a column-wise merge derives instead of coalescing. ``url_source`` names who stated
 #: ``url``, so it follows the url the merge keeps: the fresh writer's label when it stated one,
 #: ``inherited`` when a fresh row stated none and the prior value survives, and the prior label
 #: on a row this run did not touch. Delivery decision 1 (2026-09-22) accepts inherited URLs only
-#: with this label.
+#: with this label. ``update_date`` keeps the larger value, as the contract's column sentence
+#: says: a fresh read that states an older stamp than the one published never moves the row
+#: backwards, and a same-day date-only value (the list route's) loses to BILLSTATUS's instant,
+#: which sorts after it. Only when both sides have one of :data:`UPDATE_DATE_SHAPE`'s two shapes
+#: is VARCHAR order time order, so only then is ``GREATEST`` taken; any other value on either
+#: side — a ``9999-…`` sentinel, a spaced instant — could never be displaced by it, so the
+#: fresh value wins as it does in every other column (a NULL side fails the match too).
 COALESCE_RULES: dict[str, dict[str, str]] = {
     "congress_bills": {
+        "update_date": (
+            f"CASE WHEN regexp_full_match(f.update_date, '{UPDATE_DATE_SHAPE}') "
+            f"AND regexp_full_match(p.update_date, '{UPDATE_DATE_SHAPE}') "
+            "THEN GREATEST(f.update_date, p.update_date) ELSE COALESCE(f.update_date, p.update_date) END"
+        ),
         "url_source": (
             "CASE WHEN f.url IS NOT NULL THEN f.url_source WHEN p.url IS NULL THEN NULL "
             "WHEN f.bill_id IS NULL THEN p.url_source ELSE 'inherited' END"
@@ -394,10 +416,10 @@ def fill_statutes_at_large_cite(
     """Fill ``statutes_at_large_cite`` on a merged ``congress_bills`` from the published ``laws`` table.
 
     A merge-time join of the kind ``pipelines/rollups/base.py`` permits:
-    ``laws`` is an ingest rollup's output, read best-effort, and both writers
-    of ``congress_bills`` declare it in ``soft_inputs``. Runs *after* the
-    column-wise merge so the coalesce semantics protecting the two writers'
-    columns are untouched, and keeps a citation already on the row where
+    ``laws`` is an ingest rollup's output, read best-effort, and
+    ``bill-family``, the writer of ``congress_bills``, declares it in
+    ``soft_inputs``. Runs *after* the column-wise merge so the coalesce
+    semantics are untouched, and keeps a citation already on the row where
     ``laws`` states none (``laws`` never publishes a captured citation as NULL,
     so nothing is ever cleared). One law per bill: where the route lists two
     law entries for one bill, the larger ``update_date`` wins, then the key.
