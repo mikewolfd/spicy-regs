@@ -56,6 +56,8 @@ import pyarrow.parquet as pq
 from dotenv import load_dotenv
 from loguru import logger
 
+from spicy_docs.transport.credentials import scrub_credential
+
 from spicy_regs.manifest import MANIFEST_FILE, MANIFEST_SCHEMA
 from spicy_regs.schemas import COMMENT, DOCKET, DOCUMENT
 from spicy_regs.sources import iceberg, r2
@@ -183,24 +185,45 @@ def _head(client, bucket: str, key: str) -> dict | None:
 
 
 def check(output_dir: Path) -> list[str]:
-    """Every reason the seed must not be published now (empty means publishable)."""
+    """Every reason the seed must not be published now (empty means publishable).
+
+    Each finding is logged as it is made, so the R2 results stand even when the
+    catalog cannot be reached. That failure, and a missing catalog table, are
+    reported as problems rather than raised.
+    """
     receipt = json.loads((output_dir / RECEIPT).read_text())
     manifest = output_dir / MANIFEST_FILE
-    problems = []
-    if file_identity(manifest)["sha256"] != receipt["output"]["sha256"]:
-        problems.append(f"{manifest} differs from the manifest its receipt describes")
+    problems: list[str] = []
+
+    def refuse(problem: str) -> None:
+        logger.error(problem)
+        problems.append(problem)
+
+    digest = file_identity(manifest)["sha256"]
+    if digest != receipt["output"]["sha256"]:
+        refuse(f"{manifest} is {digest}, not the {receipt['output']['sha256']} its receipt describes")
+    else:
+        logger.info("{} matches its receipt ({})", manifest, digest)
 
     bucket = getenv("R2_BUCKET_NAME", "spicy-regs")
     client = r2.get_r2_client()
-    for kind, built in receipt["inputs"].items():
+    for built in receipt["inputs"].values():
         live = _head(client, bucket, built["object"])
         if live is None or (live["ETag"], live["ContentLength"]) != (built["etag"], built["bytes"]):
             found = "absent" if live is None else f"{live['ETag']} ({live['ContentLength']:,} bytes)"
-            problems.append(f"{built['object']} is now {found}, not the {built['etag']} the seed was built from")
+            refuse(f"{built['object']} is now {found}, not the {built['etag']} the seed was built from")
+        else:
+            logger.info("{} is still {} ({:,} bytes)", built["object"], built["etag"], built["bytes"])
     if _head(client, bucket, MANIFEST_FILE) is not None:
-        problems.append(f"{MANIFEST_FILE} already exists on R2; the seed only bootstraps an absent checkpoint")
+        refuse(f"{MANIFEST_FILE} already exists on R2; the seed only bootstraps an absent checkpoint")
+    else:
+        logger.info("{} is absent on R2", MANIFEST_FILE)
 
-    con = iceberg._connect()
+    try:
+        con = iceberg._connect()
+    except Exception as error:  # noqa: BLE001 — a finding, reported with the others
+        refuse(f"the R2 Data Catalog cannot be reached: {_reason(error)}")
+        return problems
     try:
         con.execute(
             f"CREATE TEMP TABLE seed AS SELECT regexp_extract(key, '/([a-z]+)/([^/]+)\\.json$', ['kind', 'id']) "
@@ -208,9 +231,13 @@ def check(output_dir: Path) -> list[str]:
         )
         for kind, record_type in CATALOG_KINDS.items():
             table = iceberg._qualified(record_type)
-            rows, ids = con.execute(
-                f'SELECT count(*), count(DISTINCT "{record_type.dedup_key}") FROM {table}'
-            ).fetchone()
+            try:
+                rows, ids = con.execute(
+                    f'SELECT count(*), count(DISTINCT "{record_type.dedup_key}") FROM {table}'
+                ).fetchone()
+            except duckdb.Error as error:
+                refuse(f"catalog table {table} is missing or unreadable; seed it first: {_reason(error)}")
+                continue
             absent = con.execute(
                 f"SELECT count(*) FROM seed s WHERE s.k.kind = '{kind}' AND NOT EXISTS "
                 f'(SELECT 1 FROM {table} t WHERE t."{record_type.dedup_key}" = s.k.id)'
@@ -225,10 +252,15 @@ def check(output_dir: Path) -> list[str]:
                 absent,
             )
             if absent:
-                problems.append(f"{absent:,} of the seed's {seeded:,} {record_type.name} ids are not in the catalog")
+                refuse(f"{absent:,} of the seed's {seeded:,} {record_type.name} ids are not in the catalog")
     finally:
         con.close()
     return problems
+
+
+def _reason(error: Exception) -> str:
+    """An exception as one scrubbed, bounded line: it may render the catalog endpoint or token."""
+    return scrub_credential(f"{type(error).__name__}: {error}", getenv("R2_CATALOG_TOKEN", "")).splitlines()[0][:300]
 
 
 def publish(output_dir: Path) -> dict:
@@ -268,9 +300,8 @@ def main() -> int:
 
     if args.check or args.publish:
         problems = check(args.output_dir)
-        for problem in problems:
-            logger.error(problem)
         if problems:
+            logger.error("Not publishable: {} problem(s) above", len(problems))
             return 1
         logger.info("Seed is publishable: inputs unchanged, manifest absent, every id in the catalog")
         if args.publish:

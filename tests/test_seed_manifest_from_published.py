@@ -118,7 +118,8 @@ def live(tmp_path: Path, published: dict[str, Path], monkeypatch: pytest.MonkeyP
             f"WHERE {record_type.dedup_key} IS NOT NULL"
         )
     monkeypatch.setattr(seed.r2, "get_r2_client", lambda: s3)
-    monkeypatch.setattr(seed.iceberg, "_connect", lambda: catalog)
+    # A cursor per check: check closes its connection, the catalog lives on.
+    monkeypatch.setattr(seed.iceberg, "_connect", catalog.cursor)
     return tmp_path / "seed", s3, catalog
 
 
@@ -139,3 +140,34 @@ def test_check_refuses_a_changed_input_an_existing_manifest_and_a_missing_id(liv
     assert "comments.parquet is now" in problems[0]
     assert "already exists on R2" in problems[1]
     assert "1 of the seed's 1 dockets ids are not in the catalog" in problems[2]
+
+
+def test_check_reports_a_missing_catalog_table_after_the_r2_findings(live, monkeypatch: pytest.MonkeyPatch) -> None:
+    output_dir, s3, catalog = live
+    s3.objects["manifest.parquet"] = ('"m"', 1)
+    catalog.execute(f"DROP TABLE {iceberg._qualified(COMMENT)}")
+
+    problems = seed.check(output_dir)
+
+    assert len(problems) == 2
+    assert "already exists on R2" in problems[0]
+    assert problems[1].startswith(f"catalog table {iceberg._qualified(COMMENT)} is missing")
+    # The CLI turns the same findings into exit 1 instead of a traceback.
+    monkeypatch.setattr(seed, "load_dotenv", lambda *a, **k: None)
+    monkeypatch.setattr("sys.argv", ["seed", "--output-dir", str(output_dir), "--check"])
+    assert seed.main() == 1
+
+
+def test_check_reports_an_unreachable_catalog_without_its_token(live, monkeypatch: pytest.MonkeyPatch) -> None:
+    output_dir, _, _ = live
+    token = "catalog-token-0123456789"
+    monkeypatch.setenv("R2_CATALOG_TOKEN", token)
+
+    def refuse():
+        raise RuntimeError(f"HTTP 401 for token {token}\nsecond line")
+
+    monkeypatch.setattr(seed.iceberg, "_connect", refuse)
+
+    [problem] = seed.check(output_dir)
+
+    assert problem == "the R2 Data Catalog cannot be reached: RuntimeError: HTTP 401 for token <redacted>"

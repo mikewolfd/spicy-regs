@@ -325,7 +325,7 @@ def test_seed_comments_from_parquet_loads_partition_tree(tmp_path, local_catalog
 
 
 def test_seed_comments_replace_agency_is_idempotent(tmp_path, local_catalog) -> None:
-    """Loading the same agency twice with replace_agency must not duplicate rows."""
+    """Loading the same agency twice with replace must not duplicate rows."""
     con = local_catalog
     iceberg._ensure_table(con, COMMENT)
 
@@ -343,10 +343,10 @@ def test_seed_comments_replace_agency_is_idempotent(tmp_path, local_catalog) -> 
     )
     glob = str(comments_dir / "agency_code=EPA/docket_id=*/year=*/month=*/part-0.parquet")
 
-    first = iceberg.seed_comments_from_parquet(con, glob, COMMENT, replace_agency="EPA")
+    first = iceberg.seed_comments_from_parquet(con, glob, COMMENT, "EPA", replace=True)
     assert first == 2
     # Re-running the same agency replaces, not appends.
-    second = iceberg.seed_comments_from_parquet(con, glob, COMMENT, replace_agency="EPA")
+    second = iceberg.seed_comments_from_parquet(con, glob, COMMENT, "EPA", replace=True)
     assert second == 2
 
     # A different agency present in the table is untouched by replacing EPA.
@@ -359,8 +359,8 @@ def test_seed_comments_replace_agency_is_idempotent(tmp_path, local_catalog) -> 
         [_comment("d1", "DOL-1", "DOL", "2025-03-01T00:00:00Z")],
     )
     dol_glob = str(comments_dir / "agency_code=DOL/docket_id=*/year=*/month=*/part-0.parquet")
-    iceberg.seed_comments_from_parquet(con, dol_glob, COMMENT, replace_agency="DOL")
-    iceberg.seed_comments_from_parquet(con, glob, COMMENT, replace_agency="EPA")  # again
+    iceberg.seed_comments_from_parquet(con, dol_glob, COMMENT, "DOL", replace=True)
+    iceberg.seed_comments_from_parquet(con, glob, COMMENT, "EPA", replace=True)  # again
     counts = dict(
         con.execute(f"SELECT agency_code, count(*) FROM {iceberg._qualified(COMMENT)} GROUP BY agency_code").fetchall()
     )
@@ -381,11 +381,13 @@ def test_seed_comments_loads_one_agency_from_a_monolithic_source(tmp_path, local
         schema=COMMENT.schema,
     ).write_parquet(source)
 
-    assert iceberg.seed_comments_from_parquet(con, str(source), COMMENT, replace_agency="EPA") == 2
-    assert iceberg.seed_comments_from_parquet(con, str(source), COMMENT, replace_agency="EPA") == 2
-    assert iceberg.seed_comments_from_parquet(con, str(source), COMMENT, replace_agency="DOL") == 3
+    assert iceberg.seed_comments_from_parquet(con, str(source), COMMENT, "EPA") == 2
+    assert iceberg.seed_comments_from_parquet(con, str(source), COMMENT, "EPA", replace=True) == 2
+    assert iceberg.seed_comments_from_parquet(con, str(source), COMMENT, "DOL") == 3
     rows = con.execute(f"SELECT comment_id FROM {iceberg._qualified(COMMENT)} ORDER BY comment_id").fetchall()
     assert rows == [("c1",), ("c2",), ("d1",)]
+    with pytest.raises(ValueError, match="agency"):
+        iceberg.seed_comments_from_parquet(con, str(source), COMMENT, replace=True)
 
 
 def test_seed_comments_tolerates_missing_columns(tmp_path, local_catalog) -> None:
@@ -764,3 +766,26 @@ def test_comments_index_retains_unknown_dates_and_refuses_malformed_rows(tmp_pat
     with pytest.raises(ValueError, match="invalid coordinates"):
         iceberg._build_comments_index(con, COMMENT, tmp_path)
     assert index.read_bytes() == before
+
+
+def test_row_group_touches_separates_sorted_from_unsorted_sources(tmp_path) -> None:
+    """The monolithic comments seed reads about one pass only when sorted by agency_code."""
+    import duckdb
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    from scripts.seed_comments_catalog import MAX_SOURCE_PASSES, row_group_touches
+
+    agencies = [f"A{i:02d}" for i in range(10)]
+    rows = [agency for agency in agencies for _ in range(4)]
+    sorted_file, shuffled_file = tmp_path / "sorted.parquet", tmp_path / "shuffled.parquet"
+    pq.write_table(pa.table({"agency_code": rows}), sorted_file, row_group_size=4)
+    # Every row group holds the whole alphabet: each agency's load reads all of them.
+    pq.write_table(pa.table({"agency_code": agencies * 4}), shuffled_file, row_group_size=10)
+    con = duckdb.connect()
+
+    groups, touches = row_group_touches(con, str(sorted_file), agencies)
+    assert (groups, touches) == (10, 10)
+    groups, touches = row_group_touches(con, str(shuffled_file), agencies)
+    assert (groups, touches) == (4, 40)
+    assert touches > MAX_SOURCE_PASSES * groups

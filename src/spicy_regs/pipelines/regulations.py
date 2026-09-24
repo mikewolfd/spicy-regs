@@ -47,7 +47,7 @@ from spicy_regs.transforms import (
 # none falls off the end: a fixed ``--batch-size 22`` over 15 batches (330 slots)
 # silently left VCNP, VETS, WAPA, WCPO and WHD in no batch once discovery
 # returned 335 agencies (2026-09-24). The ceiling makes a jump in the mirror's
-# agency list a refusal to act on (add batches) instead of quietly longer jobs.
+# agency list a refusal to act on (raise BATCH_COUNT) instead of quietly longer jobs.
 MAX_DERIVED_BATCH_SIZE = 25
 
 
@@ -326,7 +326,7 @@ class RegulationsPipeline(Pipeline):
                 if size > MAX_DERIVED_BATCH_SIZE:
                     raise RuntimeError(
                         f"{len(agencies)} agencies over {self.batch_count} batches needs {size} per batch, "
-                        f"above the ceiling of {MAX_DERIVED_BATCH_SIZE}; add batches"
+                        f"above the ceiling of {MAX_DERIVED_BATCH_SIZE}; raise BATCH_COUNT in etl-new-pipeline.yml"
                     )
             start = self.batch_number * size
             agencies = agencies[start : start + size]

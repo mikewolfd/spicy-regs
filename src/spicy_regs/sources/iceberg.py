@@ -324,7 +324,7 @@ def _build_comments_index(con, record_type: RecordType, output_dir: Path) -> Pat
 
 
 def seed_comments_from_parquet(
-    con, source_glob: str, record_type: RecordType, replace_agency: str | None = None
+    con, source_glob: str, record_type: RecordType, agency: str | None = None, *, replace: bool = False
 ) -> int:
     """Bulk-load published comment Parquet into the catalog table; return its count.
 
@@ -335,14 +335,14 @@ def seed_comments_from_parquet(
     ``agency_code`` / ``docket_id`` as columns (year/month live only in the path
     and are not table columns).
 
-    When ``replace_agency`` is given, all existing rows for that ``agency_code``
-    are deleted before the insert, and only that agency's source rows are
-    inserted. The loader runs one agency at a time, so this makes each agency
-    load idempotent — re-running (after a timeout, or over an already-seeded
-    table) replaces that agency's rows instead of duplicating them, since the
-    plain ``INSERT`` does no dedup — and lets a source holding every agency (the
-    fork's monolithic ``comments.parquet``, which has no partition tree) load
-    one agency at a time.
+    ``agency`` inserts only that ``agency_code``'s source rows, so a source
+    holding every agency (the fork's monolithic ``comments.parquet``, which has
+    no partition tree) loads one agency at a time. ``replace`` first deletes the
+    agency's existing rows: the loader runs one agency at a time, so this makes a
+    re-run (after a timeout, or over an already-seeded table) replace that
+    agency's rows instead of duplicating them, since the plain ``INSERT`` does no
+    dedup. The caller passes it only when the agency has rows, because each
+    ``DELETE`` scans the catalog table.
 
     Columns absent from every file in the glob (an older partition written before
     a column was added) are inserted as ``NULL`` — mirroring the schema-evolution
@@ -352,9 +352,10 @@ def seed_comments_from_parquet(
     """
     columns = list(record_type.schema)
     esc = _sql_str(source_glob)
-    agency_filter = ""
-    if replace_agency is not None:
-        agency_filter = f"WHERE agency_code = '{_sql_str(replace_agency)}'"
+    if replace and agency is None:
+        raise ValueError("replace needs the agency whose rows it replaces")
+    agency_filter = "" if agency is None else f"WHERE agency_code = '{_sql_str(agency)}'"
+    if replace:
         con.execute(f"DELETE FROM {_qualified(record_type)} {agency_filter};")
     present = {
         row[0]

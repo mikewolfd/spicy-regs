@@ -311,7 +311,7 @@ def test_batch_count_covers_every_discovered_agency_once(monkeypatch: pytest.Mon
 
 def test_derived_batch_size_above_the_ceiling_refuses(monkeypatch: pytest.MonkeyPatch) -> None:
     agencies = [f"A{i:03d}" for i in range(15 * regulations.MAX_DERIVED_BATCH_SIZE + 1)]
-    with pytest.raises(RuntimeError, match="add batches"):
+    with pytest.raises(RuntimeError, match="raise BATCH_COUNT"):
         _batches(agencies, monkeypatch, 15)
 
 
@@ -799,3 +799,45 @@ def test_scheduled_workflow_derives_batches_and_never_starts_fresh() -> None:
     assert '--batch-count "$BATCH_COUNT"' in script
     assert "--batch-size" not in script
     assert "--no-allow-fresh-start" in script
+
+
+@pytest.mark.parametrize(
+    ("event", "batch", "timeout", "outputs"),
+    [
+        ("schedule", "", "", {"timeout_minutes": "60", "matrix": '{"batch":[' + ",".join(map(str, range(15))) + "]}"}),
+        ("workflow_dispatch", "all", "240", {"timeout_minutes": "240"}),
+        ("workflow_dispatch", "14", "", {"timeout_minutes": "60", "matrix": '{"batch":[14]}'}),
+        ("workflow_dispatch", "14", "361", None),
+        ("workflow_dispatch", "14", "060", None),
+        ("workflow_dispatch", "15", "60", None),
+    ],
+)
+def test_workflow_setup_validates_the_dispatch_inputs(tmp_path: Path, event, batch, timeout, outputs) -> None:
+    """The setup step's shell, run as written: the timeout and batch it hands the ETL job."""
+    import subprocess
+
+    import yaml
+
+    workflow = yaml.safe_load((Path(__file__).parents[1] / ".github/workflows/etl-new-pipeline.yml").read_text())
+    assert workflow["jobs"]["etl-new"]["timeout-minutes"] == "${{ fromJSON(needs.setup.outputs.timeout_minutes) }}"
+    output = tmp_path / "github_output"
+    output.touch()
+    env = {
+        "PATH": "/usr/bin:/bin",
+        "EVENT": event,
+        "BATCH_NUMBER": batch,
+        "TIMEOUT_MINUTES": timeout,
+        "SKIP_UPLOAD": "false",
+        "USE_ICEBERG": "true",
+        "BATCH_COUNT": str(workflow["env"]["BATCH_COUNT"]),
+        "GITHUB_OUTPUT": str(output),
+    }
+    [step] = workflow["jobs"]["setup"]["steps"]
+    result = subprocess.run(["bash", "-c", step["run"]], env=env, capture_output=True, text=True)
+
+    if outputs is None:
+        assert result.returncode == 1
+        return
+    assert result.returncode == 0, result.stderr
+    written = dict(line.split("=", 1) for line in output.read_text().splitlines())
+    assert outputs.items() <= written.items()

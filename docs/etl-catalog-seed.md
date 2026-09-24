@@ -113,6 +113,14 @@ gh workflow run seed-comments-catalog.yml --repo mikewolfd/spicy-regs \
   -f source_key=comments.parquet -f full_load=true -f append=true -f upload_index=false
 ```
 
+- **Sort order:** the load reads the object once per agency, and each read
+  skips the row groups whose `agency_code` range excludes that agency. The load
+  therefore stays near one pass over the 2.5 GB file only because
+  `comments.parquet` is sorted by `agency_code`. Its 195 row groups have one out
+  of order, so the 133 agencies read 329 row groups, about 1.7 passes. The
+  script checks this from the footer statistics and refuses a source that would
+  take more than two passes. If a republished `comments.parquet` is refused,
+  rewrite it ordered by `agency_code` first.
 - **Full load:** it reports `Load complete: 23,890,403 rows in the catalog
   comments table`. It loads each agency separately, so an interrupted run can be
   dispatched again with the same inputs: agencies whose count already matches
@@ -279,3 +287,12 @@ fallback, not a requirement. Pause the schedule first, then run for example
 rates. Later sweeps read only a day's new keys. Each batch then spends 10–23
 minutes, mostly loading the manifest and listing its agencies. A full sweep
 takes about 4 hours.
+
+**Manifest load cost (not yet addressed):** every batch rebuilds the Bloom
+filter from the whole manifest. That took 183 s for the seed's 26.2M keys,
+hashing each key in Python, so a sweep spends about 46 minutes (183 s × 15) on
+it. The filter's bit array holds 241 MB, twice the ~120 MB that
+`BloomFilter.size_bytes` reports and far above the "~34 MB" its comment claims:
+the `array("L")` items are 8 bytes on 64-bit Linux and macOS, not 4. Both costs
+grow with the manifest, and the next change to `manifest.py` should address
+them.
