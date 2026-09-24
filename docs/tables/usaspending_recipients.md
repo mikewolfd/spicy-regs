@@ -4,9 +4,9 @@
 
 **Federal award recipients**
 
-One row per federal-award recipient, ingested from the USASpending.gov `/api/v2/recipient/` endpoint by `build_usaspending_recipients`. A keyless (no API key) org-resolution reference dimension keyed by UEI and name — the organizations that receive federal money — complementary to the SAM entity registry and the `fec_committees` table for resolving and enriching the organizations that comment on rulemakings by their federal funding. Scope is deliberately bounded to the top-N recipients by trailing-12-month federal award amount (the endpoint reports ~18M recipients, too many for a daily full walk); the transform merges each run's top-N with the prior table so coverage stays monotonic. All columns are stored as VARCHAR.
+One row per federal-award recipient, ingested from the USASpending.gov `/api/v2/recipient/` endpoint by `build_usaspending_recipients`. A keyless (no API key) org-resolution reference dimension keyed by UEI and name — the organizations that receive federal money — complementary to the SAM entity registry and the `fec_committees` table for resolving and enriching the organizations that comment on rulemakings by their federal funding. Scope is deliberately bounded to the top-N recipients by trailing-12-month federal award amount (the endpoint reports ~18M recipients, too many for a daily full walk); the transform merges each run's top-N with the prior table so coverage stays monotonic. Retained recipients outside a run's selection keep their earlier amounts without a per-row observation date. All columns are stored as VARCHAR.
 
-**Coverage.** Not a range. No date column: the table is the top recipients by trailing-12-month award amount (the list endpoint's amount, which equals the detail endpoint's `year=latest` total, not `year=all`), so it cannot be asked about a period, and a recipient below that cut is absent rather than absent from the awards data. *(measured 2026-09-06)*
+**Coverage.** Accumulated recipients from bounded top-N walks ranked by trailing-12-month award amount. Each run refreshes its selected recipients and retains earlier rows outside that selection with their previous amounts. No per-row observation date is stored, so the amounts can describe different trailing-12-month periods. An absent recipient may still exist in the publisher's awards data. *(measured 2026-09-24)*
 
 - **Parquet file:** `usaspending_recipients.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
@@ -19,4 +19,4 @@ One row per federal-award recipient, ingested from the USASpending.gov `/api/v2/
 | `duns` | `VARCHAR` | Legacy DUNS number, when present. Superseded by UEI; often null for newer records. |
 | `name` | `VARCHAR` | Recipient name as recorded by USASpending (e.g. `LOCKHEED MARTIN CORP`). The name-resolution key. |
 | `recipient_level` | `VARCHAR` | Recipient rollup level: `P` (parent), `C` (child), or `R` (standalone recipient with no parent). The same UEI can appear at multiple levels. |
-| `total_award_amount` | `VARCHAR` | All-time federal award dollars for the recipient at this level, as a numeric string (e.g. `63465270734.15`). The bounding sort key (top-N by amount). |
+| `total_award_amount` | `VARCHAR` | Trailing-12-month federal award dollars reported by the recipient list endpoint at the recipient's last read, as a numeric string (e.g. `63465270734.15`). The top-N sort key. Retained rows outside the latest selection can carry older amounts; no per-row observation date is stored. |
