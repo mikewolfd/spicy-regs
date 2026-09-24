@@ -101,7 +101,7 @@ def test_rule_target_spine_emits_only_action_specific_edges(tmp_path):
     }
     assert pq.ParquetFile(output).schema_arrow.names == list(COLUMNS)
     assert all(row["method"] == "deterministic" for row in rows)
-    assert all(row["actor_id"] == "spicy-regs:rule-targets:v2" for row in rows)
+    assert all(row["actor_id"] == "spicy-regs:rule-targets:v3" for row in rows)
     assert all(row["run_id"] == "golden-run" for row in rows)
 
 

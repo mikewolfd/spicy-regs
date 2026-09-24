@@ -19,18 +19,21 @@ from spicy_regs.ontology.common import (
     ATTESTATION_COLUMNS,
     JsonReadStats,
     RunContext,
+    eastern_day_text,
     iter_parquet_rows,
     parse_json_list,
     stable_id,
     write_parquet_rows,
 )
 
-from spicy_regs.ontology.federal_register import FederalRegisterIndex, record_id, record_url, references_json
+from spicy_regs.ontology.federal_register import FederalRegisterIndex, record_url, references_json
 
 ITEMS_OUTPUT = "regulatory_agenda_items.parquet"
 RELATIONSHIPS_OUTPUT = "agenda_item_proceedings.parquet"
-ITEM_ACTOR_ID = "spicy-regs:regulatory-agenda-items:v2"
-RELATIONSHIP_ACTOR_ID = "spicy-regs:agenda-item-proceedings:v2"
+# v3: first_seen/last_seen and evidence_date are the Eastern day of a Regulations.gov
+# instant, not its UTC day, and the proceedings they link join labelled FR dockets.
+ITEM_ACTOR_ID = "spicy-regs:regulatory-agenda-items:v3"
+RELATIONSHIP_ACTOR_ID = "spicy-regs:agenda-item-proceedings:v3"
 
 ITEM_COLUMNS = (
     "agenda_item_id",
@@ -71,7 +74,8 @@ def _agenda_date(edition: object) -> str | None:
 
 
 def _source_date(*values: object) -> str | None:
-    dates = sorted(str(value)[:10] for value in values if value)
+    """The latest Eastern day among the values (``eastern_day_text``), or ``None``."""
+    dates = sorted(day for value in values if (day := eastern_day_text(value)))
     return dates[-1] if dates else None
 
 
@@ -103,13 +107,16 @@ def build_regulatory_agenda(
     *,
     run_id: str | None = None,
     asserted_at: str | None = None,
+    fr_index: FederalRegisterIndex | None = None,
 ) -> tuple[Path, Path]:
     """Build one agenda item per RIN and provenance-bearing action links.
 
     Unified Agenda equality creates the item and its editioned observations,
     but never an action relationship: only a docket, regulations.gov document,
     or Federal Register artifact that directly reports the RIN can link the
-    agenda item to an independently assembled Proceeding.
+    agenda item to an independently assembled Proceeding. Every day is
+    ``eastern_day_text``. ``fr_index`` is the generation's shared index of
+    ``federal_register.parquet``; it is built here when not supplied.
     """
     paths = _require_inputs(
         output_dir,
@@ -135,13 +142,23 @@ def build_regulatory_agenda(
         actor_id=RELATIONSHIP_ACTOR_ID,
     )
     json_stats = JsonReadStats()
-    fr_index = FederalRegisterIndex(paths["federal_register"])
+    fr_index = fr_index or FederalRegisterIndex(paths["federal_register"])
     unresolved_by_fr: dict[str, list[dict]] = defaultdict(list)
     unresolved_by_rin: dict[str, list[dict]] = defaultdict(list)
 
     proceedings_by_docket: dict[str, set[str]] = defaultdict(set)
     proceedings_by_fr_document: dict[str, set[str]] = defaultdict(set)
-    for row in iter_parquet_rows(paths["proceedings"]):
+    for row in iter_parquet_rows(
+        paths["proceedings"],
+        # Every column FederalRegisterIndex.proceeding_ids reads.
+        columns=(
+            "proceeding_id",
+            "docket_ids_json",
+            "fr_document_ids_json",
+            "fr_document_numbers_json",
+            "unresolved_fr_references_json",
+        ),
+    ):
         proceeding_id = str(row.get("proceeding_id") or "").strip()
         if not proceeding_id:
             continue
@@ -171,7 +188,7 @@ def build_regulatory_agenda(
 
     def observe(rin: str, *dates: object) -> None:
         observed_rins.add(rin)
-        seen_dates[rin].update(str(value)[:10] for value in dates if value)
+        seen_dates[rin].update(day for value in dates if (day := eastern_day_text(value)))
 
     def add_relationship(
         *,
@@ -207,7 +224,7 @@ def build_regulatory_agenda(
         if date:
             seen_dates[rin].add(date)
 
-    for row in iter_parquet_rows(paths["dockets"]):
+    for row in iter_parquet_rows(paths["dockets"], columns=("docket_id", "rin", "modify_date")):
         rin = normalize_rin(row.get("rin"))
         docket = normalize_regsgov_identifier(row.get("docket_id"))
         if not rin:
@@ -225,7 +242,9 @@ def build_regulatory_agenda(
                 evidence_date=row.get("modify_date"),
             )
 
-    for row in iter_parquet_rows(paths["documents"]):
+    for row in iter_parquet_rows(
+        paths["documents"], columns=("document_id", "docket_id", "additional_rins", "posted_date", "modify_date")
+    ):
         docket = normalize_regsgov_identifier(row.get("docket_id"))
         raw_rins = parse_json_list(
             row.get("additional_rins"),
@@ -257,9 +276,11 @@ def build_regulatory_agenda(
                     evidence_date=evidence_date,
                 )
 
-    for row in iter_parquet_rows(paths["federal_register"]):
+    for row in iter_parquet_rows(
+        paths["federal_register"], columns=("document_number", "publication_date", "regulation_id_numbers_json")
+    ):
         document_number = str(row.get("document_number") or "").strip()
-        identity = record_id(row)
+        identity = fr_index.record_id(row)
         raw_rins = parse_json_list(
             row.get("regulation_id_numbers_json"),
             stats=json_stats,
@@ -285,7 +306,10 @@ def build_regulatory_agenda(
                     evidence_date=row.get("publication_date"),
                 )
 
-    for row in iter_parquet_rows(paths["unified_agenda"]):
+    for row in iter_parquet_rows(
+        paths["unified_agenda"],
+        columns=("rin", "agenda_edition", "url", "priority_category", "first_action_date", "next_action_date"),
+    ):
         rin = normalize_rin(row.get("rin"))
         if not rin:
             continue

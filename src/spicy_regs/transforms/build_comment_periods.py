@@ -10,10 +10,9 @@ from __future__ import annotations
 import json
 from collections import Counter, defaultdict
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 from pathlib import Path
 from urllib.parse import quote
-from zoneinfo import ZoneInfo
 
 import pyarrow.parquet as pq
 from loguru import logger
@@ -25,6 +24,7 @@ from spicy_regs.ontology.common import (
     JsonReadStats,
     RunContext,
     canonical_json,
+    eastern_day,
     iter_parquet_rows,
     parse_json_list,
     stable_id,
@@ -33,15 +33,16 @@ from spicy_regs.ontology.common import (
 
 from spicy_regs.ontology.federal_register import (
     FederalRegisterIndex,
-    record_id,
+    linked_docket_id,
     record_url,
     references_json,
     resolved_id,
 )
 
 OUTPUT = "comment_periods.parquet"
-# v5: regulations.gov close dates are the Eastern day, one day earlier than v4 (see _regsgov_day).
-ACTOR_ID = "spicy-regs:comment-periods:v5"
+# v5: regulations.gov close dates are the Eastern day, one day earlier than v4 (see eastern_day).
+# v6: labelled FR docket values join (linked_docket_id), so more FR intervals carry a docket.
+ACTOR_ID = "spicy-regs:comment-periods:v6"
 
 COLUMNS = (
     "comment_period_id",
@@ -68,38 +69,6 @@ class _Interval:
     source: str
     evidence_id: str
     opened_by_artifact_id: str
-
-
-def _day(value: object) -> date | None:
-    if not value:
-        return None
-    try:
-        return date.fromisoformat(str(value)[:10])
-    except ValueError:
-        return None
-
-
-_EASTERN = ZoneInfo("America/New_York")
-
-
-def _regsgov_day(value: object) -> date | None:
-    """The Eastern calendar day a regulations.gov comment-window instant falls on.
-
-    Regulations.gov stamps a window at the Eastern day's bounds: a start at Eastern midnight
-    (04:00/05:00Z) and an end at 11:59:59 PM Eastern (03:59:59/04:59:59Z), so an end's UTC date
-    is the following day. Measured 2026-09-23 over the 133,006 documents that also carry a
-    Federal Register ``comments_close_on``: the Eastern day equals it for 127,361, the UTC date
-    for 118. A bare UTC midnight is a date-only value and keeps its date (5,494 of 5,551 such
-    starts equal their FR publication date; the Eastern day, 6).
-    """
-    text = str(value or "").strip()
-    if len(text) <= 10 or text.endswith("T00:00:00Z"):
-        return _day(text)
-    try:
-        instant = datetime.fromisoformat(text)
-    except ValueError:
-        return None
-    return instant.astimezone(_EASTERN).date() if instant.tzinfo else instant.date()
 
 
 def _artifact_url(source: str, identifier: object) -> str | None:
@@ -211,8 +180,14 @@ def build_comment_periods(
     *,
     run_id: str | None = None,
     asserted_at: str | None = None,
+    fr_index: FederalRegisterIndex | None = None,
 ) -> Path:
-    """Build comment periods, retaining docket-only and joint intervals."""
+    """Build comment periods, retaining docket-only and joint intervals.
+
+    Every open and close date is :func:`eastern_day`. ``fr_index`` is the
+    generation's shared index of ``federal_register.parquet``; it is built here
+    when not supplied.
+    """
     required = {
         name: output_dir / f"{name}.parquet"
         for name in (
@@ -233,14 +208,26 @@ def build_comment_periods(
     )
     provenance = context.provenance(method="deterministic", actor_id=ACTOR_ID)
     json_stats = JsonReadStats()
-    fr_index = FederalRegisterIndex(required["federal_register"])
+    fr_index = fr_index or FederalRegisterIndex(required["federal_register"])
     unresolved_by_fr: dict[str, list[dict]] = defaultdict(list)
 
     proceeding_by_id: dict[str, dict] = {}
     dockets_by_proceeding: dict[str, set[str]] = {}
     proceeding_ids_by_docket: dict[str, set[str]] = defaultdict(set)
     proceeding_ids_by_fr_document: dict[str, set[str]] = defaultdict(set)
-    for row in iter_parquet_rows(required["proceedings"]):
+    for row in iter_parquet_rows(
+        required["proceedings"],
+        # Every column proceeding_rins and FederalRegisterIndex.proceeding_ids read.
+        columns=(
+            "proceeding_id",
+            "docket_ids_json",
+            "fr_document_ids_json",
+            "fr_document_numbers_json",
+            "unresolved_fr_references_json",
+            "rins_json",
+            "rin",
+        ),
+    ):
         proceeding_id = str(row["proceeding_id"])
         proceeding_by_id[proceeding_id] = row
         dockets = parse_json_list(
@@ -288,10 +275,9 @@ def build_comment_periods(
         source: str,
         evidence_id: object,
         retain_unresolved: bool = False,
-        day=_day,
     ) -> None:
         nonlocal unanchored_intervals
-        open_date, close_date = day(start), day(end)
+        open_date, close_date = eastern_day(start), eastern_day(end)
         evidence = str(evidence_id or "").strip()
         opened_by = _artifact_url(source, evidence)
         if open_date is None or close_date is None or not evidence or opened_by is None:
@@ -323,7 +309,17 @@ def build_comment_periods(
             )
         )
 
-    for row in iter_parquet_rows(required["documents"]):
+    for row in iter_parquet_rows(
+        required["documents"],
+        columns=(
+            "document_id",
+            "docket_id",
+            "additional_rins",
+            "posted_date",
+            "comment_start_date",
+            "comment_end_date",
+        ),
+    ):
         docket = normalize_regsgov_identifier(row.get("docket_id"))
         if docket is None or not row.get("comment_end_date"):
             continue
@@ -352,13 +348,14 @@ def build_comment_periods(
             end=row.get("comment_end_date"),
             source="documents.comment_end_date",
             evidence_id=row.get("document_id"),
-            day=_regsgov_day,
         )
 
     linked_dockets_by_fr: dict[str, set[str]] = defaultdict(set)
-    for row in iter_parquet_rows(required["fr_docket_links"]):
-        docket = normalize_regsgov_identifier(row.get("docket_id"))
-        if row.get("document_number") and docket in trusted_dockets:
+    for row in iter_parquet_rows(
+        required["fr_docket_links"], columns=("docket_id", "document_number", "publication_date")
+    ):
+        docket = linked_docket_id(row.get("docket_id"))
+        if row.get("document_number") and docket is not None and docket in trusted_dockets:
             reference = {
                 "source": "fr_docket_links",
                 "evidence_id": docket,
@@ -370,11 +367,14 @@ def build_comment_periods(
                 for candidate in reference["candidate_ids"]:
                     unresolved_by_fr[candidate].append(reference)
 
-    for row in iter_parquet_rows(required["federal_register"]):
+    for row in iter_parquet_rows(
+        required["federal_register"],
+        columns=("document_number", "publication_date", "comments_close_on", "regulation_id_numbers_json"),
+    ):
         if not row.get("comments_close_on") or not row.get("publication_date"):
             continue
         document_number = str(row.get("document_number") or "")
-        identity = record_id(row)
+        identity = fr_index.record_id(row)
         raw_rins = parse_json_list(
             row.get("regulation_id_numbers_json"),
             stats=json_stats,

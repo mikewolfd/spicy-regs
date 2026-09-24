@@ -19,6 +19,7 @@ from spicy_regs.ontology.common import (
     JsonReadStats,
     RunContext,
     canonical_json,
+    eastern_day_text,
     iter_parquet_rows,
     parse_json_list,
     read_parquet_rows,
@@ -26,10 +27,17 @@ from spicy_regs.ontology.common import (
     write_parquet_rows,
 )
 
-from spicy_regs.ontology.federal_register import FederalRegisterIndex, record_id, references_json, resolved_id
+from spicy_regs.ontology.federal_register import (
+    FederalRegisterIndex,
+    linked_docket_id,
+    references_json,
+    resolved_id,
+)
 
 OUTPUT = "proceedings.parquet"
-ACTOR_ID = "spicy-regs:proceedings:v4"
+# v5: labelled FR docket values join (linked_docket_id), and stage events fall on the
+# Eastern day of a Regulations.gov instant rather than its UTC day.
+ACTOR_ID = "spicy-regs:proceedings:v5"
 
 COLUMNS = (
     "proceeding_id",
@@ -106,6 +114,7 @@ def build_proceedings(
     *,
     run_id: str | None = None,
     asserted_at: str | None = None,
+    fr_index: FederalRegisterIndex | None = None,
 ) -> Path:
     """Build proceedings from dockets and Federal Register action artifacts.
 
@@ -114,7 +123,8 @@ def build_proceedings(
     it never groups dockets, creates an agenda-only proceeding, or preserves a
     stable proceeding id. One Federal Register artifact may explicitly connect
     multiple trusted dockets; otherwise docket and artifact identities stay
-    separate.
+    separate. ``fr_index`` is the generation's shared index of
+    ``federal_register.parquet``; it is built here when not supplied.
     """
     paths = _require_inputs(
         output_dir,
@@ -133,7 +143,7 @@ def build_proceedings(
     )
     provenance = context.provenance(method="deterministic", actor_id=ACTOR_ID)
     json_stats = JsonReadStats()
-    fr_index = FederalRegisterIndex(paths["federal_register"])
+    fr_index = fr_index or FederalRegisterIndex(paths["federal_register"])
     prior_file = output_dir / "_proceedings_prior.parquet"
     if not prior_file.exists() and (output_dir / OUTPUT).exists():
         prior_file = output_dir / OUTPUT
@@ -150,7 +160,9 @@ def build_proceedings(
             "rins": set(),
             "titles": [],
             "agencies": [],
-            "events": [],
+            # Each distinct event once, in first-seen order; a list scan per event was
+            # quadratic in a proceeding's events (1,635 in the largest).
+            "events": {},
             "fr_documents": set(),
             "fr_document_numbers": set(),
             "unresolved_fr_references": [],
@@ -162,7 +174,9 @@ def build_proceedings(
     trusted_dockets: set[str] = set()
     action_dockets: set[str] = set()
     docket_metadata: dict[str, dict] = {}
-    for row in iter_parquet_rows(paths["dockets"]):
+    for row in iter_parquet_rows(
+        paths["dockets"], columns=("docket_id", "rin", "docket_type", "title", "agency_code", "modify_date")
+    ):
         docket = normalize_regsgov_identifier(row.get("docket_id"))
         if docket is None:
             continue
@@ -171,7 +185,9 @@ def build_proceedings(
         if normalize_rin(row.get("rin")) or "rulemaking" in str(row.get("docket_type") or "").casefold():
             action_dockets.add(docket)
 
-    for row in iter_parquet_rows(paths["documents"]):
+    for row in iter_parquet_rows(
+        paths["documents"], columns=("document_id", "docket_id", "additional_rins", "document_type", "title")
+    ):
         docket = normalize_regsgov_identifier(row.get("docket_id"))
         if docket is None:
             continue
@@ -192,9 +208,11 @@ def build_proceedings(
 
     linked_dockets_by_fr: dict[str, set[str]] = defaultdict(set)
     unresolved_links_by_docket: dict[str, list[dict]] = defaultdict(list)
-    for row in iter_parquet_rows(paths["fr_docket_links"]):
-        docket = normalize_regsgov_identifier(row.get("docket_id"))
-        if row.get("document_number") and docket in trusted_dockets:
+    for row in iter_parquet_rows(
+        paths["fr_docket_links"], columns=("docket_id", "document_number", "publication_date")
+    ):
+        docket = linked_docket_id(row.get("docket_id"))
+        if row.get("document_number") and docket is not None and docket in trusted_dockets:
             document_number = str(row["document_number"])
             reference = {
                 "source": "fr_docket_links",
@@ -274,12 +292,11 @@ def build_proceedings(
         event = {
             "stage": stage,
             "event_kind": _STAGE_KIND[stage],
-            "effective_date": None if date is None else str(date)[:10],
+            "effective_date": eastern_day_text(date),
             "source": source,
             "evidence_id": None if evidence_id is None else str(evidence_id),
         }
-        if event not in group["events"]:
-            group["events"].append(event)
+        group["events"].setdefault(tuple(event.values()), event)
 
     for docket, row in docket_metadata.items():
         key = group_key_by_docket.get(docket)
@@ -293,7 +310,10 @@ def build_proceedings(
         if row.get("agency_code"):
             group["agencies"].append(str(row["agency_code"]))
 
-    for row in iter_parquet_rows(paths["documents"]):
+    for row in iter_parquet_rows(
+        paths["documents"],
+        columns=("document_id", "docket_id", "additional_rins", "document_type", "title", "agency_code", "posted_date"),
+    ):
         docket = normalize_regsgov_identifier(row.get("docket_id"))
         key = group_key_by_docket.get(docket or "")
         if key is None:
@@ -323,11 +343,14 @@ def build_proceedings(
             evidence_id=row.get("document_id"),
         )
 
-    for row in iter_parquet_rows(paths["federal_register"]):
+    for row in iter_parquet_rows(
+        paths["federal_register"],
+        columns=("document_number", "publication_date", "regulation_id_numbers_json", "document_type", "title"),
+    ):
         document_number = str(row.get("document_number") or "").strip()
         if not document_number:
             continue
-        identity = record_id(row)
+        identity = fr_index.record_id(row)
         raw_rins = parse_json_list(
             row.get("regulation_id_numbers_json"),
             stats=json_stats,
@@ -365,7 +388,9 @@ def build_proceedings(
             evidence_id=identity,
         )
 
-    for row in iter_parquet_rows(paths["rule_targets"]):
+    for row in iter_parquet_rows(
+        paths["rule_targets"], columns=("docket_id", "rin", "cfr_ref", "cfr_title", "cfr_part", "cfr_section")
+    ):
         docket = normalize_regsgov_identifier(row.get("docket_id"))
         key = group_key_by_docket.get(docket or "")
         if key is None:
@@ -389,6 +414,11 @@ def build_proceedings(
                     row.get("cfr_ref"),
                 )
 
+    group_keys_by_fr_document: dict[str, set[str]] = defaultdict(set)
+    for group_key, group in groups.items():
+        for identity in group["fr_documents"]:
+            group_keys_by_fr_document[identity].add(group_key)
+
     # Stable partner ids follow action evidence, never RIN equality. Docket
     # overlap preserves ordinary continuity; FR overlap preserves a provisional
     # document-based proceeding when its docket is discovered later.
@@ -405,14 +435,19 @@ def build_proceedings(
             column="docket_ids_json",
         )
         prior_fr_documents, unresolved = fr_index.proceeding_ids(row, json_stats)
+        prior_docket_groups = {
+            group_key_by_docket[docket] for docket in raw_dockets or () if docket in group_key_by_docket
+        }
         for reference in unresolved:
             # Preserve an old ambiguous observation for every possible current
-            # group, without letting it select a predecessor or stable id.
-            for group in groups.values():
-                if group["fr_documents"].intersection(reference["candidate_ids"]) or group["dockets"].intersection(
-                    raw_dockets or []
-                ):
-                    group["unresolved_fr_references"].append(reference)
+            # group, without letting it select a predecessor or stable id. Looked
+            # up by candidate and docket: scanning every group per reference was
+            # quadratic in proceedings.
+            targets = set(prior_docket_groups)
+            for candidate in reference["candidate_ids"]:
+                targets.update(group_keys_by_fr_document.get(candidate, ()))
+            for group_key in targets:
+                groups[group_key]["unresolved_fr_references"].append(reference)
         prior_identity.append(
             (
                 proceeding_id,
@@ -468,7 +503,7 @@ def build_proceedings(
     rows: list[dict] = []
     for group_key, group in groups.items():
         events = sorted(
-            group["events"],
+            group["events"].values(),
             key=lambda event: (
                 event.get("effective_date") or "",
                 event.get("stage") or "",

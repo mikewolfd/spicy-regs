@@ -23,15 +23,18 @@ from spicy_regs.ontology.common import (
     JsonReadStats,
     RunContext,
     canonical_json,
+    eastern_day_text,
     iter_parquet_rows,
     parse_json_list,
     write_parquet_rows,
 )
 
-from spicy_regs.ontology.federal_register import FederalRegisterIndex, record_id, resolved_id
+from spicy_regs.ontology.federal_register import FederalRegisterIndex, linked_docket_id, resolved_id
 
 OUTPUT = "rule_targets.parquet"
-ACTOR_ID = "spicy-regs:rule-targets:v2"
+# v3: labelled FR docket values join (linked_docket_id), zero-padded and en-dash FR numbers
+# resolve on their comparison key, and first_seen/last_seen are Eastern days, not instants.
+ACTOR_ID = "spicy-regs:rule-targets:v3"
 
 COLUMNS = (
     "docket_id",
@@ -58,9 +61,10 @@ SOURCES = frozenset(
 )
 
 
-def _date_bounds(*values: object) -> tuple[str | None, str | None]:
-    dates = sorted(str(value) for value in values if value)
-    return (dates[0], dates[-1]) if dates else (None, None)
+def _date_bounds(*days: str | None) -> tuple[str | None, str | None]:
+    """The earliest and latest of ISO days (``eastern_day_text``), ignoring absent ones."""
+    present = sorted(day for day in days if day)
+    return (present[0], present[-1]) if present else (None, None)
 
 
 def _require_inputs(output_dir: Path, names: tuple[str, ...]) -> dict[str, Path]:
@@ -76,13 +80,15 @@ def build_rule_targets(
     *,
     run_id: str | None = None,
     asserted_at: str | None = None,
+    fr_index: FederalRegisterIndex | None = None,
 ) -> Path:
     """Build action-specific docket-to-RIN and docket-to-CFR evidence.
 
     Unified Agenda values describe an editioned observation of a durable
     agenda item and are deliberately absent here: equality on a RIN does not
     authorize projecting an agenda-level CFR reference onto every docket that
-    happens to carry that RIN.
+    happens to carry that RIN. ``fr_index`` is the generation's shared index of
+    ``federal_register.parquet``; it is built here when not supplied.
     """
     paths = _require_inputs(
         output_dir,
@@ -91,7 +97,7 @@ def build_rule_targets(
     context = RunContext.resolve(run_id=run_id, asserted_at=asserted_at, prefix="rule-targets")
     provenance = context.provenance(method="deterministic", actor_id=ACTOR_ID)
     json_stats = JsonReadStats()
-    fr_index = FederalRegisterIndex(paths["federal_register"])
+    fr_index = fr_index or FederalRegisterIndex(paths["federal_register"])
 
     # The table's specified logical key deliberately retains corroborating
     # sources while folding repeated evidence from the same source into a date
@@ -106,75 +112,89 @@ def build_rule_targets(
 
     def add_edge(
         *,
-        docket_id: object,
+        docket: str,
         citation: CfrCitation | None,
-        rin: object,
+        rin: str | None,
         source: str,
         evidence_id: object,
-        first_seen: object = None,
-        last_seen: object = None,
-        fr_reference: dict | None = None,
+        first_seen: str | None = None,
+        last_seen: str | None = None,
+        fr_reference: tuple[str, dict] | None = None,
     ) -> None:
-        docket = normalize_regsgov_identifier(docket_id)
-        if docket is None or docket not in trusted_dockets or source not in SOURCES:
+        """Fold one observation into its edge.
+
+        Callers pass a normalized trusted docket, a normalized RIN, Eastern days and the
+        FR reference with its canonical form, each computed once per source row: this runs
+        once per docket x citation x RIN of every Federal Register row.
+        """
+        if docket not in trusted_dockets or source not in SOURCES:
             return
-        normalized_rin = normalize_rin(rin)
         cfr_ref = citation.cfr_ref if citation else None
-        key = (docket, cfr_ref, normalized_rin, source)
-        first, last = _date_bounds(first_seen, last_seen)
-        candidate = {
-            "docket_id": docket,
-            "cfr_ref": cfr_ref,
-            "cfr_title": citation.title if citation else None,
-            "cfr_part": citation.part if citation else None,
-            "cfr_section": citation.section if citation else None,
-            "rin": normalized_rin,
-            "source": source,
-            "evidence_id": None if evidence_id is None else str(evidence_id),
-            "first_seen": first,
-            "last_seen": last,
-            **provenance,
-        }
+        key = (docket, cfr_ref, rin, source)
         if fr_reference is not None:
-            references.setdefault(key, {})[canonical_json(fr_reference)] = fr_reference
+            form, reference = fr_reference
+            references.setdefault(key, {})[form] = reference
+        evidence = None if evidence_id is None else str(evidence_id)
         existing = edges.get(key)
         if existing is None:
-            edges[key] = candidate
+            first, last = _date_bounds(first_seen, last_seen)
+            edges[key] = {
+                "docket_id": docket,
+                "cfr_ref": cfr_ref,
+                "cfr_title": citation.title if citation else None,
+                "cfr_part": citation.part if citation else None,
+                "cfr_section": citation.section if citation else None,
+                "rin": rin,
+                "source": source,
+                "evidence_id": evidence,
+                "first_seen": first,
+                "last_seen": last,
+                **provenance,
+            }
             return
         existing["first_seen"], existing["last_seen"] = _date_bounds(
-            existing.get("first_seen"),
-            existing.get("last_seen"),
-            first,
-            last,
+            existing["first_seen"],
+            existing["last_seen"],
+            first_seen,
+            last_seen,
         )
-        evidence = sorted(value for value in (existing.get("evidence_id"), candidate.get("evidence_id")) if value)
-        existing["evidence_id"] = evidence[0] if evidence else None
+        if evidence and (not existing["evidence_id"] or evidence < existing["evidence_id"]):
+            existing["evidence_id"] = evidence
 
-    for row in iter_parquet_rows(paths["dockets"]):
+    def with_form(reference: dict) -> tuple[str, dict]:
+        return canonical_json(reference), reference
+
+    for row in iter_parquet_rows(paths["dockets"], columns=("docket_id", "rin", "modify_date")):
         docket = normalize_regsgov_identifier(row.get("docket_id"))
         if docket is None:
             continue
         trusted_dockets.add(docket)
         rin = normalize_rin(row.get("rin"))
         if rin:
+            modified = eastern_day_text(row.get("modify_date"))
             add_edge(
-                docket_id=docket,
+                docket=docket,
                 citation=None,
                 rin=rin,
                 source="docket_rin",
                 evidence_id=docket,
-                first_seen=row.get("modify_date"),
-                last_seen=row.get("modify_date"),
+                first_seen=modified,
+                last_seen=modified,
             )
 
     documents_by_fr_doc: dict[str, list[dict]] = defaultdict(list)
-    for row in iter_parquet_rows(paths["documents"]):
+    for row in iter_parquet_rows(
+        paths["documents"],
+        columns=("document_id", "docket_id", "additional_rins", "fr_doc_num", "posted_date", "modify_date"),
+    ):
         docket = normalize_regsgov_identifier(row.get("docket_id"))
         if docket is not None:
             # Documents are themselves sourced from Regulations.gov. They can
             # legitimately arrive before the corresponding docket record.
             trusted_dockets.add(docket)
         document_id = row.get("document_id")
+        posted = eastern_day_text(row.get("posted_date"))
+        modified = eastern_day_text(row.get("modify_date"))
         raw_rins = parse_json_list(
             row.get("additional_rins"),
             stats=json_stats,
@@ -188,13 +208,13 @@ def build_rule_targets(
                 if docket is None or not rin:
                     continue
                 add_edge(
-                    docket_id=docket,
+                    docket=docket,
                     citation=None,
                     rin=rin,
                     source="document_rin",
                     evidence_id=document_id,
-                    first_seen=row.get("posted_date"),
-                    last_seen=row.get("modify_date") or row.get("posted_date"),
+                    first_seen=posted,
+                    last_seen=modified or posted,
                 )
         fr_doc_num = row.get("fr_doc_num")
         if fr_doc_num and docket is not None:
@@ -204,23 +224,35 @@ def build_rule_targets(
                 **fr_index.reference(str(fr_doc_num)),
             }
             if identity := resolved_id(reference):
-                documents_by_fr_doc[identity].append({**row, "docket_id": docket, "fr_reference": reference})
+                documents_by_fr_doc[identity].append(
+                    {
+                        "docket": docket,
+                        "document_id": document_id,
+                        "posted": posted,
+                        "modified": modified,
+                        "fr_reference": with_form(reference),
+                    }
+                )
             else:
                 add_edge(
-                    docket_id=docket,
+                    docket=docket,
                     citation=None,
                     rin=None,
                     source="document_fr_doc",
                     evidence_id=document_id,
-                    first_seen=row.get("posted_date"),
-                    last_seen=row.get("modify_date"),
-                    fr_reference=reference,
+                    first_seen=posted,
+                    last_seen=modified,
+                    fr_reference=with_form(reference),
                 )
 
+    # parse_cfr_citation reads only the Register's CFR objects; count anything else it drops.
+    unread_cfr: list[object] = []
     linked_dockets_by_fr_doc: dict[str, set[str]] = defaultdict(set)
-    for row in iter_parquet_rows(paths["fr_docket_links"]):
-        docket = normalize_regsgov_identifier(row.get("docket_id"))
-        if row.get("document_number") and docket in trusted_dockets:
+    for row in iter_parquet_rows(
+        paths["fr_docket_links"], columns=("docket_id", "document_number", "publication_date")
+    ):
+        docket = linked_docket_id(row.get("docket_id"))
+        if row.get("document_number") and docket is not None and docket in trusted_dockets:
             reference = {
                 "source": "fr_docket_links",
                 "evidence_id": docket,
@@ -230,19 +262,26 @@ def build_rule_targets(
                 linked_dockets_by_fr_doc[identity].add(docket)
             else:
                 add_edge(
-                    docket_id=docket,
+                    docket=docket,
                     citation=None,
                     rin=None,
                     source="fr_cfr_ref",
                     evidence_id=docket,
-                    fr_reference=reference,
+                    fr_reference=with_form(reference),
                 )
 
-    for row in iter_parquet_rows(paths["federal_register"]):
+    for row in iter_parquet_rows(
+        paths["federal_register"],
+        columns=("document_number", "publication_date", "cfr_references_json", "regulation_id_numbers_json"),
+    ):
         document_number = row.get("document_number")
         if not document_number:
             continue
-        identity = record_id(row)
+        identity = fr_index.record_id(row)
+        linked_dockets = linked_dockets_by_fr_doc.get(identity, ())
+        documents = documents_by_fr_doc.get(identity, ())
+        if not linked_dockets and not documents:
+            continue
         raw_cfr = parse_json_list(
             row.get("cfr_references_json"),
             stats=json_stats,
@@ -259,44 +298,49 @@ def build_rule_targets(
         )
         if raw_cfr is None or raw_rins is None:
             continue
-        citations = [citation for raw in raw_cfr for citation in parse_cfr_citation(raw)]
-        citations = list(dict.fromkeys(citations))
-        rins = list(dict.fromkeys(rin for value in raw_rins if (rin := normalize_rin(value))))
+        unread_cfr.extend(raw for raw in raw_cfr if not isinstance(raw, dict))
+        citations = list(dict.fromkeys(citation for raw in raw_cfr for citation in parse_cfr_citation(raw)))
+        rins = list(dict.fromkeys(rin for value in raw_rins if (rin := normalize_rin(value)))) or [None]
         publication_date = row.get("publication_date")
+        published = eastern_day_text(publication_date)
 
-        linked_dockets = linked_dockets_by_fr_doc.get(identity, set())
-        for docket in linked_dockets:
-            for citation in citations:
-                for rin in rins or (None,):
-                    add_edge(
-                        docket_id=docket,
-                        citation=citation,
-                        rin=rin,
-                        source="fr_cfr_ref",
-                        evidence_id=identity,
-                        fr_reference={
-                            "source": "federal_register",
-                            "evidence_id": identity,
-                            **fr_index.reference(str(document_number), publication_date),
-                        },
-                        first_seen=publication_date,
-                        last_seen=publication_date,
-                    )
+        if linked_dockets and citations:
+            # Once per FR row, not per docket x citation x RIN.
+            reference = with_form(
+                {
+                    "source": "federal_register",
+                    "evidence_id": identity,
+                    **fr_index.reference(str(document_number), publication_date),
+                }
+            )
+            for docket in linked_dockets:
+                for citation in citations:
+                    for rin in rins:
+                        add_edge(
+                            docket=docket,
+                            citation=citation,
+                            rin=rin,
+                            source="fr_cfr_ref",
+                            evidence_id=identity,
+                            fr_reference=reference,
+                            first_seen=published,
+                            last_seen=published,
+                        )
 
         # A regulations.gov document's frDocNum is independent corroboration of
         # the same target, so it intentionally receives a different source value.
-        for document in documents_by_fr_doc.get(identity, ()):
+        for document in documents:
             for citation in citations or (None,):
-                for rin in rins or (None,):
+                for rin in rins:
                     add_edge(
-                        docket_id=document.get("docket_id"),
+                        docket=document["docket"],
                         citation=citation,
                         rin=rin,
                         source="document_fr_doc",
-                        evidence_id=document.get("document_id"),
+                        evidence_id=document["document_id"],
                         fr_reference=document["fr_reference"],
-                        first_seen=document.get("posted_date") or publication_date,
-                        last_seen=document.get("modify_date") or publication_date,
+                        first_seen=document["posted"] or published,
+                        last_seen=document["modified"] or published,
                     )
 
     for key, row in edges.items():
@@ -313,6 +357,12 @@ def build_rule_targets(
     )
     out_file = write_parquet_rows(output_dir / OUTPUT, columns=COLUMNS, rows=rows)
     json_stats.log("rule_targets")
+    if unread_cfr:
+        logger.warning(
+            "rule_targets: dropped {:,} Federal Register CFR references that are not objects; examples: {}",
+            len(unread_cfr),
+            "; ".join(repr(raw)[:80] for raw in unread_cfr[:5]),
+        )
     logger.info("Rule targets: {:,} rows across {:,} dockets", len(rows), len({r["docket_id"] for r in rows}))
     assert pq.ParquetFile(out_file).schema_arrow.names == list(COLUMNS)
     return out_file

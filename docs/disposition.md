@@ -288,7 +288,8 @@ Committed to RefSpec, not pushed, once the current merge settles.
 ### One missing minter
 
 `canonical_usc_chapter_iri` and its lowercase-suffix rule
-(`ontology/citations.py:404-418`). The 2026-08-31 port of the citation grammar
+(`ontology/citations.py:404-418` at `e2da4b3`; the unused grammar was deleted
+after it, fork delivery decision 18). The 2026-08-31 port of the citation grammar
 into RefSpec's `iri_minting.py` carried seven of eight producers; this is the
 eighth.
 
