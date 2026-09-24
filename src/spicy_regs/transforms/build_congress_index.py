@@ -7,9 +7,11 @@ Congressional Record reconstruction is a separate, deferred acquisition.
 
 from __future__ import annotations
 
+import json
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+from operator import itemgetter
 from pathlib import Path
 from typing import Any
 
@@ -32,11 +34,12 @@ from spicy_docs.transport.credentials import CredentialRefusedError, scrub_crede
 from spicy_regs.sources import r2
 from spicy_regs.sources.congress_bills import API_KEY_ENV_VARS, _resolve_api_key, listing_reader
 from spicy_regs.transforms.congress_scope import congresses_from_env, record_volumes
-from spicy_regs.transforms.congress_walk import ListingSource
+from spicy_regs.transforms.congress_walk import ListingSource, PooledListingSource
 from spicy_regs.transforms.table_merge import merge_contract_table, published_table
 
 
-#: Pages of ``MAX_LIMIT`` per list unit. The largest unit measured is
+#: Pages per complete pass of a list unit; pooled passes vary the page size.
+#: The largest unit measured is
 #: ``house-communication/119`` at 4,975 (20 pages); an older Congress with
 #: twice that still fits, and reaching the bound is the reader's refusal, not
 #: a quiet stop.
@@ -206,58 +209,44 @@ class _Listed:
 
 
 def _walk(
-    reader: ListingSource, spec: IndexSpec, congresses: Sequence[int], identity: tuple[str, ...]
+    reader: PooledListingSource, spec: IndexSpec, congresses: Sequence[int], identity: tuple[str, ...]
 ) -> list[_Listed]:
-    """Every record the scoped units list, keyed by the shaper's identity; repeats and unkeyable records counted."""
+    """Settle each scoped list by identity before reading details or writing output.
+
+    Equal row counts can conceal repeated and missing identities at page
+    boundaries. The source reader varies page sizes over bounded whole walks
+    and refuses a pool that cannot reach the declared total.
+    """
+
+    def entry(record: Mapping[str, Any]) -> _Listed:
+        row = spec.shape(record, None)
+        parts = [row[column] for column in identity]
+        if any(part is None for part in parts):
+            raise PagedJsonSourceError(f"{spec.table}: list record names no keyable row")
+        return _Listed(tuple(str(part) for part in parts), record, row)
+
     listed: dict[tuple[str, ...], _Listed] = {}
     for label, url in spec.units(congresses):
-        declared: int | None = None
-        walked = pages = repeated = unkeyable = 0
-        for page in reader.records(spec.list_route, url, max_pages=MAX_PAGES):
-            pages += 1
-            if declared is None and page.declared_count is not None:
-                declared = int(page.declared_count)
-            for record in page.records:
-                walked += 1
-                try:
-                    row = spec.shape(record, None)
-                except TableContractError as error:
-                    unkeyable += 1
-                    logger.warning("{}: {} list record refused by the shaper: {}", spec.table, label, error)
-                    continue
-                parts = [row[column] for column in identity]
-                if any(part is None for part in parts):
-                    unkeyable += 1
-                    logger.warning("{}: {} list record names no keyable row", spec.table, label)
-                    continue
-                key = tuple(str(part) for part in parts)
-                if key in listed:
-                    repeated += 1
-                listed[key] = _Listed(key, record, row)
+        pooled = reader.pooled(
+            spec.list_route,
+            url,
+            # JSON preserves the complete tuple, including a treaty's valid
+            # empty suffix; it is not a missing identity component.
+            key=lambda record: json.dumps(entry(record).key),
+            version=itemgetter("updateDate"),
+            max_pages=MAX_PAGES,
+        )
+        for record in pooled.records:
+            current = entry(record)
+            listed[current.key] = current
         logger.info(
-            "{}: {} — declared {}, walked {:,} on {} page(s); {:,} repeated, {:,} unkeyable",
+            "{}: {} — {:,} distinct records, {:,} declared, in {} walk(s)",
             spec.table,
             label,
-            "?" if declared is None else f"{declared:,}",
-            walked,
-            pages,
-            repeated,
-            unkeyable,
+            len(pooled.records),
+            pooled.declared,
+            pooled.passes,
         )
-        if repeated and declared is not None:
-            # Declared equal to walked is a row count, not an identity count:
-            # each repeat displaced a record this walk never delivered. The
-            # next whole walk delivers it, which is why the list is never
-            # short-circuited.
-            logger.info(
-                "{}: {} — {:,} distinct records delivered of {:,} declared; the {:,} not delivered"
-                " are recovered by the next whole walk",
-                spec.table,
-                label,
-                declared - repeated,
-                declared,
-                repeated,
-            )
     return list(listed.values())
 
 
@@ -290,7 +279,7 @@ def build_index_table(
     output_dir: Path,
     spec: IndexSpec,
     *,
-    reader: ListingSource | None = None,
+    reader: PooledListingSource | None = None,
     congresses: Sequence[int] | None = None,
     max_details: int = MAX_DETAILS_PER_RUN,
     download_prior: Callable[[str, Path], bool] = r2.download,
@@ -374,8 +363,9 @@ def build_index_table(
         outcomes["read"] += 1
 
     logger.info("{}: {:,} listed; {}", spec.table, len(listed), dict(outcomes) or "every row complete from the list")
-    output = merge_contract_table(output_dir, spec.table, rows, download_prior=download_prior,
-                                  prior_present=prior is not None)
+    output = merge_contract_table(
+        output_dir, spec.table, rows, download_prior=download_prior, prior_present=prior is not None
+    )
     if spec.table == "house_communications":
         import pyarrow.compute as pc
         import pyarrow.parquet as pq
@@ -383,7 +373,9 @@ def build_index_table(
 
         table = pq.read_table(output)
         index = table.schema.get_field_index("source_route")
-        table = table.set_column(index, "source_route", pc.fill_null(table["source_route"], COMMUNICATION_SOURCE_ROUTES[0]))
+        table = table.set_column(
+            index, "source_route", pc.fill_null(table["source_route"], COMMUNICATION_SOURCE_ROUTES[0])
+        )
         temporary = output.with_suffix(".tmp.parquet")
         pq.write_table(table, temporary, compression="zstd")
         temporary.replace(output)

@@ -30,12 +30,12 @@ the same way: a cap that says once, at WARNING, when it stopped that leg.
 
 from __future__ import annotations
 
-from collections.abc import Iterator, Mapping
+from collections.abc import Callable, Hashable, Iterator, Mapping
 from dataclasses import dataclass
 from typing import Any, Protocol
 
 from loguru import logger
-from spicy_docs.reading.paged_json import DeclaredCountMismatch, PagedJsonSourceError
+from spicy_docs.reading.paged_json import DeclaredCountMismatch, PagedJsonSourceError, PooledWalk
 
 
 class ListingSource(Protocol):
@@ -47,6 +47,21 @@ class ListingSource(Protocol):
     """
 
     def records(self, route: Any, url: str, *, max_pages: int = ...) -> Iterator[Any]: ...
+
+
+class PooledListingSource(ListingSource, Protocol):
+    """A listing reader that can settle a query by distinct source identity."""
+
+    def pooled(
+        self,
+        route: Any,
+        url: str,
+        *,
+        key: Callable[[Mapping[str, Any]], Hashable],
+        version: Callable[[Mapping[str, Any]], Any] | None = ...,
+        max_passes: int = ...,
+        max_pages: int = ...,
+    ) -> PooledWalk: ...
 
 
 class PerRunCap:

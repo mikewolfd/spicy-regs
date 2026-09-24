@@ -16,12 +16,18 @@ from types import SimpleNamespace
 
 import pyarrow.parquet as pq
 import pytest
-from spicy_docs.reading.paged_json import PagedJsonSourceError
+from spicy_docs.reading.paged_json import (
+    DEFAULT_POOL_PASSES,
+    DeclaredCountChanged,
+    DeclaredCountMismatch,
+    IncompleteWalkError,
+    PagedJsonSourceError,
+)
 from spicy_docs.schemas import TABLE_CONTRACTS
 from spicy_docs.transport.credentials import CredentialRefusedError
 
 from spicy_regs.transforms.build_congress_index import INDEX_SPECS, build_index_table
-from tests.test_incremental_rollups import no_download, seed
+from tests.test_incremental_rollups import PageStubReader, no_download, seed
 
 FIXTURES = Path(__file__).parent / "fixtures" / "congress_index"
 
@@ -38,7 +44,7 @@ def _path_of(url: str) -> str:
     return url.split("/v3/", 1)[1].split("?", 1)[0]
 
 
-class FixtureReader:
+class FixtureReader(PageStubReader):
     """Serves the fixture whose name the URL's path spells, keyed as the route spells its rows.
 
     ``refuse`` names paths answered with a 404-shaped refusal; ``serve_as``
@@ -46,7 +52,7 @@ class FixtureReader:
     """
 
     def __init__(self, *, refuse: frozenset[str] = frozenset(), serve_as: dict[str, str] | None = None):
-        self.urls: list[str] = []
+        super().__init__()
         self.refuse = refuse
         self.serve_as = serve_as or {}
 
@@ -60,7 +66,9 @@ class FixtureReader:
         rows = document[route.records_key]
         yield SimpleNamespace(
             records=(rows,) if isinstance(rows, dict) else tuple(rows),
-            declared_count=(document.get("pagination") or {}).get("count"),
+            # These list fixtures are trimmed; their test population is the
+            # retained subset, not the original publisher's whole Congress.
+            declared_count=len(rows) if isinstance(rows, list) else None,
         )
 
     @property
@@ -281,7 +289,7 @@ def test_a_partitioned_treaty_is_published_list_only_and_never_asked_for(tmp_pat
             for page in super().records(route, url, max_pages=max_pages):
                 if "limit=1" not in url:
                     part = dict(page.records[0], number=3, suffix="A", url="https://api.congress.gov/v3/treaty/119/3/A")
-                    page = SimpleNamespace(records=(*page.records, part), declared_count=page.declared_count)
+                    page = SimpleNamespace(records=(*page.records, part), declared_count=page.declared_count + 1)
                 yield page
 
     rows, reader = _run(tmp_path, "treaties", reader=WithAPart())
@@ -302,6 +310,49 @@ def test_a_repeated_list_record_is_published_once(tmp_path):
 
     rows, _ = _run(tmp_path, "nominations", reader=Repeating())
     assert len(rows) == 2
+
+
+def test_nominations_pool_page_boundary_ties_without_changing_the_query(tmp_path):
+    template = json.loads((FIXTURES / "nomination-119.json").read_text())["nominations"][0]
+    citations = ["PN1022-25", "PN1022-22", "PN730-28", "PN680", "PN1022-7", "PN1022-31", "PN730-31", "PN753"]
+    records = [dict(template, citation=citation) for citation in citations]
+
+    class BoundaryReader(FixtureReader):
+        def records(self, route, url, *, max_pages=1):
+            self.urls.append(url)
+            # Each walk serves eight rows, repeats four and misses four.
+            chosen = records[:4] if len(self.urls) == 1 else records[4:]
+            yield SimpleNamespace(records=chosen, declared_count=8)
+            yield SimpleNamespace(records=chosen, declared_count=8)
+
+    rows, reader = _run(tmp_path, "nominations", reader=BoundaryReader())
+    assert {row["citation"] for row in rows} == set(citations)
+    assert len(reader.urls) == 2
+    assert "limit=250" in reader.urls[0] and "limit=237" in reader.urls[1]
+    assert all("sort=" not in url for url in reader.urls), "this route ignores sort"
+
+
+@pytest.mark.parametrize("failure", ["count_mismatch", "count_changed", "unsettled"])
+def test_an_unsettled_list_never_replaces_output(tmp_path, failure):
+    output = tmp_path / "nominations.parquet"
+    output.write_bytes(b"previous published output")
+
+    class Refusing(FixtureReader):
+        def records(self, route, url, *, max_pages=1):
+            if failure == "count_mismatch":
+                raise DeclaredCountMismatch("terminal count mismatch", declared=2, observed=1)
+            if failure == "count_changed":
+                raise DeclaredCountChanged("population changed", declared=2, changed_to=3)
+            for page in super().records(route, url, max_pages=max_pages):
+                yield SimpleNamespace(records=(page.records[0], page.records[0]), declared_count=2)
+
+    error = DeclaredCountMismatch if failure == "count_mismatch" else IncompleteWalkError
+    reader = Refusing()
+    with pytest.raises(error):
+        _run(tmp_path, "nominations", reader=reader)
+    assert output.read_bytes() == b"previous published output"
+    if failure == "unsettled":
+        assert len(reader.urls) == DEFAULT_POOL_PASSES
 
 
 def test_every_spec_marks_a_detail_only_column_and_matches_its_rollup(tmp_path):
