@@ -105,19 +105,27 @@ def _fr_rins_and_stage(row: dict, stats: JsonReadStats) -> tuple[set[str], str |
     return rins, _stage_from_document(row.get("document_type"), row.get("title"))
 
 
-def _fr_evidence(
-    path: Path, identities: set[str], fr_index: FederalRegisterIndex, stats: JsonReadStats
+#: What a Federal Register row that is no action evidence states: no RIN and no stage.
+_NO_ACTION: tuple[frozenset[str], None] = (frozenset(), None)
+
+
+def _fr_action_evidence(
+    path: Path, fr_index: FederalRegisterIndex, stats: JsonReadStats
 ) -> dict[str, tuple[set[str], str | None]]:
-    """The RINs and stage of the FR rows whose numbers ``identities`` carry, read by a pushed-down filter."""
-    if not identities:
-        return {}
-    numbers = sorted({identity.rsplit("@", 1)[0] for identity in identities})
-    rows = pq.read_table(path, columns=list(_FR_EVIDENCE_COLUMNS), filters=[("document_number", "in", numbers)])
-    return {
-        fr_index.record_id(row): _fr_rins_and_stage(row, stats)
-        for row in rows.to_pylist()
-        if str(row.get("document_number") or "").strip()
-    }
+    """The RINs and stage of every Federal Register row that states either, by dated identity.
+
+    One pass, each row read once: a row left out states neither, so a later pass answers
+    it with :data:`_NO_ACTION` instead of reading it again. Membership here is what makes
+    an FR document action evidence (decisions 32 and 33).
+    """
+    evidence: dict[str, tuple[set[str], str | None]] = {}
+    for row in iter_parquet_rows(path, columns=_FR_EVIDENCE_COLUMNS):
+        if not str(row.get("document_number") or "").strip():
+            continue
+        rins, stage = _fr_rins_and_stage(row, stats)
+        if rins or stage:
+            evidence[fr_index.record_id(row)] = (rins, stage)
+    return evidence
 
 
 def _current_stage_from_events(events: list[dict]) -> str | None:
@@ -187,6 +195,7 @@ def build_proceedings(
     if not prior_file.exists() and (output_dir / OUTPUT).exists():
         prior_file = output_dir / OUTPUT
     prior_proceedings = read_parquet_rows(prior_file)
+    fr_action = _fr_action_evidence(paths["federal_register"], fr_index, json_stats)
 
     def empty_group(
         *,
@@ -228,7 +237,8 @@ def build_proceedings(
             action_dockets.add(docket)
 
     for row in iter_parquet_rows(
-        paths["documents"], columns=("document_id", "docket_id", "additional_rins", "document_type", "title")
+        paths["documents"],
+        columns=("document_id", "docket_id", "additional_rins", "document_type", "title", "fr_doc_num"),
     ):
         docket = normalize_regsgov_identifier(row.get("docket_id"))
         if docket is None:
@@ -242,12 +252,21 @@ def build_proceedings(
             column="additional_rins",
         )
         has_rin = raw_rins is not None and any(normalize_rin(value) for value in raw_rins)
-        if has_rin or _stage_from_document(
-            row.get("document_type"),
-            row.get("title"),
+        # A document of the docket's own that cites an FR document stating a RIN or a rule
+        # stage is action evidence too (decision 32 as amended: 392 of the shells it first
+        # removed held a RIN that way, through rule_targets' document_fr_doc edges).
+        cited = row.get("fr_doc_num")
+        if (
+            has_rin
+            or _stage_from_document(row.get("document_type"), row.get("title"))
+            or (cited and resolved_id(fr_index.reference(str(cited))) in fr_action)
         ):
             action_dockets.add(docket)
 
+    # An FR link names a docket; it makes the docket an action docket only when the
+    # document is itself action evidence (decision 32 as amended). A RIN-less notice, or a
+    # reference that resolves to no one document, attaches to the docket's proceeding if it
+    # has one and founds none.
     linked_dockets_by_fr: dict[str, set[str]] = defaultdict(set)
     unresolved_links_by_docket: dict[str, list[dict]] = defaultdict(list)
     for docket, reference in fr_index.docket_links(paths["fr_docket_links"]):
@@ -255,18 +274,16 @@ def build_proceedings(
             continue
         if identity := resolved_id(reference):
             linked_dockets_by_fr[identity].add(docket)
+            if identity in fr_action:
+                action_dockets.add(docket)
         else:
             unresolved_links_by_docket[docket].append(reference)
-        action_dockets.add(docket)
 
     # Docket identity is action-specific. A Federal Register document is the only
     # cross-docket union signal used by this carrier, and only one that is itself action
     # evidence: RIN-less notices named up to 100 dockets apart (FMCSA exemption
     # applications, FDA information collections) and chained them into 400-docket
-    # proceedings (decision 33). Only documents naming several dockets are read here;
-    # the main pass below reuses what was read.
-    several = {identity for identity, dockets in linked_dockets_by_fr.items() if len(dockets) > 1}
-    fr_evidence = _fr_evidence(paths["federal_register"], several, fr_index, json_stats)
+    # proceedings (decision 33).
     parent: dict[str, str] = {}
 
     def find(node: str) -> str:
@@ -285,10 +302,9 @@ def build_proceedings(
 
     for docket in action_dockets:
         find(docket)
-    for identity in several:
-        rins, stage = fr_evidence.get(identity, (set(), None))
-        if rins or stage:
-            ordered = sorted(linked_dockets_by_fr[identity])
+    for identity, dockets in linked_dockets_by_fr.items():
+        if len(dockets) > 1 and identity in fr_action:
+            ordered = sorted(dockets)
             for docket in ordered[1:]:
                 union(ordered[0], docket)
 
@@ -383,12 +399,12 @@ def build_proceedings(
             evidence_id=row.get("document_id"),
         )
 
-    for row in iter_parquet_rows(paths["federal_register"], columns=_FR_EVIDENCE_COLUMNS):
+    for row in iter_parquet_rows(paths["federal_register"], columns=("document_number", "publication_date", "title")):
         document_number = str(row.get("document_number") or "").strip()
         if not document_number:
             continue
         identity = fr_index.record_id(row)
-        rins, stage = fr_evidence[identity] if identity in fr_evidence else _fr_rins_and_stage(row, json_stats)
+        rins, stage = fr_action.get(identity, _NO_ACTION)
         linked_keys = sorted(
             {
                 group_key_by_docket[docket]

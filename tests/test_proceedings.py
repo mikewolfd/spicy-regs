@@ -808,13 +808,21 @@ def test_unscoped_rin_keeps_identity_when_one_docket_becomes_known(tmp_path):
 
 
 def test_a_nonrulemaking_docket_is_a_proceeding_only_on_action_evidence(tmp_path):
-    """Decision 32: ``Nonrulemaking`` is not ``Rulemaking``; a shell forms no proceeding of its own."""
+    """Decision 32 as amended: a docket needs a RIN, the exact type ``Rulemaking``, or action evidence.
+
+    Action evidence is a document of its own with a RIN or a rule stage, a document of its
+    own that cites an FR document with a RIN or a rule stage, or an FR link from such a
+    document. A RIN-less notice naming a docket is none of these.
+    """
     shell, with_rin, staged, rulemaking = (
         "FDA-2023-H-0001",
         "FAA-2023-0002",
         "DOT-OST-2023-0003",
         "EPA-HQ-OAR-2023-0004",
     )
+    # Real: DOT-OST-2012-0168-0056 cites 2016-24862, which states RIN 2105-ZA02; and the
+    # RIN-less notice 2021-06210 names FDA-2020-E-1269 (with two more dockets).
+    cites, noticed = "DOT-OST-2012-0168", "FDA-2020-E-1269"
     _write(
         tmp_path / "dockets.parquet",
         ("docket_id", "rin", "docket_type", "title", "agency_code", "modify_date"),
@@ -823,12 +831,23 @@ def test_a_nonrulemaking_docket_is_a_proceeding_only_on_action_evidence(tmp_path
             {"docket_id": with_rin, "rin": "2120-AA64", "docket_type": "Nonrulemaking", "title": "Exemption"},
             {"docket_id": staged, "rin": None, "docket_type": "Nonrulemaking", "title": "Petition"},
             {"docket_id": rulemaking, "rin": None, "docket_type": "Rulemaking", "title": "Standards"},
+            {"docket_id": cites, "rin": None, "docket_type": "Nonrulemaking", "title": "State freight plans"},
+            {"docket_id": noticed, "rin": None, "docket_type": "Nonrulemaking", "title": "Patent term"},
         ],
     )
     # The shell's one document opens a comment period but is no stage and states no RIN.
     _write(
         tmp_path / "documents.parquet",
-        ("document_id", "docket_id", "additional_rins", "document_type", "title", "posted_date", "comment_end_date"),
+        (
+            "document_id",
+            "docket_id",
+            "additional_rins",
+            "document_type",
+            "title",
+            "posted_date",
+            "comment_end_date",
+            "fr_doc_num",
+        ),
         [
             {
                 "document_id": f"{shell}-0001",
@@ -838,7 +857,15 @@ def test_a_nonrulemaking_docket_is_a_proceeding_only_on_action_evidence(tmp_path
                 "title": "Complaint",
                 "posted_date": "2023-01-05",
                 "comment_end_date": "2023-02-06",
-            }
+            },
+            {
+                "document_id": f"{cites}-0056",
+                "docket_id": cites,
+                "additional_rins": "[]",
+                "document_type": "Notice",
+                "title": "Guidance on State Freight Plans and State Freight Advisory Committees",
+                "fr_doc_num": "2016-24862",
+            },
         ],
     )
     _write(
@@ -851,13 +878,34 @@ def test_a_nonrulemaking_docket_is_a_proceeding_only_on_action_evidence(tmp_path
                 "regulation_id_numbers_json": "[]",
                 "document_type": "Proposed Rule",
                 "title": "Proposed exemption standards",
-            }
+            },
+            {
+                "document_number": "2016-24862",
+                "publication_date": "2016-10-14",
+                "regulation_id_numbers_json": '["2105-ZA02"]',
+                "document_type": "Notice",
+                "title": "Guidance on State Freight Plans and State Freight Advisory Committees",
+            },
+            {
+                "document_number": "2021-06210",
+                "publication_date": "2021-03-25",
+                "regulation_id_numbers_json": "[]",
+                "document_type": "Notice",
+                "title": "Determination of Regulatory Review Period for Purposes of Patent Extension; BAROSTIM NEO",
+            },
         ],
     )
     _write(
         tmp_path / "fr_docket_links.parquet",
         ("docket_id", "document_number", "publication_date"),
-        [{"docket_id": f"Docket No. {staged}", "document_number": "2023-00001", "publication_date": "2023-01-03"}],
+        [
+            {"docket_id": f"Docket No. {staged}", "document_number": "2023-00001", "publication_date": "2023-01-03"},
+            {
+                "docket_id": "Docket Nos. FDA-2020-E-1269, FDA-2020-E-1273, and FDA-2020-E-1272",
+                "document_number": "2021-06210",
+                "publication_date": "2021-03-25",
+            },
+        ],
     )
     _write(
         tmp_path / "rule_targets.parquet", ("docket_id", "rin", "cfr_ref", "cfr_title", "cfr_part", "cfr_section"), []
@@ -865,9 +913,10 @@ def test_a_nonrulemaking_docket_is_a_proceeding_only_on_action_evidence(tmp_path
 
     proceedings = pq.read_table(build_proceedings(tmp_path)).to_pylist()
     by_docket = {docket: row for row in proceedings for docket in json.loads(row["docket_ids_json"])}
-    assert set(by_docket) == {with_rin, staged, rulemaking}, "the shell forms no proceeding"
+    assert set(by_docket) == {with_rin, staged, rulemaking, cites}, "neither the shell nor the noticed docket"
     assert json.loads(by_docket[staged]["fr_document_ids_json"]) == ["2023-00001@2023-01-03"]
     assert json.loads(by_docket[with_rin]["rins_json"]) == ["2120-AA64"]
+    assert not any("2021-06210@2021-03-25" in row["fr_document_ids_json"] for row in proceedings)
     assert {row["actor_id"] for row in proceedings} == {"spicy-regs:proceedings:v8"}
 
     # Its comment period keeps the docket as its anchor, with no proceeding.
