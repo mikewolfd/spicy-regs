@@ -520,20 +520,29 @@ def build_proceedings(
             candidate_edges.append((-score, prior_id, group_key))
 
     # The id each group mints when it continues no prior one. A prior id that is some current
-    # group's minted id stays with that group while it exists: handed to a sibling by overlap,
-    # it would be minted again for its own group. Splitting the proceedings RIN-less notices
-    # had merged (decision 33) duplicated 352 ids that way on the 2026-09-23 parents.
+    # group's minted id is held for that group while it has no id: handed to a sibling by
+    # overlap, it would be minted again for its own group. Splitting the proceedings RIN-less
+    # notices had merged (decision 33) duplicated 352 ids that way on the 2026-09-23 parents.
+    # Once the minting group has taken another id the hold is released and the remaining edges
+    # run again, in score order, so no id is left unused that overlap alone would have kept.
     minted_by_group = {group_key: stable_id("proceeding", *group["identity"]) for group_key, group in groups.items()}
     group_minting = {minted: group_key for group_key, minted in minted_by_group.items()}
     proceeding_id_by_group: dict[str, str] = {}
     claimed_prior_ids: set[str] = set()
-    for _, prior_id, group_key in sorted(candidate_edges):
-        if group_key in proceeding_id_by_group or prior_id in claimed_prior_ids:
-            continue
-        if group_minting.get(prior_id, group_key) != group_key:
-            continue
-        proceeding_id_by_group[group_key] = prior_id
-        claimed_prior_ids.add(prior_id)
+    edges = sorted(candidate_edges)
+    while edges:
+        held = {minted for minted, owner in group_minting.items() if owner not in proceeding_id_by_group}
+        for _, prior_id, group_key in edges:
+            if group_key in proceeding_id_by_group or prior_id in claimed_prior_ids:
+                continue
+            if prior_id in held and group_minting[prior_id] != group_key:
+                continue
+            proceeding_id_by_group[group_key] = prior_id
+            claimed_prior_ids.add(prior_id)
+        remaining = [
+            edge for edge in edges if edge[2] not in proceeding_id_by_group and edge[1] not in claimed_prior_ids
+        ]
+        edges = remaining if len(remaining) < len(edges) else []
     for group_key in groups:
         proceeding_id_by_group.setdefault(group_key, minted_by_group[group_key])
 

@@ -7,7 +7,7 @@ import json
 import pyarrow.parquet as pq
 import pytest
 
-from spicy_regs.ontology.common import write_parquet_rows
+from spicy_regs.ontology.common import stable_id, write_parquet_rows
 from spicy_regs.transforms.build_comment_periods import (
     COLUMNS as COMMENT_PERIOD_COLUMNS,
     build_comment_periods,
@@ -873,3 +873,59 @@ def test_a_nonrulemaking_docket_is_a_proceeding_only_on_action_evidence(tmp_path
     # Its comment period keeps the docket as its anchor, with no proceeding.
     (period,) = pq.read_table(build_comment_periods(tmp_path)).to_pylist()
     assert (json.loads(period["docket_ids_json"]), period["proceeding_ids_json"]) == ([shell], "[]")
+
+
+def test_an_id_held_for_its_minting_group_is_released_once_that_group_takes_another(tmp_path):
+    """Prior P = {a,b,c} under b's minted id; now A = {a,c} and B = {b,d,e}, and B continues Q.
+
+    B mints P, so P is held for B while B has no id. B takes Q (more overlap), which releases
+    P, and A, whose best match P is, continues it, as plain overlap scoring always did.
+    """
+    a, b, c, d, e = (f"EPA-HQ-OAR-2020-000{n}" for n in range(1, 6))
+    p_id, q_id = stable_id("proceeding", "docket", b), stable_id("proceeding", "docket", d)
+    _write(
+        tmp_path / "dockets.parquet",
+        ("docket_id", "rin", "docket_type", "title", "agency_code", "modify_date"),
+        [{"docket_id": docket, "docket_type": "Rulemaking"} for docket in (a, b, c, d, e)],
+    )
+    _write(tmp_path / "documents.parquet", ("document_id", "docket_id", "additional_rins", "document_type"), [])
+    _write(
+        tmp_path / "federal_register.parquet",
+        ("document_number", "publication_date", "regulation_id_numbers_json", "document_type", "title"),
+        [
+            {"document_number": number, "publication_date": "2026-01-02", "document_type": "Proposed Rule"}
+            for number in ("2026-00001", "2026-00002")
+        ],
+    )
+    _write(
+        tmp_path / "fr_docket_links.parquet",
+        ("docket_id", "document_number", "publication_date"),
+        [
+            *(
+                {"docket_id": docket, "document_number": "2026-00001", "publication_date": "2026-01-02"}
+                for docket in (a, c)
+            ),
+            *(
+                {"docket_id": docket, "document_number": "2026-00002", "publication_date": "2026-01-02"}
+                for docket in (b, d, e)
+            ),
+        ],
+    )
+    _write(
+        tmp_path / "rule_targets.parquet", ("docket_id", "rin", "cfr_ref", "cfr_title", "cfr_part", "cfr_section"), []
+    )
+    _write(
+        tmp_path / "_proceedings_prior.parquet",
+        ("proceeding_id", "docket_ids_json", "fr_document_ids_json"),
+        [
+            {"proceeding_id": p_id, "docket_ids_json": json.dumps([a, b, c]), "fr_document_ids_json": "[]"},
+            {"proceeding_id": q_id, "docket_ids_json": json.dumps([d, e]), "fr_document_ids_json": "[]"},
+        ],
+    )
+
+    rows = pq.read_table(build_proceedings(tmp_path)).to_pylist()
+    by_dockets = {tuple(json.loads(row["docket_ids_json"])): row for row in rows}
+    assert set(by_dockets) == {(a, c), (b, d, e)}
+    assert by_dockets[(a, c)]["proceeding_id"] == by_dockets[(a, c)]["supersedes_id"] == p_id
+    assert by_dockets[(b, d, e)]["proceeding_id"] == by_dockets[(b, d, e)]["supersedes_id"] == q_id
+    assert json.loads(by_dockets[(b, d, e)]["identity_predecessors_json"]) == [p_id]
