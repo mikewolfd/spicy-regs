@@ -55,6 +55,28 @@ from spicy_regs.sources.r2 import upload_file
 MIN_SOURCE_ROWS = 100_000
 
 
+def counts(con, source_uri: str) -> tuple[int, int, int]:
+    """Read catalog, source and missing-key counts without creating a table."""
+    exists = con.execute(
+        "SELECT EXISTS (SELECT 1 FROM information_schema.tables "
+        "WHERE table_catalog = ? AND table_schema = ? AND table_name = ?)",
+        [iceberg._CATALOG_ALIAS, iceberg._namespace(), DOCKET.name],
+    ).fetchone()[0]
+    qualified = iceberg._qualified(DOCKET)
+    before = con.execute(f"SELECT count(*) FROM {qualified}").fetchone()[0] if exists else 0
+    source = f"read_parquet('{iceberg._sql_str(source_uri)}')"
+    source_rows = con.execute(f"SELECT count(*) FROM {source}").fetchone()[0]
+    absent = (
+        f'WHERE NOT EXISTS (SELECT 1 FROM {qualified} t WHERE t."{DOCKET.dedup_key}" = src.k)'
+        if exists else ""
+    )
+    missing = con.execute(
+        f'SELECT count(*) FROM (SELECT DISTINCT "{DOCKET.dedup_key}" AS k '
+        f'FROM {source} WHERE "{DOCKET.dedup_key}" IS NOT NULL) src {absent}'
+    ).fetchone()[0]
+    return before, source_rows, missing
+
+
 def main() -> int:
     load_dotenv()
     parser = argparse.ArgumentParser(description=__doc__)
@@ -85,11 +107,7 @@ def main() -> int:
     con = iceberg._connect()  # iceberg + httpfs loaded, catalog attached
     try:
         iceberg.create_s3_secret(con)
-        iceberg._ensure_table(con, DOCKET)
-
-        qualified = iceberg._qualified(DOCKET)
-        before = con.execute(f"SELECT count(*) FROM {qualified}").fetchone()[0]
-        source_rows = con.execute(f"SELECT count(*) FROM read_parquet('{iceberg._sql_str(source_uri)}')").fetchone()[0]
+        before, source_rows, missing = counts(con, source_uri)
 
         logger.info("Catalog {} holds {:,} rows", DOCKET.name, before)
         logger.info("Source {} holds {:,} rows", source_uri, source_rows)
@@ -103,24 +121,13 @@ def main() -> int:
             )
             return 1
 
-        missing = con.execute(
-            f"""
-            SELECT count(*) FROM (
-                SELECT DISTINCT "{DOCKET.dedup_key}" AS k
-                FROM read_parquet('{iceberg._sql_str(source_uri)}')
-                WHERE "{DOCKET.dedup_key}" IS NOT NULL
-            ) src
-            WHERE NOT EXISTS (
-                SELECT 1 FROM {qualified} t WHERE t."{DOCKET.dedup_key}" = src.k
-            );
-            """
-        ).fetchone()[0]
         logger.info("{:,} source docket_id(s) are missing from the catalog", missing)
 
         if args.dry_run:
             logger.info("--dry-run: nothing written. Would backfill {:,} row(s).", missing)
             return 0
 
+        iceberg._ensure_table(con, DOCKET)
         if not missing:
             logger.info("Catalog already holds every source docket_id — nothing to backfill.")
             inserted, total = 0, before
