@@ -36,13 +36,12 @@ from spicy_regs.ontology.federal_register import (
 OUTPUT = "proceedings.parquet"
 # v5: labelled FR docket values join (linked_docket_id), and stage events fall on the
 # Eastern day of a Regulations.gov instant rather than its UTC day.
-# v6: a docket value naming several dockets joins each (linked_docket_ids), so one FR
-# document's list unites its trusted dockets, as separate link values always did.
-# v7: a docket is an action docket by a RIN or docket_type exactly Rulemaking, not by the
-# substring that also matched Nonrulemaking (decision 32).
-# v8: only an FR document with a RIN or a rule stage unions the dockets it names; any
-# other attaches to each named docket's proceeding (decision 33).
-ACTOR_ID = "spicy-regs:proceedings:v8"
+# v6 (one bump over published v5): a docket value naming several dockets joins each
+# (linked_docket_ids); a docket is an action docket by a RIN, a docket_type exactly
+# Rulemaking, a document of its own that is action evidence or cites an FR document that
+# is, or a link from an FR document that is (decision 32); and only an FR document with a
+# RIN or a rule stage unites the dockets it names, any other attaching to each (decision 33).
+ACTOR_ID = "spicy-regs:proceedings:v6"
 
 COLUMNS = (
     "proceeding_id",
