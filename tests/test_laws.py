@@ -18,6 +18,7 @@ from types import SimpleNamespace
 import httpx
 import pyarrow.parquet as pq
 import pytest
+from loguru import logger
 from spicy_docs.sources.govinfo.uslm import (
     PublicLawSelection,
     UslmSourceError,
@@ -274,8 +275,10 @@ def test_table_iii_honours_its_own_cap(tmp_path, scoped):
 def _walk_111(tmp_path, monkeypatch, *, chain, numbers=range(220, 231), held=(220,), **olrc_kw):
     """Walk the 111th's public laws ``numbers``, as the laws table states them, with ``held`` acts published.
 
-    Returns the acts asked and the act keys whose rows this run published.
+    Returns the acts asked and the act keys whose rows this run published; ``olrc_kw["log"]``, a list,
+    collects the run's log lines.
     """
+    log = olrc_kw.pop("log", None)
     monkeypatch.setenv("BILL_FAMILY_CONGRESSES", "111")
     seed(
         tmp_path,
@@ -287,7 +290,12 @@ def _walk_111(tmp_path, monkeypatch, *, chain, numbers=range(220, 231), held=(22
             tmp_path, "table3_records", [{"act_key": f"111-{n}", "seq": "0", "observed_at": "2026-09-01"} for n in held]
         )
     olrc = StubOlrc(chain=chain, **olrc_kw)
-    _, _, table3 = _build(tmp_path, olrc=olrc)
+    sink = logger.add(log.append, format="{message}") if log is not None else None
+    try:
+        _, _, table3 = _build(tmp_path, olrc=olrc)
+    finally:
+        if sink is not None:
+            logger.remove(sink)
     return olrc.acts, {r["act_key"] for r in _rows(table3) if r["observed_at"] == OBSERVED_AT}
 
 
@@ -300,23 +308,43 @@ def test_table_iii_follows_the_chain_from_the_highest_held_act_to_its_end(tmp_pa
 
 
 @pytest.mark.parametrize(
-    ("following", "numbers", "release_point"),
+    ("following", "numbers", "release_point", "reason"),
     [
-        (None, range(220, 231), "119-73"),
-        ("111-226", range(220, 226), "119-73"),
-        ("111-226", range(220, 231), "111-224"),
-        ("112-226", range(220, 231), "119-73"),
-        ("111-221", range(220, 231), "119-73"),
+        (None, range(220, 231), "119-73", "names no next public law"),
+        ("111-226", range(220, 226), "119-73", "names an act outside the caller's bound"),
+        ("111-226", range(220, 231), "111-224", "names an act past the release point it states"),
+        ("112-226", range(220, 231), "119-73", "names an act in another Congress"),
+        ("111-221", range(220, 231), "119-73", "names an act that does not follow it"),
     ],
     ids=["names-no-next-act", "past-the-laws-table", "past-the-release-point", "another-congress", "does-not-follow"],
 )
 def test_table_iii_chain_ends_where_the_page_leads_nowhere_it_may_ask(
-    tmp_path, monkeypatch, following, numbers, release_point
+    tmp_path, monkeypatch, following, numbers, release_point, reason
 ):
     # Every act a wrong turn would reach is served, so a missing guard shows up as an extra ask.
     chain = {"111-220": "111-223", "111-223": following, "111-226": None, "111-221": None, "112-226": None}
-    asked, read = _walk_111(tmp_path, monkeypatch, chain=chain, numbers=numbers, release_point=release_point)
+    log: list[str] = []
+    asked, read = _walk_111(tmp_path, monkeypatch, chain=chain, numbers=numbers, release_point=release_point, log=log)
     assert asked == ["111-220", "111-223"] and read == {"111-223"}
+    ends = [line for line in log if line.startswith("Laws: Table III chain for Congress 111 ends at 111-223: ")]
+    assert ends and ends[0].startswith(f"Laws: Table III chain for Congress 111 ends at 111-223: its page {reason} (")
+
+
+def test_a_chain_that_ends_on_its_own_spends_no_cap(tmp_path, monkeypatch):
+    """The cap is spent per request: the 111th's two acts and the 110th's one fit a cap of three exactly."""
+    monkeypatch.setenv("BILL_FAMILY_CONGRESSES", "110,111")
+    seed(
+        tmp_path,
+        "laws",
+        [
+            {"law_id": f"{c}-public-{n}", "congress": str(c), "law_type": "public", "number": str(n)}
+            for c, n in ((111, 220), (111, 223), (110, 1))
+        ],
+    )
+    olrc = StubOlrc(chain={"111-220": "111-223", "111-223": None, "110-1": None})
+    _, _, table3 = _build(tmp_path, olrc=olrc, max_table3=3)
+    assert olrc.acts == ["111-220", "111-223", "110-1"]
+    assert {r["act_key"] for r in _rows(table3)} == {"111-220", "111-223", "110-1"}
 
 
 @pytest.mark.parametrize(

@@ -2152,7 +2152,8 @@ tables:
       does not hold from a served page cut short.
 
       So the rollup follows Table III's own chain instead of asking for every
-      law. Each served page names the next act the table holds (119-4 names
+      law, with spicy-docs' iter_table3_chain (B32), which owns the rules
+      below. Each served page names the next act the table holds (119-4 names
       119-12). Each run asks again for the Congress's highest published act,
       only to read the act it names; its rows are not published again. Cold,
       the run starts at the lowest act the law route lists. It then asks for
