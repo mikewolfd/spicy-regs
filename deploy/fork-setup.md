@@ -63,6 +63,9 @@ Enable the R2 Data Catalog on this account's bucket only when using Iceberg.
 Set `R2_CATALOG_URI`, `R2_CATALOG_WAREHOUSE`, `R2_CATALOG_TOKEN` and optionally
 `R2_CATALOG_NAMESPACE` in the fork secrets and local environment. Copy the URI
 and warehouse from the actual catalog; do not reuse an upstream catalog token.
+Scheduled ETL runs use Iceberg. The [catalog and manifest seed runbook](../docs/etl-catalog-seed.md)
+covers enabling the catalog, loading it from the published Parquet, and
+publishing the manifest the ETL needs.
 
 Cache purge is optional. Set `CLOUDFLARE_ZONE_ID` and `CLOUDFLARE_API_TOKEN` only
 for the zone serving this bucket, using a token scoped to cache purge. This token

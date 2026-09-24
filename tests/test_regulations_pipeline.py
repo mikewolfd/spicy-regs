@@ -14,7 +14,7 @@ import pytest
 
 import spicy_regs.pipelines.regulations as regulations
 import spicy_docs.sources.mirrulations as mirrulations
-from spicy_regs.manifest import Manifest
+from spicy_regs.manifest import Manifest, MissingManifestError
 from spicy_regs.pipelines import Pipeline, RegulationsPipeline
 
 PREFIX = "raw-data"
@@ -159,6 +159,7 @@ def test_run_extracts_stages_and_merges(tmp_output: Path, monkeypatch: pytest.Mo
     monkeypatch.setattr(mirrulations, "s3_resource", lambda: _FakeS3Resource(store))
 
     RegulationsPipeline(
+        allow_fresh_start=True,
         agency=AGENCY,
         output_dir=tmp_output,
         skip_comments=True,
@@ -177,7 +178,9 @@ def test_run_dedups_on_merge_keeping_latest_modify_date(tmp_output: Path, monkey
     }
     monkeypatch.setattr(mirrulations, "s3_resource", lambda: _FakeS3Resource(store))
 
-    RegulationsPipeline(agency=AGENCY, output_dir=tmp_output, skip_comments=True, skip_upload=True).run()
+    RegulationsPipeline(
+        allow_fresh_start=True, agency=AGENCY, output_dir=tmp_output, skip_comments=True, skip_upload=True
+    ).run()
 
     df = pl.read_parquet(tmp_output / "dockets.parquet")
     assert df.height == 1
@@ -201,6 +204,7 @@ def test_chunked_comments_commit_per_chunk(tmp_output: Path, monkeypatch: pytest
     monkeypatch.setattr(regulations.iceberg, "merge_comments", lambda sd, od, rt: merge_calls.append(1))
 
     RegulationsPipeline(
+        allow_fresh_start=True,
         agency=AGENCY,
         output_dir=tmp_output,
         only_comments=True,
@@ -216,7 +220,9 @@ def test_chunked_comments_commit_per_chunk(tmp_output: Path, monkeypatch: pytest
 def test_run_with_no_records_is_noop(tmp_output: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(mirrulations, "s3_resource", lambda: _FakeS3Resource({}))
 
-    RegulationsPipeline(agency=AGENCY, output_dir=tmp_output, skip_comments=True, skip_upload=True).run()
+    RegulationsPipeline(
+        allow_fresh_start=True, agency=AGENCY, output_dir=tmp_output, skip_comments=True, skip_upload=True
+    ).run()
 
     assert not (tmp_output / "dockets.parquet").exists()
 
@@ -232,7 +238,7 @@ def _run(tmp_output: Path, **overrides: Any) -> None:
         skip_upload=True,
     )
     kwargs.update(overrides)
-    RegulationsPipeline(**kwargs).run()
+    RegulationsPipeline(allow_fresh_start=True, **kwargs).run()
 
 
 def test_second_run_skips_keys_already_in_manifest(tmp_output: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -271,6 +277,47 @@ def test_full_refresh_reprocesses_despite_manifest(tmp_output: Path, monkeypatch
     )
     _run(tmp_output, full_refresh=True)
     assert merge_calls == [1]  # reprocessed even though the key is in the manifest
+
+
+def test_run_without_a_manifest_refuses_before_reading_the_mirror(
+    tmp_output: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """No published manifest must stop the run, not re-read every agency's history."""
+    monkeypatch.setattr(mirrulations, "s3_resource", lambda: pytest.fail("the mirror was read"))
+
+    with pytest.raises(MissingManifestError):
+        RegulationsPipeline(agency=AGENCY, output_dir=tmp_output, skip_comments=True, skip_upload=True).run()
+    with pytest.raises(MissingManifestError):
+        RegulationsPipeline(
+            agency=AGENCY, output_dir=tmp_output, only_comments=True, use_iceberg=True, chunk_size=2
+        ).run()
+
+
+# --- batching --------------------------------------------------------------
+
+
+def _batches(agencies: list[str], monkeypatch: pytest.MonkeyPatch, count: int) -> list[list[str]]:
+    monkeypatch.setattr(mirrulations, "discover_agencies", lambda: agencies)
+    return [RegulationsPipeline(batch_number=n, batch_count=count)._agencies() for n in range(count)]
+
+
+def test_batch_count_covers_every_discovered_agency_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    # 335 agencies were discovered on 2026-09-24; 15 fixed batches of 22 missed five.
+    agencies = [f"A{i:03d}" for i in range(335)]
+    batches = _batches(agencies, monkeypatch, 15)
+    assert [agency for batch in batches for agency in batch] == agencies
+    assert max(map(len, batches)) == 23
+
+
+def test_derived_batch_size_above_the_ceiling_refuses(monkeypatch: pytest.MonkeyPatch) -> None:
+    agencies = [f"A{i:03d}" for i in range(15 * regulations.MAX_DERIVED_BATCH_SIZE + 1)]
+    with pytest.raises(RuntimeError, match="raise BATCH_COUNT"):
+        _batches(agencies, monkeypatch, 15)
+
+
+def test_batch_number_outside_the_batch_count_refuses() -> None:
+    with pytest.raises(ValueError, match="outside"):
+        RegulationsPipeline(agency=AGENCY, batch_number=15, batch_count=15)._agencies()
 
 
 # --- failed-key handling ---------------------------------------------------
@@ -347,6 +394,7 @@ def test_chunked_comments_exclude_failed_keys_from_manifest(tmp_output: Path, mo
     monkeypatch.setattr(regulations.iceberg, "merge_comments", lambda sd, od, rt: None)
 
     pipe = RegulationsPipeline(
+        allow_fresh_start=True,
         agency=AGENCY,
         output_dir=tmp_output,
         only_comments=True,
@@ -385,6 +433,7 @@ def test_processes_multiple_agencies_in_parallel(tmp_output: Path, monkeypatch: 
     monkeypatch.setattr(mirrulations, "s3_resource", lambda: _FakeS3Resource(store))
 
     RegulationsPipeline(
+        allow_fresh_start=True,
         output_dir=tmp_output,
         skip_comments=True,
         skip_upload=True,
@@ -426,6 +475,7 @@ def test_run_uploads_changed_comment_partitions(tmp_output: Path, monkeypatch: p
     )
 
     RegulationsPipeline(
+        allow_fresh_start=True,
         agency=AGENCY,
         output_dir=tmp_output,
         only_comments=True,
@@ -472,6 +522,7 @@ def test_run_does_not_advance_manifest_after_comment_upload_failure(
 
     with pytest.raises(RuntimeError, match="comment upload failed"):
         RegulationsPipeline(
+            allow_fresh_start=True,
             agency=AGENCY,
             output_dir=tmp_output,
             only_comments=True,
@@ -505,6 +556,7 @@ def test_run_does_not_advance_manifest_after_base_upload_failure(
 
     with pytest.raises(RuntimeError, match="base upload failed"):
         RegulationsPipeline(
+            allow_fresh_start=True,
             agency=AGENCY,
             output_dir=tmp_output,
             skip_comments=True,
@@ -548,6 +600,7 @@ def test_run_preflight_failure_stops_all_publication(tmp_output: Path, monkeypat
 
     with pytest.raises(RuntimeError, match="manifest guard failed"):
         RegulationsPipeline(
+            allow_fresh_start=True,
             agency=AGENCY,
             output_dir=tmp_output,
             only_comments=True,
@@ -582,6 +635,7 @@ def test_run_refuses_to_publish_comments_without_a_refreshed_index(
 
     with pytest.raises(RuntimeError, match="comments_index.parquet"):
         RegulationsPipeline(
+            allow_fresh_start=True,
             agency=AGENCY,
             output_dir=tmp_output,
             only_comments=True,
@@ -613,6 +667,7 @@ def test_run_skips_partition_upload_when_no_comments(tmp_output: Path, monkeypat
     )
 
     RegulationsPipeline(
+        allow_fresh_start=True,
         agency=AGENCY,
         output_dir=tmp_output,
         skip_comments=True,
@@ -672,6 +727,7 @@ def test_run_primes_comments_index_from_r2_before_merge(tmp_output: Path, monkey
     monkeypatch.setattr(regulations.r2, "download", fake_download)
 
     RegulationsPipeline(
+        allow_fresh_start=True,
         agency=AGENCY,
         output_dir=tmp_output,
         only_comments=True,
@@ -709,3 +765,79 @@ def test_cli_main_builds_and_runs_pipeline(monkeypatch: pytest.MonkeyPatch) -> N
     assert captured["kwargs"]["agency"] == "EPA"
     assert captured["kwargs"]["skip_upload"] is True
     assert captured["kwargs"]["since_year"] == 2025
+
+
+def test_cli_parses_the_scheduled_workflow_flags(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict = {}
+
+    class _FakePipeline:
+        def __init__(self, **kwargs) -> None:
+            captured.update(kwargs)
+
+        def run(self) -> None:
+            pass
+
+    monkeypatch.setattr(regulations, "RegulationsPipeline", _FakePipeline)
+    monkeypatch.setattr(regulations, "load_dotenv", lambda *a, **k: None)
+
+    with pytest.raises(SystemExit) as exited:
+        regulations.app(["--batch-number", "14", "--batch-count", "15", "--no-allow-fresh-start", "--use-iceberg"])
+
+    assert exited.value.code == 0
+    assert (captured["batch_number"], captured["batch_count"], captured["allow_fresh_start"]) == (14, 15, False)
+
+
+def test_scheduled_workflow_derives_batches_and_never_starts_fresh() -> None:
+    import yaml
+
+    workflow = yaml.safe_load((Path(__file__).parents[1] / ".github/workflows/etl-new-pipeline.yml").read_text())
+    inputs = workflow[True]["workflow_dispatch"]["inputs"]
+    assert inputs["allow_fresh_start"]["default"] is False
+    script = next(
+        step["run"] for step in workflow["jobs"]["etl-new"]["steps"] if step.get("name") == "Run new pipeline"
+    )
+    assert '--batch-count "$BATCH_COUNT"' in script
+    assert "--batch-size" not in script
+    assert "--no-allow-fresh-start" in script
+
+
+@pytest.mark.parametrize(
+    ("event", "batch", "timeout", "outputs"),
+    [
+        ("schedule", "", "", {"timeout_minutes": "60", "matrix": '{"batch":[' + ",".join(map(str, range(15))) + "]}"}),
+        ("workflow_dispatch", "all", "240", {"timeout_minutes": "240"}),
+        ("workflow_dispatch", "14", "", {"timeout_minutes": "60", "matrix": '{"batch":[14]}'}),
+        ("workflow_dispatch", "14", "361", None),
+        ("workflow_dispatch", "14", "060", None),
+        ("workflow_dispatch", "15", "60", None),
+    ],
+)
+def test_workflow_setup_validates_the_dispatch_inputs(tmp_path: Path, event, batch, timeout, outputs) -> None:
+    """The setup step's shell, run as written: the timeout and batch it hands the ETL job."""
+    import subprocess
+
+    import yaml
+
+    workflow = yaml.safe_load((Path(__file__).parents[1] / ".github/workflows/etl-new-pipeline.yml").read_text())
+    assert workflow["jobs"]["etl-new"]["timeout-minutes"] == "${{ fromJSON(needs.setup.outputs.timeout_minutes) }}"
+    output = tmp_path / "github_output"
+    output.touch()
+    env = {
+        "PATH": "/usr/bin:/bin",
+        "EVENT": event,
+        "BATCH_NUMBER": batch,
+        "TIMEOUT_MINUTES": timeout,
+        "SKIP_UPLOAD": "false",
+        "USE_ICEBERG": "true",
+        "BATCH_COUNT": str(workflow["env"]["BATCH_COUNT"]),
+        "GITHUB_OUTPUT": str(output),
+    }
+    [step] = workflow["jobs"]["setup"]["steps"]
+    result = subprocess.run(["bash", "-c", step["run"]], env=env, capture_output=True, text=True)
+
+    if outputs is None:
+        assert result.returncode == 1
+        return
+    assert result.returncode == 0, result.stderr
+    written = dict(line.split("=", 1) for line in output.read_text().splitlines())
+    assert outputs.items() <= written.items()

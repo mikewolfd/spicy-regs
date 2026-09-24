@@ -45,7 +45,10 @@ state; the ledger holds its pins and evidence, and the execution log its history
 - **T06:** dockets and documents delivered as a metadata repair; document bodies
   and text extraction remain open. The scheduled ETL has never completed a
   sweep on the fork (no manifest, 60-minute batches, no catalog secrets); the
-  base objects were all written by local deliveries. See the ledger.
+  base objects were all written by local deliveries. It now refuses to start
+  without a manifest; the [catalog and manifest seed runbook](etl-catalog-seed.md)
+  holds the owner's steps and a manifest built from the published ids. See the
+  ledger.
 - **T07:** published for every comment-bearing agency, six plus ACF repaired from
   native source (decision 7), and the derived attachment text repaired in
   numeric order with one tool recorded (plan A6, decision 19); the other

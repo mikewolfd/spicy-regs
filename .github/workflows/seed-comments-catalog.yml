@@ -3,7 +3,9 @@ name: Seed comments catalog (manual)
 # On-demand loader for the R2 Data Catalog cutover. Copies the already-current
 # published comments/ partition tree on R2 into the Iceberg `comments` table so
 # the MCP servers can serve row-level reads from the catalog instead of the
-# frozen monolithic comments.parquet (see PRs #89/#90).
+# frozen monolithic comments.parquet (see PRs #89/#90). The fork has no partition
+# tree: set `source_key` to comments.parquet to load each agency from it instead
+# (docs/etl-catalog-seed.md).
 #
 # Manual dispatch only — it WRITES to the production catalog, so it never runs on
 # a schedule. It defaults to a single-agency smoke test (OMB, the docket from the
@@ -37,6 +39,17 @@ on:
         required: false
         default: false
         type: boolean
+      source_key:
+        description: 'Load every agency from this object (e.g. comments.parquet) instead of the comments/ partition tree'
+        required: false
+        default: ''
+        type: string
+
+concurrency:
+  # Every catalog writer shares one group with the ETL (DELETE + INSERT is not
+  # safe under concurrent writers); a seed queues behind an in-flight run.
+  group: comments-catalog-write
+  cancel-in-progress: false
 
 jobs:
   seed:
@@ -75,21 +88,33 @@ jobs:
           R2_CATALOG_WAREHOUSE: ${{ secrets.R2_CATALOG_WAREHOUSE }}
           R2_CATALOG_TOKEN: ${{ secrets.R2_CATALOG_TOKEN }}
           R2_CATALOG_NAMESPACE: ${{ secrets.R2_CATALOG_NAMESPACE }}
+          # Inputs via env, never interpolated into the shell body, and validated.
+          FULL_LOAD: ${{ inputs.full_load }}
+          AGENCY: ${{ inputs.agency }}
+          APPEND: ${{ inputs.append }}
+          UPLOAD_INDEX: ${{ inputs.upload_index }}
+          SOURCE_KEY: ${{ inputs.source_key }}
         run: |
-          ARGS=""
-          if [ "${{ inputs.full_load }}" = "true" ]; then
+          set -euo pipefail
+          ARGS=()
+          if [ "$FULL_LOAD" = "true" ]; then
             echo "Full load: every agency"
-          elif [ -n "${{ inputs.agency }}" ]; then
-            ARGS="$ARGS --agency ${{ inputs.agency }}"
+          elif [ -n "$AGENCY" ]; then
+            if ! printf '%s' "$AGENCY" | grep -Eq '^[A-Za-z0-9_-]+$'; then
+              echo "agency must match [A-Za-z0-9_-], got: $AGENCY" >&2; exit 1
+            fi
+            ARGS+=(--agency "$AGENCY")
           fi
-          if [ "${{ inputs.append }}" = "true" ]; then
-            ARGS="$ARGS --append"
+          if [ -n "$SOURCE_KEY" ]; then
+            if ! printf '%s' "$SOURCE_KEY" | grep -Eq '^[A-Za-z0-9_./-]+\.parquet$'; then
+              echo "source_key must be a .parquet object key, got: $SOURCE_KEY" >&2; exit 1
+            fi
+            ARGS+=(--source-key "$SOURCE_KEY")
           fi
-          if [ "${{ inputs.upload_index }}" = "true" ]; then
-            ARGS="$ARGS --upload-index"
-          fi
-          echo "Running: uv run python scripts/seed_comments_catalog.py $ARGS"
-          uv run python scripts/seed_comments_catalog.py $ARGS
+          if [ "$APPEND" = "true" ]; then ARGS+=(--append); fi
+          if [ "$UPLOAD_INDEX" = "true" ]; then ARGS+=(--upload-index); fi
+          echo "Running: uv run python scripts/seed_comments_catalog.py ${ARGS[*]-}"
+          uv run python scripts/seed_comments_catalog.py ${ARGS[@]+"${ARGS[@]}"}
 
       - name: Verify freshness (index vs rows)
         if: ${{ inputs.full_load == true }}

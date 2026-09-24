@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
-"""Seed the Iceberg catalog ``comments`` table from the existing R2 partitions.
+"""Seed the Iceberg catalog ``comments`` table from the published comments on R2.
 
 One-time loader for the catalog cutover (see PR #89). The partitioned
 ``comments/`` tree on R2 is already current; this copies it into the R2 Data
 Catalog ``comments`` table so the MCP servers can serve row-level reads from the
-catalog instead of the frozen monolithic ``comments.parquet``. Loading per agency
-keeps memory bounded and gives progress. After loading it rebuilds
-``comments_index.parquet`` from the catalog so a quick diff against the published
-index confirms the load is complete.
+catalog instead of the frozen monolithic ``comments.parquet``. The fork never
+produced that tree, so ``--source-key comments.parquet`` reads each agency's
+rows from the monolithic object instead. Loading per agency keeps memory bounded
+and gives progress. After loading it rebuilds ``comments_index.parquet`` from
+the catalog so a quick diff against the published index confirms the load is
+complete.
 
 Needs both credential sets in the environment:
 
@@ -21,6 +23,7 @@ Needs both credential sets in the environment:
 Usage:
     uv run python scripts/seed_comments_catalog.py
     uv run python scripts/seed_comments_catalog.py --agency OMB        # one agency
+    uv run python scripts/seed_comments_catalog.py --source-key comments.parquet  # the fork
     uv run python scripts/seed_comments_catalog.py --append            # add to a non-empty table
     uv run python scripts/seed_comments_catalog.py --upload-index      # publish the rebuilt index
 """
@@ -37,6 +40,27 @@ from loguru import logger
 
 from spicy_regs.schemas import COMMENT
 from spicy_regs.sources import iceberg, r2
+
+# A monolithic source is read once per agency, and each read touches only the row
+# groups whose agency_code range holds that agency. So the whole load costs about
+# one pass over the file only while the file is sorted by agency_code; the fork's
+# comments.parquet is (195 row groups, one out of order, 329 touches for 133
+# agencies on 2026-09-24). Unsorted, it would be read once per agency: refuse.
+MAX_SOURCE_PASSES = 2
+
+
+def row_group_touches(con, source: str, agencies: list[str]) -> tuple[int, int]:
+    """``(row groups, row groups read)`` when each agency loads alone, from agency_code stats.
+
+    A row group without statistics counts against every agency, so an
+    unreadable footer reads as unsorted rather than as cheap.
+    """
+    ranges = con.execute(
+        f"SELECT stats_min_value, stats_max_value FROM parquet_metadata('{iceberg._sql_str(source)}') "
+        "WHERE path_in_schema = 'agency_code'"
+    ).fetchall()
+    touches = sum(1 for agency in agencies for lo, hi in ranges if lo is None or hi is None or lo <= agency <= hi)
+    return len(ranges), touches
 
 
 def _agencies(con, bucket: str, only: str | None) -> list[str]:
@@ -71,6 +95,11 @@ def main() -> int:
     load_dotenv()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--agency", help="Load only this agency_code (default: all)")
+    parser.add_argument(
+        "--source-key",
+        help="Read every agency from this monolithic object (e.g. comments.parquet) "
+        "instead of the comments/ partition tree",
+    )
     parser.add_argument("--output-dir", type=Path, default=Path("output"))
     parser.add_argument(
         "--append",
@@ -107,6 +136,21 @@ def main() -> int:
         expected = _expected_counts(con, bucket)
         logger.info("Seeding {} agency partition set(s) into the catalog", len(agencies))
 
+        if args.source_key:
+            source_uri = f"s3://{bucket}/{args.source_key}"
+            groups, touches = row_group_touches(con, source_uri, agencies)
+            logger.info(
+                "{}: {} row groups; loading {} agencies reads {} of them", source_uri, groups, len(agencies), touches
+            )
+            if touches > MAX_SOURCE_PASSES * groups:
+                logger.error(
+                    "{} is not sorted by agency_code: the per-agency loads would read it {:.1f} times over. "
+                    "Rewrite it ordered by agency_code first.",
+                    source_uri,
+                    touches / max(groups, 1),
+                )
+                return 1
+
         qualified = iceberg._qualified(COMMENT)
         # Resume check in one grouped scan: the catalog is unpartitioned, so a
         # per-agency count(*) would re-read the whole table once per agency.
@@ -132,11 +176,15 @@ def main() -> int:
                 logger.info("  [{}/{}] {}: already loaded ({:,} rows) — skipping", i, len(agencies), agency, have)
                 skipped += 1
                 continue
-            glob = f"s3://{bucket}/comments/agency_code={safe}/docket_id=*/year=*/month=*/part-0.parquet"
+            source = (
+                f"s3://{bucket}/{args.source_key}"
+                if args.source_key
+                else f"s3://{bucket}/comments/agency_code={safe}/docket_id=*/year=*/month=*/part-0.parquet"
+            )
             try:
-                # replace_agency makes each agency load idempotent: a re-run
-                # replaces that agency's rows rather than duplicating them.
-                total = iceberg.seed_comments_from_parquet(con, glob, COMMENT, replace_agency=agency)
+                # Replacing makes a re-run idempotent; an agency with no rows
+                # yet skips the DELETE, which would scan the whole table.
+                total = iceberg.seed_comments_from_parquet(con, source, COMMENT, agency, replace=have > 0)
                 loaded += 1
             except Exception as exc:  # noqa: BLE001 — keep going, report at the end
                 logger.warning("  [{}/{}] {}: skipped ({})", i, len(agencies), agency, exc)

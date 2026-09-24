@@ -71,13 +71,14 @@ Reads JSON from the Mirrulations S3 mirror, flattens it, writes Parquet to
 
 ```bash
 # One agency, recent only, comments only — finishes in a few minutes.
-uv run run-pipeline --agency EPA --only-comments --since-year 2025
+uv run run-pipeline --agency EPA --only-comments --since-year 2025 --allow-fresh-start
 ```
 
 Outputs land in `./output/` (e.g. `output/comments.parquet`) alongside an
-incremental `manifest.json` — re-running picks up where the last run left
-off. Drop `--only-comments` / `--agency` / `--since-year` to widen the scope;
-add `--full-refresh` to ignore the manifest. `uv run run-pipeline --help`
+incremental `manifest.parquet` — re-running picks up where the last run left
+off. A run with no manifest refuses to start unless `--allow-fresh-start` is
+given, as above for the first run. Drop `--only-comments` / `--agency` /
+`--since-year` to widen the scope; add `--full-refresh` to ignore the manifest. `uv run run-pipeline --help`
 lists every flag. Upload to R2 stays off by default (`--skip-upload`); only
 the maintainers publish.
 

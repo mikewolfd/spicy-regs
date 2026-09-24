@@ -71,12 +71,6 @@ class TestManifestLoad:
             assert k in manifest
         assert "nonexistent-key" not in manifest
 
-    def test_load_no_manifest_is_empty(self, tmp_output, monkeypatch):
-        """With no local manifest and R2 not configured, load yields an empty manifest."""
-        monkeypatch.delenv("R2_PUBLIC_URL", raising=False)
-        manifest = Manifest.load(tmp_output)
-        assert "anything" not in manifest
-
 
 class TestManifestRoundTrip:
     def test_save_then_load(self, tmp_output):

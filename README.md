@@ -184,15 +184,17 @@ minutes instead of hours:
 
 ```bash
 # Smallest useful run: one agency, recent dockets, comments only, no upload.
-uv run run-pipeline --agency EPA --only-comments --since-year 2025
+# The first run has no manifest yet, so it must be allowed to start empty.
+uv run run-pipeline --agency EPA --only-comments --since-year 2025 --allow-fresh-start
 ```
 
 What you get:
 
 - `output/comments.parquet` — merged and deduplicated comments
 - `output/manifest.parquet` — a Bloom filter of already-processed source keys,
-  so the next run is incremental. Delete it or pass `--full-refresh` to rebuild
-  from scratch.
+  so the next run is incremental. Pass `--full-refresh` to rebuild from scratch.
+  Without a manifest (locally or on R2) a run refuses to start unless given
+  `--allow-fresh-start`.
 
 Useful flags (`uv run run-pipeline --help` for the full list):
 
@@ -204,6 +206,7 @@ Useful flags (`uv run run-pipeline --help` for the full list):
 | `--skip-comments` | Inverse — dockets + documents only (much faster) |
 | `--max-workers 8` | Agencies processed in parallel (default 4) |
 | `--full-refresh` | Ignore the existing manifest and rebuild from scratch |
+| `--allow-fresh-start` | Start from an empty manifest when none exists (first run) |
 | `--no-skip-upload` | Also publish to R2 (needs credentials in `.env`) |
 | `--use-iceberg` | Route dockets + comments through the R2 Data Catalog |
 | `--chunk-size 50000` | Bounded-memory comment ingest for very large agencies |

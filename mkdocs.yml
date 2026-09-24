@@ -38,6 +38,7 @@ nav:
   - Overview: index.md
   - Publication status: publication-status.md
   - Fork generation: fork-generation.md
+  - ETL catalog and manifest seed: etl-catalog-seed.md
   - Local data reuse: research/local-data-reuse-2026-09-21.md
   - Correction handling: correction-lifecycle.md
   - Changelog: changelog.md

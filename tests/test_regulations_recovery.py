@@ -25,12 +25,13 @@ def test_unproductive_answer_is_retained_not_manifested(tmp_path, monkeypatch, c
     key = _comment_key("c1", "EPA-2026-0001")
     monkeypatch.setattr(mirrulations, "s3_resource", lambda: _FakeS3Resource({key: body}))
     pipeline = RegulationsPipeline(
+        allow_fresh_start=True,
         agency="EPA", output_dir=tmp_path, only_comments=True, enrich_text=False,
         use_iceberg=chunked, chunk_size=1 if chunked else 0,
     )
     pipeline.run()
     pipeline.run()
-    assert key not in Manifest.load(tmp_path)
+    assert key not in Manifest.load(tmp_path, allow_fresh_start=True)
     rows = pq.read_table(tmp_path / "failed_keys.parquet").to_pylist()
     assert len(rows) == 1 and rows[0]["attempts"] == 2
     assert rows[0]["status"] == ("unreadable" if body == b"{ broken" else "requested-empty")
@@ -54,6 +55,7 @@ def test_access_refusal_aborts_without_checkpoint(tmp_path, monkeypatch, status,
     monkeypatch.setattr(mirrulations, "s3_resource", lambda: Refused({key: b"{}"}))
     with pytest.raises(mirrulations.MirrulationsAccessRefusedError):
         RegulationsPipeline(
+            allow_fresh_start=True,
             agency="EPA", output_dir=tmp_path, only_comments=True, enrich_text=False,
             use_iceberg=chunked, chunk_size=1 if chunked else 0,
         ).run()
@@ -91,13 +93,14 @@ def test_missing_record_identity_never_becomes_a_row_or_coverage(
     monkeypatch.setattr(mirrulations, "s3_resource", lambda: resource)
     monkeypatch.setattr(regulations.iceberg, "merge_comments", lambda *a: pytest.fail("invalid record reached merge"))
     pipeline = RegulationsPipeline(
+        allow_fresh_start=True,
         agency="EPA", output_dir=tmp_path, only_comments=record_name == "comments",
         skip_comments=record_name != "comments",
         enrich_text=False, use_iceberg=chunked, chunk_size=1 if chunked else 0,
     )
     pipeline.run()
     pipeline.run()
-    assert key not in Manifest.load(tmp_path)
+    assert key not in Manifest.load(tmp_path, allow_fresh_start=True)
     [row] = pq.read_table(tmp_path / "failed_keys.parquet").to_pylist()
     assert row["key"] == key and row["attempts"] == (3 if transient_first else 2)
     assert row["status"] == "requested-empty"
@@ -164,7 +167,7 @@ def test_legacy_false_coverage_is_retried_before_new_work(tmp_path, monkeypatch)
     original = mirrulations.reader_factory
     monkeypatch.setattr(mirrulations, "reader_factory", lambda *a, **kw: original(
         *a, **kw, download_workers=1, resource_factory=lambda: resource))
-    RegulationsPipeline(agency="EPA", output_dir=tmp_path, skip_comments=True).run()
+    RegulationsPipeline(allow_fresh_start=True, agency="EPA", output_dir=tmp_path, skip_comments=True).run()
     assert asked == [old, new]
     assert pq.read_table(tmp_path / "dockets.parquet").num_rows == 2
     assert pq.read_table(tmp_path / "failed_keys.parquet").num_rows == 0
@@ -222,6 +225,7 @@ def test_unresolved_history_survives_fresh_hosted_runner(tmp_path, monkeypatch, 
 
     def run(directory):
         RegulationsPipeline(
+            allow_fresh_start=True,
             agency="EPA", output_dir=directory, only_comments=chunked, skip_comments=not chunked,
             enrich_text=False, use_iceberg=chunked, chunk_size=1 if chunked else 0, skip_upload=False,
         ).run()
