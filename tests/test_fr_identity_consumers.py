@@ -362,7 +362,7 @@ def test_labelled_dockets_and_padded_numbers_join_every_rulemaking_table(tmp_pat
         ("federal_register.document_type", "2010-02-05"),
     }
     assert not any(json.loads(r["docket_ids_json"]) == [] for r in proceedings)
-    assert {r["actor_id"] for r in proceedings} == {"spicy-regs:proceedings:v6"}
+    assert {r["actor_id"] for r in proceedings} == {"spicy-regs:proceedings:v7"}
 
     periods = pq.read_table(build_comment_periods(tmp_path)).to_pylist()
     (period,) = [r for r in periods if "federal_register.comments_close_on" in r["source"]]
@@ -488,8 +488,10 @@ def test_a_listed_docket_value_joins_each_held_docket_once(tmp_path):
     assert json.loads(fda["cfr_refs_json"]) == ["21-101"]
     fmcsa = by_dockets['["FMCSA-2001-9709"]']
     assert json.loads(fmcsa["fr_document_ids_json"]) == ["03-2053@2003-01-29"]
-    assert by_dockets['["EIB-2023-0012"]']["fr_document_ids_json"] == "[]", "the prose-first value joined nothing"
-    assert not any("FMCSA-00-7382" in r["docket_ids_json"] for r in proceedings)
+    # The prose-first value joined nothing, so its Nonrulemaking docket forms no proceeding.
+    assert not any(
+        "EIB-2023-0012" in r["docket_ids_json"] or "FMCSA-00-7382" in r["docket_ids_json"] for r in proceedings
+    )
 
     periods = pq.read_table(build_comment_periods(tmp_path)).to_pylist()
     (period,) = periods

@@ -805,3 +805,71 @@ def test_unscoped_rin_keeps_identity_when_one_docket_becomes_known(tmp_path):
     assert json.loads(second[0]["docket_ids_json"]) == [docket_id]
     assert json.loads(second[0]["identity_predecessors_json"]) == []
     assert second[0]["supersedes_id"] == stable_id
+
+
+def test_a_nonrulemaking_docket_is_a_proceeding_only_on_action_evidence(tmp_path):
+    """Decision 32: ``Nonrulemaking`` is not ``Rulemaking``; a shell forms no proceeding of its own."""
+    shell, with_rin, staged, rulemaking = (
+        "FDA-2023-H-0001",
+        "FAA-2023-0002",
+        "DOT-OST-2023-0003",
+        "EPA-HQ-OAR-2023-0004",
+    )
+    _write(
+        tmp_path / "dockets.parquet",
+        ("docket_id", "rin", "docket_type", "title", "agency_code", "modify_date"),
+        [
+            {"docket_id": shell, "rin": None, "docket_type": "Nonrulemaking", "title": "Civil money penalty"},
+            {"docket_id": with_rin, "rin": "2120-AA64", "docket_type": "Nonrulemaking", "title": "Exemption"},
+            {"docket_id": staged, "rin": None, "docket_type": "Nonrulemaking", "title": "Petition"},
+            {"docket_id": rulemaking, "rin": None, "docket_type": "Rulemaking", "title": "Standards"},
+        ],
+    )
+    # The shell's one document opens a comment period but is no stage and states no RIN.
+    _write(
+        tmp_path / "documents.parquet",
+        ("document_id", "docket_id", "additional_rins", "document_type", "title", "posted_date", "comment_end_date"),
+        [
+            {
+                "document_id": f"{shell}-0001",
+                "docket_id": shell,
+                "additional_rins": "[]",
+                "document_type": "Notice",
+                "title": "Complaint",
+                "posted_date": "2023-01-05",
+                "comment_end_date": "2023-02-06",
+            }
+        ],
+    )
+    _write(
+        tmp_path / "federal_register.parquet",
+        ("document_number", "publication_date", "regulation_id_numbers_json", "document_type", "title"),
+        [
+            {
+                "document_number": "2023-00001",
+                "publication_date": "2023-01-03",
+                "regulation_id_numbers_json": "[]",
+                "document_type": "Proposed Rule",
+                "title": "Proposed exemption standards",
+            }
+        ],
+    )
+    _write(
+        tmp_path / "fr_docket_links.parquet",
+        ("docket_id", "document_number", "publication_date"),
+        [{"docket_id": f"Docket No. {staged}", "document_number": "2023-00001", "publication_date": "2023-01-03"}],
+    )
+    _write(
+        tmp_path / "rule_targets.parquet", ("docket_id", "rin", "cfr_ref", "cfr_title", "cfr_part", "cfr_section"), []
+    )
+
+    proceedings = pq.read_table(build_proceedings(tmp_path)).to_pylist()
+    by_docket = {docket: row for row in proceedings for docket in json.loads(row["docket_ids_json"])}
+    assert set(by_docket) == {with_rin, staged, rulemaking}, "the shell forms no proceeding"
+    assert json.loads(by_docket[staged]["fr_document_ids_json"]) == ["2023-00001@2023-01-03"]
+    assert json.loads(by_docket[with_rin]["rins_json"]) == ["2120-AA64"]
+    assert {row["actor_id"] for row in proceedings} == {"spicy-regs:proceedings:v7"}
+
+    # Its comment period keeps the docket as its anchor, with no proceeding.
+    (period,) = pq.read_table(build_comment_periods(tmp_path)).to_pylist()
+    assert (json.loads(period["docket_ids_json"]), period["proceeding_ids_json"]) == ([shell], "[]")

@@ -38,7 +38,9 @@ OUTPUT = "proceedings.parquet"
 # Eastern day of a Regulations.gov instant rather than its UTC day.
 # v6: a docket value naming several dockets joins each (linked_docket_ids), so one FR
 # document's list unites its trusted dockets, as separate link values always did.
-ACTOR_ID = "spicy-regs:proceedings:v6"
+# v7: a docket is an action docket by a RIN or docket_type exactly Rulemaking, not by the
+# substring that also matched Nonrulemaking (decision 32).
+ACTOR_ID = "spicy-regs:proceedings:v7"
 
 COLUMNS = (
     "proceeding_id",
@@ -183,7 +185,10 @@ def build_proceedings(
             continue
         trusted_dockets.add(docket)
         docket_metadata[docket] = row
-        if normalize_rin(row.get("rin")) or "rulemaking" in str(row.get("docket_type") or "").casefold():
+        # A docket is action evidence by its RIN or its type being exactly Rulemaking: the
+        # substring test this replaced also matched Nonrulemaking, and made a single-docket
+        # proceeding of every one of those shells (fork delivery decision 32).
+        if normalize_rin(row.get("rin")) or str(row.get("docket_type") or "").casefold() == "rulemaking":
             action_dockets.add(docket)
 
     for row in iter_parquet_rows(
