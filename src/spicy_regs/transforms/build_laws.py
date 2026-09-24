@@ -366,8 +366,9 @@ def _table3_rows(
     the Congress's highest held act, asked again only for the act its page
     names, or, cold, at the lowest act the laws table states; publishes the
     acts it does not hold; and spends the per-run cap and checks the deadline
-    in ``acquire``, once per request, raising to end the walk, since a check
-    before each ``next()`` would also spend one at every chain's natural end. A
+    in ``acquire``, once per act (its retries included), raising to end the
+    walk, since a check before each ``next()`` would also spend one at every
+    chain's natural end. A
     chain act that fails ends its Congress's chain for the run, and
     :data:`TABLE3_STOP_AFTER` failures in a row end the walk.
     """
@@ -395,8 +396,9 @@ def _table3_rows(
     consecutive = 0
     for congress in sorted(stated, reverse=True):
         start = max(held_numbers[congress]) if congress in held_numbers else min(stated[congress])
+        start_key, first_ask = f"{congress}-{start}", len(asked)
         # Never binds: every act after the start is a distinct act the laws table states.
-        chain = iter_table3_chain(acquire, f"{congress}-{start}", max_acts=len(stated[congress]) + 1, within=within)
+        chain = iter_table3_chain(acquire, start_key, max_acts=len(stated[congress]) + 1, within=within)
         named: tuple[str | None, str | None] = (None, None)  # the last page's next act and release point
         while True:
             try:
@@ -414,13 +416,12 @@ def _table3_rows(
                 logger.warning("Laws: Table III walk {}", stop)
                 return _table3_summary(rows, read, failed)
             except (UsCodeSourceError, httpx.HTTPError, ConnectionError) as error:
-                failed.append(asked[-1])
+                # The walker refuses a start it cannot read before asking for anything.
+                key = asked[-1] if len(asked) > first_ask else start_key
+                failed.append(key)
                 consecutive += 1
                 logger.warning(
-                    "Laws: Table III chain for Congress {} stops at {}: {}",
-                    congress,
-                    asked[-1],
-                    _transport_error(error),
+                    "Laws: Table III chain for Congress {} stops at {}: {}", congress, key, _transport_error(error)
                 )
                 if consecutive >= TABLE3_STOP_AFTER:
                     logger.warning("Laws: Table III walk stops after {} failures in a row", consecutive)

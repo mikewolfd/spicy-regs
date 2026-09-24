@@ -368,6 +368,33 @@ def test_a_page_the_reader_refuses_counts_toward_the_stop(tmp_path, monkeypatch,
     assert olrc.acts == asked
 
 
+@pytest.mark.parametrize("scope", ["110", "110,111"], ids=["first-congress", "after-another-congress"])
+def test_a_start_the_walker_refuses_before_any_request_is_counted_as_that_start(tmp_path, monkeypatch, scope):
+    """A laws row numbered 0 starts the 110th's chain at ``110-0``, which the walker refuses unasked.
+
+    The failure is the start's own, never the previous Congress's last act, and needs no act asked.
+    """
+    monkeypatch.setenv("BILL_FAMILY_CONGRESSES", scope)
+    seed(
+        tmp_path,
+        "laws",
+        [
+            {"law_id": f"{c}-public-{n}", "congress": str(c), "law_type": "public", "number": str(n)}
+            for c, n in ((110, 0), (111, 226))
+        ],
+    )
+    olrc = StubOlrc()
+    log: list[str] = []
+    sink = logger.add(log.append, format="{message}")
+    try:
+        _build(tmp_path, olrc=olrc)
+    finally:
+        logger.remove(sink)
+    assert olrc.acts == (["111-226"] if "111" in scope else [])
+    assert any(line.startswith("Laws: Table III chain for Congress 110 stops at 110-0: ") for line in log)
+    assert any("failed ['110-0']" in line for line in log)
+
+
 def test_a_chain_act_that_drops_is_retried_then_counted(tmp_path, monkeypatch):
     """Through the rollup's own acquirer: a dropped connection is retried by the transport, then is a failure."""
     monkeypatch.setattr("time.sleep", lambda seconds: None)  # the retry backoff

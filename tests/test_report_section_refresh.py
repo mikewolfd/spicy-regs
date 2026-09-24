@@ -265,7 +265,7 @@ def test_the_rollup_reads_its_reread_list_from_the_environment(tmp_path, monkeyp
 
 #: Its MODS (``tests/fixtures/govinfo_bodies/mods-CRPT-119hrpt811.xml``, the
 #: bytes refused on 2026-09-23 and published as Part 1 on 2026-09-24) names
-#: only ``-pt1``: one of the eight packages whose one part is spelled so.
+#: only ``-pt1``: the one package in this table whose one part is spelled so.
 PART_ONLY = "CRPT-119hrpt811"
 PART_ONLY_MODS = "sha256:aba0227068f60977bb1ee98d58add159064bb2b38e7b235e70b8673de7b3e125"
 #: Both parts are constituents, suffixed, and the root states no bill

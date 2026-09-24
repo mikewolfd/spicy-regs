@@ -161,6 +161,69 @@ def test_invalid_replacement_scope_keeps_prior_bytes(tmp_path, scope):
     assert prior.read_bytes() == retained
 
 
+#: A report-shaped table whose identity gained ``part_id`` after rows were published.
+PARTS = ("package_id", "part_id", "body")
+
+
+def _write_parts_prior(tmp_path: Path, prior: list[dict], prior_columns: tuple[str, ...]) -> Path:
+    schema = pa.schema([(c, pa.string()) for c in prior_columns])
+    pq.write_table(pa.Table.from_pylist(prior, schema=schema), prior_scratch_path(tmp_path, NAME))
+    return prior_scratch_path(tmp_path, NAME)
+
+
+def _merge_parts(tmp_path: Path, prior: list[dict], prior_columns: tuple[str, ...], **kwargs) -> list[dict]:
+    _write_parts_prior(tmp_path, prior, prior_columns)
+    out = merge_table(
+        tmp_path, name=NAME, columns=PARTS, identity=("package_id", "part_id"), version_column=None,
+        rows=[], remote_key=REMOTE_KEY, download_prior=_never_called, **kwargs,
+    )
+    return _read(out)
+
+
+@pytest.mark.parametrize("coalesce_prior", [False, True], ids=["row-wise", "column-wise"])
+def test_backfill_prior_fills_an_absent_identity_column_from_its_source(tmp_path, coalesce_prior):
+    """A prior published before ``part_id`` keeps every row, each spelled as its package's one part."""
+    prior = [{"package_id": "A", "body": "a"}, {"package_id": "B", "body": "b"}]
+    rows = _merge_parts(
+        tmp_path, prior, ("package_id", "body"),
+        backfill_prior={"part_id": "package_id"}, coalesce_prior=coalesce_prior,
+    )
+    assert rows == [
+        {"package_id": "A", "part_id": "A", "body": "a"},
+        {"package_id": "B", "part_id": "B", "body": "b"},
+    ]
+
+
+@pytest.mark.parametrize("coalesce_prior", [False, True], ids=["row-wise", "column-wise"])
+def test_backfill_prior_fills_a_null_and_leaves_a_set_value(tmp_path, coalesce_prior):
+    prior = [{"package_id": "A", "part_id": None, "body": "a"}, {"package_id": "B", "part_id": "B-pt2", "body": "b"}]
+    rows = _merge_parts(
+        tmp_path, prior, PARTS, backfill_prior={"part_id": "package_id"}, coalesce_prior=coalesce_prior
+    )
+    assert rows == [
+        {"package_id": "A", "part_id": "A", "body": "a"},
+        {"package_id": "B", "part_id": "B-pt2", "body": "b"},
+    ]
+
+
+def test_without_backfill_prior_a_null_identity_part_drops_the_prior_row(tmp_path):
+    """The hazard the backfill exists for: the identity test drops the row without a word."""
+    prior = [{"package_id": "A", "body": "a"}]
+    assert _merge_parts(tmp_path, prior, ("package_id", "body")) == []
+
+
+@pytest.mark.parametrize("mapping", [{"part_id": "missing"}, {"missing": "package_id"}], ids=["source", "target"])
+def test_backfill_prior_refuses_a_name_outside_the_columns_and_keeps_prior_bytes(tmp_path, mapping):
+    prior = _write_parts_prior(tmp_path, [{"package_id": "A", "body": "a"}], ("package_id", "body"))
+    retained = prior.read_bytes()
+    with pytest.raises(ValueError, match="backfill_prior"):
+        merge_table(
+            tmp_path, name=NAME, columns=PARTS, identity=("package_id", "part_id"), version_column=None,
+            rows=[], remote_key=REMOTE_KEY, download_prior=_never_called, backfill_prior=mapping,
+        )
+    assert prior.read_bytes() == retained
+
+
 def test_merge_leaves_no_scratch_files_behind(tmp_path):
     _write_prior(tmp_path, _PRIOR_ROWS)
     _merge(tmp_path, [{"id": "1", "name": "new", "version": "2024-02-01"}])

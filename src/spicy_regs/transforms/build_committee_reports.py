@@ -444,9 +444,9 @@ def build_committee_reports(
     # A read package's part rows are replaced as a set, so a part it no longer
     # states goes; a refused or unread package keeps its prior rows. A prior
     # row published before ``part_id`` existed is spelled as the package's one
-    # part first, since the merge drops a row with a NULL in its identity; the
-    # eight whose one part is ``-pt1`` are spelled wrong by that, and the
-    # ``parts=`` rule version re-reads each to replace it.
+    # part first, since the merge drops a row with a NULL in its identity. The
+    # one row here that spelling gets wrong is CRPT-119hrpt811's, whose one part
+    # is ``-pt1``; the ``parts=`` rule version re-reads it to replace it.
     replaced = {"committee_reports": evaluated_reports, "report_sections": evaluated_reports,
                 "hearing_bill_links": evaluated_hearings}
     paths = tuple(merge_contract_table(output_dir, name, rows, download_prior=download_prior,
