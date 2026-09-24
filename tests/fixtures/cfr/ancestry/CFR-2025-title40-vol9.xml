@@ -1,25 +1,43 @@
 <?xml version='1.0' encoding='utf-8'?>
 <CFRDOC xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="CFRMergedXML.xsd">
- <FMTR>
-  <TITLEPG>
-   <TITLENUM>Title 40</TITLENUM>
-   <SUBJECT>Protection of Environment</SUBJECT>
-   <PARTS>Part 60 (Appendices)</PARTS>
-   <REVISED>Revised as of July 1, 2024</REVISED>
-   <DATE>As of July 1, 2024</DATE>
-  </TITLEPG>
- </FMTR>
- <TITLE>
-  <CHAPTER>
-   <SUBCHAP TYPE="N">
-    <PART>
-     <EAR>Pt. 60</EAR>
-     <HD SOURCE="HED">PART 60—STANDARDS OF PERFORMANCE FOR NEW STATIONARY SOURCES (CONTINUED)</HD>
-     <APPENDIX>
-      <HD SOURCE="HED">Appendix A-1 to Part 60—Test Methods 1 through 2F</HD>
-     </APPENDIX>
-    </PART>
-   </SUBCHAP>
-  </CHAPTER>
- </TITLE>
-</CFRDOC>
+    <AMDDATE>July 1, 2024</AMDDATE>
+    <FMTR><TITLEPG>
+            <CODE />
+            <PRTPAGE P="1" />
+            <TITLENUM>Title 40</TITLENUM>
+            <SUBJECT>Protection of Environment</SUBJECT>
+            <PARTS>Part 60 (Appendices)</PARTS>
+            <REVISED>Revised as of July 1, 2024</REVISED>
+            <CONTAINS>Containing a codification of documents of general applicability and future effect</CONTAINS>
+            <DATE>As of July 1, 2024</DATE>
+            <PUB>
+                <P>Published by the Office of the Federal Register National Archives and Records Administration as a Special Edition of the Federal Register</P>
+            </PUB>
+        </TITLEPG>
+        </FMTR><TITLE>
+        <LRH>40 CFR Ch. I (7-1-24 Edition)</LRH>
+        <RRH>Environmental Protection Agency</RRH>
+        <CFRTITLE>
+            <TITLEHD>
+                <PRTPAGE P="1" />
+                <HD SOURCE="HED">Title 40—Protection of Environment</HD>
+                <P>(This book contains part 60, appendices)</P>
+            </TITLEHD>
+            </CFRTITLE>
+        <CHAPTER>
+            <SUBCHAP TYPE="N">
+                <HD SOURCE="HED">SUBCHAPTER C—AIR PROGRAMS (CONTINUED)</HD>
+                <PART>
+                    <EAR>Pt. 60</EAR>
+                    <HD SOURCE="HED">PART 60—STANDARDS OF PERFORMANCE FOR NEW STATIONARY SOURCES (CONTINUED)</HD>
+                    <APPENDIX>
+                        <EAR>Pt. 60, App. A-1</EAR>
+                        <HD SOURCE="HED">Appendix A-1 to Part 60—Test Methods 1 through 2F</HD>
+                        <FP SOURCE="FP-2">Method 1—Sample and velocity traverses for stationary sources</FP>
+                        <P>The test methods in this appendix are referred to in § 60.8 (Performance Tests) and § 60.11 (Compliance With Standards and Maintenance Requirements) of 40 CFR part 60, subpart A (General Provisions). Specific uses of these test methods are described in the standards of performance contained in the subparts, beginning with Subpart D.</P>
+                        </APPENDIX>
+                    </PART>
+            </SUBCHAP>
+        </CHAPTER>
+    </TITLE>
+    </CFRDOC>

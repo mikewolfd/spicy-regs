@@ -1,32 +1,53 @@
 <?xml version='1.0' encoding='utf-8'?>
 <CFRDOC xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="CFRMergedXML.xsd">
- <FMTR>
-  <TITLEPG>
-   <TITLENUM>Title 34</TITLENUM>
-   <SUBJECT>Education</SUBJECT>
-   <PARTS>Part 680 to End</PARTS>
-   <TITLENUM>Title 35</TITLENUM>
-   <RESERVED>[Reserved]</RESERVED>
-   <REVISED>Revised as of July 1, 2025</REVISED>
-   <DATE>As of July 1, 2025</DATE>
-  </TITLEPG>
- </FMTR>
- <TITLE>
-  <SUBTITLE>
-   <CHAPTER>
-    <PART>
-     <EAR>Pt. 681</EAR>
-     <HD SOURCE="HED"> PART 681—HEALTH EDUCATION ASSISTANCE LOAN PROGRAM</HD>
-     <SUBPART>
-      <HD SOURCE="HED">Subpart A—General Program Description</HD>
-      <SECTION>
-       <SECTNO>§ 681.1</SECTNO>
-       <SUBJECT>What is the HEAL program?</SUBJECT>
-       <P>(a) The Health Education Assistance Loan (HEAL) program is a program of Federal insurance of educational loans that were made to graduate students in the fields of medicine, osteopathic medicine, dentistry, veterinary medicine, optometry, podiatric medicine, pharmacy, public health, chiropractic, health administration, and clinical psychology. The basic purpose of the program is to encourage lenders to make loans to students in these fields who desire to borrow money to pay for their educational costs. In addition, certain nonstudents (such as doctors serving as interns or residents) could borrow in order to pay the current interest charges accruing on earlier HEAL loans. By taking a HEAL loan, the borrower is obligated to repay the lender or holder the full amount of the money borrowed, plus all interest which accrues on the loan.</P>
-      </SECTION>
-     </SUBPART>
-    </PART>
-   </CHAPTER>
-  </SUBTITLE>
- </TITLE>
-</CFRDOC>
+    <AMDDATE>Dec. 31, 2024</AMDDATE>
+    <FMTR><TITLEPG>
+            <CODE />
+            <PRTPAGE P="1" />
+            <TITLENUM>Title 34</TITLENUM>
+            <SUBJECT>Education</SUBJECT>
+            <PARTS>Part 680 to End</PARTS>
+            <TITLENUM>Title 35</TITLENUM>
+            <RESERVED>[Reserved]</RESERVED>
+            <REVISED>Revised as of July 1, 2025</REVISED>
+            <CONTAINS>Containing a codification of documents of general applicability and future effect</CONTAINS>
+            <DATE>As of July 1, 2025</DATE>
+            <PUB>
+                <P>Published by the Office of the Federal Register National Archives and Records Administration as a Special Edition of the Federal Register</P>
+            </PUB>
+        </TITLEPG>
+        </FMTR><TITLE>
+        <LRH>34 CFR Ch. VI (7-1-25 Edition)</LRH>
+        <RRH>Ofc. of Postsecondary Educ., Education</RRH>
+        <CFRTITLE>
+            <TITLEHD>
+                <PRTPAGE P="1" />
+                <HD SOURCE="HED">Title 34—Education</HD>
+                <P>(This book contains part 680 to end)</P>
+            </TITLEHD>
+            </CFRTITLE>
+        <SUBTITLE>
+            <HD SOURCE="HED">Subtitle B—Regulations of the Offices of the Department of Education (Continued)</HD>
+            <CHAPTER>
+                <PART>
+                    <EAR>Pt. 681</EAR>
+                    <HD SOURCE="HED"> PART 681—HEALTH EDUCATION ASSISTANCE LOAN PROGRAM</HD>
+                    <SUBPART>
+                        <HD SOURCE="HED">Subpart A—General Program Description</HD>
+                        <SECTION>
+                            <SECTNO>§ 681.1</SECTNO>
+                            <SUBJECT>What is the HEAL program?</SUBJECT>
+                            <P>(a) The Health Education Assistance Loan (HEAL) program is a program of Federal insurance of educational loans that were made to graduate students in the fields of medicine, osteopathic medicine, dentistry, veterinary medicine, optometry, podiatric medicine, pharmacy, public health, chiropractic, health administration, and clinical psychology. The basic purpose of the program is to encourage lenders to make loans to students in these fields who desire to borrow money to pay for their educational costs. In addition, certain nonstudents (such as doctors serving as interns or residents) could borrow in order to pay the current interest charges accruing on earlier HEAL loans. By taking a HEAL loan, the borrower is obligated to repay the lender or holder the full amount of the money borrowed, plus all interest which accrues on the loan.</P>
+                            </SECTION>
+                    </SUBPART>
+                    </PART>
+                </CHAPTER>
+            </SUBTITLE>
+        <CFRTITLE>
+            <TITLEHD>
+                <PRTPAGE P="429" />
+                <HD SOURCE="HED">Title 35 [Reserved]</HD>
+            </TITLEHD>
+        </CFRTITLE>
+    </TITLE>
+    </CFRDOC>

@@ -372,20 +372,25 @@ def test_placement_keeps_every_non_placement_column():
     assert changed == {"part", "section", "cfr_ref"}
 
 
-def test_a_volume_the_validator_refuses_is_still_placed_and_the_refusal_logged():
-    """CFR-2025-title34-vol4 prints TITLENUM twice (Title 34 and reserved Title 35)."""
+def test_the_combined_title_34_35_volume_is_admitted_and_placed():
+    """CFR-2025-title34-vol4 prints TITLENUM twice: Title 34 and Title 35, reserved, with an empty heading.
+
+    SpicyDocs 0.31.0's validator drops the reserved title (plan A14); 0.30.0 refused the volume.
+    """
     placed, warnings = _place("CFR-2025-title34-vol4", "sec681-1")
     assert (placed["sec681-1"]["part"], placed["sec681-1"]["cfr_ref"]) == ("681", "34-681.1")
-    assert len(warnings) == 1
-    assert "CFR-2025-title34-vol4" in warnings[0] and "TITLENUM" in warnings[0]
+    assert warnings == []
 
 
-def test_a_volume_without_sections_places_nothing():
-    """CFR-2025-title40-vol9 prints only appendices; its scan is empty, so rows keep their identifier values."""
+def test_an_appendix_only_volume_is_admitted_and_places_nothing():
+    """CFR-2025-title40-vol9 prints only appendices; its scan is empty, so rows keep their identifier values.
+
+    SpicyDocs 0.31.0's validator admits it on its title page's word (plan A14); 0.30.0 refused the volume.
+    """
     placed, warnings = _place("CFR-2025-title40-vol9", "sec60-1", "part60-appA-1")
     assert (placed["sec60-1"]["part"], placed["sec60-1"]["section"]) == (None, "60-1")
     assert placed["part60-appA-1"]["part"] == "60"
-    assert len(warnings) == 1 and "lacks source section content" in warnings[0]
+    assert warnings == []
 
 
 @pytest.mark.parametrize(
