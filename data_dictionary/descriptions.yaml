@@ -1250,7 +1250,7 @@ tables:
   usaspending_recipients:
     label: "Federal award recipients"
     coverage: >-
-      Accumulated recipients from bounded top-N walks ranked by trailing-12-month
+      Not a range. Accumulated recipients from bounded top-N walks ranked by trailing-12-month
       award amount. Each run refreshes its selected recipients and retains earlier
       rows outside that selection with their previous amounts. No per-row
       observation date is stored, so the amounts can describe different

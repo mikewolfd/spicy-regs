@@ -2722,8 +2722,8 @@
     "table": "usaspending_recipients",
     "label": "Federal award recipients",
     "summary": "One row per federal-award recipient, ingested from the USASpending.gov `/api/v2/recipient/` endpoint by `build_usaspending_recipients`. A keyless (no API key) org-resolution reference dimension keyed by UEI and name — the organizations that receive federal money — complementary to the SAM entity registry and the `fec_committees` table for resolving and enriching the organizations that comment on rulemakings by their federal funding. Scope is deliberately bounded to the top-N recipients by trailing-12-month federal award amount (the endpoint reports ~18M recipients, too many for a daily full walk); the transform merges each run's top-N with the prior table so coverage stays monotonic. Retained recipients outside a run's selection keep their earlier amounts without a per-row observation date. All columns are stored as VARCHAR.",
-    "coverage": "Accumulated recipients from bounded top-N walks ranked by trailing-12-month award amount. Each run refreshes its selected recipients and retains earlier rows outside that selection with their previous amounts. No per-row observation date is stored, so the amounts can describe different trailing-12-month periods. An absent recipient may still exist in the publisher's awards data.",
-    "kind": null,
+    "coverage": "Not a range. Accumulated recipients from bounded top-N walks ranked by trailing-12-month award amount. Each run refreshes its selected recipients and retains earlier rows outside that selection with their previous amounts. No per-row observation date is stored, so the amounts can describe different trailing-12-month periods. An absent recipient may still exist in the publisher's awards data.",
+    "kind": "not_a_range",
     "measured_on": "2026-09-24",
     "data_quality": null,
     "columns": [
