@@ -13,13 +13,14 @@ never lands on the wrong row and ``captured`` always carries one.
 the publisher's public-law order alone (the index links the current Congress's
 session tables only) — the two orders hold the same rows, but the contract
 keys a row on its position in one page, so the code-order twin would collide.
-**``table3_records``**: Table III's own chain, per Congress. Every served
-act page names the next act the table holds (``Table3Page.next_act``: 119-4
-names 119-12), so the walk asks only the acts the chain names, from the
-Congress's highest held act on, under its own cap and deadline. Table III lags
-enactment and holds no page for an act that classified nothing; OLRC answers
-such an act with a connection dropped inside its site menu, which is why the
-walk never probes a number the chain does not name.
+**``table3_records``**: Table III's own chain, per Congress, walked by
+spicy-docs' ``iter_table3_chain``. Every served act page names the next act
+the table holds (``Table3Page.next_act``: 119-4 names 119-12), so the walk asks
+only the acts the chain names, from the Congress's highest held act on, under
+this rollup's cap and deadline. Table III lags enactment and holds no page for
+an act that classified nothing; OLRC answers such an act with a connection
+dropped inside its site menu, which is why the walk never probes a number the
+chain does not name.
 
 **Incremental.** The list is re-walked whole every run; the PLAW is what is
 not re-read. A law already published with ``uslm_outcome = captured`` and the
@@ -45,7 +46,7 @@ import time
 from collections import Counter
 from collections.abc import Callable, Mapping
 from pathlib import Path
-from typing import Any, NamedTuple, Protocol
+from typing import Any, NamedTuple, Protocol, cast
 
 import httpx
 from loguru import logger
@@ -59,7 +60,7 @@ from spicy_docs.sources.govinfo.uslm_acquisition import (
     UslmAcquisitionBudget,
     UslmSourceUnavailableError,
 )
-from spicy_docs.sources.uscode import UsCodeSourceError
+from spicy_docs.sources.uscode import Table3Page, UsCodeSourceError, iter_table3_chain
 from spicy_docs.sources.uscode.acquisition import UsCodeAcquirer, UsCodeAcquisitionBudget
 from spicy_docs.transport.credentials import scrub_credential
 
@@ -337,33 +338,14 @@ def _classification_rows(olrc: OlrcSource, congresses: tuple[int, ...], prior_fi
     return rows
 
 
-# TODO(spicy-docs): expose this chain walk in spicy-docs (`iter_table3_acts`; the bulk-zip
-# streamer holds that name today) and amend `docs/sources/uscode.md:129-136` with the early-drop
-# window. An act the table does not hold answers 200, then the connection drops inside the site
-# menu, before the content div a served page opens 27,199-27,947 bytes in. The bytes are a prefix
-# of a served page, and the transport discards and retries them, so they are neither retained nor
-# distinguishable from a served page dropped early.
 def _public_law(key: str | None) -> tuple[int, int] | None:
     """``(congress, number)`` of a public-law key such as ``119-4`` or ``119–4``; ``None`` for anything else."""
     match = _PUBLIC_LAW_KEY.fullmatch((key or "").strip())
     return (int(match[1]), int(match[2])) if match else None
 
 
-def _chain_end(page: Any, congress: int, number: int, stated: set[int]) -> tuple[int | None, str]:
-    """The next act number the page names for this Congress's chain, or ``None`` and why the chain ends here."""
-    following = _public_law(page.next_act)
-    if following is None:
-        return None, f"names no next public law ({page.next_act!r})"
-    if following[0] != congress:
-        return None, f"names {page.next_act}, in another Congress"
-    if following[1] <= number:
-        return None, f"names {page.next_act}, which does not follow it"
-    if following[1] not in stated:
-        return None, f"names {page.next_act}, which the laws table does not state"
-    current = _public_law(page.release_point)
-    if current is not None and following > current:
-        return None, f"names {page.next_act}, past the release point {page.release_point} it states"
-    return following[1], ""
+class _WalkStopped(Exception):
+    """Raised from the walk's ``acquire`` to end the whole Table III walk: the per-run cap or the deadline."""
 
 
 def _table3_rows(
@@ -377,38 +359,65 @@ def _table3_rows(
 ) -> list[dict]:
     """Follow each scoped Congress's Table III chain from its highest held act, newest Congress first.
 
-    The walk asks the Congress's highest held act again (only for the next act
-    its page names; its rows are not published again) or, cold, the lowest act
-    the laws table states. It then asks each next act a page names and
-    publishes that act's rows. The chain ends at a page that names no next act,
-    or names one in another Congress, one the laws table does not state, or one
-    past the release point the page states (the lag). A chain act that fails
-    ends its Congress's chain for the run, and :data:`TABLE3_STOP_AFTER`
-    failures in a row end the walk, as do the per-run cap and the deadline.
+    ``iter_table3_chain`` walks one Congress and owns where a chain ends: a
+    page that names no next public law, one in another Congress, one that does
+    not follow, one the laws table does not state (``within``), or one past the
+    release point the page states (the lag). This caller starts each chain at
+    the Congress's highest held act, asked again only for the act its page
+    names, or, cold, at the lowest act the laws table states; publishes the
+    acts it does not hold; and spends the per-run cap and checks the deadline
+    in ``acquire``, once per act (its retries included), raising to end the
+    walk, since a check before each ``next()`` would also spend one at every
+    chain's natural end. A
+    chain act that fails ends its Congress's chain for the run, and
+    :data:`TABLE3_STOP_AFTER` failures in a row end the walk.
     """
     started = clock()
     rows: list[dict] = []
     read: list[str] = []
     failed: list[str] = []
+    asked: list[str] = []
     stated: dict[int, set[int]] = {}
     for congress, number in acts:
         stated.setdefault(congress, set()).add(number)
+    within = {f"{congress}-{number}" for congress, number in acts}
     held_numbers: dict[int, list[int]] = {}
     for act in filter(None, map(_public_law, held)):
         held_numbers.setdefault(act[0], []).append(act[1])
+
+    def acquire(key: str) -> Any:
+        if clock() - started >= deadline_seconds:
+            raise _WalkStopped(f"reached its {deadline_seconds:,}-second deadline before {key}")
+        if not cap.take():
+            raise _WalkStopped(f"reached its per-run cap before {key}")
+        asked.append(key)
+        return olrc.acquire_table3_act(key)
+
     consecutive = 0
     for congress in sorted(stated, reverse=True):
-        number = max(held_numbers[congress]) if congress in held_numbers else min(stated[congress])
+        start = max(held_numbers[congress]) if congress in held_numbers else min(stated[congress])
+        start_key, first_ask = f"{congress}-{start}", len(asked)
+        # Never binds: every act after the start is a distinct act the laws table states.
+        chain = iter_table3_chain(acquire, start_key, max_acts=len(stated[congress]) + 1, within=within)
+        named: tuple[str | None, str | None] = (None, None)  # the last page's next act and release point
         while True:
-            key = f"{congress}-{number}"
-            if clock() - started >= deadline_seconds:
-                logger.warning("Laws: Table III walk reached its {:,}-second deadline before {}", deadline_seconds, key)
-                return _table3_summary(rows, read, failed)
-            if not cap.take():
-                return _table3_summary(rows, read, failed)
             try:
-                acquired = olrc.acquire_table3_act(key)
+                acquired = next(chain)
+            except StopIteration as end:
+                logger.info(
+                    "Laws: Table III chain for Congress {} ends at {}: its page {} (next {!r}, release point {!r})",
+                    congress,
+                    asked[-1],
+                    end.value,
+                    *named,
+                )
+                break
+            except _WalkStopped as stop:
+                logger.warning("Laws: Table III walk {}", stop)
+                return _table3_summary(rows, read, failed)
             except (UsCodeSourceError, httpx.HTTPError, ConnectionError) as error:
+                # The walker refuses a start it cannot read before asking for anything.
+                key = asked[-1] if len(asked) > first_ask else start_key
                 failed.append(key)
                 consecutive += 1
                 logger.warning(
@@ -419,7 +428,9 @@ def _table3_rows(
                     return _table3_summary(rows, read, failed)
                 break
             consecutive = 0
-            page = acquired.result
+            key = asked[-1]
+            page = cast(Table3Page, acquired.result)  # acquire is acquire_table3_act
+            named = (page.next_act, page.release_point)
             if key not in held:
                 observed_at = acquired.capture.observed_at
                 rows.extend(
@@ -427,11 +438,6 @@ def _table3_rows(
                     for seq, record in enumerate(page.records)
                 )
                 read.append(key)
-            following, reason = _chain_end(page, congress, number, stated[congress])
-            if following is None:
-                logger.info("Laws: Table III chain for Congress {} ends at {}: its page {}", congress, key, reason)
-                break
-            number = following
     return _table3_summary(rows, read, failed)
 
 

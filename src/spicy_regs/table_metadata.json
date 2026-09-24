@@ -4834,16 +4834,16 @@
   "committee_reports": {
     "table": "committee_reports",
     "label": "Committee reports",
-    "summary": "One row per captured GovInfo committee report package. `bill_id` is the measure the report accompanies, read from the package's own MODS metadata. All columns are stored as VARCHAR.",
+    "summary": "One row per published part of a captured GovInfo committee report package, keyed `(package_id, part_id)`. `bill_id` is the measure the report accompanies, read from the package's own MODS metadata. All columns are stored as VARCHAR.",
     "coverage": "Sampled. The 2026-09-21 mikewolfd/spicy-regs fork delivery rebuilt and published all 105 selected report packages with 13 selected hearings as one five-table generation. All 118 package bodies and 13 hearing details were accepted; two exact retained package capture sets were reused and 116 acquired fresh. Every selected report was reprocessed under SpicyDocs 0.26.0; nine letter spans reproduced their retained text digests. This is a mixed-Congress selection, not complete historical or constituent-granule coverage. No upstream/default publication is asserted. Receipts: fork-execution-2026-09-21/report-family/rebuild-audit.json, publication-report-family.json and report-family-mcp-audit/.",
     "kind": "sampled",
     "measured_on": "2026-09-21",
-    "data_quality": "Only the MODS PRIMARY bill fills bill_id. The thirteen CBO columns come from spicy-docs read_cbo_estimate on the same body already acquired. The cover recital gates publication of a letter: a CBO heading alone is not an estimate. report_states_estimate=false records an absent recital; NULL means the rule has not run. A positive recital with no resolved letter span remains distinct from an extracted letter. recital_bill_id comes from the printed recital and is retained beside the MODS bill_id. Only root-package MODS fields supply the package join. CRPT-119hrpt494 has PRIMARY H.R. 3495 references in two constituent-granule records but none at the package root, so bill_id remains NULL; its separate recital_bill_id is a text interpretation. Constituent body coverage is not asserted. A report whose root MODS names only its part 1 (CRPT-119hrpt811) is held out and refused in committee_report_reads until the tables key parts (decision 29).",
+    "data_quality": "Only the MODS PRIMARY bill fills bill_id. The thirteen CBO columns come from spicy-docs read_cbo_estimate on the same body already acquired. The cover recital gates publication of a letter: a CBO heading alone is not an estimate. report_states_estimate=false records an absent recital; NULL means the rule has not run. A positive recital with no resolved letter span remains distinct from an extracted letter. recital_bill_id comes from the printed recital and is retained beside the MODS bill_id. bill_id is the part's own PRIMARY bill: a multi-part package's root states none, so each part of CRPT-119hrpt494 carries the H.R. 3495 its constituent record names, where its row read before parts were keyed has NULL; its separate recital_bill_id is a text interpretation. Every part a record states is read, all or none: a package whose parts cannot all be read is refused in committee_report_reads and keeps its prior rows. Parts, by decision 29 (`docs/research/fork-delivery-decisions-2026-09-22.md`): a report published in one part is one row whose part_id is its package id and whose part_number is NULL; a report published as parts is one row per part, part_id the part's granule id (CRPT-119hrpt455-pt2) and part_number 1 to N, except that a Part 1 the publisher left unsuffixed (CRPT-119hrpt494) has part_id equal to the package id and part_number 1. A package whose one part is spelled -pt1 (CRPT-119hrpt811; spicy-docs `docs/tables.md` names the others it measured) is (package-pt1, 1), the same shape as Part 1 of two, so a reader counts a package's rows to tell a lone part from Part 1 of several. title, date_issued and last_modified are the package's and repeat on every part row. A row published before part_id existed is kept as its package's one part (part_id the package id, part_number NULL) until the package is read again, which replaces its rows as a set; the committee_report_reads rule version re-reads every report once for this, which is what re-keys the CRPT-119hrpt811 row published 2026-09-24 as (CRPT-119hrpt811-pt1, 1).",
     "columns": [
       {
         "column_name": "package_id",
         "column_type": "VARCHAR",
-        "description": "The GovInfo package id, which is this row's identity."
+        "description": "The GovInfo package id: with part_id, this row's identity.  Summary facts (title, date_issued, last_modified) are the package's and repeat on every part row."
       },
       {
         "column_name": "collection",
@@ -4999,21 +4999,32 @@
         "column_name": "estimate_absence_rule",
         "column_type": "VARCHAR",
         "description": "Which reason pattern matched: `not_available` (the estimate had not arrived when the report was filed) or `not_received` (the committee asked and CBO had not answered).  NULL where the report gives no reason, which is not the same as having none to give."
+      },
+      {
+        "column_name": "part_id",
+        "column_type": "VARCHAR",
+        "description": "The part of the report this row is: the publisher's own granule id for it, which is also the file stem its body was read at (`CRPT-119hrpt455-pt2`).  The package id itself where the part's stem is the package's: a report published in one part, and a Part 1 the publisher left unsuffixed (`CRPT-119hrpt494`).  Never NULL, because it is half the identity; a package's part rows are replaced as a set."
+      },
+      {
+        "column_name": "part_number",
+        "column_type": "VARCHAR",
+        "description": "The part's number as the publisher states it (its `partNumber`, or the `-pt{N}` its id carries, which must agree).  NULL on a report published in one part, whose record numbers none."
       }
     ],
-    "grain": "One row per captured GovInfo committee report package, with the CBO estimate it reprints or refuses.",
+    "grain": "One row per published part of a captured GovInfo committee report package, with the CBO estimate it reprints or refuses.",
     "identity_columns": [
-      "package_id"
+      "package_id",
+      "part_id"
     ]
   },
   "report_sections": {
     "table": "report_sections",
     "label": "Committee report heading and text blocks",
-    "summary": "One row per heading or unheaded text block in one committee report. `heading` preserves the source title; agency identity fields remain unresolved. `pattern` records which header pattern fired, which is this table's provenance column. All columns are stored as VARCHAR.",
+    "summary": "One row per heading or unheaded text block in one part of a committee report, keyed `(package_id, part_id, seq)`. `heading` preserves the source title; agency identity fields remain unresolved. `pattern` records which header pattern fired, which is this table's provenance column. All columns are stored as VARCHAR.",
     "coverage": "Sampled. The 2026-09-21 mikewolfd/spicy-regs fork delivery rebuilt and published all 1,246 heading/text blocks from the 105 selected reports in one five-table generation. Every report body text digest and section span was independently checked; all 12,460 prior non-agency section values remained unchanged. heading retains the source title while agency_label and agency_key remain unresolved NULLs. All selected bodies were HTML, so no page boundaries were inferred. This is the full selected repair, not complete report history or upstream/default publication. Receipts: fork-execution-2026-09-21/report-family/rebuild-audit.json, publication-report-family.json and report-family-mcp-audit/.",
     "kind": "sampled",
     "measured_on": "2026-09-21",
-    "data_quality": null,
+    "data_quality": "part_id names the committee_reports row a block was parsed from, so (package_id, part_id) is its parent, and seq counts from zero within that part. By decision 29 (`docs/research/fork-delivery-decisions-2026-09-22.md`) part_id is the package id for a report published in one part and the part's granule id for a report published as parts, CRPT-119hrpt494's unsuffixed Part 1 aside; a package whose one part is spelled -pt1 (CRPT-119hrpt811; spicy-docs `docs/tables.md` names the others it measured) carries that spelling, so the parent's row count tells a lone part from Part 1 of several. A block published before part_id existed carries its package id there until its report is read again, which replaces every block of the package.",
     "columns": [
       {
         "column_name": "package_id",
@@ -5023,7 +5034,7 @@
       {
         "column_name": "seq",
         "column_type": "VARCHAR",
-        "description": "Zero-based position of this block in the report, in reading order."
+        "description": "Zero-based position of this block in its part, in reading order."
       },
       {
         "column_name": "agency_label",
@@ -5079,11 +5090,17 @@
         "column_name": "heading",
         "column_type": "VARCHAR",
         "description": "The source heading as spelled and trimmed, including actual agency names and generic titles; NULL for preamble or full_report blocks, which have no source heading."
+      },
+      {
+        "column_name": "part_id",
+        "column_type": "VARCHAR",
+        "description": "The report part this block was parsed from, spelled as `committee_reports.part_id`, so (package_id, part_id) is the parent row.  Appended last."
       }
     ],
-    "grain": "One row per heading block parsed out of one committee report's text.",
+    "grain": "One row per heading block parsed out of one committee report part's text.",
     "identity_columns": [
       "package_id",
+      "part_id",
       "seq"
     ]
   },
@@ -5651,7 +5668,7 @@
     "coverage": "Sampled. Measured on one cold-start run (receipt `d1-measured-run-2026-09-19/`), and the measurement is mostly a refusal: of the 106 public acts the law route listed (108 laws, less the 2 private laws, which are not requested), 2 were read and produced 65 rows, 5 were refused, and the walk then stopped for the Congress with 99 acts unread — the per-run cap of 300 was never approached. Since 2026-09-24 the rollup reads one Table III page per act on each scoped Congress's chain, under that cap, from the highest act already published. It asks for that act again only to read the act its page names.",
     "kind": "sampled",
     "measured_on": "2026-09-19",
-    "data_quality": "Table III holds an act only once OLRC has classified it, and holds no page for an act that classified nothing. It lags enactment by tens of laws: on 2026-09-24 it was current through 119-73 while the law route reached 119-111, and 33 of the acts at or before 119-73 had no page (receipt `drift-audit-2026-09-24/laws/`). OLRC answers such an act with `200 OK` and a connection dropped inside its site menu. Those bytes are a prefix of a served page, so the answer cannot tell an act the table does not hold from a served page cut short.\nSo the rollup follows Table III's own chain instead of asking for every law. Each served page names the next act the table holds (119-4 names 119-12). Each run asks again for the Congress's highest published act, only to read the act it names; its rows are not published again. Cold, the run starts at the lowest act the law route lists. It then asks for each act the pages name. The chain ends at a page that names no next act, or names one the laws table does not list, or one past the release point the page states. A chain act that does not serve (a transport failure after the acquirer's retries, or a page the reader refuses) ends its Congress's chain for the run. Three in a row end the walk, and it starts no request after 20 minutes. A Congress whose lowest listed act has no page cannot start cold. A run asks one page per Congress when the table has not moved, plus one for each act a new release adds.\nUntil 2026-09-24 the rollup asked for every law and counted each act without a page as a refusal, so from 2026-09-22 every run stopped at 119-5 and the table held only the 65 rows of acts 119-1 and 119-4. A capped live walk along the chain from 119-4 read 119-12, 119-18, 119-21, 119-22 and 119-23 (643 rows) in six requests, asking no act without a page (receipt `table3-walk-2026-09-24/chain/`).\nAn act's rows are published once: a later edit to its page (a status moving to repealed) is not picked up, and `release_point` says how current the captured page was. Private laws and pre-1957 session-law chapters are not requested. `usc_section_key` is `usc_section` folded for joins (trimmed, lower-cased, every dash spelling an ASCII hyphen), because case carries no identity in the Code and Table III itself prints some sections both ways (decision 30, `docs/research/fork-delivery-decisions-2026-09-22.md`). Because an act's rows are published once, rows published before the column existed keep it NULL; fold their `usc_section` by the same rule to join them. All columns are stored as VARCHAR.",
+    "data_quality": "Table III holds an act only once OLRC has classified it, and holds no page for an act that classified nothing. It lags enactment by tens of laws: on 2026-09-24 it was current through 119-73 while the law route reached 119-111, and 33 of the acts at or before 119-73 had no page (receipt `drift-audit-2026-09-24/laws/`). OLRC answers such an act with `200 OK` and a connection dropped inside its site menu. Those bytes are a prefix of a served page, so the answer cannot tell an act the table does not hold from a served page cut short.\nSo the rollup follows Table III's own chain instead of asking for every law, with spicy-docs' iter_table3_chain (B32), which owns the rules below. Each served page names the next act the table holds (119-4 names 119-12). Each run asks again for the Congress's highest published act, only to read the act it names; its rows are not published again. Cold, the run starts at the lowest act the law route lists. It then asks for each act the pages name. The chain ends at a page that names no next act, or names one the laws table does not list, or one past the release point the page states. A chain act that does not serve (a transport failure after the acquirer's retries, or a page the reader refuses) ends its Congress's chain for the run. Three in a row end the walk, and it starts no request after 20 minutes. A Congress whose lowest listed act has no page cannot start cold. A run asks one page per Congress when the table has not moved, plus one for each act a new release adds.\nUntil 2026-09-24 the rollup asked for every law and counted each act without a page as a refusal, so from 2026-09-22 every run stopped at 119-5 and the table held only the 65 rows of acts 119-1 and 119-4. A capped live walk along the chain from 119-4 read 119-12, 119-18, 119-21, 119-22 and 119-23 (643 rows) in six requests, asking no act without a page (receipt `table3-walk-2026-09-24/chain/`).\nAn act's rows are published once: a later edit to its page (a status moving to repealed) is not picked up, and `release_point` says how current the captured page was. Private laws and pre-1957 session-law chapters are not requested. `usc_section_key` is `usc_section` folded for joins (trimmed, lower-cased, every dash spelling an ASCII hyphen), because case carries no identity in the Code and Table III itself prints some sections both ways (decision 30, `docs/research/fork-delivery-decisions-2026-09-22.md`). Because an act's rows are published once, rows published before the column existed keep it NULL; fold their `usc_section` by the same rule to join them. All columns are stored as VARCHAR.",
     "columns": [
       {
         "column_name": "act_key",

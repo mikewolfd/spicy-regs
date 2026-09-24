@@ -14,15 +14,19 @@ from spicy_docs.schemas.committee_report_tables import REPORT_SECTION_READER_VER
 
 READS_TABLE = "committee_report_reads"
 READ_COLUMNS = ("package_id", "last_modified", "outcome", "rule_version", "observed_at")
-#: ``parts`` is this repository's own rule: a report read at its part 1's stem
-#: is held, not published (``build_committee_reports.ReportPartHeld``), so a
-#: prior complete read that published one, ``CRPT-119hrpt811`` at 0.31.0, is
-#: no longer complete and the next run reads it again. TODO(B31): replaced
-#: when the report tables key parts (decision 29).
+#: ``parts`` is this repository's own rule for reading a report: every part
+#: its record states, one row each, a package's rows replaced as a set
+#: (decision 29). ``per-part-001`` replaced ``held-001``, which held out a
+#: report read at its part 1's stem, so every CRPT checkpoint reads once more.
+#: The re-read corrects what the backfill cannot: a row published before
+#: ``part_id`` is kept as ``(package_id, package_id)``, right for a report in
+#: one part, but CRPT-119hrpt811's Part-1 row (published 2026-09-24) becomes
+#: ``(CRPT-119hrpt811-pt1, 1)``, and CRPT-119hrpt494 gains its Part 2 and part
+#: numbers, only when read again.
 RULE_VERSIONS = {
     "CRPT": (
         f"spicy-docs={version('spicy-docs')};cbo={CBO_ESTIMATE_RULE_VERSION};sections={REPORT_SECTION_READER_VERSION}"
-        ";parts=held-001"
+        ";parts=per-part-001"
     ),
     "CHRG": HEARING_BILL_LINK_RULE_VERSION,
 }

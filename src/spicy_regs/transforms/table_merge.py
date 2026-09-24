@@ -122,6 +122,7 @@ def merge_table(
     prior_present: bool | None = None,
     coalesce_prior: bool = False,
     replace_parents: ReplacementScope | None = None,
+    backfill_prior: Mapping[str, str] | None = None,
     parquet_metadata: Mapping[str, str] | None = None,
 ) -> Path:
     """Merge freshly fetched ``rows`` against the prior ``remote_key`` table.
@@ -170,6 +171,16 @@ def merge_table(
     rows. A tuple of column names and a collection of matching value tuples
     replaces composite scopes, such as one file within one package, without
     modifying the retained prior file before the merge succeeds.
+
+    ``backfill_prior`` maps a column to another column of the same table whose
+    value a prior row takes where its own is NULL or absent. It exists for a
+    column appended to the identity: the NULL-fill above would leave that part
+    of every prior row's identity NULL, and the identity test would then drop
+    every prior row without a word. The committee-report tables are the case:
+    ``{"part_id": "package_id"}`` spells a row published before
+    ``(package_id, part_id)`` as the package's one part (decision 29). It is
+    applied in the prior's select, before the identity test and alongside
+    ``replace_parents``.
 
     ``parquet_metadata`` writes processing checkpoints in the same artifact as
     the rows, including a successful read producing zero rows; callers supply
@@ -244,6 +255,9 @@ def merge_table(
         }))
         scope_match = " AND ".join(f"r.{column} = p.{column}" for column in scope_columns)
         prior_filter = f"WHERE NOT EXISTS (SELECT 1 FROM replaced_parents r WHERE {scope_match})"
+    backfill = dict(backfill_prior or {})
+    if any(column not in columns or source not in columns for column, source in backfill.items()):
+        raise ValueError("backfill_prior must map table columns to table columns")
     if have_prior:
         # The prior table may predate columns this contract has since gained —
         # ``congress_bills`` is the live case: its first ten columns are frozen
@@ -274,7 +288,15 @@ def merge_table(
                 len(extra),
                 ", ".join(extra),
             )
-        prior_select = ", ".join(c if c in prior_cols else f"CAST(NULL AS VARCHAR) AS {c}" for c in columns)
+
+        def prior_column(column: str) -> str:
+            source = backfill.get(column)
+            source = source if source in prior_cols else None
+            if column in prior_cols:
+                return f"COALESCE({column}, {source}) AS {column}" if source else column
+            return f"{source} AS {column}" if source else f"CAST(NULL AS VARCHAR) AS {column}"
+
+        prior_select = ", ".join(prior_column(c) for c in columns)
 
     if have_prior and coalesce_prior:
         # Column-wise: a fresh row's NULL must not erase a value the prior
@@ -498,6 +520,7 @@ def merge_contract_table(
     download_prior: Callable[[str, Path], bool] = r2.download,
     prior_present: bool | None = None,
     replace_parents: ReplacementScope | None = None,
+    backfill_prior: Mapping[str, str] | None = None,
     parquet_metadata: Mapping[str, str] | None = None,
 ) -> Path:
     """Merge ``rows`` for one ``spicy_docs.schemas`` table contract.
@@ -527,6 +550,7 @@ def merge_contract_table(
         prior_present=prior_present,
         coalesce_prior=coalesce,
         replace_parents=replace_parents,
+        backfill_prior=backfill_prior,
         parquet_metadata=parquet_metadata,
     )
     if contract_name == STATUTES_JOIN_TARGET:

@@ -413,6 +413,8 @@ def test_committee_reports_skips_packages_it_holds(tmp_path, monkeypatch):
             self.requested.append(package_id)
             raise LookupError("stub: no body in a hermetic test")
 
+        acquire_parts = acquire
+
     acquirer = CountingAcquirer()
 
     class NoHearings:

@@ -3,7 +3,10 @@
 MODS cover links and the CBO letter rule use bytes already fetched. Agenda
 acquisition is deferred: this pass has no verified meeting-to-jacket join or
 House repository locator. Pending reads precede discovery under the same cap;
-completed empty covers are checkpointed without inventing a link row.
+completed empty covers are checkpointed without inventing a link row. A report
+is one row per published part (decision 29): every part is read or none, and a
+package's part rows are replaced as a set, while the checkpoint stays keyed by
+package.
 """
 
 from __future__ import annotations
@@ -33,11 +36,9 @@ from spicy_docs.sources.agency_reports.report_blocks import parse_agency_blocks
 from spicy_docs.sources.govinfo.bodies import ModsBill, GovInfoBodySourceError, parse_package_id
 from spicy_docs.sources.govinfo.body_acquisition import GovInfoBodyAcquirer, GovInfoBodyBudget
 from spicy_docs.reading.paged_json import PagedJsonSourceError
-from spicy_docs.reading.refusals import attach_refused_response
 from spicy_docs.schemas.tables import text
 from spicy_docs.sources.congress.listing import LIST_ROUTES, list_route_url
 from spicy_docs.sources.govinfo.discovery import GovInfoDiscoveryReader, collection_url
-from spicy_docs.transport.captured import refused_capture
 from spicy_docs.transport.credentials import CredentialRefusedError, scrub_credential
 
 from spicy_regs.sources import r2
@@ -57,12 +58,16 @@ class PackageDiscoverySource(Protocol):
 class PackageBodySource(Protocol):
     """What this transform needs of a GovInfo package-body acquirer.
 
-    No ``prefer``: the rendition order is the acquirer's sealed default
+    ``acquire_parts`` reads a report, every part its record states or none;
+    ``acquire`` reads a hearing, whose record states no parts. No ``prefer``:
+    the rendition order is the acquirer's sealed default
     (``sources.govinfo.bodies.BODY_PREFERENCE`` — XML, HTML, text, then PDF),
     so this transform neither passes one nor needs a seam that accepts one.
     """
 
     def acquire(self, package_id: str, *, max_bytes: int | None = ...) -> Any: ...
+
+    def acquire_parts(self, package_id: str, *, max_bytes: int | None = ...) -> tuple[Any, ...]: ...
 
 
 class HearingDetailSource(Protocol):
@@ -78,7 +83,12 @@ DISCOVERY_BUDGET = PagedJsonBudget(
     min_request_interval_seconds=0.2,
 )
 
-#: Three requests per package (summary, MODS, body), paced.
+#: Per package: summary and MODS, then one body per part (``2 + P``), paced,
+#: with every retry drawn from the same count. Eight gives a two-part report,
+#: the most any of the 145 retained CRPT packages states (spicy-docs
+#: ``docs/tables.md``), four requests of retry headroom, and reads up to six
+#: parts; a record stating seven or more is refused before any body request
+#: (``GovInfoPartsOverBudgetError``), every run, until this grows.
 BODY_BUDGET = GovInfoBodyBudget(
     max_requests=8,
     max_body_bytes=24 * 1024 * 1024,  # MAX_EVIDENCE_BYTES
@@ -99,6 +109,11 @@ OVERLAP_HOURS = 24
 MAX_PACKAGES_PER_RUN = 200
 
 MAX_PAGES = 40
+
+#: A row published before the report tables keyed parts is the package's one
+#: part: right for every report published in one part and for
+#: CRPT-119hrpt494's unsuffixed Part 1 (spicy-docs ``docs/tables.md``).
+PART_BACKFILL = {"part_id": "package_id"}
 
 
 def _prior_watermark(prior_file: Path) -> datetime | None:
@@ -151,47 +166,31 @@ def _package_ids(reader: PackageDiscoverySource, collection: str, since: str,
     return found
 
 
-class ReportPartHeld(GovInfoBodySourceError):
-    """A report whose MODS names only its part 1, so the body read is that part's, not the package's.
+def _read_bodies(acquirer: PackageBodySource, package_id: str, collection: str,
+                 evidence: CaptureEvidence | None = None) -> list[tuple[Any, BodyText]]:
+    """Each fetched body of one package with the one text derivation for its rendition.
 
-    spicy-docs 0.31.0 reads such a record at the part's stem and states it as
-    ``body.part_id`` (``CRPT-119hrpt811``; ``CRPT-112hrpt38`` has named only
-    its part 1 since 2011). Every table here is keyed on the package, so a row
-    would publish Part 1 under the whole report's id, and once a Part 2 appears
-    the refused refresh would keep that row stale. Decision 29 holds the
-    package out: it is refused, retried every run, and its prior rows removed.
-
-    TODO(B31): delete this hold once the report tables key
-    ``(package_id, part_id)`` (spicy-docs branch ``wt/parts``; decision 29 in
-    ``docs/research/fork-delivery-decisions-2026-09-22.md``).
+    A report is every part its record states, read by ``acquire_parts``: one
+    summary and one MODS, then one body per part, all or nothing, so a
+    package's part rows are never half replaced. A hearing's record states no
+    parts, so it is one ``acquire``. Takes the narrow Protocol rather than the
+    concrete acquirer, the way the bill family's ``_version_captures`` does:
+    what this transform depends on is the facts ``body_text`` reads off a
+    fetched body, and the rendition it was fetched in is the body's own, never
+    this caller's guess.
     """
-
-
-def _read_body(acquirer: PackageBodySource, package_id: str,
-               evidence: CaptureEvidence | None = None) -> tuple[Any, BodyText]:
-    """One package's fetched body and the one text derivation for its rendition.
-
-    Takes the narrow Protocol rather than the concrete acquirer, the way the
-    bill family's ``_version_captures`` does: what this transform depends on is
-    the three facts ``body_text`` reads off a fetched body, and the rendition
-    it was fetched in is the body's own, never this caller's guess. A body read
-    at a part's stem raises :class:`ReportPartHeld` carrying the MODS that
-    names the part, as the 2026-09-23 refusal of the same record carried it.
-    """
-    package = acquirer.acquire(package_id)
-    if (part := package.body.part_id) is not None:
-        held = ReportPartHeld(f"GovInfo MODS names only {part}; held until parts are keyed (decision 29)")
-        attach_refused_response(held, refused_capture(package.mods_capture, stage="source-validation"))
-        raise held
+    bodies = acquirer.acquire_parts(package_id) if collection == "CRPT" else (acquirer.acquire(package_id),)
     if evidence:
-        for capture in package.captures:
+        # Every part repeats the package's summary and MODS; each is retained once.
+        first = bodies[0]
+        for capture in (first.summary_capture, first.mods_capture, *(body.body_capture for body in bodies)):
             evidence.capture(capture, stage=package_id + ":used")
     # No extractor argument: ``body_text``'s default (``DocumentExtractor(NativeText())``,
     # PyMuPDF) is the pipeline ``gpo_normalize`` was derived on — the GPO
     # gutter-numbered layout only comes through on PyMuPDF's own line
     # adjacency, not pypdf's (measured
     # ``docs/research/gpo-normalizer-vs-upstream-2026-09-19.md`` in spicy-docs).
-    return package, body_text(package)
+    return [(body, body_text(body)) for body in bodies]
 
 
 #: The one MODS ``context`` that states a package is *about* a bill, as
@@ -341,7 +340,6 @@ def build_committee_reports(
     renditions: Counter[str] = Counter()
     mentions: Counter[str] = Counter()
     meetings: Counter[str] = Counter()
-    held: set[str] = set()
     refused = unchanged = linked = 0
 
     for collection in ("CRPT", "CHRG"):
@@ -373,7 +371,7 @@ def build_committee_reports(
         for package_id in list(pending)[:max_packages]:
             state = reads[package_id]
             try:
-                package, derived = _read_body(acquirer, package_id, evidence)
+                bodies = _read_bodies(acquirer, package_id, collection, evidence)
             except (CredentialRefusedError, SourceEvidenceError):
                 raise
             except Exception as error:  # noqa: BLE001 — retained for the next run
@@ -381,36 +379,39 @@ def build_committee_reports(
                     evidence.refusal(error, stage=package_id)
                 refused += 1
                 state["outcome"] = "refused"
-                if isinstance(error, ReportPartHeld):
-                    held.add(package_id)
                 logger.warning("{}: {} refused: {}", collection, package_id,
                                scrub_credential(str(error), evidence.credential if evidence else ""))
                 continue
-            renditions[derived.rendition] += 1
-            primary = package.mods.primary_bill
-            bill = None if primary is None else _bill_key(package_id, primary)
-            linked += bill is not None
-            mentions.update(entry.context for entry in package.mods.bills if entry.context != PRIMARY_BILL_CONTEXT)
-            common = {"page_count": None if derived.pages is None else len(derived.pages),
-                      "text_sha256": "sha256:" + hashlib.sha256(derived.text.encode("utf-8")).hexdigest()}
-            state.update(last_modified=package.summary.last_modified, outcome="complete")
-            if collection == "CHRG":
-                event_id, outcome = _event_id(hearings, package, evidence)
-                meetings[outcome] += 1
-                if outcome == "refused":
-                    state["outcome"] = "detail_refused"
-                hearing_rows.append(shape_hearing_transcript(package, event_id=event_id, **common))
-                link_rows.extend(shape_hearing_bill_link(link) for link in cover_links(package.mods, event_id=event_id))
-                evaluated_hearings.add(package_id)
-            else:
-                estimate = read_cbo_estimate(derived.text)
-                report_rows.append(shape_committee_report(
-                    package, bill_id=bill, estimate=estimate,
-                    recital_bill_id=recital_bill_id(estimate, package.identity.congress), **common))
-                section_rows.extend(shape_report_section(
-                    block, package_id=package_id, seq=seq, last_modified=package.summary.last_modified
-                ) for seq, block in enumerate(parse_agency_blocks(derived.text)))
-                evaluated_reports.add(package_id)
+            modified = bodies[0][0].summary.last_modified
+            state.update(last_modified=modified, outcome="complete")
+            for body, derived in bodies:
+                renditions[derived.rendition] += 1
+                # A report part states its own bills; a multi-part package's
+                # root states none (CRPT-119hrpt455, -119hrpt494). A hearing
+                # has no part, so its bills are the package's.
+                stated = body.part if body.part is not None else body.mods
+                primary = stated.primary_bill
+                bill = None if primary is None else _bill_key(package_id, primary)
+                linked += bill is not None
+                mentions.update(entry.context for entry in stated.bills if entry.context != PRIMARY_BILL_CONTEXT)
+                common = {"page_count": None if derived.pages is None else len(derived.pages),
+                          "text_sha256": "sha256:" + hashlib.sha256(derived.text.encode("utf-8")).hexdigest()}
+                if collection == "CHRG":
+                    event_id, outcome = _event_id(hearings, body, evidence)
+                    meetings[outcome] += 1
+                    if outcome == "refused":
+                        state["outcome"] = "detail_refused"
+                    hearing_rows.append(shape_hearing_transcript(body, event_id=event_id, **common))
+                    link_rows.extend(shape_hearing_bill_link(link) for link in cover_links(body.mods, event_id=event_id))
+                else:
+                    estimate = read_cbo_estimate(derived.text)
+                    report_rows.append(shape_committee_report(
+                        body, bill_id=bill, estimate=estimate,
+                        recital_bill_id=recital_bill_id(estimate, body.identity.congress), **common))
+                    section_rows.extend(shape_report_section(
+                        block, package_id=package_id, part_id=body.part.part_id, seq=seq, last_modified=modified
+                    ) for seq, block in enumerate(parse_agency_blocks(derived.text)))
+            (evaluated_hearings if collection == "CHRG" else evaluated_reports).add(package_id)
             if evidence:
                 evidence.event("package-outcome", **state)
 
@@ -427,7 +428,7 @@ def build_committee_reports(
         refused,
     )
     logger.info(
-        "Committee reports: {:,} packages name a PRIMARY bill; other mentions by MODS context — {}",
+        "Committee reports: {:,} report parts and hearings name a PRIMARY bill; other mentions by MODS context — {}",
         linked,
         dict(mentions),
     )
@@ -440,14 +441,17 @@ def build_committee_reports(
         # has a column for the derivation name, so this is where it is stated.
         logger.info("Committee reports: renditions read — {}", dict(renditions))
     logger.info("Committee reports: {} cover links; agenda deferred (no verified meeting-to-jacket join)", len(link_rows))
-    # A held report's prior rows go with its refusal: they held a part under
-    # the package's id, so were never valid. Only a body read and found to be a
-    # part is ``held``; a refused read never reaches that test, so it keeps its
-    # prior rows, as every refusal does.
-    replaced = {"committee_reports": held, "report_sections": evaluated_reports | held,
+    # A read package's part rows are replaced as a set, so a part it no longer
+    # states goes; a refused or unread package keeps its prior rows. A prior
+    # row published before ``part_id`` existed is spelled as the package's one
+    # part first, since the merge drops a row with a NULL in its identity. The
+    # one row here that spelling gets wrong is CRPT-119hrpt811's, whose one part
+    # is ``-pt1``; the ``parts=`` rule version re-reads it to replace it.
+    replaced = {"committee_reports": evaluated_reports, "report_sections": evaluated_reports,
                 "hearing_bill_links": evaluated_hearings}
     paths = tuple(merge_contract_table(output_dir, name, rows, download_prior=download_prior,
                                      replace_parents=("package_id", replaced[name]) if name in replaced else None,
+                                     backfill_prior=PART_BACKFILL if name in ("committee_reports", "report_sections") else None,
                                      prior_present=(prior_files[name] is not None) if name in prior_files else None)
                   for name, rows in (("committee_reports", report_rows), ("report_sections", section_rows),
                                      ("hearing_transcripts", hearing_rows), ("hearing_bill_links", link_rows)))

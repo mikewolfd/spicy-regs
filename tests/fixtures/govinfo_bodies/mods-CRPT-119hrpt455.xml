@@ -1,0 +1,433 @@
+<mods xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://www.loc.gov/mods/v3" version="3.3" xsi:schemaLocation="http://www.loc.gov/mods/v3 http://www.loc.gov/standards/mods/v3/mods-3-3.xsd" ID="P0b002ee1ddaee4b6">
+    <name type="corporate">
+         <namePart>United States Government Publishing Office</namePart>
+         <role>
+              <roleTerm authority="marcrelator" type="text">publisher</roleTerm>
+              <roleTerm authority="marcrelator" type="code">pbl</roleTerm>
+        </role>
+         <role>
+              <roleTerm authority="marcrelator" type="text">distributor</roleTerm>
+              <roleTerm authority="marcrelator" type="code">dst</roleTerm>
+        </role>
+    </name>
+    <name type="corporate">
+         <namePart>United States</namePart>
+         <namePart>Congress</namePart>
+         <namePart>House of Representatives</namePart>
+         <role>
+              <roleTerm authority="marcrelator" type="text">author</roleTerm>
+              <roleTerm authority="marcrelator" type="code">aut</roleTerm>
+        </role>
+         <description>Government Organization</description>
+    </name>
+    <typeOfResource>text</typeOfResource>
+    <genre authority="marcgt">government publication</genre>
+    <language>
+         <languageTerm type="code" authority="iso639-2b">eng</languageTerm>
+    </language>
+    <extension>
+         <collectionCode>CRPT</collectionCode>
+         <category>Congressional Committee Materials</category>
+         <waisDatabaseName>119_cong_reports</waisDatabaseName>
+         <branch>legislative</branch>
+         <dateIngested>2026-01-29</dateIngested>
+    </extension>
+    <titleInfo>
+         <title>MAKE THE DISTRICT OF COLUMBIA SAFE AND BEAUTIFUL ACT OF 2026</title>
+    </titleInfo>
+    <originInfo>
+         <publisher>U.S. Government Publishing Office</publisher>
+         <dateIssued encoding="w3cdtf">2026-01-14</dateIssued>
+         <issuance>monographic</issuance>
+    </originInfo>
+    <physicalDescription>
+         <note type="source content type">deposited</note>
+         <digitalOrigin>born digital</digitalOrigin>
+         <extent>35 digital object pages</extent>
+    </physicalDescription>
+    <classification authority="sudocs">Y 1.1/8:119-455</classification>
+    <identifier type="uri">https://www.govinfo.gov/app/details/CRPT-119hrpt455</identifier>
+    <identifier type="local">P0b002ee1ddaee4b6</identifier>
+    <identifier type="ILS system id">001466415</identifier>
+    <identifier type="former package identifier">f:hr455p1.119.txt</identifier>
+    <recordInfo>
+         <recordContentSource authority="marcorg">DGPO</recordContentSource>
+         <recordCreationDate encoding="w3cdtf">2026-01-29</recordCreationDate>
+         <recordChangeDate encoding="w3cdtf">2026-01-29</recordChangeDate>
+         <recordIdentifier source="DGPO">CRPT-119hrpt455</recordIdentifier>
+         <recordOrigin>machine generated</recordOrigin>
+         <languageOfCataloging>
+              <languageTerm type="code" authority="iso639-2b">eng</languageTerm>
+        </languageOfCataloging>
+    </recordInfo>
+    <accessCondition type="GPO scope determination">fdlp</accessCondition>
+    <extension>
+         <subtitle>Report together with DISSENTING VIEWS to accompany H.R. 5103, including cost estimate of the Congressional Budget Office</subtitle>
+         <docClass>HRPT</docClass>
+         <accessId>CRPT-119hrpt455</accessId>
+         <chamber>HOUSE</chamber>
+         <congress years="2025-2026">119</congress>
+         <number>455</number>
+         <session>2</session>
+         <isConferenceReport>false</isConferenceReport>
+         <isSerialSet>true</isSerialSet>
+    </extension>
+    <location>
+         <url displayLabel="Content Detail" access="object in context">https://www.govinfo.gov/app/details/CRPT-119hrpt455</url>
+    </location>
+    <identifier type="preferred citation">H. Rept. 119-455</identifier>
+    <relatedItem type="constituent" ID="id-hr455p1" xlink:href="https://www.govinfo.gov/metadata/granule/CRPT-119hrpt455/CRPT-119hrpt455-pt1/mods.xml">
+         <titleInfo>
+              <title>MAKE THE DISTRICT OF COLUMBIA SAFE AND BEAUTIFUL ACT OF 2026</title>
+              <partName>Part 1</partName>
+        </titleInfo>
+         <relatedItem type="otherFormat" xlink:href="https://www.govinfo.gov/content/pkg/CRPT-119hrpt455/html/CRPT-119hrpt455-pt1.htm">
+              <identifier type="FDsys Unique ID">D09002ee1ddaee720</identifier>
+        </relatedItem>
+         <relatedItem type="otherFormat" xlink:href="https://www.govinfo.gov/content/pkg/CRPT-119hrpt455/pdf/CRPT-119hrpt455-pt1.pdf">
+              <identifier type="FDsys Unique ID">D09002ee1ddaee723</identifier>
+        </relatedItem>
+         <identifier type="uri">https://www.govinfo.gov/app/details/CRPT-119hrpt455/CRPT-119hrpt455-pt1</identifier>
+         <identifier type="former granule identifier">f:hr455p1.119.txt</identifier>
+         <location>
+              <url displayLabel="Content Detail" access="object in context">https://www.govinfo.gov/app/details/CRPT-119hrpt455/CRPT-119hrpt455-pt1</url>
+              <url access="raw object" displayLabel="PDF rendition">https://www.govinfo.gov/content/pkg/CRPT-119hrpt455/pdf/CRPT-119hrpt455-pt1.pdf</url>
+              <url access="raw object" displayLabel="HTML rendition">https://www.govinfo.gov/content/pkg/CRPT-119hrpt455/html/CRPT-119hrpt455-pt1.htm</url>
+        </location>
+         <identifier type="preferred citation">H. Rept. 119-455,Part 1</identifier>
+         <abstract>The Committee on Natural Resources, to whom was referred the bill (H.R. 5103) to establish a program to Beautify the District of Columbia and establish the District of Columbia Safe and Beautiful Commission, having considered the same, reports favorably thereon with an amendment and recommends that the bill as amended do pass.</abstract>
+         <extension>
+              <searchTitle>MAKE THE DISTRICT OF COLUMBIA SAFE AND BEAUTIFUL ACT OF 2026;H. Rept. 119-455,Part 1</searchTitle>
+              <legislativeHistory>Ordered to be printed</legislativeHistory>
+              <granuleClass>FIRSTPART</granuleClass>
+              <accessId>CRPT-119hrpt455-pt1</accessId>
+              <action date="2026-01-14">Ordered to be printed</action>
+              <heading>Part 1</heading>
+              <partNumber>1</partNumber>
+              <session>2</session>
+              <shortTitle>Make the District of Columbia Safe and Beautiful Act of 2026</shortTitle>
+              <recommendation>The Committee on Natural Resources, to whom was referred the bill (H.R. 5103) to establish a program to Beautify the District of Columbia and establish the District of Columbia Safe and Beautiful Commission, having considered the same, reports favorably thereon with an amendment and recommends that the bill as amended do pass.</recommendation>
+              <submittedStatement>Mr. Westerman, from the Committee on Natural Resources, submitted the following</submittedStatement>
+              <bill congress="119" context="OTHER" number="5103" type="HR"></bill>
+              <bill congress="119" context="PRIMARY" number="5103" type="HR"></bill>
+              <congCommittee authorityId="hsii00" chamber="H" congress="119" type="S">
+                                        
+                   <name type="authority-standard">Committee on Natural Resources</name>
+                                        
+                   <name type="authority-short">Natural Resources</name>
+                                    
+            </congCommittee>
+              <congMember bioGuideId="W000821" chamber="H" congress="119" party="R" role="SUBMITTEDBY" state="AR">
+                                        
+                   <name type="parsed">Mr. Westerman</name>
+                                        
+                   <name type="authority-fnf">Bruce Westerman</name>
+                                        
+                   <name type="authority-lnf">Westerman, Bruce</name>
+                                    
+            </congMember>
+              <law congress="93" isPrivate="false" number="198"></law>
+              <law congress="95" isPrivate="false" number="220"></law>
+              <law congress="98" isPrivate="false" number="169"></law>
+              <law congress="111" isPrivate="false" number="139"></law>
+              <statuteAtLarge volume="87">
+                                        
+                   <pages pages="774"></pages>
+                                    
+            </statuteAtLarge>
+              <associatedBills>H.R. 5103, 119th</associatedBills>
+        </extension>
+         <name type="personal">
+              <namePart>Bruce Westerman</namePart>
+              <affiliation>United States House of Representatives</affiliation>
+              <role>
+                   <roleTerm authority="marcrelator" type="text">sponsor</roleTerm>
+                   <roleTerm authority="marcrelator" type="code">spn</roleTerm>
+            </role>
+              <description>United States Congress Member</description>
+        </name>
+         <name type="corporate">
+              <namePart>United States</namePart>
+              <namePart>Congress</namePart>
+              <namePart>House of Representatives</namePart>
+              <namePart>Committee on Natural Resources</namePart>
+              <role>
+                   <roleTerm authority="marcrelator" type="text">associated name</roleTerm>
+                   <roleTerm authority="marcrelator" type="code">asn</roleTerm>
+            </role>
+              <description>Government Organization</description>
+        </name>
+         <relatedItem type="isReferencedBy">
+              <titleInfo>
+                   <title>United States House Bill 5103 (119th Congress)</title>
+            </titleInfo>
+              <identifier type="Congressional Bill citation">H.R. 5103</identifier>
+              <extension>
+                   <congress>119</congress>
+                   <context>OTHER</context>
+            </extension>
+        </relatedItem>
+         <relatedItem type="isReferencedBy">
+              <titleInfo>
+                   <title>United States House Bill 5103 (119th Congress)</title>
+            </titleInfo>
+              <identifier type="Congressional Bill citation">H.R. 5103</identifier>
+              <extension>
+                   <congress>119</congress>
+                   <context>PRIMARY</context>
+            </extension>
+        </relatedItem>
+         <relatedItem type="isReferencedBy">
+              <titleInfo>
+                   <title>United States Statutes at Large</title>
+                   <partNumber>Volume 87 Page 774</partNumber>
+            </titleInfo>
+              <identifier type="Statute citation">87 Stat. 774</identifier>
+        </relatedItem>
+         <relatedItem type="isReferencedBy">
+              <titleInfo>
+                   <title>United States Public Law 198 (93rd Congress)</title>
+            </titleInfo>
+              <identifier type="public law citation">Public Law 93-198</identifier>
+              <identifier type="public law citation">Public Law No 93-198</identifier>
+        </relatedItem>
+         <relatedItem type="isReferencedBy">
+              <titleInfo>
+                   <title>United States Public Law 220 (95th Congress)</title>
+            </titleInfo>
+              <identifier type="public law citation">Public Law 95-220</identifier>
+              <identifier type="public law citation">Public Law No 95-220</identifier>
+        </relatedItem>
+         <relatedItem type="isReferencedBy">
+              <titleInfo>
+                   <title>United States Public Law 169 (98th Congress)</title>
+            </titleInfo>
+              <identifier type="public law citation">Public Law 98-169</identifier>
+              <identifier type="public law citation">Public Law No 98-169</identifier>
+        </relatedItem>
+         <relatedItem type="isReferencedBy">
+              <titleInfo>
+                   <title>United States Public Law 139 (111th Congress)</title>
+            </titleInfo>
+              <identifier type="public law citation">Public Law 111-139</identifier>
+              <identifier type="public law citation">Public Law No 111-139</identifier>
+        </relatedItem>
+    </relatedItem>
+    <relatedItem type="constituent" ID="id-hr455p2" xlink:href="https://www.govinfo.gov/metadata/granule/CRPT-119hrpt455/CRPT-119hrpt455-pt2/mods.xml">
+         <titleInfo>
+              <title>MAKE THE DISTRICT OF COLUMBIA SAFE AND BEAUTIFUL ACT OF 2026</title>
+              <partName>Part 2</partName>
+        </titleInfo>
+         <relatedItem type="otherFormat" xlink:href="https://www.govinfo.gov/content/pkg/CRPT-119hrpt455/html/CRPT-119hrpt455-pt2.htm">
+              <identifier type="FDsys Unique ID">D09002ee1ddaee721</identifier>
+        </relatedItem>
+         <relatedItem type="otherFormat" xlink:href="https://www.govinfo.gov/content/pkg/CRPT-119hrpt455/pdf/CRPT-119hrpt455-pt2.pdf">
+              <identifier type="FDsys Unique ID">D09002ee1ddaee722</identifier>
+        </relatedItem>
+         <identifier type="uri">https://www.govinfo.gov/app/details/CRPT-119hrpt455/CRPT-119hrpt455-pt2</identifier>
+         <identifier type="former granule identifier">f:hr455p2.119.txt</identifier>
+         <location>
+              <url displayLabel="Content Detail" access="object in context">https://www.govinfo.gov/app/details/CRPT-119hrpt455/CRPT-119hrpt455-pt2</url>
+              <url access="raw object" displayLabel="PDF rendition">https://www.govinfo.gov/content/pkg/CRPT-119hrpt455/pdf/CRPT-119hrpt455-pt2.pdf</url>
+              <url access="raw object" displayLabel="HTML rendition">https://www.govinfo.gov/content/pkg/CRPT-119hrpt455/html/CRPT-119hrpt455-pt2.htm</url>
+        </location>
+         <identifier type="preferred citation">H. Rept. 119-455,Part 2</identifier>
+         <abstract>The Committee on Oversight and Government Reform, to whom was referred the bill (H.R. 5103) to establish a program to Beautify the District of Columbia and establish the District of Columbia Safe and Beautiful Commission, having considered the same, reports favorably thereon with an amendment and recommends that the bill as amended do pass.</abstract>
+         <extension>
+              <searchTitle>MAKE THE DISTRICT OF COLUMBIA SAFE AND BEAUTIFUL ACT OF 2026;H. Rept. 119-455,Part 2</searchTitle>
+              <legislativeHistory>Committed to the Committee of the Whole House on the State of the Union and ordered to be printed</legislativeHistory>
+              <granuleClass>OTHERPART</granuleClass>
+              <accessId>CRPT-119hrpt455-pt2</accessId>
+              <action date="2026-01-14">Committed to the Committee of the Whole House on the State of the Union and ordered to be printed</action>
+              <heading>Part 2</heading>
+              <partNumber>2</partNumber>
+              <session>2</session>
+              <shortTitle>Make the District of Columbia Safe and Beautiful Act of 2025</shortTitle>
+              <recommendation>The Committee on Oversight and Government Reform, to whom was referred the bill (H.R. 5103) to establish a program to Beautify the District of Columbia and establish the District of Columbia Safe and Beautiful Commission, having considered the same, reports favorably thereon with an amendment and recommends that the bill as amended do pass.</recommendation>
+              <submittedStatement>Mr. Comer, from the Committee on Oversight and Government Reform, submitted the following</submittedStatement>
+              <bill congress="119" context="OTHER" number="2693" type="HR"></bill>
+              <bill congress="119" context="OTHER" number="5103" type="HR"></bill>
+              <bill congress="119" context="PRIMARY" number="5103" type="HR"></bill>
+              <bill congress="119" context="OTHER" number="5107" type="HR"></bill>
+              <bill congress="119" context="OTHER" number="5163" type="HR"></bill>
+              <bill congress="119" context="OTHER" number="5172" type="HR"></bill>
+              <bill congress="119" context="OTHER" number="5179" type="HR"></bill>
+              <bill congress="119" context="OTHER" number="5183" type="HR"></bill>
+              <bill congress="119" context="OTHER" number="5214" type="HR"></bill>
+              <bill congress="119" context="OTHER" number="5242" type="HR"></bill>
+              <congCommittee authorityId="hsgo00" chamber="H" congress="119" type="S">
+                                        
+                   <name type="authority-standard">Committee on Oversight and Government Reform</name>
+                                        
+                   <name type="authority-short">Oversight and Government Reform</name>
+                                    
+            </congCommittee>
+              <congMember bioGuideId="C001108" chamber="H" congress="119" party="R" role="SUBMITTEDBY" state="KY">
+                                        
+                   <name type="parsed">Mr. Comer</name>
+                                        
+                   <name type="authority-fnf">James Comer</name>
+                                        
+                   <name type="authority-lnf">Comer, James</name>
+                                    
+            </congMember>
+              <law congress="92" isPrivate="false" number="463"></law>
+              <law congress="104" isPrivate="false" number="1"></law>
+              <law congress="111" isPrivate="false" number="139"></law>
+              <USCode title="5">
+                                        
+                   <section detail="(b)" number="1004"></section>
+                                    
+            </USCode>
+              <associatedBills>H.R. 5103, 119th</associatedBills>
+        </extension>
+         <name type="personal">
+              <namePart>James Comer</namePart>
+              <affiliation>United States House of Representatives</affiliation>
+              <role>
+                   <roleTerm authority="marcrelator" type="text">sponsor</roleTerm>
+                   <roleTerm authority="marcrelator" type="code">spn</roleTerm>
+            </role>
+              <description>United States Congress Member</description>
+        </name>
+         <name type="corporate">
+              <namePart>United States</namePart>
+              <namePart>Congress</namePart>
+              <namePart>House of Representatives</namePart>
+              <namePart>Committee on Oversight and Government Reform</namePart>
+              <role>
+                   <roleTerm authority="marcrelator" type="text">associated name</roleTerm>
+                   <roleTerm authority="marcrelator" type="code">asn</roleTerm>
+            </role>
+              <description>Government Organization</description>
+        </name>
+         <relatedItem type="isReferencedBy">
+              <titleInfo>
+                   <title>United States House Bill 2693 (119th Congress)</title>
+            </titleInfo>
+              <identifier type="Congressional Bill citation">H.R. 2693</identifier>
+              <extension>
+                   <congress>119</congress>
+                   <context>OTHER</context>
+            </extension>
+        </relatedItem>
+         <relatedItem type="isReferencedBy">
+              <titleInfo>
+                   <title>United States House Bill 5103 (119th Congress)</title>
+            </titleInfo>
+              <identifier type="Congressional Bill citation">H.R. 5103</identifier>
+              <extension>
+                   <congress>119</congress>
+                   <context>OTHER</context>
+            </extension>
+        </relatedItem>
+         <relatedItem type="isReferencedBy">
+              <titleInfo>
+                   <title>United States House Bill 5103 (119th Congress)</title>
+            </titleInfo>
+              <identifier type="Congressional Bill citation">H.R. 5103</identifier>
+              <extension>
+                   <congress>119</congress>
+                   <context>PRIMARY</context>
+            </extension>
+        </relatedItem>
+         <relatedItem type="isReferencedBy">
+              <titleInfo>
+                   <title>United States House Bill 5107 (119th Congress)</title>
+            </titleInfo>
+              <identifier type="Congressional Bill citation">H.R. 5107</identifier>
+              <extension>
+                   <congress>119</congress>
+                   <context>OTHER</context>
+            </extension>
+        </relatedItem>
+         <relatedItem type="isReferencedBy">
+              <titleInfo>
+                   <title>United States House Bill 5163 (119th Congress)</title>
+            </titleInfo>
+              <identifier type="Congressional Bill citation">H.R. 5163</identifier>
+              <extension>
+                   <congress>119</congress>
+                   <context>OTHER</context>
+            </extension>
+        </relatedItem>
+         <relatedItem type="isReferencedBy">
+              <titleInfo>
+                   <title>United States House Bill 5172 (119th Congress)</title>
+            </titleInfo>
+              <identifier type="Congressional Bill citation">H.R. 5172</identifier>
+              <extension>
+                   <congress>119</congress>
+                   <context>OTHER</context>
+            </extension>
+        </relatedItem>
+         <relatedItem type="isReferencedBy">
+              <titleInfo>
+                   <title>United States House Bill 5179 (119th Congress)</title>
+            </titleInfo>
+              <identifier type="Congressional Bill citation">H.R. 5179</identifier>
+              <extension>
+                   <congress>119</congress>
+                   <context>OTHER</context>
+            </extension>
+        </relatedItem>
+         <relatedItem type="isReferencedBy">
+              <titleInfo>
+                   <title>United States House Bill 5183 (119th Congress)</title>
+            </titleInfo>
+              <identifier type="Congressional Bill citation">H.R. 5183</identifier>
+              <extension>
+                   <congress>119</congress>
+                   <context>OTHER</context>
+            </extension>
+        </relatedItem>
+         <relatedItem type="isReferencedBy">
+              <titleInfo>
+                   <title>United States House Bill 5214 (119th Congress)</title>
+            </titleInfo>
+              <identifier type="Congressional Bill citation">H.R. 5214</identifier>
+              <extension>
+                   <congress>119</congress>
+                   <context>OTHER</context>
+            </extension>
+        </relatedItem>
+         <relatedItem type="isReferencedBy">
+              <titleInfo>
+                   <title>United States House Bill 5242 (119th Congress)</title>
+            </titleInfo>
+              <identifier type="Congressional Bill citation">H.R. 5242</identifier>
+              <extension>
+                   <congress>119</congress>
+                   <context>OTHER</context>
+            </extension>
+        </relatedItem>
+         <relatedItem type="isReferencedBy">
+              <titleInfo>
+                   <title>United States Code</title>
+                   <partNumber>Title 5 Section 1004(b)</partNumber>
+            </titleInfo>
+              <identifier type="USC citation">5 U.S.C. 1004(b)</identifier>
+        </relatedItem>
+         <relatedItem type="isReferencedBy">
+              <titleInfo>
+                   <title>United States Public Law 463 (92nd Congress)</title>
+            </titleInfo>
+              <identifier type="public law citation">Public Law 92-463</identifier>
+              <identifier type="public law citation">Public Law No 92-463</identifier>
+        </relatedItem>
+         <relatedItem type="isReferencedBy">
+              <titleInfo>
+                   <title>United States Public Law 1 (104th Congress)</title>
+            </titleInfo>
+              <identifier type="public law citation">Public Law 104-1</identifier>
+              <identifier type="public law citation">Public Law No 104-1</identifier>
+        </relatedItem>
+         <relatedItem type="isReferencedBy">
+              <titleInfo>
+                   <title>United States Public Law 139 (111th Congress)</title>
+            </titleInfo>
+              <identifier type="public law citation">Public Law 111-139</identifier>
+              <identifier type="public law citation">Public Law No 111-139</identifier>
+        </relatedItem>
+    </relatedItem>
+</mods>

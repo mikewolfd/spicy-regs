@@ -258,8 +258,9 @@ with their evidence in `spicy-docs/docs/research/parsing-survey-2026-09-23.md`:*
   spicy-regs; B4, B6, B11, B20 and decision 30 in SpicyDocs 0.31.0. Next: the
   0.31.0 re-vendor (adopting B6 and A14, fixing SAM), then A7/A12's rulemaking
   rebuild and snapshot, the `replace_all` CFR run, the print-citations re-read
-  (A10); B31 awaits decision 29's confirmation; the rest (B1–B3, B5, B7–B10,
-  B12–B19, B21–B30, C4, D6) per the plan.
+  (A10); B31 (decision 29) and B32 (the Table III chain walk) are adopted at
+  the 0.32.0 re-vendor; the rest (B1–B3, B5, B7–B10, B12–B19, B21–B30, C4,
+  D6) per the plan.
 - **Wider source populations.** SAM years, lobbying history (the key is now
   set), FCC filings history, USAspending beyond the top 10,000, court catch-up
   and parties (decision 9).
