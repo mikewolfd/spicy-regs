@@ -83,6 +83,8 @@ _VOLUME_REQUEST_INTERVAL_SECONDS = 1.0
 
 #: Parquet key-value metadata recording that every section row was placed by
 #: the annual-volume PART heading rule; bump the value when that rule changes.
+#: A change in SpicyDocs' scan or split (0.31.0's single-section ``§§`` read) is
+#: applied by a ``replace_all`` run recorded in the ledger, not by a marker bump.
 PLACEMENT_MARKER = {"spicy_regs.cfr_sections.placement": "annual-volume-part-heading/1"}
 
 # The published schema: all VARCHAR, in a fixed order. ``granule_id`` is the
@@ -234,13 +236,13 @@ def _placed_package(acquirer: CfrAcquirer, package_id: str | None, rows: list[di
 
     One download per package that has section granules, through
     ``acquire_annual``, whose identity validator is a second streaming pass
-    before the scan: over the 262 retained 2025 volumes (1.29 GB) it cost
-    14.7 s against the scan's 18.2 s, small beside the download (measured
-    2026-09-23), and SpicyDocs 0.31.0 admits all 262, the combined Title 34/35
-    and appendix-only Title 40 vol 9 included. A failure, a refused volume
-    among them, leaves the prior table's rows for the package in place (the
-    merge keeps them); a 401/403 (``CredentialRefusedError``) is not a volume
-    failure and aborts.
+    before the scan: over the 262 retained volumes (236 from the 2025 edition,
+    26 from 2026; 1.29 GB) it cost 14.7 s against the scan's 18.2 s, small
+    beside the download (measured 2026-09-23), and SpicyDocs 0.31.0 admits all
+    262, the combined Title 34/35 and appendix-only Title 40 vol 9 included. A
+    failure, a refused volume among them, leaves the prior table's rows for the
+    package in place (the merge keeps them); a 401/403
+    (``CredentialRefusedError``) is not a volume failure and aborts.
     """
     volume = annual_volume(package_id)
     if volume is None or not any(_SECTION_TOKEN_RE.search(row["granule_id"]) for row in rows):
