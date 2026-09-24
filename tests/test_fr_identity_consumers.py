@@ -15,7 +15,7 @@ from loguru import logger
 from spicy_docs.interpretation.identifier_shapes import normalize_docket_reference
 
 from spicy_regs.ontology.citations import normalize_regsgov_identifier
-from spicy_regs.ontology.common import RunContext, write_parquet_rows
+from spicy_regs.ontology.common import RunContext, stable_id, write_parquet_rows
 from spicy_regs.ontology import federal_register
 from spicy_regs.ontology.federal_register import FederalRegisterIndex, linked_docket_ids
 from spicy_regs.pipelines import rulemaking_dataset
@@ -362,7 +362,7 @@ def test_labelled_dockets_and_padded_numbers_join_every_rulemaking_table(tmp_pat
         ("federal_register.document_type", "2010-02-05"),
     }
     assert not any(json.loads(r["docket_ids_json"]) == [] for r in proceedings)
-    assert {r["actor_id"] for r in proceedings} == {"spicy-regs:proceedings:v7"}
+    assert {r["actor_id"] for r in proceedings} == {"spicy-regs:proceedings:v8"}
 
     periods = pq.read_table(build_comment_periods(tmp_path)).to_pylist()
     (period,) = [r for r in periods if "federal_register.comments_close_on" in r["source"]]
@@ -566,6 +566,70 @@ def test_a_list_merging_a_multi_docket_proceeding_lists_the_absorbed_ids_as_pred
     assert merged["proceeding_id"] == merged["supersedes_id"] == prior_by_dockets[four]
     # ... and each absorbed id is named, never silently dropped.
     assert json.loads(merged["identity_predecessors_json"]) == absorbed
+
+
+def test_only_an_action_document_merges_the_dockets_it_names(tmp_path):
+    """Decision 33: a Proposed Rule's list unites its dockets; a RIN-less Notice's list does not."""
+    _listed_inputs(tmp_path)
+    notice = ["FDA-2020-E-1269", "FDA-2020-E-1272", "FDA-2020-E-1273"]
+    fr = pq.read_table(tmp_path / "federal_register.parquet").to_pylist()
+    fr.append(
+        {
+            **dict.fromkeys(fr[0]),
+            "document_number": "2021-06210",
+            "publication_date": "2021-03-25",
+            "document_type": "Notice",
+            "title": "Determination of Regulatory Review Period for Purposes of Patent Extension; BAROSTIM NEO",
+            "docket_ids_json": '["Docket Nos. FDA-2020-E-1269, FDA-2020-E-1273, and FDA-2020-E-1272"]',
+            "regulation_id_numbers_json": "[]",
+            "cfr_references_json": "[]",
+            "comments_close_on": "2021-05-24",
+        }
+    )
+    _write(tmp_path, "federal_register", tuple(fr[0]), fr)
+    build_fr_docket_links(tmp_path)
+    dockets = pq.read_table(tmp_path / "dockets.parquet").to_pylist()
+    dockets += [{**dict.fromkeys(dockets[0]), "docket_id": d, "docket_type": "Nonrulemaking"} for d in notice]
+    _write(tmp_path, "dockets", tuple(dockets[0]), dockets)
+    build_rule_targets(tmp_path)
+    # The generation before merged the Notice's dockets, under the id its middle docket
+    # minted when it stood alone (as FDA-2014-E-2356 did on the 2026-09-23 parents).
+    merged_id = stable_id("proceeding", "docket", "FDA-2020-E-1272")
+    _write(
+        tmp_path,
+        "_proceedings_prior",
+        ("proceeding_id", "docket_ids_json", "fr_document_ids_json"),
+        [
+            {
+                "proceeding_id": merged_id,
+                "docket_ids_json": json.dumps(notice),
+                "fr_document_ids_json": '["2021-06210@2021-03-25"]',
+            }
+        ],
+    )
+
+    proceedings = pq.read_table(build_proceedings(tmp_path)).to_pylist()
+    assert len({r["proceeding_id"] for r in proceedings}) == len(proceedings)
+    by_dockets = {r["docket_ids_json"]: r for r in proceedings}
+    # The Proposed Rule (a rule stage) unites its three dockets ...
+    assert json.dumps(FDA_DOCKETS, separators=(",", ":")) in by_dockets
+    # ... the Notice (no RIN, no stage) attaches to each of its three and merges none.
+    for docket in notice:
+        row = by_dockets[f'["{docket}"]']
+        assert json.loads(row["fr_document_ids_json"]) == ["2021-06210@2021-03-25"]
+        assert row["stage_events_json"] == "[]"
+        # The merged id stays with the docket that minted it; the others mint their own and
+        # name it as their predecessor.
+        if docket == "FDA-2020-E-1272":
+            assert row["proceeding_id"] == row["supersedes_id"] == merged_id
+        else:
+            assert row["proceeding_id"] == stable_id("proceeding", "docket", docket)
+            assert json.loads(row["identity_predecessors_json"]) == [merged_id]
+
+    periods = pq.read_table(build_comment_periods(tmp_path)).to_pylist()
+    (period,) = [r for r in periods if "2021-06210@2021-03-25" in json.loads(r["evidence_ids_json"])]
+    # Three proceedings hold the notice, so its period keeps the dockets and chooses none.
+    assert (json.loads(period["docket_ids_json"]), period["proceeding_ids_json"]) == (notice, "[]")
 
 
 def test_the_index_reads_each_link_row_once_and_keys_each_docket_it_names(tmp_path):

@@ -868,7 +868,7 @@ def test_a_nonrulemaking_docket_is_a_proceeding_only_on_action_evidence(tmp_path
     assert set(by_docket) == {with_rin, staged, rulemaking}, "the shell forms no proceeding"
     assert json.loads(by_docket[staged]["fr_document_ids_json"]) == ["2023-00001@2023-01-03"]
     assert json.loads(by_docket[with_rin]["rins_json"]) == ["2120-AA64"]
-    assert {row["actor_id"] for row in proceedings} == {"spicy-regs:proceedings:v7"}
+    assert {row["actor_id"] for row in proceedings} == {"spicy-regs:proceedings:v8"}
 
     # Its comment period keeps the docket as its anchor, with no proceeding.
     (period,) = pq.read_table(build_comment_periods(tmp_path)).to_pylist()
