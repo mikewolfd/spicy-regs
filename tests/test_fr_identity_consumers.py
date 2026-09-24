@@ -1,4 +1,4 @@
-"""Dated FR joins and explicit ambiguity across the materialized consumers.
+"""Dated FR joins, labelled dockets, unpadded numbers and explicit ambiguity across the materialized consumers.
 
 These controlled source rows exercise joins; the unmodified native collision
 fixture and its byte provenance are tested in test_federal_register.py.
@@ -6,10 +6,14 @@ fixture and its byte provenance are tested in test_federal_register.py.
 
 import json
 import shutil
+import sys
 
 import pyarrow.parquet as pq
+import pytest
 
-from spicy_regs.ontology.common import write_parquet_rows
+from spicy_regs.ontology.common import RunContext, write_parquet_rows
+from spicy_regs.ontology.federal_register import FederalRegisterIndex, linked_docket_id
+from spicy_regs.pipelines import rulemaking_dataset
 from spicy_regs.transforms.build_comment_periods import build_comment_periods
 from spicy_regs.transforms.build_federal_register import build_federal_register
 from spicy_regs.transforms.build_fr_docket_links import build_fr_docket_links
@@ -162,3 +166,200 @@ def test_legacy_ambiguous_proceeding_is_unresolved_in_agenda_and_periods(tmp_pat
     assert len({r["comment_period_id"] for r in periods}) == 2
     assert all(r["proceeding_ids_json"] == r["docket_ids_json"] == "[]" for r in periods)
     assert all(json.loads(r["unresolved_fr_references_json"]) for r in periods)
+
+
+def _index(root, rows):
+    _write(root, "federal_register", ("document_number", "publication_date"), rows)
+    return FederalRegisterIndex(root / "federal_register.parquet")
+
+
+def test_a_padded_number_resolves_on_its_unpadded_key_only_when_the_key_names_one_document(tmp_path):
+    index = _index(
+        tmp_path,
+        [
+            {"document_number": "2010-2394", "publication_date": "2010-02-05"},
+            {"document_number": "2013-00123", "publication_date": "2013-01-04"},
+            {"document_number": "E9-9366", "publication_date": "2009-04-24"},
+            # Two documents the Register itself numbers apart, one key once unpadded.
+            {"document_number": "94-0190", "publication_date": "1994-04-26"},
+            {"document_number": "94-190", "publication_date": "1994-01-05"},
+        ],
+    )
+
+    def resolve(number, day=None):
+        reference = index.reference(number, day)
+        return reference["status"], reference["candidate_ids"]
+
+    # Regulations.gov pads where the Register did not.
+    assert resolve("2010-02394") == ("unpadded_single_candidate_in_input", ["2010-2394@2010-02-05"])
+    assert resolve("E9-09366") == ("unpadded_single_candidate_in_input", ["E9-9366@2009-04-24"])
+    assert resolve("2010-02394", "2010-02-05") == ("unpadded_dated", ["2010-2394@2010-02-05"])
+    assert resolve("2010-02394", "2010-02-06") == ("missing", [])
+    # Both sides reduce: an unpadded reference reaches the Register's padded number.
+    assert resolve("2013-123") == ("unpadded_single_candidate_in_input", ["2013-00123@2013-01-04"])
+    # The exact spelling is tried first, so a held number never goes through the key.
+    assert resolve("2013-00123") == ("single_candidate_in_input", ["2013-00123@2013-01-04"])
+    assert resolve("94-190") == ("single_candidate_in_input", ["94-190@1994-01-05"])
+    assert resolve("94-190", "1994-04-26") == ("missing", [])
+    # A key two held numbers share is refused, not chosen between.
+    assert resolve("94-00190") == ("ambiguous", ["94-0190@1994-04-26", "94-190@1994-01-05"])
+    assert resolve("94-00190", "1994-04-26") == ("ambiguous", ["94-0190@1994-04-26", "94-190@1994-01-05"])
+    assert resolve("2010-09999") == ("missing", [])
+    assert resolve("SSA-2010-0037") == ("missing", [])
+
+
+def test_the_index_answers_its_own_rows_record_ids(tmp_path):
+    index = _index(tmp_path, [{"document_number": "00-111", "publication_date": "2000-01-14"}])
+    assert index.record_id({"document_number": "00-111", "publication_date": "2000-01-14"}) == "00-111@2000-01-14"
+    # A row the index does not hold is validated by its owner, as before.
+    assert index.record_id({"document_number": "00-112", "publication_date": "2000-01-14"}) == "00-112@2000-01-14"
+
+
+@pytest.mark.parametrize(
+    ("stated", "docket"),
+    [
+        ("Docket No. SSA-2010-0037", "SSA-2010-0037"),
+        ("DHS Docket No. USCIS-2025-0004", "USCIS-2025-0004"),
+        ("epa-hq-oar-2021-0317", "EPA-HQ-OAR-2021-0317"),
+        # SpicyDocs' column shape ends on digits; a literal identifier stays one.
+        ("GIPSA-2010-FGIS-0014-NONRULEMAKING", "GIPSA-2010-FGIS-0014-NONRULEMAKING"),
+        ("Docket No. RM98-1-000", None),  # a FERC docket, not a Regulations.gov one
+        ("MM Docket No. 98-213", None),
+        ("Sequence No. 1", None),
+        ("PPWOCRADI0, PCU00RP14.R50000", None),
+        (None, None),
+    ],
+)
+def test_a_federal_register_docket_value_is_read_through_its_label(stated, docket):
+    assert linked_docket_id(stated) == docket
+
+
+def _labelled_inputs(root):
+    records = [
+        {
+            "document_number": "2010-2394",
+            "publication_date": "2010-02-05",
+            "type": "Proposed Rule",
+            "title": "Labelled docket rule",
+            "docket_ids": ["Docket No. SSA-2010-0037", "Docket No. FAA-2010-0001"],
+            "cfr_references": [{"title": 20, "part": 404}],
+            "regulation_id_numbers": ["0960-AG21"],
+            "comments_close_on": "2010-04-06",
+        },
+        {
+            "document_number": "2010-2400",
+            "publication_date": "2010-02-05",
+            "type": "Rule",
+            "title": "Literal docket rule",
+            "docket_ids": ["GIPSA-2010-FGIS-0014-NONRULEMAKING"],
+            "cfr_references": [{"title": 7, "part": 800}],
+            "regulation_id_numbers": [],
+        },
+    ]
+    build_federal_register(root, documents=lambda start: iter(records), download_prior=lambda key, path: False)
+    build_fr_docket_links(root)
+    _write(
+        root,
+        "dockets",
+        ("docket_id", "docket_type", "rin", "modify_date"),
+        [
+            # 22:30 Eastern on the 10th is the 11th in UTC.
+            {
+                "docket_id": "SSA-2010-0037",
+                "docket_type": "Rulemaking",
+                "rin": "0960-AG21",
+                "modify_date": "2010-03-11T03:30:00Z",
+            },
+            {"docket_id": "GIPSA-2010-FGIS-0014-NONRULEMAKING", "docket_type": "Nonrulemaking"},
+        ],
+    )
+    _write(
+        root,
+        "documents",
+        ("document_id", "docket_id", "fr_doc_num", "additional_rins", "document_type", "posted_date", "modify_date"),
+        [
+            {
+                "document_id": "SSA-2010-0037-0001",
+                "docket_id": "SSA-2010-0037",
+                "fr_doc_num": "2010-02394",  # Regulations.gov pads; the Register did not
+                "additional_rins": "[]",
+                "document_type": "Proposed Rule",
+                "posted_date": "2010-02-05T05:00:00Z",
+                "modify_date": "2010-02-06T02:00:00Z",
+            }
+        ],
+    )
+    _write(root, "unified_agenda", ("rin", "agenda_edition"), [])
+
+
+def test_labelled_dockets_and_padded_numbers_join_every_rulemaking_table(tmp_path):
+    _labelled_inputs(tmp_path)
+
+    targets = pq.read_table(build_rule_targets(tmp_path)).to_pylist()
+    edges = {(r["docket_id"], r["source"], r["cfr_ref"], r["rin"]): r for r in targets}
+    assert set(edges) == {
+        ("SSA-2010-0037", "docket_rin", None, "0960-AG21"),
+        ("SSA-2010-0037", "fr_cfr_ref", "20-404", "0960-AG21"),
+        ("SSA-2010-0037", "document_fr_doc", "20-404", "0960-AG21"),
+        ("GIPSA-2010-FGIS-0014-NONRULEMAKING", "fr_cfr_ref", "7-800", None),
+    }, "FAA-2010-0001 is named but no Regulations.gov record asserts it"
+    corroboration = edges[("SSA-2010-0037", "document_fr_doc", "20-404", "0960-AG21")]
+    (reference,) = json.loads(corroboration["fr_references_json"])
+    assert reference["document_number"] == "2010-02394"
+    assert reference["status"] == "unpadded_single_candidate_in_input"
+    assert reference["candidate_ids"] == ["2010-2394@2010-02-05"]
+    # Days, not instants: the Eastern day of each Regulations.gov stamp.
+    assert (corroboration["first_seen"], corroboration["last_seen"]) == ("2010-02-05", "2010-02-05")
+    docket_rin = edges[("SSA-2010-0037", "docket_rin", None, "0960-AG21")]
+    assert (docket_rin["first_seen"], docket_rin["last_seen"]) == ("2010-03-10", "2010-03-10")
+    assert {r["actor_id"] for r in targets} == {"spicy-regs:rule-targets:v3"}
+
+    proceedings = pq.read_table(build_proceedings(tmp_path)).to_pylist()
+    ssa = next(r for r in proceedings if "SSA-2010-0037" in json.loads(r["docket_ids_json"]))
+    assert json.loads(ssa["fr_document_ids_json"]) == ["2010-2394@2010-02-05"], "not an FR-only proceeding"
+    assert json.loads(ssa["cfr_refs_json"]) == ["20-404"]
+    assert {(e["source"], e["effective_date"]) for e in json.loads(ssa["stage_events_json"])} == {
+        ("documents.document_type", "2010-02-05"),
+        ("federal_register.document_type", "2010-02-05"),
+    }
+    assert not any(json.loads(r["docket_ids_json"]) == [] for r in proceedings)
+    assert {r["actor_id"] for r in proceedings} == {"spicy-regs:proceedings:v5"}
+
+    periods = pq.read_table(build_comment_periods(tmp_path)).to_pylist()
+    (period,) = [r for r in periods if "federal_register.comments_close_on" in r["source"]]
+    assert json.loads(period["docket_ids_json"]) == ["SSA-2010-0037"]
+    assert json.loads(period["proceeding_ids_json"]) == [ssa["proceeding_id"]]
+    assert {r["actor_id"] for r in periods} == {"spicy-regs:comment-periods:v6"}
+
+    items_path, relationships_path = build_regulatory_agenda(tmp_path)
+    (item,) = pq.read_table(items_path).to_pylist()
+    assert (item["rin"], item["first_seen"], item["last_seen"]) == ("0960-AG21", "2010-02-05", "2010-03-10")
+    relationships = {r["source"]: r for r in pq.read_table(relationships_path).to_pylist()}
+    assert relationships["docket_rin"]["evidence_date"] == "2010-03-10"
+    assert relationships["federal_register_rin"]["evidence_date"] == "2010-02-05"
+    assert {r["actor_id"] for r in relationships.values()} == {"spicy-regs:agenda-item-proceedings:v3"}
+    assert item["actor_id"] == "spicy-regs:regulatory-agenda-items:v3"
+
+
+def test_the_rulemaking_generation_builds_one_federal_register_index(tmp_path, monkeypatch):
+    _labelled_inputs(tmp_path)
+    built: list[object] = []
+
+    class CountingIndex(FederalRegisterIndex):
+        def __init__(self, path):
+            built.append(path)
+            super().__init__(path)
+
+    def refuse(*_args, **_kwargs):
+        raise AssertionError("a stage rebuilt the Federal Register index")
+
+    monkeypatch.setattr(rulemaking_dataset, "FederalRegisterIndex", CountingIndex)
+    for module in (build_rule_targets, build_proceedings, build_regulatory_agenda, build_comment_periods):
+        monkeypatch.setattr(sys.modules[module.__module__], "FederalRegisterIndex", refuse)
+    pipeline = rulemaking_dataset.RulemakingDatasetPipeline(output_dir=tmp_path)
+    context = RunContext.resolve(run_id="one-index", asserted_at="2026-09-23T12:00:00Z")
+    for stage in pipeline._ordered_stages(pipeline.stages()):
+        stage.build(tmp_path, context)
+
+    assert built == [tmp_path / "federal_register.parquet"]
+    assert all((tmp_path / name).exists() for name in pipeline.published_outputs)

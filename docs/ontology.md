@@ -15,33 +15,41 @@ mapped no longer exist.
 
 ## The surviving ontology package
 
-- `ontology/citations.py` — citation grammars and canonical IRIs for CFR,
-  U.S.C., executive order, RIN and Federal Register document references.
-  `parse_cfr_citation` reads compact keys, API dictionaries or prose and
-  returns `CfrCitation` values; `normalize_rin` accepts only the RIN lexical
-  space and returns `None` otherwise; `normalize_regsgov_identifier`
-  uppercases and keeps the agency-issued hyphen or underscore separators, and
-  accepts no value whose syntax the publisher never issues.
+- `ontology/citations.py` — the identifier readers the rulemaking tables use.
+  `parse_cfr_citation` reads the Federal Register's structured CFR objects
+  (the only form it states) and returns `CfrCitation` values;
+  `canonical_cfr_iri` expands one; `normalize_rin` accepts only the published
+  RIN key `\d{4}-[A-Z]{2}\d{2}` and returns `None` otherwise;
+  `normalize_regsgov_identifier` uppercases and keeps the agency-issued hyphen
+  or underscore separators, and accepts no value whose syntax the publisher
+  never issues. The prose citation grammar that lived here had no production
+  caller and was deleted (fork delivery decision 18); SpicyDocs'
+  `interpretation.citation_grammar` is the data-side grammar.
 - `ontology/rins.py` — usable RIN sets from proceedings rows: the complete
   `rins_json` list, or the one known legacy scalar. A malformed non-NULL list
   is reported, never silently replaced.
 - `ontology/federal_register.py` — dated FR record keys
-  (`federal_register_source_record_id` under SpicyDocs' own classification)
-  and `FederalRegisterIndex`, which resolves number-only references against
-  one held generation and retains ambiguity: no unpadding, case folding or
-  IRI minting happens here.
+  (`federal_register_source_record_id` under SpicyDocs' own classification);
+  `FederalRegisterIndex`, built once per generation, which resolves
+  number-only references against the held generation and retains ambiguity
+  (the literal number first, then SpicyDocs' unpadded comparison key); and
+  `linked_docket_id`, which reads a Federal Register docket value through its
+  label with SpicyDocs' `normalize_docket_reference`.
 - `ontology/common.py` — storage and provenance shared by the ontology
   rollups: the attestation columns (`method`, `actor_id`, `run_id`,
-  `asserted_at`, `supersedes_id`), `RunContext`, canonical JSON and the
-  counting JSON readers.
+  `asserted_at`, `supersedes_id`), `RunContext`, canonical JSON, the
+  counting JSON readers, and `eastern_day`, the one day rule of the
+  rulemaking tables: an instant falls on its Eastern calendar day, and a
+  date-only value (or a bare UTC midnight) keeps its date.
 
 ## The rule_targets carrier
 
 `transforms/build_rule_targets.py` builds `rule_targets.parquet`
-(`ACTOR_ID = spicy-regs:rule-targets:v2`): one row per observed rule-identity
+(`ACTOR_ID = spicy-regs:rule-targets:v3`): one row per observed rule-identity
 edge, with `docket_id`, `cfr_ref` (+ `cfr_title`/`cfr_part`/`cfr_section`),
-`rin`, the `source` class the edge came from and `fr_references_json` retaining
-each literal number-only observation. The four source classes are
+`rin`, the `source` class the edge came from, `first_seen`/`last_seen` as
+Eastern days, and `fr_references_json` retaining each literal number-only
+observation with the status that says how it resolved. The four source classes are
 `fr_cfr_ref` (a CFR reference read off the Federal Register's own citation),
 `docket_rin` (the docket's stated RIN), `document_rin` (a document's stated
 RIN) and `document_fr_doc` (a document-to-docket resolution). Ambiguous or

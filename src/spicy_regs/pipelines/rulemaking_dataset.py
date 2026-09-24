@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+from functools import cache
 from pathlib import Path
 from typing import Annotated, ClassVar
 
 from cyclopts import App, Parameter
 
 from spicy_regs.ontology.common import RunContext
+from spicy_regs.ontology.federal_register import FederalRegisterIndex
 from spicy_regs.pipelines.materialized import DatasetStage, MaterializedDatasetPipeline
 from spicy_regs.transforms import (
     build_comment_periods,
@@ -106,17 +108,31 @@ class RulemakingDatasetPipeline(MaterializedDatasetPipeline):
         }
 
     def stages(self) -> tuple[DatasetStage, ...]:
+        # Every stage reads the one federal_register snapshot, so its index is built once
+        # per generation rather than once per stage.
+        @cache
+        def fr_index(output_dir: Path) -> FederalRegisterIndex:
+            return FederalRegisterIndex(output_dir / "federal_register.parquet")
+
         def rule_targets(output_dir: Path, context: RunContext) -> None:
-            build_rule_targets(output_dir, run_id=context.run_id, asserted_at=context.asserted_at)
+            build_rule_targets(
+                output_dir, run_id=context.run_id, asserted_at=context.asserted_at, fr_index=fr_index(output_dir)
+            )
 
         def proceedings(output_dir: Path, context: RunContext) -> None:
-            build_proceedings(output_dir, run_id=context.run_id, asserted_at=context.asserted_at)
+            build_proceedings(
+                output_dir, run_id=context.run_id, asserted_at=context.asserted_at, fr_index=fr_index(output_dir)
+            )
 
         def regulatory_agenda(output_dir: Path, context: RunContext) -> None:
-            build_regulatory_agenda(output_dir, run_id=context.run_id, asserted_at=context.asserted_at)
+            build_regulatory_agenda(
+                output_dir, run_id=context.run_id, asserted_at=context.asserted_at, fr_index=fr_index(output_dir)
+            )
 
         def comment_periods(output_dir: Path, context: RunContext) -> None:
-            build_comment_periods(output_dir, run_id=context.run_id, asserted_at=context.asserted_at)
+            build_comment_periods(
+                output_dir, run_id=context.run_id, asserted_at=context.asserted_at, fr_index=fr_index(output_dir)
+            )
 
         return (
             DatasetStage(

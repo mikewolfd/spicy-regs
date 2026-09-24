@@ -40,6 +40,16 @@ required for the materialization, as in the repository's default environment.
 Resolution statuses are `dated`, `single_candidate_in_input`, `ambiguous` and
 `missing`. A single candidate means only one candidate exists in the held input;
 it does not certify worldwide number uniqueness or complete historical coverage.
+The literal number is matched first; a number the generation does not hold is
+compared on SpicyDocs' unpadded key (`unpadded_federal_register_document_number`,
+both sides reduced), because Regulations.gov pads numbers the Register did not
+(`2010-02394` for `2010-2394`). Such a match is `unpadded_dated` or
+`unpadded_single_candidate_in_input`, and a key two held numbers share (five
+1994–1997 pairs) is `ambiguous` with both candidates (fork delivery decision 18).
+Federal Register docket values are read through their label ("Docket No.
+SSA-2010-0037") with SpicyDocs' `normalize_docket_reference`, keeping a literal
+Regulations.gov identifier as itself; a link joins only a docket the
+Regulations.gov records assert, and a link that names none stays out as before.
 A Regulations.gov document's posting date is not used as an FR publication date.
 Old number-only proceeding identities migrate only when the held input supplies
 one candidate. Ambiguous prior identities remain evidence, and do not select a
@@ -47,8 +57,8 @@ new record's ID. Existing docket-based continuity remains unchanged.
 
 These additive materialized fields require consumer adoption with the same
 generation. Interpretation actor versions move with the changed rules. The
-legacy `federal_register_identifier` lexical helper has no internal production
-callers and remains unsuitable for dated table joins; adopting RefSpec's
+legacy `federal_register_identifier` lexical helper had no production caller
+and was deleted with the rest of the unused citation grammar; adopting RefSpec's
 matter-level mint/refusal API is separate work.
 
 ## Validation and publication boundary
