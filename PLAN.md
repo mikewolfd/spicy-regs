@@ -406,7 +406,7 @@ converges over runs instead of timing out, and let the merge accumulate.
 | `committee-reports` | GovInfo packages modified since the prior max `last_modified` minus `OVERLAP_HOURS`; packages already published are not re-fetched | `MAX_PACKAGES_PER_RUN`; 30 days is the cold-start window only |
 | `press-releases` | Both feeds, whole — the feed *is* the delta, and the merge accumulates what rotates off | n/a |
 | `members` | Both roster files, whole — one small JSON each, with no partial-fetch route | n/a |
-| `laws` | The `law/{congress}` list, whole (one page), then PLAW USLM files only for laws not yet `captured` or whose list `update_date` moved (`unavailable` — the bulk lag — is retried every run); the classification index and each session table it links, whole, replacing that session's rows; Table III pages only for acts not yet published, oldest first, a refused act stepped past and three consecutive refusals ending the Congress's walk | `MAX_USLM_PER_RUN` and `MAX_TABLE3_PER_RUN`, PLAW newest first; pinned in `tests/test_laws.py` |
+| `laws` | The `law/{congress}` list, whole (one page), then PLAW USLM files only for laws not yet `captured` or whose list `update_date` moved (`unavailable` — the bulk lag — is retried every run); the classification index and each session table it links, whole, replacing that session's rows; Table III along its own chain (each page names the next act the table holds) from the highest published act, which is asked again only for that name; a failed act ends its Congress's chain, three failures in a row or 20 minutes end the walk | `MAX_USLM_PER_RUN` and `MAX_TABLE3_PER_RUN`, PLAW newest first; pinned in `tests/test_laws.py` |
 | `committee-rosters` | The `committee/{congress}` list, whole (one page; the route over-declares and `walk_route` publishes what it served), then details only for committees not yet folded or whose list `update_date` moved; both chamber files, whole, each replacing its chamber's seats for the current Congress | `MAX_DETAILS_PER_RUN`, newest `update_date` first; pinned in `tests/test_committee_rosters.py` |
 
 `tests/test_incremental_rollups.py` pins each of these with a counting stub
@@ -945,10 +945,13 @@ five 0.21.2 contracts (A5/A7/A10); every shared-registry edit here sits in an
   OLRC classification index and each public-law-order session table it links
   for a scoped Congress (the code-order twin holds the same lines under
   colliding positions), each page replacing its session's rows;
-  `table3_records` one act page per public law, oldest first under
-  `MAX_TABLE3_PER_RUN`; a refused act is stepped past and three consecutive
-  refusals (`TABLE3_STOP_AFTER`) are the lag, so it costs three requests a
-  run and no act the table never serves blocks the ones behind it.
+  `table3_records` along Table III's own chain under `MAX_TABLE3_PER_RUN`:
+  each page names the next act the table holds (`Table3Page.next_act`), so
+  the walk asks only those acts. It starts from the highest published act,
+  asked again only for that name, and stops at a page that names nothing the
+  laws table lists or nothing short of its release point. A failed act ends
+  its Congress's chain. `TABLE3_STOP_AFTER` (3) failures in a row, or
+  `TABLE3_DEADLINE_SECONDS` (20 minutes), end the walk.
 - [x] **`committee-rosters` rollup** (`transforms/build_committee_rosters.py`,
   two outputs): the `committee/{congress}` route walked whole with no `sort`;
   the detail folded through `shape_committee` newest `update_date` first under
@@ -1088,7 +1091,12 @@ satisfied; the headroom is the thing to watch, not the archive reads.
    `uscode.house.gov` returns a clean status line and headers, then closes the
    connection mid-chunk (`RemoteProtocolError: peer closed connection without
    sending complete message body`). Intermittent per page, not per act
-   (`119_1` and `119_4` were served whole in the same run). **Re-derived and
+   (`119_1` and `119_4` were served whole in the same run). *Corrected
+   2026-09-24: this is OLRC's answer for an act Table III holds no page for.
+   34 of 74 acts probed answered it and the other 40 were served whole
+   (`drift-audit-2026-09-24/laws/`). Its bytes are a prefix of a served page,
+   so `build_laws` now follows the chain the pages state and never asks an
+   act the chain does not name (`table3-walk-2026-09-24/chain/`).* **Re-derived and
    retained**, not asserted: `scripts/table3_rederive.py` in the receipt
    re-asks the five failing acts with a plain `httpx.get` -- no acquirer, no
    retries -- *and one control act the same run read whole*, because five
