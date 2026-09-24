@@ -15,7 +15,6 @@ from pathlib import Path
 
 import pytest
 
-from spicy_regs.ontology.citations import parse_cfr_citation
 from spicy_regs.pipelines.rollups import cfr_sections as rollup
 from spicy_regs.sources.cfr_sections import API_KEY_ENV_VARS, CfrSectionsError, CfrSectionsReader, _resolve_api_key
 from spicy_regs.transforms.build_cfr_sections import COLUMNS, _cfr_ref, _shape, annual_volume, place_sections
@@ -404,25 +403,39 @@ def test_annual_volume_reads_only_volume_package_ids(package_id, volume):
     assert (None if selection is None else (selection.year, selection.title, selection.volume)) == volume
 
 
-# -- the Federal Register join key ------------------------------------------
+# -- the printed-citation join key -------------------------------------------
 
 
-def test_title_43_cfr_ref_is_the_federal_register_key():
-    """Ruling 5: the printed citation joins; the FR side reads "43 CFR 1601.0-1" as 43-1601.0-1."""
+def _citation_key(text: str) -> str:
+    """The ``cfr_section`` key SpicyDocs' grammar gives printed text, as ``document_citations`` stores it."""
+    from spicy_docs.interpretation.citations import find_citations
+
+    [finding] = find_citations(text, kinds=("cfr_section",))
+    assert finding.target_resolved
+    return finding.target_key
+
+
+def test_title_43_cfr_ref_is_the_printed_citation_key():
+    """Ruling 5: the printed citation joins, so "43 CFR 1601.0-1" keys to 43-1601.0-1 while part is 1600.
+
+    The Register's 294,501 CFR reference objects (2026-09-23) carry title, part, chapter and URL only, so
+    ``rule_targets`` joins ``cfr_sections`` at (title, part); the section-level agreement held
+    here is between ``cfr_ref`` and the grammar's key over citation text (``document_citations``).
+    """
     placed = _place("CFR-2025-title43-vol2", "sec1601-0-1")
-    [citation] = parse_cfr_citation("43 CFR 1601.0-1")
-    assert citation.cfr_ref == placed["sec1601-0-1"]["cfr_ref"] == "43-1601.0-1"
+    assert _citation_key("43 CFR 1601.0-1") == placed["sec1601-0-1"]["cfr_ref"] == "43-1601.0-1"
     assert placed["sec1601-0-1"]["part"] == "1600"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="plan A7: the Federal Register key cuts Title 41's compound parts ('41 CFR 50-201.1' reads as 41-50)",
-)
-def test_title_41_cfr_ref_is_the_federal_register_key():
+def test_title_41_cfr_ref_is_the_printed_citation_key():
+    """Title 41's compound part keeps its hyphen on both sides: "41 CFR 50-201.1" keys to 41-50-201.1.
+
+    The Register's 294,501 CFR reference objects (2026-09-23) carry title, part, chapter and URL only, so
+    ``rule_targets`` joins ``cfr_sections`` at (title, part); the section-level agreement held
+    here is between ``cfr_ref`` and the grammar's key over citation text (``document_citations``).
+    """
     placed = _place("CFR-2025-title41-vol1", "sec50-201-1")
-    [citation] = parse_cfr_citation("41 CFR 50-201.1")
-    assert citation.cfr_ref == placed["sec50-201-1"]["cfr_ref"] == "41-50-201.1"
+    assert _citation_key("41 CFR 50-201.1") == placed["sec50-201-1"]["cfr_ref"] == "41-50-201.1"
 
 
 # -- the rollup's replace_all input ------------------------------------------
