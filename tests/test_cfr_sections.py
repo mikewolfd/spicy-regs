@@ -14,7 +14,6 @@ import datetime as dt
 from pathlib import Path
 
 import pytest
-from loguru import logger
 
 from spicy_regs.ontology.citations import parse_cfr_citation
 from spicy_regs.pipelines.rollups import cfr_sections as rollup
@@ -267,21 +266,21 @@ def test_shape_leaves_a_malformed_section_id_unsplit():
 # -- section placement from the annual volume XML -----------------------------
 
 
-def _place(package_id: str, *suffixes: str) -> tuple[dict[str, dict], list[str]]:
-    """Place ``{package_id}-{suffix}`` granules against the package's retained volume excerpt.
-
-    Returns the placed rows keyed by suffix and the warnings logged while placing.
-    """
+def _place(package_id: str, *suffixes: str) -> dict[str, dict]:
+    """Place ``{package_id}-{suffix}`` granules against the package's retained volume excerpt, keyed by suffix."""
     rows = [_shape({"granuleId": f"{package_id}-{suffix}", "_package_id": package_id}) for suffix in suffixes]
+    placed = place_sections(rows, (ANCESTRY / f"{package_id}.xml").read_bytes())
+    return {row["granule_id"].removeprefix(f"{package_id}-"): row for row in placed}
+
+
+def _validated_title(package_id: str) -> int | None:
+    """The title SpicyDocs' annual validator, which ``acquire_annual`` runs before the scan, reads; a refusal raises."""
+    from spicy_docs.sources.cfr.annual import annual_cfr_xml_locator, validate_annual_cfr_xml
+
     volume = annual_volume(package_id)
     assert volume is not None
-    warnings: list[str] = []
-    sink = logger.add(warnings.append, level="WARNING", format="{message}")
-    try:
-        placed = place_sections(rows, (ANCESTRY / f"{package_id}.xml").read_bytes(), volume)
-    finally:
-        logger.remove(sink)
-    return {row["granule_id"].removeprefix(f"{package_id}-"): row for row in placed}, warnings
+    xml = (ANCESTRY / f"{package_id}.xml").read_bytes()
+    return validate_annual_cfr_xml(xml, identity=volume, final_url=annual_cfr_xml_locator(volume)).title
 
 
 @pytest.mark.parametrize(
@@ -309,13 +308,13 @@ def _place(package_id: str, *suffixes: str) -> tuple[dict[str, dict], list[str]]
     ],
 )
 def test_section_granules_take_the_volume_part_heading(package_id, suffix, part, section, cfr_ref):
-    placed, _warnings = _place(package_id, suffix)
+    placed = _place(package_id, suffix)
     row = placed[suffix]
     assert (row["part"], row["section"], row["cfr_ref"]) == (part, section, cfr_ref)
 
 
 def test_non_section_and_unscanned_granules_keep_the_identifier_path():
-    placed, _warnings = _place(
+    placed = _place(
         "CFR-2025-title41-vol1",
         "part50",  # a NODE: Title 41's compound part stays cut at the hyphen (documented limit)
         "part50-201-toc-id5",
@@ -365,27 +364,30 @@ def test_placement_keeps_every_non_placement_column():
         "lastModified": "2026-07-30T12:33:07Z",
     }
     shaped = _shape(granule)
-    volume = annual_volume(package_id)
-    assert volume is not None
-    [placed] = place_sections([shaped], (ANCESTRY / f"{package_id}.xml").read_bytes(), volume)
+    [placed] = place_sections([shaped], (ANCESTRY / f"{package_id}.xml").read_bytes())
     changed = {column for column in COLUMNS if placed[column] != shaped[column]}
     assert changed == {"part", "section", "cfr_ref"}
 
 
-def test_a_volume_the_validator_refuses_is_still_placed_and_the_refusal_logged():
-    """CFR-2025-title34-vol4 prints TITLENUM twice (Title 34 and reserved Title 35)."""
-    placed, warnings = _place("CFR-2025-title34-vol4", "sec681-1")
+def test_the_combined_title_34_35_volume_is_admitted_and_placed():
+    """CFR-2025-title34-vol4 prints TITLENUM twice: Title 34 and Title 35, reserved, with an empty heading.
+
+    SpicyDocs 0.31.0's validator drops the reserved title (plan A14); 0.30.0 refused the volume.
+    """
+    assert _validated_title("CFR-2025-title34-vol4") == 34
+    placed = _place("CFR-2025-title34-vol4", "sec681-1")
     assert (placed["sec681-1"]["part"], placed["sec681-1"]["cfr_ref"]) == ("681", "34-681.1")
-    assert len(warnings) == 1
-    assert "CFR-2025-title34-vol4" in warnings[0] and "TITLENUM" in warnings[0]
 
 
-def test_a_volume_without_sections_places_nothing():
-    """CFR-2025-title40-vol9 prints only appendices; its scan is empty, so rows keep their identifier values."""
-    placed, warnings = _place("CFR-2025-title40-vol9", "sec60-1", "part60-appA-1")
+def test_an_appendix_only_volume_is_admitted_and_places_nothing():
+    """CFR-2025-title40-vol9 prints only appendices; its scan is empty, so rows keep their identifier values.
+
+    SpicyDocs 0.31.0's validator admits it on its title page's word (plan A14); 0.30.0 refused the volume.
+    """
+    assert _validated_title("CFR-2025-title40-vol9") == 40
+    placed = _place("CFR-2025-title40-vol9", "sec60-1", "part60-appA-1")
     assert (placed["sec60-1"]["part"], placed["sec60-1"]["section"]) == (None, "60-1")
     assert placed["part60-appA-1"]["part"] == "60"
-    assert len(warnings) == 1 and "lacks source section content" in warnings[0]
 
 
 @pytest.mark.parametrize(
@@ -407,7 +409,7 @@ def test_annual_volume_reads_only_volume_package_ids(package_id, volume):
 
 def test_title_43_cfr_ref_is_the_federal_register_key():
     """Ruling 5: the printed citation joins; the FR side reads "43 CFR 1601.0-1" as 43-1601.0-1."""
-    placed, _warnings = _place("CFR-2025-title43-vol2", "sec1601-0-1")
+    placed = _place("CFR-2025-title43-vol2", "sec1601-0-1")
     [citation] = parse_cfr_citation("43 CFR 1601.0-1")
     assert citation.cfr_ref == placed["sec1601-0-1"]["cfr_ref"] == "43-1601.0-1"
     assert placed["sec1601-0-1"]["part"] == "1600"
@@ -418,7 +420,7 @@ def test_title_43_cfr_ref_is_the_federal_register_key():
     reason="plan A7: the Federal Register key cuts Title 41's compound parts ('41 CFR 50-201.1' reads as 41-50)",
 )
 def test_title_41_cfr_ref_is_the_federal_register_key():
-    placed, _warnings = _place("CFR-2025-title41-vol1", "sec50-201-1")
+    placed = _place("CFR-2025-title41-vol1", "sec50-201-1")
     [citation] = parse_cfr_citation("41 CFR 50-201.1")
     assert citation.cfr_ref == placed["sec50-201-1"]["cfr_ref"] == "41-50-201.1"
 

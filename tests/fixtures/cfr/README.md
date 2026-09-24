@@ -52,7 +52,12 @@ its README): Title 43's subpart numbering, Title 41's compound parts, Title 14
 Part 241, Title 26's parenthesized and range numbers, Title 30's publisher typo
 and Title 48's duplicate § 849.504. `CFR-2025-title34-vol4.xml` (TITLENUM
 printed twice for the combined Title 34/35 volume) and
-`CFR-2025-title40-vol9.xml` (no SECTION) are the two retained volumes SpicyDocs'
-annual validator refuses; they are cut by `cut_refused_fixtures.py` in
-`corpora/fork-execution-2026-09-21/cfr-ancestry-fix-2026-09-23/` from the
-volumes in `cfr-ancestry-2026-09-23/xml/` (digests in its `fetch.json`).
+`CFR-2025-title40-vol9.xml` (appendices, no SECTION) are the two retained
+volumes SpicyDocs' annual validator refused before 0.31.0. They are copied
+unchanged from spicy-docs' `annual-title34-vol4-combined.xml` and
+`annual-title40-vol9-appendices.xml` (spicy-docs `7b65900`), which keep the
+title page and title headings the validator reads (Title 35's empty reserved
+heading among them); the element-path-only cuts made by `cut_refused_fixtures.py`
+dropped those headings. 0.31.0 admits both excerpts and all 262 retained 2025
+volumes in `cfr-ancestry-2026-09-23/xml/` (digests in its `fetch.json`,
+re-checked 2026-09-23); 0.30.0 refused these two.

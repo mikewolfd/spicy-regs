@@ -5,6 +5,23 @@ The optional `source-readers` extra enables the same readers for package install
 its wheels must be supplied explicitly until they are published in a registry.
 Base CLI and MCP installs do not require them.
 
+- `spicy_docs-0.31.0`: built from SpicyDocs `main` at `7b65900`, with Rulespec Artifacts 1.1.1.
+  Built September 23, 2026 UTC: **1,456,368 bytes**, SHA-256
+  `87ef3880ca2b79727a0f25d7eedce699c0ec42e2d31527c46bcf424d631e7d5c`. Adds the canonical
+  citation grammar, identifier shapes and IRI minters, moved from RefSpec
+  (`interpretation.citation_grammar`, `identifier_shapes`, `iri_minting`; grammar changes
+  move rule versions, pinned by a frozen specimen fixture, and the docket reader admits the
+  `-RULE`-family suffixes); `usc_section_key` appended to `law_code_sections` and
+  `table3_records` (decision 30); pooled enumeration by corroborated identity
+  (`pool_walks`, `CongressListingReader.pooled`, typed `DeclaredCountMismatch`,
+  `DeclaredCountChanged` and `IncompleteWalkError`; B6); the Unified Agenda field-path
+  projection (`project_unified_agenda_edition`; B11); the Regulations.gov Eastern day
+  (`regulations_gov_day`) and Congress.gov day windows (`utc_day_window`; A13); an annual
+  CFR validator that admits the combined Title 34/35 and appendix-only volumes, and GovInfo
+  discovery that refuses uncounted pages and repeated ids (A14); a double section sign
+  before one number read as one section (A8); and a SAM extract download that asks for
+  gzip and waits by wall clock (`max_wait` seconds replaces `poll_max`), without which every
+  scheduled run had failed with HTTP 406.
 - `spicy_docs-0.30.0`: built from SpicyDocs `main` at `4b13c0d`, with Rulespec Artifacts 1.1.1.
   Built September 23, 2026 UTC: **1,299,791 bytes**, SHA-256
   `02c824eb25ff171f55c3a23967f0833422eafa4b9e54bcae354ba7247f7e49c2`. Adds CFR section ancestry from annual
