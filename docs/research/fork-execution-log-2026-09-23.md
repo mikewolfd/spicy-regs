@@ -472,3 +472,25 @@ Receipts: `members-qualification/`, `congressional-status/`, `native-vote-varian
   was still `fca7afb7…`; readback from S3 and the public URL equals the candidate.
   Scripts, `build.json`, `validation.json` and `publication-comments.json` are in
   `comment-text-repair-2026-09-23/`.
+
+- **Rulemaking joins (plans A7, A12; decision 18).** The rulemaking tables were
+  rebuilt on SpicyDocs 0.31.0: docket values read through the one label-aware
+  reader (the literal fallback was deleted after a measurement showed it changed
+  no join: 279,260 of 279,261 held ids read unchanged, the exception `GSA-NA-2005`
+  named by no link), Federal Register numbers keyed by the comparison key that
+  unpads and folds (a match between two sequences padded to different widths is
+  refused: all five on the parents named another document), and instants placed
+  on the Eastern calendar day through `regulations_gov_day` (equal to the old rule
+  on all 1,488,432 distinct values). A first candidate on the pre-release wheel
+  was reviewed (folds named in status, the predecessor test, the CFR entries the
+  parser drops counted); the release candidate differs from it only where 0.31.0
+  admits more (`-NONRULEMAKING` dockets, three more numbers unpadded) and by the
+  2026-09-23 Federal Register issue. Published at 01:20 UTC on 2026-09-24 through
+  the pipeline's own gate after the live pointer was confirmed twice; readback
+  equals the candidate. Scripts, `validation.json`, `samples.json`, `verify.json`,
+  `spot-check.json`, `differences.json` and `publish.out` are in
+  `rulemaking-joins-2026-09-23/candidate-0.31.0/`.
+
+- **CFR `replace_all` on 0.31.0.** Run 35940291235 re-placed every volume:
+  321,010 rows, equal cell for cell to `f6192c07…` except `cfr_ref` on 2 rows
+  (`cfr-replace-all-2026-09-23/audit.json`).
