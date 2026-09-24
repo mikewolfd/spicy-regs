@@ -106,6 +106,7 @@ class FederalRegisterIndex:
             if held != number:
                 self._colliding_keys.setdefault(key, [held]).append(number)
         # fr_docket_links path -> each row's dockets and its resolved reference; see docket_links.
+        # Keyed on the path alone: an index must not outlive a rebuild of the file it cached.
         self._docket_links: dict[Path, list[tuple[tuple[str, ...], dict]]] = {}
 
     def record_id(self, row: dict) -> str:
@@ -176,17 +177,21 @@ class FederalRegisterIndex:
         when a value named one docket. Every docket-shaped value comes back: which dockets a
         stage trusts is its own join.
 
-        The table is read once per index and replayed to every stage that shares it: read
-        per stage, the plural reader alone cost 19.5 s over 899,227 values (measured
-        2026-09-24), three times a generation.
+        The table is read once per index and replayed to every stage that shares it, as the
+        index itself is; the plural reader costs about twice the single one, which each stage
+        used to run. In paired builds of the 2026-09-23 parents the four stages took 110.5 s
+        reading once with the plural reader and 118.6 s reading per stage with the single
+        (receipt ``docket-lists-2026-09-24``). The cache is keyed on ``path`` alone, so an
+        index must not be reused after the links file at that path is rebuilt. Each reference
+        is a fresh dict per pair, and its ``candidate_ids`` a tuple, since every stage shares it.
         """
         rows = self._docket_links.get(path)
         if rows is None:
-            rows = self._docket_links[path] = [
-                (dockets, self.reference(str(row["document_number"]), row.get("publication_date")))
-                for row in iter_parquet_rows(path, columns=("docket_id", "document_number", "publication_date"))
-                if row.get("document_number") and (dockets := linked_docket_ids(row.get("docket_id")))
-            ]
+            rows = self._docket_links[path] = []
+            for row in iter_parquet_rows(path, columns=("docket_id", "document_number", "publication_date")):
+                if row.get("document_number") and (dockets := linked_docket_ids(row.get("docket_id"))):
+                    reference = self.reference(str(row["document_number"]), row.get("publication_date"))
+                    rows.append((dockets, {**reference, "candidate_ids": tuple(reference["candidate_ids"])}))
         for dockets, reference in rows:
             for docket in dockets:
                 yield docket, {"source": "fr_docket_links", "evidence_id": docket, **reference}

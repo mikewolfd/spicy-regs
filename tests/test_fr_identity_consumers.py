@@ -12,6 +12,8 @@ import pyarrow.parquet as pq
 import pytest
 from loguru import logger
 
+from spicy_docs.interpretation.identifier_shapes import normalize_docket_reference
+
 from spicy_regs.ontology.citations import normalize_regsgov_identifier
 from spicy_regs.ontology.common import RunContext, write_parquet_rows
 from spicy_regs.ontology import federal_register
@@ -496,6 +498,74 @@ def test_a_listed_docket_value_joins_each_held_docket_once(tmp_path):
     assert json.loads(period["evidence_ids_json"]) == ["2011-3678@2011-02-18"]
 
 
+def test_a_list_merging_a_multi_docket_proceeding_lists_the_absorbed_ids_as_predecessors(tmp_path, monkeypatch):
+    """Two real EPA proposals: one names four dockets apart, the other a list reaching into them."""
+    records = [
+        {
+            "document_number": "2012-5760",
+            "publication_date": "2012-03-26",
+            "type": "Proposed Rule",
+            "title": "National Uniform Emission Standards for Storage Vessel and Transfer Operations",
+            "docket_ids": [*(f"EPA-HQ-OAR-2010-08{n}" for n in (68, 69, 70, 71)), "FRL-9645-1"],
+            "cfr_references": [{"title": 40, "part": 65}],
+            "regulation_id_numbers": ["2060-AR00"],
+        },
+        {
+            "document_number": "2011-31530",
+            "publication_date": "2012-01-06",
+            "type": "Proposed Rule",
+            "title": "National Emission Standards for Hazardous Air Pollutants From Petroleum Refineries",
+            "docket_ids": ["EPA-HQ-OAR-2003-0146, EPA-HQ-OAR-2010-0870, EPA-HQ-OAR-2011-0002", "FRL-9502-9"],
+            "cfr_references": [{"title": 40, "part": 63}],
+            "regulation_id_numbers": ["2060-AP84"],
+        },
+    ]
+    build_federal_register(tmp_path, documents=lambda start: iter(records), download_prior=lambda key, path: False)
+    build_fr_docket_links(tmp_path)
+    _write(
+        tmp_path,
+        "dockets",
+        ("docket_id", "docket_type", "rin"),
+        [
+            *(
+                {"docket_id": f"EPA-HQ-OAR-2010-08{n}", "docket_type": "Rulemaking", "rin": "2060-AR00"}
+                for n in (68, 69, 70, 71)
+            ),
+            {"docket_id": "EPA-HQ-OAR-2003-0146", "docket_type": "Rulemaking", "rin": "2060-AO55"},
+            {"docket_id": "EPA-HQ-OAR-2011-0002", "docket_type": "Rulemaking", "rin": "2060-AP84"},
+        ],
+    )
+    _write(tmp_path, "documents", ("document_id", "docket_id", "fr_doc_num", "additional_rins"), [])
+    build_rule_targets(tmp_path)
+    # The prior generation read one docket per value, so the list joined nothing.
+    with monkeypatch.context() as before:
+        before.setattr(
+            federal_register,
+            "linked_docket_ids",
+            lambda value: tuple(filter(None, [normalize_docket_reference(value)])),
+        )
+        prior = pq.read_table(build_proceedings(tmp_path)).to_pylist()
+    prior_by_dockets = {r["docket_ids_json"]: r["proceeding_id"] for r in prior}
+    four = json.dumps([f"EPA-HQ-OAR-2010-08{n}" for n in (68, 69, 70, 71)], separators=(",", ":"))
+    # Absorbed: the two single-docket proceedings, and the FR-only one the unread list left.
+    (fr_only,) = [r["proceeding_id"] for r in prior if r["docket_ids_json"] == "[]"]
+    absorbed = sorted(
+        [fr_only, *(prior_by_dockets[f'["{docket}"]'] for docket in ("EPA-HQ-OAR-2003-0146", "EPA-HQ-OAR-2011-0002"))]
+    )
+    assert len(prior) == 4
+    shutil.copyfile(tmp_path / "proceedings.parquet", tmp_path / "_proceedings_prior.parquet")
+
+    (merged,) = pq.read_table(build_proceedings(tmp_path)).to_pylist()
+    assert json.loads(merged["docket_ids_json"]) == sorted(
+        ["EPA-HQ-OAR-2003-0146", "EPA-HQ-OAR-2011-0002", *json.loads(four)]
+    )
+    assert json.loads(merged["fr_document_ids_json"]) == ["2011-31530@2012-01-06", "2012-5760@2012-03-26"]
+    # The four-docket proceeding outranks the singles on docket overlap and keeps its id ...
+    assert merged["proceeding_id"] == merged["supersedes_id"] == prior_by_dockets[four]
+    # ... and each absorbed id is named, never silently dropped.
+    assert json.loads(merged["identity_predecessors_json"]) == absorbed
+
+
 def test_the_index_reads_each_link_row_once_and_keys_each_docket_it_names(tmp_path):
     _listed_inputs(tmp_path)
     links = tmp_path / "fr_docket_links.parquet"
@@ -522,7 +592,7 @@ def test_the_index_reads_each_link_row_once_and_keys_each_docket_it_names(tmp_pa
                 "document_number": "2011-3678",
                 "publication_date": "2011-02-19",
                 "status": "missing",
-                "candidate_ids": [],
+                "candidate_ids": (),
             },
         )
         for docket in FDA_DOCKETS
