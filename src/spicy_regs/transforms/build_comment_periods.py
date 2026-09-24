@@ -41,7 +41,8 @@ from spicy_regs.ontology.federal_register import (
 OUTPUT = "comment_periods.parquet"
 # v5: regulations.gov close dates are the Eastern day, one day earlier than v4 (see eastern_day).
 # v6: labelled FR docket values join (linked_docket_id), so more FR intervals carry a docket.
-# v7: a docket value naming several dockets joins each (linked_docket_ids).
+# v7: a docket value naming several dockets joins each (linked_docket_ids), and an FR interval
+# whose notice several proceedings hold lists every one of them (decision 33), not none.
 ACTOR_ID = "spicy-regs:comment-periods:v7"
 
 COLUMNS = (
@@ -262,7 +263,7 @@ def build_comment_periods(
     inverted_by_source: Counter[str] = Counter()
     inverted_examples: list[str] = []
     ambiguous_document_intervals = 0
-    ambiguous_fr_intervals = 0
+    shared_fr_intervals = 0
     unanchored_intervals = 0
 
     def add_interval(
@@ -382,11 +383,12 @@ def build_comment_periods(
             docket_targets.update(proceeding_ids_by_docket.get(docket, ()))
         artifact_targets = set(proceeding_ids_by_fr_document.get(identity, ()))
         # Direct artifact membership is strongest. Docket membership is the
-        # fallback for older rows that predate the artifact projection.
-        candidates = artifact_targets or docket_targets
-        proceeding_ids = candidates if len(candidates) == 1 else set()
-        if len(candidates) > 1:
-            ambiguous_fr_intervals += 1
+        # fallback for older rows that predate the artifact projection. A notice that
+        # is no action evidence attaches to every proceeding whose dockets it names
+        # (decision 33), and its period opens in each of them, so it lists them all.
+        proceeding_ids = artifact_targets or docket_targets
+        if len(proceeding_ids) > 1:
+            shared_fr_intervals += 1
         add_interval(
             proceeding_ids=proceeding_ids,
             docket_ids=dockets,
@@ -423,10 +425,10 @@ def build_comment_periods(
             ", ".join(f"{source}={count:,}" for source, count in sorted(inverted_by_source.items())),
             "; ".join(inverted_examples),
         )
-    if ambiguous_fr_intervals:
-        logger.warning(
-            "comment_periods: retained {:,} ambiguous FR intervals with docket-only anchors",
-            ambiguous_fr_intervals,
+    if shared_fr_intervals:
+        logger.info(
+            "comment_periods: {:,} FR intervals open in several proceedings and list each",
+            shared_fr_intervals,
         )
     if ambiguous_document_intervals:
         logger.warning(

@@ -638,6 +638,46 @@ def test_only_an_action_document_merges_the_dockets_it_names(tmp_path):
             assert json.loads(row["identity_predecessors_json"]) == [merged_id]
 
 
+def test_a_notice_several_proceedings_hold_opens_a_period_listing_each(tmp_path):
+    """Decision 33 as amended: the period of a RIN-less notice naming two rulemakings lists both."""
+    _listed_inputs(tmp_path)
+    dockets = ["FMCSA-2014-0083", "NHTSA-2016-0087"]
+    _with_records(
+        tmp_path,
+        [
+            {
+                "document_number": "2016-23486",
+                "publication_date": "2016-09-29",
+                "document_type": "Notice",
+                "title": "Notice of Availability of a Draft Environmental Assessment for Rulemaking To Require "
+                "the Installation and Maintenance of Speed Limiting Devices in Heavy Vehicles",
+                "docket_ids_json": '["Docket No. NHTSA-2016-0087", "Docket No. FMCSA-2014-0083"]',
+                "comments_close_on": "2016-11-07",
+            }
+        ],
+        dockets,
+    )
+    held = pq.read_table(tmp_path / "dockets.parquet").to_pylist()
+    rins = {"FMCSA-2014-0083": "2126-AB63", "NHTSA-2016-0087": "2127-AK92"}
+    _write(
+        tmp_path, "dockets", tuple(held[0]), [{**row, "rin": rins.get(row["docket_id"], row["rin"])} for row in held]
+    )
+    build_rule_targets(tmp_path)
+
+    proceedings = pq.read_table(build_proceedings(tmp_path)).to_pylist()
+    ids = sorted(
+        row["proceeding_id"] for row in proceedings if json.loads(row["docket_ids_json"])[:1] in ([d] for d in dockets)
+    )
+    assert len(ids) == 2, "the notice merges neither"
+
+    periods = pq.read_table(build_comment_periods(tmp_path)).to_pylist()
+    (period,) = [r for r in periods if "2016-23486@2016-09-29" in json.loads(r["evidence_ids_json"])]
+    assert json.loads(period["docket_ids_json"]) == dockets
+    assert json.loads(period["proceeding_ids_json"]) == ids
+    assert json.loads(period["rins_json"]) == ["2126-AB63", "2127-AK92"]
+    assert (period["open_date"], period["close_date"]) == ("2016-09-29", "2016-11-07")
+
+
 def test_the_index_reads_each_link_row_once_and_keys_each_docket_it_names(tmp_path):
     _listed_inputs(tmp_path)
     links = tmp_path / "fr_docket_links.parquet"
