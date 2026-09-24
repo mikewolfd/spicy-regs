@@ -135,17 +135,22 @@ def test_follows_publisher_opaque_continuation_exactly():
         {"packages": {}, "count": 0},
         {"packages": [None], "count": 1},
         page("packages", [{}]),
-        page("packages", [{"packageId": "FR-2025-01-01"}]),
         page("packages", [{"packageId": " GPO-CFR-INDEX-2025"}]),
-        page("packages", [{"packageId": "GPO-CFR-INDEX-25"}]),
         page("packages", [], count=1),
         page("packages", [PACKAGE], count=True),
         b"not JSON",
     ],
 )
 def test_bad_package_page_refuses(payload):
-    with pytest.raises((cfr.CfrSectionsError, PagedJsonSourceError)):
+    """SpicyDocs' discovery walk refuses an uncounted page and a missing, padded or repeated id."""
+    with pytest.raises(PagedJsonSourceError):
         list(reader(Transport(payload)).iter_records())
+
+
+@pytest.mark.parametrize("package_id", ["FR-2025-01-01", "GPO-CFR-INDEX-25"])
+def test_a_package_outside_the_collection_refuses(package_id):
+    with pytest.raises(cfr.CfrSectionsError, match="outside its collection"):
+        list(reader(Transport(page("packages", [{"packageId": package_id}]))).iter_records())
 
 
 def test_listed_index_package_is_skipped_with_one_log_line():
@@ -177,12 +182,18 @@ def test_listed_index_package_is_skipped_with_one_log_line():
         page("granules", [], count=1),
         page("granules", [GRANULE], count=2),
         page("granules", [GRANULE, GRANULE]),
-        page("granules", [{**GRANULE, "granuleId": "CFR-2024-title1-vol1-sec1-1"}]),
     ],
 )
 def test_bad_granule_page_refuses(payload):
-    with pytest.raises((cfr.CfrSectionsError, PagedJsonSourceError)):
+    """SpicyDocs' discovery walk refuses an uncounted page and a missing, padded or repeated id."""
+    with pytest.raises(PagedJsonSourceError):
         list(reader(Transport(page("packages", [PACKAGE]), payload)).iter_records())
+
+
+def test_a_granule_of_another_package_refuses():
+    other = page("granules", [{**GRANULE, "granuleId": "CFR-2024-title1-vol1-sec1-1"}])
+    with pytest.raises(cfr.CfrSectionsError, match="differs from its requested package"):
+        list(reader(Transport(page("packages", [PACKAGE]), other)).iter_records())
 
 
 def test_missing_or_repeated_continuation_cannot_finish_a_partial_selection():
@@ -219,8 +230,16 @@ def test_explicit_empty_selection_is_valid():
     assert list(reader(Transport(page("packages", [PACKAGE]), page("granules", []))).iter_records()) == []
 
 
-@pytest.mark.parametrize("failure", ["missing-key", "http", "partial", "missing-identity"])
-def test_source_failure_preserves_prior_output_byte_for_byte(monkeypatch, tmp_path, failure):
+@pytest.mark.parametrize(
+    ("failure", "refusal"),
+    [
+        ("missing-key", cfr.CfrSectionsError),
+        ("http", CredentialRefusedError),
+        ("partial", PagedJsonSourceError),
+        ("missing-identity", PagedJsonSourceError),
+    ],
+)
+def test_source_failure_preserves_prior_output_byte_for_byte(monkeypatch, tmp_path, failure, refusal):
     """Every failure mode leaves the published output and ``_cfr_prior.parquet`` unchanged.
 
     No ``_cfr_new.parquet`` is left behind either.
@@ -243,7 +262,7 @@ def test_source_failure_preserves_prior_output_byte_for_byte(monkeypatch, tmp_pa
         }[failure]
         selected = reader(Transport(page("packages", [PACKAGE]), payload))
     monkeypatch.setattr(build, "CfrSectionsReader", lambda **_: selected)
-    with pytest.raises((cfr.CfrSectionsError, PagedJsonSourceError, CredentialRefusedError)):
+    with pytest.raises(refusal):
         build.build_cfr_sections(tmp_path, since_year=2025)
     assert output.read_bytes() == before
     assert prior_file.read_bytes() == prior_before

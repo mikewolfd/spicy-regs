@@ -2,8 +2,9 @@
 
 SpicyRegs owns the selected year window and table mapping. SpicyDocs owns the
 GovInfo locators, HTTP capture, header-only credential, opaque continuations,
-retry bounds and terminal count checks. Missing credentials and failed or
-incomplete listings raise before the builder can replace its prior output.
+retry bounds, each page's count and identity checks and the terminal count
+check. Missing credentials and failed or incomplete listings raise before the
+builder can replace its prior output.
 An explicit zero-count terminal listing is a valid empty selection.
 
 These are list-level metadata, not section bodies or native part ancestry.
@@ -16,7 +17,7 @@ import datetime as dt
 import os
 import re
 from collections.abc import Iterator, Mapping
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import httpx
 from loguru import logger
@@ -24,7 +25,6 @@ from loguru import logger
 from spicy_regs.sources.base import Reader
 
 if TYPE_CHECKING:
-    from spicy_docs.reading.paged_json import JsonPage
     from spicy_docs.sources.govinfo.discovery import GovInfoDiscoveryReader
 
 API_BASE = "https://api.govinfo.gov"
@@ -52,28 +52,6 @@ def _resolve_api_key() -> str | None:
         if value and value.strip():
             return value.strip()
     return None
-
-
-def _identity(record: Mapping, field: str) -> str:
-    """Return the row's nonempty, unpadded ``field`` value, refusing a missing or padded one."""
-    value = record.get(field)
-    if not isinstance(value, str) or not value.strip() or value != value.strip():
-        raise CfrSectionsError(f"CFR row requires a nonempty {field}")
-    return value
-
-
-def _identified_rows(pages: Iterator[JsonPage], field: str) -> Iterator[dict]:
-    """Require counted listings and distinct source identities, without dropping rows."""
-    seen = set()
-    for page in pages:
-        if page.declared_count is None:
-            raise CfrSectionsError("CFR listing omitted its declared count")
-        for record in page.records:
-            identity = _identity(record, field)
-            if identity in seen:
-                raise CfrSectionsError(f"CFR listing repeats a {field}")
-            seen.add(identity)
-            yield dict(record)
 
 
 class CfrSectionsReader(Reader):
@@ -132,7 +110,7 @@ class CfrSectionsReader(Reader):
                 self._source = None
         logger.info("CFR: yielded {:,} granules", self._seen)
 
-    def _iter_packages(self) -> Iterator[dict]:
+    def _iter_packages(self) -> Iterator[Mapping[str, Any]]:
         """Yield identified ``CFR-`` package rows, skipping GovInfo's annual index with one log line.
 
         The CFR collection also lists ``GPO-CFR-INDEX-2025``, which is not a
@@ -149,7 +127,9 @@ class CfrSectionsReader(Reader):
             page_size=self.page_size,
         )
         skipped = []
-        for package in _identified_rows(self._source.packages(url, max_pages=_MAX_PAGES), "packageId"):
+        # SpicyDocs' discovery walk refuses, before yielding a page, one without a count
+        # or with a missing, padded or repeated packageId (and granuleId below).
+        for package in (row for page in self._source.packages(url, max_pages=_MAX_PAGES) for row in page.records):
             if INDEX_PACKAGE_RE.fullmatch(package["packageId"]):
                 skipped.append(package["packageId"])
             elif package["packageId"].startswith("CFR-"):
@@ -159,7 +139,7 @@ class CfrSectionsReader(Reader):
         if skipped:
             logger.info("CFR: skipped {} listed index package(s): {}", len(skipped), ", ".join(skipped))
 
-    def _iter_granules(self, package: dict) -> Iterator[dict]:
+    def _iter_granules(self, package: Mapping[str, Any]) -> Iterator[dict]:
         """Yield each granule with its package id, lastModified and title attached.
 
         Refuses a granule whose identity does not belong to the requested package.
@@ -169,7 +149,7 @@ class CfrSectionsReader(Reader):
         assert self._source is not None
         package_id = package["packageId"]
         url = package_granules_url(package_id, page_size=self.page_size)
-        for granule in _identified_rows(self._source.granules(url, max_pages=_MAX_PAGES), "granuleId"):
+        for granule in (row for page in self._source.granules(url, max_pages=_MAX_PAGES) for row in page.records):
             if not granule["granuleId"].startswith(f"{package_id}-"):
                 raise CfrSectionsError("CFR granule identity differs from its requested package")
             self._seen += 1
