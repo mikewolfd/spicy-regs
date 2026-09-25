@@ -10,6 +10,10 @@
   "main": "worker/index.ts",
   "compatibility_date": "2026-08-01",
   "compatibility_flags": ["nodejs_compat"],
+  // The fork serves MCP at its workers.dev address (no custom domain). Per-version
+  // preview URLs would only add unlisted public copies of the same server.
+  "workers_dev": true,
+  "preview_urls": false,
   // Set these for the selected account before deploying a fork. The Worker
   // forwards them to Python; secrets belong in Wrangler's secret store.
   "vars": {

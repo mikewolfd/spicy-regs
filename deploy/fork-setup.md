@@ -82,6 +82,18 @@ these settings and the optional secret to its Python container.
 
 Run `npm run check` before deployment. This generates types, checks TypeScript,
 and builds the container locally. It does not deploy it or populate the bucket.
+
+The fork's server is live at `https://spicy-regs-mcp.mdeeb.workers.dev/mcp`
+(first deployed 2026-09-25 from `f2df979`, after Containers was enabled on the
+account; the first attempt uploaded only the Worker because the Containers API
+answered 401). A remote MCP client adds that URL as a connector. The same smoke
+script was run against the exact image locally and against the live endpoint:
+the three tools answer, `describe_table` names each table's managed generation,
+and five cross-source joins return rows (FEC candidate to legislator and votes,
+laws to Table III, compiled hearing dates, organization to FEC committee,
+USAspending to SAM by UEI). A cold `list_sources` takes about 25 seconds while
+the container reads each table's footer. Script and receipts:
+`~/Work/corpora/fork-execution-2026-09-21/r7-mcp-2026-09-25/`.
 The Cloud Run script describes the historical upstream service. A fork using
 that separate hosting path needs its own project, data URL, catalog settings and
 smoke-test target; the existing script is not a fork deployment recipe.
