@@ -13,13 +13,13 @@ file necessarily retains full-output work.
 
 ## Implementation and operation
 
-[`pipelines/comments_mirror.py`](../../src/spicy_regs/pipelines/comments_mirror.py)
+[`pipelines/comments_mirror.py`](https://github.com/mikewolfd/spicy-regs/blob/083433a42c6f47113b880978541c74bec0ba66e3/src/spicy_regs/pipelines/comments_mirror.py)
 owns validation and publication; the CLI delegates to it. Catalog reads pin the
 table UUID, snapshot ID and schema ID, including Iceberg deletes. One native
 partitioned write produces agency staging. Each agency sorts by docket, posted
 date and comment ID; the monolith streams those files in the original column
 order. Connections close between phases and between agency sorts. Every phase
-uses [`ExportResources`](../../src/spicy_regs/duckdb_settings.py).
+uses [`ExportResources`](https://github.com/mikewolfd/spicy-regs/blob/083433a42c6f47113b880978541c74bec0ba66e3/src/spicy_regs/duckdb_settings.py).
 
 The publisher retains exact IDs and group-count checks. If an agency loses its
 last row, an empty file replaces its old public URL. This prevents an agency
@@ -195,8 +195,8 @@ the monolith still contributes `O(S)` and global integrity checks can contribute
 ### Findings
 
 1. **Reshape the export direction.**
-   [`_export_parquet`](../../src/spicy_regs/sources/iceberg.py) sorts the full
-   row, including long text. [`partition_comments`](../../src/spicy_regs/transforms/partition_comments.py)
+   [`_export_parquet`](https://github.com/mikewolfd/spicy-regs/blob/03541c7d917b3ea5ed2eb88071590c13b45e34f6/src/spicy_regs/sources/iceberg.py) sorts the full
+   row, including long text. [`partition_comments`](https://github.com/mikewolfd/spicy-regs/blob/03541c7d917b3ea5ed2eb88071590c13b45e34f6/src/spicy_regs/transforms/partition_comments.py)
    then sorts agency names within each batch, writes intermediate agency files,
    and sorts/recompresses each by docket and posted date. The latter ordering
    serves an identified consumer need; the preceding global modify-date sort
@@ -207,13 +207,13 @@ the monolith still contributes `O(S)` and global integrity checks can contribute
    agency writers open together. Configuration alone cannot establish a
    process-memory bound; the measurements demonstrate that distinction.
 3. **Move repeated aggregate work to its proper boundary.**
-   [`merge_comments`](../../src/spicy_regs/sources/iceberg.py) rebuilds the
+   [`merge_comments`](https://github.com/mikewolfd/spicy-regs/blob/03541c7d917b3ea5ed2eb88071590c13b45e34f6/src/spicy_regs/sources/iceberg.py) rebuilds the
    complete index for each staged batch. The
-   [refresh workflow](../../.github/workflows/_regulations-refresh.yml) exports
+   [refresh workflow](https://github.com/mikewolfd/spicy-regs/blob/03541c7d917b3ea5ed2eb88071590c13b45e34f6/.github/workflows/_regulations-refresh.yml) exports
    it again after ingestion. Intermediate public indexes can also get ahead of
    the public comment files they describe.
 4. **Preserve incremental state across execution batches.**
-   [`Manifest.load`](../../src/spicy_regs/manifest.py) hashes the complete
+   [`Manifest.load`](https://github.com/mikewolfd/spicy-regs/blob/03541c7d917b3ea5ed2eb88071590c13b45e34f6/src/spicy_regs/manifest.py) hashes the complete
    manifest in Python in every fresh job. The
    [runbook measurement](../etl-catalog-seed.md)
    records 183 seconds for the earlier seed, or about 46 minutes across the
@@ -318,19 +318,19 @@ and require their own completeness evidence.
 
 ## What DocSpec already does
 
-The current [DocSpec record-storage design](../../../DocSpec/docs/record-storage.md#snapshot-publication-and-maintenance)
+The current [DocSpec record-storage design](https://github.com/Formspec-Labs/DocSpec/blob/3133850a12797407a7fbaa9e93914347b79ec9c5/docs/record-storage.md#snapshot-publication-and-maintenance)
 separates logical state publication from a portable export. Its
-[`apply_changes`](../../../DocSpec/src/docspec/adapters/storage/records.py)
+[`apply_changes`](https://github.com/Formspec-Labs/DocSpec/blob/3133850a12797407a7fbaa9e93914347b79ec9c5/src/docspec/adapters/storage/records.py)
 registers the selected base snapshot, commits changed rows and positional
 deletes together, and preserves base files. It sorts incoming rows rather than
 resorting retained payloads. SQLite publishes the logical state after file
-durability; [exact upsert retries](../../../DocSpec/src/docspec/application/core_ingestion.py)
+durability; [exact upsert retries](https://github.com/Formspec-Labs/DocSpec/blob/3133850a12797407a7fbaa9e93914347b79ec9c5/src/docspec/application/core_ingestion.py)
 reuse the published result.
 
 Payload writes therefore track changed content. That does not make every
 operation `O(D)`: match joins and physical checks may examine inherited files,
 and some membership comparisons, sequence digests, compactions and
-[portable exports](../../../DocSpec/docs/result-exports.md) require the full
+[portable exports](https://github.com/Formspec-Labs/DocSpec/blob/3133850a12797407a7fbaa9e93914347b79ec9c5/docs/result-exports.md) require the full
 selected population. DocSpec explicitly distinguishes bounded batches from
 bounded total work and from a hard process-RSS ceiling.
 
