@@ -7,8 +7,11 @@ name: ETL (new pipeline)
 # Callers retain comments-catalog-write through mirror/consumer finalization.
 on:
   schedule:
-    - cron: '25 6 * * *'   # primary daily sweep (shared manifest)
-    - cron: '25 18 * * *'  # redundant sweep; manifest makes it cheap if the first ran
+    - cron: '25 6 * * *'   # daily sweep
+    # Retry only: every sweep re-lists all of Mirrulations (29M record files on
+    # 2026-09-25) however little is new, so this exits unless no scheduled
+    # sweep has succeeded today.
+    - cron: '25 18 * * *'
   workflow_dispatch:
     inputs:
       agency:
@@ -72,7 +75,10 @@ concurrency:
 jobs:
   setup:
     runs-on: ubuntu-latest
+    permissions:
+      actions: read
     outputs:
+      run: ${{ steps.gen.outputs.run }}
       batch: ${{ steps.gen.outputs.batch }}
       skip_upload: ${{ steps.gen.outputs.skip_upload }}
       use_iceberg: ${{ steps.gen.outputs.use_iceberg }}
@@ -82,12 +88,25 @@ jobs:
         id: gen
         env:
           EVENT: ${{ github.event_name }}
+          SCHEDULE: ${{ github.event.schedule }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
           BATCH_NUMBER: ${{ inputs.batch_number }}
           SKIP_UPLOAD: ${{ inputs.skip_upload }}
           USE_ICEBERG: ${{ inputs.use_iceberg }}
           TIMEOUT_MINUTES: ${{ inputs.timeout_minutes }}
         run: |
           set -euo pipefail
+          RUN=true
+          if [ "$EVENT" = "schedule" ] && [ "${SCHEDULE:-}" = '25 18 * * *' ]; then
+            SUCCEEDED=$(gh run list --workflow etl-new-pipeline.yml --event schedule --status success \
+              --created ">=$(date -u +%F)" --json databaseId --jq length)
+            if [ "$SUCCEEDED" -gt 0 ]; then
+              echo "A scheduled sweep already succeeded today; the retry sweep is not needed."
+              RUN=false
+            fi
+          fi
+          echo "run=$RUN" >> "$GITHUB_OUTPUT"
           if [ "$EVENT" = "schedule" ]; then
             TIMEOUT=360
             BATCH_NUMBER=all
@@ -111,6 +130,7 @@ jobs:
 
   etl-new:
     needs: setup
+    if: ${{ needs.setup.outputs.run == 'true' }}
     runs-on: ubuntu-latest
     # The full scheduled sweep shares one process, bounded by the hosted limit.
     timeout-minutes: ${{ fromJSON(needs.setup.outputs.timeout_minutes) }}
