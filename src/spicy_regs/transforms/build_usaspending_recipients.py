@@ -131,6 +131,11 @@ def _iter_recipient_rows(
                     or page.next_body["page"] != page.request_body["page"] + 1
                 ):
                     raise PagedJsonSourceError("USAspending continuation skips a page or follows an empty page")
+            if evidence is not None:
+                # The tee journals when the request started; a row states the reader's response-complete
+                # time, so the journal carries that too, keyed by the same digest.
+                evidence.event("page-read", stage="usaspending", sha256=page.capture.sha256,
+                               observed_at=page.capture.observed_at, records=len(page.records))
             for record in page.records:
                 identity = record.get("id")
                 if not isinstance(identity, str) or not identity.strip() or identity in seen:
