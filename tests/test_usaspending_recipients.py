@@ -16,9 +16,9 @@ _RAW_RECIPIENT = {
 
 def test_shape_produces_exact_schema():
     row = _shape(_RAW_RECIPIENT)
-    # Every published column present, and nothing extra (6-column schema).
+    # Every published column present, and nothing extra (including observation metadata).
     assert set(row) == set(COLUMNS)
-    assert len(COLUMNS) == 6
+    assert len(COLUMNS) == 8
 
 
 def test_shape_maps_and_stringifies_fields():

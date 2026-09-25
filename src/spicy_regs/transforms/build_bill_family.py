@@ -8,22 +8,22 @@ from __future__ import annotations
 
 import functools
 import json
-import httpx
 import os
 from collections import Counter
 from collections.abc import Callable, Collection, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Protocol, Self
+from typing import TYPE_CHECKING, Any, Protocol, Self
 
+import httpx
 from loguru import logger
 from spicy_docs.extraction.body_text import body_text
 from spicy_docs.interpretation.bill_family import (
     BillFamilyCapture,
     BillFamilyTables,
-    BillVersionCapture,
     BillSummarizer,
+    BillVersionCapture,
     DiffSummarizer,
     EngineStamp,
     SectionClassifier,
@@ -39,16 +39,17 @@ from spicy_docs.interpretation.vote_matching import (
     read_vote_key,
     recorded_vote_references,
 )
-from spicy_docs.schemas import TABLE_CONTRACTS
-from spicy_docs.schemas.tables import bill_id as bill_key, text
 from spicy_docs.reading.paged_json import PagedJsonSourceError
+from spicy_docs.schemas import TABLE_CONTRACTS
 from spicy_docs.schemas.activity_events import activity_events, snapshot_from_rows
+from spicy_docs.schemas.tables import bill_id as bill_key
+from spicy_docs.schemas.tables import text
 from spicy_docs.sources.congress.bill_status import (
     BillAction,
     BillIdentity,
     BillLaw,
-    BillSponsor,
     BillSourceError,
+    BillSponsor,
     BillStatus,
     bill_package_id_from_url,
 )
@@ -69,6 +70,7 @@ from spicy_docs.sources.congress.bulk_status import (
 from spicy_docs.sources.govinfo.body_acquisition import GovInfoBodyAcquirer, GovInfoBodyBudget
 from spicy_docs.transport.credentials import CredentialRefusedError, scrub_credential
 
+from spicy_regs.source_evidence import SourceEvidenceError
 from spicy_regs.sources import r2
 from spicy_regs.sources.congress_bills import (
     API_KEY_ENV_VARS,
@@ -84,6 +86,9 @@ from spicy_regs.transforms.congress_scope import (
 )
 from spicy_regs.transforms.model_call import resolve_gemini_key
 from spicy_regs.transforms.table_merge import merge_contract_table, merge_table, published_table
+
+if TYPE_CHECKING:
+    from spicy_regs.source_evidence import CaptureEvidence
 
 #: The DeltaTrack commit the vendored wheel was built from. ``installed_engine_stamp``
 #: reads a revision out of ``direct_url.json``, which only a git install writes;
@@ -364,8 +369,10 @@ class CongressListBackfill:
     charges every page and every detail.
     """
 
-    def __init__(self, api_key: str, transport: httpx.BaseTransport | None = None) -> None:
-        self._reader = listing_reader(api_key, transport)
+    def __init__(self, api_key: str, transport: httpx.BaseTransport | None = None,
+                 *, evidence: CaptureEvidence | None = None) -> None:
+        self._reader = listing_reader(api_key, transport, evidence=evidence)
+        self._evidence = evidence
 
     def __enter__(self) -> Self:
         self._reader.__enter__()
@@ -380,7 +387,15 @@ class CongressListBackfill:
         return self._reader.bills(bill_list_url(congress=congress, bill_type=bill_type), max_pages=LIST_WALK_MAX_PAGES)
 
     def detail(self, identity: BillIdentity) -> tuple[Mapping[str, Any], str]:
-        record, capture = bill_detail(self._reader, identity)
+        """One bill's detail; with evidence, its capture (or refusal) is retained, not only list pages."""
+        try:
+            record, capture = bill_detail(self._reader, identity)
+        except Exception as error:
+            if self._evidence is not None:
+                self._evidence.refusal(error, stage="bill-detail")
+            raise
+        if self._evidence is not None:
+            self._evidence.capture(capture, stage="bill-detail")
         return record, str(capture.observed_at)
 
 
@@ -501,7 +516,7 @@ def _version_captures(
             budget[0] -= 1
             try:
                 package = acquirer.acquire(package_id)
-            except CredentialRefusedError:
+            except (CredentialRefusedError, SourceEvidenceError):
                 raise
             except Exception as error:  # noqa: BLE001 — one printing's refusal is not the bill's
                 logger.warning(
@@ -1022,6 +1037,8 @@ def _retained_entry(acquirer: BulkStatusSource, acquisition: Any, congress: int,
     if entry is None or capture is None:
         try:
             listing = acquirer.list_archives(congress, bill_type)
+        except SourceEvidenceError:
+            raise
         except Exception as error:  # noqa: BLE001 — no entry means no skip next run, not a failed run
             logger.warning(
                 "Bill family: {} {} listing refused, so the next run cannot skip its zip: {}",
@@ -1529,6 +1546,7 @@ def build_bill_family(
     list_source: ListBackfillSource | None = None,
     max_version_fetches: int = MAX_VERSION_FETCHES,
     download_prior: Callable[[str, Path], bool] = r2.download,
+    evidence: CaptureEvidence | None = None,
 ) -> tuple[Path, ...]:
     """Build all eighteen bill-family outputs; returns one path per table."""
     if isinstance(max_version_fetches, bool) or not isinstance(max_version_fetches, int) or max_version_fetches < 0:
@@ -1553,10 +1571,22 @@ def build_bill_family(
         )
 
     api_key = _resolve_api_key()
-    bulk_acquirer = bulk_acquirer or BulkStatusAcquirer(budget=bulk_status_budget())
+    if evidence is not None:
+        evidence.credential = api_key or ""
+        evidence.event("bill-family-selection", congresses=list(congresses), bill_types=list(bill_types),
+                       max_version_fetches=max_version_fetches)
+    bulk_budget = bulk_status_budget()
+    bulk_acquirer = bulk_acquirer or BulkStatusAcquirer(
+        budget=bulk_budget,
+        transport=None if evidence is None else evidence.transport(stage="bill-status-bulk", max_bytes=bulk_budget.max_bytes),
+    )
     if body_acquirer is None and max_version_fetches > 0:
         if api_key:
-            body_acquirer = GovInfoBodyAcquirer(budget=BODY_BUDGET, api_key=api_key)
+            body_acquirer = GovInfoBodyAcquirer(
+                budget=BODY_BUDGET, api_key=api_key,
+                transport=None if evidence is None else evidence.transport(
+                    stage="bill-package", max_bytes=max(BODY_BUDGET.max_body_bytes, BODY_BUDGET.max_metadata_bytes)),
+            )
         else:
             logger.warning(
                 "Bill family: no api.data.gov key ({}) — publishing status-derived tables only",
@@ -1732,7 +1762,7 @@ def build_bill_family(
     if backfill_congresses:
         source = list_source
         if source is None and api_key:
-            source = CongressListBackfill(api_key)
+            source = CongressListBackfill(api_key, evidence=evidence)
         if source is not None:
             outcome = _run_backfill(
                 source,

@@ -53,7 +53,7 @@ class RetainedReport(NoBodies):
         self.fail = fail
         self.empty = empty
 
-    def acquire_parts(self, package_id, *, max_bytes=None):
+    def acquire_parts(self, package_id, *, max_bytes=None, prefer=()):
         self.requested.append(package_id)
         if self.fail:
             raise ConnectionError("retained source unavailable")
@@ -225,7 +225,7 @@ def test_an_unsafe_named_reread_is_refused_before_any_source_request(tmp_path, r
 
 
 class RefusingAcquirer(HearingBodyAcquirer):
-    def acquire(self, package_id, *, max_bytes=None):
+    def acquire(self, package_id, *, max_bytes=None, prefer=()):
         self.requested.append(package_id)
         raise ConnectionError("stub: body unavailable")
 
@@ -300,7 +300,7 @@ class ReportsAcquirer(NoBodies):
     def __init__(self):
         self.requested = []
 
-    def acquire_parts(self, package_id, *, max_bytes=None):
+    def acquire_parts(self, package_id, *, max_bytes=None, prefer=()):
         self.requested.append(package_id)
         if package_id == REFUSED:
             raise ConnectionError("retained source unavailable")
@@ -531,3 +531,34 @@ def test_a_report_of_seven_parts_is_refused_before_any_body_request(tmp_path):
     assert set(_keys(tables["committee_reports"])) == {(TWO_PARTS, part) for part in parts}
     assert {row["observed_at"] for row in tables["committee_reports"]} == {"prior"}
     assert [row["outcome"] for row in tables[READS_TABLE]] == ["refused"]
+
+
+class ListedReport:
+    """Discovery listing ``CRPT_ID`` at one ``lastModified``, the way it answers a publisher refresh."""
+
+    def __init__(self, modified):
+        self.modified = modified
+
+    def packages(self, url, *, max_pages=40):
+        yield SimpleNamespace(records=[{"packageId": CRPT_ID, "lastModified": self.modified}] if "/CRPT/" in url else [])
+
+
+def test_a_refreshed_report_whose_read_is_refused_keeps_its_rows_and_is_retried(tmp_path):
+    """Complete under today's rule, then refreshed and refused once: the checkpoint says ``refused`` at the new stamp,
+    never the old ``complete``, the prior rows stand, and the next run retries it with nothing listed."""
+    read = _run(tmp_path, RetainedReport(), reader=ListedReport("2026-09-18T12:00:00Z"))
+    assert [row["outcome"] for row in read[READS_TABLE]] == ["complete"]
+    names = ("committee_reports", "report_sections", READS_TABLE)
+    for name in names:
+        shutil.copyfile(tmp_path / f"{name}.parquet", prior_scratch_path(tmp_path, name))
+    refused = _run(tmp_path, RetainedReport(fail=True), reader=ListedReport("2026-09-20T12:00:00Z"))
+    [state] = refused[READS_TABLE]
+    assert (state["outcome"], state["last_modified"]) == ("refused", "2026-09-20T12:00:00Z")
+    assert state["rule_version"] == RULE_VERSIONS["CRPT"]
+    for name in ("committee_reports", "report_sections"):
+        assert refused[name] == read[name], f"{name}: a refused read keeps the prior rows"
+    for name in names:
+        shutil.copyfile(tmp_path / f"{name}.parquet", prior_scratch_path(tmp_path, name))
+    again = RetainedReport()
+    _run(tmp_path, again)
+    assert again.requested == [CRPT_ID]

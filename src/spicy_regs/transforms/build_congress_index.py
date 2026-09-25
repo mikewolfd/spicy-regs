@@ -13,7 +13,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from operator import itemgetter
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import httpx
 from loguru import logger
@@ -36,6 +36,9 @@ from spicy_regs.sources.congress_bills import API_KEY_ENV_VARS, _resolve_api_key
 from spicy_regs.transforms.congress_scope import congresses_from_env, record_volumes
 from spicy_regs.transforms.congress_walk import ListingSource, PooledListingSource
 from spicy_regs.transforms.table_merge import merge_contract_table, published_table
+
+if TYPE_CHECKING:
+    from spicy_regs.source_evidence import CaptureEvidence
 
 
 #: Pages per complete pass of a list unit; pooled passes vary the page size.
@@ -283,13 +286,14 @@ def build_index_table(
     congresses: Sequence[int] | None = None,
     max_details: int = MAX_DETAILS_PER_RUN,
     download_prior: Callable[[str, Path], bool] = r2.download,
+    evidence: CaptureEvidence | None = None,
 ) -> Path:
     """Walk ``spec``'s list units, read the details the published table lacks, and merge."""
     if reader is None:
         api_key = _resolve_api_key()
         if not api_key:
             raise RuntimeError(f"{spec.table} needs an api.data.gov key (set one of {', '.join(API_KEY_ENV_VARS)})")
-        reader = listing_reader(api_key)
+        reader = listing_reader(api_key, evidence=evidence)
     contract = TABLE_CONTRACTS[spec.table]
     identity, version = contract.identity, contract.version_column
     assert version is not None, f"{spec.table} has no version column to resume on"
@@ -306,6 +310,8 @@ def build_index_table(
     def refuse(entry: _Listed, state: _Held | None, error: Exception) -> None:
         """One row's refusal: counted, logged scrubbed, and a new record still indexed list-only."""
         outcomes["refused"] += 1
+        if evidence is not None:
+            evidence.refusal(error, stage=f"{spec.table}-detail")
         logger.warning("{}: {} refused: {}", spec.table, "-".join(entry.key), scrub_credential(str(error), ""))
         if state is None:
             rows.append(entry.row)
@@ -363,6 +369,9 @@ def build_index_table(
         outcomes["read"] += 1
 
     logger.info("{}: {:,} listed; {}", spec.table, len(listed), dict(outcomes) or "every row complete from the list")
+    if evidence is not None:
+        evidence.event("congress-index-selection", table=spec.table, congresses=list(congresses),
+                       max_details=max_details, listed=len(listed), outcomes=dict(outcomes))
     output = merge_contract_table(
         output_dir, spec.table, rows, download_prior=download_prior, prior_present=prior is not None
     )

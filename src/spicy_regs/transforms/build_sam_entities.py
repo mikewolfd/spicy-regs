@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import time
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -35,6 +36,9 @@ from loguru import logger
 
 from spicy_regs.sources import r2
 from spicy_regs.transforms.table_merge import merge_local_prior
+
+if TYPE_CHECKING:
+    from spicy_regs.source_evidence import CaptureEvidence
 
 # Env vars checked in order for the api.data.gov key. SAM.gov needs a key that is
 # specifically associated with a SAM.gov account holding the Entity API role, so
@@ -62,6 +66,10 @@ MIN_REGISTRATION_YEAR = 2000
 # dispatch shares the hour, so it refuses rather than being cancelled by the job.
 EXTRACT_MAX_WAIT = 60 * 60.0
 
+#: Retained bytes allowed for one year's extract response when evidence is on;
+#: the 2026 registration-year extract above is 71.5 MB gzip.
+EXTRACT_RETENTION_BYTES = 2 * 1024**3
+
 # The paged walk's per-request budget: the same retry margin the old local
 # reader carried, with the paged reader's own page/byte bounds.
 PAGED_BUDGET = None  # built lazily beside the reader that needs it
@@ -82,6 +90,7 @@ def _resolve_sam_api_key() -> str:
 
 def _iter_sam_entities(
     *,
+    evidence: CaptureEvidence | None = None,
     mode: str,
     registration_status: str,
     since_year: int | None,
@@ -118,6 +127,11 @@ def _iter_sam_entities(
 
     api_key = _resolve_sam_api_key()
     emitted = 0
+    if evidence is not None:
+        evidence.credential = api_key
+        evidence.event("selection", stage="sam", mode=mode, registration_status=registration_status,
+                       since_year=since_year, until_year=until_year, year_windows=year_windows,
+                       max_records=max_records)
 
     def budget_left() -> bool:
         return max_records is None or emitted < max_records
@@ -148,14 +162,20 @@ def _iter_sam_entities(
                     "nothing is published"
                 )
             extractor = SamBulkExtract(
-                api_key=api_key, registration_status=registration_status, year=year, max_wait=left
+                api_key=api_key, registration_status=registration_status, year=year, max_wait=left,
+                transport=None if evidence is None else evidence.transport(
+                    stage=f"sam-extract:{year}", max_bytes=EXTRACT_RETENTION_BYTES
+                ),
             )
             yield from emit(extractor.records())
         return
 
     # partition: the owner's adaptive windowed walk under the reach bound.
     budget = PagedJsonBudget(max_requests=5, max_page_bytes=8 * 1024 * 1024, timeout_seconds=120.0, min_request_interval_seconds=0.2)
-    reader = SamEntitiesReader(budget=budget, api_key=api_key)
+    reader = SamEntitiesReader(
+        budget=budget, api_key=api_key,
+        transport=None if evidence is None else evidence.transport(stage="sam-page", max_bytes=budget.max_page_bytes),
+    )
     since = date(since_year or MIN_REGISTRATION_YEAR, 1, 1)
     until = date(until_year or date.today().year, 12, 31)
     yield from emit(
@@ -250,6 +270,7 @@ def _shape(doc: dict) -> dict:
 def build_sam_entities(
     output_dir: Path,
     *,
+    evidence: CaptureEvidence | None = None,
     max_records: int | None = DEFAULT_MAX_RECORDS,
     registration_status: str = "A",
     mode: str = "extract",
@@ -280,6 +301,7 @@ def build_sam_entities(
     rows = [
         _shape(doc)
         for doc in _iter_sam_entities(
+            evidence=evidence,
             mode=mode,
             registration_status=registration_status,
             since_year=since_year,

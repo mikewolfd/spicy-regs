@@ -26,8 +26,10 @@ class PrintCitationsRollup(RollupPipeline):
         "document_citations.parquet",
     )
 
+    retain_source_evidence: ClassVar[bool] = True
+
     def build(self, output_dir: Path) -> tuple[Path, ...]:
-        return build_print_citations(output_dir)
+        return build_print_citations(output_dir, evidence=self.source_evidence)
 
 
 app = make_rollup_app(PrintCitationsRollup)

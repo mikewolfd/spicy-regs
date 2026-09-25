@@ -211,6 +211,7 @@ def test_the_measured_sample_resolves_thirty_four_roll_calls_with_no_conflicts(t
     _seed_references(tmp_path, rows)
 
     references = _recorded_vote_references(tmp_path, (119,), _no_prior)
+    assert references is not None
     assert len(references) == 58, "every measured entry is read back as a reference"
 
     index = index_vote_references(references)
@@ -251,6 +252,7 @@ def test_numeric_action_ties_keep_bill_order_and_malformed_reference_refusal(tmp
         ],
     )
     references = _recorded_vote_references(tmp_path, (119,), _no_prior)
+    assert references is not None
     assert [(reference.action_index, reference.bill.number) for reference in references] == [
         (8, 2),
         (8, 3),
@@ -572,6 +574,185 @@ def test_the_reference_scratch_file_is_not_left_beside_the_outputs(tmp_path, sco
     assert not prior_scratch_path(tmp_path, VOTE_REFERENCES_TABLE).exists()
 
 
+@pytest.mark.parametrize("references_available", [True, False])
+@pytest.mark.parametrize("refresh_native", [True, False])
+def test_held_links_refresh_independently_of_native_fetch_and_preserve_members(
+    tmp_path, scoped, references_available, refresh_native,
+):
+    from spicy_docs.schemas.congress_activity_tables import shape_roll_call_vote
+    from spicy_docs.sources.congress.votes import VoteLocator
+
+    old = shape_roll_call_vote(
+        _Tallied(VoteLocator(chamber="senate", congress=119, session=1, roll_number=212)),
+        tally={"yea-total": 220, "nay-total": 210}, member_vote_count=0,
+    )
+    old.update(bill_id="119-hr-1", match_rule="bill_action_recorded_vote", match_action_index="21",
+               match_url="https://www.senate.gov/old", conflict_count="0")
+    member = {**{name: old[name] for name in ("vote_id", "congress", "chamber", "session", "roll_number")},
+              "member_key": "keep", "position": "Yea"}
+
+    def prior(remote, local):
+        name = remote.removesuffix(".parquet")
+        values = {"roll_call_votes": [old], "member_votes": [member]}.get(name)
+        if values is None:
+            return False
+        pq.write_table(pa.Table.from_pylist(values, schema=pa.schema([
+            (column, pa.string()) for column in TABLE_CONTRACTS[name].columns
+        ])), local)
+        return True
+
+    if references_available:
+        _seed_references(tmp_path, [{
+            **_sample_rows()[0], "congress": "119", "chamber": "senate", "session": "1",
+            "roll_number": "212", "bill_id": "119-hr-1", "action_index": "17",
+        }])
+    acquirer = StubVoteAcquirer(senate_rolls=(212,))
+    paths = build_roll_call_votes(
+        tmp_path, reader=StubListingReader(), acquirer=acquirer, download_prior=prior,
+        overlap=1 if refresh_native else 0, max_votes=1 if refresh_native else 0,
+    )
+    actual = pq.read_table(paths[0]).to_pylist()[0]
+    assert actual["match_action_index"] == ("17" if references_available else "21")
+    relationship = {"bill_id", "match_rule", "match_action_index", "match_url", "conflict_count"}
+    assert {k: v for k, v in actual.items() if k not in relationship} == {
+        k: v for k, v in old.items() if k not in relationship
+    }
+    # Link-only corrections cannot replace a native roster. A successful native
+    # reread still replaces it with the source's (here empty) complete roster.
+    members = pq.read_table(paths[1]).to_pylist()
+    assert ([row["member_key"] for row in members]) == ([] if refresh_native else ["keep"])
+    assert acquirer.requested == ([("senate", 212)] if refresh_native else [])
+
+
+def _held_row(roll: int, *, congress: int = 119) -> dict:
+    """A held House roll call as a prior run published it, with a recorded-vote link at action 21."""
+    from spicy_docs.schemas.congress_activity_tables import shape_roll_call_vote
+    from spicy_docs.sources.congress.votes import VoteLocator
+
+    row = shape_roll_call_vote(
+        _Tallied(VoteLocator(chamber="house", congress=congress, session=1, roll_number=roll)),
+        tally={"yea-total": 220, "nay-total": 210},
+        member_vote_count=0,
+    )
+    row.update(bill_id=f"{congress}-hr-1", match_rule="bill_action_recorded_vote", match_action_index="21",
+               match_url="https://clerk.house.gov/old", conflict_count="0")
+    return row
+
+
+def _published(tables: dict[str, list[dict]]):
+    """A ``download_prior`` serving each named contract table's rows."""
+
+    def download(remote: str, local: Path) -> bool:
+        name = remote.removesuffix(".parquet")
+        if name not in tables:
+            return False
+        schema = pa.schema([(column, pa.string()) for column in TABLE_CONTRACTS[name].columns])
+        pq.write_table(pa.Table.from_pylist(tables[name], schema=schema), local)
+        return True
+
+    return download
+
+
+def _events(evidence, name: str) -> list[dict]:
+    lines = (evidence.artifact_dir / "journal.jsonl").read_text().splitlines()
+    return [event for event in map(json.loads, lines) if event["event"] == name]
+
+
+@pytest.mark.parametrize("refresh_native", [False, True])
+def test_a_missing_reference_input_never_relinks_a_held_house_vote_from_the_listing(
+    tmp_path, scoped, refresh_native
+):
+    """The review's case: no ``bill_vote_references`` file and a House listing that names the vote.
+
+    The listing's reference carries no action, so taking it would null
+    ``match_action_index`` and rewrite the rule and URL — an absent optional
+    input acting as a deletion. Neither the held nor the re-read vote may change.
+    """
+    from spicy_regs.source_evidence import CaptureEvidence
+
+    old = _held_row(240)
+    member = {**{name: old[name] for name in ("vote_id", "congress", "chamber", "session", "roll_number")},
+              "member_key": "keep", "position": "Yea"}
+    evidence = CaptureEvidence(tmp_path / "audit", "roll-call-votes")
+    acquirer = StubVoteAcquirer()
+    paths = build_roll_call_votes(
+        tmp_path,
+        reader=StubListingReader([_house_listing_record(240)]),
+        acquirer=acquirer,
+        download_prior=_published({"roll_call_votes": [old], "member_votes": [member]}),
+        overlap=1 if refresh_native else 0,
+        max_votes=1 if refresh_native else 0,
+        evidence=evidence,
+    )
+    assert pq.read_table(paths[0]).to_pylist() == [old]
+    assert acquirer.requested == ([("house", 240)] if refresh_native else [])
+    members = [row["member_key"] for row in pq.read_table(paths[1]).to_pylist()]
+    assert members == ([] if refresh_native else ["keep"])
+    assert [event["available"] for event in _events(evidence, "vote-reference-input")] == [False]
+    [linkage] = _events(evidence, "held-vote-linkage")
+    assert linkage["input_available"] is False and linkage["relinked"] == []
+    assert linkage["unresolved_prior_preserved"] == ["119-house-1-240"]
+
+
+def test_recorded_references_relink_only_held_votes_in_scope_and_count_their_conflicts(tmp_path, scoped):
+    """Two recorded references and the listing disagree on one held vote; the others stay byte-for-byte.
+
+    The winner is the recorded reference at the lowest action (17), exactly
+    what a fresh acquisition would publish, and ``conflict_count`` counts both
+    disagreeing references. A held vote the input does not name, and one
+    outside the scoped Congresses that the input does name, keep every field.
+    """
+    import hashlib as _hashlib
+
+    from spicy_regs.source_evidence import CaptureEvidence
+
+    relinked, unresolved, out_of_scope = _held_row(240), _held_row(241), _held_row(240, congress=118)
+    base = {**_sample_rows()[0], "chamber": "house", "session": "1", "roll_number": "240"}
+    _seed_references(tmp_path, [
+        base | {"congress": "119", "bill_id": "119-hr-2", "action_index": "30", "url": "https://clerk.house.gov/b"},
+        base | {"congress": "119", "bill_id": "119-hr-1", "action_index": "17", "url": "https://clerk.house.gov/a"},
+        base | {"congress": "118", "bill_id": "118-hr-5", "action_index": "3", "url": "https://clerk.house.gov/c"},
+    ])
+    digest = "sha256:" + _hashlib.sha256(prior_scratch_path(tmp_path, VOTE_REFERENCES_TABLE).read_bytes()).hexdigest()
+    evidence = CaptureEvidence(tmp_path / "audit", "roll-call-votes")
+    pin = {"logicalId": "urn:test:bill-family", "artifactDigest": "sha256:" + "a" * 64}
+    evidence.read_snapshot = {"families": {"bill-family": {
+        **pin, "tables": {f"{VOTE_REFERENCES_TABLE}.parquet": {"sha256": digest}},
+    }}}
+    members = [
+        {**{name: row[name] for name in ("vote_id", "congress", "chamber", "session", "roll_number")},
+         "member_key": row["vote_id"], "position": "Yea"}
+        for row in (relinked, unresolved, out_of_scope)
+    ]
+    paths = build_roll_call_votes(
+        tmp_path,
+        reader=StubListingReader([_house_listing_record(240, number="9999")]),
+        acquirer=StubVoteAcquirer(),
+        download_prior=_published({"roll_call_votes": [relinked, unresolved, out_of_scope], "member_votes": members}),
+        overlap=0,
+        max_votes=0,
+        evidence=evidence,
+    )
+    rows = {row["vote_id"]: row for row in pq.read_table(paths[0]).to_pylist()}
+    link = {"bill_id": "119-hr-1", "match_rule": "bill_action_recorded_vote", "match_action_index": "17",
+            "match_url": "https://clerk.house.gov/a", "conflict_count": "2"}
+    assert rows == {
+        "119-house-1-240": relinked | link,
+        "119-house-1-241": unresolved,
+        "118-house-1-240": out_of_scope,
+    }
+    positions = {(row["vote_id"], row["member_key"], row["position"]) for row in pq.read_table(paths[1]).to_pylist()}
+    assert positions == {(row["vote_id"], row["member_key"], row["position"]) for row in members}
+    [reference_input] = _events(evidence, "vote-reference-input")
+    assert reference_input["sha256"] == digest
+    assert reference_input["generation"] == {"family": "bill-family", **pin}
+    [linkage] = _events(evidence, "held-vote-linkage")
+    assert [(item["vote_id"], item["previous"]["match_action_index"], item["match_action_index"])
+            for item in linkage["relinked"]] == [("119-house-1-240", "21", "17")]
+    assert linkage["unresolved_prior_preserved"] == ["119-house-1-241"]
+    assert linkage["held_in_scope"] == 2
+
+
 def test_a_malformed_reference_row_costs_that_row_only(tmp_path, scoped):
     """One unreadable row must not lose the linkage for every other vote in the run."""
     rows = [row for row in _sample_rows() if row["roll_number"] == "240"]
@@ -579,6 +760,7 @@ def test_a_malformed_reference_row_costs_that_row_only(tmp_path, scoped):
     _seed_references(tmp_path, rows)
 
     references = _recorded_vote_references(tmp_path, (119,), _no_prior)
+    assert references is not None
     assert len(references) == len(rows) - 1
     assert all(reference.bill.number == 3424 for reference in references)
 
@@ -806,7 +988,7 @@ def test_the_copied_publisher_bodies_match_the_digests_their_readme_records():
 
 def test_a_prior_that_has_vote_day_fills_only_its_nulls_and_is_not_rewritten_when_complete(tmp_path):
     """Every run after the first: the column exists, so the fill replaces it in place."""
-    from spicy_regs.transforms.build_roll_call_votes import _backfill_vote_day, _held_votes
+    from spicy_regs.transforms.build_roll_call_votes import _held_votes, _repair_held_votes
 
     columns = TABLE_CONTRACTS["roll_call_votes"].columns
 
@@ -829,7 +1011,11 @@ def test_a_prior_that_has_vote_day_fills_only_its_nulls_and_is_not_rewritten_whe
     ]
     pq.write_table(pa.Table.from_pylist(rows, schema=pa.schema([(c, pa.string()) for c in columns])), prior)
 
-    assert _backfill_vote_day(prior, _held_votes(prior)) == 1
+    def repair():
+        # No recorded-vote input: only vote_day can change.
+        return _repair_held_votes(prior, _held_votes(prior), index_vote_references(()), None, (119,))
+
+    repair()
     table = pq.read_table(prior)
     assert table.column_names == list(columns), "vote_day keeps its contract position"
     assert {r["roll_number"]: r["vote_day"] for r in table.to_pylist()} == {
@@ -839,5 +1025,5 @@ def test_a_prior_that_has_vote_day_fills_only_its_nulls_and_is_not_rewritten_whe
     }
 
     before = (prior.read_bytes(), prior.stat().st_ino, prior.stat().st_mtime_ns)
-    assert _backfill_vote_day(prior, _held_votes(prior)) == 0
+    repair()
     assert (prior.read_bytes(), prior.stat().st_ino, prior.stat().st_mtime_ns) == before, "nothing to fill, no rewrite"

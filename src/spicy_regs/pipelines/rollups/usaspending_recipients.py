@@ -18,11 +18,12 @@ class UsaSpendingRecipientsRollup(RollupPipeline):
     """Federal-award recipients ingested from the USASpending.gov v2 API (keyless)."""
 
     name: ClassVar[str] = "usaspending-recipients"
+    retain_source_evidence: ClassVar[bool] = True
     inputs: ClassVar[tuple[str, ...]] = ()
     output: ClassVar[str] = "usaspending_recipients.parquet"
 
     def build(self, output_dir: Path) -> Path:
-        return build_usaspending_recipients(output_dir)
+        return build_usaspending_recipients(output_dir, evidence=self.source_evidence)
 
 
 app = make_rollup_app(UsaSpendingRecipientsRollup)

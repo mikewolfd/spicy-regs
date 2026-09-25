@@ -9,6 +9,11 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from spicy_regs.source_evidence import CaptureEvidence
+
 import httpx
 
 from spicy_regs.sources.base import Reader
@@ -32,6 +37,7 @@ class GaoReportsReader(Reader):
         max_records: int | None = None,
         verbose: bool = False,
         transport: httpx.BaseTransport | None = None,
+        evidence: CaptureEvidence | None = None,
     ) -> None:
         if url != RSS_URL:
             raise ValueError("GAO reports reader requires the provider's reports RSS route")
@@ -42,6 +48,7 @@ class GaoReportsReader(Reader):
         self.max_records = max_records
         self.verbose = verbose
         self.transport = transport
+        self.evidence = evidence
 
     def iter_records(self) -> Iterator[dict]:
         try:
@@ -55,7 +62,11 @@ class GaoReportsReader(Reader):
         budget = GaoFeedBudget(
             max_requests=_MAX_REQUESTS, max_bytes=4 * 1024 * 1024, timeout_seconds=60, min_request_interval_seconds=0
         )
-        with GaoFeedAcquirer(budget=budget, transport=self.transport) as reader:
+        transport = self.transport
+        if self.evidence:
+            self.evidence.event("selection", stage="gao", url=RSS_URL, max_records=self.max_records)
+            transport = self.evidence.transport(transport, stage="gao-response", max_bytes=budget.max_bytes)
+        with GaoFeedAcquirer(budget=budget, transport=transport) as reader:
             feed = reader.acquire_reports_feed().feed
         items = feed.items if self.max_records is None else feed.items[: self.max_records]
         for item in items:

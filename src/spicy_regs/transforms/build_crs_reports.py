@@ -17,6 +17,10 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from spicy_regs.source_evidence import CaptureEvidence
 
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -83,7 +87,7 @@ def _prior_max_update_date(prior_file: Path) -> date | None:
         return None
 
 
-def build_crs_reports(output_dir: Path, *, since: date | None = None) -> Path:
+def build_crs_reports(output_dir: Path, *, since: date | None = None, evidence: CaptureEvidence | None = None) -> Path:
     """Build ``crs_reports.parquet`` (incremental merge with the prior table)."""
     import duckdb
 
@@ -104,7 +108,7 @@ def build_crs_reports(output_dir: Path, *, since: date | None = None) -> Path:
     logger.info("CRS reports: fetching reports updated since {}", since or "the beginning")
 
     # 3. Fetch + shape into a "new rows" parquet.
-    reader = CrsReportsReader(since=since)
+    reader = CrsReportsReader(since=since, evidence=evidence)
     rows = [_shape(doc) for doc in reader.iter_records()]
     new_file = output_dir / "_crs_new.parquet"
     table = pa.Table.from_pylist(rows, schema=_SCHEMA) if rows else _SCHEMA.empty_table()

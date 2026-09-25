@@ -17,11 +17,12 @@ class GaoReportsRollup(RollupPipeline):
     """GAO oversight reports ingested from the gao.gov reports RSS feed."""
 
     name: ClassVar[str] = "gao-reports"
+    retain_source_evidence: ClassVar[bool] = True
     inputs: ClassVar[tuple[str, ...]] = ()
     output: ClassVar[str] = "gao_reports.parquet"
 
     def build(self, output_dir: Path) -> Path:
-        return build_gao_reports(output_dir)
+        return build_gao_reports(output_dir, evidence=self.source_evidence)
 
 
 app = make_rollup_app(GaoReportsRollup)

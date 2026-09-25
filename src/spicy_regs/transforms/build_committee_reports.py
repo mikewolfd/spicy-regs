@@ -15,13 +15,17 @@ import hashlib
 import os
 from collections import Counter
 from collections.abc import Callable, Collection, Iterator
+from dataclasses import asdict
 from datetime import UTC, datetime, timedelta
+from functools import cache
+from importlib.metadata import version
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, NamedTuple, Protocol
 
 import httpx
 from loguru import logger
 from spicy_docs.extraction.body_text import BodyText, body_text
+from spicy_docs.extraction.model import PageContent, PageResult, TextBlock
 from spicy_docs.interpretation.cbo_estimates import read_cbo_estimate, recital_bill_id
 from spicy_docs.interpretation.hearing_bill_links import cover_links
 from spicy_docs.schemas.hearing_bill_link_tables import shape_hearing_bill_link
@@ -33,8 +37,14 @@ from spicy_docs.schemas.committee_report_tables import (
 )
 from spicy_docs.schemas.tables import natural_key
 from spicy_docs.sources.agency_reports.report_blocks import parse_agency_blocks
-from spicy_docs.sources.govinfo.bodies import ModsBill, GovInfoBodySourceError, parse_package_id
-from spicy_docs.sources.govinfo.body_acquisition import GovInfoBodyAcquirer, GovInfoBodyBudget
+from spicy_docs.sources.govinfo.bodies import ModsBill, GovInfoBodySourceError, parse_package_id, publisher_body_status
+from spicy_docs.sources.govinfo.body_acquisition import (
+    GovInfoBodyAcquirer,
+    GovInfoBodyBudget,
+    GovInfoFormatNotOfferedError,
+    GovInfoPartsOverBudgetError,
+)
+from spicy_docs.reading.refusals import RefusedResponse
 from spicy_docs.reading.paged_json import PagedJsonSourceError
 from spicy_docs.schemas.tables import text
 from spicy_docs.sources.congress.listing import LIST_ROUTES, list_route_url
@@ -59,15 +69,16 @@ class PackageBodySource(Protocol):
     """What this transform needs of a GovInfo package-body acquirer.
 
     ``acquire_parts`` reads a report, every part its record states or none;
-    ``acquire`` reads a hearing, whose record states no parts. No ``prefer``:
-    the rendition order is the acquirer's sealed default
-    (``sources.govinfo.bodies.BODY_PREFERENCE`` — XML, HTML, text, then PDF),
-    so this transform neither passes one nor needs a seam that accepts one.
+    ``acquire`` reads a hearing, whose record states no parts. The rendition
+    order is the acquirer's sealed default
+    (``sources.govinfo.bodies.BODY_PREFERENCE`` — XML, HTML, text, then PDF);
+    ``prefer`` is passed only as ``("pdf",)``, to read the PDF a part offers
+    in place of the publisher's placeholder text.
     """
 
-    def acquire(self, package_id: str, *, max_bytes: int | None = ...) -> Any: ...
+    def acquire(self, package_id: str, *, max_bytes: int | None = ..., prefer: tuple[str, ...] = ...) -> Any: ...
 
-    def acquire_parts(self, package_id: str, *, max_bytes: int | None = ...) -> tuple[Any, ...]: ...
+    def acquire_parts(self, package_id: str, *, max_bytes: int | None = ..., prefer: tuple[str, ...] = ...) -> tuple[Any, ...]: ...
 
 
 class HearingDetailSource(Protocol):
@@ -166,8 +177,56 @@ def _package_ids(reader: PackageDiscoverySource, collection: str, since: str,
     return found
 
 
+#: The ``publisher_body_status`` a read acts on: the text rendition is the
+#: publisher's own notice that the text is only in the PDF.
+PLACEHOLDER = "publisher_placeholder"
+
+
+class ReadBody(NamedTuple):
+    """One fetched body, its one text derivation, and what that text states.
+
+    ``completeness`` (``publisher_body_status``) and ``text_sha256`` each scan
+    the whole text, so they are taken once here, not by every consumer.
+    """
+
+    body: Any
+    derived: BodyText
+    completeness: str
+    text_sha256: str
+
+
+def _read(body: Any) -> ReadBody:
+    """The text derivation for one fetched body's own rendition, with its status and digest."""
+    # No extractor argument: ``body_text``'s default (``DocumentExtractor(NativeText())``,
+    # PyMuPDF) is the pipeline ``gpo_normalize`` was derived on — the GPO
+    # gutter-numbered layout only comes through on PyMuPDF's own line
+    # adjacency, not pypdf's (measured
+    # ``docs/research/gpo-normalizer-vs-upstream-2026-09-19.md`` in spicy-docs).
+    derived = body_text(body)
+    return ReadBody(body, derived, publisher_body_status(derived.text, rendition=derived.rendition),
+                    "sha256:" + hashlib.sha256(derived.text.encode("utf-8")).hexdigest())
+
+
+def _part_key(body: Any, package_id: str) -> str:
+    """The part a body is: its report part's id, or the package id for a hearing, whose record states none."""
+    return package_id if body.part is None else body.part.part_id
+
+
+def _retain(evidence: CaptureEvidence, bodies: Collection[Any], stage: str) -> None:
+    """Retain one acquisition's summary and MODS once, then each body; every part repeats the first two."""
+    first = next(iter(bodies))
+    for capture in (first.summary_capture, first.mods_capture, *(body.body_capture for body in bodies)):
+        evidence.capture(capture, stage=stage)
+
+
+@cache
+def _extraction_versions() -> dict[str, str]:
+    """What a PDF's text is re-derived with from its retained bytes; read only once a PDF was extracted."""
+    return {name: version(name) for name in ("spicy-docs", "pymupdf")}
+
+
 def _read_bodies(acquirer: PackageBodySource, package_id: str, collection: str,
-                 evidence: CaptureEvidence | None = None) -> list[tuple[Any, BodyText]]:
+                 evidence: CaptureEvidence | None = None) -> list[ReadBody]:
     """Each fetched body of one package with the one text derivation for its rendition.
 
     A report is every part its record states, read by ``acquire_parts``: one
@@ -178,19 +237,87 @@ def _read_bodies(acquirer: PackageBodySource, package_id: str, collection: str,
     what this transform depends on is the facts ``body_text`` reads off a
     fetched body, and the rendition it was fetched in is the body's own, never
     this caller's guess.
+
+    A part whose text is the publisher's placeholder is read again from the
+    PDF its record offers, under that PDF's own digest; the placeholder's
+    capture is kept beside it. A part offering no PDF keeps its placeholder,
+    marked, since nothing more is published, and so does one whose PDF every
+    later run would be refused in the same way (:func:`_pdf_refusal_is_final`),
+    so the package is not re-read forever; a transient failure refuses it. The journal records digests and
+    counts, never text: the bytes are retained, and a PDF's text is re-derived
+    from them with the recorded versions.
     """
     bodies = acquirer.acquire_parts(package_id) if collection == "CRPT" else (acquirer.acquire(package_id),)
     if evidence:
-        # Every part repeats the package's summary and MODS; each is retained once.
-        first = bodies[0]
-        for capture in (first.summary_capture, first.mods_capture, *(body.body_capture for body in bodies)):
-            evidence.capture(capture, stage=package_id + ":used")
-    # No extractor argument: ``body_text``'s default (``DocumentExtractor(NativeText())``,
-    # PyMuPDF) is the pipeline ``gpo_normalize`` was derived on — the GPO
-    # gutter-numbered layout only comes through on PyMuPDF's own line
-    # adjacency, not pypdf's (measured
-    # ``docs/research/gpo-normalizer-vs-upstream-2026-09-19.md`` in spicy-docs).
-    return [(body, body_text(body)) for body in bodies]
+        _retain(evidence, bodies, package_id + ":used")
+    reads = [_read(body) for body in bodies]
+    keys = [_part_key(read.body, package_id) for read in reads]
+    placeholders = {key: read for key, read in zip(keys, reads, strict=True) if read.completeness == PLACEHOLDER}
+    offered = [key for key, read in placeholders.items()
+               if read.body.format != "pdf" and "pdf" in read.body.offered_formats]
+    if evidence:
+        for key, read in placeholders.items():
+            evidence.event("body-placeholder", package_id=package_id, part_id=key,
+                           source_sha256=read.body.body_capture.sha256, text_sha256=read.text_sha256,
+                           text_chars=len(read.derived.text), offered_formats=list(read.body.offered_formats))
+    if offered:
+        # A report's parts are read all or none, so every part is asked for as
+        # PDF and only the placeholder parts take theirs. A failure refuses the
+        # package, which stays pending until a read succeeds.
+        try:
+            pdfs = (acquirer.acquire_parts(package_id, prefer=("pdf",)) if collection == "CRPT"
+                    else (acquirer.acquire(package_id, prefer=("pdf",)),))
+        except GovInfoBodySourceError as error:
+            if not _pdf_refusal_is_final(error):
+                raise
+            logger.warning("{}: offered PDF refused for good; placeholder kept for {}: {}", package_id, offered, error)
+            if evidence is not None:
+                evidence.refusal(error, stage=package_id + ":pdf-fallback")
+            return reads
+        by_part = {_part_key(body, package_id): body for body in pdfs}
+        if missing := [key for key in offered if key not in by_part]:
+            raise ValueError(f"PDF acquisition did not return placeholder parts {missing}")
+        if evidence:
+            _retain(evidence, [by_part[key] for key in offered], package_id + ":pdf-fallback")
+        reads = [_read(by_part[key]) if key in offered else read for key, read in zip(keys, reads, strict=True)]
+    if evidence:
+        for key, read in zip(keys, reads, strict=True):
+            if read.derived.pages is not None:
+                replaced = placeholders[key].body.body_capture.sha256 if key in offered else None
+                evidence.event("body-text", package_id=package_id, part_id=key,
+                               source_sha256=read.body.body_capture.sha256, replaces_sha256=replaced,
+                               text_sha256=read.text_sha256, text_chars=len(read.derived.text),
+                               page_count=len(read.derived.pages), derivation=read.derived.derivation,
+                               extraction_versions=_extraction_versions(), cleanup=asdict(read.derived.record),
+                               body_completeness=read.completeness)
+    return reads
+
+
+def _pdf_refusal_is_final(error: Exception) -> bool:
+    """Whether a later run would get the same refusal of the offered PDF: the publisher's record decides it.
+
+    A rendition a part does not offer, a report whose parts exceed the request
+    budget, and a body past the byte bound (the transport's
+    ``response-byte-limit`` refusal) repeat until the publisher changes the
+    package, which moves its ``last_modified``. Anything else may be transient.
+    """
+    if isinstance(error, (GovInfoFormatNotOfferedError, GovInfoPartsOverBudgetError)):
+        return True
+    refused = getattr(error, "refused_response", None)
+    return isinstance(refused, RefusedResponse) and refused.unavailable_reason == "response-byte-limit"
+
+
+def _section_input(derived: BodyText) -> str | tuple[PageResult, ...]:
+    """What ``parse_agency_blocks`` reads: the pages, where the rendition states them, so a section cites its pages.
+
+    ``BodyText.text`` is its pages joined by one ``\\n``, the join
+    ``parse_agency_blocks`` makes, so a section's offsets are the same either
+    way. Page ``N`` is the PDF's ``N``-th page, as extraction numbers it.
+    """
+    if derived.pages is None:
+        return derived.text
+    return tuple(PageResult({"page": number}, PageContent((TextBlock(page),), ()))
+                 for number, page in enumerate(derived.pages, start=1))
 
 
 #: The one MODS ``context`` that states a package is *about* a bill, as
@@ -338,6 +465,7 @@ def build_committee_reports(
     section_rows: list[dict] = []
     hearing_rows: list[dict] = []
     renditions: Counter[str] = Counter()
+    completeness: Counter[str] = Counter()
     mentions: Counter[str] = Counter()
     meetings: Counter[str] = Counter()
     refused = unchanged = linked = 0
@@ -382,10 +510,13 @@ def build_committee_reports(
                 logger.warning("{}: {} refused: {}", collection, package_id,
                                scrub_credential(str(error), evidence.credential if evidence else ""))
                 continue
-            modified = bodies[0][0].summary.last_modified
+            modified = bodies[0].body.summary.last_modified
+            # A placeholder whose part offers no PDF is complete: nothing more
+            # is published, its row says so, and a new stamp or rule re-reads it.
             state.update(last_modified=modified, outcome="complete")
-            for body, derived in bodies:
+            for body, derived, status, text_sha256 in bodies:
                 renditions[derived.rendition] += 1
+                completeness[status] += 1
                 # A report part states its own bills; a multi-part package's
                 # root states none (CRPT-119hrpt455, -119hrpt494). A hearing
                 # has no part, so its bills are the package's.
@@ -395,7 +526,8 @@ def build_committee_reports(
                 linked += bill is not None
                 mentions.update(entry.context for entry in stated.bills if entry.context != PRIMARY_BILL_CONTEXT)
                 common = {"page_count": None if derived.pages is None else len(derived.pages),
-                          "text_sha256": "sha256:" + hashlib.sha256(derived.text.encode("utf-8")).hexdigest()}
+                          "text_sha256": text_sha256, "body_completeness": status,
+                          "text_derivation": derived.derivation}
                 if collection == "CHRG":
                     event_id, outcome = _event_id(hearings, body, evidence)
                     meetings[outcome] += 1
@@ -410,12 +542,12 @@ def build_committee_reports(
                         recital_bill_id=recital_bill_id(estimate, body.identity.congress), **common))
                     section_rows.extend(shape_report_section(
                         block, package_id=package_id, part_id=body.part.part_id, seq=seq, last_modified=modified
-                    ) for seq, block in enumerate(parse_agency_blocks(derived.text)))
+                    ) for seq, block in enumerate(parse_agency_blocks(_section_input(derived))))
             (evaluated_hearings if collection == "CHRG" else evaluated_reports).add(package_id)
             if evidence:
                 evidence.event("package-outcome", **state)
 
-    if unfinished := sorted(key for key in reread if reads[key]["outcome"] != "complete"):
+    if unfinished := sorted(key for key in reread if key not in evaluated_hearings or reads[key]["outcome"] != "complete"):
         # A refused named read would publish a checkpoint every later run
         # retries, and a refused hearing detail would drop the prior event_id.
         raise RuntimeError(f"reread did not complete, so nothing is merged: {unfinished}")
@@ -437,9 +569,10 @@ def build_committee_reports(
         # event_id is either a detail that names no meeting or one not read.
         logger.info("Committee reports: hearing details by outcome — {}", dict(meetings))
     if renditions:
-        # Which rendition each package was actually read in. Neither contract
-        # has a column for the derivation name, so this is where it is stated.
-        logger.info("Committee reports: renditions read — {}", dict(renditions))
+        # The run's tally of what each row states in format, text_derivation
+        # and body_completeness: a placeholder kept for want of a PDF shows here.
+        logger.info("Committee reports: renditions read — {}; body completeness — {}",
+                    dict(renditions), dict(completeness))
     logger.info("Committee reports: {} cover links; agenda deferred (no verified meeting-to-jacket join)", len(link_rows))
     # A read package's part rows are replaced as a set, so a part it no longer
     # states goes; a refused or unread package keeps its prior rows. A prior
@@ -448,7 +581,7 @@ def build_committee_reports(
     # one row here that spelling gets wrong is CRPT-119hrpt811's, whose one part
     # is ``-pt1``; the ``parts=`` rule version re-reads it to replace it.
     replaced = {"committee_reports": evaluated_reports, "report_sections": evaluated_reports,
-                "hearing_bill_links": evaluated_hearings}
+                "hearing_bill_links": evaluated_hearings, "hearing_transcripts": evaluated_hearings}
     paths = tuple(merge_contract_table(output_dir, name, rows, download_prior=download_prior,
                                      replace_parents=("package_id", replaced[name]) if name in replaced else None,
                                      backfill_prior=PART_BACKFILL if name in ("committee_reports", "report_sections") else None,

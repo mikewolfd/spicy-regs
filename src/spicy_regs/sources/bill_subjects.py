@@ -32,13 +32,17 @@ retains carrier and time, not the response bytes.
 from __future__ import annotations
 
 import time
-from collections.abc import Iterable
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 import httpx
 from loguru import logger
+
 from spicy_regs.sources.congress_bills import API_BASE, API_KEY_ENV_VARS, _resolve_api_key
+
+if TYPE_CHECKING:
+    from spicy_regs.source_evidence import CaptureEvidence
 
 #: Carrier names, stored verbatim in ``bill_subjects.carrier`` so a reader can
 #: tell which publisher supplied a row.
@@ -164,6 +168,7 @@ class BillSubjectsFetcher:
         client: httpx.Client | None = None,
         deadline: float | None = None,
         clock: Callable[[], float] = time.monotonic,
+        evidence: CaptureEvidence | None = None,
     ) -> None:
         key = api_key if api_key is not None else _resolve_api_key()
         if not key:
@@ -177,6 +182,9 @@ class BillSubjectsFetcher:
         self._last_start = float("-inf")
         self._client = client
         self._owns_client = client is None
+        self.evidence = evidence
+        if evidence is not None:
+            evidence.credential = key
 
     def __enter__(self) -> BillSubjectsFetcher:
         return self
@@ -259,6 +267,9 @@ class BillSubjectsFetcher:
             self._client = httpx.Client(
                 timeout=_TIMEOUT,
                 headers={"User-Agent": _USER_AGENT, "Accept": "application/json"},
+                transport=None if self.evidence is None else self.evidence.transport(
+                    stage="bill-subject-response", max_bytes=8 * 1024 * 1024,
+                ),
             )
         target = httpx.URL(url)
         where = f"GET {target.host}{target.path}"

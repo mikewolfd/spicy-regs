@@ -17,11 +17,12 @@ class CrsReportsRollup(RollupPipeline):
     """Congressional Research Service reports ingested from the Congress.gov v3 API."""
 
     name: ClassVar[str] = "crs-reports"
+    retain_source_evidence: ClassVar[bool] = True
     inputs: ClassVar[tuple[str, ...]] = ()
     output: ClassVar[str] = "crs_reports.parquet"
 
     def build(self, output_dir: Path) -> Path:
-        return build_crs_reports(output_dir)
+        return build_crs_reports(output_dir, evidence=self.source_evidence)
 
 
 app = make_rollup_app(CrsReportsRollup)

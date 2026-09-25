@@ -285,7 +285,7 @@ def test_rollup_forwards_explicit_budget(monkeypatch, tmp_path, raw, expected):
     calls = []
     monkeypatch.setattr(rollup, "build_bill_family", lambda output_dir, **kwargs: calls.append(kwargs) or ())
     assert rollup.BillFamilyRollup().build(tmp_path) == ()
-    assert calls == [{"max_version_fetches": expected}]
+    assert calls == [{"max_version_fetches": expected, "evidence": None}]
 
 
 @pytest.mark.parametrize("raw", ["-1", "1.0", "unlimited"])

@@ -363,4 +363,4 @@ def test_rollup_build_honours_explicit_range(monkeypatch, tmp_path):
 
     monkeypatch.setattr(rollup, "build_sam_entities", fake_build)
     rollup.SamEntitiesRollup().build(tmp_path)
-    assert captured == {"mode": "partition", "since_year": 2000, "until_year": 2026, "max_records": None}
+    assert captured == {"mode": "partition", "since_year": 2000, "until_year": 2026, "max_records": None, "evidence": None}

@@ -46,7 +46,7 @@ def test_cover_links_use_mods_and_empty_covers_resume_without_body_requests(tmp_
     class Bodies(NoBodies):
         requested = []
 
-        def acquire(self, package_id, *, max_bytes=None):
+        def acquire(self, package_id, *, max_bytes=None, prefer=()):
             key = package_id
             self.requested.append(key)
             mods = (FIXTURES / f"mods-{key}.excerpt.xml").read_bytes() if key == "CHRG-118hhrg56198" else None
@@ -82,7 +82,7 @@ def test_report_pass_runs_the_recital_gate_on_its_existing_body(tmp_path, fixtur
     # Deliberately synthetic package metadata; the retained excerpt exercises body-to-rule wiring.
     body = ("<html><body><pre>" + html.escape((FIXTURES / fixture).read_text()) + "</pre></body></html>").encode()
     class Acquirer(NoBodies):
-        def acquire_parts(self, package_id, *, max_bytes=None):
+        def acquire_parts(self, package_id, *, max_bytes=None, prefer=()):
             return (_package(package_id, body=body),)
 
     acquirer = Acquirer()
@@ -101,7 +101,7 @@ def test_pending_packages_survive_an_advanced_window_and_the_cap(tmp_path):
     class Bodies(NoBodies):
         requested = []
 
-        def acquire_parts(self, package_id, *, max_bytes=None):
+        def acquire_parts(self, package_id, *, max_bytes=None, prefer=()):
             key = package_id
             self.requested.append(key)
             raise ValueError("publisher refusal")
@@ -124,7 +124,7 @@ def test_pending_packages_survive_an_advanced_window_and_the_cap(tmp_path):
 def test_report_body_credential_refusal_aborts_without_checkpoint(tmp_path, status):
     """A 401/403 body fetch raises before any capture table or checkpoint is written."""
     class Refusing(NoBodies):
-        def acquire_parts(self, package_id, *, max_bytes=None):
+        def acquire_parts(self, package_id, *, max_bytes=None, prefer=()):
             raise CredentialRefusedError(f"HTTP {status}")
 
     with pytest.raises(CredentialRefusedError):
@@ -196,7 +196,7 @@ def test_hearing_correction_replaces_only_evaluated_parent_links(tmp_path, corre
                                   if "/CHRG/" in url else [])
 
     class Bodies(NoBodies):
-        def acquire(self, package_id, *, max_bytes=None):
+        def acquire(self, package_id, *, max_bytes=None, prefer=()):
             asked.append(package_id)
             if correction == "refused" and modified.startswith("2026-09-20"):
                 raise ValueError("body temporarily unavailable")

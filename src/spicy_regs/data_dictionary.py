@@ -525,6 +525,8 @@ DERIVED_SCHEMAS: dict[str, list[tuple[str, str]]] = {
         ("name", "VARCHAR"),
         ("recipient_level", "VARCHAR"),
         ("total_award_amount", "VARCHAR"),
+        ("observed_at", "VARCHAR"),
+        ("source_capture_sha256", "VARCHAR"),
     ],
     # Ingested from the FCC ECFS public API (build_fcc_proceedings); the FCC's
     # docket equivalent — the FCC does not participate in regulations.gov. All

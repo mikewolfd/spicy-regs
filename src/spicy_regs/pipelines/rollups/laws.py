@@ -18,11 +18,12 @@ class LawsRollup(RollupPipeline):
     """Enacted laws with their Statutes at Large citation, and the OLRC classification tables (api.data.gov key)."""
 
     name: ClassVar[str] = "laws"
+    retain_source_evidence: ClassVar[bool] = True
     inputs: ClassVar[tuple[str, ...]] = ()
     outputs: ClassVar[tuple[str, ...]] = ("laws.parquet", "law_code_sections.parquet", "table3_records.parquet")
 
     def build(self, output_dir: Path) -> tuple[Path, ...]:
-        return build_laws(output_dir)
+        return build_laws(output_dir, evidence=self.source_evidence)
 
 
 app = make_rollup_app(LawsRollup)

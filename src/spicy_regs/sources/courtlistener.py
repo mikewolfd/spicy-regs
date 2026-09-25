@@ -14,6 +14,11 @@ from collections.abc import Iterator
 from datetime import date
 from typing import Literal
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from spicy_regs.source_evidence import CaptureEvidence
+
 import httpx
 
 from spicy_regs.sources.base import Reader
@@ -54,6 +59,7 @@ class CourtListenerReader(Reader):
         api_token: str | None = None,
         verbose: bool = False,
         transport: httpx.BaseTransport | None = None,
+        evidence: CaptureEvidence | None = None,
     ) -> None:
         if max_records is not None and (type(max_records) is not int or max_records < 1):
             raise ValueError("max_records must be a positive integer")
@@ -63,6 +69,7 @@ class CourtListenerReader(Reader):
         self.api_token = api_token if api_token is not None else _resolve_api_token()
         self.verbose = verbose
         self.transport = transport
+        self.evidence = evidence
 
     def iter_records(self) -> Iterator[dict]:
         try:
@@ -90,7 +97,12 @@ class CourtListenerReader(Reader):
         seen = set()
         yielded = 0
         declared = None
-        with CourtListenerSearchReader(budget=budget, api_key=self.api_token, transport=self.transport) as reader:
+        transport = self.transport
+        if self.evidence:
+            self.evidence.credential = self.api_token or ""
+            self.evidence.event("selection", stage="courtlistener", url=url, max_records=self.max_records)
+            transport = self.evidence.transport(transport, stage="courtlistener-response", max_bytes=budget.max_page_bytes)
+        with CourtListenerSearchReader(budget=budget, api_key=self.api_token, transport=transport) as reader:
             for page in reader.search(url, max_pages=_MAX_PAGES):
                 if page.declared_count is None:
                     raise CourtListenerError("CourtListener search omitted its declared count")
@@ -135,8 +147,9 @@ class CourtListenerOpinionSearchReader(CourtListenerReader):
         api_token: str | None = None,
         verbose: bool = False,
         transport: httpx.BaseTransport | None = None,
+        evidence: CaptureEvidence | None = None,
     ) -> None:
         super().__init__(
-            since=since, max_records=max_records, api_token=api_token, verbose=verbose, transport=transport
+            since=since, max_records=max_records, api_token=api_token, verbose=verbose, transport=transport, evidence=evidence
         )
         self.court = court

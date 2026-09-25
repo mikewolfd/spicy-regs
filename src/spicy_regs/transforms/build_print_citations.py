@@ -29,7 +29,7 @@ from collections.abc import Callable, Iterator, Mapping, Sequence
 from datetime import UTC, datetime
 from importlib.metadata import version
 from pathlib import Path
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 import httpx
 from loguru import logger
@@ -46,12 +46,12 @@ from spicy_docs.interpretation.citations import (
     find_citations,
 )
 from spicy_docs.reading.paged_json import PagedJsonBudget, PagedJsonSourceError
+from spicy_docs.schemas.bill_action_tables import shape_bill_committee_action
 from spicy_docs.schemas.budget_volume_tables import (
     BUDGET_VOLUME,
     budget_index_stated_keys,
     shape_budget_volume,
 )
-from spicy_docs.schemas.bill_action_tables import shape_bill_committee_action
 from spicy_docs.schemas.document_citation_tables import (
     GOVINFO_PACKAGE,
     document_provenance,
@@ -64,9 +64,13 @@ from spicy_docs.sources.congress.committee_rosters import (
     CommitteeRosterBudget,
     CommitteeRosterError,
 )
-from spicy_docs.sources.govinfo.body_acquisition import GovInfoBodyAcquirer, GovInfoBodyBudget, GovInfoFormatNotOfferedError
-from spicy_docs.sources.govinfo.bodies import MEASURED_BUDGET_PARTS, PRINT_BODY_PREFERENCE, parse_package_id
 from spicy_docs.sources.govinfo.activity_reports import ACTIVITY_REPORT_RULE_VERSION, is_activity_report, names_activity
+from spicy_docs.sources.govinfo.bodies import MEASURED_BUDGET_PARTS, PRINT_BODY_PREFERENCE, parse_package_id
+from spicy_docs.sources.govinfo.body_acquisition import (
+    GovInfoBodyAcquirer,
+    GovInfoBodyBudget,
+    GovInfoFormatNotOfferedError,
+)
 from spicy_docs.sources.govinfo.discovery import GovInfoDiscoveryReader, published_url
 from spicy_docs.transport.credentials import CredentialRefusedError, scrub_credential
 
@@ -75,6 +79,9 @@ from spicy_regs.sources.congress_bills import API_KEY_ENV_VARS, _resolve_api_key
 from spicy_regs.transforms.congress_scope import current_congress
 from spicy_regs.transforms.read_checkpoints import checkpoint_metadata, read_checkpoints
 from spicy_regs.transforms.table_merge import merge_contract_table, published_table
+
+if TYPE_CHECKING:
+    from spicy_regs.source_evidence import CaptureEvidence
 
 #: The four tables this transform publishes, in the order ``build`` returns
 #: them. ``document_citations`` is last because it is fed by both families.
@@ -392,15 +399,28 @@ def build_print_citations(
     rosters: RosterSource | None = None,
     max_packages: int = MAX_PACKAGES_PER_RUN,
     download_prior: Callable[[str, Path], bool] = r2.download,
+    evidence: CaptureEvidence | None = None,
 ) -> tuple[Path, Path, Path, Path]:
     """Build the two document tables, the bill-action table and the shared citation link table."""
     if reader is None or acquirer is None:
         api_key = _resolve_api_key()
         if not api_key:
             raise RuntimeError(f"Print citations need an api.data.gov key (set one of {', '.join(API_KEY_ENV_VARS)})")
-        reader = reader or GovInfoDiscoveryReader(budget=DISCOVERY_BUDGET, api_key=api_key)
-        acquirer = acquirer or GovInfoBodyAcquirer(budget=BODY_BUDGET, api_key=api_key)
-    rosters = rosters or CommitteeRosterAcquirer(budget=ROSTER_BUDGET)
+        if evidence is not None:
+            evidence.credential = api_key
+        reader = reader or GovInfoDiscoveryReader(
+            budget=DISCOVERY_BUDGET, api_key=api_key,
+            transport=None if evidence is None else evidence.transport(stage="print-discovery", max_bytes=DISCOVERY_BUDGET.max_page_bytes),
+        )
+        acquirer = acquirer or GovInfoBodyAcquirer(
+            budget=BODY_BUDGET, api_key=api_key,
+            transport=None if evidence is None else evidence.transport(
+                stage="print-package", max_bytes=max(BODY_BUDGET.max_body_bytes, BODY_BUDGET.max_metadata_bytes)),
+        )
+    rosters = rosters or CommitteeRosterAcquirer(
+        budget=ROSTER_BUDGET,
+        transport=None if evidence is None else evidence.transport(stage="print-rosters", max_bytes=ROSTER_BUDGET.max_bytes),
+    )
 
     # All four priors are asked for once, up front. The two document tables
     # need theirs for the held-package check anyway; the two derived tables ask

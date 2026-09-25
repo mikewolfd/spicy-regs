@@ -17,6 +17,11 @@ from collections.abc import Iterator, Mapping
 from datetime import date
 from operator import itemgetter
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from spicy_regs.source_evidence import CaptureEvidence
+
 import httpx
 
 from spicy_regs.sources.base import Reader
@@ -57,6 +62,7 @@ class CrsReportsReader(Reader):
         api_key: str | None = None,
         verbose: bool = False,
         transport: httpx.BaseTransport | None = None,
+        evidence: CaptureEvidence | None = None,
     ) -> None:
         if isinstance(per_page, bool) or not isinstance(per_page, int) or per_page < 1:
             raise ValueError("per_page must be a positive integer")
@@ -65,6 +71,7 @@ class CrsReportsReader(Reader):
         self.api_key = api_key if api_key is not None else _resolve_api_key()
         self.verbose = verbose
         self.transport = transport
+        self.evidence = evidence
 
     def iter_records(self) -> Iterator[dict]:
         if not self.api_key:
@@ -88,7 +95,12 @@ class CrsReportsReader(Reader):
             timeout_seconds=60,
             min_request_interval_seconds=0,
         )
-        with CongressListingReader(budget=budget, api_key=self.api_key, transport=self.transport) as reader:
+        transport = self.transport
+        if self.evidence:
+            self.evidence.credential = self.api_key
+            self.evidence.event("selection", stage="crs", url=url, since=str(self.since), max_pages=_MAX_PAGES)
+            transport = self.evidence.transport(transport, stage="crs-response", max_bytes=budget.max_page_bytes)
+        with CongressListingReader(budget=budget, api_key=self.api_key, transport=transport) as reader:
             pooled = reader.pooled(
                 LIST_ROUTES["crsreport"],
                 url,

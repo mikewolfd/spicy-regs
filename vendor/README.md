@@ -5,6 +5,22 @@ The optional `source-readers` extra enables the same readers for package install
 its wheels must be supplied explicitly until they are published in a registry.
 Base CLI and MCP installs do not require them.
 
+- `spicy_docs-0.33.0`: built from SpicyDocs `main` at `881f6f5`, with Rulespec Artifacts 1.1.1.
+  Built September 25, 2026 UTC: **1,466,243 bytes**, SHA-256
+  `9021a9468de3ddd501b6bf2477b0e1a3a0e954df839fb79a8f625a26f3fdeb3f`, byte-identical to a
+  rebuild from a clean archive of that commit. It carries the September 25 audit repairs.
+  Table III keeps a data row whose act-section label is blank (reader rule
+  `table3-native-rows-v2`; act 119-37 had four such rows the old reader dropped). `laws`
+  states every PLAW read (`captured_partial`, `captured_refused`, `request_failed`) and
+  appends `uslm_citable_as_json`, `uslm_reason` and `uslm_reader_version`; a file stating
+  another law raises `UslmIdentityError`. Hearings keep every native `heldDate`
+  (`held_dates_json`; `held_date` only when one date is stated; link rule set
+  `d06e0bd80ca1`), and `committee_reports`/`hearing_transcripts` append
+  `body_completeness` and `text_derivation` for GovInfo PDF notices. The host re-reads
+  under the new rule versions; the source gate and reviews are in
+  `~/Work/corpora/fork-execution-2026-09-21/repair-execution-2026-09-25/`. This is a
+  local package adoption; public tables require a subsequent run.
+
 - `spicy_docs-0.32.1`: built from clean source commit `4310647`, with Rulespec Artifacts 1.1.1.
   Built September 24, 2026 UTC: **1,463,602 bytes**, SHA-256
   `09d96e176a2aa6bf82d15bb37aeff63e13db78354303798fafde732f396b6c85`.

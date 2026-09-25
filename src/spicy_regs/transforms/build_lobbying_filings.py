@@ -36,6 +36,8 @@ from spicy_regs.transforms.table_merge import merge_local_prior
 if TYPE_CHECKING:
     from spicy_docs.sources.lda import LdaFilingsReader
 
+    from spicy_regs.source_evidence import CaptureEvidence
+
 OUTPUT = "lobbying_filings.parquet"
 
 # Re-scan this many days before the last stored dt_posted on each run, so
@@ -225,6 +227,7 @@ def _prior_max_dt_posted(prior_file: Path) -> date | None:
 def build_lobbying_filings(
     output_dir: Path,
     *,
+    evidence: CaptureEvidence | None = None,
     since: date | None = None,
     until: date | None = None,
     filing_year: int | None = None,
@@ -267,7 +270,12 @@ def build_lobbying_filings(
         timeout_seconds=60.0,
         min_request_interval_seconds=KEYED_INTERVAL_SECONDS if api_key else KEYLESS_INTERVAL_SECONDS,
     )
-    with LdaFilingsReader(budget=budget, api_key=api_key) as reader:
+    transport = None
+    if evidence is not None:
+        evidence.credential = api_key or ""
+        evidence.event("selection", stage="lobbying", url=url, max_records=max_records)
+        transport = evidence.transport(stage="lobbying-response", max_bytes=budget.max_page_bytes)
+    with LdaFilingsReader(budget=budget, api_key=api_key, transport=transport) as reader:
         rows = [_shape(f) for f in _iter_filings(reader, url, max_records=max_records)]
     new_file = output_dir / "_lda_new.parquet"
     table = pa.Table.from_pylist(rows, schema=_SCHEMA) if rows else _SCHEMA.empty_table()

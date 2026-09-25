@@ -175,10 +175,10 @@ class NoBodies:
     (``PackageBodySource``), so a stub for one collection still states both.
     """
 
-    def acquire(self, package_id: str, *, max_bytes=None):
+    def acquire(self, package_id: str, *, max_bytes=None, prefer=()):
         raise LookupError(f"stub: no hearing body for {package_id}")
 
-    def acquire_parts(self, package_id: str, *, max_bytes=None):
+    def acquire_parts(self, package_id: str, *, max_bytes=None, prefer=()):
         raise LookupError(f"stub: no report body for {package_id}")
 
 
@@ -193,11 +193,13 @@ class StubBodyAcquirer:
         self.requested: list[str] = []
         self.mods_bytes = mods_bytes
 
-    def acquire(self, package_id: str, *, max_bytes=None):
+    def acquire(self, package_id: str, *, max_bytes=None, prefer=()):
+        assert prefer == (), "only a publisher placeholder asks for a rendition"
         self.requested.append(package_id)
         return _package(package_id, mods_bytes=self.mods_bytes)
 
-    def acquire_parts(self, package_id: str, *, max_bytes=None):
+    def acquire_parts(self, package_id: str, *, max_bytes=None, prefer=()):
+        assert prefer == (), "only a publisher placeholder asks for a rendition"
         self.requested.append(package_id)
         return _parts(package_id, mods_bytes=self.mods_bytes)
 
@@ -390,11 +392,11 @@ def test_the_acquirer_is_asked_with_no_preference(tmp_path, monkeypatch):
 class StubPdfAcquirer:
     """The fallback: a package offered only as PDF, which the sealed preference now reaches."""
 
-    def acquire(self, package_id: str, *, max_bytes=None):
+    def acquire(self, package_id: str, *, max_bytes=None, prefer=()):
         body = make_pdf([f"{package_id} page one", "page two"])
         return _package(package_id, fmt="pdf", media_type="application/pdf", body=body)
 
-    def acquire_parts(self, package_id: str, *, max_bytes=None):
+    def acquire_parts(self, package_id: str, *, max_bytes=None, prefer=()):
         return (self.acquire(package_id),)
 
 
@@ -449,7 +451,7 @@ class TwoHearingsDiscovery(StubDiscovery):
 class HearingBodyAcquirer(StubBodyAcquirer):
     """The real MODS for 63127, a minimal one for 64431, both through `validate_package_mods`."""
 
-    def acquire(self, package_id: str, *, max_bytes=None):
+    def acquire(self, package_id: str, *, max_bytes=None, prefer=()):
         self.requested.append(package_id)
         mods = None if package_id == CHRG_ID else _hearing_mods(package_id)
         return _package(package_id, mods_bytes=mods)

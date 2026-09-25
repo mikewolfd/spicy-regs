@@ -1,6 +1,6 @@
 """Transform: build ``usaspending_recipients.parquet`` from USASpending.gov.
 
-Produces a pinned 6-column all-VARCHAR schema keyed on ``recipient_id`` — the
+Produces an all-VARCHAR schema keyed on ``recipient_id`` — the
 federal-award **recipient** reference dimension that sits alongside the
 regulations.gov corpus and complements the SAM entity registry and FEC
 committee table for resolving organization commenters by their federal
@@ -23,6 +23,7 @@ from __future__ import annotations
 import json
 from collections.abc import Iterator
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import httpx
 import pyarrow as pa
@@ -30,6 +31,9 @@ import pyarrow.parquet as pq
 from loguru import logger
 
 from spicy_regs.sources import r2
+
+if TYPE_CHECKING:
+    from spicy_regs.source_evidence import CaptureEvidence
 
 OUTPUT = "usaspending_recipients.parquet"
 
@@ -40,8 +44,8 @@ PER_PAGE = 100
 DEFAULT_MAX_PAGES = 100
 _MAX_REQUESTS_PER_PAGE = 5
 
-# The published schema: 6 columns, all VARCHAR, in a fixed order.
-# ``recipient_id`` is the primary / dedup key.
+# The published schema, all VARCHAR, in a fixed order (``data_dictionary`` declares
+# the same list). ``recipient_id`` is the primary / dedup key.
 COLUMNS = (
     "recipient_id",
     "uei",
@@ -49,6 +53,8 @@ COLUMNS = (
     "name",
     "recipient_level",
     "total_award_amount",
+    "observed_at",
+    "source_capture_sha256",
 )
 _SCHEMA = pa.schema([(c, pa.string()) for c in COLUMNS])
 
@@ -69,6 +75,8 @@ def _shape(doc: dict) -> dict:
         "name": doc.get("name"),
         "recipient_level": doc.get("recipient_level"),
         "total_award_amount": _s(doc.get("amount")),
+        "observed_at": doc.get("_source_observed_at"),
+        "source_capture_sha256": doc.get("_source_capture_sha256"),
     }
 
 
@@ -77,6 +85,8 @@ def _iter_recipient_rows(
     per_page: int = PER_PAGE,
     max_pages: int | None = None,
     transport: httpx.BaseTransport | None = None,
+    evidence: CaptureEvidence | None = None,
+    include_observation: bool = False,
 ) -> Iterator[dict]:
     """Yield the selected top-page recipient ranking through SpicyDocs' evidenced reader.
 
@@ -100,6 +110,12 @@ def _iter_recipient_rows(
         min_request_interval_seconds=0,
     )
     seen: set[str] = set()
+    if evidence is not None:
+        # The owner requests identity encoding and reads raw bytes, so each
+        # page's ``capture.sha256`` names the blob this tee retains; the tee
+        # alone also keeps retries and pages the owner refuses.
+        evidence.event("selection", stage="usaspending", url=url, request_body=body, max_pages=pages)
+        transport = evidence.transport(transport, stage="usaspending-response", max_bytes=budget.max_page_bytes)
     with UsaspendingRecipientsReader(budget=budget, transport=transport) as reader:
         for index, page in enumerate(reader.recipients(body, max_pages=pages)):
             metadata = json.loads(page.capture.body).get("page_metadata")
@@ -120,12 +136,18 @@ def _iter_recipient_rows(
                 if not isinstance(identity, str) or not identity.strip() or identity in seen:
                     raise PagedJsonSourceError("USAspending page contains a missing or repeated recipient identity")
                 seen.add(identity)
-                yield dict(record)
+                observed = dict(record)
+                if include_observation:
+                    observed["_source_observed_at"] = page.capture.observed_at
+                    observed["_source_capture_sha256"] = page.capture.sha256
+                yield observed
             if index + 1 == pages and page.next_url is not None:
                 return  # the requested top-page selection is complete even when more pages exist
 
 
-def build_usaspending_recipients(output_dir: Path, *, max_pages: int | None = None) -> Path:
+def build_usaspending_recipients(
+    output_dir: Path, *, max_pages: int | None = None, evidence: CaptureEvidence | None = None,
+) -> Path:
     """Build ``usaspending_recipients.parquet`` (top-N merged with the prior table)."""
     import duckdb
 
@@ -140,7 +162,9 @@ def build_usaspending_recipients(output_dir: Path, *, max_pages: int | None = No
         logger.info("USASpending recipients: no prior table found — clean build")
 
     # 2. Fetch + shape into a "new rows" parquet.
-    rows = [_shape(doc) for doc in _iter_recipient_rows(max_pages=max_pages)]
+    rows = [_shape(doc) for doc in _iter_recipient_rows(
+        max_pages=max_pages, include_observation=True, evidence=evidence,
+    )]
     new_file = output_dir / "_usaspending_new.parquet"
     table = pa.Table.from_pylist(rows, schema=_SCHEMA) if rows else _SCHEMA.empty_table()
     pq.write_table(table, new_file, compression="zstd")
@@ -157,8 +181,15 @@ def build_usaspending_recipients(output_dir: Path, *, max_pages: int | None = No
 
     cols = ", ".join(COLUMNS)
     if have_prior:
+        prior_columns = set(pq.read_schema(prior_file).names)
+        # Only the additive observation fields may be absent in a legacy file.
+        # Never stamp carried records with this run's time or capture digest.
+        prior_cols = ", ".join(
+            f"CAST(NULL AS VARCHAR) AS {col}" if col not in prior_columns and col in
+            ("observed_at", "source_capture_sha256") else col for col in COLUMNS
+        )
         union = (
-            f"SELECT {cols}, 0 AS _src FROM read_parquet('{prior_file}') "
+            f"SELECT {prior_cols}, 0 AS _src FROM read_parquet('{prior_file}') "
             f"UNION ALL BY NAME "
             f"SELECT {cols}, 1 AS _src FROM read_parquet('{new_file}')"
         )

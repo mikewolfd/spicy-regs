@@ -28,8 +28,10 @@ class HouseCommunicationsRollup(RollupPipeline):
     name: ClassVar[str] = "house-communications"
     output: ClassVar[str] = "house_communications.parquet"
 
+    retain_source_evidence: ClassVar[bool] = True
+
     def build(self, output_dir: Path) -> Path:
-        return build_house_communications(output_dir)
+        return build_house_communications(output_dir, evidence=self.source_evidence)
 
 
 class CommitteeMeetingsRollup(RollupPipeline):
@@ -38,8 +40,10 @@ class CommitteeMeetingsRollup(RollupPipeline):
     name: ClassVar[str] = "committee-meetings"
     output: ClassVar[str] = "committee_meetings.parquet"
 
+    retain_source_evidence: ClassVar[bool] = True
+
     def build(self, output_dir: Path) -> Path:
-        return build_committee_meetings(output_dir)
+        return build_committee_meetings(output_dir, evidence=self.source_evidence)
 
 
 class RecordIssuesRollup(RollupPipeline):
@@ -48,8 +52,10 @@ class RecordIssuesRollup(RollupPipeline):
     name: ClassVar[str] = "record-issues"
     output: ClassVar[str] = "record_issues.parquet"
 
+    retain_source_evidence: ClassVar[bool] = True
+
     def build(self, output_dir: Path) -> Path:
-        return build_record_issues(output_dir)
+        return build_record_issues(output_dir, evidence=self.source_evidence)
 
 
 class TreatiesRollup(RollupPipeline):
@@ -58,8 +64,10 @@ class TreatiesRollup(RollupPipeline):
     name: ClassVar[str] = "treaties"
     output: ClassVar[str] = "treaties.parquet"
 
+    retain_source_evidence: ClassVar[bool] = True
+
     def build(self, output_dir: Path) -> Path:
-        return build_treaties(output_dir)
+        return build_treaties(output_dir, evidence=self.source_evidence)
 
 
 class NominationsRollup(RollupPipeline):
@@ -68,8 +76,10 @@ class NominationsRollup(RollupPipeline):
     name: ClassVar[str] = "nominations"
     output: ClassVar[str] = "nominations.parquet"
 
+    retain_source_evidence: ClassVar[bool] = True
+
     def build(self, output_dir: Path) -> Path:
-        return build_nominations(output_dir)
+        return build_nominations(output_dir, evidence=self.source_evidence)
 
 
 house_communications_app = make_rollup_app(HouseCommunicationsRollup)

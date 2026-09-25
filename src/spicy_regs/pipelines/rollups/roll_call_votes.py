@@ -25,9 +25,10 @@ class RollCallVotesRollup(RollupPipeline):
     inputs: ClassVar[tuple[str, ...]] = ()
     soft_inputs: ClassVar[tuple[str, ...]] = ("bill_vote_references.parquet",)
     outputs: ClassVar[tuple[str, ...]] = ("roll_call_votes.parquet", "member_votes.parquet")
+    retain_source_evidence: ClassVar[bool] = True
 
     def build(self, output_dir: Path) -> tuple[Path, ...]:
-        return build_roll_call_votes(output_dir)
+        return build_roll_call_votes(output_dir, evidence=self.source_evidence)
 
 
 app = make_rollup_app(RollCallVotesRollup)

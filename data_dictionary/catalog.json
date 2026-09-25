@@ -819,8 +819,8 @@
     {
       "table": "usaspending_recipients",
       "label": "Federal award recipients",
-      "summary": "One row per federal-award recipient, ingested from the USASpending.gov `/api/v2/recipient/` endpoint by `build_usaspending_recipients`. A keyless (no API key) org-resolution reference dimension keyed by UEI and name — the organizations that receive federal money — complementary to the SAM entity registry and the `fec_committees` table for resolving and enriching the organizations that comment on rulemakings by their federal funding. Scope is deliberately bounded to the top-N recipients by trailing-12-month federal award amount (the endpoint reports ~18M recipients, too many for a daily full walk); the transform merges each run's top-N with the prior table so coverage stays monotonic. Retained recipients outside a run's selection keep their earlier amounts without a per-row observation date. All columns are stored as VARCHAR.",
-      "coverage": "Not a range. Accumulated recipients from bounded top-N walks ranked by trailing-12-month award amount. Each run refreshes its selected recipients and retains earlier rows outside that selection with their previous amounts. No per-row observation date is stored, so the amounts can describe different trailing-12-month periods. An absent recipient may still exist in the publisher's awards data.",
+      "summary": "One row per federal-award recipient, ingested from the USASpending.gov `/api/v2/recipient/` endpoint by `build_usaspending_recipients`. A keyless (no API key) org-resolution reference dimension keyed by UEI and name — the organizations that receive federal money — complementary to the SAM entity registry and the `fec_committees` table for resolving and enriching the organizations that comment on rulemakings by their federal funding. Scope is deliberately bounded to the top-N recipients by trailing-12-month federal award amount (the endpoint reports ~18M recipients, too many for a daily full walk); the transform merges each run's top-N with the prior table so coverage stays monotonic. Retained recipients outside a run's selection keep their earlier amounts and their original observation columns. All columns are stored as VARCHAR.",
+      "coverage": "Not a range. Accumulated recipients from bounded top-N walks ranked by trailing-12-month award amount. Each run refreshes its selected recipients and retains earlier rows outside that selection with their previous amounts, so the amounts can describe different trailing-12-month periods. A row read since per-row capture evidence was added states its `observed_at` and the digest of its source page; a row carried from earlier runs keeps NULL there, because its read time was not retained. An absent recipient may still exist in the publisher's awards data.",
       "kind": "not_a_range",
       "measured_on": "2026-09-24",
       "data_quality": null,
@@ -830,7 +830,9 @@
         "duns",
         "name",
         "recipient_level",
-        "total_award_amount"
+        "total_award_amount",
+        "observed_at",
+        "source_capture_sha256"
       ]
     },
     {
@@ -1440,7 +1442,9 @@
         "estimate_absence_reason",
         "estimate_absence_rule",
         "part_id",
-        "part_number"
+        "part_number",
+        "body_completeness",
+        "text_derivation"
       ]
     },
     {
@@ -1475,7 +1479,7 @@
       "coverage": "Sampled. The 2026-09-21 mikewolfd/spicy-regs fork delivery rebuilt and published all 13 selected hearing packages within the five-table report family. All 13 exact hearing-detail requests were accepted and their native event identifiers checked. One body changed bytes from its prior pin while its normalized text digest stayed identical; the fresh capture remains distinct. These are package/body metadata rows, not speaker turns or complete hearing history. No upstream/default publication is asserted. Receipts: fork-execution-2026-09-21/report-family/rebuild-audit.json, publication-report-family.json and report-family-mcp-audit/.",
       "kind": "sampled",
       "measured_on": "2026-09-21",
-      "data_quality": "Cover bills come from the package's MODS and cost no extra requests. BODY mentions do not become hearing links. event_id comes from a verified Congress.gov hearing detail; NULL can mean no meeting or a refused detail. committee_report_reads distinguishes a completed read from a refused one.",
+      "data_quality": "Cover bills come from the package's MODS and cost no extra requests. BODY mentions do not become hearing links. event_id comes from a verified Congress.gov hearing detail; NULL can mean no meeting or a refused detail. committee_report_reads distinguishes a completed read from a refused one. body_completeness says what the read text states about itself: a publisher_placeholder body is the publisher's notice that the document is only in the PDF. When the package offers that PDF it is read instead (pdf_extracted, with text_derivation naming the extraction); when it offers none, the notice is published as it stands. NULL on rows not re-read since the column was added.",
       "columns": [
         "package_id",
         "collection",
@@ -1496,7 +1500,9 @@
         "observed_at",
         "page_count",
         "text_sha256",
-        "event_id"
+        "event_id",
+        "body_completeness",
+        "text_derivation"
       ]
     },
     {
@@ -1506,7 +1512,7 @@
       "coverage": "Sampled. The 2026-09-21 mikewolfd/spicy-regs fork delivery published a verified empty table within the five-table report family: all 13 selected root-package CHRG MODS records state zero COVER bill references. Complete read checkpoints distinguish this result from unread or refused packages. This does not establish absence of bill relationships in constituent records, agendas, bill actions or transcript text, and does not measure recall. Agenda acquisition remains deferred. No upstream/default publication is asserted. Receipts: fork-execution-2026-09-21/report-family/rebuild-audit.json, publication-report-family.json and report-family-mcp-audit/.",
       "kind": "sampled",
       "measured_on": "2026-09-21",
-      "data_quality": "mods_cover means held_on. The package measured confirmation on 19 of 20 cover pairs and 18 of 18 pairs where cover and agenda agreed. Agenda links mean noticed, not held_on: agenda-only pairs were confirmed 1 of 18, contradicted 1 and unverifiable 16. Recall is unmeasured. Only 2 of 20 sampled House hearings and 0 of 3 Senate hearings stated COVER bills; a missing row does not establish that a hearing concerned no bills. A successfully re-read cover replaces that hearing's prior links, including an empty result. Unread or refused bodies retain their prior links.",
+      "data_quality": "mods_cover means held_on. The package measured confirmation on 19 of 20 cover pairs and 18 of 18 pairs where cover and agenda agreed. Agenda links mean noticed, not held_on: agenda-only pairs were confirmed 1 of 18, contradicted 1 and unverifiable 16. Recall is unmeasured. Only 2 of 20 sampled House hearings and 0 of 3 Senate hearings stated COVER bills; a missing row does not establish that a hearing concerned no bills. A successfully re-read cover replaces that hearing's prior links, including an empty result. Unread or refused bodies retain their prior links. held_date is the one date the hearing's MODS states. A compiled volume that states several dates has held_date NULL and every native date, in source order, in held_dates_json; the list does not establish that each bill was considered on each date. Before link rule d06e0bd80ca1 (2026-09-25) such a volume's links carried its first date (CHRG-117shrg56721 states eleven), and rows not re-read since keep held_dates_json NULL.",
       "columns": [
         "package_id",
         "congress",
@@ -1519,7 +1525,8 @@
         "relation",
         "evidence_rule",
         "evidence_text",
-        "link_rule_version"
+        "link_rule_version",
+        "held_dates_json"
       ]
     },
     {
@@ -1556,7 +1563,7 @@
       "coverage": "Sampled. Measured on one cold-start run (receipt `d1-measured-run-2026-09-19/`): `law/119` declared 108 and served 108 on one page for one keyed request, and all 108 became rows; the PLAW leg spent 108 keyless requests under its 300-per-run cap and established 102 Statutes at Large citations. The Congress.gov law route for the scoped Congresses (the current one by default) is walked whole each run and every law it lists is a row; the PLAW USLM citation is added per law, newest first, under the per-run cap. A steady-state run is meant to ask only about laws whose list row moved or whose PLAW the bulk folder had not yet served. **The skip is design, not measurement**: D1 was a cold start, so nothing was held and nothing was skipped, and the saving described here has not been observed yet — the second run is what measures it.",
       "kind": "sampled",
       "measured_on": "2026-09-19",
-      "data_quality": "`statutes_at_large_cite` is NULL exactly when `uslm_outcome` is not `captured`. `unavailable` is the publisher's own lag, a `404` from the exact PLAW locator: on 2026-09-19 the route listed 108 laws and the PLAW bulk folder held 104, the four newest (119-103, 119-104, 119-109, 119-110) absent, and both the capped proof run and the full measured run met exactly those four; each is retried every run until the folder serves it. `not_requested` marks a law the cap or a transport failure kept this run from establishing, retried too; a transport failure is never published as `unavailable`.\nThe measured run also showed a third way into `not_requested` that the name does not suggest: the two private laws of the 119th (`PLAW-119pvtl1`, `PLAW-119pvtl2`) *were* requested and served, and the contract refused them because the USLM meta's `citableAs` names a private law number and no Statutes at Large citation. So the 108 rows divide 102 `captured`, 4 `unavailable` and 2 `not_requested`, and the last two are a contract refusal rather than a request not made. They are re-requested every run and will be refused again; the column says \"no citation established\", which is true, but it does not distinguish \"not asked\" from \"asked and refused\".\nA captured PLAW whose meta names no citation is refused, never published with a NULL citation beside a `captured` outcome. A law already captured is not re-read unless its list row's `update_date` moves. All columns are stored as VARCHAR.",
+      "data_quality": "`statutes_at_large_cite` is set when `uslm_outcome` is `captured`; read every NULL through `uslm_outcome` and `uslm_reason`. `unavailable` (reason `source_unavailable`) is the publisher's own lag, a `404` from the exact PLAW locator: on 2026-09-19 the route listed 108 laws and the PLAW bulk folder held 104, the four newest (119-103, 119-104, 119-109, 119-110) absent; each is retried every run until the folder serves it.\n`captured_partial` is a validated USLM file that states no Statutes at Large citation (reason `statutes_citation_not_stated`): the two private laws of the 119th (`PLAW-119pvtl1`, `PLAW-119pvtl2`), whose own `citableAs` values are kept in `uslm_citable_as_json`. Until reader rule `laws-uslm-v2` (2026-09-25) the contract refused those two files and their rows said `not_requested`, although both were requested and served. `captured_refused` keeps the digest of a `200` body the reader refused, either another law's file (`native_identity_refused`) or not native USLM at all, such as an HTML page (`native_shape_refused`), and none of its unvalidated fields. `request_failed` is an attempted read that established nothing, a transport failure included; it is never published as `unavailable`. `not_requested` means only that no request was made, which the per-run cap decides.\nA validated row (`captured` or `captured_partial`) is not re-read unless its list row's `update_date` moves or `uslm_reader_version` changes, and a failed later attempt never replaces it. All columns are stored as VARCHAR.",
       "columns": [
         "law_id",
         "congress",
@@ -1584,7 +1591,10 @@
         "uslm_processed_date",
         "uslm_sha256",
         "uslm_observed_at",
-        "uslm_outcome"
+        "uslm_outcome",
+        "uslm_citable_as_json",
+        "uslm_reason",
+        "uslm_reader_version"
       ]
     },
     {
@@ -1625,7 +1635,7 @@
       "coverage": "Sampled. Measured on one cold-start run (receipt `d1-measured-run-2026-09-19/`), and the measurement is mostly a refusal: of the 106 public acts the law route listed (108 laws, less the 2 private laws, which are not requested), 2 were read and produced 65 rows, 5 were refused, and the walk then stopped for the Congress with 99 acts unread — the per-run cap of 300 was never approached. Since 2026-09-24 the rollup reads one Table III page per act on each scoped Congress's chain, under that cap, from the highest act already published. It asks for that act again only to read the act its page names.",
       "kind": "sampled",
       "measured_on": "2026-09-19",
-      "data_quality": "Table III holds an act only once OLRC has classified it, and holds no page for an act that classified nothing. It lags enactment by tens of laws: on 2026-09-24 it was current through 119-73 while the law route reached 119-111, and 33 of the acts at or before 119-73 had no page (receipt `drift-audit-2026-09-24/laws/`). OLRC answers such an act with `200 OK` and a connection dropped inside its site menu. Those bytes are a prefix of a served page, so the answer cannot tell an act the table does not hold from a served page cut short.\nSo the rollup follows Table III's own chain instead of asking for every law, with spicy-docs' iter_table3_chain (B32), which owns the rules below. Each served page names the next act the table holds (119-4 names 119-12). Each run asks again for the Congress's highest published act, only to read the act it names; its rows are not published again. Cold, the run starts at the lowest act the law route lists. It then asks for each act the pages name. The chain ends at a page that names no next act, or names one the laws table does not list, or one past the release point the page states. A chain act that does not serve (a transport failure after the acquirer's retries, or a page the reader refuses) ends its Congress's chain for the run. Three in a row end the walk, and it starts no request after 20 minutes. A Congress whose lowest listed act has no page cannot start cold. A run asks one page per Congress when the table has not moved, plus one for each act a new release adds.\nUntil 2026-09-24 the rollup asked for every law and counted each act without a page as a refusal, so from 2026-09-22 every run stopped at 119-5 and the table held only the 65 rows of acts 119-1 and 119-4. A capped live walk along the chain from 119-4 read 119-12, 119-18, 119-21, 119-22 and 119-23 (643 rows) in six requests, asking no act without a page (receipt `table3-walk-2026-09-24/chain/`).\nAn act's rows are published once: a later edit to its page (a status moving to repealed) is not picked up, and `release_point` says how current the captured page was. Private laws and pre-1957 session-law chapters are not requested. `usc_section_key` is `usc_section` folded for joins (trimmed, lower-cased, every dash spelling an ASCII hyphen), because case carries no identity in the Code and Table III itself prints some sections both ways (decision 30, `docs/research/fork-delivery-decisions-2026-09-22.md`). Because an act's rows are published once, rows published before the column existed keep it NULL; fold their `usc_section` by the same rule to join them. All columns are stored as VARCHAR.",
+      "data_quality": "Table III holds an act only once OLRC has classified it, and holds no page for an act that classified nothing. It lags enactment by tens of laws: on 2026-09-24 it was current through 119-73 while the law route reached 119-111, and 33 of the acts at or before 119-73 had no page (receipt `drift-audit-2026-09-24/laws/`). OLRC answers such an act with `200 OK` and a connection dropped inside its site menu. Those bytes are a prefix of a served page, so the answer cannot tell an act the table does not hold from a served page cut short.\nSo the rollup follows Table III's own chain instead of asking for every law, with spicy-docs' iter_table3_chain (B32), which owns the rules below. Each served page names the next act the table holds (119-4 names 119-12). Each run asks again for the Congress's highest published act to read the act it names; its rows are published again only when the shaped rows changed (a new release point, a moved status), because the page bytes embed a per-request session id. A Congress with no published act starts at the act the previous Congress's highest page names, asks nothing while that page's release point is still in the previous Congress, and otherwise starts at the lowest act the law route lists. It then asks for each act the pages name. The chain ends at a page that names no next act, or names one the laws table does not list, or one past the release point the page states. A chain act that does not serve (a transport failure after the acquirer's retries, or a page the reader refuses) ends its Congress's chain for the run. Three in a row, re-reads of stale acts included, end the walk, and it starts no request after 20 minutes. A Congress whose lowest listed act has no page cannot start cold. A run asks one page per Congress when the table has not moved, plus one for each act a new release adds.\nUntil 2026-09-24 the rollup asked for every law and counted each act without a page as a refusal, so from 2026-09-22 every run stopped at 119-5 and the table held only the 65 rows of acts 119-1 and 119-4. A capped live walk along the chain from 119-4 read 119-12, 119-18, 119-21, 119-22 and 119-23 (643 rows) in six requests, asking no act without a page (receipt `table3-walk-2026-09-24/chain/`).\nEach act keeps a checkpoint in the file's metadata: reader rule, capture digest and shaped-row digest. Before any chain walks, an act read under an older rule (or with no checkpoint) is read again, and a successful read replaces its whole row set in native order, an empty one included; a failed read keeps its rows and is retried on later runs. Since reader rule `table3-native-rows-v2` (2026-09-25) a data row whose act-section cell is blank keeps its other stated cells with `act_section` NULL. The earlier reader dropped such rows (four on act 119-37), so `seq` moves for later rows of an act that had one. A later edit to an older act's page is picked up only when a rule change re-reads it, and `release_point` says how current the captured page was. Private laws and pre-1957 session-law chapters are not requested. `usc_section_key` is `usc_section` folded for joins (trimmed, lower-cased, every dash spelling an ASCII hyphen), because case carries no identity in the Code and Table III itself prints some sections both ways (decision 30, `docs/research/fork-delivery-decisions-2026-09-22.md`). A row read before the column existed keeps it NULL until its act is read again; fold its `usc_section` by the same rule to join it. All columns are stored as VARCHAR.",
       "columns": [
         "act_key",
         "stated_key",

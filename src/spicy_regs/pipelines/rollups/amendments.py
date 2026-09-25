@@ -14,8 +14,10 @@ class AmendmentsRollup(RollupPipeline):
     inputs: ClassVar[tuple[str, ...]] = ()
     output: ClassVar[str] = "amendments.parquet"
 
+    retain_source_evidence: ClassVar[bool] = True
+
     def build(self, output_dir: Path) -> Path:
-        return build_amendments(output_dir)
+        return build_amendments(output_dir, evidence=self.source_evidence)
 
 
 app = make_rollup_app(AmendmentsRollup)

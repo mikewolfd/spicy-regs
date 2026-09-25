@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?><?xml-stylesheet type="text/css" href="uslm.css"?><pLaw xmlns="http://schemas.gpo.gov/xml/uslm" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xml:lang="en" xsi:schemaLocation="http://schemas.gpo.gov/xml/uslm https://www.govinfo.gov/schemas/xml/uslm/uslm-2.0.17.xsd">
+
+<?I97 ??>
+<?I50 PRIVATE LAW 119–2—MAR. 26, 2026?>
+<?I51 PRIVATE LAW 119–2—MAR. 26, 2026?>
+<?I52 PRIVATE LAW 119–2—MAR. 26, 2026?>
+
+
+<!--Disclaimer: Legislative measures that include compacts or other non-standard data structures will require additional modeling and may contain inconsistencies in the converted USLM XML.-->
+<meta><dc:title>Private Law 119–2: To authorize the President to award the Medal of Honor to Nicholas Dockery for acts of valor as a member of the Army while serving in Afghanistan.</dc:title>
+<dc:type>Private Law</dc:type><docNumber>2</docNumber>
+<citableAs>Private Law 119–2</citableAs>
+<approvedDate>2026-03-26</approvedDate>
+<dc:date>2026-03-26</dc:date>
+<dc:publisher>United States Government Publishing Office</dc:publisher><dc:creator>National Archives and Records Administration</dc:creator><dc:creator>Office of the Federal Register</dc:creator><dc:format>text/xml</dc:format><dc:language>EN</dc:language><dc:rights>Pursuant to Title 17 Section 105 of the United States Code, this file is not subject to copyright protection and is in the public domain.</dc:rights>
+<processedBy>GPO Locator to USLM Converter 4.15.31;Stage2.20250702</processedBy><processedDate>2026-04-21</processedDate>
+<congress>119</congress><publicPrivate>private</publicPrivate>
+</meta>
+<preface><page display="no">?1</page><centerRunningHead>PRIVATE LAW 119–2—MAR. 26, 2026</centerRunningHead>
+
+<dc:type>Private Law</dc:type><docNumber>119–2</docNumber>
+<congress value="119">119th Congress</congress>
+</preface>
+<main>
+<longTitle>
+<docTitle class="centered fontsize12" style="-uslm-lc:I658005">An Act</docTitle>
+<officialTitle class="indentUp0 firstIndent1 fontsize8" style="-uslm-lc:I658011">To authorize the President to award the Medal of Honor to Nicholas Dockery for acts of valor as a member of the Army while serving in Afghanistan.<sidenote><p class="centered fontsize8" id="x80fc7128-3da2-11f1-be08-d5aa197cc5de" style="-uslm-lc:I658076"><approvedDate date="2026-03-26">Mar. 26, 2026</approvedDate></p><p class="centered fontsize8" id="x80fc7129-3da2-11f1-be08-d5aa197cc5de" style="-uslm-lc:I658076">[<ref href="/us/bill/119/hr/7194">H.R. 7194</ref>]<?GPOvSpace 08?></p></sidenote></officialTitle>
+</longTitle>
+<enactingFormula style="-uslm-lc:I658120"><i>  Be it enacted by the Senate and House of Representa­tives of the United States of America in Congress assembled,</i></enactingFormula><sidenote><p class="leftAlign firstIndent0 fontsize8" id="x80fc983a-3da2-11f1-be08-d5aa197cc5de" style="-uslm-lc:I658180">Nicholas Dockery</p><p class="leftAlign firstIndent0 fontsize8" id="x80fc983b-3da2-11f1-be08-d5aa197cc5de" style="-uslm-lc:I658180">Medal of Honor Act.</p></sidenote>
+<section id="d118e84" identifier="/us/pvtl/119/2/s1" style="-uslm-lc:I658146"><num class="bold" value="1">SECTION 1. </num><heading>SHORT TITLE.</heading><content style="-uslm-lc:I658120">  This Act may be cited as the “<shortTitle role="act">Nicholas Dockery Medal of Honor Act</shortTitle>”.</content></section>
+<section id="d118e94" identifier="/us/pvtl/119/2/s2" style="-uslm-lc:I658141"><num class="fontsize12" value="2">SEC. 2. </num><heading>AUTHORIZATION FOR AWARD OF MEDAL OF HONOR TO NICHOLAS DOCKERY FOR ACTS OF VALOR AS A MEMBER OF THE ARMY WHILE SERVING IN AFGHANISTAN.</heading><subsection class="firstIndent0 fontsize10" id="y80fe6cfc-3da2-11f1-be08-d5aa197cc5de" identifier="/us/pvtl/119/2/s2/a" style="-uslm-lc:I658120"><num class="fontsize10" style="-uslm-lc:emspace2" value="a">(a) </num><sidenote><p class="leftAlign firstIndent0 fontsize8" id="x80fe6cfd-3da2-11f1-be08-d5aa197cc5de" style="-uslm-lc:I658180">Kareem N. Dockery.</p></sidenote><heading class="fontsize10"><inline class="smallCaps">Authorization</inline>.—</heading><content>Notwithstanding the time limitations specified in <ref href="/us/usc/t10/s7274">section 7274 of title 10, United States Code</ref>, or any other time limitation with respect to the awarding of certain medals to persons who served in the Armed Forces, the President is authorized to award the Medal of Honor, under section 7271 of such title, to Nicholas Dockery, formerly known as Kareem N. Dockery for the acts of valor described in subsection (b).</content></subsection>
+<subsection class="firstIndent0 fontsize10" id="y80fe940e-3da2-11f1-be08-d5aa197cc5de" identifier="/us/pvtl/119/2/s2/b" style="-uslm-lc:I658120"><num class="fontsize10" style="-uslm-lc:emspace2" value="b">(b) </num><heading class="fontsize10"><inline class="smallCaps">Acts of Valor Described</inline>.—</heading><content>The acts of valor described in section 2 of this Act are the actions of Nicholas Dockery, as a member of the Army, on October 2, 2012, while serving in Afghanistan, for which he was previously awarded the Silver Star.<?GPOvSpace 08?></content></subsection>
+</section>
+<action>
+<actionDescription style="-uslm-lc:I658120">  Approved</actionDescription> <date date="2026-03-26">March 26, 2026</date>.</action>
+</main>
+</pLaw>

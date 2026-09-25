@@ -23,12 +23,21 @@ READ_COLUMNS = ("package_id", "last_modified", "outcome", "rule_version", "obser
 #: one part, but CRPT-119hrpt811's Part-1 row (published 2026-09-24) becomes
 #: ``(CRPT-119hrpt811-pt1, 1)``, and CRPT-119hrpt494 gains its Part 2 and part
 #: numbers, only when read again.
+#:
+#: ``body`` is this repository's rule for a body's text, in both collections:
+#: ``placeholder-pdf-001`` reads the PDF a part offers in place of the
+#: publisher's placeholder text, publishes ``body_completeness`` and
+#: ``text_derivation``, and gives a PDF-derived report's sections their pages.
+#: CHRG also moves with ``HEARING_BILL_LINK_RULE_VERSION`` (the date correction
+#: moved it). Admitting the two historical CHRG volumes to the package grammar
+#: needs no token: no checkpoint names either, so there is nothing to re-read,
+#: and only discovery can select them.
 RULE_VERSIONS = {
     "CRPT": (
         f"spicy-docs={version('spicy-docs')};cbo={CBO_ESTIMATE_RULE_VERSION};sections={REPORT_SECTION_READER_VERSION}"
-        ";parts=per-part-001"
+        ";parts=per-part-001;body=placeholder-pdf-001"
     ),
-    "CHRG": HEARING_BILL_LINK_RULE_VERSION,
+    "CHRG": f"{HEARING_BILL_LINK_RULE_VERSION};body=placeholder-pdf-001",
 }
 
 

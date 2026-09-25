@@ -29,12 +29,14 @@ class LobbyingFilingsRollup(RollupPipeline):
     """Senate Lobbying Disclosure Act filings ingested from lda.gov (key optional)."""
 
     name: ClassVar[str] = "lobbying-filings"
+    retain_source_evidence: ClassVar[bool] = True
     inputs: ClassVar[tuple[str, ...]] = ()
     output: ClassVar[str] = "lobbying_filings.parquet"
 
     def build(self, output_dir: Path) -> Path:
         return build_lobbying_filings(
             output_dir,
+            evidence=self.source_evidence,
             since=_date_env("LDA_SINCE"),
             until=_date_env("LDA_UNTIL"),
         )

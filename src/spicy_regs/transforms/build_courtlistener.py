@@ -21,6 +21,10 @@ from __future__ import annotations
 import json
 from datetime import date, timedelta
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from spicy_regs.source_evidence import CaptureEvidence
 
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -136,6 +140,7 @@ def _prior_max_date_filed(prior_file: Path) -> date | None:
 def build_courtlistener(
     output_dir: Path,
     *,
+    evidence: CaptureEvidence | None = None,
     since: date | None = None,
     max_records: int | None = None,
 ) -> Path:
@@ -159,7 +164,7 @@ def build_courtlistener(
     logger.info("CourtListener: fetching dockets filed since {}", since or "the beginning")
 
     # 3. Fetch + shape into a "new rows" parquet.
-    reader = CourtListenerReader(since=since, max_records=max_records)
+    reader = CourtListenerReader(since=since, max_records=max_records, evidence=evidence)
     rows = [_shape(d) for d in reader.iter_records()]
     new_file = output_dir / "_cl_new.parquet"
     table = pa.Table.from_pylist(rows, schema=_SCHEMA) if rows else _SCHEMA.empty_table()

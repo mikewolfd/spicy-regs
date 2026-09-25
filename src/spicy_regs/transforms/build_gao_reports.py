@@ -20,6 +20,10 @@ from __future__ import annotations
 
 from email.utils import parsedate_to_datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from spicy_regs.source_evidence import CaptureEvidence
 
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -91,7 +95,7 @@ def _shape(item: dict) -> dict:
     }
 
 
-def build_gao_reports(output_dir: Path, *, max_records: int | None = None) -> Path:
+def build_gao_reports(output_dir: Path, *, max_records: int | None = None, evidence: CaptureEvidence | None = None) -> Path:
     """Build ``gao_reports.parquet`` (append-only merge with the prior table)."""
     import duckdb
 
@@ -106,7 +110,7 @@ def build_gao_reports(output_dir: Path, *, max_records: int | None = None) -> Pa
         logger.info("GAO reports: no prior table found — starting fresh")
 
     # 2. Fetch + shape the current feed window into a "new rows" parquet.
-    reader = GaoReportsReader(max_records=max_records)
+    reader = GaoReportsReader(max_records=max_records, evidence=evidence)
     rows = [_shape(item) for item in reader.iter_records()]
     new_file = output_dir / "_gao_new.parquet"
     table = pa.Table.from_pylist(rows, schema=_SCHEMA) if rows else _SCHEMA.empty_table()

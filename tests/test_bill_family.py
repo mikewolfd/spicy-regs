@@ -1642,3 +1642,100 @@ def test_an_unaddressable_printing_is_never_fetched_and_spends_no_budget():
     assert [c.version_code for c in captures] == ["private-law"]
     assert captures[0].package_id is None
     assert captures[0].source == "congress", "not fetched, so the row does not claim a GovInfo source"
+
+
+# --------------------------------------------------------------------------- #
+# Source evidence (retention is off in the scheduled rollup until evidence
+# storage is content-addressed; these runs pass an explicit CaptureEvidence).
+# --------------------------------------------------------------------------- #
+def _journal(evidence) -> list[dict]:
+    return [json.loads(line) for line in (evidence.artifact_dir / "journal.jsonl").read_text().splitlines()]
+
+
+def _retained(evidence, event: dict) -> bytes:
+    return (evidence.artifact_dir / "blobs" / "sha256" / event["sha256"].removeprefix("sha256:")).read_bytes()
+
+
+def _no_secret(evidence, secret: str) -> bool:
+    return all(secret.encode() not in path.read_bytes() for path in evidence.directory.rglob("*") if path.is_file())
+
+
+@pytest.mark.parametrize("where", ["body", "listing"])
+def test_a_retention_failure_is_never_one_printings_refusal(tmp_path, monkeypatch, where):
+    """Both broad ``except`` blocks around acquisition re-raise a retention failure instead of logging a refusal."""
+    from spicy_regs.source_evidence import SourceEvidenceError
+
+    monkeypatch.setenv("BILL_FAMILY_CONGRESSES", "119")
+    monkeypatch.setenv("BILL_FAMILY_BILL_TYPES", "hr")
+    monkeypatch.setattr("spicy_regs.transforms.build_bill_family.resolve_gemini_key", lambda: None)
+
+    class FailingBodies(StubBodyAcquirer):
+        def acquire(self, package_id, *, max_bytes=None):
+            raise SourceEvidenceError("Cannot retain source file bytes")
+
+    class FailingListing(StubBulkAcquirer):
+        def list_archives(self, congress, bill_type):
+            raise SourceEvidenceError("Cannot retain source file bytes")
+
+    with pytest.raises(SourceEvidenceError):
+        build_bill_family(
+            tmp_path,
+            bulk_acquirer=FailingListing() if where == "listing" else StubBulkAcquirer(),
+            body_acquirer=FailingBodies() if where == "body" else StubBodyAcquirer(),
+            max_version_fetches=10,
+            download_prior=_no_prior,
+        )
+    assert not list(tmp_path.glob("*.parquet"))
+
+
+def test_backfill_details_and_their_refusals_are_retained_beside_the_list_pages(tmp_path, scoped_92, one_attempt):
+    from spicy_regs.source_evidence import CaptureEvidence
+    from spicy_regs.transforms.build_bill_family import CongressListBackfill
+
+    evidence = CaptureEvidence(tmp_path / "audit", "bill-family")
+    transport = httpx.MockTransport(_respond_92_hr(_two_bills(), fail={2185}))
+    build_bill_family(
+        tmp_path, list_source=CongressListBackfill("test-key", transport, evidence=evidence), download_prior=_no_prior
+    )
+    journal = _journal(evidence)
+    [detail] = [event for event in journal if event["event"] == "capture" and event["stage"] == "bill-detail"]
+    assert detail["requested_url"].endswith("/bill/92/hr/2190?format=json")
+    assert json.loads(_retained(evidence, detail))["bill"]["number"] == "2190"
+    assert any(event.get("stage") == "congress-listing-response" for event in journal)
+    [refusal] = [event for event in journal if event["event"] == "refusal"]
+    assert refusal["stage"] == "bill-detail" and refusal["error_type"] == "_RetryableTransportError"
+    assert _no_secret(evidence, "test-key")
+
+
+def test_the_billstatus_zip_the_family_builds_from_is_retained_whole(tmp_path, monkeypatch):
+    """The production bulk acquirer, observed by the evidence tee, keeps the exact zip before parsing it."""
+    import io
+    import zipfile
+
+    from spicy_regs.source_evidence import CaptureEvidence
+
+    monkeypatch.setenv("BILL_FAMILY_CONGRESSES", "119")
+    monkeypatch.setenv("BILL_FAMILY_BILL_TYPES", "hr")
+    monkeypatch.setenv("API_GOV", "fixture-key-0123456789")
+    monkeypatch.setattr("spicy_regs.transforms.build_bill_family.resolve_gemini_key", lambda: None)
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
+        archive.writestr("BILLSTATUS-119hr6028.xml", (FIXTURES / "status-119hr6028.xml").read_bytes())
+    raw = buffer.getvalue()
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith(".zip"):
+            return httpx.Response(200, stream=httpx.ByteStream(raw), headers={"content-type": "application/zip"})
+        return httpx.Response(404, stream=httpx.ByteStream(b"{}"), headers={"content-type": "application/json"})
+
+    evidence = CaptureEvidence(tmp_path / "audit", "bill-family")
+    original = evidence.transport
+    monkeypatch.setattr(evidence, "transport", lambda *a, **kw: original(httpx.MockTransport(respond), **kw))
+    build_bill_family(tmp_path, max_version_fetches=0, download_prior=_no_prior, evidence=evidence)
+    bills = pq.read_table(tmp_path / "congress_bills.parquet").to_pylist()
+    assert [row["bill_id"] for row in bills] == ["119-hr-6028"]
+    journal = _journal(evidence)
+    [zipped] = [event for event in journal if event["event"] == "capture" and event["requested_url"].endswith(".zip")]
+    assert zipped["stage"] == "bill-status-bulk" and _retained(evidence, zipped) == raw
+    assert any(event["event"] == "bill-family-selection" for event in journal)
+    assert _no_secret(evidence, "fixture-key-0123456789")

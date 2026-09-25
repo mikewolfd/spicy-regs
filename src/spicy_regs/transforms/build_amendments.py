@@ -42,6 +42,7 @@ from collections.abc import Callable
 from datetime import date, datetime, timedelta
 from operator import itemgetter
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from loguru import logger
 from spicy_docs.reading.paged_json import PagedJsonBudget
@@ -58,6 +59,9 @@ from spicy_regs.sources.congress_bills import API_KEY_ENV_VARS, _resolve_api_key
 from spicy_regs.transforms.congress_scope import congresses_from_env
 from spicy_regs.transforms.congress_walk import ListingSource
 from spicy_regs.transforms.table_merge import merge_contract_table, prior_scratch_path
+
+if TYPE_CHECKING:
+    from spicy_regs.source_evidence import CaptureEvidence
 
 NAME = "amendments"
 OUTPUT = "amendments.parquet"
@@ -148,13 +152,19 @@ def build_amendments(
     since: date | None = None,
     until: date | None = None,
     download_prior: Callable[[str, Path], bool] = r2.download,
+    evidence: CaptureEvidence | None = None,
 ) -> Path:
     """Build ``amendments.parquet`` for the scoped Congresses, incrementally."""
     if reader is None:
         api_key = _resolve_api_key()
         if not api_key:
             raise RuntimeError(f"Amendments need an api.data.gov key (set one of {', '.join(API_KEY_ENV_VARS)})")
-        reader = CongressListingReader(budget=BUDGET, api_key=api_key)
+        if evidence is not None:
+            evidence.credential = api_key
+        reader = CongressListingReader(
+            budget=BUDGET, api_key=api_key,
+            transport=None if evidence is None else evidence.transport(stage="amendment-response", max_bytes=BUDGET.max_page_bytes),
+        )
 
     # 1. The prior table, to the path the merge below reuses in place.
     prior_file = prior_scratch_path(output_dir, NAME)
@@ -198,4 +208,7 @@ def build_amendments(
         )
 
     logger.info("Amendments: {:,} rows this run", len(rows))
-    return merge_contract_table(output_dir, "amendments", rows, prior_present=have_prior)
+    if evidence is not None:
+        evidence.event("amendment-selection", since=None if since is None else since.isoformat(),
+                       until=None if until is None else until.isoformat(), rows=len(rows))
+    return merge_contract_table(output_dir, "amendments", rows, prior_present=have_prior, download_prior=download_prior)

@@ -41,6 +41,9 @@ class BillSubjectsRollup(RollupPipeline):
     name: ClassVar[str] = "bill-subjects"
     inputs: ClassVar[tuple[str, ...]] = ("congress_bills.parquet",)
     output: ClassVar[str] = "bill_subjects.parquet"
+    #: Off until evidence storage is content-addressed: bulk extracts/BILLSTATUS archives would be
+    #: re-uploaded and re-verified on every publication (see docs/source-evidence.md).
+    retain_source_evidence: ClassVar[bool] = False
 
     def build(self, output_dir: Path) -> Path:
         minutes = _int_env("BILL_SUBJECTS_DEADLINE_MINUTES")
@@ -48,6 +51,7 @@ class BillSubjectsRollup(RollupPipeline):
             output_dir,
             max_bills=_int_env("BILL_SUBJECTS_MAX"),
             deadline_seconds=DEADLINE_SECONDS if minutes is None else minutes * 60,
+            evidence=self.source_evidence,
         )
 
 

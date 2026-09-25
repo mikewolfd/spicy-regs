@@ -17,11 +17,12 @@ class CourtListenerRollup(RollupPipeline):
     """APA / agency-review litigation dockets ingested from CourtListener (no key required)."""
 
     name: ClassVar[str] = "courtlistener"
+    retain_source_evidence: ClassVar[bool] = True
     inputs: ClassVar[tuple[str, ...]] = ()
     output: ClassVar[str] = "court_dockets.parquet"
 
     def build(self, output_dir: Path) -> Path:
-        return build_courtlistener(output_dir)
+        return build_courtlistener(output_dir, evidence=self.source_evidence)
 
 
 app = make_rollup_app(CourtListenerRollup)

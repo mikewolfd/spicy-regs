@@ -58,12 +58,16 @@ class BillFamilyRollup(RollupPipeline):
         f"{BACKFILL_WALKS_TABLE}.parquet",
     )
 
+    #: Off until evidence storage is content-addressed: bulk extracts/BILLSTATUS archives would be
+    #: re-uploaded and re-verified on every publication (see docs/source-evidence.md).
+    retain_source_evidence: ClassVar[bool] = False
+
     def build(self, output_dir: Path) -> tuple[Path, ...]:
         raw = os.environ.get("BILL_FAMILY_MAX_VERSION_FETCHES", "").strip()
         if raw and (not raw.isascii() or not raw.isdecimal()):
             raise ValueError("BILL_FAMILY_MAX_VERSION_FETCHES must be a nonnegative integer; zero disables acquisition")
         budget = int(raw) if raw else MAX_VERSION_FETCHES
-        return build_bill_family(output_dir, max_version_fetches=budget)
+        return build_bill_family(output_dir, max_version_fetches=budget, evidence=self.source_evidence)
 
 
 app = make_rollup_app(BillFamilyRollup)

@@ -74,6 +74,8 @@ from spicy_regs.transforms.congress_scope import BULK_STATUS_FLOOR, bulk_status_
 if TYPE_CHECKING:
     from spicy_docs.sources.congress.bulk_status import BulkStatusArchive
 
+    from spicy_regs.source_evidence import CaptureEvidence
+
 OUTPUT = "bill_subjects.parquet"
 BILLS_INPUT = "congress_bills.parquet"
 
@@ -264,14 +266,18 @@ def _read_folders(
 
 
 @contextmanager
-def _folder_reader(injected: FolderReader | None) -> Iterator[FolderReader]:
+def _folder_reader(injected: FolderReader | None, evidence: CaptureEvidence | None = None) -> Iterator[FolderReader]:
     """The injected reader, or the keyless bulk route on the bill family's per-zip budget."""
     if injected is not None:
         yield injected
         return
     from spicy_docs.sources.congress.bulk_status import BulkStatusAcquirer
 
-    with BulkStatusAcquirer(budget=bulk_status_budget()) as acquirer:
+    budget = bulk_status_budget()
+    with BulkStatusAcquirer(
+        budget=budget,
+        transport=None if evidence is None else evidence.transport(stage="subject-bulk", max_bytes=budget.max_bytes),
+    ) as acquirer:
 
         def read(congress: int, bill_type: str) -> BulkStatusArchive:
             archive = acquirer.acquire(congress, bill_type).archive
@@ -341,6 +347,7 @@ def enrich_bill_subjects(
     fetcher: SubjectsFetcher | None = None,
     read_folder: FolderReader | None = None,
     clock: Callable[[], float] = time.monotonic,
+    evidence: CaptureEvidence | None = None,
 ) -> Path:
     """Build ``bill_subjects.parquet`` (bounded, resumable enrichment pass).
 
@@ -426,7 +433,7 @@ def enrich_bill_subjects(
             answers.append((bill.bill_id, result))
     logger.info("Bill subjects: {:,} family bills changed, {:,} unchanged", len(family) - unchanged, unchanged)
     if read:
-        with _folder_reader(read_folder) as reader:
+        with _folder_reader(read_folder, evidence) as reader:
             folder_answers, refused_in_zip = _read_folders(read, reader, recent=recent, past_deadline=past_deadline)
         answers += folder_answers
         refused += refused_in_zip
@@ -437,7 +444,9 @@ def enrich_bill_subjects(
         logger.warning("Bill subjects: {:,} bills wait for an api.data.gov key", len(api))
         api = []
     if api:
-        context = nullcontext(fetcher) if fetcher is not None else BillSubjectsFetcher(deadline=deadline, clock=clock)
+        context = nullcontext(fetcher) if fetcher is not None else BillSubjectsFetcher(
+            deadline=deadline, clock=clock, evidence=evidence,
+        )
         with context as api_fetcher:
             for seen, bill in enumerate(api):
                 if past_deadline():
@@ -460,6 +469,10 @@ def enrich_bill_subjects(
         if result is not None:
             rows.append(_shape(bill_id, result.policy_area, result.subjects, result.carrier, now))
     _log_counts(counts, clock() - started)
+    if evidence is not None:
+        evidence.event("bill-subject-selection", max_bills=max_bills, max_folders=max_folders,
+                       deadline_seconds=deadline_seconds, answered=len(rows), waiting=waiting,
+                       folders_past_cap=len(folders) - len(read))
 
     # 4. Merge prior + new, dedup on bill_id preferring the fresh row.
     new_file = output_dir / "_bill_subjects_new.parquet"
