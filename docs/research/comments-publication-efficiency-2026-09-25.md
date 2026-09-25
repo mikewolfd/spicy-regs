@@ -1,6 +1,6 @@
 # Comments publication efficiency — September 25, 2026
 
-**Implemented locally; hosted qualification remains open.** Iceberg remains the
+**Implemented and qualified on hosted CI; scheduled ETL is running again.** Iceberg remains the
 write authority. The publisher builds agency files first, sorts each once for
 docket reads, and streams them into the compatible monolith. It skips a verified
 unchanged catalog snapshot and builds the comments index once at publication.
@@ -59,9 +59,25 @@ checkpoint. Reuse removes repeated Python membership construction, not that I/O.
 Local qualification and resource measurements are retained in
 `~/Work/corpora/fork-execution-2026-09-21/comments-efficient-publisher-2026-09-25/`.
 The full unit suite, Ruff, type check and generated data-dictionary checks pass.
-The remaining release gate is hosted publication/readback with the writer lock,
-followed by the existing consumer refresh. No CI dispatch, public upload or
-schedule change was made for this implementation.
+Hosted qualification followed on September 25; see below.
+
+### Hosted qualification
+
+Three hosted runs, all with the writer lock and the consumer refresh:
+
+| Run | What it proved | Result |
+| --- | --- | --- |
+| [36170694175](https://github.com/mikewolfd/spicy-regs/actions/runs/36170694175) | Complete catalog rebuild, upload and public readback | 26,303,691 rows in 16m48s, **4.30 GB** peak RSS (the failed run used a 6 GB budget). One dependent rollup lost a publication-pointer race; fixed in `a89476e`. |
+| [36175550193](https://github.com/mikewolfd/spicy-regs/actions/runs/36175550193) | Unchanged snapshot | Skipped the build after verifying object versions (mirror job 38 s); every dependent job and public/catalog readback passed. |
+| [36177463432](https://github.com/mikewolfd/spicy-regs/actions/runs/36177463432) | First full incremental sweep | 15 batches, 8,251 new records, ingestion 1h47m; mirror rebuild 18m04s at **4.32 GB** peak; 26,311,037 rows; public and catalog readback passed. 2h33m end to end. |
+
+ETL was re-enabled after the first two runs. The sweep's cost is now listing,
+not publication: 80.7 of its 107 ingestion minutes were Mirrulations listing and
+staging, because every sweep lists all 29M record files. SpicyDocs 0.33.1 lists
+each agency as concurrent docket ranges (four agencies together: 449 s to
+133 s on the public mirror), and the 18:25 sweep now runs only when no scheduled
+sweep has succeeded that day (`afe2274`). A fresh monolith still rewrites the
+whole file whenever comments change.
 
 ### Complete local qualification
 
@@ -99,9 +115,9 @@ The final output holds 4.259 GB in the monolith and 4.255 GB in agency files.
 Receipts in `comments-efficient-publisher-2026-09-25/`: `qualification.json`,
 `output-3GB/comments-build.json`, `layout-verification.json`,
 `transport-verification.json`, the earlier resource diagnostics, replay scripts,
-validation logs and the retained code patch. The final repository gates pass;
-ETL remains manually disabled, verified through the workflow API. Hosted
-publication/readback, consumer refresh and browser qualification remain open.
+validation logs and the retained code patch. The final repository gates passed
+with ETL still disabled; the hosted runs above closed publication/readback and
+consumer refresh. Browser qualification remains open.
 
 ## Evidence and scope
 
@@ -369,7 +385,9 @@ without changing the public export would also preserve the linear/full-sort
 cost. Querying every agency separately before proving pruning risks multiplying
 reads. These alternatives do not address the measured causes.
 
-Finish hosted qualification against these gates before resuming ETL:
+These were the hosted gates set before resuming ETL; the runs above met the
+full-catalog, no-change and sweep gates. Browser query performance remains
+unqualified:
 
 - Run the complete pinned current catalog through the hosted path. Record total
   process RSS, native memory, peak scratch, rows and bytes read/written, runtime
