@@ -48,8 +48,8 @@ The source parser currently requires a truthy `actsection`, and the host skips
 already held acts. Changing only the parser would leave the public defect in
 place. Its `(act_key, seq)` key also means adding omitted rows shifts later
 positions. See [the parser](/Users/mikewolfd/Work/spicy-stack/spicy-docs/src/spicy_docs/sources/uscode/table3.py:157),
-[the host walk](../../src/spicy_regs/transforms/build_laws.py:432) and
-[parent replacement](../../src/spicy_regs/transforms/table_merge.py:168).
+the host walk (`src/spicy_regs/transforms/build_laws.py:432`) and
+parent replacement (`src/spicy_regs/transforms/table_merge.py:168`).
 
 Proposed change:
 
@@ -84,7 +84,7 @@ No other act changes without source or rule evidence.
 
 [The law shaper](/Users/mikewolfd/Work/spicy-stack/spicy-docs/src/spicy_docs/schemas/law_tables.py:184)
 requires a Statutes citation for every captured USLM record. The
-[host refusal path](../../src/spicy_regs/transforms/build_laws.py:242) then
+host refusal path (`src/spicy_regs/transforms/build_laws.py:242`) then
 discards valid captured metadata and preserves `not_requested`.
 
 Proposed change:
@@ -132,7 +132,7 @@ manufacture a bill-by-date cross-product. Agenda matching needs an explicit
 event/date match; list membership alone cannot establish it.
 
 Bump the hearing relationship rule version used by
-[`committee_report_reads`](../../src/spicy_regs/transforms/committee_report_reads.py:26),
+`committee_report_reads` (`src/spicy_regs/transforms/committee_report_reads.py:26`),
 adopt the source package, and reprocess the affected CHRG scope. Replace each
 successfully evaluated package's full relationship set, including relationships
 no longer emitted. A failed acquisition retains the prior rows/checkpoint.
@@ -164,8 +164,8 @@ they need regression coverage and routine retention, not another bespoke repair.
 
 ## R3 — Make each new generation reproducible
 
-Use [`CaptureEvidence`](../../src/spicy_regs/source_evidence.py:41) and the
-[`RollupPipeline` evidence hooks](../../src/spicy_regs/pipelines/rollups/base.py:119).
+Use `CaptureEvidence` (`src/spicy_regs/source_evidence.py:41`) and the
+`RollupPipeline` evidence hooks (`src/spicy_regs/pipelines/rollups/base.py:119`).
 The report family already demonstrates this path. Wire captures before adapters
 discard them to yield bare dictionaries. Enable retention in the affected laws,
 congressional indexes/amendments, bill/subject/print and external-source rollups.
@@ -216,7 +216,7 @@ captures. If old capture-time values cannot be proved, qualify a new generation.
 | `amendments` | Complete changed-row capture-time proof under R3. |
 
 Also repair the known stale `match_action_index` values in roll-call votes.
-[The current builder](../../src/spicy_regs/transforms/build_roll_call_votes.py:387)
+The current builder (`src/spicy_regs/transforms/build_roll_call_votes.py:387`)
 skips held votes before refreshing the derived bill-reference fields. Recompute
 only those relationship fields from the pinned current bill-reference input for
 all held votes; preserve native tallies, dates and member positions. Record the

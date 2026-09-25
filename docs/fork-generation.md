@@ -31,6 +31,14 @@ readback and the [parallel source/output audits](research/parallel-rollup-audit-
 The campaign remains open. The ledger holds exact qualified pins and partial or
 failed dispositions; the execution log records the dated work and receipts.
 
+- **September 25 repairs (R1–R4 of the [repair plan](research/rollup-audit-repair-plan-2026-09-25.md)):**
+  in code at `9818b2e` with spicy-docs 0.33.0, and `197e449`. They cover
+  Table III and private-law fidelity, compiled hearing dates and PDF-only
+  bodies, retained source evidence with per-row USAspending observation times,
+  and held-vote link refresh. The affected families republish on their next
+  runs. Qualifying those generations, and R5–R8, remain open (see the ledger's
+  September 25 repairs).
+
 - **T01:** complete; SAM failures now refuse publication, and its initial load
   is T14. Earlier scheduled runs failed on the extract download's `Accept`
   header (HTTP 406). The repaired scheduled 2002 selection succeeded and retained

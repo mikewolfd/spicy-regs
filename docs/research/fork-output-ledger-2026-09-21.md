@@ -28,6 +28,30 @@ state and compiled-hearing date defects. No production repairs or publication
 were performed by this audit. CRS advanced after the frozen check; its newer
 generation remains unaudited.
 
+## September 25 repairs
+
+Work packages R1–R4 of the [repair plan](rollup-audit-repair-plan-2026-09-25.md)
+are in code at spicy-regs `9818b2e` (adopting spicy-docs 0.33.0, `881f6f5`)
+and `197e449`. The three FAILED rows (`laws`, `table3_records`,
+`hearing_bill_links`) and the partial USAspending and roll-call-link findings
+are repaired in code only. Their public generations are unchanged until the
+next run re-reads under the new rule versions, and none is qualified until
+that generation is audited. Offline replays against retained sources show the
+intended corrections: Table III act 119-37 gains exactly its four native
+rows, both private laws become `captured_partial`, all 82 COVER links survive,
+and two stale Senate `match_action_index` values move from 19 to 15 and from
+21 to 17. The receipts, reviews and replays are in
+`/Users/mikewolfd/Work/corpora/fork-execution-2026-09-21/repair-execution-2026-09-25/`.
+Every rollup the repair touches now retains its source evidence, SAM and the
+bill-status families included, so the next generations can be qualified from
+their own inputs.
+
+Found during the repair: `fec_committees` has failed every scheduled run
+since 2026-09-22 (runs 35774968104, 35910579310, 36049323173 and
+36180816422). Each dies on FEC's HTTP 429 after about 10,000 records, once
+the transport's three quick retries are spent. Its qualified 2026-09-21
+generation is therefore also the live one.
+
 | Task | Producer | Output | Delivery state |
 | --- | --- | --- | --- |
 | T13 | `run-rollup-court-opinion-clusters` | `court_opinion_clusters.parquet` | generated and verified for complete 2026-06-30 edition; qualified at `7a2cbdb7…` (2026-09-22) |
@@ -50,7 +74,7 @@ generation remains unaudited.
 | T12 | `run-rollup-fcc-filings` | `fcc_filings.parquet` | qualified at `18c85718…` (2026-09-25): 5,491 filings, retaining every prior row and adding 237. Every added native field matches; the fresh incremental window closes at 724 distinct filings. History before the initial August 24 window and crowded-day recovery remain open. Receipt: `parallel-rollup-audit-2026-09-25/` (workstream details in the [audit report](parallel-rollup-audit-2026-09-25.md)). |
 | T14 | `run-rollup-sam-entities` | `sam_entities.parquet` | current `464977e4…` is PARTIAL (2026-09-25): 167,965 registrations preserve the qualified 147,254-row 2026 population and add 20,711 dated 2002. Scheduled run 36046185903 succeeded after the request repair. Three new registrations match all 19 native fields, but the complete new extract was not retained; the run artifact contains input descriptions only. Earlier extract qualified at `56dd0f65…` (2026-09-23). Identity is `(uei, entity_eft_indicator)`; wider years and complete new-extract replay remain open. Receipt: `parallel-rollup-audit-2026-09-25/` (workstream details in the [audit report](parallel-rollup-audit-2026-09-25.md)). |
 | T14 | `run-rollup-lobbying-filings` | `lobbying_filings.parquet` | qualified at `fd1794b5…` (2026-09-25): 27,931 filings; every prior cell is unchanged, and all 35 additions match native responses. The fresh 131-record window closes after resolving one extra identity by direct read. This carries the bounded July 2026 onward selection; wider history remains open. Receipt: `parallel-rollup-audit-2026-09-25/` (workstream details in the [audit report](parallel-rollup-audit-2026-09-25.md)). |
-| T04 | `run-rollup-fec-committees` | `fec_committees.parquet` | generated and verified; qualified at `dfda14da…` (2026-09-21) |
+| T04 | `run-rollup-fec-committees` | `fec_committees.parquet` | generated and verified; qualified at `dfda14da…` (2026-09-21). Every scheduled refresh since 2026-09-22 fails on FEC's HTTP 429, so that generation is still live (see September 25 repairs). |
 | T04 | `run-rollup-fec-source-catalog` | `fec_source_catalog.parquet` | generated and verified; qualified at `0570574b…` (2026-09-21) |
 | T04 | `build-fec-observations` | `fec_source_records.parquet`, `fec_collections.parquet`, `fec_relationships.parquet` | generated and verified; qualified at `11bcb620…` (2026-09-21) |
 | T15 | `run-rollup-org-committee-links` | `org_committee_links.parquet` | qualified at `7d6f3b3b…` (2026-09-25): all 3,245 links and all 19 fields match an independent Python replay over exact FEC committee and public comment parents. The comments file is bound by its full digest to the public receipt. These are confidence-tiered name heuristics, not verified identities or financial relationships. Receipt: `parallel-rollup-audit-2026-09-25/` (workstream details in the [audit report](parallel-rollup-audit-2026-09-25.md)). |
