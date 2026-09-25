@@ -423,6 +423,7 @@ def _publish_verified_generation(
         except ClientError as exc:
             if not _precondition(exc):
                 raise
+        logger.info("publication: pointer moved concurrently; merging {} onto the reread index", family)
         index, etag = _stored_index(client, bucket)
         _assert_family_unchanged(index, prior_index, family)
     raise PublicationError("Publication changed concurrently; retry from a fresh snapshot")
