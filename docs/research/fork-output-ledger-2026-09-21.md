@@ -64,7 +64,10 @@ Found during the repair: `fec_committees` has failed every scheduled run
 since 2026-09-22 (runs 35774968104, 35910579310, 36049323173 and
 36180816422). Each dies on FEC's HTTP 429 after about 10,000 records, once
 the transport's three quick retries are spent. Its qualified 2026-09-21
-generation is therefore also the live one.
+generation was therefore still the live one. `f2df979` paces the walk under the
+gateway's stated limit of 60 requests per minute, and spicy-docs `3cfc6f6`
+(carried into the 0.34.0 branch) waits out `Retry-After`. The dispatched run
+then published the full registry at `4b1ca622…`; see its T04 row.
 
 | Task | Producer | Output | Delivery state |
 | --- | --- | --- | --- |
@@ -88,7 +91,7 @@ generation is therefore also the live one.
 | T12 | `run-rollup-fcc-filings` | `fcc_filings.parquet` | qualified at `18c85718…` (2026-09-25): 5,491 filings, retaining every prior row and adding 237. Every added native field matches; the fresh incremental window closes at 724 distinct filings. History before the initial August 24 window and crowded-day recovery remain open. Receipt: `parallel-rollup-audit-2026-09-25/` (workstream details in the [audit report](parallel-rollup-audit-2026-09-25.md)). |
 | T14 | `run-rollup-sam-entities` | `sam_entities.parquet` | current `464977e4…` is PARTIAL (2026-09-25): 167,965 registrations preserve the qualified 147,254-row 2026 population and add 20,711 dated 2002. Scheduled run 36046185903 succeeded after the request repair. Three new registrations match all 19 native fields, but the complete new extract was not retained; the run artifact contains input descriptions only. Earlier extract qualified at `56dd0f65…` (2026-09-23). Identity is `(uei, entity_eft_indicator)`; wider years and complete new-extract replay remain open. Receipt: `parallel-rollup-audit-2026-09-25/` (workstream details in the [audit report](parallel-rollup-audit-2026-09-25.md)). |
 | T14 | `run-rollup-lobbying-filings` | `lobbying_filings.parquet` | qualified at `fd1794b5…` (2026-09-25): 27,931 filings; every prior cell is unchanged, and all 35 additions match native responses. The fresh 131-record window closes after resolving one extra identity by direct read. This carries the bounded July 2026 onward selection; wider history remains open. Receipt: `parallel-rollup-audit-2026-09-25/` (workstream details in the [audit report](parallel-rollup-audit-2026-09-25.md)). |
-| T04 | `run-rollup-fec-committees` | `fec_committees.parquet` | generated and verified; qualified at `dfda14da…` (2026-09-21). Every scheduled refresh since 2026-09-22 fails on FEC's HTTP 429, so that generation is still live (see September 25 repairs). |
+| T04 | `run-rollup-fec-committees` | `fec_committees.parquet` | qualified at `dfda14da…` (2026-09-21) for the 27,311-committee selection. Published at `4b1ca622…` (2026-09-25, run 36201050523, code `f2df979`): the complete OpenFEC committee registry, 89,679 unique committees, walked in 21 minutes with no HTTP 429 once requests were paced under the 60-per-minute gateway limit. All 27,311 committee IDs of the qualified selection are present, with the same 16 columns. The field-level audit against the run's retained captures is pending. |
 | T04 | `run-rollup-fec-source-catalog` | `fec_source_catalog.parquet` | generated and verified; qualified at `0570574b…` (2026-09-21) |
 | T04 | `build-fec-observations` | `fec_source_records.parquet`, `fec_collections.parquet`, `fec_relationships.parquet` | generated and verified; qualified at `11bcb620…` (2026-09-21) |
 | T15 | `run-rollup-org-committee-links` | `org_committee_links.parquet` | qualified at `7d6f3b3b…` (2026-09-25): all 3,245 links and all 19 fields match an independent Python replay over exact FEC committee and public comment parents. The comments file is bound by its full digest to the public receipt. These are confidence-tiered name heuristics, not verified identities or financial relationships. Receipt: `parallel-rollup-audit-2026-09-25/` (workstream details in the [audit report](parallel-rollup-audit-2026-09-25.md)). |
