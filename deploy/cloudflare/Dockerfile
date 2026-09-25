@@ -17,9 +17,13 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
-# Runtime deps only. Pins match mcp-server/requirements.txt (the <2 mcp bound is
+# Runtime deps only, pinned like pyproject.toml (the <2 mcp bound is
 # load-bearing — mcp 2.0 removed mcp.server.fastmcp). uvicorn serves the ASGI app.
-RUN pip install "mcp>=1.27.1,<2" "duckdb>=1.2.0,<2" "uvicorn[standard]>=0.30"
+# loguru: the publication index reader the server imports to resolve fork
+# generations logs through it; without it every tool call failed (found by the
+# 2026-09-25 local smoke before the first fork deploy). The duckdb floor is the
+# package's own.
+RUN pip install "mcp>=1.27.1,<2" "duckdb>=1.5.3,<2" "uvicorn[standard]>=0.30" "loguru>=0.7"
 
 # Install the package code without its declared (ETL) dependencies. mcp_server
 # imports only the local _icon module plus mcp/duckdb, so this is sufficient and
@@ -27,6 +31,9 @@ RUN pip install "mcp>=1.27.1,<2" "duckdb>=1.2.0,<2" "uvicorn[standard]>=0.30"
 COPY pyproject.toml README.md ./
 COPY src ./src
 RUN pip install --no-deps .
+# Fail the build, not the first request, when a module the server imports at
+# request time needs a package this image does not install.
+RUN python -c "import spicy_regs.mcp_server, spicy_regs.sources.publication, spicy_regs.local_data"
 
 # The platform sends traffic to $PORT (default 8080). build_app() mounts the MCP
 # endpoint at /mcp; --factory because build_app is a callable returning the app.
