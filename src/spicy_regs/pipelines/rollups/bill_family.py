@@ -58,9 +58,7 @@ class BillFamilyRollup(RollupPipeline):
         f"{BACKFILL_WALKS_TABLE}.parquet",
     )
 
-    #: Off until evidence storage is content-addressed: bulk extracts/BILLSTATUS archives would be
-    #: re-uploaded and re-verified on every publication (see docs/source-evidence.md).
-    retain_source_evidence: ClassVar[bool] = False
+    retain_source_evidence: ClassVar[bool] = True
 
     def build(self, output_dir: Path) -> tuple[Path, ...]:
         raw = os.environ.get("BILL_FAMILY_MAX_VERSION_FETCHES", "").strip()

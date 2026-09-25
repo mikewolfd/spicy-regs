@@ -53,9 +53,7 @@ class SamEntitiesRollup(RollupPipeline):
     """Federal entity registry ingested from the SAM.gov Entity API (api.data.gov key)."""
 
     name: ClassVar[str] = "sam-entities"
-    #: Off until evidence storage is content-addressed: bulk extracts/BILLSTATUS archives would be
-    #: re-uploaded and re-verified on every publication (see docs/source-evidence.md).
-    retain_source_evidence: ClassVar[bool] = False
+    retain_source_evidence: ClassVar[bool] = True
     inputs: ClassVar[tuple[str, ...]] = ()
     output: ClassVar[str] = "sam_entities.parquet"
 
