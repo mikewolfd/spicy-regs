@@ -880,3 +880,113 @@ after a committed batch. `etl-local-catchup-2026-09-24/handoff.json` and
 `progress.json` distinguish the queued transition from the actual active
 revision. Mirror publication, dependent refreshes and source qualification
 remain separate gates.
+
+## September 25 local comments export and publication
+
+The catch-up completed every batch at 01:41 UTC. Its hosted completion run
+[36083102561](https://github.com/mikewolfd/spicy-regs/actions/runs/36083102561)
+then failed during the full comments export: DuckDB could not allocate another
+block within its 6 GB memory budget. The failure preceded mirror upload, and
+scheduled ETL remained paused.
+
+The existing publisher now accepts an export memory budget and thread count.
+The local recovery used a 16 GB budget and two threads, with disk spilling and
+the existing retained-ID, unique-ID and coverage checks. It ran from an
+isolated checkout of `03541c7` plus the retained `export-memory.patch`;
+`progress.json` records the patch digest. The full unit suite, Ruff, type check
+and data dictionary check passed. These resource changes and documentation
+remain local; the hosted export has not been re-qualified.
+
+Publication completed at 10:11 UTC. The combined file holds 26,303,691 comments,
+2,413,288 more than its predecessor, with every prior ID retained. Its SHA-256
+is `b90e1105332ec7e0c399708724ed479c6c30c6ff066525e8bd10103c48df9845`
+and its public ETag is `45071b2b74ccec68498c23f35d1b3675-509`. The index has
+143,367 groups, including three genuine source-null docket relationships.
+The agency files cover the same population across 180 agencies. Every public
+object matches its local size and ETag; the receipt retains full file digests.
+Anonymous public and raw-catalog checks both passed at 10:16 UTC.
+
+The existing feed, agency-statistics, monthly-volume, docket-search, discovery,
+organization-link and rulemaking commands then completed their refreshes.
+Base ETags remained unchanged throughout. Rulemaking published
+`snapshot_6d3dc0f22923d60e5d6e78f4e60c49ea`; its public manifest and all output
+digests match the local generation. Docket-search bytes also match. This
+records successful publication and integrity checks; source qualification of
+newer dependent generations remains a separate ledger task.
+
+Comments monitoring and the read-only duplicate audit are enabled again, and
+the manual mirror entry is available. Scheduled ETL stays paused until the
+hosted exporter completes within its runner limits. One empty FWS source
+response and three derived texts above the 64 MiB limit remain in the published
+retry checkpoints. The prior failed completion receipt is archived, and the
+catch-up status now points to the successful local recovery.
+
+Evidence: `~/Work/corpora/fork-execution-2026-09-21/comments-local-export-2026-09-25/`:
+`completion.json`, `public-object-verification.json`, `consumer-progress.json`,
+`consumer-public-readback.json`, `refresh-inputs.json`, the publication-index
+snapshot, workflow states, validation log, code patch and operation logs.
+
+
+## September 25 comments publication efficiency — local implementation
+
+The [accepted design](comments-publication-efficiency-2026-09-25.md) is now
+implemented locally. The catalog supplies one pinned snapshot scan into agency
+staging. Each agency sorts once; the compatible monolith streams its final
+files. Shared row/byte targets and resource settings replace independent large
+buffers. The index recount moves from each ingestion batch to the final mirror.
+The sweep discovers agencies and loads its Bloom membership once, with portable
+byte storage and unchanged membership semantics.
+
+Publication retains the exact prior IDs, uniqueness, null relationships and
+agency/docket/month checks. An agency move that empties an old agency writes an
+empty replacement to its public URL. A completion receipt advances only after
+all public bytes match local digests and stable storage versions. Unchanged
+snapshot/schema/exporter identity plus matching object versions skips payload
+work. A failed batch stops the sweep before later checkpoints can retire its
+pending keys. Manual CLI and workflow finalization use the same publisher.
+
+The full unit suite, Ruff, type check and generated data dictionary checks pass.
+Local full-corpus receipts and comparisons are under
+`comments-efficient-publisher-2026-09-25/`. Hosted qualification and the browser
+workload remain separate gates. These changes and evidence remain local; no
+public objects, workflow state or ETL schedule were changed in this work.
+
+## September 25 parallel source/output audits
+
+Three medium-effort auditors checked congressional people/votes, congressional
+documents and external sources while the parent agent replayed regulatory
+outputs. The frozen index, native inputs, public bytes, prior-population
+comparisons and independent cross-reviews are retained under
+`parallel-rollup-audit-2026-09-25/`. The
+[audit report](parallel-rollup-audit-2026-09-25.md) records the method and scope;
+`audit-summary.json` preserves normalized dispositions and result-file hashes.
+
+The new finding is four omitted Table III rows whose native act-section labels
+are blank. The audits also reproduce the false private-law `not_requested`
+state and the compiled hearing's false unique date. Current report sections,
+expanded bill/subject/print populations and several external refreshes remain
+partial. Empty model/backfill outputs are explicitly uncomputed.
+
+The ledger advances only the scopes that passed. Full independent regulatory
+transformation replays pass against the exact catch-up parents; wider parent
+source qualification remains separate. The newer SAM scheduled acquisition
+succeeded, and former hearing detail refusals now have valid retained responses.
+At the 17:36 UTC end check, CRS alone had advanced beyond the audit freeze;
+that new generation remains unaudited. Base ETags and the rulemaking pointer
+were unchanged. This work changed documentation and retained local audit
+evidence; it made no production repair, publication or schedule change.
+
+
+The final complete local run used the shared 3 GB DuckDB budget and one thread.
+It completed in 527 seconds at 9.62 GB peak process RSS, retaining the exact
+26,303,691-row population and schema. Every index group and prior ID passed;
+all-column fingerprints match the retained public parent. A read-only check of
+all retained public/storage versions took 5.6 seconds, and a sample byte
+readback matched. That probe did not publish a receipt. See `qualification.json`,
+`output-3GB/comments-build.json`, `layout-verification.json` and
+`transport-verification.json` in the implementation evidence directory.
+
+The 6 GB/two-thread diagnostics reached about 12.8 GB process RSS, even after
+connections were separated. Those results motivated the lower shared defaults;
+the configured budget is not a whole-process cap. The hosted ETL state was
+checked through the API and remains `disabled_manually` pending qualification.
