@@ -236,7 +236,7 @@ def test_single_scan_buckets_keys_by_record_type() -> None:
 
     result = list_agency_files_by_type(resource, BUCKET, PREFIX, AGENCY, [DOCKET, DOCUMENT, COMMENT])
 
-    assert scans[0] == 1
+    assert scans[0] == 2  # one docket enumeration and one range listing, not one scan per record type
     assert result["dockets"] == [f"{PREFIX}/{AGENCY}/EPA-2024-0001/text-EPA-2024-0001/docket/EPA-2024-0001.json"]
     assert result["documents"] == [
         f"{PREFIX}/{AGENCY}/EPA-2024-0001/text-EPA-2024-0001/documents/EPA-2024-0001-0001.json"
@@ -260,7 +260,7 @@ def test_reader_factory_scans_each_agency_once() -> None:
         list(reader.iter_records())
         keys_by_type[record_type.name] = reader.last_keys
 
-    assert scans[0] == 1  # one scan for the agency, not one per record type
+    assert scans[0] == 2  # one docket enumeration and one range listing for the agency, not one per record type
     assert len(keys_by_type["dockets"]) == 1
     assert len(keys_by_type["documents"]) == 1
     assert len(keys_by_type["comments"]) == 1

@@ -24,6 +24,34 @@ def isolate_env(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch)
             monkeypatch.delenv(name, raising=False)
 
 
+class _ObjectsListingClient:
+    """ListObjectsV2 pages over a fake resource's ``objects.filter``, so its refusals and records still apply."""
+
+    def __init__(self, resource) -> None:
+        self._resource = resource
+
+    def get_paginator(self, name: str) -> "_ObjectsListingClient":
+        assert name == "list_objects_v2"
+        return self
+
+    def paginate(self, *, Bucket: str, Prefix: str, Delimiter: str | None = None, StartAfter: str | None = None):
+        keys = sorted(obj.key for obj in self._resource.Bucket(Bucket).objects.filter(Prefix=Prefix))
+        if Delimiter is None:
+            yield {"Contents": [{"Key": key} for key in keys if StartAfter is None or key > StartAfter]}
+            return
+        rests = (key[len(Prefix) :] for key in keys)
+        prefixes = sorted({Prefix + rest.split(Delimiter)[0] + Delimiter for rest in rests if Delimiter in rest})
+        yield {"CommonPrefixes": [{"Prefix": prefix} for prefix in prefixes]}
+
+
+@pytest.fixture(autouse=True)
+def list_mirrulations_through_fake_resources(monkeypatch: pytest.MonkeyPatch) -> None:
+    """SpicyDocs lists Mirrulations with its own botocore client; fake resources list through their objects."""
+    from spicy_docs.sources import mirrulations
+
+    monkeypatch.setattr(mirrulations, "listing_client", _ObjectsListingClient)
+
+
 @pytest.fixture
 def tmp_output(tmp_path: Path) -> Path:
     """Return a temporary output directory."""

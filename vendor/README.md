@@ -5,6 +5,14 @@ The optional `source-readers` extra enables the same readers for package install
 its wheels must be supplied explicitly until they are published in a registry.
 Base CLI and MCP installs do not require them.
 
+- `spicy_docs-0.33.1`: built from SpicyDocs `main` at `4503f59`, with Rulespec Artifacts 1.1.1.
+  Built September 25, 2026 UTC: **1,467,262 bytes**, SHA-256
+  `4b2e99ea8dd57b9de4e2a4827f1e1d965f16b703b840cd4c073d59cf7893f482`, byte-identical across two
+  rebuilds from a clean archive of that commit. Mirrulations agency listings run as concurrent
+  contiguous docket ranges with listing timestamps left unparsed; the keys returned are identical
+  to the serial listing (FAA checked per record type). Four agencies listed together took 133 s
+  instead of 449 s on the public mirror. No rule version changes.
+
 - `spicy_docs-0.33.0`: built from SpicyDocs `main` at `881f6f5`, with Rulespec Artifacts 1.1.1.
   Built September 25, 2026 UTC: **1,466,243 bytes**, SHA-256
   `9021a9468de3ddd501b6bf2477b0e1a3a0e954df839fb79a8f625a26f3fdeb3f`, byte-identical to a
