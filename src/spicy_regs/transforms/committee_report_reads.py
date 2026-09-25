@@ -28,6 +28,9 @@ READ_COLUMNS = ("package_id", "last_modified", "outcome", "rule_version", "obser
 #: ``placeholder-pdf-001`` reads the PDF a part offers in place of the
 #: publisher's placeholder text, publishes ``body_completeness`` and
 #: ``text_derivation``, and gives a PDF-derived report's sections their pages.
+#: ``placeholder-pdf-002`` (spicy-docs 0.33.2) also knows the notice spelled
+#: without "IN", which CRPT-119hrpt649 and CHRG-119jhrg60491 print, so every
+#: body read under 001 is read again.
 #: CHRG also moves with ``HEARING_BILL_LINK_RULE_VERSION`` (the date correction
 #: moved it). Admitting the two historical CHRG volumes to the package grammar
 #: needs no token: no checkpoint names either, so there is nothing to re-read,
@@ -35,9 +38,9 @@ READ_COLUMNS = ("package_id", "last_modified", "outcome", "rule_version", "obser
 RULE_VERSIONS = {
     "CRPT": (
         f"spicy-docs={version('spicy-docs')};cbo={CBO_ESTIMATE_RULE_VERSION};sections={REPORT_SECTION_READER_VERSION}"
-        ";parts=per-part-001;body=placeholder-pdf-001"
+        ";parts=per-part-001;body=placeholder-pdf-002"
     ),
-    "CHRG": f"{HEARING_BILL_LINK_RULE_VERSION};body=placeholder-pdf-001",
+    "CHRG": f"{HEARING_BILL_LINK_RULE_VERSION};body=placeholder-pdf-002",
 }
 
 

@@ -5,6 +5,14 @@ The optional `source-readers` extra enables the same readers for package install
 its wheels must be supplied explicitly until they are published in a registry.
 Base CLI and MCP installs do not require them.
 
+- `spicy_docs-0.33.2`: built from SpicyDocs `main` at `1e73312`, with Rulespec Artifacts 1.1.1.
+  Built September 25, 2026 UTC: **1,467,427 bytes**, SHA-256
+  `b3b7c8f85c113ee89c55bf99bc4134387b385f93798fc95d2584f0ff7d0e1e3d`, byte-identical across two
+  rebuilds from a clean archive of that commit (`SOURCE_DATE_EPOCH` at the commit time).
+  GovInfo's PDF notice is recognised in both spellings the publisher prints; the September 25
+  qualification audit found the second, without "IN", on CRPT-119hrpt649 and CHRG-119jhrg60491.
+  The host moves its CRPT/CHRG body rule to `placeholder-pdf-002` so those bodies are read again.
+
 - `spicy_docs-0.33.1`: built from SpicyDocs `main` at `4503f59`, with Rulespec Artifacts 1.1.1.
   Built September 25, 2026 UTC: **1,467,262 bytes**, SHA-256
   `4b2e99ea8dd57b9de4e2a4827f1e1d965f16b703b840cd4c073d59cf7893f482`, byte-identical across two
