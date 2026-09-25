@@ -19,10 +19,10 @@ from pathlib import Path
 
 import boto3
 import httpx
-from botocore.exceptions import ClientError
 from loguru import logger
 
 from spicy_regs.sources.cloudflare import purge_urls
+from spicy_regs.sources.publication import _get_bounded, _head
 
 
 # --- download (public URL) -------------------------------------------------
@@ -111,16 +111,8 @@ def _get_remote_size(client, bucket: str, remote_key: str) -> int | None:
     check when nothing is there, so a guessed absence would wave every upload
     through.
     """
-    from botocore.exceptions import ClientError
-
-    try:
-        resp = client.head_object(Bucket=bucket, Key=remote_key)
-    except ClientError as e:
-        code = e.response.get("Error", {}).get("Code", "")
-        if code in ("404", "NoSuchKey", "NotFound"):
-            return None
-        raise
-    return int(resp["ContentLength"])
+    stored = _head(client, bucket, remote_key)
+    return None if stored is None else int(stored["ContentLength"])
 
 
 def _assert_upload_safe(
@@ -292,28 +284,14 @@ def upload_file(local_path: Path, remote_key: str | None = None, *, cache_contro
 
 def read_json_object(remote_key: str) -> dict | None:
     """Read a small control object directly from storage; only absence is optional."""
-    try:
-        response = get_r2_client().get_object(Bucket=getenv("R2_BUCKET_NAME", "spicy-regs"), Key=remote_key)
-    except ClientError as error:
-        if error.response["Error"]["Code"] in {"NoSuchKey", "404", "NotFound"}:
-            return None
-        raise
-    with response["Body"] as body:
-        raw = body.read(1_048_577)
-    if len(raw) > 1_048_576:
-        raise RuntimeError(f"Oversized publication receipt: {remote_key}")
-    return json.loads(raw)
+    stored = _get_bounded(get_r2_client(), getenv("R2_BUCKET_NAME", "spicy-regs"), remote_key)
+    return None if stored is None else json.loads(stored[0])
 
 
 def object_version(remote_key: str) -> dict | None:
     """Storage version used to detect out-of-band mirror replacements."""
-    try:
-        response = get_r2_client().head_object(Bucket=getenv("R2_BUCKET_NAME", "spicy-regs"), Key=remote_key)
-    except ClientError as error:
-        if error.response["Error"]["Code"] in {"NoSuchKey", "404", "NotFound"}:
-            return None
-        raise
-    return {"etag": response["ETag"], "bytes": response["ContentLength"]}
+    stored = _head(get_r2_client(), getenv("R2_BUCKET_NAME", "spicy-regs"), remote_key)
+    return None if stored is None else {"etag": stored["ETag"], "bytes": stored["ContentLength"]}
 
 
 def public_object_version(url: str) -> dict | None:

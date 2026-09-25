@@ -3,6 +3,7 @@
 Writers verify all remote bytes before changing the pointer. Readers resolve
 the pointer once per operation and use immutable table URLs. Legacy bare URLs
 remain readable only for tables not yet present in the publication index.
+Source-evidence blobs are content-addressed and stored once for all artifacts.
 """
 
 from __future__ import annotations
@@ -16,7 +17,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from copy import deepcopy
 from pathlib import Path
-from typing import TYPE_CHECKING, BinaryIO
+from typing import TYPE_CHECKING, BinaryIO, Callable
 
 import httpx
 from loguru import logger
@@ -27,6 +28,9 @@ if TYPE_CHECKING:
 INDEX_KEY = "publication.json"
 INDEX_LIMIT = 1024 * 1024
 PART_BYTES = 64 * 1024 * 1024
+EVIDENCE_PREFIX = "source-evidence"
+_IMMUTABLE_HEADERS = {"ContentType": "application/octet-stream", "CacheControl": "public, max-age=31536000, immutable"}
+_BLOB_KEY = re.compile(r"blobs/sha256/([0-9a-f]{64})\Z")
 _POINTER_ATTEMPTS = 8
 _NAME = re.compile(r"[a-z][a-z0-9_-]*\Z")
 _DIGEST = re.compile(r"sha256:[0-9a-f]{64}\Z")
@@ -42,7 +46,11 @@ def empty_index() -> dict:
 
 
 def _pairs(pairs):
-    """JSON object-pairs hook that refuses a repeated key."""
+    """JSON object-pairs hook that refuses a repeated key.
+
+    Readers such as the MCP server parse the index without ETL dependencies, so
+    this cannot use Rulespec's parser.
+    """
     result = {}
     for key, value in pairs:
         if key in result:
@@ -103,24 +111,25 @@ def parse_index(raw: bytes) -> dict:
     return value
 
 
-def load_index(base_url: str) -> dict:
-    """Read one bounded pointer; only a 404 permits legacy table resolution."""
-    with httpx.stream(
-        "GET",
-        f"{base_url.rstrip('/')}/{INDEX_KEY}",
-        headers={"User-Agent": "spicy-regs", "Cache-Control": "no-cache"},
-        follow_redirects=True,
-        timeout=60,
-    ) as response:
-        if response.status_code == 404:
-            return empty_index()
+def _bounded_get(url: str, *, allow_missing: bool, headers: Mapping[str, str] | None = None) -> bytes | None:
+    """GET at most ``INDEX_LIMIT`` bytes; a 404 is ``None`` only when ``allow_missing``."""
+    with httpx.stream("GET", url, headers={"User-Agent": "spicy-regs", **(headers or {})},
+                      follow_redirects=True, timeout=60) as response:
+        if allow_missing and response.status_code == 404:
+            return None
         response.raise_for_status()
         raw = bytearray()
         for chunk in response.iter_bytes():
             raw.extend(chunk)
             if len(raw) > INDEX_LIMIT:
-                raise PublicationError("Publication index exceeds its byte limit")
-    return parse_index(bytes(raw))
+                raise PublicationError(f"{url} exceeds its byte limit")
+    return bytes(raw)
+
+
+def load_index(base_url: str) -> dict:
+    """Read one bounded pointer; only a 404 permits legacy table resolution."""
+    raw = _bounded_get(f"{base_url.rstrip('/')}/{INDEX_KEY}", allow_missing=True, headers={"Cache-Control": "no-cache"})
+    return empty_index() if raw is None else parse_index(raw)
 
 
 def current_index(base_url: str) -> dict:
@@ -131,22 +140,19 @@ def current_index(base_url: str) -> dict:
 
 def load_family_root(base_url: str, entry: Mapping) -> tuple[bytes, dict]:
     """Read only the pinned prior root for lineage; this does not re-admit its tables."""
-    from rulespec_artifacts import expected_artifact_digest
+    from rulespec_artifacts import ArtifactVerificationError, expected_artifact_digest, parse_canonical_json
 
-    with httpx.stream("GET", f"{base_url.rstrip('/')}/{entry['prefix']}/artifact.json",
-                      headers={"User-Agent": "spicy-regs"}, follow_redirects=True, timeout=60) as response:
-        response.raise_for_status()
-        raw = bytearray()
-        for chunk in response.iter_bytes():
-            raw.extend(chunk)
-            if len(raw) > INDEX_LIMIT:
-                raise PublicationError("Prior generation root exceeds its byte limit")
-    root = json.loads(raw, object_pairs_hook=_pairs)
-    if (root.get("artifactDigest") != entry["artifactDigest"]
+    raw = _bounded_get(f"{base_url.rstrip('/')}/{entry['prefix']}/artifact.json", allow_missing=False)
+    assert raw is not None
+    try:
+        root = parse_canonical_json(raw)
+    except ArtifactVerificationError as exc:
+        raise PublicationError("Prior generation root is not canonical artifact JSON") from exc
+    if (not isinstance(root, dict) or root.get("artifactDigest") != entry["artifactDigest"]
             or expected_artifact_digest(root) != entry["artifactDigest"]
             or root.get("logicalId") != entry["logicalId"] or not isinstance(root.get("inputs"), list)):
         raise PublicationError("Prior generation root differs from its captured pin")
-    return bytes(raw), root
+    return raw, root
 
 
 @contextmanager
@@ -183,7 +189,60 @@ def _missing(error: ClientError) -> bool:
 
 
 def _precondition(error: ClientError) -> bool:
-    return error.response.get("Error", {}).get("Code") in {"412", "PreconditionFailed"}
+    """A refused conditional write; S3 reports a concurrent conditional write as ``ConditionalRequestConflict``."""
+    return error.response.get("Error", {}).get("Code") in {"412", "PreconditionFailed", "ConditionalRequestConflict"}
+
+
+def _head(client, bucket: str, key: str) -> dict | None:
+    """HEAD one object; only absence is ``None``, so permission and 5xx errors propagate."""
+    from botocore.exceptions import ClientError
+
+    try:
+        return client.head_object(Bucket=bucket, Key=key)
+    except ClientError as exc:
+        if _missing(exc):
+            return None
+        raise
+
+
+def file_identity(path: Path, *, part_bytes: int = PART_BYTES) -> dict:
+    """Size, SHA-256 and the S3/R2 ETag of ``path`` uploaded in ``part_bytes`` parts, in one read.
+
+    A single-part upload's ETag is the file's MD5; a multipart one is the MD5 of
+    the part MD5s plus the part count. ``_put_immutable`` uses ``PART_BYTES``;
+    boto3's managed transfer uses 8 MiB parts.
+    """
+    digest = hashlib.sha256()
+    parts = []
+    with path.open("rb") as stream:
+        while chunk := stream.read(part_bytes):
+            digest.update(chunk)
+            parts.append(hashlib.md5(chunk, usedforsecurity=False).digest())
+    if len(parts) <= 1:
+        etag = (parts[0] if parts else hashlib.md5(b"", usedforsecurity=False).digest()).hex()
+    else:
+        etag = f"{hashlib.md5(b''.join(parts), usedforsecurity=False).hexdigest()}-{len(parts)}"
+    return {"bytes": path.stat().st_size, "sha256": "sha256:" + digest.hexdigest(), "etag": f'"{etag}"'}
+
+
+def _get_bounded(client, bucket: str, key: str) -> tuple[bytes, str] | None:
+    """Read a small control object and its ETag; only absence is ``None`` and oversize refuses."""
+    from botocore.exceptions import ClientError
+
+    try:
+        response = client.get_object(Bucket=bucket, Key=key)
+    except ClientError as exc:
+        if _missing(exc):
+            return None
+        raise
+    body = response["Body"]
+    try:
+        raw = body.read(INDEX_LIMIT + 1)
+    finally:
+        body.close()
+    if len(raw) > INDEX_LIMIT:
+        raise PublicationError(f"{key} exceeds its byte limit")
+    return raw, response["ETag"]
 
 
 def _stored_index(client, bucket: str) -> tuple[dict, str | None]:
@@ -191,20 +250,10 @@ def _stored_index(client, bucket: str) -> tuple[dict, str | None]:
 
     A response without an ETag refuses.
     """
-    from botocore.exceptions import ClientError
-
-    try:
-        response = client.get_object(Bucket=bucket, Key=INDEX_KEY)
-    except ClientError as exc:
-        if _missing(exc):
-            return empty_index(), None
-        raise
-    body = response["Body"]
-    try:
-        raw = body.read(INDEX_LIMIT + 1)
-    finally:
-        body.close()
-    etag = response["ETag"]
+    stored = _get_bounded(client, bucket, INDEX_KEY)
+    if stored is None:
+        return empty_index(), None
+    raw, etag = stored
     if not isinstance(etag, str) or not etag:
         raise PublicationError("Publication index has no conditional-write token")
     return parse_index(raw), etag
@@ -219,59 +268,77 @@ def _copy_unchanged_member(client, bucket: str, source_key: str, destination_key
     copy can never publish wrong bytes — a wrong source digest fails
     verification before the pointer moves.
     """
+    if _head(client, bucket, destination_key) is None:
+        client.copy_object(Bucket=bucket, Key=destination_key, CopySource={"Bucket": bucket, "Key": source_key})
+
+
+def _create_multipart(client, bucket: str, key: str, upload_parts: Callable[[str], list[dict]]) -> None:
+    """Create-only multipart lifecycle: any failure aborts; a refused completion means the key already exists.
+
+    The caller admits the destination bytes afterwards, so an existing object is
+    only reused once it proves to hold the expected bytes.
+    """
     from botocore.exceptions import ClientError
 
+    args = {"Bucket": bucket, "Key": key}
+    upload_id = client.create_multipart_upload(**args, **_IMMUTABLE_HEADERS)["UploadId"]
+    completing = False
     try:
-        client.head_object(Bucket=bucket, Key=destination_key)
-        return
-    except ClientError as exc:
-        if not _missing(exc):
+        parts = upload_parts(upload_id)
+        completing = True
+        client.complete_multipart_upload(**args, UploadId=upload_id, MultipartUpload={"Parts": parts},
+                                         IfNoneMatch="*")
+    except BaseException as exc:
+        client.abort_multipart_upload(**args, UploadId=upload_id)
+        if not completing or not isinstance(exc, ClientError) or not _precondition(exc):
             raise
-    client.copy_object(Bucket=bucket, Key=destination_key, CopySource={"Bucket": bucket, "Key": source_key})
 
 
-def _put_immutable(client, bucket: str, key: str, path: Path) -> None:
-    """Conditional creation, including multipart completion for large tables."""
+def _put_immutable(client, bucket: str, key: str, path: Path, *, sha256: str | None = None) -> None:
+    """Conditional creation, including multipart completion for large tables.
+
+    Every request carries Content-MD5, so storage refuses bytes damaged in
+    transit. With ``sha256``, the bytes actually sent must hash to it before the
+    object is created, so a content-addressed key never holds other bytes.
+    """
     from botocore.exceptions import ClientError
 
     size = path.stat().st_size
-    args = {"Bucket": bucket, "Key": key}
-    headers = {"ContentType": "application/octet-stream", "CacheControl": "public, max-age=31536000, immutable"}
+    if size > PART_BYTES * 10_000:
+        raise PublicationError("Generation member exceeds the bounded multipart size")
+    digest = hashlib.sha256()
+
+    def checked(chunk: bytes) -> dict:
+        digest.update(chunk)
+        return {"Body": chunk, "ContentMD5": base64.b64encode(hashlib.md5(chunk, usedforsecurity=False).digest()).decode()}
+
+    def assert_content_address() -> None:
+        if sha256 is not None and "sha256:" + digest.hexdigest() != sha256:
+            raise PublicationError(f"Bytes sent for {key} differ from their content address")
+
     if size <= PART_BYTES:
+        body = checked(path.read_bytes())
+        assert_content_address()
         try:
-            with path.open("rb") as body:
-                client.put_object(**args, **headers, Body=body, ContentLength=size, IfNoneMatch="*")
+            client.put_object(Bucket=bucket, Key=key, **_IMMUTABLE_HEADERS, **body, ContentLength=size,
+                              IfNoneMatch="*")
         except ClientError as exc:
             if not _precondition(exc):
                 raise
         return
-    if size > PART_BYTES * 10_000:
-        raise PublicationError("Generation member exceeds the bounded multipart size")
-    upload_id = client.create_multipart_upload(**args, **headers)["UploadId"]
-    try:
+
+    def upload_parts(upload_id: str) -> list[dict]:
         parts = []
         with path.open("rb") as stream:
             while chunk := stream.read(PART_BYTES):
                 part = len(parts) + 1
-                digest = base64.b64encode(hashlib.md5(chunk, usedforsecurity=False).digest()).decode()
-                result = client.upload_part(
-                    **args,
-                    UploadId=upload_id,
-                    PartNumber=part,
-                    Body=chunk,
-                    ContentMD5=digest,
-                )
+                result = client.upload_part(Bucket=bucket, Key=key, UploadId=upload_id, PartNumber=part,
+                                            **checked(chunk))
                 parts.append({"PartNumber": part, "ETag": result["ETag"]})
-        client.complete_multipart_upload(
-            **args,
-            UploadId=upload_id,
-            MultipartUpload={"Parts": parts},
-            IfNoneMatch="*",
-        )
-    except BaseException as exc:
-        client.abort_multipart_upload(**args, UploadId=upload_id)
-        if not isinstance(exc, ClientError) or not _precondition(exc):
-            raise
+        assert_content_address()
+        return parts
+
+    _create_multipart(client, bucket, key, upload_parts)
 
 
 class _S3Members:
@@ -304,6 +371,67 @@ class _S3Members:
             body.close()
 
 
+class _EvidenceMembers:
+    """Admission source for one evidence artifact whose blobs live in the shared prefix.
+
+    Metadata members come from ``source-evidence/<digest>/``; each
+    ``blobs/sha256/<hex>`` member comes from ``source-evidence/blobs/…``, or
+    from the locally admitted copy when the stored object's size and ETag
+    already equal those bytes (``trusted``).
+    """
+
+    def __init__(self, client, bucket: str, prefix: str, local, blobs: set[str], trusted: set[str]):
+        self.artifact = _S3Members(client, bucket, prefix)
+        self.shared = _S3Members(client, bucket, EVIDENCE_PREFIX)
+        self.local, self.blobs, self.trusted = local, blobs, trusted
+
+    def keys(self):
+        yield from sorted({*self.artifact.keys(), *self.blobs})
+
+    @contextmanager
+    def open(self, object_key: str) -> Iterator[BinaryIO]:
+        source = (self.local if object_key in self.trusted
+                  else self.shared if object_key in self.blobs else self.artifact)
+        with source.open(object_key) as stream:
+            yield stream
+
+
+def _publish_evidence(client, bucket: str, path: Path, artifact) -> None:
+    """Upload one locally admitted evidence artifact, sending and reading back only new blob bytes.
+
+    Blob members are content-addressed, so each is stored once at
+    ``source-evidence/blobs/sha256/<hex>`` for every artifact that cites it.
+    A new blob is created from bytes that hash to its key and is read back once
+    by admission. An existing blob whose size and ETag equal the local bytes is
+    not transferred again; any other existing object is read back and refused
+    unless its bytes match. Small metadata stays under the artifact's prefix.
+    """
+    from rulespec_artifacts import LocalMemberSource, admit_artifact, iter_member_descriptors
+
+    local = LocalMemberSource(path)
+    prefix = f"{EVIDENCE_PREFIX}/{artifact.pin.artifact_digest.removeprefix('sha256:')}"
+    declared = {member.object_key: member for member in iter_member_descriptors(artifact, local)}
+    blobs, trusted = set(), set()
+    for key in sorted(local.keys()):
+        match, member = _BLOB_KEY.fullmatch(key), declared.get(key)
+        if match is None or member is None:
+            _put_immutable(client, bucket, f"{prefix}/{key}", path / key)
+            continue
+        if member.sha256 != "sha256:" + match[1]:
+            raise PublicationError(f"Evidence blob {key} is not addressed by its content")
+        blobs.add(key)
+        stored = _head(client, bucket, f"{EVIDENCE_PREFIX}/{key}")
+        if stored is None:
+            _put_immutable(client, bucket, f"{EVIDENCE_PREFIX}/{key}", path / key, sha256=member.sha256)
+            continue
+        identity = file_identity(path / key)
+        if (stored["ContentLength"], stored.get("ETag")) == (identity["bytes"], identity["etag"]):
+            trusted.add(key)
+        else:
+            logger.warning("Stored evidence blob {} differs from its expected identity; reading it back", key)
+    admit_artifact(_EvidenceMembers(client, bucket, prefix, local, blobs, trusted), expected_pin=artifact.pin)
+
+
 def publish_generation(directory: Path, *, client, bucket: str, prior_index: Mapping,
                        evidence_directories: tuple[Path, ...] = ()) -> dict:
     """Verify/upload/verify, then compare-and-swap the publication pointer.
@@ -334,7 +462,7 @@ def _publish_verified_generation(
 ) -> dict:
     """Shared publication gates; both callers fully verify their source first."""
     from botocore.exceptions import ClientError
-    from rulespec_artifacts import LocalMemberSource, admit_artifact, iter_member_descriptors
+    from rulespec_artifacts import admit_artifact, iter_member_descriptors
     from spicy_regs.sources.r2 import _assert_upload_safe, _get_remote_size
     from spicy_regs.source_evidence import INPUT_ROLE, PRIOR_ROLE, verify_evidence
 
@@ -378,10 +506,7 @@ def _publish_verified_generation(
             raise PublicationError("Source evidence belongs to a different family")
         if item.root["inputs"] != [value for value in artifact.root["inputs"] if value["role"] == PRIOR_ROLE]:
             raise PublicationError("Source evidence and generation name different inherited inputs")
-        evidence_prefix = "source-evidence/" + item.pin.artifact_digest.removeprefix("sha256:")
-        for key in sorted(LocalMemberSource(path).keys()):
-            _put_immutable(client, bucket, evidence_prefix + "/" + key, path / key)
-        admit_artifact(_S3Members(client, bucket, evidence_prefix), expected_pin=item.pin)
+        _publish_evidence(client, bucket, path, item)
     # Members whose bytes the prior generation already holds under the same
     # digest are copied server-side instead of re-uploaded. The copy can never
     # publish wrong bytes: ``admit_artifact`` below re-verifies every member of

@@ -19,7 +19,7 @@ from spicy_regs.generations import _verify_generation, _write_generation_metadat
 from spicy_regs.sources.publication import (
     PART_BYTES,
     PublicationError,
-    _precondition,
+    _create_multipart,
     _publish_verified_generation,
     _put_immutable,
     _S3Members,
@@ -150,35 +150,27 @@ def verify_remote_generation(directory: Path, *, client, bucket: str, staging_pr
 
 
 def _copy_immutable(client, bucket: str, target: str, member: StoredParquet) -> None:
-    """Promote pinned bytes with multipart copy; final admission checks SHA-256."""
-    from botocore.exceptions import ClientError
+    """Promote pinned bytes with multipart copy; final admission checks SHA-256.
 
+    R2 documents copy-source conditionals as unimplemented for UploadPartCopy,
+    so ``CopySourceIfMatch`` guards only on S3; admission is the guard that
+    holds on both.
+    """
     if not 0 < member.byte_size <= PART_BYTES * 10_000:
         raise PublicationError("Remote member exceeds bounded multipart size")
-    args = {"Bucket": bucket, "Key": target}
-    upload_id = client.create_multipart_upload(
-        **args, ContentType="application/octet-stream", CacheControl="public, max-age=31536000, immutable"
-    )["UploadId"]
-    completing = False
-    try:
+
+    def copy_parts(upload_id: str) -> list[dict]:
         parts = []
         for start in range(0, member.byte_size, PART_BYTES):
             result = client.upload_part_copy(
-                **args, UploadId=upload_id, PartNumber=len(parts) + 1,
+                Bucket=bucket, Key=target, UploadId=upload_id, PartNumber=len(parts) + 1,
                 CopySource={"Bucket": bucket, "Key": member.key}, CopySourceIfMatch=member.etag,
                 CopySourceRange=f"bytes={start}-{min(start + PART_BYTES, member.byte_size) - 1}",
             )
             parts.append({"PartNumber": len(parts) + 1, "ETag": result["CopyPartResult"]["ETag"]})
-        completing = True
-        client.complete_multipart_upload(
-            **args, UploadId=upload_id, MultipartUpload={"Parts": parts}, IfNoneMatch="*",
-        )
-    except BaseException as exc:
-        client.abort_multipart_upload(**args, UploadId=upload_id)
-        if not completing or not isinstance(exc, ClientError) or not _precondition(exc):
-            raise
-        # Only a refused destination completion can be reused. The common
-        # publisher independently hashes that target before its CAS.
+        return parts
+
+    _create_multipart(client, bucket, target, copy_parts)
 
 
 def publish_remote_generation(

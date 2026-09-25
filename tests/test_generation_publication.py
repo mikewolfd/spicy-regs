@@ -11,7 +11,7 @@ from rulespec_artifacts import ArtifactVerificationError, canonical_json_bytes
 
 from spicy_regs.generations import build_generation, verify_generation
 from spicy_regs.sources import publication as pub, r2
-from tests.generation_fakes import Store
+from tests.generation_fakes import Store, error
 
 
 def build(tmp_path, name="one", family="test", keys=("a.parquet", "b.parquet"), value="one"):
@@ -123,6 +123,21 @@ def test_concurrent_sibling_family_is_merged_not_overwritten(tmp_path):
     assert published["families"]["other"] == rival
     assert published["families"]["test"]["artifactDigest"] == artifact.pin.artifact_digest
     assert pub.parse_index(store.objects[pub.INDEX_KEY]) == published
+
+
+def test_conditional_request_conflict_is_retried_like_a_refused_pointer_write(tmp_path):
+    old, _ = build(tmp_path)
+    new, artifact = build(tmp_path, "two", value="two")
+    store = Store()
+    prior = publish(store, old)
+
+    def conflict(key):
+        if key == pub.INDEX_KEY:
+            store.before_put = None
+            raise error("ConditionalRequestConflict")
+
+    store.before_put = conflict
+    assert publish(store, new, prior)["families"]["test"]["artifactDigest"] == artifact.pin.artifact_digest
 
 
 def test_concurrent_same_family_commit_refuses_as_stale(tmp_path):

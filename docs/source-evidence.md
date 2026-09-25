@@ -47,12 +47,31 @@ gap. This feature does not retroactively qualify it. Without a managed prior,
 any legacy or local merged inputs likewise remain unqualified.
 
 Before publishing a table pointer, the publisher requires the exact admitted
-audit input, uploads it at `source-evidence/<artifact-digest>/`, and re-admits
-all remote bytes. Missing, altered or failed evidence blocks publication.
-Existing generations with empty inputs remain readable and retain their
-original evidentiary limits. Consumers can resolve a `source-evidence` input
-using the same public base URL and that deterministic path, then admit it
-with the input's expected pin.
+audit input and re-admits it from storage. Missing, altered or failed evidence
+blocks publication. Existing generations with empty inputs remain readable and
+retain their original evidentiary limits.
+
+The artifact root, member manifest and journal are stored under
+`source-evidence/<artifact-digest>/`. Each blob member `blobs/sha256/<hex>` is
+stored once, at `source-evidence/blobs/sha256/<hex>`, and shared by every
+artifact that cites the same bytes. A daily run that re-captures an unchanged
+source therefore sends, stores and reads back only its new bytes and small
+metadata. Consumers resolve a `source-evidence` input with the same public base
+URL: `blobs/` members under `source-evidence/`, all other members under the
+artifact's digest prefix, then admit it with the input's expected pin.
+Artifacts published before September 25, 2026 keep their blobs under their own
+prefix and stay readable there.
+
+A blob is created only from bytes whose SHA-256 equals its key, with
+Content-MD5 on every request and a create-only condition, and admission reads
+it back once. A blob that already exists is not downloaded again when its
+stored size and ETag equal those of the locally admitted bytes; rulespec then
+admits the artifact over those local bytes. Any other existing object is read
+back and refused unless its bytes match. This check cannot see a same-size
+replacement that also reproduces the MD5-based ETag, storage corruption that
+leaves the ETag unchanged, or a replacement between the check and a later
+reader's download. The shared prefix must be written only by this publisher.
+A full audit can still read every blob and admit it.
 
 The reusable workflow always uploads `output/source-evidence/` with the run
 audit, on success and failure. The directory is outside hidden `.builds/`

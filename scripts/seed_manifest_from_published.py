@@ -61,7 +61,7 @@ from spicy_docs.transport.credentials import scrub_credential
 from spicy_regs.manifest import MANIFEST_FILE, MANIFEST_SCHEMA
 from spicy_regs.schemas import COMMENT, DOCKET, DOCUMENT
 from spicy_regs.sources import iceberg, r2
-from spicy_regs.sources.publication import _missing
+from spicy_regs.sources.publication import _head, file_identity as _file_identity
 
 RECEIPT = "manifest-seed.json"
 PUBLISH_RECEIPT = "manifest-publish.json"
@@ -101,15 +101,7 @@ def _key_sql(kind: str, source: str) -> str:
 
 def file_identity(path: Path) -> dict:
     """Size, sha256 and the 8 MiB multipart ETag of one file, in one read."""
-    digest = hashlib.sha256()
-    parts = []
-    with path.open("rb") as handle:
-        while chunk := handle.read(_ETAG_PART):
-            digest.update(chunk)
-            parts.append(hashlib.md5(chunk).digest())
-    # A single-part upload's ETag is the file's MD5; a multipart one hashes the part MD5s.
-    etag = parts[0].hex() if len(parts) == 1 else f"{hashlib.md5(b''.join(parts)).hexdigest()}-{len(parts)}"
-    return {"bytes": path.stat().st_size, "sha256": "sha256:" + digest.hexdigest(), "etag": f'"{etag}"'}
+    return _file_identity(path, part_bytes=_ETAG_PART)
 
 
 def build(output_dir: Path, sources: dict[str, Path]) -> dict:
@@ -171,17 +163,6 @@ def build(output_dir: Path, sources: dict[str, Path]) -> dict:
     }
     (output_dir / RECEIPT).write_text(json.dumps(receipt, indent=2) + "\n")
     return receipt
-
-
-def _head(client, bucket: str, key: str) -> dict | None:
-    from botocore.exceptions import ClientError
-
-    try:
-        return client.head_object(Bucket=bucket, Key=key)
-    except ClientError as error:
-        if _missing(error):
-            return None
-        raise
 
 
 def check(output_dir: Path) -> list[str]:
