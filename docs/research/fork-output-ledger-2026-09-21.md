@@ -54,7 +54,11 @@ audited against their own retained evidence
 families qualify with stated limits. `committee_reports` and
 `hearing_transcripts` fail on one newly found defect: the publisher's second
 spelling of its PDF notice, fixed in spicy-docs `7550f0e` and awaiting release.
-Each output's row states its pin and limits.
+Each output's row states its pin and limits. Spicy-docs 0.33.2 then
+recognised the second spelling, and the committee-reports rule moved to
+`placeholder-pdf-002`. The family republished at `95810b26…`, where
+CRPT-119hrpt649 and CHRG-119jhrg60491 are `pdf_extracted` from their PDFs
+(259 and 89 pages). A full audit of that generation is still pending.
 
 Found during the repair: `fec_committees` has failed every scheduled run
 since 2026-09-22 (runs 35774968104, 35910579310, 36049323173 and
@@ -119,7 +123,7 @@ generation is therefore also the live one.
 | T06 | `run-pipeline` | `documents.parquet` | publication verified at table digest `ff502e4b…` (2026-09-25; ETag `9cac7d9b…`): 2,002,562 rows. The latest five native records match every mapped field after locating their exact numbered source captures. This is bounded source evidence; whole-population source qualification, document bodies and extraction evidence remain PARTIAL. Receipt: `parallel-rollup-audit-2026-09-25/` (workstream details in the [audit report](parallel-rollup-audit-2026-09-25.md)). |
 | T06 | `run-pipeline` | `comments_index.parquet` | published and verified at table digest `2a050b5e…` (2026-09-25; ETag `97417edf…`): 143,367 groups sum to 26,303,691 comments. The public monolith, agency files and raw catalog pass exact coverage and unique-ID checks. Receipt: `comments-local-export-2026-09-25/` |
 | T06 | `run-pipeline` | `comments/agency_code=<agency>/docket_id=<docket>/year=<year>/month=<month>/part-0.parquet` | unproduced on the fork (probed keys answer 404); the comments deliveries wrote `comments.parquet` and its index directly |
-| T07 | `publish-comments-mirror.yml` | `comments.parquet` | published by the local recovery and verified at table digest `b90e1105…` (2026-09-25; ETag `45071b2b…`): 26,303,691 rows across 180 agencies, with every previously published ID retained. The catalog export adds 2,413,288 rows to the prior public population. Public bytes, unique IDs and index coverage are verified; wider native-source qualification remains open. Earlier native and attachment-text repairs are retained in `comment-text-repair-2026-09-23/`; current publication receipts are in `comments-local-export-2026-09-25/` |
+| T07 | `publish-comments-mirror.yml` | `comments.parquet` | published by the local recovery and verified at table digest `b90e1105…` (2026-09-25; ETag `45071b2b…`): 26,303,691 rows across 180 agencies, with every previously published ID retained. The catalog export adds 2,413,288 rows to the prior public population. Public bytes, unique IDs and index coverage are verified; wider native-source qualification remains open. Earlier native and attachment-text repairs are retained in `comment-text-repair-2026-09-23/`; current publication receipts are in `comments-local-export-2026-09-25/`. Hosted publication then qualified the same day: run 36177463432's incremental sweep published 26,311,037 rows at snapshot 3697835162427868969, with dependents and verify passing ([hosted qualification](comments-publication-efficiency-2026-09-25.md#hosted-qualification)). |
 | T07 | `publish-comments-mirror.yml` | `comments/agency/agency_code=<agency>/part-0.parquet` | published and verified 2026-09-25: the agency files contain the same 26,303,691 IDs as the monolith and agree with every index group. `comments-local-export-2026-09-25/public-object-verification.json` records each file’s digest, ETag and row count |
 | T17 | `materialize-rulemaking` | `rule_targets.parquet`, `proceedings.parquet`, `regulatory_agenda_items.parquet`, `agenda_item_proceedings.parquet`, `comment_periods.parquet` | current `snapshot_6d3dc0f2…` is PARTIAL (2026-09-25): every public/input digest and all 20 recorded integrity checks pass. It contains 563,176 rule targets, 268,314 proceedings, 38,408 agenda items, 155,669 agenda links and 286,056 periods. Full semantic accounting of retired identities and decisions 32–33 remains open; retired no-action shells may legitimately have no successor. Earlier source/join scope was qualified at `snapshot_837754c3…` (2026-09-24); later bounded evidence is retained in `docket-lists-2026-09-24/published-step/`. Receipt: `parallel-rollup-audit-2026-09-25/` (workstream details in the [audit report](parallel-rollup-audit-2026-09-25.md)). |
 
@@ -281,8 +285,8 @@ separate from the source-qualified pins in the output table.
   `workflow-audit-2026-09-24/base-public-readback-during-catchup.json`.
   The public ETags were unchanged after the failure; staging rows and public
   headers are retained in `local-catchup-batch-01-failure.json` in that directory.
-- ETL, mirror publication, dedupe and comments monitoring remain paused during
-  local catch-up. The completion watcher refused the failed attempt without
+- ETL, mirror publication, dedupe and comments monitoring were paused during
+  local catch-up; they resumed on 2026-09-25 after hosted qualification. The completion watcher refused the failed attempt without
   dispatching the mirror or restoring schedules. Its retry requires successful
   batch receipts, CI and the reviewed fork revision, then publishes and verifies
   the mirror and dependent outputs before restoring incremental scheduling.

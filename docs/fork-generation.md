@@ -64,10 +64,9 @@ failed dispositions; the execution log records the dated work and receipts.
   operational gaps in the execution order remain. Workflow repairs are pushed:
   catalog recovery is journaled, weekly dedupe is audit-only, dependent refreshes
   wait for completed inputs, and health checks cover raw catalog and public data.
-  The hosted regulatory completion chain stopped during the mirror export;
-  local publication, dependent refreshes and integrity checks passed. Monitoring
-  and the read-only duplicate audit are enabled again. The ledger retains the
-  receipts and the remaining hosted-export qualification gate.
+  The hosted regulatory completion chain once stopped during the mirror
+  export; it now qualifies on hosted runners (see T06). Monitoring and the
+  read-only duplicate audit are enabled again.
   See the [workflow review](research/workflow-review-2026-09-24.md).
 - **T04:** complete for the selected seed: all five FEC tables, from the retained
   2024/2026 committee traversal, not all FEC history (T05). See the ledger and
@@ -79,12 +78,18 @@ failed dispositions; the execution log records the dated work and receipts.
   adds shared concurrent reads, independent text retries and reusable local
   manifests; its batch-boundary handoff preserves the running batch's revision.
   The public comments mirror and raw catalog pass identity and coverage checks.
-  Scheduled ETL stays paused pending a successful hosted export within runner
-  limits. Document bodies and the retained text-read exceptions remain open. Follow the
+  Hosted export and scheduled ETL qualify ([hosted qualification](research/comments-publication-efficiency-2026-09-25.md#hosted-qualification)):
+  run 36170694175 rebuilt, uploaded and read back the mirror at 4.30 GB peak
+  (the earlier failure was at a 6 GB budget), 36175550193 skipped an unchanged
+  snapshot, and 36177463432 completed the first full incremental sweep since
+  before September 10 (8,251 new records, 26,311,037 comment rows, dependents
+  and verify passing, 2 h 33 min end to end). ETL was re-enabled at 19:04 UTC on
+  September 25. Document bodies and the retained text-read exceptions remain open. Follow the
   [catch-up runbook](etl-catalog-seed.md). The local
   [publication efficiency refactor](research/comments-publication-efficiency-2026-09-25.md)
   reuses sweep membership, builds the mirror agency-first and skips verified
-  unchanged snapshots. It retains the hosted qualification gate.
+  unchanged snapshots. Browser query-performance qualification for the new
+  monolith order remains open.
 - **T07:** the monolith, index and agency mirror are published and verified at
   the September 25 pins in the ledger. Local export recovered the hosted
   out-of-memory failure and retained every previously published ID. Earlier
@@ -314,10 +319,9 @@ with their evidence in `spicy-docs/docs/research/parsing-survey-2026-09-23.md`:*
   replay the retained examples, preserve the broader population, then publish
   and read back corrected families. Historical hearing-part support remains
   open. The audit report records exact native proof and owner boundaries.
-- **Qualify hosted export and the next incremental sweep.** Local catch-up,
-  mirror publication, dependent refreshes and public/catalog checks passed.
-  Hosted export exhausted its memory budget; scheduled ETL remains paused
-  until that path qualifies. Monitoring and the read-only duplicate audit are
+- **Hosted export and the incremental sweep: done** ([hosted qualification](research/comments-publication-efficiency-2026-09-25.md#hosted-qualification)).
+  Hosted mirror publication, an unchanged-snapshot skip and a complete
+  incremental sweep passed on September 25, and scheduled ETL runs again. Monitoring and the read-only duplicate audit are
   enabled. The source schedules remain independent; retain the reviewed
   exclusions, source-null relationships and exact input barriers. See the
   catch-up runbook and ledger.
