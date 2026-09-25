@@ -17,7 +17,6 @@ from spicy_regs.transforms import merge_comments_partitioned, update_comments_in
 from spicy_regs.transforms.build_agency_stats import build_agency_stats
 from spicy_regs.transforms.build_feed_summary import build_feed_summary
 from spicy_regs.transforms.comment_partitions import HIVE_NULL
-from spicy_regs.transforms.partition_comments import partition_comments
 from tests.test_regulations_pipeline import _FakeS3Resource
 
 
@@ -57,9 +56,12 @@ def test_reviewed_comments_survive_ingestion_and_public_mirror(tmp_path, monkeyp
             enrich_text=False, skip_upload=True,
         ).run()
         assert set(pl.read_parquet(output / "manifest.parquet")["key"]) == set(store)
-        index = pl.read_parquet(output / "comments_index.parquet")
-        assert index["row_count"].sum() == len(expected)
-        assert index["docket_id"].null_count() == len(index)
+        if mode == "parquet":
+            index = pl.read_parquet(output / "comments_index.parquet")
+            assert index["row_count"].sum() == len(expected)
+            assert index["docket_id"].null_count() == len(index)
+        else:
+            assert not (output / "comments_index.parquet").exists()
 
     with connect(COMMENT) as con:
         if mode == "parquet":
@@ -67,11 +69,13 @@ def test_reviewed_comments_survive_ingestion_and_public_mirror(tmp_path, monkeyp
             assert iceberg.seed_comments_from_parquet(con, pattern, COMMENT) == len(expected)
         got = con.execute(f"SELECT * FROM {iceberg._qualified(COMMENT)}").pl()
         assert got.sort("comment_id").to_dicts() == sorted(expected, key=lambda row: row["comment_id"])
-        iceberg._export_parquet(con, COMMENT, output)
-        iceberg._build_comments_index(con, COMMENT, output)
+    monkeypatch.setattr(iceberg, "_connect", lambda: connect(COMMENT))
+    monkeypatch.setattr(iceberg, "_read_snapshot", lambda *a: iceberg.CatalogSnapshot("local", 1, 0))
+    monkeypatch.setattr(iceberg, "_snapshot_query", lambda rt, _: f"SELECT * FROM {iceberg._qualified(rt)}")
+    result = iceberg.export_public_comments(output, COMMENT)
 
     # Exercise the same per-agency files and count check used by publication.
-    directory = partition_comments(output)
+    directory = result["partitions"]
     with duckdb.connect() as con:
         mirrored = f"SELECT * FROM read_parquet('{directory}/agency_code=*/part-0.parquet', hive_partitioning=true)"
         index_sql = f"SELECT * FROM read_parquet('{output / 'comments_index.parquet'}')"

@@ -5,7 +5,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 
-from scripts.publish_comments_mirror import validate_export
+from spicy_regs.pipelines.comments_mirror import validate_export
 
 
 def write_candidate(root, ids):
@@ -17,15 +17,15 @@ def write_candidate(root, ids):
 
 
 def head(etag):
-    return httpx.Response(200, headers={'etag': etag}, request=httpx.Request('HEAD', 'https://example.org/comments'))
+    return httpx.Response(200, headers={'etag': etag, 'content-length': '100'}, request=httpx.Request('HEAD', 'https://example.org/comments'))
 
 
 def test_export_retains_previous_ids(tmp_path, monkeypatch):
     old = tmp_path / 'old.parquet'
-    pq.write_table(pa.table({'comment_id': ['a']}), old)
+    pq.write_table(pa.table({'comment_id': ['a'], 'agency_code': ['EPA']}), old)
     write_candidate(tmp_path, ['a', 'b'])
     monkeypatch.setattr(httpx, 'head', lambda *_a, **_k: head('stable'))
-    assert validate_export(tmp_path, str(old)) == 'stable'
+    assert validate_export(tmp_path, str(old)).etag == 'stable'
     write_candidate(tmp_path, ['b'])
     with pytest.raises(RuntimeError, match='discard 1 previously published IDs'):
         validate_export(tmp_path, str(old))
@@ -33,7 +33,7 @@ def test_export_retains_previous_ids(tmp_path, monkeypatch):
 
 def test_changed_predecessor_refuses_publication(tmp_path, monkeypatch):
     old = tmp_path / 'old.parquet'
-    pq.write_table(pa.table({'comment_id': ['a']}), old)
+    pq.write_table(pa.table({'comment_id': ['a'], 'agency_code': ['EPA']}), old)
     write_candidate(tmp_path, ['a'])
     responses = iter([head('old'), head('changed')])
     monkeypatch.setattr(httpx, 'head', lambda *_a, **_k: next(responses))

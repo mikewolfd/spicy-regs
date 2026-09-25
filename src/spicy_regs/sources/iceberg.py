@@ -16,13 +16,9 @@ of :mod:`spicy_regs.sources.r2`:
 * :func:`merge_and_export` — ensure the table exists, MERGE the per-agency
   staging Parquet in, then export a public ``{name}.parquet`` snapshot so the
   no-credentials CLI / MCP read path keeps working (the "dual model").
-* :func:`merge_comments` — the comments variant. Comments are tens of millions
-  of rows, so there is no monolithic ``comments.parquet`` snapshot to keep
-  fresh; the catalog table *is* the read surface (the MCP server queries it
-  directly when the catalog is configured). Instead of exporting the whole
-  table, this MERGEs the staged rows and rebuilds the tiny
-  ``comments_index.parquet`` (per-partition row counts) that the feed summary
-  and agency rollups read for comment counts.
+* :func:`merge_comments` upserts staged comments without rebuilding public files.
+  :func:`export_public_comments` builds the compatible mirror and index together
+  at the end of a successful ingestion sweep.
 
 Credentials are read from the environment, alongside the existing ``R2_*`` vars:
 
@@ -32,14 +28,18 @@ Credentials are read from the environment, alongside the existing ``R2_*`` vars:
 * ``R2_CATALOG_NAMESPACE``  — Iceberg namespace/schema (optional, default ``default``)
 """
 
+import json
+from dataclasses import dataclass
 from os import getenv
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING
 from urllib.parse import urlparse
 
 from loguru import logger
 
 from spicy_regs.schemas import RecordType
+from spicy_regs.duckdb_settings import ExportResources
 
 if TYPE_CHECKING:
     import polars as pl
@@ -190,7 +190,7 @@ def _staging_files(staging_dir: Path, record_type: RecordType) -> list[Path]:
     return sorted(staging_type_dir.glob("*.parquet"))
 
 
-def _merge(con, staging_files: list[Path], record_type: RecordType) -> None:
+def _merge(con, staging_files: list[Path], record_type: RecordType) -> int:
     """Row-level upsert of the staged rows into the Iceberg table.
 
     Uses the existing tested ``DELETE`` + ``INSERT`` sequence, also used by
@@ -253,12 +253,16 @@ def _merge(con, staging_files: list[Path], record_type: RecordType) -> None:
            OR s.modify_date > t.modify_date;
         """
     )
-    # 3. Upsert = delete exactly the winning keys, then insert their rows.
-    con.execute(f'DELETE FROM {tbl} WHERE "{key}" IN (SELECT "{key}" FROM {winners});')
-    con.execute(f"INSERT INTO {tbl} ({col_list}) SELECT {col_list} FROM {winners};")
-
-    con.execute(f"DROP TABLE IF EXISTS {staged};")
-    con.execute(f"DROP TABLE IF EXISTS {winners};")
+    changed = con.execute(f"SELECT count(*) FROM {winners}").fetchone()[0]
+    try:
+        # Avoid empty catalog commits: the snapshot is also the mirror's input identity.
+        if changed:
+            con.execute(f'DELETE FROM {tbl} WHERE "{key}" IN (SELECT "{key}" FROM {winners});')
+            con.execute(f"INSERT INTO {tbl} ({col_list}) SELECT {col_list} FROM {winners};")
+        return changed
+    finally:
+        con.execute(f"DROP TABLE IF EXISTS {staged};")
+        con.execute(f"DROP TABLE IF EXISTS {winners};")
 
 
 def _export_parquet(con, record_type: RecordType, output_dir: Path) -> Path:
@@ -286,7 +290,7 @@ def _export_parquet(con, record_type: RecordType, output_dir: Path) -> Path:
     return out_file
 
 
-def _build_comments_index(con, record_type: RecordType, output_dir: Path) -> Path:
+def _build_comments_index(con, record_type: RecordType, output_dir: Path, *, source_sql: str | None = None) -> Path:
     """Rebuild ``comments_index.parquet`` from the catalog comments table.
 
     The index is the small per-``(agency_code, docket_id, year, month)`` row-count
@@ -303,7 +307,8 @@ def _build_comments_index(con, record_type: RecordType, output_dir: Path) -> Pat
     """
     from spicy_regs.transforms.comment_partitions import validate_comment_coordinates
 
-    validate_comment_coordinates(con, f"SELECT * FROM {_qualified(record_type)}")
+    source_sql = source_sql or f"SELECT * FROM {_qualified(record_type)}"
+    validate_comment_coordinates(con, source_sql)
     index_file = output_dir / "comments_index.parquet"
     tmp_file = index_file.with_suffix(".tmp.parquet")
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -316,7 +321,7 @@ def _build_comments_index(con, record_type: RecordType, output_dir: Path) -> Pat
                 EXTRACT(YEAR FROM CAST(posted_date AS TIMESTAMP))::BIGINT AS year,
                 EXTRACT(MONTH FROM CAST(posted_date AS TIMESTAMP))::BIGINT AS month,
                 CAST(COUNT(*) AS BIGINT) AS row_count
-            FROM {_qualified(record_type)}
+            FROM ({source_sql})
             GROUP BY 1, 2, 3, 4
         ) TO '{_sql_str(str(tmp_file))}' (FORMAT PARQUET, COMPRESSION ZSTD);
         """
@@ -547,71 +552,95 @@ def upsert_comment_text(con, record_type: RecordType, agency: str, updates: "pl.
     con.execute("DROP TABLE IF EXISTS _uct_replacement;")
 
 
-def merge_comments(staging_dir: Path, output_dir: Path, record_type: RecordType) -> Path | None:
-    """Upsert staged comments into the catalog, then rebuild the comments index.
-
-    Unlike :func:`merge_and_export`, this does **not** write a monolithic
-    ``comments.parquet`` — the comments table is too large to re-export on every
-    run, and the catalog is the read surface. Returns the path to the refreshed
-    ``comments_index.parquet`` (which the pipeline publishes to R2), or ``None``
-    when there was nothing staged.
-    """
+def merge_comments(staging_dir: Path, record_type: RecordType) -> int:
+    """Upsert staged comments; final mirror publication owns the index recount."""
     staging_files = _staging_files(staging_dir, record_type)
     if not staging_files:
-        logger.info("iceberg: no staging files for {}; skipping merge", record_type.name)
-        return None
-
+        return 0
     from spicy_regs.transforms.comment_partitions import validate_staged_comments
 
     validate_staged_comments(staging_dir)
     con = _connect_for_table(record_type)
     try:
-        logger.info(
-            "iceberg: MERGE {} staging file(s) into {}",
-            len(staging_files),
-            _qualified(record_type),
-        )
-        _merge(con, staging_files, record_type)
-        total = con.execute(f"SELECT count(*) FROM {_qualified(record_type)}").fetchone()[0]
-        logger.info("iceberg: {} now holds {:,} rows", record_type.name, total)
-        index_file = _build_comments_index(con, record_type, output_dir)
-        logger.info("iceberg: rebuilt comments index at {}", index_file)
-        return index_file
+        changed = _merge(con, staging_files, record_type)
+        logger.info("iceberg: merged {:,} winning {} rows", changed, record_type.name)
+        return changed
     finally:
         con.close()
 
 
-def export_public_comments(output_dir: Path, record_type: RecordType) -> dict[str, Path]:
-    """Rebuild the public comments read-mirror from the catalog.
+@dataclass(frozen=True)
+class CatalogSnapshot:
+    """Exact source version, including identity across table recreation."""
 
-    The browser UI can't reach the credentialed catalog, so it reads comments as
-    public Parquet on R2. :func:`merge_comments` only republishes the tiny index,
-    so the public monolith + per-agency tree the UI reads otherwise go stale. This
-    regenerates that mirror from the catalog — the write-side system of record —
-    restoring the dual model for comments:
+    table_uuid: str
+    snapshot_id: int
+    schema_id: int
 
-    * ``comments.parquet``       — the flat monolith the UI full-scans
-    * ``comments_index.parquet`` — per-partition row counts
 
-    The caller derives the per-agency tree the UI reads for scoped queries
-    (``comments/agency/agency_code={X}/part-0.parquet``) from the monolith via
-    :func:`spicy_regs.transforms.partition_comments`. Returns the written paths
-    keyed ``"comments"`` and ``"index"``.
-    """
-    con = _connect_for_table(record_type)
+def _read_snapshot(con, record_type: RecordType) -> CatalogSnapshot:
+    if dedupe_recovery_pending(con, record_type):
+        raise RuntimeError(f"Unfinished dedupe for {record_type.name}; recover before exporting")
+    raw = con.execute("SELECT metadata FROM iceberg_load_table_response(?)", [
+        f"{_CATALOG_ALIAS}.{_namespace()}.{record_type.name}",
+    ]).fetchone()[0]
+    metadata = json.loads(raw) if isinstance(raw, str) else raw
+    snapshot = CatalogSnapshot(metadata["table-uuid"], int(metadata["current-snapshot-id"]),
+                               int(metadata["current-schema-id"]))
+    if not snapshot.table_uuid or snapshot.snapshot_id < 0:
+        raise RuntimeError("Comments catalog has no usable snapshot")
+    return snapshot
+
+
+def catalog_snapshot(record_type: RecordType) -> CatalogSnapshot:
+    """Read metadata without creating/migrating any catalog tables."""
+    con = _connect()
     try:
-        # Full-table export of tens of millions of rows. Cap memory and disable
-        # insertion-order preservation so the sort in _export_parquet spills to
-        # disk instead of OOM-ing the CI runner (temp_directory defaults to a
-        # writable dir here — this never runs on the read-only serverless host).
-        con.execute("SET preserve_insertion_order=false")
-        con.execute("SET memory_limit='6GB'")
-        monolith = _export_parquet(con, record_type, output_dir)
-        index_file = _build_comments_index(con, record_type, output_dir)
-        logger.info("iceberg: wrote public monolith {} and index {}", monolith, index_file)
-        return {"comments": monolith, "index": index_file}
+        return _read_snapshot(con, record_type)
     finally:
         con.close()
+
+
+def _snapshot_query(record_type: RecordType, snapshot: CatalogSnapshot) -> str:
+    return f"SELECT * FROM {_qualified(record_type)} AT (VERSION => {int(snapshot.snapshot_id)})"
+
+
+def export_public_comments(
+    output_dir: Path, record_type: RecordType, *, memory_limit: str = ExportResources.memory,
+    threads: int = ExportResources.threads,
+    snapshot: CatalogSnapshot | None = None, resources: ExportResources | None = None,
+) -> dict[str, Path]:
+    """Scan one pinned snapshot into agencies; sort once, assemble, then recount.
+
+    Every payload read from the catalog includes its Iceberg deletes. Remaining
+    work reads local files. Anonymous readers retain their existing paths/schema.
+    """
+    import duckdb
+    from spicy_regs.transforms.partition_comments import assemble_comments, sort_comment_agencies, stage_comment_agencies
+
+    resources = resources or ExportResources(memory=memory_limit, threads=threads)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    with TemporaryDirectory(prefix="comments-export-", dir=output_dir) as work:
+        work_dir = Path(work)
+        con = _connect()
+        try:
+            current = _read_snapshot(con, record_type)
+            if snapshot is not None and current != snapshot:
+                raise RuntimeError("Catalog snapshot changed before export; retry")
+            resources.configure(con, work_dir / "spill")
+            source = _snapshot_query(record_type, current)
+            columns = con.sql(source).columns
+            stage_comment_agencies(con, source, work_dir / "staging", resources=resources)
+        finally:
+            con.close()
+        partitions = sort_comment_agencies(work_dir / "staging", output_dir, resources=resources)
+        with duckdb.connect() as con:
+            resources.configure(con, work_dir / "spill")
+            monolith = assemble_comments(con, partitions, output_dir, columns, resources=resources)
+            con.from_parquet(str(monolith)).create_view("comments_export")
+            index_file = _build_comments_index(con, record_type, output_dir,
+                                               source_sql="SELECT * FROM comments_export")
+        return {"comments": monolith, "index": index_file, "partitions": partitions}
 
 
 def audit_duplicates(con, record_type: RecordType) -> list[tuple[str, int, int]]:

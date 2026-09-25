@@ -50,4 +50,4 @@ def test_direct_catalog_entry_refuses_invalid_staging_before_connecting(tmp_path
 
     monkeypatch.setattr(iceberg, "_connect_for_table", forbidden)
     with pytest.raises(ValueError, match="invalid coordinates"):
-        iceberg.merge_comments(tmp_path / "stage", tmp_path / "output", COMMENT)
+        iceberg.merge_comments(tmp_path / "stage", COMMENT)

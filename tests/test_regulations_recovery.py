@@ -220,8 +220,7 @@ def test_unresolved_history_survives_fresh_hosted_runner(tmp_path, monkeypatch, 
     monkeypatch.setattr(r2, "upload_file", upload)
     monkeypatch.setattr(r2, "preflight_uploads", lambda *a: None)
     monkeypatch.setattr(r2, "upload_dataset", lambda out, names: [upload(out / f"{name}.parquet") for name in names])
-    monkeypatch.setattr(regulations.iceberg, "merge_comments", lambda sd, out, rt: pq.write_table(
-        pa.table({"rows": [1]}), out / "comments_index.parquet"))
+    monkeypatch.setattr(regulations.iceberg, "merge_comments", lambda sd, rt: 1)
 
     def run(directory):
         RegulationsPipeline(

@@ -99,6 +99,7 @@ class RegulationsPipeline(Pipeline):
         self.enrich_text = enrich_text
         self.chunk_size = chunk_size
         self.verbose = verbose
+        self._sweep_agencies: list[str] | None = None
         self._pending_text: PendingCommentText | None = None
         self._text_pool: DerivedTextPool | None = None
 
@@ -124,6 +125,32 @@ class RegulationsPipeline(Pipeline):
                 )
             self._run(manifest)
         logger.info("ETL batch completed in {:.1f}s", monotonic() - started)
+
+    def run_sweep(self) -> None:
+        """Reuse membership and agency discovery; commit every batch before the next.
+
+        Stop on failure: continuing with uncommitted in-memory keys could retire
+        a failed batch when a later batch publishes its manifest. A fresh runner
+        resumes from the last durable checkpoint; final publication is separate.
+        """
+        if self.batch_number is not None or not self.batch_count or self.batch_count < 1 or self.full_refresh:
+            raise ValueError("A sweep requires positive batch_count, no batch_number, and no full_refresh")
+        output_dir = self.output_dir or Path.cwd() / "output"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        self._sweep_agencies = self._agencies()
+        try:
+            self.batch_number = 0
+            self._agencies()  # Refuse an oversized batch before hashing the manifest.
+            manifest = Manifest.load(output_dir, allow_fresh_start=self.allow_fresh_start)
+            for batch in range(self.batch_count):
+                self.batch_number = batch
+                if not self._agencies():
+                    continue
+                logger.info("ETL sweep batch {}/{}", batch + 1, self.batch_count)
+                self.run(manifest=manifest)
+        finally:
+            self.batch_number = None
+            self._sweep_agencies = None
 
     def _run(self, manifest: Manifest) -> None:
         output_dir = self.output_dir or (Path.cwd() / "output")
@@ -239,10 +266,9 @@ class RegulationsPipeline(Pipeline):
         manifest_file = output_dir / "manifest.parquet"
         unresolved_file = output_dir / "failed_keys.parquet"
         text_pending_file = output_dir / PENDING_TEXT_FILE
-        # The Iceberg comments path MERGEs rows through the catalog rather than
-        # under the public comments/ prefix, so it changes no partition files —
-        # only the refreshed index needs publishing.
-        publish_index = bool(changed_comments) or (self.use_iceberg and staged.get("comments", 0) > 0)
+        # Iceberg ingestion commits source rows only. Mirror finalization publishes
+        # the matching index after every batch has succeeded.
+        publish_index = bool(changed_comments)
         if publish_index and not index_file.exists():
             raise RuntimeError("Expected comments_index.parquet after publishing comment data")
         # Manifest.save writes only when this run recorded keys, so a missing
@@ -269,9 +295,6 @@ class RegulationsPipeline(Pipeline):
         if changed_comments:
             logger.info("Uploading {} changed comment partitions...", len(changed_comments))
             r2.upload_comment_partitions(output_dir, changed_comments)
-        elif publish_index:
-            logger.info("Uploading refreshed comments index (Iceberg path)...")
-            r2.upload_file(index_file, remote_key="comments_index.parquet")
         if unresolved_file.exists():
             r2.upload_file(unresolved_file, remote_key=unresolved_file.name)
         if text_pending_file.exists():
@@ -318,7 +341,7 @@ class RegulationsPipeline(Pipeline):
             records = list(transform.apply(reader.iter_records()))
             if records:
                 write_staging(agency, comment_rt.name, records, staging_dir, comment_rt.schema)
-                iceberg.merge_comments(staging_dir, output_dir, comment_rt)
+                iceberg.merge_comments(staging_dir, comment_rt)
                 rmtree(staging_dir / comment_rt.name, ignore_errors=True)
             # Only a completed read and successful merge can retire a key.
             unresolved.update(reader.last_keys, {(agency, comment_rt.name): reader.unresolved})
@@ -360,7 +383,9 @@ class RegulationsPipeline(Pipeline):
         ``batch_count`` splits the list into that many contiguous batches of
         ``ceil(len / batch_count)`` agencies, overriding ``batch_size``.
         """
-        if self.agency is not None:
+        if self._sweep_agencies is not None:
+            agencies = self._sweep_agencies
+        elif self.agency is not None:
             agencies = [self.agency]
         elif (agencies_env := getenv("AGENCIES")) is not None:
             agencies = agencies_env.split(",")
@@ -396,6 +421,8 @@ class RegulationsPipeline(Pipeline):
         """
         for rt in record_types:
             if rt.name == "comments":
+                if self.use_iceberg:
+                    continue
                 index_file = output_dir / "comments_index.parquet"
                 if not index_file.exists():
                     r2.download("comments_index.parquet", index_file)
@@ -417,7 +444,7 @@ class RegulationsPipeline(Pipeline):
         R2 Data Catalog (Iceberg ``MERGE INTO`` + public Parquet export) instead
         of the whole-file ``merge_staging_files`` rewrite, and ``comments`` are
         routed through :func:`iceberg.merge_comments` (row-level upsert into the
-        catalog + index rebuild, no monolithic export) instead of the
+        catalog; the final mirror owns index publication) instead of the
         partitioned ``merge_comments_partitioned`` path. ``documents`` stay on
         the existing whole-file path until the Iceberg flow is vetted for them.
 
@@ -449,11 +476,8 @@ class RegulationsPipeline(Pipeline):
         changed_comments: list[Path] = []
         if "comments" in names and staged.get("comments", 0) > 0:
             if self.use_iceberg:
-                # Row-level upsert into the catalog table (the read surface) and
-                # rebuild the index. No partition files are produced, so
-                # changed_comments stays empty and the caller publishes only the
-                # refreshed index.
-                iceberg.merge_comments(staging_dir, output_dir, RECORD_TYPES["comments"])
+                # Finalization owns the one mirror/index build after the sweep.
+                iceberg.merge_comments(staging_dir, RECORD_TYPES["comments"])
             else:
                 changed_comments = merge_comments_partitioned(
                     staging_dir,
@@ -486,6 +510,10 @@ def main(
         int | None,
         Parameter(help="Split the agencies into this many batches, deriving each batch's size (overrides batch-size)"),
     ] = None,
+    sweep: Annotated[bool, Parameter(help="Run every batch with one manifest; requires --batch-count")] = False,
+    defer_comments_publication: Annotated[
+        bool, Parameter(help="Caller will finalize the comments mirror after ingestion (workflow use)"),
+    ] = False,
     full_refresh: Annotated[bool, Parameter(help="Ignore manifest + existing output")] = False,
     allow_fresh_start: Annotated[
         bool,
@@ -509,7 +537,7 @@ def main(
 ) -> None:
     """Run the regulations.gov ETL pipeline."""
     load_dotenv()
-    RegulationsPipeline(
+    pipeline = RegulationsPipeline(
         agency=agency,
         output_dir=output_dir,
         since_year=since_year,
@@ -527,7 +555,15 @@ def main(
         enrich_text=enrich_text,
         chunk_size=chunk_size,
         verbose=verbose,
-    ).run()
+    )
+    if sweep:
+        pipeline.run_sweep()
+    else:
+        pipeline.run()
+    if use_iceberg and not skip_upload and not skip_comments and not defer_comments_publication:
+        from spicy_regs.pipelines.comments_mirror import publish_comments_mirror
+
+        publish_comments_mirror(output_dir or Path.cwd() / "output")
 
 
 if __name__ == "__main__":

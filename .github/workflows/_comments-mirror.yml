@@ -10,8 +10,8 @@ on:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    # Full-table export of tens of millions of rows from the catalog, plus the
-    # streaming per-agency partition pass. Give it ample headroom.
+    # Unchanged snapshots verify object versions only. Changed snapshots scan
+    # once into agency staging, sort each agency, then stream the monolith.
     timeout-minutes: 180
 
     steps:

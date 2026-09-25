@@ -253,7 +253,7 @@ def test_chunked_comments_commit_per_chunk(tmp_output: Path, monkeypatch: pytest
     monkeypatch.setattr(mirrulations, "s3_resource", lambda: _FakeS3Resource(store))
 
     merge_calls: list = []
-    monkeypatch.setattr(regulations.iceberg, "merge_comments", lambda sd, od, rt: merge_calls.append(1))
+    monkeypatch.setattr(regulations.iceberg, "merge_comments", lambda sd, rt: merge_calls.append(1))
 
     RegulationsPipeline(
         allow_fresh_start=True,
@@ -443,7 +443,7 @@ def test_chunked_comments_exclude_failed_keys_from_manifest(tmp_output: Path, mo
     flaky = keys["c1"]
     active = {"active": True}
     monkeypatch.setattr(mirrulations, "s3_resource", lambda: _FlakyResource(store, {flaky}, active))
-    monkeypatch.setattr(regulations.iceberg, "merge_comments", lambda sd, od, rt: None)
+    monkeypatch.setattr(regulations.iceberg, "merge_comments", lambda sd, rt: None)
 
     pipe = RegulationsPipeline(
         allow_fresh_start=True,
@@ -665,38 +665,17 @@ def test_run_preflight_failure_stops_all_publication(tmp_output: Path, monkeypat
     assert attempted == []
 
 
-def test_run_refuses_to_publish_comments_without_a_refreshed_index(
-    tmp_output: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """A comments run that produced no index must refuse to publish at all.
-
-    Skipping the index would publish the comment rows, then advance the
-    manifest — retiring those keys while the public index still describes the
-    previous partitions.
-    """
-    store = {
-        _comment_key("c1", "EPA-2024-0001"): dumps(
-            _comment_payload("c1", "EPA-2024-0001", "2024-01-01T00:00:00Z")
-        ).encode(),
-    }
+def test_catalog_ingestion_defers_index_until_mirror(tmp_output, monkeypatch):
+    store = {_comment_key("c1", "EPA-2024-0001"): dumps(
+        _comment_payload("c1", "EPA-2024-0001", "2024-01-01T00:00:00Z")).encode()}
     monkeypatch.setattr(mirrulations, "s3_resource", lambda: _FakeS3Resource(store))
-    # The catalog MERGE "succeeds" but leaves no comments_index.parquet behind.
-    monkeypatch.setattr(regulations.iceberg, "merge_comments", lambda sd, od, rt: None)
-    uploaded: list[Path] = []
-    monkeypatch.setattr(regulations.r2, "upload_file", lambda path, remote_key=None: uploaded.append(path))
-
-    with pytest.raises(RuntimeError, match="comments_index.parquet"):
-        RegulationsPipeline(
-            allow_fresh_start=True,
-            agency=AGENCY,
-            output_dir=tmp_output,
-            only_comments=True,
-            use_iceberg=True,
-            enrich_text=False,
-            skip_upload=False,
-        ).run()
-
-    assert uploaded == []
+    monkeypatch.setattr(regulations.iceberg, "merge_comments", lambda sd, rt: 1)
+    uploaded = []
+    monkeypatch.setattr(regulations.r2, "upload_file", lambda path, remote_key=None: uploaded.append(path.name))
+    RegulationsPipeline(allow_fresh_start=True, agency=AGENCY, output_dir=tmp_output,
+                        only_comments=True, use_iceberg=True, enrich_text=False, skip_upload=False).run()
+    assert "comments_index.parquet" not in uploaded
+    assert uploaded[-1] == "manifest.parquet"
 
 
 def test_run_skips_partition_upload_when_no_comments(tmp_output: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -856,9 +835,9 @@ def test_scheduled_workflow_derives_batches_and_never_starts_fresh() -> None:
 @pytest.mark.parametrize(
     ("event", "batch", "timeout", "outputs"),
     [
-        ("schedule", "", "", {"timeout_minutes": "60", "matrix": '{"batch":[' + ",".join(map(str, range(15))) + "]}"}),
+        ("schedule", "", "", {"timeout_minutes": "360", "batch": "all"}),
         ("workflow_dispatch", "all", "240", {"timeout_minutes": "240"}),
-        ("workflow_dispatch", "14", "", {"timeout_minutes": "60", "matrix": '{"batch":[14]}'}),
+        ("workflow_dispatch", "14", "", {"timeout_minutes": "60", "batch": "14"}),
         ("workflow_dispatch", "14", "361", None),
         ("workflow_dispatch", "14", "060", None),
         ("workflow_dispatch", "15", "60", None),
@@ -893,3 +872,57 @@ def test_workflow_setup_validates_the_dispatch_inputs(tmp_path: Path, event, bat
     assert result.returncode == 0, result.stderr
     written = dict(line.split("=", 1) for line in output.read_text().splitlines())
     assert outputs.items() <= written.items()
+
+
+def test_sweep_reuses_manifest_and_discovers_agencies_once(tmp_output, monkeypatch):
+    discoveries, loads, seen = [], [], []
+    monkeypatch.delenv("AGENCIES", raising=False)
+    monkeypatch.setattr(mirrulations, "discover_agencies", lambda: discoveries.append(1) or ["A", "B", "C"])
+    manifest = Manifest.empty()
+    monkeypatch.setattr(Manifest, "load", lambda *a, **kw: loads.append(1) or manifest)
+
+    def run(self, *, manifest):
+        seen.append((id(manifest), self._agencies()))
+        if self.batch_number:
+            assert "batch-0" in manifest
+        manifest.record([f"batch-{self.batch_number}"])
+        manifest.save(tmp_output)
+
+    monkeypatch.setattr(RegulationsPipeline, "run", run)
+    pipe = RegulationsPipeline(output_dir=tmp_output, batch_count=2)
+    pipe.run_sweep()
+    assert discoveries == loads == [1]
+    assert seen == [(id(manifest), ["A", "B"]), (id(manifest), ["C"])]
+    assert pipe.batch_number is None
+
+
+def test_failed_sweep_stops_before_later_batch_can_retire_pending_keys(tmp_output, monkeypatch):
+    monkeypatch.setenv("AGENCIES", "A,B,C")
+    manifest = Manifest.empty()
+    monkeypatch.setattr(Manifest, "load", lambda *a, **kw: manifest)
+    seen = []
+
+    def run(self, *, manifest):
+        seen.append(self.batch_number)
+        manifest.record(["pending"])
+        raise OSError("checkpoint publication failed")
+
+    monkeypatch.setattr(RegulationsPipeline, "run", run)
+    pipe = RegulationsPipeline(output_dir=tmp_output, batch_count=3)
+    with pytest.raises(OSError):
+        pipe.run_sweep()
+    assert seen == [0]
+    assert not (tmp_output / "manifest.parquet").exists()
+    assert pipe.batch_number is None
+
+
+@pytest.mark.parametrize("defer", [False, True])
+def test_manual_cli_finalizes_once_unless_workflow_owns_finalization(tmp_output, monkeypatch, defer):
+    from spicy_regs.pipelines import comments_mirror
+
+    calls = []
+    monkeypatch.setattr(RegulationsPipeline, "run", lambda self: calls.append("ingest"))
+    monkeypatch.setattr(comments_mirror, "publish_comments_mirror", lambda out: calls.append("mirror"))
+    regulations.main(output_dir=tmp_output, use_iceberg=True, skip_upload=False,
+                     defer_comments_publication=defer)
+    assert calls == (["ingest"] if defer else ["ingest", "mirror"])

@@ -199,3 +199,51 @@ def test_upload_dataset_is_a_noop_with_nothing_to_publish(tmp_path: Path, monkey
     monkeypatch.setattr(r2, "upload_file", lambda p, remote_key=None: None)
 
     r2.upload_dataset(tmp_path, ["dockets"])
+
+
+@pytest.mark.parametrize("fault", [None, "bytes", "version", "missing-etag"])
+def test_public_readback_binds_bytes_to_stable_storage_version(tmp_path, monkeypatch, fault):
+    from contextlib import contextmanager
+    import hashlib
+    import httpx
+
+    data = b"complete candidate bytes"
+    path = tmp_path / "comments.parquet"
+    path.write_bytes(data)
+    version = {"etag": '"stable"', "bytes": len(data)}
+    versions = iter([version, {**version, "etag": '"changed"'} if fault == "version" else version])
+    monkeypatch.setattr(r2, "object_version", lambda _: next(versions))
+
+    @contextmanager
+    def stream(method, url, **kwargs):
+        headers = {} if fault == "missing-etag" else {"etag": '"stable"'}
+        yield httpx.Response(200, headers=headers, content=b"x" * len(data) if fault == "bytes" else data,
+                             request=httpx.Request(method, url))
+
+    monkeypatch.setattr(r2.httpx, "stream", stream)
+    if fault:
+        with pytest.raises(RuntimeError, match="readback differs"):
+            r2.verify_public_file(path, "comments.parquet", "https://public.example")
+    else:
+        assert r2.verify_public_file(path, "comments.parquet", "https://public.example") == {
+            **version, "sha256": hashlib.sha256(data).hexdigest(),
+        }
+
+
+@pytest.mark.parametrize("code", ["NoSuchKey", "AccessDenied", "InternalError"])
+def test_receipt_and_object_version_only_treat_absence_as_optional(monkeypatch, code):
+    from botocore.exceptions import ClientError
+
+    class Client:
+        def get_object(self, **kwargs):
+            raise ClientError({"Error": {"Code": code}}, "GetObject")
+
+        head_object = get_object
+
+    monkeypatch.setattr(r2, "get_r2_client", Client)
+    for read in (r2.read_json_object, r2.object_version):
+        if code == "NoSuchKey":
+            assert read("comments-publication.json") is None
+        else:
+            with pytest.raises(ClientError):
+                read("comments-publication.json")

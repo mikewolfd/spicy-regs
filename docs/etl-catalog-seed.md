@@ -214,6 +214,24 @@ and read back public comments alongside the raw catalog. The publisher refuses
 lost IDs, duplicate IDs or index/partition disagreement. An unfinished dedupe
 must be recovered explicitly before normal writes or exports.
 
+If the hosted mirror export runs out of memory, use the same publisher locally
+while the comments workflows remain paused. Choose an empty output directory
+and a memory budget that leaves room for Python, Arrow and the operating system:
+
+```sh
+R2_ALLOW_SHRINK=1 uv run --frozen --env-file .env python scripts/publish_comments_mirror.py \
+  --output-dir <mirror-output> --memory-limit 16GB --threads 2
+uv run --frozen --env-file .env python scripts/check_comments_freshness.py --surface both
+```
+
+The memory option applies across export, agency sorting and validation. It does
+not limit the whole process. The larger budget above records the original local
+recovery; start with the shared defaults for the refactored publisher. `R2_ALLOW_SHRINK=1` matches the hosted publisher: changed compression
+may reduce file sizes, while retained-ID and exact coverage checks still run
+before upload. A successful local mirror still needs the dependent refresh and
+unchanged-input checks defined in `_regulations-refresh.yml` before scheduling
+resumes. Retain its logs and base-version receipt alongside the catch-up logs.
+
 Only after that refresh succeeds, re-enable scheduled ETL, the audit-only
 dedupe workflow and comments monitoring. Later scheduled sweeps use the
 published manifest to skip completed source keys; they run the same downstream
@@ -222,23 +240,23 @@ ledger review. A failed refresh leaves the schedules paused for reconciliation.
 
 ## Recognising success
 
-- **Manifest:** each batch logs `Loaded manifest: 26,171,058 keys`, and the
-  count grows as batches append. The words `No manifest found` never appear. A
-  `MissingManifestError` means step 4 did not run.
-- **Staging:** `[AGENCY] comments: staged N rows` reports the agency's
-  remainder, not its whole history (FWS alone once listed 2,637,380 comments).
-- **Catalog:** `iceberg: dockets now holds …` and `iceberg: comments now holds …`
-  stay at or above 279,124 and 23,890,403.
-- **Publication:** the batch ends with `Uploading manifest after all data files
-  succeeded...`, and the ETag of `manifest.parquet` changes after every batch.
-  `dockets.parquet`, `documents.parquet` and `comments_index.parquet` get new
-  `Last-Modified` times, and `failed_keys.parquet` appears.
-- **Duration:** first-sweep batch times track the table below. From the second
-  sweep on, a batch spends most of its time loading the manifest (about 3
-  minutes locally, likely more on a runner) and listing its agencies.
-- **Comments mirror:** the batch command updates the catalog and index. The
-  workflow's completion step exports `comments.parquet` and agency partitions
-  through `_comments-mirror.yml`; local catch-up uses the manual refresh entry.
+- **Manifest:** the sweep logs one `Loaded manifest` line, then reuses it.
+  `MissingManifestError` means the published checkpoint is unavailable; never
+  silently turn this into a new bootstrap.
+- **Staging:** `[AGENCY] comments: staged N rows` reports new/unresolved source
+  work. Compare with the retained source listing when qualifying completeness.
+- **Catalog:** `iceberg: merged … winning comments rows` reports actual eligible
+  upserts. Zero winners issue no catalog writes. Final public/catalog audits
+  retain the exact population checks.
+- **Checkpoint:** the batch ends with `Uploading manifest after all data files
+  succeeded...`. Raw and text retry checkpoints upload before that manifest.
+  Comments ingestion does not publish an index ahead of its matching mirror.
+- **Duration:** initial membership loading occurs once per sweep. Source listing
+  and whole-file checkpoint I/O remain; the historical measurements below
+  describe the earlier separate-job design.
+- **Comments mirror:** the successful sweep finalizes the monolith, agency files
+  and matching index together. An unchanged source and verified completion
+  receipt log `skipping build`; downstream jobs still enforce their own checks.
 
 ## First sweep
 
@@ -335,3 +353,42 @@ A local multi-batch driver can load `Manifest` once and pass it to each
 folder. Every batch still saves its own durable checkpoint. See the
 [refactor evidence](research/comment-text-refactor-2026-09-24.md) for measurements
 and restart checks.
+
+
+## Incremental sweeps after catch-up
+
+The local efficiency refactor changes the scheduled ETL from separate batch
+jobs to one process that discovers agencies and loads the processed-key manifest
+once. Each batch still publishes its raw/text retry checkpoints and manifest.
+An unsuccessful batch stops the sweep and blocks the final public mirror;
+resume on a fresh runner from the published checkpoint. Whole-file manifest
+checkpoint I/O remains. The reusable refresh runs only after ingestion succeeds.
+
+Use the supported sweep command for an incremental local run:
+
+```sh
+uv run --frozen run-pipeline --sweep --batch-count 15 --use-iceberg --no-skip-upload
+```
+
+A single `--batch-number` remains available for repairs. Both commands finalize
+the comments mirror after successful ingestion. Workflow callers use
+`--defer-comments-publication` because their reusable refresh owns that step.
+Do not combine `--sweep` with `--batch-number` or `--full-refresh`. The caller must
+serialize catalog writes with publication; the hosted workflows retain the
+`comments-catalog-write` group.
+
+The comments publisher builds agency files from one pinned source scan, sorts
+each once and streams the compatible monolith. All phases share the resource
+settings in `ExportResources`; `--memory-limit` and `--threads` override them.
+`--skip-upload` always builds and checks locally. `--force` rebuilds even if the
+completed snapshot matches, including recovery from an unreadable receipt.
+
+A successful `comments-publication.json` receipt permits skipping a subsequent
+unchanged build after storage and public object-version checks. A text-only
+catalog edit invalidates that receipt. Failed uploads leave the prior receipt
+in place, so finalization remains retryable after ingestion checkpoints commit.
+Removed agencies receive empty public files to clear their old URLs.
+
+See the [implementation and qualification record](research/comments-publication-efficiency-2026-09-25.md).
+These changes are local. Hosted qualification remains necessary before restoring
+scheduled ETL; the earlier successful catch-up publication remains separate.

@@ -158,7 +158,7 @@ def test_merge_upserts_without_merge_into(tmp_path) -> None:
             return []
 
         def fetchone(self):
-            return [0]
+            return [1]
 
     iceberg._merge(_RecordingCon(), files, DOCKET)
 
@@ -270,7 +270,7 @@ def test_build_comments_index_rebuilds_after_merge(tmp_path, local_catalog) -> N
 
 def test_merge_comments_noop_without_staging(tmp_path) -> None:
     # No staged comments -> returns None and never touches the catalog.
-    assert iceberg.merge_comments(tmp_path / "empty", tmp_path / "out", COMMENT) is None
+    assert iceberg.merge_comments(tmp_path / "empty", COMMENT) == 0
 
 
 # --- catalog seed loader ---------------------------------------------------
@@ -414,7 +414,8 @@ def test_seed_comments_tolerates_missing_columns(tmp_path, local_catalog) -> Non
     assert text_content is None
 
 
-def test_export_public_comments_rebuilds_mirror(tmp_path, local_catalog, monkeypatch) -> None:
+@pytest.mark.parametrize("options", [{}, {"memory_limit": "64MB", "threads": 1}])
+def test_export_public_comments_rebuilds_mirror(tmp_path, local_catalog, monkeypatch, options) -> None:
     """export_public_comments writes the public monolith + index straight from the
     catalog, and that monolith feeds partition_comments to produce the per-agency
     tree the UI reads."""
@@ -446,7 +447,9 @@ def test_export_public_comments_rebuilds_mirror(tmp_path, local_catalog, monkeyp
     monkeypatch.setattr(iceberg, "_connect", lambda: con)
 
     out = tmp_path / "output"
-    result = iceberg.export_public_comments(out, COMMENT)
+    monkeypatch.setattr(iceberg, "_read_snapshot", lambda *_: iceberg.CatalogSnapshot("local", 1, 0))
+    monkeypatch.setattr(iceberg, "_snapshot_query", lambda rt, snap: f"SELECT * FROM {iceberg._qualified(rt)}")
+    result = iceberg.export_public_comments(out, COMMENT, **options)
 
     assert result["comments"] == out / "comments.parquet"
     assert result["index"] == out / "comments_index.parquet"
@@ -840,3 +843,32 @@ def test_row_group_touches_separates_sorted_from_unsorted_sources(tmp_path) -> N
     groups, touches = row_group_touches(con, str(shuffled_file), agencies)
     assert (groups, touches) == (4, 40)
     assert touches > MAX_SOURCE_PASSES * groups
+
+
+def test_unchanged_merge_does_not_issue_catalog_writes(tmp_path, local_catalog):
+    con = local_catalog
+    iceberg._ensure_table(con, DOCKET)
+    staging = tmp_path / "staging"
+    _write_staging(staging, "EPA", [_docket("EPA-1", "EPA", "Same", "2025-01-01")])
+    files = iceberg._staging_files(staging, DOCKET)
+    assert iceberg._merge(con, files, DOCKET) == 1
+    statements = []
+
+    class Observed:
+        def execute(self, sql, *args):
+            statements.append(sql)
+            return con.execute(sql, *args)
+
+    assert iceberg._merge(Observed(), files, DOCKET) == 0
+    assert not any(sql.startswith(("DELETE", "INSERT")) for sql in statements)
+
+
+def test_comment_merge_does_not_recount_or_build_index(tmp_path, local_catalog, monkeypatch):
+    con = local_catalog
+    iceberg._ensure_table(con, COMMENT)
+    staging = tmp_path / "staging"
+    _write_comment_staging(staging, "EPA", [_comment("a", "EPA-1", "EPA", "2026-09-01")])
+    monkeypatch.setattr(iceberg, "_connect_for_table", lambda _: con)
+    monkeypatch.setattr(iceberg, "_build_comments_index", lambda *a: pytest.fail("per-batch recount"))
+    assert iceberg.merge_comments(staging, COMMENT) == 1
+    assert not (tmp_path / "comments_index.parquet").exists()

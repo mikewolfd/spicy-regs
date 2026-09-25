@@ -93,3 +93,13 @@ class TestManifestRoundTrip:
         manifest = Manifest.load(tmp_output)
         for k in batch1 | batch2:
             assert k in manifest
+
+
+def test_bloom_uses_portable_byte_storage_without_false_negatives():
+    bloom = BloomFilter(1000)
+    assert bloom.size_bytes == (bloom._nbits + 7) // 8
+    assert bloom.size_bytes == len(bloom._bits)
+    keys = [f"raw-data/EPA/{i}.json" for i in range(1000)]
+    for key in keys:
+        bloom.add(key)
+    assert all(key in bloom for key in keys)

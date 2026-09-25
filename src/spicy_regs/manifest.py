@@ -16,10 +16,9 @@ unless the caller allows a fresh start). Bloom hashing is deterministic, so a fa
 positive is *sticky*: the same never-seen key tests positive on every run and is
 skipped until a ``--full-refresh`` rebuilds the filter. At the 1e-7 rate over
 ~30M keys the expected count is a handful of keys total — an accepted tradeoff
-for the ~150x memory saving over an exact set, not "picked up next run".
+for the memory saving over an exact set, not "picked up next run".
 """
 
-from array import array
 from collections.abc import Container, Iterable
 from hashlib import md5, sha1
 from math import log
@@ -51,13 +50,13 @@ class MissingManifestError(RuntimeError):
 
 
 # ---------------------------------------------------------------------------
-# Bloom filter — stdlib-only, ~34 MB for 30M keys at 1e-7 FP rate.
+# Bloom filter — stdlib-only, about 126 MB for 30M keys at 1e-7 FP rate.
 #
 # A false positive skips a genuinely new file *permanently*: the hashes are
 # deterministic, so the same key collides on every run — it is not "picked up
 # next run", only by a ``--full-refresh`` that rebuilds the filter. At 1e-7 over
 # ~30M keys the expected count is ~3 keys total, the accepted cost of replacing a
-# Python set that consumed ~5 GB for 27M strings with this ~34 MB bit array.
+# Python set with a compact bit array sized by the usual Bloom-filter formula.
 # ---------------------------------------------------------------------------
 
 
@@ -67,10 +66,12 @@ class BloomFilter:
     __slots__ = ("_bits", "_nbits", "_k")
 
     def __init__(self, capacity: int, fp_rate: float = 1e-7) -> None:
+        if capacity < 1 or not 0 < fp_rate < 1:
+            raise ValueError("Bloom capacity must be positive and false-positive rate must be in (0, 1)")
         self._nbits = max(1, int(-capacity * log(fp_rate) / (log(2) ** 2)))
         self._k = max(1, int((self._nbits / capacity) * log(2)))
-        # 'L' = unsigned long (4 bytes each)
-        self._bits = array("L", [0]) * (self._nbits // 32 + 1)
+        # bytearray has the same width on every platform; unsigned long does not.
+        self._bits = bytearray((self._nbits + 7) // 8)
 
     def _hashes(self, key: str) -> list[int]:
         kb = key.encode()
@@ -80,17 +81,17 @@ class BloomFilter:
 
     def add(self, key: str) -> None:
         for pos in self._hashes(key):
-            self._bits[pos >> 5] |= 1 << (pos & 31)
+            self._bits[pos >> 3] |= 1 << (pos & 7)
 
     def __contains__(self, key: str) -> bool:
         for pos in self._hashes(key):
-            if not (self._bits[pos >> 5] & (1 << (pos & 31))):
+            if not (self._bits[pos >> 3] & (1 << (pos & 7))):
                 return False
         return True
 
     @property
     def size_bytes(self) -> int:
-        return len(self._bits) * 4
+        return len(self._bits)
 
 
 def save_manifest(output_dir: Path, new_keys: set[str]) -> None:

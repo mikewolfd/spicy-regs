@@ -13,11 +13,13 @@ historical 3.3 GB ``comments.parquet``.
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import hashlib
+import json
 from os import getenv
 from pathlib import Path
 
 import boto3
 import httpx
+from botocore.exceptions import ClientError
 from loguru import logger
 
 from spicy_regs.sources.cloudflare import purge_urls
@@ -232,7 +234,7 @@ def preflight_uploads(output_dir: Path, files: list[Path]) -> None:
     _raise_for_failures("Publication preflight", failures, len(files))
 
 
-def upload_file(local_path: Path, remote_key: str | None = None) -> None:
+def upload_file(local_path: Path, remote_key: str | None = None, *, cache_control: str | None = None) -> None:
     """Publish one file to R2 (the remote key defaults to the filename).
 
     HEADs the existing object first and refuses to overwrite it with a much
@@ -266,7 +268,7 @@ def upload_file(local_path: Path, remote_key: str | None = None) -> None:
     # else (the UI MiniSearch json.gz, which DuckDB never reads) caches safely.
     # `R2_CACHE_CONTROL` overrides.
     configured_cache_control = getenv("R2_CACHE_CONTROL")
-    cache_control = configured_cache_control or (
+    cache_control = cache_control or configured_cache_control or (
         "public, no-cache, must-revalidate"
         if remote_key.endswith(".parquet")
         else "public, max-age=3600, stale-while-revalidate=86400"
@@ -286,6 +288,66 @@ def upload_file(local_path: Path, remote_key: str | None = None) -> None:
     # must never fail a publish that already wrote the data (see cloudflare.py).
     if public_url:
         purge_urls([f"{public_url.rstrip('/')}/{remote_key}"])
+
+
+def read_json_object(remote_key: str) -> dict | None:
+    """Read a small control object directly from storage; only absence is optional."""
+    try:
+        response = get_r2_client().get_object(Bucket=getenv("R2_BUCKET_NAME", "spicy-regs"), Key=remote_key)
+    except ClientError as error:
+        if error.response["Error"]["Code"] in {"NoSuchKey", "404", "NotFound"}:
+            return None
+        raise
+    with response["Body"] as body:
+        raw = body.read(1_048_577)
+    if len(raw) > 1_048_576:
+        raise RuntimeError(f"Oversized publication receipt: {remote_key}")
+    return json.loads(raw)
+
+
+def object_version(remote_key: str) -> dict | None:
+    """Storage version used to detect out-of-band mirror replacements."""
+    try:
+        response = get_r2_client().head_object(Bucket=getenv("R2_BUCKET_NAME", "spicy-regs"), Key=remote_key)
+    except ClientError as error:
+        if error.response["Error"]["Code"] in {"NoSuchKey", "404", "NotFound"}:
+            return None
+        raise
+    return {"etag": response["ETag"], "bytes": response["ContentLength"]}
+
+
+def public_object_version(url: str) -> dict | None:
+    response = httpx.head(url, follow_redirects=True, timeout=60)
+    if response.status_code == 404:
+        return None
+    response.raise_for_status()
+    etag = response.headers.get("etag")
+    if not etag:
+        raise RuntimeError(f"Public object has no ETag: {url}")
+    return {"etag": etag, "bytes": int(response.headers["content-length"])}
+
+
+def verify_public_file(local_path: Path, remote_key: str, base_url: str) -> dict:
+    """Read back bounded public bytes and bind their digest to the stored version."""
+    with local_path.open("rb") as file:
+        digest = hashlib.file_digest(file, "sha256").hexdigest()
+    size = local_path.stat().st_size
+    before = object_version(remote_key)
+    actual = hashlib.sha256()
+    received = 0
+    url = f"{base_url.rstrip('/')}/{remote_key}"
+    with httpx.stream("GET", url, follow_redirects=True, timeout=120,
+                      headers={"Accept-Encoding": "identity"}) as response:
+        response.raise_for_status()
+        etag = response.headers.get("etag")
+        for chunk in response.iter_bytes(chunk_size=1_048_576):
+            actual.update(chunk)
+            received += len(chunk)
+    version = {"etag": etag, "bytes": received}
+    if (not etag or received != size or actual.hexdigest() != digest
+            or before != version or object_version(remote_key) != version):
+        raise RuntimeError(f"Public readback differs from the candidate: {remote_key}")
+    return {**version, "sha256": digest}
 
 
 def upload_directory_to_r2(local_dir: Path, remote_prefix: str | None = None) -> None:
