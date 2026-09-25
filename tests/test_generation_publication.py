@@ -7,7 +7,7 @@ import httpx
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
-from rulespec_artifacts import ArtifactVerificationError
+from rulespec_artifacts import ArtifactVerificationError, canonical_json_bytes
 
 from spicy_regs.generations import build_generation, verify_generation
 from spicy_regs.sources import publication as pub, r2
@@ -84,19 +84,65 @@ def test_late_shrink_refusal_uploads_nothing(tmp_path):
     assert not store.writes
 
 
-def test_compare_and_swap_preserves_concurrent_writer(tmp_path):
+def test_persistent_contention_refuses_and_preserves_concurrent_writer(tmp_path):
     old, _ = build(tmp_path)
     new, _ = build(tmp_path, "two", value="two")
     store = Store()
     prior = publish(store, old)
-    rival = json.dumps(prior).encode()  # semantically same, different object version
+    rivals = []
 
     def concurrent(key):
-        if key == pub.INDEX_KEY:
-            store.objects[key] = rival
+        if key == pub.INDEX_KEY:  # semantically same, a new object version on every attempt
+            rivals.append(json.dumps(prior, indent=len(rivals)).encode())
+            store.objects[key] = rivals[-1]
 
     store.before_put = concurrent
     with pytest.raises(pub.PublicationError, match="concurrently"):
+        publish(store, new, prior)
+    assert store.objects[pub.INDEX_KEY] == rivals[-1]
+    assert len(rivals) == pub._POINTER_ATTEMPTS
+
+
+def test_concurrent_sibling_family_is_merged_not_overwritten(tmp_path):
+    old, _ = build(tmp_path)
+    new, artifact = build(tmp_path, "two", value="two")
+    sibling, _ = build(tmp_path, "other", family="other", keys=("c.parquet",))
+    store = Store()
+    prior = publish(store, old)
+    rival = publish(Store(), sibling)["families"]["other"]
+
+    def concurrent(key):
+        if key == pub.INDEX_KEY:
+            store.before_put = None
+            index = pub.parse_index(store.objects[key])
+            index["families"]["other"] = rival
+            store.objects[key] = canonical_json_bytes(index)
+
+    store.before_put = concurrent
+    published = publish(store, new, prior)
+    assert published["families"]["other"] == rival
+    assert published["families"]["test"]["artifactDigest"] == artifact.pin.artifact_digest
+    assert pub.parse_index(store.objects[pub.INDEX_KEY]) == published
+
+
+def test_concurrent_same_family_commit_refuses_as_stale(tmp_path):
+    old, _ = build(tmp_path)
+    new, _ = build(tmp_path, "two", value="two")
+    third, _ = build(tmp_path, "three", value="three")
+    store = Store()
+    prior = publish(store, old)
+    other = Store()
+    other.objects = dict(store.objects)
+    publish(other, third, prior)
+    rival = other.objects[pub.INDEX_KEY]
+
+    def concurrent(key):
+        if key == pub.INDEX_KEY:
+            store.before_put = None
+            store.objects[key] = rival
+
+    store.before_put = concurrent
+    with pytest.raises(pub.PublicationError, match="changed since"):
         publish(store, new, prior)
     assert store.objects[pub.INDEX_KEY] == rival
 

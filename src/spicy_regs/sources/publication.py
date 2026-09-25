@@ -27,6 +27,7 @@ if TYPE_CHECKING:
 INDEX_KEY = "publication.json"
 INDEX_LIMIT = 1024 * 1024
 PART_BYTES = 64 * 1024 * 1024
+_POINTER_ATTEMPTS = 8
 _NAME = re.compile(r"[a-z][a-z0-9_-]*\Z")
 _DIGEST = re.compile(r"sha256:[0-9a-f]{64}\Z")
 _snapshot: ContextVar[tuple[str, dict] | None] = ContextVar("publication_snapshot", default=None)
@@ -310,9 +311,11 @@ def publish_generation(directory: Path, *, client, bucket: str, prior_index: Map
     Validation and conditional-write refusals preserve the current pointer.
     A transport failure after the pointer request can have an uncertain result;
     reread the index to establish whether the complete generation is current.
-    Unreferenced immutable uploads may remain and are safe to reuse. A concurrent update refuses this
-    attempt; it must not overwrite the other writer or silently retry a stale
-    family build. Input provenance and semantic quality are separate checks.
+    Unreferenced immutable uploads may remain and are safe to reuse. A pointer
+    moved by another family's writer is reread and this family's entry merged
+    onto it, which equals a first attempt made a moment later; a change to this
+    family or its tables refuses as stale and never overwrites the other writer.
+    Input provenance and semantic quality are separate checks.
     """
     from rulespec_artifacts import LocalMemberSource
     from spicy_regs.generations import verify_generation
@@ -331,7 +334,7 @@ def _publish_verified_generation(
 ) -> dict:
     """Shared publication gates; both callers fully verify their source first."""
     from botocore.exceptions import ClientError
-    from rulespec_artifacts import LocalMemberSource, admit_artifact, canonical_json_bytes, iter_member_descriptors
+    from rulespec_artifacts import LocalMemberSource, admit_artifact, iter_member_descriptors
     from spicy_regs.sources.r2 import _assert_upload_safe, _get_remote_size
     from spicy_regs.source_evidence import INPUT_ROLE, PRIOR_ROLE, verify_evidence
 
@@ -341,16 +344,12 @@ def _publish_verified_generation(
     if not _NAME.fullmatch(family):
         raise PublicationError("Invalid family name")
     index, etag = _stored_index(client, bucket)
-    if index["families"].get(family) != prior_index["families"].get(family):
-        raise PublicationError("Family changed since the build read its inputs; rebuild before publishing")
+    _assert_family_unchanged(index, prior_index, family)
     prefix = f"generations/{family}/{artifact.pin.artifact_digest.removeprefix('sha256:')}"
     tables = {}
     for member in iter_member_descriptors(artifact, source):
         key = member.object_key
         assert key is not None
-        for owner, entry in index["families"].items():
-            if owner != family and key in entry["tables"]:
-                raise PublicationError(f"{key} already belongs to family {owner}")
         _, prior = table_location(index, key)
         old_size = prior["byteSize"] if prior else _get_remote_size(client, bucket, key)
         _assert_upload_safe(member.byte_size, old_size, key)
@@ -362,15 +361,13 @@ def _publish_verified_generation(
     old_family = index["families"].get(family)
     if old_family is not None and set(old_family["tables"]) != set(tables):
         raise PublicationError("Family membership changed; explicit migration is required")
-    updated = deepcopy(index)
-    updated["families"][family] = {
+    entry = {
         "prefix": prefix,
         "logicalId": artifact.pin.logical_id,
         "artifactDigest": artifact.pin.artifact_digest,
         "tables": tables,
     }
-    raw = canonical_json_bytes(updated)
-    parse_index(raw)
+    _merge_family(index, family, entry)
     evidence = [verify_evidence(path) for path in evidence_directories]
     declared = [item for item in artifact.root["inputs"] if item["role"] == INPUT_ROLE]
     actual = [{"role": INPUT_ROLE, **item.pin.as_dict()} for item in evidence]
@@ -408,18 +405,44 @@ def _publish_verified_generation(
         logger.info("publication: reused {} unchanged member(s) across generation prefixes", reused)
     # S3 success or caller-supplied metadata is not byte-verification evidence.
     admit_artifact(_S3Members(client, bucket, prefix), expected_pin=artifact.pin)
-    condition = {"IfMatch": etag} if etag is not None else {"IfNoneMatch": "*"}
-    try:
-        client.put_object(
-            Bucket=bucket,
-            Key=INDEX_KEY,
-            Body=raw,
-            ContentType="application/json",
-            CacheControl="no-store, no-cache, must-revalidate",
-            **condition,
-        )
-    except ClientError as exc:
-        if _precondition(exc):
-            raise PublicationError("Publication changed concurrently; retry from a fresh snapshot") from exc
-        raise
-    return updated
+    # Each lost race means another writer's pointer write succeeded, so
+    # contention resolves in at most one round per concurrent writer.
+    for _ in range(_POINTER_ATTEMPTS):
+        updated, raw = _merge_family(index, family, entry)
+        condition = {"IfMatch": etag} if etag is not None else {"IfNoneMatch": "*"}
+        try:
+            client.put_object(
+                Bucket=bucket,
+                Key=INDEX_KEY,
+                Body=raw,
+                ContentType="application/json",
+                CacheControl="no-store, no-cache, must-revalidate",
+                **condition,
+            )
+            return updated
+        except ClientError as exc:
+            if not _precondition(exc):
+                raise
+        index, etag = _stored_index(client, bucket)
+        _assert_family_unchanged(index, prior_index, family)
+    raise PublicationError("Publication changed concurrently; retry from a fresh snapshot")
+
+
+def _assert_family_unchanged(index: Mapping, prior_index: Mapping, family: str) -> None:
+    if index["families"].get(family) != prior_index["families"].get(family):
+        raise PublicationError("Family changed since the build read its inputs; rebuild before publishing")
+
+
+def _merge_family(index: dict, family: str, entry: dict) -> tuple[dict, bytes]:
+    """Return ``index`` with ``family`` set to ``entry``, refusing a table another family owns."""
+    from rulespec_artifacts import canonical_json_bytes
+
+    for owner, other in index["families"].items():
+        for key in entry["tables"]:
+            if owner != family and key in other["tables"]:
+                raise PublicationError(f"{key} already belongs to family {owner}")
+    updated = deepcopy(index)
+    updated["families"][family] = entry
+    raw = canonical_json_bytes(updated)
+    parse_index(raw)
+    return updated, raw
