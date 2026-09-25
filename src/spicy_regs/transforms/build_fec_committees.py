@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from collections.abc import Generator, Iterable
 from contextlib import closing
 from pathlib import Path
@@ -40,6 +41,15 @@ PER_PAGE = 100
 API_KEY_ENV_VARS = ("API_GOV", "DATA_GOV_API_KEY", "FEC_API_KEY", "REGULATIONS_GOV_API_KEY")
 _MAX_PAGES = 5_000
 _PROGRESS_EVERY = 5_000
+# OpenFEC states this key's quota as X-RateLimit-Limit: 60 per rolling minute
+# (2026-09-25); runs 36049323173 and 36180816422 paced at 0.25 s got exactly 60
+# pages per clock minute, then HTTP 429. SpicyDocs through 0.33.2 does not pace to the
+# header, so start requests 1.1 s apart: about 55 a minute, under the window.
+_MIN_INTERVAL = 1.1
+# ~900 pages at that pace take ~17 minutes; the rollup job is killed at 30
+# (_rollup.yml). Stop at 25 so an overrun leaves an incomplete attempt, not a
+# killed job, and nothing is published.
+_DEADLINE_SECONDS = 25 * 60
 
 OUTPUT = "fec_committees.parquet"
 
@@ -114,7 +124,7 @@ def iter_fec_committee_records(
     api_key: str | None = None,
     capture_dir: Path | None = None,
     transport: httpx.BaseTransport | None = None,
-    min_interval: float = 0.25,
+    min_interval: float = _MIN_INTERVAL,
 ) -> Generator[dict, None, None]:
     """Yield native committee metadata from one SpicyDocs ``FecClient`` traversal.
 
@@ -122,7 +132,8 @@ def iter_fec_committee_records(
     response captures. This adapter selects the complete committee registry, checks
     that identifiers advance without duplication, and retains a per-run page index.
     Only normal iterator exhaustion completes an acquisition. Missing credentials,
-    page bounds, changed exact counts and failed requests refuse the run.
+    page bounds, changed exact counts, failed requests and a walk still unfinished
+    at the run deadline refuse the run; each attempt restarts from page one.
 
     Set ``FEC_CAPTURE_DIR`` or pass ``capture_dir`` to keep raw evidence outside the
     build directory. Each attempt gets its own directory; incomplete attempts remain
@@ -162,6 +173,7 @@ def iter_fec_committee_records(
         }
         (run_path / "run.json").write_text(json.dumps(state, indent=2) + "\n")
         previous_id = None
+        deadline = time.monotonic() + _DEADLINE_SECONDS
         try:
             with (
                 FecClient(
@@ -222,6 +234,11 @@ def iter_fec_committee_records(
                         if state["records"] % _PROGRESS_EVERY == 0:
                             logger.info("FEC committees: {:,} observed so far", state["records"])
                         yield record
+                    if page["next_url"] is not None and time.monotonic() > deadline:
+                        raise TimeoutError(
+                            f"FEC committees traversal passed its {_DEADLINE_SECONDS // 60}-minute deadline "
+                            f"after {state['pages']:,} pages; the attempt is incomplete"
+                        )
                 if state["declared_exact_count"] not in (None, state["records"]):
                     raise ValueError("FEC observed committees disagree with the declared exact count")
                 state["status"] = "complete"
