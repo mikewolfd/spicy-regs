@@ -36,8 +36,20 @@ failed dispositions; the execution log records the dated work and receipts.
   Table III and private-law fidelity, compiled hearing dates and PDF-only
   bodies, retained source evidence with per-row USAspending observation times,
   and held-vote link refresh. The affected families republish on their next
-  runs. Qualifying those generations, and R5–R8, remain open (see the ledger's
-  September 25 repairs).
+  runs. The first repaired generations are audited (see the ledger's
+  September 25 repairs): all qualify except `committee_reports` and
+  `hearing_transcripts`, whose one remaining defect is fixed in spicy-docs
+  `7550f0e` and awaits release. R6 (model outputs) is out of scope by the
+  owner's decision.
+- **R7 (hosted MCP):** `f51248f` makes the container image serve: it had
+  lacked a runtime package since 2026-09-22. A local run of the exact image
+  passed the three tools and five cross-source joins against the fork's
+  published data (FEC to legislators and votes, laws to Table III, compiled
+  hearing dates, organization to committee, USAspending to SAM). The first
+  `wrangler deploy` uploaded the Worker, but the account's Containers API
+  answered HTTP 401, so no container runs behind it. Enabling Containers on the
+  fork's Cloudflare account, then redeploying, is the remaining step. Receipts:
+  `/Users/mikewolfd/Work/corpora/fork-execution-2026-09-21/r7-mcp-2026-09-25/`.
 
 - **T01:** complete; SAM failures now refuse publication, and its initial load
   is T14. Earlier scheduled runs failed on the extract download's `Accept`
