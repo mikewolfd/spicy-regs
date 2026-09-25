@@ -22,7 +22,12 @@ usa = importlib.import_module("spicy_regs.transforms.build_usaspending_recipient
 KEY = "fixture-key-never-in-url"
 DAY = date(2026, 9, 8)
 CRS = {"id": "R1", "updateDate": "2026-09-08T00:00:00Z", "title": "One"}
-FCC_FILING = {"id_submission": "f1", "date_received": "2026-09-08T23:56:03Z"}
+FCC_FILING = {
+    "id_submission": "f1",
+    "date_received": "2026-09-08T23:56:03Z",
+    "date_submission": "2026-09-08T23:55:00Z",
+    "express_comment": 1,
+}
 FCC_PROCEEDING = {"name": "17-108", "id_proceeding": 1, "date_proceeding_created": "2026-09-08T10:00:00Z"}
 RECIPIENT = {"id": "r1-R", "name": "ONE", "amount": 1.25}
 FEED = b'<rss version="2.0"><channel><title>Reports</title><item><title>One</title><link>https://www.gao.gov/products/gao-26-107974</link><description>Native text</description></item></channel></rss>'
@@ -59,9 +64,16 @@ def crs_page(records, *, total=None, next_url=None):
     return {"CRSReports": records, "pagination": {"count": len(records) if total is None else total, "next": next_url}}
 
 
-def fcc_page(kind, records, *, counted=0):
+def docketed(*names, **fields):
+    """A filing as a docket-scoped selection serves it: ``proceedings`` names every docket it was filed in."""
+    return {**FCC_FILING, **fields, "proceedings": [{"name": name} for name in names]}
+
+
+def fcc_page(kind, records, *, counted=None):
     """An ECFS page with the aggregation ECFS answers beside every response; ``counted`` records carry its field."""
     key, field = ("filing", "express_comment") if kind == "fcc-filings" else ("proceeding", "bureau_name")
+    if counted is None:
+        counted = len(records) if kind == "fcc-filings" else 0
     buckets = [{"key": 1, "doc_count": counted}] if counted else []
     return {
         key: records,
@@ -201,22 +213,38 @@ def test_crs_page_bound_refuses_partial_walk(monkeypatch):
         list(selected("crs", Transport(crs_page([CRS], total=2, next_url=next_url)), per_page=1).iter_records())
 
 
-def test_fcc_subdivides_full_window_but_refuses_full_single_day(monkeypatch):
-    monkeypatch.setattr(fcc, "MAX_RESULT_WINDOW", 2)
-    transport = Transport(
-        {"filing": [FCC_FILING, {**FCC_FILING, "id_submission": "f2"}]},
-        fcc_page("fcc-filings", [FCC_FILING]),
-        fcc_page("fcc-filings", [{**FCC_FILING, "id_submission": "f2"}]),
+@pytest.mark.parametrize("per_page,limit", [(None, 1_000), (19, 19), (6_000, 5_000)])
+def test_fcc_filings_delegate_each_selection_to_the_source_traversal(monkeypatch, per_page, limit):
+    from spicy_docs.sources.fcc_ecfs import FccEcfsReader
+
+    calls = []
+
+    def iter_filings(_reader, **kwargs):
+        calls.append(kwargs)
+        yield FCC_FILING
+
+    monkeypatch.setattr(FccEcfsReader, "iter_filings", iter_filings)
+    monkeypatch.setattr(
+        fcc, "_fetch_proceedings_window", lambda *_args, **_kwargs: pytest.fail("filings used the proceedings walk")
     )
-    records = fcc._fetch_fcc("filings", since=DAY, until=date(2026, 9, 9), api_key=KEY, per_page=2, transport=transport)
-    assert len(list(records)) == 2
-    assert len(transport.calls) == 3
-    with pytest.raises(fcc.FccEcfsError, match="result ceiling"):
-        list(
-            selected(
-                "fcc-filings", Transport({"filing": [FCC_FILING, {**FCC_FILING, "id_submission": "f2"}]}), per_page=2
-            ).iter_records()
+    transport = Transport()
+    rows = list(
+        fcc._fetch_fcc(
+            "filings",
+            since=DAY,
+            until=date(2026, 9, 9),
+            api_key=KEY,
+            per_page=per_page,
+            proceedings=("17-108", "23-320"),
+            transport=transport,
         )
+    )
+    assert calls == [
+        {"received_from": "2026-09-08", "received_to": "2026-09-09", "proceeding": name, "limit": limit}
+        for name in ("17-108", "23-320")
+    ]
+    assert rows == [FCC_FILING, FCC_FILING] and all(row is not FCC_FILING for row in rows)
+    assert transport.calls == []
 
 
 def test_usa_short_nonterminal_page_continues_and_preserves_amount():
@@ -255,8 +283,8 @@ def test_usa_refuses_cross_page_inconsistency(second_page):
 def test_fcc_named_proceedings_keep_each_selection_and_shared_filing():
     # A filing can legitimately appear in both selected proceedings. The fetch
     # preserves both observations; table merging owns identity deduplication.
-    shared = {**FCC_FILING, "proceedings": [{"name": "17-108"}, {"name": "23-320"}]}
-    second = {**FCC_FILING, "id_submission": "f2"}
+    shared = docketed("17-108", "23-320")
+    second = docketed("23-320", id_submission="f2")
     transport = Transport(fcc_page("fcc-filings", [shared]), fcc_page("fcc-filings", [shared, second]))
     reader = selected("fcc-filings", transport, proceedings=("17-108", "23-320"))
     assert list(reader.iter_records()) == [shared, shared, second]
@@ -265,13 +293,14 @@ def test_fcc_named_proceedings_keep_each_selection_and_shared_filing():
 
 def test_fcc_second_proceeding_failure_preserves_prior_output(monkeypatch, tmp_path):
     module = importlib.import_module("spicy_regs.transforms.build_fcc_ecfs")
-    table = pa.Table.from_pylist([module._shape_filing(FCC_FILING)], schema=module._FILING_SCHEMA)
+    filed = docketed("17-108")
+    table = pa.Table.from_pylist([module._shape_filing(filed)], schema=module._FILING_SCHEMA)
     prior = tmp_path / "_fcc_filings_prior.parquet"
     output = tmp_path / "fcc_filings.parquet"
     pq.write_table(table, prior)
     pq.write_table(table, output)
     before = prior.read_bytes(), output.read_bytes()
-    transport = Transport(fcc_page("fcc-filings", [FCC_FILING]), 500)
+    transport = Transport(fcc_page("fcc-filings", [filed]), 500)
     reader = selected("fcc-filings", transport, proceedings=("17-108", "23-320"))
     monkeypatch.setattr(module, "_fetch_fcc", lambda *args, **kwargs: reader.iter_records())
 
@@ -373,7 +402,9 @@ def test_failed_build_preserves_prior_and_existing_output_bytes(monkeypatch, tmp
             source = selected(kind, Transport(usa_page([RECIPIENT], total=2, next_page=2), 500), per_page=1)
         elif kind.startswith("fcc"):
             source = selected(
-                kind, Transport({("filing" if kind == "fcc-filings" else "proceeding"): [native]}, 500), per_page=1
+                kind,
+                Transport(fcc_page(kind, [native], counted=2 if kind == "fcc-filings" else 0), 500),
+                per_page=1,
             )
         else:
             source = selected(
@@ -392,6 +423,8 @@ def test_failed_build_preserves_prior_and_existing_output_bytes(monkeypatch, tmp
         getattr(module, builder_name)(tmp_path)
     assert (prior.read_bytes(), output.read_bytes()) == before
     assert not list(tmp_path.glob("*_new.parquet"))
+    if failure == "partial" and kind.startswith("fcc"):
+        assert len(source.kwargs["transport"].calls) == 2
 
 
 @pytest.mark.parametrize(
@@ -457,7 +490,7 @@ def test_fcc_pools_a_window_until_its_aggregate_count():
         fcc_page("fcc-filings", [first, first], counted=2), fcc_page("fcc-filings", [second, second], counted=2)
     )
     assert sorted(x["id_submission"] for x in selected("fcc-filings", transport).iter_records()) == ["f1", "f2"]
-    assert [call.url.params["limit"] for call in transport.calls] == ["250", "237"]
+    assert [call.url.params["limit"] for call in transport.calls] == ["1000", "948"]
 
 
 def test_fcc_walks_cycle_through_three_page_sizes():
@@ -466,30 +499,40 @@ def test_fcc_walks_cycle_through_three_page_sizes():
     transport = Transport(*[dirty] * DEFAULT_POOL_PASSES)
     with pytest.raises(IncompleteWalkError):
         list(records("fcc-filings", transport))
-    assert [call.url.params["limit"] for call in transport.calls] == ["250", "237", "223", "250"][:DEFAULT_POOL_PASSES]
-
-
-def test_fcc_bisects_a_window_a_smaller_walk_could_not_exhaust(monkeypatch):
-    """A window the first walk exhausts but a later, smaller walk would stop short of is split at once.
-
-    Otherwise a second walk would meet the result ceiling and refuse as if the window had grown.
-    """
-    monkeypatch.setattr(fcc, "MAX_RESULT_WINDOW", 20)
-    filings = [{**FCC_FILING, "id_submission": f"f{number}"} for number in range(18)]
-    transport = Transport(
-        fcc_page("fcc-filings", filings, counted=0),  # 18 of 19 a page: exhausted, but a 17-row walk reaches 17
-        fcc_page("fcc-filings", filings[:9], counted=0),
-        fcc_page("fcc-filings", filings[9:], counted=0),
-    )
-    rows = list(
-        fcc._fetch_fcc("filings", since=DAY, until=date(2026, 9, 9), api_key=KEY, per_page=19, transport=transport)
-    )
-    assert [row["id_submission"] for row in rows] == [filing["id_submission"] for filing in filings]
-    assert [call.url.params["date_received"] for call in transport.calls] == [
-        "[gte]2026-09-08[lte]2026-09-10",
-        "[gte]2026-09-08[lte]2026-09-09",
-        "[gte]2026-09-09[lte]2026-09-10",
+    assert [call.url.params["limit"] for call in transport.calls] == ["1000", "948", "889", "1000"][
+        :DEFAULT_POOL_PASSES
     ]
+
+
+def test_fcc_filings_keep_filters_and_explicit_page_size_through_source_traversal():
+    filings = [docketed("17-108"), docketed("17-108", id_submission="f2")]
+    transport = Transport(fcc_page("fcc-filings", filings))
+    rows = list(
+        fcc._fetch_fcc(
+            "filings",
+            since=DAY,
+            until=date(2026, 9, 9),
+            api_key=KEY,
+            per_page=19,
+            proceedings=("17-108",),
+            transport=transport,
+        )
+    )
+    assert rows == filings and len(transport.calls) == 1
+    request = transport.calls[0]
+    assert request.url.params["date_received"] == "[gte]2026-09-08[lte]2026-09-10"
+    assert request.url.params["proceedings.name"] == "17-108"
+    assert request.url.params["limit"] == "19"
+    assert request.url.params["sort"] == "date_submission,ASC"
+    assert request.headers["x-api-key"] == KEY and KEY not in str(request.url)
+
+
+def test_fcc_filings_missing_counted_flag_refuses_instead_of_inventing_a_count():
+    missing_flag = {key: value for key, value in FCC_FILING.items() if key != "express_comment"}
+    transport = Transport(fcc_page("fcc-filings", [missing_flag]))
+    with pytest.raises(PagedJsonSourceError, match="scalar express_comment flag"):
+        list(records("fcc-filings", transport))
+    assert len(transport.calls) == 1
 
 
 def _proceeding(name, **fields):
@@ -501,6 +544,65 @@ def _proceeding(name, **fields):
         "total_filing_count": 1,
         **fields,
     }
+
+
+def test_fcc_proceedings_split_full_spans_but_refuse_a_full_single_day(monkeypatch):
+    monkeypatch.setattr(fcc, "MAX_RESULT_WINDOW", 2)
+    first = _proceeding("17-108", id_proceeding=1)
+    second = _proceeding("23-320", id_proceeding=2, date_proceeding_created="2026-09-09T10:00:00Z")
+    transport = Transport(
+        fcc_page("fcc-proceedings", [first, second], counted=2),
+        fcc_page("fcc-proceedings", [first], counted=1),
+        fcc_page("fcc-proceedings", [second], counted=1),
+    )
+    rows = list(
+        fcc._fetch_fcc("proceedings", since=DAY, until=date(2026, 9, 9), api_key=KEY, per_page=2, transport=transport)
+    )
+    assert rows == [first, second]
+    assert [call.url.params["date_proceeding_created"] for call in transport.calls] == [
+        "[gte]2026-09-08[lte]2026-09-10",
+        "[gte]2026-09-08[lte]2026-09-09",
+        "[gte]2026-09-09[lte]2026-09-10",
+    ]
+    assert all(call.url.params["offset"] == "0" for call in transport.calls)
+
+    same_day = [first, {**second, "date_proceeding_created": "2026-09-08T11:00:00Z"}]
+    full_day = Transport(fcc_page("fcc-proceedings", same_day, counted=2))
+    with pytest.raises(fcc.FccEcfsError, match="proceedings reaches the result ceiling on 2026-09-08"):
+        list(fcc._fetch_fcc("proceedings", since=DAY, until=DAY, api_key=KEY, per_page=2, transport=full_day))
+    assert len(full_day.calls) == 1
+
+
+@pytest.mark.parametrize("window", [20, 34])
+def test_fcc_proceedings_split_a_window_a_smaller_walk_could_not_exhaust(monkeypatch, window):
+    """A proceedings window the first walk exhausts but a later, smaller walk would stop short of is split at once.
+
+    Otherwise a second walk would meet the result ceiling and refuse as if the window had grown. ``per_page=19``
+    cycles 19, 18 and 17 rows a page, and a window is within reach only below ``min(window // size * size)``: 17 at
+    20 and 18 at 34. The last size alone (``window // 17 * 17``) gives 34 at 34, where 18 rows would be pooled
+    instead, so that case pins the reach to the smallest multiple of any walk size.
+    """
+    monkeypatch.setattr(fcc, "MAX_RESULT_WINDOW", window)
+    created = ["2026-09-08T10:00:00Z"] * 9 + ["2026-09-09T10:00:00Z"] * 9
+    documents = [
+        _proceeding(f"26-{number}", id_proceeding=number, date_proceeding_created=day)
+        for number, day in enumerate(created)
+    ]
+    transport = Transport(
+        fcc_page("fcc-proceedings", documents, counted=18),  # 18 of 19 a page: exhausted, but an 18-row walk is not
+        fcc_page("fcc-proceedings", documents[:9], counted=9),
+        fcc_page("fcc-proceedings", documents[9:], counted=9),
+    )
+    rows = list(
+        fcc._fetch_fcc("proceedings", since=DAY, until=date(2026, 9, 9), api_key=KEY, per_page=19, transport=transport)
+    )
+    assert rows == documents
+    assert [call.url.params["date_proceeding_created"] for call in transport.calls] == [
+        "[gte]2026-09-08[lte]2026-09-10",
+        "[gte]2026-09-08[lte]2026-09-09",
+        "[gte]2026-09-09[lte]2026-09-10",
+    ]
+    assert all(call.url.params["limit"] == "19" and call.url.params["offset"] == "0" for call in transport.calls)
 
 
 @pytest.mark.parametrize(
@@ -527,7 +629,8 @@ def test_fcc_proceedings_pool_by_document_not_by_filing_activity(field, before, 
     rows = list(records("fcc-proceedings", transport))
     assert sorted(row["name"] for row in rows) == ["17-108", "23-320", "24-1"]
     assert next(row for row in rows if row["name"] == "17-108")[field] == after, "the latest observation"
-    assert len(transport.calls) == 2
+    # Proceedings keep the 250-row default (and its shifted second walk) while filings default to 1,000.
+    assert [call.url.params["limit"] for call in transport.calls] == ["250", "237"]
 
 
 def test_fcc_proceedings_edited_between_walks_refuse_rather_than_settle_on_a_surplus():

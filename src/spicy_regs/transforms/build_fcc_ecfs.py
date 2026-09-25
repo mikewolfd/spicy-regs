@@ -19,19 +19,18 @@ the last :data:`FILINGS_FIRST_RUN_DAYS` days unless an explicit ``since``
 (``FCC_SINCE``) is passed. Deeper backfills are expected to run scoped to
 specific proceedings (``FCC_PROCEEDINGS``) and/or in date slices.
 
-Every window is pooled over whole walks (spicy-docs ``pool_walks``) until one
-walk is clean or the pool holds exactly the count ECFS aggregates for it
-(:data:`_COUNTED_BY`); the 2026-09-22 scheduled filings run met an identity
-repeated within one window.
+SpicyDocs owns counted filing traversal, including submission-time splits for
+crowded received days. This host stages fresh rows in bounded batches and
+publishes only after the source iterator and merge finish successfully.
 """
 
 from __future__ import annotations
 
 import json
 import os
-from collections.abc import Hashable, Iterator, Mapping
+from collections.abc import Generator, Hashable, Iterable, Iterator, Mapping
+from contextlib import closing
 from datetime import UTC, date, datetime, timedelta
-from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -40,6 +39,7 @@ import pyarrow.parquet as pq
 from loguru import logger
 
 from spicy_regs.sources import r2
+from spicy_regs.transforms.parquet_rows import write_rows
 from spicy_regs.transforms.table_merge import merge_local_prior
 
 if TYPE_CHECKING:
@@ -183,26 +183,15 @@ def _shape_filing(raw: dict) -> dict:
 
 
 # -- source fetch ---------------------------------------------------------------
-# spicy-docs owns the ECFS transport, offset walk, credential header and
-# inclusive-day URL bounds (:mod:`spicy_docs.sources.fcc_ecfs`). The walk below
-# is this host's window policy on top of it: spans whose reach would pass the
-# publisher's 10,000-record result ceiling bisect on their dates, and a single
-# day that still hits the ceiling refuses, because two sorted slices cannot
-# prove coverage when source timestamps tie. Source-confirmed empty windows are
-# valid.
+# SpicyDocs owns filing counts, pooled walks and submission-time partitions.
+# This host keeps its proceeding-document selection below: proceeding identity
+# and missing-bureau counts differ from the filing route.
 
 ECFS_EPOCH = date(1990, 1, 1)
 API_KEY_ENV_VARS = ("API_GOV", "DATA_GOV_API_KEY", "FCC_API_KEY", "REGULATIONS_GOV_API_KEY")
 PER_PAGE = 250
 MAX_RESULT_WINDOW = 10_000
 _MAX_REQUESTS_PER_PAGE = 5
-
-#: ECFS states no total, but every response, empty ones included, carries Elasticsearch term
-#: aggregations over the whole query. One field's buckets plus ``sum_other_doc_count`` count the
-#: records carrying that field; a record without it is counted as observed. Measured 2026-09-23:
-#: filings' ``express_comment`` summed to all 5,137 filings received 2026-08-23..09-22, and
-#: proceedings' ``bureau_name`` to every proceeding walked but the one with no bureau.
-_COUNTED_BY = {"proceedings": "bureau_name", "filings": "express_comment"}
 
 
 class FccEcfsError(ValueError):
@@ -223,38 +212,36 @@ def _fetch_fcc(
     since: date | None = None,
     until: date | None = None,
     api_key: str | None = None,
-    per_page: int = PER_PAGE,
+    per_page: int | None = None,
     proceedings: tuple[str, ...] = (),
     transport: httpx.BaseTransport | None = None,
-) -> Iterator[dict]:
+) -> Generator[dict, None, None]:
     """Yield raw ECFS records for ``endpoint`` ("proceedings" or "filings").
 
     ``proceedings`` scopes a filings selection to named proceedings, one full
     window walk each; a filing legitimately shared by two selected proceedings
     is yielded for each, and table merging owns identity deduplication.
     """
-    if isinstance(per_page, bool) or not isinstance(per_page, int) or per_page < 1:
+    if per_page is not None and (isinstance(per_page, bool) or not isinstance(per_page, int) or per_page < 1):
         raise ValueError("per_page must be a positive integer")
     since = since or ECFS_EPOCH
     until = until or date.today()
     api_key = api_key if api_key is not None else _resolve_api_key()
-    per_page = min(per_page, PER_PAGE)
     if not api_key:
         raise FccEcfsError("ECFS requires an api.data.gov key")
     if since > until:
         raise FccEcfsError("ECFS selection start must not follow its end")
     try:
         from spicy_docs.reading.paged_json import PagedJsonBudget
-        from spicy_docs.sources.fcc_ecfs import FccEcfsReader
+        from spicy_docs.sources.fcc_ecfs import DEFAULT_FILINGS_LIMIT, MAX_FILINGS_LIMIT, FccEcfsReader
     except ModuleNotFoundError as error:
         if error.name == "spicy_docs":
             raise RuntimeError(
                 "FCC ECFS requires spicy-regs[source-readers]. Run `uv sync --frozen` in a SpicyRegs checkout."
             ) from None
         raise
-    if endpoint not in _COUNTED_BY:
+    if endpoint not in ("proceedings", "filings"):
         raise ValueError(f"unknown ECFS endpoint {endpoint!r}")
-    record_key = "proceeding" if endpoint == "proceedings" else "filing"
     budget = PagedJsonBudget(
         max_requests=_MAX_REQUESTS_PER_PAGE,
         max_page_bytes=16 * 1024 * 1024,
@@ -263,23 +250,27 @@ def _fetch_fcc(
     )
     with FccEcfsReader(budget=budget, api_key=api_key, transport=transport) as reader:
         for name in proceedings or (None,):
-            extra = {"proceedings.name": name} if name else {}
-            yield from _fetch_window(
-                reader,
-                endpoint=endpoint,
-                record_key=record_key,
-                gte=since,
-                lte=until,
-                per_page=per_page,
-                extra=extra,
-            )
+            if endpoint == "filings":
+                for record in reader.iter_filings(
+                    received_from=since.isoformat(),
+                    received_to=until.isoformat(),
+                    proceeding=name,
+                    limit=min(per_page or DEFAULT_FILINGS_LIMIT, MAX_FILINGS_LIMIT),
+                ):
+                    yield dict(record)
+            else:
+                yield from _fetch_proceedings_window(
+                    reader,
+                    gte=since,
+                    lte=until,
+                    per_page=min(per_page or PER_PAGE, PER_PAGE),
+                    extra={"proceedings.name": name} if name else {},
+                )
 
 
-def _fetch_window(
+def _fetch_proceedings_window(
     reader: FccEcfsReader,
     *,
-    endpoint: str,
-    record_key: str,
     gte: date,
     lte: date,
     per_page: int,
@@ -288,30 +279,26 @@ def _fetch_window(
     """Yield one window, bisecting a span past the result ceiling; a single over-ceiling day refuses.
 
     A window within the ceiling is pooled over whole walks until one is clean or the pool
-    holds exactly the window's aggregate count (:data:`_COUNTED_BY`, spicy-docs ``pool_walks``).
-    Each walk takes the next of :func:`_walk_page_sizes`, so its page boundaries fall on other
-    records; a window is within the ceiling only if a walk at the smallest of them can exhaust
-    it, so a later, smaller walk never meets the ceiling the first walk did not.
+    holds exactly the window's bureau aggregate count (spicy-docs ``pool_walks``). A walk that
+    repeats one record and skips another does so at its page boundaries, so each walk takes the
+    next of spicy-docs ``walk_page_sizes`` to move them; a window is within the ceiling only below
+    ``pooled_reach``, so a later, smaller walk never meets the ceiling the first walk did not.
     """
-    from spicy_docs.reading.paged_json import WalkPass, pool_walks
+    from spicy_docs.reading.paged_json import WalkPass, pool_walks, pooled_reach, walk_page_sizes
 
-    sizes = _walk_page_sizes(per_page)
+    sizes = walk_page_sizes(per_page)
 
     def walk(size: int) -> tuple[list[dict], bool, int]:
-        return _page_window(
-            reader, endpoint=endpoint, record_key=record_key, gte=gte, lte=lte, per_page=size, extra=extra
-        )
+        return _page_proceedings_window(reader, gte=gte, lte=lte, per_page=size, extra=extra)
 
     records, exhausted, counted = walk(sizes[0])
-    if not exhausted or len(records) >= MAX_RESULT_WINDOW // sizes[-1] * sizes[-1]:
+    if not exhausted or len(records) >= pooled_reach(per_page, MAX_RESULT_WINDOW):
         if gte == lte:
-            raise FccEcfsError(f"ECFS {endpoint} reaches the result ceiling on {gte}; narrow the selection")
+            raise FccEcfsError(f"ECFS proceedings reaches the result ceiling on {gte}; narrow the selection")
         mid = gte + (lte - gte) // 2
         for start, end in ((gte, mid), (mid + timedelta(days=1), lte)):
-            yield from _fetch_window(
+            yield from _fetch_proceedings_window(
                 reader,
-                endpoint=endpoint,
-                record_key=record_key,
                 gte=start,
                 lte=end,
                 per_page=per_page,
@@ -324,26 +311,15 @@ def _fetch_window(
             return WalkPass(tuple(records), counted)
         again, exhausted, count = walk(sizes[index % len(sizes)])
         if not exhausted:
-            raise FccEcfsError(f"ECFS {endpoint} {gte}..{lte} grew past the result ceiling between passes")
+            raise FccEcfsError(f"ECFS proceedings {gte}..{lte} grew past the result ceiling between passes")
         return WalkPass(tuple(again), count)
 
-    label = f"ECFS {endpoint} {gte}..{lte}"
-    pooled = pool_walks(walk_pass, key=partial(_identity, endpoint), label=label)
+    label = f"ECFS proceedings {gte}..{lte}"
+    pooled = pool_walks(walk_pass, key=_proceeding_identity, label=label)
     logger.info(
         "{}: {:,} records of {:,} counted, in {} walk(s)", label, len(pooled.records), pooled.declared, pooled.passes
     )
     yield from (dict(record) for record in pooled.records)
-
-
-def _walk_page_sizes(per_page: int) -> tuple[int, ...]:
-    """The page sizes successive walks of one window cycle through: 250 gives 250, 237 and 223.
-
-    A walk that repeats one record and skips another does so at its page boundaries, so a
-    second walk with the same boundaries tends to skip the same record. This is the rule
-    spicy-docs' Congress reader applies (``CongressListingReader.pooled``), restated because
-    spicy-docs does not export it; B7 moves ECFS pooling there, where the two can share it.
-    """
-    return tuple(dict.fromkeys((per_page, per_page - per_page // 19, per_page - per_page // 9)))
 
 
 #: Proceeding fields that summarize filing activity. They change between two walks of one window
@@ -357,11 +333,10 @@ _PROCEEDING_ACTIVITY = frozenset(
 )
 
 
-def _identity(endpoint: str, record: Mapping[str, Any]) -> Hashable:
-    """The record's identity within one window.
+def _proceeding_identity(record: Mapping[str, Any]) -> Hashable:
+    """A proceeding document's identity within one window.
 
-    A filing is its ``id_submission``; spicy-docs refuses a missing or blank one. A proceeding
-    has no such key: ECFS holds more than one document for some dockets and reuses one
+    ECFS holds more than one document for some dockets and reuses one
     ``id_proceeding`` across documents (measured 2026-09-23: 553 of 21,138 ids, two of them a
     single docket's two documents, 24-89 and 25-12). So a proceeding is its document without
     the filing-activity counters (:data:`_PROCEEDING_ACTIVITY`), which move as filings arrive
@@ -372,35 +347,23 @@ def _identity(endpoint: str, record: Mapping[str, Any]) -> Hashable:
     of one the walk skipped and the walk still looks clean; excluding the activity fields
     narrows that to edits of the document itself.
     """
-    if endpoint == "proceedings":
-        document = {field: value for field, value in record.items() if field not in _PROCEEDING_ACTIVITY}
-        return json.dumps(document, sort_keys=True, default=str)
-    return record.get("id_submission")
+    document = {field: value for field, value in record.items() if field not in _PROCEEDING_ACTIVITY}
+    return json.dumps(document, sort_keys=True, default=str)
 
 
-def _carries_counted_field(endpoint: str, record: dict) -> bool:
-    """Whether ``record`` carries the field its endpoint's window count is aggregated over."""
-    if endpoint == "proceedings":
-        return bool(_dict_field(record, "bureau").get("name"))
-    return record.get("express_comment") is not None
-
-
-def _window_count(endpoint: str, page, records: list[dict]) -> int:
-    """The window's record count: its aggregate over :data:`_COUNTED_BY` plus the records without that field."""
-    field = _COUNTED_BY[endpoint]
+def _proceeding_count(page, records: list[dict]) -> int:
+    """Bureau memberships plus observed documents without a bureau (not a filing total)."""
     try:
-        aggregation = json.loads(page.capture.body)["aggregations"][field]
+        aggregation = json.loads(page.capture.body)["aggregations"]["bureau_name"]
         counted = sum(bucket["doc_count"] for bucket in aggregation["buckets"]) + aggregation["sum_other_doc_count"]
     except (KeyError, TypeError, ValueError):
-        raise FccEcfsError(f"ECFS {endpoint} answered no {field} aggregation to count its window by") from None
-    return counted + sum(1 for record in records if not _carries_counted_field(endpoint, record))
+        raise FccEcfsError("ECFS proceedings answered no bureau_name aggregation to count its window by") from None
+    return counted + sum(1 for record in records if not _dict_field(record, "bureau").get("name"))
 
 
-def _page_window(
+def _page_proceedings_window(
     reader: FccEcfsReader,
     *,
-    endpoint: str,
-    record_key: str,
     gte: date,
     lte: date,
     per_page: int,
@@ -408,22 +371,17 @@ def _page_window(
 ) -> tuple[list[dict], bool, int]:
     """Page one window through the owner's offset walk; return its records, whether it exhausted, and its count."""
     from spicy_docs.reading.paged_json import with_query
-    from spicy_docs.sources.fcc_ecfs import filings_url, proceedings_url
+    from spicy_docs.sources.fcc_ecfs import proceedings_url
 
-    if endpoint == "proceedings":
-        url = proceedings_url(
-            created_from=gte.isoformat(), created_to=lte.isoformat(), limit=per_page, descending=False
-        )
-    else:
-        url = filings_url(received_from=gte.isoformat(), received_to=lte.isoformat(), limit=per_page, descending=False)
+    url = proceedings_url(created_from=gte.isoformat(), created_to=lte.isoformat(), limit=per_page, descending=False)
     for key, value in extra.items():
         url = with_query(url, key, value)
     records: list[dict] = []
     while True:
-        page = reader.page(url, records_key=record_key)
+        page = reader.page(url, records_key="proceeding")
         records.extend(dict(record) for record in page.records)
         if page.next_url is None:
-            return records, True, _window_count(endpoint, page, records)
+            return records, True, _proceeding_count(page, records)
         if len(records) + per_page > MAX_RESULT_WINDOW:
             return records, False, 0
         url = page.next_url
@@ -453,39 +411,45 @@ def _merge_incremental(
     schema: pa.Schema,
     key: str,
     order_by: str,
-    rows: list[dict],
+    rows: Iterable[dict],
     prior_file: Path,
     have_prior: bool,
 ) -> Path:
-    """Union prior + freshly fetched rows, dedup on ``key`` preferring fresh."""
+    """Stage bounded fresh-row batches, then replace the output after a successful dedup merge."""
     import duckdb
 
     out_file = output_dir / output
     new_file = output_dir / f"{scratch_prefix}_new.parquet"
-    table = pa.Table.from_pylist(rows, schema=schema) if rows else schema.empty_table()
-    pq.write_table(table, new_file, compression="zstd")
+    staged = output_dir / f".{output}.partial"
+    try:
+        write_rows(rows, new_file, schema)
+        logger.info("FCC {}: staged {:,} fresh rows", output, pq.ParquetFile(new_file).metadata.num_rows)
 
-    spill_dir = output_dir / ".duckdb_tmp"
-    spill_dir.mkdir(exist_ok=True)
-    con = duckdb.connect()
-    con.execute("SET memory_limit='4GB'")
-    con.execute("SET preserve_insertion_order=false")
-    con.execute("SET threads=2")
-    con.execute(f"SET temp_directory='{spill_dir}'")
+        spill_dir = output_dir / ".duckdb_tmp"
+        spill_dir.mkdir(exist_ok=True)
+        con = duckdb.connect()
+        try:
+            con.execute("SET memory_limit='4GB'")
+            con.execute("SET preserve_insertion_order=false")
+            con.execute("SET threads=2")
+            con.execute("SET temp_directory=?", [str(spill_dir)])
+            merge_local_prior(
+                con,
+                columns=columns,
+                identity=key,
+                order_by=f"{order_by} DESC, {key}",
+                prior_file=prior_file if have_prior else None,
+                new_file=new_file,
+                out_file=staged,
+            )
+        finally:
+            con.close()
+        staged.replace(out_file)
+    finally:
+        new_file.unlink(missing_ok=True)
+        staged.unlink(missing_ok=True)
 
-    merge_local_prior(
-        con,
-        columns=columns,
-        identity=key,
-        order_by=f"{order_by} DESC, {key}",
-        prior_file=prior_file if have_prior else None,
-        new_file=new_file,
-        out_file=out_file,
-    )
-    con.close()
-
-    for scratch in (prior_file, new_file):
-        scratch.unlink(missing_ok=True)
+    prior_file.unlink(missing_ok=True)
     return out_file
 
 
@@ -590,21 +554,19 @@ def build_fcc_filings(
             )
     logger.info("FCC filings: fetching filings received since {} (proceedings={})", since, proceedings or "all")
 
-    rows = [_shape_filing(f) for f in _fetch_fcc("filings", since=since, proceedings=proceedings)]
-    logger.info("FCC filings: fetched {:,} filings this run", len(rows))
-
-    out = _merge_incremental(
-        output_dir,
-        output=FILINGS_OUTPUT,
-        scratch_prefix="_fcc_filings",
-        columns=FILING_COLUMNS,
-        schema=_FILING_SCHEMA,
-        key="id_submission",
-        order_by="date_received",
-        rows=rows,
-        prior_file=prior_file,
-        have_prior=have_prior,
-    )
+    with closing(_fetch_fcc("filings", since=since, proceedings=proceedings)) as source:
+        out = _merge_incremental(
+            output_dir,
+            output=FILINGS_OUTPUT,
+            scratch_prefix="_fcc_filings",
+            columns=FILING_COLUMNS,
+            schema=_FILING_SCHEMA,
+            key="id_submission",
+            order_by="date_received",
+            rows=(_shape_filing(f) for f in source),
+            prior_file=prior_file,
+            have_prior=have_prior,
+        )
     total = pq.ParquetFile(out).metadata.num_rows
     logger.info("FCC filings: {:,} rows", total)
     return out
