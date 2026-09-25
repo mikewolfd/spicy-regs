@@ -56,7 +56,20 @@ jobs:
             ARGS="$ARGS --skip-upload"
           fi
           echo "Running: uv run python scripts/publish_comments_mirror.py $ARGS"
-          uv run --frozen python scripts/publish_comments_mirror.py $ARGS
+          mkdir -p output
+          /usr/bin/time -v -o output/comments-resources.txt \
+            uv run --frozen python scripts/publish_comments_mirror.py $ARGS
+
+      - name: Retain publication receipts and resource measurements
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: comments-publication-${{ github.run_id }}
+          path: |
+            output/comments-build.json
+            output/comments-publication.json
+            output/comments-resources.txt
+          retention-days: 30
 
       - name: Capture published base versions for dependent jobs
         if: ${{ !inputs.skip_upload }}
