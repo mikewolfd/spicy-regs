@@ -5,6 +5,18 @@ The optional `source-readers` extra enables the same readers for package install
 its wheels must be supplied explicitly until they are published in a registry.
 Base CLI and MCP installs do not require them.
 
+- `spicy_docs-0.34.0`: built from SpicyDocs branch `agency-scrapers-0.34.0` at `3938514`
+  (release commit; the branch sits on `main` 1e73312 and is under review), with Rulespec
+  Artifacts 1.1.1. Built September 25, 2026 UTC: **1,621,728 bytes**, SHA-256
+  `0099a5eef9d3bc658690c1584917c05a5eb7d4e517021043adb61f1d7587fdea`, byte-identical across
+  two rebuilds from a clean archive of that commit. Adds the agency scrapers (FCC filing walks
+  and document capture, SEC, FERC, CFTC, EDIS), one walled-fetch ladder for keyless sources,
+  and the OpenFEC quota pacing. FCC filings delegate count checks, pooled walks and crowded-query
+  timestamp splits to `FccEcfsReader.iter_filings`; this host keeps its overlap and publication
+  policy and streams the merge through its existing batch writer. Every row of a docket-scoped
+  selection must name the docket, so fixture rows carry `proceedings`. No rule version changes
+  for the other readers. This is a local package adoption; public tables require a subsequent run.
+
 - `spicy_docs-0.33.2`: built from SpicyDocs `main` at `1e73312`, with Rulespec Artifacts 1.1.1.
   Built September 25, 2026 UTC: **1,467,427 bytes**, SHA-256
   `b3b7c8f85c113ee89c55bf99bc4134387b385f93798fc95d2584f0ff7d0e1e3d`, byte-identical across two
