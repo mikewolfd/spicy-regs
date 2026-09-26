@@ -33,6 +33,26 @@ These U.S. government documents are public domain.
 | `mods-CRPT-119hrpt455.xml` | [`packages/CRPT-119hrpt455/mods`](https://api.govinfo.gov/packages/CRPT-119hrpt455/mods) | 24,549 | `290e09efb3f28d77e3e23cd379d8e826e8894ef444aea0fd383377a210d86c59` | Copied byte-for-byte from spicy-docs `tests/fixtures/govinfo_bodies/` at `549db06`, the 0.32.0 release this repository pins; spicy-docs captured it 2026-09-23 with the key sent only as `X-Api-Key`. It contains no key and no `api_key=` parameter. |
 | `summary-CRPT-119hrpt455.json` | [`packages/CRPT-119hrpt455/summary`](https://api.govinfo.gov/packages/CRPT-119hrpt455/summary) | 1,399 | `1d483854f59a0c6d3c4bf521c4b2a6ec44391d16391faf3271a8b1884ecaceb0` | Copied byte-for-byte from the same spicy-docs directory and commit; captured 2026-09-23 by spicy-docs' live `acquire_parts` run, key sent only as `X-Api-Key`, and it contains none. |
 
+`mods-CRPT-118srpt99.xml` is the one **reduced** file here: the Senate
+Budget Committee's report on the 117th Congress, filed in the 118th, whose
+MODS keys all 34 root `<bill>` elements -- H.R. 5376, the reconciliation act,
+among them -- `congress="118"`. `tests/test_print_citations.py` uses it to
+prove the transform keys the print's bills in the Congress the report states
+it covers and counts the MODS disagreeing. It is byte-identical to spicy-docs'
+`tests/fixtures/document_citations/mods-CRPT-118srpt99.xml`, written by the
+same `build_fixtures.py` (receipt
+`~/Work/corpora/supply-2026-09-02/receipts/fix-print-citations-2026-09-26/`)
+from the 2026-09-26 drift audit's keyless read of
+`https://www.govinfo.gov/metadata/pkg/CRPT-118srpt99/mods.xml` (32,601 bytes,
+`sha256:775f4aac44924271b8d284cfb40372008cb942e5e5503ec60746d90c9f0002a9`,
+`drift-qualification-2026-09-26/bills-citations/native/`): everything before
+the first `<relatedItem>`, then `</mods>`, which drops the 62 constituent
+records the MODS reader never reads.
+
+| File | Bytes | SHA-256 |
+| --- | --- | --- |
+| `mods-CRPT-118srpt99.xml` | 11,679 | `824fe705c4ab450ca53f98ad4a53682daeb0a4d59c5b1a22835ae9493bfd481f` |
+
 ## What each one states about a bill
 
 A GovInfo MODS carries the bills a package relates to as

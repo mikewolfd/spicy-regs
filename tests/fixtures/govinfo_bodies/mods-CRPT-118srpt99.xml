@@ -1,0 +1,200 @@
+<mods xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://www.loc.gov/mods/v3" version="3.3" xsi:schemaLocation="http://www.loc.gov/mods/v3 http://www.loc.gov/standards/mods/v3/mods-3-3.xsd" ID="P0b002ee1c1009f9f">
+    <name type="corporate">
+         <namePart>United States Government Publishing Office</namePart>
+         <role>
+              <roleTerm authority="marcrelator" type="text">publisher</roleTerm>
+              <roleTerm authority="marcrelator" type="code">pbl</roleTerm>
+        </role>
+         <role>
+              <roleTerm authority="marcrelator" type="text">distributor</roleTerm>
+              <roleTerm authority="marcrelator" type="code">dst</roleTerm>
+        </role>
+    </name>
+    <name type="corporate">
+         <namePart>United States</namePart>
+         <namePart>Congress</namePart>
+         <namePart>Senate</namePart>
+         <role>
+              <roleTerm authority="marcrelator" type="text">author</roleTerm>
+              <roleTerm authority="marcrelator" type="code">aut</roleTerm>
+        </role>
+         <description>Government Organization</description>
+    </name>
+    <typeOfResource>text</typeOfResource>
+    <genre authority="marcgt">government publication</genre>
+    <language>
+         <languageTerm type="code" authority="iso639-2b">eng</languageTerm>
+    </language>
+    <extension>
+         <collectionCode>CRPT</collectionCode>
+         <category>Congressional Committee Materials</category>
+         <waisDatabaseName>118_cong_reports</waisDatabaseName>
+         <branch>legislative</branch>
+         <dateIngested>2023-09-25</dateIngested>
+    </extension>
+    <titleInfo>
+         <title>REPORT ON THE ACTIVITIES OF THE COMMITTEE ON THE BUDGET UNITED STATES SENATE DURING THE ONE HUNDRED SEVENTEENTH CONGRESS PURSUANT TO Paragraph 8(b) of Rule XXVI of the Standing Rules of the United States Senate</title>
+    </titleInfo>
+    <originInfo>
+         <publisher>U.S. Government Publishing Office</publisher>
+         <dateIssued encoding="w3cdtf">2023-09-20</dateIssued>
+         <issuance>monographic</issuance>
+    </originInfo>
+    <physicalDescription>
+         <note type="source content type">deposited</note>
+         <digitalOrigin>born digital</digitalOrigin>
+         <extent>23 digital object pages</extent>
+    </physicalDescription>
+    <classification authority="sudocs">Y 1.1/5:</classification>
+    <identifier type="uri">https://www.govinfo.gov/app/details/CRPT-118srpt99</identifier>
+    <identifier type="local">P0b002ee1c1009f9f</identifier>
+    <identifier type="ILS system id">001249526</identifier>
+    <identifier type="former package identifier">f:sr099.118.txt</identifier>
+    <recordInfo>
+         <recordContentSource authority="marcorg">DGPO</recordContentSource>
+         <recordCreationDate encoding="w3cdtf">2023-09-25</recordCreationDate>
+         <recordChangeDate encoding="w3cdtf">2024-11-08</recordChangeDate>
+         <recordIdentifier source="DGPO">CRPT-118srpt99</recordIdentifier>
+         <recordOrigin>machine generated</recordOrigin>
+         <languageOfCataloging>
+              <languageTerm type="code" authority="iso639-2b">eng</languageTerm>
+        </languageOfCataloging>
+    </recordInfo>
+    <accessCondition type="GPO scope determination">fdlp</accessCondition>
+    <extension>
+         <subtitle>Report Pursuant to paragraph 8(b) of Rule XXVI of the Standing Rules of the Senate</subtitle>
+         <docClass>SRPT</docClass>
+         <accessId>CRPT-118srpt99</accessId>
+         <chamber>SENATE</chamber>
+         <congress years="2023-2024">118</congress>
+         <number>99</number>
+         <session>1</session>
+         <isConferenceReport>false</isConferenceReport>
+         <isSerialSet>true</isSerialSet>
+    </extension>
+    <location>
+         <url displayLabel="Content Detail" access="object in context">https://www.govinfo.gov/app/details/CRPT-118srpt99</url>
+         <url displayLabel="HTML rendition" access="raw object">https://www.govinfo.gov/content/pkg/CRPT-118srpt99/html/CRPT-118srpt99.htm</url>
+         <url displayLabel="PDF rendition" access="raw object">https://www.govinfo.gov/content/pkg/CRPT-118srpt99/pdf/CRPT-118srpt99.pdf</url>
+    </location>
+    <identifier type="preferred citation">S. Rept. 118-99</identifier>
+    <extension>
+         <searchTitle>REPORT ON THE ACTIVITIES OF THE COMMITTEE ON THE BUDGET UNITED STATES SENATE DURING THE ONE HUNDRED SEVENTEENTH CONGRESS PURSUANT TO Paragraph 8(b) of Rule XXVI of the Standing Rules of the United States Senate;S. Rept. 118-99</searchTitle>
+         <legislativeHistory>Ordered to be printed</legislativeHistory>
+         <granuleClass>FIRSTPART</granuleClass>
+         <accessId>CRPT-118srpt99</accessId>
+         <action date="2023-09-20">Ordered to be printed</action>
+         <session>1</session>
+         <submittedStatement>Mr. Whitehouse, from the Committee on the Budget, submitted the following</submittedStatement>
+         <bill congress="118" context="OTHER" number="5" type="SCONRES"></bill>
+         <bill congress="118" context="OTHER" number="11" type="SCONRES"></bill>
+         <bill congress="118" context="OTHER" number="13" type="SCONRES"></bill>
+         <bill congress="118" context="OTHER" number="14" type="SCONRES"></bill>
+         <bill congress="118" context="OTHER" number="28" type="SRES"></bill>
+         <bill congress="118" context="OTHER" number="32" type="SRES"></bill>
+         <bill congress="118" context="OTHER" number="41" type="SCONRES"></bill>
+         <bill congress="118" context="OTHER" number="43" type="SCONRES"></bill>
+         <bill congress="118" context="OTHER" number="44" type="HCONRES"></bill>
+         <bill congress="118" context="OTHER" number="45" type="SRES"></bill>
+         <bill congress="118" context="OTHER" number="66" type="SRES"></bill>
+         <bill congress="118" context="OTHER" number="232" type="S"></bill>
+         <bill congress="118" context="OTHER" number="445" type="SRES"></bill>
+         <bill congress="118" context="OTHER" number="545" type="S"></bill>
+         <bill congress="118" context="OTHER" number="793" type="S"></bill>
+         <bill congress="118" context="OTHER" number="1174" type="S"></bill>
+         <bill congress="118" context="OTHER" number="1253" type="S"></bill>
+         <bill congress="118" context="OTHER" number="1319" type="HR"></bill>
+         <bill congress="118" context="OTHER" number="1392" type="S"></bill>
+         <bill congress="118" context="OTHER" number="1685" type="S"></bill>
+         <bill congress="118" context="OTHER" number="2127" type="S"></bill>
+         <bill congress="118" context="OTHER" number="2133" type="S"></bill>
+         <bill congress="118" context="OTHER" number="2469" type="S"></bill>
+         <bill congress="118" context="OTHER" number="2548" type="S"></bill>
+         <bill congress="118" context="OTHER" number="2723" type="S"></bill>
+         <bill congress="118" context="OTHER" number="2744" type="S"></bill>
+         <bill congress="118" context="OTHER" number="2823" type="S"></bill>
+         <bill congress="118" context="OTHER" number="3770" type="S"></bill>
+         <bill congress="118" context="OTHER" number="4020" type="S"></bill>
+         <bill congress="118" context="OTHER" number="4115" type="S"></bill>
+         <bill congress="118" context="OTHER" number="4249" type="S"></bill>
+         <bill congress="118" context="OTHER" number="4250" type="S"></bill>
+         <bill congress="118" context="OTHER" number="4251" type="S"></bill>
+         <bill congress="118" context="OTHER" number="5376" type="HR"></bill>
+         <congDoc congress="109" context="OTHER" number="24" type="S"></congDoc>
+         <congDoc congress="113" context="OTHER" number="18" type="S"></congDoc>
+         <congCommittee authorityId="ssbu00" chamber="S" congress="118" type="S">
+                                    
+              <name type="authority-standard">Committee on the Budget</name>
+                                    
+              <name type="authority-short">Budget</name>
+                                
+        </congCommittee>
+         <congMember bioGuideId="W000802" chamber="S" congress="118" party="D" role="SUBMITTEDBY" state="RI">
+                                    
+              <name type="parsed">Mr. Whitehouse</name>
+                                    
+              <name type="authority-fnf">Sheldon Whitehouse</name>
+                                    
+              <name type="authority-lnf">Whitehouse, Sheldon</name>
+                                
+        </congMember>
+         <law congress="93" isPrivate="false" number="344"></law>
+         <law congress="117" isPrivate="false" number="2"></law>
+         <law congress="117" isPrivate="false" number="31"></law>
+         <USCode title="2">
+                                    
+              <section number="632"></section>
+                                
+        </USCode>
+         <statuteAtLarge volume="88">
+                                    
+              <pages pages="297"></pages>
+                                
+        </statuteAtLarge>
+         <statuteAtLarge volume="135">
+                                    
+              <pages pages="4"></pages>
+                                
+        </statuteAtLarge>
+         <congReport congress="117" number="16" type="S"></congReport>
+         <congReport congress="117" number="22" type="S"></congReport>
+         <congReport congress="117" number="23" type="S"></congReport>
+         <congReport congress="117" number="24" type="S"></congReport>
+         <congHearing congress="117" number="24" type="S"></congHearing>
+         <congHearing congress="117" number="25" type="S"></congHearing>
+         <congHearing congress="117" number="29" type="S"></congHearing>
+         <congHearing congress="117" number="33" type="S"></congHearing>
+         <congHearing congress="117" number="42" type="S"></congHearing>
+         <congHearing congress="117" number="44" type="S"></congHearing>
+         <congHearing congress="117" number="46" type="S"></congHearing>
+         <congHearing congress="117" number="49" type="S"></congHearing>
+         <congHearing congress="117" number="232" type="S"></congHearing>
+         <congHearing congress="117" number="235" type="S"></congHearing>
+         <congHearing congress="117" number="236" type="S"></congHearing>
+         <congHearing congress="117" number="245" type="S"></congHearing>
+         <congHearing congress="117" number="259" type="S"></congHearing>
+         <congHearing congress="117" number="260" type="S"></congHearing>
+         <congHearing congress="117" number="287" type="S"></congHearing>
+         <congCommPrint chamber="S" congress="117" number="16"></congCommPrint>
+    </extension>
+    <name type="personal">
+         <namePart>Sheldon Whitehouse</namePart>
+         <affiliation>United States Senate</affiliation>
+         <role>
+              <roleTerm authority="marcrelator" type="text">sponsor</roleTerm>
+              <roleTerm authority="marcrelator" type="code">spn</roleTerm>
+        </role>
+         <description>United States Congress Member</description>
+    </name>
+    <name type="corporate">
+         <namePart>United States</namePart>
+         <namePart>Congress</namePart>
+         <namePart>Senate</namePart>
+         <namePart>Committee on the Budget</namePart>
+         <role>
+              <roleTerm authority="marcrelator" type="text">associated name</roleTerm>
+              <roleTerm authority="marcrelator" type="code">asn</roleTerm>
+        </role>
+         <description>Government Organization</description>
+    </name>
+</mods>

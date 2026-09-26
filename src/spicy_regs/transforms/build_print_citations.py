@@ -54,8 +54,8 @@ from spicy_docs.schemas.budget_volume_tables import (
 )
 from spicy_docs.schemas.document_citation_tables import (
     GOVINFO_PACKAGE,
+    activity_report_stated_keys,
     document_provenance,
-    index_stated_keys,
     shape_activity_report,
     shape_document_citation,
 )
@@ -64,7 +64,13 @@ from spicy_docs.sources.congress.committee_rosters import (
     CommitteeRosterBudget,
     CommitteeRosterError,
 )
-from spicy_docs.sources.govinfo.activity_reports import ACTIVITY_REPORT_RULE_VERSION, is_activity_report, names_activity
+from spicy_docs.sources.govinfo.activity_reports import (
+    ACTIVITY_REPORT_RULE_VERSION,
+    COVERED_CONGRESS_RULE_VERSION,
+    covered_congress,
+    is_activity_report,
+    names_activity,
+)
 from spicy_docs.sources.govinfo.bodies import MEASURED_BUDGET_PARTS, PRINT_BODY_PREFERENCE, parse_package_id
 from spicy_docs.sources.govinfo.body_acquisition import (
     GovInfoBodyAcquirer,
@@ -236,6 +242,7 @@ def _processing_versions(vocabulary: tuple[tuple[str, str], ...]) -> dict[str, s
     inputs = {
         BUDGET: common,
         CRPT: common | {
+            "covered_congress_rules": COVERED_CONGRESS_RULE_VERSION,
             "action_rules": PRINT_ACTION_RULE_SET_VERSION,
             "action_vocabulary": PRINT_ACTION_VOCABULARY_VERSION,
             "committee_chamber": ACTIVITY_REPORT_CHAMBER,
@@ -469,6 +476,8 @@ def build_print_citations(
     citation_rows: list[dict] = []
     refusals: Counter[str] = Counter()
     kinds: Counter[str] = Counter()
+    covered_by: Counter[str] = Counter()
+    filed_in_another_congress = 0
     unchanged = fetched = capped = root_not_offered = 0
     pages_read = 0
 
@@ -518,25 +527,38 @@ def build_print_citations(
             continue
         fetched += 1
 
-        identity = package.identity
+        # A report's bills belong to the Congress the report says it covers,
+        # never the package id's: a Senate report is filed in the next
+        # Congress, and its MODS stamps its bills with that one too
+        # (CRPT-118srpt99's H.R. 5376 is the 117th's). A BUDGET package, or a
+        # report stating no Congress, leaves each printed bill key
+        # congress-free and unresolved rather than stamped with a guess.
+        covered = covered_congress(package.summary.title, derived.pages) if collection == CRPT else None
         findings = find_citations(
             derived.text,
             pages=derived.pages,
-            # A BUDGET package states no Congress at all, so a printed bill
-            # key stays congress-free and unresolved rather than being
-            # stamped with a Congress nothing established.
-            congress=getattr(identity, "congress", None),
+            congress=None if covered is None else covered.congress,
             committees=vocabulary if collection == CRPT else (),
         )
         for finding in findings:
             kinds[finding.kind] += 1
 
-        if collection == CRPT:
-            stated = index_stated_keys(package.mods)
+        if covered is not None:  # an activity report; only CRPT is read for the Congress it covers
+            covered_by[str(covered.source)] += 1
+            filed_in_another_congress += int(covered.congress not in (None, package.identity.congress))
+            if covered.congress is None:
+                logger.warning("CRPT: {} states no single Congress it covers ({} {}); its bills stay unresolved",
+                               package_id, covered.source, covered.stated)
+            stated = activity_report_stated_keys(package.mods, covered)
             document_kind = GOVINFO_PACKAGE
             rows.append(
                 shape_activity_report(
-                    package.summary, package.mods, derived, findings, rule_set_version=CITATION_RULE_SET_VERSION
+                    package.summary,
+                    package.mods,
+                    derived,
+                    findings,
+                    covered=covered,
+                    rule_set_version=CITATION_RULE_SET_VERSION,
                 )
             )
         else:
@@ -594,6 +616,9 @@ def build_print_citations(
         sum(refusals.values()),
     )
     logger.info("BUDGET: {} publisher package-root format answers (not failures)", root_not_offered)
+    if covered_by:
+        logger.info("CRPT: covered Congress read from {} (rule {}); {} reports cover a Congress other than their filing one",
+                    dict(covered_by), COVERED_CONGRESS_RULE_VERSION, filed_in_another_congress)
     if capped:
         # Every count on a capped document is a floor. Nothing here caps pages,
         # so this can only mean the body the publisher served was shorter than

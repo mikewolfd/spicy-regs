@@ -86,9 +86,23 @@ def _mods_bytes(package_id: str) -> bytes:
     return (MODS_DIR / f"mods-{package_id}.xml").read_bytes()
 
 
-def _package(package_id: str, *, pages: list[list[str]], last_modified: str | None = "2026-09-18T12:00:00Z", pdf_pages=None):
-    """A fetched package body, built the way the acquirer would have built one."""
+def _package(
+    package_id: str,
+    *,
+    pages: list[list[str]],
+    last_modified: str | None = "2026-09-18T12:00:00Z",
+    pdf_pages=None,
+    title: str | None = None,
+):
+    """A fetched package body, built the way the acquirer would have built one.
+
+    A report's default title states the Congress its id was filed in, as a
+    House report's does; the Senate and no-statement cases pass their own.
+    """
     identity = parse_package_id(package_id)
+    if title is None:
+        congress = getattr(identity, "congress", None)
+        title = f"Report {package_id}" if congress is None else f"ACTIVITY REPORT FOR THE {congress}TH CONGRESS"
     body = make_multiline_pdf(pdf_pages if pdf_pages is not None else pages)
     url = f"https://www.govinfo.gov/content/pkg/{package_id}/pdf/{package_id}.pdf"
     capture = CapturedBodyResponse(
@@ -121,7 +135,7 @@ def _package(package_id: str, *, pages: list[list[str]], last_modified: str | No
             collection_code=identity.collection,
             date_issued="2026-01-05",
             last_modified=last_modified,
-            title=f"Report {package_id}",
+            title=title,
             download_links=(),
             pages=str(len(pages)),
         ),
@@ -260,7 +274,9 @@ def test_same_text_correction_retires_current_findings_but_keeps_older_text(tmp_
     assert _rows(paths[3]) == old_citations
 
 
-@pytest.mark.parametrize("version_name", ["CITATION_RULE_SET_VERSION", "PRINT_ACTION_RULE_SET_VERSION"])
+@pytest.mark.parametrize(
+    "version_name", ["CITATION_RULE_SET_VERSION", "PRINT_ACTION_RULE_SET_VERSION", "COVERED_CONGRESS_RULE_VERSION"]
+)
 def test_rule_correction_revisits_held_print_outside_discovery(tmp_path, monkeypatch, version_name):
     listing = _listing(CRPT_ID, "ACTIVITY REPORT of the COMMITTEE")
     acquirer = _Acquirer({CRPT_ID: _package(CRPT_ID, pages=REPORT_PAGES)})
@@ -347,15 +363,16 @@ def test_budget_correction_replaces_only_its_own_citations(tmp_path, monkeypatch
     assert _rows(paths[3]) == activity_cites
 
 
-def test_action_rule_change_does_not_reprocess_budget_volumes(tmp_path, monkeypatch):
+@pytest.mark.parametrize("version_name", ["PRINT_ACTION_RULE_SET_VERSION", "COVERED_CONGRESS_RULE_VERSION"])
+def test_a_report_only_rule_change_does_not_reprocess_budget_volumes(tmp_path, monkeypatch, version_name):
     acquirer = _Acquirer({BUDGET_ID: _package(BUDGET_ID, pages=BUDGET_PAGES)})
     paths = _build(tmp_path, _Reader({"BUDGET": [_listing(BUDGET_ID, "Mid-Session Review")]}), acquirer)
     _publish_as_prior(paths)
     acquirer.asked.clear()
-    monkeypatch.setattr("spicy_regs.transforms.build_print_citations.PRINT_ACTION_RULE_SET_VERSION", "corrected")
+    monkeypatch.setattr(f"spicy_regs.transforms.build_print_citations.{version_name}", "corrected")
 
     _build(tmp_path, _Reader({}), acquirer)
-    assert acquirer.asked == [], "budget volumes do not use the action interpretation"
+    assert acquirer.asked == [], "budget volumes use neither the action nor the covered-Congress reading"
 
 
 def test_unknown_source_timestamp_cannot_establish_an_unchanged_print(tmp_path):
@@ -406,6 +423,71 @@ def test_the_title_rule_refuses_the_measured_false_positive_class(title):
     """
     assert "activit" in title.lower(), "the false positive must contain the word, or this proves nothing"
     assert not is_activity_report(CRPT_ID, title)
+
+
+# --------------------------------------------------------------------------
+# The Congress a report's bills belong to.
+# --------------------------------------------------------------------------
+
+#: CRPT-118srpt99, a report on the 117th filed in the 118th: its published
+#: title, its cover's lines, and the sentence the 2026-09-26 drift audit found
+#: published against 118-hr-5376 (``drift-qualification-2026-09-26/
+#: bills-citations/``). Its MODS is the publisher's, reduced
+#: (``fixtures/govinfo_bodies/README.md``), and stamps H.R. 5376 ``118``.
+SENATE_ID = "CRPT-118srpt99"
+SENATE_TITLE = (
+    "REPORT ON THE ACTIVITIES OF THE COMMITTEE ON THE BUDGET UNITED STATES SENATE DURING THE ONE HUNDRED "
+    "SEVENTEENTH CONGRESS PURSUANT TO Paragraph 8(b) of Rule XXVI of the Standing Rules of the United States Senate"
+)
+SENATE_PAGES = [
+    ["118TH CONGRESS", "1st Session", "REPORT", "118-99", "REPORT ON THE ACTIVITIES", "OF THE COMMITTEE ON THE BUDGET",
+     "DURING THE", "ONE HUNDRED SEVENTEENTH CONGRESS", "SEPTEMBER 20, 2023. Ordered to be printed"],
+    ["This resolution provided the reconciliation directives for measure H.R. 5376,",
+     "colloquially referred to as The Inflation Reduction Act, signed", "into law on August 16, 2022."],
+]  # fmt: skip
+
+
+def _bill_citations(path: Path) -> list[tuple]:
+    return [
+        (row["target_key"], row["target_resolved"], row["stated_by_index"])
+        for row in _rows(path)
+        if row["cite_kind"] == "bill_number"
+    ]
+
+
+def test_a_senate_reports_bills_resolve_in_the_congress_it_covers_not_the_one_it_was_filed_in(tmp_path):
+    """Both Congresses are kept, the report's own statement keys the bills, and the MODS's disagreement is counted."""
+    reader = _Reader({"CRPT": [_listing(SENATE_ID, SENATE_TITLE)]})
+    acquirer = _Acquirer({SENATE_ID: _package(SENATE_ID, pages=SENATE_PAGES, title=SENATE_TITLE)})
+    activity, _, actions, citations = _build(tmp_path, reader, acquirer)
+
+    [report] = _rows(activity)
+    assert (report["congress"], report["covered_congress"], report["covered_congress_source"]) == ("118", "117", "title")
+    assert report["bills_congress_mismatch"] == "1", "the MODS keys H.R. 5376 under the filing Congress"
+    assert _bill_citations(citations) == [("117-hr-5376", "true", "false")]
+    action_rows = _rows(actions)
+    assert action_rows and {row["bill_id"] for row in action_rows} == {"117-hr-5376"}
+    assert "became_public_law" in {row["print_phrasing"] for row in action_rows}
+
+
+def test_a_report_stating_no_congress_publishes_its_bills_unresolved_and_attaches_no_action(tmp_path):
+    """Unresolved rather than guessed: the package id's Congress is never used as a fallback."""
+    title = "ACTIVITY REPORT OF THE COMMITTEE ON THE JUDICIARY"
+    acquirer = _Acquirer({CRPT_ID: _package(CRPT_ID, pages=REPORT_PAGES, title=title)})
+    activity, _, actions, citations = _build(tmp_path, _Reader({"CRPT": [_listing(CRPT_ID, title)]}), acquirer)
+
+    [report] = _rows(activity)
+    assert (report["congress"], report["covered_congress"], report["covered_congress_source"]) == ("119", None, None)
+    assert (report["distinct_bills_beyond_index"], report["bills_congress_mismatch"]) == (None, None)
+    assert _bill_citations(citations) == [("HR1093", "false", None)]
+    assert _rows(actions) == []
+    # The same print under a title that states its Congress does attach the
+    # action, so the empty table above is the refusal and not a phrase missed.
+    stated = _Acquirer({CRPT_ID: _package(CRPT_ID, pages=REPORT_PAGES)})
+    (tmp_path / "stated").mkdir()
+    _, _, actions, citations = _build(tmp_path / "stated", _Reader({"CRPT": [_listing(CRPT_ID, title)]}), stated)
+    assert _bill_citations(citations) == [("119-hr-1093", "true", "false")]
+    assert {row["bill_id"] for row in _rows(actions)} == {"119-hr-1093"}
 
 
 # --------------------------------------------------------------------------
