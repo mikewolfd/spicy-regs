@@ -1582,25 +1582,29 @@ def build_bill_family(
     prior_paths = _download_prior(output_dir, download_prior)
     index = _prior_index(prior_paths)
     held_archives = _held_archives(prior_paths.get(ARCHIVES_TABLE))
-    # An unchanged archive still needs a read for legacy status rows; bodies
-    # and comparisons are the body pass's.
+    # An unchanged archive still needs a read for a status row in doubt: one a
+    # BILLSTATUS read wrote (it states a schema version) before this rollup
+    # recorded CBO outcomes, or one the prior index reopens. A row no BILLSTATUS
+    # read wrote does not reopen the folder, whatever else is said of it: a
+    # full read of the zip rebuilds every bill it holds, so such a row is one
+    # it does not hold -- the 119th's six H.R. numbers reserved for the Speaker
+    # and the Minority Leader, listed by the retired list writer with an API
+    # URL -- and no read of the zip can qualify it; the zip moves when it starts
+    # to hold the bill. Bodies and comparisons are the body pass's.
     bills_prior = prior_paths.get("congress_bills")
-    if bills_prior is not None:
+    # A prior without the frozen identity columns names no folder to reopen.
+    if bills_prior is not None and _has_columns(bills_prior, ("bill_id", "congress", "bill_type")):
+        import duckdb
+
         # A narrow projection replaces materialising every prior row into Python
-        # dicts: only the three columns the prune decides on are read.
-        if _has_columns(bills_prior, ("bill_id", "congress", "bill_type")):
-            import duckdb
-
-            rows = duckdb.sql(f"SELECT bill_id, congress, bill_type FROM read_parquet('{bills_prior}')").fetchall()
-            for bill_id, congress, bill_type in rows:
-                if bill_id not in index.bill_text_dates or bill_id in index.pending_bills:
-                    held_archives.pop((congress, bill_type), None)
-        else:
-            import pyarrow.parquet as pq
-
-            for row in pq.read_table(bills_prior).to_pylist():
-                if row["bill_id"] not in index.bill_text_dates or row["bill_id"] in index.pending_bills:
-                    held_archives.pop((row.get("congress"), row.get("bill_type")), None)
+        # dicts: only the columns the prune decides on are read.
+        stated = _has_columns(bills_prior, ("schema_version",))
+        version = "schema_version" if stated else "'unknown'"
+        for bill_id, congress, bill_type, schema_version in duckdb.sql(
+            f"SELECT bill_id, congress, bill_type, {version} FROM read_parquet('{bills_prior}')"
+        ).fetchall():
+            if schema_version is not None and (bill_id in index.pending_bills or bill_id not in index.bill_text_dates):
+                held_archives.pop((congress, bill_type), None)
 
     if prior_paths.get("bill_versions") is None or bills_prior is None:
         held_archives.clear()

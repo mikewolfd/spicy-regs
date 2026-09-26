@@ -842,6 +842,33 @@ def test_a_second_run_over_an_unchanged_listing_makes_no_zip_request(tmp_path, s
     assert len(pq.read_table(paths[ARCHIVES_TABLE]).to_pylist()) == 1
 
 
+def test_a_list_era_row_the_zip_does_not_hold_does_not_reopen_its_folder(tmp_path, scoped):
+    """119 HR 11 is reserved for the Minority Leader: listed by the old list writer, absent from BILLSTATUS."""
+    first = tmp_path / "run1"
+    paths = _run(first, StubBulkAcquirer(), _no_prior)
+    bills = pq.read_table(paths["congress_bills"])
+    reserved = {column: None for column in bills.schema.names} | {
+        "bill_id": "119-hr-11",
+        "congress": "119",
+        "bill_type": "hr",
+        "number": "11",
+        "title": "Reserved for the Minority Leader.",
+        # The retired list writer's API URL with no provenance label, which
+        # alone reopens a bill the zip holds (see ``RETIRED_LIST_URL_SOURCE``).
+        "url": "https://api.congress.gov/v3/bill/119/hr/11?format=json",
+    }
+    pq.write_table(pa.Table.from_pylist([*bills.to_pylist(), reserved], schema=bills.schema), paths["congress_bills"])
+    second = StubBulkAcquirer()
+    _run(tmp_path / "run2", second, _prior_from(first))
+    assert second.zip_downloads == [], "no read of the zip can qualify a row it does not hold"
+
+    legacy = reserved | {"schema_version": "3.0.0"}
+    pq.write_table(pa.Table.from_pylist([*bills.to_pylist(), legacy], schema=bills.schema), paths["congress_bills"])
+    third = StubBulkAcquirer()
+    _run(tmp_path / "run3", third, _prior_from(first))
+    assert third.zip_downloads == [(119, "hr")], "a row a BILLSTATUS read wrote without an outcome is re-read"
+
+
 def test_a_moved_zip_is_downloaded_again(tmp_path, scoped):
     """The comparison has to be able to say no, or the skip is just a cache that never expires."""
     first = tmp_path / "run1"
