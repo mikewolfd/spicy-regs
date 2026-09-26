@@ -1452,8 +1452,15 @@ tables:
       the 600-per-run fetch cap did not reach, plus those offered only as PDF.
       The refusal count is therefore a measure of how far the cap is from the
       corpus, not of anything wrong with the printings; it falls as successive
-      runs spend the cap on ground earlier ones did not reach. All columns are
-      stored as VARCHAR.
+      runs spend the cap on ground earlier ones did not reach. A section is
+      keyed on its `seq` within the printing since spicy-docs 0.35.0: the old
+      key (`match_path`, `body_index`) repeats inside a printing, and the merge
+      had kept one row per repeat, so generation `55671b43…` holds 83 of
+      119-hr-5334 enrolled's 84 sections, 150 of 119-hr-9022 reported's 151 and
+      4 of 119-hr-4060 introduced's 5. Each such printing's `section_count`
+      exceeds its rows, so the next run re-reads it and republishes it whole
+      (receipt `bill-family-repair-scope-2026-09-26/`). All columns are stored
+      as VARCHAR.
     coverage: >-
       Sampled. The adoption run produced 66 rows in this output from the
       118th Congress's HR and S BILLSTATUS archives, processing 16,213 bills in
@@ -1476,7 +1483,15 @@ tables:
       `d1-measured-run-2026-09-19/`): **3,185** refusals against 128 published
       comparisons, which is what a 600-printing cap over 22,064 printings
       implies, since a pair needs both of its sides fetched in the same run.
-      All columns are stored as VARCHAR.
+      A pair runs from a printing to its neighbour in spicy-docs'
+      `printing_order`: publisher date, then a dateless enrolled printing by its
+      stage (`pair_rule` `consecutive_by_date_then_stage`). Before spicy-docs
+      0.35.0 the empty enrolled date sorted first, and generation `55671b43…`
+      holds 18 enrolled-to-introduced comparisons and 14 that skip the enrolled
+      printing to reach the law. The next run over each such bill retires them
+      with their items and makes the neighbour pairs (receipt
+      `bill-family-repair-scope-2026-09-26/`). All columns are stored as
+      VARCHAR.
     coverage: >-
       Sampled. The adoption run produced 0 rows in this output from the
       118th Congress's HR and S BILLSTATUS archives, processing 16,213 bills in

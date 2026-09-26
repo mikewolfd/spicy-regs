@@ -2,3 +2,4 @@
 tests/fixtures/adoption_0_24_0/*.txt -whitespace
 tests/fixtures/adoption_0_24_0/*.xml -whitespace
 tests/fixtures/congress_votes/*.xml -text -whitespace
+tests/fixtures/govinfo_bills/*.xml -text -whitespace

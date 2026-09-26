@@ -1,0 +1,58 @@
+<?xml version="1.0"?>
+<?xml-stylesheet type="text/xsl" href="billres.xsl"?>
+<!DOCTYPE bill PUBLIC "-//US Congress//DTDs/bill.dtd//EN" "bill.dtd">
+<bill bill-stage="Enrolled-Bill" dms-id="H65D05FD84DEC4B308AD7667BFCF02699" public-private="public" key="H" bill-type="olc"> 
+<metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+<dublinCore>
+<dc:title> HR 5334 ENR: Lindsey O. Graham Sanctioning Russia and Iran Act of 2026</dc:title>
+<dc:publisher>U.S. House of Representatives</dc:publisher>
+<dc:date></dc:date>
+<dc:format>text/xml</dc:format>
+<dc:language>EN</dc:language>
+<dc:rights>Pursuant to Title 17 Section 105 of the United States Code, this file is not subject to copyright protection and is in the public domain.</dc:rights>
+</dublinCore>
+</metadata>
+<form>
+<distribution-code display="no">I</distribution-code> 
+<congress>One Hundred Nineteenth Congress of the United States of America</congress> <session>At the Second Session</session><enrolled-dateline>Begun and held at the City of Washington on Saturday, the third day of January, two thousand and twenty-six</enrolled-dateline> 
+<legis-num>H. R. 5334</legis-num> 
+<current-chamber display="no"></current-chamber> 
+<legis-type>AN ACT</legis-type> 
+<official-title display="yes">To impose sanctions and other measures with respect to the Russian Federation, as championed by the late Senator Lindsey O. Graham, and for other purposes.</official-title> 
+</form> 
+<legis-body id="H161AA14DFB7D4240A423BF53C099A24B" style="OLC"> 
+<division id="H5BF684D9A2BF403DB8E0277FEAFD73E6" style="OLC"><enum>A</enum><header>Lindsey O. Graham Sanctioning Russia and Iran Act of 2026</header> 
+<section id="H7962367FAA414AD1A32CB7EAFBC1B109" section-type="section-one" commented="no"><enum>1.</enum><header>Short title; table of contents</header> 
+<subsection commented="no" display-inline="no-display-inline" id="H19BF169E9E754856AA4B6C53647B0400"><enum>(a)</enum><header display-inline="yes-display-inline">Short title</header><text display-inline="yes-display-inline">This Act may be cited as the <quote><short-title>Lindsey O. Graham Sanctioning Russia and Iran Act of 2026</short-title></quote>.</text></subsection> <subsection commented="no" display-inline="no-display-inline" id="HA0F0724E0D6846AD82DAD5A4357AE362"><enum>(b)</enum><header>Table of contents</header><text>The table of contents for this division is as follows:</text> 
+<toc> 
+<toc-entry level="section" idref="H7962367FAA414AD1A32CB7EAFBC1B109">Sec. 1. Short title; table of contents.</toc-entry> 
+<toc-entry level="title" idref="H42DEB9C4313645E79ED2E3629C098C96">TITLE I—Sanctions with respect to the Russian Federation</toc-entry> 
+<toc-entry level="section" idref="H0AAA2065C2E649ED95234166AE373B64">Sec. 101. Definitions.</toc-entry> 
+<toc-entry level="section" idref="HA8793C9EA79B4607A3BD816C2009654C">Sec. 102. Imposition of sanctions on certain persons affiliated with or supporting the Government of the Russian Federation.</toc-entry> 
+<toc-entry level="section" idref="HC694912E42A24DC0921FD91134FA03F9">Sec. 103. Imposition of sanctions with respect to financial institutions affiliated with the Government of the Russian Federation.</toc-entry> 
+<toc-entry level="section" idref="H175428B1AA4143B8BADFCBABA50BBF0C">Sec. 104. Imposition of sanctions with respect to other entities owned or controlled by the Government of the Russian Federation.</toc-entry> 
+<toc-entry level="section" idref="HE89A208874D6417689EDD435D7EC261F">Sec. 105. Prohibition on transfers of funds involving the Russian Federation.</toc-entry> 
+<toc-entry level="section" idref="HFC434F40C15444ADB17BDDBA26958461">Sec. 106. Prohibition on listing or trading of Russian entities on United States securities exchanges.</toc-entry> 
+<toc-entry level="section" idref="HA522F467660A4BA78E8E893B8372DD14">Sec. 107. Prohibition on investment by United States persons in the Russian Federation.</toc-entry> 
+<toc-entry level="section" idref="H29395065835D4526AC33AFF9386F2613">Sec. 108. Prohibition on energy exports to, and investment in energy sector of, the Russian Federation.</toc-entry> 
+<toc-entry level="section" idref="H1C592C8BEF0E4B41B3E2CB685BF438A1">Sec. 109. Prohibition on purchase of sovereign debt of the Russian Federation by United States persons.</toc-entry> 
+<toc-entry level="section" idref="H02BB254CAC4649AD8FEF1BD12FA7E54D">Sec. 110. Prohibition on provision of services to sanctioned financial institutions by international financial messaging systems.</toc-entry> 
+<toc-entry level="section" idref="HC6DC99C2576649F2B428345209D8E38B">Sec. 111. Prohibition on importing, and sanctions with respect to, uranium from the Russian Federation.</toc-entry> 
+<toc-entry level="section" idref="H134B54E46DC74A859973FED750D77C8E">Sec. 112. Increase in duties on goods imported from the Russian Federation.</toc-entry> 
+<toc-entry level="section" idref="HD20B40F0BC2545EFB460E6234E8DA564">Sec. 113. Duties on countries that purchase Russian-origin crude oil or natural gas or facilitate sanctions evasion.</toc-entry> 
+<toc-entry level="section" idref="HEC0AFB8330834ECF99025023D43009B4">Sec. 114. Exceptions.</toc-entry> 
+<toc-entry level="section" idref="H72AD9FCD9F4440B1B87C8BD106E85807">Sec. 115. Waiver.</toc-entry> 
+<toc-entry level="section" idref="H3665B4DCF37C4C829129386619571203">Sec. 116. Sanctions implementation and penalties.</toc-entry> 
+<toc-entry level="section" idref="H66F1102F681E4CD0A7A6D9CCEAFB1F96">Sec. 117. Termination.</toc-entry> 
+<toc-entry level="title" idref="H751A6612BB864EDB9BB6A236632021C5">TITLE II—Other matters</toc-entry> 
+<toc-entry level="section" idref="H452DCC6EEE3345C48E3F4A528D184890">Sec. 201. Extension of the Iran Sanctions Act of 1996.</toc-entry> 
+<toc-entry level="section" idref="HC3E5E88F33A340929CFA78A3103701A9">Sec. 202. Severability.</toc-entry> 
+<toc-entry level="section" idref="HA1A95A690B2440A2881A4F3D464CFA1D">Sec. 203. Sunset.</toc-entry></toc></subsection></section> 
+</division> <division id="H2052F72D43D047AC9C266C02CF2561D6" style="OLC"><enum>B</enum><header>Supporting Early-childhood Educators’ Deductions</header> <section id="H99FFDB592AC24CB1B2B3F75409BD3309"><enum>1.</enum><header>Educator expense deduction to include early childhood educators</header> <subsection id="H1A22CB14E12D46C29D87BCF27EEFF4A2"><enum>(a)</enum><header>In general</header><text display-inline="yes-display-inline"><external-xref legal-doc="usc" parsable-cite="usc/26/62">Section 62(d)(1)</external-xref> of the Internal Revenue Code of 1986 is amended—</text> 
+<paragraph id="H2C6AF2C28CF94F0096726E59595D1E08"><enum>(1)</enum><text>in subparagraph (A), by striking <quote>a kindergarten through grade 12 teacher</quote> and inserting <quote>an early childhood or kindergarten through grade 12 teacher</quote>, and</text></paragraph> <paragraph id="H115C1F2F8775496E8FBBE444799D88DA"><enum>(2)</enum><text display-inline="yes-display-inline">in subparagraph (B), to read as follows:</text> 
+<quoted-block style="OLC" id="HAD07BF327AA8496993BE93449E9577DE" display-inline="no-display-inline"> 
+<subparagraph id="H710E7C404D49432FA39F1176DD5F4AC3"><enum>(B)</enum><header>School</header><text display-inline="yes-display-inline">The term <term>school</term> means—</text> <clause id="HF8596A672E4D4E14A9471AD632E23932"><enum>(i)</enum><text>in the case of early childhood education, any school or childcare facility which—</text> 
+<subclause id="HF69852DCAE014528A479C3A2CE27EF25"><enum>(I)</enum><text display-inline="yes-display-inline">provides educational or childcare services for more than 2 individuals (other than individuals who reside at the school or facility) who have not attained age 6, and</text></subclause> <subclause id="H277F72635A2E4EF7ABB75F3C34102C1F"><enum>(II)</enum><text display-inline="yes-display-inline">operates at the public expense or receives a fee, payment, or grant for providing such services for any of the individuals (regardless of whether such school or facility is operated for profit), and</text></subclause></clause> 
+<clause id="HE5B06283262842ABBC4AA595861D605C"><enum>(ii)</enum><text>in the case of elementary education or secondary education (kindergarten through grade 12), any school which provides such education, as determined under State law.</text></clause></subparagraph><after-quoted-block>.</after-quoted-block></quoted-block></paragraph></subsection> <subsection id="H26C42466663C46D8875FA6A53F05B909"><enum>(b)</enum><header>Conforming amendment</header><text display-inline="yes-display-inline">Section 62(a)(2)(D) of such Code is amended by striking <quote><header-in-text level="subparagraph" style="OLC">Certain expenses of elementary and secondary school teachers</header-in-text></quote> in the heading and inserting <quote><header-in-text level="subparagraph" style="OLC">Certain expenses of early childhood, elementary, and secondary school teachers</header-in-text></quote>.</text></subsection> 
+<subsection id="HC2E632D0E31C4D2BA11DD712976D6B55"><enum>(c)</enum><header>Effective date</header><text>The amendments made by this section shall apply to expenses paid or incurred in taxable years beginning after December 31, 2025.</text></subsection></section></division> </legis-body> <attestation><attestation-group><role>Speaker of the House of Representatives.</role></attestation-group><attestation-group><role>Vice President of the United States and President of the Senate.</role></attestation-group></attestation> </bill> 
+

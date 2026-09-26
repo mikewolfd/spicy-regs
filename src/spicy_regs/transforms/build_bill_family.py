@@ -26,6 +26,7 @@ from spicy_docs.interpretation.bill_family import (
     BillVersionCapture,
     DiffSummarizer,
     EngineStamp,
+    FamilyRefusal,
     SectionClassifier,
     installed_engine_stamp,
 )
@@ -56,10 +57,11 @@ from spicy_docs.sources.congress.bill_status import (
 from spicy_docs.sources.congress.bill_tree import engine_available, parse_bill_tree
 from spicy_docs.sources.congress.bill_versions import (
     DEFAULT_FORMAT_PREFERENCE,
-    VERSION_CODES,
     VersionCodeError,
     bill_version_package_id,
     choose_format,
+    consecutive_pairs,
+    printing_order,
     version_slug,
 )
 from spicy_docs.sources.congress.bulk_status import (
@@ -85,7 +87,7 @@ from spicy_regs.transforms.congress_scope import (
     congresses_from_env,
 )
 from spicy_regs.transforms.model_call import resolve_gemini_key
-from spicy_regs.transforms.table_merge import merge_contract_table, merge_table, published_table
+from spicy_regs.transforms.table_merge import ReplacementScope, merge_contract_table, merge_table, published_table
 
 if TYPE_CHECKING:
     from spicy_regs.source_evidence import CaptureEvidence
@@ -572,13 +574,21 @@ def _version_captures(
     return captures
 
 
+def _printings(status: Any) -> list[tuple[str, str | None]]:
+    """A status's typed printings as the ``(version_code, date)`` pairs the provider orders."""
+    typed = (version for version in status.text_versions if version.type)
+    return [(version_slug(version.type), getattr(version, "date", None)) for version in typed]
+
+
 def _ordered_printings(status: Any) -> list[Any]:
-    """Use publisher dates and the owner's public vocabulary declaration order."""
-    order = {entry.slug: index for index, entry in enumerate(VERSION_CODES)}
-    return sorted(
-        (version for version in status.text_versions if version.type),
-        key=lambda version: (getattr(version, "date", None) or "", order.get(version_slug(version.type), len(order))),
-    )
+    """A status's typed printings in the provider's own ``printing_order``, the order its diffs pair in."""
+    typed = [version for version in status.text_versions if version.type]
+    return [typed[index] for index in printing_order(_printings(status))]
+
+
+def _code_pairs(printings: Sequence[tuple[str, str | None]]) -> set[tuple[str, str]]:
+    """The ``(earlier, later)`` version codes the provider's ``consecutive_pairs`` compares."""
+    return {(printings[older][0], printings[newer][0]) for older, newer in consecutive_pairs(printings)}
 
 
 def _body_kind(content_type: str | None, format_name: str | None) -> str | None:
@@ -612,6 +622,9 @@ class PriorIndex:
     xml_printings: Collection[str] = field(default_factory=frozenset)
     pairs: Collection[tuple[str, str, str]] = field(default_factory=frozenset)
     pending_bills: Collection[str] = field(default_factory=frozenset)
+    #: Every published ``section_diffs`` key, by bill, less the bill: what a
+    #: rebuild checks against the pairs its status establishes, retiring the rest.
+    published_pairs: Mapping[str, Collection[tuple[str, str, str, str]]] = field(default_factory=dict)
 
     @property
     def is_cold(self) -> bool:
@@ -634,10 +647,9 @@ class PriorIndex:
         """The consecutive XML printing pairs of this bill that have no published diff yet."""
         identifier = bill_key(status.identity)
         xml = self.xml_codes(identifier) if xml_codes is None else xml_codes
-        codes = [version_slug(version.type) for version in _ordered_printings(status)]
         return {
             (older, newer)
-            for older, newer in zip(codes, codes[1:])
+            for older, newer in _code_pairs(_printings(status))
             if older in xml
             and newer in xml
             and (identifier, older, newer) not in self.pairs
@@ -753,6 +765,7 @@ def _prior_index(paths: Mapping[str, Path | None]) -> PriorIndex:
                 continue
             printings.add(key)
     pairs: set[tuple[str, str, str]] = set()
+    published: dict[str, set[tuple[str, str, str, str]]] = {}
     diffs_path = paths.get("section_diffs")
     items_path = paths.get("section_diff_items")
     pair_identity = TABLE_CONTRACTS["section_diffs"].identity
@@ -771,6 +784,7 @@ def _prior_index(paths: Mapping[str, Path | None]) -> PriorIndex:
         }
         for row in duckdb.sql(f"SELECT {columns}, item_count FROM read_parquet('{diffs_path}')").fetchall():
             key, count = tuple(row[:-1]), _int_or_none(row[-1])
+            published.setdefault(key[0], set()).add(key[1:])
             if (
                 key[2] == ACQUIRED_SOURCE
                 and key[4] == ACQUIRED_SOURCE
@@ -792,15 +806,15 @@ def _prior_index(paths: Mapping[str, Path | None]) -> PriorIndex:
         if not versions_qualified
         or version_counts.get(bill) != len(listed.get(bill, ()))
     )
-    order = {entry.slug: position for position, entry in enumerate(VERSION_CODES)}
     for bill, codes in listed.items():
-        ordered = sorted(codes, key=lambda code: (dates[(bill, code)], order.get(code, len(order))))
+        established = _code_pairs([(code, dates[(bill, code)]) for code in sorted(codes)])
+        xml = {code for code in codes if f"{bill}\x1f{code}" in xml_printings}
+        # A missing comparison, and a published one no established neighbour
+        # pair accounts for -- backward, or skipping a printing -- both reopen
+        # the bill; the rebuild computes the first and retires the second.
         if any(
-            f"{bill}\x1f{older}" in xml_printings
-            and f"{bill}\x1f{newer}" in xml_printings
-            and (bill, older, newer) not in pairs
-            for older, newer in zip(ordered, ordered[1:])
-        ):
+            older in xml and newer in xml and (bill, older, newer) not in pairs for older, newer in established
+        ) or any((key[0], key[2]) not in established for key in published.get(bill, ())):
             pending_bills.add(bill)
     if bills_path is not None and _has_columns(bills_path, ("bill_id", "url", "url_source")):
         # Pre-label rows can carry the same API URL without the retired
@@ -819,7 +833,40 @@ def _prior_index(paths: Mapping[str, Path | None]) -> PriorIndex:
                 len(unqualified_urls),
             )
         pending_bills.update(unqualified_urls)
-    return PriorIndex(text_dates, printings, xml_printings, pairs, pending_bills)
+    return PriorIndex(text_dates, printings, xml_printings, pairs, pending_bills, published)
+
+
+#: The reason a fresh row repeating a key is refused. The merge keeps one row
+#: per contract identity, so a repeat would publish as one and drop the other
+#: without a word -- what ``bill_sections`` did before spicy-docs 0.35.0 keyed
+#: it on ``seq`` (119-hr-5334 enrolled: two divisions' ``Sec. 1``; 119-hr-9022
+#: reported: two paragraphs under one heading).
+REPEATED_KEY_REASON = "repeats the key of a row this run already produced"
+
+
+def _refuse_repeated_keys(tables: BillFamilyTables) -> BillFamilyTables:
+    """Keep each contract key's first row and refuse the rest by name, before any merge sees them.
+
+    The provider refuses a repeat within one bill's pass; this covers the run,
+    so no merge collapses two produced rows into one. One pass over every row.
+    """
+    refusals: list[FamilyRefusal] = []
+    kept: dict[str, tuple[dict, ...]] = {}
+    for contract, attr in FAMILY_TABLES:
+        identity = TABLE_CONTRACTS[contract].identity
+        seen: set[tuple[str | None, ...]] = set()
+        rows = []
+        for row in getattr(tables, attr):
+            key = tuple(row[column] for column in identity)
+            if key in seen:
+                refusals.append(FamilyRefusal(contract, tuple(value or "" for value in key), REPEATED_KEY_REASON))
+                continue
+            seen.add(key)
+            rows.append(row)
+        kept[attr] = tuple(rows)
+    if not refusals:
+        return tables
+    return replace(tables, **kept, refusals=(*tables.refusals, *refusals))
 
 
 def _complete_child_scopes(
@@ -1650,6 +1697,8 @@ def build_bill_family(
     remaining = [max_version_fetches]
     families: list[BillFamilyTables] = []
     touched: set[str] = set()
+    # Published comparisons a rebuild shows no established neighbour pair accounts for.
+    retired_pairs: set[tuple[str, ...]] = set()
     archive_rows: list[dict] = []
     vote_rows: list[dict] = []
     bills = unchanged = skipped = archives_skipped = votes_refused = 0
@@ -1723,6 +1772,12 @@ def build_bill_family(
                     summarize=summarize,
                     summarize_diff=summarize_diff_call,
                 )
+                established = _code_pairs(_printings(member.status))
+                retired_pairs.update(
+                    (identifier, *pair)
+                    for pair in index.published_pairs.get(identifier, ())
+                    if (pair[0], pair[2]) not in established
+                )
                 processed = {entry.version_code for entry in capture.versions if _processed_capture(entry)}
                 xml_codes = index.xml_codes(identifier) | {
                     entry.version_code for entry in capture.versions if entry.document is not None
@@ -1792,7 +1847,7 @@ def build_bill_family(
                 ", ".join(API_KEY_ENV_VARS),
             )
 
-    folded = BillFamilyTables.concat(families)
+    folded = _refuse_repeated_keys(BillFamilyTables.concat(families))
     # One pass over every refusal both passes produced — `concat` carries them,
     # so the backfill's families are counted here too, which the per-bill count
     # this replaces never reached. Keyed by the reason as well as the table: a
@@ -1855,6 +1910,33 @@ def build_bill_family(
     section_scopes = _complete_child_scopes("bill_versions", folded.bill_versions, folded.bill_sections, "section_count")
     item_scopes = _complete_child_scopes("section_diffs", folded.section_diffs, folded.section_diff_items, "item_count")
 
+    pair_identity = TABLE_CONTRACTS["section_diffs"].identity
+    if retired_pairs:
+        logger.warning("Bill family: retiring {:,} published comparisons of non-neighbours", len(retired_pairs))
+    # Each scope names parents whose prior child rows this run replaces --
+    # emptying them where the run publishes none.
+    replaced: dict[str, ReplacementScope] = {
+        "cbo_cost_estimates": (
+            "bill_id",
+            {
+                identifier
+                for row in folded.bills
+                if (identifier := row["bill_id"]) is not None
+                and row.get("cbo_cost_estimates_outcome")
+                in {
+                    "populated",
+                    "requested-empty:absent",
+                    "requested-empty:present-and-empty",
+                }
+            },
+        ),
+        "bill_sections": (TABLE_CONTRACTS["bill_versions"].identity, section_scopes),
+        "section_diffs": (pair_identity, retired_pairs),
+        "section_diff_items": (pair_identity, item_scopes | retired_pairs),
+        "financial_changes": (pair_identity, retired_pairs),
+        "diff_summaries": (pair_identity, retired_pairs),
+    }
+
     def publish(contract: str, rows: Any) -> Path:
         return merge_contract_table(
             output_dir,
@@ -1862,26 +1944,7 @@ def build_bill_family(
             rows,
             download_prior=download_prior,
             prior_present=(prior_paths.get(contract) is not None) if contract in prior_paths else None,
-            replace_parents=(
-                "bill_id",
-                {
-                    identifier
-                    for row in folded.bills
-                    if (identifier := row["bill_id"]) is not None
-                    and row.get("cbo_cost_estimates_outcome")
-                    in {
-                        "populated",
-                        "requested-empty:absent",
-                        "requested-empty:present-and-empty",
-                    }
-                },
-            )
-            if contract == "cbo_cost_estimates"
-            else (TABLE_CONTRACTS["bill_versions"].identity, section_scopes)
-            if contract == "bill_sections"
-            else (TABLE_CONTRACTS["section_diffs"].identity, item_scopes)
-            if contract == "section_diff_items"
-            else None,
+            replace_parents=replaced.get(contract),
         )
 
     paths = [publish(contract, getattr(folded, attr)) for contract, attr in FAMILY_TABLES]
