@@ -731,13 +731,13 @@
       ],
       "audits": [
         {
-          "disposition": "PARTIAL",
-          "pin": "257e889a",
+          "disposition": "qualified",
+          "pin": "fa33e547",
           "pin_kind": "artifact",
           "date": "2026-09-26"
         }
       ],
-      "statement": "current `257e889a…` is PARTIAL (2026-09-26): 5,006 rows. R8 admits evidence `8ca61398…` (1,045 members, bound). An independent replay matches list membership (5,006 = listed = declared), all 34,042 list cells, and 16,000 detail cells of the 1,000 rows read this run. Limits: 6 rows are list-only past the cap, and 4,000 older details were read before evidence was retained. `a663f38` re-reads once every held detail no retained response backs; it is self-limiting and journals the remaining list. It is draining in paced runs, and the table qualifies once a generation has no list-only rows and an empty unverified list. Receipt: `amend-hc-qualification-2026-09-26/house-communications/`."
+      "statement": "qualified at `fa33e547…` (2026-09-26): 5,006 rows, 0 list-only. R8 is clean on it and on each generation of the 09-26 evidence drain (`bc3715f0…` → `fa33e547…`, runs 36243144053–36248685095 at `a663f38`): evidence admitted and bound, 0 failures. The journaled unverified remainder falls from 4,006 to 0. List membership (5,006 = the declared count of its 43 retained pages) and all 40,048 list cells replay. Every row's detail replays cell for cell from the one retained response that read it, through an independent raw-JSON parser: 170,204 cells, 0 mismatches. Against `257e889a…` only the six formerly list-only rows changed; all 5,000 re-read details came back identical. RIN limit: the rule misses 14 report natures whose RIN is malformed (11) or labelled `RINs:`/\"Regulation Identification Number\" (3), and keeps only the first RIN on the 6 rows that state several. Receipt: `amend-hc-qualification-2026-09-26/house-communications/final/`."
     },
     {
       "task": "T08",
