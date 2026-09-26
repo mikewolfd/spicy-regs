@@ -1,5 +1,6 @@
 name: Rollup — roll_call_votes
-# Manual repair entry point; routine execution is sequenced by its parent workflow.
+# Manual repair and backfill entry point; routine execution is sequenced by its
+# parent workflow, refresh-congress-vote-terms.yml.
 on:
   workflow_dispatch:
     inputs:
@@ -13,6 +14,13 @@ on:
         required: false
         default: ''
         type: string
+# The scheduled refresh's group: a dispatch queues behind it and behind other
+# dispatches instead of racing them, since two concurrent publications of this
+# family refuse the later one as stale after its whole acquisition.
+concurrency:
+  group: congress-vote-terms
+  cancel-in-progress: false
+  queue: max
 jobs:
   run:
     uses: ./.github/workflows/_rollup.yml
