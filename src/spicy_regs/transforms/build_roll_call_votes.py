@@ -1,14 +1,18 @@
 """Build roll-call and member-vote tables from complete source enumerations.
 
-House listing identities and Senate LIS menus determine which votes to acquire.
-Bill references enrich those votes independently: an unlinked procedural vote
-still has its own tally and member positions. House action references may add
-keys before the listing catches up; Senate references alone never establish a
+Each chamber's own session index determines which votes to acquire: the
+Clerk's EVS pages for the House, the LIS vote menu for the Senate. Congress.gov's
+House listing adds its linkage and keys where it serves (the 115th Congress
+on). Bill references enrich those votes independently: an unlinked procedural
+vote still has its own tally and member positions. House action references may
+add keys before an index catches up; Senate references alone never establish a
 complete Senate selection.
 
 Acquisition is bounded by MAX_VOTES_PER_RUN. Unseen keys precede held correction
 refreshes so a small cap cannot stall backfill. OVERLAP_VOTES applies separately
-to each chamber; all keys retain the publisher's chamber namespace. A successful
+to each chamber of a sitting Congress; a closed Congress's held roll calls are
+never re-read, so a backfill reads each once and the scheduled scope never
+reaches them. All keys retain the publisher's chamber namespace. A successful
 reacquisition replaces that roll call's complete member roster. Failed, capped
 or unselected roll calls retain their prior observations; a held one published
 before ``vote_day`` existed gains it from its own ``vote_date`` before the merge.
@@ -21,7 +25,7 @@ from __future__ import annotations
 import hashlib
 import json
 from collections import Counter
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Collection, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol, cast
 
@@ -50,6 +54,7 @@ from spicy_docs.sources.congress.votes import (
     VoteBudget,
     VoteLocator,
     VoteSourceError,
+    locator_from_index_entry,
     locator_from_menu_entry,
     vote_day,
 )
@@ -57,7 +62,7 @@ from spicy_docs.sources.congress.votes import (
 from spicy_regs.sources import r2
 from spicy_regs.sources.congress_bills import API_KEY_ENV_VARS, _resolve_api_key
 from spicy_regs.transforms.build_bill_family import VOTE_REFERENCES_TABLE
-from spicy_regs.transforms.congress_scope import congresses_from_env, sessions_of
+from spicy_regs.transforms.congress_scope import congresses_from_env, default_congresses, sessions_of
 from spicy_regs.transforms.congress_walk import ListingSource
 from spicy_regs.transforms.table_merge import merge_contract_table, published_table
 
@@ -73,6 +78,8 @@ class VoteSource(Protocol):
     """What this transform needs of a roll-call acquirer."""
 
     def acquire(self, locator: Any, *, crosswalk: Any = ...) -> Any: ...
+
+    def list_house_votes(self, congress: int, session: int) -> Any: ...
 
     def list_senate_votes(self, congress: int, session: int) -> Any: ...
 
@@ -97,9 +104,10 @@ MAX_PAGES = 40
 #: Bound per-run source requests; larger selections resume from prior outputs.
 MAX_VOTES_PER_RUN = 1_500
 
-#: The newest roll calls are re-read every run even when already published,
-#: because the contract carries no publisher ``updateDate`` to compare and a
-#: late correction would otherwise never be picked up.
+#: The newest roll calls of a sitting Congress are re-read every run even when
+#: already published, because the contract carries no publisher ``updateDate``
+#: to compare and a late correction would otherwise never be picked up. A
+#: closed Congress (outside ``default_congresses``) is read once.
 OVERLAP_VOTES = 25
 
 NAME = "roll_call_votes"
@@ -415,11 +423,14 @@ def build_roll_call_votes(
     overlap: int = OVERLAP_VOTES,
     download_prior: Callable[[str, Path], bool] = r2.download,
     evidence: CaptureEvidence | None = None,
+    open_congresses: Collection[int] | None = None,
 ) -> tuple[Path, Path]:
     """Build both chambers; optional bill links never restrict native selection.
 
-    Menu/listing failures propagate before either output is written. Unseen
-    votes take priority over correction refreshes, with overlap per chamber.
+    Index/menu/listing failures propagate before either output is written.
+    Unseen votes take priority over correction refreshes, with overlap per
+    chamber for ``open_congresses`` only (default: ``default_congresses()``,
+    the sitting Congress and, just after a boundary, the outgoing one).
     """
     if reader is None:
         api_key = _resolve_api_key()
@@ -436,24 +447,30 @@ def build_roll_call_votes(
         transport=None if evidence is None else evidence.transport(stage="vote-source", max_bytes=VOTE_BUDGET.max_bytes),
     )
 
-    # 1. Linkage: what the publisher says each House roll call was about.
+    # 1. Population from each chamber's own session index; linkage from
+    # Congress.gov's House listing, which is an empty success before the 115th
+    # Congress and so never bounds the House selection.
     congresses = congresses_from_env()
     route = LIST_ROUTES["house-vote"]
     records: list[object] = []
     listed_keys: set[VoteKey] = set()
     for congress in congresses:
-        before = len(records)
+        before, indexed = len(records), len(listed_keys)
         for session in sessions_of(congress):
+            # The owner reader proves each index's identity and refuses an
+            # empty, failed or gapped one; a refusal cannot establish a
+            # zero-vote session.
+            index = acquirer.list_house_votes(congress, session).index
+            listed_keys.update(locator_from_index_entry(index, entry).as_vote_key() for entry in index.votes)
+            menu = acquirer.list_senate_votes(congress, session).menu
+            listed_keys.update(locator_from_menu_entry(menu, entry).as_vote_key() for entry in menu.votes)
             url = list_route_url(route, congress=congress, session=session, limit=MAX_LIMIT)
             for page in reader.records(route, url, max_pages=MAX_PAGES):
                 records.extend(page.records)
-            # The owner reader proves menu identity and refuses empty/failed
-            # responses; a refusal cannot establish a zero-vote session.
-            menu = acquirer.list_senate_votes(congress, session).menu
-            for entry in menu.votes:
-                locator = locator_from_menu_entry(menu, entry)
-                listed_keys.add(VoteKey(locator.congress, locator.chamber, locator.session, locator.roll_number))
-        logger.info("Roll-call votes: Congress {} — {:,} listed House votes", congress, len(records) - before)
+        logger.info(
+            "Roll-call votes: Congress {} — {:,} roll calls in the chambers' indexes, {:,} House votes listed by Congress.gov",
+            congress, len(listed_keys) - indexed, len(records) - before,
+        )
 
     listed_keys.update(read_house_vote_key(record) for record in records)
     listing_references: list[VoteReference] = []
@@ -504,22 +521,24 @@ def build_roll_call_votes(
         key=lambda k: (k.congress, k.session, k.roll_number, k.chamber),
         reverse=True,
     )
+    sitting = set(default_congresses() if open_congresses is None else open_congresses)
     fresh_keys: list[VoteKey] = []
     refresh_keys: list[VoteKey] = []
     chamber_positions: Counter[str] = Counter()
     for key in ordered:
-        position = chamber_positions[key.chamber]
-        chamber_positions[key.chamber] += 1
         identity = (str(key.congress), str(key.chamber), str(key.session), str(key.roll_number))
         if identity not in held:
             fresh_keys.append(key)
-        elif position < overlap:
+        if key.congress not in sitting:
+            continue
+        if identity in held and chamber_positions[key.chamber] < overlap:
             refresh_keys.append(key)
+        chamber_positions[key.chamber] += 1
     keys = fresh_keys + refresh_keys
     if held:
         logger.info(
             "Roll-call votes: {:,} of {:,} listed roll calls already published — fetching {:,}"
-            " (up to {} per chamber are re-read for corrections)",
+            " (up to {} per chamber of a sitting Congress are re-read for corrections)",
             len(ordered) - len(fresh_keys),
             len(ordered),
             len(keys),

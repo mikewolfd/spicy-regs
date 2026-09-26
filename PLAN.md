@@ -461,7 +461,7 @@ converges over runs instead of timing out, and let the merge accumulate.
 | --- | --- | --- |
 | `bill-family` | The 8 folder listings, then only the archives whose zip has moved since the entry retained last run, then only bills whose `updateDateIncludingText` differs from the published row, and of those only printings not already captured (plus a new printing's neighbour, so the consecutive-pair diff still happens) | `MAX_VERSION_FETCHES` printings/run; skipping what is held means the next run resumes on new ground rather than re-walking the same prefix |
 | `amendments` | The `updateDate` window from the prior max minus `OVERLAP_DAYS`, server-side via `fromDateTime`/`toDateTime` | `MAX_WINDOW_DAYS` (90); `AMENDMENTS_SINCE`/`AMENDMENTS_UNTIL` drive a chunk |
-| `roll-call-votes` | The index walk, then Clerk files only for roll calls not already published with a tally, plus the newest `OVERLAP_VOTES` re-read for corrections | `MAX_VOTES_PER_RUN`, newest first |
+| `roll-call-votes` | Each chamber's own index (Clerk EVS pages, Senate LIS menu) and the Congress.gov listing for linkage, then Clerk and LIS files only for roll calls not already published with a tally, plus, for a sitting Congress only, the newest `OVERLAP_VOTES` re-read for corrections | `MAX_VOTES_PER_RUN`, newest first; an earlier Congress is a dispatched scope, read once |
 | `committee-reports` | GovInfo packages modified since the prior max `last_modified` minus `OVERLAP_HOURS`; packages already published are not re-fetched | `MAX_PACKAGES_PER_RUN`; 30 days is the cold-start window only |
 | `press-releases` | Both feeds, whole — the feed *is* the delta, and the merge accumulates what rotates off | n/a |
 | `members` | Both roster files, whole — one small JSON each, with no partial-fetch route | n/a |
@@ -486,9 +486,10 @@ shortcut taken here:
 2. **The roll-call index walk is not short-circuited.** The `house-vote` route
    declares `sort_honored=False`, so the publisher's order is not guaranteed
    monotonic in roll number and stopping on a page of already-held votes could
-   silently drop roll calls sitting later in an unordered listing. The walk is
-   a few 250-row pages per session; the per-roll-call Clerk fetch is the real
-   cost and that *is* skipped.
+   silently drop roll calls sitting later in an unordered listing. The Clerk's
+   EVS index is read whole too, since its completeness check (rolls 1..N) needs
+   every page. The walks are a few pages per session; the per-roll-call file
+   fetch is the real cost and that *is* skipped.
 3. **A corrected roll call cannot be detected by comparison.** The
    `roll_call_votes` contract has no column for the publisher's `updateDate`,
    so there is nothing to compare a listing's `updateDate` against.

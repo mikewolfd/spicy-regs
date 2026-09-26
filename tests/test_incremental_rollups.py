@@ -242,6 +242,11 @@ class CountingVoteAcquirer:
         self.requested.append(locator.roll_number)
         raise _Unavailable("stub: no Clerk file in a hermetic test")
 
+    def list_house_votes(self, congress, session):
+        from types import SimpleNamespace
+
+        return SimpleNamespace(index=SimpleNamespace(votes=()))
+
     def list_senate_votes(self, congress, session):
         from types import SimpleNamespace
 
@@ -288,6 +293,7 @@ def test_roll_call_votes_skips_what_it_already_published(tmp_path, monkeypatch):
         acquirer=acquirer,
         overlap=5,
         download_prior=no_download,
+        open_congresses=(119,),
     )
     # Only the overlap is re-read; the other 35 are not fetched again.
     assert len(acquirer.requested) == 5

@@ -27,6 +27,8 @@ import pytest
 from spicy_docs.interpretation.vote_matching import VoteMatchError, index_vote_references, read_vote_key
 from spicy_docs.schemas import TABLE_CONTRACTS
 from spicy_docs.sources.congress.votes import (
+    ClerkVoteIndex,
+    ClerkVoteIndexEntry,
     SenateVoteMenu,
     SenateVoteMenuEntry,
     VoteRefusedError,
@@ -154,11 +156,22 @@ class _Acquisition:
 
 
 class StubVoteAcquirer:
-    """Serves House acquisitions and a Senate menu, recording every locator requested."""
+    """Serves both chambers' session indexes and their acquisitions, recording every locator requested."""
 
-    def __init__(self, senate_rolls=()):
+    def __init__(self, senate_rolls=(), house_rolls=()):
         self.requested: list[tuple[str, int]] = []
         self.senate_rolls = senate_rolls
+        self.house_rolls = house_rolls
+
+    def list_house_votes(self, congress, session):
+        # As with the menu, empty tuples isolate listing-driven selections; the
+        # real reader refuses an empty or gapped Clerk index.
+        entries = tuple(
+            ClerkVoteIndexEntry(n, "8-Sep", None, None, None, None)
+            for n in sorted(self.house_rolls, reverse=True)
+            if session == 1
+        )
+        return SimpleNamespace(index=ClerkVoteIndex(congress, session, 1789 + 2 * (congress - 1) + session - 1, entries))
 
     def list_senate_votes(self, congress, session):
         # Empty tuples isolate House-only unit selections; the real provider
@@ -450,6 +463,70 @@ def test_senate_menu_failure_preserves_existing_outputs(tmp_path, scoped, error)
     assert acquirer.requested == [] and retained.read_bytes() == b"prior output"
 
 
+@pytest.mark.parametrize("error", [VoteSourceError("index skips roll 100"), VoteRefusedError("https://clerk.house.gov")])
+def test_clerk_index_failure_preserves_existing_outputs(tmp_path, scoped, error):
+    """A refused or gapped House index cannot establish the House population, so nothing is written."""
+
+    class FailedIndex(StubVoteAcquirer):
+        def list_house_votes(self, congress, session):
+            raise error
+
+    retained = tmp_path / "roll_call_votes.parquet"
+    retained.write_bytes(b"prior output")
+    acquirer = FailedIndex(senate_rolls=(1,))
+    with pytest.raises(type(error)):
+        build_roll_call_votes(tmp_path, reader=StubListingReader(), acquirer=acquirer, download_prior=_no_prior)
+    assert acquirer.requested == [] and retained.read_bytes() == b"prior output"
+
+
+def test_the_clerk_index_is_the_house_population_where_the_listing_is_empty(tmp_path, monkeypatch):
+    """Congress.gov answers an empty success before the 115th; the Clerk's own index still bounds the House."""
+    monkeypatch.setenv("BILL_FAMILY_CONGRESSES", "110")
+    acquirer = StubVoteAcquirer(house_rolls=(1, 2, 3), senate_rolls=(1, 2))
+    paths = build_roll_call_votes(
+        tmp_path, reader=StubListingReader(), acquirer=acquirer, download_prior=_no_prior, open_congresses=(119,)
+    )
+    assert sorted(acquirer.requested) == [("house", 1), ("house", 2), ("house", 3), ("senate", 1), ("senate", 2)]
+    rows = pq.read_table(paths[0]).to_pylist()
+    assert sorted(row["vote_id"] for row in rows) == [
+        "110-house-1-1", "110-house-1-2", "110-house-1-3", "110-senate-1-1", "110-senate-1-2",
+    ]
+    assert {row["source_url"] for row in rows if row["chamber"] == "house"} == {
+        f"https://clerk.house.gov/evs/2007/roll{n:03d}.xml" for n in (1, 2, 3)
+    }
+
+
+def test_a_closed_congress_is_read_once_and_resumes_only_what_is_missing(tmp_path, monkeypatch):
+    """Held roll calls of a closed Congress are never re-read for corrections; a capped backfill resumes."""
+    import shutil
+
+    monkeypatch.setenv("BILL_FAMILY_CONGRESSES", "110")
+    requested = []
+    for attempt in range(3):
+        run = tmp_path / str(attempt)
+        run.mkdir()
+
+        def prior(remote, local):
+            previous = tmp_path / str(attempt - 1) / remote
+            if not previous.exists():
+                return False
+            shutil.copyfile(previous, local)
+            return True
+
+        acquirer = StubVoteAcquirer(house_rolls=(1, 2, 3), senate_rolls=(1, 2))
+        build_roll_call_votes(
+            run, reader=StubListingReader(), acquirer=acquirer, max_votes=3, overlap=25, download_prior=prior,
+            open_congresses=(119,),
+        )
+        requested.append(sorted(acquirer.requested))
+    # Newest first under the cap, then the rest, then nothing: no overlap re-read of a closed Congress.
+    assert requested == [
+        [("house", 2), ("house", 3), ("senate", 2)],
+        [("house", 1), ("senate", 1)],
+        [],
+    ]
+
+
 def test_small_cap_prioritizes_unseen_votes_over_both_chamber_refreshes(tmp_path, scoped):
     import shutil
 
@@ -468,7 +545,8 @@ def test_small_cap_prioritizes_unseen_votes_over_both_chamber_refreshes(tmp_path
 
         acquirer = StubVoteAcquirer(senate_rolls=(1, 2))
         paths = build_roll_call_votes(
-            run, reader=reader, acquirer=acquirer, max_votes=1, overlap=25, download_prior=prior
+            run, reader=reader, acquirer=acquirer, max_votes=1, overlap=25, download_prior=prior,
+            open_congresses=(119,),
         )
         requested.extend(acquirer.requested)
     assert len(requested) == len(set(requested)) == 4
@@ -478,7 +556,9 @@ def test_small_cap_prioritizes_unseen_votes_over_both_chamber_refreshes(tmp_path
     run = tmp_path / str(attempt)
     run.mkdir()
     acquirer = StubVoteAcquirer(senate_rolls=(1, 2))
-    build_roll_call_votes(run, reader=reader, acquirer=acquirer, max_votes=2, overlap=1, download_prior=prior)
+    build_roll_call_votes(
+        run, reader=reader, acquirer=acquirer, max_votes=2, overlap=1, download_prior=prior, open_congresses=(119,)
+    )
     assert set(acquirer.requested) == {("house", 2), ("senate", 2)}
 
 
@@ -609,7 +689,7 @@ def test_held_links_refresh_independently_of_native_fetch_and_preserve_members(
     acquirer = StubVoteAcquirer(senate_rolls=(212,))
     paths = build_roll_call_votes(
         tmp_path, reader=StubListingReader(), acquirer=acquirer, download_prior=prior,
-        overlap=1 if refresh_native else 0, max_votes=1 if refresh_native else 0,
+        overlap=1 if refresh_native else 0, max_votes=1 if refresh_native else 0, open_congresses=(119,),
     )
     actual = pq.read_table(paths[0]).to_pylist()[0]
     assert actual["match_action_index"] == ("17" if references_available else "21")
@@ -683,6 +763,7 @@ def test_a_missing_reference_input_never_relinks_a_held_house_vote_from_the_list
         overlap=1 if refresh_native else 0,
         max_votes=1 if refresh_native else 0,
         evidence=evidence,
+        open_congresses=(119,),
     )
     assert pq.read_table(paths[0]).to_pylist() == [old]
     assert acquirer.requested == ([("house", 240)] if refresh_native else [])
