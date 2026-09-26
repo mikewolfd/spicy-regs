@@ -122,12 +122,12 @@ then published the full registry at `4b1ca622…`; see its T04 row.
 | T08 | `run-rollup-record-issues` | `record_issues.parquet` | qualified at `6b1913da…` (2026-09-25): 367 issues; the added issue matches all 17 native fields and every prior row is unchanged. This carries the recorded source selection, not complete historical coverage. Receipt: `parallel-rollup-audit-2026-09-25/` (workstream details in the [audit report](parallel-rollup-audit-2026-09-25.md)). |
 | T08 | `run-rollup-treaties` | `treaties.parquet` | qualified at `4ccf2d7a…` (2026-09-25): both rows are exactly unchanged from the previously qualified selection. No fresh whole-source walk was performed; broader history and detail remain outside this carried scope. Receipt: `parallel-rollup-audit-2026-09-25/` (workstream details in the [audit report](parallel-rollup-audit-2026-09-25.md)). |
 | T08 | `run-rollup-nominations` | `nominations.parquet` | qualified at `d4622c60…` (2026-09-25): all 2,214 rows are exactly unchanged from the qualified predecessor. A fresh pooled list yields 2,212 native identities plus the two retained parent identities; later native changes remain explicit and do not establish frozen-output freshness. Prior population/part reconciliation remains evidenced in `ledger-continuation-2026-09-24/nominations/`. Receipt: `parallel-rollup-audit-2026-09-25/` (workstream details in the [audit report](parallel-rollup-audit-2026-09-25.md)). |
-| T06 | `run-pipeline` | `dockets.parquet` | publication verified at table digest `680b86ad…` (2026-09-25; ETag `2466cee0…`): 279,336 rows. The latest five native records match every mapped field after locating their exact numbered source captures. This is bounded source evidence; whole-population source qualification after catch-up remains PARTIAL. Earlier T06 source qualification is retained in the execution receipts. Receipt: `parallel-rollup-audit-2026-09-25/` (workstream details in the [audit report](parallel-rollup-audit-2026-09-25.md)). |
-| T06 | `run-pipeline` | `documents.parquet` | publication verified at table digest `ff502e4b…` (2026-09-25; ETag `9cac7d9b…`): 2,002,562 rows. The latest five native records match every mapped field after locating their exact numbered source captures. This is bounded source evidence; whole-population source qualification, document bodies and extraction evidence remain PARTIAL. Receipt: `parallel-rollup-audit-2026-09-25/` (workstream details in the [audit report](parallel-rollup-audit-2026-09-25.md)). |
-| T06 | `run-pipeline` | `comments_index.parquet` | published and verified at table digest `2a050b5e…` (2026-09-25; ETag `97417edf…`): 143,367 groups sum to 26,303,691 comments. The public monolith, agency files and raw catalog pass exact coverage and unique-ID checks. Receipt: `comments-local-export-2026-09-25/` |
+| T06 | `run-pipeline` | `dockets.parquet` | publication verified at table digest `308b35c6…` (2026-09-26; ETag `50d8cfba…`): 279,380 rows with unique `docket_id`, published by hosted sweep run 36177463432 and read back anonymously (receipt `hosted-sweep-readback-2026-09-26/readback.json`). At the earlier table `680b86ad…` (279,336 rows), the latest five native records match every mapped field after locating their exact numbered source captures. This is bounded source evidence; whole-population source qualification after catch-up remains PARTIAL. Earlier T06 source qualification is retained in the execution receipts. Receipt: `parallel-rollup-audit-2026-09-25/` (workstream details in the [audit report](parallel-rollup-audit-2026-09-25.md)). |
+| T06 | `run-pipeline` | `documents.parquet` | publication verified at table digest `d7487819…` (2026-09-26; ETag `f3324286…`): 2,002,831 rows with unique `document_id`, published by hosted sweep run 36177463432 and read back anonymously (receipt `hosted-sweep-readback-2026-09-26/readback.json`). At the earlier table `ff502e4b…` (2,002,562 rows), the latest five native records match every mapped field after locating their exact numbered source captures. This is bounded source evidence; whole-population source qualification, document bodies and extraction evidence remain PARTIAL. Receipt: `parallel-rollup-audit-2026-09-25/` (workstream details in the [audit report](parallel-rollup-audit-2026-09-25.md)). |
+| T06 | `run-pipeline` | `comments_index.parquet` | published and verified at table digest `c43559bd…` (2026-09-26; ETag `fb95b0e8…`): 143,397 groups sum to 26,311,037 comments, and every group equals a recount of the public monolith (`check_comments`, run on the downloaded bytes). Published by hosted sweep run 36177463432, whose verify job also passed the raw-catalog check. Receipt: `hosted-sweep-readback-2026-09-26/readback.json`. The earlier local-recovery index (`2a050b5e…`, 143,367 groups, 26,303,691 comments) is receipted in `comments-local-export-2026-09-25/`. |
 | T06 | `run-pipeline` | `comments/agency_code=<agency>/docket_id=<docket>/year=<year>/month=<month>/part-0.parquet` | unproduced on the fork (probed keys answer 404); the comments deliveries wrote `comments.parquet` and its index directly |
-| T07 | `publish-comments-mirror.yml` | `comments.parquet` | published by the local recovery and verified at table digest `b90e1105…` (2026-09-25; ETag `45071b2b…`): 26,303,691 rows across 180 agencies, with every previously published ID retained. The catalog export adds 2,413,288 rows to the prior public population. Public bytes, unique IDs and index coverage are verified; wider native-source qualification remains open. Earlier native and attachment-text repairs are retained in `comment-text-repair-2026-09-23/`; current publication receipts are in `comments-local-export-2026-09-25/`. Hosted publication then qualified the same day: run 36177463432's incremental sweep published 26,311,037 rows at snapshot 3697835162427868969, with dependents and verify passing ([hosted qualification](comments-publication-efficiency-2026-09-25.md#hosted-qualification)). |
-| T07 | `publish-comments-mirror.yml` | `comments/agency/agency_code=<agency>/part-0.parquet` | published and verified 2026-09-25: the agency files contain the same 26,303,691 IDs as the monolith and agree with every index group. `comments-local-export-2026-09-25/public-object-verification.json` records each file’s digest, ETag and row count |
+| T07 | `publish-comments-mirror.yml` | `comments.parquet` | published by hosted sweep run 36177463432 (snapshot 3697835162427868969) and verified at table digest `0d11e204…` (2026-09-26; ETag `1970f15e…`): 26,311,037 rows with unique IDs across 180 agencies. Its publisher refuses the loss of any previously published ID, and every index group equals a recount (receipt `hosted-sweep-readback-2026-09-26/readback.json`; [hosted qualification](comments-publication-efficiency-2026-09-25.md#hosted-qualification)). The earlier local recovery (table `b90e1105…`, 26,303,691 rows) retained every previously published ID. The catalog export adds 2,413,288 rows to the prior public population. Public bytes, unique IDs and index coverage are verified; wider native-source qualification remains open. Earlier native and attachment-text repairs are retained in `comment-text-repair-2026-09-23/`; current publication receipts are in `comments-local-export-2026-09-25/`. |
+| T07 | `publish-comments-mirror.yml` | `comments/agency/agency_code=<agency>/part-0.parquet` | republished by hosted sweep run 36177463432 with the 26,311,037-row snapshot; the publisher read back every file and the verify job's public check passed, but these files were not re-hashed independently. The 2026-09-25 local-recovery files held the same 26,303,691 IDs as that monolith and agreed with every index group; `comments-local-export-2026-09-25/public-object-verification.json` records each file’s digest, ETag and row count |
 | T17 | `materialize-rulemaking` | `rule_targets.parquet`, `proceedings.parquet`, `regulatory_agenda_items.parquet`, `agenda_item_proceedings.parquet`, `comment_periods.parquet` | current `snapshot_6d3dc0f2…` is PARTIAL (2026-09-25): every public/input digest and all 20 recorded integrity checks pass. It contains 563,176 rule targets, 268,314 proceedings, 38,408 agenda items, 155,669 agenda links and 286,056 periods. Full semantic accounting of retired identities and decisions 32–33 remains open; retired no-action shells may legitimately have no successor. Earlier source/join scope was qualified at `snapshot_837754c3…` (2026-09-24); later bounded evidence is retained in `docket-lists-2026-09-24/published-step/`. Receipt: `parallel-rollup-audit-2026-09-25/` (workstream details in the [audit report](parallel-rollup-audit-2026-09-25.md)). |
 
 ## September 24 report refresh
@@ -180,12 +180,53 @@ The dated narrative behind the rows (the September 21–22 status, the scope gap
 - **Successful-run findings:** private laws still misreport captured-but-refused reads; USAspending still lacks per-row observation dates. The Table III traversal and larger subject selection have now published. Table III drops four meaningful native rows, and the broader subjects audit remains partial. SAM's repaired scheduled acquisition succeeded, but its new complete extract was not retained. Ordinary external readers need routine source-response retention under T18. See the [log audit](rollup-success-log-audit-2026-09-24.md) and [September 25 audit](parallel-rollup-audit-2026-09-25.md).
 - **FEC (T05):** broader individual records, committee history and correction streams (log: Scope and evidence gaps).
 - **Table III cold start:** a Congress whose first listed act has no OLRC page cannot start its chain (about 45% of acts have none); seed the 120th from the 119th's highest served act before January 2027 — its page is inferred (from 119-1 naming 118-273 as its prior act), not yet observed, to name the next Congress's first act.
-- **Operations (T18–T20):** qualify the hosted mirror export within its runner
-  limits, then qualify the first resumed incremental sweep. The
-  [operations checkpoint](#operations-checkpoint) records completed repairs and
-  the remaining deployment/access work.
+- **Operations (T18–T20):** the hosted mirror export and the first resumed
+  incremental sweep are qualified, and scheduled ETL runs again
+  ([September 25 hosted qualification](#september-25-hosted-qualification)).
+  Queued publication work: publish `dockets` and `documents` as managed families
+  at sweep finalization, so DocSpec can admit them by reference; store table
+  members once, since every generation publication still re-downloads its whole
+  family; then the comments family; and qualify browser queries against the
+  new monolith order. The [operations checkpoint](#operations-checkpoint)
+  records the remaining deployment and access work.
 
 ## Operations checkpoint
+
+### September 25 hosted qualification
+
+Three hosted runs qualified the mirror export, the verified no-change skip and
+the first complete incremental sweep since before September 10; their numbers
+are in the [efficiency note](comments-publication-efficiency-2026-09-25.md#hosted-qualification).
+ETL was re-enabled at 19:04 UTC. Changes made alongside:
+
+- **Listing.** A sweep now spends most of its time listing Mirrulations
+  (80.7 of the sweep's 107 ingestion minutes). SpicyDocs 0.33.1 (`4503f59`,
+  adopted at `1f201b9` and carried into 0.34.0) lists each agency as concurrent
+  contiguous docket ranges: four agencies took 133 s instead of 449 s with
+  identical keys. The 18:25 sweep now runs only when no scheduled sweep has
+  succeeded that day (`afe2274`). The 06:25 UTC sweep on September 26 is the
+  first on the new listing.
+- **Publication pointer.** Parallel dependent rollups share one compare-and-swap
+  on `publication.json`; a lost race to another family now rereads and merges
+  instead of failing the job (`a89476e`, logged by `4b345a5`, and R2's
+  `ConditionalRequestConflict` counts as a lost race since `123cf59`).
+- **Source evidence stored once.** Evidence blobs live at
+  `source-evidence/blobs/sha256/<hex>`, uploaded create-only with Content-MD5
+  and verified once (`123cf59`, [source evidence](../source-evidence.md)). A
+  probe confirmed R2 refuses a wrong Content-MD5 (`BadDigest`). The first real
+  uploads held 2,737 shared blobs (278.6 MiB) by 22:28 UTC, which let SAM and
+  bill-status retention turn on (`197e449`).
+- **Upstream.** `#198` is merged with the swap-insert retry: `a7237d9`, `37ce426`.
+- **Local data.** 57.5 GB of superseded comment Parquet builds were deleted from
+  `comments-efficient-publisher-2026-09-25/`, `comments-efficiency-review-2026-09-25/`,
+  `comments-local-export-2026-09-25/`, `full-comments/` and
+  `comment-text-repair-2026-09-23/`. Every receipt, digest record, log, script
+  and raw capture remains, so the directory citations above resolve; the
+  deleted builds can no longer be re-hashed locally.
+- **Validation audit.** A stack-wide duplicate-validation audit is in
+  `/Users/mikewolfd/Work/corpora/fork-execution-2026-09-21/dry-validation-audit-2026-09-25/`
+  (`findings.md`, `findings.json`). Its top open item is the per-publication
+  family re-download named in the Operations item above.
 
 ### September 25 publication efficiency — local implementation
 
@@ -218,8 +259,9 @@ public ID remains present, and all published objects match the local files by
 size and ETag. Full file digests and receipts are retained in
 `comments-local-export-2026-09-25/`.
 
-Scheduled ETL stays paused pending hosted export qualification. Local resource
-controls do not establish that the smaller CI runner can complete the export.
+Scheduled ETL stayed paused pending hosted export qualification, because local
+resource controls do not establish that the smaller CI runner can complete the
+export. It resumed at 19:04 UTC the same day ([hosted qualification](#september-25-hosted-qualification)).
 Feed summary, agency statistics, monthly volume, docket search, discovery,
 organization links and rulemaking refreshed successfully by 10:17 UTC, with
 the base versions unchanged. Monitoring and the read-only duplicate audit are

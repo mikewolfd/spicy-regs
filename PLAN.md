@@ -31,14 +31,17 @@ this section quoted a commit and a count; the commit that added the section
 made both wrong within the hour, which is the trap named at the bottom of this
 file arriving in the file itself.
 
-- **`origin/main` is Eugene's `1f02a7f`** (2026-09-02), restored by the
-  force-reset above. Every commit on it is Eugene's.
-- **`fork/main` is the squashed history: 20 commits above `1f02a7f`**,
-  rewritten 2026-09-18 from the 94-commit history that preceded it. The tree
-  is byte-identical; the old history is preserved as
-  `archive/pre-squash-2026-09-18` on the fork, and each squashed commit's body
-  lists the original commits it absorbed. Commits 1–7 are the seven PRs, one
-  each, in their original order; none depends on another.
+- **`origin/main` is Eugene's history**: `1f02a7f` (2026-09-02), restored by
+  the force-reset above, then his #198 (`243dd72`, 2026-09-25). Every commit on
+  it is Eugene's.
+- **`fork/main` contains all of `origin/main`.** #198 was merged at `a7237d9`
+  with every conflict resolved to the fork's journaled dedupe and ID-retention
+  guard (the merge message gives the reasons), and its in-run swap-insert
+  retry followed as `37ce426`. `git log fork/main..origin/main` is empty; the
+  fork's own work is `git log origin/main..fork/main`. Its base was the squashed
+  history rewritten on 2026-09-18, preserved as `archive/pre-squash-2026-09-18`;
+  commits 1–7 of that squash are the seven PRs, one each, in their original
+  order.
 
 ```bash
 git fetch origin fork --prune
@@ -182,6 +185,29 @@ the 2026-09-25 validation". What is actionable from this side:
   hand-roll the same stage → merge → replace → unlink sequence around
   `table_merge._duckdb_session`; one `merge_fresh_rows` in `table_merge.py`
   would serve both. Left until the transforms are not under concurrent edit.
+
+**Make regulatory publication scale with change, and admit the base tables
+by reference.** Hosted comments publication and the first complete incremental
+sweep qualified on 2026-09-25
+([hosted qualification](docs/research/comments-publication-efficiency-2026-09-25.md#hosted-qualification)),
+and evidence blobs are stored once (`123cf59`). In order:
+
+- **Publish `dockets` and `documents` as managed families.** DocSpec admits by
+  reference only a managed generation (its decision 0007, task C27), and these
+  two plus comments are most of the search corpus. Publish them once, at sweep
+  finalization in `_regulations-refresh`. Per-batch root uploads stay as
+  recovery checkpoints until the browser, MCP and rollup `_prime` readers are
+  verified against generation URLs.
+- **Store table members once.** `_publish_verified_generation` re-downloads
+  every member to admit it and copies unchanged members into each new prefix:
+  O(family bytes) per publication (6.64 GiB live; `court-opinion-clusters`
+  alone 3.7 GiB). Apply the evidence approach from `123cf59` to tables. This is
+  finding 1 of the stack-wide validation audit
+  (`~/Work/corpora/fork-execution-2026-09-21/dry-validation-audit-2026-09-25/findings.md`).
+- **Then the comments family**, which also needs DocSpec to admit several
+  members per table.
+- **Qualify browser queries** against the new monolith order, the one open gate
+  in the efficiency note.
 
 ### Accepted costs (decided 2026-09-22)
 

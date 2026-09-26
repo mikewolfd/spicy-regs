@@ -87,8 +87,10 @@ failed dispositions; the execution log records the dated work and receipts.
   [catch-up runbook](etl-catalog-seed.md). The local
   [publication efficiency refactor](research/comments-publication-efficiency-2026-09-25.md)
   reuses sweep membership, builds the mirror agency-first and skips verified
-  unchanged snapshots. Browser query-performance qualification for the new
-  monolith order remains open.
+  unchanged snapshots. Listing now dominates a sweep; SpicyDocs 0.33.1's
+  concurrent docket-range listing and the retry-only 18:25 sweep address it
+  (ledger operations checkpoint). Browser query-performance qualification for
+  the new monolith order remains open.
 - **T07:** the monolith, index and agency mirror are published and verified at
   the September 25 pins in the ledger. Local export recovered the hosted
   out-of-memory failure and retained every previously published ID. Earlier
@@ -296,8 +298,8 @@ is the evidence for valid emptiness; a generic nonempty-file check is insufficie
 
 | ID / status | Task and owner | Dependencies | Complete when |
 | --- | --- | --- | --- |
-| **T18 · Workflow repairs and recovery checks pass; full completion chain pending** | **Complete workflow, access and monitoring wiring.** SpicyRegs + operations. | T03 retention; per-source access checks; published parents for live checks. | Add FEC catalog and explicit retained-observation workflow inputs; retain pinned input manifests and source failures. Forward Zyte only to an actually selected adapter and validate it there. Catalog access, parent-completion barriers and publication-aware checks are implemented; qualify their full refresh and failure paths on the fork. Reconcile body/model and bounded-backfill controls with their source tasks. |
-| **T19 · Metadata and live schema checks pass; hosted MCP and wider data proof pending** | **Expose accurate catalog/MCP metadata for the fork.** SpicyRegs. | T02 output ledger and selected published families. | Keep dictionary descriptions aligned with active publication; verify stable identifiers, join meanings, coverage and evidence links. The withdrawn opinion bodies remain excluded. Point the tested consumer at the fork, not an upstream default. Exercise representative cross-source joins without treating inferred links or money flows as source facts. |
+| **T18 · Workflow repairs and the hosted regulatory refresh chain pass; failure paths and source access pending** | **Complete workflow, access and monitoring wiring.** SpicyRegs + operations. | T03 retention; per-source access checks; published parents for live checks. | Add FEC catalog and explicit retained-observation workflow inputs; retain pinned input manifests and source failures. Forward Zyte only to an actually selected adapter and validate it there. Catalog access, parent-completion barriers and publication-aware checks are implemented; qualify their full refresh and failure paths on the fork. Reconcile body/model and bounded-backfill controls with their source tasks. |
+| **T19 · Metadata and live schema checks pass; hosted MCP live (R7); wider data proof pending** | **Expose accurate catalog/MCP metadata for the fork.** SpicyRegs. | T02 output ledger and selected published families. | Keep dictionary descriptions aligned with active publication; verify stable identifiers, join meanings, coverage and evidence links. The withdrawn opinion bodies remain excluded. Point the tested consumer at the fork, not an upstream default. Exercise representative cross-source joins without treating inferred links or money flows as source facts. |
 | **T20 · Waiting on all intended outputs** | **Close the campaign and qualify refresh.** All owners. | T02 ledger and the completed family-specific tasks; T18/T19. | Every intended output has the completion evidence below or an explicit unresolved blocker. Verify public downloads and MCP reads, then repeat selected refresh/correction/failure scenarios without losing prior valid data. Keep the campaign open for missing intended outputs. Track catalog, custom domain, Worker and Pages deployment separately; storage/data success is not deployment success. |
 
 ### Immediate execution order
@@ -344,10 +346,11 @@ with their evidence in `spicy-docs/docs/research/parsing-survey-2026-09-23.md`:*
 - **Bill family (T09).** Bodies, models (needs `GEMINI_API_KEY`), historical
   backfills and the measured Congress.gov/BILLSTATUS freshness gap. The
   timestamp/URL repair is published; its source checks do not qualify new bodies.
-- **Operations and closure.** Pages and live schema verification pass. Qualify
-  the first resumed incremental sweep and representative
-  consumer reads. The configured Cloudflare MCP Worker was absent at the
-  September 24 Wrangler check; its deployment remains separate. Complete the
+- **Operations and closure.** Pages and live schema verification pass, the
+  first resumed incremental sweep is qualified, and the MCP Worker is live (R7
+  above). Representative consumer reads remain. Next in publication: `dockets`
+  and `documents` as managed families, table members stored once, then comments
+  (`PLAN.md`, "Make regulatory publication scale with change"). Complete the
   remaining T18/T19 source access and consumer work before T20.
 
 The original order, kept for the record:
