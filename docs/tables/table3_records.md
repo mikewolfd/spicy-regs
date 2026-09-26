@@ -19,18 +19,18 @@ Table III only grows: across the eight consecutive releases from 116-150 (2020-0
 
 | Column | Type | Description |
 | --- | --- | --- |
-| `act_key` | `VARCHAR` | The act key requested: a public law number, or a pre-1957 session-law chapter. |
-| `stated_key` | `VARCHAR` | The act key as the page itself states it, en dash and all. |
-| `seq` | `VARCHAR` | Zero-based position of this record on the page. |
-| `congress` | `VARCHAR` | The Congress the page states for the act. |
-| `act_date` | `VARCHAR` | The act's date as the page states it. |
-| `statutes_at_large_volume` | `VARCHAR` | The volume the page states for the act. |
-| `release_point` | `VARCHAR` | The currency the page states in its Table III Tool banner. |
+| `act_key` | `VARCHAR` | The act key: a public law number, or a pre-1957 session-law chapter. |
+| `stated_key` | `VARCHAR` | The act number as Table III states it: `119-4` in the bulk file, `119–4` (en dash) on a page. |
+| `seq` | `VARCHAR` | Zero-based position of this record in its act, in the source's own order. |
+| `congress` | `VARCHAR` | The Congress Table III states for the act: `119` in the bulk file, `119th Cong.` on a page. |
+| `act_date` | `VARCHAR` | The act's date as Table III states it: `2025-03-15` in the bulk file, `Mar. 15, 2025` on a page. |
+| `statutes_at_large_volume` | `VARCHAR` | The volume Table III states for the act, or in the bulk file for the fragment holding this record: `139` there, `139 Stat.` on a page. |
+| `release_point` | `VARCHAR` | The release point Table III states it is current through: the bulk member's name, or a page's banner. |
 | `act_section` | `VARCHAR` | The native act section; NULL when a meaningful source row leaves its label blank. |
-| `record_volume` | `VARCHAR` | The volume in this record's own statviewer link, where it carries one. |
+| `record_volume` | `VARCHAR` | The volume of this record's Statutes at Large page: its statviewer link's on a page, its fragment's in the bulk file; NULL where neither is stated. |
 | `record_page` | `VARCHAR` | The Statutes at Large page for this record. |
 | `usc_title` | `VARCHAR` | The Code title the section went to; NULL where it went nowhere. |
 | `usc_section` | `VARCHAR` | The Code section the section went to; NULL where it went nowhere. |
-| `status` | `VARCHAR` | The page's status column for the record (repealed, omitted, and the like). |
-| `observed_at` | `VARCHAR` | When the page was captured; the merge prefers the larger value. |
+| `status` | `VARCHAR` | Table III's status for the record (repealed, omitted, and the like). |
+| `observed_at` | `VARCHAR` | When the page or bulk file was captured; the merge prefers the larger value. |
 | `usc_section_key` | `VARCHAR` | usc_section as a join key: lower-cased, with every dash spelling an ASCII hyphen, as RefSpec's section oracle keys it. Fold the other side the same way (schemas.tables.usc_section_key): document_citations' usc_section rule 001 keeps the printed case and dashes. NULL where usc_section is, and on rows published before the column existed. |

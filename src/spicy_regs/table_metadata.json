@@ -5726,37 +5726,37 @@
       {
         "column_name": "act_key",
         "column_type": "VARCHAR",
-        "description": "The act key requested: a public law number, or a pre-1957 session-law chapter."
+        "description": "The act key: a public law number, or a pre-1957 session-law chapter."
       },
       {
         "column_name": "stated_key",
         "column_type": "VARCHAR",
-        "description": "The act key as the page itself states it, en dash and all."
+        "description": "The act number as Table III states it: `119-4` in the bulk file, `119–4` (en dash) on a page."
       },
       {
         "column_name": "seq",
         "column_type": "VARCHAR",
-        "description": "Zero-based position of this record on the page."
+        "description": "Zero-based position of this record in its act, in the source's own order."
       },
       {
         "column_name": "congress",
         "column_type": "VARCHAR",
-        "description": "The Congress the page states for the act."
+        "description": "The Congress Table III states for the act: `119` in the bulk file, `119th Cong.` on a page."
       },
       {
         "column_name": "act_date",
         "column_type": "VARCHAR",
-        "description": "The act's date as the page states it."
+        "description": "The act's date as Table III states it: `2025-03-15` in the bulk file, `Mar. 15, 2025` on a page."
       },
       {
         "column_name": "statutes_at_large_volume",
         "column_type": "VARCHAR",
-        "description": "The volume the page states for the act."
+        "description": "The volume Table III states for the act, or in the bulk file for the fragment holding this record: `139` there, `139 Stat.` on a page."
       },
       {
         "column_name": "release_point",
         "column_type": "VARCHAR",
-        "description": "The currency the page states in its Table III Tool banner."
+        "description": "The release point Table III states it is current through: the bulk member's name, or a page's banner."
       },
       {
         "column_name": "act_section",
@@ -5766,7 +5766,7 @@
       {
         "column_name": "record_volume",
         "column_type": "VARCHAR",
-        "description": "The volume in this record's own statviewer link, where it carries one."
+        "description": "The volume of this record's Statutes at Large page: its statviewer link's on a page, its fragment's in the bulk file; NULL where neither is stated."
       },
       {
         "column_name": "record_page",
@@ -5786,12 +5786,12 @@
       {
         "column_name": "status",
         "column_type": "VARCHAR",
-        "description": "The page's status column for the record (repealed, omitted, and the like)."
+        "description": "Table III's status for the record (repealed, omitted, and the like)."
       },
       {
         "column_name": "observed_at",
         "column_type": "VARCHAR",
-        "description": "When the page was captured; the merge prefers the larger value."
+        "description": "When the page or bulk file was captured; the merge prefers the larger value."
       },
       {
         "column_name": "usc_section_key",
@@ -5799,7 +5799,7 @@
         "description": "usc_section as a join key: lower-cased, with every dash spelling an ASCII hyphen, as RefSpec's section oracle keys it. Fold the other side the same way (schemas.tables.usc_section_key): document_citations' usc_section rule 001 keeps the printed case and dashes. NULL where usc_section is, and on rows published before the column existed."
       }
     ],
-    "grain": "One row per classification record on one act's OLRC Table III page.",
+    "grain": "One row per classification record of one act in OLRC's Table III, read from its page or the bulk file.",
     "identity_columns": [
       "act_key",
       "seq"
@@ -6797,7 +6797,7 @@
       {
         "column_name": "distinct_bills",
         "column_type": "VARCHAR",
-        "description": "How many distinct bill keys the print names, by the shared citation rules.  A floor, not a total: it counts what pages_read reached, and the MODS is the authoritative list.  A key carries `covered_congress`, because a print writes `H.R. 7806` and never a Congress beside it, unless the bill is printed under a Congress subheading (`116th Congress`), which it takes instead; where the report states none, these are the printed forms, unresolved."
+        "description": "How many distinct bill keys the print names, by the shared citation rules.  A floor, not a total: it counts what pages_read reached, and the MODS is the authoritative list.  A key carries `covered_congress`, because a print mostly writes `H.R. 7806` with no Congress beside it, unless the print states the bill's own: set right after it (`H.R. 6752, 115th Cong.`), else in a Congress subheading over it (`116th Congress`), which it takes instead; where the report states none, these are the printed forms, unresolved."
       },
       {
         "column_name": "distinct_bills_beyond_index",
@@ -6807,7 +6807,7 @@
       {
         "column_name": "bills_congress_mismatch",
         "column_type": "VARCHAR",
-        "description": "How many printed bills the MODS states under a *different* Congress than `covered_congress`: the same comparison run a second time on `(bill_type, number)` alone.  Nonzero on a Senate report is the publisher's index disagreeing with the report -- GovInfo stamps a Senate report's `<bill>` list with the filing Congress, so CRPT-118srpt99's H.R. 5376 is `118` in its MODS and `117` in its print, which reports on the 117th.  Nonzero on a House report counts the bills its Congress subheadings key in an earlier Congress, which the MODS stamps with the filing one, and any measure of another Congress the print names without one, whose row's `bill_id` is then wrong.  NULL where `covered_congress` is."
+        "description": "How many printed bills the MODS states under a *different* Congress than `covered_congress`: the same comparison run a second time on `(bill_type, number)` alone.  Nonzero on a Senate report is the publisher's index disagreeing with the report -- GovInfo stamps a Senate report's `<bill>` list with the filing Congress, so CRPT-118srpt99's H.R. 5376 is `118` in its MODS and `117` in its print, which reports on the 117th.  Nonzero on a House report counts the bills the print keys in an earlier Congress -- beside the bill or in a subheading over it -- which the MODS stamps with the filing one, and any measure of another Congress the print names without saying so, whose row's `bill_id` is then wrong.  NULL where `covered_congress` is."
       },
       {
         "column_name": "distinct_laws",
@@ -6882,7 +6882,7 @@
       {
         "column_name": "covered_congress",
         "column_type": "VARCHAR",
-        "description": "The Congress the report says it reports on, read from its own words -- the index title, else the print's cover, else its first five pages, and `covered_congress_source` says which -- and the Congress a printed bill key is built in outside a Congress subheading.  Beside `congress` rather than replacing it: the two differ on every Senate report, which is filed early in the following Congress (CRPT-118srpt99 reports on the 117th).  NULL where the report states no Congress, or where the first source stating one states several; its printed bills outside a subheading then stay unresolved rather than being stamped with a guess."
+        "description": "The Congress the report says it reports on, read from its own words -- the index title, else the print's cover, else its first five pages, and `covered_congress_source` says which -- and the Congress a printed bill key is built in where the print states no other for it.  Beside `congress` rather than replacing it: the two differ on every Senate report, which is filed early in the following Congress (CRPT-118srpt99 reports on the 117th).  NULL where the report states no Congress, or where the first source stating one states several; its printed bills the print states no Congress for then stay unresolved rather than being stamped with a guess."
       },
       {
         "column_name": "covered_congress_source",
@@ -7102,7 +7102,7 @@
       {
         "column_name": "bill_id",
         "column_type": "VARCHAR",
-        "description": "`congress_bills.bill_id` for the measure this action is attached to, in the citation rule's own spelling.  The Congress is the one the document says it covers (`house_activity_reports.covered_congress`), or the one a Congress subheading states for a bill printed under it, because a print writes `H.R. 1093` and never a Congress beside it; a bill the document states neither for has no `bill_id` and attaches no action.  `house_activity_reports.bills_congress_mismatch` counts the bills the MODS keys under another Congress."
+        "description": "`congress_bills.bill_id` for the measure this action is attached to, in the citation rule's own spelling.  The Congress is the one the document says it covers (`house_activity_reports.covered_congress`), unless the print states the bill's own -- set right after it (`H.R. 6752, 115th Cong.`) or in a Congress subheading over it -- because a print mostly writes `H.R. 1093` with no Congress beside it; a bill the document states no Congress for has no `bill_id` and attaches no action.  `house_activity_reports.bills_congress_mismatch` counts the bills the MODS keys under another Congress."
       },
       {
         "column_name": "print_phrasing",
