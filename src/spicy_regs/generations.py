@@ -7,6 +7,7 @@ It does not qualify source coverage or interpreted fields.
 
 from __future__ import annotations
 
+import functools
 import hashlib
 import re
 import shutil
@@ -44,6 +45,20 @@ def source_digest(root: Path, suffixes: tuple[str, ...] = (".py",)) -> str:
         digest.update(path.relative_to(root).as_posix().encode() + b"\0")
         digest.update(path.read_bytes())
     return digest.hexdigest()
+
+
+@functools.cache
+def spicy_docs_code() -> str:
+    """Digest of the installed SpicyDocs' code and data (.py, .json, .xsd): what reads, derives and shapes a source.
+
+    A re-read keyed on it, not on the release string, skips a version-only release (0.39.2
+    changed one README line against 0.39.1). The whole package is digested, not the modules a
+    caller imports, because a missed transitive module would leave stale rows silently; a
+    release touching only another source still re-reads, which costs requests, not correctness.
+    """
+    import spicy_docs
+
+    return source_digest(Path(spicy_docs.__file__).parent, (".py", ".json", ".xsd"))
 
 
 def implementation_id() -> str:

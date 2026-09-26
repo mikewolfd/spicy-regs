@@ -428,6 +428,61 @@ def test_committee_reports_skips_packages_it_holds(tmp_path, monkeypatch):
     assert "CRPT-119hrpt2" in acquirer.requested
 
 
+@pytest.mark.parametrize("change", ["release", "code"])
+def test_a_report_is_re_read_for_a_code_change_not_a_release_string(tmp_path, monkeypatch, change):
+    """The token held ``spicy-docs=<version>``, so every version-only release re-read all 141 reports.
+
+    708f2bf4 against 95810b26 differed in ``observed_at`` alone. A release string moving with the
+    code unchanged re-reads nothing; the code moving re-reads what it derives.
+    """
+    import importlib
+    import importlib.metadata
+
+    from spicy_regs import generations
+    from spicy_regs.transforms import build_committee_reports as module
+    from spicy_regs.transforms import committee_report_reads as reads
+    from spicy_regs.transforms.table_merge import prior_scratch_path
+
+    monkeypatch.delenv("COMMITTEE_REPORTS_SINCE", raising=False)
+    held = {"package_id": "CRPT-119hrpt1", "last_modified": "2026-09-10T12:00:00Z"}
+    seed(tmp_path, "committee_reports", [held])
+    checkpoint = held | {"outcome": "complete", "rule_version": reads.RULE_VERSIONS["CRPT"], "observed_at": "2026-09-20"}
+    pq.write_table(pa.Table.from_pylist([checkpoint]), prior_scratch_path(tmp_path, reads.READS_TABLE))
+    if change == "release":
+        real = importlib.metadata.version
+        monkeypatch.setattr(importlib.metadata, "version", lambda name: "9.9.9" if name == "spicy-docs" else real(name))
+    else:
+        monkeypatch.setattr(generations, "spicy_docs_code", lambda: "0" * 64)
+    importlib.reload(reads)
+    try:
+        assert (reads.RULE_VERSIONS["CRPT"] == checkpoint["rule_version"]) is (change == "release")
+
+        class Reader:
+            def packages(self, url, *, max_pages=40):
+                return iter(())
+
+        class Acquirer:
+            requested: list[str] = []
+
+            def acquire_parts(self, package_id, *, prefer=(), max_bytes=None):
+                self.requested.append(package_id)
+                raise LookupError("stub: no body in a hermetic test")
+
+            acquire = acquire_parts
+
+        class NoHearings:
+            def records(self, route, url, *, max_pages=1):
+                raise AssertionError("no hearing is pending")
+
+        acquirer = Acquirer()
+        module.build_committee_reports(tmp_path, reader=Reader(), acquirer=acquirer, hearings=NoHearings(),
+                                       download_prior=no_download)
+        assert acquirer.requested == ([] if change == "release" else ["CRPT-119hrpt1"])
+    finally:
+        monkeypatch.undo()
+        importlib.reload(reads)
+
+
 def test_amendments_carry_the_detail_routes_sponsor_and_amended_bill(tmp_path, monkeypatch):
     """The list route states neither; each amendment's detail record does."""
     from spicy_regs.transforms.build_amendments import build_amendments

@@ -7782,7 +7782,7 @@
       {
         "column_name": "rule_version",
         "column_type": "VARCHAR",
-        "description": "The package's CBO or hearing-link rule digest; a changed digest forces another read."
+        "description": "The rules a package was read under: for a report, the installed SpicyDocs code digest (not its release string), the CBO and section readers and this repository's part and body rules; for a hearing, the hearing-link rule and the body rule. A changed token forces another read."
       },
       {
         "column_name": "observed_at",

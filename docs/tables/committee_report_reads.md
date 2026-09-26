@@ -17,5 +17,5 @@ One row per package observed or inherited from this rollup's prior tables. Pendi
 | `package_id` | `VARCHAR` | GovInfo package ID and checkpoint identity. |
 | `last_modified` | `VARCHAR` | Publisher timestamp requested, replaced by the acquired summary timestamp on success. |
 | `outcome` | `VARCHAR` | pending, refused, detail_refused or complete; only complete permits an unchanged skip. |
-| `rule_version` | `VARCHAR` | The package's CBO or hearing-link rule digest; a changed digest forces another read. |
+| `rule_version` | `VARCHAR` | The rules a package was read under: for a report, the installed SpicyDocs code digest (not its release string), the CBO and section readers and this repository's part and body rules; for a hearing, the hearing-link rule and the body rule. A changed token forces another read. |
 | `observed_at` | `VARCHAR` | UTC time this rollup recorded the checkpoint. |

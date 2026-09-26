@@ -5,12 +5,13 @@ collection, and ``complete`` is the completeness test over a checkpoint row.
 """
 
 from pathlib import Path
-from importlib.metadata import version
 
 import pyarrow.parquet as pq
 from spicy_docs.interpretation.cbo_estimates import CBO_ESTIMATE_RULE_VERSION
 from spicy_docs.interpretation.hearing_bill_links import HEARING_BILL_LINK_RULE_VERSION
 from spicy_docs.schemas.committee_report_tables import REPORT_SECTION_READER_VERSION
+
+from spicy_regs.generations import spicy_docs_code
 
 READS_TABLE = "committee_report_reads"
 READ_COLUMNS = ("package_id", "last_modified", "outcome", "rule_version", "observed_at")
@@ -31,13 +32,17 @@ READ_COLUMNS = ("package_id", "last_modified", "outcome", "rule_version", "obser
 #: ``placeholder-pdf-002`` (spicy-docs 0.33.2) also knows the notice spelled
 #: without "IN", which CRPT-119hrpt649 and CHRG-119jhrg60491 print, so every
 #: body read under 001 is read again.
+#: ``code`` is the installed SpicyDocs' code and data (:func:`spicy_docs_code`),
+#: which derives a report's text and sections; it replaced the release string,
+#: under which every one of the stack's version-only releases re-read all 141
+#: reports for rows differing only in ``observed_at`` (708f2bf4 against 95810b26).
 #: CHRG also moves with ``HEARING_BILL_LINK_RULE_VERSION`` (the date correction
 #: moved it). Admitting the two historical CHRG volumes to the package grammar
 #: needs no token: no checkpoint names either, so there is nothing to re-read,
 #: and only discovery can select them.
 RULE_VERSIONS = {
     "CRPT": (
-        f"spicy-docs={version('spicy-docs')};cbo={CBO_ESTIMATE_RULE_VERSION};sections={REPORT_SECTION_READER_VERSION}"
+        f"code={spicy_docs_code()[:12]};cbo={CBO_ESTIMATE_RULE_VERSION};sections={REPORT_SECTION_READER_VERSION}"
         ";parts=per-part-001;body=placeholder-pdf-002"
     ),
     "CHRG": f"{HEARING_BILL_LINK_RULE_VERSION};body=placeholder-pdf-002",
