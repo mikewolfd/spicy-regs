@@ -119,9 +119,10 @@ failed dispositions; the execution log records the dated work and receipts.
   scopes; current USAspending and court dockets remain partial. CRS advanced
   after the audit freeze, so its newer generation is separately pending.
   Still required: raw-response retention in
-  the ordinary scheduled readers for replayable audits, FCC crowded-single-day
-  recovery, identity-set pooling (plan B6, released in SpicyDocs 0.31.0 and
-  adopted at the re-vendor), court parties (decision 9) and
+  the ordinary scheduled readers for replayable audits, identity-set pooling
+  (plan B6, released in SpicyDocs 0.31.0 and adopted at the re-vendor; FCC
+  crowded-single-day recovery released in 0.34.0 as timestamp partitioning
+  and adopted at `5a16d3a`, see the ledger), court parties (decision 9) and
   catch-up, a scope decision on the APA selection's non-civil dockets, and wider
   populations. See the ledger.
 - **T13:** clusters, citation tables and the text-free opinion index are

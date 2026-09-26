@@ -150,6 +150,39 @@ present on every month probed from 2000 to 2009. The field goes in the source's
 field list and the published schema; the backfill is a full-range run of the
 existing rollup, which is a publish and therefore Mike's.
 
+**Agency scrapers: consume what spicy-docs 0.34.0 now provides, and carry its
+open items.** 0.34.0 (fork and origin `main` at `3938514`, adopted here at
+`5a16d3a`, 2026-09-25) adds FCC filing walks that this host now delegates to
+(`build_fcc_ecfs.py` hands each selection to `FccEcfsReader.iter_filings` and
+streams the merge through `write_rows`), plus SEC, FERC, CFTC and USITC EDIS
+readers that nothing here consumes yet. Seven independent reviews validated
+that work, their agreed findings were fixed, and three bounded live probes
+requalified the changed paths; the source-side ledger is spicy-docs
+`docs/research/agency-scraper-completion-2026-09-24.md`, "Open items after
+the 2026-09-25 validation". What is actionable from this side:
+
+- **Adopt the four new sources only through their capture-level APIs.** Each
+  reader's resume is a full re-walk and none has durable checkpoints or a
+  `publish` profile in spicy-docs; scheduling, watermarks and recovery stay
+  here, as they do for FCC. Do not build a second persistence layer for them.
+- **EDIS bulk ZIPs need a session, not the token.** The job create/status/ZIP
+  routes work over a signed-in Login.gov session with a CSRF header;
+  `EDIS_TOKEN` alone redirects to login. A client for them does not exist, and
+  its session values must be scrubbed per component before any receipt.
+- **FCC proceedings still materialize the whole walk** (`build_fcc_proceedings`,
+  by design, for grouping by docket) and `MAX_RESULT_WINDOW` is restated here
+  because importing it at module load would break the optional-dependency
+  contract (`tests/test_reference_source_imports.py`). Re-measure the
+  proceedings walk before changing either.
+- **The filings table is rewritten on every run** (`merge_local_prior`,
+  O(prior + fresh)), the same idiom as every sibling transform; as FCC
+  backfills grow toward the archive, a daily run scales with the archive, not
+  the delta. Partition by received year when that is measured to matter.
+- **Deferred refactor.** `_merge_incremental` here and `build_fec_committees`
+  hand-roll the same stage → merge → replace → unlink sequence around
+  `table_merge._duckdb_session`; one `merge_fresh_rows` in `table_merge.py`
+  would serve both. Left until the transforms are not under concurrent edit.
+
 ### Accepted costs (decided 2026-09-22)
 
 **The rollup repeated passes stay.** `build_proceedings` reads `documents`
