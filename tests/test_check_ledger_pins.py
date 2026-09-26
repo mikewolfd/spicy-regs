@@ -146,7 +146,6 @@ class _Head:
 
 
 def test_exit_code_fails_only_on_drift_not_live_or_malformed(monkeypatch, tmp_path, capsys):
-    monkeypatch.setattr(pins, "load_dotenv", lambda: None)
     monkeypatch.setattr(
         pins, "fetch_live", lambda url, text: (pins.rollup_pins(INDEX), pins.snapshot_pins(POINTER, MANIFEST), OBJECTS)
     )
@@ -157,3 +156,27 @@ def test_exit_code_fails_only_on_drift_not_live_or_malformed(monkeypatch, tmp_pa
     clean = [line for line in LEDGER.splitlines() if "amendments" in line or "withdrawn" in line]
     ledger.write_text("\n".join(clean), encoding="utf-8")
     assert pins.main(["--ledger", str(ledger), "--index-url", "https://data.example"]) == 0
+
+
+def test_the_default_publisher_is_the_one_the_ledger_states_not_the_environment(monkeypatch, tmp_path, capsys):
+    """An unset or foreign R2_PUBLIC_URL must not decide which bucket a ledger is checked against."""
+    monkeypatch.setenv("R2_PUBLIC_URL", "https://another-bucket.example")
+    seen = []
+    monkeypatch.setattr(pins, "fetch_live", lambda url, text: seen.append(url) or ({}, {}, {}))
+    ledger = tmp_path / "ledger.md"
+    ledger.write_text("Public data destination: `https://pub-fork.example/`. Local candidates are not publications.\n")
+    assert pins.main(["--ledger", str(ledger)]) == 0
+    assert seen == ["https://pub-fork.example"]
+    assert "(the ledger's stated destination)" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("text", ["no destination here\n",
+                                  "Public data destination: `https://a.example`\nPublic data destination: `https://b.example`\n"])
+def test_a_ledger_without_exactly_one_destination_refuses_unless_one_is_given(monkeypatch, tmp_path, capsys, text):
+    monkeypatch.setattr(pins, "fetch_live", lambda url, text: ({}, {}, {}))
+    ledger = tmp_path / "ledger.md"
+    ledger.write_text(text)
+    assert pins.main(["--ledger", str(ledger)]) == 1
+    assert "pass --index-url" in capsys.readouterr().err
+    assert pins.main(["--ledger", str(ledger), "--index-url", "https://explicit.example"]) == 0
+    assert "an explicit --index-url" in capsys.readouterr().out

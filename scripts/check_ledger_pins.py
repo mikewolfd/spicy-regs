@@ -10,6 +10,11 @@ rulemaking generation behind ``materialized/rulemaking/latest.json``. A base
 object outside the index (dockets, documents, comments and its index) records
 ``verified at table digest `<8 hex>…` (<date>; ETag `<8 hex>…`)``, and its ETag is
 compared with a HEAD of the public object. Read-only.
+
+The publisher checked is the one the ledger names in its ``Public data
+destination`` line, not whatever the environment happens to point at: a clean
+run against another bucket would prove nothing about this ledger. An explicit
+``--index-url`` still overrides it, and the report says so.
 """
 
 from __future__ import annotations
@@ -22,9 +27,6 @@ from collections.abc import Iterator, Mapping, Sequence
 from pathlib import Path
 
 import httpx
-from dotenv import load_dotenv
-
-from spicy_regs.public_url import resolve_r2_base_url
 from spicy_regs.sources import publication
 
 LEDGER = Path(__file__).resolve().parents[1] / "docs" / "research" / "fork-output-ledger-2026-09-21.md"
@@ -33,9 +35,18 @@ FAILING = ("DRIFT", "NOT-LIVE", "MALFORMED")
 _ROW = re.compile(r"\| T\d")
 _CODE = re.compile(r"`([^`]+)`")
 _PIN = re.compile(r"qualified at `((?:snapshot_)?[0-9a-f]{8})…` \((\d{4}-\d{2}-\d{2})\)")
+_DESTINATION = re.compile(r"^Public data destination: `(https://[^`]+)`", re.M)
 _BASE = re.compile(r"verified at table digest `[0-9a-f]{8}…` \((\d{4}-\d{2}-\d{2}); ETag `([0-9a-f]{8})…`\)")
 
 Live = Mapping[str, tuple[str, int]]  # table -> (pin, rows), or object -> (ETag prefix, bytes)
+
+
+def ledger_destination(text: str) -> str:
+    """The public base URL the ledger states it describes; exactly one is required."""
+    found = _DESTINATION.findall(text)
+    if len(found) != 1:
+        raise ValueError(f"the ledger states {len(found)} public data destinations, not 1; pass --index-url")
+    return found[0].rstrip("/")
 
 
 def ledger_rows(text: str) -> Iterator[tuple[str, list[str], str]]:
@@ -148,19 +159,20 @@ def fetch_live(base_url: str, ledger: str) -> tuple[dict, dict, dict]:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    load_dotenv()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--ledger", type=Path, default=LEDGER)
-    parser.add_argument("--index-url", help="Public base URL holding publication.json (default: R2_PUBLIC_URL)")
+    parser.add_argument("--index-url", help="Public base URL holding publication.json (default: the ledger's destination)")
     args = parser.parse_args(argv)
     try:
-        base_url = resolve_r2_base_url(args.index_url)
         ledger = args.ledger.read_text(encoding="utf-8")
+        stated = ledger_destination(ledger) if args.index_url is None else None
+        base_url = (args.index_url or stated or "").rstrip("/")
         results = check(ledger, *fetch_live(base_url, ledger))
     except (OSError, ValueError, KeyError, RuntimeError, httpx.HTTPError) as exc:
         print(f"Ledger pins could not be checked: {exc}", file=sys.stderr)
         return 1
-    print(f"Ledger {args.ledger} against {base_url}")
+    source = "the ledger's stated destination" if stated else "an explicit --index-url, not the ledger's destination"
+    print(f"Ledger {args.ledger} against {base_url} ({source})")
     for status, detail in results:
         print(f"{status:<9} {detail}")
     counts = Counter(status for status, _ in results)
