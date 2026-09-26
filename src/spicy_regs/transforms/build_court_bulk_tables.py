@@ -18,6 +18,12 @@ decoder. A table replaces its predecessor only after the whole export has been r
 
 An export comes from ``COURTLISTENER_BULK_DIR`` when that directory holds it under the publisher's
 filename at the listed size, and is otherwise downloaded, bound to the listed ETag and size.
+
+A table that names clusters waits for them: the publisher cuts each export at a different hour of
+the export day, clusters first, so its citations and opinions name clusters created after the
+cluster export. Such a table is refused while it names a cluster id above the published
+``court_opinion_clusters``, whose search catch-up adds every cluster created since its export; run
+that rollup first.
 """
 
 from __future__ import annotations
@@ -42,6 +48,8 @@ if TYPE_CHECKING:
 RETAINED_DIR_ENV = "COURTLISTENER_BULK_DIR"
 #: Rows per Parquet row group.
 BATCH_ROWS = 100_000
+#: The published table whose ``cluster_id`` a cluster-naming export must not run ahead of.
+CLUSTERS_TABLE = "court_opinion_clusters.parquet"
 
 
 @dataclass(frozen=True)
@@ -59,6 +67,10 @@ class BulkTable:
     @property
     def schema(self) -> pa.Schema:
         return pa.schema([(column, pa.string()) for column in self.columns])
+
+    @property
+    def names_clusters(self) -> bool:
+        return "cluster_id" in self.columns
 
 
 CITATIONS = BulkTable(
@@ -127,6 +139,30 @@ def latest_common_dump_date(objects: Sequence[BulkObject], datasets: Sequence[st
     return max(common)
 
 
+def _highest_cluster_id(parquet: str) -> int | None:
+    import duckdb
+
+    with duckdb.connect() as con:
+        if parquet.startswith("https://"):
+            con.execute("INSTALL httpfs; LOAD httpfs")
+        path = parquet.replace("'", "''")
+        row = con.execute(f"SELECT max(TRY_CAST(cluster_id AS BIGINT)) FROM read_parquet('{path}')").fetchone()
+        return None if row is None else row[0]
+
+
+def published_cluster_ceiling() -> int | None:
+    """The highest cluster id in the published ``court_opinion_clusters``, or ``None`` when none is published.
+
+    Reads that one column over the public URL (about 55 MB for ten million clusters).
+    """
+    from spicy_regs.public_url import resolve_r2_base_url
+    from spicy_regs.sources.publication import load_index, table_location
+
+    base = resolve_r2_base_url()
+    location, descriptor = table_location(load_index(base), CLUSTERS_TABLE)
+    return None if descriptor is None else _highest_cluster_id(f"{base}/{location}")
+
+
 def _bucket_url(url: str) -> str:
     from spicy_docs.sources.courtlistener.listing import BULK_BASE_URL
 
@@ -169,8 +205,13 @@ def export_file(published: BulkObject, work_dir: Path) -> tuple[Path, bool]:
     return store / receipt["blob_path"], True
 
 
-def build_court_bulk_table(table: BulkTable, output_dir: Path, *, local_file: Path, dump_date: date) -> Path:
-    """Write ``table.output`` from one whole export; the previous file survives any failure."""
+def build_court_bulk_table(
+    table: BulkTable, output_dir: Path, *, local_file: Path, dump_date: date, cluster_ceiling: int | None = None
+) -> Path:
+    """Write ``table.output`` from one whole export; the previous file survives any failure.
+
+    With ``cluster_ceiling``, a table that names clusters is refused when any is above it.
+    """
     from spicy_docs.sources.courtlistener.local import CourtListenerLocalDump
 
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -196,6 +237,13 @@ def build_court_bulk_table(table: BulkTable, output_dir: Path, *, local_file: Pa
                 flush(writer)
         if not dump.completed:
             raise RuntimeError(f"CourtListener bulk: {local_file.name} was not read to its end")
+        if cluster_ceiling is not None and table.names_clusters:
+            newest = _highest_cluster_id(str(staging))
+            if newest is not None and newest > cluster_ceiling:
+                raise RuntimeError(
+                    f"{table.output}: the {edition} export names cluster {newest:,}, above the published "
+                    f"{CLUSTERS_TABLE} (to {cluster_ceiling:,}); run run-rollup-court-opinion-clusters first"
+                )
     except BaseException:
         staging.unlink(missing_ok=True)
         raise
@@ -219,6 +267,11 @@ def build_court_bulk_tables(
 
     objects = list_bulk_dumps()
     edition = dump_date or latest_common_dump_date(objects, [table.dataset for table in tables])
+    ceiling = None
+    if any(table.names_clusters for table in tables):
+        ceiling = published_cluster_ceiling()
+        if ceiling is None:
+            raise RuntimeError(f"CourtListener bulk: {CLUSTERS_TABLE} is not published; publish it before its children")
     built = []
     for table in tables:
         published = find_dump(objects, table.dataset, edition)
@@ -226,7 +279,11 @@ def build_court_bulk_tables(
             raise RuntimeError(f"CourtListener bulk: no {table.dataset} export for {edition}")
         local_file, downloaded = export_file(published, output_dir)
         try:
-            built.append(build_court_bulk_table(table, output_dir, local_file=local_file, dump_date=edition))
+            built.append(
+                build_court_bulk_table(
+                    table, output_dir, local_file=local_file, dump_date=edition, cluster_ceiling=ceiling
+                )
+            )
         finally:
             if downloaded:
                 local_file.unlink(missing_ok=True)

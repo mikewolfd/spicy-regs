@@ -1,12 +1,14 @@
 name: Rollup — court_citations, court_citation_map, court_parentheticals
 on:
   schedule:
-    # 04:50 UTC on the 2nd and 9th of January, April, July and October. The
+    # 04:50 UTC on the 9th and 16th of January, April, July and October. The
     # publisher cuts its bulk export on the last day of each quarter and says it
-    # finishes by the next day; each export is a full snapshot, so the 2nd picks
-    # it up and the 9th retries a late one. Any other week would republish the
-    # same edition.
-    - cron: '50 4 2,9 1,4,7,10 *'
+    # finishes by the next day; each export is a full snapshot. Its citations
+    # name clusters created after its cluster export, so this rollup refuses
+    # until court_opinion_clusters (Mondays) has caught up past them: the 9th
+    # follows one Monday of the new quarter and the 16th two. Any other week
+    # would republish the same edition.
+    - cron: '50 4 9,16 1,4,7,10 *'
   workflow_dispatch:
     inputs:
       skip_upload:

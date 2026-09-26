@@ -174,10 +174,43 @@ def test_downloaded_exports_are_deleted_and_retained_ones_kept(tmp_path, monkeyp
 
     monkeypatch.setattr(bulk, "list_bulk_dumps", lambda: [_listed(path, name) for name, path in files.items()])
     monkeypatch.setattr(module, "export_file", lambda obj, work: (files[obj.dataset], obj.dataset == "citations"))
+    monkeypatch.setattr(module, "published_cluster_ceiling", lambda: 2)
     built = build_court_bulk_tables((CITATIONS, CITATION_MAP), tmp_path / "out")
     assert [path.name for path in built] == [CITATIONS.output, CITATION_MAP.output]
     assert not files["citations"].exists(), "a downloaded export is removed once decoded"
     assert files["citation-map"].exists(), "a retained export is never removed"
+
+
+_CITATIONS_OF_CLUSTER_9 = (
+    b'id,volume,reporter,page,type,cluster_id,date_created,date_modified\n"1","1","U.S.","1","1","9",,\n'
+)
+
+
+def test_a_table_naming_a_cluster_newer_than_the_published_clusters_waits_for_them(tmp_path):
+    """The publisher cuts citations hours after clusters; publishing them first would orphan the newest."""
+    source = _export(tmp_path / "citations.csv.bz2", _CITATIONS_OF_CLUSTER_9)
+    out_dir = tmp_path / "out"
+    out_dir.mkdir()
+    previous = out_dir / CITATIONS.output
+    previous.write_bytes(b"previous generation")
+    with pytest.raises(RuntimeError, match="names cluster 9, above the published court_opinion_clusters.parquet"):
+        build_court_bulk_table(CITATIONS, out_dir, local_file=source, dump_date=EDITION, cluster_ceiling=8)
+    assert previous.read_bytes() == b"previous generation"
+    assert not list(out_dir.glob(".*partial"))
+    out = build_court_bulk_table(CITATIONS, out_dir, local_file=source, dump_date=EDITION, cluster_ceiling=9)
+    assert pq.read_table(out, columns=["cluster_id"]).to_pylist() == [{"cluster_id": "9"}]
+    assert not CITATION_MAP.names_clusters and not PARENTHETICALS.names_clusters and OPINIONS.names_clusters
+
+
+def test_tables_naming_clusters_are_refused_before_any_download_when_none_are_published(tmp_path, monkeypatch):
+    import spicy_docs.sources.courtlistener.bulk as bulk
+
+    source = _export(tmp_path / "citations.csv.bz2", _CITATIONS_OF_CLUSTER_9)
+    monkeypatch.setattr(bulk, "list_bulk_dumps", lambda: [_listed(source, "citations")])
+    monkeypatch.setattr(module, "export_file", lambda *a: pytest.fail("nothing is downloaded before the check"))
+    monkeypatch.setattr(module, "published_cluster_ceiling", lambda: None)
+    with pytest.raises(RuntimeError, match="court_opinion_clusters.parquet is not published"):
+        build_court_bulk_tables((CITATIONS,), tmp_path / "out")
 
 
 @pytest.mark.parametrize("table", [CITATIONS, CITATION_MAP, PARENTHETICALS, OPINIONS], ids=lambda t: t.dataset)
