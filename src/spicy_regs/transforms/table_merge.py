@@ -33,6 +33,7 @@ def merge_local_prior(
     out_file: Path,
     row_group_size: int = 50_000,
     kv_metadata: Mapping[str, str] | None = None,
+    retire: str | None = None,
 ) -> None:
     """Merge the fresh ``new_file`` over a local prior on one identity column.
 
@@ -44,6 +45,11 @@ def merge_local_prior(
     hand-rolled copy per rollup. A composite ``identity`` names its columns in
     order; only the first must be non-NULL (a SAM registration's EFT indicator
     is usually NULL, and NULLs partition together).
+
+    ``retire`` is a SQL predicate over prior rows, for a caller whose fresh rows
+    are the complete population of a slice: a prior row it holds TRUE for is
+    dropped before the union, so what the slice no longer contains is retired.
+    A row it holds NULL for is kept.
     """
     keys = (identity,) if isinstance(identity, str) else tuple(identity)
     cols = ", ".join(f'"{c}"' for c in columns)
@@ -52,8 +58,8 @@ def merge_local_prior(
         prior_path = str(prior_file).replace("'", "''")
         union = (
             f"SELECT {cols}, 0 AS _src FROM read_parquet('{prior_path}') "
-            f"UNION ALL BY NAME "
-            f"SELECT {cols}, 1 AS _src FROM read_parquet('{new_path}')"
+            + (f"WHERE ({retire}) IS NOT TRUE " if retire else "")
+            + f"UNION ALL BY NAME SELECT {cols}, 1 AS _src FROM read_parquet('{new_path}')"
         )
     else:
         union = f"SELECT {cols}, 1 AS _src FROM read_parquet('{new_path}')"

@@ -20,6 +20,13 @@ adaptive date-window subdivision (see :mod:`spicy_docs.sources.sam`).
 Both are bounded by ``max_records`` and the ``[since_year, until_year]`` range,
 so a scheduled run advances coverage and the merge accretes it across runs.
 
+**Retirement.** An unbounded extract year is SAM's complete active set for that
+``registrationDate`` year, so it replaces that year's rows: a registration the
+year no longer holds (expired, or no longer active) is retired and journaled.
+Before this, the merge only accreted; on 2026-09-26 the table held 62 more 2002
+and 18 more 2003 registrations than SAM then counted active. A bounded run
+(``max_records``) or the partition walk retires nothing.
+
 Every column comes from the ``/entities`` payload: no per-entity detail
 fetches.
 """
@@ -27,6 +34,7 @@ fetches.
 from __future__ import annotations
 
 import time
+from datetime import date
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -93,6 +101,14 @@ def _resolve_sam_api_key() -> str:
     raise SamExtractError("SAM entities require a SAM-authorized API key; set SAM_API_KEY")
 
 
+def _extract_years(since_year: int | None, until_year: int | None, year_windows: bool) -> list[int | None]:
+    """The ``registrationDate`` years one extract run requests, oldest first; ``[None]`` is the whole registry."""
+    if not year_windows:
+        return [None]
+    first = since_year if since_year is not None else MIN_REGISTRATION_YEAR
+    return list(range(first, (until_year if until_year is not None else date.today().year) + 1))
+
+
 def _iter_sam_entities(
     *,
     evidence: CaptureEvidence | None = None,
@@ -112,7 +128,6 @@ def _iter_sam_entities(
     owner's.
     """
     from collections.abc import Iterator
-    from datetime import date
 
     from spicy_docs.reading.paged_json import PagedJsonBudget
     from typing import cast
@@ -150,12 +165,7 @@ def _iter_sam_entities(
             yield record
 
     if mode == "extract":
-        years: list[int | None] = [None] if not year_windows else list(
-            range(
-                since_year if since_year is not None else MIN_REGISTRATION_YEAR,
-                (until_year if until_year is not None else date.today().year) + 1,
-            )
-        )
+        years = _extract_years(since_year, until_year, year_windows)
         deadline = time.monotonic() + EXTRACT_MAX_WAIT
         for year in years:
             if not budget_left():
@@ -334,6 +344,16 @@ def build_sam_entities(
     con.execute("SET threads=2")
     con.execute(f"SET temp_directory='{spill_dir}'")
 
+    # An unbounded extract year is SAM's whole active set for that year: it replaces the year's rows.
+    retire = None
+    if mode == "extract" and max_records is None:
+        years = _extract_years(since_year, until_year, year_windows)
+        retire = "TRUE" if years == [None] else (
+            "substr(registration_date, 1, 4) IN (" + ", ".join(f"'{year}'" for year in years) + ")"
+        )
+        if have_prior:
+            _journal_retired(con, prior_file, new_file, retire, years, evidence)
+
     merge_local_prior(
         con,
         columns=COLUMNS,
@@ -342,6 +362,7 @@ def build_sam_entities(
         prior_file=prior_file if have_prior else None,
         new_file=new_file,
         out_file=out_file,
+        retire=retire,
     )
     con.close()
 
@@ -352,3 +373,25 @@ def build_sam_entities(
     total = pq.ParquetFile(out_file).metadata.num_rows
     logger.info("SAM entities: {:,} rows", total)
     return out_file
+
+
+def _journal_retired(con, prior_file: Path, new_file: Path, retire: str, years: list[int | None],
+                     evidence: CaptureEvidence | None) -> None:
+    """Log, and journal when evidence is on, each prior registration the completed years no longer hold."""
+    prior, new = (str(path).replace("'", "''") for path in (prior_file, new_file))
+    retired = con.execute(
+        f"""
+        SELECT uei, entity_eft_indicator, registration_date FROM read_parquet('{prior}') p
+        WHERE ({retire}) AND NOT EXISTS (
+            SELECT 1 FROM read_parquet('{new}') n
+            WHERE n.uei = p.uei AND n.entity_eft_indicator IS NOT DISTINCT FROM p.entity_eft_indicator
+        )
+        ORDER BY registration_date, uei, entity_eft_indicator
+        """
+    ).fetchall()
+    logger.info("SAM entities: retiring {:,} registrations the completed years no longer hold", len(retired))
+    if evidence is not None and retired:
+        evidence.event(
+            "sam-registrations-retired", stage="sam", years=years, count=len(retired),
+            registrations=[{"uei": u, "eft_indicator": e, "registration_date": d} for u, e, d in retired],
+        )

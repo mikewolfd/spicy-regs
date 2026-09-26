@@ -103,6 +103,58 @@ def test_the_merge_keeps_every_registration_of_one_entity(tmp_path):
     )
 
 
+
+def _registration(uei: str, registered: str | None) -> dict:
+    return {"entityRegistration": {**_RAW_ENTITY["entityRegistration"], "ueiSAM": uei, "entityEFTIndicator": None,
+                                   "registrationDate": registered}}
+
+
+def _published(tmp_path, *registrations) -> None:
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    table = pa.Table.from_pylist([_shape(r) for r in registrations], schema=pa.schema([(c, pa.string()) for c in COLUMNS]))
+    pq.write_table(table, tmp_path / "_sam_prior.parquet")
+
+
+@pytest.mark.parametrize("max_records", [None, 5])
+def test_a_completed_extract_year_retires_what_it_no_longer_holds(tmp_path, monkeypatch, max_records):
+    """2002 no longer holds B (expired); 2010 was not re-read and a dateless row is outside every year."""
+    import json
+
+    import pyarrow.parquet as pq
+    from spicy_docs.sources import sam_extract
+
+    from spicy_regs.source_evidence import CaptureEvidence
+    from spicy_regs.transforms.build_sam_entities import build_sam_entities
+
+    class Extract:
+        superseded: list[dict] = []
+
+        def __init__(self, **kwargs):
+            assert kwargs["year"] == 2002
+
+        def records(self):
+            yield _registration("A", "2002-03-04")
+
+    monkeypatch.setattr(sam_extract, "SamBulkExtract", Extract)
+    monkeypatch.setenv("SAM_API_KEY", "k")
+    _published(tmp_path, _registration("A", "2002-03-04"), _registration("B", "2002-05-06"),
+               _registration("C", "2010-01-02"), _registration("D", None))
+    evidence = CaptureEvidence(tmp_path / "audit", "sam-entities")
+    out = build_sam_entities(tmp_path, evidence=evidence, since_year=2002, until_year=2002, max_records=max_records)
+
+    held = sorted(row["uei"] for row in pq.read_table(out).to_pylist())
+    journal = [json.loads(line) for line in (evidence.artifact_dir / "journal.jsonl").read_text().splitlines()]
+    retired = [event for event in journal if event["event"] == "sam-registrations-retired"]
+    if max_records is None:
+        assert held == ["A", "C", "D"]
+        [event] = retired
+        assert (event["years"], event["count"]) == ([2002], 1)
+        assert event["registrations"] == [{"uei": "B", "eft_indicator": None, "registration_date": "2002-05-06"}]
+    else:  # a bounded run may have stopped inside the year, so it retires nothing
+        assert held == ["A", "B", "C", "D"] and retired == []
+
 def test_shape_maps_nested_fields():
     row = _shape(_RAW_ENTITY)
     assert row["uei"] == "TXBDHEGXWKD6"
