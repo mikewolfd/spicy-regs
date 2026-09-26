@@ -15,7 +15,7 @@ One row per printing of a bill, per source that supplied it. The full text is de
 | Column | Type | Description |
 | --- | --- | --- |
 | `bill_id` | `VARCHAR` | The bill this printing belongs to. |
-| `version_code` | `VARCHAR` | The sealed version-code slug BillTrax stores and this repository never renames. |
+| `version_code` | `VARCHAR` | The printing's code: its stage's sealed slug, or a numbered reprint's own package suffix (eas2). |
 | `source` | `VARCHAR` | Which acquisition path supplied this row (govinfo, congress, govinfo-pdf, upload). |
 | `label` | `VARCHAR` | The publisher's version-type string verbatim, which is not unique per printing. |
 | `version_date` | `VARCHAR` | The publisher's date for this printing; the merge prefers the larger value. |

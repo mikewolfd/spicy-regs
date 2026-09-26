@@ -3178,7 +3178,7 @@
       {
         "column_name": "version_code",
         "column_type": "VARCHAR",
-        "description": "The sealed version-code slug BillTrax stores and this repository never renames."
+        "description": "The printing's code: its stage's sealed slug, or a numbered reprint's own package suffix (eas2)."
       },
       {
         "column_name": "source",
