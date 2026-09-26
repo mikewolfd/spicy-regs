@@ -37,6 +37,7 @@ from spicy_regs.pipelines.rollups.senate_expenditures import SenateExpendituresR
 
 # A8/A9 (laws and rosters)
 from spicy_regs.pipelines.rollups.committee_rosters import CommitteeRostersRollup
+from spicy_regs.pipelines.rollups.federal_register import FederalRegisterRollup
 from spicy_regs.pipelines.rollups.laws import LawsRollup
 from spicy_regs.transforms.build_bill_family import (
     ARCHIVE_COLUMNS,
@@ -85,6 +86,8 @@ HOSTED_ROLLUPS = (
     # acquisition pass.
     PrintCitationsRollup,
     SenateExpendituresRollup,
+    # SpicyDocs 0.42.0's federal_register contract.
+    FederalRegisterRollup,
 )
 
 

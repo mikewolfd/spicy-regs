@@ -48,14 +48,14 @@ OVERLAP_DAYS = 7
 
 
 def published_columns() -> tuple[str, ...]:
-    """The published width: SpicyDocs' projection plus the derived ``rin``.
+    """The published width: SpicyDocs' ``federal_register`` contract, the projection plus the derived ``rin``.
 
     A function, not a constant, because base installs import this module
     without the source-readers extra that carries SpicyDocs.
     """
-    from spicy_docs.schemas.federal_register import FEDERAL_REGISTER_COLUMNS
+    from spicy_docs.schemas.federal_register import FEDERAL_REGISTER
 
-    return (*FEDERAL_REGISTER_COLUMNS, "rin")
+    return tuple(FEDERAL_REGISTER.columns)
 
 #: ``rin`` as a projection of the array, for every row of the merged table.
 #: ``[]`` and NULL both give NULL: a join key is present or it is not.

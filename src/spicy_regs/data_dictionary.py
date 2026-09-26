@@ -125,6 +125,8 @@ CONTRACT_TABLES: tuple[str, ...] = (
     "table3_records",
     "committees",
     "committee_assignments",
+    # The Federal Register rollup (spicy-docs 0.42.0).
+    "federal_register",
     # The Congress.gov index tables (gaps A5, A7, A10), each written by its own
     # rollup in pipelines/rollups/congress_index.py.
     "house_communications",
@@ -160,7 +162,6 @@ TABLES: tuple[str, ...] = (
     "congress_bills",
     "bill_subjects",
     "unified_agenda",
-    "federal_register",
     "sam_entities",
     "lobbying_filings",
     "lobbying_activities",
@@ -360,35 +361,6 @@ DERIVED_SCHEMAS: dict[str, list[tuple[str, str]]] = {
         ("first_action_date", "VARCHAR"),
         ("next_action_date", "VARCHAR"),
         ("url", "VARCHAR"),
-    ],
-    # Composite key: (document_number, publication_date); neither column changes
-    # type or spelling. Ingested from federalregister.gov; all columns are
-    # stored as VARCHAR, array fields serialized as JSON strings.
-    "federal_register": [
-        ("document_number", "VARCHAR"),
-        ("title", "VARCHAR"),
-        ("abstract", "VARCHAR"),
-        ("document_type", "VARCHAR"),
-        ("publication_date", "VARCHAR"),
-        ("effective_on", "VARCHAR"),
-        ("comments_close_on", "VARCHAR"),
-        ("signing_date", "VARCHAR"),
-        ("agencies_json", "VARCHAR"),
-        ("agency_slugs", "VARCHAR"),
-        ("docket_ids_json", "VARCHAR"),
-        ("regulation_id_numbers_json", "VARCHAR"),
-        ("cfr_references_json", "VARCHAR"),
-        ("topics_json", "VARCHAR"),
-        ("html_url", "VARCHAR"),
-        ("pdf_url", "VARCHAR"),
-        ("body_html_url", "VARCHAR"),
-        ("volume", "VARCHAR"),
-        ("start_page", "VARCHAR"),
-        ("end_page", "VARCHAR"),
-        ("subtype", "VARCHAR"),
-        ("executive_order_number", "VARCHAR"),
-        ("modify_date", "VARCHAR"),
-        ("rin", "VARCHAR"),
     ],
     # Ingested from the OpenFEC /committees endpoint (build_fec_committees); a
     # committee/PAC reference dimension, all columns stored as VARCHAR with array
