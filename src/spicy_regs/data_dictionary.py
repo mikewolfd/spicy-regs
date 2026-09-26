@@ -13,8 +13,8 @@ The data dictionary has two layers:
 ``spicy-regs-dict check`` reconciles the two so they can't silently drift, and
 ``spicy-regs-dict generate`` renders one Markdown page per table for the MkDocs
 site under ``docs/tables/``. ``generate`` also bundles the output ledger's
-per-table audits for the MCP server (``output_ledger``), and ``check`` refuses a
-stale copy.
+per-table audits (``output_ledger``) and the declared cross-table joins
+(``table_joins``) for the MCP server, and ``check`` refuses a stale copy of either.
 
 Usage::
 
@@ -38,7 +38,7 @@ import duckdb
 import polars as pl
 from dotenv import load_dotenv
 
-from spicy_regs import output_ledger
+from spicy_regs import output_ledger, table_joins
 from spicy_regs.schemas.regulations import RECORD_TYPES
 
 # Repo layout anchors (this file lives at src/spicy_regs/data_dictionary.py).
@@ -1073,7 +1073,7 @@ def cmd_check(args: argparse.Namespace) -> int:
         expected = {name: value for name, value in expected_schemas().items() if name in live}
         errors += check_schema_drift(expected, live)
 
-    stale = qualification_errors()
+    stale = qualification_errors() + joins_errors()
     if errors or stale:
         print(f"✗ Data dictionary check failed ({len(errors) + len(stale)} issue(s)):", file=sys.stderr)
         for err in errors + stale:
@@ -1112,6 +1112,20 @@ def qualification_errors() -> list[str]:
     if not record.is_file() or record.read_bytes() != fresh:
         return [f"{record.name} is stale relative to {output_ledger.LEDGER_NAME}; run 'uv run spicy-regs-dict generate'"]
     return []
+
+
+def joins_bytes() -> bytes:
+    """The declared cross-table joins as the bundled ``table_joins.json`` states them."""
+    return catalog_bytes(table_joins.joins_record())
+
+
+def joins_errors() -> list[str]:
+    """Refuse a join naming an undeclared table or column, or a bundled copy that differs from the declarations."""
+    errors = table_joins.declaration_errors(expected_schemas())
+    record = table_joins.RECORD
+    if not record.is_file() or record.read_bytes() != joins_bytes():
+        errors.append(f"{record.name} is stale relative to spicy_regs.table_joins; run 'uv run spicy-regs-dict generate'")
+    return errors
 
 
 def build_catalog(descriptions: dict, schemas: dict[str, list[tuple[str, str]]]) -> dict:
@@ -1236,8 +1250,8 @@ def cmd_catalog(args: argparse.Namespace) -> int:
 def cmd_generate(args: argparse.Namespace) -> int:
     """Render the table pages, refusing (exit 1) when descriptions are out of sync with the schema.
 
-    Writing the default docs dir also refreshes catalog.json (+ .sha256), table_metadata.json and
-    table_qualification.json (from the output ledger).
+    Writing the default docs dir also refreshes catalog.json (+ .sha256), table_metadata.json,
+    table_qualification.json (from the output ledger) and table_joins.json (from table_joins).
     """
     descriptions = load_descriptions(Path(args.descriptions))
     schemas = _schemas_for_source(args.source, args.base)
@@ -1272,6 +1286,8 @@ def cmd_generate(args: argparse.Namespace) -> int:
             print(f"✗ {output_ledger.LEDGER_NAME} cannot build the qualification record: {exc}", file=sys.stderr)
             return 1
         print(f"  - {output_ledger.RECORD.relative_to(REPO_ROOT)}")
+        table_joins.RECORD.write_bytes(joins_bytes())
+        print(f"  - {table_joins.RECORD.relative_to(REPO_ROOT)}")
     return 0
 
 

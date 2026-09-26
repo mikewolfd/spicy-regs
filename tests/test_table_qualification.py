@@ -200,10 +200,11 @@ def test_the_bundled_record_is_read_once_per_process(monkeypatch):
     monkeypatch.setattr(mcp_server, "files", lambda package: reads.append(package) or real(package))
     mcp_server._ledger.cache_clear()
     mcp_server._table_metadata.cache_clear()
+    mcp_server._joins.cache_clear()
     server = _serve(monkeypatch, _index(), bundled=True)
     for _ in range(3):
         described = _tool_data(server, "describe_table", {"table": "laws"})
-    assert len(reads) == 2  # table_metadata.json and table_qualification.json, once each
+    assert len(reads) == 3  # table_metadata.json, table_qualification.json and table_joins.json, once each
     assert described["qualification"]["ledger_destination"] == BUNDLED_DESTINATION
     assert described["qualification"]["status"] != "unknown_for_publisher"
 

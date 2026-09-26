@@ -624,6 +624,31 @@ def _ledger() -> tuple[dict, dict[str, list[dict]]]:
     return _ledger_index(json.loads(files("spicy_regs").joinpath("table_qualification.json").read_text("utf-8")))
 
 
+JOINS_BASIS = (
+    "Declared cross-table joins, bundled when the dictionary was generated. baseline_keys and "
+    "baseline_missing count distinct non-null child keys and those absent from the parent on the baseline "
+    "date; floor_pct is the resolution rate scripts/check_table_joins.py holds the live tables to. A "
+    "'scope' or 'design' join resolves partly for the stated reason; it is not a defect."
+)
+
+
+@lru_cache(maxsize=1)
+def _joins() -> dict:
+    """The bundled join declarations (``table_joins``), read once per process."""
+    return json.loads(files("spicy_regs").joinpath("table_joins.json").read_text("utf-8"))
+
+
+def _table_joins(table: str) -> dict:
+    """The declared joins where ``table`` is the child or the parent, with their baseline."""
+    record = _joins()
+    return {
+        "basis": JOINS_BASIS,
+        "baseline": record["baseline"],
+        "outgoing": [join for join in record["joins"] if join["child"] == table],
+        "incoming": [join for join in record["joins"] if join["parent"] == table],
+    }
+
+
 def _qualification(
     cursor: duckdb.DuckDBPyConnection, tables: list[str], *, statements: bool
 ) -> tuple[dict, dict[str, dict] | None]:
@@ -736,7 +761,9 @@ def _register_tools(mcp: FastMCP) -> None:
         unavailable declared table still returns its dictionary description.
         qualification gives the live pin, the output ledger's audited pin, date
         and disposition, whether they match, and the ledger's own statement, as
-        separate fields; it is reported only for the ledger's publisher.
+        separate fields; it is reported only for the ledger's publisher. joins
+        lists the declared joins this table makes (outgoing) and receives
+        (incoming), each with its measured baseline and expected kind.
         """
         cursor = _get_connection().cursor()
         with _statement_timeout(cursor):
@@ -772,6 +799,7 @@ def _register_tools(mcp: FastMCP) -> None:
             "available": available,
             "publication": status["publication"].get(table, {"status": "unavailable"}),
             "qualification": scope if qualified is None else {**scope, **qualified[table]},
+            "joins": _table_joins(table),
             "metadata": {key: value for key, value in entry.items() if key not in {"table", "columns"}},
             "metadata_basis": "Dictionary declarations and dated coverage notes; not live population measurements.",
             "declared_columns": entry["columns"],

@@ -134,6 +134,15 @@ A table in `TABLES` whose parquet isn't published yet (a new source whose first
 upload hasn't run) is skipped with a warning rather than breaking every query —
 same degradation strategy as the catalog fallback.
 
+## Declared joins (`_table_joins`)
+
+`describe_table` lists the cross-table joins the table makes (`outgoing`) and
+receives (`incoming`) from `table_joins.json`, which `spicy-regs-dict generate`
+bundles from `spicy_regs.table_joins` and `check` refuses when stale. Each join
+carries its kind (`complete`, `scope`, `design`, `empty`), the reason for a
+partial one, and its measured baseline. `scripts/check_table_joins.py` holds the
+live tables to each floor nightly in `check-rollup-freshness.yml`.
+
 ## Ledger qualification (`_qualification`)
 
 `list_sources` and `describe_table` report the output ledger's audit for each
