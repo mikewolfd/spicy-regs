@@ -51,7 +51,14 @@ from spicy_regs.content_checks import (
     redact,
     scan_bytes,
 )
-from spicy_regs.sources.publication import EVIDENCE_PREFIX, INDEX_KEY, INDEX_LIMIT, PublicationError, parse_index
+from spicy_regs.sources.publication import (
+    EVIDENCE_PREFIX,
+    INDEX_KEY,
+    INDEX_LIMIT,
+    PublicationError,
+    parse_index,
+    table_owner,
+)
 
 FORMAT = "spicy-regs-generation-audit"
 ROOT = "artifact.json"
@@ -392,7 +399,7 @@ def _publication(con, base: PublicBase, source: _ArtifactSource, entry: Mapping,
     root_tables = spec.get("tables", {})
     section["root"] = {
         "kind": (root or {}).get("kind"), "family": spec.get("family"), "publicationStatus": spec.get("publicationStatus"),
-        "carriedForward": spec.get("carriedForward"), "packages": spec.get("packages"),
+        "carriedForward": spec.get("carriedForward"), "parents": spec.get("parents"), "packages": spec.get("packages"),
         "inputs": (root or {}).get("inputs"),
         "capturedPrior": ((spec.get("readSnapshot") or {}).get("families", {}).get(family) or {}).get("artifactDigest"),
     }
@@ -985,10 +992,10 @@ def _dispositions(sections: Mapping[str, dict], run: _Run) -> dict:
 def _select(index: Mapping, family: str | None, table: str | None) -> tuple[str, list[str]]:
     if table is not None:
         key = table.removesuffix(".parquet") + ".parquet"
-        owners = [name for name, entry in index["families"].items() if key in entry["tables"]]
-        if not owners:
+        owner = table_owner(index, key)
+        if owner is None:
             raise AuditError(f"{key} is not in the publication index; only managed generations can be audited")
-        return owners[0], [key]
+        return owner[0], [key]
     if family not in index["families"]:
         raise AuditError(f"Family {family!r} is not in the publication index")
     return family, sorted(index["families"][family]["tables"])
