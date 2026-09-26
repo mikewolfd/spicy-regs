@@ -124,16 +124,8 @@
       "tables": [
         "docket_search.json.gz"
       ],
-      "audits": [
-        {
-          "disposition": "verified",
-          "pin": "c761cc8c",
-          "pin_kind": "table",
-          "date": "2026-09-26",
-          "etag": "cd719934"
-        }
-      ],
-      "statement": "verified at table digest `c761cc8c…` (2026-09-26; ETag `cd719934…`): all 279,362 search documents match an independent field-by-field replay from dockets `308b35c6…`; the same 18 dockets without title or abstract are omitted. A later regeneration (ETag `7421faa6…`) is unaudited. Receipt: `drift-qualification-2026-09-26/regulatory/`."
+      "audits": [],
+      "statement": "Not built on the fork after `a6a14b1`: the refresh builds it only where `PUBLISH_DOCKET_SEARCH` is set, and the fork leaves it unset because its one reader, the web app, loads upstream's copy. On 2026-09-26 the object with ETag `cd719934…` (table `c761cc8c…`) matched an independent field-by-field replay of all 279,362 search documents from dockets `308b35c6…`, omitting the same 18 dockets without title or abstract. The fork's last regeneration (ETag `7421faa6…`) is unaudited and has no reader. Receipt: `drift-qualification-2026-09-26/regulatory/`."
     },
     {
       "task": "T15",
