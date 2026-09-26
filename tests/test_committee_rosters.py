@@ -61,6 +61,7 @@ class StubListingReader:
             "Congress.gov declared and observed record counts differ", declared=DECLARED, observed=len(listed)
         )
         self.detail_codes: list[str] = []
+        self.list_urls: list[str] = []
 
     def _walk(self):
         yield _Page(self.listed, DECLARED)
@@ -68,6 +69,7 @@ class StubListingReader:
 
     def records(self, route, url, *, max_pages=100):
         if route.name == "committee":
+            self.list_urls.append(url)
             return self._walk()
         assert route.name == "committee-detail"
         code = url.rsplit("/", 1)[-1].split("?")[0]
@@ -112,7 +114,6 @@ def _by_code(path: Path) -> dict[str, dict]:
 
 @pytest.fixture(autouse=True)
 def scoped(monkeypatch):
-    monkeypatch.setenv("BILL_FAMILY_CONGRESSES", "119")
     # The House fixture states the 119th; the roster leg always asks for the sitting Congress.
     monkeypatch.setattr(bcr, "current_congress", lambda: 119)
 
@@ -141,6 +142,29 @@ def test_a_cold_start_folds_each_detail_newest_first_and_publishes_what_the_rout
     budget = rows["hsbu00"]
     assert budget["detail_captured"] == "false" and budget["subcommittee_count"] == "0"
     assert budget["history_count"] is None and budget["chamber"] == "House"
+
+
+def test_the_list_is_every_congress_in_one_walk_whatever_the_bill_scope(tmp_path, monkeypatch):
+    """committee_meetings keeps the 118th and bill_committees reaches the 108th; a Congress-scoped list orphaned both."""
+    monkeypatch.setenv("BILL_FAMILY_CONGRESSES", "119")
+    older = {**HSJU00, "updateDate": "2020-01-01T00:00:00Z", "name": "an older listing of the same committee"}
+    reader = StubListingReader(listed=[*LISTED, older])
+    committees, _ = _build(tmp_path, reader=reader)
+    [url] = reader.list_urls
+    assert url.split("?", 1)[0].endswith("/v3/committee"), "no Congress in the list path"
+    rows = _by_code(committees)
+    assert len(rows) == len(LISTED) and rows["hsju00"]["update_date"] == HSJU00["updateDate"]
+
+
+def test_a_code_the_detail_route_cannot_spell_is_listed_without_spending_the_cap(tmp_path):
+    """The unscoped list carries historical name-authority codes (``n79043125``); asking would refuse every run."""
+    historical = {**LIST_PAGE["committees"][1], "systemCode": "n79043125", "name": "Mines and Mining",
+                  "updateDate": "2099-01-01T00:00:00Z"}
+    reader = StubListingReader(listed=[historical, *LISTED])
+    committees, _ = _build(tmp_path, reader=reader, max_details=1)
+    assert reader.detail_codes == ["hsbu00"], "the one detail of the cap goes to the newest code it can spell"
+    row = _by_code(committees)["n79043125"]
+    assert (row["detail_captured"], row["name"]) == ("false", "Mines and Mining")
 
 
 def test_every_other_walk_refusal_fails_the_run(tmp_path):

@@ -1,7 +1,8 @@
 """Transform: build ``committees`` and ``committee_assignments`` from three publishers.
 
-``committees`` is the Congress.gov ``committee/{congress}`` list route walked
-whole per scoped Congress, one row per ``systemCode``, with the
+``committees`` is the Congress.gov ``committee`` list route walked whole with
+no Congress, every committee of every Congress the publisher records (818
+records in four pages, 2026-09-26), one row per ``systemCode``, with the
 ``committee/{chamber}/{system_code}`` detail folded on where captured under the
 per-run cap; ``shape_committee`` refuses a detail whose ``systemCode`` is not
 the row's, so a fold never lands on the wrong row. ``committee_assignments`` is
@@ -58,7 +59,7 @@ from spicy_docs.transport.credentials import scrub_credential
 
 from spicy_regs.sources import r2
 from spicy_regs.sources.congress_bills import API_KEY_ENV_VARS, _resolve_api_key
-from spicy_regs.transforms.congress_scope import congresses_from_env, current_congress
+from spicy_regs.transforms.congress_scope import current_congress
 from spicy_regs.transforms.congress_walk import ListingSource, PerRunCap, walk_route
 from spicy_regs.transforms.table_merge import merge_contract_table, published_table, retire_prior_rows
 
@@ -87,11 +88,12 @@ ROSTER_BUDGET = CommitteeRosterBudget(
     min_request_interval_seconds=1.0,
 )
 
-#: Pages of ``MAX_LIMIT`` per Congress; the 119th's 236 committees fit in one.
+#: Pages of ``MAX_LIMIT`` for the whole route; its 818 records took four on 2026-09-26.
 MAX_PAGES = 10
 
 #: Detail records asked for per run: a whole Congress in one run (~1 minute
-#: at the pacing above), bounding a multi-Congress backfill.
+#: at the pacing above), bounding a backfill (the 581 committees the unscoped
+#: route added to the 119th's 236 take two runs).
 MAX_DETAILS_PER_RUN = 300
 
 NAME = "committees"
@@ -115,44 +117,55 @@ def _held_committees(prior_file: Path | None) -> dict[str, HeldCommittee]:
     return {str(code): HeldCommittee(update_date, captured) for code, update_date, captured in rows}
 
 
-def _list_committees(reader: ListingSource, congresses: tuple[int, ...]) -> list[Mapping[str, Any]]:
-    """Every committee the route lists for the scoped Congresses, one record per ``systemCode``, newest first.
+def _list_committees(reader: ListingSource) -> list[Mapping[str, Any]]:
+    """Every committee the route lists, of every Congress, one record per ``systemCode``, newest first.
 
-    A committee sits in every Congress it existed in, so a multi-Congress
-    scope lists the same code more than once; the record with the larger
-    ``updateDate`` is the one kept, which is the row the merge would keep too.
+    Not scoped to a Congress, because the tables that name committees are not:
+    ``committee_meetings`` keeps the previous Congress (its three 118th House
+    bodies, such as ``hlvc00``, are on no 119th list) and ``bill_committees``
+    reaches the 108th with the bill family's backfill (78 codes on no 119th
+    list, all on the 108th-117th lists). The unscoped route lists all of them
+    and every Congress's list besides, in four pages where the twelve lists of
+    the 108th-119th take twelve; a record listed twice keeps the larger
+    ``updateDate``, the row the merge would keep too.
     """
     route = LIST_ROUTES["committee"]
+    walk = walk_route(reader, route, list_route_url(route, limit=MAX_LIMIT), max_pages=MAX_PAGES,
+                      label="Committees: every Congress")
     by_code: dict[str, Mapping[str, Any]] = {}
-    for congress in congresses:
-        walk = walk_route(
-            reader,
-            route,
-            list_route_url(route, congress=congress, limit=MAX_LIMIT),
-            max_pages=MAX_PAGES,
-            label=f"Committees: Congress {congress}",
-        )
-        for record in walk.records:
-            code = text(record.get("systemCode"))
-            if not code:
-                logger.warning("Committees: a list record states no systemCode; skipped")
-                continue
-            held = by_code.get(code)
-            if held is None or (text(record.get("updateDate")) or "") > (text(held.get("updateDate")) or ""):
-                by_code[code] = record
+    for record in walk.records:
+        code = text(record.get("systemCode"))
+        if not code:
+            logger.warning("Committees: a list record states no systemCode; skipped")
+            continue
+        held = by_code.get(code)
+        if held is None or (text(record.get("updateDate")) or "") > (text(held.get("updateDate")) or ""):
+            by_code[code] = record
     return sorted(by_code.values(), key=lambda record: text(record.get("updateDate")) or "", reverse=True)
 
 
-def _detail(reader: ListingSource, record: Mapping[str, Any]) -> Mapping[str, Any] | None:
+def _detail_url(record: Mapping[str, Any]) -> str | None:
+    """The detail route's URL for one list record, or ``None`` when the reader's code grammar cannot spell it.
+
+    The unscoped list carries 96 historical codes outside that grammar (Library of
+    Congress name-authority ids such as ``n79043125``, and ``sp2k00``); they stay
+    list-only rows and spend no share of the per-run cap.
+    """
+    try:
+        return list_route_url(LIST_ROUTES["committee-detail"], chamber=str(record.get("chamber") or "").lower(),
+                              system_code=str(record.get("systemCode")))
+    except PagedJsonSourceError:
+        return None
+
+
+def _detail(reader: ListingSource, url: str, code: str) -> Mapping[str, Any] | None:
     """One committee's detail record, or ``None`` when the route did not establish one.
 
     A ``401``/``403`` propagates and aborts the run; a refusal by the reader
     or a transport failure is this committee's gap, retried next run.
     """
     route = LIST_ROUTES["committee-detail"]
-    code = str(record.get("systemCode"))
     try:
-        url = list_route_url(route, chamber=str(record.get("chamber") or "").lower(), system_code=code)
         for page in reader.records(route, url, max_pages=1):
             for detail in page.records:
                 return detail
@@ -165,7 +178,7 @@ def _committee_rows(
     listed: list[Mapping[str, Any]], held: Mapping[str, HeldCommittee], reader: ListingSource, max_details: int
 ) -> list[dict]:
     rows: list[dict] = []
-    unchanged = deferred = folded = 0
+    unchanged = deferred = folded = unaddressable = 0
     cap = PerRunCap(max_details, "Committees: details")
     for record in listed:
         code = str(record.get("systemCode"))
@@ -174,7 +187,9 @@ def _committee_rows(
         if prior is not None and prior.detail_captured == TRUE and prior.update_date == update_date:
             unchanged += 1
             continue
-        detail = _detail(reader, record) if cap.take() else None
+        url = _detail_url(record)
+        unaddressable += url is None
+        detail = _detail(reader, url, code) if url is not None and cap.take() else None
         try:
             row = shape_committee(record, detail) if detail is not None else None
         except TableContractError as error:
@@ -194,12 +209,14 @@ def _committee_rows(
             folded += 1
         rows.append(row)
     logger.info(
-        "Committees: {:,} listed — {:,} rows this run ({:,} with a detail), {:,} already folded and unchanged, {:,} held over",
+        "Committees: {:,} listed — {:,} rows this run ({:,} with a detail), {:,} already folded and unchanged,"
+        " {:,} held over, {:,} with a code the detail route cannot spell",
         len(listed),
         len(rows),
         folded,
         unchanged,
         deferred,
+        unaddressable,
     )
     return rows
 
@@ -286,7 +303,7 @@ def build_committee_rosters(
     priors = {name: published_table(output_dir, name, download_prior) for name in (NAME, ASSIGNMENTS)}
 
     # 1. The enumeration, whole, then the detail fold under its cap.
-    listed = _list_committees(reader, congresses_from_env())
+    listed = _list_committees(reader)
     committee_rows = _committee_rows(listed, _held_committees(priors[NAME]), reader, max_details)
 
     # 2. Today's seats, for the Congress the files describe.

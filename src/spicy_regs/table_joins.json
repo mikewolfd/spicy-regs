@@ -9,7 +9,8 @@
       "~/Work/corpora/fork-execution-2026-09-21/join-map-2026-09-26/unified-agenda-rin-after-backfill.json",
       "~/Work/corpora/fork-execution-2026-09-21/join-map-2026-09-26/dockets-after-gap-fill.json",
       "~/Work/corpora/fork-execution-2026-09-21/join-map-2026-09-26/sam-entities-after-backfill.json",
-      "~/Work/corpora/fork-execution-2026-09-21/join-map-2026-09-26/live-check-after-fixes.json"
+      "~/Work/corpora/fork-execution-2026-09-21/join-map-2026-09-26/live-check-after-fixes.json",
+      "~/Work/corpora/fork-execution-2026-09-21/committee-fixes-2026-09-26/3-rosters-118/runs.json"
     ]
   },
   "kinds": [
@@ -547,9 +548,9 @@
         "system_code"
       ],
       "kind": "complete",
-      "reason": "",
+      "reason": "Complete once committees lists every Congress: the 108th-117th backfill named 78 codes on no 119th list. Measured on a local committee-rosters run over the live children (receipt committee-fixes-2026-09-26/3-rosters-118/runs.json); the published table misses them until it runs.",
       "measured_via": null,
-      "baseline_keys": 116,
+      "baseline_keys": 255,
       "baseline_missing": 0,
       "floor_pct": 100.0
     },
@@ -563,9 +564,9 @@
         "system_code"
       ],
       "kind": "complete",
-      "reason": "",
+      "reason": "Complete once committees lists every Congress: meetings keep the previous Congress, whose House bodies hlfd00, hlvc00 and htzt00 are on no 119th list. Same local run and receipt.",
       "measured_via": null,
-      "baseline_keys": 212,
+      "baseline_keys": 217,
       "baseline_missing": 0,
       "floor_pct": 100.0
     },

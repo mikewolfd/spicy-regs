@@ -2274,11 +2274,15 @@ tables:
       Sampled. Measured on one cold-start run (receipt
       `d1-measured-run-2026-09-19/`): `committee/119` declared 238 and served
       236, and all 236 rows had their detail folded on within the 300-per-run
-      cap — 237 keyed requests in 264 seconds. The Congress.gov committee
-      route for the scoped Congresses is walked whole each run, and the
-      committee detail is folded onto each row under that cap, newest
-      `update_date` first; a committee whose detail was captured is re-read
-      only when its list row's `update_date` moves.
+      cap — 237 keyed requests in 264 seconds. Since 2026-09-26 the
+      Congress.gov committee route is walked whole with no Congress: 818
+      records in four pages, every committee of every Congress the publisher
+      records (the 108th-119th lists hold 416 of them), because
+      `committee_meetings` keeps the previous Congress and `bill_committees`
+      reaches the 108th. The committee detail is folded onto each row under
+      that cap, newest `update_date` first; a committee whose detail was
+      captured is re-read only when its list row's `update_date` moves. Receipt
+      `committee-fixes-2026-09-26/3-rosters-118/`.
     measured_on: "2026-09-19"
     data_quality: >-
       The route over-declares: on 2026-09-19 `committee/119` declared 238 and
@@ -2289,12 +2293,16 @@ tables:
       detail's columns are the publisher's or NULL; where the detail was
       captured, its `subcommittees` are the row's, an empty list included. The
       detail's counts (`bill_count` and the rest) are that day's statement,
-      dated by `detail_update_date`. All columns are stored as VARCHAR.
+      dated by `detail_update_date`. Rows are committees of every Congress:
+      filter `is_current` for today's. 96 historical codes the reader's detail
+      grammar cannot spell (Library of Congress name-authority ids such as
+      `n79043125`, and `sp2k00`) are list rows with `detail_captured` false.
+      All columns are stored as VARCHAR.
     summary: >-
-      One row per committee or subcommittee the Congress.gov committee list
-      route states, keyed on the publisher's `systemCode`, with the detail
-      record's history, subcommittees, parent and currency folded on where
-      captured. All columns are stored as VARCHAR.
+      One row per committee or subcommittee of any Congress the Congress.gov
+      committee list route states, keyed on the publisher's `systemCode`, with
+      the detail record's history, subcommittees, parent and currency folded on
+      where captured. All columns are stored as VARCHAR.
     columns_from: spicy_docs
 
   committee_assignments:

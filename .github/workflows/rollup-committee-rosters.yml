@@ -1,8 +1,8 @@
 name: Rollup — committee_rosters
 on:
   schedule:
-    # 01:40 UTC — the committee list per scoped Congress with its details,
-    # capped, and the two chamber roster files.
+    # 01:40 UTC — the committee list of every Congress (four pages) with the
+    # details of new or changed committees, capped, and the two chamber roster files.
     - cron: '40 1 * * *'
   workflow_dispatch:
     inputs:
@@ -11,11 +11,6 @@ on:
         required: false
         default: false
         type: boolean
-      congresses:
-        description: 'Comma-separated Congress numbers for the committee list (e.g. 118,119); blank uses the current Congress. The roster files always describe the current Congress.'
-        required: false
-        default: ''
-        type: string
 jobs:
   run:
     uses: ./.github/workflows/_rollup.yml
@@ -23,5 +18,4 @@ jobs:
     with:
       command: run-rollup-committee-rosters
       skip_upload: ${{ github.event_name == 'workflow_dispatch' && inputs.skip_upload || false }}
-      bill_family_congresses: ${{ inputs.congresses || '' }}
       timeout_minutes: 30

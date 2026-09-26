@@ -30,6 +30,7 @@ BASELINE_RECEIPTS = (
     "~/Work/corpora/fork-execution-2026-09-21/join-map-2026-09-26/dockets-after-gap-fill.json",
     "~/Work/corpora/fork-execution-2026-09-21/join-map-2026-09-26/sam-entities-after-backfill.json",
     "~/Work/corpora/fork-execution-2026-09-21/join-map-2026-09-26/live-check-after-fixes.json",
+    "~/Work/corpora/fork-execution-2026-09-21/committee-fixes-2026-09-26/3-rosters-118/runs.json",
 )
 
 #: Expected resolution. ``complete``: every key should resolve and an orphan is
@@ -141,8 +142,13 @@ JOINS: tuple[Join, ...] = (
           "the legacy hs spelling; the Joint Economic Committee has three Congress.gov codes) and 3 Senate seats on "
           "JSIK00, the 2024 inaugural committee, which Congress.gov lists in no Congress. Receipt "
           "join-gaps-2026-09-26/e/."),
-    _join("bill_committees", "system_code", "committees", "system_code", 116, 0),
-    _join("committee_meetings", "committee_system_code", "committees", "system_code", 212, 0),
+    _join("bill_committees", "system_code", "committees", "system_code", 255, 0,
+          reason="Complete once committees lists every Congress: the 108th-117th backfill named 78 codes on no 119th "
+                 "list. Measured on a local committee-rosters run over the live children (receipt "
+                 "committee-fixes-2026-09-26/3-rosters-118/runs.json); the published table misses them until it runs."),
+    _join("committee_meetings", "committee_system_code", "committees", "system_code", 217, 0,
+          reason="Complete once committees lists every Congress: meetings keep the previous Congress, whose House "
+                 "bodies hlfd00, hlvc00 and htzt00 are on no 119th list. Same local run and receipt."),
     _join("hearing_bill_links", "committee_system_code", "committees", "system_code", 4, 0),
     _join("hearing_bill_links", "package_id", "hearing_transcripts", "package_id", 9, 0),
     _join("hearing_transcripts", "event_id", "committee_meetings", "event_id", 16, 0,
