@@ -5,14 +5,14 @@ The optional `source-readers` extra enables the same readers for package install
 its wheels must be supplied explicitly until they are published in a registry.
 Base CLI and MCP installs do not require them.
 
-- `spicy_docs-0.37.0`: built from SpicyDocs `main` at `c80afc8` (release commit), with Rulespec
-  Artifacts 1.1.1. Built September 26, 2026 UTC: **1,640,699 bytes**, SHA-256
-  `ed54be5071e804d21e91c9e529c0ac9831e8ba7e2b0ffe29457203eb687a86dc`, byte-identical across
+- `spicy_docs-0.38.0`: built from SpicyDocs `main` at `29f4969` (release commit), with Rulespec
+  Artifacts 1.1.1. Built September 26, 2026 UTC: **1,643,673 bytes**, SHA-256
+  `b5d794f5370fd8dc222ba8e1441894280b737877269229c1c54306c18a1532d6`, byte-identical across
   two rebuilds from a clean archive of that commit with `SOURCE_DATE_EPOCH` at its commit time.
-  On top of 0.36.0 it gives a numbered reprint its own version code from its stated package
-  (`printing_version_code`: `eas2`, `rh2`), so a bill printed twice at one stage no longer maps
-  both printings to one identity, and it refuses whole a printing that still repeats one. It
-  changes only the bill readers. 0.36.0 and its build record are at `065bdee`.
+  On top of 0.37.0 it keys a bill printed under an activity report's Congress subheading
+  (`116th Congress`) in that Congress until the next entry (`congress_subheading_scopes`,
+  `bill_number` 004). It changes only the citation readers. 0.37.0 and its build record are at
+  `8602581`.
 
 - `rulespec_artifacts-1.1.1`: exact dependency of SpicyDocs 0.26.6 and 0.27.0, built from
   Rulespec `a3acb04cbfe2cc32a89622a3523da48aa6958348`. **99,315 bytes**, SHA-256

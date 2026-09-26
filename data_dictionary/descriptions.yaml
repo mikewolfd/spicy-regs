@@ -2525,7 +2525,18 @@ tables:
       Senate report `bills_congress_mismatch` and `distinct_bills_beyond_index`
       count the MODS's wrong Congress, not new yield (2026-09-26 drift audit:
       the eight Senate reports on the 117th had published 1,915 citations under
-      118th-Congress bills before the fix). A committee name both chambers hold
+      118th-Congress bills before the fix). **And for a House report's bills
+      printed under a Congress subheading.** CRPT-117hrpt705 and -118hrpt974
+      print a predecessor bill's history under `116th Congress` or `117th
+      Congress` inside the current bill's entry, and -118hrpt967 heads each
+      Congress of its committee history, 107th to 118th, the same way; since
+      spicy-docs `bill_number` 004 those bills are keyed in the subheading's
+      Congress until the next entry, while the MODS stamps them with the filing
+      one, so `bills_congress_mismatch` and `distinct_bills_beyond_index` count
+      them (45 on -117hrpt705, 225 on -118hrpt967; replay receipt
+      `print-subheading-2026-09-26/`). A bill that states its own Congress
+      inline (`H.R. 6752, 115th Cong.`) still takes the report's. A committee
+      name both chambers hold
       (`Committee on the Judiciary`, `on the Budget`, `on Veterans' Affairs`,
       `on Armed Services`, `on Appropriations`) resolves to the chamber of the
       report's own committee, read off the package id; before 2026-09-26 the
