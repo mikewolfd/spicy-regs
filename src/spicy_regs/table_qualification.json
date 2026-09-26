@@ -188,7 +188,7 @@
       "audits": [
         {
           "disposition": "PARTIAL",
-          "pin": "55671b43",
+          "pin": "d380cdc0",
           "pin_kind": "artifact",
           "date": "2026-09-26"
         },
@@ -199,7 +199,7 @@
           "date": "2026-09-24"
         }
       ],
-      "statement": "current `55671b43…` is PARTIAL (2026-09-26): no prior identity is removed and 188 are added, and all 513 bills that retained 110th–113th BILLSTATUS lists are still absent. Field checks against fresh BILLSTATUS were not rerun at this pin; at `5990abbb…` 150 of 166 changed rows matched in eight fields. Scoped repair remains qualified at `4a1949a9…` (2026-09-24). Receipts: `bill-family-55671b43-2026-09-26/`, `drift-qualification-2026-09-26/bills-citations/`."
+      "statement": "current `d380cdc0…` is PARTIAL (2026-09-26): all 420,166 identities survive with none added, and only update dates and related-bill fields change. All 513 bills that retained 110th–113th BILLSTATUS lists are still absent; the retired list walk left 1,299 missing across the 108th–117th (receipt `join-gaps-2026-09-26/d/`). Scoped repair remains qualified at `4a1949a9…` (2026-09-24). Receipts: `bill-family-d380cdc0-2026-09-26/`, `drift-qualification-2026-09-26/bills-citations/`."
     },
     {
       "task": "T11",
@@ -209,12 +209,12 @@
       "audits": [
         {
           "disposition": "qualified",
-          "pin": "b07c51d4",
+          "pin": "649cfd28",
           "pin_kind": "artifact",
           "date": "2026-09-26"
         }
       ],
-      "statement": "qualified at `b07c51d4…` (2026-09-26): the retained edition's 3,954 rows have table bytes identical to the qualified `c63a3a10…`. No new claim about source freshness. Receipt: `drift-qualification-2026-09-26/regulatory/`."
+      "statement": "qualified at `649cfd28…` (2026-09-26): the edition backfill holds 58 editions, 199510–202510, in 233,250 rows over 46,247 RINs, with `(rin, agenda_edition)` unique. Every readable edition is present; 199504 and 201204 were never published, and SpicyDocs refuses 200404 and 200410 over an XML-forbidden control byte. The Fall 2012 file is stamped `201210`, as its records state. No prior row is removed. Three editions, the oldest, the legacy-named Fall 2012 and the newest, match independent parses of reginfo's export exactly: RIN sets, titles and priority categories (4,999, 4,063 and 3,954 RINs). The run retains no source evidence. Receipt: `unified-agenda-649cfd28-2026-09-26/`."
     },
     {
       "task": "T11",
@@ -483,12 +483,12 @@
       "audits": [
         {
           "disposition": "FAILED",
-          "pin": "55671b43",
+          "pin": "d380cdc0",
           "pin_kind": "artifact",
           "date": "2026-09-26"
         }
       ],
-      "statement": "current `55671b43…` is FAILED (2026-09-26): scheduled run 36211271899 built it with code that predates the ordering and identity repairs, so both defects persist. `section_diffs` holds 18 pairs from a dateless enrolled printing back to the introduced one (13 at `5990abbb…`), and 119-hr-5334 enrolled and 119-hr-9022 reported still lack one section each. The generation audit (`scripts/audit_generation.py`) admits every member byte and finds every keyed table unique, with no prior identity removed. Keyless `bill_vote_references` and `bill_family_archives` differ only in re-observation times, plus 8 new vote references. It admits the first retained BILLSTATUS evidence, `65415e8f…`, bound to this generation: 1,816 captures, every body of its expected kind, and no credential in evidence or table cells. Source qualification is not assessed at this pin; at `5990abbb…` all 147 text diffs reconstructed from independent XML reads. The four model outputs remain uncomputed. Receipts: `bill-family-55671b43-2026-09-26/`, `drift-qualification-2026-09-26/bills-citations/`."
+      "statement": "current `d380cdc0…` is FAILED (2026-09-26): run 36219598578 at `a555f73` repairs both audited defects. No pair runs backward, 21 pairs reach an enrolled printing, and 119-hr-5334 enrolled, 119-hr-9022 reported and 119-hr-4060 introduced publish every section. The 32 stale pairs retired are exactly 18 backward and 14 that skipped the enrolled printing, and every removed item belongs to one of them. It exposes a new identity defect: a bill printed twice at one stage (119-hr-6644 `eas` and `eas2`) maps both printings to one (bill, version_code, source), so 198 section_diff_items on each side name the other printing's elements and resolve to no section. The generation audit admits every member and evidence `e3ea6ba5…`, bound to this generation, with every body of its expected kind and no credential found. Keyless vote references and archives differ only in re-observation times. The four model outputs remain uncomputed. Receipt: `bill-family-d380cdc0-2026-09-26/`."
     },
     {
       "task": "T08",
