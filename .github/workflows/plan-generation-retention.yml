@@ -1,0 +1,37 @@
+name: Plan generation retention
+
+# Decision 36 (2026-09-26): keep each family's last three generations and every
+# generation the docs, DocSpec or a kept generation's parents cite; delete the
+# rest. This only plans: it lists the bucket, reads roots, and uploads the plan
+# for a person to review. Nothing here deletes.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - uses: astral-sh/setup-uv@v4
+
+      - run: uv sync
+
+      - name: Plan
+        env:
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+        run: uv run --frozen python scripts/plan_generation_retention.py --output retention-plan.json | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: retention-plan
+          path: retention-plan.json

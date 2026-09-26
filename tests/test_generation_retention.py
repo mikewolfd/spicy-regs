@@ -1,0 +1,106 @@
+"""Decision 36: keep each family's last three generations and everything cited, and plan the rest for deletion."""
+
+import json
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from typing import ClassVar
+
+import pyarrow as pa
+import pyarrow.parquet as pq
+import pytest
+
+from spicy_regs import generation_retention as retention
+from spicy_regs.pipelines.rollups.base import RollupPipeline
+from spicy_regs.sources import publication as pub, r2
+
+LATER = datetime.now(timezone.utc) + timedelta(days=2)
+
+
+def _table(path: Path) -> Path:
+    pq.write_table(pa.table({"id": [path.parent.name]}), path, store_schema=False)
+    return path
+
+
+class _Base(RollupPipeline):
+    name: ClassVar[str] = "base"
+    output: ClassVar[str] = "base.parquet"
+
+    def build(self, output_dir: Path) -> Path:
+        return _table(output_dir / self.output)
+
+
+class _Derived(RollupPipeline):
+    name: ClassVar[str] = "derived"
+    inputs: ClassVar[tuple[str, ...]] = ("base.parquet",)
+    output: ClassVar[str] = "derived.parquet"
+
+    def build(self, output_dir: Path) -> Path:
+        return _table(output_dir / self.output)
+
+
+def _publish(pipeline: type[RollupPipeline], tmp_path: Path, store, runs: int) -> list[str]:
+    """Run ``pipeline`` ``runs`` times and return each generation's digest, oldest first."""
+    digests = []
+    for run in range(runs):
+        pipeline(output_dir=tmp_path / f"{pipeline.name}-{run}", skip_upload=False).run()
+        entry = pub.parse_index(store.objects[pub.INDEX_KEY])["families"][pipeline.name]
+        digests.append(entry["artifactDigest"].removeprefix("sha256:"))
+    return digests
+
+
+def _plan(store, *, notes=(), docspec=None, now=LATER) -> dict:
+    return retention.plan(store, "spicy-regs", notes=notes, docspec=docspec or {}, now=now)
+
+
+def _kept(record: dict, family: str) -> dict[str, list[str]]:
+    return {g["digest"]: g["keep"] for g in record["families"][family]["generations"] if g["keep"]}
+
+
+def test_a_family_keeps_its_current_and_two_predecessors_along_the_prior_chain(tmp_path, remote):
+    digests = _publish(_Base, tmp_path, remote, 5)
+    record = _plan(remote)
+    assert set(_kept(record, "base")) == set(digests[2:])
+    assert record["delete"] == sorted(f"generations/base/{d}" for d in digests[:2])
+    assert record["totals"]["delete_bytes"] == sum(
+        len(raw) for key, raw in remote.objects.items() if key.startswith(tuple(record["delete"])))
+
+
+def test_a_note_or_docspec_pin_keeps_an_older_generation(tmp_path, remote):
+    digests = _publish(_Base, tmp_path, remote, 5)
+    notes = [("docs/research/ledger.md", f"qualified at `{digests[0][:8]}…` (2026-09-26)")]
+    record = _plan(remote, notes=notes, docspec={digests[1]: "DocSpec evidence pin (a receipt)"})
+    kept = _kept(record, "base")
+    assert kept[digests[0]] == ["named in docs/research/ledger.md"]
+    assert kept[digests[1]] == ["DocSpec evidence pin (a receipt)"]
+    assert record["delete"] == []
+
+
+def test_a_kept_generation_keeps_the_parent_it_read(tmp_path, monkeypatch, remote):
+    def download(remote_key, local_path):
+        location, _ = pub.table_location(pub.parse_index(remote.objects[pub.INDEX_KEY]), remote_key)
+        local_path.write_bytes(remote.objects[location])
+        return True
+
+    monkeypatch.setattr(r2, "download", download)
+    read = _publish(_Base, tmp_path, remote, 1)[0]
+    _publish(_Derived, tmp_path, remote, 1)
+    newer = _publish(_Base, tmp_path / "later", remote, 4)
+    record = _plan(remote)
+    assert _kept(record, "base")[read] == [f"parent of derived/{record['families']['derived']['current'][7:15]} "
+                                           "(base.parquet)"]
+    assert record["delete"] == [f"generations/base/{newer[0]}"]
+
+
+def test_a_generation_written_within_a_day_is_kept_as_possibly_in_flight(tmp_path, remote):
+    _publish(_Base, tmp_path, remote, 5)
+    record = _plan(remote, now=datetime.now(timezone.utc))
+    assert record["delete"] == []
+
+
+def test_docspec_pins_refuse_a_document_outside_the_stated_shape():
+    pin = {"family": "documents", "artifactDigest": "sha256:" + "a" * 64, "role": "evidence", "cites": "r.json"}
+    document = {"format": retention.DOCSPEC_PINS_FORMAT, "version": 1, "pins": [pin]}
+    assert retention.docspec_pins(json.dumps(document).encode()) == {"a" * 64: "DocSpec evidence pin (r.json)"}
+    for broken in ({**document, "version": 2}, {**document, "pins": [{**pin, "artifactDigest": "aaaa"}]}, {}):
+        with pytest.raises(pub.PublicationError, match="DocSpec pins"):
+            retention.docspec_pins(json.dumps(broken).encode())

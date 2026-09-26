@@ -2,10 +2,15 @@
 
 import base64
 from collections import Counter
+from datetime import datetime, timezone
 from hashlib import md5
 from io import BytesIO
 
 from botocore.exceptions import ClientError
+
+
+#: The write time listed for an object a test seeded into ``objects`` directly.
+_SEEDED = datetime(2026, 1, 1, tzinfo=timezone.utc)
 
 
 def error(code):
@@ -22,10 +27,12 @@ class Store:
     ETags follow S3/R2: a single put's is its MD5, a multipart one hashes the
     part MD5s and appends the part count. ``reads`` counts full GETs per key and
     ``sent`` counts request-body bytes per key, so tests can assert transfer volume.
+    ``modified`` holds each key's last write time, which listings report.
     """
 
     def __init__(self):
         self.objects = {}
+        self.modified = {}
         self.etags = {}  # multipart ETags only; others derive from the stored bytes
         self.writes = []
         self.copies = []
@@ -53,6 +60,7 @@ class Store:
         self.etags.pop(Key, None)
         if source_key in self.etags:
             self.etags[Key] = self.etags[source_key]
+        self.modified[Key] = datetime.now(timezone.utc)
         self.writes.append(Key)
         self.copies.append(Key)
         return {}
@@ -81,6 +89,7 @@ class Store:
         self.etags.pop(Key, None)
         if etag:
             self.etags[Key] = etag
+        self.modified[Key] = datetime.now(timezone.utc)
         self.writes.append(Key)
         return {}
 
@@ -90,9 +99,10 @@ class Store:
 
     def paginate(self, *, Bucket, Prefix):
         # Two pages prove the adapter consumes the whole prefix listing.
-        keys = sorted(k for k in self.objects if k.startswith(Prefix))
-        yield {"Contents": [{"Key": k} for k in keys[:1]]}
-        yield {"Contents": [{"Key": k} for k in keys[1:]]}
+        listed = [{"Key": k, "Size": len(self.objects[k]), "LastModified": self.modified.get(k, _SEEDED)}
+                  for k in sorted(self.objects) if k.startswith(Prefix)]
+        yield {"Contents": listed[:1]}
+        yield {"Contents": listed[1:]}
 
     def create_multipart_upload(self, *, Bucket, Key, **kwargs):
         self.uploads[Key] = []
