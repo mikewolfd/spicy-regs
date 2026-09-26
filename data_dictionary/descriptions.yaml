@@ -2232,13 +2232,22 @@ tables:
       OLRC states no Last-Modified, ETag or Content-Length for the zip, so
       each run fetches it; it was byte-identical on 2026-09-14 and 2026-09-26
       at the same release point. Each Congress keeps a checkpoint in the
-      file's metadata: the derivation rule with the spicy-docs release, the
-      member's digest and release point, and each act's shaped-row digest.
-      While all match, nothing is derived. Otherwise every scoped act is
-      derived again, and only an act whose rows changed is published, its
-      whole row set replaced. Being the whole table, the file also
-      establishes absence: a held act it no longer lists loses its rows. A
-      failed read publishes nothing and keeps every checkpoint.
+      file's metadata: the derivation rule with a digest of SpicyDocs' code
+      (not its release string, so a version-only release derives nothing),
+      the member's digest and release point, and each act's shaped-row
+      digest. While all match, nothing is derived. Otherwise every scoped act
+      is derived again, and only an act whose rows changed is published, its
+      whole row set replaced.
+
+      Table III only grows: across the eight consecutive releases from
+      116-150 (2020-07) to 119-73, archived by the Wayback Machine, no act was
+      ever dropped (receipt `table3-bulk-2026-09-26/wayback/`). So a held act
+      the file no longer lists loses its rows only when the release point
+      advances, at most one act a release, and the removal is journaled as
+      `rows-retired` for qualification to reconcile. A file whose release
+      point is older than the one published, that drops an act without
+      advancing, or that drops more than one is refused and journaled: it
+      publishes nothing and keeps every checkpoint, as a failed read does.
       `usc_section_key` is `usc_section` folded for joins (trimmed,
       lower-cased, every dash spelling an ASCII hyphen), because case carries
       no identity in the Code and Table III itself prints some sections both

@@ -40,11 +40,12 @@ from spicy_regs.transforms.read_checkpoints import read_checkpoints
 
 from spicy_regs.transforms.build_laws import (
     OLRC_BUDGET,
-    TABLE3_RULE,
+    TABLE3_MAX_RETIRED_PER_RELEASE,
     _bulk_rows,
     _table3_rows,
     build_laws,
     olrc_acquirer,
+    table3_rule,
 )
 from spicy_regs.transforms.congress_walk import PerRunCap
 from tests.test_incremental_rollups import no_download, seed
@@ -64,14 +65,9 @@ OBSERVED_AT = "2026-09-19T00:00:00Z"
 LISTED_119 = [*LIST_PAGE["bills"], LAW_119_1]
 
 
-class _Capture:
-    def __init__(self, body: bytes, observed_at: str = OBSERVED_AT):
-        self.body = body
-        self.observed_at = observed_at
-
-    @property
-    def sha256(self) -> str:
-        return "sha256:" + hashlib.sha256(self.body).hexdigest()
+def _Capture(body: bytes, observed_at: str = OBSERVED_AT) -> CapturedBodyResponse:
+    """An owner capture of ``body``, as the acquirers return one (evidence refuses anything else)."""
+    return CapturedBodyResponse("https://stub.invalid/", "https://stub.invalid/", 200, None, observed_at, body)
 
 
 class _Page:
@@ -284,7 +280,7 @@ def test_table_iii_is_one_bulk_read_for_every_congress_the_laws_table_holds(tmp_
         "usc_title": "16", "usc_section": "668dd nt"}
     assert lost["observed_at"] == OBSERVED_AT
     (checkpoint,) = [c for c in read_checkpoints(table3, "laws-table3") if c["congress"] == "119"]
-    assert checkpoint["rule"] == TABLE3_RULE and checkpoint["release_point"] == "119-73"
+    assert checkpoint["rule"] == table3_rule() and checkpoint["release_point"] == "119-73"
     assert set(checkpoint["acts"]) == {"119-30", "119-37", "119-53"}
 
 
@@ -325,30 +321,128 @@ def test_an_unchanged_bulk_derives_nothing(tmp_path, scoped):
     assert read_checkpoints(table3, "laws-table3") == checkpoints
 
 
-def test_a_changed_bulk_publishes_only_the_acts_it_changed_and_removes_the_ones_it_dropped(tmp_path, scoped):
-    _build(tmp_path)
-    _again(tmp_path)
-    # The same release point, corrected: 119-53's one record moves from Elim. to Rep., and 119-30 is gone.
-    def fragment(member: bytes, act_id: bytes) -> tuple[int, int]:
-        start = member.index(b"<act id='" + act_id)
-        return start, member.index(b"</act>", start) + len(b"</act>\n")
+def _fragment(member: bytes, act_id: bytes) -> tuple[int, int]:
+    """Where one ``<act>`` fragment of the excerpt starts and ends, its trailing newline included."""
+    start = member.index(b"<act id='" + act_id)
+    return start, member.index(b"</act>", start) + len(b"</act>\n")
 
-    start, end = fragment(BULK_EXCERPT, b"4d1d41a4")
-    corrected = BULK_EXCERPT[:start] + BULK_EXCERPT[start:end].replace(b">Elim.<", b">Rep.<") + BULK_EXCERPT[end:]
-    start, end = fragment(corrected, b"41c326fe")
-    corrected = corrected[:start] + corrected[end:]
+
+#: 119-53's one record moves from Elim. to Rep.
+MOVED = (lambda start, end: BULK_EXCERPT[:start] + BULK_EXCERPT[start:end].replace(b">Elim.<", b">Rep.<")
+         + BULK_EXCERPT[end:])(*_fragment(BULK_EXCERPT, b"4d1d41a4"))
+
+
+def _without(member: bytes, *act_ids: bytes) -> bytes:
+    for act_id in act_ids:
+        start, end = _fragment(member, act_id)
+        member = member[:start] + member[end:]
+    return member
+
+
+def _journal(evidence) -> list[dict]:
+    return [json.loads(line) for line in (evidence.artifact_dir / "journal.jsonl").read_text().splitlines()]
+
+
+def _rerun(tmp_path, olrc):
+    """Publish the first run, then run ``olrc`` over it with evidence; the second run's journal and rows."""
+    from spicy_regs.source_evidence import CaptureEvidence
+
+    _, _, first = _build(tmp_path)
+    before = (_rows(first), read_checkpoints(first, "laws-table3"))
+    _again(tmp_path)
+    evidence = CaptureEvidence(tmp_path, "laws")
+    _, _, table3 = _build(tmp_path, olrc=olrc, evidence=evidence)
+    return before, (_rows(table3), read_checkpoints(table3, "laws-table3")), _journal(evidence)
+
+
+def test_a_corrected_bulk_publishes_only_the_acts_it_changed(tmp_path, scoped):
     later = "2026-09-20T00:00:00Z"
-    _build(tmp_path, olrc=StubOlrc(bulk=corrected, observed_at=later))
-    rows = _rows(tmp_path / "table3_records.parquet")
-    assert "119-30" not in {r["act_key"] for r in rows}
+    _, (rows, _), journal = _rerun(tmp_path, StubOlrc(bulk=MOVED, observed_at=later))
     (moved,) = (r for r in rows if r["act_key"] == "119-53")
     assert (moved["status"], moved["observed_at"]) == ("Rep.", later)
-    assert {r["observed_at"] for r in rows if r["act_key"] == "119-37"} == {OBSERVED_AT}, "unchanged rows stand"
+    assert {r["observed_at"] for r in rows if r["act_key"] != "119-53"} == {OBSERVED_AT}, "unchanged rows stand"
+    assert not any(e["event"] in ("rows-retired", "table3-bulk-refused") for e in journal)
 
-    # A new release point moves every act's release_point, so every act is published again.
+
+@pytest.mark.parametrize(
+    ("member", "release_point", "reason"),
+    [
+        (_without(MOVED, b"41c326fe"), "119-73", "acts-dropped-without-release-point-advance"),
+        (_without(MOVED, b"41c326fe", b"4d1d41a4"), "119-80", "acts-dropped-past-bound"),
+        (MOVED, "119-60", "release-point-regressed"),
+    ],
+    ids=["drop-at-the-same-release-point", "drop-more-than-the-bound", "release-point-regressed"],
+)
+def test_a_read_that_would_lose_acts_or_go_back_is_refused_whole(tmp_path, scoped, member, release_point, reason):
+    """Table III only grows (0 drops in 182,775 act-transitions since 2020), so these read as a bad file, not news.
+
+    The refused read publishes nothing at all, not even 119-53's corrected status, and keeps every checkpoint.
+    """
+    olrc = StubOlrc(bulk=member, release_point=release_point, observed_at="2026-09-20T00:00:00Z")
+    before, after, journal = _rerun(tmp_path, olrc)
+    assert after == before
+    (refused,) = (e for e in journal if e["event"] == "table3-bulk-refused")
+    assert (refused["reason"], refused["release_point"], refused["published_release_point"]) == (
+        reason, release_point, "119-73")
+    assert not any(e["event"] == "rows-retired" for e in journal)
+    if "dropped" in refused:
+        assert len(refused["dropped"]) > (TABLE3_MAX_RETIRED_PER_RELEASE if reason.endswith("bound") else 0)
+
+
+def test_a_release_point_advance_retires_an_act_the_file_dropped_and_journals_it(tmp_path, scoped):
+    olrc = StubOlrc(bulk=_without(MOVED, b"41c326fe"), release_point="119-80", observed_at="2026-09-20T00:00:00Z")
+    (prior, _), (rows, checkpoints), journal = _rerun(tmp_path, olrc)
+    assert "119-30" not in {r["act_key"] for r in rows}
+    assert {r["release_point"] for r in rows} == {"119-80"}, "an advance restates every act"
+    (checkpoint,) = checkpoints
+    assert checkpoint["release_point"] == "119-80" and "119-30" not in checkpoint["acts"]
+    (retired,) = (e for e in journal if e["event"] == "rows-retired")
+    assert (retired["table"], retired["key"], retired["scope"]) == ("table3_records", ["act_key"],
+                                                                    {"release_point": "119-80"})
+    # What the audit reconciles: the act keys the prior held and the output does not, derived here without SQL.
+    assert retired["rows"] == [[key] for key in sorted({r["act_key"] for r in prior} - {r["act_key"] for r in rows})]
+    assert retired["rows"] == [["119-30"]]
+
+
+@pytest.mark.parametrize(("release_point", "retired"), [("119-73", None), ("119-80", [["119-2"]])])
+def test_a_page_era_act_with_no_bulk_checkpoint_is_held_all_the_same(tmp_path, scoped, release_point, retired):
+    """The first bulk run finds only the page walk's per-act checkpoints, which it does not read; the rows say what
+    is held. 119-2 is published and the file does not list it: refused at the same release point, retired past it."""
+    from spicy_regs.source_evidence import CaptureEvidence
+
+    seed(tmp_path, "table3_records", [{"act_key": "119-2", "seq": "0", "release_point": "119-73",
+                                       "observed_at": "2026-09-01"}])
+    evidence = CaptureEvidence(tmp_path, "laws")
+    _, _, table3 = _build(tmp_path, olrc=StubOlrc(release_point=release_point), evidence=evidence)
+    journal = _journal(evidence)
+    held = "119-2" in {r["act_key"] for r in _rows(table3)}
+    if retired is None:
+        assert held and next(e for e in journal if e["event"] == "table3-bulk-refused")["dropped"] == ["119-2"]
+    else:
+        assert not held and next(e for e in journal if e["event"] == "rows-retired")["rows"] == retired
+
+
+@pytest.mark.parametrize("change", ["release", "code"])
+def test_a_spicy_docs_release_string_derives_nothing_and_its_code_derives_again(tmp_path, scoped, monkeypatch,
+                                                                                change):
+    """Keyed on SpicyDocs' code as print citations and committee reports are: a version-only pin changes nothing."""
+    import importlib.metadata
+
+    from spicy_regs.transforms import build_laws as module
+
+    _, _, first = _build(tmp_path)
+    published = _rows(first)
     _again(tmp_path)
-    _build(tmp_path, olrc=StubOlrc(bulk=corrected, release_point="119-80", observed_at=later))
-    assert {r["release_point"] for r in _rows(tmp_path / "table3_records.parquet")} == {"119-80"}
+    if change == "release":
+        real = importlib.metadata.version
+        monkeypatch.setattr(importlib.metadata, "version", lambda name: "9.9.9" if name == "spicy-docs" else real(name))
+    else:
+        monkeypatch.setattr(module, "spicy_docs_code", lambda: "0" * 64)
+    log = _log_of(lambda: _build(tmp_path, olrc=StubOlrc(observed_at="2026-09-20T00:00:00Z")))
+    table3 = tmp_path / "table3_records.parquet"
+    assert any(("unchanged at release point" if change == "release" else "0 published []") in line for line in log)
+    assert _rows(table3) == published, "the same file derives the same rows, so nothing is published either way"
+    assert {c["rule"] for c in read_checkpoints(table3, "laws-table3")} == {module.table3_rule()}
 
 
 def test_a_congress_that_left_the_laws_scope_keeps_its_table_iii_rows_current(tmp_path, monkeypatch):
@@ -397,9 +491,9 @@ def test_the_bulk_is_fetched_through_the_rollup_s_own_acquirer_retried_and_retai
     unpaced = replace(OLRC_BUDGET, min_request_interval_seconds=0.0)
     evaluated: set[str] = set()
     with olrc_acquirer(httpx.MockTransport(answer), budget=unpaced) as olrc:
-        rows = _table3_rows(olrc, {119}, set(), {}, evaluated, evidence)
+        read = _table3_rows(olrc, {119}, set(), None, {}, evaluated, evidence)
     assert asked == ["/table3/table3-xml-bulk.zip"] * 2
-    assert evaluated == {"119-30", "119-37", "119-53"} and len(rows) == 112
+    assert evaluated == {"119-30", "119-37", "119-53"} and len(read.rows) == 112 and read.retiring == []
     events = [json.loads(line) for line in (evidence.artifact_dir / "journal.jsonl").read_text().splitlines()]
     (capture,) = (e for e in events if e["event"] == "capture")
     assert (capture["stage"], capture["sha256"]) == ("table3:bulk", "sha256:" + hashlib.sha256(served).hexdigest())

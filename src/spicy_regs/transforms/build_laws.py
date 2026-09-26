@@ -27,7 +27,9 @@ where a page prints ``119th Cong.``, ``Jan. 29, 2025``, ``139 Stat.`` and
 ``119–4``; the classifications agree on all 2,981 rows the pages published,
 and the file also holds two acts the page walk never reached (receipt
 ``fork-execution-2026-09-21/table3-bulk-2026-09-26/``). Being the whole table,
-it states absence too: a held act it no longer lists loses its rows.
+it states absence too, but Table III only grows, so a held act it no longer
+lists is retired only past a release-point advance and within
+:data:`TABLE3_MAX_RETIRED_PER_RELEASE`, and journaled as ``rows-retired``.
 
 **Incremental.** The list is re-walked whole every run; the PLAW is what is
 not re-read. A law already published ``captured`` or ``captured_partial`` under
@@ -45,8 +47,8 @@ shaped-row digest. OLRC states no ``Last-Modified``, ``ETag`` or
 say it is unchanged: while every scoped Congress holds a checkpoint for this
 member, release point and rule, nothing is derived. Otherwise every scoped act
 is derived again, and only an act whose rows changed, or which the file no
-longer lists, is published, its whole row set replaced. A failed read
-publishes nothing and keeps every checkpoint. A ``401``/``403`` from any of the
+longer lists, is published, its whole row set replaced. A failed read, or one
+the retirement guard refuses, publishes nothing and keeps every checkpoint. A ``401``/``403`` from any of the
 three publishers aborts the run. Needs an api.data.gov key for the list route;
 the PLAW and OLRC routes are keyless.
 """
@@ -55,8 +57,7 @@ from __future__ import annotations
 
 import re
 from collections import Counter
-from collections.abc import Callable, Mapping
-from importlib.metadata import version
+from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, NamedTuple, Protocol
 
@@ -77,12 +78,13 @@ from spicy_docs.sources.uscode.acquisition import UsCodeAcquirer, UsCodeAcquisit
 from spicy_docs.transport.captured import attached_capture
 from spicy_docs.transport.credentials import scrub_credential
 
+from spicy_regs.generations import spicy_docs_code
 from spicy_regs.sources import r2
 from spicy_regs.sources.congress_bills import API_KEY_ENV_VARS, _resolve_api_key
 from spicy_regs.transforms.congress_scope import congresses_from_env
 from spicy_regs.transforms.congress_walk import ListingSource, PerRunCap, walk_route
 from spicy_regs.transforms.read_checkpoints import checkpoint_metadata, read_checkpoints
-from spicy_regs.transforms.table_merge import merge_contract_table, published_table
+from spicy_regs.transforms.table_merge import merge_contract_table, published_table, retired_rows
 
 if TYPE_CHECKING:
     from spicy_regs.source_evidence import CaptureEvidence
@@ -160,12 +162,25 @@ class HeldLaw(NamedTuple):
     reader_version: str | None = None
 
 
-#: The rule ``table3_records`` rows are derived under, with the spicy-docs
-#: release whose bulk reader and shaper derive them: either moving derives the
-#: next bulk read again. That costs no request, since the zip is fetched every
-#: run anyway, and publishes only the acts whose rows it changes; a package
-#: version in a re-fetch token, by contrast, costs a request per item.
-TABLE3_RULE = f"table3-bulk-v1+spicy-docs={version('spicy-docs')}"
+#: At most this many held acts may leave Table III in one release, and only when
+#: its release point advances; more, or any without an advance, refuses the read
+#: and publishes nothing. Table III only grows: across the eight consecutive
+#: releases from 116-150 (2020-07) to 119-73, 8 to 155 acts were added each
+#: time, and not one of 182,775 act-transitions dropped an act (receipt
+#: ``fork-execution-2026-09-21/table3-bulk-2026-09-26/wayback/``). One allows a
+#: publisher's correction of a single act; a partial dump drops thousands.
+TABLE3_MAX_RETIRED_PER_RELEASE = 1
+
+
+def table3_rule() -> str:
+    """The rule ``table3_records`` rows are derived under: this derivation and SpicyDocs' code.
+
+    The code (:func:`~spicy_regs.generations.spicy_docs_code`), not the release string,
+    so a version-only SpicyDocs release derives nothing again, as for print citations
+    and committee reports. A code change derives the next read again, which costs no
+    request (the zip is fetched every run) and publishes only acts whose rows moved.
+    """
+    return f"table3-bulk-v1;code={spicy_docs_code()}"
 
 #: A public-law key as Table III states it: ``119-4`` in the bulk, ``119–4`` on a page.
 _PUBLIC_LAW_KEY = re.compile(r"(\d+)[-\u2013](\d+)")
@@ -207,12 +222,20 @@ def _held_congresses(prior_file: Path | None) -> set[int]:
     return {int(congress) for (congress,) in rows if str(congress).isdigit()}
 
 
-def _held_acts(prior_file: Path | None) -> set[str]:
+def _held_acts(prior_file: Path | None) -> tuple[set[str], str | None]:
+    """Every act the published ``table3_records`` holds, and the newest release point its rows state."""
     if prior_file is None:
-        return set()
+        return set(), None
     import duckdb
 
-    return {str(row[0]) for row in duckdb.sql(f"SELECT DISTINCT act_key FROM read_parquet('{prior_file}')").fetchall()}
+    rows = duckdb.sql(f"SELECT DISTINCT act_key, release_point FROM read_parquet('{prior_file}')").fetchall()
+    return {str(act) for act, _ in rows}, _newest_release_point(point for _, point in rows)
+
+
+def _newest_release_point(points: Iterable[object]) -> str | None:
+    """The latest of some release-point labels (``119-73``), ordered by Congress then law; ``None`` if none parse."""
+    parsed = [(law, str(point)) for point in points if (law := _public_law(str(point) if point else None))]
+    return max(parsed)[1] if parsed else None
 
 
 def _list_laws(
@@ -403,7 +426,7 @@ def _table3_current(checkpoint: Mapping[str, Any] | None, bulk: Any) -> bool:
     The release point is in the member's name, not its bytes, so an unchanged
     member under a new release point is still a new statement of currency.
     """
-    return (checkpoint is not None and checkpoint.get("rule") == TABLE3_RULE
+    return (checkpoint is not None and checkpoint.get("rule") == table3_rule()
             and checkpoint.get("member_sha256") == bulk.member_sha256
             and checkpoint.get("release_point") == bulk.release_point and isinstance(checkpoint.get("acts"), dict))
 
@@ -441,74 +464,142 @@ def _bulk_rows(
     return acts
 
 
+class Table3Read(NamedTuple):
+    """What one Table III bulk read publishes: its rows, the acts it retires, and the release point it states."""
+
+    rows: list[dict]
+    retiring: list[str]
+    release_point: str | None
+
+
 def _table3_rows(
     olrc: OlrcSource,
     congresses: set[int],
     held: set[str],
+    published_release_point: str | None,
     checkpoints: dict[str, dict],
     evaluated: set[str],
     evidence: CaptureEvidence | None = None,
-) -> list[dict]:
-    """Every scoped act's rows from one read of the Table III bulk file; only changed or vanished acts are published.
+) -> Table3Read:
+    """Every scoped act's rows from one read of the Table III bulk file; only changed or retired acts are published.
 
     One request a run, retained as evidence. ``checkpoints`` maps a Congress to
     what was last derived for it: rule, member digest, release point and each
     act's shaped-row digest. While every scoped Congress's checkpoint names this
-    member and release point under the current rule, nothing is derived. Otherwise each scoped act
-    is derived and compared with its digest (a held act with none is published),
-    and a held or checkpointed act the file no longer lists is ``evaluated``
-    with no rows, which removes them. A failed read changes nothing.
+    member and release point under the current rule, nothing is derived.
+    Otherwise each scoped act is derived and compared with its digest (a held
+    act with none is published). A held or checkpointed act the file no longer
+    lists is retired, ``evaluated`` with no rows, which removes them.
+
+    The read is refused, publishing nothing and keeping every checkpoint, when
+    its release point sorts before ``published_release_point`` (the newest the
+    table or a checkpoint states), when it drops an act without advancing past
+    it, or when it drops more than :data:`TABLE3_MAX_RETIRED_PER_RELEASE`. A
+    failed read changes nothing either.
     """
+    unchanged = Table3Read([], [], None)
     try:
         acquired = olrc.acquire_table3_bulk()
     except (UsCodeSourceError, httpx.HTTPError, ConnectionError) as error:
         if evidence:
             evidence.refusal(error, stage="table3:bulk")
         logger.warning("Laws: Table III bulk not established — every row stands: {}", _transport_error(error))
-        return []
+        return unchanged
     if evidence:
         evidence.capture(acquired.capture, stage="table3:bulk")
-    bulk = acquired.result
+    bulk, rule = acquired.result, table3_rule()
     scope = sorted(congresses)
+    published = _newest_release_point([published_release_point, *(c.get("release_point") for c in checkpoints.values())])
+    stated = {"release_point": bulk.release_point, "published_release_point": published,
+              "member_sha256": bulk.member_sha256, "rule": rule, "congresses": scope}
+
+    def refuse(reason: str, **fields: object) -> Table3Read:
+        logger.warning("Laws: Table III bulk refused ({}) — every row stands: release point {} against published {} {}",
+                       reason, bulk.release_point, published, fields or "")
+        if evidence:
+            evidence.event("table3-bulk-refused", reason=reason, **stated, **fields)
+        return unchanged
+
+    point, held_point = _public_law(bulk.release_point), _public_law(published)
+    if point is None:  # the member name's grammar makes this unreachable; a refusal, not a crash, if it moves
+        return refuse("release-point-unreadable")
+    if held_point is not None and point < held_point:
+        return refuse("release-point-regressed")
+    advanced = held_point is None or point > held_point
     if all(_table3_current(checkpoints.get(str(congress)), bulk) for congress in scope):
         logger.info("Laws: Table III bulk unchanged at release point {} ({}) for Congresses {}; nothing derived",
                     bulk.release_point, bulk.member_sha256, scope)
         if evidence:
-            evidence.event("table3-bulk", release_point=bulk.release_point, member_sha256=bulk.member_sha256,
-                           rule=TABLE3_RULE, congresses=scope, derived=False)
-        return []
+            evidence.event("table3-bulk", **stated, derived=False)
+        return unchanged
     derived = _bulk_rows(acquired.capture.body, congresses, release_point=bulk.release_point,
                          observed_at=acquired.capture.observed_at)
     rows: list[dict] = []
-    published: list[str] = []
-    removed: list[str] = []
+    changed: list[str] = []
+    retiring: list[str] = []
+    digests: dict[int, dict[str, str | None]] = {}
     for congress in scope:
         prior = (checkpoints.get(str(congress)) or {}).get("acts") or {}
         acts = derived.get(congress, {})
-        digests = {key: _rows_digest(act_rows) for key, act_rows in acts.items()}
-        for key, act_digest in digests.items():
+        digests[congress] = {key: _rows_digest(act_rows) for key, act_rows in acts.items()}
+        for key, act_digest in digests[congress].items():
             if prior.get(key) != act_digest:
-                published.append(key)
+                changed.append(key)
                 rows.extend(acts[key])
-        stated = {key for key in held | set(prior) if (act := _public_law(key)) is not None and act[0] == congress}
-        removed.extend(sorted(stated - set(digests)))
-        checkpoints[str(congress)] = {"congress": str(congress), "rule": TABLE3_RULE,
+        known = {key for key in held | set(prior) if (act := _public_law(key)) is not None and act[0] == congress}
+        retiring.extend(sorted(known - set(acts)))
+    if retiring and not advanced:
+        return refuse("acts-dropped-without-release-point-advance", dropped=retiring)
+    if len(retiring) > TABLE3_MAX_RETIRED_PER_RELEASE:
+        return refuse("acts-dropped-past-bound", dropped=retiring, bound=TABLE3_MAX_RETIRED_PER_RELEASE)
+    for congress in scope:
+        checkpoints[str(congress)] = {"congress": str(congress), "rule": rule,
                                       "member_sha256": bulk.member_sha256, "sha256": acquired.capture.sha256,
                                       "release_point": bulk.release_point, "observed_at": acquired.capture.observed_at,
-                                      "acts": digests}
-    evaluated.update(published, removed)
-    if removed:
-        logger.warning("Laws: Table III no longer lists {}; their rows are removed", removed)
+                                      "acts": digests[congress]}
+    evaluated.update(changed, retiring)
+    if retiring:
+        logger.warning("Laws: Table III at release point {} no longer lists {}; their rows are retired",
+                       bulk.release_point, retiring)
     logger.info(
         "Laws: Table III bulk at release point {} — {:,} acts derived for Congresses {}, {:,} published {}, {:,} rows",
-        bulk.release_point, sum(map(len, derived.values())), scope, len(published), published, len(rows),
+        bulk.release_point, sum(map(len, derived.values())), scope, len(changed), changed, len(rows),
     )
     if evidence:
-        evidence.event("table3-bulk", release_point=bulk.release_point, member_sha256=bulk.member_sha256,
-                       rule=TABLE3_RULE, congresses=scope, derived=True,
+        evidence.event("table3-bulk", **stated, derived=True,
                        acts={str(congress): sorted(acts) for congress, acts in derived.items()},
-                       published=published, removed=removed, rows=len(rows))
-    return rows
+                       published=changed, retiring=retiring, rows=len(rows))
+    return Table3Read(rows, retiring, bulk.release_point)
+
+
+def _journal_retired(prior_file: Path | None, read: Table3Read, scratch_dir: Path,
+                     evidence: CaptureEvidence | None) -> None:
+    """Journal the acts the merge will remove as ``rows-retired``, as ``retired_rows`` finds them.
+
+    Run before the merge, which deletes its prior: the prior's rows of a retiring
+    act that no fresh row supplies again are what ``replace_parents`` drops.
+    Keyed on ``act_key``; qualification reconciles the act keys the prior held and
+    the output does not against exactly these (``generation_audit``).
+    """
+    if not read.retiring or prior_file is None or evidence is None:
+        return
+    import duckdb
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    fresh = scratch_dir / "_table3_records_fresh_keys.parquet"
+    pq.write_table(pa.table({"act_key": pa.array([row["act_key"] for row in read.rows], pa.string())}), fresh)
+    listed = ", ".join("'" + key.replace("'", "''") + "'" for key in read.retiring)
+    try:
+        with duckdb.connect() as con:
+            removed = retired_rows(con, identity=("act_key",), prior_file=prior_file, new_file=fresh,
+                                   retire=f"act_key IN ({listed})")
+    finally:
+        fresh.unlink(missing_ok=True)
+    evidence.event("rows-retired", stage="table3", table=TABLE3, key=["act_key"],
+                   rows=[list(key) for key in sorted({tuple(row) for row in removed})],
+                   reason="the Table III bulk file no longer lists the act, and its release point advanced",
+                   scope={"release_point": read.release_point})
 
 
 def _rows_digest(rows: list[dict]) -> str | None:
@@ -545,7 +636,7 @@ def build_laws(
     # 1. The enumeration, whole, then the PLAW leg under its cap.
     if evidence:
         evidence.event("selection", congresses=congresses, max_uslm=max_uslm,
-                       uslm_reader_version=USLM_READER_VERSION, table3_rule=TABLE3_RULE)
+                       uslm_reader_version=USLM_READER_VERSION, table3_rule=table3_rule())
     listed = _list_laws(reader, congresses)
     if evidence:
         evidence.event("law-list-complete", law_ids=[plain["law_id"] for _, _, plain in listed])
@@ -559,14 +650,16 @@ def build_laws(
     checkpoints = {r["congress"]: r for r in read_checkpoints(priors[TABLE3], "laws-table3")
                    if isinstance(r.get("congress"), str) and isinstance(r.get("acts"), dict)}
     evaluated: set[str] = set()
-    table3_rows = _table3_rows(olrc, set(congresses) | _held_congresses(priors[NAME]), _held_acts(priors[TABLE3]),
-                               checkpoints, evaluated, evidence)
+    held, published_release_point = _held_acts(priors[TABLE3])
+    table3 = _table3_rows(olrc, set(congresses) | _held_congresses(priors[NAME]), held, published_release_point,
+                          checkpoints, evaluated, evidence)
+    _journal_retired(priors[TABLE3], table3, output_dir, evidence)
 
     return (
         merge_contract_table(output_dir, NAME, law_rows, prior_present=priors[NAME] is not None),
         merge_contract_table(output_dir, CODE_SECTIONS, section_rows, prior_present=priors[CODE_SECTIONS] is not None,
                              replace_parents=(("congress", "session"), sessions)),
-        merge_contract_table(output_dir, TABLE3, table3_rows, prior_present=priors[TABLE3] is not None,
+        merge_contract_table(output_dir, TABLE3, table3.rows, prior_present=priors[TABLE3] is not None,
                              replace_parents=("act_key", evaluated),
                              parquet_metadata=checkpoint_metadata(priors[TABLE3], "laws-table3", checkpoints.values())),
     )
