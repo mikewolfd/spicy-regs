@@ -26,6 +26,13 @@ on:
         required: false
         default: ''
         type: string
+# A dispatch queues behind the 02:00 run and behind other dispatches instead of
+# racing them, since two concurrent publications of this family refuse the
+# later one as stale after its whole acquisition.
+concurrency:
+  group: rollup-bill-family
+  cancel-in-progress: false
+  queue: max
 jobs:
   run:
     uses: ./.github/workflows/_rollup.yml
