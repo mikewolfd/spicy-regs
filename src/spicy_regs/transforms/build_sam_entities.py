@@ -22,7 +22,8 @@ so a scheduled run advances coverage and the merge accretes it across runs.
 
 **Retirement.** An unbounded extract year is SAM's complete active set for that
 ``registrationDate`` year, so it replaces that year's rows: a registration the
-year no longer holds (expired, or no longer active) is retired and journaled.
+year no longer holds (expired, or no longer active) is retired and journaled
+as a ``rows-retired`` event that qualification reconciles against the removals.
 Before this, the merge only accreted; on 2026-09-26 the table held 62 more 2002
 and 18 more 2003 registrations than SAM then counted active. A bounded run
 (``max_records``) or the partition walk retires nothing.
@@ -43,7 +44,7 @@ import pyarrow.parquet as pq
 from loguru import logger
 
 from spicy_regs.sources import r2
-from spicy_regs.transforms.table_merge import merge_local_prior
+from spicy_regs.transforms.table_merge import merge_local_prior, retired_rows
 
 if TYPE_CHECKING:
     from spicy_regs.source_evidence import CaptureEvidence
@@ -59,6 +60,9 @@ SAM_API_KEY_ENV_VARS = (
     "DATA_GOV_API_KEY",
     "REGULATIONS_GOV_API_KEY",
 )
+
+#: A registration's key: one entity registers once per EFT indicator.
+IDENTITY = ("uei", "entity_eft_indicator")
 
 # Earliest registrationDate year the extract windows and the daily rotation cover.
 # SAM's active registrations by year (entity API counts, 2026-09-26): none in
@@ -352,12 +356,19 @@ def build_sam_entities(
             "substr(registration_date, 1, 4) IN (" + ", ".join(f"'{year}'" for year in years) + ")"
         )
         if have_prior:
-            _journal_retired(con, prior_file, new_file, retire, years, evidence)
+            retired = retired_rows(con, identity=IDENTITY, prior_file=prior_file, new_file=new_file, retire=retire)
+            logger.info("SAM entities: retiring {:,} registrations the completed years no longer hold", len(retired))
+            if evidence is not None:
+                evidence.event(
+                    "rows-retired", stage="sam", table="sam_entities", key=list(IDENTITY), rows=retired,
+                    reason="an unbounded extract year is SAM's complete active set for that registrationDate year",
+                    scope={"registration_date_years": years},
+                )
 
     merge_local_prior(
         con,
         columns=COLUMNS,
-        identity=("uei", "entity_eft_indicator"),
+        identity=IDENTITY,
         order_by="legal_business_name, uei, entity_eft_indicator",
         prior_file=prior_file if have_prior else None,
         new_file=new_file,
@@ -373,25 +384,3 @@ def build_sam_entities(
     total = pq.ParquetFile(out_file).metadata.num_rows
     logger.info("SAM entities: {:,} rows", total)
     return out_file
-
-
-def _journal_retired(con, prior_file: Path, new_file: Path, retire: str, years: list[int | None],
-                     evidence: CaptureEvidence | None) -> None:
-    """Log, and journal when evidence is on, each prior registration the completed years no longer hold."""
-    prior, new = (str(path).replace("'", "''") for path in (prior_file, new_file))
-    retired = con.execute(
-        f"""
-        SELECT uei, entity_eft_indicator, registration_date FROM read_parquet('{prior}') p
-        WHERE ({retire}) AND NOT EXISTS (
-            SELECT 1 FROM read_parquet('{new}') n
-            WHERE n.uei = p.uei AND n.entity_eft_indicator IS NOT DISTINCT FROM p.entity_eft_indicator
-        )
-        ORDER BY registration_date, uei, entity_eft_indicator
-        """
-    ).fetchall()
-    logger.info("SAM entities: retiring {:,} registrations the completed years no longer hold", len(retired))
-    if evidence is not None and retired:
-        evidence.event(
-            "sam-registrations-retired", stage="sam", years=years, count=len(retired),
-            registrations=[{"uei": u, "eft_indicator": e, "registration_date": d} for u, e, d in retired],
-        )

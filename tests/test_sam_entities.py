@@ -146,12 +146,13 @@ def test_a_completed_extract_year_retires_what_it_no_longer_holds(tmp_path, monk
 
     held = sorted(row["uei"] for row in pq.read_table(out).to_pylist())
     journal = [json.loads(line) for line in (evidence.artifact_dir / "journal.jsonl").read_text().splitlines()]
-    retired = [event for event in journal if event["event"] == "sam-registrations-retired"]
+    retired = [event for event in journal if event["event"] == "rows-retired"]
     if max_records is None:
         assert held == ["A", "C", "D"]
         [event] = retired
-        assert (event["years"], event["count"]) == ([2002], 1)
-        assert event["registrations"] == [{"uei": "B", "eft_indicator": None, "registration_date": "2002-05-06"}]
+        assert (event["table"], event["key"], event["rows"]) == ("sam_entities", ["uei", "entity_eft_indicator"],
+                                                                 [["B", None]])
+        assert event["scope"] == {"registration_date_years": [2002]} and event["reason"]
     else:  # a bounded run may have stopped inside the year, so it retires nothing
         assert held == ["A", "B", "C", "D"] and retired == []
 

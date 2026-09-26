@@ -85,6 +85,22 @@ def merge_local_prior(
     )
 
 
+def retired_rows(con, *, identity: tuple[str, ...], prior_file: Path, new_file: Path, retire: str) -> list[list]:
+    """The identities of prior rows ``retire`` drops that ``new_file`` does not supply again, in key order.
+
+    What :func:`merge_local_prior` removes for the same ``retire``: a caller journals it as a
+    ``rows-retired`` event, which qualification reconciles against the rows actually removed.
+    """
+    prior, new = (str(path).replace("'", "''") for path in (prior_file, new_file))
+    keys = ", ".join(f'"{k}"' for k in identity)
+    same = " AND ".join(f'n."{k}" IS NOT DISTINCT FROM p."{k}"' for k in identity)
+    rows = con.execute(
+        f"SELECT {keys} FROM read_parquet('{prior}') p WHERE ({retire}) "
+        f"AND NOT EXISTS (SELECT 1 FROM read_parquet('{new}') n WHERE {same}) ORDER BY {keys}"
+    ).fetchall()
+    return [list(row) for row in rows]
+
+
 def prior_scratch_path(output_dir: Path, name: str) -> Path:
     """The local path :func:`merge_table` caches/reuses the prior table under.
 
