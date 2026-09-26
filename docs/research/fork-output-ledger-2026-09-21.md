@@ -30,8 +30,14 @@ MCP `table_qualification` record read these rows directly.
   cover the 117th Congress as the 118th and misread `CLAUSE S 2(N)` and
   `S. Con. Res. 2022` as citations (receipt `bills-citations/print-check.json`).
   The scheduled `55671b43…`, the first bill family with retained BILLSTATUS
-  evidence, still carries both defects. Both repairs are in progress, and no
-  generation of either family is qualified.
+  evidence, still carries both defects. Both repairs are in code at `8041729`,
+  adopting SpicyDocs 0.35.0 (`0ecac5c`):
+  - bill printings pair by date, then a dateless enrolled one by its stage;
+    `bill_sections` is keyed on `seq`, and the stale pairs are retired on the
+    next run;
+  - activity-report bills key in the covered Congress, and committees are read
+    in the report's chamber, or in the chamber the print names.
+  Neither family is qualified until its next generation is published and audited.
 - **Partial.** `congress_bills` lacks bills that the retained 110th–113th
   BILLSTATUS lists (`bills-citations/congress-bills-missing-vs-billstatus-110-113.json`).
   The subjects, amendments and house-communications audits are partial as
@@ -44,6 +50,13 @@ MCP `table_qualification` record read these rows directly.
   D1: the SpicyDocs docket-name reader misses several native formats (the
   FAR-case form needs an owner ruling). D2: document numbers containing spaces
   do not join. D3: `identity_predecessors_json` looks back only one snapshot.
+  D1 (owner ruling: read a docket named after prose) and D2 are in SpicyDocs
+  0.35.0, adopted at `8041729`, where they read 432 of the 442 missed held pairs
+  and all 39 missing references (receipt `regulatory/d1d2-fix/`). D3 is in code
+  at `635c42c`: lineage now carries all recorded ancestry, and a proceeding no
+  longer lists as a predecessor a sibling that shares only a cited notice
+  (receipt `regulatory/d3-fix/`). Each closes when the next rulemaking snapshot
+  is audited.
   D4: derived rollups record no parent digests (receipt `regulatory/results.json`);
   fixed in code at `4396f2e`, where each derived generation records its parents,
   and closed once a refresh publishes such generations and their parents are verified.
