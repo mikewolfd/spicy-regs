@@ -13,8 +13,11 @@ generation something cites and the last ``KEEP_LAST`` per family. Kept:
 * every generation DocSpec pins in its ``docs/pins/fork-generations.json``;
 * the managed parents a kept generation records, transitively, so its inputs
   stay readable;
-* anything written within ``IN_FLIGHT``: a publish uploads its prefix before
-  it swaps the pointer.
+* a generation that stopped being current less than ``GRACE`` ago, when its
+  successor on the chain was written, since a run may still be reading it;
+* a generation off the chain written after the current one: a publish uploads
+  its prefix before it swaps the pointer, so it may be in flight. One off the
+  chain and older than current lost its swap and was never read.
 
 Everything else under ``generations/`` is planned for deletion. Source evidence
 under ``source-evidence/`` is content-addressed and shared, and is not planned
@@ -38,7 +41,10 @@ from spicy_regs.sources import publication
 
 PLAN_FORMAT = "spicy-regs-generation-retention-plan"
 KEEP_LAST = 3
-IN_FLIGHT = timedelta(hours=24)
+#: A rollup reads its parents through the index it captured at start, and a
+#: GitHub-hosted job runs at most 6 hours, so a generation stays readable that
+#: long after it stops being current.
+GRACE = timedelta(hours=6)
 PREFIX = "generations/"
 ROOT = "artifact.json"
 DOCS = LEDGER.parents[1]
@@ -141,31 +147,37 @@ def plan(client, bucket: str, *, notes: Iterable[tuple[str, str]], docspec: Mapp
         generation.keep.append(reason)
         return first
 
-    for family, entry in index["families"].items():
+    by_family: dict[str, list[Generation]] = {}
+    for generation in generations.values():
+        by_family.setdefault(generation.family, []).append(generation)
+    for family, members in by_family.items():
+        entry = index["families"].get(family)
+        if entry is None:
+            for generation in sorted(members, key=lambda g: g.newest, reverse=True)[:KEEP_LAST]:
+                keep(generation.digest, f"last {KEEP_LAST} by upload time: {family} is not in the index")
+            continue
         current = entry["artifactDigest"].removeprefix("sha256:")
         if current not in generations:
             raise publication.PublicationError(f"Current {family} generation {current[:8]} is not in the listing")
+        chain: list[str] = []
         step: str | None = current
-        for place in range(KEEP_LAST):
-            if step is None or step not in generations:
-                break
-            keep(step, "current" if place == 0 else f"last {KEEP_LAST}: {place} before current")
+        while step is not None and step in generations and step not in chain:
+            chain.append(step)
             replaced = (root(step) or {}).get("spec", {}).get("readSnapshot", {}).get("families", {}).get(family)
             step = replaced["artifactDigest"].removeprefix("sha256:") if replaced else None
-    unindexed: dict[str, list[Generation]] = {}
-    for generation in generations.values():
-        if generation.family not in index["families"]:
-            unindexed.setdefault(generation.family, []).append(generation)
-    for family, members in unindexed.items():
-        for generation in sorted(members, key=lambda g: g.newest, reverse=True)[:KEEP_LAST]:
-            keep(generation.digest, f"last {KEEP_LAST} by upload time: {family} is not in the index")
+        for place, digest in enumerate(chain):
+            superseded = generations[chain[place - 1]].newest if place else now
+            if place < KEEP_LAST:
+                keep(digest, "current" if place == 0 else f"last {KEEP_LAST}: {place} before current")
+            elif now - superseded < GRACE:
+                keep(digest, f"current until {superseded:%Y-%m-%dT%H:%MZ}, within the {GRACE.seconds // 3600}h grace")
+        for generation in members:
+            if generation.digest not in chain and generation.newest > generations[current].newest:
+                keep(generation.digest, "written after the current generation: a publish may be in flight")
     for digest, names in note_pins(notes, generations).items():
         keep(digest, "named in " + ", ".join(sorted(names)))
     for digest, reason in docspec.items():
         keep(digest, reason)
-    for generation in generations.values():
-        if now - generation.newest < IN_FLIGHT:
-            keep(generation.digest, f"written within {IN_FLIGHT.total_seconds() / 3600:g}h")
 
     pending = [digest for digest, generation in generations.items() if generation.keep]
     while pending:

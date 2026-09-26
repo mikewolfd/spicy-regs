@@ -91,10 +91,25 @@ def test_a_kept_generation_keeps_the_parent_it_read(tmp_path, monkeypatch, remot
     assert record["delete"] == [f"generations/base/{newer[0]}"]
 
 
-def test_a_generation_written_within_a_day_is_kept_as_possibly_in_flight(tmp_path, remote):
-    _publish(_Base, tmp_path, remote, 5)
-    record = _plan(remote, now=datetime.now(timezone.utc))
-    assert record["delete"] == []
+def test_a_generation_stays_for_the_grace_after_it_stops_being_current(tmp_path, remote):
+    digests = _publish(_Base, tmp_path, remote, 5)
+    within = _plan(remote, now=datetime.now(timezone.utc) + retention.GRACE - timedelta(minutes=5))
+    assert within["delete"] == []
+    assert [reason[:13] for reason in _kept(within, "base")[digests[0]]] == ["current until"]
+
+
+def test_an_upload_off_the_chain_is_kept_only_while_newer_than_current(tmp_path, remote):
+    """A publish that has not swapped yet may be in flight; one older than current lost its swap."""
+    first = _publish(_Base, tmp_path / "first", remote, 1)[0]
+    index = remote.objects[pub.INDEX_KEY]
+    pending = _publish(_Base, tmp_path / "pending", remote, 1)[0]
+    remote.objects[pub.INDEX_KEY] = index  # as if its swap had not happened yet
+    assert _kept(_plan(remote), "base")[pending] == ["written after the current generation: a publish may be in flight"]
+
+    current = _publish(_Base, tmp_path / "after", remote, 1)[0]
+    record = _plan(remote)
+    assert set(_kept(record, "base")) == {first, current}
+    assert record["delete"] == [f"generations/base/{pending}"]
 
 
 def test_docspec_pins_refuse_a_document_outside_the_stated_shape():
