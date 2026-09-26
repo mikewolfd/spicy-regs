@@ -359,14 +359,15 @@ def test_a_multi_year_run_shares_one_wait_and_refuses_the_year_it_cannot_reach(m
 # -- rollup: bounded rotation + env overrides --------------------------------
 
 
-def test_rotating_year_covers_full_range_over_a_cycle():
+def test_the_rotation_rereads_the_current_year_every_other_day_and_cycles_the_older_years():
     from spicy_regs.pipelines.rollups.sam_entities import _MIN_REGISTRATION_YEAR, _rotating_year
 
     today = date(2026, 7, 18)
-    span = today.year - _MIN_REGISTRATION_YEAR + 1
-    seen = {_rotating_year(date.fromordinal(today.toordinal() + d)) for d in range(span)}
-    # A full rotation touches every year in [min, current] exactly once.
-    assert seen == set(range(_MIN_REGISTRATION_YEAR, today.year + 1))
+    days = [date.fromordinal(today.toordinal() + d) for d in range(2 * (today.year - _MIN_REGISTRATION_YEAR))]
+    picked = [_rotating_year(day) for day in days]
+    assert all(year == today.year for day, year in zip(days, picked) if day.toordinal() % 2 == 0)
+    older = [year for day, year in zip(days, picked) if day.toordinal() % 2]
+    assert sorted(older) == list(range(_MIN_REGISTRATION_YEAR, today.year))  # each older year exactly once
 
 
 def test_int_env_parses_blank_and_bad_values(monkeypatch):

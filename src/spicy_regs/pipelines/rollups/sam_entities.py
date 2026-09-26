@@ -29,14 +29,18 @@ from spicy_regs.transforms import build_sam_entities
 
 
 def _rotating_year(today: date) -> int:
-    """Pick one registrationDate year to fetch this run, rotating by day.
+    """Pick one registrationDate year to fetch this run: the current year every other day.
 
-    Cycles across ``[_MIN_REGISTRATION_YEAR, today.year]`` so successive scheduled
-    runs advance coverage one bounded year-window at a time (and keep refreshing
-    once the cycle wraps). Deterministic from the date — no persisted cursor.
+    The current year gains registrations daily (4,357 in the three days after the
+    2026 load of 2026-09-23), while an older year changes only as registrations
+    expire. Even ordinal days re-read the current year; odd days cycle through
+    ``[_MIN_REGISTRATION_YEAR, today.year - 1]``, each older year once per
+    ``2 * span`` days. Deterministic from the date, with no persisted cursor.
     """
-    span = today.year - _MIN_REGISTRATION_YEAR + 1
-    return _MIN_REGISTRATION_YEAR + (today.toordinal() % span)
+    day = today.toordinal()
+    if day % 2 == 0:
+        return today.year
+    return _MIN_REGISTRATION_YEAR + (day // 2) % (today.year - _MIN_REGISTRATION_YEAR)
 
 
 def _int_env(name: str) -> int | None:
