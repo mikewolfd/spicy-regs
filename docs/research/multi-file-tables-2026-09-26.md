@@ -123,15 +123,38 @@ entry carries what DocSpec pins on, as v1 does: `logicalId`, `artifactDigest` an
 A member's `key` is relative to the generation prefix, so a carried-forward member keeps the same `key`
 and `sha256` from one generation to the next (§4.3 relies on this).
 
-**Open for 24:**
-- whether the v1 and v2 writes need one conditional sequence (v2, then v1) or one shared precondition;
-- whether the table key in v2 drops `.parquet`.
+**Write order (24's answer).** v2 is written first, under its own conditional write (CAS); then v1,
+under its own. v1 is always `derive_v1(v2)`, a pure function of v2, and is never merged on its own.
+- A failed or raced v1 write is repaired by deriving it again from the current v2. A reader of a
+  stale v1 sees an older but consistent state, never a mix.
+- Concurrent writers are serialized by v2's CAS alone.
+- The pointer-retry merge (`_merge_family`, `_assert_family_unchanged`) moves to v2 unchanged.
+
+**A family with a split table in v1** is listed with its single-member tables only, and the split
+table is omitted. DocSpec 0.11.2 checks `set(tables) == set(members)`, so it would refuse such a
+family through v1. DocSpec must therefore read v2 for any family with a split table **before** that
+family's first split publishes (§4.5 step 2). None of the families DocSpec admits today
+(`federal_register`, `dockets`, `documents`) is proposed for splitting.
+
+**Table keys** keep the `<name>.parquet` spelling in v2 (24's answer). One key string across both
+indexes gives `table_members(index, key)` a single argument domain, and no reader maps between
+spellings.
 
 ### 4.2 Members, and the partition column
 
 - Member keys follow `public_tables`: `generations/<family>/<digest>/<table>/<col>=<value>/part-NNNNNN.parquet`.
   `NNNNNN` numbers the files within a partition when one would pass `maxRowsPerMember` or a byte cap.
   A proposed cap is 1 GiB per member, well under any single-request limit.
+- **The partition value must be a function of the table's identity key** (24). Then a row can live in
+  only one partition. Identity uniqueness across members reduces to uniqueness within each member,
+  and carry-forward can never keep a stale copy of a row in an untouched partition while its fresh
+  copy lands in another.
+  - `bill_sections` satisfies it: `congress` is the prefix of `bill_id`.
+  - `court_opinion_clusters` partitioned by `date_filed` would **not**: its identity is
+    `cluster_id`, and a cluster whose `date_filed` changes would sit in two partitions. It is
+    partitioned by a `cluster_id` range instead (§4.6).
+  - The alternative, re-merging every partition that holds a prior copy of a fresh row, costs a
+    lookup of every fresh identity against every partition. It is not proposed.
 - The partition column must be a **declared column** of the table, stored inside the Parquet (83's
   preference). Readers read with `hive_partitioning=false`, so no synthetic column appears and
   `DESCRIBE` still equals the declared columns (the MCP at `mcp_server.py:438-442` and the freshness
@@ -167,6 +190,17 @@ and `sha256` from one generation to the next (§4.3 relies on this).
 ### 4.4 Publishing and verification: single pass
 
 - `_copy_unchanged_member` decides per member by the prior member's digest, read from v2.
+- **Storage is not saved.** Carry-forward still copies every unchanged member server-side into each
+  new generation, so storage per generation stays O(family bytes): about 4 GB of copies a week for
+  the court family. That is fine under decision 36's retention. The savings are in transfer, merge
+  time and admission, not storage.
+- **Guards (24):**
+  - The key-set guard (`publication.py:569` refuses any change to a family's key set) becomes: the
+    family's **table** set stays fixed, and a declared partitioned table may **add** members (a new
+    Congress, a new FCC year).
+  - A member that disappears is a retirement, journaled like `rows-retired`.
+  - The shrink guard runs **per table**, on the sum of member rows, not per member key, since one
+    partition can legitimately shrink, for example after a retirement.
 - Local verification happens **once** per member, following `operations.md` §1b(b): `_run_tables`
   passes its verified artifact to `_publish_verified_generation` instead of re-verifying.
 - **Admission read-back.** `admit_artifact` still GETs every member, copies included
@@ -182,7 +216,8 @@ and `sha256` from one generation to the next (§4.3 relies on this).
 
 1. **spicy-regs.** One `table_members(index, table)` resolver replaces `table_location`, returning
    `[(url, sha256, rows)]` with one element for a v1 table. `r2.download`, the MCP views
-   (`read_parquet([...])`), the CLI, `generation_audit`, the nightly checks and the dictionary check
+   (`read_parquet([...])`), the CLI, `generation_audit`, the nightly checks (including
+   `check_table_joins`' `table_urls`, which builds one URL per table today) and the dictionary check
    all go through it. Ships in one spicy-regs release **before** any table is published split.
 2. **DocSpec** (83):
    - `stage_generation` and `admit_generation` carry a member list;
@@ -202,8 +237,9 @@ and `sha256` from one generation to the next (§4.3 relies on this).
 
 1. **`bill_sections`** first, as the owner chose: it has the simplest partition (congress), a
    nightly delta confined to one partition, and no external reader beyond spicy-regs itself.
-2. **`court_opinion_clusters`**, by `date_filed` year or decade (39 decades, at most 1.71M rows each),
-   before it reaches the single-object cap.
+2. **`court_opinion_clusters`**, by `cluster_id` range, before it reaches the single-object cap.
+   `date_filed` (39 decades, at most 1.71M rows each) would read better but is not a function of
+   the identity (§4.2). The range width is chosen to keep each member under the byte cap.
 3. **`fcc_filings`** by received year (decision 46), when it approaches 500 MB.
 4. **FEC individual contributions** (decision 51), born split, by cycle, then month or committee.
 5. **Comments:** folding the agency mirror into generations would make it atomic, but would cost an
@@ -219,11 +255,22 @@ and `sha256` from one generation to the next (§4.3 relies on this).
   and §4.5's sorted-set `verify`. It agrees with the 1 GiB member cap, the ≤ 256 MiB row groups, the
   phase-1 O(family) read-back ("documents' 77 MB took 5.4 s"), and not trusting size and ETag in
   admission. Engine needs nothing.
-- **spicy-stack-24 (publication format):** pending.
+- **spicy-stack-24 (publication format), 2026-09-26:** the direction is right. Folded in:
+  - §4.1: v2 is written first and v1 derived from it; a split table is omitted from v1; keys keep
+    `<name>.parquet`;
+  - §4.2: the partition value is a function of the identity (so court clusters go by `cluster_id`
+    range);
+  - §4.4: the key-set guard admits added members and journals vanished ones as retirements, the
+    shrink guard runs per table, and storage stays O(family bytes);
+  - §4.5: the resolver serves `check_table_joins`;
+  - §5: a real 1.1 GiB `CopyObject` measurement.
+- **Pending:** 83's confirmation that DocSpec reads v2 before any family it admits gets a split table
+  (§4.1).
 
 ## 5. Open measurements before code
 
-- R2's actual single-request `CopyObject` and PUT limits (decides how urgent `court_opinion_clusters` is).
+- R2's actual single-request `CopyObject` and PUT limits, measured with a real 1.1 GiB `CopyObject`
+  before the 1 GiB member cap is fixed (it also decides how urgent `court_opinion_clusters` is).
 - The share of `bill_sections` bytes the nightly run leaves unchanged once split. Estimate: 1.45 GB of
   1.9 GB after the 113th–114th land, since only the 119th changes.
 - Admission read-back time for a 0.9 GB split family on the runner (phase-1 acceptability).
