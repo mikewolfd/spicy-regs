@@ -27,6 +27,7 @@ from spicy_regs.ontology.common import (
 )
 
 from spicy_regs.ontology.federal_register import FederalRegisterIndex, record_url, references_json
+from spicy_regs.ontology.rins import proceeding_rins
 
 ITEMS_OUTPUT = "regulatory_agenda_items.parquet"
 RELATIONSHIPS_OUTPUT = "agenda_item_proceedings.parquet"
@@ -38,8 +39,11 @@ RELATIONSHIPS_OUTPUT = "agenda_item_proceedings.parquet"
 # they link: SpicyDocs 0.35.0 reads a docket named after prose (D1) and folds Regulations.gov's
 # typed FR-number separators (D2). A rulemaking snapshot records no package version, so the
 # actor carries the reader change.
-ITEM_ACTOR_ID = "spicy-regs:regulatory-agenda-items:v4"
-RELATIONSHIP_ACTOR_ID = "spicy-regs:agenda-item-proceedings:v4"
+# v5: an item tracks a proceeding only through a RIN the proceeding holds, so a catch-all
+# Federal Register feed docket (proceedings v10) tracks none of the rules it posts; items it
+# tracked keep their other links and count one fewer (decision 32 as amended 2026-09-26).
+ITEM_ACTOR_ID = "spicy-regs:regulatory-agenda-items:v5"
+RELATIONSHIP_ACTOR_ID = "spicy-regs:agenda-item-proceedings:v5"
 
 ITEM_COLUMNS = (
     "agenda_item_id",
@@ -154,20 +158,24 @@ def build_regulatory_agenda(
 
     proceedings_by_docket: dict[str, set[str]] = defaultdict(set)
     proceedings_by_fr_document: dict[str, set[str]] = defaultdict(set)
+    rins_by_proceeding: dict[str, set[str]] = {}
     for row in iter_parquet_rows(
         paths["proceedings"],
-        # Every column FederalRegisterIndex.proceeding_ids reads.
+        # Every column FederalRegisterIndex.proceeding_ids and proceeding_rins read.
         columns=(
             "proceeding_id",
             "docket_ids_json",
             "fr_document_ids_json",
             "fr_document_numbers_json",
             "unresolved_fr_references_json",
+            "rins_json",
+            "rin",
         ),
     ):
         proceeding_id = str(row.get("proceeding_id") or "").strip()
         if not proceeding_id:
             continue
+        rins_by_proceeding[proceeding_id] = proceeding_rins(row, json_stats)
         dockets = parse_json_list(
             row.get("docket_ids_json"),
             stats=json_stats,
@@ -205,7 +213,9 @@ def build_regulatory_agenda(
         evidence_date: object,
     ) -> None:
         evidence = str(evidence_id or "").strip()
-        if source not in SOURCES or not evidence or not proceeding_id:
+        # An item tracks a proceeding only through a RIN the proceeding holds: a catch-all
+        # docket's documents report other rulemakings' RINs, which its proceeding does not take.
+        if source not in SOURCES or not evidence or rin not in rins_by_proceeding.get(proceeding_id, ()):
             return
         key = (rin, proceeding_id, source, evidence)
         date = _source_date(evidence_date)

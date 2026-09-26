@@ -29,10 +29,12 @@ from spicy_regs.ontology.common import (
 
 from spicy_regs.ontology.federal_register import (
     FederalRegisterIndex,
+    catch_all_docket,
     references_json,
     resolved_id,
     rule_stage,
 )
+from spicy_regs.transforms.build_rule_targets import DOCUMENT_SOURCES
 
 OUTPUT = "proceedings.parquet"
 # v5: labelled FR docket values join (linked_docket_id), and stage events fall on the
@@ -47,7 +49,10 @@ OUTPUT = "proceedings.parquet"
 # v8: SpicyDocs 0.35.0 reads a docket named after prose (D1) and folds Regulations.gov's typed FR-number separators (D2).
 # v9: identity_predecessors_json is removed (owner decision 2026-09-26): no consumer read the
 # lineage, and supersedes_id with stable ids keeps continuity.
-ACTOR_ID = "spicy-regs:proceedings:v9"
+# v10: an agency's Federal Register feed docket (*_FRDOC_*, catch_all_docket) takes nothing from
+# its own documents: no action evidence, RIN, CFR part, stage event or title (decision 32 as
+# amended, owner ruling 2026-09-26).
+ACTOR_ID = "spicy-regs:proceedings:v10"
 
 COLUMNS = (
     "proceeding_id",
@@ -236,6 +241,10 @@ def build_proceedings(
         if docket is None:
             continue
         trusted_dockets.add(docket)
+        # A catch-all's documents post other rulemakings' FR documents: none is its evidence,
+        # so it is an action docket only by its own RIN or type (decision 32 as amended).
+        if catch_all_docket(docket):
+            continue
         raw_rins = parse_json_list(
             row.get("additional_rins"),
             stats=json_stats,
@@ -364,7 +373,7 @@ def build_proceedings(
     ):
         docket = normalize_regsgov_identifier(row.get("docket_id"))
         key = group_key_by_docket.get(docket or "")
-        if key is None:
+        if key is None or catch_all_docket(docket or ""):
             continue
         group = groups[key]
         raw_rins = parse_json_list(
@@ -429,11 +438,12 @@ def build_proceedings(
             )
 
     for row in iter_parquet_rows(
-        paths["rule_targets"], columns=("docket_id", "rin", "cfr_ref", "cfr_title", "cfr_part", "cfr_section")
+        paths["rule_targets"],
+        columns=("docket_id", "rin", "cfr_ref", "cfr_title", "cfr_part", "cfr_section", "source"),
     ):
         docket = normalize_regsgov_identifier(row.get("docket_id"))
         key = group_key_by_docket.get(docket or "")
-        if key is None:
+        if key is None or (catch_all_docket(docket or "") and row.get("source") in DOCUMENT_SOURCES):
             continue
         group = groups[key]
         if rin := normalize_rin(row.get("rin")):

@@ -135,22 +135,26 @@ def test_agenda_items_classify_scope_without_using_rin_as_action_identity(
             "proceeding_id",
             "docket_ids_json",
             "fr_document_numbers_json",
+            "rins_json",
         ),
         [
             {
                 "proceeding_id": proceedings[0],
                 "docket_ids_json": json.dumps([dockets[0]]),
                 "fr_document_numbers_json": '["2025-00001"]',
+                "rins_json": json.dumps([recurring_rin]),
             },
             {
                 "proceeding_id": proceedings[1],
                 "docket_ids_json": json.dumps([dockets[1]]),
                 "fr_document_numbers_json": '["2026-00002"]',
+                "rins_json": json.dumps([recurring_rin]),
             },
             {
                 "proceeding_id": proceedings[2],
                 "docket_ids_json": json.dumps([dockets[2]]),
                 "fr_document_numbers_json": "[]",
+                "rins_json": json.dumps([ordinary_rin]),
             },
         ],
     )

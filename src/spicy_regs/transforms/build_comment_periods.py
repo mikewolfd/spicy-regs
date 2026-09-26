@@ -44,7 +44,9 @@ OUTPUT = "comment_periods.parquet"
 # v7: a docket value naming several dockets joins each (linked_docket_ids), and an FR interval
 # whose notice several proceedings hold lists every one of them (decision 33), not none.
 # v8: SpicyDocs 0.35.0 reads a docket named after prose (D1) and folds Regulations.gov's typed FR-number separators (D2).
-ACTOR_ID = "spicy-regs:comment-periods:v8"
+# v9: code unchanged; a period in a catch-all Federal Register feed docket no longer takes the
+# posted rules' RINs through its proceeding (proceedings v10), only its document's own.
+ACTOR_ID = "spicy-regs:comment-periods:v9"
 
 COLUMNS = (
     "comment_period_id",

@@ -1,4 +1,4 @@
-"""Dated FR record keys, number-only references, the dockets an FR link names and a document's rule stage.
+"""Dated FR record keys, number-only references, the dockets an FR link names, a document's rule stage and the catch-all dockets.
 
 SpicyDocs owns the source key and the comparison key a reference number reduces to
 (dashes and case folded, the sequence's zero padding removed); RefSpec's number-only
@@ -66,6 +66,32 @@ def rule_stage(document_type: object, title: object) -> str | None:
     if kind == "proposed rule" or "proposed rule" in text:
         return "proposed"
     return None
+
+
+#: Regulations.gov's Federal Register feed dockets, one per agency (``EPA_FRDOC_0001``).
+_CATCH_ALL_DOCKET = re.compile(r"[A-Z0-9]+_FRDOC_\d{4}")
+
+
+def catch_all_docket(docket: str) -> bool:
+    """Whether a normalized Regulations.gov docket id is an agency's Federal Register feed docket.
+
+    A feed docket holds the FR documents of that agency's rulemakings, so none of its own
+    documents is evidence of its own proceeding: their RINs, stages and citations belong to
+    the rulemakings they post. It forms a proceeding only on its own RIN or docket type, like
+    any other docket (fork delivery decision 32 as amended, owner ruling 2026-09-26).
+
+    On the R5 re-audit's parents the identifier is the whole test. All 176 such dockets end
+    ``_FRDOC_0001`` and are typed Rulemaking; 155 of the 175 with documents are titled
+    "Recently Posted ... Rules and Notices" and the rest are feed dockets titled after a
+    document ("FR Pending Documents", "Temporary Holding Docket"). Their documents are FR
+    documents (median 100%), they cite up to 1,324 distinct action notices (median 18), no
+    FR document names one of them, and through those documents they held 6,025 RINs of
+    which 7 were their own. No data test finds the rest: 50 or more cited action notices
+    and no RIN of the docket's own also takes 18 program series (FEMA flood-elevation
+    determinations, the National Priorities List, NMFS in-season actions) beside 6
+    feed-titled dockets (receipt ``frdoc-catchalls-2026-09-26/``).
+    """
+    return _CATCH_ALL_DOCKET.fullmatch(docket) is not None
 
 
 #: The digits a document number ends on: its sequence, whatever separates it.
