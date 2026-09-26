@@ -31,8 +31,8 @@ One row per roll call: the publisher's own tally, and the bill it refers to. The
 | `not_voting` | `VARCHAR` | Members not voting: the Clerk's not-voting-total, or the Senate's absent, folded to one column. |
 | `tallies_json` | `VARCHAR` | Every count the publisher stated, under the publisher's own names, as a JSON object. Candidate elections keep literal choice labels here and leave the four ordinary tally columns NULL. |
 | `member_vote_count` | `VARCHAR` | How many member positions the file carried; the member_votes row count for this roll call. |
-| `bill_id` | `VARCHAR` | The bill this roll call refers to, from a recorded-vote reference or a vote-list reference. |
-| `match_rule` | `VARCHAR` | Which vote-matching rule named that bill, including unmatched. |
+| `bill_id` | `VARCHAR` | The bill this roll call refers to: from a bill action's recorded-vote reference, a vote-list reference, or the vote file's own statement of its measure. |
+| `match_rule` | `VARCHAR` | Which vote-matching rule named that bill: bill_action_recorded_vote (the bill's own action records this roll call), house_vote_legislation (Congress.gov's House vote list), vote_file_legislation (the vote file names the bill: the Clerk's legis-num, or the Senate's document or amended document), or unmatched. |
 | `match_action_index` | `VARCHAR` | Position of the action whose recordedVote named this roll call, where one did. |
 | `match_url` | `VARCHAR` | The reference URL the match was read from. |
 | `conflict_count` | `VARCHAR` | How many later references disagreed with the one that won; kept, never dropped. |
@@ -40,3 +40,4 @@ One row per roll call: the publisher's own tally, and the bill it refers to. The
 | `documents_json` | `VARCHAR` | Ordered Senate document objects with native congress, type, number, name, title and short_title; [] for captured votes without documents, NULL for legacy or linkage-only rows. Numbers retain publisher spelling, including nomination suffixes; this does not assert a matched bill or nomination. |
 | `amendments_json` | `VARCHAR` | Ordered Senate amendment objects with native number, to_amendment_number, to_amendment_to_amendment_number, to_document_number, to_document_short_title and purpose; [] for captured votes without amendments, NULL for legacy or linkage-only rows. Repeated empty-ID blocks remain separate observations; no document pairing is inferred. |
 | `vote_day` | `VARCHAR` | The chamber's own printed vote date as an ISO day (YYYY-MM-DD) in Eastern local time, which sorts where vote_date does not and is never the UTC day of a Congress.gov recordedVotes date; NULL where the file prints no date, on linkage-only rows, and on rows published before this column until a host backfills them. |
+| `legis_num` | `VARCHAR` | The Clerk's own legis-num as the House vote file states it (H R 3354, H RES 682, QUORUM); empty when a captured Clerk file states none; NULL on Senate rows, linkage-only rows and House rows captured before this column. |

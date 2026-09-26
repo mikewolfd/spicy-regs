@@ -1324,7 +1324,8 @@
         "tally_kind",
         "documents_json",
         "amendments_json",
-        "vote_day"
+        "vote_day",
+        "legis_num"
       ]
     },
     {

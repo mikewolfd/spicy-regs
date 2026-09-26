@@ -4538,12 +4538,12 @@
       {
         "column_name": "bill_id",
         "column_type": "VARCHAR",
-        "description": "The bill this roll call refers to, from a recorded-vote reference or a vote-list reference."
+        "description": "The bill this roll call refers to: from a bill action's recorded-vote reference, a vote-list reference, or the vote file's own statement of its measure."
       },
       {
         "column_name": "match_rule",
         "column_type": "VARCHAR",
-        "description": "Which vote-matching rule named that bill, including unmatched."
+        "description": "Which vote-matching rule named that bill: bill_action_recorded_vote (the bill's own action records this roll call), house_vote_legislation (Congress.gov's House vote list), vote_file_legislation (the vote file names the bill: the Clerk's legis-num, or the Senate's document or amended document), or unmatched."
       },
       {
         "column_name": "match_action_index",
@@ -4579,6 +4579,11 @@
         "column_name": "vote_day",
         "column_type": "VARCHAR",
         "description": "The chamber's own printed vote date as an ISO day (YYYY-MM-DD) in Eastern local time, which sorts where vote_date does not and is never the UTC day of a Congress.gov recordedVotes date; NULL where the file prints no date, on linkage-only rows, and on rows published before this column until a host backfills them."
+      },
+      {
+        "column_name": "legis_num",
+        "column_type": "VARCHAR",
+        "description": "The Clerk's own legis-num as the House vote file states it (H R 3354, H RES 682, QUORUM); empty when a captured Clerk file states none; NULL on Senate rows, linkage-only rows and House rows captured before this column."
       }
     ],
     "grain": "One row per roll call: the publisher's own tally, and the bill it refers to.",

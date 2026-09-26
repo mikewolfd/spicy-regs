@@ -5,14 +5,13 @@ The optional `source-readers` extra enables the same readers for package install
 its wheels must be supplied explicitly until they are published in a registry.
 Base CLI and MCP installs do not require them.
 
-- `spicy_docs-0.40.0`: built from SpicyDocs `main` at `609d5e6` (release commit). Built September 26,
-  2026 UTC: **1,648,809 bytes**, SHA-256
-  `63d91bf6a3391ce38b02308d30895aa5e5497902bcbafabcdc92ac97cdbb0b18`, byte-identical across two
+- `spicy_docs-0.41.0`: built from SpicyDocs `main` at `04ad912` (release commit). Built September 26,
+  2026 UTC: **1,659,021 bytes**, SHA-256
+  `d3b41704e851b593bb17bde9ea13dc0d7dbc2014d97f0b1667280ac6958ed391`, byte-identical across two
   rebuilds from a clean archive of that commit with `SOURCE_DATE_EPOCH` at its commit time. On top
-  of 0.39.2 it adds the inline-Congress citation rule (bill_number 005), every committee systemCode
-  the unscoped list states, the stated Content-Length on byte-limit refusals, the Table III bulk
-  facts with `iter_table3_chain` removed, and the House roll-call population from the Clerk's index
-  with the Senate's verdict spellings. 0.39.2 and its build record are at `a2cdc65`.
+  of 0.40.0 it reads BILLSTATUS 1.0.0, reads bill text from GovInfo's BILLS bulk zips and builds a
+  bill's printings apart from its status, and links a roll call to the bill its own file names
+  (`legis_num`, match rule `vote_file_legislation`). 0.40.0 and its build record are at `d770eee`.
 
 - `rulespec_artifacts-1.1.2`: exact dependency of SpicyDocs 0.39.2, built from Rulespec
   `23d5f2d98973b2a7f1bf7ce4c9c7a786a4f369ab` (`packages/rulespec-artifacts` of a whole-repo
