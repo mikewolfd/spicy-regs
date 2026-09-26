@@ -3380,7 +3380,7 @@
       {
         "column_name": "match_path",
         "column_type": "VARCHAR",
-        "description": "The normalized, division-free cross-version key, unit-separator joined."
+        "description": "The normalized, division-free cross-version key, unit-separator joined; it can repeat."
       },
       {
         "column_name": "match_path_json",
@@ -3435,7 +3435,7 @@
       {
         "column_name": "seq",
         "column_type": "VARCHAR",
-        "description": "Position in document order, which the match path deliberately does not encode."
+        "description": "Position in document order; the section's key within its printing, which the match path cannot be."
       },
       {
         "column_name": "body_chars",
@@ -3458,8 +3458,7 @@
       "bill_id",
       "version_code",
       "source",
-      "match_path",
-      "body_index"
+      "seq"
     ]
   },
   "section_diffs": {
@@ -3514,7 +3513,7 @@
       {
         "column_name": "pair_rule",
         "column_type": "VARCHAR",
-        "description": "Why these two printings were compared; consecutive by date, never every pair."
+        "description": "Why these two printings were compared: neighbours by date, then by stage, never every pair."
       },
       {
         "column_name": "added_count",
@@ -3847,6 +3846,11 @@
         "description": "Which acquisition path supplied that printing; without it an XML row and its PDF twin collide."
       },
       {
+        "column_name": "seq",
+        "column_type": "VARCHAR",
+        "description": "The classified section's bill_sections seq, its key within the printing."
+      },
+      {
         "column_name": "match_path",
         "column_type": "VARCHAR",
         "description": "The section's normalized cross-version key, unit-separator joined."
@@ -3907,8 +3911,7 @@
       "bill_id",
       "version_code",
       "source",
-      "match_path",
-      "body_index",
+      "seq",
       "label"
     ]
   },

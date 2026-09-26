@@ -17,6 +17,7 @@ One row per label a model assigned to one section of one printing. `vocabulary_h
 | `bill_id` | `VARCHAR` | The bill whose section was classified. |
 | `version_code` | `VARCHAR` | The printing whose section was classified. |
 | `source` | `VARCHAR` | Which acquisition path supplied that printing; without it an XML row and its PDF twin collide. |
+| `seq` | `VARCHAR` | The classified section's bill_sections seq, its key within the printing. |
 | `match_path` | `VARCHAR` | The section's normalized cross-version key, unit-separator joined. |
 | `body_index` | `VARCHAR` | Which body element the section came from. |
 | `label` | `VARCHAR` | One of the five sealed classification labels. |

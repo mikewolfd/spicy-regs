@@ -1133,6 +1133,7 @@
         "bill_id",
         "version_code",
         "source",
+        "seq",
         "match_path",
         "body_index",
         "label",

@@ -19,7 +19,7 @@ One row per content-bearing node of one bill version, in document order. All col
 | `bill_id` | `VARCHAR` | The bill this section belongs to. |
 | `version_code` | `VARCHAR` | The printing this section was read from. |
 | `source` | `VARCHAR` | Which acquisition path supplied the printing; part of the parent version's key. |
-| `match_path` | `VARCHAR` | The normalized, division-free cross-version key, unit-separator joined. |
+| `match_path` | `VARCHAR` | The normalized, division-free cross-version key, unit-separator joined; it can repeat. |
 | `match_path_json` | `VARCHAR` | The same path as a JSON array, so a consumer need not split on a separator. |
 | `display_path_json` | `VARCHAR` | The human-facing path the engine composes, as a JSON array. |
 | `element_id` | `VARCHAR` | The publisher's own id attribute on the element this node came from. |
@@ -30,7 +30,7 @@ One row per content-bearing node of one bill version, in document order. All col
 | `division_label` | `VARCHAR` | The division this section sits under, as the engine composes the label. |
 | `division_key` | `VARCHAR` | The normalized division key, which is what a cross-version match ignores. |
 | `body_index` | `VARCHAR` | Which body element this node came from; a reported bill carries two. |
-| `seq` | `VARCHAR` | Position in document order, which the match path deliberately does not encode. |
+| `seq` | `VARCHAR` | Position in document order; the section's key within its printing, which the match path cannot be. |
 | `body_chars` | `VARCHAR` | Character length of body. |
 | `body_sha256` | `VARCHAR` | Digest of body's UTF-8 bytes, so an unchanged section is recognisable without a join. |
 | `version_date` | `VARCHAR` | The parent printing's date, carried so this table versions with its parent. |

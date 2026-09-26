@@ -24,7 +24,7 @@ One row per compared pair of consecutive printings of one bill. `engine_name`, `
 | `from_version_date` | `VARCHAR` | The earlier printing's publisher date. |
 | `to_version_date` | `VARCHAR` | The later printing's publisher date; the merge prefers the larger value. |
 | `pair_type` | `VARCHAR` | Which comparison strategy this pair called for: xml-xml, pdf-pdf or pdf-xml. |
-| `pair_rule` | `VARCHAR` | Why these two printings were compared; consecutive by date, never every pair. |
+| `pair_rule` | `VARCHAR` | Why these two printings were compared: neighbours by date, then by stage, never every pair. |
 | `added_count` | `VARCHAR` | Sections present only in the later printing. |
 | `removed_count` | `VARCHAR` | Sections present only in the earlier printing. |
 | `modified_count` | `VARCHAR` | Sections present in both whose body text differs. |
