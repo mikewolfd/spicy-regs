@@ -210,12 +210,13 @@ JOINS: tuple[Join, ...] = (
     _join("court_dockets", "cl_docket_id", "court_opinion_clusters", "cl_docket_id", 11_475, 9_214, "design",
           "court_dockets is a PACER docket selection; most PACER dockets have no published opinion."),
     # Federal spending and registration.
-    _join("usaspending_recipients", "uei", "sam_entities", "uei", 7_274, 884, "scope",
-          "sam_entities holds SAM's public active registrations, every registration year from 1996 plus two "
-          "older ones. A recipient can name a UEI with none: of a 40-UEI sample of these orphans, the entity API "
-          "held no public record for 38, one was Inactive, and one was activated after the 2026 year was then "
-          "last read. Receipts join-map-2026-09-26/sam-entities-after-backfill.json and "
-          "usaspending-unresolved-uei-sample-2026-09-26.txt."),
+    _join("usaspending_recipients", "uei", "sam_entities", "uei", 140_849, 20_417, "scope",
+          "sam_entities holds SAM's public active registrations, every registration year from 1996. The recipients "
+          "are every one funded in the trailing 12 months (decision 48; 231,700 rows on 2026-09-26), and a smaller "
+          "recipient more often has no public active registration: the top 10,000 resolved 87.8%, all funded "
+          "recipients 85.5%, with 120,432 UEIs resolving against 6,390 before. Of a 40-UEI sample of the orphans, "
+          "the entity API held no public record for 38. Receipts join-map-2026-09-26/sam-entities-after-backfill.json "
+          "and usaspending-unresolved-uei-sample-2026-09-26.txt."),
 )
 
 #: Tables outside the dictionary's registry, read from the materialized rulemaking snapshot.
