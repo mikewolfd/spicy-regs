@@ -90,6 +90,38 @@ def test_streamed_capture_retains_wire_bytes_request_and_retry_status(tmp_path):
     verify_evidence(evidence.artifact_dir)
 
 
+@pytest.mark.parametrize('method,status,content', [('GET', 302, None), ('POST', 307, b'{"page":1}')])
+def test_a_redirect_retains_every_hop_and_its_request_body(tmp_path, method, status, content):
+    """httpx rebuilds a redirect's request on an explicit stream, so its content was never read.
+
+    SAM's extract download redirects; run 36219331804 (2026-09-26) died on RequestNotRead
+    at the first retained redirect. A 307 re-sends the body, and both hops retain it.
+    """
+    evidence = CaptureEvidence(tmp_path, 'test')
+
+    def respond(request):
+        if request.url.host == 'native.test':
+            return httpx.Response(status, headers={'Location': 'https://files.test/extract.zip'})
+        return httpx.Response(200, stream=Chunks([b'PK', b'\x03\x04']))
+
+    class Wire(httpx.BaseTransport):
+        """Like httpx.HTTPTransport, and unlike MockTransport, it never reads the request."""
+
+        def handle_request(self, request):
+            return respond(request)
+
+    transport = evidence.transport(Wire(), stage='native', max_bytes=1000)
+    with httpx.Client(transport=transport, follow_redirects=True) as client:
+        assert client.request(method, 'https://native.test/download', content=content).content == b'PK\x03\x04'
+    recorded = captures(evidence)
+    assert [(r['status_code'], r['requested_url']) for r in recorded] == [
+        (status, 'https://native.test/download'), (200, 'https://files.test/extract.zip')]
+    expected = None if content is None else 'sha256:' + hashlib.sha256(content).hexdigest()
+    assert [r['request_body'] and r['request_body']['sha256'] for r in recorded] == [expected, expected]
+    evidence.finish()
+    verify_evidence(evidence.artifact_dir)
+
+
 @pytest.mark.parametrize('parts,max_bytes,error', [([b'ab', b'cd'], 3, SourceEvidenceError),
                                                   ([b'aa-sec', b'ret-bb'], 100, CredentialRefusedError),
                                                   ([b'aa-s', b'e', b'c', b'r', b'et-bb'], 100, CredentialRefusedError)])

@@ -218,9 +218,9 @@ class CaptureEvidence:
             raise ValueError("max_bytes must be positive")
 
         class RetainedStream(httpx.SyncByteStream):
-            def __init__(self, stream, request, response, observed_at):
+            def __init__(self, stream, request, request_body, response, observed_at):
                 self.stream, self.request, self.response = stream, request, response
-                self.observed_at = observed_at
+                self.request_body, self.observed_at = request_body, observed_at
 
             def __iter__(self):
                 check = _StreamCheck(evidence, max_bytes)
@@ -239,7 +239,7 @@ class CaptureEvidence:
                             observed_at=self.observed_at, status_code=self.response.status_code,
                             content_type=self.response.headers.get("content-type"),
                             content_encoding=self.response.headers.get("content-encoding", "identity"),
-                            method=self.request.method, request_body=self.request.content or None,
+                            method=self.request.method, request_body=self.request_body,
                         )
                         retained = True
                         # Retain before HTTP decoding too: malformed gzip must
@@ -261,10 +261,15 @@ class CaptureEvidence:
                 self.inner = transport if transport is not None else httpx.HTTPTransport()
 
             def handle_request(self, request):
+                # Read the body before it is sent: a redirect's request carries an explicit
+                # stream whose content httpx never reads (RequestNotRead), and read() swaps
+                # in a replayable stream, so the wire send still has every byte.
+                request_body = request.read() or None
                 observed_at = datetime.now(UTC).isoformat()
                 response = self.inner.handle_request(request)
                 return httpx.Response(response.status_code, headers=response.headers,
-                                      stream=RetainedStream(response.stream, request, response, observed_at),
+                                      stream=RetainedStream(response.stream, request, request_body, response,
+                                                            observed_at),
                                       extensions=response.extensions)
 
             def close(self):
