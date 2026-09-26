@@ -1,0 +1,48 @@
+<?xml version="1.0"?>
+<?xml-stylesheet type="text/xsl" href="billres.xsl"?>
+<!DOCTYPE bill PUBLIC "-//US Congress//DTDs/bill.dtd//EN" "bill.dtd">
+<bill bill-stage="Referred-in-Senate" dms-id="HE3A7C53343974CA4B69CA89FDCB22165" public-private="public" key="G" bill-type="olc" stage-count="2" star-print="no-star-print"> 
+<metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+<dublinCore>
+<dc:title>119 HR 3426 : CASE Act</dc:title>
+<dc:publisher>U.S. House of Representatives</dc:publisher>
+<dc:date>2025-12-01</dc:date>
+<dc:format>text/xml</dc:format>
+<dc:language>EN</dc:language>
+<dc:rights>Pursuant to Title 17 Section 105 of the United States Code, this file is not subject to copyright protection and is in the public domain.</dc:rights>
+</dublinCore>
+</metadata>
+<form>
+<distribution-code display="yes">IIB</distribution-code> 
+<congress>119th CONGRESS</congress> <session>1st Session</session> 
+<legis-num>H. R. 3426</legis-num> 
+<current-chamber display="yes">IN THE SENATE OF THE UNITED STATES</current-chamber> 
+<action> 
+<action-date date="20250916">September 16, 2025</action-date> 
+<action-desc>Received; read twice and referred to the <committee-name committee-id="SSEV00">Committee on Environment and Public Works</committee-name></action-desc> 
+</action> 
+<action> 
+<action-date date="20251119">November 19, 2025</action-date> 
+<action-desc>Committee discharged; returned to the House of Representatives by unanimous consent</action-desc> 
+</action> 
+<action> 
+<action-date date="20251201">December 1, 2025</action-date> 
+<action-desc>Received; read twice and referred to the <committee-name committee-id="SSEV00">Committee on Environment and Public Works</committee-name></action-desc> 
+</action> 
+<legis-type>AN ACT</legis-type> 
+<official-title display="yes">To amend title 40, United States Code, to limit the construction of new courthouses under certain circumstances, and for other purposes.</official-title> 
+</form> 
+<legis-body id="H24DB339986354B46ABEA591BF8D7A476" style="OLC"><pagebreak/> 
+<section id="H7496A710C740440592CA513B4C36B400" section-type="section-one"><enum>1.</enum><header>Short title</header><text display-inline="no-display-inline">This Act may be cited as the <quote><short-title>Courthouse Affordability and Space Efficiency Act of 2025</short-title></quote> or the <quote>CASE Act</quote>. </text></section> <section id="HB948C4E1CCBE4BE3BA23506695930C6A"><enum>2.</enum><header>Reducing costs related to courthouses</header> <subsection id="H60267BD0733D4C2F8339E51C5C914951"><enum>(a)</enum><header>In general</header><text display-inline="yes-display-inline"><external-xref legal-doc="usc-chapter" parsable-cite="usc-chapter/40/33">Chapter 33</external-xref> of title 40, United States Code, as amended by this act, is further amended by adding at the end the following:</text> 
+<quoted-block id="H238F6233949F49D3886E543E32E81752" style="USC"> 
+<section id="H8F56F9AED8E24D2A8419FA057A948022"><enum>3320.</enum><header>Reducing costs related to courthouses</header> 
+<subsection id="HB5B63397BB5C4ED1BF2A56B94D2E6CB1"><enum>(a)</enum><header>Limitation on new courthouses</header><text>The Administrator of General Services may not commence construction of any new courthouse if—</text> <paragraph id="HA7EE2E80F01E4D61B378B5636E463512"><enum>(1)</enum><text>construction has not begun on or before the date of enactment of this section; or</text></paragraph> 
+<paragraph id="H9B3E0EE8F8D84200B3F0282C765A438D"><enum>(2)</enum><text>the design and construction of the new courthouse fails to comply, at a minimum, with the courtroom sharing requirements described in subsection (b).</text></paragraph></subsection> <subsection id="HAD90347C25634165BA9A01738D6662AD"><enum>(b)</enum><header>Courtroom sharing requirements defined</header><text>The term <quote>courtroom sharing requirements</quote> means—</text> 
+<paragraph id="H766C6FB73A614BBEB19FFE410476BD6C"><enum>(1)</enum><text>in courthouses with 10 or more active district judges, 2 courtrooms per 3 active district judges, except such courthouses may contain not less than 9 courtrooms for active district judges;</text></paragraph> <paragraph id="H5F11459D70914C53AB61673C08287D09"><enum>(2)</enum><text>in courthouses with 3 or more bankruptcy judges—</text> 
+<subparagraph id="HADC407DA5C914586B12D7CA0D0668D25"><enum>(A)</enum><text>1 courtroom per 2 bankruptcy judges;</text></subparagraph> <subparagraph id="HB8BB1996EBB74915A67049666EF258E5"><enum>(B)</enum><text>1 courtroom for emergency matters; and</text></subparagraph> 
+<subparagraph id="H8E85D200D0004707A5C944899BD3C8FB"><enum>(C)</enum><text>if there is an odd number of bankruptcy judges, the number of courtrooms required pursuant to subparagraph (A) shall be rounded down; </text></subparagraph></paragraph> <paragraph id="H2DBDB46C97614ACE9A33A093069E8FD0"><enum>(3)</enum><text>in courthouses with 3 or more senior district judges, 1 courtroom per 2 senior district judges; and</text></paragraph> 
+<paragraph id="H283E53E49A0F4EFAB46DEF0CC09FA221"><enum>(4)</enum><text>in courthouses with 3 or more magistrate judges—</text> <subparagraph id="HC4C1169EC85B42228F75AC4D5C5B22F0"><enum>(A)</enum><text>1 courtroom per 2 magistrate judges;</text></subparagraph> 
+<subparagraph id="H6F4B7CAB276049E9922C15209D8C6D02"><enum>(B)</enum><text>1 criminal duty courtroom; and</text></subparagraph> <subparagraph id="H67813B19DC7940AAB3FC3B26EE12E0D9"><enum>(C)</enum><text>if there is an odd number of magistrate judges, the number of courtrooms required pursuant to subparagraph (A) shall be rounded down. </text></subparagraph></paragraph></subsection> 
+<subsection id="H885722D63D254557AF30341DCDF632FE"><enum>(c)</enum><header>United States Courts Design Guide</header><text>Not later than 180 days after the date of enactment of this section, the Design Guide for courthouses shall be updated to incorporate courtroom sharing requirements to the maximum extent practicable.</text></subsection> <subsection id="HCE2DD11EF467448BB3213EA8241B8FC4"><enum>(d)</enum><header>Utilization</header><text>If a new courthouse will add capacity in the inventory of the General Services Administration, existing space in the same courthouse complex must be fully utilized or relinquished from the inventory of the General Services Administration.</text></subsection></section><after-quoted-block>.</after-quoted-block></quoted-block></subsection> 
+<subsection id="H366C2DA7AFC4418390CF9E26FCE5F2F4"><enum>(b)</enum><header>Clerical amendment</header><text display-inline="yes-display-inline">The analysis for <external-xref legal-doc="usc-chapter" parsable-cite="usc-chapter/40/33">chapter 33</external-xref> of title 40, United States Code, is amended by adding at the end the following:</text> <quoted-block style="USC" id="H6099BDEED4E0439B9DA5ABF03BB900D9" display-inline="no-display-inline"> <toc regeneration="no-regeneration"> <toc-entry level="section">3320. Reducing costs related to courthouses.</toc-entry></toc><after-quoted-block>.</after-quoted-block></quoted-block></subsection></section> </legis-body> <attestation><attestation-group><attestation-date date="20250915" chamber="House">Passed the House of Representatives September 15, 2025.</attestation-date><attestor display="yes">Kevin F. McCumber,</attestor><role>Clerk.</role></attestation-group></attestation> </bill> 
+

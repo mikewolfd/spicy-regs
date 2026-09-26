@@ -1459,6 +1459,16 @@ tables:
       deliberately not a column here: `bill_sections.body` carries it at the grain
       people query, and the body is re-fetchable by package id and digest. All
       columns are stored as VARCHAR.
+    data_quality: >-
+      A numbered reprint is its own printing since spicy-docs 0.37.0: the
+      publisher types it exactly like the printing it follows, so its
+      `version_code` is its own package suffix (`eas2`, `rfs2`) rather than the
+      stage's slug. Generation `d380cdc0…` still keys two such printings under
+      the stage's slug: 119-hr-6644's second Senate engrossed amendment (a
+      congress row with `BILLS-119hr6644eas2`, beside a printing whose sections
+      mix both documents) and 118-hr-7643's second House report. A rebuild of
+      the bill retires the row and publishes each printing under its own code
+      (receipt `repeated-printings-2026-09-26/`).
     columns_from: spicy_docs
 
   bill_sections:

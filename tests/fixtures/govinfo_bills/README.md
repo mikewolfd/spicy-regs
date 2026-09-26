@@ -60,3 +60,36 @@ The bodies the receipt lacks were read keyless from GovInfo on 2026-09-26
 run published for that printing, so these are the bytes that run parsed; so
 does the reduced enrolled printing's source digest. Replace them only from the
 publisher, recording the new digests here.
+
+## Numbered reprints (2026-09-26)
+
+Seventeen more files back `tests/test_bill_family_printings.py`, which rebuilds
+the bill family generation `d380cdc0…` published before spicy-docs 0.37.0 gave
+a numbered reprint its own code, and checks the next run repairs it (receipt
+`fork-execution-2026-09-21/repeated-printings-2026-09-26/`, under
+`~/Work/corpora`). All were read keyless from GovInfo on 2026-09-26 (UTC).
+
+The three BILLSTATUS files and 119 HR 3426's six printings are byte-identical
+to spicy-docs 0.37.0's `tests/fixtures/govinfo_bills/`, whose README records
+their sources and digests: `status-119hr6644.xml` (reduced to its identity and
+`textVersions`), `status-119hr3426.xml`, `status-118hr7643.xml` and
+`text-119hr3426{ih,rh,eh1s,rfs,rhuc,rfs2}.xml` (complete and unchanged).
+
+119 HR 6644's eight printings are reduced by the receipt's `reduce6644.py`,
+which cuts whole elements and leaves every other byte as served. Each keeps its
+first section and the first section of its first title (the first two for
+`eas2`), without any table of contents, so the reprint keeps more sections than
+the printing it follows, as the whole printings do (276 against 198). Each
+source's digest equals the `bill_versions.sha256` generation `d380cdc0…`
+published for it, except `eas2`, which that generation refused.
+
+| Fixture | Bytes | SHA-256 | Source package (bytes, SHA-256) |
+| --- | --- | --- | --- |
+| `text-119hr6644ih.xml` | 18,665 | `b0e00a90c72dd52a3473f081a9a5ca0532d1261d316b5eeca0f045dd70049e20` | `BILLS-119hr6644ih` (234,162, `a2f7cfd04bfe69d391c3adee2d8e94592b67a5ff21bcdbdfae183173aa895c22`) |
+| `text-119hr6644rh.xml` | 23,490 | `8b7b0035923919416cb38b1189d75eb71a2644e6965253d26ed13881474c7586` | `BILLS-119hr6644rh` (260,167, `f39bff03ec1a1582faa868bd5f6871e3f10675a4433130263e26ee7376fb0329`) |
+| `text-119hr6644eh.xml` | 19,495 | `3b4a90e6fdd54fd7ec89d5218d4239d5e4fc301adcea95b309f1fcbdbb06c376` | `BILLS-119hr6644eh` (362,126, `99317586072b7117889ff6d2bbc9cc888cf52b4931356211788d28a166dd996b`) |
+| `text-119hr6644pcs.xml` | 19,889 | `33744480b934d9e026d88da887038c23c0b24d2d3d64c6e5c308a7c3e2a09de7` | `BILLS-119hr6644pcs` (360,418, `3df5df67eb528f7042e33bed0d8fb99e7f23b2c188ab1d49176fd5e60fe56b7b`) |
+| `text-119hr6644eas.xml` | 12,685 | `ff75f9c2d970d37ec61f4ee16ad66ca161895023bae537b425728c82f341021a` | `BILLS-119hr6644eas` (553,541, `f1c0f564c13d883b1c9ec0adc4d60b33ab876cadacaac31c6ba259eddfcbe1c8`) |
+| `text-119hr6644eah.xml` | 12,868 | `d9b86cb4fbdbe181bc06a5b22f5263a83d1e8f827a7f6c29c2995122015f312a` | `BILLS-119hr6644eah` (561,415, `9b35145c0e9db247f0710e85064b7724413e58b66ca5c51b82885bcf0c82f16a`) |
+| `text-119hr6644eas2.xml` | 18,307 | `b7bd3b907138980453729d71fbe7f304dcc5b481140a1cd9f700c763ab4131f1` | `BILLS-119hr6644eas2` (680,326, `2cb469edb93517edd8ef4434c054bc62381769c4c611c1acd1578e5f6f03c8e2`) |
+| `text-119hr6644enr.xml` | 12,429 | `a4c3e8991492e683059b7487b3e68a449018c4e399550104cb4780747abfeeae` | `BILLS-119hr6644enr` (677,824, `874b8e04260ece8075b3d8a97af3ffa3820e0af46ec6115434e1a1f35ed03492`) |

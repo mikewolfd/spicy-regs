@@ -1,0 +1,474 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<billStatus>
+  <version>3.0.0</version>
+  <bill>
+    <number>7643</number>
+    <updateDate>2025-05-28T18:49:26Z</updateDate>
+    <updateDateIncludingText>2025-05-28T18:49:26Z</updateDateIncludingText>
+    <originChamber>House</originChamber>
+    <originChamberCode>H</originChamberCode>
+    <type>HR</type>
+    <introducedDate>2024-03-12</introducedDate>
+    <congress>118</congress>
+    <cdata>
+      <constitutionalAuthorityStatementText>&lt;pre&gt;[Congressional Record Volume 170, Number 44 (Tuesday, March 12, 2024)][House][Pages H1149-H1150]From the Congressional Record Online through the Government Publishing Office [&lt;a href="https://www.gpo.gov"&gt;www.gpo.gov&lt;/a&gt;]By Mr. TAKANO:H.R. 7643.Congress has the power to enact this legislation pursuantto the following:Article I, Section 8The single subject of this legislation is:Government ReformADDITIONAL SPONSORSUnder clause 7 of rule XII, sponsors were added to public bills andresolutions, as follows:H.R. 16: Mr. Amo, Ms. Stansbury, Ms. Titus, Mr. Mfume, andMr. Green  of Texas.H.R. 82: Ms. Plaskett.H.R. 148: Mr. Barr.H.R. 175: Mrs. Spartz.H.R. 239: Mr. Thanedar.H.R. 324: Mr. Johnson of Georgia, Mr. Takano, Ms. Lee ofPennsylvania, Ms. Norton, and Ms. Tlaib.H.R. 537: Mr. Austin Scott of Georgia.H.R. 704: Mrs. Trahan and Ms. Jackson Lee.H.R. 743: Mr. Pfluger and Mr. Smucker.H.R. 766: Mr. Kiley.H.R. 782: Mr. Thanedar.H.R. 830: Mr. Deluzio.H.R. 838: Mr. Larsen of Washington.H.R. 866: Mrs. McBath.H.R. 957: Mr. Pascrell.H.R. 964: Ms. Salinas and Ms. Tokuda.H.R. 982: Mr. Thanedar.H.R. 984: Mrs. Kiggans of Virginia and Mr. Espaillat.H.R. 987: Ms. Strickland.H.R. 1002: Mrs. McBath and Ms. Schrier.H.R. 1073: Mr. Quigley.H.R. 1088: Mr. Sarbanes and Mr. Langworthy.H.R. 1097: Mr. Harder of California.H.R. 1230: Mr. Connolly.H.R. 1279: Mr. Davidson.H.R. 1310: Mr. Amodei.H.R. 1359: Ms. Kelly of Illinois.H.R. 1406: Ms. Houlahan.H.R. 1477: Mr. Van Orden.H.R. 1485: Mrs. Watson Coleman.H.R. 1538: Mr. Horsford and Mrs. Ramirez.H.R. 1582: Ms. Malliotakis.H.R. 1591: Mr. Grijalva.H.R. 1737: Ms. Moore of Wisconsin and Mr. Kilmer.H.R. 1775: Ms. Malliotakis.H.R. 1787: Mrs. Miller-Meeks.H.R. 1794: Ms. Sherrill and Mr. Calvert.H.R. 2474: Ms. Plaskett.H.R. 2552: Mr. Krishnamoorthi.H.R. 2720: Ms. Salinas.H.R. 2743: Mr. Johnson of South Dakota.H.R. 2768: Mr. Fitzgerald.H.R. 2777: Mrs. Dingell.H.R. 2828: Mr. Robert Garcia of California.H.R. 2870: Ms. Wexton.H.R. 2907: Mr. Goldman of New York and Mr. Cohen.H.R. 2955: Ms. Kelly of Illinois.H.R. 3005: Ms. Plaskett.H.R. 3012: Mr. Bilirakis, Ms. Manning, Mr. Meeks, Ms.Malliotakis, Mr. D'Esposito, Mr. Webster of Florida, and Mr.Wittman.H.R. 3031: Mr. Bishop of Georgia and Ms. DeLauro.H.R. 3039: Mr. Zinke.H.R. 3106: Ms. Balint and Ms. Stevens.H.R. 3127: Mr. Sorensen.H.R. 3161: Mr. Van Orden.H.R. 3170: Ms. Salinas, Mrs. Sykes, and Ms. Tenney.H.R. 3204: Mr. Lieu, Ms. Salinas, and Ms. Leger Fernandez.H.R. 3238: Mr. Pappas and Mr. Van Orden.H.R. 3269: Mr. Ogles and Mrs. Miller of West Virginia.H.R. 3350: Ms. Schakowsky.H.R. 3413: Mr. Kilmer.H.R. 3416: Ms. Schrier, Ms. Norton, Ms. Sanchez, and Mr.Pappas.H.R. 3519: Mr. Krishnamoorthi and Mr. Davis of Illinois.H.R. 3783: Ms. Malliotakis.H.R. 3842: Ms. Wild.H.R. 3933: Mr. Cleaver and Mr. Harris.H.R. 3998: Mr. Krishnamoorthi, Mr. Stauber, Mr. Garcia ofIllinois, Mr. Fitzpatrick, and Ms. Craig.H.R. 4040: Ms. DelBene.H.R. 4157: Mr. Lucas, Mr. Kim of New Jersey, Mr. Harris,Mr. Banks, Mrs. Napolitano, Mr. Bishop of Georgia, and Mr.Massie.H.R. 4173: Ms. Brownley.H.R. 4184: Mr. Doggett.H.R. 4293: Mr. Norcross and Mr. Langworthy.H.R. 4335: Mr. Robert Garcia of California.H.R. 4389: Mr. Moylan.H.R. 4550: Ms. Salinas.H.R. 4565: Mr. Langworthy.H.R. 4581: Ms. Budzinski and Mr. Meeks.H.R. 4646: Mr. Ruiz.H.R. 4740: Mr. Biggs and Ms. Tlaib.H.R. 4758: Mr. Luetkemeyer and Mr. Allred.H.R. 4794: Mr. Fitzpatrick.H.R. 4818: Mr. Bishop of Georgia.H.R. 4893: Mrs. Fletcher.H.R. 4903: Mr. Harder of California.H.R. 5030: Ms. Salinas.H.R. 5049: Ms. Salinas.H.R. 5099: Ms. Caraveo.H.R. 5186: Ms. Perez.H.R. 5403: Mr. Lucas and Mr. Mann.H.R. 5478: Ms. Salinas.H.R. 5555: Mr. Finstad.H.R. 5572: Mr. Kim of New Jersey.H.R. 5699: Mr. Nadler and Mr. Lawler.H.R. 5763: Ms. Bonamici.H.R. 5813: Ms. Omar.H.R. 5827: Mr. Green of Texas and Ms. Jayapal.H.R. 5885: Ms. Tenney.H.R. 5968[...]&lt;/pre&gt;</constitutionalAuthorityStatementText>
+    </cdata>
+    <committees>
+      <item>
+        <systemCode>hsvr00</systemCode>
+        <name>Veterans' Affairs Committee</name>
+        <chamber>House</chamber>
+        <type>Standing</type>
+        <subcommittees>
+          <item>
+            <systemCode>hsvr10</systemCode>
+            <name>Economic Opportunity Subcommittee</name>
+            <activities>
+              <item>
+                <name>Reported by</name>
+                <date>2024-04-17T19:45:55Z</date>
+              </item>
+              <item>
+                <name>Markup by</name>
+                <date>2024-04-17T19:45:43Z</date>
+              </item>
+              <item>
+                <name>Hearings By (subcommittee)</name>
+                <date>2024-03-20T19:45:31Z</date>
+              </item>
+              <item>
+                <name>Referred to</name>
+                <date>2024-03-19T19:45:16Z</date>
+              </item>
+            </activities>
+          </item>
+          <item>
+            <systemCode>hsvr03</systemCode>
+            <name>Health Subcommittee</name>
+            <activities>
+              <item>
+                <name>Hearings By (subcommittee)</name>
+                <date>2024-03-20T15:23:07Z</date>
+              </item>
+              <item>
+                <name>Referred to</name>
+                <date>2024-03-19T15:22:53Z</date>
+              </item>
+            </activities>
+          </item>
+        </subcommittees>
+        <activities>
+          <item>
+            <name>Reported By</name>
+            <date>2024-08-27T15:59:42Z</date>
+          </item>
+          <item>
+            <name>Reported By</name>
+            <date>2024-07-18T18:35:53Z</date>
+          </item>
+          <item>
+            <name>Markup By</name>
+            <date>2024-05-01T20:45:38Z</date>
+          </item>
+          <item>
+            <name>Referred To</name>
+            <date>2024-03-12T14:01:50Z</date>
+          </item>
+        </activities>
+      </item>
+    </committees>
+    <committeeReports>
+      <committeeReport>
+        <citation>H. Rept. 118-596</citation>
+      </committeeReport>
+      <committeeReport>
+        <citation>H. Rept. 118-596,Part 2</citation>
+      </committeeReport>
+    </committeeReports>
+    <relatedBills>
+      <item>
+        <title>Clear Communication for Veterans Claims Act</title>
+        <congress>118</congress>
+        <number>7816</number>
+        <type>HR</type>
+        <latestAction>
+          <actionDate>2024-09-18</actionDate>
+          <text>Received in the Senate.</text>
+        </latestAction>
+        <relationshipDetails>
+          <item>
+            <type>Identical bill</type>
+            <identifiedBy>CRS</identifiedBy>
+          </item>
+        </relationshipDetails>
+      </item>
+    </relatedBills>
+    <actions>
+      <item>
+        <actionDate>2024-08-27</actionDate>
+        <text>Supplemental report filed by the Committee on Veterans' Affairs, H. Rept. 118-596, Part II.</text>
+        <type>Committee</type>
+        <actionCode>H12210</actionCode>
+        <sourceSystem>
+          <code>2</code>
+          <name>House floor actions</name>
+        </sourceSystem>
+        <committees>
+          <item>
+            <systemCode>hsvr00</systemCode>
+            <name>Veterans' Affairs Committee</name>
+          </item>
+        </committees>
+      </item>
+      <item>
+        <actionDate>2024-08-27</actionDate>
+        <text>Supplemental report filed by the Committee on Veterans' Affairs, H. Rept. 118-596, Part II.</text>
+        <type>Committee</type>
+        <actionCode>5000</actionCode>
+        <sourceSystem>
+          <code>9</code>
+          <name>Library of Congress</name>
+        </sourceSystem>
+        <committees>
+          <item>
+            <systemCode>hsvr00</systemCode>
+            <name>Veterans' Affairs Committee</name>
+          </item>
+        </committees>
+      </item>
+      <item>
+        <actionDate>2024-07-18</actionDate>
+        <text>Placed on the Union Calendar, Calendar No. 496.</text>
+        <type>Calendars</type>
+        <actionCode>H12410</actionCode>
+        <sourceSystem>
+          <code>2</code>
+          <name>House floor actions</name>
+        </sourceSystem>
+      </item>
+      <item>
+        <actionDate>2024-07-18</actionDate>
+        <text>Reported (Amended) by the Committee on Veterans' Affairs. H. Rept. 118-596.</text>
+        <type>Committee</type>
+        <actionCode>H12200</actionCode>
+        <sourceSystem>
+          <code>2</code>
+          <name>House floor actions</name>
+        </sourceSystem>
+        <committees>
+          <item>
+            <systemCode>hsvr00</systemCode>
+            <name>Veterans' Affairs Committee</name>
+          </item>
+        </committees>
+      </item>
+      <item>
+        <actionDate>2024-07-18</actionDate>
+        <text>Reported (Amended) by the Committee on Veterans' Affairs. H. Rept. 118-596.</text>
+        <type>Committee</type>
+        <actionCode>5000</actionCode>
+        <sourceSystem>
+          <code>9</code>
+          <name>Library of Congress</name>
+        </sourceSystem>
+        <committees>
+          <item>
+            <systemCode>hsvr00</systemCode>
+            <name>Veterans' Affairs Committee</name>
+          </item>
+        </committees>
+      </item>
+      <item>
+        <actionDate>2024-05-01</actionDate>
+        <committees>
+          <item>
+            <systemCode>hsvr00</systemCode>
+            <name>Veterans' Affairs Committee</name>
+          </item>
+        </committees>
+        <sourceSystem>
+          <code>1</code>
+          <name>House committee actions</name>
+        </sourceSystem>
+        <text>Ordered to be Reported in the Nature of a Substitute by Voice Vote.</text>
+        <type>Committee</type>
+      </item>
+      <item>
+        <actionDate>2024-05-01</actionDate>
+        <committees>
+          <item>
+            <systemCode>hsvr00</systemCode>
+            <name>Veterans' Affairs Committee</name>
+          </item>
+        </committees>
+        <sourceSystem>
+          <code>1</code>
+          <name>House committee actions</name>
+        </sourceSystem>
+        <text>Committee Consideration and Mark-up Session Held</text>
+        <type>Committee</type>
+      </item>
+      <item>
+        <actionDate>2024-04-17</actionDate>
+        <committees>
+          <item>
+            <systemCode>hsvr10</systemCode>
+            <name>Economic Opportunity Subcommittee</name>
+          </item>
+        </committees>
+        <sourceSystem>
+          <code>1</code>
+          <name>House committee actions</name>
+        </sourceSystem>
+        <text>Forwarded by Subcommittee to Full Committee (Amended) by Voice Vote.</text>
+        <type>Committee</type>
+      </item>
+      <item>
+        <actionDate>2024-04-17</actionDate>
+        <committees>
+          <item>
+            <systemCode>hsvr10</systemCode>
+            <name>Economic Opportunity Subcommittee</name>
+          </item>
+        </committees>
+        <sourceSystem>
+          <code>1</code>
+          <name>House committee actions</name>
+        </sourceSystem>
+        <text>Subcommittee Consideration and Mark-up Session Held</text>
+        <type>Committee</type>
+      </item>
+      <item>
+        <actionDate>2024-03-20</actionDate>
+        <committees>
+          <item>
+            <systemCode>hsvr10</systemCode>
+            <name>Economic Opportunity Subcommittee</name>
+          </item>
+        </committees>
+        <sourceSystem>
+          <code>1</code>
+          <name>House committee actions</name>
+        </sourceSystem>
+        <text>Subcommittee Hearings Held</text>
+        <type>Committee</type>
+      </item>
+      <item>
+        <actionDate>2024-03-19</actionDate>
+        <committees>
+          <item>
+            <systemCode>hsvr10</systemCode>
+            <name>Economic Opportunity Subcommittee</name>
+          </item>
+        </committees>
+        <sourceSystem>
+          <code>1</code>
+          <name>House committee actions</name>
+        </sourceSystem>
+        <text>Referred to the Subcommittee on Economic Opportunity.</text>
+        <type>Committee</type>
+      </item>
+      <item>
+        <actionDate>2024-03-12</actionDate>
+        <text>Referred to the House Committee on Veterans' Affairs.</text>
+        <type>IntroReferral</type>
+        <actionCode>H11100</actionCode>
+        <sourceSystem>
+          <code>2</code>
+          <name>House floor actions</name>
+        </sourceSystem>
+        <committees>
+          <item>
+            <systemCode>hsvr00</systemCode>
+            <name>Veterans' Affairs Committee</name>
+          </item>
+        </committees>
+      </item>
+      <item>
+        <actionDate>2024-03-12</actionDate>
+        <text>Introduced in House</text>
+        <type>IntroReferral</type>
+        <actionCode>Intro-H</actionCode>
+        <sourceSystem>
+          <code>9</code>
+          <name>Library of Congress</name>
+        </sourceSystem>
+      </item>
+      <item>
+        <actionDate>2024-03-12</actionDate>
+        <text>Introduced in House</text>
+        <type>IntroReferral</type>
+        <actionCode>1000</actionCode>
+        <sourceSystem>
+          <code>9</code>
+          <name>Library of Congress</name>
+        </sourceSystem>
+      </item>
+    </actions>
+    <sponsors>
+      <item>
+        <bioguideId>T000472</bioguideId>
+        <fullName>Rep. Takano, Mark [D-CA-39]</fullName>
+        <firstName>Mark</firstName>
+        <lastName>Takano</lastName>
+        <party>D</party>
+        <state>CA</state>
+        <district>39</district>
+        <isByRequest>N</isByRequest>
+      </item>
+    </sponsors>
+    <cosponsors>
+      <item>
+        <bioguideId>N000147</bioguideId>
+        <fullName>Del. Norton, Eleanor Holmes [D-DC-At Large]</fullName>
+        <firstName>Eleanor</firstName>
+        <lastName>Norton</lastName>
+        <party>D</party>
+        <state>DC</state>
+        <middleName>Holmes</middleName>
+        <district>0</district>
+        <sponsorshipDate>2024-06-12</sponsorshipDate>
+        <isOriginalCosponsor>False</isOriginalCosponsor>
+      </item>
+      <item>
+        <bioguideId>L000397</bioguideId>
+        <fullName>Rep. Lofgren, Zoe [D-CA-18]</fullName>
+        <firstName>Zoe</firstName>
+        <lastName>Lofgren</lastName>
+        <party>D</party>
+        <state>CA</state>
+        <district>18</district>
+        <sponsorshipDate>2024-07-15</sponsorshipDate>
+        <isOriginalCosponsor>False</isOriginalCosponsor>
+      </item>
+    </cosponsors>
+    <cboCostEstimates>
+      <item>
+        <pubDate>2024-05-08T20:00:00Z</pubDate>
+        <title>H.R. 7643, Veterans Congressional Work Study Act of 2024</title>
+        <url>https://www.cbo.gov/publication/60249</url>
+        <description>As ordered reported by the House Committee on Veterans’ Affairs on May 1, 2024</description>
+      </item>
+    </cboCostEstimates>
+    <policyArea>
+      <name>Armed Forces and National Security</name>
+    </policyArea>
+    <subjects>
+      <legislativeSubjects>
+        <item>
+          <name>Congressional oversight</name>
+          <updateDate>2024-08-16T16:58:36Z</updateDate>
+        </item>
+        <item>
+          <name>Congressional-executive branch relations</name>
+          <updateDate>2024-08-16T16:58:53Z</updateDate>
+        </item>
+        <item>
+          <name>Government information and archives</name>
+          <updateDate>2024-08-16T16:58:42Z</updateDate>
+        </item>
+        <item>
+          <name>Research and development</name>
+          <updateDate>2024-08-16T16:58:57Z</updateDate>
+        </item>
+        <item>
+          <name>Veterans' loans, housing, homeless programs</name>
+          <updateDate>2024-08-16T16:58:48Z</updateDate>
+        </item>
+      </legislativeSubjects>
+      <policyArea>
+        <name>Armed Forces and National Security</name>
+        <updateDate>2024-04-01T15:45:13Z</updateDate>
+      </policyArea>
+    </subjects>
+    <title>Veterans Congressional Work Study Act of 2024</title>
+    <titles>
+      <item>
+        <titleType>Short Title(s) as Reported to House</titleType>
+        <titleTypeCode>102</titleTypeCode>
+        <title>Veterans Congressional Work Study Act of 2024</title>
+        <updateDate>2025-05-28T18:49:26Z</updateDate>
+        <chamberCode>H</chamberCode>
+        <chamberName>House</chamberName>
+      </item>
+      <item>
+        <titleType>Short Title(s) as Reported to House</titleType>
+        <titleTypeCode>102</titleTypeCode>
+        <title>Clear Communication for Veterans Claims Act</title>
+        <updateDate>2025-05-28T12:50:26Z</updateDate>
+        <chamberCode>H</chamberCode>
+        <chamberName>House</chamberName>
+        <billTextVersionName>Reported in House</billTextVersionName>
+        <billTextVersionCode>RH</billTextVersionCode>
+      </item>
+      <item>
+        <titleType>Display Title</titleType>
+        <titleTypeCode>45</titleTypeCode>
+        <title>Veterans Congressional Work Study Act of 2024</title>
+        <updateDate>2024-08-28T19:18:15Z</updateDate>
+      </item>
+      <item>
+        <titleType>Override Display Title</titleType>
+        <titleTypeCode>81</titleTypeCode>
+        <title>Veterans Congressional Work Study Act of 2024</title>
+        <updateDate>2024-08-28T19:08:04Z</updateDate>
+      </item>
+      <item>
+        <titleType>Short Title(s) as Introduced</titleType>
+        <titleTypeCode>101</titleTypeCode>
+        <title>Veterans Congressional Work Study Act of 2024</title>
+        <updateDate>2024-05-24T13:33:44Z</updateDate>
+        <billTextVersionName>Introduced in House</billTextVersionName>
+        <billTextVersionCode>IH</billTextVersionCode>
+      </item>
+      <item>
+        <titleType>Official Title as Introduced</titleType>
+        <titleTypeCode>6</titleTypeCode>
+        <title>To amend title 38, United States Code, to authorize the use of Department of Veterans Affairs work-study allowance to carry out casework, policy making, and oversight related to the activities of the Department at certain congressional offices.</title>
+        <updateDate>2024-03-25T12:28:54Z</updateDate>
+        <billTextVersionName>Introduced in House</billTextVersionName>
+        <billTextVersionCode>IH</billTextVersionCode>
+      </item>
+    </titles>
+    <textVersions>
+      <item>
+        <type>Reported in House</type>
+        <date>2024-08-27T04:00:00Z</date>
+        <formats>
+          <item>
+            <url>https://www.govinfo.gov/content/pkg/BILLS-118hr7643rh2/xml/BILLS-118hr7643rh2.xml</url>
+          </item>
+        </formats>
+      </item>
+      <item>
+        <type>Reported in House</type>
+        <date>2024-07-18T04:00:00Z</date>
+        <formats>
+          <item>
+            <url>https://www.govinfo.gov/content/pkg/BILLS-118hr7643rh/xml/BILLS-118hr7643rh.xml</url>
+          </item>
+        </formats>
+      </item>
+      <item>
+        <type>Introduced in House</type>
+        <date>2024-03-12T04:00:00Z</date>
+        <formats>
+          <item>
+            <url>https://www.govinfo.gov/content/pkg/BILLS-118hr7643ih/xml/BILLS-118hr7643ih.xml</url>
+          </item>
+        </formats>
+      </item>
+    </textVersions>
+    <latestAction>
+      <actionDate>2024-08-27</actionDate>
+      <text>Supplemental report filed by the Committee on Veterans' Affairs, H. Rept. 118-596, Part II.</text>
+    </latestAction>
+  </bill>
+  <dublinCore xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:format>text/xml</dc:format>
+    <dc:language>EN</dc:language>
+    <dc:rights>Pursuant to Title 17 Section 105 of the United States Code, this file is not subject to copyright protection and is in the public domain.</dc:rights>
+    <dc:contributor>Congressional Research Service, Library of Congress</dc:contributor>
+    <dc:description>This file contains bill summaries and statuses for federal legislation. A bill summary describes the most significant provisions of a piece of legislation and details the effects the legislative text may have on current law and federal programs. Bill summaries are authored by the Congressional Research Service (CRS) of the Library of Congress. As stated in Public Law 91-510 (2 USC 166 (d)(6)), one of the duties of CRS is "to prepare summaries and digests of bills and resolutions of a public general nature introduced in the Senate or House of Representatives". For more information, refer to the User Guide that accompanies this file.</dc:description>
+  </dublinCore>
+</billStatus>

@@ -29,7 +29,7 @@ import pyarrow.parquet as pq
 import pytest
 from spicy_docs.interpretation import bill_family as family_provider
 from spicy_docs.sources.congress.bill_status import BillIdentity, parse_bill_status
-from spicy_docs.sources.congress.bill_versions import VERSION_CODES
+from spicy_docs.sources.congress.bill_versions import VERSION_CODES, printing_version_code
 
 from spicy_regs.transforms.table_merge import prior_scratch_path
 from tests.test_bill_family import (
@@ -164,7 +164,7 @@ def test_the_host_orders_a_dateless_enrolled_printing_as_the_provider_does():
     assert {version.type: version.date for version in status.text_versions}["Enrolled Bill"] == "", (
         "the fixture's own claim: BILLSTATUS states <date/> for the enrolled bill"
     )
-    codes = [build.version_slug(version.type) for version in build._ordered_printings(status)]
+    codes = [printing_version_code(version) for version in build._ordered_printings(status)]
     assert codes == ["introduced-in-house", "engrossed-in-house", "rfs", "enrolled-bill", "public-law"]
     assert build._code_pairs(build._printings(status)) == set(pairwise(codes))
 

@@ -52,6 +52,7 @@ from spicy_docs.sources.congress.bill_status import (
     BillSourceError,
     BillSponsor,
     BillStatus,
+    BillTextVersion,
     bill_package_id_from_url,
 )
 from spicy_docs.sources.congress.bill_tree import engine_available, parse_bill_tree
@@ -62,7 +63,7 @@ from spicy_docs.sources.congress.bill_versions import (
     choose_format,
     consecutive_pairs,
     printing_order,
-    version_slug,
+    printing_version_code,
 )
 from spicy_docs.sources.congress.bulk_status import (
     BulkListingEntry,
@@ -462,7 +463,7 @@ def _version_captures(
     """
     captures: list[BillVersionCapture] = []
     printings = _ordered_printings(status)
-    codes = [version_slug(version.type) for version in printings]
+    codes = [printing_version_code(version) for version in printings]
     needed = _needed_printings(codes, held) | {index for index, code in enumerate(codes) if code in retry_codes}
 
     if not needed:
@@ -575,9 +576,23 @@ def _version_captures(
 
 
 def _printings(status: Any) -> list[tuple[str, str | None]]:
-    """A status's typed printings as the ``(version_code, date)`` pairs the provider orders."""
+    """A status's typed printings as the ``(version_code, date)`` pairs the provider orders.
+
+    The code is the provider's ``printing_version_code``: a numbered reprint the
+    publisher addresses by package (``BILLS-119hr6644eas2``) is its own printing,
+    not a second one under its stage's slug.
+    """
     typed = (version for version in status.text_versions if version.type)
-    return [(version_slug(version.type), getattr(version, "date", None)) for version in typed]
+    return [(printing_version_code(version), getattr(version, "date", None)) for version in typed]
+
+
+def _row_printing_code(row: Mapping[str, Any]) -> str:
+    """The code a published ``bill_versions`` row's own label and package give its printing today."""
+    version = BillTextVersion(type=row["label"], date=row["version_date"], formats=(), package_id=row["package_id"])
+    try:
+        return printing_version_code(version)
+    except VersionCodeError:
+        return row["version_code"]
 
 
 def _ordered_printings(status: Any) -> list[Any]:
@@ -630,6 +645,12 @@ class PriorIndex:
     #: Every published ``section_diffs`` key, by bill, less the bill: what a
     #: rebuild checks against the pairs its status establishes, retiring the rest.
     published_pairs: Mapping[str, Collection[tuple[str, str, str, str]]] = field(default_factory=dict)
+    #: Published ``bill_versions`` rows, by bill, keyed under a code their own
+    #: package now names another printing: ``(version_code, source, printing
+    #: code)``. Before spicy-docs 0.37.0 a numbered reprint took its stage's
+    #: slug, so 119-hr-6644's congress row ``engrossed-amendment-senate``
+    #: carries ``eas2``'s package and date.
+    miskeyed_rows: Mapping[str, Collection[tuple[str, str, str]]] = field(default_factory=dict)
 
     def held_codes(self, bill_id: str) -> set[str]:
         """The version codes this bill has a published processed body for."""
@@ -737,7 +758,10 @@ def _prior_index(paths: Mapping[str, Path | None]) -> PriorIndex:
         "section_count",
         "cleanup_json",
         "version_date",
+        "label",
+        "package_id",
     )
+    miskeyed: dict[str, set[tuple[str, str, str]]] = {}
     versions_qualified = versions_path is not None and _has_columns(versions_path, needed)
     if versions_qualified:
         for row in (
@@ -746,6 +770,8 @@ def _prior_index(paths: Mapping[str, Path | None]) -> PriorIndex:
             if row["source"] in {"congress", ACQUIRED_SOURCE}:
                 listed.setdefault(row["bill_id"], set()).add(row["version_code"])
                 dates[(row["bill_id"], row["version_code"])] = row["version_date"] or ""
+                if row["label"] and row["package_id"] and (code := _row_printing_code(row)) != row["version_code"]:
+                    miskeyed.setdefault(row["bill_id"], set()).add((row["version_code"], row["source"], code))
             if row["source"] != ACQUIRED_SOURCE or not row["sha256"] or not row["byte_size"]:
                 continue
             bill, code = row["bill_id"], row["version_code"]
@@ -806,6 +832,8 @@ def _prior_index(paths: Mapping[str, Path | None]) -> PriorIndex:
         if not versions_qualified
         or version_counts.get(bill) != len(listed.get(bill, ()))
     )
+    # A mis-keyed row reopens its bill: the rebuild retires it (see ``miskeyed_rows``).
+    pending_bills.update(miskeyed)
     for bill, codes in listed.items():
         established = _code_pairs([(code, dates[(bill, code)]) for code in sorted(codes)])
         xml = xml_printings.get(bill, set())
@@ -833,7 +861,7 @@ def _prior_index(paths: Mapping[str, Path | None]) -> PriorIndex:
                 len(unqualified_urls),
             )
         pending_bills.update(unqualified_urls)
-    return PriorIndex(text_dates, printings, xml_printings, pairs, pending_bills, published)
+    return PriorIndex(text_dates, printings, xml_printings, pairs, pending_bills, published, miskeyed)
 
 
 #: The reason a fresh row repeating a key is refused. The merge keeps one row
@@ -1697,8 +1725,10 @@ def build_bill_family(
     remaining = [max_version_fetches]
     families: list[BillFamilyTables] = []
     touched: set[str] = set()
-    # Published comparisons a rebuild shows no established neighbour pair accounts for.
+    # Published comparisons a rebuild shows no established neighbour pair
+    # accounts for, and published printings keyed under another printing's code.
     retired_pairs: set[tuple[str, ...]] = set()
+    retired_versions: set[tuple[str, ...]] = set()
     archive_rows: list[dict] = []
     vote_rows: list[dict] = []
     bills = unchanged = skipped = archives_skipped = votes_refused = 0
@@ -1741,7 +1771,7 @@ def build_bill_family(
                 # retry policy remains separate from body completeness.
                 published = index.bill_text_dates.get(identifier)
                 held = index.held_codes(identifier)
-                codes = {version_slug(version.type) for version in _ordered_printings(member.status)}
+                codes = {code for code, _ in _printings(member.status)}
                 pending_pairs = index.pending_pairs(member.status)
                 if (
                     published is not None
@@ -1777,6 +1807,13 @@ def build_bill_family(
                     (identifier, *pair)
                     for pair in index.published_pairs.get(identifier, ())
                     if (pair[0], pair[2]) not in established
+                )
+                # A row whose package belongs to another listed printing
+                # describes that printing under the wrong key: retire it.
+                retired_versions.update(
+                    (identifier, code, source)
+                    for code, source, printing in index.miskeyed_rows.get(identifier, ())
+                    if printing in codes
                 )
                 processed = {entry.version_code for entry in capture.versions if _processed_capture(entry)}
                 xml_codes = index.xml_codes(identifier) | {
@@ -1913,6 +1950,9 @@ def build_bill_family(
     pair_identity = TABLE_CONTRACTS["section_diffs"].identity
     if retired_pairs:
         logger.warning("Bill family: retiring {:,} published comparisons of non-neighbours", len(retired_pairs))
+    if retired_versions:
+        logger.warning("Bill family: retiring {:,} published printings keyed as another", len(retired_versions))
+    version_identity = TABLE_CONTRACTS["bill_versions"].identity
     # Each scope names parents whose prior child rows this run replaces --
     # emptying them where the run publishes none.
     replaced: dict[str, ReplacementScope] = {
@@ -1930,7 +1970,8 @@ def build_bill_family(
                 }
             },
         ),
-        "bill_sections": (TABLE_CONTRACTS["bill_versions"].identity, section_scopes),
+        "bill_versions": (version_identity, retired_versions),
+        "bill_sections": (version_identity, section_scopes | retired_versions),
         "section_diffs": (pair_identity, retired_pairs),
         "section_diff_items": (pair_identity, item_scopes | retired_pairs),
         "financial_changes": (pair_identity, retired_pairs),
