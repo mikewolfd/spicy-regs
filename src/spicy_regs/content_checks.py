@@ -21,8 +21,19 @@ from urllib.parse import parse_qs, urlsplit
 CHUNK = 1024 * 1024
 SNIFF_BYTES = 4096
 HIT_SAMPLES = 20
-#: Values the owners write in place of a key; a parameter carrying one of these is already scrubbed.
-REDACTED = ("redacted", "demo_key")
+def _redacted() -> tuple[str, ...]:
+    """Values written in place of a key, lower-cased: a parameter carrying one of these holds no secret.
+
+    Besides the owners' own scrub marks, api.data.gov routes (SAM's extract trigger and
+    its entity pages) state download links with the publisher's literal placeholder,
+    which the SpicyDocs reader re-injects; it is a documented template, not a key.
+    """
+    from spicy_docs.sources.sam_extract import API_KEY_PLACEHOLDER
+
+    return ("redacted", "demo_key", API_KEY_PLACEHOLDER.lower())
+
+
+REDACTED = _redacted()
 
 
 def _credential_names() -> tuple[str, ...]:

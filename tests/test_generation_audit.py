@@ -204,6 +204,9 @@ def test_a_key_in_an_evidence_blob_is_flagged_without_reporting_it(tmp_path, mon
         capture("https://api.test/v3/bill?format=json", compressed, content_type="application/json", encoding="gzip"),
         capture("https://api.test/v3/ok?format=json", b'{"url": "https://api.test/v3/law?api_key=<redacted>"}',
                 content_type="application/json"),
+        # SAM's extract trigger states its download link with the publisher's placeholder (2026-09-26).
+        capture("https://api.test/extract?format=JSON", b"Extract File will be available for download with url: "
+                b"https://api.test/download?api_key=REPLACE_WITH_API_KEY&token=abc", content_type="text/plain"),
     ])
 
     report = audit(public_base(store, tmp_path / "public"), family="test", declarations=CITING,
