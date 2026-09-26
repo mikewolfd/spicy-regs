@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib
 import tomllib
 from pathlib import Path
 
@@ -145,6 +146,18 @@ def test_a_stated_bioguide_id_stands_before_the_lis_crosswalk(tmp_path):
         "S421": ("X000001", "half_open"),
         "S422": (None, "unresolved_member"),
     }
+
+
+def test_rows_stream_out_in_input_order_and_whole_row_groups(tmp_path, monkeypatch):
+    """The streamed writer cuts row groups where ``pq.write_table`` would and keeps ``member_votes``' order."""
+    # The package re-exports the function under the module's name, so reach the module itself.
+    module = importlib.import_module("spicy_regs.transforms.build_member_vote_terms")
+    monkeypatch.setattr(module, "_ROW_GROUP", 2)
+    votes = [_vote(f"119-house-1-{n}", "M", "house", "10-Feb-2025", bioguide="M") for n in (5, 3, 9, 1, 7)]
+    rows = _build(tmp_path, votes, [_term("M", "0", "rep", "2025-01-03", "2027-01-03")])
+    assert [key[0] for key in rows] == [vote["vote_id"] for vote in votes]
+    metadata = pq.ParquetFile(tmp_path / "member_vote_terms.parquet").metadata
+    assert [metadata.row_group(i).num_rows for i in range(metadata.num_row_groups)] == [2, 2, 1]
 
 
 def test_a_repeated_vote_row_or_a_shared_lis_id_refuses(tmp_path):
