@@ -2176,9 +2176,9 @@
     "table": "court_dockets",
     "label": "Federal court dockets",
     "summary": "One row per federal court docket challenging agency action under the Administrative Procedure Act, ingested from the CourtListener v4 search API (`courtlistener.com`, RECAP dockets with nature-of-suit 899) by `build_courtlistener`. When an agency finalizes a rule it is frequently sued; these are those suits — the litigation counterpart to the rulemakings in `dockets`/`documents`. There is no machine RIN/FR key on a court docket, so it links to the corpus by name and topic: the defendant agency appears in `case_name` and `parties_json` (joinable by name to `agency_stats` / the FR `agency_slugs`), and `cause` names the statute invoked. Primary / dedup key is `cl_docket_id`. All columns are stored as VARCHAR; array fields are JSON strings.",
-    "coverage": "True range with a density caveat. Dockets filed 1992-08-26 to 2026-09-04 across 95 courts, but 7,743 rows over that span is a bounded slice of federal court activity rather than the full docket record.",
+    "coverage": "True range with a density caveat. Dockets filed 1992-08-26 to 2026-09-25 across 101 courts, but 11,477 rows over that span are the nature-of-suit 899 selection, not the full docket record. 3,693 rows from the bulk edition had NULL party names on this date; each run re-reads a bounded slice of them.",
     "kind": "true_range",
-    "measured_on": "2026-09-06",
+    "measured_on": "2026-09-26",
     "data_quality": null,
     "columns": [
       {
@@ -2264,7 +2264,7 @@
       {
         "column_name": "parties_json",
         "column_type": "VARCHAR",
-        "description": "JSON array of party names on the docket (plaintiffs and defendants, including the defendant agency)."
+        "description": "JSON array of party names on the docket (plaintiffs and defendants, including the defendant agency). `[]` when the publisher names none; NULL when the docket came from the bulk edition and its names have not been read yet."
       },
       {
         "column_name": "attorneys_json",
@@ -2290,6 +2290,11 @@
         "column_name": "absolute_url",
         "column_type": "VARCHAR",
         "description": "Absolute URL of the docket page on courtlistener.com."
+      },
+      {
+        "column_name": "case_type",
+        "column_type": "VARCHAR",
+        "description": "Case-type code parsed from a district-court `docket_number` (`1:26-cv-02460` is `cv`, civil; also `cr` criminal, `mj` magistrate, `po` petty offense, `mc` miscellaneous). NULL when the number carries none, as appellate numbers do. The publisher codes non-civil dockets 899 too; they are kept, so filter on this for civil litigation."
       }
     ],
     "grain": null,

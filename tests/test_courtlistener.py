@@ -133,8 +133,9 @@ class Transport(httpx.MockTransport):
 
 @pytest.fixture(autouse=True)
 def bounded_requests(monkeypatch):
-    """Cap the reader's per-page retry budget so a transport failure surfaces immediately."""
+    """Cap the reader's per-page retry budget so a transport failure surfaces immediately; run unpaced."""
     monkeypatch.setattr(source, "_MAX_REQUESTS_PER_PAGE", 1)
+    monkeypatch.setattr(source, "MIN_REQUEST_INTERVAL_SECONDS", 0.0)
 
 
 NEXT = f"{source.API_BASE}/search/?cursor=second"
@@ -283,3 +284,52 @@ def test_exact_terminal_count_still_refuses_before_capped_yield(cap, kind, reade
     transport = Transport(_page([1], total=2, kind=kind))
     with pytest.raises(ValueError, match="terminal page disagrees"):
         list(reader(max_records=cap, transport=transport).iter_records())
+
+
+def test_docket_ids_pack_in_order_into_queries_within_the_limit():
+    ids = [str(100_000_000 + n) for n in range(100)]
+    queries = source.docket_id_queries(ids)
+    assert len(queries) == 3 and all(len(q) <= source.QUERY_LIMIT for q in queries)
+    assert [i for q in queries for i in q.removeprefix("docket_id:(").removesuffix(")").split(" OR ")] == ids
+    assert source.docket_id_queries([]) == []
+    with pytest.raises(ValueError, match="does not fit"):
+        source.docket_id_queries(["9" * 600])
+
+
+def test_every_page_request_is_paced(monkeypatch):
+    import time
+
+    monkeypatch.setattr(source, "MIN_REQUEST_INTERVAL_SECONDS", 0.2)
+    started = time.monotonic()
+    list(CourtListenerReader(transport=Transport(_page([1], NEXT, total=2), _page([2], total=2))).iter_records())
+    assert time.monotonic() - started >= 0.2
+
+
+def test_a_run_fills_a_bounded_slice_of_unnamed_dockets_and_flags_case_type(monkeypatch, tmp_path):
+    module = importlib.import_module("spicy_regs.transforms.build_courtlistener")
+    named = {**module._shape(_RAW_DOCKET), "cl_docket_id": "1"}
+    unnamed = [{**named, "cl_docket_id": str(100_000_000 + n), "parties_json": None,
+                "docket_number": "22-16094" if n == 0 else f"2:19-cr-{n:05d}"} for n in range(50)]
+    pq.write_table(pa.Table.from_pylist([named, *unnamed], schema=module._SCHEMA), tmp_path / "_cl_prior.parquet")
+    asked = []
+
+    class Named:
+        def __init__(self, *, query, evidence=None):
+            asked.append(query)
+            self.ids = query.removeprefix("docket_id:(").removesuffix(")").split(" OR ")
+
+        def iter_records(self):
+            return iter({"docket_id": int(i), "party": [f"party of {i}"], "docketNumber": "22-16094"} for i in self.ids)
+
+    monkeypatch.setattr(module, "CourtListenerReader", lambda **kwargs: CourtListenerReader(transport=Transport(_page([]))))
+    monkeypatch.setattr(module, "CourtListenerDocketIdReader", Named)
+    monkeypatch.setattr(module, "FILL_QUERIES_PER_RUN", 1)
+
+    rows = {r["cl_docket_id"]: r for r in pq.read_table(module.build_courtlistener(tmp_path)).to_pylist()}
+    filled = asked[0].removeprefix("docket_id:(").removesuffix(")").split(" OR ")
+    assert len(asked) == 1 and filled == [row["cl_docket_id"] for row in unnamed[:len(filled)]]
+    assert all(json.loads(rows[i]["parties_json"]) == [f"party of {i}"] for i in filled)
+    assert all(rows[row["cl_docket_id"]]["parties_json"] is None for row in unnamed[len(filled):])
+    assert rows["1"]["case_type"] == "cv" and rows[filled[0]]["case_type"] is None
+    assert rows[unnamed[-1]["cl_docket_id"]]["case_type"] == "cr"
+    assert list(rows["1"]) == list(module.PUBLISHED_COLUMNS)

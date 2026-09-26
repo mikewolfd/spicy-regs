@@ -2,16 +2,17 @@
 
 The provider owns requests, exact response parsing and cursor validation. Failed
 or incomplete walks raise before consumers replace their prior tables. Docket
-searches select APA/review-of-agency cases (nature of suit 899); opinion searches
-provide cluster metadata for catch-up, not full opinion bodies, selected by filing
-date or by cluster id. An optional COURTLISTENER_API_TOKEN travels only in a
-request header.
+searches select APA/review-of-agency cases (nature of suit 899) or named docket
+ids; opinion searches provide cluster metadata for catch-up, not full opinion
+bodies, selected by filing date or by cluster id. An optional
+COURTLISTENER_API_TOKEN travels only in a request header. Every request is paced
+to the published per-minute limit.
 """
 
 from __future__ import annotations
 
 import os
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from datetime import date
 from typing import Literal
 
@@ -29,6 +30,12 @@ APA_NATURE_OF_SUIT = "899"
 API_TOKEN_ENV_VAR = "COURTLISTENER_API_TOKEN"
 _MAX_PAGES = 5_000
 _MAX_REQUESTS_PER_PAGE = 6
+#: CourtListener's API help page states authenticated limits of 5 requests a
+#: minute, 50 an hour and 125 a day (checked 2026-09-26; doubled through
+#: October 1). A token's budget is shared by every run that uses it.
+MIN_REQUEST_INTERVAL_SECONDS = 12.0
+#: The search API refuses (and spicy-docs' search_url refuses) a longer ``q``.
+QUERY_LIMIT = 512
 
 
 class CourtListenerError(ValueError):
@@ -56,7 +63,7 @@ class CourtListenerReader(Reader):
         self,
         *,
         since: date | None = None,
-        nature_of_suit: str = APA_NATURE_OF_SUIT,
+        nature_of_suit: str | None = APA_NATURE_OF_SUIT,
         max_records: int | None = None,
         api_token: str | None = None,
         verbose: bool = False,
@@ -95,7 +102,7 @@ class CourtListenerReader(Reader):
             max_requests=_MAX_REQUESTS_PER_PAGE,
             max_page_bytes=16 * 1024 * 1024,
             timeout_seconds=60,
-            min_request_interval_seconds=0,
+            min_request_interval_seconds=MIN_REQUEST_INTERVAL_SECONDS,
         )
         seen = set()
         yielded = 0
@@ -165,3 +172,32 @@ class CourtListenerOpinionSearchReader(CourtListenerReader):
         )
         self.court = court
         self.query = None if above is None else f"cluster_id:[{above + 1} TO *]"
+
+
+def docket_id_queries(docket_ids: Iterable[str]) -> list[str]:
+    """Pack docket ids, in order, into as few ``docket_id:(a OR b ...)`` queries as ``QUERY_LIMIT`` allows."""
+    queries: list[str] = []
+    batch: list[str] = []
+    length = 0
+    for docket_id in docket_ids:
+        added = len(docket_id) + (len(" OR ") if batch else len("docket_id:()"))
+        if batch and length + added > QUERY_LIMIT:
+            queries.append(f"docket_id:({' OR '.join(batch)})")
+            batch, length = [], 0
+            added = len(docket_id) + len("docket_id:()")
+        if added > QUERY_LIMIT:
+            raise ValueError(f"Docket id {docket_id[:20]} does not fit one query")
+        batch.append(docket_id)
+        length += added
+    if batch:
+        queries.append(f"docket_id:({' OR '.join(batch)})")
+    return queries
+
+
+class CourtListenerDocketIdReader(CourtListenerReader):
+    """Re-read named RECAP dockets, whatever their filing date or nature of suit, from one packed query."""
+
+    def __init__(self, *, query: str, api_token: str | None = None, transport: httpx.BaseTransport | None = None,
+                 evidence: CaptureEvidence | None = None) -> None:
+        super().__init__(nature_of_suit=None, api_token=api_token, transport=transport, evidence=evidence)
+        self.query = query

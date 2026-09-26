@@ -38,6 +38,14 @@ FIXTURE = Path(__file__).parent / "fixtures/courtlistener_bulk/courts-2026-06-30
 DUMP_DATE = date(2026, 6, 30)
 
 
+@pytest.fixture(autouse=True)
+def unpaced(monkeypatch):
+    """The reader waits CourtListener's published interval between pages; these tests run unpaced."""
+    from spicy_regs.sources import courtlistener
+
+    monkeypatch.setattr(courtlistener, "MIN_REQUEST_INTERVAL_SECONDS", 0.0)
+
+
 def _dump(tmp_path: Path, body: bytes) -> Path:
     path = tmp_path / "dump.csv.bz2"
     path.write_bytes(bz2.compress(body))

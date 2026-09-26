@@ -6,7 +6,7 @@
 
 One row per federal court docket challenging agency action under the Administrative Procedure Act, ingested from the CourtListener v4 search API (`courtlistener.com`, RECAP dockets with nature-of-suit 899) by `build_courtlistener`. When an agency finalizes a rule it is frequently sued; these are those suits — the litigation counterpart to the rulemakings in `dockets`/`documents`. There is no machine RIN/FR key on a court docket, so it links to the corpus by name and topic: the defendant agency appears in `case_name` and `parties_json` (joinable by name to `agency_stats` / the FR `agency_slugs`), and `cause` names the statute invoked. Primary / dedup key is `cl_docket_id`. All columns are stored as VARCHAR; array fields are JSON strings.
 
-**Coverage.** True range with a density caveat. Dockets filed 1992-08-26 to 2026-09-04 across 95 courts, but 7,743 rows over that span is a bounded slice of federal court activity rather than the full docket record. *(measured 2026-09-06)*
+**Coverage.** True range with a density caveat. Dockets filed 1992-08-26 to 2026-09-25 across 101 courts, but 11,477 rows over that span are the nature-of-suit 899 selection, not the full docket record. 3,693 rows from the bulk edition had NULL party names on this date; each run re-reads a bounded slice of them. *(measured 2026-09-26)*
 
 - **Parquet file:** `court_dockets.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
@@ -30,9 +30,10 @@ One row per federal court docket challenging agency action under the Administrat
 | `jury_demand` | `VARCHAR` | Jury demand recorded on the docket (e.g. `None`). |
 | `assigned_to` | `VARCHAR` | Name of the judge assigned to the case. |
 | `referred_to` | `VARCHAR` | Name of the magistrate/referral judge, if any. Often null. |
-| `parties_json` | `VARCHAR` | JSON array of party names on the docket (plaintiffs and defendants, including the defendant agency). |
+| `parties_json` | `VARCHAR` | JSON array of party names on the docket (plaintiffs and defendants, including the defendant agency). `[]` when the publisher names none; NULL when the docket came from the bulk edition and its names have not been read yet. |
 | `attorneys_json` | `VARCHAR` | JSON array of attorney names appearing on the docket. |
 | `firms_json` | `VARCHAR` | JSON array of law-firm / legal-organization names appearing on the docket. |
 | `pacer_case_id` | `VARCHAR` | PACER case id for the docket in its court's CM/ECF system. |
 | `date_created` | `VARCHAR` | Timestamp CourtListener first indexed the docket (ISO 8601 string, from the search-result `meta.date_created`). |
 | `absolute_url` | `VARCHAR` | Absolute URL of the docket page on courtlistener.com. |
+| `case_type` | `VARCHAR` | Case-type code parsed from a district-court `docket_number` (`1:26-cv-02460` is `cv`, civil; also `cr` criminal, `mj` magistrate, `po` petty offense, `mc` miscellaneous). NULL when the number carries none, as appellate numbers do. The publisher codes non-civil dockets 899 too; they are kept, so filter on this for civil litigation. |

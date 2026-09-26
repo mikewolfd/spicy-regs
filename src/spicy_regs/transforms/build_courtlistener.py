@@ -12,8 +12,18 @@ Incremental by design: best-effort prior from R2, fetch only dockets filed
 since its max ``date_filed`` minus a short overlap, then dedup on
 ``cl_docket_id`` preferring the fresh row. With no prior table it is a full
 backfill. The scheduled run sets ``COURTLISTENER_API_TOKEN`` because keyless
-runs time out on 429s; a free token's 250-requests-a-day cap still covers the
+runs time out on 429s; a free token's 125-requests-a-day cap still covers the
 daily delta, but not a full backfill of several hundred pages in one day.
+
+Each run also re-reads up to ``FILL_QUERIES_PER_RUN`` packed id queries of the
+prior dockets with NULL party names (rows the bulk edition supplied, which
+carries no parties), so the names fill a bounded slice a day (owner decision
+50). An empty list means the publisher names no party; NULL means never read.
+
+``case_type`` is the case-type code in a district-court docket number
+(``1:23-cv-01234`` is ``cv``), recomputed from ``docket_number`` every run;
+NULL when the number carries none, as appellate numbers do. Non-civil rows are
+kept and flagged, not dropped (owner decision 49).
 """
 
 from __future__ import annotations
@@ -31,7 +41,7 @@ import pyarrow.parquet as pq
 from loguru import logger
 
 from spicy_regs.sources import r2
-from spicy_regs.sources.courtlistener import CourtListenerReader
+from spicy_regs.sources.courtlistener import CourtListenerDocketIdReader, CourtListenerReader, docket_id_queries
 from spicy_regs.transforms.table_merge import merge_local_prior
 
 OUTPUT = "court_dockets.parquet"
@@ -69,6 +79,12 @@ COLUMNS = (
     "absolute_url",
 )
 _SCHEMA = pa.schema([(c, pa.string()) for c in COLUMNS])
+#: Recomputed from ``docket_number`` over every merged row.
+DERIVED = {"case_type": r"lower(nullif(regexp_extract(docket_number, '^\s*(?:\d+:)?\d{2}-([A-Za-z]{1,4})-\d', 1), ''))"}
+PUBLISHED_COLUMNS = (*COLUMNS, *DERIVED)
+#: About 38 ids a query and two 20-row pages each: 30 requests, with the daily
+#: delta well inside the 50-an-hour and 125-a-day limits.
+FILL_QUERIES_PER_RUN = 15
 
 
 def _s(value: object) -> str | None:
@@ -137,6 +153,18 @@ def _prior_max_date_filed(prior_file: Path) -> date | None:
         return None
 
 
+def _unnamed_dockets(prior_file: Path) -> list[str]:
+    """The prior's docket ids with NULL party names, in numeric order, so each run takes the next slice."""
+    import duckdb
+
+    path = str(prior_file).replace("'", "''")
+    rows = duckdb.sql(
+        f"SELECT cl_docket_id FROM read_parquet('{path}') WHERE parties_json IS NULL "
+        "ORDER BY TRY_CAST(cl_docket_id AS BIGINT), cl_docket_id"
+    ).fetchall()
+    return [row[0] for row in rows]
+
+
 def build_courtlistener(
     output_dir: Path,
     *,
@@ -163,13 +191,25 @@ def build_courtlistener(
         since = (prior_max - timedelta(days=OVERLAP_DAYS)) if prior_max else None
     logger.info("CourtListener: fetching dockets filed since {}", since or "the beginning")
 
-    # 3. Fetch + shape into a "new rows" parquet.
+    # 3. Fetch + shape into a "new rows" parquet: the dated delta, then a
+    # bounded slice of the prior's dockets that still lack party names.
     reader = CourtListenerReader(since=since, max_records=max_records, evidence=evidence)
-    rows = [_shape(d) for d in reader.iter_records()]
+    fresh = {row["cl_docket_id"]: row for row in map(_shape, reader.iter_records())}
+    logger.info("CourtListener: fetched {:,} dockets this run", len(fresh))
+    if have_prior and max_records is None:
+        unnamed = _unnamed_dockets(prior_file)
+        queries = docket_id_queries(unnamed)
+        for query in queries[:FILL_QUERIES_PER_RUN]:
+            for docket in CourtListenerDocketIdReader(query=query, evidence=evidence).iter_records():
+                row = _shape(docket)
+                fresh.setdefault(row["cl_docket_id"], row)
+        filled = sum(1 for docket_id in unnamed if docket_id in fresh)
+        logger.info("CourtListener: re-read {:,} of {:,} dockets without party names ({} of {} queries)",
+                    filled, len(unnamed), min(len(queries), FILL_QUERIES_PER_RUN), len(queries))
     new_file = output_dir / "_cl_new.parquet"
+    rows = list(fresh.values())
     table = pa.Table.from_pylist(rows, schema=_SCHEMA) if rows else _SCHEMA.empty_table()
     pq.write_table(table, new_file, compression="zstd")
-    logger.info("CourtListener: fetched {:,} dockets this run", len(rows))
 
     # 4. Merge prior + new, dedup on cl_docket_id preferring the new row.
     spill_dir = output_dir / ".duckdb_tmp"
@@ -188,6 +228,7 @@ def build_courtlistener(
         prior_file=prior_file if have_prior else None,
         new_file=new_file,
         out_file=out_file,
+        derived=DERIVED,
     )
     con.close()
 

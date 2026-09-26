@@ -1026,10 +1026,11 @@ tables:
     label: "Federal court dockets"
     coverage: >-
       True range with a density caveat. Dockets filed 1992-08-26 to
-      2026-09-04 across 95 courts, but 7,743 rows over that span is a
-      bounded slice of federal court activity rather than the full docket
-      record.
-    measured_on: "2026-09-06"
+      2026-09-25 across 101 courts, but 11,477 rows over that span are the
+      nature-of-suit 899 selection, not the full docket record. 3,693 rows
+      from the bulk edition had NULL party names on this date; each run
+      re-reads a bounded slice of them.
+    measured_on: "2026-09-26"
     summary: >-
       One row per federal court docket challenging agency action under the
       Administrative Procedure Act, ingested from the CourtListener v4 search API
@@ -1050,6 +1051,7 @@ tables:
       court: "Human-readable court name (e.g. `District Court, District of Columbia`)."
       court_citation_string: "Court citation abbreviation (e.g. `D.D.C.`)."
       docket_number: "Court docket number (e.g. `1:26-cv-02460`)."
+      case_type: "Case-type code parsed from a district-court `docket_number` (`1:26-cv-02460` is `cv`, civil; also `cr` criminal, `mj` magistrate, `po` petty offense, `mc` miscellaneous). NULL when the number carries none, as appellate numbers do. The publisher codes non-civil dockets 899 too; they are kept, so filter on this for civil litigation."
       date_filed: "Date the case was filed (ISO 8601 string). Sort key and incremental watermark."
       date_terminated: "Date the case was terminated, if closed (ISO 8601 string). Null for pending cases."
       date_argued: "Date of oral argument, if any (ISO 8601 string). Often null."
@@ -1059,7 +1061,7 @@ tables:
       jury_demand: "Jury demand recorded on the docket (e.g. `None`)."
       assigned_to: "Name of the judge assigned to the case."
       referred_to: "Name of the magistrate/referral judge, if any. Often null."
-      parties_json: "JSON array of party names on the docket (plaintiffs and defendants, including the defendant agency)."
+      parties_json: "JSON array of party names on the docket (plaintiffs and defendants, including the defendant agency). `[]` when the publisher names none; NULL when the docket came from the bulk edition and its names have not been read yet."
       attorneys_json: "JSON array of attorney names appearing on the docket."
       firms_json: "JSON array of law-firm / legal-organization names appearing on the docket."
       pacer_case_id: "PACER case id for the docket in its court's CM/ECF system."

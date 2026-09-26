@@ -460,33 +460,6 @@ DERIVED_SCHEMAS: dict[str, list[tuple[str, str]]] = {
         ("version", "VARCHAR"),
         ("url", "VARCHAR"),
     ],
-    # Ingested from the CourtListener v4 search API (build_courtlistener); APA /
-    # agency-review litigation dockets (nature-of-suit 899). All columns stored as
-    # VARCHAR, array fields serialized as JSON strings. Keyed by cl_docket_id.
-    "court_dockets": [
-        ("cl_docket_id", "VARCHAR"),
-        ("case_name", "VARCHAR"),
-        ("case_name_full", "VARCHAR"),
-        ("court_id", "VARCHAR"),
-        ("court", "VARCHAR"),
-        ("court_citation_string", "VARCHAR"),
-        ("docket_number", "VARCHAR"),
-        ("date_filed", "VARCHAR"),
-        ("date_terminated", "VARCHAR"),
-        ("date_argued", "VARCHAR"),
-        ("nature_of_suit", "VARCHAR"),
-        ("cause", "VARCHAR"),
-        ("jurisdiction_type", "VARCHAR"),
-        ("jury_demand", "VARCHAR"),
-        ("assigned_to", "VARCHAR"),
-        ("referred_to", "VARCHAR"),
-        ("parties_json", "VARCHAR"),
-        ("attorneys_json", "VARCHAR"),
-        ("firms_json", "VARCHAR"),
-        ("pacer_case_id", "VARCHAR"),
-        ("date_created", "VARCHAR"),
-        ("absolute_url", "VARCHAR"),
-    ],
     # Derived from the verified CourtListener bulk dockets edition: same-case
     # record groups for court_dockets (the publisher's doppeldocket problem —
     # PACER main + per-defendant sub-dockets, FLP wiki / issue #2185). The
@@ -693,6 +666,7 @@ def expected_schemas() -> dict[str, list[tuple[str, str]]]:
     from spicy_regs.transforms.fec_relationships import COLUMNS as FEC_RELATIONSHIP_COLUMNS
     from spicy_regs.transforms.enrich_bill_subjects import COLUMNS as BILL_SUBJECT_COLUMNS
     from spicy_regs.transforms.build_court_opinion_clusters import COLUMNS as COURT_CLUSTER_COLUMNS
+    from spicy_regs.transforms.build_courtlistener import PUBLISHED_COLUMNS as COURT_DOCKET_COLUMNS
     from spicy_regs.transforms.build_court_bulk_tables import CITATION_MAP, CITATIONS, OPINIONS, PARENTHETICALS
     from spicy_regs.transforms.build_member_vote_terms import COLUMNS as MEMBER_VOTE_TERM_COLUMNS
     from spicy_regs.transforms.build_sam_entities import COLUMNS as SAM_COLUMNS
@@ -709,6 +683,7 @@ def expected_schemas() -> dict[str, list[tuple[str, str]]]:
         "fec_relationships": FEC_RELATIONSHIP_COLUMNS,
         "bill_subjects": BILL_SUBJECT_COLUMNS,
         "court_opinion_clusters": COURT_CLUSTER_COLUMNS,
+        "court_dockets": COURT_DOCKET_COLUMNS,
         "court_citations": CITATIONS.columns,
         "court_citation_map": CITATION_MAP.columns,
         "court_parentheticals": PARENTHETICALS.columns,

@@ -34,6 +34,7 @@ def merge_local_prior(
     row_group_size: int = 50_000,
     kv_metadata: Mapping[str, str] | None = None,
     retire: str | None = None,
+    derived: Mapping[str, str] | None = None,
 ) -> None:
     """Merge the fresh ``new_file`` over a local prior on one identity column.
 
@@ -50,6 +51,10 @@ def merge_local_prior(
     are the complete population of a slice: a prior row it holds TRUE for is
     dropped before the union, so what the slice no longer contains is retired.
     A row it holds NULL for is kept.
+
+    ``derived`` maps an output column to a SQL expression over ``columns``,
+    appended after them and recomputed from every merged row each run, so a
+    prior row gains it and it never drifts from the columns it reads.
     """
     keys = (identity,) if isinstance(identity, str) else tuple(identity)
     cols = ", ".join(f'"{c}"' for c in columns)
@@ -64,13 +69,14 @@ def merge_local_prior(
     else:
         union = f"SELECT {cols}, 1 AS _src FROM read_parquet('{new_path}')"
     out_path = str(out_file).replace("'", "''")
+    extra = "".join(f', ({expression}) AS "{name}"' for name, expression in (derived or {}).items())
     metadata_clause = ""
     if kv_metadata is not None:
         metadata_clause = ", KV_METADATA ?"
     con.execute(
         f"""
         COPY (
-            SELECT {cols} FROM (
+            SELECT {cols}{extra} FROM (
                 SELECT {cols}, ROW_NUMBER() OVER (
                     PARTITION BY {", ".join(f'"{k}"' for k in keys)} ORDER BY _src DESC
                 ) AS _rn
