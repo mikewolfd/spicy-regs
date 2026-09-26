@@ -10,7 +10,11 @@ published when a leg is not established — and never a shaper rule.
 from __future__ import annotations
 
 import hashlib
+import io
 import json
+import shutil
+import zipfile
+from collections import Counter
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
@@ -26,20 +30,18 @@ from spicy_docs.sources.govinfo.uslm import (
     validate_public_law_xml,
 )
 from spicy_docs.sources.govinfo.uslm_acquisition import UslmSourceUnavailableError
-from spicy_docs.sources.uscode import UsCodeSourceError, parse_table3_page
+from spicy_docs.sources.uscode import UsCodeSourceError, parse_table3_page, read_table3_bulk_archive
 from spicy_docs.sources.uscode.classification import parse_classification_index, parse_classification_table
 from spicy_docs.transport.captured import CapturedBodyResponse
 from spicy_docs.transport.credentials import CredentialRefusedError
 
-from spicy_docs.schemas.law_tables import USLM_READER_VERSION
-from spicy_docs.sources.uscode.table3 import TABLE3_READER_VERSION
-from spicy_regs.transforms.read_checkpoints import checkpoint_metadata, read_checkpoints
+from spicy_docs.schemas.law_tables import USLM_READER_VERSION, shape_table3_record
+from spicy_regs.transforms.read_checkpoints import read_checkpoints
 
 from spicy_regs.transforms.build_laws import (
     OLRC_BUDGET,
-    TABLE3_STOP_AFTER,
-    _page_rows,
-    _rows_digest,
+    TABLE3_RULE,
+    _bulk_rows,
     _table3_rows,
     build_laws,
     olrc_acquirer,
@@ -53,18 +55,19 @@ LAW_119_1 = json.loads((FIXTURES / "congress-law-119-1.json").read_text())
 USLM_BYTES = (FIXTURES / "plaw-119publ1.xml").read_bytes()
 INDEX_BYTES = (FIXTURES / "classification-tables-index.shtml").read_bytes()
 TABLE_BYTES = (FIXTURES / "classification-tbl119pl_2nd-head.htm").read_bytes()
-TABLE3_BYTES = (FIXTURES / "table3-111_226-head.htm").read_bytes()
-#: The fixture as the wheel's reader reads it: its page names 111-227 as the next act.
-TABLE3_PAGE = parse_table3_page(TABLE3_BYTES, key="111-226")
+#: Whole ``<act>`` fragments of ``fulldump@119-73.xml``, verbatim and in the file's order: 118-2, 119-30 and 119-53
+#: (the two acts the page walk never reached), 119-37 in twelve fragments, 87-845 across volumes 76 and 76A, and the
+#: chapter act 1789-08-07:9.
+BULK_EXCERPT = (FIXTURES / "table3-bulk-119-73-excerpt.xml").read_bytes()
 OBSERVED_AT = "2026-09-19T00:00:00Z"
 #: The three listed rows plus the one law the USLM fixture states, as one page.
 LISTED_119 = [*LIST_PAGE["bills"], LAW_119_1]
 
 
 class _Capture:
-    def __init__(self, body: bytes):
+    def __init__(self, body: bytes, observed_at: str = OBSERVED_AT):
         self.body = body
-        self.observed_at = OBSERVED_AT
+        self.observed_at = observed_at
 
     @property
     def sha256(self) -> str:
@@ -118,24 +121,28 @@ class StubUslm:
         raise AssertionError(f"the stub holds no PLAW for {selection}")
 
 
-def _stated(key: str | None) -> str | None:
-    """A key as a Table III page states it, with an en dash."""
-    return key and key.replace("-", "\u2013")
+def _bulk_zip(member: bytes = BULK_EXCERPT, release_point: str = "119-73") -> bytes:
+    """The bulk zip OLRC serves: one ``fulldump@<release point>.xml`` member, with a fixed timestamp."""
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr(zipfile.ZipInfo(f"fulldump@{release_point}.xml", date_time=(2026, 1, 23, 0, 0, 0)), member)
+    return buffer.getvalue()
 
 
 class StubOlrc:
-    """Serves a page for each act in ``chain`` (act -> the next act its page names), each stating ``release_point``.
+    """Serves the classification fixtures and one Table III bulk zip, read through the wheel's own bulk reader.
 
-    The reader refuses the ``refusing`` acts, and every other act fails in transport.
+    ``bulk`` is the zip's member, or an exception every bulk read raises.
     """
 
-    def __init__(self, *, chain=None, release_point="119-73", refusing=(), index_error=None):
-        self.chain = {"111-226": "111-227"} if chain is None else chain
+    def __init__(self, *, bulk: bytes | Exception = BULK_EXCERPT, release_point="119-73", observed_at=OBSERVED_AT,
+                 index_error=None):
+        self.bulk = bulk
         self.release_point = release_point
-        self.refusing = set(refusing)
+        self.observed_at = observed_at
         self.index_error = index_error
         self.tables: list[tuple[int, int, str]] = []
-        self.acts: list[str] = []
+        self.bulk_reads = 0
 
     def acquire_classification_index(self, *, max_bytes=None):
         if self.index_error is not None:
@@ -149,20 +156,12 @@ class StubOlrc:
         table = parse_classification_table(TABLE_BYTES, congress=congress, session=session, order=order)
         return SimpleNamespace(result=table, capture=_Capture(TABLE_BYTES))
 
-    def acquire_table3_act(self, key, *, max_bytes=None, max_rows=65536):
-        self.acts.append(key)
-        if key in self.refusing:
-            raise UsCodeSourceError("stub: Table III page states no act of its own")
-        if key not in self.chain:
-            raise ConnectionError("stub: Body source transport failed while acquiring a response")
-        page = replace(
-            TABLE3_PAGE,
-            key=key,
-            stated_key=_stated(key),
-            next_act=_stated(self.chain[key]),
-            release_point=self.release_point,
-        )
-        return SimpleNamespace(result=page, capture=_Capture(TABLE3_BYTES))
+    def acquire_table3_bulk(self, *, release_point=None, max_bytes=None):
+        self.bulk_reads += 1
+        if isinstance(self.bulk, Exception):
+            raise self.bulk
+        body = _bulk_zip(self.bulk, self.release_point)
+        return SimpleNamespace(result=read_table3_bulk_archive(body), capture=_Capture(body, self.observed_at))
 
 
 def _rows(path: Path) -> list[dict]:
@@ -242,239 +241,169 @@ def test_an_index_failure_reads_no_session_table_and_is_not_a_record(tmp_path, s
     assert olrc.tables == [] and _rows(sections) == []
 
 
-def test_table_iii_walks_the_newest_congress_first_and_a_failure_ends_only_its_chain(tmp_path, monkeypatch):
-    monkeypatch.setenv("BILL_FAMILY_CONGRESSES", "111,119")
-    # The 111th is not on the stub route; its laws are known from the prior table.
-    seed(tmp_path, "laws", [{"law_id": "111-public-226", "congress": "111", "law_type": "public", "number": "226"}])
-    olrc = StubOlrc()
-    _, _, table3 = _build(tmp_path, olrc=olrc)
-
-    # Cold, each chain starts at the lowest act the laws table states. 119-1
-    # fails, which ends the 119th's chain; the 111th's act is read, and its
-    # page names 111-227, which the laws table does not state.
-    assert olrc.acts == ["119-1", "111-226"]
-    rows = _rows(table3)
-    assert {r["act_key"] for r in rows} == {"111-226"} and len(rows) == 4
-    assert rows[0]["release_point"] == "119-73" and rows[0]["observed_at"] == OBSERVED_AT
-    assert [r["seq"] for r in rows] == ["0", "1", "2", "3"]
-
-
-def test_table_iii_asks_a_held_act_only_for_its_chain_and_never_a_private_law(tmp_path, monkeypatch):
-    monkeypatch.setenv("BILL_FAMILY_CONGRESSES", "111,119")
-    seed(
-        tmp_path,
-        "laws",
-        [
-            {"law_id": "111-public-226", "congress": "111", "law_type": "public", "number": "226"},
-            {"law_id": "111-private-1", "congress": "111", "law_type": "private", "number": "1"},
-        ],
-    )
-    seed(tmp_path, "table3_records", [{"act_key": "111-226", "seq": "0", "observed_at": "2026-09-01"}])
-    olrc = StubOlrc()
-    _, _, table3 = _build(tmp_path, olrc=olrc)
-    # The held act has no checkpoint, so it is re-read first; the 119th has no held act and no 118th seed, so it
-    # starts cold at the lowest act the laws table states, as it always has. No private law is asked.
-    assert olrc.acts == ["111-226", "119-1"], "the stale held act, then the cold start, and no private law"
-    assert len(_rows(table3)) == len(TABLE3_PAGE.records)
-    assert all(r["observed_at"] == OBSERVED_AT for r in _rows(table3)), "the stale act's rows are replaced whole"
-
-
-def test_table_iii_honours_its_own_cap(tmp_path, scoped):
-    olrc = StubOlrc()
-    _build(tmp_path, olrc=olrc, max_table3=0)
-    assert olrc.acts == []
-
-
-def _last_read_digest(olrc, key):
-    """The shaped-row digest a checkpoint records for ``key``'s page, or ``None`` when the stub serves none."""
-    try:
-        acquired = olrc.acquire_table3_act(key)
-    except (UsCodeSourceError, ConnectionError):
-        return None
-    return _rows_digest(_page_rows(acquired.result, OBSERVED_AT))
-
-
-def _walk_111(tmp_path, monkeypatch, *, chain, numbers=range(220, 231), held=(220,), **olrc_kw):
-    """Walk the 111th's public laws ``numbers``, as the laws table states them, with ``held`` acts published.
-
-    Returns the acts asked and the act keys whose rows this run published; ``olrc_kw["log"]``, a list,
-    collects the run's log lines.
-    """
-    log = olrc_kw.pop("log", None)
-    monkeypatch.setenv("BILL_FAMILY_CONGRESSES", "111")
-    seed(
-        tmp_path,
-        "laws",
-        [{"law_id": f"111-public-{n}", "congress": "111", "law_type": "public", "number": str(n)} for n in numbers],
-    )
-    if held:
-        seed(
-            tmp_path, "table3_records", [{"act_key": f"111-{n}", "seq": "0", "observed_at": "2026-09-01"} for n in held]
-        )
-        # Each held act was last read under the current rule and its page has not changed since.
-        pages = StubOlrc(chain=chain, **{k: v for k, v in olrc_kw.items() if k != "refusing"})
-        path = tmp_path / "_table3_records_prior.parquet"
-        table = pq.read_table(path)
-        metadata = checkpoint_metadata(path, "laws-table3", [
-            {"act_key": f"111-{n}", "reader_version": TABLE3_READER_VERSION, "sha256": _Capture(TABLE3_BYTES).sha256,
-             "records_sha256": _last_read_digest(pages, f"111-{n}"), "observed_at": OBSERVED_AT, "outcome": "complete"}
-            for n in held])
-        pq.write_table(table.replace_schema_metadata({k.encode(): v.encode() for k, v in metadata.items()}), path)
-    olrc = StubOlrc(chain=chain, **olrc_kw)
-    sink = logger.add(log.append, format="{message}") if log is not None else None
-    try:
-        _, _, table3 = _build(tmp_path, olrc=olrc)
-    finally:
-        if sink is not None:
-            logger.remove(sink)
-    return olrc.acts, {r["act_key"] for r in _rows(table3) if r["observed_at"] == OBSERVED_AT}
-
-
-def test_table_iii_follows_the_chain_from_the_highest_held_act_to_its_end(tmp_path, monkeypatch):
-    # 119-4 names 119-12 and 119-12 names 119-18: the chain skips the acts the table holds no page for.
-    chain = {"111-222": "111-224", "111-224": "111-227", "111-227": None}
-    asked, read = _walk_111(tmp_path, monkeypatch, chain=chain, held=(220, 222))
-    assert asked == ["111-222", "111-224", "111-227"], "no number the chain does not name is asked"
-    assert read == {"111-224", "111-227"}
-
-
-@pytest.mark.parametrize(
-    ("following", "numbers", "release_point", "reason"),
-    [
-        (None, range(220, 231), "119-73", "names no next public law"),
-        ("111-226", range(220, 226), "119-73", "names an act outside the caller's bound"),
-        ("111-226", range(220, 231), "111-224", "names an act past the release point it states"),
-        ("112-226", range(220, 231), "119-73", "names an act in another Congress"),
-        ("111-221", range(220, 231), "119-73", "names an act that does not follow it"),
-    ],
-    ids=["names-no-next-act", "past-the-laws-table", "past-the-release-point", "another-congress", "does-not-follow"],
-)
-def test_table_iii_chain_ends_where_the_page_leads_nowhere_it_may_ask(
-    tmp_path, monkeypatch, following, numbers, release_point, reason
-):
-    # Every act a wrong turn would reach is served, so a missing guard shows up as an extra ask.
-    chain = {"111-220": "111-223", "111-223": following, "111-226": None, "111-221": None, "112-226": None}
-    log: list[str] = []
-    asked, read = _walk_111(tmp_path, monkeypatch, chain=chain, numbers=numbers, release_point=release_point, log=log)
-    assert asked == ["111-220", "111-223"] and read == {"111-223"}
-    ends = [line for line in log if line.startswith("Laws: Table III chain for Congress 111 ends at 111-223: ")]
-    assert ends and ends[0].startswith(f"Laws: Table III chain for Congress 111 ends at 111-223: its page {reason} (")
-
-
-def test_a_chain_that_ends_on_its_own_spends_no_cap(tmp_path, monkeypatch):
-    """The cap is spent per request: the 111th's two acts and the 110th's one fit a cap of three exactly."""
-    monkeypatch.setenv("BILL_FAMILY_CONGRESSES", "110,111")
-    seed(
-        tmp_path,
-        "laws",
-        [
-            {"law_id": f"{c}-public-{n}", "congress": str(c), "law_type": "public", "number": str(n)}
-            for c, n in ((111, 220), (111, 223), (110, 1))
-        ],
-    )
-    olrc = StubOlrc(chain={"111-220": "111-223", "111-223": None, "110-1": None})
-    _, _, table3 = _build(tmp_path, olrc=olrc, max_table3=3)
-    assert olrc.acts == ["111-220", "111-223", "110-1"]
-    assert {r["act_key"] for r in _rows(table3)} == {"111-220", "111-223", "110-1"}
-
-
-@pytest.mark.parametrize(
-    ("chain", "asked"),
-    [
-        ({}, ["111-1", "110-1", "109-1"]),
-        ({"109-1": None}, ["111-1", "110-1", "109-1", "108-1", "107-1"]),
-    ],
-    ids=["three-refusals-stop-the-walk", "a-page-read-resets-the-count"],
-)
-def test_a_page_the_reader_refuses_counts_toward_the_stop(tmp_path, monkeypatch, chain, asked):
-    monkeypatch.setenv("BILL_FAMILY_CONGRESSES", "107,108,109,110,111")
-    congresses = range(107, 112)
-    seed(
-        tmp_path,
-        "laws",
-        [{"law_id": f"{c}-public-1", "congress": str(c), "law_type": "public", "number": "1"} for c in congresses],
-    )
-    olrc = StubOlrc(chain=chain, refusing={f"{c}-1" for c in congresses} - set(chain))
-    _build(tmp_path, olrc=olrc)
-    assert olrc.acts == asked
-
-
-@pytest.mark.parametrize("scope", ["110", "110,111"], ids=["first-congress", "after-another-congress"])
-def test_a_start_the_walker_refuses_before_any_request_is_counted_as_that_start(tmp_path, monkeypatch, scope):
-    """A laws row numbered 0 starts the 110th's chain at ``110-0``, which the walker refuses unasked.
-
-    The failure is the start's own, never the previous Congress's last act, and needs no act asked.
-    """
-    monkeypatch.setenv("BILL_FAMILY_CONGRESSES", scope)
-    seed(
-        tmp_path,
-        "laws",
-        [
-            {"law_id": f"{c}-public-{n}", "congress": str(c), "law_type": "public", "number": str(n)}
-            for c, n in ((110, 0), (111, 226))
-        ],
-    )
-    olrc = StubOlrc()
+def _log_of(build):
+    """Run ``build`` and return its log lines."""
     log: list[str] = []
     sink = logger.add(log.append, format="{message}")
     try:
-        _build(tmp_path, olrc=olrc)
+        build()
     finally:
         logger.remove(sink)
-    assert olrc.acts == (["111-226"] if "111" in scope else [])
-    assert any(line.startswith("Laws: Table III chain for Congress 110 stops at 110-0: ") for line in log)
-    assert any("failed ['110-0']" in line for line in log)
+    return log
 
 
-def test_a_chain_act_that_drops_is_retried_then_counted(tmp_path, monkeypatch):
-    """Through the rollup's own acquirer: a dropped connection is retried by the transport, then is a failure."""
+def _again(tmp_path):
+    """Make this run's outputs the next run's published priors."""
+    for name in ("laws", "table3_records"):
+        shutil.copyfile(tmp_path / f"{name}.parquet", tmp_path / f"_{name}_prior.parquet")
+
+
+def _laws(tmp_path, *keys):
+    seed(tmp_path, "laws", [{"law_id": f"{c}-public-{n}", "congress": str(c), "law_type": "public", "number": str(n)}
+                            for c, n in (key.split("-") for key in keys)])
+
+
+def test_table_iii_is_one_bulk_read_for_every_congress_the_laws_table_holds(tmp_path, scoped):
+    _laws(tmp_path, "118-2")
+    olrc = StubOlrc()
+    _, _, table3 = _build(tmp_path, olrc=olrc)
+
+    assert olrc.bulk_reads == 1
+    rows = _rows(table3)
+    # The 119th is scoped and the 118th is held; the 87th is neither, and a chapter act is no public law.
+    assert Counter(r["act_key"] for r in rows) == {"118-2": 1, "119-30": 1, "119-37": 110, "119-53": 1}
+    act = sorted((r for r in rows if r["act_key"] == "119-37"), key=lambda r: int(r["seq"]))
+    assert [r["seq"] for r in act] == [str(i) for i in range(110)], "positions, though the file's sequence skips"
+    assert [r["seq"] for r in act if r["act_section"] is None] == ["3", "4", "5", "17"]
+    assert (act[17]["usc_title"], act[17]["usc_section"], act[17]["status"]) == ("2", "60a nt", "Elim.")
+    (lost,) = (r for r in rows if r["act_key"] == "119-30")
+    assert {k: lost[k] for k in ("stated_key", "congress", "act_date", "statutes_at_large_volume", "release_point",
+                                 "act_section", "record_volume", "record_page", "usc_title", "usc_section")} == {
+        "stated_key": "119-30", "congress": "119", "act_date": "2025-07-24", "statutes_at_large_volume": "139",
+        "release_point": "119-73", "act_section": None, "record_volume": "139", "record_page": "473",
+        "usc_title": "16", "usc_section": "668dd nt"}
+    assert lost["observed_at"] == OBSERVED_AT
+    (checkpoint,) = [c for c in read_checkpoints(table3, "laws-table3") if c["congress"] == "119"]
+    assert checkpoint["rule"] == TABLE3_RULE and checkpoint["release_point"] == "119-73"
+    assert set(checkpoint["acts"]) == {"119-30", "119-37", "119-53"}
+
+
+def test_the_bulk_states_what_the_act_s_own_page_states():
+    """Act 119-37 two ways: its page (with the four blank act sections) and its twelve bulk fragments."""
+    page = parse_table3_page((FIXTURES / "table3-119_37.htm").read_bytes(), key="119-37")
+    from_page = [shape_table3_record(record, page=page, seq=seq, observed_at=OBSERVED_AT)
+                 for seq, record in enumerate(page.records)]
+    from_bulk = _bulk_rows(_bulk_zip(), {119}, release_point="119-73", observed_at=OBSERVED_AT)[119]["119-37"]
+    rendition = ("stated_key", "congress", "act_date", "statutes_at_large_volume")
+    assert [{k: v for k, v in row.items() if k not in rendition} for row in from_bulk] == [
+        {k: v for k, v in row.items() if k not in rendition} for row in from_page]
+    # The act-level context is the same statement in each source's own spelling.
+    assert {tuple(row[k] for k in rendition) for row in from_page} == {("119\u201337", "119th Cong.", "Nov. 12, 2025",
+                                                                        "139 Stat.")}
+    assert {tuple(row[k] for k in rendition) for row in from_bulk} == {("119-37", "119", "2025-11-12", "139")}
+
+
+def test_a_fragment_s_own_volume_goes_with_its_records_and_seq_runs_through_the_act():
+    rows = _bulk_rows(_bulk_zip(), {87}, release_point="119-73", observed_at=OBSERVED_AT)[87]["87-845"]
+    assert [r["seq"] for r in rows] == [str(i) for i in range(15)], "the 76A fragment's sequence restarts at 0"
+    assert [r["statutes_at_large_volume"] for r in rows] == ["76"] + ["76A"] * 14
+    # A record carries its fragment's volume only where it states a page, as a page's Statutes link would.
+    assert (rows[0]["record_page"], rows[0]["record_volume"]) == (None, None)
+    assert {r["record_volume"] for r in rows[1:]} == {"76A"}
+
+
+def test_an_unchanged_bulk_derives_nothing(tmp_path, scoped):
+    _, _, first = _build(tmp_path)
+    published, checkpoints = _rows(first), read_checkpoints(first, "laws-table3")
+    _again(tmp_path)
+    olrc = StubOlrc(observed_at="2026-09-20T00:00:00Z")
+    log = _log_of(lambda: _build(tmp_path, olrc=olrc))
+    assert olrc.bulk_reads == 1, "the zip states no validator, so it is fetched; nothing else is"
+    assert any("Laws: Table III bulk unchanged at release point 119-73" in line for line in log)
+    table3 = tmp_path / "table3_records.parquet"
+    assert _rows(table3) == published, "no row is published again, not even with a new observed_at"
+    assert read_checkpoints(table3, "laws-table3") == checkpoints
+
+
+def test_a_changed_bulk_publishes_only_the_acts_it_changed_and_removes_the_ones_it_dropped(tmp_path, scoped):
+    _build(tmp_path)
+    _again(tmp_path)
+    # The same release point, corrected: 119-53's one record moves from Elim. to Rep., and 119-30 is gone.
+    def fragment(member: bytes, act_id: bytes) -> tuple[int, int]:
+        start = member.index(b"<act id='" + act_id)
+        return start, member.index(b"</act>", start) + len(b"</act>\n")
+
+    start, end = fragment(BULK_EXCERPT, b"4d1d41a4")
+    corrected = BULK_EXCERPT[:start] + BULK_EXCERPT[start:end].replace(b">Elim.<", b">Rep.<") + BULK_EXCERPT[end:]
+    start, end = fragment(corrected, b"41c326fe")
+    corrected = corrected[:start] + corrected[end:]
+    later = "2026-09-20T00:00:00Z"
+    _build(tmp_path, olrc=StubOlrc(bulk=corrected, observed_at=later))
+    rows = _rows(tmp_path / "table3_records.parquet")
+    assert "119-30" not in {r["act_key"] for r in rows}
+    (moved,) = (r for r in rows if r["act_key"] == "119-53")
+    assert (moved["status"], moved["observed_at"]) == ("Rep.", later)
+    assert {r["observed_at"] for r in rows if r["act_key"] == "119-37"} == {OBSERVED_AT}, "unchanged rows stand"
+
+    # A new release point moves every act's release_point, so every act is published again.
+    _again(tmp_path)
+    _build(tmp_path, olrc=StubOlrc(bulk=corrected, release_point="119-80", observed_at=later))
+    assert {r["release_point"] for r in _rows(tmp_path / "table3_records.parquet")} == {"119-80"}
+
+
+def test_a_congress_that_left_the_laws_scope_keeps_its_table_iii_rows_current(tmp_path, monkeypatch):
+    """Table III lags enactment by months, so the 119th keeps its rows current after the 120th replaces it in scope.
+
+    There is no chain to seed and no start to guess: the 120th's acts appear in the file when Table III holds them.
+    """
+    monkeypatch.setenv("BILL_FAMILY_CONGRESSES", "120")
+    _laws(tmp_path, "119-30", "119-111")
+    olrc = StubOlrc()
+    log = _log_of(lambda: _build(tmp_path, reader=StubListingReader({}), olrc=olrc))
+    assert olrc.bulk_reads == 1
+    assert {r["act_key"] for r in _rows(tmp_path / "table3_records.parquet")} == {"119-30", "119-37", "119-53"}
+    assert any("derived for Congresses [119, 120]" in line for line in log)
+
+
+def test_a_failed_bulk_read_leaves_every_row_and_checkpoint_standing(tmp_path, scoped):
+    _, _, first = _build(tmp_path)
+    published, checkpoints = _rows(first), read_checkpoints(first, "laws-table3")
+    _again(tmp_path)
+    _build(tmp_path, olrc=StubOlrc(bulk=ConnectionError("stub: incomplete chunked read")))
+    table3 = tmp_path / "table3_records.parquet"
+    assert _rows(table3) == published
+    assert read_checkpoints(table3, "laws-table3") == checkpoints
+
+
+def test_the_bulk_is_fetched_through_the_rollup_s_own_acquirer_retried_and_retained(tmp_path, monkeypatch):
+    """A zip dropped mid-way is retried like any transport failure; the one served is kept as evidence."""
+    from spicy_regs.source_evidence import CaptureEvidence
+
     monkeypatch.setattr("time.sleep", lambda seconds: None)  # the retry backoff
-    monkeypatch.setenv("BILL_FAMILY_CONGRESSES", "108,109,110,111")
-    stated = [(111, 226), (111, 227), (110, 1), (109, 1), (108, 1)]
-    seed(
-        tmp_path,
-        "laws",
-        [{"law_id": f"{c}-public-{n}", "congress": str(c), "law_type": "public", "number": str(n)} for c, n in stated],
-    )
+    served = _bulk_zip()
     asked: list[str] = []
 
     class Dropped(httpx.SyncByteStream):
         def __iter__(self):
-            yield TABLE3_BYTES[:4096]
+            yield served[:4096]
             raise httpx.RemoteProtocolError("peer closed connection without sending complete message body")
 
     def answer(request: httpx.Request) -> httpx.Response:
         asked.append(request.url.path)
-        served = request.url.path == "/table3/111_226.htm"
-        stream = httpx.ByteStream(TABLE3_BYTES) if served else Dropped()
-        return httpx.Response(200, headers={"content-type": "text/html;charset=UTF-8"}, stream=stream)
+        # The publisher states no Content-Type or Content-Length for the zip.
+        return httpx.Response(200, stream=Dropped() if len(asked) == 1 else httpx.ByteStream(served))
 
+    evidence = CaptureEvidence(tmp_path, "laws")
     unpaced = replace(OLRC_BUDGET, min_request_interval_seconds=0.0)
-    _, _, table3 = _build(tmp_path, olrc=olrc_acquirer(httpx.MockTransport(answer), budget=unpaced))
-    attempts = OLRC_BUDGET.max_requests
-    # 111-226 is read and names 111-227, which drops on every attempt; 110-1
-    # and 109-1 drop too, and three failures in a row leave 108-1 unasked.
-    assert [path for path in asked if path.startswith("/table3/")] == (
-        ["/table3/111_226.htm"]
-        + ["/table3/111_227.htm"] * attempts
-        + ["/table3/110_1.htm"] * attempts
-        + ["/table3/109_1.htm"] * attempts
-    )
-    assert {r["act_key"] for r in _rows(table3)} == {"111-226"}
-
-
-def test_table_iii_walk_stops_at_its_deadline():
-    olrc = StubOlrc(chain={"111-220": "111-223", "111-223": "111-226", "111-226": None})
-    ticks = iter([0.0, 0.0, 0.0, 60.0])  # the start, then before each request
-    rows = _table3_rows(
-        olrc,
-        {(111, n) for n in range(220, 231)},
-        {"111-220"},
-        PerRunCap(300, "Laws: Table III pages"),
-        deadline_seconds=60.0,
-        clock=lambda: next(ticks),
-    )
-    assert olrc.acts == ["111-220", "111-223"] and {r["act_key"] for r in rows} == {"111-223"}
+    evaluated: set[str] = set()
+    with olrc_acquirer(httpx.MockTransport(answer), budget=unpaced) as olrc:
+        rows = _table3_rows(olrc, {119}, set(), {}, evaluated, evidence)
+    assert asked == ["/table3/table3-xml-bulk.zip"] * 2
+    assert evaluated == {"119-30", "119-37", "119-53"} and len(rows) == 112
+    events = [json.loads(line) for line in (evidence.artifact_dir / "journal.jsonl").read_text().splitlines()]
+    (capture,) = (e for e in events if e["event"] == "capture")
+    assert (capture["stage"], capture["sha256"]) == ("table3:bulk", "sha256:" + hashlib.sha256(served).hexdigest())
+    assert any(e["event"] == "table3-bulk" and e["published"] == ["119-30", "119-37", "119-53"] for e in events)
 
 
 def test_the_citation_reaches_congress_bills_from_a_law_the_run_captured(tmp_path, scoped):
@@ -601,85 +530,6 @@ def test_the_published_shapes_are_the_contracts(tmp_path, scoped):
         assert pq.read_table(path).schema.names == list(TABLE_CONTRACTS[name].columns)
 
 
-class RepairOlrc(StubOlrc):
-    def __init__(self, *, empty=(), failing=()):
-        super().__init__(chain={"119-37": "119-73", "119-73": None}, refusing=failing)
-        self.empty = set(empty)
-
-    def acquire_table3_act(self, key, **kwargs):
-        if key != "119-37":
-            result = super().acquire_table3_act(key, **kwargs)
-        else:
-            self.acts.append(key)
-            if key in self.refusing:
-                raise ConnectionError("fixture failed")
-            body = (FIXTURES / "table3-119_37.htm").read_bytes()
-            result = SimpleNamespace(result=parse_table3_page(body, key=key), capture=_Capture(body))
-        if key in self.empty:
-            result.result = replace(result.result, records=())
-        return result
-
-
-def _repair_seed(tmp_path):
-    seed(tmp_path, "laws", [{"law_id": f"119-public-{n}", "congress": "119", "law_type": "public", "number": str(n)}
-                            for n in (37, 73)])
-    seed(tmp_path, "table3_records", [
-        {"act_key": "119-37", "seq": str(i), "act_section": "old-filtered", "observed_at": "2026-09-01"}
-        for i in range(106)] + [{"act_key": "119-73", "seq": "0", "act_section": "old-frontier"},
-                               {"act_key": "118-1", "seq": "0", "act_section": "unrelated"}])
-
-
-def test_stale_held_act_is_replaced_whole_before_forward_discovery(tmp_path, scoped):
-    _repair_seed(tmp_path)
-    olrc = RepairOlrc()
-    _, _, path = _build(tmp_path, reader=StubListingReader({}), olrc=olrc, max_table3=1)
-    assert olrc.acts == ["119-37"], "older stale act must not disappear behind maximum held act 119-73"
-    rows = _rows(path)
-    repaired = sorted((r for r in rows if r["act_key"] == "119-37"), key=lambda r: int(r["seq"]))
-    assert len(repaired) == 110
-    assert [r["seq"] for r in repaired] == [str(i) for i in range(110)]
-    assert sum(r["act_section"] is None for r in repaired) == 4
-    assert not any(r["act_section"] == "old-filtered" for r in repaired)
-    assert next(r for r in rows if r["act_key"] == "119-73")["act_section"] == "old-frontier"
-    assert next(r for r in rows if r["act_key"] == "118-1")["act_section"] == "unrelated"
-    checkpoint = next(r for r in read_checkpoints(path, "laws-table3") if r["act_key"] == "119-37")
-    assert checkpoint["reader_version"] == TABLE3_READER_VERSION
-    assert checkpoint["sha256"] == _Capture((FIXTURES / "table3-119_37.htm").read_bytes()).sha256
-
-
-@pytest.mark.parametrize("empty", [False, True])
-def test_failed_reread_preserves_rows_but_successful_empty_removes_them(tmp_path, scoped, empty):
-    _repair_seed(tmp_path)
-    source = RepairOlrc(empty={"119-37"} if empty else (), failing=() if empty else {"119-37"})
-    _, _, path = _build(tmp_path, reader=StubListingReader({}), olrc=source, max_table3=1)
-    rows = [r for r in _rows(path) if r["act_key"] == "119-37"]
-    assert len(rows) == (0 if empty else 106)
-    checkpoint = next(r for r in read_checkpoints(path, "laws-table3") if r["act_key"] == "119-37")
-    assert checkpoint["outcome"] == ("complete" if empty else "refused")
-    assert (checkpoint.get("reader_version") == TABLE3_READER_VERSION) is empty
-
-
-def test_bounded_reread_resumes_past_a_failed_old_act(tmp_path, scoped):
-    import shutil
-    _repair_seed(tmp_path)
-    first = RepairOlrc(failing={"119-37"})
-    _, _, path = _build(tmp_path, reader=StubListingReader({}), olrc=first, max_table3=1)
-    shutil.copyfile(path, tmp_path / "_table3_records_prior.parquet")
-    shutil.copyfile(tmp_path / "laws.parquet", tmp_path / "_laws_prior.parquet")
-    second = RepairOlrc(failing={"119-37"})
-    _build(tmp_path, reader=StubListingReader({}), olrc=second, max_table3=1)
-    assert first.acts == ["119-37"] and second.acts == ["119-73"]
-
-
-def test_new_congress_uses_only_the_previous_native_link_as_seed(tmp_path, scoped):
-    seed(tmp_path, "table3_records", [{"act_key": "118-273", "seq": "0", "act_section": "held"}])
-    seed(tmp_path, "laws", [{"law_id": "119-public-12", "congress": "119", "law_type": "public", "number": "12"}])
-    source = StubOlrc(chain={"118-273": "119-12", "119-12": None})
-    _, _, path = _build(tmp_path, reader=StubListingReader({}), olrc=source)
-    assert source.acts == ["118-273", "119-12"]
-    assert {r["act_key"] for r in _rows(path)} == {"118-273", "119-12"}
-
-
 @pytest.mark.parametrize("number", [1, 2])
 def test_private_law_read_is_partial_and_stands_under_the_current_rule(tmp_path, scoped, number):
     """A validated private law states no Statutes citation: ``captured_partial`` is its whole truth, not a retry."""
@@ -753,75 +603,6 @@ def test_uslm_reader_version_invalidates_an_unchanged_complete_row():
     assert len(source.selections) == 1 and rows[0]["uslm_reader_version"] == USLM_READER_VERSION
 
 
-def test_current_rule_without_capture_proof_does_not_complete_a_table3_read():
-    from spicy_regs.transforms.build_laws import _table3_current
-    assert not _table3_current({"reader_version": TABLE3_READER_VERSION, "outcome": "complete"})
-    assert not _table3_current({"reader_version": TABLE3_READER_VERSION, "outcome": "refused",
-                               "sha256": _Capture(TABLE3_BYTES).sha256, "observed_at": OBSERVED_AT})
-
-
-def _current(olrc, *keys):
-    """Checkpoints saying each act was last read under the current rule, from the page ``olrc`` serves now."""
-    return {key: {"act_key": key, "reader_version": TABLE3_READER_VERSION, "sha256": _Capture(TABLE3_BYTES).sha256,
-                  "records_sha256": _last_read_digest(olrc, key), "observed_at": OBSERVED_AT, "outcome": "complete"}
-            for key in keys}
-
-
-def _cold_walk(chain, release_point, acts, *, seed_fails=False):
-    olrc = StubOlrc(chain=chain, release_point=release_point, refusing=("119-73",) if seed_fails else ())
-    checkpoints = _current(StubOlrc(chain=chain, release_point=release_point), "119-73")
-    evaluated: set[str] = set()
-    _table3_rows(olrc, acts, {"119-73"}, PerRunCap(10, "test"), checkpoints=checkpoints, evaluated=evaluated)
-    return olrc.acts, evaluated
-
-
-def test_a_new_congress_starts_where_the_previous_congress_page_says_the_chain_continues():
-    asked, read = _cold_walk({"119-73": "120-2", "120-2": None}, "120-5", {(119, 73), (120, 1), (120, 2)})
-    assert asked == ["119-73", "120-2"], "the seed's own link, not the lowest act, and no guess"
-    assert read == {"120-2"}
-
-
-def test_a_new_congress_is_not_asked_while_the_release_point_is_still_in_the_previous_one():
-    asked, read = _cold_walk({"119-73": "119-74", "119-74": None}, "119-73", {(119, 73), (119, 74), (120, 1)})
-    assert "120-1" not in asked, "Table III holds none of the 120th yet"
-    assert read == set()
-
-
-def test_a_new_congress_starts_cold_when_the_seed_names_another_congress_past_the_release():
-    # The regression the review found: an incomplete 119 frontier must not silently suppress the 120th.
-    asked, read = _cold_walk({"119-73": "119-74", "120-1": None}, "120-3", {(119, 73), (120, 1), (120, 3)})
-    assert asked[:2] == ["119-73", "120-1"]
-    assert "120-1" in read
-
-
-def test_a_seed_that_cannot_be_read_falls_back_to_the_cold_start():
-    asked, read = _cold_walk({"120-1": None}, "120-3", {(119, 73), (120, 1)}, seed_fails=True)
-    assert asked[:2] == ["119-73", "120-1"]
-    assert read == {"120-1"}
-
-
-def test_stale_rereads_share_the_walk_s_consecutive_failure_stop():
-    stale = {f"111-{n}" for n in range(220, 230)}
-    olrc = StubOlrc(chain={})  # every act fails in transport: an OLRC outage
-    checkpoints: dict[str, dict] = {}
-    _table3_rows(olrc, {(111, n) for n in range(220, 230)}, stale, PerRunCap(50, "test"), checkpoints=checkpoints,
-                 evaluated=set())
-    # The stale queue stops after TABLE3_STOP_AFTER failures; the forward walk's own first failure then stops the run.
-    assert len(olrc.acts) == TABLE3_STOP_AFTER + 1, "an outage costs a few requests, not one per stale act"
-    assert all(checkpoints[key]["outcome"] == "refused" for key in olrc.acts[:TABLE3_STOP_AFTER])
-
-
-def test_an_unchanged_frontier_page_is_not_published_again_but_a_changed_one_is():
-    chain = {"111-226": "111-227"}
-    acts = {(111, 226), (111, 227)}
-    for release_point, published in (("119-73", set()), ("119-80", {"111-226"})):
-        checkpoints = _current(StubOlrc(chain=chain, release_point="119-73"), "111-226")
-        evaluated: set[str] = set()
-        _table3_rows(StubOlrc(chain=chain, release_point=release_point), acts, {"111-226"}, PerRunCap(10, "test"),
-                     checkpoints=checkpoints, evaluated=evaluated)
-        assert evaluated == published, f"release point {release_point}"
-
-
 @pytest.mark.parametrize("failure", ["transport", "html"])
 def test_a_failed_reread_never_replaces_a_validated_prior_row(scoped, failure):
     from spicy_regs.transforms.build_laws import _law_rows, HeldLaw
@@ -857,17 +638,3 @@ def test_metadata_the_contract_refuses_is_captured_refused_without_its_fields(sc
     row = _uslm_row(Source(), LAW_119_1, law, shape_law(LAW_119_1, law))
     assert (row["uslm_outcome"], row["uslm_reason"]) == ("captured_refused", "contract_refused")
     assert row["uslm_title"] is None and row["statutes_at_large_cite"] is None
-
-
-def test_stale_acts_that_keep_failing_never_stop_the_forward_walk():
-    """Three held acts that always fail end only the stale queue; the frontier still advances."""
-    chain = {"119-73": "119-74", "119-74": None}
-    acts = {(119, n) for n in (10, 11, 12, 73, 74)}
-    held = {"119-10", "119-11", "119-12", "119-73"}
-    checkpoints = _current(StubOlrc(chain=chain, release_point="119-80"), "119-73")
-    for _ in range(2):  # every run, not only the first
-        olrc = StubOlrc(chain=chain, release_point="119-80")
-        evaluated: set[str] = set()
-        _table3_rows(olrc, acts, held, PerRunCap(20, "test"), checkpoints=checkpoints, evaluated=evaluated)
-        assert olrc.acts[:3] == ["119-10", "119-11", "119-12"]
-        assert "119-74" in olrc.acts and "119-74" in evaluated

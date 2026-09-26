@@ -1004,13 +1004,13 @@ five 0.21.2 contracts (A5/A7/A10); every shared-registry edit here sits in an
   OLRC classification index and each public-law-order session table it links
   for a scoped Congress (the code-order twin holds the same lines under
   colliding positions), each page replacing its session's rows;
-  `table3_records` along Table III's own chain under `MAX_TABLE3_PER_RUN`:
-  each page names the next act the table holds (`Table3Page.next_act`), so
-  the walk asks only those acts. It starts from the highest published act,
-  asked again only for that name, and stops at a page that names nothing the
-  laws table lists or nothing short of its release point. A failed act ends
-  its Congress's chain. `TABLE3_STOP_AFTER` (3) failures in a row, or
-  `TABLE3_DEADLINE_SECONDS` (20 minutes), end the walk.
+  `table3_records` from OLRC's Table III bulk file, fetched once a run (one
+  15 MB request), for every public law of each Congress the laws table holds
+  as well as the scoped ones. Nothing is derived while each Congress's
+  checkpoint names the same member, release point and rule; otherwise only
+  acts whose shaped rows changed, or which the file no longer lists, are
+  published. This replaced the per-act chain walk on 2026-09-26 (receipt
+  `table3-bulk-2026-09-26/`).
 - [x] **`committee-rosters` rollup** (`transforms/build_committee_rosters.py`,
   two outputs): the `committee/{congress}` route walked whole with no `sort`;
   the detail folded through `shape_committee` newest `update_date` first under

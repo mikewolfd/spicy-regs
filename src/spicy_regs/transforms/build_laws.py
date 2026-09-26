@@ -14,13 +14,20 @@ citation never lands on the wrong row; a validated file that states no
 the publisher's public-law order alone (the index links the current Congress's
 session tables only) — the two orders hold the same rows, but the contract
 keys a row on its position in one page, so the code-order twin would collide.
-**``table3_records``**: Table III's own chain, per Congress, walked by
-spicy-docs' ``iter_table3_chain``. Every served act page names the next act
-the table holds (``Table3Page.next_act``: 119-4 names 119-12), so the walk asks
-only the acts the chain names, under this rollup's cap and deadline. Table III
-lags enactment and holds no page for an act that classified nothing; OLRC
-answers such an act with a connection dropped inside its site menu, which is
-why the walk never probes a number the chain does not name.
+**``table3_records``**: OLRC's Table III bulk file, the whole table in one
+15 MB zip, fetched once a run through spicy-docs' ``acquire_table3_bulk``. Every
+public law of a Congress the laws table holds or the run scopes is derived from
+it, so a Congress keeps its rows current after it leaves the laws scope, while
+Table III catches up months behind enactment. The file splits an act's
+records about ten to an ``<act>`` fragment; an act's rows are its fragments'
+records in the file's own order, each shaped with its own fragment's Congress,
+date and volume.
+The file spells those its own way (``119``, ``2025-01-29``, ``139``, ``119-4``)
+where a page prints ``119th Cong.``, ``Jan. 29, 2025``, ``139 Stat.`` and
+``119–4``; the classifications agree on all 2,981 rows the pages published,
+and the file also holds two acts the page walk never reached (receipt
+``fork-execution-2026-09-21/table3-bulk-2026-09-26/``). Being the whole table,
+it states absence too: a held act it no longer lists loses its rows.
 
 **Incremental.** The list is re-walked whole every run; the PLAW is what is
 not re-read. A law already published ``captured`` or ``captured_partial`` under
@@ -31,24 +38,27 @@ outcome (``unavailable`` only for a ``404``/``410`` from the exact locator),
 except that a failed attempt never replaces a validated prior row; a law the
 cap does not reach keeps its prior row, or gets its list row with
 ``not_requested``. A classification page read this run replaces every prior
-row for its Congress and session. Table III keeps one checkpoint per act
-(reader rule, capture digest, shaped-row digest): a held act whose checkpoint
-is missing or from an older rule is read again before any chain walks, and a
-successful read replaces that act's whole row set, an empty one included,
-while a failed read keeps its rows and stays retryable. A ``401``/``403`` from
-any of the three publishers aborts the run. Needs an api.data.gov key for the
-list route; the PLAW and OLRC routes are keyless.
+row for its Congress and session. Table III keeps one checkpoint per Congress:
+the derivation rule, the bulk member's digest and release point, and each act's
+shaped-row digest. OLRC states no ``Last-Modified``, ``ETag`` or
+``Content-Length`` for the zip, on ``GET`` or ``HEAD``, so only its bytes can
+say it is unchanged: while every scoped Congress holds a checkpoint for this
+member, release point and rule, nothing is derived. Otherwise every scoped act
+is derived again, and only an act whose rows changed, or which the file no
+longer lists, is published, its whole row set replaced. A failed read
+publishes nothing and keeps every checkpoint. A ``401``/``403`` from any of the
+three publishers aborts the run. Needs an api.data.gov key for the list route;
+the PLAW and OLRC routes are keyless.
 """
 
 from __future__ import annotations
 
 import re
-import time
 from collections import Counter
 from collections.abc import Callable, Mapping
-from datetime import UTC, datetime
+from importlib.metadata import version
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, NamedTuple, Protocol, cast
+from typing import TYPE_CHECKING, Any, NamedTuple, Protocol
 
 import httpx
 from loguru import logger
@@ -62,9 +72,8 @@ from spicy_docs.sources.govinfo.uslm_acquisition import (
     UslmAcquisitionBudget,
     UslmSourceUnavailableError,
 )
-from spicy_docs.sources.uscode import Table3Page, UsCodeSourceError, iter_table3_chain
+from spicy_docs.sources.uscode import Table3Page, Table3Record, UsCodeSourceError, iter_table3_acts
 from spicy_docs.sources.uscode.acquisition import UsCodeAcquirer, UsCodeAcquisitionBudget
-from spicy_docs.sources.uscode.table3 import TABLE3_READER_VERSION
 from spicy_docs.transport.captured import attached_capture
 from spicy_docs.transport.credentials import scrub_credential
 
@@ -86,7 +95,7 @@ class LawTextSource(Protocol):
 
 
 class OlrcSource(Protocol):
-    """What this transform needs of the OLRC acquirer: the classification index and tables, and Table III."""
+    """What this transform needs of the OLRC acquirer: the classification index and tables, and Table III's bulk file."""
 
     def acquire_classification_index(self, *, max_bytes: int | None = ...) -> Any: ...
 
@@ -94,7 +103,7 @@ class OlrcSource(Protocol):
         self, congress: int, session: int, *, order: Any = ..., max_bytes: int | None = ..., max_rows: int = ...
     ) -> Any: ...
 
-    def acquire_table3_act(self, key: str, *, max_bytes: int | None = ..., max_rows: int = ...) -> Any: ...
+    def acquire_table3_bulk(self, *, release_point: str | None = ..., max_bytes: int | None = ...) -> Any: ...
 
 
 LIST_BUDGET = PagedJsonBudget(
@@ -113,13 +122,16 @@ USLM_BUDGET = UslmAcquisitionBudget(
     min_request_interval_seconds=0.5,
 )
 
-#: OLRC pages are generated per request and can be slow; the largest read
-#: here is a session table at ~115 KB.
+#: The largest OLRC read here is Table III's bulk zip: 14,966,992 bytes in 22
+#: seconds and one request on 2026-09-26, where a session table is ~115 KB.
+#: The timeout bounds each read, not a whole download, so a slow zip that keeps
+#: arriving is not cut. 1.5 seconds between request starts is the pace
+#: spicy-docs' U.S. Code guide asks of this publisher.
 OLRC_BUDGET = UsCodeAcquisitionBudget(
     max_requests=4,
-    max_bytes=8 * 1024 * 1024,
+    max_bytes=32 * 1024 * 1024,
     timeout_seconds=120.0,
-    min_request_interval_seconds=1.0,
+    min_request_interval_seconds=1.5,
 )
 
 #: Pages of ``MAX_LIMIT`` per Congress; a Congress enacts a few hundred laws.
@@ -130,16 +142,12 @@ MAX_PAGES = 20
 #: backfill so a run publishes before it times out.
 MAX_USLM_PER_RUN = 300
 
-#: Table III pages asked for per run, oldest unread act first.
-MAX_TABLE3_PER_RUN = 300
-
 NAME = "laws"
 CODE_SECTIONS = "law_code_sections"
 TABLE3 = "table3_records"
 CAPTURED = "captured"
 #: The outcomes whose USLM identity was validated; a failed later attempt never replaces one.
 VALIDATED = ("captured", "captured_partial")
-PUBLIC = "public"
 #: The one classification order read; see the module docstring.
 TABLE_ORDER = "public-law"
 
@@ -152,22 +160,14 @@ class HeldLaw(NamedTuple):
     reader_version: str | None = None
 
 
-#: Consecutive Table III failures that end the walk for the run: the publisher
-#: is not answering. A failure is a chain act that did not serve (a transport
-#: failure the acquirer has already retried, or a page the reader refuses); it
-#: ends its own Congress's chain, since only the page names the next act, so
-#: the count runs across Congresses and a page read resets it.
-TABLE3_STOP_AFTER = 3
+#: The rule ``table3_records`` rows are derived under, with the spicy-docs
+#: release whose bulk reader and shaper derive them: either moving derives the
+#: next bulk read again. That costs no request, since the zip is fetched every
+#: run anyway, and publishes only the acts whose rows it changes; a package
+#: version in a re-fetch token, by contrast, costs a request per item.
+TABLE3_RULE = f"table3-bulk-v1+spicy-docs={version('spicy-docs')}"
 
-#: Wall-clock seconds the Table III walk may start requests in. The laws job
-#: times out at 60 minutes and publishes nothing if it does, so this leaves
-#: room for the rest: the other legs took 30 seconds on 2026-09-24 (a cold
-#: PLAW leg of 300 files takes about 2.5 minutes), and one act can overrun the
-#: deadline by its four attempts at the 120-second timeout plus backoff, about
-#: 8.5 minutes. That totals under 35 minutes.
-TABLE3_DEADLINE_SECONDS = 20 * 60
-
-#: A public-law key as a Table III page states it, en dash and all.
+#: A public-law key as Table III states it: ``119-4`` in the bulk, ``119–4`` on a page.
 _PUBLIC_LAW_KEY = re.compile(r"(\d+)[-\u2013](\d+)")
 
 
@@ -197,17 +197,14 @@ def _held_laws(prior_file: Path | None, congresses: tuple[int, ...]) -> dict[str
     return {str(law_id): HeldLaw(update_date, outcome, version) for law_id, update_date, outcome, version in rows}
 
 
-def _held_public_laws(prior_file: Path | None, congresses: tuple[int, ...]) -> set[tuple[int, int]]:
-    """``(congress, number)`` of every public law already published for the scoped Congresses."""
+def _held_congresses(prior_file: Path | None) -> set[int]:
+    """Every Congress the published laws table holds, in or out of the run's scope."""
     if prior_file is None:
         return set()
     import duckdb
 
-    rows = duckdb.sql(
-        f"SELECT congress, number FROM read_parquet('{prior_file}') WHERE law_type = ? AND congress IN (SELECT UNNEST(?))",
-        params=[PUBLIC, [str(c) for c in congresses]],
-    ).fetchall()
-    return {(int(congress), int(number)) for congress, number in rows}
+    rows = duckdb.sql(f"SELECT DISTINCT congress FROM read_parquet('{prior_file}')").fetchall()
+    return {int(congress) for (congress,) in rows if str(congress).isdigit()}
 
 
 def _held_acts(prior_file: Path | None) -> set[str]:
@@ -400,265 +397,123 @@ def _public_law(key: str | None) -> tuple[int, int] | None:
     return (int(match[1]), int(match[2])) if match else None
 
 
-def _table3_current(state: Mapping[str, Any]) -> bool:
-    """Only a complete, capture-bound checkpoint can skip a reader-version repair."""
-    return (state.get("reader_version") == TABLE3_READER_VERSION and state.get("outcome") == "complete"
-            and isinstance(state.get("sha256"), str)
-            and re.fullmatch(r"sha256:[0-9a-f]{64}", state["sha256"]) is not None
-            and isinstance(state.get("observed_at"), str) and bool(state["observed_at"]))
+def _table3_current(checkpoint: Mapping[str, Any] | None, bulk: Any) -> bool:
+    """Whether a Congress's checkpoint was derived from this bulk member and release point under the current rule.
+
+    The release point is in the member's name, not its bytes, so an unchanged
+    member under a new release point is still a new statement of currency.
+    """
+    return (checkpoint is not None and checkpoint.get("rule") == TABLE3_RULE
+            and checkpoint.get("member_sha256") == bulk.member_sha256
+            and checkpoint.get("release_point") == bulk.release_point and isinstance(checkpoint.get("acts"), dict))
 
 
-class _WalkStopped(Exception):
-    """Raised from the walk's ``acquire`` to end the whole Table III walk: the per-run cap or the deadline."""
+def _bulk_rows(
+    body: bytes, congresses: set[int], *, release_point: str, observed_at: str
+) -> dict[int, dict[str, list[dict]]]:
+    """Each scoped public law's ``table3_records`` rows from the bulk zip, by Congress and act.
+
+    The file splits an act's records about ten to an ``<act>`` fragment, and each
+    fragment states its own Congress, date and volume: 87-845 prints one record
+    in volume 76 and the rest in 76A. So each record is shaped with its own
+    fragment standing in for the page (``Table3Page`` with no chain links), and
+    ``seq`` counts records through the act in the file's order, as a page
+    numbers its rows. The file's own ``sequence`` cannot: it repeats within 70
+    acts, restarts in 87-845's second volume and runs out of order in 5.
+    A record's volume is its fragment's where the record states a page, as a
+    page's Statutes link carries it. Pre-1957 chapters
+    (``1955-08-01:360``) are not public laws and are left out, as before.
+    """
+    acts: dict[int, dict[str, list[dict]]] = {}
+    for fragment in iter_table3_acts(body):
+        law = _public_law(fragment.search_key)
+        if law is None or law[0] not in congresses:
+            continue
+        context = Table3Page("table3-bulk", fragment.search_key, fragment.num, release_point, fragment.congress,
+                             fragment.statutes_at_large_volume, fragment.date, None, None, (),
+                             ("release-point:member-name",))
+        rows = acts.setdefault(law[0], {}).setdefault(fragment.search_key, [])
+        for record in fragment.records:
+            volume = fragment.statutes_at_large_volume if record.statutes_at_large_page else None
+            stated = Table3Record(record.act_section, volume, record.statutes_at_large_page, record.usc_title,
+                                  record.usc_section, record.usc_status)
+            rows.append(shape_table3_record(stated, page=context, seq=len(rows), observed_at=observed_at))
+    return acts
 
 
 def _table3_rows(
     olrc: OlrcSource,
-    acts: set[tuple[int, int]],
+    congresses: set[int],
     held: set[str],
-    cap: PerRunCap,
-    *,
-    deadline_seconds: float = TABLE3_DEADLINE_SECONDS,
-    clock: Callable[[], float] = time.monotonic,
-    checkpoints: dict[str, dict] | None = None,
-    evaluated: set[str] | None = None,
+    checkpoints: dict[str, dict],
+    evaluated: set[str],
     evidence: CaptureEvidence | None = None,
 ) -> list[dict]:
-    """Re-read stale held acts, then follow each scoped Congress's Table III chain, newest Congress first.
+    """Every scoped act's rows from one read of the Table III bulk file; only changed or vanished acts are published.
 
-    ``iter_table3_chain`` walks one Congress and owns where a chain ends: a
-    page that names no next public law, one in another Congress, one that does
-    not follow, one the laws table does not state (``within``), or one past the
-    release point the page states (the lag). Before any chain, every held act
-    whose checkpoint is missing, from an older reader rule or not bound to a
-    capture is read again (``checkpoints``); the old forward frontier alone
-    could never repair an earlier act. Each chain then starts at the Congress's
-    highest held act, asked again only for the act its page names. A Congress
-    with no held act starts where the previous Congress's highest held page
-    says the chain continues, and otherwise at the lowest act the laws table
-    states, unless that seed page's release point shows Table III holds none of
-    this Congress yet. An act is published when it was not held or its shaped
-    rows changed (:func:`_rows_digest`; the page bytes embed a per-request
-    session id, so their digest changes every read). The per-run cap and the
-    deadline are spent in ``acquire``, once per act (its retries included),
-    raising to end the walk. A failed act ends its Congress's chain for the
-    run, and :data:`TABLE3_STOP_AFTER` failures in a row, stale rereads
-    included, end the walk.
+    One request a run, retained as evidence. ``checkpoints`` maps a Congress to
+    what was last derived for it: rule, member digest, release point and each
+    act's shaped-row digest. While every scoped Congress's checkpoint names this
+    member and release point under the current rule, nothing is derived. Otherwise each scoped act
+    is derived and compared with its digest (a held act with none is published),
+    and a held or checkpointed act the file no longer lists is ``evaluated``
+    with no rows, which removes them. A failed read changes nothing.
     """
-    started = clock()
+    try:
+        acquired = olrc.acquire_table3_bulk()
+    except (UsCodeSourceError, httpx.HTTPError, ConnectionError) as error:
+        if evidence:
+            evidence.refusal(error, stage="table3:bulk")
+        logger.warning("Laws: Table III bulk not established — every row stands: {}", _transport_error(error))
+        return []
+    if evidence:
+        evidence.capture(acquired.capture, stage="table3:bulk")
+    bulk = acquired.result
+    scope = sorted(congresses)
+    if all(_table3_current(checkpoints.get(str(congress)), bulk) for congress in scope):
+        logger.info("Laws: Table III bulk unchanged at release point {} ({}) for Congresses {}; nothing derived",
+                    bulk.release_point, bulk.member_sha256, scope)
+        if evidence:
+            evidence.event("table3-bulk", release_point=bulk.release_point, member_sha256=bulk.member_sha256,
+                           rule=TABLE3_RULE, congresses=scope, derived=False)
+        return []
+    derived = _bulk_rows(acquired.capture.body, congresses, release_point=bulk.release_point,
+                         observed_at=acquired.capture.observed_at)
     rows: list[dict] = []
-    read: list[str] = []
-    failed: list[str] = []
-    asked: list[str] = []
-    stated: dict[int, set[int]] = {}
-    for congress, number in acts:
-        stated.setdefault(congress, set()).add(number)
-    within = {f"{congress}-{number}" for congress, number in acts}
-    held_numbers: dict[int, list[int]] = {}
-    for act in filter(None, map(_public_law, held)):
-        held_numbers.setdefault(act[0], []).append(act[1])
-
-    cached: dict[str, Any] = {}
-    failures: dict[str, Exception] = {}
-    consecutive = 0
-
-    def acquire(key: str) -> Any:
-        if key in failures:
-            raise failures[key]
-        if key in cached:
-            return cached[key]
-        if clock() - started >= deadline_seconds:
-            raise _WalkStopped(f"reached its {deadline_seconds:,}-second deadline before {key}")
-        if not cap.take():
-            raise _WalkStopped(f"reached its per-run cap before {key}")
-        asked.append(key)
-        try:
-            acquired = olrc.acquire_table3_act(key)
-        except (UsCodeSourceError, httpx.HTTPError, ConnectionError) as error:
-            failures[key] = error
-            if evidence:
-                evidence.refusal(error, stage="table3:" + key)
-            raise
-        if evidence:
-            evidence.capture(acquired.capture, stage="table3:" + key)
-        cached[key] = acquired
-        return acquired
-
-    def fail(key: str) -> bool:
-        """Record a failed act; ``True`` once :data:`TABLE3_STOP_AFTER` failures in a row are reached."""
-        nonlocal consecutive
-        if key not in failed:
-            failed.append(key)
-        consecutive += 1
-        return consecutive >= TABLE3_STOP_AFTER
-
-    def materialize(key: str, acquired: Any, page_rows: list[dict] | None = None) -> None:
-        if key in cached_rows:
-            return
-        page = cast(Table3Page, acquired.result)
-        page_rows = page_rows if page_rows is not None else _page_rows(page, acquired.capture.observed_at)
-        cached_rows[key] = page_rows
-        rows.extend(page_rows)
-        read.append(key)
-        if evaluated is not None:
-            evaluated.add(key)
-        if checkpoints is not None:
-            checkpoints[key] = {"act_key": key, "reader_version": TABLE3_READER_VERSION,
-                                "sha256": acquired.capture.sha256, "records_sha256": _rows_digest(page_rows),
-                                "observed_at": acquired.capture.observed_at, "next_act": page.next_act,
-                                "release_point": page.release_point, "outcome": "complete"}
-        if evidence:
-            evidence.event("table3-read", act_key=key, rows=len(page_rows),
-                           reader_version=TABLE3_READER_VERSION, sha256=acquired.capture.sha256)
-
-    cached_rows: dict[str, list[dict]] = {}
-
-    # Stale held acts first: successful checkpoints shrink this queue across
-    # bounded runs; a failed read keeps the act's rows and its old or missing
-    # rule, so it stays retryable, and is tried again after never-tried acts.
-    # Failures here end only this queue: acts that keep failing must not stop
-    # the forward walk from ever discovering a new act, and in a real outage
-    # the walk's own first failure stops it one request later.
-    if checkpoints is not None:
-        acts_by_key = {key: act for key in held if (act := _public_law(key)) is not None and act[0] in stated}
-        stale = sorted((key for key in acts_by_key if not _table3_current(checkpoints.get(key, {}))),
-                       key=lambda key: (checkpoints.get(key, {}).get("last_attempt", ""), acts_by_key[key]))
-        for key in stale:
-            try:
-                materialize(key, acquire(key))
-            except _WalkStopped as stop:
-                logger.warning("Laws: Table III walk {}", stop)
-                return _table3_summary(rows, read, failed)
-            except (UsCodeSourceError, httpx.HTTPError, ConnectionError) as error:
-                logger.warning("Laws: Table III stale act {} not re-read: {}", key, _transport_error(error))
-                checkpoints[key] = {**checkpoints.get(key, {}), "act_key": key,
-                                    "last_attempt": datetime.now(UTC).isoformat(), "outcome": "refused"}
-                if fail(key):
-                    logger.warning("Laws: Table III stale re-reads stop after {} failures in a row", consecutive)
-                    break
-                continue
-            consecutive = 0
-
-    for congress in sorted(stated, reverse=True):
-        if congress in held_numbers:
-            start_key = f"{congress}-{max(held_numbers[congress])}"
-        else:
-            try:
-                start_key = _cold_start(congress, stated[congress], held_numbers, within, acquire)
-            except _WalkStopped as stop:
-                logger.warning("Laws: Table III walk {}", stop)
-                return _table3_summary(rows, read, failed)
-            except (UsCodeSourceError, httpx.HTTPError, ConnectionError) as error:
-                seed = f"{congress - 1}-{max(held_numbers[congress - 1])}"
-                logger.warning("Laws: Table III seed {} for Congress {} not read: {}", seed, congress,
-                               _transport_error(error))
-                if fail(seed):
-                    logger.warning("Laws: Table III walk stops after {} failures in a row", consecutive)
-                    return _table3_summary(rows, read, failed)
-                start_key = f"{congress}-{min(stated[congress])}"
-            if start_key is None:
-                continue
-        first_ask = len(asked)
-        # Never binds: every act after the start is a distinct act the laws table states.
-        chain = iter_table3_chain(acquire, start_key, max_acts=len(stated[congress]) + 1, within=within)
-        named: tuple[str | None, str | None] = (None, None)  # the last page's next act and release point
-        while True:
-            try:
-                acquired = next(chain)
-            except StopIteration as end:
-                logger.info(
-                    "Laws: Table III chain for Congress {} ends at {}: its page {} (next {!r}, release point {!r})",
-                    congress,
-                    asked[-1] if asked else start_key,
-                    end.value,
-                    *named,
-                )
-                break
-            except _WalkStopped as stop:
-                logger.warning("Laws: Table III walk {}", stop)
-                return _table3_summary(rows, read, failed)
-            except (UsCodeSourceError, httpx.HTTPError, ConnectionError) as error:
-                # The walker refuses a start it cannot read before asking for anything.
-                key = asked[-1] if len(asked) > first_ask else start_key
-                logger.warning(
-                    "Laws: Table III chain for Congress {} stops at {}: {}", congress, key, _transport_error(error)
-                )
-                if fail(key):
-                    logger.warning("Laws: Table III walk stops after {} failures in a row", consecutive)
-                    return _table3_summary(rows, read, failed)
-                break
-            consecutive = 0
-            page = cast(Table3Page, acquired.result)
-            key = page.key  # acquire is acquire_table3_act
-            named = (page.next_act, page.release_point)
-            if key in cached_rows:
-                continue
-            if key not in held:
-                materialize(key, acquired)
-            elif checkpoints is not None:
-                page_rows = _page_rows(page, acquired.capture.observed_at)
-                if checkpoints.get(key, {}).get("records_sha256") != _rows_digest(page_rows):
-                    materialize(key, acquired, page_rows)
-    return _table3_summary(rows, read, failed)
-
-
-def _cold_start(
-    congress: int,
-    numbers: set[int],
-    held_numbers: Mapping[int, list[int]],
-    within: set[str],
-    acquire: Callable[[str], Any],
-) -> str | None:
-    """Where a Congress with no held act starts, or ``None`` when Table III holds none of it yet.
-
-    The previous Congress's highest held page is the only seed: its ``next_act``
-    is the publisher's own link. When it names an act of this Congress the laws
-    table states, the chain starts there. When it names none but its release
-    point is still in an earlier Congress, Table III holds nothing of this one
-    yet and nothing is asked. Otherwise, or with no seed, the chain starts at
-    the lowest act the laws table states, as a cold walk always has; a failure
-    there ends only this Congress's chain.
-    """
-    lowest = f"{congress}-{min(numbers)}"
-    if congress - 1 not in held_numbers:
-        logger.info("Laws: Table III for Congress {} starts cold at {}", congress, lowest)
-        return lowest
-    seed = f"{congress - 1}-{max(held_numbers[congress - 1])}"
-    page = cast(Table3Page, acquire(seed).result)
-    following, release = _public_law(page.next_act), _public_law(page.release_point)
-    if following is not None and following[0] == congress and f"{following[0]}-{following[1]}" in within:
-        logger.info("Laws: Table III for Congress {} starts at {}, the act {} names", congress, page.next_act, seed)
-        return f"{following[0]}-{following[1]}"
-    if release is not None and release[0] < congress:
-        logger.info("Laws: Table III for Congress {} not yet released ({} states release point {})",
-                    congress, seed, page.release_point)
-        return None
-    logger.info("Laws: Table III for Congress {} starts at {}; seed {} names {!r}", congress, lowest, seed,
-                page.next_act)
-    return lowest
-
-
-def _page_rows(page: Table3Page, observed_at: str) -> list[dict]:
-    """One act page's ``table3_records`` rows, sequenced in native order."""
-    return [shape_table3_record(record, page=page, seq=seq, observed_at=observed_at)
-            for seq, record in enumerate(page.records)]
+    published: list[str] = []
+    removed: list[str] = []
+    for congress in scope:
+        prior = (checkpoints.get(str(congress)) or {}).get("acts") or {}
+        acts = derived.get(congress, {})
+        digests = {key: _rows_digest(act_rows) for key, act_rows in acts.items()}
+        for key, act_digest in digests.items():
+            if prior.get(key) != act_digest:
+                published.append(key)
+                rows.extend(acts[key])
+        stated = {key for key in held | set(prior) if (act := _public_law(key)) is not None and act[0] == congress}
+        removed.extend(sorted(stated - set(digests)))
+        checkpoints[str(congress)] = {"congress": str(congress), "rule": TABLE3_RULE,
+                                      "member_sha256": bulk.member_sha256, "sha256": acquired.capture.sha256,
+                                      "release_point": bulk.release_point, "observed_at": acquired.capture.observed_at,
+                                      "acts": digests}
+    evaluated.update(published, removed)
+    if removed:
+        logger.warning("Laws: Table III no longer lists {}; their rows are removed", removed)
+    logger.info(
+        "Laws: Table III bulk at release point {} — {:,} acts derived for Congresses {}, {:,} published {}, {:,} rows",
+        bulk.release_point, sum(map(len, derived.values())), scope, len(published), published, len(rows),
+    )
+    if evidence:
+        evidence.event("table3-bulk", release_point=bulk.release_point, member_sha256=bulk.member_sha256,
+                       rule=TABLE3_RULE, congresses=scope, derived=True,
+                       acts={str(congress): sorted(acts) for congress, acts in derived.items()},
+                       published=published, removed=removed, rows=len(rows))
+    return rows
 
 
 def _rows_digest(rows: list[dict]) -> str | None:
     """A digest of an act's shaped rows without their observation time: equal digests publish nothing new."""
     return digest(json_column([{name: value for name, value in row.items() if name != "observed_at"} for row in rows]))
-
-
-def _table3_summary(rows: list[dict], read: list[str], failed: list[str]) -> list[dict]:
-    logger.info(
-        "Laws: Table III — {:,} acts read {}, {:,} failed {}, {:,} rows",
-        len(read),
-        read,
-        len(failed),
-        failed,
-        len(rows),
-    )
-    return rows
 
 
 def build_laws(
@@ -668,7 +523,6 @@ def build_laws(
     uslm: LawTextSource | None = None,
     olrc: OlrcSource | None = None,
     max_uslm: int = MAX_USLM_PER_RUN,
-    max_table3: int = MAX_TABLE3_PER_RUN,
     download_prior: Callable[[str, Path], bool] = r2.download,
     evidence: CaptureEvidence | None = None,
 ) -> tuple[Path, Path, Path]:
@@ -690,8 +544,8 @@ def build_laws(
 
     # 1. The enumeration, whole, then the PLAW leg under its cap.
     if evidence:
-        evidence.event("selection", congresses=congresses, max_uslm=max_uslm, max_table3=max_table3,
-                       uslm_reader_version=USLM_READER_VERSION, table3_reader_version=TABLE3_READER_VERSION)
+        evidence.event("selection", congresses=congresses, max_uslm=max_uslm,
+                       uslm_reader_version=USLM_READER_VERSION, table3_rule=TABLE3_RULE)
     listed = _list_laws(reader, congresses)
     if evidence:
         evidence.event("law-list-complete", law_ids=[plain["law_id"] for _, _, plain in listed])
@@ -701,16 +555,12 @@ def build_laws(
     sessions: set[tuple[str, str]] = set()
     section_rows = _classification_rows(olrc, congresses, evidence, sessions)
 
-    # 3. Table III, along its own chain through the public laws the route listed or the prior holds.
-    acts = _held_public_laws(priors[NAME], congresses) | {
-        (int(plain["congress"]), int(plain["number"])) for _, _, plain in listed if plain["law_type"] == PUBLIC
-    }
-    checkpoints = {r["act_key"]: r for r in read_checkpoints(priors[TABLE3], "laws-table3")
-                   if isinstance(r.get("act_key"), str)}
+    # 3. Table III, from its bulk file, for every Congress the laws table holds as well as the scoped ones.
+    checkpoints = {r["congress"]: r for r in read_checkpoints(priors[TABLE3], "laws-table3")
+                   if isinstance(r.get("congress"), str) and isinstance(r.get("acts"), dict)}
     evaluated: set[str] = set()
-    held = _held_acts(priors[TABLE3]) | set(checkpoints)
-    table3_rows = _table3_rows(olrc, acts, held, PerRunCap(max_table3, "Laws: Table III pages"),
-                               checkpoints=checkpoints, evaluated=evaluated, evidence=evidence)
+    table3_rows = _table3_rows(olrc, set(congresses) | _held_congresses(priors[NAME]), _held_acts(priors[TABLE3]),
+                               checkpoints, evaluated, evidence)
 
     return (
         merge_contract_table(output_dir, NAME, law_rows, prior_present=priors[NAME] is not None),

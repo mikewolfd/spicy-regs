@@ -5,7 +5,8 @@ tree at the commits below (all ancestors of the v0.21.2 tag, `3642aa1`, that
 built the vendored wheel), copied rather than re-fetched so the `laws` rollup's
 tests run on the same captures the wheel's own tests prove the shapers on.
 Each is either a complete, unchanged publisher response or a reduction stated
-exactly in spicy-docs' README for its directory. The publisher's values are
+exactly in spicy-docs' README for its directory. The two Table III fixtures
+are this repository's own captures, each stated in its row. The publisher's values are
 U.S. government data in the public domain. Offline tests establish behavior
 for these shapes; they say nothing about coverage or what the publisher
 serves today.
@@ -17,7 +18,8 @@ serves today.
 | `plaw-119publ1.xml` | `tests/fixtures/uslm/` (`7dec0c9`) | `PLAW-119publ1.xml` inside `https://www.govinfo.gov/bulkdata/PLAW/119/public/PLAW-119-public.zip`, publisher Last-Modified 2026-09-09 15:30:21 GMT; complete | 23,379 | `ee0e7a5d534411f78dd325405c42d386a1cfcf14f3870c93f5488874bb7acb54` |
 | `classification-tables-index.shtml` | `tests/fixtures/uscode/` (`d5f3e50`) | `https://uscode.house.gov/classification/tables.shtml`, 2026-09-19 (39,140 bytes) minus its 27 KB navigation menu, everything else kept | 13,285 | `6a4fbfe2c5834745dfbaabd4418549e25bf3dca3b2ac25a63e3e7fc241cfcba0` |
 | `classification-tbl119pl_2nd-head.htm` | `tests/fixtures/uscode/` (`d5f3e50`) | `https://uscode.house.gov/classification/tbl119pl_2nd.htm`, 2026-09-19 (115,140 bytes, 583 rows) through its column header plus 9 of the 583 data lines, closed; the session id replaced by `SESSIONID` | 13,941 | `e764ef99a725a3efaa00448b70fa3f03d1f7ad439e1f231b03a3d1725c4d30c8` |
-| `table3-111_226-head.htm` | `tests/fixtures/uscode/` (`ca92208`) | `https://uscode.house.gov/table3/111_226.htm`, 2026-09-14 (53,528 bytes, 32 rows) through its first 4 rows, closed; the session id replaced by `SESSIONID` | 6,199 | `943c62a36a58f7f0a94da6276ba073e44cd3af439656be32abbaa9143740a301` |
+| `table3-119_37.htm` | captured by this repository (`9818b2e`) | `https://uscode.house.gov/table3/119_37.htm`, 2026-09-25: complete; states release point 119-73 and 110 rows, four with a blank act section | 87,292 | `1e3fcbc7dbe87541c2183a50286567e2416074c4454c7ab707ce576f8b2e087d` |
+| `table3-bulk-119-73-excerpt.xml` | cut by this repository (receipt `fork-execution-2026-09-21/table3-bulk-2026-09-26/build_fixture.py`) | `fulldump@119-73.xml` inside `https://uscode.house.gov/table3/table3-xml-bulk.zip`, 2026-09-26 (zip `93e1f233…`, member `985a9bb3…`): the 19 whole `<act>` fragments of 1789-08-07:9, 87-845, 118-2, 119-30, 119-37 and 119-53, verbatim and in the member's order, joined by newlines; the tests zip it as `fulldump@119-73.xml` | 52,728 | `26fc17dae9fc6ebf691497e49910d82eed38f7d71516f7cb3abe77b791be4d4f` |
 
 The whole-corpus facts the tests do not establish — 108 laws on the route,
 104 in PLAW bulk, 4 lagging (119-103, -104, -109, -110); 583 classification
