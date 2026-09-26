@@ -133,6 +133,16 @@ def test_refresh_publishes_the_families_before_the_mirror_captures_base_versions
     assert jobs["derived"]["needs"] == "mirror" and jobs["org-links"]["needs"] == "mirror"
 
 
+def test_refresh_fills_docket_gaps_before_the_families_and_publishes_them_even_if_it_fails():
+    jobs = yaml.safe_load((REPO_ROOT / ".github/workflows/_regulations-refresh.yml").read_text())["jobs"]
+    gaps = jobs["docket-gaps"]
+    assert gaps["steps"][-1]["run"] == "uv run --frozen fill-docket-gaps --no-skip-upload"
+    assert {"DATA_GOV_API_KEY", "R2_CATALOG_TOKEN"} <= set(gaps["steps"][-1]["env"])
+    assert "!inputs.skip_upload" in gaps["if"]
+    assert jobs["base-families"]["needs"] == "docket-gaps"
+    assert jobs["base-families"]["if"] == "${{ !cancelled() }}"
+
+
 def test_the_browser_search_blob_is_built_only_where_its_app_reads_this_bucket():
     """docket_search.json.gz has one reader, the web app; the fork's deployment reads upstream's copy."""
     jobs = yaml.safe_load((REPO_ROOT / ".github/workflows/_regulations-refresh.yml").read_text())["jobs"]

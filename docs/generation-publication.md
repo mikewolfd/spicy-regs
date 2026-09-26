@@ -72,6 +72,16 @@ the batches of a partly completed sweep whose keys the manifest had already
 retired. Bare-URL readers, such as notebooks and the browser, keep reading
 the working copies, which change batch by batch as before.
 
+Before the families publish, `fill-docket-gaps` (`pipelines/docket_gaps.py`)
+asks the Regulations.gov API once for each docket that documents or the comments
+index name and the mirror never captured, and merges what it serves into the
+dockets working copy through the ETL's own extraction. It records every other
+answer in the bare `docket_gap_outcomes.parquet` and does not ask again for 30
+days: 404 means the publisher does not publish that docket, and 400 "Invalid
+ID" means the id is outside its grammar. A legacy `-RULEMAKING` id whose base
+id is served is recorded as an alias of it. If a request gets no answer, the
+job fails, but the families still publish whatever it served.
+
 ## Readers
 
 - Rollup reads share one captured index. Managed download failures and digest

@@ -7,9 +7,40 @@ on:
         type: boolean
         default: false
 jobs:
+  # Documents and comments can name a docket the Mirrulations mirror never
+  # captured (165 on 2026-09-26). Ask the Regulations.gov API for each and merge
+  # what it serves into the dockets working copy before the families publish
+  # (pipelines/docket_gaps.py). A failure here still lets the families publish
+  # the served dockets; the refresh run shows the failure.
+  docket-gaps:
+    if: ${{ !inputs.skip_upload }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@v4
+      - run: uv sync --frozen
+      - name: Fill dockets the mirror lacks
+        env:
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL }}
+          R2_CATALOG_URI: ${{ secrets.R2_CATALOG_URI }}
+          R2_CATALOG_WAREHOUSE: ${{ secrets.R2_CATALOG_WAREHOUSE }}
+          R2_CATALOG_TOKEN: ${{ secrets.R2_CATALOG_TOKEN }}
+          R2_CATALOG_NAMESPACE: ${{ secrets.R2_CATALOG_NAMESPACE }}
+          DATA_GOV_API_KEY: ${{ secrets.DATA_GOV_API_KEY }}
+        run: uv run --frozen fill-docket-gaps --no-skip-upload
   # Publish the ETL's finished dockets/documents as managed families before the
   # mirror captures base versions, so every dependent reads this sweep's snapshot.
   base-families:
+    needs: docket-gaps
+    if: ${{ !cancelled() }}
     strategy:
       fail-fast: false
       matrix:
