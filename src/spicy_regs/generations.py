@@ -37,14 +37,18 @@ def _table_info(path: Path) -> dict:
     }
 
 
-def implementation_id() -> str:
-    """Content digest of this package's Python sources, recorded in every generation root."""
+def source_digest(root: Path, suffixes: tuple[str, ...] = (".py",)) -> str:
+    """SHA-256 over every file under ``root`` with one of ``suffixes``: its relative path, then its bytes."""
     digest = hashlib.sha256()
-    root = Path(__file__).parent
-    for path in sorted(root.rglob("*.py")):
+    for path in sorted(p for p in root.rglob("*") if p.suffix in suffixes and "__pycache__" not in p.parts):
         digest.update(path.relative_to(root).as_posix().encode() + b"\0")
         digest.update(path.read_bytes())
-    return "urn:spicy-regs:implementation:sha256:" + digest.hexdigest()
+    return digest.hexdigest()
+
+
+def implementation_id() -> str:
+    """Content digest of this package's Python sources, recorded in every generation root."""
+    return "urn:spicy-regs:implementation:sha256:" + source_digest(Path(__file__).parent)
 
 
 def verify_generation(directory: Path, *, expected_pin=None):

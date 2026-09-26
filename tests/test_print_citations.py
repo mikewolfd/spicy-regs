@@ -927,3 +927,28 @@ def test_new_budget_parts_reach_the_publisher_and_root_answers_are_counted(tmp_p
     assert acquirer.asked == [package_id]
     assert all(not _rows(path) for path in paths)
     assert any("1 publisher package-root format answers (not failures)" in message for message in messages)
+
+
+def test_the_reader_is_keyed_on_its_code_not_its_release(monkeypatch):
+    """A version-only SpicyDocs release (0.39.2 against 0.39.1) must not re-read every held print."""
+    from spicy_regs.transforms import build_print_citations as module
+
+    real = module.version
+    baseline = module._processing_versions({})
+    monkeypatch.setattr(module, "version", lambda name: "9.9.9" if name == "spicy-docs" else real(name))
+    assert module._processing_versions({}) == baseline
+
+
+def test_the_source_digest_moves_with_code_and_data_but_not_prose(tmp_path):
+    from spicy_regs.generations import source_digest
+
+    (tmp_path / "pkg" / "__pycache__").mkdir(parents=True)
+    (tmp_path / "pkg" / "reader.py").write_text("RULE = 1\n")
+    (tmp_path / "pkg" / "vocabulary.json").write_text('{"a": 1}')
+    suffixes = (".py", ".json")
+    before = source_digest(tmp_path / "pkg", suffixes)
+    (tmp_path / "pkg" / "README.md").write_text("prose")
+    (tmp_path / "pkg" / "__pycache__" / "reader.py").write_text("stale copy")
+    assert source_digest(tmp_path / "pkg", suffixes) == before
+    (tmp_path / "pkg" / "vocabulary.json").write_text('{"a": 2}')
+    assert source_digest(tmp_path / "pkg", suffixes) != before

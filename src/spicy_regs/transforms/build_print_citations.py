@@ -21,6 +21,7 @@ Senate expenditure granules use a separate acquisition pass
 
 from __future__ import annotations
 
+import functools
 import hashlib
 import json
 import os
@@ -82,6 +83,7 @@ from spicy_docs.sources.govinfo.body_acquisition import (
 from spicy_docs.sources.govinfo.discovery import GovInfoDiscoveryReader, published_url
 from spicy_docs.transport.credentials import CredentialRefusedError, scrub_credential
 
+from spicy_regs.generations import source_digest
 from spicy_regs.sources import r2
 from spicy_regs.sources.congress_bills import API_KEY_ENV_VARS, _resolve_api_key
 from spicy_regs.transforms.congress_scope import current_congress
@@ -243,15 +245,30 @@ def _held_packages(prior_file: Path | None) -> dict[str, tuple[str | None, str |
     }
 
 
+@functools.cache
+def _reader_code() -> str:
+    """Digest of the installed SpicyDocs' code and data: what reads, derives and shapes every print.
+
+    Its release string would re-read all 68 held parents on a version-only release (0.39.2
+    changed one README line against 0.39.1). The whole package is digested, not the modules
+    this path imports, because a missed transitive module would leave stale rows silently;
+    a release touching only another source (SAM) still re-reads, which costs requests, not
+    correctness.
+    """
+    import spicy_docs
+
+    return source_digest(Path(spicy_docs.__file__).parent, (".py", ".json", ".xsd"))
+
+
 def _processing_versions(vocabularies: Mapping[str, Mapping[str, tuple[tuple[str, str], ...]]]) -> dict[str, str]:
     """Identify citation, action and body-reading inputs even when no finding exists.
 
-    The dependency release also covers body-text derivation and row shaping;
+    The reader's code also covers body-text derivation and row shaping;
     citation and action digests identify their rules independently. The parent
     tables' public ``rule_set_version`` keeps its citation-only meaning.
     """
     common = {
-        "reader_release": version("spicy-docs"),
+        "reader_code": _reader_code(),
         "pdf_reader_release": version("PyMuPDF"),
         "citation_rules": CITATION_RULE_SET_VERSION,
         "body_preference": PRINT_BODY_PREFERENCE,
