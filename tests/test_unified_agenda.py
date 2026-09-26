@@ -256,6 +256,25 @@ def test_each_run_refreshes_the_current_edition_then_backfills_the_newest_missin
     assert len(fetch) == 1 + BACKFILL_EDITIONS_PER_RUN
 
 
+
+def _report(status: int, body: str) -> httpx.MockTransport:
+    return httpx.MockTransport(lambda request: httpx.Response(status, text=body, headers={"content-type": "text/html"}))
+
+
+def test_the_newest_edition_is_the_newest_the_publisher_lists():
+    """The report page (2026-09-26) links each edition's XML; a Spring 2026 link would move the series."""
+    page = '<a href="XMLViewFileAction?f=REGINFO_RIN_DATA_2012.xml">'
+    page += "".join(f'<a href="XMLViewFileAction?f=REGINFO_RIN_DATA_{e}.xml">' for e in ("202504", "202510"))
+    assert unified_agenda.newest_edition(transport=_report(200, page)) == "202510"
+    newer = page + '<a href="XMLViewFileAction?f=REGINFO_RIN_DATA_202604.xml">'
+    assert unified_agenda.newest_edition(transport=_report(200, newer)) == "202604"
+
+
+@pytest.mark.parametrize(("status", "body"), [(503, "down"), (200, "<html>redesigned</html>"),
+                                             (200, "REGINFO_RIN_DATA_202410.xml")])
+def test_an_unreadable_or_older_edition_report_keeps_the_known_edition(status, body):
+    assert unified_agenda.newest_edition(transport=_report(status, body)) == unified_agenda.DEFAULT_EDITION
+
 def test_the_legacy_2012_file_is_keyed_by_the_edition_its_records_state():
     body = _FIXTURE_XML.replace(b"<PUBLICATION_ID>202510</PUBLICATION_ID>", b"<PUBLICATION_ID>201210</PUBLICATION_ID>")
 
@@ -287,6 +306,7 @@ def test_the_backfill_completes_over_runs_and_keeps_every_prior_row(tmp_path, mo
 
     monkeypatch.setattr(module, "UnifiedAgendaReader", Reader)
     monkeypatch.setattr(module.r2, "download", lambda *args: False)
+    monkeypatch.setattr(module, "newest_edition", lambda: "202510")
     counts = []
     for _ in range(4):
         out = module.build_unified_agenda(tmp_path)

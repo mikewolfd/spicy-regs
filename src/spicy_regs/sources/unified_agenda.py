@@ -7,6 +7,7 @@ before any of its rows are yielded; earlier completed editions remain yielded.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterator, Sequence
 from typing import TYPE_CHECKING
 
@@ -18,7 +19,35 @@ from spicy_regs.sources.base import Reader
 if TYPE_CHECKING:
     from spicy_docs.sources.unified_agenda.records import UnifiedAgendaField, UnifiedAgendaRecordObservation
 
+#: The newest edition when this was written; ``newest_edition`` moves past it.
 DEFAULT_EDITION = "202510"
+
+#: The publisher's page naming each edition's XML file. It is the publisher's own
+#: statement of what exists: an unpublished edition's export answers 200 with an
+#: HTML page, so the export cannot be probed. The page omits Spring 2018 (201804),
+#: which the export still serves, so it moves the newest edition, never the series.
+EDITION_REPORT_URL = "https://www.reginfo.gov/public/do/eAgendaXmlReport"
+_LISTED_EDITION = re.compile(r"REGINFO_RIN_DATA_((?:19|20)[0-9]{2}(?:04|10))\.xml")
+
+
+def newest_edition(*, transport: httpx.BaseTransport | None = None) -> str:
+    """The newest edition the publisher's report page names, never older than ``DEFAULT_EDITION``.
+
+    A page that cannot be read, or names no edition, keeps ``DEFAULT_EDITION`` and says so in the
+    run log: the run still refreshes the edition it knows.
+    """
+    try:
+        with httpx.Client(transport=transport, timeout=60, follow_redirects=True) as client:
+            response = client.get(EDITION_REPORT_URL)
+            response.raise_for_status()
+    except httpx.HTTPError as error:
+        logger.warning("Unified Agenda: edition report unreadable ({}); newest edition stays {}", error, DEFAULT_EDITION)
+        return DEFAULT_EDITION
+    listed = _LISTED_EDITION.findall(response.text)
+    if not listed:
+        logger.warning("Unified Agenda: edition report names no edition; newest edition stays {}", DEFAULT_EDITION)
+        return DEFAULT_EDITION
+    return max(DEFAULT_EDITION, *listed)
 
 
 class UnifiedAgendaReader(Reader):

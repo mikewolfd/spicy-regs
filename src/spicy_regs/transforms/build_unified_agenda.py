@@ -12,7 +12,9 @@ wasteful *and* would trip the R2 catastrophic-shrink guard on any short run.
 Instead we:
 
 1. Best-effort download the prior ``unified_agenda.parquet`` from R2.
-2. Fetch only the requested edition(s) (defaulting to the current edition).
+2. Fetch only the requested edition(s), by default the newest edition the
+   publisher's report page names (``newest_edition``), so a new edition is
+   fetched the day it is listed without a code change.
 3. Union prior + new and dedup on (``rin``, ``agenda_edition``), preferring the
    freshly fetched row so a re-run of an edition refreshes it in place.
 
@@ -43,7 +45,7 @@ import pyarrow.parquet as pq
 from loguru import logger
 
 from spicy_regs.sources import r2
-from spicy_regs.sources.unified_agenda import DEFAULT_EDITION, UnifiedAgendaReader
+from spicy_regs.sources.unified_agenda import DEFAULT_EDITION, UnifiedAgendaReader, newest_edition
 
 OUTPUT = "unified_agenda.parquet"
 
@@ -210,7 +212,7 @@ def build_unified_agenda(output_dir: Path, *, editions: tuple[str, ...] | None =
         if have_prior:
             held = {row[0] for row in duckdb.sql(
                 f"SELECT DISTINCT agenda_edition FROM read_parquet('{prior_file}')").fetchall()}
-        editions = editions_to_fetch(held)
+        editions = editions_to_fetch(held, newest_edition())
     logger.info("Unified Agenda: fetching editions {}", ", ".join(editions))
     # One reader per edition: each acquisition carries its own request budget.
     rows = [_shape(doc) for edition in editions for doc in UnifiedAgendaReader(editions=(edition,)).iter_records()]
