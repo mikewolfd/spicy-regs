@@ -3,3 +3,5 @@ tests/fixtures/adoption_0_24_0/*.txt -whitespace
 tests/fixtures/adoption_0_24_0/*.xml -whitespace
 tests/fixtures/congress_votes/*.xml -text -whitespace
 tests/fixtures/govinfo_bills/*.xml -text -whitespace
+# RefSpec's vendored REF-038 bytes are pinned by sha256; no line-ending translation.
+src/spicy_regs/reference/refspec/** -text
