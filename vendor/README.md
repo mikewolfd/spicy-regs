@@ -5,15 +5,14 @@ The optional `source-readers` extra enables the same readers for package install
 its wheels must be supplied explicitly until they are published in a registry.
 Base CLI and MCP installs do not require them.
 
-- `spicy_docs-0.36.0`: built from SpicyDocs `main` at `b299db9` (release commit), with Rulespec
-  Artifacts 1.1.1. Built September 26, 2026 UTC: **1,639,482 bytes**, SHA-256
-  `7b2c61240c63e76d73a8e2fc3bdf85d9b78e766f1297343ac5f8cf3a1786887c`, byte-identical across
+- `spicy_docs-0.37.0`: built from SpicyDocs `main` at `c80afc8` (release commit), with Rulespec
+  Artifacts 1.1.1. Built September 26, 2026 UTC: **1,640,699 bytes**, SHA-256
+  `ed54be5071e804d21e91c9e529c0ac9831e8ba7e2b0ffe29457203eb687a86dc`, byte-identical across
   two rebuilds from a clean archive of that commit with `SOURCE_DATE_EPOCH` at its commit time.
-  It adds the Regulations.gov docket-detail read (`RegulationsGovApiReader.docket`, for
-  `fill-docket-gaps`) and table-contract `references`, which `tests/test_table_joins.py` holds to
-  `table_joins`. It also credits a renewal SAM still holds Active toward an extract's declared
-  count, listing each on `SamBulkExtract.superseded`; `build_sam_entities` journals each as a
-  `sam-superseded-credited` event. 0.35.0 and its build record are at `9bffc97`.
+  On top of 0.36.0 it gives a numbered reprint its own version code from its stated package
+  (`printing_version_code`: `eas2`, `rh2`), so a bill printed twice at one stage no longer maps
+  both printings to one identity, and it refuses whole a printing that still repeats one. It
+  changes only the bill readers. 0.36.0 and its build record are at `065bdee`.
 
 - `rulespec_artifacts-1.1.1`: exact dependency of SpicyDocs 0.26.6 and 0.27.0, built from
   Rulespec `a3acb04cbfe2cc32a89622a3523da48aa6958348`. **99,315 bytes**, SHA-256
