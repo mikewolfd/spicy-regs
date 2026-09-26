@@ -1,7 +1,8 @@
 # Tables stored as several files (design draft, 2026-09-26)
 
-Status: **draft for review** by spicy-stack-24 (publication format) and spicy-stack-83 (DocSpec, Engine).
-Nothing in `sources/publication.py` or any reader changes until both agree.
+Status: **agreed** by spicy-stack-24 (publication format) and spicy-stack-83 (DocSpec, Engine) on
+2026-09-26; see the review record at the end. The measurements in §5 come before any code, and
+implementation waits for the running backfills to finish.
 
 Owner decision (2026-09-26): design multi-file tables for every large table first, as one cross-repository
 decision, then apply it to `bill_sections`. Decisions 46 (split `fcc_filings` by year before it passes
@@ -264,8 +265,12 @@ spellings.
     shrink guard runs per table, and storage stays O(family bytes);
   - §4.5: the resolver serves `check_table_joins`;
   - §5: a real 1.1 GiB `CopyObject` measurement.
-- **Pending:** 83's confirmation that DocSpec reads v2 before any family it admits gets a split table
-  (§4.1).
+- **spicy-stack-83, ordering (2026-09-26):** confirmed. DocSpec 0.11.2 checks v1 against the artifact
+  manifest, so a family with a split table omitted from v1 would refuse whole. DocSpec's v2 reader
+  (parse version 2, take each table's member list, sum the rows) ships in a DocSpec release before the
+  first split in any family DocSpec admits. Today those are `federal_register`, `dockets` and
+  `documents`, none proposed, so nothing depends on it now. Message 83 before the first split in an
+  admitted family; `comments` will be the first. Partitioning by a function of the identity is agreed.
 
 ## 5. Open measurements before code
 
