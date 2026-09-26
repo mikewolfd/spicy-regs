@@ -161,6 +161,11 @@ class CourtScope:
         )
         return cls(courts, index, jurisdictions)
 
+    @classmethod
+    def for_courts(cls, jurisdictions: dict[str, str]) -> CourtScope:
+        """A scope that classifies courts named outright and places no docket, for search rows alone."""
+        return cls([""], array("H", [0]), jurisdictions)
+
     def for_docket(self, docket_id: str | None) -> tuple[str | None, str | None, str | None]:
         """``(court_id, jurisdiction, is_federal)`` for one docket, all NULL if unknown."""
         if not docket_id:

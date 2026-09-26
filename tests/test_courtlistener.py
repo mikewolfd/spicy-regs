@@ -181,6 +181,15 @@ def test_opinion_selection_uses_cluster_identity_and_court():
     assert "nature_of_suit" not in params
 
 
+def test_opinion_selection_above_an_id_ignores_filing_date():
+    transport = Transport(_page([11], kind="o"))
+    list(CourtListenerOpinionSearchReader(above=10, transport=transport).iter_records())
+    params = transport.calls[0].url.params
+    assert params["q"] == "cluster_id:[11 TO *]" and "filed_after" not in params
+    with pytest.raises(ValueError, match="non-negative integer"):
+        CourtListenerOpinionSearchReader(above=-1)
+
+
 @pytest.mark.parametrize("status", [401, 403, 404, 429, 500])
 def test_source_refusal_is_not_empty_success(status):
     with pytest.raises((ValueError, ConnectionError, httpx.HTTPError, CredentialRefusedError)):

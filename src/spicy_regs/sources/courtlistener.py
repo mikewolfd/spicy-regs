@@ -3,8 +3,9 @@
 The provider owns requests, exact response parsing and cursor validation. Failed
 or incomplete walks raise before consumers replace their prior tables. Docket
 searches select APA/review-of-agency cases (nature of suit 899); opinion searches
-provide cluster metadata for catch-up, not full opinion bodies. An optional
-COURTLISTENER_API_TOKEN travels only in a request header.
+provide cluster metadata for catch-up, not full opinion bodies, selected by filing
+date or by cluster id. An optional COURTLISTENER_API_TOKEN travels only in a
+request header.
 """
 
 from __future__ import annotations
@@ -49,6 +50,7 @@ class CourtListenerReader(Reader):
     kind: Literal["r", "o"] = "r"
     identity_field = "docket_id"
     court: str | None = None
+    query: str | None = None
 
     def __init__(
         self,
@@ -87,6 +89,7 @@ class CourtListenerReader(Reader):
             filed_after=self.since.isoformat() if self.since else None,
             court=self.court,
             nature_of_suit=self.nature_of_suit if self.kind == "r" else None,
+            q=self.query,
         )
         budget = PagedJsonBudget(
             max_requests=_MAX_REQUESTS_PER_PAGE,
@@ -133,7 +136,12 @@ class CourtListenerReader(Reader):
 
 
 class CourtListenerOpinionSearchReader(CourtListenerReader):
-    """Select opinion cluster metadata; full text remains a bulk-source task."""
+    """Select opinion cluster metadata; full text remains a bulk-source task.
+
+    ``above`` selects every cluster whose id is greater, whatever its filing date:
+    the publisher numbers clusters in creation order, so it names exactly the
+    decisions created after an export that ended at that id.
+    """
 
     kind: Literal["r", "o"] = "o"
     identity_field = "cluster_id"
@@ -142,6 +150,7 @@ class CourtListenerOpinionSearchReader(CourtListenerReader):
         self,
         *,
         since: date | None = None,
+        above: int | None = None,
         court: str | None = None,
         max_records: int | None = None,
         api_token: str | None = None,
@@ -149,7 +158,10 @@ class CourtListenerOpinionSearchReader(CourtListenerReader):
         transport: httpx.BaseTransport | None = None,
         evidence: CaptureEvidence | None = None,
     ) -> None:
+        if above is not None and (type(above) is not int or above < 0):
+            raise ValueError("above must be a non-negative integer cluster id")
         super().__init__(
             since=since, max_records=max_records, api_token=api_token, verbose=verbose, transport=transport, evidence=evidence
         )
         self.court = court
+        self.query = None if above is None else f"cluster_id:[{above + 1} TO *]"

@@ -8,22 +8,27 @@ the agencies in ``agency_stats``.
 **Bulk-first, because bulk is the only road.** The v4 ``/clusters/`` endpoint
 answers ``401`` without a token, so the quarterly CSV dump is the only keyless
 source; an incremental ``/search/?type=o`` catch-up (keyless, cursor-paginated)
-tops the table up for decisions filed after the dump date. Best-effort prior
-from R2, then dedup on ``cluster_id`` preferring the freshest row; rows are
-written in batches because the dump runs to ten million clusters and one
+tops the table up with every cluster whose id is above the export's highest.
+The publisher numbers clusters in creation order and cuts each export table at
+a different hour of the export day (2026-06-30: clusters by 08:16 UTC, opinions
+09:56, citations 19:14), so the sibling tables name clusters created after this
+one was cut; a filing-date catch-up missed those filed earlier. Best-effort
+prior from R2, then dedup on ``cluster_id`` preferring the freshest row; rows
+are written in batches because the dump runs to ten million clusters and one
 ``from_pylist`` over that is an out-of-memory error. The dump has no
 ``court_id`` — it lives on the docket, in a different multi-GiB file — so
 ``court_id`` / ``court_jurisdiction`` / ``court_is_federal`` are resolved from
 a docket→court map (see :mod:`spicy_regs.transforms.court_scope`) while each
 row is shaped; ``skip_court_scope`` opts out and leaves the three columns NULL
-at the cost of a ~46-minute map build.
+at the cost of a ~46-minute map build. A scheduled run whose prior already
+holds the newest export reads neither dump and only catches up.
 """
 
 from __future__ import annotations
 
 from collections.abc import Generator
 from contextlib import closing
-from datetime import date, timedelta
+from datetime import date
 from pathlib import Path
 from typing import cast
 
@@ -45,10 +50,6 @@ OUTPUT = "court_opinion_clusters.parquet"
 DATASET = "opinion-clusters"
 
 CL_BASE_URL = "https://www.courtlistener.com"
-
-#: Re-scan this many days before the dump date on the search catch-up, so
-#: decisions indexed or corrected just after the dump are still picked up.
-OVERLAP_DAYS = 7
 
 #: Rows buffered before each parquet batch write.
 BATCH_ROWS = 25_000
@@ -211,6 +212,26 @@ def _shape_search(result: dict, *, scope: CourtScope | None = None) -> dict:
     return row
 
 
+def held_export(table: Path) -> tuple[int | None, str | None]:
+    """A clusters table's highest bulk ``cluster_id`` and the day of its newest bulk ``date_created``.
+
+    Together they name the export the table holds without a stamp: the id is
+    where that export ended, and the export was cut on its dump date, so a table
+    whose newest bulk row was created on or after a dump's date already holds it.
+    One scan of two columns.
+    """
+    import duckdb
+
+    path = str(table).replace("'", "''")
+    with duckdb.connect() as con:
+        high, created = con.execute(
+            f"""SELECT max(TRY_CAST(cluster_id AS BIGINT)) FILTER (WHERE ingest_source = 'bulk'),
+                       max(date_created) FILTER (WHERE ingest_source = 'bulk')
+                FROM read_parquet('{path}')"""
+        ).fetchone() or (None, None)
+    return high, created[:10] if created else None
+
+
 def build_court_opinion_clusters(
     output_dir: Path,
     *,
@@ -229,6 +250,11 @@ def build_court_opinion_clusters(
     46-minute ``dockets`` read. It is the honest way to build the table without
     the scope, and it is not the default: a decision table that cannot say which
     court decided is a table nobody can ask the obvious question of.
+
+    With neither ``dump_date`` nor ``local_file``, a prior that already holds the
+    newest listed export (:func:`held_export`) is only caught up: no dump is
+    read, and the search rows above that export's highest id are merged over it.
+    Naming an edition or a file always reads it.
 
     ``courts_local_file`` pairs a retained courts dump with a supplied docket
     map. ``include_prior=False`` builds the selected source edition alone,
@@ -257,6 +283,8 @@ def build_court_opinion_clusters(
     )
 
     # 2. Resolve which published dump to read.
+    held_high: int | None = None
+    catch_up_only = False
     if local_file is None:
         objects = list_bulk_dumps()
         resolved = dump_date or latest_dump_date(objects, DATASET)
@@ -265,11 +293,16 @@ def build_court_opinion_clusters(
         published = find_dump(objects, DATASET, resolved)
         if published is None:
             raise RuntimeError(f"CourtListener bulk: no {DATASET} dump for {resolved}")
-        logger.info(
-            "Opinion clusters: reading dump {} ({:.3f} GiB compressed)",
-            published.filename,
-            published.size / 2**30,
-        )
+        held_high, held_day = held_export(prior_file) if have_prior and dump_date is None else (None, None)
+        catch_up_only = held_high is not None and held_day is not None and held_day >= resolved.isoformat()
+        if catch_up_only:
+            logger.info("Opinion clusters: prior holds the {} export (to id {:,}); catch-up only", resolved, held_high)
+        else:
+            logger.info(
+                "Opinion clusters: reading dump {} ({:.3f} GiB compressed)",
+                published.filename,
+                published.size / 2**30,
+            )
     else:
         resolved = dump_date
         logger.info("Opinion clusters: reading local dump {}", local_file)
@@ -284,27 +317,39 @@ def build_court_opinion_clusters(
     # that this machine cannot afford to hold two copies of it.
     scope: CourtScope | None = None
     if not skip_court_scope:
-        map_file = docket_court_map or build_docket_court_map(output_dir, dump_date=resolved)
-        scope = CourtScope.from_map(
-            map_file, court_jurisdictions(dump_date=resolved, local_file=courts_local_file)
-        )
+        jurisdictions = court_jurisdictions(dump_date=resolved, local_file=courts_local_file)
+        if catch_up_only:
+            # Search rows name their court; only bulk rows need the docket map.
+            scope = CourtScope.for_courts(jurisdictions)
+        else:
+            map_file = docket_court_map or build_docket_court_map(output_dir, dump_date=resolved)
+            scope = CourtScope.from_map(map_file, jurisdictions)
 
-    # 4. Stream the dump into the staging table, batch by batch.
+    # 4. Stream the dump into the staging table, batch by batch, noting where it ends.
     writer = CourtListenerTableWriter(new_file, schema=_SCHEMA, batch_size=BATCH_ROWS)
-    reader = CourtListenerBulkReader(DATASET, dump_date=resolved, local_file=local_file, max_records=max_records)
+    export_high = held_high if catch_up_only else None
     try:
-        with closing(cast(Generator[dict, None, None], reader.iter_records())) as source_rows:
-            for row in source_rows:
-                writer.add(_shape_bulk(row, scope=scope))
+        if not catch_up_only:
+            reader = CourtListenerBulkReader(
+                DATASET, dump_date=resolved, local_file=local_file, max_records=max_records
+            )
+            with closing(cast(Generator[dict, None, None], reader.iter_records())) as source_rows:
+                for row in source_rows:
+                    shaped = _shape_bulk(row, scope=scope)
+                    writer.add(shaped)
+                    cluster_id = shaped["cluster_id"]
+                    if cluster_id and cluster_id.isdecimal():
+                        export_high = max(export_high or 0, int(cluster_id))
 
         bulk_rows = writer.written + len(writer.rows)
 
-        # 5. Search catch-up for decisions filed after the dump was cut.
+        # 5. Search catch-up for every cluster created after the export was cut.
+        # The range is disjoint from the export's ids, so no bulk row is replaced
+        # by the narrower search row and the first build below stays duplicate-free.
         search_rows = 0
-        if not skip_search_catchup and resolved is not None:
-            since = resolved - timedelta(days=OVERLAP_DAYS)
-            logger.info("Opinion clusters: search catch-up for decisions filed since {}", since)
-            for result in CourtListenerOpinionSearchReader(since=since).iter_records():
+        if not skip_search_catchup and export_high is not None:
+            logger.info("Opinion clusters: search catch-up for clusters above id {:,}", export_high)
+            for result in CourtListenerOpinionSearchReader(above=export_high).iter_records():
                 writer.add(_shape_search(result, scope=scope))
                 search_rows += 1
         writer.close()
@@ -324,10 +369,11 @@ def build_court_opinion_clusters(
     # 6. Merge prior + new, dedup on cluster_id preferring the freshest row.
     #
     # A first build has nothing to merge *against*: one dump, whose cluster_id is
-    # the publisher's primary key, so the dedup is a no-op. Running the merge
-    # anyway would hold the staged copy and the merged copy on disk at once —
-    # 7.1 GiB rather than 3.6 GiB at the 2026-06-30 dump's size — which is the
-    # difference between fitting inside the project's free-space floor and not.
+    # the publisher's primary key, and a catch-up above its highest id, so the
+    # dedup is a no-op. Running the merge anyway would hold the staged copy and
+    # the merged copy on disk at once — 7.1 GiB rather than 3.6 GiB at the
+    # 2026-06-30 dump's size — which is the difference between fitting inside
+    # the project's free-space floor and not.
     # So the first build promotes the staged file instead, and pays for that with
     # dump order rather than date order.
     if not have_prior:

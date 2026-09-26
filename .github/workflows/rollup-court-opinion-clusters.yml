@@ -2,7 +2,8 @@ name: Rollup — court_opinion_clusters
 on:
   schedule:
     # 04:20 UTC Mondays — the bulk dumps are cut monthly to quarterly, so a
-    # weekly pass is enough to pick up a new one and run the search catch-up.
+    # weekly pass is enough to pick up a new one; every other week it only runs
+    # the search catch-up over the published table.
     - cron: '20 4 * * 1'
   workflow_dispatch:
     inputs:
@@ -18,10 +19,12 @@ jobs:
     with:
       command: run-rollup-court-opinion-clusters
       skip_upload: ${{ github.event_name == 'workflow_dispatch' && inputs.skip_upload || false }}
-      # This rollup streams two bulk dumps, not one: opinion-clusters for the
-      # decisions (2.3 GiB, ~23 min) and dockets for the court each was decided
-      # in (4.67 GiB, ~46 min), because the cluster dump carries no court_id.
-      # The bucket serves one client about 1.75 MiB/s no matter how many
-      # connections it opens, so that is ~70 minutes of waiting on someone
-      # else's bandwidth. The default 30 would kill the job mid-stream.
-      timeout_minutes: 120
+      # A new export streams two bulk dumps, not one: opinion-clusters for the
+      # decisions and dockets for the court each was decided in, because the
+      # cluster dump carries no court_id. On a hosted runner the docket map
+      # alone took over 120 minutes (run 35561659245 was cancelled at 120 with
+      # 70.95 million of about 72 million dockets read) and the cluster stream
+      # 72 minutes (run 34806660211, before the docket map existed); 120
+      # cancelled two of the three runs since 2026-09-07. The ~17-minute
+      # catch-up of the other weeks needs far less.
+      timeout_minutes: 300

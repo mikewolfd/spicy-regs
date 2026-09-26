@@ -346,11 +346,68 @@ def test_search_catchup_failure_after_flush_preserves_prior_and_output(tmp_path,
 
     assert len(requests) == 2
     assert requests[0].url.params["type"] == "o"
+    # Every cluster created after the export's highest id, whatever its filing date.
+    assert requests[0].url.params["q"] == "cluster_id:[2 TO *]" and "filed_after" not in requests[0].url.params
     assert str(requests[1].url) == next_url
     assert [(row["cluster_id"], row["case_name"]) for row in written] == [("1", "Bulk case"), ("2", "Search case")]
     assert closed == [True]
     assert (prior.read_bytes(), output.read_bytes()) == before
     assert not (tmp_path / "_clusters_new.parquet").exists()
+
+
+@pytest.mark.parametrize(
+    ("prior_created", "named_edition", "reads_export"),
+    [
+        ("2026-06-30 08:16:36.759906+00", False, False),
+        ("2026-03-31 07:00:00+00", False, True),
+        ("2026-06-30 08:16:36.759906+00", True, True),
+    ],
+    ids=["prior-holds-the-export", "prior-holds-an-older-export", "edition-named"],
+)
+def test_a_prior_holding_the_newest_export_is_only_caught_up(
+    tmp_path, monkeypatch, prior_created, named_edition, reads_export, ample_disk_space
+):
+    """A weekly run re-streamed 7 GiB of unchanged dumps to add a few thousand search rows; it now reads neither."""
+    import spicy_docs.sources.courtlistener.bulk as bulk
+    from spicy_docs.sources.courtlistener.listing import BulkObject
+
+    module = importlib.import_module("spicy_regs.transforms.build_court_opinion_clusters")
+    prior = {**_shape_bulk({"id": "5", "docket_id": "1", "date_created": prior_created}), "court_id": "dcd"}
+    pq.write_table(pa.Table.from_pylist([prior], schema=module._SCHEMA), tmp_path / "_clusters_prior.parquet")
+    assert module.held_export(tmp_path / "_clusters_prior.parquet") == (5, prior_created[:10])
+    monkeypatch.setattr(bulk, "list_bulk_dumps", lambda: [])
+    monkeypatch.setattr(bulk, "latest_dump_date", lambda objects, dataset: DUMP_DATE)
+    listed = BulkObject("bulk-data/opinion-clusters-2026-06-30.csv.bz2", 1, '"etag"', "2026-06-30T12:00:00Z")
+    monkeypatch.setattr(bulk, "find_dump", lambda objects, dataset, day: listed)
+    monkeypatch.setattr(module, "court_jurisdictions", lambda **kwargs: {"dcd": "FD"})
+    docket_map = tmp_path / "map.parquet"
+    pq.write_table(pa.table({"cl_docket_id": ["1"], "court_id": ["dcd"]}), docket_map)
+    monkeypatch.setattr(module, "build_docket_court_map", lambda *a, **k: docket_map)
+    exported = []
+
+    def export(self):
+        exported.append(True)
+        yield {"id": "8", "docket_id": "1", "date_created": "2026-06-30 08:00:00+00"}
+
+    monkeypatch.setattr(CourtListenerBulkReader, "iter_records", export)
+    selections = []
+
+    class Search:
+        def __init__(self, **kwargs):
+            selections.append(kwargs)
+
+        def iter_records(self):
+            yield {"cluster_id": 9, "court_id": "dcd", "caseName": "Created after the export"}
+
+    monkeypatch.setattr(module, "CourtListenerOpinionSearchReader", Search)
+    out = module.build_court_opinion_clusters(tmp_path, dump_date=DUMP_DATE if named_edition else None)
+
+    rows = {row["cluster_id"]: row for row in pq.read_table(out).to_pylist()}
+    assert bool(exported) is reads_export
+    assert selections == [{"above": 8 if reads_export else 5}]
+    assert sorted(rows) == (["5", "8", "9"] if reads_export else ["5", "9"])
+    assert (rows["9"]["ingest_source"], rows["9"]["court_is_federal"]) == ("search", "t")
+    assert rows["5"]["ingest_source"] == "bulk"
 
 
 @pytest.mark.parametrize("kind", ["clusters"])
