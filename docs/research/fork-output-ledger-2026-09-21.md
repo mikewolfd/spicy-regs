@@ -38,8 +38,12 @@ MCP `table_qualification` record read these rows directly.
   - activity-report bills key in the covered Congress, and committees are read
     in the report's chamber, or in the chamber the print names.
   Bill family `d380cdc0…` shows both repaired, but it exposes repeated same-stage
-  printings sharing one identity (119-hr-6644), whose repair is in progress; print
-  citations await the second batch of their re-read.
+  printings sharing one identity (119-hr-6644). SpicyDocs 0.37.0 gives a numbered
+  reprint its own code (`eas2`), adopted at `8602581` (receipt
+  `repeated-printings-2026-09-26/`). SpicyDocs 0.38.0, adopted at `fec7c3b`, keys a
+  bill printed under a Congress subheading in that Congress: 40 of the 41 wrong
+  joins to 117th bills are fixed (receipt `print-subheading-2026-09-26/`). Both
+  families close when their next generations are published and audited.
 - **Partial.** `congress_bills` lacks bills that the retained 110th–113th
   BILLSTATUS lists (`bills-citations/congress-bills-missing-vs-billstatus-110-113.json`).
   The subjects, amendments and house-communications audits are partial as
