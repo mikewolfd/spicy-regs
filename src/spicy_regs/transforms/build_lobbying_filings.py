@@ -324,8 +324,9 @@ def build_lobbying_filings(
     else:
         logger.info("LDA: no prior table found — full backfill")
 
-    # 2. Decide the fetch window start.
-    if since is None:
+    # 2. Decide the fetch window start. A filing year is read whole: the
+    # posted-date watermark would narrow a history year to its last days.
+    if since is None and filing_year is None:
         prior_max = _prior_max_dt_posted(prior_file) if have_prior else None
         since = (prior_max - timedelta(days=OVERLAP_DAYS)) if prior_max else None
     # A stale watermark must not create an ever-growing request that repeatedly

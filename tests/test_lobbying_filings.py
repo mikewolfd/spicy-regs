@@ -198,6 +198,24 @@ def test_fetch_sends_bounded_date_window(tmp_path, monkeypatch):
     bld.build_lobbying_filings(tmp_path, since=date(2026, 4, 1), until=date(2026, 5, 1))
 
 
+def test_a_filing_year_reads_the_whole_year_whatever_the_prior_watermark(tmp_path, monkeypatch):
+    """The history backfill: the stored posted-date watermark must not narrow a year to its last days."""
+    from spicy_regs.transforms.build_lobbying_filings import _SCHEMA
+
+    _no_prior(monkeypatch)
+    pq.write_table(pa.Table.from_pylist([_shape(_RAW_FILING)], schema=_SCHEMA), tmp_path / "_lda_prior.parquet")
+
+    def respond(request, number):
+        assert request.url.params["filing_year"] == "2010"
+        assert "filing_dt_posted_after" not in request.url.params
+        assert "filing_dt_posted_before" not in request.url.params
+        return _json_response(_page([], None))
+
+    calls = _mock_http(monkeypatch, respond)
+    bld.build_lobbying_filings(tmp_path, filing_year=2010)
+    assert len(calls) == 1
+
+
 def test_max_records_stops_the_walk_mid_page(tmp_path, monkeypatch):
     """An explicit record cap is a prefix of the walk: the next page is never requested."""
     _no_prior(monkeypatch)
