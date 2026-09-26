@@ -27,9 +27,9 @@ REDACTED = ("redacted", "demo_key")
 
 def _credential_names() -> tuple[str, ...]:
     """SpicyDocs' credential parameters plus header/JSON spellings of an API key, longest first."""
-    from spicy_docs.transport.credentials import _CREDENTIAL_PARAMETERS
+    from spicy_docs.transport.credentials import CREDENTIAL_PARAMETERS
 
-    names = {name.lower() for name in _CREDENTIAL_PARAMETERS} | {"api-key", "apikey", "x-api-key"}
+    names = {name.lower() for name in CREDENTIAL_PARAMETERS} | {"api-key", "apikey", "x-api-key"}
     return tuple(sorted(names, key=lambda name: (-len(name), name)))
 
 

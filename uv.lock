@@ -1944,14 +1944,14 @@ s3 = [
 
 [[package]]
 name = "spicy-docs"
-version = "0.34.1"
-source = { path = "vendor/spicy_docs-0.34.1-py3-none-any.whl" }
+version = "0.35.0"
+source = { path = "vendor/spicy_docs-0.35.0-py3-none-any.whl" }
 dependencies = [
     { name = "jsonschema" },
     { name = "rulespec-artifacts" },
 ]
 wheels = [
-    { filename = "spicy_docs-0.34.1-py3-none-any.whl", hash = "sha256:6f1d4306478c8427d2529145159661ccf9e6d3498039d52f45de0e3bbc22a55e" },
+    { filename = "spicy_docs-0.35.0-py3-none-any.whl", hash = "sha256:8b16e5caa206119b2d875fb0b49a3da96a9a54ec2ca2304a4ee7699a4bf7db8c" },
 ]
 
 [package.optional-dependencies]
@@ -2077,7 +2077,7 @@ requires-dist = [
     { name = "rulespec-artifacts", marker = "extra == 'source-readers'", path = "vendor/rulespec_artifacts-1.1.1-py3-none-any.whl" },
     { name = "sentence-transformers", marker = "extra == 'embed'" },
     { name = "smart-open", extras = ["s3"], marker = "extra == 'source-readers'", specifier = "==8.0.1" },
-    { name = "spicy-docs", extras = ["acquisition", "pdf", "pdf-pypdf", "bill-diff", "courtlistener-local"], marker = "extra == 'source-readers'", path = "vendor/spicy_docs-0.34.1-py3-none-any.whl" },
+    { name = "spicy-docs", extras = ["acquisition", "pdf", "pdf-pypdf", "bill-diff", "courtlistener-local"], marker = "extra == 'source-readers'", path = "vendor/spicy_docs-0.35.0-py3-none-any.whl" },
     { name = "torch", marker = "extra == 'embed'" },
     { name = "tqdm" },
 ]
@@ -2102,7 +2102,7 @@ source-readers = [
     { name = "pypdf", specifier = "==6.14.2" },
     { name = "rulespec-artifacts", path = "vendor/rulespec_artifacts-1.1.1-py3-none-any.whl" },
     { name = "smart-open", extras = ["s3"], specifier = "==8.0.1" },
-    { name = "spicy-docs", extras = ["acquisition", "pdf", "pdf-pypdf", "bill-diff", "courtlistener-local"], path = "vendor/spicy_docs-0.34.1-py3-none-any.whl" },
+    { name = "spicy-docs", extras = ["acquisition", "pdf", "pdf-pypdf", "bill-diff", "courtlistener-local"], path = "vendor/spicy_docs-0.35.0-py3-none-any.whl" },
 ]
 
 [[package]]
