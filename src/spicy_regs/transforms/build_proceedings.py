@@ -44,11 +44,9 @@ OUTPUT = "proceedings.parquet"
 # v7: identity_predecessors_json is all recorded ancestry, carried from each prior row, not
 # the prior rows one generation overlapped; a sibling sharing only a cited notice is none.
 # v8: SpicyDocs 0.35.0 reads a docket named after prose (D1) and folds Regulations.gov's typed FR-number separators (D2).
-ACTOR_ID = "spicy-regs:proceedings:v8"
-#: Versions whose identity_predecessors_json listed every prior row the group overlapped in
-#: one generation, a sibling sharing a cited notice included (6,786 such entries in 328
-#: rows of snapshot_47cca15e, a no-change rerun). Only their retired ids are ancestry.
-_ONE_GENERATION_ACTORS = frozenset(f"spicy-regs:proceedings:v{n}" for n in range(1, 7))
+# v9: identity_predecessors_json is removed (owner decision 2026-09-26): no consumer read the
+# lineage, and supersedes_id with stable ids keeps continuity.
+ACTOR_ID = "spicy-regs:proceedings:v9"
 
 COLUMNS = (
     "proceeding_id",
@@ -62,7 +60,6 @@ COLUMNS = (
     "cfr_refs_json",
     "cfr_target_iris_json",
     "authority_refs_json",
-    "identity_predecessors_json",
     *ATTESTATION_COLUMNS,
     "fr_document_ids_json",
     "unresolved_fr_references_json",
@@ -179,13 +176,7 @@ def build_proceedings(
     artifact identities stay separate. ``fr_index`` is the generation's shared
     index of ``federal_register.parquet``; it is built here when not supplied.
 
-    ``supersedes_id`` is the prior id a row continues. ``identity_predecessors_json``
-    is every other id the row descends from: each prior proceeding it continues or
-    absorbed, and every predecessor those prior rows recorded. A rerun keeps it, a
-    merge accumulates it, and each side of a split inherits the history of the prior
-    proceedings it overlaps. A prior shares a docket or an action FR document with
-    what it became; one that shares only a cited notice is a predecessor only if no
-    proceeding continues it, since otherwise it lives on as a sibling.
+    ``supersedes_id`` is the prior id a row continues.
     """
     paths = _require_inputs(
         output_dir,
@@ -485,8 +476,6 @@ def build_proceedings(
     # overlap preserves ordinary continuity; FR overlap preserves a provisional
     # document-based proceeding when its docket is discovered later.
     prior_identity: list[tuple[str, set[str], set[str]]] = []
-    prior_predecessors_by_id: dict[str, set[str]] = {}
-    one_generation_prior_ids: list[str] = []
     for row in prior_proceedings:
         proceeding_id = str(row.get("proceeding_id") or "")
         if not proceeding_id:
@@ -498,16 +487,6 @@ def build_proceedings(
             row_id=proceeding_id,
             column="docket_ids_json",
         )
-        recorded = parse_json_list(
-            row.get("identity_predecessors_json"),
-            stats=json_stats,
-            table="proceedings_prior",
-            row_id=proceeding_id,
-            column="identity_predecessors_json",
-        )
-        prior_predecessors_by_id[proceeding_id] = set(map(str, recorded or ()))
-        if row.get("actor_id") in _ONE_GENERATION_ACTORS:
-            one_generation_prior_ids.append(proceeding_id)
         prior_fr_documents, unresolved = fr_index.proceeding_ids(row, json_stats)
         prior_docket_groups = {
             group_key_by_docket[docket] for docket in raw_dockets or () if docket in group_key_by_docket
@@ -533,12 +512,6 @@ def build_proceedings(
     prior_by_id = {
         prior_id: (prior_dockets, prior_fr_documents) for prior_id, prior_dockets, prior_fr_documents in prior_identity
     }
-    # An older row's list mixes the ids it absorbed with siblings that share a cited notice,
-    # and a live id there is either; carry only the ids its own generation had retired.
-    for prior_id in one_generation_prior_ids:
-        prior_predecessors_by_id[prior_id] = {
-            ancestor for ancestor in prior_predecessors_by_id[prior_id] if ancestor not in prior_by_id
-        }
     prior_ids_by_docket: dict[str, set[str]] = defaultdict(set)
     prior_ids_by_fr: dict[str, set[str]] = defaultdict(set)
     for prior_id, prior_dockets, prior_fr_documents in prior_identity:
@@ -548,8 +521,6 @@ def build_proceedings(
             prior_ids_by_fr[document_number].add(prior_id)
 
     predecessor_ids_by_group: dict[str, set[str]] = defaultdict(set)
-    # Priors that share no docket and no action FR document, only a notice both cite.
-    cited_ids_by_group: dict[str, set[str]] = defaultdict(set)
     candidate_edges: list[tuple[int, str, str]] = []
     for group_key, group in groups.items():
         current_dockets = set(group["dockets"])
@@ -566,8 +537,6 @@ def build_proceedings(
             if not docket_overlap and not shared_fr_documents:
                 continue
             predecessor_ids_by_group[group_key].add(prior_id)
-            if not docket_overlap and not any(identity in fr_action for identity in shared_fr_documents):
-                cited_ids_by_group[group_key].add(prior_id)
             score = docket_overlap * 100 + len(shared_fr_documents) * 10
             candidate_edges.append((-score, prior_id, group_key))
 
@@ -609,7 +578,6 @@ def build_proceedings(
         edges = remaining
     for group_key in groups:
         proceeding_id_by_group.setdefault(group_key, minted_by_group[group_key])
-    current_ids = set(proceeding_id_by_group.values())
 
     rows: list[dict] = []
     for group_key, group in groups.items():
@@ -625,13 +593,6 @@ def build_proceedings(
         rins = sorted(group["rins"])
         proceeding_id = proceeding_id_by_group[group_key]
         matched_predecessors = predecessor_ids_by_group.get(group_key, set())
-        # A prior sharing only a cited notice is a sibling while another proceeding continues
-        # it: in a no-change rerun that made 328 rows list 6,786 siblings (snapshot_47cca15e).
-        lineage = matched_predecessors - (cited_ids_by_group.get(group_key, set()) & current_ids)
-        ancestry = set(lineage)
-        for prior_id in lineage:
-            ancestry.update(prior_predecessors_by_id[prior_id])
-        ancestry.discard(proceeding_id)
         rows.append(
             {
                 "proceeding_id": proceeding_id,
@@ -651,7 +612,6 @@ def build_proceedings(
                 # Unified Agenda authority belongs to the editioned agenda
                 # observation and is never fanned out to an action.
                 "authority_refs_json": "[]",
-                "identity_predecessors_json": canonical_json(sorted(ancestry)),
                 **{
                     **provenance,
                     "supersedes_id": (proceeding_id if proceeding_id in matched_predecessors else None),

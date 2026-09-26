@@ -362,7 +362,7 @@ def test_labelled_dockets_and_padded_numbers_join_every_rulemaking_table(tmp_pat
         ("federal_register.document_type", "2010-02-05"),
     }
     assert not any(json.loads(r["docket_ids_json"]) == [] for r in proceedings)
-    assert {r["actor_id"] for r in proceedings} == {"spicy-regs:proceedings:v8"}
+    assert {r["actor_id"] for r in proceedings} == {"spicy-regs:proceedings:v9"}
 
     periods = pq.read_table(build_comment_periods(tmp_path)).to_pylist()
     (period,) = [r for r in periods if "federal_register.comments_close_on" in r["source"]]
@@ -504,7 +504,7 @@ def test_a_listed_docket_value_joins_each_held_docket_once(tmp_path):
     assert json.loads(period["evidence_ids_json"]) == ["2011-3678@2011-02-18"]
 
 
-def test_a_list_merging_a_multi_docket_proceeding_lists_the_absorbed_ids_as_predecessors(tmp_path, monkeypatch):
+def test_a_list_merging_a_multi_docket_proceeding_keeps_the_outranking_id(tmp_path, monkeypatch):
     """Two real EPA proposals: one names four dockets apart, the other a list reaching into them."""
     records = [
         {
@@ -553,11 +553,6 @@ def test_a_list_merging_a_multi_docket_proceeding_lists_the_absorbed_ids_as_pred
         prior = pq.read_table(build_proceedings(tmp_path)).to_pylist()
     prior_by_dockets = {r["docket_ids_json"]: r["proceeding_id"] for r in prior}
     four = json.dumps([f"EPA-HQ-OAR-2010-08{n}" for n in (68, 69, 70, 71)], separators=(",", ":"))
-    # Absorbed: the two single-docket proceedings, and the FR-only one the unread list left.
-    (fr_only,) = [r["proceeding_id"] for r in prior if r["docket_ids_json"] == "[]"]
-    absorbed = sorted(
-        [fr_only, *(prior_by_dockets[f'["{docket}"]'] for docket in ("EPA-HQ-OAR-2003-0146", "EPA-HQ-OAR-2011-0002"))]
-    )
     assert len(prior) == 4
     shutil.copyfile(tmp_path / "proceedings.parquet", tmp_path / "_proceedings_prior.parquet")
 
@@ -566,10 +561,8 @@ def test_a_list_merging_a_multi_docket_proceeding_lists_the_absorbed_ids_as_pred
         ["EPA-HQ-OAR-2003-0146", "EPA-HQ-OAR-2011-0002", *json.loads(four)]
     )
     assert json.loads(merged["fr_document_ids_json"]) == ["2011-31530@2012-01-06", "2012-5760@2012-03-26"]
-    # The four-docket proceeding outranks the singles on docket overlap and keeps its id ...
+    # The four-docket proceeding outranks the singles on docket overlap and keeps its id.
     assert merged["proceeding_id"] == merged["supersedes_id"] == prior_by_dockets[four]
-    # ... and each absorbed id is named, never silently dropped.
-    assert json.loads(merged["identity_predecessors_json"]) == absorbed
 
 
 #: The one RIN-less Notice of 2026-09-23's links naming three or more dockets that are all
@@ -633,60 +626,16 @@ def test_only_an_action_document_merges_the_dockets_it_names(tmp_path):
         row = by_dockets[f'["{docket}"]']
         assert json.loads(row["fr_document_ids_json"]) == ["2016-23295@2016-09-27"]
         assert row["stage_events_json"] == "[]"
-        # The merged id stays with the docket that minted it; the others mint their own and
-        # name it as their predecessor.
+        # The merged id stays with the docket that minted it; the others mint their own.
         if docket == EPA_NOTICE[1]:
             assert row["proceeding_id"] == row["supersedes_id"] == merged_id
         else:
             assert row["proceeding_id"] == stable_id("proceeding", "docket", docket)
-            assert json.loads(row["identity_predecessors_json"]) == [merged_id]
 
-    # A rerun keeps each row's lineage, and the Notice all four cite makes none of them a
-    # predecessor of another: re-deriving it did, 6,786 times in the rerun snapshot_47cca15e.
+    # A rerun keeps every id.
     shutil.copyfile(tmp_path / "proceedings.parquet", tmp_path / "_proceedings_prior.parquet")
-    rerun = {r["proceeding_id"]: r for r in pq.read_table(build_proceedings(tmp_path)).to_pylist()}
-    assert rerun.keys() == {r["proceeding_id"] for r in proceedings}
-    for row in proceedings:
-        assert rerun[row["proceeding_id"]]["identity_predecessors_json"] == row["identity_predecessors_json"]
-
-
-def test_a_retired_proceeding_that_shares_only_a_cited_notice_is_a_predecessor(tmp_path):
-    """An older proceeding of the Notice alone is retired; each docket's proceeding now citing it names it."""
-    _listed_inputs(tmp_path)
-    _with_records(
-        tmp_path,
-        [
-            {
-                "document_number": "2016-23295",
-                "publication_date": "2016-09-27",
-                "document_type": "Notice",
-                "title": "Adequacy Status of the Cleveland-Akron-Lorain and Columbus, Ohio Areas",
-                "docket_ids_json": json.dumps([*EPA_NOTICE, "FRL-9953-10-Region 5"]),
-            }
-        ],
-        EPA_NOTICE,
-    )
-    build_rule_targets(tmp_path)
-    own = {docket: stable_id("proceeding", "docket", docket) for docket in EPA_NOTICE}
-    _write(
-        tmp_path,
-        "_proceedings_prior",
-        ("proceeding_id", "docket_ids_json", "fr_document_ids_json"),
-        [
-            *({"proceeding_id": own[d], "docket_ids_json": json.dumps([d]), "fr_document_ids_json": "[]"} for d in own),
-            {
-                "proceeding_id": "proceeding_notice",
-                "docket_ids_json": "[]",
-                "fr_document_ids_json": '["2016-23295@2016-09-27"]',
-            },
-        ],
-    )
-
-    proceedings = pq.read_table(build_proceedings(tmp_path)).to_pylist()
-    for docket in EPA_NOTICE:
-        (row,) = [r for r in proceedings if json.loads(r["docket_ids_json"]) == [docket]]
-        assert row["proceeding_id"] == row["supersedes_id"] == own[docket]
-        assert json.loads(row["identity_predecessors_json"]) == ["proceeding_notice"]
+    rerun = {r["proceeding_id"] for r in pq.read_table(build_proceedings(tmp_path)).to_pylist()}
+    assert rerun == {r["proceeding_id"] for r in proceedings}
 
 
 def test_a_notice_several_proceedings_hold_opens_a_period_listing_each(tmp_path):
@@ -776,8 +725,8 @@ def test_the_index_reads_each_link_row_once_and_keys_each_docket_it_names(tmp_pa
     assert list(index.docket_links(links)) == first, "replayed, not re-read"
 
 
-def test_a_proceeding_merged_by_a_label_join_lists_the_old_ids_as_predecessors(tmp_path, monkeypatch):
-    """The FR-only proceeding a label join absorbs survives as a predecessor, not as a lost id."""
+def test_a_label_join_continues_the_docket_id_and_retires_the_fr_only_one(tmp_path, monkeypatch):
+    """A label join absorbs the FR-only proceeding into the docket's, which keeps its id."""
     _labelled_inputs(tmp_path)
     build_rule_targets(tmp_path)
     # The prior generation read FR docket values syntax-only, so 2010-2394 stood alone.
@@ -795,11 +744,9 @@ def test_a_proceeding_merged_by_a_label_join_lists_the_old_ids_as_predecessors(t
 
     merged = pq.read_table(build_proceedings(tmp_path)).to_pylist()
     ssa = next(r for r in merged if "SSA-2010-0037" in json.loads(r["docket_ids_json"]))
-    # Docket overlap outranks FR overlap, so the docket's id continues ...
+    # Docket overlap outranks FR overlap, so the docket's id continues.
     assert ssa["proceeding_id"] == prior_docket["proceeding_id"]
     assert ssa["supersedes_id"] == prior_docket["proceeding_id"]
-    # ... and the absorbed FR-only id is named, never silently dropped.
-    assert json.loads(ssa["identity_predecessors_json"]) == [prior_fr_only["proceeding_id"]]
     assert prior_fr_only["proceeding_id"] not in {r["proceeding_id"] for r in merged}
     assert len(merged) == len(prior) - 1
 
