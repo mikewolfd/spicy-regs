@@ -8,8 +8,10 @@ Each carries the rate measured on the live fork tables on 2026-09-26
 are low by design, or by a table's current selection, are declared with that
 rate and the reason, so the check still covers them. ``spicy-regs-dict
 generate`` bundles them as ``table_joins.json`` beside ``table_metadata.json``
-and ``check`` refuses a stale copy. ``references`` is the measurement-free shape
-a SpicyDocs contract can adopt. Standard library only: the MCP image imports it.
+and ``check`` refuses a stale copy. ``references`` is the measurement-free
+shape; SpicyDocs 0.36.0 contracts state the joins onto a parent's identity as
+``TableContract.references``, and ``tests/test_table_joins.py`` holds each of
+those to a join declared here. Standard library only: the MCP image imports it.
 """
 
 from __future__ import annotations
