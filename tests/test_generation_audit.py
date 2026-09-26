@@ -9,7 +9,7 @@ import httpx
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
-from rulespec_artifacts import MemberNotFoundError
+from rulespec_artifacts import MemberNotFoundError, canonical_json_bytes, parse_canonical_json
 from spicy_docs.transport.captured import CapturedBodyResponse
 
 from spicy_regs.content_checks import Scan, configured_secrets, expected_kind, sniff
@@ -138,6 +138,21 @@ def test_an_unknown_prior_pin_refuses(tmp_path):
     publish(tmp_path, store, "current", {"t.parquet": rows(("1", "a"))})
     with pytest.raises(RuntimeError, match="captured prior chain"):
         audit(public_base(store, tmp_path / "public"), family="test", declarations=DECLARED, prior="deadbeef")
+
+
+def test_a_chain_root_whose_own_digest_field_lies_refuses(tmp_path):
+    """The content digest omits the root's ``artifactDigest`` field, so only publication.family_root sees it."""
+    store = Store()
+    first = publish(tmp_path, store, "first", {"t.parquet": rows(("1", "a"))})
+    second = publish(tmp_path, store, "second", {"t.parquet": rows(("1", "b"))}, prior=first)
+    publish(tmp_path, store, "third", {"t.parquet": rows(("1", "c"))}, prior=second)
+    key = f"{second['families']['test']['prefix']}/artifact.json"
+    root = parse_canonical_json(store.objects[key])
+    store.objects[key] = canonical_json_bytes({**root, "artifactDigest": "sha256:" + "0" * 64})
+
+    with pytest.raises(RuntimeError, match="differs from the pin that named it"):
+        audit(public_base(store, tmp_path / "public"), family="test", declarations=DECLARED,
+              prior=first["families"]["test"]["artifactDigest"])
 
 
 def evidence_generation(tmp_path, store, captures):

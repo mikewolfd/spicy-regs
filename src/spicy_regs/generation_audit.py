@@ -56,6 +56,7 @@ from spicy_regs.sources.publication import (
     INDEX_KEY,
     INDEX_LIMIT,
     PublicationError,
+    family_root,
     parse_index,
     table_owner,
 )
@@ -431,8 +432,6 @@ def _publication(con, base: PublicBase, source: _ArtifactSource, entry: Mapping,
 
 def _chain(base: PublicBase, root: Mapping, family: str) -> Iterator[dict]:
     """Earlier generations' index entries, newest first, each root checked against the pin that named it."""
-    from rulespec_artifacts import expected_artifact_digest, parse_canonical_json
-
     seen: set[str] = set()
     entry = ((root.get("spec", {}).get("readSnapshot") or {}).get("families") or {}).get(family)
     while entry is not None:
@@ -440,11 +439,10 @@ def _chain(base: PublicBase, root: Mapping, family: str) -> Iterator[dict]:
             raise AuditError(f"{family}'s captured prior chain loops or exceeds {CHAIN_LIMIT} generations")
         seen.add(entry["artifactDigest"])
         yield entry
-        prior = parse_canonical_json(base.read(f"{entry['prefix']}/{ROOT}", limit=INDEX_LIMIT))
-        # publication.load_family_root makes the same check, but reads only over https.
-        if (not isinstance(prior, dict) or expected_artifact_digest(prior) != entry["artifactDigest"]
-                or prior.get("logicalId") != entry["logicalId"]):
-            raise AuditError(f"The root at {entry['prefix']} differs from the pin that named it")
+        try:
+            prior = family_root(base.read(f"{entry['prefix']}/{ROOT}", limit=INDEX_LIMIT), entry)
+        except PublicationError as error:
+            raise AuditError(f"The root at {entry['prefix']} differs from the pin that named it: {error}") from error
         entry = ((prior.get("spec", {}).get("readSnapshot") or {}).get("families") or {}).get(family)
 
 
