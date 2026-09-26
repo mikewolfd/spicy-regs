@@ -52,8 +52,13 @@ SAM_API_KEY_ENV_VARS = (
     "REGULATIONS_GOV_API_KEY",
 )
 
-# Earliest plausible registrationDate year to window over for a full extract.
-MIN_REGISTRATION_YEAR = 2000
+# Earliest registrationDate year the extract windows and the daily rotation cover.
+# SAM's active registrations by year (entity API counts, 2026-09-26): none in
+# 1970-1995, 2 in 1996, 194 in 1997, 830 in 1998, 857 in 1999. The old floor of
+# 2000 left those 1,883 unread. Two outliers are older (K5L7EUVEGBX4, 1949;
+# J48LKZLWY1M6, 1968). Rotating back to 1949 would spend 47 near-empty daily
+# runs per cycle, so they are loaded by one-off dispatch of their own years.
+MIN_REGISTRATION_YEAR = 1996
 
 # Monotonic seconds, from the run's first extract trigger, that all of its extracts
 # may take: each year's reader waits only what is left, and a year with none left
