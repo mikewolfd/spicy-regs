@@ -47,8 +47,9 @@ failed dispositions; the execution log records the dated work and receipts.
   cross-source joins pass against the fork's published data (FEC to legislators
   and votes, laws to Table III, compiled hearing dates, organization to
   committee, USAspending to SAM), and `describe_table` names each table's
-  managed generation. Exposing each output's ledger qualification beside its
-  published generation remains open. Receipts:
+  managed generation. Each output's ledger audit (pin, date, disposition) is
+  now reported beside its live pin as `qualification`, bundled from the ledger
+  by `spicy-regs-dict generate`; this is in code and not yet deployed. Receipts:
   `/Users/mikewolfd/Work/corpora/fork-execution-2026-09-21/r7-mcp-2026-09-25/`.
 - **T01:** complete; SAM failures now refuse publication, and its initial load
   is T14. Earlier scheduled runs failed on the extract download's `Accept`

@@ -169,7 +169,9 @@ INSTRUCTIONS = (
     "to discover available tables and declared outputs, describe_table for actual "
     "schemas, field meanings, identifiers and coverage caveats, and query_sql for "
     "read-only queries and joins. A declared output or coverage measurement does "
-    "not establish publication or freshness. Always LIMIT exploratory results. "
+    "not establish publication or freshness. qualification reports the output "
+    "ledger's audit disposition for its own pin beside the live pin; it is not a "
+    "verification flag for the live generation. Always LIMIT exploratory results. "
     "Cite source identifiers, evidence locators and dates from returned rows."
 )
 
@@ -598,6 +600,84 @@ def _table_metadata() -> dict[str, dict[str, Any]]:
     return json.loads(files("spicy_regs").joinpath("table_metadata.json").read_text(encoding="utf-8"))
 
 
+QUALIFICATION_BASIS = (
+    "The output ledger's audits, bundled when the dictionary was generated. ledger_disposition is the "
+    "ledger's word for ledger_pin only; generation compares that pin with this connection's live pin. "
+    "'newer generation, not yet audited' means the live pin differs from every pin the ledger records "
+    "for the table. A disposition covers the scope its ledger statement names; it does not verify "
+    "relationships that metadata.data_quality calls heuristic or unresolved."
+)
+
+
+def _ledger_index(record: dict) -> tuple[dict, dict[str, list[dict]]]:
+    """A qualification record and its ledger rows by table."""
+    rows: dict[str, list[dict]] = {}
+    for row in record["rows"]:
+        for table in row["tables"]:
+            rows.setdefault(table, []).append(row)
+    return record, rows
+
+
+@lru_cache(maxsize=1)
+def _ledger() -> tuple[dict, dict[str, list[dict]]]:
+    """The bundled qualification record (``output_ledger``), read and indexed once per process."""
+    return _ledger_index(json.loads(files("spicy_regs").joinpath("table_qualification.json").read_text("utf-8")))
+
+
+def _qualification(
+    cursor: duckdb.DuckDBPyConnection, tables: list[str], *, statements: bool
+) -> tuple[dict, dict[str, dict] | None]:
+    """The ledger's scope fields and each table's audit beside its live pin; no tables for another publisher.
+
+    Live pins come from this connection's publication snapshot: the family
+    artifact digest, or the table digest for a base object's ``table`` pin. A
+    table the index does not manage has no live pin to compare.
+    """
+    record, rows = _ledger()
+    scope = {"ledger": record["ledger"], "ledger_destination": record["destination"], "basis": QUALIFICATION_BASIS}
+    if DATA_DIR is not None or R2_BASE_URL != record["destination"]:
+        reads = str(DATA_DIR) if DATA_DIR is not None else R2_BASE_URL
+        reason = f"This server reads {reads}; the ledger records audits only for {record['destination']}."
+        return {**scope, "status": "unknown_for_publisher", "reason": reason}, None
+    live = {
+        key.removesuffix(".parquet"): {"artifact": entry["artifactDigest"][7:15], "table": table["sha256"][7:15]}
+        for entry in _connection_index(cursor)["families"].values()
+        for key, table in entry["tables"].items()
+    }
+    return scope, {name: _table_qualification(rows.get(name, []), live.get(name, {}), statements) for name in tables}
+
+
+def _table_qualification(rows: list[dict], live: dict[str, str], statements: bool) -> dict:
+    """The audit matching the live pin, else the ledger's latest, as separate fields; never one verified flag."""
+    audits = [audit for row in rows for audit in row["audits"]]
+    result: dict[str, Any]
+    if not audits:
+        result = {"status": "no_audit_recorded" if rows else "not_in_ledger", "live_pin": live.get("artifact")}
+    else:
+        matched = [audit for audit in audits if live.get(audit["pin_kind"]) == audit["pin"]]
+        audit = max(matched or audits, key=lambda item: item["date"])
+        live_pin = live.get(audit["pin_kind"])
+        if matched:
+            generation = "current generation audited"
+        elif live_pin:
+            generation = "newer generation, not yet audited"
+        else:
+            generation = "live generation not pinned by the publication index; cannot compare"
+        result = {
+            "status": "recorded",
+            "generation": generation,
+            "live_pin": live_pin,
+            "ledger_pin": audit["pin"],
+            "pin_kind": audit["pin_kind"],
+            "ledger_date": audit["date"],
+            "ledger_disposition": audit["disposition"],
+        }
+    if statements and rows:
+        result["ledger_tasks"] = list(dict.fromkeys(row["task"] for row in rows))
+        result["ledger_statements"] = [row["statement"] for row in rows]
+    return result
+
+
 def _available_tables(cursor: duckdb.DuckDBPyConnection) -> list[str]:
     """Tables/views registered in this connection, in declared display order."""
     rows = cursor.execute(
@@ -622,12 +702,16 @@ def _register_tools(mcp: FastMCP) -> None:
 
         Availability reflects the cached connection, rebuilt after its configured
         lifetime. It establishes that a view loaded, not full row validation.
-        Use describe_table for meaning, coverage and schema differences.
+        qualification compares each live pin with the output ledger's audited
+        pin and disposition, only for the ledger's publisher. Use
+        describe_table for meaning, coverage, schema differences and the
+        ledger's statement.
         """
         cursor = _get_connection().cursor()
         with _statement_timeout(cursor):
             available = _available_tables(cursor)
         metadata = _table_metadata()
+        scope, tables = _qualification(cursor, available, statements=False)
         return {
             **_source_details(cursor),
             "tables": available,
@@ -636,6 +720,7 @@ def _register_tools(mcp: FastMCP) -> None:
             "availability_basis": "Views loaded in the current connection; not a full data or freshness audit.",
             "connection_ttl_seconds": _CONNECTION_TTL_SECONDS,
             "publication": _publication_status(cursor)["publication"],
+            "qualification": scope if tables is None else {**scope, "status": "applies", "tables": tables},
             "datasets": [
                 {"table": name, "label": metadata.get(name, {}).get("label", name), "available": name in available}
                 for name in dict.fromkeys((*TABLES, *available))
@@ -649,6 +734,9 @@ def _register_tools(mcp: FastMCP) -> None:
         Declared columns and coverage metadata describe supported output; they
         do not certify this connection's data population or freshness. An
         unavailable declared table still returns its dictionary description.
+        qualification gives the live pin, the output ledger's audited pin, date
+        and disposition, whether they match, and the ledger's own statement, as
+        separate fields; it is reported only for the ledger's publisher.
         """
         cursor = _get_connection().cursor()
         with _statement_timeout(cursor):
@@ -664,6 +752,7 @@ def _register_tools(mcp: FastMCP) -> None:
             available = table in status["tables"]
             rows = cursor.execute(f'DESCRIBE "{table}"').fetchall() if available else []
         actual = {row[0]: row[1] for row in rows}
+        scope, qualified = _qualification(cursor, [table], statements=True)
         differences = (
             {
                 "missing_columns": [name for name in declared if name not in actual],
@@ -682,6 +771,7 @@ def _register_tools(mcp: FastMCP) -> None:
             **_source_details(cursor),
             "available": available,
             "publication": status["publication"].get(table, {"status": "unavailable"}),
+            "qualification": scope if qualified is None else {**scope, **qualified[table]},
             "metadata": {key: value for key, value in entry.items() if key not in {"table", "columns"}},
             "metadata_basis": "Dictionary declarations and dated coverage notes; not live population measurements.",
             "declared_columns": entry["columns"],

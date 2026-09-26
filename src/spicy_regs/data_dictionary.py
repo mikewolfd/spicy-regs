@@ -12,7 +12,9 @@ The data dictionary has two layers:
 
 ``spicy-regs-dict check`` reconciles the two so they can't silently drift, and
 ``spicy-regs-dict generate`` renders one Markdown page per table for the MkDocs
-site under ``docs/tables/``.
+site under ``docs/tables/``. ``generate`` also bundles the output ledger's
+per-table audits for the MCP server (``output_ledger``), and ``check`` refuses a
+stale copy.
 
 Usage::
 
@@ -36,6 +38,7 @@ import duckdb
 import polars as pl
 from dotenv import load_dotenv
 
+from spicy_regs import output_ledger
 from spicy_regs.schemas.regulations import RECORD_TYPES
 
 # Repo layout anchors (this file lives at src/spicy_regs/data_dictionary.py).
@@ -1070,15 +1073,17 @@ def cmd_check(args: argparse.Namespace) -> int:
         expected = {name: value for name, value in expected_schemas().items() if name in live}
         errors += check_schema_drift(expected, live)
 
-    if errors:
-        print(f"✗ Data dictionary check failed ({len(errors)} issue(s)):", file=sys.stderr)
-        for err in errors:
+    stale = qualification_errors()
+    if errors or stale:
+        print(f"✗ Data dictionary check failed ({len(errors) + len(stale)} issue(s)):", file=sys.stderr)
+        for err in errors + stale:
             print(f"  - {err}", file=sys.stderr)
-        print(
-            "\nUpdate data_dictionary/descriptions.yaml (and DERIVED_SCHEMAS / RECORD_TYPES "
-            "if the schema changed) so they line up.",
-            file=sys.stderr,
-        )
+        if errors:
+            print(
+                "\nUpdate data_dictionary/descriptions.yaml (and DERIVED_SCHEMAS / RECORD_TYPES "
+                "if the schema changed) so they line up.",
+                file=sys.stderr,
+            )
         return 1
     if unreadable:
         print("Live schema verification is incomplete; this is not a pass.", file=sys.stderr)
@@ -1086,6 +1091,27 @@ def cmd_check(args: argparse.Namespace) -> int:
     count = len(descriptions) if args.source == "schema" else len(live)
     print(f"✓ Data dictionary check passed ({count} tables, source={args.source}).")
     return 0
+
+
+def qualification_bytes() -> bytes:
+    """The MCP qualification record freshly built from the output ledger; OSError or ValueError when it cannot be."""
+    return catalog_bytes(output_ledger.qualification_record(output_ledger.LEDGER.read_text(encoding="utf-8")))
+
+
+def qualification_errors() -> list[str]:
+    """Refuse a bundled qualification record that differs from a fresh build of the output ledger.
+
+    The MCP server reports ledger dispositions from this copy, so a stale one
+    would describe audits the ledger no longer states.
+    """
+    record = output_ledger.RECORD
+    try:
+        fresh = qualification_bytes()
+    except (OSError, ValueError) as exc:
+        return [f"{output_ledger.LEDGER_NAME} cannot build the qualification record: {exc}"]
+    if not record.is_file() or record.read_bytes() != fresh:
+        return [f"{record.name} is stale relative to {output_ledger.LEDGER_NAME}; run 'uv run spicy-regs-dict generate'"]
+    return []
 
 
 def build_catalog(descriptions: dict, schemas: dict[str, list[tuple[str, str]]]) -> dict:
@@ -1210,7 +1236,8 @@ def cmd_catalog(args: argparse.Namespace) -> int:
 def cmd_generate(args: argparse.Namespace) -> int:
     """Render the table pages, refusing (exit 1) when descriptions are out of sync with the schema.
 
-    Writing the default docs dir also refreshes catalog.json (+ .sha256) and table_metadata.json.
+    Writing the default docs dir also refreshes catalog.json (+ .sha256), table_metadata.json and
+    table_qualification.json (from the output ledger).
     """
     descriptions = load_descriptions(Path(args.descriptions))
     schemas = _schemas_for_source(args.source, args.base)
@@ -1239,6 +1266,12 @@ def cmd_generate(args: argparse.Namespace) -> int:
         print(f"  - {DEFAULT_CATALOG_PATH.relative_to(REPO_ROOT)} (+ .sha256)")
         DEFAULT_MCP_METADATA_PATH.write_bytes(catalog_bytes(build_mcp_metadata(descriptions, schemas)))
         print(f"  - {DEFAULT_MCP_METADATA_PATH.relative_to(REPO_ROOT)}")
+        try:
+            output_ledger.RECORD.write_bytes(qualification_bytes())
+        except (OSError, ValueError) as exc:
+            print(f"✗ {output_ledger.LEDGER_NAME} cannot build the qualification record: {exc}", file=sys.stderr)
+            return 1
+        print(f"  - {output_ledger.RECORD.relative_to(REPO_ROOT)}")
     return 0
 
 

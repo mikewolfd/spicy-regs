@@ -10,14 +10,15 @@ from spicy_regs.sources import publication
 SNAPSHOT = "snapshot_0e799850778e1c92bde682d0d0f500be"
 
 
-def _family(name: str, head: str, tables: dict[str, int]) -> dict:
+def _family(name: str, head: str, tables: dict[str, int], table_head: str = "") -> dict:
     digest = head + "0" * (64 - len(head))
+    table_digest = table_head + "1" * (64 - len(table_head))
     return {
         "prefix": f"generations/{name}/{digest}",
         "logicalId": f"urn:spicy-regs:{name}",
         "artifactDigest": f"sha256:{digest}",
         "tables": {
-            key: {"sha256": "sha256:" + "1" * 64, "byteSize": 1, "rows": rows, "columns": [["id", "VARCHAR"]]}
+            key: {"sha256": f"sha256:{table_digest}", "byteSize": 1, "rows": rows, "columns": [["id", "VARCHAR"]]}
             for key, rows in tables.items()
         },
     }

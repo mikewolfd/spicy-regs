@@ -302,6 +302,11 @@ date; `check` fails on a missing or malformed one. `generate` also rewrites
 declaration other repos vendor — and `src/spicy_regs/table_metadata.json`, the
 field meanings and coverage notes bundled with the MCP server. This lets a base
 MCP installation describe datasets without installing the source readers.
+It also writes `src/spicy_regs/table_qualification.json` from the
+[output ledger](docs/research/fork-output-ledger-2026-09-21.md): each row's
+audited pins, dates and disposition words, its statement and the ledger's
+publisher, parsed by `spicy_regs.output_ledger`. `check` fails when that copy
+differs from a fresh build or a row states an audit outside the recognized phrases.
 CI fails if any generated output drifts from its source definitions.
 
 The twenty-two hosted tables instead declare `columns_from: spicy_docs` and
@@ -328,7 +333,13 @@ minutes; it does not certify population completeness or data freshness.
 declared row identifiers, coverage and data-quality notes. `declared_columns`
 and `schema_differences` show when the loaded artifact differs from the supported
 schema. Unavailable tables still return their dictionary metadata with
-`available: false` and an empty actual `columns` list. Read the dated coverage
+`available: false` and an empty actual `columns` list. Both tools return
+`qualification`: the live pin, the output ledger's audited pin, date and
+disposition word, and whether the two pins match, as separate fields;
+`describe_table` adds the ledger row's own statement. It is reported only when
+the server reads the publisher the ledger names, and is `unknown_for_publisher`
+otherwise. A disposition applies to its own pin and stated scope; it does not
+upgrade relationships that `data_quality` calls heuristic. Read the dated coverage
 notes and source evidence before interpreting joins or totals. These responses
 describe this checkout's server; the hosted service changes after deployment.
 

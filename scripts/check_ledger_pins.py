@@ -20,45 +20,19 @@ run against another bucket would prove nothing about this ledger. An explicit
 from __future__ import annotations
 
 import argparse
-import re
 import sys
 from collections import Counter
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 import httpx
+from spicy_regs.output_ledger import LEDGER, audits, ledger_destination, ledger_rows
 from spicy_regs.sources import publication
 
-LEDGER = Path(__file__).resolve().parents[1] / "docs" / "research" / "fork-output-ledger-2026-09-21.md"
 SNAPSHOT_POINTER = "materialized/rulemaking/latest.json"
 FAILING = ("DRIFT", "NOT-LIVE", "MALFORMED")
-_ROW = re.compile(r"\| T\d")
-_CODE = re.compile(r"`([^`]+)`")
-_PIN = re.compile(r"qualified at `((?:snapshot_)?[0-9a-f]{8})…` \((\d{4}-\d{2}-\d{2})\)")
-_DESTINATION = re.compile(r"^Public data destination: `(https://[^`]+)`", re.M)
-_BASE = re.compile(r"verified at table digest `[0-9a-f]{8}…` \((\d{4}-\d{2}-\d{2}); ETag `([0-9a-f]{8})…`\)")
 
 Live = Mapping[str, tuple[str, int]]  # table -> (pin, rows), or object -> (ETag prefix, bytes)
-
-
-def ledger_destination(text: str) -> str:
-    """The public base URL the ledger states it describes; exactly one is required."""
-    found = _DESTINATION.findall(text)
-    if len(found) != 1:
-        raise ValueError(f"the ledger states {len(found)} public data destinations, not 1; pass --index-url")
-    return found[0].rstrip("/")
-
-
-def ledger_rows(text: str) -> Iterator[tuple[str, list[str], str]]:
-    """Yield ``(task, tables, delivery state)`` for each ``| T<n>`` table row."""
-    for line in text.splitlines():
-        if not _ROW.match(line):
-            continue
-        cells = [cell.strip() for cell in line.strip().strip("|").split("|", 3)]
-        if len(cells) != 4:
-            raise ValueError(f"Ledger row is not Task | Producer | Output | Delivery state: {line}")
-        tables = [name for name in _CODE.findall(cells[2]) if "<" not in name and "/" not in name]
-        yield cells[0], tables, cells[3]
 
 
 def rollup_pins(index: Mapping) -> dict[str, tuple[str, int]]:
@@ -84,7 +58,12 @@ def snapshot_pins(pointer: Mapping, manifest: Mapping) -> dict[str, tuple[str, i
 
 def base_object_keys(text: str) -> list[str]:
     """The base objects whose ledger rows record an ETag, in row order."""
-    return [table for _, tables, state in ledger_rows(text) if _BASE.search(state) for table in tables]
+    return [
+        table
+        for _, tables, state in ledger_rows(text)
+        if any(audit["pin_kind"] == "table" for audit in audits(state))
+        for table in tables
+    ]
 
 
 def check(text: str, rollups: Live, snapshots: Live, objects: Live | None = None) -> list[tuple[str, str]]:
@@ -98,7 +77,9 @@ def check(text: str, rollups: Live, snapshots: Live, objects: Live | None = None
     objects = objects or {}
     results = []
     for task, tables, state in ledger_rows(text):
-        pins, bases, unit = _PIN.findall(state), _BASE.findall(state), "rows"
+        found, unit = audits(state), "rows"
+        pins = [(audit["pin"], audit["date"]) for audit in found if audit["disposition"] == "qualified"]
+        bases = [(audit["date"], audit["etag"]) for audit in found if audit["pin_kind"] == "table"]
         if len(pins) == 1 and tables:
             pin, day = pins[0]
             source = snapshots if pin.startswith("snapshot_") else rollups

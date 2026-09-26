@@ -1,0 +1,924 @@
+{
+  "format": "spicy-regs-table-qualification",
+  "version": 1,
+  "ledger": "docs/research/fork-output-ledger-2026-09-21.md",
+  "destination": "https://pub-72e95c0c20a84508b42b03a6ff6d55f8.r2.dev",
+  "rows": [
+    {
+      "task": "T13",
+      "tables": [
+        "court_opinion_clusters"
+      ],
+      "audits": [
+        {
+          "disposition": "qualified",
+          "pin": "7a2cbdb7",
+          "pin_kind": "artifact",
+          "date": "2026-09-22"
+        }
+      ],
+      "statement": "generated and verified for complete 2026-06-30 edition; qualified at `7a2cbdb7…` (2026-09-22)"
+    },
+    {
+      "task": "T13",
+      "tables": [
+        "court_opinion_bodies"
+      ],
+      "audits": [],
+      "statement": "withdrawn 2026-09-22 and removed 2026-09-23: builder, rollup, workflow and catalog/MCP registration deleted, and the push deleted the fork workflow; text links out through the clusters' `absolute_url`"
+    },
+    {
+      "task": "T13",
+      "tables": [
+        "court_citations",
+        "court_citation_map",
+        "court_parentheticals"
+      ],
+      "audits": [
+        {
+          "disposition": "qualified",
+          "pin": "f1e2e523",
+          "pin_kind": "artifact",
+          "date": "2026-09-22"
+        }
+      ],
+      "statement": "added and published for the complete 2026-06-30 edition: qualified at `f1e2e523…` (2026-09-22); public row counts verified"
+    },
+    {
+      "task": "T13",
+      "tables": [
+        "court_opinions"
+      ],
+      "audits": [
+        {
+          "disposition": "qualified",
+          "pin": "f7cc67cc",
+          "pin_kind": "artifact",
+          "date": "2026-09-22"
+        }
+      ],
+      "statement": "added and published for the complete 2026-06-30 edition (text-free): qualified at `f7cc67cc…` (2026-09-22); public row counts verified; no scheduled workflow (54.6 GB source)"
+    },
+    {
+      "task": "T16",
+      "tables": [
+        "bill_subjects"
+      ],
+      "audits": [
+        {
+          "disposition": "PARTIAL",
+          "pin": "1b067027",
+          "pin_kind": "artifact",
+          "date": "2026-09-25"
+        },
+        {
+          "disposition": "qualified",
+          "pin": "86137cc2",
+          "pin_kind": "artifact",
+          "date": "2026-09-23"
+        }
+      ],
+      "statement": "current `1b067027…` is PARTIAL (2026-09-25): 98,482 identities, all prior identities retained. Every subject set and policy area in 38,376 retained 118th/119th native records matches, as do ten additional fresh samples; older-Congress additions and wider changed-field proof remain open. The larger candidate is now published. Earlier selection qualified at `86137cc2…` (2026-09-23); its 20,013-row scope remains historical evidence. Receipt: `parallel-rollup-audit-2026-09-25/` (workstream details in the [audit report](parallel-rollup-audit-2026-09-25.md))."
+    },
+    {
+      "task": "T15",
+      "tables": [
+        "feed_summary"
+      ],
+      "audits": [
+        {
+          "disposition": "qualified",
+          "pin": "71fb5c24",
+          "pin_kind": "artifact",
+          "date": "2026-09-25"
+        }
+      ],
+      "statement": "qualified at `71fb5c24…` (2026-09-25): all 279,336 rows and every output field equal an independent replay from exact catch-up parents. This qualifies the computation; broader native-source qualification of those parents remains separate. Receipt: `parallel-rollup-audit-2026-09-25/` (workstream details in the [audit report](parallel-rollup-audit-2026-09-25.md))."
+    },
+    {
+      "task": "T15",
+      "tables": [
+        "agency_stats"
+      ],
+      "audits": [
+        {
+          "disposition": "qualified",
+          "pin": "85ca895c",
+          "pin_kind": "artifact",
+          "date": "2026-09-25"
+        }
+      ],
+      "statement": "qualified at `85ca895c…` (2026-09-25): every count for all 316 agencies equals an independent recount from exact catch-up parents. Parent native-source limits remain separate. Receipt: `parallel-rollup-audit-2026-09-25/` (workstream details in the [audit report](parallel-rollup-audit-2026-09-25.md))."
+    },
+    {
+      "task": "T15",
+      "tables": [
+        "agency_monthly_volume"
+      ],
+      "audits": [
+        {
+          "disposition": "qualified",
+          "pin": "f6a2c06c",
+          "pin_kind": "artifact",
+          "date": "2026-09-25"
+        }
+      ],
+      "statement": "qualified at `f6a2c06c…` (2026-09-25): all 77,963 rows match an independent replay from documents table `ff502e4b…`; the stated date policy excludes 2,022 missing dates and eight year-zero dates. Receipt: `parallel-rollup-audit-2026-09-25/` (workstream details in the [audit report](parallel-rollup-audit-2026-09-25.md))."
+    },
+    {
+      "task": "T15",
+      "tables": [
+        "docket_search.json.gz"
+      ],
+      "audits": [
+        {
+          "disposition": "verified",
+          "pin": "167d3fb9",
+          "pin_kind": "table",
+          "date": "2026-09-25",
+          "etag": "4e413386"
+        }
+      ],
+      "statement": "verified at table digest `167d3fb9…` (2026-09-25; ETag `4e413386…`): all 279,318 search documents match the independent field-by-field replay from dockets table `680b86ad…`. The 18 dockets with neither title nor abstract are explicitly omitted. Parent source qualification remains separate. Receipt: `parallel-rollup-audit-2026-09-25/` (workstream details in the [audit report](parallel-rollup-audit-2026-09-25.md))."
+    },
+    {
+      "task": "T15",
+      "tables": [
+        "rulemaking_lifecycles"
+      ],
+      "audits": [],
+      "statement": "withdrawn 2026-09-23 (decision 4): the 2026-09-22 scheduled run had published generation `2f001194…` (26,519 rows); the family was conditionally removed from the index. Its workflow was deleted in `5715163` on September 24; the local research producer remains and pairing semantics remain blocked"
+    },
+    {
+      "task": "T15",
+      "tables": [
+        "discovery_signals"
+      ],
+      "audits": [
+        {
+          "disposition": "qualified",
+          "pin": "e33aa262",
+          "pin_kind": "artifact",
+          "date": "2026-09-25"
+        }
+      ],
+      "statement": "qualified at `e33aa262…` (2026-09-25): all nine signals match an independent replay from documents table `ff502e4b…` at the retained UTC as-of instant, `2026-09-25T10:15:37.277533+00:00`. This is the stated moving-window computation, not additional source acquisition. Receipt: `parallel-rollup-audit-2026-09-25/` (workstream details in the [audit report](parallel-rollup-audit-2026-09-25.md))."
+    },
+    {
+      "task": "T15",
+      "tables": [
+        "fr_docket_links"
+      ],
+      "audits": [
+        {
+          "disposition": "qualified",
+          "pin": "1bd5402a",
+          "pin_kind": "artifact",
+          "date": "2026-09-25"
+        }
+      ],
+      "statement": "qualified at `1bd5402a…` (2026-09-25): all 899,520 rows equal an independent multiset expansion of Federal Register `fde0d30a…`, with zero missing or extra rows. Native docket labels and their downstream normalization limits remain explicit. Receipt: `parallel-rollup-audit-2026-09-25/` (workstream details in the [audit report](parallel-rollup-audit-2026-09-25.md))."
+    },
+    {
+      "task": "T11",
+      "tables": [
+        "cfr_sections"
+      ],
+      "audits": [
+        {
+          "disposition": "qualified",
+          "pin": "60092f2a",
+          "pin_kind": "artifact",
+          "date": "2026-09-25"
+        }
+      ],
+      "statement": "qualified at `60092f2a…` (2026-09-25): all 321,010 rows have table bytes identical to the previously qualified `08e585dd…`. This carries the retained edition and prior part-ancestry/citation qualification; it is not a fresh whole-source audit. `cfr_ref` remains the printed citation and is null on the documented 7,910 range, parenthesized and typo rows (earlier receipt `cfr-replace-all-2026-09-23/`). Receipt: `parallel-rollup-audit-2026-09-25/` (workstream details in the [audit report](parallel-rollup-audit-2026-09-25.md))."
+    },
+    {
+      "task": "T16",
+      "tables": [
+        "congress_bills"
+      ],
+      "audits": [
+        {
+          "disposition": "PARTIAL",
+          "pin": "5990abbb",
+          "pin_kind": "artifact",
+          "date": "2026-09-25"
+        },
+        {
+          "disposition": "qualified",
+          "pin": "4a1949a9",
+          "pin_kind": "artifact",
+          "date": "2026-09-24"
+        }
+      ],
+      "statement": "current `5990abbb…` is PARTIAL (2026-09-25); `bill-family` remains the sole writer. All 419,978 prior bill identities survive; the expanded body/section/difference population is publicly verified but not fully source-qualified. The scoped native metadata repair was qualified at `4a1949a9…` (2026-09-24). The API/BILLSTATUS freshness gap and wider history remain open; see the complete family row. Receipt: `parallel-rollup-audit-2026-09-25/` (workstream details in the [audit report](parallel-rollup-audit-2026-09-25.md))."
+    },
+    {
+      "task": "T11",
+      "tables": [
+        "unified_agenda"
+      ],
+      "audits": [
+        {
+          "disposition": "qualified",
+          "pin": "c63a3a10",
+          "pin_kind": "artifact",
+          "date": "2026-09-25"
+        }
+      ],
+      "statement": "qualified at `c63a3a10…` (2026-09-25): the retained edition's 3,954 rows have table bytes identical to the previously qualified `8a22c704…`. This preserves that edition's earlier scope, not a new claim about source freshness. Receipt: `parallel-rollup-audit-2026-09-25/` (workstream details in the [audit report](parallel-rollup-audit-2026-09-25.md))."
+    },
+    {
+      "task": "T11",
+      "tables": [
+        "federal_register"
+      ],
+      "audits": [
+        {
+          "disposition": "qualified",
+          "pin": "fde0d30a",
+          "pin_kind": "artifact",
+          "date": "2026-09-25"
+        }
+      ],
+      "statement": "qualified at `fde0d30a…` (2026-09-25): 1,009,209 rows. Every one of the 1,009,103 previously qualified rows is unchanged; all 106 additions match the September 24 native issue JSON in identity and every field. Earlier historical scope/facet checks remain in `drift-audit-2026-09-23/` and the execution log. Receipt: `parallel-rollup-audit-2026-09-25/` (workstream details in the [audit report](parallel-rollup-audit-2026-09-25.md))."
+    },
+    {
+      "task": "T12",
+      "tables": [
+        "fcc_proceedings"
+      ],
+      "audits": [
+        {
+          "disposition": "qualified",
+          "pin": "930e4716",
+          "pin_kind": "artifact",
+          "date": "2026-09-25"
+        }
+      ],
+      "statement": "qualified at `930e4716…` (2026-09-25): 21,683 docket rows, with table bytes identical to the qualified predecessor. Independently remapped all 21,691 retained native documents; every output field matches. The table remains one row per docket. Receipt: `parallel-rollup-audit-2026-09-25/` (workstream details in the [audit report](parallel-rollup-audit-2026-09-25.md))."
+    },
+    {
+      "task": "T12",
+      "tables": [
+        "fcc_filings"
+      ],
+      "audits": [
+        {
+          "disposition": "qualified",
+          "pin": "18c85718",
+          "pin_kind": "artifact",
+          "date": "2026-09-25"
+        }
+      ],
+      "statement": "qualified at `18c85718…` (2026-09-25): 5,491 filings, retaining every prior row and adding 237. Every added native field matches; the fresh incremental window closes at 724 distinct filings. History before the initial August 24 window and crowded-day recovery remain open. Receipt: `parallel-rollup-audit-2026-09-25/` (workstream details in the [audit report](parallel-rollup-audit-2026-09-25.md))."
+    },
+    {
+      "task": "T14",
+      "tables": [
+        "sam_entities"
+      ],
+      "audits": [
+        {
+          "disposition": "PARTIAL",
+          "pin": "464977e4",
+          "pin_kind": "artifact",
+          "date": "2026-09-25"
+        },
+        {
+          "disposition": "qualified",
+          "pin": "56dd0f65",
+          "pin_kind": "artifact",
+          "date": "2026-09-23"
+        }
+      ],
+      "statement": "current `464977e4…` is PARTIAL (2026-09-25): 167,965 registrations preserve the qualified 147,254-row 2026 population and add 20,711 dated 2002. Scheduled run 36046185903 succeeded after the request repair. Three new registrations match all 19 native fields, but the complete new extract was not retained; the run artifact contains input descriptions only. Earlier extract qualified at `56dd0f65…` (2026-09-23). Identity is `(uei, entity_eft_indicator)`; wider years and complete new-extract replay remain open. Receipt: `parallel-rollup-audit-2026-09-25/` (workstream details in the [audit report](parallel-rollup-audit-2026-09-25.md))."
+    },
+    {
+      "task": "T14",
+      "tables": [
+        "lobbying_filings"
+      ],
+      "audits": [
+        {
+          "disposition": "qualified",
+          "pin": "fd1794b5",
+          "pin_kind": "artifact",
+          "date": "2026-09-25"
+        }
+      ],
+      "statement": "qualified at `fd1794b5…` (2026-09-25): 27,931 filings; every prior cell is unchanged, and all 35 additions match native responses. The fresh 131-record window closes after resolving one extra identity by direct read. This carries the bounded July 2026 onward selection; wider history remains open. Receipt: `parallel-rollup-audit-2026-09-25/` (workstream details in the [audit report](parallel-rollup-audit-2026-09-25.md))."
+    },
+    {
+      "task": "T04",
+      "tables": [
+        "fec_committees"
+      ],
+      "audits": [
+        {
+          "disposition": "qualified",
+          "pin": "dfda14da",
+          "pin_kind": "artifact",
+          "date": "2026-09-21"
+        }
+      ],
+      "statement": "qualified at `dfda14da…` (2026-09-21) for the 27,311-committee selection. Published at `4b1ca622…` (2026-09-25, run 36201050523, code `f2df979`): the complete OpenFEC committee registry, 89,679 unique committees, walked in 21 minutes with no HTTP 429 once requests were paced under the 60-per-minute gateway limit. All 27,311 committee IDs of the qualified selection are present, with the same 16 columns. The field-level audit against the run's retained captures is pending."
+    },
+    {
+      "task": "T04",
+      "tables": [
+        "fec_source_catalog"
+      ],
+      "audits": [
+        {
+          "disposition": "qualified",
+          "pin": "0570574b",
+          "pin_kind": "artifact",
+          "date": "2026-09-21"
+        }
+      ],
+      "statement": "generated and verified; qualified at `0570574b…` (2026-09-21)"
+    },
+    {
+      "task": "T04",
+      "tables": [
+        "fec_source_records",
+        "fec_collections",
+        "fec_relationships"
+      ],
+      "audits": [
+        {
+          "disposition": "qualified",
+          "pin": "11bcb620",
+          "pin_kind": "artifact",
+          "date": "2026-09-21"
+        }
+      ],
+      "statement": "generated and verified; qualified at `11bcb620…` (2026-09-21)"
+    },
+    {
+      "task": "T15",
+      "tables": [
+        "org_committee_links"
+      ],
+      "audits": [
+        {
+          "disposition": "qualified",
+          "pin": "7d6f3b3b",
+          "pin_kind": "artifact",
+          "date": "2026-09-25"
+        }
+      ],
+      "statement": "qualified at `7d6f3b3b…` (2026-09-25): all 3,245 links and all 19 fields match an independent Python replay over exact FEC committee and public comment parents. The comments file is bound by its full digest to the public receipt. These are confidence-tiered name heuristics, not verified identities or financial relationships. Receipt: `parallel-rollup-audit-2026-09-25/` (workstream details in the [audit report](parallel-rollup-audit-2026-09-25.md))."
+    },
+    {
+      "task": "T12",
+      "tables": [
+        "gao_reports"
+      ],
+      "audits": [
+        {
+          "disposition": "qualified",
+          "pin": "d87cf97b",
+          "pin_kind": "artifact",
+          "date": "2026-09-25"
+        }
+      ],
+      "statement": "qualified at `d87cf97b…` (2026-09-25): 42 reports. All 11 additions and two abstract changes match native RSS; the other 29 rows are unchanged. `report_type=Report` is an explicit default, not a native feed value. This qualifies the bounded feed population; broader history and routine retained source inputs remain open. Receipt: `parallel-rollup-audit-2026-09-25/` (workstream details in the [audit report](parallel-rollup-audit-2026-09-25.md))."
+    },
+    {
+      "task": "T12",
+      "tables": [
+        "crs_reports"
+      ],
+      "audits": [
+        {
+          "disposition": "qualified",
+          "pin": "35a43885",
+          "pin_kind": "artifact",
+          "date": "2026-09-25"
+        }
+      ],
+      "statement": "qualified at `35a43885…` (2026-09-25): 14,143 reports, preserving all prior identities. Business fields of all five additions and 30 updates match native responses; 22 later source timestamp restamps remain an explicit limit. The fresh 64-record window closes. At the 17:36 UTC end check, `7076f282…` had become public and remains unaudited. Receipt: `parallel-rollup-audit-2026-09-25/` (workstream details in the [audit report](parallel-rollup-audit-2026-09-25.md))."
+    },
+    {
+      "task": "T12",
+      "tables": [
+        "court_dockets"
+      ],
+      "audits": [
+        {
+          "disposition": "PARTIAL",
+          "pin": "5570c1b4",
+          "pin_kind": "artifact",
+          "date": "2026-09-25"
+        },
+        {
+          "disposition": "qualified",
+          "pin": "95f2091d",
+          "pin_kind": "artifact",
+          "date": "2026-09-23"
+        }
+      ],
+      "statement": "current `5570c1b4…` is PARTIAL (2026-09-25): 11,474 dockets, all prior identities retained, four additions and eight updates. The fresh 40-record window closes, but docket 74842896 now has a native judge value absent at publication; no run-time raw response resolves that drift. Party ordering also differs while the set agrees. Earlier selection qualified at `95f2091d…` (2026-09-23); parties, catch-up and scope limits remain open. Receipt: `parallel-rollup-audit-2026-09-25/` (workstream details in the [audit report](parallel-rollup-audit-2026-09-25.md))."
+    },
+    {
+      "task": "T12",
+      "tables": [
+        "court_docket_groups"
+      ],
+      "audits": [
+        {
+          "disposition": "qualified",
+          "pin": "0f855eb1",
+          "pin_kind": "artifact",
+          "date": "2026-09-23"
+        }
+      ],
+      "statement": "republished with numeric parent order and qualified at `0f855eb1…` (2026-09-23): 901 rows; raw-validated against the native docket edition and public readback identical"
+    },
+    {
+      "task": "T12",
+      "tables": [
+        "usaspending_recipients"
+      ],
+      "audits": [
+        {
+          "disposition": "qualified",
+          "pin": "ab52206f",
+          "pin_kind": "artifact",
+          "date": "2026-09-25"
+        }
+      ],
+      "statement": "qualified at `ab52206f…` (2026-09-25): 10,311 recipients, every prior identity retained. Each of the 10,000 rows read in the retained 100-page top-amount walk matches its page JSON, carries that page's capture digest and an `observed_at` bracketed by that capture (the reader's response-complete clock, not the journal's request-start time). The 311 carried rows, identified by ID, keep prior values with NULL observation fields; 47 of them come from the evidence-less `f033c5f4…` run. Schema equals the dictionary. Wider coverage and the trailing-12-month period mix remain explicit. Receipt: `repair-qualification-2026-09-25/votes-usaspending/`."
+    },
+    {
+      "task": "T09",
+      "tables": [
+        "congress_bills",
+        "bill_actions",
+        "bill_committees",
+        "bill_publisher_summaries",
+        "bill_versions",
+        "bill_sections",
+        "section_diffs",
+        "section_diff_items",
+        "financial_changes",
+        "section_classifications",
+        "bill_summaries",
+        "diff_summaries",
+        "cbo_cost_estimates",
+        "public_activity_events",
+        "bill_family_archives",
+        "bill_vote_references",
+        "bill_family_backfills",
+        "bill_family_backfill_walks"
+      ],
+      "audits": [
+        {
+          "disposition": "PARTIAL",
+          "pin": "5990abbb",
+          "pin_kind": "artifact",
+          "date": "2026-09-25"
+        },
+        {
+          "disposition": "qualified",
+          "pin": "4a1949a9",
+          "pin_kind": "artifact",
+          "date": "2026-09-24"
+        }
+      ],
+      "statement": "current `5990abbb…` is PARTIAL (2026-09-25): all public family bytes, schemas, counts and prior identities pass. There are still 419,978 bills; additions include 597 versions, 6,768 sections, 125 diffs and 1,301 diff items. Bill actions, vote references and CBO estimates pass their stated source/conservation checks; new bodies, broader metadata, summaries and differences need further raw replay. Six model/backfill outputs remain verified empty and uncomputed. The scoped native metadata repair was qualified at `4a1949a9…` (2026-09-24), including the known timestamp/URL corrections and preserved broader population. Ordinary API freshness, missing bodies, models and backfill coverage remain open. Receipt: `parallel-rollup-audit-2026-09-25/` (workstream details in the [audit report](parallel-rollup-audit-2026-09-25.md))."
+    },
+    {
+      "task": "T08",
+      "tables": [
+        "press_releases"
+      ],
+      "audits": [
+        {
+          "disposition": "qualified",
+          "pin": "c0f3cc22",
+          "pin_kind": "artifact",
+          "date": "2026-09-25"
+        }
+      ],
+      "statement": "qualified at `c0f3cc22…` (2026-09-25): 32 rows, retaining every prior identity. All 25 current RSS items match native content; seven historical items carry forward. Capture time, feed position and source channel freshness are separate metadata limits. Literal bill links remain bounded; history and other committees are outside scope. Receipt: `parallel-rollup-audit-2026-09-25/` (workstream details in the [audit report](parallel-rollup-audit-2026-09-25.md))."
+    },
+    {
+      "task": "T08",
+      "tables": [
+        "amendments"
+      ],
+      "audits": [
+        {
+          "disposition": "PARTIAL",
+          "pin": "559fd5f4",
+          "pin_kind": "artifact",
+          "date": "2026-09-25"
+        },
+        {
+          "disposition": "qualified",
+          "pin": "af5ef4c3",
+          "pin_kind": "artifact",
+          "date": "2026-09-24"
+        }
+      ],
+      "statement": "current `559fd5f4…` is PARTIAL (2026-09-25): 7,100 rows, all prior identities retained, five additions and 12 changed records. Fresh checks of those 17 records expose later source differences; no exact capture-time response resolves them. Earlier detail selection qualified at `af5ef4c3…` (2026-09-24); Rules Committee amendments without native member sponsors remain explicit. Receipt: `parallel-rollup-audit-2026-09-25/` (workstream details in the [audit report](parallel-rollup-audit-2026-09-25.md))."
+    },
+    {
+      "task": "T08",
+      "tables": [
+        "member_vote_terms"
+      ],
+      "audits": [
+        {
+          "disposition": "qualified",
+          "pin": "c85e578f",
+          "pin_kind": "artifact",
+          "date": "2026-09-25"
+        }
+      ],
+      "statement": "qualified at `c85e578f…` (2026-09-25): all 382,536 identities and 2,677,752 nonidentity cells match an independent join replay over exact recorded inputs. The 15 unique inclusive-end fallbacks and three unmatched post-term Not Voting positions remain explicit. No prior row changes or losses; three new votes add 300 positions. Receipt: `parallel-rollup-audit-2026-09-25/` (workstream details in the [audit report](parallel-rollup-audit-2026-09-25.md))."
+    },
+    {
+      "task": "T08",
+      "tables": [
+        "roll_call_votes",
+        "member_votes"
+      ],
+      "audits": [
+        {
+          "disposition": "qualified",
+          "pin": "45b8f6b8",
+          "pin_kind": "artifact",
+          "date": "2026-09-25"
+        }
+      ],
+      "statement": "qualified at `45b8f6b8…` (2026-09-25): 1,579 votes and 382,536 positions, every prior identity retained. Only Senate 212/213 `match_action_index` change (21→17, 19→15) under `recorded-vote-first-numeric-action-v2`; all 845 links equal the first recorded reference in bill-family `5990abbb…`, 734 remain unmatched, and `member_votes` is byte-identical. All 50 retained overlap XMLs match every roll-call and member cell. Other votes inherit `0255d5de…` by exact equality; wider history and scorecards remain open. Receipt: `repair-qualification-2026-09-25/votes-usaspending/`."
+    },
+    {
+      "task": "T08",
+      "tables": [
+        "members",
+        "member_terms"
+      ],
+      "audits": [
+        {
+          "disposition": "qualified",
+          "pin": "47ac33e4",
+          "pin_kind": "artifact",
+          "date": "2026-09-25"
+        }
+      ],
+      "statement": "qualified at `47ac33e4…` (2026-09-25): 12,770 members and 45,535 terms. Only capture times change; all 581,370 substantive cells match native JSON, and retained captures bind the frozen run. The community crosswalk retains its Ed Case special-election-term and party-history limits. Three newly present native website URLs are omitted by the current table design; official-roster completeness is not established. Receipt: `parallel-rollup-audit-2026-09-25/` (workstream details in the [audit report](parallel-rollup-audit-2026-09-25.md))."
+    },
+    {
+      "task": "T10",
+      "tables": [
+        "committee_reports"
+      ],
+      "audits": [
+        {
+          "disposition": "FAILED",
+          "pin": "5e1e73ad",
+          "pin_kind": "artifact",
+          "date": "2026-09-25"
+        }
+      ],
+      "statement": "FAILED at `5e1e73ad…` (2026-09-25): `CRPT-119srpt35` is `pdf_extracted` from its retained 52-page PDF `8e3f51d9…`. But the HTML of `CRPT-119hrpt649` is only the publisher notice `[TEXT NOT AVAILABLE REFER TO PDF]`, and the row publishes `not_flagged`. The marker test matches only `…AVAILABLE IN REFER…`. The other 141 rows replay against their evidence `c98006ab…`. The spelling is fixed in spicy-docs `7550f0e` (both notices are literals; the retained pages are its fixtures) and awaits a release and a body-rule bump to re-read both packages. Receipt: `repair-qualification-2026-09-25/congress-documents/`."
+    },
+    {
+      "task": "T10",
+      "tables": [
+        "report_sections"
+      ],
+      "audits": [
+        {
+          "disposition": "qualified",
+          "pin": "5e1e73ad",
+          "pin_kind": "artifact",
+          "date": "2026-09-25"
+        }
+      ],
+      "statement": "qualified at `5e1e73ad…` (2026-09-25): 1,885 sections tile their texts contiguously, each body an exact slice, and all earlier identities survive. All 50 sections of `CRPT-119srpt35` cite pages that a second PDF extractor confirms. The sections of `CRPT-119hrpt649` decompose its placeholder notice. Receipt: `repair-qualification-2026-09-25/congress-documents/`."
+    },
+    {
+      "task": "T10",
+      "tables": [
+        "hearing_transcripts"
+      ],
+      "audits": [
+        {
+          "disposition": "FAILED",
+          "pin": "5e1e73ad",
+          "pin_kind": "artifact",
+          "date": "2026-09-25"
+        }
+      ],
+      "statement": "FAILED at `5e1e73ad…` (2026-09-25): `CHRG-119hhrg64529` is `pdf_extracted` from its retained 63-page PDF `d5eae879…`. But `CHRG-119jhrg60491` is the same notice and is not flagged. For eight new hearings Congress.gov returned a retained 404, so their `event_id` is NULL. The historical parts p11 and p19 are refused because their PDFs exceed the 24 MiB bound. The spelling is fixed in spicy-docs `7550f0e` (both notices are literals; the retained pages are its fixtures) and awaits a release and a body-rule bump to re-read both packages. Receipt: `repair-qualification-2026-09-25/congress-documents/`."
+    },
+    {
+      "task": "T10",
+      "tables": [
+        "hearing_bill_links"
+      ],
+      "audits": [
+        {
+          "disposition": "qualified",
+          "pin": "5e1e73ad",
+          "pin_kind": "artifact",
+          "date": "2026-09-25"
+        }
+      ],
+      "statement": "qualified at `5e1e73ad…` (2026-09-25): 86 links under rule `d06e0bd80ca1`. All 82 earlier identities survive, and four additions match native COVER. `CHRG-117shrg56721` has a NULL `held_date` and keeps all 11 native dates. The other 85 links keep their sole native date. The four new links await `event_id`. Receipt: `repair-qualification-2026-09-25/congress-documents/`."
+    },
+    {
+      "task": "T10",
+      "tables": [
+        "committee_report_reads"
+      ],
+      "audits": [
+        {
+          "disposition": "qualified",
+          "pin": "5e1e73ad",
+          "pin_kind": "artifact",
+          "date": "2026-09-25"
+        }
+      ],
+      "statement": "qualified at `5e1e73ad…` (2026-09-25): 288 checkpoints equal their journal outcomes: 278 `complete`, 8 `detail_refused` and 2 `refused`. All ten non-complete checkpoints retry, and none was deferred by the 200-per-collection cap. The historical parts will be refused every run until the bound changes. Receipt: `repair-qualification-2026-09-25/congress-documents/`."
+    },
+    {
+      "task": "T08",
+      "tables": [
+        "house_activity_reports",
+        "budget_volumes",
+        "bill_committee_actions",
+        "document_citations"
+      ],
+      "audits": [
+        {
+          "disposition": "PARTIAL",
+          "pin": "d57faac3",
+          "pin_kind": "artifact",
+          "date": "2026-09-25"
+        },
+        {
+          "disposition": "qualified",
+          "pin": "a5d46aa6",
+          "pin_kind": "artifact",
+          "date": "2026-09-24"
+        }
+      ],
+      "statement": "current `d57faac3…` is PARTIAL (2026-09-25): 40 activity reports, 28 budget volumes, 12,699 actions and 52,674 citations. Every prior cell is unchanged; all parent counts reconcile. Existing 15,749 spans replay exactly against six retained texts. Two added PDF samples and nine citation phrases pass a second extractor, but the new normalized spans and action meanings need wider replay. The held-parent grammar repair was qualified at `a5d46aa6…` (2026-09-24); new coverage is separate. Receipt: `parallel-rollup-audit-2026-09-25/` (workstream details in the [audit report](parallel-rollup-audit-2026-09-25.md))."
+    },
+    {
+      "task": "T08",
+      "tables": [
+        "senate_expenditures"
+      ],
+      "audits": [
+        {
+          "disposition": "qualified",
+          "pin": "acef9fcf",
+          "pin_kind": "artifact",
+          "date": "2026-09-22"
+        }
+      ],
+      "statement": "generated and verified; replayed byte-identical; qualified at `acef9fcf…` (2026-09-22)"
+    },
+    {
+      "task": "T08",
+      "tables": [
+        "laws"
+      ],
+      "audits": [
+        {
+          "disposition": "qualified",
+          "pin": "43130abc",
+          "pin_kind": "artifact",
+          "date": "2026-09-25"
+        }
+      ],
+      "statement": "qualified at `43130abc…` (2026-09-25): all 113 identities survive, and every row replays against its admitted evidence `4d77e2fc…`. Private laws 119-1 and 119-2 are `captured_partial` with reason `statutes_citation_not_stated`; they keep their `citableAs` values, and their bytes equal the earlier hash-bound XML. No row claims `not_requested`, and the earlier citations are unchanged. 119-111 is newly captured at 140 Stat. 1026. Receipt: `repair-qualification-2026-09-25/congress-documents/`."
+    },
+    {
+      "task": "T08",
+      "tables": [
+        "law_code_sections"
+      ],
+      "audits": [
+        {
+          "disposition": "qualified",
+          "pin": "43130abc",
+          "pin_kind": "artifact",
+          "date": "2026-09-25"
+        }
+      ],
+      "statement": "qualified at `43130abc…` (2026-09-25): all 3,655 rows keep every source-value cell of the `c9d35661…` audit. Only `observed_at` moves, to this run's retained classification captures. Their stated laws and prepared dates match; the pages were not re-parsed independently. Receipt: `repair-qualification-2026-09-25/congress-documents/`."
+    },
+    {
+      "task": "T08",
+      "tables": [
+        "table3_records"
+      ],
+      "audits": [
+        {
+          "disposition": "qualified",
+          "pin": "43130abc",
+          "pin_kind": "artifact",
+          "date": "2026-09-25"
+        }
+      ],
+      "statement": "qualified at `43130abc…` (2026-09-25): 2,981 rows over 38 acts, all re-read under `table3-native-rows-v2` with capture-bound checkpoints. Every row replays cell for cell against its retained page. Act 119-37 has all 110 native rows, including the blank act-section rows at pages 511, 534, 534 and 563. Every earlier row survives in order. The walk ends at release point 119-73. Receipt: `repair-qualification-2026-09-25/congress-documents/`."
+    },
+    {
+      "task": "T08",
+      "tables": [
+        "committees",
+        "committee_assignments"
+      ],
+      "audits": [
+        {
+          "disposition": "qualified",
+          "pin": "9ab5e338",
+          "pin_kind": "artifact",
+          "date": "2026-09-25"
+        }
+      ],
+      "statement": "qualified at `9ab5e338…` (2026-09-25): 236 committees and 2,966 assignments preserve every substantive prior cell. All 450 Senate native seat identities and member fields match fresh XML; its later file-date restamp is an explicit capture-time limit. The declared/served committee discrepancy and 28 unlisted relationships remain; House seats carry the earlier qualification. Receipt: `parallel-rollup-audit-2026-09-25/` (workstream details in the [audit report](parallel-rollup-audit-2026-09-25.md))."
+    },
+    {
+      "task": "T08",
+      "tables": [
+        "house_communications"
+      ],
+      "audits": [
+        {
+          "disposition": "PARTIAL",
+          "pin": "37625a89",
+          "pin_kind": "artifact",
+          "date": "2026-09-25"
+        },
+        {
+          "disposition": "qualified",
+          "pin": "333e422d",
+          "pin_kind": "artifact",
+          "date": "2026-09-24"
+        }
+      ],
+      "statement": "current `37625a89…` is PARTIAL (2026-09-25): all 4,992 identities survive and 1,000 more list-only rows gain detail; 992 remain list-only. Twenty additions match all 640 native cells, but the other 980 detail fills were not independently replayed. Earlier scope qualified at `333e422d…` (2026-09-24); source list drift does not establish lost records or completeness. Receipt: `parallel-rollup-audit-2026-09-25/` (workstream details in the [audit report](parallel-rollup-audit-2026-09-25.md))."
+    },
+    {
+      "task": "T08",
+      "tables": [
+        "committee_meetings"
+      ],
+      "audits": [
+        {
+          "disposition": "qualified",
+          "pin": "f85be7b6",
+          "pin_kind": "artifact",
+          "date": "2026-09-25"
+        }
+      ],
+      "statement": "qualified at `f85be7b6…` (2026-09-25): 2,765 meetings, preserving all prior identities. Three additions and five changed records match native responses in all 216 checked cells. The corrected `NoChamber` population is retained; current list/carry-forward discrepancies remain explicit source-scope limits. Receipt: `parallel-rollup-audit-2026-09-25/` (workstream details in the [audit report](parallel-rollup-audit-2026-09-25.md))."
+    },
+    {
+      "task": "T08",
+      "tables": [
+        "record_issues"
+      ],
+      "audits": [
+        {
+          "disposition": "qualified",
+          "pin": "6b1913da",
+          "pin_kind": "artifact",
+          "date": "2026-09-25"
+        }
+      ],
+      "statement": "qualified at `6b1913da…` (2026-09-25): 367 issues; the added issue matches all 17 native fields and every prior row is unchanged. This carries the recorded source selection, not complete historical coverage. Receipt: `parallel-rollup-audit-2026-09-25/` (workstream details in the [audit report](parallel-rollup-audit-2026-09-25.md))."
+    },
+    {
+      "task": "T08",
+      "tables": [
+        "treaties"
+      ],
+      "audits": [
+        {
+          "disposition": "qualified",
+          "pin": "4ccf2d7a",
+          "pin_kind": "artifact",
+          "date": "2026-09-25"
+        }
+      ],
+      "statement": "qualified at `4ccf2d7a…` (2026-09-25): both rows are exactly unchanged from the previously qualified selection. No fresh whole-source walk was performed; broader history and detail remain outside this carried scope. Receipt: `parallel-rollup-audit-2026-09-25/` (workstream details in the [audit report](parallel-rollup-audit-2026-09-25.md))."
+    },
+    {
+      "task": "T08",
+      "tables": [
+        "nominations"
+      ],
+      "audits": [
+        {
+          "disposition": "qualified",
+          "pin": "d4622c60",
+          "pin_kind": "artifact",
+          "date": "2026-09-25"
+        }
+      ],
+      "statement": "qualified at `d4622c60…` (2026-09-25): all 2,214 rows are exactly unchanged from the qualified predecessor. A fresh pooled list yields 2,212 native identities plus the two retained parent identities; later native changes remain explicit and do not establish frozen-output freshness. Prior population/part reconciliation remains evidenced in `ledger-continuation-2026-09-24/nominations/`. Receipt: `parallel-rollup-audit-2026-09-25/` (workstream details in the [audit report](parallel-rollup-audit-2026-09-25.md))."
+    },
+    {
+      "task": "T06",
+      "tables": [
+        "dockets"
+      ],
+      "audits": [
+        {
+          "disposition": "verified",
+          "pin": "308b35c6",
+          "pin_kind": "table",
+          "date": "2026-09-26",
+          "etag": "50d8cfba"
+        }
+      ],
+      "statement": "publication verified at table digest `308b35c6…` (2026-09-26; ETag `50d8cfba…`): 279,380 rows with unique `docket_id`, published by hosted sweep run 36177463432 and read back anonymously (receipt `hosted-sweep-readback-2026-09-26/readback.json`). At the earlier table `680b86ad…` (279,336 rows), the latest five native records match every mapped field after locating their exact numbered source captures. This is bounded source evidence; whole-population source qualification after catch-up remains PARTIAL. Earlier T06 source qualification is retained in the execution receipts. Receipt: `parallel-rollup-audit-2026-09-25/` (workstream details in the [audit report](parallel-rollup-audit-2026-09-25.md))."
+    },
+    {
+      "task": "T06",
+      "tables": [
+        "documents"
+      ],
+      "audits": [
+        {
+          "disposition": "verified",
+          "pin": "d7487819",
+          "pin_kind": "table",
+          "date": "2026-09-26",
+          "etag": "f3324286"
+        }
+      ],
+      "statement": "publication verified at table digest `d7487819…` (2026-09-26; ETag `f3324286…`): 2,002,831 rows with unique `document_id`, published by hosted sweep run 36177463432 and read back anonymously (receipt `hosted-sweep-readback-2026-09-26/readback.json`). At the earlier table `ff502e4b…` (2,002,562 rows), the latest five native records match every mapped field after locating their exact numbered source captures. This is bounded source evidence; whole-population source qualification, document bodies and extraction evidence remain PARTIAL. Receipt: `parallel-rollup-audit-2026-09-25/` (workstream details in the [audit report](parallel-rollup-audit-2026-09-25.md))."
+    },
+    {
+      "task": "T06",
+      "tables": [
+        "comments_index"
+      ],
+      "audits": [
+        {
+          "disposition": "verified",
+          "pin": "c43559bd",
+          "pin_kind": "table",
+          "date": "2026-09-26",
+          "etag": "fb95b0e8"
+        }
+      ],
+      "statement": "published and verified at table digest `c43559bd…` (2026-09-26; ETag `fb95b0e8…`): 143,397 groups sum to 26,311,037 comments, and every group equals a recount of the public monolith (`check_comments`, run on the downloaded bytes). Published by hosted sweep run 36177463432, whose verify job also passed the raw-catalog check. Receipt: `hosted-sweep-readback-2026-09-26/readback.json`. The earlier local-recovery index (`2a050b5e…`, 143,367 groups, 26,303,691 comments) is receipted in `comments-local-export-2026-09-25/`."
+    },
+    {
+      "task": "T07",
+      "tables": [
+        "comments"
+      ],
+      "audits": [
+        {
+          "disposition": "verified",
+          "pin": "0d11e204",
+          "pin_kind": "table",
+          "date": "2026-09-26",
+          "etag": "1970f15e"
+        }
+      ],
+      "statement": "published by hosted sweep run 36177463432 (snapshot 3697835162427868969) and verified at table digest `0d11e204…` (2026-09-26; ETag `1970f15e…`): 26,311,037 rows with unique IDs across 180 agencies. Its publisher refuses the loss of any previously published ID, and every index group equals a recount (receipt `hosted-sweep-readback-2026-09-26/readback.json`; [hosted qualification](comments-publication-efficiency-2026-09-25.md#hosted-qualification)). The earlier local recovery (table `b90e1105…`, 26,303,691 rows) retained every previously published ID. The catalog export adds 2,413,288 rows to the prior public population. Public bytes, unique IDs and index coverage are verified; wider native-source qualification remains open. Earlier native and attachment-text repairs are retained in `comment-text-repair-2026-09-23/`; current publication receipts are in `comments-local-export-2026-09-25/`."
+    },
+    {
+      "task": "T17",
+      "tables": [
+        "rule_targets",
+        "proceedings",
+        "regulatory_agenda_items",
+        "agenda_item_proceedings",
+        "comment_periods"
+      ],
+      "audits": [
+        {
+          "disposition": "PARTIAL",
+          "pin": "snapshot_6d3dc0f2",
+          "pin_kind": "snapshot",
+          "date": "2026-09-25"
+        },
+        {
+          "disposition": "qualified",
+          "pin": "snapshot_837754c3",
+          "pin_kind": "snapshot",
+          "date": "2026-09-24"
+        }
+      ],
+      "statement": "current `snapshot_6d3dc0f2…` is PARTIAL (2026-09-25): every public/input digest and all 20 recorded integrity checks pass. It contains 563,176 rule targets, 268,314 proceedings, 38,408 agenda items, 155,669 agenda links and 286,056 periods. Full semantic accounting of retired identities and decisions 32–33 remains open; retired no-action shells may legitimately have no successor. Earlier source/join scope was qualified at `snapshot_837754c3…` (2026-09-24); later bounded evidence is retained in `docket-lists-2026-09-24/published-step/`. Receipt: `parallel-rollup-audit-2026-09-25/` (workstream details in the [audit report](parallel-rollup-audit-2026-09-25.md))."
+    }
+  ]
+}

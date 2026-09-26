@@ -134,6 +134,31 @@ A table in `TABLES` whose parquet isn't published yet (a new source whose first
 upload hasn't run) is skipped with a warning rather than breaking every query —
 same degradation strategy as the catalog fallback.
 
+## Ledger qualification (`_qualification`)
+
+`list_sources` and `describe_table` report the output ledger's audit for each
+table beside its live pin. The ledger is Markdown under `docs/research/`, which
+the image does not ship, so `spicy-regs-dict generate` bundles
+`table_qualification.json` (built by `spicy_regs.output_ledger`) and `check`
+refuses a stale copy. `_ledger` reads it once per process.
+
+- **Only for the ledger's publisher.** The record names the destination the
+  ledger audits. A server reading any other base URL, or a local directory,
+  reports `unknown_for_publisher` and no pins: the same pin on another bucket
+  proves nothing about this ledger.
+- **Pins compare by kind.** A family pin compares with the snapshot's
+  `artifactDigest`; a base object's `verified at table digest` pin compares with
+  its managed table's `sha256`. A table the index does not manage has no live
+  pin, and the reply says it cannot compare rather than guessing from a bare URL.
+- **Separate fields, never one verified flag.** `ledger_disposition` is the
+  row's word (`qualified`, `PARTIAL`, `FAILED`, `verified`) for `ledger_pin`
+  only. `generation` says whether the live pin is one the ledger audited, so a
+  `FAILED` generation that is still live reads as "current generation audited"
+  plus `FAILED`. With no match, the ledger's latest audit is shown.
+- **Closed vocabulary.** "Published at" is a publication statement, not an
+  audit. A new or misspelled audit word fails the build instead of being read as
+  either an audit or its absence; add it to `output_ledger` deliberately.
+
 ## DNS rebinding protection is off in `build_app`
 
 Deliberate. The deployment is reached via `mcp.spicy-regs.dev` and per-deploy Cloud Run
