@@ -188,7 +188,7 @@
       "audits": [
         {
           "disposition": "PARTIAL",
-          "pin": "5990abbb",
+          "pin": "55671b43",
           "pin_kind": "artifact",
           "date": "2026-09-26"
         },
@@ -199,7 +199,7 @@
           "date": "2026-09-24"
         }
       ],
-      "statement": "current `5990abbb…` is PARTIAL (2026-09-26): all 419,978 identities survive; 150 of 166 changed rows match fresh same-revision BILLSTATUS in eight fields, and 16 later-revised bills are unjudged. The generation retains no source. Retained 110th–113th BILLSTATUS lists 513 bills that `congress_bills` lacks. Scoped repair remains qualified at `4a1949a9…` (2026-09-24). Receipt: `drift-qualification-2026-09-26/bills-citations/`."
+      "statement": "current `55671b43…` is PARTIAL (2026-09-26): no prior identity is removed and 188 are added, and all 513 bills that retained 110th–113th BILLSTATUS lists are still absent. Field checks against fresh BILLSTATUS were not rerun at this pin; at `5990abbb…` 150 of 166 changed rows matched in eight fields. Scoped repair remains qualified at `4a1949a9…` (2026-09-24). Receipts: `bill-family-55671b43-2026-09-26/`, `drift-qualification-2026-09-26/bills-citations/`."
     },
     {
       "task": "T11",
@@ -483,12 +483,12 @@
       "audits": [
         {
           "disposition": "FAILED",
-          "pin": "5990abbb",
+          "pin": "55671b43",
           "pin_kind": "artifact",
           "date": "2026-09-26"
         }
       ],
-      "statement": "current `5990abbb…` is FAILED (2026-09-26): bytes, schemas, counts and every prior identity pass. `section_diffs` pairs five dateless enrolled bills backward (enrolled→introduced; `build_bill_family.py:580` sorts an empty BILLSTATUS date first), with eight more inherited from `4a1949a9…`; `bill_sections` drops two sections on identity collisions (119-hr-5334 enrolled, 119-hr-9022 rh), leaving a dangling diff item. 60 of 597 new bodies are byte-identical by sha256, and their sections check against independent XML reads; all 147 text diffs reconstruct. 150 of 166 changed bills match fresh same-revision BILLSTATUS. No retained source; the four model outputs remain uncomputed. Receipt: `drift-qualification-2026-09-26/bills-citations/`."
+      "statement": "current `55671b43…` is FAILED (2026-09-26): scheduled run 36211271899 built it with code that predates the ordering and identity repairs, so both defects persist. `section_diffs` holds 18 pairs from a dateless enrolled printing back to the introduced one (13 at `5990abbb…`), and 119-hr-5334 enrolled and 119-hr-9022 reported still lack one section each. The generation audit (`scripts/audit_generation.py`) admits every member byte and finds every keyed table unique, with no prior identity removed. Keyless `bill_vote_references` and `bill_family_archives` differ only in re-observation times, plus 8 new vote references. It admits the first retained BILLSTATUS evidence, `65415e8f…`, bound to this generation: 1,816 captures, every body of its expected kind, and no credential in evidence or table cells. Source qualification is not assessed at this pin; at `5990abbb…` all 147 text diffs reconstructed from independent XML reads. The four model outputs remain uncomputed. Receipts: `bill-family-55671b43-2026-09-26/`, `drift-qualification-2026-09-26/bills-citations/`."
     },
     {
       "task": "T08",
