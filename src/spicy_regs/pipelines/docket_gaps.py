@@ -10,8 +10,10 @@ are identical in shape.
 
 Every other answer is recorded in ``docket_gap_outcomes.parquet`` and not asked
 again for ``RETRY_AFTER``: 404 means the publisher does not publish that docket,
-and 400 "Invalid ID" means the id is outside its grammar (legacy ``-RULEMAKING``
-suffixes). A transport failure is not an answer: nothing is recorded, the
+and 400 "Invalid ID" means the id is outside its grammar. For a legacy
+``-RULEMAKING``/``-NONRULEMAKING`` id the unsuffixed id is asked too: if the
+publisher serves it, that docket is merged and the suffixed id is recorded as an
+``alias`` of it (``canonical_id``), not as an orphan. A transport failure is not an answer: nothing is recorded, the
 served dockets are still merged, and the step fails so the run shows it.
 """
 
@@ -19,6 +21,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import re
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -38,7 +41,8 @@ from spicy_regs.transforms import ExtractRecords, write_staging
 
 OUTCOMES = "docket_gap_outcomes.parquet"
 OUTCOME_SCHEMA = {"docket_id": pl.Utf8, "outcome": pl.Utf8, "http_status": pl.Int64,
-                  "observed_at": pl.Utf8, "body_sha256": pl.Utf8}
+                  "observed_at": pl.Utf8, "body_sha256": pl.Utf8, "canonical_id": pl.Utf8}
+LEGACY_SUFFIX = re.compile(r"-(NON)?RULEMAKING\Z")
 RETRY_AFTER = timedelta(days=30)
 DEFAULT_MAX_DOCKETS = 500
 DOCKETS = RECORD_TYPES["dockets"]
@@ -49,10 +53,11 @@ class Answer:
     """What the publisher said about one docket id."""
 
     docket_id: str
-    outcome: str  # "served" | "absent" | "invalid"
+    outcome: str  # "served" | "alias" | "absent" | "invalid"
     http_status: int
     body: bytes
     payload: Mapping[str, Any] | None = None
+    canonical_id: str | None = None
 
 
 def missing_dockets(documents: Path, comments_index: Path, dockets: Path) -> list[str]:
@@ -93,6 +98,11 @@ def ask(reader, docket_id: str) -> Answer | None:
     except PagedJsonSourceError as error:
         capture = getattr(error, "capture", None)
         if capture is not None and capture.status_code == 400 and b"Invalid ID" in capture.body:
+            canonical = LEGACY_SUFFIX.sub("", docket_id)
+            if canonical != docket_id:
+                served = ask(reader, canonical)
+                if served is not None and served.outcome == "served":
+                    return Answer(docket_id, "alias", served.http_status, served.body, served.payload, canonical)
             return Answer(docket_id, "invalid", 400, capture.body)
         logger.warning("docket gaps: {} answered nothing usable ({})", docket_id, error)
         return None
@@ -127,8 +137,9 @@ def fill(
             failures += 1
         else:
             answers.append(answer)
-    served = [answer for answer in answers if answer.outcome == "served"]
+    served = [answer for answer in answers if answer.outcome in {"served", "alias"}]
     counts = {"missing": len(missing), "asked": len(asked), "served": len(served),
+              "alias": sum(a.outcome == "alias" for a in answers),
               "absent": sum(a.outcome == "absent" for a in answers),
               "invalid": sum(a.outcome == "invalid" for a in answers), "unanswered": failures}
     logger.info("docket gaps: {}", counts)
@@ -145,7 +156,7 @@ def fill(
     observed_at = now().isoformat()
     fresh = pl.DataFrame(
         [{"docket_id": a.docket_id, "outcome": a.outcome, "http_status": a.http_status, "observed_at": observed_at,
-          "body_sha256": hashlib.sha256(a.body).hexdigest()} for a in answers],
+          "body_sha256": hashlib.sha256(a.body).hexdigest(), "canonical_id": a.canonical_id} for a in answers],
         schema=OUTCOME_SCHEMA,
     )
     merged = pl.concat([prior.join(fresh.select("docket_id"), on="docket_id", how="anti"), fresh]).sort("docket_id")

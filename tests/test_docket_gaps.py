@@ -15,9 +15,9 @@ from spicy_regs.schemas.regulations import RECORD_TYPES
 from spicy_regs.sources import r2
 
 NOW = datetime(2026, 9, 26, 12, tzinfo=UTC)
-SERVED = {"data": {"id": "BIS-2023-0005", "type": "dockets", "links": {}, "attributes": {
-    "agencyId": "BIS", "title": "Additions to the Entity List", "docketType": "Rulemaking",
-    "modifyDate": "2023-03-29T14:51:26Z", "dkAbstract": None, "rin": "Not Assigned"}}}
+ATTRIBUTES = {"agencyId": "BIS", "title": "Additions to the Entity List", "docketType": "Rulemaking",
+              "modifyDate": "2023-03-29T14:51:26Z", "dkAbstract": None, "rin": "Not Assigned"}
+SERVED = {"data": {"id": "BIS-2023-0005", "type": "dockets", "links": {}, "attributes": ATTRIBUTES}}
 
 
 def _capture(status: int, body: bytes) -> CapturedBodyResponse:
@@ -42,6 +42,9 @@ class _Reader:
             return _Detail(SERVED)
         if docket_id == "CFPB-2026-0008":
             raise RegulationsGovApiUnavailableError(_capture(404, b'{"errors":[{"status":"404"}]}'))
+        if docket_id == "GIPSA-2010-FGIS-0004":
+            return _Detail({"data": {"id": docket_id, "type": "dockets", "links": {},
+                                     "attributes": {**ATTRIBUTES, "agencyId": "GIPSA"}}})
         if docket_id.endswith("-RULEMAKING"):
             error = PagedJsonSourceError("Body source answered HTTP 400")
             attach_capture(error, _capture(400, b'{"errors":[{"status":"400","title":"Invalid ID: ' + docket_id.encode() + b'"}]}'))
@@ -55,7 +58,8 @@ def _working_copies(directory: Path) -> None:
                  schema=dockets.schema).write_parquet(directory / "dockets.parquet")
     pl.DataFrame({"docket_id": ["EPA-1", "BIS-2023-0005", "CFPB-2026-0008", None]}).write_parquet(
         directory / "documents.parquet")
-    pl.DataFrame({"docket_id": ["GIPSA-2010-FGIS-0002-RULEMAKING", "FAA-2026-9999", "EPA-1"]}).write_parquet(
+    pl.DataFrame({"docket_id": ["GIPSA-2010-FGIS-0002-RULEMAKING", "GIPSA-2010-FGIS-0004-RULEMAKING",
+                                "FAA-2026-9999", "EPA-1"]}).write_parquet(
         directory / "comments_index.parquet")
 
 
@@ -70,10 +74,14 @@ def test_each_answer_is_classified_and_recorded(working):
     reader = _Reader()
     with pytest.raises(RuntimeError, match="1 docket request"):
         docket_gaps.fill(working, reader, now=lambda: NOW)
-    assert reader.asked == ["BIS-2023-0005", "CFPB-2026-0008", "FAA-2026-9999", "GIPSA-2010-FGIS-0002-RULEMAKING"]
+    assert reader.asked == ["BIS-2023-0005", "CFPB-2026-0008", "FAA-2026-9999", "GIPSA-2010-FGIS-0002-RULEMAKING",
+                            "GIPSA-2010-FGIS-0002", "GIPSA-2010-FGIS-0004-RULEMAKING", "GIPSA-2010-FGIS-0004"]
     outcomes = pl.read_parquet(working / docket_gaps.OUTCOMES).sort("docket_id")
     assert dict(zip(outcomes["docket_id"], outcomes["outcome"], strict=True)) == {
-        "BIS-2023-0005": "served", "CFPB-2026-0008": "absent", "GIPSA-2010-FGIS-0002-RULEMAKING": "invalid"}
+        "BIS-2023-0005": "served", "CFPB-2026-0008": "absent", "GIPSA-2010-FGIS-0002-RULEMAKING": "invalid",
+        "GIPSA-2010-FGIS-0004-RULEMAKING": "alias"}
+    aliases = outcomes.filter(pl.col("outcome") == "alias")
+    assert aliases["canonical_id"].to_list() == ["GIPSA-2010-FGIS-0004"]
     assert dict(zip(outcomes["docket_id"], outcomes["http_status"], strict=True))["CFPB-2026-0008"] == 404
 
 
@@ -83,7 +91,7 @@ def test_absent_and_invalid_ids_are_not_asked_again_until_the_retry_window_passe
     reader = _Reader()
     with pytest.raises(RuntimeError):
         docket_gaps.fill(working, reader, now=lambda: NOW + timedelta(days=1))
-    assert reader.asked == ["BIS-2023-0005", "FAA-2026-9999"]
+    assert reader.asked == ["BIS-2023-0005", "FAA-2026-9999", "GIPSA-2010-FGIS-0004-RULEMAKING", "GIPSA-2010-FGIS-0004"]
     later = _Reader()
     with pytest.raises(RuntimeError):
         docket_gaps.fill(working, later, now=lambda: NOW + docket_gaps.RETRY_AFTER + timedelta(days=1))
@@ -109,5 +117,5 @@ def test_a_served_docket_is_merged_and_the_working_copy_uploaded(working, monkey
     monkeypatch.setattr(r2, "upload_file", lambda path, remote_key=None: uploaded.append(remote_key))
     with pytest.raises(RuntimeError):
         docket_gaps.fill(working, _Reader(), skip_upload=False, now=lambda: NOW)
-    assert merged == ["BIS-2023-0005"]
+    assert sorted(merged) == ["BIS-2023-0005", "GIPSA-2010-FGIS-0004"]
     assert uploaded == ["dockets.parquet", docket_gaps.OUTCOMES]
