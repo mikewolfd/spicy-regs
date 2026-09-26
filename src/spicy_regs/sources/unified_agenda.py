@@ -62,9 +62,11 @@ class UnifiedAgendaReader(Reader):
         with UnifiedAgendaAcquirer(budget=budget, transport=self.transport) as source:
             for edition in self.editions:
                 acquired = source.acquire_edition(UnifiedAgendaEdition(edition))
+                # The edition every record states: the off-pattern ``2012`` file is Fall 2012 (201210).
+                publication = acquired.edition.publication_id
                 rows: list[dict] = []
                 scan_unified_agenda_records(
-                    acquired.capture.body, on_record=lambda record: rows.append(_normalize(record, edition))
+                    acquired.capture.body, on_record=lambda record: rows.append(_normalize(record, publication))
                 )
                 logger.info("Unified Agenda: edition {} yielded {:,} records", edition, len(rows))
                 yield from rows

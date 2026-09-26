@@ -18,6 +18,14 @@ Instead we:
 
 With no prior table (first run) step 3 keeps only the freshly fetched editions.
 
+Step 2 also backfills: each run fetches, newest first, up to
+``BACKFILL_EDITIONS_PER_RUN`` editions of ``edition_series`` that the prior table
+lacks, so historical RINs cited by ``dockets`` and ``federal_register`` resolve.
+Measured 2026-09-26: the 58 readable editions from 1995 hold 233,250 rows over
+46,247 RINs and take about 15 s each to fetch; with them, 93.1% of distinct
+``dockets.rin`` and 83.0% of ``federal_register.rin`` values name a held RIN, up
+from 11.5% and 5.7% with the Fall 2025 edition alone.
+
 The reginfo.gov XML export the reader parses is documented in
 :mod:`spicy_regs.sources.unified_agenda`; :func:`_shape` maps the reader's
 normalized per-RIN dict onto the pinned 17 columns.
@@ -38,6 +46,16 @@ from spicy_regs.sources import r2
 from spicy_regs.sources.unified_agenda import DEFAULT_EDITION, UnifiedAgendaReader
 
 OUTPUT = "unified_agenda.parquet"
+
+#: Editions the series skips, all publisher irregularities recorded rather than
+#: repaired: Spring 1995 and Spring 2012 were never published, and SpicyDocs
+#: refuses both 2004 editions, which each carry a control byte XML 1.0 forbids.
+UNREADABLE_EDITIONS = frozenset({"199504", "200404", "200410", "201204"})
+
+#: Missing editions fetched per run, newest first: about five minutes at the
+#: measured 15 s each, well inside the rollup job's 30-minute timeout. A
+#: complete backfill takes three runs.
+BACKFILL_EDITIONS_PER_RUN = 20
 
 # The published schema: 17 columns, all VARCHAR; array-valued fields serialized
 # as JSON strings. Primary / dedup key is (rin, agenda_edition).
@@ -146,8 +164,33 @@ def _shape(doc: dict) -> dict:
     }
 
 
+def edition_series(latest: str = DEFAULT_EDITION) -> tuple[str, ...]:
+    """The file stem of every readable edition from 1995 through ``latest``, oldest first."""
+    from spicy_docs.sources.unified_agenda import LEGACY_FILE_STEMS
+
+    stem_of = {publication: stem for stem, publication in LEGACY_FILE_STEMS.items()}
+    return tuple(
+        stem_of.get(edition, edition)
+        for year in range(1995, int(latest[:4]) + 1)
+        for edition in (f"{year}04", f"{year}10")
+        if edition <= latest and edition not in UNREADABLE_EDITIONS
+    )
+
+
+def editions_to_fetch(held: set[str], latest: str = DEFAULT_EDITION) -> tuple[str, ...]:
+    """The current edition, refreshed every run, then the newest editions the prior table lacks."""
+    from spicy_docs.sources.unified_agenda import LEGACY_FILE_STEMS
+
+    missing = [
+        stem
+        for stem in reversed(edition_series(latest))
+        if stem != latest and LEGACY_FILE_STEMS.get(stem, stem) not in held
+    ]
+    return (latest, *missing[:BACKFILL_EDITIONS_PER_RUN])
+
+
 def build_unified_agenda(output_dir: Path, *, editions: tuple[str, ...] | None = None) -> Path:
-    """Build ``unified_agenda.parquet`` (incremental merge with the prior table)."""
+    """Build ``unified_agenda.parquet`` (incremental merge with the prior table and edition backfill)."""
     import duckdb
 
     out_file = output_dir / OUTPUT
@@ -160,10 +203,17 @@ def build_unified_agenda(output_dir: Path, *, editions: tuple[str, ...] | None =
     else:
         logger.info("Unified Agenda: no prior table found — starting fresh")
 
-    # 2. Fetch + shape the requested edition(s) into a "new rows" parquet.
-    editions = editions or (DEFAULT_EDITION,)
-    reader = UnifiedAgendaReader(editions=editions)
-    rows = [_shape(doc) for doc in reader.iter_records()]
+    # 2. Fetch + shape the requested edition(s) into a "new rows" parquet: the
+    # current edition plus a bounded backfill of editions the prior table lacks.
+    if editions is None:
+        held = set()
+        if have_prior:
+            held = {row[0] for row in duckdb.sql(
+                f"SELECT DISTINCT agenda_edition FROM read_parquet('{prior_file}')").fetchall()}
+        editions = editions_to_fetch(held)
+    logger.info("Unified Agenda: fetching editions {}", ", ".join(editions))
+    # One reader per edition: each acquisition carries its own request budget.
+    rows = [_shape(doc) for edition in editions for doc in UnifiedAgendaReader(editions=(edition,)).iter_records()]
     new_file = output_dir / "_ua_new.parquet"
     table = pa.Table.from_pylist(rows, schema=_SCHEMA) if rows else _SCHEMA.empty_table()
     pq.write_table(table, new_file, compression="zstd")

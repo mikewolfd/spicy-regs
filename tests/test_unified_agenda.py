@@ -235,3 +235,63 @@ def test_default_edition_is_yyyymm():
     ed = unified_agenda.DEFAULT_EDITION
     assert len(ed) == 6 and ed.isdigit()
     assert ed[4:] in {"04", "10"}
+
+
+def test_the_series_runs_from_fall_1995_to_the_current_edition_without_unreadable_ones():
+    from spicy_regs.transforms.build_unified_agenda import UNREADABLE_EDITIONS, edition_series
+
+    series = edition_series("202510")
+    assert series[0] == "199510" and series[-1] == "202510"
+    assert "2012" in series and "201210" not in series  # the publisher's one off-pattern file name
+    assert not UNREADABLE_EDITIONS & set(series)
+    assert len(series) == 58  # every readable edition, measured 2026-09-26
+
+
+def test_each_run_refreshes_the_current_edition_then_backfills_the_newest_missing():
+    from spicy_regs.transforms.build_unified_agenda import BACKFILL_EDITIONS_PER_RUN, editions_to_fetch
+
+    fetch = editions_to_fetch({"202510", "202504", "201210"}, "202510")
+    assert fetch[:3] == ("202510", "202410", "202404")
+    assert "2012" not in fetch  # held as its stated edition, 201210
+    assert len(fetch) == 1 + BACKFILL_EDITIONS_PER_RUN
+
+
+def test_the_legacy_2012_file_is_keyed_by_the_edition_its_records_state():
+    body = _FIXTURE_XML.replace(b"<PUBLICATION_ID>202510</PUBLICATION_ID>", b"<PUBLICATION_ID>201210</PUBLICATION_ID>")
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        assert request.url.params["f"] == "REGINFO_RIN_DATA_2012.xml"
+        return httpx.Response(200, stream=httpx.ByteStream(body), headers={"content-type": "application/xml"})
+
+    rows = list(UnifiedAgendaReader(editions=("2012",), transport=httpx.MockTransport(respond)).iter_records())
+    assert {row["agenda_edition"] for row in rows} == {"201210"}
+
+
+def test_the_backfill_completes_over_runs_and_keeps_every_prior_row(tmp_path, monkeypatch):
+    import sys
+
+    import pyarrow.parquet as pq
+
+    import spicy_regs.transforms.build_unified_agenda  # noqa: F401 -- the package re-exports the function by this name
+
+    module = sys.modules["spicy_regs.transforms.build_unified_agenda"]
+
+    class Reader:
+        def __init__(self, *, editions):
+            self.editions = editions
+
+        def iter_records(self):
+            for stem in self.editions:
+                edition = "201210" if stem == "2012" else stem
+                yield {"rin": f"0000-{edition}", "agenda_edition": edition, "timetable": []}
+
+    monkeypatch.setattr(module, "UnifiedAgendaReader", Reader)
+    monkeypatch.setattr(module.r2, "download", lambda *args: False)
+    counts = []
+    for _ in range(4):
+        out = module.build_unified_agenda(tmp_path)
+        editions = set(pq.read_table(out)["agenda_edition"].to_pylist())
+        counts.append(len(editions))
+        out.replace(tmp_path / "_ua_prior.parquet")  # the next run's prior table
+    assert counts == [21, 41, 58, 58]
+    assert editions == {"201210" if stem == "2012" else stem for stem in module.edition_series()}
