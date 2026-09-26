@@ -49,6 +49,7 @@ from tests.test_bill_family import scoped as fixture_scope
 scoped = fixture_scope
 
 build = importlib.import_module("spicy_regs.transforms.build_bill_family")
+bodies = importlib.import_module("spicy_regs.transforms.bill_family_bodies")
 
 HR983 = BillIdentity(congress=119, bill_type="hr", number=983)
 HR5334 = BillIdentity(congress=119, bill_type="hr", number=5334)
@@ -113,7 +114,7 @@ def _date_first_pairs(printings: Sequence[tuple[str, str | None]]) -> list[tuple
 def _published_before_0_35():
     """Provider and host pair printings as they did when the audited tables were published."""
     with pytest.MonkeyPatch.context() as patch:
-        for module in (family_provider, build):
+        for module in (family_provider, build, bodies):
             patch.setattr(module, "printing_order", _date_first_order)
             patch.setattr(module, "consecutive_pairs", _date_first_pairs)
         yield
@@ -205,8 +206,8 @@ def test_the_next_run_retires_published_backward_pairs_and_makes_the_missing_one
     assert _pairs(again) == _pairs(repaired)
 
 
-def test_a_published_backward_pair_alone_reopens_its_bill(tmp_path):
-    """Every established pair is published, yet a stale one is too: the bill is still pending."""
+def test_a_published_backward_pair_alone_gives_its_bill_body_work(tmp_path):
+    """Every established pair is published, yet a stale one is too: the body pass retires it, the status is not re-read."""
     bill = "119-hr-983"
     versions = [
         {
@@ -247,7 +248,7 @@ def test_a_published_backward_pair_alone_reopens_its_bill(tmp_path):
     index = build._prior_index(paths)
     assert index.xml_codes(bill) == {"introduced-in-house", "enrolled-bill"}
     assert (bill, "introduced-in-house", "enrolled-bill") in index.pairs
-    assert bill in index.pending_bills
+    assert bill in index.body_bills and bill not in index.pending_bills
 
 
 def test_the_next_run_republishes_a_silently_partial_printing_whole(tmp_path, scoped):

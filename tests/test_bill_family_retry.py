@@ -1,8 +1,9 @@
 """Bill-family retry contracts for build_bill_family and its rollup.
 
-A capped or failed body pass stays retryable despite an unchanged BILLSTATUS;
-completed scopes skip only while their published evidence verifies, and an
-invalid budget is refused before any acquisition or output.
+A capped or failed body stays pending by its own printing's state, so the next
+run reads it without reading its BILLSTATUS again; a status folder is complete
+once its bills are shaped, and skips only while its published evidence
+verifies; an invalid budget is refused before any acquisition or output.
 """
 
 import importlib
@@ -35,6 +36,7 @@ from tests.test_bill_family import (
 scoped = fixture_scope
 
 build = importlib.import_module("spicy_regs.transforms.build_bill_family")
+bodies = importlib.import_module("spicy_regs.transforms.bill_family_bodies")
 rollup = importlib.import_module("spicy_regs.pipelines.rollups.bill_family")
 
 
@@ -84,45 +86,44 @@ def archive_scopes(paths):
     }
 
 
-def test_capped_folders_keep_their_archive_rows_without_completion(tmp_path, scoped, monkeypatch):
-    """Run 35946820267: the cap left every folder unfinished, so the table was written empty and refused."""
+def test_a_capped_body_pass_leaves_status_complete_and_resumes_by_printing(tmp_path, scoped, monkeypatch):
+    """Run 35946820267 left every folder unfinished over the cap; a body is no longer a folder's to finish."""
     monkeypatch.setenv("BILL_FAMILY_BILL_TYPES", "hr,s")
     first, _, body = run(tmp_path / "first", budget=1, bulk=SenateToo())
-    assert body.requested == ["BILLS-119hr6028ih"], "the cap is hit inside the first folder"
+    assert body.requested == ["BILLS-119hr6028ih"], "the cap is hit on the first folder's first printing"
     assert archive_scopes(first) == {("119", "hr", "BILLSTATUS-119-hr.zip"), ("119", "s", "BILLSTATUS-119-s.zip")}
-    assert completed_scopes(first) == []
-    _, bulk, _ = run(tmp_path / "second", prior=tmp_path / "first", budget=0, bulk=SenateToo())
-    assert bulk.zip_downloads == [(119, "hr"), (119, "s")], "a row without completion is no skip evidence"
+    assert completed_scopes(first) == [["119", "hr"], ["119", "s"]], "both folders' status is shaped"
+    _, bulk, body = run(tmp_path / "second", prior=tmp_path / "first", budget=1, bulk=SenateToo())
+    assert bulk.zip_downloads == [], "no BILLSTATUS zip is read again to reach a body"
+    assert body.requested == ["BILLS-119hr6028eh"], "the pending printing, by its own state"
 
 
-def test_a_completed_folder_is_written_and_listed_beside_an_unfinished_one(tmp_path, scoped, monkeypatch):
+def test_a_folder_is_complete_whatever_its_bodies(tmp_path, scoped, monkeypatch):
     monkeypatch.setenv("BILL_FAMILY_BILL_TYPES", "hr,s")
     first, _, body = run(tmp_path / "first", budget=2, bulk=SenateToo())
     assert body.requested == ["BILLS-119hr6028ih", "BILLS-119hr6028eh"]
-    assert archive_scopes(first) == {("119", "hr", "BILLSTATUS-119-hr.zip"), ("119", "s", "BILLSTATUS-119-s.zip")}
-    assert completed_scopes(first) == [["119", "hr"]]
+    assert completed_scopes(first) == [["119", "hr"], ["119", "s"]], "119 S 6028's refused bodies do not reopen it"
     _, bulk, _ = run(tmp_path / "second", prior=tmp_path / "first", budget=0, bulk=SenateToo())
-    assert bulk.zip_downloads == [(119, "s")], "only the completed folder's zip is skipped"
+    assert bulk.zip_downloads == []
 
 
 def test_one_body_caps_resume_then_retry_pending_pair_without_metadata_change(tmp_path, scoped):
     first, _, first_body = run(tmp_path / "first", budget=1)
     assert first_body.requested == ["BILLS-119hr6028ih"]
-    assert len(acquired(first)) == 1 and completed_scopes(first) == []
+    assert len(acquired(first)) == 1 and completed_scopes(first) == [["119", "hr"]]
     held = acquired(first)["introduced-in-house"]
 
     second, second_bulk, second_body = run(tmp_path / "second", prior=tmp_path / "first", budget=1)
-    assert second_bulk.zip_downloads == [(119, "hr")]
+    assert second_bulk.zip_downloads == []
     assert second_body.requested == ["BILLS-119hr6028eh"], "missing body must precede its held neighbour"
     assert len(acquired(second)) == 2
     assert acquired(second)["introduced-in-house"] == held
-    assert pq.read_table(second["section_diffs"]).num_rows == 0
-    assert completed_scopes(second) == [], "a missing XML comparison must remain unfinished"
+    assert pq.read_table(second["section_diffs"]).num_rows == 0, "the comparison waits for both documents"
 
     third, _, third_body = run(tmp_path / "third", prior=tmp_path / "second", budget=2)
     assert set(third_body.requested) == {"BILLS-119hr6028ih", "BILLS-119hr6028eh"}
     assert pq.read_table(third["section_diffs"]).num_rows == 1
-    assert completed_scopes(third) == [["119", "hr"]]
+    assert acquired(third) == acquired(second), "both sides were read only to be compared"
 
     fourth, fourth_bulk, fourth_body = run(tmp_path / "fourth", prior=tmp_path / "third", budget=1)
     assert fourth_bulk.zip_downloads == [] and fourth_body.requested == []
@@ -131,33 +132,32 @@ def test_one_body_caps_resume_then_retry_pending_pair_without_metadata_change(tm
 
 def test_failed_xml_parse_is_not_a_completed_govinfo_body(tmp_path, scoped, monkeypatch):
     with monkeypatch.context() as failed:
-        failed.setattr(build, "parse_bill_tree", lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("bad XML")))
+        failed.setattr(
+            bodies, "parse_bill_tree", lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("bad XML"))
+        )
         first, _, _ = run(tmp_path / "first")
     assert all(row["sha256"] and row["section_count"] is None for row in acquired(first).values())
-    assert completed_scopes(first) == []
-    second, _, body = run(tmp_path / "second", prior=tmp_path / "first")
-    assert len(body.requested) == 2
+    second, bulk, body = run(tmp_path / "second", prior=tmp_path / "first")
+    assert bulk.zip_downloads == [] and len(body.requested) == 2
     assert all(row["section_count"] for row in acquired(second).values())
-    assert completed_scopes(second) == [["119", "hr"]]
 
 
-def test_missing_published_sections_invalidate_a_completed_archive_skip(tmp_path, scoped):
+def test_missing_published_sections_make_their_printings_pending_again(tmp_path, scoped):
     first, _, _ = run(tmp_path / "first")
     sections = pq.read_table(first["bill_sections"])
     pq.write_table(sections.slice(0, 0), first["bill_sections"])
     second, bulk, body = run(tmp_path / "second", prior=tmp_path / "first")
-    assert bulk.zip_downloads == [(119, "hr")] and len(body.requested) == 2
+    assert bulk.zip_downloads == [] and len(body.requested) == 2
     assert pq.read_table(second["bill_sections"]).num_rows == sections.num_rows
 
 
-def test_failed_pdf_cleanup_retries_unchanged_status_then_qualifies_skip(tmp_path, scoped, monkeypatch):
+def test_failed_pdf_cleanup_retries_by_printing_state(tmp_path, scoped, monkeypatch):
     with monkeypatch.context() as failed:
-        failed.setattr(build, "body_text", lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("bad PDF")))
+        failed.setattr(bodies, "body_text", lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("bad PDF")))
         first, _, _ = run(
             tmp_path / "first", bulk=StubBulkAcquirer(status=_pdf_only_status()), body=StubPdfBodyAcquirer()
         )
     assert all(row["sha256"] and row["cleanup_json"] is None for row in acquired(first).values())
-    assert completed_scopes(first) == []
     second, _, body = run(
         tmp_path / "second",
         prior=tmp_path / "first",
@@ -166,15 +166,14 @@ def test_failed_pdf_cleanup_retries_unchanged_status_then_qualifies_skip(tmp_pat
     )
     assert len(body.requested) == 2
     assert all(row["cleanup_json"] for row in acquired(second).values())
-    assert completed_scopes(second) == [["119", "hr"]]
 
 
-def test_missing_published_diff_invalidate_a_completed_archive_skip(tmp_path, scoped):
+def test_missing_published_diff_is_computed_again(tmp_path, scoped):
     first, _, _ = run(tmp_path / "first")
     diffs = pq.read_table(first["section_diffs"])
     pq.write_table(diffs.slice(0, 0), first["section_diffs"])
     second, bulk, body = run(tmp_path / "second", prior=tmp_path / "first")
-    assert bulk.zip_downloads == [(119, "hr")] and len(body.requested) == 2
+    assert bulk.zip_downloads == [] and len(body.requested) == 2
     assert pq.read_table(second["section_diffs"]).num_rows == 1
 
 
@@ -214,26 +213,58 @@ def test_failed_held_neighbour_refresh_preserves_its_complete_row(tmp_path, scop
     second, _, body = run(tmp_path / "second", prior=tmp_path / "first", budget=2, body=FailedNeighbour())
     assert body.requested == ["BILLS-119hr6028eh", "BILLS-119hr6028ih"]
     assert acquired(second)["introduced-in-house"] == held
-    assert completed_scopes(second) == []
+    assert pq.read_table(second["section_diffs"]).num_rows == 0, "the comparison stays pending"
 
 
 def test_missing_middle_body_does_not_create_a_nonconsecutive_diff(scoped):
+    """A held middle printing that cannot be read again stays in the order, so its neighbours are not paired."""
     status = parse_bill_status((FIXTURES / "status-119hr6028.xml").read_bytes(), identity=IDENTITY)
     introduced, engrossed = build._ordered_printings(status)
     enrolled = replace(engrossed, type="Enrolled Bill", date="2026-09-20", package_id="BILLS-119hr6028enr")
-    status = replace(status, text_versions=(introduced, engrossed, enrolled))
+
+    def row(version, code, source):
+        return {
+            "bill_id": "119-hr-6028",
+            "version_code": code,
+            "source": source,
+            "label": version.type,
+            "version_date": version.date,
+            "package_id": version.package_id,
+            "offered_formats_json": json.dumps(
+                [{"url": item.url, "type": item.type, "package_id": item.package_id} for item in engrossed.formats]
+            ),
+            "sha256": "sha256:held" if source == "govinfo" else None,
+        }
 
     class SyntheticThird(StubBodyAcquirer):
         def acquire(self, package_id, **kwargs):
+            if package_id.endswith("eh"):
+                self.requested.append(package_id)
+                raise ValueError("the held middle cannot be read again")
             return super().acquire(package_id.replace("enr", "eh"), **kwargs)
 
-    entries = build._version_captures(status, SyntheticThird(), [2], held={"engrossed-in-house"})
-    assert len(entries) == 3
-    middle = next(entry for entry in entries if entry.version_code == "engrossed-in-house")
-    assert middle.body is None and middle.source == "congress"
-    tables = build.build_family(
-        build.BillFamilyCapture(status=status, versions=tuple(entries)), engine=build.engine_stamp()
+    rows = [
+        row(introduced, "introduced-in-house", "congress"),
+        row(engrossed, "engrossed-in-house", "govinfo"),
+        row(enrolled, "enrolled-bill", "congress"),
+    ]
+    held = {"engrossed-in-house"}
+    work, _, _ = bodies.plan_work(
+        rows, held=lambda bill: held, xml=lambda bill: held, complete_pairs=(), published_pairs={}
     )
+    acquirer = SyntheticThird()
+    outcome = bodies.BodyPass(
+        bills_source=None,
+        body_source=acquirer,
+        remaining=[5],
+        engine=build.engine_stamp(),
+        classify=None,
+        summarize_diff=None,
+        refusals={},
+    ).run(work)
+    assert len(acquirer.requested) == 3, "both new printings, and the held middle for their comparisons"
+    [tables] = outcome.families
+    assert {row["version_code"] for row in tables.bill_versions} == {"introduced-in-house", "enrolled-bill"}
     assert tables.section_diffs == (), "the held middle placeholder must prevent an introduced-to-enrolled shortcut"
 
 
@@ -271,7 +302,7 @@ def test_zero_budget_is_metadata_only_and_keeps_body_work_retryable(tmp_path, sc
     first, _, body = run(tmp_path / "first", budget=0)
     assert body.requested == []
     assert pq.read_table(first["congress_bills"]).num_rows == 1
-    assert not acquired(first) and completed_scopes(first) == []
+    assert not acquired(first) and completed_scopes(first) == [["119", "hr"]]
     _, _, later = run(tmp_path / "second", prior=tmp_path / "first", budget=2)
     assert len(later.requested) == 2
 
@@ -356,7 +387,7 @@ def test_missing_diff_children_reopen_completed_archive(tmp_path, scoped, missin
             damaged = items.drop(["seq"])
         pq.write_table(damaged, first["section_diff_items"])
     second, bulk, bodies = run(tmp_path / "second", prior=tmp_path / "first", body=StubChangedBodyAcquirer())
-    assert bulk.zip_downloads == [(119, "hr")] and len(bodies.requested) == 2
+    assert bulk.zip_downloads == [] and len(bodies.requested) == 2
     assert pq.read_table(second["section_diff_items"]).to_pylist() == items.to_pylist()
     assert completed_scopes(second) == [["119", "hr"]]
     _, next_bulk, next_bodies = run(tmp_path / "third", prior=tmp_path / "second")
@@ -424,4 +455,4 @@ def test_failed_or_unattempted_retry_preserves_retained_child_scopes(tmp_path, s
     assert len(bodies.requested) == budget
     assert pq.read_table(second["bill_sections"]).to_pylist() == before_sections
     assert pq.read_table(second["section_diff_items"]).to_pylist() == before_items
-    assert completed_scopes(second) == []
+    assert pq.read_table(second["section_diffs"]).num_rows == 0, "the comparison stays pending"

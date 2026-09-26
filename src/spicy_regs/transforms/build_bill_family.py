@@ -1,7 +1,9 @@
 """Build the bill family through spicy-docs, retaining this rollup's own resume state.
 
-BILLSTATUS supplies the CBO index and explicit per-bill outcomes. Optional
-body capture and model processing keep their separate declared caps.
+BILLSTATUS supplies the CBO index and explicit per-bill outcomes, and lists
+each bill's printings; their bodies, sections and comparisons are the body
+pass's (``bill_family_bodies``), by each printing's own state. The per-package
+route and model processing keep their separate declared caps.
 """
 
 from __future__ import annotations
@@ -18,7 +20,6 @@ from typing import TYPE_CHECKING, Any, Protocol, Self
 
 import httpx
 from loguru import logger
-from spicy_docs.extraction.body_text import body_text
 from spicy_docs.interpretation.bill_family import (
     BillFamilyCapture,
     BillFamilyTables,
@@ -55,7 +56,6 @@ from spicy_docs.sources.congress.bill_status import (
     BillTextVersion,
     bill_package_id_from_url,
 )
-from spicy_docs.sources.congress.bill_tree import engine_available, parse_bill_tree
 from spicy_docs.sources.congress.bill_versions import (
     DEFAULT_FORMAT_PREFERENCE,
     VersionCodeError,
@@ -70,7 +70,8 @@ from spicy_docs.sources.congress.bulk_status import (
     BulkStatusAcquirer,
     bulk_status_locator,
 )
-from spicy_docs.sources.govinfo.body_acquisition import GovInfoBodyAcquirer, GovInfoBodyBudget
+from spicy_docs.sources.congress.bulk_bills import BulkBillsAcquirer
+from spicy_docs.sources.govinfo.body_acquisition import GovInfoBodyAcquirer
 from spicy_docs.transport.credentials import CredentialRefusedError, scrub_credential
 
 from spicy_regs.source_evidence import SourceEvidenceError
@@ -80,6 +81,20 @@ from spicy_regs.sources.congress_bills import (
     _resolve_api_key,
     bill_detail,
     listing_reader,
+)
+from spicy_regs.transforms.bill_family_bodies import (
+    ACQUIRED_SOURCE,
+    BODY_BUDGET,
+    LISTED_SOURCE,
+    MAX_VERSION_FETCHES,
+    TEXT_REFUSALS_KEY,
+    BodyPass,
+    BulkBillsSource,
+    PackageBodySource,
+    body_kind,
+    plan_work,
+    refusal_metadata,
+    refusal_state,
 )
 from spicy_regs.transforms.congress_scope import (
     BULK_STATUS_FLOOR,
@@ -101,18 +116,6 @@ if TYPE_CHECKING:
 #: than left blank — ``section_diffs.engine_revision`` is the column that says
 #: which engine produced a diff.
 DELTATRACK_REVISION = "c636448ba08d55bba7cb8c884aad0f5ac1ccf2f6"
-
-#: Three requests per printing (summary, MODS, body), paced at ~3/s.
-BODY_BUDGET = GovInfoBodyBudget(
-    max_requests=8,
-    max_body_bytes=24 * 1024 * 1024,  # MAX_EVIDENCE_BYTES
-    max_metadata_bytes=4 * 1024 * 1024,
-    timeout_seconds=120.0,
-    min_request_interval_seconds=0.34,
-)
-
-#: ~3 requests each at ~3/s: 600 printings is ~10 minutes.
-MAX_VERSION_FETCHES = 600
 
 #: How many distinct refusal reasons a run's log names before it stops and says
 #: how many it did not. Distinct reasons, not refusals: a prompt every bill
@@ -144,9 +147,13 @@ ARCHIVE_COLUMNS: tuple[str, ...] = (
 #: One entry per folder, and the folder is what a run looks it up by.
 ARCHIVE_IDENTITY: tuple[str, ...] = ("congress", "bill_type")
 
-# Qualifies status, bodies and applicable XML pairs, not optional model work.
-# A source listing stamp alone never proves that this work completed.
-ARCHIVE_COMPLETION_KEY = "spicy_regs.bill_family.completed_archive_scopes.v1"
+# Qualifies the folder's status: every member parsed and every rebuilt bill
+# shaped. A source listing stamp alone never proves that this work completed.
+# v1 also required each bill's bodies and XML pairs, which are now the body
+# pass's by each printing's own state; a v1 list is read as v2, since it
+# states strictly more.
+ARCHIVE_COMPLETION_KEY = "spicy_regs.bill_family.completed_archive_scopes.v2"
+ARCHIVE_COMPLETION_KEYS_READ = (ARCHIVE_COMPLETION_KEY, "spicy_regs.bill_family.completed_archive_scopes.v1")
 
 #: The roll calls each bill's own actions record, one row per ``recordedVotes``
 #: entry. Not a contract table — nothing in ``spicy_docs.schemas`` shapes it —
@@ -292,10 +299,6 @@ _SNAPSHOT_ARG = {
     "bill_summaries": "bill_summaries",
 }
 
-#: The ``source`` value a printing carries once its body has been captured.
-#: A held printing also needs captured bytes and applicable parse evidence.
-ACQUIRED_SOURCE = "govinfo"
-
 #: Provider-owned shapes, including the CBO publication index.
 FAMILY_TABLES: tuple[tuple[str, str], ...] = (
     ("congress_bills", "bills"),
@@ -325,17 +328,6 @@ class BulkStatusSource(Protocol):
     def acquire(self, congress: int, bill_type: str, *, unchanged_since: BulkListingEntry | None = ...) -> Any: ...
 
     def list_archives(self, congress: int, bill_type: str) -> Any: ...
-
-
-class PackageBodySource(Protocol):
-    """What this transform needs of a GovInfo package-body acquirer.
-
-    No ``prefer``: the rendition order is the acquirer's sealed default now
-    (``sources.govinfo.bodies.BODY_PREFERENCE``), so this transform neither
-    passes one nor needs a seam that accepts one.
-    """
-
-    def acquire(self, package_id: str, *, max_bytes: int | None = ...) -> Any: ...
 
 
 class ListBackfillSource(Protocol):
@@ -372,8 +364,9 @@ class CongressListBackfill:
     charges every page and every detail.
     """
 
-    def __init__(self, api_key: str, transport: httpx.BaseTransport | None = None,
-                 *, evidence: CaptureEvidence | None = None) -> None:
+    def __init__(
+        self, api_key: str, transport: httpx.BaseTransport | None = None, *, evidence: CaptureEvidence | None = None
+    ) -> None:
         self._reader = listing_reader(api_key, transport, evidence=evidence)
         self._evidence = evidence
 
@@ -408,72 +401,26 @@ def engine_stamp() -> EngineStamp:
     return stamp if stamp.revision else EngineStamp(stamp.name, stamp.version, DELTATRACK_REVISION)
 
 
-def _needed_printings(codes: Sequence[str], held: Collection[str]) -> set[int]:
-    """Which printings this run must fetch: the unheld ones and their neighbours.
+def _listed_captures(status: Any, held: Collection[str] = ()) -> list[BillVersionCapture]:
+    """A metadata-only capture for each listed printing with no processed body: its pending state.
 
-    A printing already captured needs no second fetch — its row, sections and
-    digests are published. But a diff is computed over *consecutive* pairs, so
-    a new printing's predecessor has to be in hand for that pair to exist.
-    Fetching the unheld printings plus their immediate neighbours is the
-    smallest set that leaves no diff uncomputed, and on a bill whose printings
-    are all held it is empty, which is the common case and the whole saving.
-    """
-    needed: set[int] = set()
-    for index, code in enumerate(codes):
-        if code in held:
-            continue
-        needed.update({index - 1, index, index + 1})
-    return {index for index in needed if 0 <= index < len(codes)}
+    The publisher's own facts about a printing (type, date, offered formats)
+    are real and belong in ``bill_versions`` before any body is read, and the
+    NULL body columns say what is missing; the body pass
+    (``bill_family_bodies``) reads the body by that state, not by rebuilding
+    the bill. A printing already held is left to its published body row.
 
-
-def _version_captures(
-    status: Any,
-    acquirer: PackageBodySource | None,
-    budget: list[int],
-    held: Collection[str] = (),
-    retry_codes: Collection[str] = (),
-) -> list[BillVersionCapture]:
-    """One :class:`BillVersionCapture` per printing this run has anything to say about.
-
-    A printing whose body is not fetched still gets a capture when the run is
-    seeing it for the first time — the publisher's own facts about it (type,
-    date, offered formats) are real and belong in ``bill_versions``, and the
-    NULL body columns say what is missing.
-
-    A fully completed bill emits no new captures. During partial work, held
-    printings still appear as metadata-only ``congress`` placeholders when they
-    cannot be refetched. This keeps source order intact and prevents a diff
-    across a missing middle printing; it never overwrites a retained complete
-    ``govinfo`` body row with failed or absent processing facts.
-
-    **PDF is now in the preference, last.** Both halves of the choice take the
-    sealed order from spicy-docs rather than a local one: ``choose_format``
-    reads Congress.gov's stated links in ``DEFAULT_FORMAT_PREFERENCE``, and the
-    acquirer fetches the GovInfo rendition in ``bodies.BODY_PREFERENCE``, which
-    is the same order spelled in that module's own names. Bills before the
-    113th Congress offer no XML at all (measured:
-    ``spicy-docs/docs/research/pdf-only-corpus-2026-09-19.md``), so under the
-    previous local ``("xml", "txt")`` they yielded no body at all. They now
-    yield one, through :func:`body_text`, whose PDF branch is the GPO
-    normalizer — and that run's ``GpoCleanupRecord`` is what fills the version
-    row's ``cleanup_*`` columns. A PDF printing still has no section tree
-    (``parse_bill_tree`` reads XML), so it has no ``bill_sections`` rows and a
-    pair it belongs to is refused by name through the existing
-    ``FamilyRefusal`` path rather than diffed against nothing.
+    Bills before the 113th Congress offer no XML at all (measured:
+    ``spicy-docs/docs/research/pdf-only-corpus-2026-09-19.md``); the body pass
+    reads their PDF, whose ``GpoCleanupRecord`` fills the version row's
+    ``cleanup_*`` columns, and a pair such a printing belongs to is refused by
+    name through the provider's ``FamilyRefusal`` path.
     """
     captures: list[BillVersionCapture] = []
-    printings = _ordered_printings(status)
-    codes = [printing_version_code(version) for version in printings]
-    needed = _needed_printings(codes, held) | {index for index, code in enumerate(codes) if code in retry_codes}
-
-    if not needed:
-        return []
-
-    # A one-body budget must reach an uncaptured body before refetching a held
-    # neighbour. The provider orders returned captures before computing diffs.
-    for index in sorted(range(len(printings)), key=lambda index: (codes[index] in held, index)):
-        version = printings[index]
-        version_code = codes[index]
+    for version in _ordered_printings(status):
+        version_code = printing_version_code(version)
+        if version_code in held:
+            continue
         chosen = choose_format(version.formats, prefer=DEFAULT_FORMAT_PREFERENCE)
         package_id = version.package_id
         if package_id is None and chosen is not None:
@@ -486,92 +433,27 @@ def _version_captures(
                 # GovInfo suffix it does not: `Private Law` is the measured case
                 # (`private-law` resolves as a slug, and `govinfo_suffix` refuses
                 # it, because GovInfo publishes private laws as PLAW `pvtl` and
-                # not as a BILLS printing). Derived here rather than inside the
-                # acquire below, this refusal used to abort the whole run --
-                # seventeen tables lost to one printing of one bill, on a
-                # cold-start walk of the 119th (receipt
-                # `d1-measured-run-2026-09-19/`, first attempt).
-                #
-                # The wheel already answers the same refusal twice for the same
-                # reason -- `BillVersionCapture.version_code_is_reprint_ambiguous`
-                # says so in as many words ("rather than left to abort a whole
-                # bill over one unrecognised printing") and `_sorted_versions`
-                # tolerates the type. This is the third place, and it answers it
-                # the way this function already handles a printing it cannot
-                # fetch: the row still carries the publisher's own facts about
-                # the printing, and the columns that need an address are NULL.
-                # `package_id` is `str | None` on the capture for exactly this.
+                # not as a BILLS printing). Outside this guard the refusal once
+                # aborted a whole run -- seventeen tables lost to one printing of
+                # one bill, on a cold-start walk of the 119th (receipt
+                # `d1-measured-run-2026-09-19/`, first attempt). The row still
+                # carries the publisher's facts; the columns that need an
+                # address are NULL, and the body pass never asks for it.
                 logger.warning(
                     "Bill family: {} {} names no GovInfo package: {}",
                     bill_key(status.identity),
                     version_code,
                     scrub_credential(str(error), ""),
                 )
-
-        body = None
-        document = None
-        cleanup = None
-        source = "congress"
-        # ``package_id`` is what the acquirer is addressed by, so an unaddressable
-        # printing is not fetched and does not spend the run's budget; it still
-        # gets its row below from the publisher's own facts.
-        if index in needed and acquirer is not None and chosen is not None and package_id is not None and budget[0] > 0:
-            budget[0] -= 1
-            try:
-                package = acquirer.acquire(package_id)
-            except (CredentialRefusedError, SourceEvidenceError):
-                raise
-            except Exception as error:  # noqa: BLE001 — one printing's refusal is not the bill's
-                logger.warning(
-                    "Bill family: {} {} body refused: {}",
-                    package_id,
-                    version_code,
-                    scrub_credential(str(error), ""),
-                )
-            else:
-                body = package.body_capture
-                source = "govinfo"
-                if package.format == "xml" and engine_available():
-                    try:
-                        document = parse_bill_tree(body.body, version=version_code)
-                    except Exception as error:  # noqa: BLE001 — an unparsed printing is a NULL tree
-                        logger.warning("Bill family: {} tree refused: {}", package_id, scrub_credential(str(error), ""))
-                elif package.format == "pdf":
-                    # Keyed on the rendition actually fetched, not on the link
-                    # chosen: the acquirer picks from what the package MODS
-                    # offers, and only the PDF branch of ``body_text`` yields
-                    # the ``GpoCleanupRecord`` the cleanup_* columns describe.
-                    # No extractor argument: ``body_text``'s default
-                    # (``DocumentExtractor(NativeText())``, PyMuPDF) is the
-                    # pipeline ``gpo_normalize`` was derived on — pypdf glues
-                    # the GPO gutter number onto its content line, so the
-                    # normalizer never detects the layout through it (measured
-                    # ``docs/research/gpo-normalizer-vs-upstream-2026-09-19.md``
-                    # in spicy-docs).
-                    try:
-                        cleanup = body_text(package).record
-                    except Exception as error:  # noqa: BLE001 — an unextracted PDF is a NULL cleanup
-                        logger.warning(
-                            "Bill family: {} PDF text refused: {}", package_id, scrub_credential(str(error), "")
-                        )
-
-        entry = BillVersionCapture(
-            version=version,
-            version_code=version_code,
-            source=source,
-            package_id=package_id,
-            chosen_format=chosen,
-            body=body,
-            document=document,
-            cleanup=cleanup,
+        captures.append(
+            BillVersionCapture(
+                version=version,
+                version_code=version_code,
+                source=LISTED_SOURCE,
+                package_id=package_id,
+                chosen_format=chosen,
+            )
         )
-        # Keep metadata placeholders between fetched printings: omitting a held
-        # middle printing would make the provider diff nonconsecutive versions.
-        # The congress source preserves listed facts without replacing an older
-        # complete govinfo row when its neighbour refresh failed or was capped.
-        if version_code in held and not _processed_capture(entry):
-            entry = replace(entry, source="congress", body=None, document=None, cleanup=None)
-        captures.append(entry)
     return captures
 
 
@@ -606,31 +488,14 @@ def _code_pairs(printings: Sequence[tuple[str, str | None]]) -> set[tuple[str, s
     return {(printings[older][0], printings[newer][0]) for older, newer in consecutive_pairs(printings)}
 
 
-def _body_kind(content_type: str | None, format_name: str | None) -> str | None:
-    """Classify a fetched body as ``pdf``, ``xml``, or the source's own format name."""
-    media = (content_type or "").split(";", 1)[0].strip().lower()
-    if media == "application/pdf":
-        return "pdf"
-    if media in {"application/xml", "text/xml"} or media.endswith("+xml"):
-        return "xml"
-    return format_name
-
-
-def _processed_capture(entry: BillVersionCapture) -> bool:
-    """Whether a captured body carries the derived artifact its kind needs (XML tree or PDF cleanup)."""
-    if entry.body is None:
-        return False
-    kind = _body_kind(entry.body.content_type, entry.format_name)
-    if kind == "xml":
-        return entry.document is not None
-    if kind == "pdf":
-        return entry.cleanup is not None
-    return True
-
-
 @dataclass(frozen=True, slots=True)
 class PriorIndex:
-    """Published status stamps, processed bodies and completed XML pairs, each looked up by bill."""
+    """Published status stamps, processed bodies and completed XML pairs, each looked up by bill.
+
+    ``pending_bills`` are bills whose *status* must be read again; bills with
+    body or comparison work are ``body_bills``, which the body pass reaches
+    without rebuilding them.
+    """
 
     bill_text_dates: Mapping[str, str | None]
     #: Version codes with a published processed body, by bill. Keyed so a
@@ -651,6 +516,13 @@ class PriorIndex:
     #: slug, so 119-hr-6644's congress row ``engrossed-amendment-senate``
     #: carries ``eas2``'s package and date.
     miskeyed_rows: Mapping[str, Collection[tuple[str, str, str]]] = field(default_factory=dict)
+    #: Bills with a listed, addressable printing that has no processed body, a
+    #: consecutive XML pair with no complete published comparison, or a
+    #: published comparison no consecutive pair accounts for.
+    body_bills: Collection[str] = field(default_factory=frozenset)
+    #: ``(bill_id, version_code)`` listed under both sources: a ``congress``
+    #: placeholder left beside the processed ``govinfo`` body that stands for it.
+    shadowed: Collection[tuple[str, str]] = field(default_factory=frozenset)
 
     def held_codes(self, bill_id: str) -> set[str]:
         """The version codes this bill has a published processed body for."""
@@ -659,21 +531,6 @@ class PriorIndex:
     def xml_codes(self, bill_id: str) -> set[str]:
         """The version codes this bill has a complete published XML body and section rows for."""
         return set(self.xml_printings.get(bill_id, ()))
-
-    def pending_pairs(
-        self, status: Any, xml_codes: Collection[str] | None = None, completed: Collection[tuple[str, str, str]] = ()
-    ) -> set[tuple[str, str]]:
-        """The consecutive XML printing pairs of this bill that have no published diff yet."""
-        identifier = bill_key(status.identity)
-        xml = self.xml_codes(identifier) if xml_codes is None else xml_codes
-        return {
-            (older, newer)
-            for older, newer in _code_pairs(_printings(status))
-            if older in xml
-            and newer in xml
-            and (identifier, older, newer) not in self.pairs
-            and (identifier, older, newer) not in completed
-        }
 
 
 def _download_prior(output_dir: Path, download_prior: Callable[[str, Path], bool]) -> dict[str, Path | None]:
@@ -718,9 +575,7 @@ def _prior_index(paths: Mapping[str, Path | None]) -> PriorIndex:
     elif wants_versions:
         version_counts = {
             bill: _int_or_none(count)
-            for bill, count in duckdb.sql(
-                f"SELECT bill_id, version_count FROM read_parquet('{bills_path}')"
-            ).fetchall()
+            for bill, count in duckdb.sql(f"SELECT bill_id, version_count FROM read_parquet('{bills_path}')").fetchall()
         }
     elif wants_text:
         text_dates = dict(
@@ -732,6 +587,8 @@ def _prior_index(paths: Mapping[str, Path | None]) -> PriorIndex:
 
     printings: dict[str, set[str]] = {}
     listed: dict[str, set[str]] = {}
+    addressable: dict[str, set[str]] = {}
+    sources: dict[tuple[str, str], set[str]] = {}
     dates: dict[tuple[str, str], str] = {}
     xml_printings: dict[str, set[str]] = {}
     section_counts = {}
@@ -767,15 +624,18 @@ def _prior_index(paths: Mapping[str, Path | None]) -> PriorIndex:
         for row in (
             duckdb.sql(f"SELECT {', '.join(needed)} FROM read_parquet('{versions_path}')").to_arrow_table().to_pylist()
         ):
-            if row["source"] in {"congress", ACQUIRED_SOURCE}:
+            if row["source"] in {LISTED_SOURCE, ACQUIRED_SOURCE}:
                 listed.setdefault(row["bill_id"], set()).add(row["version_code"])
+                sources.setdefault((row["bill_id"], row["version_code"]), set()).add(row["source"])
                 dates[(row["bill_id"], row["version_code"])] = row["version_date"] or ""
+                if row["package_id"]:
+                    addressable.setdefault(row["bill_id"], set()).add(row["version_code"])
                 if row["label"] and row["package_id"] and (code := _row_printing_code(row)) != row["version_code"]:
                     miskeyed.setdefault(row["bill_id"], set()).add((row["version_code"], row["source"], code))
             if row["source"] != ACQUIRED_SOURCE or not row["sha256"] or not row["byte_size"]:
                 continue
             bill, code = row["bill_id"], row["version_code"]
-            kind = _body_kind(row["content_type"], row["format_name"])
+            kind = body_kind(row["content_type"], row["format_name"])
             if kind == "xml":
                 count = row["section_count"]
                 if sections_path is None or count is None or not count.isdigit():
@@ -822,28 +682,33 @@ def _prior_index(paths: Mapping[str, Path | None]) -> PriorIndex:
         len(text_dates),
         sum(len(codes) for codes in printings.values()),
     )
-    pending_bills = {bill for bill, codes in listed.items() if not codes <= printings.get(bill, set())}
+    # A body is the body pass's to read, by the printing's own state; the
+    # status is read again only when a status fact is in doubt.
+    body_bills = {bill for bill, codes in addressable.items() if not codes <= printings.get(bill, set())}
     # The surviving version rows cannot establish which source rows were lost.
     # Source counts are independent of acquisition paths: congress/govinfo
     # duplicates count once, and uploaded/PDF-twin rows never fill a source gap.
-    pending_bills.update(
-        bill
-        for bill in text_dates
-        if not versions_qualified
-        or version_counts.get(bill) != len(listed.get(bill, ()))
-    )
+    pending_bills = {
+        bill for bill in text_dates if not versions_qualified or version_counts.get(bill) != len(listed.get(bill, ()))
+    }
     # A mis-keyed row reopens its bill: the rebuild retires it (see ``miskeyed_rows``).
     pending_bills.update(miskeyed)
     for bill, codes in listed.items():
         established = _code_pairs([(code, dates[(bill, code)]) for code in sorted(codes)])
         xml = xml_printings.get(bill, set())
         # A missing comparison, and a published one no established neighbour
-        # pair accounts for -- backward, or skipping a printing -- both reopen
-        # the bill; the rebuild computes the first and retires the second.
+        # pair accounts for -- backward, or skipping a printing -- are both the
+        # body pass's: it computes the first and retires the second.
         if any(
             older in xml and newer in xml and (bill, older, newer) not in pairs for older, newer in established
         ) or any((key[0], key[2]) not in established for key in published.get(bill, ())):
-            pending_bills.add(bill)
+            body_bills.add(bill)
+    shadowed = {
+        (bill, code)
+        for (bill, code), stated in sources.items()
+        if stated == {LISTED_SOURCE, ACQUIRED_SOURCE} and code in printings.get(bill, ())
+    }
+    body_bills.update(bill for bill, _code in shadowed)
     if bills_path is not None and _has_columns(bills_path, ("bill_id", "url", "url_source")):
         # Pre-label rows can carry the same API URL without the retired
         # writer's marker. Body completion does not qualify that URL: reread
@@ -861,7 +726,9 @@ def _prior_index(paths: Mapping[str, Path | None]) -> PriorIndex:
                 len(unqualified_urls),
             )
         pending_bills.update(unqualified_urls)
-    return PriorIndex(text_dates, printings, xml_printings, pairs, pending_bills, published, miskeyed)
+    return PriorIndex(
+        text_dates, printings, xml_printings, pairs, pending_bills, published, miskeyed, body_bills, shadowed
+    )
 
 
 #: The reason a fresh row repeating a key is refused. The merge keeps one row
@@ -1043,7 +910,8 @@ def _held_archives(path: Path | None) -> dict[tuple[str, str], BulkListingEntry]
     import duckdb
     import pyarrow.parquet as pq
 
-    raw = (pq.read_schema(path).metadata or {}).get(ARCHIVE_COMPLETION_KEY.encode())
+    metadata = pq.read_schema(path).metadata or {}
+    raw = next((metadata[key.encode()] for key in ARCHIVE_COMPLETION_KEYS_READ if key.encode() in metadata), None)
     try:
         completed = set(tuple(scope) for scope in json.loads(raw)) if raw else set()
     except (ValueError, TypeError):
@@ -1618,6 +1486,7 @@ def build_bill_family(
     *,
     bulk_acquirer: BulkStatusSource | None = None,
     body_acquirer: PackageBodySource | None = None,
+    bills_acquirer: BulkBillsSource | None = None,
     list_source: ListBackfillSource | None = None,
     max_version_fetches: int = MAX_VERSION_FETCHES,
     download_prior: Callable[[str, Path], bool] = r2.download,
@@ -1648,23 +1517,41 @@ def build_bill_family(
     api_key = _resolve_api_key()
     if evidence is not None:
         evidence.credential = api_key or ""
-        evidence.event("bill-family-selection", congresses=list(congresses), bill_types=list(bill_types),
-                       max_version_fetches=max_version_fetches)
+        evidence.event(
+            "bill-family-selection",
+            congresses=list(congresses),
+            bill_types=list(bill_types),
+            max_version_fetches=max_version_fetches,
+        )
     bulk_budget = bulk_status_budget()
     bulk_acquirer = bulk_acquirer or BulkStatusAcquirer(
         budget=bulk_budget,
-        transport=None if evidence is None else evidence.transport(stage="bill-status-bulk", max_bytes=bulk_budget.max_bytes),
+        transport=None
+        if evidence is None
+        else evidence.transport(stage="bill-status-bulk", max_bytes=bulk_budget.max_bytes),
+    )
+    # Bill text in bulk is keyless, so it runs whether or not a key is present;
+    # the per-package route it leaves the rest to is keyed and capped.
+    bills_acquirer = bills_acquirer or BulkBillsAcquirer(
+        budget=bulk_budget,
+        transport=None
+        if evidence is None
+        else evidence.transport(stage="bill-text-bulk", max_bytes=bulk_budget.max_bytes),
     )
     if body_acquirer is None and max_version_fetches > 0:
         if api_key:
             body_acquirer = GovInfoBodyAcquirer(
-                budget=BODY_BUDGET, api_key=api_key,
-                transport=None if evidence is None else evidence.transport(
-                    stage="bill-package", max_bytes=max(BODY_BUDGET.max_body_bytes, BODY_BUDGET.max_metadata_bytes)),
+                budget=BODY_BUDGET,
+                api_key=api_key,
+                transport=None
+                if evidence is None
+                else evidence.transport(
+                    stage="bill-package", max_bytes=max(BODY_BUDGET.max_body_bytes, BODY_BUDGET.max_metadata_bytes)
+                ),
             )
         else:
             logger.warning(
-                "Bill family: no api.data.gov key ({}) — publishing status-derived tables only",
+                "Bill family: no api.data.gov key ({}) — bill text before the 113th Congress is not read",
                 ", ".join(API_KEY_ENV_VARS),
             )
 
@@ -1695,7 +1582,8 @@ def build_bill_family(
     prior_paths = _download_prior(output_dir, download_prior)
     index = _prior_index(prior_paths)
     held_archives = _held_archives(prior_paths.get(ARCHIVES_TABLE))
-    # An unchanged archive still needs a read for legacy status rows or pending bodies/pairs.
+    # An unchanged archive still needs a read for legacy status rows; bodies
+    # and comparisons are the body pass's.
     bills_prior = prior_paths.get("congress_bills")
     if bills_prior is not None:
         # A narrow projection replaces materialising every prior row into Python
@@ -1703,9 +1591,7 @@ def build_bill_family(
         if _has_columns(bills_prior, ("bill_id", "congress", "bill_type")):
             import duckdb
 
-            rows = duckdb.sql(
-                f"SELECT bill_id, congress, bill_type FROM read_parquet('{bills_prior}')"
-            ).fetchall()
+            rows = duckdb.sql(f"SELECT bill_id, congress, bill_type FROM read_parquet('{bills_prior}')").fetchall()
             for bill_id, congress, bill_type in rows:
                 if bill_id not in index.bill_text_dates or bill_id in index.pending_bills:
                     held_archives.pop((congress, bill_type), None)
@@ -1721,13 +1607,12 @@ def build_bill_family(
     completed_archives = set(held_archives)
     visited_archives: set[tuple[str, str]] = set()
 
-    # 2. Acquire and build, one bill at a time, skipping only completed work.
+    # 2. Status: rebuild each bill whose BILLSTATUS moved, listing its new
+    # printings as pending; bodies are step 2c's, by each printing's own state.
     remaining = [max_version_fetches]
     families: list[BillFamilyTables] = []
     touched: set[str] = set()
-    # Published comparisons a rebuild shows no established neighbour pair
-    # accounts for, and published printings keyed under another printing's code.
-    retired_pairs: set[tuple[str, ...]] = set()
+    # Published printings keyed under another printing's code.
     retired_versions: set[tuple[str, ...]] = set()
     archive_rows: list[dict] = []
     vote_rows: list[dict] = []
@@ -1766,48 +1651,26 @@ def build_bill_family(
                 if member.status is None:
                     continue
                 identifier = bill_key(member.status.identity)
-                # A matching publisher stamp skips only when all listed bodies
-                # and applicable XML pairs are already complete. Optional model
-                # retry policy remains separate from body completeness.
+                # A matching publisher stamp skips the bill: its printings'
+                # bodies and comparisons are the body pass's, not a reason to
+                # read its status again.
                 published = index.bill_text_dates.get(identifier)
-                held = index.held_codes(identifier)
-                codes = {code for code, _ in _printings(member.status)}
-                pending_pairs = index.pending_pairs(member.status)
                 if (
                     published is not None
                     and published == member.status.update_date_including_text
-                    and codes <= held
-                    and not pending_pairs
                     and identifier not in index.pending_bills
                 ):
                     unchanged += 1
                     continue
+                codes = {code for code, _ in _printings(member.status)}
                 capture = BillFamilyCapture(
                     status=member.status,
-                    versions=tuple(
-                        _version_captures(
-                            member.status,
-                            body_acquirer,
-                            remaining,
-                            held=held,
-                            retry_codes={code for pair in pending_pairs for code in pair},
-                        )
-                    ),
+                    versions=tuple(_listed_captures(member.status, index.held_codes(identifier))),
                     observed_at=observed_at,
                 )
-                tables = build_family(
-                    capture,
-                    engine=stamp,
-                    classify=classify,
-                    summarize=summarize,
-                    summarize_diff=summarize_diff_call,
-                )
-                established = _code_pairs(_printings(member.status))
-                retired_pairs.update(
-                    (identifier, *pair)
-                    for pair in index.published_pairs.get(identifier, ())
-                    if (pair[0], pair[2]) not in established
-                )
+                # No documents here, so nothing to compare or model: diff=False
+                # keeps the provider from refusing every pair of placeholders.
+                tables = build_family(capture, engine=stamp, diff=False)
                 # A row whose package belongs to another listed printing
                 # describes that printing under the wrong key: retire it.
                 retired_versions.update(
@@ -1815,22 +1678,7 @@ def build_bill_family(
                     for code, source, printing in index.miskeyed_rows.get(identifier, ())
                     if printing in codes
                 )
-                processed = {entry.version_code for entry in capture.versions if _processed_capture(entry)}
-                xml_codes = index.xml_codes(identifier) | {
-                    entry.version_code for entry in capture.versions if entry.document is not None
-                }
-                completed_pairs = {
-                    (bill, older, newer)
-                    for bill, older, older_source, newer, newer_source in _complete_child_scopes(
-                        "section_diffs", tables.section_diffs, tables.section_diff_items, "item_count"
-                    )
-                    if older_source == ACQUIRED_SOURCE and newer_source == ACQUIRED_SOURCE
-                }
-                if (
-                    not tables.bills
-                    or not codes <= (held | processed)
-                    or index.pending_pairs(member.status, xml_codes, completed_pairs)
-                ):
+                if not tables.bills:
                     archive_complete = False
                 families.append(tables)
                 rows, refused = vote_reference_rows(member.status, observed_at=observed_at)
@@ -1841,13 +1689,34 @@ def build_bill_family(
             # Every visited folder's prior row is replaced, so each is written
             # back: the row records the zip that was read; completion is the
             # metadata list's alone. Gating the row on completion emptied the
-            # table whenever the fetch cap left every visited folder unfinished.
+            # table whenever a refusal left every visited folder unfinished.
             if retained is not None:
                 archive_rows.append(retained)
                 if archive_complete:
                     completed_archives.add(scope)
 
-    # 2b. The pre-BILLSTATUS backfill: same scope input, the route the
+    # 2b. Bodies, sections and comparisons, by each printing's own state:
+    # the printings this run listed and every earlier run's still pending.
+    fresh_versions = [row for tables in families for row in tables.bill_versions]
+    body = _run_body_pass(
+        prior_paths,
+        index,
+        fresh_versions,
+        retired_versions,
+        congresses=congresses,
+        bill_types=bill_types,
+        bills_acquirer=bills_acquirer,
+        body_acquirer=body_acquirer,
+        remaining=remaining,
+        engine=stamp,
+        classify=classify,
+        summarize=summarize,
+        summarize_diff=summarize_diff_call,
+        fresh_bills=[row for tables in families for row in tables.bills],
+        refusals=_held_text_refusals(prior_paths.get(ARCHIVES_TABLE)),
+    )
+
+    # 2c. The pre-BILLSTATUS backfill: same scope input, the route the
     # publisher serves below the bulk floor, the same per-run cap.
     backfill_state: list[dict[str, Any]] = []
     backfill_walk_state: list[dict[str, Any]] = []
@@ -1884,7 +1753,19 @@ def build_bill_family(
                 ", ".join(API_KEY_ENV_VARS),
             )
 
-    folded = _refuse_repeated_keys(BillFamilyTables.concat(families))
+    folded = _refuse_repeated_keys(BillFamilyTables.concat([*families, *body.families]))
+    # A placeholder a processed body now stands for goes, whether this run's
+    # status pass listed it or an earlier run did: one row per printing.
+    superseded = body.superseded
+    if superseded:
+        folded = replace(
+            folded,
+            bill_versions=tuple(
+                row
+                for row in folded.bill_versions
+                if (row["bill_id"], row["version_code"], row["source"]) not in superseded
+            ),
+        )
     # One pass over every refusal both passes produced — `concat` carries them,
     # so the backfill's families are counted here too, which the per-bill count
     # this replaces never reached. Keyed by the reason as well as the table: a
@@ -1898,17 +1779,28 @@ def build_bill_family(
         (refusal.table, scrub_credential(refusal.reason, gemini_key or "")) for refusal in folded.refusals
     )
     logger.info(
-        "Bill family: {:,} bills rebuilt, {:,} unchanged and skipped, {:,} status fetches (printings and backfill "
-        "details) of {:,} allowed",
+        "Bill family: {:,} bills rebuilt, {:,} unchanged and skipped, {:,} capped fetches (per-package printings "
+        "and backfill details) of {:,} allowed",
         bills,
         unchanged,
         max_version_fetches - remaining[0],
         max_version_fetches,
     )
+    logger.info(
+        "Bill family: bodies — {:,} printings read ({:,} from {:,} BILLS zips, {:,} zips not needed, {:,} listings; "
+        "{:,} per-package fetches), {:,} bills built",
+        body.captured,
+        body.bulk_read,
+        body.zips,
+        body.zips_not_needed,
+        body.listings,
+        body.fetched,
+        len(body.families),
+    )
     if remaining[0] == 0:
         logger.warning(
             "Bill family: the per-run cap was reached — the next run resumes on what this one did not reach: "
-            "incomplete bulk bodies and XML pairs remain retryable; backfilled bills use their retained state"
+            "pending printings and XML pairs remain pending; backfilled bills use their retained state"
         )
     if archives_skipped:
         logger.info(
@@ -1931,12 +1823,14 @@ def build_bill_family(
         logger.warning("Bill family: {:,} recordedVotes entries refused for a missing sealed field", votes_refused)
 
     # 3. The thirteenth table: what changed since the last published run,
-    # compared over this run's bills only — the rest cannot have changed.
+    # compared over the bills whose status this run read — the rest cannot
+    # have changed. A body the body pass read for another bill is not a
+    # version added: the printing was added when its status listed it.
     prior = _prior_snapshot(prior_paths, touched)
     current = snapshot_from_rows(
         bills=folded.bills,
-        bill_versions=folded.bill_versions,
-        bill_summaries=folded.bill_summaries,
+        bill_versions=[row for row in folded.bill_versions if row["bill_id"] in touched],
+        bill_summaries=[row for row in folded.bill_summaries if row["bill_id"] in touched],
     )
     events = activity_events(prior, current, detected_at=_detected_at())
     logger.info("Bill family: {:,} activity events", len(events))
@@ -1944,14 +1838,19 @@ def build_bill_family(
     # 4. Publish. Every table goes through the one merge helper. Each prior was
     # either downloaded above or found absent, so the merge is told rather than
     # left to retry a download that already failed.
-    section_scopes = _complete_child_scopes("bill_versions", folded.bill_versions, folded.bill_sections, "section_count")
+    section_scopes = _complete_child_scopes(
+        "bill_versions", folded.bill_versions, folded.bill_sections, "section_count"
+    )
     item_scopes = _complete_child_scopes("section_diffs", folded.section_diffs, folded.section_diff_items, "item_count")
 
     pair_identity = TABLE_CONTRACTS["section_diffs"].identity
+    retired_pairs = body.retired_pairs
     if retired_pairs:
         logger.warning("Bill family: retiring {:,} published comparisons of non-neighbours", len(retired_pairs))
     if retired_versions:
         logger.warning("Bill family: retiring {:,} published printings keyed as another", len(retired_versions))
+    if superseded:
+        logger.info("Bill family: retiring {:,} placeholders a processed body now stands for", len(superseded))
     version_identity = TABLE_CONTRACTS["bill_versions"].identity
     # Each scope names parents whose prior child rows this run replaces --
     # emptying them where the run publishes none.
@@ -1970,7 +1869,7 @@ def build_bill_family(
                 }
             },
         ),
-        "bill_versions": (version_identity, retired_versions),
+        "bill_versions": (version_identity, retired_versions | superseded),
         "bill_sections": (version_identity, section_scopes | retired_versions),
         "section_diffs": (pair_identity, retired_pairs),
         "section_diff_items": (pair_identity, item_scopes | retired_pairs),
@@ -2004,7 +1903,10 @@ def build_bill_family(
             download_prior=download_prior,
             prior_present=prior_paths.get(ARCHIVES_TABLE) is not None,
             replace_parents=(ARCHIVE_IDENTITY, visited_archives),
-            parquet_metadata={ARCHIVE_COMPLETION_KEY: json.dumps(sorted(completed_archives))},
+            parquet_metadata={
+                ARCHIVE_COMPLETION_KEY: json.dumps(sorted(completed_archives)),
+                TEXT_REFUSALS_KEY: refusal_metadata(body.refusals),
+            },
         )
     )
     paths.append(
@@ -2051,6 +1953,130 @@ def build_bill_family(
         )
     )
     return tuple(paths)
+
+
+def _held_text_refusals(path: Path | None) -> dict[str, dict[str, Any]]:
+    """The BILLS printings the last run's zips refused, by zip link, with the entry each was read at."""
+    if path is None:
+        return {}
+    import pyarrow.parquet as pq
+
+    return refusal_state((pq.read_schema(path).metadata or {}).get(TEXT_REFUSALS_KEY.encode()))
+
+
+def _in_scope(bill_id: str, congresses: Collection[int], bill_types: Collection[str]) -> bool:
+    congress, bill_type, _number = bill_id.split("-")
+    return int(congress) in congresses and bill_type in bill_types
+
+
+def _run_body_pass(
+    prior_paths: Mapping[str, Path | None],
+    index: PriorIndex,
+    fresh_versions: Sequence[Mapping[str, Any]],
+    retired_versions: Collection[tuple[str, ...]],
+    *,
+    congresses: Collection[int],
+    bill_types: Collection[str],
+    bills_acquirer: BulkBillsSource | None,
+    body_acquirer: PackageBodySource | None,
+    remaining: list[int],
+    engine: EngineStamp,
+    classify: SectionClassifier | None,
+    summarize: BillSummarizer | None,
+    summarize_diff: DiffSummarizer | None,
+    fresh_bills: Sequence[Mapping[str, Any]],
+    refusals: Mapping[str, Mapping[str, Any]],
+) -> Any:
+    """Plan and run the body pass over the in-scope bills with body or comparison work.
+
+    The candidates are the prior index's ``body_bills`` and the bills this
+    run's status pass rebuilt; only their ``bill_versions`` rows are read,
+    prior and fresh, the fresh winning, and none a mis-keyed retirement names.
+    """
+    import duckdb
+
+    candidates = {
+        bill
+        for bill in {*index.body_bills, *(row["bill_id"] for row in fresh_versions)}
+        if _in_scope(bill, congresses, bill_types)
+    }
+    fresh = {(row["bill_id"], row["version_code"], row["source"]): row for row in fresh_versions}
+    columns = (
+        "bill_id",
+        "version_code",
+        "source",
+        "label",
+        "version_date",
+        "package_id",
+        "offered_formats_json",
+        "sha256",
+    )
+    rows: list[Mapping[str, Any]] = []
+    path = prior_paths.get("bill_versions")
+    if candidates and path is not None and _has_columns(path, columns):
+        wanted = duckdb.sql("SELECT UNNEST(?::VARCHAR[]) AS bill_id", params=[sorted(candidates)])  # noqa: F841 — read by name below
+        rows = (
+            duckdb.sql(
+                f"SELECT {', '.join(f't.{column}' for column in columns)} FROM read_parquet('{path}') t "
+                "SEMI JOIN wanted w ON t.bill_id = w.bill_id"
+            )
+            .to_arrow_table()
+            .to_pylist()
+        )
+    retired = set(retired_versions)
+    merged = [
+        row
+        for row in rows
+        if (key := (row["bill_id"], row["version_code"], row["source"])) not in fresh and key not in retired
+    ]
+    merged.extend(row for key, row in fresh.items() if key not in retired and key[0] in candidates)
+    work, retired_pairs, redundant = plan_work(
+        merged,
+        held=index.held_codes,
+        xml=index.xml_codes,
+        complete_pairs=index.pairs,
+        published_pairs=index.published_pairs,
+        shadowed=index.shadowed,
+    )
+    logger.info(
+        "Bill family: body pass over {:,} bills with work ({:,} pending printings) of {:,} candidates",
+        len(work),
+        sum(len(bill.pending) for bill in work),
+        len(candidates),
+    )
+    bill_rows: dict[str, Mapping[str, Any]] = {}
+    if summarize is not None and work:
+        # A summary reads its bill's title, stage and money-bill kind: this
+        # run's row where the status pass wrote one, the published one else.
+        bill_rows = {row["bill_id"]: row for row in fresh_bills}
+        path = prior_paths.get("congress_bills")
+        facts = ("bill_id", "title", "stage", "money_bill_kind")
+        unread = sorted({bill.bill_id for bill in work} - bill_rows.keys())
+        if unread and path is not None and _has_columns(path, facts):
+            wanted = duckdb.sql("SELECT UNNEST(?::VARCHAR[]) AS bill_id", params=[unread])  # noqa: F841 — read by name below
+            for row in (
+                duckdb.sql(
+                    f"SELECT {', '.join(f't.{column}' for column in facts)} FROM read_parquet('{path}') t "
+                    "SEMI JOIN wanted w ON t.bill_id = w.bill_id"
+                )
+                .to_arrow_table()
+                .to_pylist()
+            ):
+                bill_rows[row["bill_id"]] = row
+    outcome = BodyPass(
+        bills_source=bills_acquirer,
+        body_source=body_acquirer,
+        remaining=remaining,
+        engine=engine,
+        classify=classify,
+        summarize_diff=summarize_diff,
+        refusals=refusals,
+        summarize=summarize,
+        bill_rows=bill_rows,
+    ).run(work)
+    outcome.retired_pairs |= retired_pairs
+    outcome.superseded |= redundant
+    return outcome
 
 
 def _detected_at() -> str:

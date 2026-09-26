@@ -24,6 +24,34 @@ def isolate_env(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch)
             monkeypatch.delenv(name, raising=False)
 
 
+class _NoBulkBillText:
+    """Every BILLS folder lists nothing, so the per-package route answers for every printing.
+
+    The bill family builds its keyless bulk bill-text acquirer by default;
+    this stands in for it so no test reaches GovInfo, and a test of the bulk
+    route passes its own ``bills_acquirer``.
+    """
+
+    def __init__(self, **_arguments) -> None:
+        self.listings: list[tuple[int, int, str]] = []
+
+    def list_folder(self, congress: int, session: int, bill_type: str):
+        from types import SimpleNamespace
+
+        self.listings.append((congress, session, bill_type))
+        link = f"https://www.govinfo.gov/bulkdata/BILLS/{congress}/{session}/{bill_type}/BILLS-{congress}-{session}-{bill_type}.zip"
+        return SimpleNamespace(listing=SimpleNamespace(members={}, zip_entry=SimpleNamespace(link=link)))
+
+    def acquire(self, listing, *, keep=None):
+        raise AssertionError("an empty listing names nothing to download")
+
+
+@pytest.fixture(autouse=True)
+def no_bulk_bill_text(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep the bill family's default bulk bill-text acquirer off the network (see ``_NoBulkBillText``)."""
+    monkeypatch.setattr("spicy_regs.transforms.build_bill_family.BulkBillsAcquirer", _NoBulkBillText, raising=False)
+
+
 class _ObjectsListingClient:
     """ListObjectsV2 pages over a fake resource's ``objects.filter``, so its refusals and records still apply."""
 

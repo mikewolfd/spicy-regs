@@ -10,7 +10,8 @@ and two comparisons into and out of ``eas2`` whose items name sections never
 published (receipt ``fork-execution-2026-09-21/repeated-printings-2026-09-26/``).
 
 The end-to-end case first rebuilds that published shape from the same native
-bytes, then runs as the next scheduled run would and checks the repair. The
+bytes, through the provider of the time fed every printing the host then
+fetched, then runs as the next scheduled run would and checks the repair. The
 fixtures and their provenance are in ``tests/fixtures/govinfo_bills/README.md``.
 """
 
@@ -18,12 +19,14 @@ from __future__ import annotations
 
 import importlib
 from contextlib import contextmanager
+from dataclasses import replace
 from pathlib import Path
 
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 from spicy_docs.interpretation import bill_family as family_provider
+from spicy_docs.schemas import TABLE_CONTRACTS
 from spicy_docs.sources.congress.bill_status import BillIdentity
 from spicy_docs.sources.congress.bill_tree import parse_bill_tree
 from spicy_docs.sources.congress.bill_versions import version_slug
@@ -74,6 +77,39 @@ def _published_before_0_37():
         yield
 
 
+def _published_by_the_old_host(directory: Path, identity: BillIdentity) -> dict[str, Path]:
+    """The tables generation d380cdc0 published for one bill, from the same native bytes.
+
+    The host of the time read every listed printing's body into one
+    ``build_bill_family`` call, keyed by stage name, so both Senate
+    engrossments arrived under one code; a printing with no fixture is the
+    metadata-only row it published for an unread body.
+    """
+    directory.mkdir()
+    status = _status(identity)
+    bodies = PackageBodies()
+    with _published_before_0_37():
+        versions = []
+        for listed in build._listed_captures(status):
+            try:
+                package = bodies.acquire(listed.package_id or "")
+            except LookupError:
+                versions.append(listed)
+                continue
+            document = parse_bill_tree(package.body_capture.body, version=listed.version_code)
+            versions.append(replace(listed, source="govinfo", body=package.body_capture, document=document))
+        tables = family_provider.build_bill_family(
+            family_provider.BillFamilyCapture(status=status, versions=tuple(versions)), engine=build.engine_stamp()
+        )
+    paths = {}
+    for contract, attr in build.FAMILY_TABLES:
+        columns = TABLE_CONTRACTS[contract].columns
+        schema = pa.schema([(column, pa.string()) for column in columns])
+        paths[contract] = directory / f"{contract}.parquet"
+        pq.write_table(pa.Table.from_pylist(list(getattr(tables, attr)), schema=schema), paths[contract])
+    return paths
+
+
 def _with_stale_listing(paths: dict[str, Path]) -> None:
     """Add the congress row an earlier generation left: ``eas2``'s listing under the first printing's code."""
     table = pq.read_table(paths["bill_versions"])
@@ -116,8 +152,7 @@ def test_the_host_keys_a_numbered_reprint_as_its_own_printing(identity, reprint,
 # Repair: the next run over the published d380cdc0 shape.
 # --------------------------------------------------------------------------- #
 def test_the_next_run_separates_a_mixed_printing_and_its_comparisons(tmp_path, scoped):
-    with _published_before_0_37():
-        audited = _run(tmp_path / "audited", NativeBulk(HR6644), PackageBodies())
+    audited = _published_by_the_old_host(tmp_path / "audited", HR6644)
     _with_stale_listing(audited)
     eas, eas2 = _elements("119hr6644eas"), _elements("119hr6644eas2")
     assert len(eas) < len(eas2), "the fixture keeps the published shape: the reprint has more sections"
@@ -136,8 +171,10 @@ def test_the_next_run_separates_a_mixed_printing_and_its_comparisons(tmp_path, s
         repaired
     )
     assert _unresolved_items(repaired) == []
-    # The re-read scope: the two unheld printings and their neighbours.
-    assert sorted(bodies.requested) == [f"BILLS-119hr6644{suffix}" for suffix in ("eah", "eas", "eas2", "enr", "pcs")]
+    # The re-read scope: the two unheld printings (the first printing's sections
+    # no longer match its row) and the neighbours of the comparisons not yet
+    # published; placed-on-calendar -> eas is published whole, so pcs is not read.
+    assert sorted(bodies.requested) == [f"BILLS-119hr6644{suffix}" for suffix in ("eah", "eas", "eas2", "enr")]
 
     steady = PackageBodies()
     again = _run(tmp_path / "steady", NativeBulk(HR6644), steady, prior=tmp_path / "repaired")

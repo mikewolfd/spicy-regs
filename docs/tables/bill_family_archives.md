@@ -4,7 +4,7 @@
 
 **Bill-family archive listings**
 
-One row per BILLSTATUS bulk folder a `bill-family` run read, holding the listing entry it read; the next run compares against it before downloading that folder's zip only when the generation's metadata lists the folder as complete (its bodies and XML pairs fetched), so a row records what was read, never that the folder may be skipped. All columns are stored as VARCHAR.
+One row per BILLSTATUS bulk folder a `bill-family` run read, holding the listing entry it read; the next run compares against it before downloading that folder's zip only when the generation's metadata lists the folder as complete (every member parsed and every rebuilt bill shaped), so a row records what was read, never that the folder may be skipped. Printing bodies are read apart from status, by each printing's own state; the same metadata names the BILLS bulk printings a zip refused, with the zip entry they were read at, so an unchanged zip is not read again for them. All columns are stored as VARCHAR.
 
 **Coverage.** Not a range. The adoption run produced 2 rows in this output from the 118th Congress's HR and S BILLSTATUS archives, processing 16,213 bills in one pass. The pass used 16 requests (8 keyed, 8 keyless), with the printing cap fixed at four and model calls disabled. Two folders were acquired from a cold start; this run does not measure archive resume. Receipt: `rollups-0-24-0-adoption-2026-09-20/`. Local output only; not uploaded. *(measured 2026-09-20)*
 

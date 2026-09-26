@@ -734,13 +734,63 @@ def test_a_new_printing_pulls_its_neighbour_so_the_diff_still_happens(tmp_path, 
     assert pq.read_table(paths["section_diffs"]).to_pylist(), "the new pair must still be compared"
 
 
-def test_needed_printings_picks_the_unheld_and_their_neighbours():
-    from spicy_regs.transforms.build_bill_family import _needed_printings
+def _listed_row(code: str, label: str, date: str, suffix: str | None, *, source: str = "congress") -> dict:
+    """One ``bill_versions`` row of 119 HR 6028 as the status pass lists it."""
+    return {
+        "bill_id": "119-hr-6028",
+        "version_code": code,
+        "source": source,
+        "label": label,
+        "version_date": date,
+        "package_id": f"BILLS-119hr6028{suffix}" if suffix else None,
+        "offered_formats_json": None,
+        "sha256": "sha256:held" if source == "govinfo" else None,
+    }
 
-    codes = ["a", "b", "c", "d"]
-    assert _needed_printings(codes, held=set(codes)) == set()
-    assert _needed_printings(codes, held={"a", "b", "c"}) == {2, 3}
-    assert _needed_printings(codes, held=()) == {0, 1, 2, 3}
+
+FOUR_PRINTINGS = (
+    ("introduced-in-house", "Introduced in House", "2025-01-01T05:00:00Z", "ih"),
+    ("reported-in-house", "Reported in House", "2025-02-01T05:00:00Z", "rh"),
+    ("engrossed-in-house", "Engrossed in House", "2025-03-01T05:00:00Z", "eh"),
+    ("rfs", "Referred in Senate", "2025-04-01T04:00:00Z", "rfs"),
+)
+
+
+def test_the_body_plan_reads_what_is_pending_and_the_neighbours_its_comparisons_need():
+    """Two held XML printings, one compared; two listed without a body, and a comparison that skips one."""
+    from spicy_regs.transforms.bill_family_bodies import plan_work
+
+    rows = [_listed_row(*printing) for printing in FOUR_PRINTINGS]
+    rows += [_listed_row(*printing, source="govinfo") for printing in FOUR_PRINTINGS[:2]]
+    held = {"introduced-in-house", "reported-in-house"}
+    skipping = ("introduced-in-house", "govinfo", "engrossed-in-house", "govinfo")
+    [work], retired, redundant = plan_work(
+        rows,
+        held=lambda bill: held,
+        xml=lambda bill: held,
+        complete_pairs={("119-hr-6028", "introduced-in-house", "reported-in-house")},
+        published_pairs={"119-hr-6028": {skipping}},
+        shadowed={("119-hr-6028", "introduced-in-house")},
+    )
+    assert [printing.code for printing in work.printings] == [code for code, *_ in FOUR_PRINTINGS]
+    assert work.pending == {"engrossed-in-house", "rfs"}
+    assert work.open_pairs == [("reported-in-house", "engrossed-in-house"), ("engrossed-in-house", "rfs")]
+    # A comparison is read for only when both of its sides will be in hand.
+    assert work.needed({"engrossed-in-house", "rfs"}) == {"reported-in-house", "engrossed-in-house", "rfs"}
+    assert work.needed({"rfs"}) == {"rfs"}
+    assert work.needed(()) == set()
+    assert retired == {("119-hr-6028", *skipping)}, "a comparison skipping a printing is retired"
+    assert redundant == {("119-hr-6028", "introduced-in-house", "congress")}
+
+    every = {code for code, *_ in FOUR_PRINTINGS}
+    complete = {
+        ("119-hr-6028", older, newer)
+        for (older, *_), (newer, *_) in zip(FOUR_PRINTINGS, FOUR_PRINTINGS[1:], strict=False)
+    }
+    work, _, _ = plan_work(
+        rows, held=lambda bill: every, xml=lambda bill: every, complete_pairs=complete, published_pairs={}
+    )
+    assert work == [], "a bill whose printings and comparisons are all published has no body work"
 
 
 # --------------------------------------------------------------------------- #
@@ -1560,7 +1610,7 @@ def test_a_printing_with_no_govinfo_suffix_is_a_row_not_a_dead_run():
     """
     from spicy_docs.sources.congress.bill_versions import VersionCodeError, govinfo_suffix, version_slug
 
-    from spicy_regs.transforms.build_bill_family import _version_captures
+    from spicy_regs.transforms.build_bill_family import _listed_captures
 
     # The premise the test rests on, re-derived rather than assumed: the slug
     # resolves and its GovInfo suffix does not.
@@ -1570,6 +1620,7 @@ def test_a_printing_with_no_govinfo_suffix_is_a_row_not_a_dead_run():
 
     class _Printing:
         type = "Private Law"
+        date = None
         formats = ()
         package_id = None
 
@@ -1577,7 +1628,7 @@ def test_a_printing_with_no_govinfo_suffix_is_a_row_not_a_dead_run():
         identity = IDENTITY
         text_versions = (_Printing(),)
 
-    captures = _version_captures(_Status(), acquirer=None, budget=[10])
+    captures = _listed_captures(_Status())
 
     assert [c.version_code for c in captures] == ["private-law"]
     assert captures[0].package_id is None, "unaddressable, and the row says so rather than guessing"
@@ -1585,23 +1636,17 @@ def test_a_printing_with_no_govinfo_suffix_is_a_row_not_a_dead_run():
 
 
 def test_an_unaddressable_printing_is_never_fetched_and_spends_no_budget():
-    """The `package_id is not None` guard, with a printing that gets past the other two.
+    """A printing with no package id is not pending, and the fetch guard holds even if one were asked for.
 
-    The sibling test above passes no acquirer and no formats, so the guard on
-    `package_id` is never evaluated there and deleting it would survive. This
-    one gives the printing a real offered format, so `chosen` is not None and an
-    acquirer *is* present — the only remaining thing standing between the run
-    and `acquire(None)` is the guard under test.
-
-    The format's URL is a Congress.gov link rather than a canonical GovInfo one,
-    so `bill_package_id_from_url` declines it (it recognizes only the canonical
-    form) and the derivation below it raises for `private-law`. That is the real
-    shape: the publisher offers somewhere to read the printing, and nothing in
-    it addresses a GovInfo package.
+    The printing offers a real format -- a Congress.gov link, which
+    `bill_package_id_from_url` declines, and `private-law` has no GovInfo suffix
+    to derive one from -- so `chosen` is not None and an acquirer is present:
+    only the package-id guard stands between the run and `acquire(None)`.
     """
     from spicy_docs.sources.congress.bill_status import BillTextFormat, BillTextVersion
+    from spicy_docs.sources.congress.bill_versions import DEFAULT_FORMAT_PREFERENCE, choose_format
 
-    from spicy_regs.transforms.build_bill_family import _version_captures
+    from spicy_regs.transforms.bill_family_bodies import BillWork, BodyPass, Printing, plan_work
 
     class _RecordingAcquirer:
         def __init__(self) -> None:
@@ -1611,37 +1656,37 @@ def test_an_unaddressable_printing_is_never_fetched_and_spends_no_budget():
             self.requested.append(package_id)
             raise AssertionError(f"acquire must not be called for an unaddressable printing: {package_id!r}")
 
-    printing = BillTextVersion(
-        type="Private Law",
-        date="2026-09-01",
-        formats=(
-            BillTextFormat(
-                url="https://www.congress.gov/119/bills/hr6028/BILLS-119hr6028.htm", type="HTML", package_id=None
-            ),
+    formats = (
+        BillTextFormat(
+            url="https://www.congress.gov/119/bills/hr6028/BILLS-119hr6028.htm", type="HTML", package_id=None
         ),
-        package_id=None,
     )
+    version = BillTextVersion(type="Private Law", date="2026-09-01", formats=formats, package_id=None)
+    assert choose_format(version.formats, prefer=DEFAULT_FORMAT_PREFERENCE) is not None
 
-    class _Status:
-        identity = IDENTITY
-        text_versions = (printing,)
+    row = _listed_row("private-law", "Private Law", "2026-09-01", None) | {
+        "offered_formats_json": json.dumps([{"url": formats[0].url, "type": "HTML", "package_id": None}])
+    }
+    work, _, _ = plan_work([row], held=lambda bill: (), xml=lambda bill: (), complete_pairs=(), published_pairs={})
+    assert work == [], "an unaddressable printing is not pending"
 
     acquirer = _RecordingAcquirer()
     budget = [10]
-    captures = _version_captures(_Status(), acquirer=acquirer, budget=budget)
-
-    # The premise: the other two conditions are both satisfied, so only the
-    # package_id guard can be what stops the call.
-    from spicy_docs.sources.congress.bill_versions import DEFAULT_FORMAT_PREFERENCE, choose_format
-
-    assert choose_format(printing.formats, prefer=DEFAULT_FORMAT_PREFERENCE) is not None
-    assert acquirer is not None
-
+    forced = BillWork(
+        "119-hr-6028", IDENTITY, [Printing("private-law", version, None, False, False, None)], {"private-law"}, []
+    )
+    outcome = BodyPass(
+        bills_source=None,
+        body_source=acquirer,
+        remaining=budget,
+        engine=engine_stamp(),
+        classify=None,
+        summarize_diff=None,
+        refusals={},
+    ).run([forced])
     assert acquirer.requested == [], "an unaddressable printing must not be handed to the acquirer"
     assert budget == [10], "and must not spend the run's per-run fetch budget"
-    assert [c.version_code for c in captures] == ["private-law"]
-    assert captures[0].package_id is None
-    assert captures[0].source == "congress", "not fetched, so the row does not claim a GovInfo source"
+    assert outcome.families == [], "nothing was read, so nothing is built"
 
 
 # --------------------------------------------------------------------------- #

@@ -18,10 +18,13 @@ whether it was filled or refused; per ``(congress, bill_type)`` walked, the
 route's declared total against what was reached. Scope comes from the workflow
 inputs ``BILL_FAMILY_CONGRESSES`` and ``BILL_FAMILY_BILL_TYPES``, defaulting to
 the current Congress and all eight bill types.
-``BILL_FAMILY_MAX_VERSION_FETCHES`` bounds printing acquisitions and the
-existing pre-108 metadata-backfill request budget; it defaults to 600, and zero
-disables those requests without disabling BILLSTATUS metadata reads (model-call
-policy is separate from this acquisition cap). The ``congress_bills`` merge
+Printing bodies come from the keyless BILLS bulk folders from the 113th Congress
+on (``transforms/bill_family_bodies.py``), each zip read once for the printings
+it holds; ``BILL_FAMILY_MAX_VERSION_FETCHES`` bounds the per-package route that
+remains for older printings and what bulk does not hold, and the pre-108
+metadata-backfill request budget; it defaults to 600, and zero disables those
+requests without disabling BILLSTATUS or bulk text reads (model-call policy is
+separate from this acquisition cap). The ``congress_bills`` merge
 reads the published ``laws`` table best-effort to fill
 ``statutes_at_large_cite`` (``transforms/table_merge.py``) — a ``soft_input``,
 absent or stale without failing anything — which is why the ``laws`` rollup's
