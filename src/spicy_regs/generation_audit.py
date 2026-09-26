@@ -635,13 +635,20 @@ def _multiset(con, common: Sequence[str], identity: Sequence[str], retyped: set[
 
 
 def _conservation(con, table: str, current: Mapping, prior: Mapping, info: Mapping, prior_info: Mapping,
-                  declaration: Declaration | None, profile: dict | None, run: _Run) -> dict:
-    """Both directions against the prior generation's table: identities, rows, columns and changed cells."""
+                  declaration: Declaration | None, profile: dict | None, run: _Run,
+                  retirement: Mapping | None = None) -> dict:
+    """Both directions against the prior generation's table: identities, rows, columns and changed cells.
+
+    Removals a build journaled (``rows-retired``) are reconciled exactly instead of being a review item.
+    """
     result: dict[str, Any] = {"rows": current["rows"], "prior_rows": prior["rows"],
                               "bytes_equal": current["sha256"] == prior["sha256"]}
+    types = {name: kind for name, kind in info["columns"]}
+    if retirement is not None:
+        common_now = [name for name, _ in prior_info["columns"] if name in types]
+        result["retirement"] = _reconcile_retirement(con, table, retirement, common_now, run)
     if result["bytes_equal"]:
         return {**result, "status": "bytes-equal"}
-    types = {name: kind for name, kind in info["columns"]}
     prior_types = {name: kind for name, kind in prior_info["columns"]}
     common = [name for name in prior_types if name in types]
     retyped = {name for name in common if prior_types[name] != types[name]}
@@ -668,10 +675,78 @@ def _conservation(con, table: str, current: Mapping, prior: Mapping, info: Mappi
                       **_multiset(con, common, identity, retyped, run))
         removed = result.get("identities_removed", result["prior_rows_not_in_current"]["rows"])
         differs = result["prior_rows_not_in_current"]["rows"] or result["current_rows_not_in_prior"]["rows"]
-    if removed:
+    if removed and (result.get("retirement") or {}).get("status") != "matches":
         run.finding("review", "conservation", "prior-identities-or-rows-removed", table, count=removed)
     changed = differs or retyped or result["columns_removed"] or result["columns_added"]
     return {**result, "status": "changed" if changed else "equal"}
+
+
+#: The journal event a build writes when it removes prior rows on purpose (spicy-regs
+#: ``table_merge.retired_rows``): the table, its key, and every removed identity in key order.
+RETIRED_EVENT = "rows-retired"
+
+
+def _retirements(events: Sequence[Mapping], run: _Run) -> dict[str, dict]:
+    """Each table's journaled retirements: its key, and the identities its build removed on purpose."""
+    declared: dict[str, dict] = {}
+    for event in events:
+        if event.get("event") != RETIRED_EVENT:
+            continue
+        table, key, rows = event.get("table"), event.get("key"), event.get("rows")
+        if not (isinstance(table, str) and isinstance(key, list) and key and all(isinstance(k, str) for k in key)
+                and isinstance(rows, list) and all(isinstance(r, list) and len(r) == len(key) for r in rows)):
+            run.finding("fail", "evidence", "rows-retired-malformed", table if isinstance(table, str) else None)
+            continue
+        held = declared.setdefault(table, {"key": key, "rows": [], "events": 0})
+        if held["key"] != key:
+            run.finding("fail", "evidence", "rows-retired-keys-differ", table, keys=[held["key"], key])
+            continue
+        held["rows"].extend(rows)
+        held["events"] += 1
+    return declared
+
+
+def _reconcile_retirement(con, table: str, declared: Mapping, common: Sequence[str], run: _Run) -> dict:
+    """Removed identities against the journaled ones: equal, or a failure naming each side's surplus.
+
+    A removal the build did not journal, a journaled identity the output still holds, and one the prior never
+    held are each a failure; an exact match makes the removals expected rather than a review item. Keys compare
+    as text, NULL-safe (set operations treat NULLs as equal), as the build's own ``retired_rows`` matches them.
+    """
+    import pyarrow as pa
+
+    key = list(declared["key"])
+    result: dict[str, Any] = {"key": key, "declared": len(declared["rows"]), "events": declared["events"]}
+    if not all(column in common for column in key):
+        run.finding("fail", "conservation", "retirement-key-not-in-table", table, key=key)
+        return {**result, "status": "key-not-in-table"}
+    as_text = ", ".join(f"CAST({_q(c)} AS VARCHAR) AS {_q(c)}" for c in key)
+    cols = ", ".join(_q(c) for c in key)
+    con.register("audit_retired", pa.table({c: pa.array([None if row[i] is None else str(row[i])
+                                                         for row in declared["rows"]], pa.string())
+                                            for i, c in enumerate(key)}))
+    try:
+        con.execute(f"CREATE OR REPLACE TEMP TABLE audit_removed AS "
+                    f"SELECT {as_text} FROM audit_prior EXCEPT SELECT {as_text} FROM audit_current")
+        result["removed"] = _one(con, "SELECT count(*) FROM audit_removed")[0]
+        checks = {
+            "removal-not-journaled": f"SELECT {cols} FROM audit_removed EXCEPT SELECT {cols} FROM audit_retired",
+            "journaled-retirement-still-present":
+                f"SELECT {cols} FROM audit_retired INTERSECT SELECT {as_text} FROM audit_current",
+            "journaled-retirement-not-in-prior":
+                f"SELECT {cols} FROM audit_retired EXCEPT SELECT {as_text} FROM audit_prior",
+        }
+        for code, query in checks.items():
+            count = _one(con, f"SELECT count(*) FROM ({query})")[0]
+            result[code.replace("-", "_")] = count
+            if count:
+                sample = con.execute(f"SELECT * FROM ({query}) ORDER BY ALL LIMIT {run.samples}").fetchall()
+                run.finding("fail", "conservation", code, table, count=count,
+                            sample=[{c: run.show(v) for c, v in zip(key, row)} for row in sample])
+    finally:
+        con.unregister("audit_retired")
+    result["status"] = "differs" if any(result[c.replace("-", "_")] for c in checks) else "matches"
+    return result
 
 
 # --------------------------------------------------------------------------- #
@@ -764,6 +839,7 @@ def _evidence(base: PublicBase, root: Mapping | None, family: str, run: _Run,
             continue
         events.append(event)
     section["journal"] = {"events": len(events), "by_event": dict(Counter(str(e.get("event")) for e in events))}
+    section["retirements"] = _retirements(events, run)
     try:
         members = {member["objectKey"] for manifest in source.manifests()
                    for member in json.loads(source.read_control(manifest)).get("members", []) if "objectKey" in member}
@@ -895,6 +971,11 @@ def audit(base: PublicBase, *, family: str | None = None, table: str | None = No
                     run.finding("review", "conservation", "table-removed", key.removesuffix(".parquet"))
         sections: dict[str, dict] = {"publication": publication, "prior": prior_section, "schema": {}, "identity": {},
                                      "conservation": {}, "evidence": {}, "state": {}}
+        # Evidence first: a build's journaled retirements decide how conservation reads its removals.
+        evidence = sections["evidence"] = _evidence(base, root, family, run, sources)
+        retirements = evidence.get("retirements", {})
+        for unknown in sorted(set(retirements) - {key.removesuffix(".parquet") for key in entry["tables"]}):
+            run.finding("fail", "evidence", "retirement-names-no-table-of-this-family", unknown)
         cells, metadata = {}, {}
         for key in keys:
             name = key.removesuffix(".parquet")
@@ -916,7 +997,7 @@ def audit(base: PublicBase, *, family: str | None = None, table: str | None = No
             sections["identity"][name], profile = _identity(con, info, declaration, name, run)
             try:
                 sections["conservation"][name] = _conserve(con, base, name, key, descriptor, info, prior_entry,
-                                                           declaration, profile, run)
+                                                           declaration, profile, run, retirements.get(name))
             except _UNREADABLE as error:
                 run.finding("fail", "conservation", "prior-table-unreadable", name, error=str(error))
                 sections["conservation"][name] = {"status": "prior-unreadable"}
@@ -925,7 +1006,6 @@ def audit(base: PublicBase, *, family: str | None = None, table: str | None = No
             metadata[name] = scan_bytes(b"\n".join(bytes(k) + b"=" + bytes(v) for k, v in con.execute(
                 f"SELECT key, value FROM parquet_kv_metadata({_literal(base.path(entry['prefix'] + '/' + key))})"
             ).fetchall()), run.secrets)
-        evidence = sections["evidence"] = _evidence(base, root, family, run, sources)
         unexpected = evidence.get("body_shapes", {}).get("unexpected_2xx", [])
         if unexpected:
             cited = _cited(con, base, entry["prefix"], {k: infos[k] for k in keys if k in infos},
@@ -967,15 +1047,18 @@ def audit(base: PublicBase, *, family: str | None = None, table: str | None = No
 
 
 def _conserve(con, base: PublicBase, name: str, key: str, descriptor: Mapping, info: Mapping, prior: Mapping | None,
-              declaration: Declaration | None, profile: dict | None, run: _Run) -> dict:
+              declaration: Declaration | None, profile: dict | None, run: _Run,
+              retirement: Mapping | None = None) -> dict:
     if prior is None:
+        if retirement is not None and retirement["rows"]:
+            run.finding("fail", "conservation", "retirement-without-prior", name, declared=len(retirement["rows"]))
         return {"status": "no-prior"}
     if key not in prior["tables"]:
         return {"status": "table-added"}
     source = _parquet(base, prior["prefix"], key)
     con.execute(f"CREATE OR REPLACE VIEW audit_prior AS SELECT * FROM {source}")
     return _conservation(con, name, descriptor, prior["tables"][key], info, _table_info(con, source), declaration,
-                         profile, run)
+                         profile, run, retirement)
 
 
 def _dispositions(sections: Mapping[str, dict], run: _Run) -> dict:

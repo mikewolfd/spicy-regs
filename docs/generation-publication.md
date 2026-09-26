@@ -122,7 +122,10 @@ The report keeps its sections separate: publication (every member byte admitted;
 index, manifest and root agree), schema (names and types against the dictionary),
 identity (duplicate and NULL keys counted before any row is paired), conservation
 against a prior pin from the generation's captured chain (both directions, and
-multisets where identity cannot pair rows), evidence (admission, binding,
+multisets where identity cannot pair rows; a table whose build journals a
+`rows-retired` event, as `table_merge.retired_rows` computes it, must remove
+exactly the identities it names, and a removal it does not name, one it names that
+the output still holds, or one the prior never held is a failure), evidence (admission, binding,
 credential and body-shape scans) and state (an empty table is state, not a
 failure). Every report names source qualification and deployment as not assessed,
 and `limits` lists what the run could not see. Exit status 1 means at least one

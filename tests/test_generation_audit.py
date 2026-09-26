@@ -261,6 +261,52 @@ def test_an_empty_output_is_reported_as_state_not_failure(tmp_path, monkeypatch)
     assert any("cannot tell an intentionally uncomputed output" in limit for limit in report["limits"])
 
 
+def retiring(tmp_path, monkeypatch, rows):
+    """A prior with ids 1-3, then a generation whose build removed id 2 and journaled ``rows``."""
+    store = Store()
+    prior = publish(tmp_path, store, "prior", {"t.parquet": rows_of(("1", "a"), ("2", "b"), ("3", "c"))})
+    monkeypatch.setattr(pub, "load_family_root", lambda url, entry: (
+        raw := store.objects[f"{entry['prefix']}/artifact.json"], pub.family_root(raw, entry)))
+    evidence = CaptureEvidence(tmp_path, "test")
+    evidence.inherit(prior, public_url="https://test.invalid")
+    evidence.capture(capture("https://native.test/1", b"<ok/>"), stage="source")
+    evidence.event("rows-retired", stage="test", table="t", key=["id"], rows=rows,
+                   reason="the source's complete set for this scope", scope={"part": 1})
+    publish(tmp_path, store, "current", {"t.parquet": rows_of(("1", "a"), ("3", "c"))}, prior=prior, evidence=evidence)
+    return audit(public_base(store, tmp_path / "public"), family="test", declarations=DECLARED)
+
+
+rows_of = rows
+
+
+def test_removals_the_build_journaled_exactly_are_expected_not_reviewed(tmp_path, monkeypatch):
+    report = retiring(tmp_path, monkeypatch, [["2"]])
+
+    retirement = report["sections"]["conservation"]["t"]["retirement"]
+    assert retirement["status"] == "matches" and (retirement["declared"], retirement["removed"]) == (1, 1)
+    assert "prior-identities-or-rows-removed" not in codes(report)
+    assert not codes(report, "fail")
+
+
+@pytest.mark.parametrize("journaled,code", [
+    ([], "removal-not-journaled"),
+    ([["2"], ["3"]], "journaled-retirement-still-present"),
+    ([["2"], ["9"]], "journaled-retirement-not-in-prior"),
+])
+def test_a_removal_and_its_journal_must_agree_exactly(tmp_path, monkeypatch, journaled, code):
+    report = retiring(tmp_path, monkeypatch, journaled)
+
+    assert code in codes(report, "fail")
+    assert report["sections"]["conservation"]["t"]["retirement"]["status"] == "differs"
+
+
+def test_a_malformed_retirement_event_fails_and_explains_nothing(tmp_path, monkeypatch):
+    report = retiring(tmp_path, monkeypatch, [["2", "extra"]])
+
+    assert "rows-retired-malformed" in codes(report, "fail")
+    assert "prior-identities-or-rows-removed" in codes(report, "review")
+
+
 def test_changed_member_bytes_fail_admission_and_the_cli_exit(tmp_path, capsys):
     store = Store()
     index = publish(tmp_path, store, "current", {"t.parquet": rows(("1", "a"))})
