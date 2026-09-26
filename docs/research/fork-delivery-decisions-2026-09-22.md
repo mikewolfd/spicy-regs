@@ -167,7 +167,7 @@ Commits are spicy-regs fork `main` unless named. "Left" is what remains and what
 | 53 | Not started. | — | Read the 24 bulk committee-master files; drop the 897 paged requests a day to a daily delta. |
 
 Also open, outside these decisions:
-- Re-measure the vote joins when ca's votes chain ends. `member_votes.bioguide_id → members` is LAG on L000555.
+- ~~Re-measure the vote joins when ca's votes chain ends.~~ Done in `b0497ee`: all four hold. L000555 (Luke Letlow, who died before taking the seat) is the one baselined orphan.
 - Re-measure the rulemaking joins when ca materializes decisions 54–57.
 - Ingest court clusters from the 2026-09-30 bulk edition. The search catch-up cannot fit a 125-a-day token.
 
