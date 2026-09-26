@@ -139,6 +139,38 @@ behind each, including state, cost and the recommended path, is in
 | 52 | Which agency readers to adopt? | **All four: SEC, FERC, CFTC and USITC EDIS.** | They shipped in spicy-docs 0.34.0 with no consumer. EDIS bulk jobs need a signed-in session client, and spicy-docs adds checkpoints and release profiles first. |
 | 53 | FEC committee history source. | **The 24 bulk committee-master files, not the PostgreSQL dump.** | 24 requests give 89,710 committees and 298,395 committee-cycle rows; the same read replaces the 897 paged requests a day, plus a small daily delta. |
 
+### Where decisions 34–53 stand (2026-09-26, 20:30 UTC)
+
+Commits are spicy-regs fork `main` unless named. "Left" is what remains and what it waits on.
+
+| # | State | Evidence | Left |
+| --- | --- | --- | --- |
+| 34 | Settled. | — | Nothing; the three model tables stay empty. |
+| 35 | Done. | `a7e32d2` (`topics_json`); spicy-docs 0.42.0 contract adopted in `aede342`; the full re-read of 2026-09-26 fetched all 1,009,313 documents. | The resolved document→FR link, as a DocSpec typed layer (DocSpec). |
+| 36 | Planned; nothing deleted. | Planner `283a854`, `88cd489`; gated execution `a5ef304` (`plan-generation-retention.yml`). Plan run 36264884138: 91 generations (1.28 GiB) deletable, 195 kept (15.09 GiB), every ledger and DocSpec pin kept. Review list: `generation-retention-2026-09-26/review-run-36264884138.md`. | **The owner's go-ahead.** Then dispatch with `execute_plan_run`, which deletes only what that plan and a fresh one agree on. After that, decide whether retention runs on a schedule. Rulemaking snapshots and `source-evidence/` blobs are outside the plan. |
+| 37 | Conditional. | — | Only if the fork serves queries directly. |
+| 38 | Open, agency by agency. | — | Per decision 7's cohorts (spicy-regs). |
+| 39 | Open. | — | DocSpec re-compares the ~64k records first; then the ledger records the qualification. |
+| 40 | Open. | The writer is still present: `transforms/merge_comments_partitioned.py`, `comment_partitions.py`. | Remove the declaration and those writers (spicy-regs). |
+| 41 | Open. | — | Per-attachment tool fallback with the tool recorded per attachment (spicy-regs). |
+| 42 | Superseded by decisions 54–57 below. | — | ca's lane. |
+| 43 | Waiting. | — | Needs an Engine hosting decision. |
+| 44 | Settled: not now. | — | — |
+| 45 | Settled. | — | Nothing; the refusals stay recorded. |
+| 46 | Waiting. | — | The cross-repo multi-file table design comes first (the owner's ruling of 2026-09-26). Then received-year windows, newest first. |
+| 47 | Running. | Activity tables live since migration run 36264742453 (`cb5d9f8`, joins `a7e9f84`); whole-year reads fixed in `a85293c` before any history year ran. The 2026 canary (run 36265472320, 56,887 filings) is running. | Verify the canary, then run `corpora/lobbying-backfill-2026-09-26/driver.zsh 2025 1999`. It runs one year per dispatch, newest first, and waits out the daily run. |
+| 48 | Done. | `1f516cc`; recipients→`sam_entities` re-recorded in `3d4a696`. | — |
+| 49 | Done. | `add9bd9`; `case_type` live (cv 10,034, cr 327, mj 213, po 191, NULL 653 for appellate and blank numbers). | — |
+| 50 | Filling. | `add9bd9`. Every run re-reads up to 15 packed id queries at the published 12 s interval. Run 36266967475 filled 692 of 3,693 dockets; 3,001 remain, about five more daily runs. | Full `/parties/` records for agency-party dockets linked to a rulemaking. These wait for ca's proceedings fix (decisions 54–57), which moves the rulemaking links. |
+| 51 | Waiting. | — | Multi-file tables, then the 2024 and 2026 cycles only. |
+| 52 | Not started. | — | SEC, FERC and CFTC readers. EDIS needs a signed-in session client and spicy-docs checkpoints first. |
+| 53 | Not started. | — | Read the 24 bulk committee-master files; drop the 897 paged requests a day to a daily delta. |
+
+Also open, outside these decisions:
+- Re-measure the vote joins when ca's votes chain ends. `member_votes.bioguide_id → members` is LAG on L000555.
+- Re-measure the rulemaking joins when ca materializes decisions 54–57.
+- Ingest court clusters from the 2026-09-30 bulk edition. The search catch-up cannot fit a 125-a-day token.
+
 ## Owner decisions, 2026-09-26 (rulemaking lifecycles)
 
 The owner decided these after the measurements in
