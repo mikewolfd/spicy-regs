@@ -26,6 +26,7 @@ BASELINE_DATE = "2026-09-26"
 BASELINE_RECEIPTS = (
     "~/Work/corpora/fork-execution-2026-09-21/join-map-2026-09-26/results.json",
     "~/Work/corpora/fork-execution-2026-09-21/join-map-2026-09-26/rule-targets-baseline.json",
+    "~/Work/corpora/fork-execution-2026-09-21/join-map-2026-09-26/unified-agenda-rin-after-backfill.json",
 )
 
 #: Expected resolution. ``complete``: every key should resolve and an orphan is
@@ -160,10 +161,17 @@ JOINS: tuple[Join, ...] = (
     _join("rule_targets", "docket_id", "dockets", "docket_id", 143_004, 98,
           reason="Normalized FR-to-Regulations.gov bridge from the materialized rulemaking snapshot."),
     _join("fr_docket_links", "document_number", "federal_register", "document_number", 603_702, 0),
-    _join("dockets", "rin", "unified_agenda", "rin", 14_421, 12_761, "scope",
-          "unified_agenda holds a single edition, so most historical RINs have no row."),
-    _join("federal_register", "rin", "unified_agenda", "rin", 35_859, 33_823, "scope",
-          "unified_agenda holds a single edition, so most historical RINs have no row."),
+    _join("dockets", "rin", "unified_agenda", "rin", 14_421, 994, "scope",
+          "unified_agenda holds every readable edition, Fall 1995 to the newest (not Spring 1995 or Spring 2012, "
+          "never published, nor the two 2004 editions SpicyDocs refuses). Of the 994 RINs no edition lists, 536 "
+          "are NMFS's 0648-X series, which it assigns to in-season actions and never puts on the agenda, 115 name "
+          "2026 dockets newer than the newest edition, and 9 are malformed. Receipt "
+          "join-map-2026-09-26/unified-agenda-rin-after-backfill.json."),
+    _join("federal_register", "rin", "unified_agenda", "rin", 35_859, 6_090, "scope",
+          "unified_agenda holds every readable edition, Fall 1995 to the newest. Of the 6,090 RINs no edition "
+          "lists, 2,211 are NMFS's 0648-X in-season series (every one), 1,409 first appear before Fall 1995, 179 "
+          "first appear in 2026, after the newest edition, and 460 are malformed as printed (3206-XXXX, "
+          "7100 AG80). Receipt join-map-2026-09-26/unified-agenda-rin-after-backfill.json."),
     # FEC.
     _join("org_committee_links", "committee_id", "fec_committees", "committee_id", 3_633, 0),
     _join("fec_source_records", "collection_id", "fec_collections", "collection_id", 647, 0),

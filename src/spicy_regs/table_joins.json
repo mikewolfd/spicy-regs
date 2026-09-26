@@ -5,7 +5,8 @@
     "date": "2026-09-26",
     "receipts": [
       "~/Work/corpora/fork-execution-2026-09-21/join-map-2026-09-26/results.json",
-      "~/Work/corpora/fork-execution-2026-09-21/join-map-2026-09-26/rule-targets-baseline.json"
+      "~/Work/corpora/fork-execution-2026-09-21/join-map-2026-09-26/rule-targets-baseline.json",
+      "~/Work/corpora/fork-execution-2026-09-21/join-map-2026-09-26/unified-agenda-rin-after-backfill.json"
     ]
   },
   "kinds": [
@@ -735,11 +736,11 @@
         "rin"
       ],
       "kind": "scope",
-      "reason": "unified_agenda holds a single edition, so most historical RINs have no row.",
+      "reason": "unified_agenda holds every readable edition, Fall 1995 to the newest (not Spring 1995 or Spring 2012, never published, nor the two 2004 editions SpicyDocs refuses). Of the 994 RINs no edition lists, 536 are NMFS's 0648-X series, which it assigns to in-season actions and never puts on the agenda, 115 name 2026 dockets newer than the newest edition, and 9 are malformed. Receipt join-map-2026-09-26/unified-agenda-rin-after-backfill.json.",
       "measured_via": null,
       "baseline_keys": 14421,
-      "baseline_missing": 12761,
-      "floor_pct": 11.5109
+      "baseline_missing": 994,
+      "floor_pct": 93.1072
     },
     {
       "child": "federal_register",
@@ -751,11 +752,11 @@
         "rin"
       ],
       "kind": "scope",
-      "reason": "unified_agenda holds a single edition, so most historical RINs have no row.",
+      "reason": "unified_agenda holds every readable edition, Fall 1995 to the newest. Of the 6,090 RINs no edition lists, 2,211 are NMFS's 0648-X in-season series (every one), 1,409 first appear before Fall 1995, 179 first appear in 2026, after the newest edition, and 460 are malformed as printed (3206-XXXX, 7100 AG80). Receipt join-map-2026-09-26/unified-agenda-rin-after-backfill.json.",
       "measured_via": null,
       "baseline_keys": 35859,
-      "baseline_missing": 33823,
-      "floor_pct": 5.6777
+      "baseline_missing": 6090,
+      "floor_pct": 83.0168
     },
     {
       "child": "org_committee_links",
