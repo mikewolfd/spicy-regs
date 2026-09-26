@@ -532,12 +532,12 @@
       "audits": [
         {
           "disposition": "qualified",
-          "pin": "45b8f6b8",
+          "pin": "9072b65d",
           "pin_kind": "artifact",
-          "date": "2026-09-25"
+          "date": "2026-09-26"
         }
       ],
-      "statement": "qualified at `45b8f6b8…` (2026-09-25): 1,579 votes and 382,536 positions, every prior identity retained. Only Senate 212/213 `match_action_index` change (21→17, 19→15) under `recorded-vote-first-numeric-action-v2`; all 845 links equal the first recorded reference in bill-family `5990abbb…`, 734 remain unmatched, and `member_votes` is byte-identical. All 50 retained overlap XMLs match every roll-call and member cell. Other votes inherit `0255d5de…` by exact equality; wider history and scorecards remain open. Receipt: `repair-qualification-2026-09-25/votes-usaspending/`."
+      "statement": "qualified at `9072b65d…` (2026-09-26): the 108th–119th, 23,358 roll calls and 7,384,694 positions, with no identity of `45b8f6b8…` removed. House 108th–118th holds 14,503 of the Clerk's 14,509 listed roll calls and Senate 7,276 of 7,277; the 7 absences are each stated by the source. 108-1-2's totals contradict its members' choices; five House files (112-1-484, 112-2-327, 113-2-275, 114-1-300, 114-2-44) list no recorded votes, and the two opened say \"vacated by unanimous consent\"; the Senate menu withholds 116-2-216 (a secret session, journaled `vote-withheld`). Links come from the bill's recorded action, then the vote file's own statement (`vote_file_legislation`). Every vote join holds: member_votes.bioguide_id misses only L000555, Luke Letlow, who died before taking his seat. The generation audit finds 0 failures; its 13 reviews are the Clerk's HTML index pages at the vote-source stage. Receipt: `votes-backfill-2026-09-26/final/`. At `45b8f6b8…`: 1,579 votes and 382,536 positions, every prior identity retained. Only Senate 212/213 `match_action_index` change (21→17, 19→15) under `recorded-vote-first-numeric-action-v2`; all 845 links equal the first recorded reference in bill-family `5990abbb…`, 734 remain unmatched, and `member_votes` is byte-identical. All 50 retained overlap XMLs match every roll-call and member cell. Other votes inherit `0255d5de…` by exact equality; wider history and scorecards remain open. Receipt: `repair-qualification-2026-09-25/votes-usaspending/`."
     },
     {
       "task": "T08",
