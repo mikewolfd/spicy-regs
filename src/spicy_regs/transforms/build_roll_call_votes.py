@@ -477,6 +477,7 @@ def build_roll_call_votes(
     # 1. Population from each chamber's own session index.
     congresses = congresses_from_env()
     listed_keys: set[VoteKey] = set()
+    withheld: list[tuple[VoteKey, str]] = []
     for congress in congresses:
         indexed = len(listed_keys)
         for session in sessions_of(congress):
@@ -486,8 +487,23 @@ def build_roll_call_votes(
             index = acquirer.list_house_votes(congress, session).index
             listed_keys.update(locator_from_index_entry(index, entry).as_vote_key() for entry in index.votes)
             menu = acquirer.list_senate_votes(congress, session).menu
-            listed_keys.update(locator_from_menu_entry(menu, entry).as_vote_key() for entry in menu.votes)
+            for entry in menu.votes:
+                key = locator_from_menu_entry(menu, entry).as_vote_key()
+                if entry.data_available:
+                    listed_keys.add(key)
+                else:
+                    withheld.append((key, entry.title))
         logger.info("Roll-call votes: Congress {} — {:,} roll calls in the chambers' indexes", congress, len(listed_keys) - indexed)
+    # A vote the Senate's own menu says it holds no data for (116-2-216, a
+    # secret session) is not read: its file is served, but as 0-0 with every
+    # senator "Not Voting", which the menu says is not the vote's record.
+    for key, statement in withheld:
+        logger.warning("Roll-call votes: Senate {}-{}-{} withheld by its menu: {}", key.congress, key.session, key.roll_number, statement)
+        if evidence is not None:
+            evidence.event(
+                "vote-withheld", congress=key.congress, chamber=key.chamber, session=key.session,
+                roll_number=key.roll_number, statement=statement,
+            )
 
     # Linkage: the bill's own action names the roll call; the vote file's own
     # statement is read per row below, from the file or the held row.
@@ -582,10 +598,11 @@ def build_roll_call_votes(
             member_rows.append(shape_member_vote(member, vote=vote))
 
     logger.info(
-        "Roll-call votes: {:,} roll calls, {:,} member positions, {:,} refused",
+        "Roll-call votes: {:,} roll calls, {:,} member positions, {:,} refused, {:,} withheld by the Senate's menu",
         len(vote_rows),
         len(member_rows),
         refused,
+        len(withheld),
     )
     return (
         merge_contract_table(output_dir, NAME, vote_rows, prior_present=have_prior, download_prior=download_prior),

@@ -5,13 +5,14 @@ The optional `source-readers` extra enables the same readers for package install
 its wheels must be supplied explicitly until they are published in a registry.
 Base CLI and MCP installs do not require them.
 
-- `spicy_docs-0.41.0`: built from SpicyDocs `main` at `04ad912` (release commit). Built September 26,
-  2026 UTC: **1,659,021 bytes**, SHA-256
-  `d3b41704e851b593bb17bde9ea13dc0d7dbc2014d97f0b1667280ac6958ed391`, byte-identical across two
+- `spicy_docs-0.41.1`: built from SpicyDocs `main` at `0840b59` (release commit). Built September 26,
+  2026 UTC: **1,659,614 bytes**, SHA-256
+  `495dd097ebb676764d1aa2ba417da10c144373b38bebc5c1612555e555673ff3`, byte-identical across two
   rebuilds from a clean archive of that commit with `SOURCE_DATE_EPOCH` at its commit time. On top
-  of 0.40.0 it reads BILLSTATUS 1.0.0, reads bill text from GovInfo's BILLS bulk zips and builds a
-  bill's printings apart from its status, and links a roll call to the bill its own file names
-  (`legis_num`, match rule `vote_file_legislation`). 0.40.0 and its build record are at `d770eee`.
+  of 0.41.0 it reads every Senate vote menu of the 108th-118th: a vote the menu states is withheld
+  (116-2-216, a secret session) is listed with `data_available=False`, and a question naming several
+  amendments keeps them all (`question_measures`). 0.41.0 (reads BILLSTATUS 1.0.0 and the BILLS bulk
+  zips, links a roll call to the bill its file names) and its build record are at `a54f418`.
 
 - `rulespec_artifacts-1.1.2`: exact dependency of SpicyDocs 0.39.2, built from Rulespec
   `23d5f2d98973b2a7f1bf7ce4c9c7a786a4f369ab` (`packages/rulespec-artifacts` of a whole-repo

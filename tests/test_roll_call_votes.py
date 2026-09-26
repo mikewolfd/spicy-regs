@@ -139,10 +139,11 @@ class _Acquisition:
 class StubVoteAcquirer:
     """Serves both chambers' session indexes and their acquisitions, recording every locator requested."""
 
-    def __init__(self, senate_rolls=(), house_rolls=()):
+    def __init__(self, senate_rolls=(), house_rolls=(), withheld_senate_rolls=()):
         self.requested: list[tuple[str, int]] = []
         self.senate_rolls = senate_rolls
         self.house_rolls = house_rolls
+        self.withheld_senate_rolls = withheld_senate_rolls
 
     def list_house_votes(self, congress, session):
         # As with the menu, empty tuples isolate reference-driven selections;
@@ -158,8 +159,13 @@ class StubVoteAcquirer:
         # Empty tuples isolate House-only unit selections; the real provider
         # refuses an empty published XML menu, covered by the failure tests.
         entries = tuple(
-            SenateVoteMenuEntry(n, "1-Jan", None, None, None, None, {}, "Fixture")
+            SenateVoteMenuEntry(n, "1-Jan", None, None, (), None, {}, "Fixture")
             for n in self.senate_rolls
+            if session == 1
+        ) + tuple(
+            SenateVoteMenuEntry(n, "23-Oct", None, None, (), None, {}, "Vote data is unavailable due to secret session.",
+                                data_available=False)
+            for n in self.withheld_senate_rolls
             if session == 1
         )
         return SimpleNamespace(menu=SenateVoteMenu(congress, session, 2025 + session - 1, entries))
@@ -1105,3 +1111,19 @@ def test_a_house_row_published_before_legis_num_is_read_once_more_then_held(tmp_
     resumed = RealBodyAcquirer(house_rolls=(240,))
     assert _real_run(second, captured, acquirer=resumed, overlap=0) == rows
     assert resumed.requested == []
+
+
+def test_a_vote_the_senate_menu_withholds_is_journaled_and_never_read(tmp_path, scoped):
+    """116-2-216's file is served as 0-0 with every senator "Not Voting"; the menu says that is not its record."""
+    from spicy_regs.source_evidence import CaptureEvidence
+
+    evidence = CaptureEvidence(tmp_path / "audit", "roll-call-votes")
+    acquirer = StubVoteAcquirer(senate_rolls=(1, 2), withheld_senate_rolls=(3,))
+    paths = build_roll_call_votes(
+        tmp_path, acquirer=acquirer, download_prior=_no_prior, evidence=evidence, open_congresses=(119,)
+    )
+    assert sorted(acquirer.requested) == [("senate", 1), ("senate", 2)]
+    assert sorted(row["roll_number"] for row in pq.read_table(paths[0]).to_pylist()) == ["1", "2"]
+    [event] = _events(evidence, "vote-withheld")
+    assert (event["chamber"], event["roll_number"]) == ("senate", 3)
+    assert event["statement"] == "Vote data is unavailable due to secret session."
