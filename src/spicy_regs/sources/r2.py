@@ -28,8 +28,11 @@ from spicy_regs.sources.publication import _get_bounded, _head
 # --- download (public URL) -------------------------------------------------
 
 
-def download_from_r2(remote_key: str, local_path: Path) -> bool:
+def download_from_r2(remote_key: str, local_path: Path, *, bare: bool = False) -> bool:
     """Download one object from R2 over the public URL.
+
+    ``remote_key`` resolves through the publication index unless ``bare``, which
+    reads the object at that key even when a managed family publishes the key.
 
     Returns ``True`` on success, ``False`` when R2 is unconfigured or the object
     is missing (HTTP 404). Everything else — 5xx, network failures, disk write
@@ -51,7 +54,7 @@ def download_from_r2(remote_key: str, local_path: Path) -> bool:
 
     from spicy_regs.sources.publication import current_index, table_location
 
-    resolved, descriptor = table_location(current_index(public_url), remote_key)
+    resolved, descriptor = (remote_key, None) if bare else table_location(current_index(public_url), remote_key)
     url = f"{public_url.rstrip('/')}/{resolved}"
     temp_path = local_path.with_suffix(local_path.suffix + ".tmp")
     digest = hashlib.sha256()
@@ -88,6 +91,17 @@ def download_from_r2(remote_key: str, local_path: Path) -> bool:
 def download(remote_key: str, local_path: Path) -> bool:
     """Alias for :func:`download_from_r2` (the connector's download verb)."""
     return download_from_r2(remote_key, local_path)
+
+
+def download_working_copy(remote_key: str, local_path: Path) -> bool:
+    """Download the ETL's own bare copy of a base table, never its managed family.
+
+    ``dockets.parquet`` and ``documents.parquet`` are updated after every sweep
+    batch; the managed family is published once the sweep completes. Priming
+    from the family after a partly completed sweep would drop the batches whose
+    keys the manifest already retired.
+    """
+    return download_from_r2(remote_key, local_path, bare=True)
 
 
 # --- upload (S3 API) -------------------------------------------------------

@@ -51,6 +51,21 @@ An offline cold-start partial candidate is marked `local-partial`; the generic
 publisher refuses it too. Merely retaining a valid Parquet artifact does not
 promote that partial result to a complete family.
 
+## Regulatory base tables
+
+The ETL rewrites the bare `dockets.parquet` and `documents.parquet` after every
+sweep batch and primes each run from those bare objects
+(`r2.download_working_copy`), never from a managed family. Once a sweep
+completes, the regulatory refresh publishes each as its own family,
+`dockets` and `documents` (`run-rollup-dockets`, `run-rollup-documents`), from
+the same working copy, refusing a null or repeated identity. It does this
+before the comments mirror captures base versions, so every dependent reads
+that sweep's snapshot, and `check_refresh_inputs.py` holds both family pins
+along with the bare objects' ETags. Priming from a family instead would drop
+the batches of a partly completed sweep whose keys the manifest had already
+retired. Bare-URL readers, such as notebooks and the browser, keep reading
+the working copies, which change batch by batch as before.
+
 ## Readers
 
 - Rollup reads share one captured index. Managed download failures and digest
@@ -82,8 +97,9 @@ promote that partial result to a complete family.
 The offline object-store tests exercise conditional creation, interrupted
 uploads, concurrent index changes, byte corruption and stale inputs. They are
 not a live R2 deployment rehearsal. Validate these operations in a disposable
-bucket before enabling the new writer in production. Base regulations.gov,
-partitioned comments, Iceberg publication and the browser's non-table
-`docket_search.json.gz` object are outside this table-generation path.
-Historical rebuilds, semantic qualification and public adoption remain separate
-work. No publication index is created remotely by the test suite.
+bucket before enabling the new writer in production. Partitioned comments,
+Iceberg publication and the browser's non-table `docket_search.json.gz` object
+are outside this table-generation path; base regulations.gov dockets and
+documents joined it as families (above). Historical rebuilds, semantic
+qualification and public adoption remain separate work. No publication index is
+created remotely by the test suite.

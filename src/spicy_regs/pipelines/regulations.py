@@ -425,11 +425,11 @@ class RegulationsPipeline(Pipeline):
                     continue
                 index_file = output_dir / "comments_index.parquet"
                 if not index_file.exists():
-                    r2.download("comments_index.parquet", index_file)
+                    r2.download_working_copy("comments_index.parquet", index_file)
                 continue
             local = output_dir / f"{rt.name}.parquet"
             if not local.exists():
-                r2.download(f"{rt.name}.parquet", local)
+                r2.download_working_copy(f"{rt.name}.parquet", local)
 
     def _merge(
         self,

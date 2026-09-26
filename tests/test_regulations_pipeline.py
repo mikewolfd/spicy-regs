@@ -755,7 +755,13 @@ def test_run_primes_comments_index_from_r2_before_merge(tmp_output: Path, monkey
             return True
         return False  # partitions are absent on R2 in this test
 
-    monkeypatch.setattr(regulations.r2, "download", fake_download)
+    def managed_download(remote_key: str, local_path: Path) -> bool:
+        if remote_key in {"dockets.parquet", "documents.parquet", "comments_index.parquet"}:
+            raise AssertionError(f"priming must read the working copy, not a managed family: {remote_key}")
+        return fake_download(remote_key, local_path)
+
+    monkeypatch.setattr(regulations.r2, "download_working_copy", fake_download)
+    monkeypatch.setattr(regulations.r2, "download", managed_download)
 
     RegulationsPipeline(
         allow_fresh_start=True,

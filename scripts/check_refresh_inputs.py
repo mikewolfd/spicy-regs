@@ -2,8 +2,9 @@
 """Retain and verify the mutable base versions used by a regulatory refresh.
 
 Managed rollup generations retain their publication-index snapshot separately.
-This receipt covers the base objects outside that index. The caller holds the
-catalog writer lock from capture through verification.
+This receipt covers the bare base objects and the managed dockets/documents
+families that dependents read in their place. The caller holds the catalog
+writer lock from capture through verification.
 """
 
 from __future__ import annotations
@@ -16,8 +17,10 @@ from pathlib import Path
 import httpx
 
 from spicy_regs.public_url import resolve_r2_base_url
+from spicy_regs.sources import publication
 
 BASE_KEYS = ('dockets.parquet', 'documents.parquet', 'comments.parquet', 'comments_index.parquet', 'manifest.parquet')
+BASE_FAMILIES = ('dockets', 'documents')
 
 
 def observe(base_url: str) -> dict[str, dict]:
@@ -30,6 +33,10 @@ def observe(base_url: str) -> dict[str, dict]:
             if not etag:
                 raise RuntimeError(f'{key}: no ETag; cannot establish its version')
             pins[key] = {'etag': etag, 'bytes': int(response.headers['content-length'])}
+    families = publication.load_index(base_url)['families']
+    for family in BASE_FAMILIES:
+        if family in families:
+            pins[f'family:{family}'] = {'artifactDigest': families[family]['artifactDigest']}
     return pins
 
 

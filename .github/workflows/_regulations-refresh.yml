@@ -7,7 +7,23 @@ on:
         type: boolean
         default: false
 jobs:
+  # Publish the ETL's finished dockets/documents as managed families before the
+  # mirror captures base versions, so every dependent reads this sweep's snapshot.
+  base-families:
+    strategy:
+      fail-fast: false
+      matrix:
+        command:
+          - run-rollup-dockets
+          - run-rollup-documents
+    uses: ./.github/workflows/_rollup.yml
+    secrets: inherit
+    with:
+      command: ${{ matrix.command }}
+      skip_upload: ${{ inputs.skip_upload }}
+      timeout_minutes: 30
   mirror:
+    needs: base-families
     uses: ./.github/workflows/_comments-mirror.yml
     secrets: inherit
     with:

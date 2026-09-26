@@ -44,7 +44,7 @@ def test_text_retry_after_manifest_on_fresh_host(tmp_path, monkeypatch, mode):
     remote = {}
     uploads = []
 
-    def download(key, path):
+    def download(key, path, **_):
         if key not in remote:
             return False
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -176,7 +176,7 @@ def test_inline_access_refusal_never_advances_either_checkpoint(tmp_path, monkey
     }}]
     key = _comment_key(row["data"]["id"], ACF[1], agency=ACF[0])
     raw = _FakeS3Resource({key: json.dumps(row).encode()})
-    monkeypatch.setattr(r2, "download_from_r2", lambda *args: False)
+    monkeypatch.setattr(r2, "download_from_r2", lambda *args, **kwargs: False)
     monkeypatch.setattr(manifest_module, "download_from_r2", lambda *args: False)
     # Pool resources are constructed before the agency reader's resource.
     resources = iter([_FakeS3Resource(_store(), listing_status=403), raw])
