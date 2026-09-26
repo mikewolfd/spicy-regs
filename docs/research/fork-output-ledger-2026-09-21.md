@@ -64,8 +64,14 @@ MCP `table_qualification` record read these rows directly.
   (receipt `regulatory/d3-fix/`). Each closes when the next rulemaking snapshot
   is audited.
   D4: derived rollups record no parent digests (receipt `regulatory/results.json`);
-  fixed in code at `4396f2e`, where each derived generation records its parents,
-  and closed once a refresh publishes such generations and their parents are verified.
+  fixed at `4396f2e` and closed 2026-09-26. The refresh run 36224680634 published
+  feed summary, agency stats, monthly volume, org committee links and discovery
+  signals, and each records its parents. Every managed parent's pin equals its read
+  snapshot and its member digest, and the streamed bytes match: dockets `e601dbf6…`,
+  documents `7c98ef8c…` and FEC committees `4b1ca622…`. The bare comments index
+  matches by sha256, and the in-place comments monolith by ETag and size (receipt
+  `d4-parents-2026-09-26/`). This verifies lineage only; each table's own rows are
+  audited in its row above.
 - **Scaling.** `fec_committees` re-walks the whole registry with little
   deadline headroom, and its captures live only as an expiring workflow
   artifact. CHRG rule-token re-reads use most of the per-run cap. A package is
