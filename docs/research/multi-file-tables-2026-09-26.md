@@ -200,6 +200,10 @@ spellings.
     family's **table** set stays fixed, and a declared partitioned table may **add** members (a new
     Congress, a new FCC year).
   - A member that disappears is a retirement, journaled like `rows-retired`.
+  - A family may also gain whole tables through an explicit migration. A rollup declares
+    `added_tables`, and the guard requires `set(tables) == set(prior tables) | set(added_tables)`
+    (cc88f14). Any drop or undeclared addition still refuses, and the declaration is inert once
+    the tables have been published. Phase 1 folds both relaxations into the same check.
   - The shrink guard runs **per table**, on the sum of member rows, not per member key, since one
     partition can legitimately shrink, for example after a retirement.
 - Local verification happens **once** per member, following `operations.md` §1b(b): `_run_tables`
