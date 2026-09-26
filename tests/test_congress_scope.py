@@ -73,6 +73,14 @@ def test_the_default_names_both_congresses_across_the_boundary():
 
 def test_the_overlap_window_does_not_name_a_congress_before_the_first():
     assert default_congresses(date(1789, 6, 1)) == (1,)
+    assert default_congresses(date(1789, 6, 1), trailing=2) == (1,)
+
+
+def test_trailing_congresses_stay_in_scope_and_absorb_the_overlap():
+    assert default_congresses(date(2026, 9, 19), trailing=1) == (119, 118)
+    assert default_congresses(date(2026, 9, 19), trailing=2) == (119, 118, 117)
+    assert default_congresses(date(2025, 1, 15), trailing=1) == (119, 118)  # inside the overlap: no repeat
+    assert congresses_from_env(today=date(2026, 9, 19), trailing=1) == (119, 118)
 
 
 def test_the_overlap_never_overrides_an_explicit_scope(monkeypatch):

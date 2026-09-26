@@ -2,7 +2,9 @@
 built with bounded detail reads and own-output resume keyed on each table's marker column.
 
 House communications retain the publisher route on historical rows. The
-Congressional Record reconstruction is a separate, deferred acquisition.
+Congressional Record reconstruction is a separate, deferred acquisition. A table
+that keeps an earlier Congress in scope lists it only from the day before its
+held rows' newest stamp, so that Congress costs its changes, not a re-walk.
 """
 
 from __future__ import annotations
@@ -11,6 +13,7 @@ import json
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+from datetime import date, timedelta
 from operator import itemgetter
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -28,12 +31,18 @@ from spicy_docs.schemas.congress_index_tables import (
     shape_treaty,
 )
 from spicy_docs.schemas.tables import Row, TableContractError
-from spicy_docs.sources.congress.listing import LIST_ROUTES, MAX_LIMIT, CongressListRoute, list_route_url
+from spicy_docs.sources.congress.listing import (
+    LIST_ROUTES,
+    MAX_LIMIT,
+    CongressListRoute,
+    list_route_url,
+    utc_day_window,
+)
 from spicy_docs.transport.credentials import CredentialRefusedError, scrub_credential
 
 from spicy_regs.sources import r2
 from spicy_regs.sources.congress_bills import API_KEY_ENV_VARS, _resolve_api_key, listing_reader
-from spicy_regs.transforms.congress_scope import congresses_from_env, record_volumes
+from spicy_regs.transforms.congress_scope import congresses_from_env, current_congress, record_volumes
 from spicy_regs.transforms.congress_walk import ListingSource, PooledListingSource
 from spicy_regs.transforms.table_merge import merge_contract_table, published_table
 
@@ -66,8 +75,9 @@ class IndexSpec:
 
     table: str
     list_route: CongressListRoute
-    #: ``(label, url)`` per list unit for the scoped Congresses.
-    units: Callable[[Sequence[int]], Sequence[tuple[str, str]]]
+    #: ``(label, url)`` per list unit for the scoped Congresses, each listed
+    #: from its ``fromDateTime`` in the mapping when it has one.
+    units: Callable[[Sequence[int], Mapping[int, str]], Sequence[tuple[str, str]]]
     shape: Callable[[Mapping[str, Any], Mapping[str, Any] | None], Row]
     detail_route: CongressListRoute | None = None
     #: A detail-only column, NULL exactly when no detail was read.
@@ -75,16 +85,23 @@ class IndexSpec:
     #: ``list_route_url`` keywords for the detail from the shaped list row, or
     #: ``None`` when the row has no addressable detail.
     detail_query: Callable[[Row], Mapping[str, Any] | None] | None = None
+    #: Earlier Congresses the default scope keeps, listed through an update
+    #: window (:func:`_windows`). A route whose records keep changing after
+    #: their Congress ends needs them; its ``units`` must honor the window.
+    trailing_congresses: int = 0
 
 
-def _per_congress(route: CongressListRoute) -> Callable[[Sequence[int]], Sequence[tuple[str, str]]]:
-    return lambda congresses: [
-        (f"{route.name}/{congress}", list_route_url(route, congress=congress, limit=MAX_LIMIT))
+def _per_congress(route: CongressListRoute) -> Callable[[Sequence[int], Mapping[int, str]], Sequence[tuple[str, str]]]:
+    return lambda congresses, windows: [
+        (
+            f"{route.name}/{congress}",
+            list_route_url(route, congress=congress, limit=MAX_LIMIT, from_datetime=windows.get(congress)),
+        )
         for congress in congresses
     ]
 
 
-def _record_units(congresses: Sequence[int]) -> Sequence[tuple[str, str]]:
+def _record_units(congresses: Sequence[int], _windows: Mapping[int, str]) -> Sequence[tuple[str, str]]:
     route = LIST_ROUTES["daily-congressional-record"]
     return [
         (f"{route.name}/{volume}", list_route_url(route, volume=volume, limit=MAX_LIMIT))
@@ -140,6 +157,12 @@ INDEX_SPECS: Mapping[str, IndexSpec] = {
         detail_route=LIST_ROUTES["committee-meeting-detail"],
         detail_marker="committees_json",
         detail_query=_meeting_query,
+        # A meeting's record is updated when GovInfo prints its transcript, up
+        # to two years on: in 2026 through 2026-09-26, 204 of the 118th's
+        # 3,326 meetings changed and 5 of the 117th's (receipt
+        # join-gaps-2026-09-26/f/). hearing_transcripts joins on event_id, and
+        # every transcript it could not join was a 118th meeting.
+        trailing_congresses=1,
     ),
     "record_issues": IndexSpec(
         "record_issues",
@@ -202,6 +225,37 @@ def _held_rows(prior: Path | None, spec: IndexSpec, identity: tuple[str, ...], v
     return held
 
 
+def _windows(
+    held: Mapping[tuple, _Held], congresses: Sequence[int], today: date | None = None
+) -> dict[int, str]:
+    """``fromDateTime`` per earlier Congress with held rows: the day before its newest stamp.
+
+    The current Congress is walked whole. An earlier one is listed
+    from the day before its newest held stamp, or before its oldest row whose
+    detail is unread, so a row deferred by the detail cap is listed again until
+    it is read. A Congress with nothing held is walked whole once. The key's
+    first part is its Congress.
+    """
+    current = current_congress(today)
+    earliest: dict[int, str] = {}
+    newest: dict[int, str] = {}
+    for key, state in held.items():
+        if not state.stamp or not str(key[0]).isdecimal() or int(key[0]) >= current:
+            continue
+        congress = int(key[0])
+        newest[congress] = max(newest.get(congress, state.stamp), state.stamp)
+        if not state.read:
+            earliest[congress] = min(earliest.get(congress, state.stamp), state.stamp)
+    windows = {}
+    for congress in congresses:
+        if congress in newest:
+            stamp = earliest.get(congress, newest[congress])
+            opens, _ = utc_day_window(date.fromisoformat(stamp[:10]) - timedelta(days=1), None)
+            if opens:
+                windows[congress] = opens
+    return windows
+
+
 @dataclass(slots=True)
 class _Listed:
     """One listed record, shaped list-only, and its key."""
@@ -212,7 +266,11 @@ class _Listed:
 
 
 def _walk(
-    reader: PooledListingSource, spec: IndexSpec, congresses: Sequence[int], identity: tuple[str, ...]
+    reader: PooledListingSource,
+    spec: IndexSpec,
+    congresses: Sequence[int],
+    identity: tuple[str, ...],
+    windows: Mapping[int, str],
 ) -> list[_Listed]:
     """Settle each scoped list by identity before reading details or writing output.
 
@@ -229,7 +287,7 @@ def _walk(
         return _Listed(tuple(str(part) for part in parts), record, row)
 
     listed: dict[tuple[str, ...], _Listed] = {}
-    for label, url in spec.units(congresses):
+    for label, url in spec.units(congresses, windows):
         pooled = reader.pooled(
             spec.list_route,
             url,
@@ -297,11 +355,14 @@ def build_index_table(
     contract = TABLE_CONTRACTS[spec.table]
     identity, version = contract.identity, contract.version_column
     assert version is not None, f"{spec.table} has no version column to resume on"
-    congresses = tuple(congresses) if congresses is not None else congresses_from_env()
+    if congresses is None:
+        congresses = congresses_from_env(trailing=spec.trailing_congresses)
+    congresses = tuple(congresses)
 
     prior = published_table(output_dir, spec.table, download_prior)
     held = _held_rows(prior, spec, identity, version)
-    listed = _walk(reader, spec, congresses, identity)
+    windows = _windows(held, congresses) if spec.trailing_congresses else {}
+    listed = _walk(reader, spec, congresses, identity, windows)
 
     rows: list[Row] = []
     queue: list[tuple[_Listed, Mapping[str, Any]]] = []
@@ -371,6 +432,7 @@ def build_index_table(
     logger.info("{}: {:,} listed; {}", spec.table, len(listed), dict(outcomes) or "every row complete from the list")
     if evidence is not None:
         evidence.event("congress-index-selection", table=spec.table, congresses=list(congresses),
+                       windows={str(congress): start for congress, start in windows.items()},
                        max_details=max_details, listed=len(listed), outcomes=dict(outcomes))
     output = merge_contract_table(
         output_dir, spec.table, rows, download_prior=download_prior, prior_present=prior is not None

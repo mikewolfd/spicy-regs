@@ -391,3 +391,63 @@ def test_every_spec_marks_a_detail_only_column_and_matches_its_rollup(tmp_path):
         if spec.detail_marker is not None:
             assert spec.detail_marker in TABLE_CONTRACTS[table].columns
             assert spec.detail_marker not in TABLE_CONTRACTS[table].identity
+
+
+# --------------------------------------------------------------------------- #
+# An earlier Congress kept in scope costs its changes, not a re-walk.
+# --------------------------------------------------------------------------- #
+def test_meetings_keep_the_previous_congress_in_their_default_scope():
+    """Transcripts attach to 118th meetings through 2026; a current-only scope never saw those updates."""
+    from datetime import date
+
+    from spicy_regs.transforms.congress_scope import congresses_from_env
+
+    trailing = INDEX_SPECS["committee_meetings"].trailing_congresses
+    assert congresses_from_env(today=date(2026, 9, 26), trailing=trailing) == (119, 118)
+    assert all(spec.trailing_congresses == 0 for name, spec in INDEX_SPECS.items() if name != "committee_meetings")
+
+
+def test_an_earlier_congress_is_listed_from_the_day_before_its_newest_or_oldest_unread_stamp():
+    from datetime import date
+
+    from spicy_regs.transforms.build_congress_index import _Held, _windows
+
+    today = date(2026, 9, 26)
+    held = {
+        ("118", "house", "1"): _Held("2026-09-05T01:11:23Z", True),
+        ("118", "house", "2"): _Held("2025-12-01T00:00:00Z", True),
+        ("119", "house", "3"): _Held("2026-09-24T20:56:39Z", True),
+    }
+    # The current Congress is walked whole; a cold earlier one too.
+    assert _windows(held, (119, 118, 117), today) == {118: "2026-09-03T23:59:59Z"}
+    # A row deferred by the detail cap keeps the window open back to it until it is read.
+    held[("118", "senate", "4")] = _Held("2024-02-10T10:00:00Z", False)
+    assert _windows(held, (119, 118), today) == {118: "2024-02-08T23:59:59Z"}
+
+
+def test_the_previous_congress_list_is_windowed_and_the_current_one_is_not(tmp_path):
+    from spicy_docs.schemas.congress_index_tables import shape_committee_meeting
+
+    listed = json.loads((FIXTURES / "committee-meeting-119.json").read_text())["committeeMeetings"][0]
+    held = {
+        **shape_committee_meeting(listed, None),
+        "congress": "118",
+        "update_date": "2026-09-05T01:11:23Z",
+        "committees_json": "[]",
+    }
+    seed(tmp_path, "committee_meetings", [held])
+    reader = FixtureReader(serve_as={"committee-meeting/118": "committee-meeting/119"})
+    out = build_index_table(
+        tmp_path,
+        INDEX_SPECS["committee_meetings"],
+        reader=reader,
+        congresses=[119, 118],
+        download_prior=no_download,
+        max_details=0,
+    )
+    lists = {_path_of(url): url for url in reader.urls if "limit=1&" not in url and not url.endswith("limit=1")}
+    assert "fromDateTime" not in lists["committee-meeting/119"]
+    assert "fromDateTime=2026-09-03T23%3A59%3A59Z" in lists["committee-meeting/118"]
+    assert ("118", held["chamber"], held["event_id"]) in {
+        _key("committee_meetings", row) for row in pq.read_table(out).to_pylist()
+    }

@@ -86,7 +86,7 @@ def session_of(congress: int, year: int) -> int:
     return session
 
 
-def default_congresses(today: date | None = None) -> tuple[int, ...]:
+def default_congresses(today: date | None = None, *, trailing: int = 0) -> tuple[int, ...]:
     """The default Congress scope: current, plus the outgoing one across a boundary.
 
     From 3 January of an odd year the outgoing Congress drops out of
@@ -94,20 +94,24 @@ def default_congresses(today: date | None = None) -> tuple[int, ...]:
     never be re-read. While ``today`` sits in the first
     ``CONGRESS_BOUNDARY_OVERLAP_DAYS`` after the boundary, the default names
     both Congresses; after the window it names only the current one.
+    ``trailing`` keeps that many earlier Congresses in scope all the time, for
+    a source whose records keep changing long after their Congress ends.
     """
     day = today or date.today()
     congress = current_congress(day)
     convenes = date(FIRST_CONGRESS_YEAR + 2 * (congress - 1), 1, 3)
-    if congress > 1 and day < convenes + timedelta(days=CONGRESS_BOUNDARY_OVERLAP_DAYS):
-        return (congress, congress - 1)
-    return (congress,)
+    overlap = congress > 1 and day < convenes + timedelta(days=CONGRESS_BOUNDARY_OVERLAP_DAYS)
+    earlier = max(trailing, 1 if overlap else 0)
+    return tuple(range(congress, max(congress - earlier, 1) - 1, -1))
 
 
-def congresses_from_env(var: str = "BILL_FAMILY_CONGRESSES", *, today: date | None = None) -> tuple[int, ...]:
+def congresses_from_env(
+    var: str = "BILL_FAMILY_CONGRESSES", *, today: date | None = None, trailing: int = 0
+) -> tuple[int, ...]:
     """Congress numbers from a comma-separated env var, defaulting to :func:`default_congresses`."""
     raw = os.environ.get(var, "").strip()
     if not raw:
-        return default_congresses(today)
+        return default_congresses(today, trailing=trailing)
     congresses = []
     for part in raw.split(","):
         part = part.strip()
@@ -118,7 +122,7 @@ def congresses_from_env(var: str = "BILL_FAMILY_CONGRESSES", *, today: date | No
         except ValueError as exc:
             raise ValueError(f"{var} must be comma-separated Congress numbers, got {part!r}") from exc
     if not congresses:
-        return default_congresses(today)
+        return default_congresses(today, trailing=trailing)
     return tuple(congresses)
 
 
