@@ -35,7 +35,9 @@ _AUDIT = re.compile(
 )
 #: Anything that starts one of those phrases, or an all-caps word used like one,
 #: so a slipped or new spelling fails the build instead of reading as no audit.
-_AUDIT_MENTION = re.compile(r"(?:qualified|\b[A-Z][A-Z-]{3,}) at `|current `[^`]*` is |verified at table digest")
+_AUDIT_MENTION = re.compile(
+    r"\bqualified(?: [a-z]+){0,3} at `|\b[A-Z][A-Z-]{3,} at `|current `[^`]*` is |verified at table digest"
+)
 
 
 def ledger_destination(text: str) -> str:

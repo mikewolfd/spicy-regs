@@ -206,3 +206,14 @@ def test_the_bundled_record_is_read_once_per_process(monkeypatch):
     assert len(reads) == 2  # table_metadata.json and table_qualification.json, once each
     assert described["qualification"]["ledger_destination"] == BUNDLED_DESTINATION
     assert described["qualification"]["status"] != "unknown_for_publisher"
+
+
+@pytest.mark.parametrize("state", [
+    "qualified with limits at `snapshot_dcda51db…` (2026-09-26): an unrecognized audit phrase",
+    "qualified at `350e49f5…` (2026-09-25 run; audited 2026-09-26): a date the phrase does not take",
+])
+def test_an_audit_phrase_with_words_or_a_date_outside_the_vocabulary_refuses(state):
+    """A near-miss spelling must fail the build, never read as "no audit recorded"."""
+    text = "Public data destination: `https://pub.example`\n| T1 | `run-x` | `x.parquet` | " + state + " |\n"
+    with pytest.raises(ValueError, match="outside the recognized phrases"):
+        output_ledger.qualification_record(text)
