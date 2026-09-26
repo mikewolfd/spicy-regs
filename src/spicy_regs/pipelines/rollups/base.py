@@ -32,7 +32,9 @@ verification; readers capture that index once per operation. The old bare
 Parquet URLs are not rewritten by this path.
 """
 
+import hashlib
 from abc import abstractmethod
+from collections.abc import Mapping
 from contextlib import nullcontext
 from os import getenv
 from pathlib import Path
@@ -63,6 +65,10 @@ class RollupPipeline(Pipeline):
     #: entry must name an *ingest* rollup's output whose cron runs before
     #: this one's — ``tests/test_hosted_rollups.py`` holds both.
     soft_inputs: ClassVar[tuple[str, ...]] = ()
+    #: Public objects the transform reads over HTTP instead of downloading (for
+    #: Parquet projection pushdown). Their storage versions are recorded as
+    #: parents and must not change while the rollup builds.
+    remote_inputs: ClassVar[tuple[str, ...]] = ()
 
     #: Zero or more artifacts a multi-output rollup writes and publishes (R2
     #: remote keys, same convention as ``output``). Leave empty and declare
@@ -147,9 +153,13 @@ class RollupPipeline(Pipeline):
             if public_url:
                 build_dir = output_dir / ".builds" / uuid4().hex
                 build_dir.mkdir(parents=True)
-            self._prime(build_dir)
+            parents = self._prime(build_dir, prior_index)
+            remote = self._observe_remote_inputs(build_dir, public_url)
             logger.info("Building rollup {}...", self.output)
             built = self.build(build_dir)
+            if self._observe_remote_inputs(build_dir, public_url) != remote:
+                raise publication.PublicationError("A remote input changed while the rollup built; rebuild")
+            parents |= remote
             out_paths = built if isinstance(built, tuple) else (built,)
             family = self.name
             expected_keys = self.outputs or (self.output,)
@@ -188,6 +198,7 @@ class RollupPipeline(Pipeline):
                 read_snapshot=prior_index, carried_forward=carried_forward,
                 publication_status=publication_status,
                 inputs=self.source_evidence.inputs() if self.source_evidence else (),
+                parents=parents,
             )
             destination = generations / artifact.pin.artifact_digest.removeprefix("sha256:")
             if destination.exists():
@@ -209,23 +220,61 @@ class RollupPipeline(Pipeline):
             purge_urls([f"{public_url.rstrip('/')}/{publication.INDEX_KEY}"])
         logger.info("Done!")
 
-    def _prime(self, output_dir: Path) -> None:
-        """Download each required base table from R2 unless already local.
+    def _prime(self, output_dir: Path, snapshot: Mapping | None = None) -> dict[str, dict]:
+        """Download each required base table from R2 unless already local; return what was read.
 
         A missing base table is fatal: a rollup built from absent inputs would
         publish a truncated artifact that the upload shrink-guard would then
         (correctly) reject — better to fail loudly here with a clear message.
+        Each parent records the digest and size of the bytes read, plus its
+        family and generation when a managed family published it. A verified
+        managed download reuses its descriptor; any other file is hashed once.
         """
+        from spicy_regs.sources import publication
+
+        parents = {}
         for remote_key in self.inputs:
             local = output_dir / remote_key
+            downloaded = False
             if local.exists():
                 logger.info("Using local {} (skipping download)", remote_key)
-                continue
-            if not r2.download(remote_key, local):
+            elif not r2.download(remote_key, local):
                 raise RuntimeError(
                     f"Rollup {self.output!r}: required base table {remote_key!r} "
                     f"not found on R2 and not present locally in {output_dir}"
                 )
+            else:
+                downloaded = True
+            owner = publication.table_owner(snapshot or publication.empty_index(), remote_key)
+            descriptor = owner[1]["tables"][remote_key] if owner else None
+            if downloaded and descriptor:
+                parent = {"sha256": descriptor["sha256"], "byteSize": descriptor["byteSize"]}
+            else:
+                with local.open("rb") as stream:
+                    parent = {"sha256": "sha256:" + hashlib.file_digest(stream, "sha256").hexdigest(),
+                              "byteSize": local.stat().st_size}
+            if owner:
+                parent |= {"family": owner[0], "artifactDigest": owner[1]["artifactDigest"]}
+            parents[remote_key] = parent
+        return parents
+
+    def _observe_remote_inputs(self, output_dir: Path, public_url: str | None) -> dict[str, dict]:
+        """The storage version of each remote input, or the digest of a local copy that replaces it."""
+        observed = {}
+        for remote_key in self.remote_inputs:
+            local = output_dir / remote_key
+            if local.exists():
+                with local.open("rb") as stream:
+                    observed[remote_key] = {"sha256": "sha256:" + hashlib.file_digest(stream, "sha256").hexdigest(),
+                                            "byteSize": local.stat().st_size}
+                continue
+            if not public_url:
+                raise RuntimeError(f"Rollup {self.output!r}: {remote_key} needs R2_PUBLIC_URL or a local copy")
+            version = r2.public_object_version(f"{public_url.rstrip('/')}/{remote_key}")
+            if version is None:
+                raise RuntimeError(f"Rollup {self.output!r}: remote input {remote_key!r} is missing")
+            observed[remote_key] = {"etag": version["etag"], "byteSize": version["bytes"]}
+        return observed
 
     @abstractmethod
     def build(self, output_dir: Path) -> Path | tuple[Path, ...]:

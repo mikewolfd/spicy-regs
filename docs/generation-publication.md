@@ -14,8 +14,14 @@ read, row counts, and every byte digest. It uses the installed Rulespec artifact
 library for membership, canonical identity, manifests and verification.
 
 The resulting artifact records the host implementation digest, installed package
-versions, the captured publication index, and any unchanged siblings carried
-forward by a partial writer. It does not establish source completeness, common
+versions, the captured publication index, any unchanged siblings carried
+forward by a partial writer, and its `parents`. A parent is each declared input
+the build read: the SHA-256 and size of its bytes (with its family and
+generation when a managed family published it, checked against the captured
+index), or for an input read in place over HTTP (`remote_inputs`) its storage
+ETag and size, which must not change while the rollup builds. The non-table
+`docket_search.json.gz` has no generation, so only the refresh receipt binds
+its parent. It does not establish source completeness, common
 publisher timestamps, correct interpretation, or model qualification. The
 captured index identifies managed table inputs, not all original source requests.
 

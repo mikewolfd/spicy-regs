@@ -25,6 +25,7 @@ class OrgCommitteeLinksRollup(RollupPipeline):
 
     name: ClassVar[str] = "org-committee-links"
     inputs: ClassVar[tuple[str, ...]] = ("fec_committees.parquet",)
+    remote_inputs: ClassVar[tuple[str, ...]] = ("comments.parquet",)
     output: ClassVar[str] = "org_committee_links.parquet"
 
     def build(self, output_dir: Path) -> Path:

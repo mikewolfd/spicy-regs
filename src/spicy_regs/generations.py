@@ -8,6 +8,7 @@ It does not qualify source coverage or interpreted fields.
 from __future__ import annotations
 
 import hashlib
+import re
 import shutil
 from collections.abc import Callable, Mapping, Sequence
 from importlib.metadata import version
@@ -64,7 +65,7 @@ def _verify_generation(source, table_info: Callable[[str], dict], *, expected_pi
     if root["kind"] != KIND:
         raise ValueError("Not a SpicyRegs rollup generation")
     spec = root["spec"]
-    if set(spec) != {"family", "tables", "packages", "readSnapshot", "carriedForward", "publicationStatus"}:
+    if set(spec) - {"parents"} != {"family", "tables", "packages", "readSnapshot", "carriedForward", "publicationStatus"}:
         raise ValueError("Invalid rollup generation specification")
     if spec["publicationStatus"] not in {"complete-family", "local-partial"}:
         raise ValueError("Invalid generation publication status")
@@ -75,6 +76,7 @@ def _verify_generation(source, table_info: Callable[[str], dict], *, expected_pi
     snapshot = spec["readSnapshot"]
     if snapshot:
         parse_index(canonical_json_bytes(snapshot))
+    _check_parents(spec.get("parents", {}), snapshot)
     carried = spec["carriedForward"]
     from spicy_regs.source_evidence import INPUT_ROLE, PRIOR_ROLE
 
@@ -113,6 +115,35 @@ def _verify_generation(source, table_info: Callable[[str], dict], *, expected_pi
     return artifact
 
 
+_PARENT_DIGEST = re.compile(r"sha256:[0-9a-f]{64}\Z")
+
+
+def _check_parents(parents, snapshot: Mapping) -> None:
+    """Each parent names its bytes or storage version; a managed one agrees with the captured index."""
+    from spicy_regs.sources.publication import table_owner
+
+    if not isinstance(parents, dict):
+        raise ValueError("Invalid generation parents")
+    for key, parent in parents.items():
+        fields = set(parent) - {"family", "artifactDigest"}
+        size = parent.get("byteSize")
+        if not isinstance(size, int) or isinstance(size, bool) or size < 0:
+            raise ValueError(f"Invalid parent size: {key}")
+        if fields == {"sha256", "byteSize"}:
+            if not _PARENT_DIGEST.fullmatch(str(parent["sha256"])):
+                raise ValueError(f"Invalid parent digest: {key}")
+        elif fields != {"etag", "byteSize"} or not isinstance(parent["etag"], str) or not parent["etag"]:
+            raise ValueError(f"Invalid parent version: {key}")
+        if ("family" in parent) != ("artifactDigest" in parent):
+            raise ValueError(f"Parent family and generation must be stated together: {key}")
+        if "family" in parent:
+            owner = table_owner(snapshot or {"families": {}}, key)
+            if (owner is None or owner[0] != parent["family"]
+                    or owner[1]["artifactDigest"] != parent["artifactDigest"]
+                    or "sha256" in parent and owner[1]["tables"][key]["sha256"] != parent["sha256"]):
+                raise ValueError(f"Parent differs from its captured family: {key}")
+
+
 def build_generation(
     directory: Path,
     *,
@@ -124,8 +155,13 @@ def build_generation(
     carried_forward: Mapping[str, str] | None = None,
     publication_status: str = "complete-family",
     inputs=(),
+    parents: Mapping[str, Mapping] | None = None,
 ):
     """Snapshot exactly one declared family into a new immutable artifact.
+
+    ``parents`` records each input table the build read: the digest and size of
+    its bytes, or the storage version of an input read in place, plus the
+    family and generation when a managed family published it.
 
     A successful empty table is a Parquet file with zero rows. An omitted
     output is a failure, never an empty success. No root is written until the
@@ -168,6 +204,7 @@ def build_generation(
     _write_generation_metadata(
         directory, family=family, tables=tables, members=members, read_snapshot=read_snapshot,
         carried_forward=carried_forward, publication_status=publication_status, inputs=inputs,
+        parents=parents,
     )
     return verify_generation(directory)
 
@@ -176,6 +213,7 @@ def _write_generation_metadata(
     directory: Path, *, family: str, tables: Mapping, members,
     read_snapshot: Mapping | None = None, carried_forward: Mapping[str, str] | None = None,
     publication_status: str = "complete-family", inputs=(), extra_packages: Sequence[str] = (),
+    parents: Mapping[str, Mapping] | None = None,
 ):
     """Write the existing manifest/root format; callers must then verify bytes."""
     from rulespec_artifacts import Producer, build_artifact_root, canonical_json_bytes, write_member_manifest
@@ -196,6 +234,7 @@ def _write_generation_metadata(
             "readSnapshot": dict(read_snapshot or {}),
             "carriedForward": dict(carried_forward or {}),
             "publicationStatus": publication_status,
+            **({"parents": {key: dict(value) for key, value in parents.items()}} if parents else {}),
         },
         producer=Producer("spicy-regs", implementation, "urn:spicy-regs:rollup-verifier", "1", implementation),
         manifests=[manifest],

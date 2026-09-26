@@ -184,6 +184,11 @@ def table_location(index: Mapping, key: str) -> tuple[str, dict | None]:
     return key, None
 
 
+def table_owner(index: Mapping, key: str) -> tuple[str, Mapping] | None:
+    """The family publishing ``key`` in ``index`` and its entry, or ``None`` for a legacy table."""
+    return next(((name, entry) for name, entry in index["families"].items() if key in entry["tables"]), None)
+
+
 def _missing(error: ClientError) -> bool:
     return error.response.get("Error", {}).get("Code") in {"404", "NoSuchKey", "NotFound"}
 
