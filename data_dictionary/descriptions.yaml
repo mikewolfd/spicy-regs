@@ -2292,9 +2292,11 @@ tables:
       captured, its `subcommittees` are the row's, an empty list included. The
       detail's counts (`bill_count` and the rest) are that day's statement,
       dated by `detail_update_date`. Rows are committees of every Congress:
-      filter `is_current` for today's. 96 historical codes the reader's detail
-      grammar cannot spell (Library of Congress name-authority ids such as
-      `n79043125`, and `sp2k00`) are list rows with `detail_captured` false.
+      filter `is_current` for today's. 95 historical committees are keyed on
+      their Library of Congress name-authority id (`n79043125`, the Senate's
+      Indian Affairs, 1820-1946), which their history states as
+      `locLinkedDataId`; none is current. A code the detail route cannot
+      address is a list row with `detail_captured` false.
       All columns are stored as VARCHAR.
     summary: >-
       One row per committee or subcommittee of any Congress the Congress.gov
@@ -2861,6 +2863,6 @@ tables:
     columns:
       package_id: "GovInfo package ID and checkpoint identity."
       last_modified: "Publisher timestamp requested, replaced by the acquired summary timestamp on success."
-      outcome: "pending, refused, refused_final, detail_refused or complete. complete permits an unchanged skip; so does refused_final, a refusal every run would repeat (a body past the byte bound, parts past the request budget, no rendition taken) until the package's last_modified, the rule or the bound in rule_version moves. refused and detail_refused are read again every run."
+      outcome: "pending, refused, refused_final, detail_refused or complete. complete permits an unchanged skip; so does refused_final, a refusal every run would repeat (a body past the byte bound, parts past the request budget, no rendition taken) until the package's last_modified or the rule moves. A body past the bound rests on the size its response stated (rule_version ends refused-under=size=<bytes>) and is read again only when the bound grows past that size; any other rests on the bounds rule_version names. refused and detail_refused are read again every run."
       rule_version: "The rules a package was read under: for a report, the installed SpicyDocs code digest (not its release string), the CBO and section readers and this repository's part and body rules; for a hearing, the hearing-link rule and the body rule. A changed token forces another read."
       observed_at: "UTC time this rollup recorded the checkpoint."

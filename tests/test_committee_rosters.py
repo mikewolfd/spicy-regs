@@ -157,14 +157,28 @@ def test_the_list_is_every_congress_in_one_walk_whatever_the_bill_scope(tmp_path
 
 
 def test_a_code_the_detail_route_cannot_spell_is_listed_without_spending_the_cap(tmp_path):
-    """The unscoped list carries historical name-authority codes (``n79043125``); asking would refuse every run."""
-    historical = {**LIST_PAGE["committees"][1], "systemCode": "n79043125", "name": "Mines and Mining",
-                  "updateDate": "2099-01-01T00:00:00Z"}
-    reader = StubListingReader(listed=[historical, *LISTED])
+    """A code outside the reader's grammar (a name-authority prefix no list uses) would refuse every run."""
+    unlisted = {**LIST_PAGE["committees"][1], "systemCode": "nb79043125", "name": "Mines and Mining",
+                "updateDate": "2099-01-01T00:00:00Z"}
+    reader = StubListingReader(listed=[unlisted, *LISTED])
     committees, _ = _build(tmp_path, reader=reader, max_details=1)
     assert reader.detail_codes == ["hsbu00"], "the one detail of the cap goes to the newest code it can spell"
-    row = _by_code(committees)["n79043125"]
+    row = _by_code(committees)["nb79043125"]
     assert (row["detail_captured"], row["name"]) == ("false", "Mines and Mining")
+
+
+def test_a_committee_keyed_on_its_name_authority_id_folds_its_detail(tmp_path):
+    """The 95 historical committees the unscoped list keys on a Library of Congress id have details to fold."""
+    detail = {"systemCode": "n79043125", "isCurrent": False, "type": "Standing",
+              "history": [{"officialName": "Committee on Indian Affairs", "locLinkedDataId": "n79043125"}]}
+    historical = {"chamber": "Senate", "committeeTypeCode": "Standing", "name": "Indian Affairs",
+                  "systemCode": "n79043125", "updateDate": "2025-06-20T19:17:19Z",
+                  "url": "https://api.congress.gov/v3/committee/senate/n79043125?format=json"}
+    reader = StubListingReader(listed=[historical], details={"n79043125": detail})
+    committees, _ = _build(tmp_path, reader=reader)
+    assert reader.detail_codes == ["n79043125"]
+    row = _by_code(committees)["n79043125"]
+    assert (row["detail_captured"], row["is_current"], row["history_count"]) == ("true", "false", "1")
 
 
 def test_every_other_walk_refusal_fails_the_run(tmp_path):

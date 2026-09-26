@@ -76,21 +76,39 @@ def complete(row: dict, collection: str, modified: str | None = None) -> bool:
 REFUSED_FINAL = "refused_final"
 
 
-def refusal_rule(collection: str, bounds: str) -> str:
-    """The token a final refusal is recorded under: the collection's rule and the bounds that refused it."""
-    return f"{RULE_VERSIONS[collection]};refused-under={bounds}"
+#: The basis of a size refusal whose response stated its length: ``size=<stated bytes>``.
+SIZE_BASIS = "size="
 
 
-def settled(row: dict, collection: str, modified: str | None = None, *, bounds: str) -> bool:
-    """Complete, or refused for good under the same rule and ``bounds``; either way at ``modified`` when given.
+def refusal_rule(collection: str, basis: str) -> str:
+    """The token a final refusal is recorded under: the collection's rule and what refused it.
 
-    A final refusal is settled like a read while the package's ``last_modified``
-    stands: GovInfo lists no body size, and it moves a package's stamp with its
-    content (the 1946 parts' PDFs carry the package's ``Last-Modified``), so a
-    new stamp, rule or bound reads it again and nothing else does.
+    ``basis`` is ``size=<bytes>`` for a body whose response stated a length past
+    the byte bound, and otherwise the bounds that refused it.
+    """
+    return f"{RULE_VERSIONS[collection]};refused-under={basis}"
+
+
+def settled(row: dict, collection: str, modified: str | None = None, *, bounds: str, max_body_bytes: int) -> bool:
+    """Complete, or refused for good under the same rule; either way at ``modified`` when given.
+
+    A size refusal is final on the size its response stated: it stands while that
+    size is past ``max_body_bytes``, so a larger bound that still falls short (the
+    1946 parts state 312,487,940 and 373,504,330 bytes) reads nothing, and one past
+    it reads the package again. Any other final refusal stands while ``bounds`` is
+    unchanged. Either way a new ``last_modified`` reads it again: GovInfo moves a
+    package's stamp with its content, and a stated size is known only by asking.
     """
     if row.get("outcome") != REFUSED_FINAL:
         return complete(row, collection, modified)
-    return row.get("rule_version") == refusal_rule(collection, bounds) and (
-        modified is None or modified == row.get("last_modified")
-    )
+    prefix = refusal_rule(collection, "")
+    rule = row.get("rule_version") or ""
+    if not rule.startswith(prefix):
+        return False
+    basis = rule.removeprefix(prefix)
+    stated = basis.removeprefix(SIZE_BASIS)
+    if basis.startswith(SIZE_BASIS) and stated.isdecimal():
+        still_refused = int(stated) > max_body_bytes
+    else:
+        still_refused = basis == bounds
+    return still_refused and (modified is None or modified == row.get("last_modified"))

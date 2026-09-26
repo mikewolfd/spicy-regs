@@ -147,9 +147,10 @@ def _list_committees(reader: ListingSource) -> list[Mapping[str, Any]]:
 def _detail_url(record: Mapping[str, Any]) -> str | None:
     """The detail route's URL for one list record, or ``None`` when the reader's code grammar cannot spell it.
 
-    The unscoped list carries 96 historical codes outside that grammar (Library of
-    Congress name-authority ids such as ``n79043125``, and ``sp2k00``); they stay
-    list-only rows and spend no share of the per-run cap.
+    SpicyDocs' grammar is the unscoped list's own (every one of its 817 codes, the
+    95 Library of Congress name-authority ids such as ``n79043125`` and ``sp2k00``
+    among them, whose details all answered, 2026-09-26). A code outside it stays a
+    list-only row and spends no share of the per-run cap.
     """
     try:
         return list_route_url(LIST_ROUTES["committee-detail"], chamber=str(record.get("chamber") or "").lower(),

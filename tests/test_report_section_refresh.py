@@ -621,8 +621,12 @@ def _hearing_run(directory, reader, evidence=None):
     return tables, source.paths
 
 
-def test_a_body_past_the_byte_bound_is_refused_once_and_not_fetched_again_until_its_stamp_moves(tmp_path, monkeypatch):
-    """The two 1946 parts cost summary, MODS and a refused PDF request on every run; now once per stamp or bound."""
+def test_a_body_past_the_byte_bound_is_final_on_its_stated_size_until_its_stamp_moves(tmp_path, monkeypatch):
+    """The two 1946 parts cost summary, MODS and a refused PDF request on every run; now once per stamp.
+
+    The refusal rests on the size the PDF's response stated, so a larger bound that still falls short
+    reads nothing, and only a bound past that size reads it again.
+    """
     from spicy_regs.transforms import build_committee_reports as module
 
     evidence = CaptureEvidence(tmp_path, "committee-reports")
@@ -631,10 +635,11 @@ def test_a_body_past_the_byte_bound_is_refused_once_and_not_fetched_again_until_
     assert paths == ["summary", "mods", f"{HEARING_1946}.pdf"]
     [state] = first[READS_TABLE]
     assert (state["outcome"], state["last_modified"]) == (REFUSED_FINAL, stamp)
-    assert state["rule_version"] == f"{RULE_VERSIONS['CHRG']};refused-under={module.REFUSAL_BOUNDS}"
+    assert state["rule_version"] == f"{RULE_VERSIONS['CHRG']};refused-under=size={PDF_1946_BYTES}"
     journal = [json.loads(line) for line in (evidence.artifact_dir / "journal.jsonl").read_bytes().splitlines()]
     [refusal] = [row for row in journal if row["event"] == "refusal"]
     assert refusal["response"]["unavailable_reason"] == "response-byte-limit"
+    assert (refusal["response"]["stated_byte_size"], refusal["response"]["observed_byte_size"]) == (PDF_1946_BYTES, None)
     assert [row["outcome"] for row in journal if row["event"] == "package-outcome"] == [REFUSED_FINAL]
 
     # Nothing listed, or listed at the same stamp: no request, and the selection names it as settled.
@@ -647,10 +652,18 @@ def test_a_body_past_the_byte_bound_is_refused_once_and_not_fetched_again_until_
         assert selection["selected"] == [] and selection["refused_final"] == [HEARING_1946]
         shutil.rmtree(tmp_path / "again")
 
-    # A new stamp, or a larger bound, asks again.
+    # A bound still short of the stated size, or another request budget, reads nothing. The bound is
+    # stood in for: SpicyDocs caps a GovInfo body budget at 24 MiB, so no run can yet read past it.
+    for bound, requests in ((100 * 1024 * 1024, 8), (24 * 1024 * 1024, 12)):
+        monkeypatch.setattr(module, "BODY_BUDGET", SimpleNamespace(max_body_bytes=bound, max_requests=requests))
+        monkeypatch.setattr(module, "REFUSAL_BOUNDS", f"body={bound};requests={requests}")
+        _, paths = _hearing_run(tmp_path, ListedHearing())
+        assert paths == []
+    # A new stamp, or a bound past the stated size, asks again.
+    monkeypatch.undo()
     _, paths = _hearing_run(tmp_path, ListedHearing("2026-10-01T00:00:00Z"))
     assert paths == ["summary", "mods", f"{HEARING_1946}.pdf"]
-    monkeypatch.setattr(module, "REFUSAL_BOUNDS", "body=419430400;requests=8")
+    monkeypatch.setattr(module, "BODY_BUDGET", SimpleNamespace(max_body_bytes=400 * 1024 * 1024, max_requests=8))
     _, paths = _hearing_run(tmp_path, ListedHearing())
     assert paths == ["summary", "mods", f"{HEARING_1946}.pdf"]
 

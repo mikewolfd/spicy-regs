@@ -59,6 +59,7 @@ from spicy_regs.transforms.committee_report_reads import (
     READS_TABLE,
     REFUSED_FINAL,
     RULE_VERSIONS,
+    SIZE_BASIS,
     prior_reads,
     refusal_rule,
     settled,
@@ -309,13 +310,31 @@ def _refusal_is_final(error: Exception) -> bool:
     A rendition a part does not offer, a report whose parts exceed the request
     budget, and a body past the byte bound (the transport's
     ``response-byte-limit`` refusal) repeat until the publisher changes the
-    package, which moves its ``last_modified``, or :data:`REFUSAL_BOUNDS` grows.
+    package, which moves its ``last_modified``, or the bound grows past it (:func:`_refusal_basis`).
     Anything else may be transient.
     """
     if isinstance(error, (GovInfoFormatNotOfferedError, GovInfoPartsOverBudgetError)):
         return True
     refused = getattr(error, "refused_response", None)
     return isinstance(refused, RefusedResponse) and refused.unavailable_reason == "response-byte-limit"
+
+
+def _refusal_basis(error: Exception) -> str:
+    """What a final refusal rests on: the size its response stated, else the bounds that refused it.
+
+    A body past the byte bound states its ``Content-Length`` (the 1946 parts'
+    312,487,940 and 373,504,330 bytes), so it is final on that size against the
+    bound, not on the bound's value; a record stating too many parts, no rendition
+    taken, or an unstated length rests on :data:`REFUSAL_BOUNDS`.
+    """
+    refused = getattr(error, "refused_response", None)
+    if isinstance(refused, RefusedResponse) and refused.stated_byte_size is not None:
+        return f"{SIZE_BASIS}{refused.stated_byte_size}"
+    return REFUSAL_BOUNDS
+
+
+def _settled(row: dict, collection: str, modified: str | None = None) -> bool:
+    return settled(row, collection, modified, bounds=REFUSAL_BOUNDS, max_body_bytes=BODY_BUDGET.max_body_bytes)
 
 
 def _section_input(derived: BodyText) -> str | tuple[PageResult, ...]:
@@ -494,9 +513,9 @@ def build_committee_reports(
                     evidence.refusal(error, stage=collection + ":listing")
                 raise
             pending = {key: row.get("last_modified") for key, row in reads.items()
-                       if key.startswith(collection + "-") and not settled(row, collection, bounds=REFUSAL_BOUNDS)}
+                       if key.startswith(collection + "-") and not _settled(row, collection)}
             pending.update({key: modified for key, modified in listed.items()
-                            if not settled(reads.get(key, {}), collection, modified, bounds=REFUSAL_BOUNDS)})
+                            if not _settled(reads.get(key, {}), collection, modified)})
         unchanged += len(listed) - sum(key in pending for key in listed)
         if evidence:
             evidence.event("package-selection", collection=collection, listed=listed,
@@ -521,7 +540,7 @@ def build_committee_reports(
                 refused += 1
                 if _refusal_is_final(error):
                     # Not asked again until its stamp, the rule or the bounds move.
-                    state.update(outcome=REFUSED_FINAL, rule_version=refusal_rule(collection, REFUSAL_BOUNDS))
+                    state.update(outcome=REFUSED_FINAL, rule_version=refusal_rule(collection, _refusal_basis(error)))
                 else:
                     state["outcome"] = "refused"
                 logger.warning("{}: {} {}: {}", collection, package_id, state["outcome"].replace("_", " "),
