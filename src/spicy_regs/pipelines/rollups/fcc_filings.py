@@ -43,12 +43,14 @@ class FccFilingsRollup(RollupPipeline):
     """FCC filings (comment equivalents) ingested from ECFS (api.data.gov key)."""
 
     name: ClassVar[str] = "fcc-filings"
+    retain_source_evidence: ClassVar[bool] = True
     inputs: ClassVar[tuple[str, ...]] = ()
     output: ClassVar[str] = "fcc_filings.parquet"
 
     def build(self, output_dir: Path) -> Path:
         return build_fcc_filings(
             output_dir,
+            evidence=self.source_evidence,
             since=_date_env("FCC_SINCE"),
             proceedings=_proceedings_env("FCC_PROCEEDINGS"),
         )

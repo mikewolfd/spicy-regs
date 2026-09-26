@@ -13,6 +13,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 
+from spicy_regs.pipelines.rollups.base import RollupPipeline
 from spicy_regs.source_evidence import CaptureEvidence, SourceEvidenceError, verify_evidence
 from spicy_docs.transport.credentials import CredentialRefusedError
 from spicy_regs.sources.crs_reports import CrsReportsReader
@@ -369,6 +370,31 @@ def json_response(raw: bytes, status: int = 200) -> httpx.Response:
     return httpx.Response(status, stream=httpx.ByteStream(raw), headers={'content-type': 'application/json'})
 
 
+
+def test_fcc_filings_retain_each_response_without_the_key(tmp_path, monkeypatch, tee):
+    """The real ECFS reader's count and page requests are retained, so the generation replays from them."""
+    from datetime import date
+
+    fcc = importlib.import_module('spicy_regs.transforms.build_fcc_ecfs')
+    monkeypatch.setenv('API_GOV', KEY)
+    monkeypatch.setattr(fcc.r2, 'download', lambda *a: False)
+    evidence = CaptureEvidence(tmp_path / 'audit', 'fcc-filings')
+    filing = {'id_submission': 'f-1', 'date_submission': '2026-09-25T12:00:00.000Z',
+              'date_received': '2026-09-25T00:00:00Z', 'express_comment': 1, 'proceedings': [{'name': '17-108'}]}
+
+    def respond(request):
+        rows = [filing] if int(request.url.params.get('offset', 0)) == 0 else []
+        buckets = {'doc_count_error_upper_bound': 0, 'sum_other_doc_count': 0, 'buckets': [{'key': 1, 'doc_count': 1}]}
+        return json_response(json.dumps({'filing': rows, 'aggregations': {'express_comment': buckets}}).encode())
+
+    tee(evidence, respond)
+    output = fcc.build_fcc_filings(tmp_path, evidence=evidence, since=date(2026, 9, 25))
+    assert [row['id_submission'] for row in pq.read_table(output).to_pylist()] == ['f-1']
+    retained = captures(evidence)
+    assert retained and {capture['stage'] for capture in retained} == {'fcc-filings-response'}
+    assert any(e['event'] == 'selection' and e['stage'] == 'fcc-filings' for e in journal(evidence))
+    assert_no_secret(evidence, KEY)
+
 def test_lobbying_retains_each_page_without_the_key(tmp_path, monkeypatch, tee):
     from datetime import date
 
@@ -466,3 +492,53 @@ def test_bill_subjects_api_and_bulk_readers_retain_their_responses_without_the_k
     by_stage = {c['stage']: payload(evidence, c) for c in captures(evidence)}
     assert by_stage == {'bill-subject-response': subjects, 'subject-bulk': zipped}
     assert_no_secret(evidence, KEY)
+
+
+# --------------------------------------------------------------------------- #
+# Every rollup that reads a publisher keeps what it read, or says here why not.
+# --------------------------------------------------------------------------- #
+_UNWIRED = "not wired yet: T18 queue (open-work-investigation-2026-09-26/evidence-partials.md)"
+EVIDENCE_EXEMPT = {
+    "DocketsFamily": "republishes the ETL's own working copy; the ETL's Mirrulations reads are the source reads",
+    "DocumentsFamily": "republishes the ETL's own working copy; the ETL's Mirrulations reads are the source reads",
+    "FecObservationsRollup": "builds only from a prepared retained-input archive checked against its stated digests",
+    "CfrSectionsRollup": _UNWIRED,
+    "CommitteeRostersRollup": _UNWIRED,
+    "CourtCitationsRollup": _UNWIRED,
+    "CourtOpinionClustersRollup": _UNWIRED,
+    "CourtOpinionsRollup": _UNWIRED,
+    "FccProceedingsRollup": _UNWIRED + "; measure one whole proceedings walk before retaining it daily",
+    "FecCommitteesRollup": _UNWIRED + "; its captures live only as an expiring workflow artifact",
+    "FecSourceCatalogRollup": _UNWIRED,
+    "FederalRegisterRollup": _UNWIRED,
+    "PressReleasesRollup": _UNWIRED,
+    "SenateExpendituresRollup": _UNWIRED,
+    "UnifiedAgendaRollup": _UNWIRED,
+}
+
+
+def _ingest_rollups() -> dict[str, type[RollupPipeline]]:
+    """Concrete rollups with no base-table inputs: each reads an outside source."""
+    import pkgutil
+
+    import spicy_regs.pipelines.rollups as package
+
+    found: dict[str, type[RollupPipeline]] = {}
+    for info in pkgutil.iter_modules(package.__path__):
+        module = importlib.import_module(f"{package.__name__}.{info.name}")
+        for cls in vars(module).values():
+            if (isinstance(cls, type) and issubclass(cls, RollupPipeline) and cls.__module__ == module.__name__
+                    and "name" in vars(cls) and not cls.inputs):
+                found[cls.__name__] = cls
+    return found
+
+
+def test_every_ingest_rollup_retains_its_source_evidence_or_names_why_not():
+    """FCC filings published unevidenced generations for days because nothing held the rollups to this."""
+    rollups = _ingest_rollups()
+    unexplained = sorted(name for name, cls in rollups.items()
+                         if not cls.retain_source_evidence and name not in EVIDENCE_EXEMPT)
+    assert unexplained == [], f"retain source evidence, or add a reason to EVIDENCE_EXEMPT: {unexplained}"
+    stale = sorted(name for name in EVIDENCE_EXEMPT
+                   if name not in rollups or rollups[name].retain_source_evidence)
+    assert stale == [], f"remove these from EVIDENCE_EXEMPT: {stale}"

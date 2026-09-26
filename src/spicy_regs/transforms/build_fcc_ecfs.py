@@ -43,6 +43,7 @@ from spicy_regs.transforms.parquet_rows import write_rows
 from spicy_regs.transforms.table_merge import merge_local_prior
 
 if TYPE_CHECKING:
+    from spicy_regs.source_evidence import CaptureEvidence
     import httpx
 
     from spicy_docs.sources.fcc_ecfs import FccEcfsReader
@@ -192,6 +193,7 @@ API_KEY_ENV_VARS = ("API_GOV", "DATA_GOV_API_KEY", "FCC_API_KEY", "REGULATIONS_G
 PER_PAGE = 250
 MAX_RESULT_WINDOW = 10_000
 _MAX_REQUESTS_PER_PAGE = 5
+MAX_PAGE_BYTES = 16 * 1024 * 1024
 
 
 class FccEcfsError(ValueError):
@@ -244,7 +246,7 @@ def _fetch_fcc(
         raise ValueError(f"unknown ECFS endpoint {endpoint!r}")
     budget = PagedJsonBudget(
         max_requests=_MAX_REQUESTS_PER_PAGE,
-        max_page_bytes=16 * 1024 * 1024,
+        max_page_bytes=MAX_PAGE_BYTES,
         timeout_seconds=60,
         min_request_interval_seconds=0,
     )
@@ -529,13 +531,16 @@ def build_fcc_proceedings(output_dir: Path) -> Path:
 def build_fcc_filings(
     output_dir: Path,
     *,
+    evidence: CaptureEvidence | None = None,
     since: date | None = None,
     proceedings: tuple[str, ...] = (),
 ) -> Path:
     """Build ``fcc_filings.parquet`` (incremental merge with the prior table).
 
     ``proceedings`` scopes the fetch to specific proceeding names — used for
-    targeted backfills of big dockets without walking all of ECFS.
+    targeted backfills of big dockets without walking all of ECFS. With
+    ``evidence``, every ECFS response the reader receives is retained, without
+    the key, so a generation can be replayed from its own captures.
     """
     prior_file = output_dir / "_fcc_filings_prior.parquet"
 
@@ -554,7 +559,12 @@ def build_fcc_filings(
             )
     logger.info("FCC filings: fetching filings received since {} (proceedings={})", since, proceedings or "all")
 
-    with closing(_fetch_fcc("filings", since=since, proceedings=proceedings)) as source:
+    transport = None
+    if evidence is not None:
+        evidence.credential = _resolve_api_key() or ""
+        evidence.event("selection", stage="fcc-filings", since=since.isoformat(), proceedings=list(proceedings))
+        transport = evidence.transport(stage="fcc-filings-response", max_bytes=MAX_PAGE_BYTES)
+    with closing(_fetch_fcc("filings", since=since, proceedings=proceedings, transport=transport)) as source:
         out = _merge_incremental(
             output_dir,
             output=FILINGS_OUTPUT,
