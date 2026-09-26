@@ -4,9 +4,9 @@
 Each declared join counts its distinct non-null child keys and those absent from
 the parent. A join fails below its floor, the baseline rate truncated to four
 decimals, so a new orphan or a narrowed parent shows as a failing number. A
-complete join reports a few new orphans as LAG (``Join.lag_allowance``) rather
-than failing, since a growing child can name a key its parent publishes a run
-later. A declared-empty child that now publishes keys fails too, until its
+join reports a few orphans beyond those its floor admits as LAG
+(``Join.lag_allowance``) rather than failing, since a growing child can name a
+key its parent publishes a run later. A declared-empty child that now publishes keys fails too, until its
 baseline is recorded. Reads the publisher the output ledger names, or an explicit
 ``--index-url``, never a default. Read-only: it downloads column pages and
 writes nothing but an optional receipt.
@@ -99,7 +99,7 @@ def verdict(join: table_joins.Join, keys: int, missing: int, examples: Sequence[
     elif pct is not None and pct >= floor:
         status = "OK"
     else:
-        status = "LAG" if missing <= join.baseline_missing + join.lag_allowance(keys) else "BELOW"
+        status = "LAG" if missing <= join.admitted_missing(keys) + join.lag_allowance(keys) else "BELOW"
     return {"join": join.name, "kind": join.kind, "status": status, "keys": keys, "missing": missing,
             "resolved_pct": None if pct is None else round(pct, 4), "floor_pct": floor,
             "baseline_keys": join.baseline_keys, "baseline_missing": join.baseline_missing,

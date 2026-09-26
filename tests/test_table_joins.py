@@ -96,7 +96,8 @@ def _declared(keys: int, missing: int, kind: str = "complete") -> table_joins.Jo
     (["a", "b", None], _declared(2, 0), "OK"),
     (["a", "b", "orphan"], _declared(2, 0), "LAG"),
     (["a", "b", "o1", "o2", "o3", "o4"], _declared(2, 0), "BELOW"),
-    (["a", "orphan"], _declared(2, 0, "scope"), "BELOW"),
+    (["a", "orphan"], _declared(2, 0, "scope"), "LAG"),
+    (["a", "o1", "o2", "o3", "o4"], _declared(2, 0, "scope"), "BELOW"),
     (["a", "orphan"], _declared(2, 1, "scope"), "OK"),
     (["a"], _declared(0, 0, "empty"), "UNBASELINED"),
     ([None], _declared(0, 0, "empty"), "EMPTY"),
@@ -109,6 +110,14 @@ def test_the_live_check_holds_each_join_to_its_floor(tmp_path, child, declared, 
     if status == "LAG":
         assert result["examples"] == ["orphan"] and result["missing"] == 1
     assert (status in live.FAILING) == (status in {"BELOW", "UNBASELINED", "EMPTIED"})
+
+
+@pytest.mark.parametrize(("missing", "status"), [(9_216, "LAG"), (9_218, "LAG"), (9_219, "BELOW")])
+def test_a_growing_design_join_lags_on_its_rate_not_its_baseline_count(missing, status):
+    """court_dockets on 2026-09-26: two new PACER dockets without an opinion took 19.7037% to 19.7003%."""
+    declared = _declared(11_475, 9_214, "design")
+    assert declared.admitted_missing(11_477) == 9_215
+    assert live.verdict(declared, 11_477, missing)["status"] == status
 
 
 def test_a_composite_join_needs_every_column_to_match(tmp_path):

@@ -39,8 +39,9 @@ BASELINE_RECEIPTS = (
 #: not key. ``empty``: the child publishes no key yet.
 KINDS = ("complete", "scope", "design", "empty")
 
-#: A complete join reports up to this many new orphans, or this share of its
-#: keys if larger, as LAG instead of failing (see ``Join.lag_allowance``).
+#: A join reports up to this many orphans beyond those its floor admits, or
+#: this share of its keys if larger, as LAG instead of failing (see
+#: ``Join.lag_allowance``).
 LAG_MIN = 3
 LAG_SHARE = 0.0001
 
@@ -75,16 +76,23 @@ class Join:
         pct = self.baseline_pct
         return None if pct is None else math.floor(pct * 10_000) / 10_000
 
+    def admitted_missing(self, keys: int) -> int:
+        """The most orphans ``keys`` distinct keys can hold and still meet the floor."""
+        floor = self.floor_pct
+        return 0 if floor is None else keys - math.ceil(keys * floor / 100)
+
     def lag_allowance(self, keys: int) -> int:
-        """New orphans a complete join tolerates as lag before it fails.
+        """Orphans a join tolerates as lag, beyond those its floor admits, before it fails.
 
         A growing child can name a key its parent publishes a run later (a
         report citing a bill BILLSTATUS has not served yet, a document naming a
-        docket before the gap fill reaches it), and failing on each such orphan
-        trains people to ignore the check. Scope and design joins keep the pure
-        rate floor: their missing count grows with the child by definition.
+        docket before the gap fill reaches it, a new PACER docket whose opinion
+        comes later), and failing on each such orphan trains people to ignore
+        the check. The allowance sits on top of ``admitted_missing`` rather than
+        the baseline count, so a scope or design join, whose missing count grows
+        with the child by definition, gets the same few orphans of lag.
         """
-        return max(LAG_MIN, math.ceil(keys * LAG_SHARE)) if self.kind == "complete" else 0
+        return max(LAG_MIN, math.ceil(keys * LAG_SHARE))
 
 
 def _join(child: str, child_columns: str | tuple[str, ...], parent: str, parent_columns: str | tuple[str, ...],
