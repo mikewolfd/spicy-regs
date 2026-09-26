@@ -99,13 +99,11 @@ _BILL = "congress_bills"
 JOINS: tuple[Join, ...] = (
     # The bill family and the tables that name its bills.
     _join("bill_actions", "bill_id", _BILL, "bill_id", 38_559, 0),
-    _join("bill_committee_actions", "bill_id", _BILL, "bill_id", 3_009, 16,
-          reason="11 are real 117th-Congress bills congress_bills lacks: its rows below the 118th are the retired "
-                 "list walk's, which misses 1,299 BILLSTATUS bills across the 108th-117th (199 in the 117th) until "
-                 "the bill family is run for them. 2 are Senate reports keyed to their filing Congress, fixed at "
-                 "9818678 and re-keyed by the print-citation runs; 2 are bills a House report prints under a "
-                 "'116th Congress' subheading, keyed to the report's Congress; 1 (118-hr-14106) is the publisher's "
-                 "misprint. Receipt join-gaps-2026-09-26/d/."),
+    _join("bill_committee_actions", "bill_id", _BILL, "bill_id", 2_956, 1,
+          reason="1 (118-hr-14106) is the publisher's misprint. The 16 of 2026-09-26 are resolved: the "
+                 "status-only bill-family backfill of the 108th-117th filled the list walk's 1,299-bill gap, the "
+                 "print re-keys moved Senate reports to their covered Congress and subheaded bills to theirs. "
+                 "Receipts join-gaps-2026-09-26/d/, congress-bills-backfill-2026-09-26/."),
     _join("bill_committees", "bill_id", _BILL, "bill_id", 37_473, 0),
     _join("bill_publisher_summaries", "bill_id", _BILL, "bill_id", 17_839, 0),
     _join("bill_sections", "bill_id", _BILL, "bill_id", 1_849, 0),

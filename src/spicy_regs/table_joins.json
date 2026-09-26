@@ -45,11 +45,11 @@
         "bill_id"
       ],
       "kind": "complete",
-      "reason": "11 are real 117th-Congress bills congress_bills lacks: its rows below the 118th are the retired list walk's, which misses 1,299 BILLSTATUS bills across the 108th-117th (199 in the 117th) until the bill family is run for them. 2 are Senate reports keyed to their filing Congress, fixed at 9818678 and re-keyed by the print-citation runs; 2 are bills a House report prints under a '116th Congress' subheading, keyed to the report's Congress; 1 (118-hr-14106) is the publisher's misprint. Receipt join-gaps-2026-09-26/d/.",
+      "reason": "1 (118-hr-14106) is the publisher's misprint. The 16 of 2026-09-26 are resolved: the status-only bill-family backfill of the 108th-117th filled the list walk's 1,299-bill gap, the print re-keys moved Senate reports to their covered Congress and subheaded bills to theirs. Receipts join-gaps-2026-09-26/d/, congress-bills-backfill-2026-09-26/.",
       "measured_via": null,
-      "baseline_keys": 3009,
-      "baseline_missing": 16,
-      "floor_pct": 99.4682
+      "baseline_keys": 2956,
+      "baseline_missing": 1,
+      "floor_pct": 99.9661
     },
     {
       "child": "bill_committees",
