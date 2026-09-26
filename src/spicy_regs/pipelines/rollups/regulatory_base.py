@@ -11,10 +11,18 @@ from pathlib import Path
 from typing import ClassVar
 
 import duckdb
+import pyarrow.parquet as pq
 
 from spicy_regs.pipelines.rollups.base import RollupPipeline, make_rollup_app
 from spicy_regs.schemas.regulations import RECORD_TYPES
 from spicy_regs.sources import r2
+
+
+#: DocSpec admits a member by reference only when every row group is at most
+#: 256 MiB uncompressed. The writers sort, and DuckDB 1.5 ignores
+#: ``ROW_GROUP_SIZE_BYTES`` for sorted output (measured 2026-09-26), so the
+#: bound is checked here, where a refusal is visible in the run.
+MAX_ROW_GROUP_BYTES = 256 * 2**20
 
 
 class _BaseTableFamily(RollupPipeline):
@@ -33,6 +41,10 @@ class _BaseTableFamily(RollupPipeline):
         )
         if missing or distinct != rows:
             raise RuntimeError(f"{self.output}: {missing} rows lack {key} and {rows - missing - distinct} repeat one")
+        metadata = pq.ParquetFile(path).metadata
+        largest = max((metadata.row_group(i).total_byte_size for i in range(metadata.num_row_groups)), default=0)
+        if largest > MAX_ROW_GROUP_BYTES:
+            raise RuntimeError(f"{self.output}: a {largest / 2**20:.1f} MiB row group exceeds the admission bound")
         return path
 
 

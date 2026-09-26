@@ -87,6 +87,16 @@ def test_a_working_copy_with_a_repeated_or_missing_id_is_not_published(tmp_path,
     assert pub.INDEX_KEY not in remote.objects
 
 
+def test_a_row_group_over_the_admission_bound_is_not_published(tmp_path, monkeypatch, remote):
+    from spicy_regs.pipelines.rollups import regulatory_base
+
+    _working_copy(monkeypatch, _dockets(["EPA-1", "EPA-2"]))
+    monkeypatch.setattr(regulatory_base, "MAX_ROW_GROUP_BYTES", 1)
+    with pytest.raises(RuntimeError, match="exceeds the admission bound"):
+        DocketsFamily(output_dir=tmp_path, skip_upload=False).run()
+    assert pub.INDEX_KEY not in remote.objects
+
+
 def test_working_copy_download_ignores_a_family_that_owns_the_key(tmp_path, monkeypatch):
     """The ETL primes from the bare object even when ``dockets.parquet`` resolves to a generation."""
     monkeypatch.setenv("R2_PUBLIC_URL", "https://example.test")
