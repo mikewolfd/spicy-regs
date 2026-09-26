@@ -19,6 +19,7 @@ from uuid import uuid4
 from rulespec_artifacts import (
     ArtifactInput,
     LocalMemberSource,
+    MemberSource,
     Producer,
     admit_artifact,
     build_artifact_root,
@@ -424,9 +425,10 @@ class CaptureEvidence:
             raise swallowed
 
 
-def verify_evidence(directory: Path, *, expected_pin=None):
-    """Admit the separate artifact; it must never masquerade as a table family."""
-    artifact = admit_artifact(LocalMemberSource(directory), expected_pin=expected_pin)
+def verify_evidence(evidence: Path | MemberSource, *, expected_pin=None):
+    """Admit the separate artifact from a directory or any member source; it must never masquerade as a table family."""
+    source = LocalMemberSource(evidence) if isinstance(evidence, Path) else evidence
+    artifact = admit_artifact(source, expected_pin=expected_pin)
     if artifact.root["kind"] != KIND or artifact.root["spec"]["outcome"] != "build-complete":
         raise SourceEvidenceError("Only completed-build evidence can support a generation")
     return artifact

@@ -98,6 +98,27 @@ the working copies, which change batch by batch as before.
 - Dictionary remote schema discovery captures the same index. Declared schema
   pages alone continue to make no claim of production availability.
 
+## Auditing a published generation
+
+`scripts/audit_generation.py` re-reads one family's (or one table's) current
+generation anonymously and writes a JSON report. It never writes to storage.
+
+```sh
+uv run --frozen python scripts/audit_generation.py --family laws --prior 43130abc \
+  --env-file ../spicy-docs/.env --output report.json
+```
+
+The report keeps its sections separate: publication (every member byte admitted;
+index, manifest and root agree), schema (names and types against the dictionary),
+identity (duplicate and NULL keys counted before any row is paired), conservation
+against a prior pin from the generation's captured chain (both directions, and
+multisets where identity cannot pair rows), evidence (admission, binding,
+credential and body-shape scans) and state (an empty table is state, not a
+failure). Every report names source qualification and deployment as not assessed,
+and `limits` lists what the run could not see. Exit status 1 means at least one
+`fail` finding; 2 means the audit could not run. `check_ledger_pins.py` compares
+pins only; this tool audits what a pin holds.
+
 ## Rollout limits
 
 The offline object-store tests exercise conditional creation, interrupted
