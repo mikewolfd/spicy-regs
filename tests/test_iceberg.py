@@ -872,3 +872,72 @@ def test_comment_merge_does_not_recount_or_build_index(tmp_path, local_catalog, 
     monkeypatch.setattr(iceberg, "_build_comments_index", lambda *a: pytest.fail("per-batch recount"))
     assert iceberg.merge_comments(staging, COMMENT) == 1
     assert not (tmp_path / "comments_index.parquet").exists()
+
+
+class _FlakyLiveInsert:
+    """Fails the swap INSERT into the live table for ``agency`` with a catalog error ``times`` times.
+
+    ``commit_anyway`` runs the INSERT before raising: the commit landed but the
+    client saw an error, which the retry must not repeat.
+    """
+
+    def __init__(self, con, agency, *, times=1, commit_anyway=False, count_failures=0):
+        self.con, self.agency, self.times, self.commit_anyway = con, agency, times, commit_anyway
+        self.prefix = f"INSERT INTO {iceberg._qualified(COMMENT)}"
+        self.count_prefix = f"SELECT count(*) FROM {iceberg._qualified(COMMENT)} WHERE"
+        self.failed = 0
+        self.count_failures = count_failures  # the recount meets the same outage this many times
+
+    def execute(self, sql, parameters=None):
+        if (sql.lstrip().startswith(self.count_prefix) and f"agency_code = '{self.agency}'" in sql
+                and self.count_failures):
+            self.count_failures -= 1
+            raise duckdb.IOException("HTTP 502 from the catalog during the recount")
+        flaky = (sql.lstrip().startswith(self.prefix) and f"agency_code = '{self.agency}'" in sql
+                 and self.failed < self.times)
+        if flaky and not self.commit_anyway:
+            self.failed += 1
+            raise duckdb.IOException("HTTP 502 from the catalog")
+        result = self.con.execute(sql, parameters) if parameters is not None else self.con.execute(sql)
+        if flaky:
+            self.failed += 1
+            raise duckdb.IOException("HTTP 502 after commit")
+        return result
+
+
+def _seed_two_agencies(tmp_path, con):
+    iceberg._ensure_table(con, COMMENT)
+    base = tmp_path / "seed.parquet"
+    rows = [_comment("a", "EPA-1", "EPA", "2025-01-01"), _comment("b", "OMB-1", "OMB", "2025-01-01")]
+    pl.DataFrame(rows + rows, schema=COMMENT.schema).write_parquet(base)
+    iceberg.seed_comments_from_parquet(con, str(base), COMMENT)
+
+
+@pytest.mark.parametrize("count_failures", [0, 1])
+@pytest.mark.parametrize("commit_anyway", [False, True])
+def test_dedupe_swap_retries_a_transient_catalog_error(tmp_path, local_catalog, monkeypatch, commit_anyway,
+                                                      count_failures):
+    """Upstream #198's retry on the journaled swap: a transient catalog error on one agency's INSERT is
+    retried in the same run, an INSERT that committed despite the error is not repeated, and a recount
+    that meets the same outage is retried rather than guessed past."""
+    monkeypatch.setattr(iceberg.time, "sleep", lambda _seconds: None)
+    con = local_catalog
+    _seed_two_agencies(tmp_path, con)
+    flaky = _FlakyLiveInsert(con, "OMB", commit_anyway=commit_anyway, count_failures=count_failures)
+    assert iceberg.dedupe_table(flaky, COMMENT) == (4, 2)
+    assert flaky.failed == 1
+    live = iceberg._qualified(COMMENT)
+    assert con.execute(f"SELECT comment_id FROM {live} ORDER BY comment_id").fetchall() == [("a",), ("b",)]
+    assert not iceberg.dedupe_recovery_pending(con, COMMENT)
+
+
+def test_dedupe_swap_leaves_the_journal_to_resume_when_retries_run_out(tmp_path, local_catalog, monkeypatch):
+    monkeypatch.setattr(iceberg.time, "sleep", lambda _seconds: None)
+    monkeypatch.setenv("DEDUP_SWAP_RETRIES", "2")
+    con = local_catalog
+    _seed_two_agencies(tmp_path, con)
+    with pytest.raises(duckdb.IOException):
+        iceberg.dedupe_table(_FlakyLiveInsert(con, "OMB", times=2), COMMENT)
+    assert iceberg.dedupe_recovery_pending(con, COMMENT)
+    assert iceberg.dedupe_table(con, COMMENT) == (4, 2)
+    assert not iceberg.dedupe_recovery_pending(con, COMMENT)

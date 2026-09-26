@@ -29,6 +29,7 @@ Credentials are read from the environment, alongside the existing ``R2_*`` vars:
 """
 
 import json
+import time
 from dataclasses import dataclass
 from os import getenv
 from pathlib import Path
@@ -726,6 +727,35 @@ def dedupe_table(con, record_type: RecordType) -> tuple[int, int]:
         if rows != expected or distinct != expected:
             raise RuntimeError(f"dedupe verification failed: {ident} has {rows} rows / {distinct} IDs; expected {expected}")
 
+    def _copy_agency(agency: str | None, rows: int) -> None:
+        # One agency's INSERT from the sibling, retried on a catalog error
+        # (upstream #198: the 2026-09-06 swap died on a single 502). Each INSERT
+        # is one Iceberg commit, so after an error the agency holds none of its
+        # rows or all of them. Every retry backs off, then counts before it
+        # inserts: a commit that landed despite the error is not repeated, and a
+        # count that meets the same outage is itself retried rather than
+        # guessed past. A partial agency, anything but a DuckDB error, or the
+        # last failed attempt propagates, and the journal resumes the next run.
+        import duckdb
+
+        where = "agency_code IS NULL" if agency is None else f"agency_code = '{_sql_str(agency)}'"
+        attempts = int(getenv("DEDUP_SWAP_RETRIES", "3"))
+        for attempt in range(1, attempts + 1):
+            try:
+                if attempt > 1:
+                    have = con.execute(f"SELECT count(*) FROM {tbl} WHERE {where}").fetchone()[0]
+                    if have == rows:
+                        return
+                    if have:
+                        raise RuntimeError(f"swap INSERT for {agency} left {have:,} of {rows:,} rows")
+                con.execute(f"INSERT INTO {tbl} ({col_list}) SELECT {col_list} FROM {dedup_tbl} WHERE {where};")
+                return
+            except duckdb.Error as error:
+                if attempt == attempts:
+                    raise
+                logger.warning("iceberg: swap for {} failed ({}); retry {}/{}", agency, error, attempt, attempts - 1)
+                time.sleep(2**attempt)
+
     def _replace_live_from_sibling() -> int:
         # Swap without RENAME: rebuild the live table from the deduped sibling
         # using DROP/CREATE/INSERT (per-agency, so no whole-table statement). The
@@ -733,12 +763,11 @@ def dedupe_table(con, record_type: RecordType) -> tuple[int, int]:
         # interrupted; it is dropped only once the rebuilt row count matches.
         expected = con.execute(f"SELECT row_count FROM {state_tbl} WHERE phase = 'ready'").fetchone()[0]
         _verify(dedup_tbl, expected)
-        sibling_agencies = [r[0] for r in con.execute(f"SELECT DISTINCT agency_code FROM {dedup_tbl}").fetchall()]
+        per_agency = con.execute(f"SELECT agency_code, count(*) FROM {dedup_tbl} GROUP BY agency_code").fetchall()
         con.execute(f"DROP TABLE IF EXISTS {tbl};")
         con.execute(f"CREATE TABLE {tbl} ({col_defs});")
-        for agency in sibling_agencies:
-            where = "agency_code IS NULL" if agency is None else f"agency_code = '{_sql_str(agency)}'"
-            con.execute(f"INSERT INTO {tbl} ({col_list}) SELECT {col_list} FROM {dedup_tbl} WHERE {where};")
+        for agency, rows in per_agency:
+            _copy_agency(agency, rows)
         _verify(tbl, expected)
         con.execute(f"DROP TABLE IF EXISTS {dedup_tbl};")
         con.execute(f"DROP TABLE {state_tbl};")
