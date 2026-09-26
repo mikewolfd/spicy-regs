@@ -274,19 +274,13 @@
       ],
       "audits": [
         {
-          "disposition": "PARTIAL",
-          "pin": "65edd788",
+          "disposition": "qualified",
+          "pin": "9a7de1ac",
           "pin_kind": "artifact",
           "date": "2026-09-26"
-        },
-        {
-          "disposition": "qualified",
-          "pin": "56dd0f65",
-          "pin_kind": "artifact",
-          "date": "2026-09-23"
         }
       ],
-      "statement": "current `65edd788…` is PARTIAL (2026-09-26): 179,825 registrations keep all 167,965 rows of `464977e4…` unchanged, including the qualified 147,254-row 2026 population, and add 11,860 registered in 2003, the scheduled rotating year window. Ten sampled additions match all 19 native fields. Run 36177843463 (`4b345a5`) predates SAM evidence retention (`197e449`), so the 2003 extract was not retained. Earlier extract qualified at `56dd0f65…` (2026-09-23); identity is `(uei, entity_eft_indicator)`; other years remain open. Receipt: `drift-qualification-2026-09-26/external/`."
+      "statement": "qualified at `9a7de1ac…` (2026-09-26): the backfilled, retiring registry, 792,846 active registrations over registration years 1949, 1968 and 1996–2026, no row undated. Each unbounded year replaces its rows only after its extract meets its declared count. The generation audit reconciles the removals exactly: 80 retired in 2002–2003 at `0ed551d3…`, 11 in 2026 here, each named in a `rows-retired` event, none unjournaled and none still present. The 8 renewals SAM holds Active twice are credited, each in a `sam-superseded-credited` event dated before its trigger's cutoff. Evidence is admitted and bound, and no credential appears among 10 configured secrets. Counts reconcile: SAM reports 793,040 active (per the reconciliation receipt's entity-API query), which is 792,846 held plus 8 credited, 181 activated after their year was read (the current year is re-read every other day), and 5 registrations with no registrationDate. A year-windowed extract cannot reach those 5, so they are a known exclusion. Rows held per year match an independent recount of the published table. Field values were not re-sampled at this pin. Receipts: `sam-entities-0ed551d3-2026-09-26/`, `sam-entities-9a7de1ac-2026-09-26/`, `sam-entities-reconciliation-2026-09-26/per-year.json`."
     },
     {
       "task": "T14",
