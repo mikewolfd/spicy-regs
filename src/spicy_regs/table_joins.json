@@ -8,7 +8,8 @@
       "~/Work/corpora/fork-execution-2026-09-21/join-map-2026-09-26/rule-targets-baseline.json",
       "~/Work/corpora/fork-execution-2026-09-21/join-map-2026-09-26/unified-agenda-rin-after-backfill.json",
       "~/Work/corpora/fork-execution-2026-09-21/join-map-2026-09-26/dockets-after-gap-fill.json",
-      "~/Work/corpora/fork-execution-2026-09-21/join-map-2026-09-26/sam-entities-after-backfill.json"
+      "~/Work/corpora/fork-execution-2026-09-21/join-map-2026-09-26/sam-entities-after-backfill.json",
+      "~/Work/corpora/fork-execution-2026-09-21/join-map-2026-09-26/live-check-after-fixes.json"
     ]
   },
   "kinds": [
@@ -610,11 +611,11 @@
         "event_id"
       ],
       "kind": "complete",
-      "reason": "The 7 are 118th-Congress House meetings Congress.gov updated in 2026 when their transcripts printed; committee_meetings listed only the current Congress. It now keeps the previous one, and its next run lists them. Receipt join-gaps-2026-09-26/f/.",
+      "reason": "Complete since committee_meetings keeps the previous Congress: the 7 orphans of the first baseline were 118th-Congress meetings it had not listed (join-gaps-2026-09-26/f/). Receipt join-map-2026-09-26/live-check-after-fixes.json.",
       "measured_via": null,
-      "baseline_keys": 15,
-      "baseline_missing": 7,
-      "floor_pct": 53.3333
+      "baseline_keys": 16,
+      "baseline_missing": 0,
+      "floor_pct": 100.0
     },
     {
       "child": "report_sections",

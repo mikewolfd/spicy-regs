@@ -29,6 +29,7 @@ BASELINE_RECEIPTS = (
     "~/Work/corpora/fork-execution-2026-09-21/join-map-2026-09-26/unified-agenda-rin-after-backfill.json",
     "~/Work/corpora/fork-execution-2026-09-21/join-map-2026-09-26/dockets-after-gap-fill.json",
     "~/Work/corpora/fork-execution-2026-09-21/join-map-2026-09-26/sam-entities-after-backfill.json",
+    "~/Work/corpora/fork-execution-2026-09-21/join-map-2026-09-26/live-check-after-fixes.json",
 )
 
 #: Expected resolution. ``complete``: every key should resolve and an orphan is
@@ -146,10 +147,10 @@ JOINS: tuple[Join, ...] = (
     _join("committee_meetings", "committee_system_code", "committees", "system_code", 212, 0),
     _join("hearing_bill_links", "committee_system_code", "committees", "system_code", 4, 0),
     _join("hearing_bill_links", "package_id", "hearing_transcripts", "package_id", 9, 0),
-    _join("hearing_transcripts", "event_id", "committee_meetings", "event_id", 15, 7,
-          reason="The 7 are 118th-Congress House meetings Congress.gov updated in 2026 when their transcripts "
-                 "printed; committee_meetings listed only the current Congress. It now keeps the previous one, and "
-                 "its next run lists them. Receipt join-gaps-2026-09-26/f/."),
+    _join("hearing_transcripts", "event_id", "committee_meetings", "event_id", 16, 0,
+          reason="Complete since committee_meetings keeps the previous Congress: the 7 orphans of the first "
+                 "baseline were 118th-Congress meetings it had not listed (join-gaps-2026-09-26/f/). Receipt "
+                 "join-map-2026-09-26/live-check-after-fixes.json."),
     _join("report_sections", "part_id", "committee_reports", "part_id", 142, 0),
     _join("law_code_sections", "law_id", "laws", "law_id", 70, 0),
     # Regulations.gov and the Federal Register.
