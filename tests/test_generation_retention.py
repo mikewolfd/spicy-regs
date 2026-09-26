@@ -119,3 +119,26 @@ def test_docspec_pins_refuse_a_document_outside_the_stated_shape():
     for broken in ({**document, "version": 2}, {**document, "pins": [{**pin, "artifactDigest": "aaaa"}]}, {}):
         with pytest.raises(pub.PublicationError, match="DocSpec pins"):
             retention.docspec_pins(json.dumps(broken).encode())
+
+
+def test_execution_deletes_only_what_a_fresh_plan_agrees_on_members_before_the_root(tmp_path, remote):
+    digests = _publish(_Base, tmp_path, remote, 5)
+    approved = _plan(remote)
+    cited = [("docs/research/ledger.md", f"`{digests[1][:8]}…`")]  # cited after the review
+    record = retention.execute(remote, "spicy-regs", approved, _plan(remote, notes=cited))
+
+    assert record["deleted"] == [f"generations/base/{digests[0]}"]
+    assert record["spared"] == [f"generations/base/{digests[1]}"]
+    gone = [key for key in remote.deletes if key.startswith(record["deleted"][0])]
+    assert len(gone) > 1 and [key.endswith("/artifact.json") for key in gone] == [False] * (len(gone) - 1) + [True]
+    assert not any(key.startswith(record["deleted"][0]) for key in remote.objects)
+    assert any(key.startswith(record["spared"][0]) for key in remote.objects)
+    stored = json.loads(remote.objects[f"retention/{LATER.isoformat()}.json"])
+    assert stored["deleted"] == record["deleted"]
+    assert _plan(remote, notes=cited)["delete"] == []
+
+
+def test_execution_refuses_a_plan_for_another_bucket(remote):
+    with pytest.raises(pub.PublicationError, match="approved plan"):
+        retention.execute(remote, "spicy-regs", {"format": retention.PLAN_FORMAT, "version": 1, "bucket": "other"},
+                          {})

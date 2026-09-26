@@ -21,7 +21,11 @@ generation something cites and the last ``KEEP_LAST`` per family. Kept:
 
 Everything else under ``generations/`` is planned for deletion. Source evidence
 under ``source-evidence/`` is content-addressed and shared, and is not planned
-here. The plan records the index ETag it was made against. Nothing is deleted.
+here. Planning deletes nothing. ``execute`` takes a plan a person reviewed and
+deletes only the prefixes a fresh plan also marks, so anything published,
+pinned or cited since is spared. Within a prefix it deletes the members before
+the root, so an interrupted run leaves a root that still links the chain. Each
+execution leaves its record under ``RECORDS``.
 """
 
 from __future__ import annotations
@@ -47,6 +51,9 @@ KEEP_LAST = 3
 GRACE = timedelta(hours=6)
 PREFIX = "generations/"
 ROOT = "artifact.json"
+RECORDS = "retention/"
+#: DeleteObjects accepts at most this many keys per request.
+DELETE_BATCH = 1000
 DOCS = LEDGER.parents[1]
 DOCSPEC_PINS = "https://raw.githubusercontent.com/mikewolfd/DocSpec/main/docs/pins/fork-generations.json"
 DOCSPEC_PINS_FORMAT = "docspec-fork-generation-pins"
@@ -214,6 +221,34 @@ def plan(client, bucket: str, *, notes: Iterable[tuple[str, str]], docspec: Mapp
     }
 
 
+def execute(client, bucket: str, approved: Mapping, fresh: Mapping) -> dict:
+    """Delete what both the reviewed plan and a fresh one mark deletable, and store the record of it."""
+    if approved.get("format") != PLAN_FORMAT or approved.get("version") != 1 or approved.get("bucket") != bucket:
+        raise publication.PublicationError(f"The approved plan is not a {PLAN_FORMAT} v1 plan for {bucket}")
+    doomed = sorted(set(approved["delete"]) & set(fresh["delete"]))
+    for prefix in doomed:
+        pages = client.get_paginator("list_objects_v2").paginate(Bucket=bucket, Prefix=f"{prefix}/")
+        keys = sorted(item["Key"] for page in pages for item in page.get("Contents", ()))
+        root = f"{prefix}/{ROOT}"
+        members = [key for key in keys if key != root]
+        for start in range(0, len(members), DELETE_BATCH):
+            batch = members[start:start + DELETE_BATCH]
+            failed = client.delete_objects(
+                Bucket=bucket, Delete={"Objects": [{"Key": key} for key in batch], "Quiet": True}).get("Errors")
+            if failed:
+                raise publication.PublicationError(f"Deleting {prefix} failed for {len(failed)} objects")
+        if root in keys:
+            client.delete_object(Bucket=bucket, Key=root)
+    record = {
+        "format": "spicy-regs-generation-retention-record", "version": 1,
+        "approved_plan": approved["planned_at"], "fresh_plan": fresh["planned_at"],
+        "deleted": doomed, "spared": sorted(set(approved["delete"]) - set(doomed)),
+    }
+    client.put_object(Bucket=bucket, Key=f"{RECORDS}{fresh['planned_at']}.json", IfNoneMatch="*",
+                      Body=json.dumps(record, indent=2).encode(), ContentType="application/json")
+    return record
+
+
 def summary(record: Mapping) -> list[str]:
     """A per-family table of the plan for a person to review."""
     gib = 1024 ** 3
@@ -246,6 +281,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=(__doc__ or "").split("\n\n")[0])
     parser.add_argument("--output", type=Path, required=True, help="Write the JSON plan here")
     parser.add_argument("--docspec-pins", default=DOCSPEC_PINS, help="DocSpec's pin document, a URL or a path")
+    parser.add_argument("--execute", type=Path, help="A reviewed plan: delete what it and this fresh plan both mark")
     args = parser.parse_args(argv)
     source = args.docspec_pins
     raw = (publication._bounded_get(source, allow_missing=False) if source.startswith("https://")
@@ -254,10 +290,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     bucket = getenv("R2_BUCKET_NAME")
     if not bucket:
         parser.error("R2_BUCKET_NAME is not set")
-    record = plan(r2.get_r2_client(), bucket, notes=_notes(), docspec=docspec_pins(raw),
-                  now=datetime.now(timezone.utc))
+    client = r2.get_r2_client()
+    record = plan(client, bucket, notes=_notes(), docspec=docspec_pins(raw), now=datetime.now(timezone.utc))
     args.output.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
     print("\n".join(summary(record)))
+    if args.execute:
+        done = execute(client, bucket, json.loads(args.execute.read_text(encoding="utf-8")), record)
+        print(f"\nDeleted {len(done['deleted'])} generations; spared {len(done['spared'])} the fresh plan keeps. "
+              f"Record: {RECORDS}{record['planned_at']}.json")
     return 0
 
 

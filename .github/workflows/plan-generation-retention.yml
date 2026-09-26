@@ -2,16 +2,26 @@ name: Plan generation retention
 
 # Decision 36 (2026-09-26): keep each family's last three generations and every
 # generation the docs, DocSpec or a kept generation's parents cite; delete the
-# rest. This only plans: it lists the bucket, reads roots, and uploads the plan
-# for a person to review. Nothing here deletes.
+# rest. Dispatched bare, this only plans: it lists the bucket, reads roots, and
+# uploads the plan for a person to review. Given the run id of a plan someone
+# reviewed, it deletes what that plan and a fresh one both mark deletable.
 
 on:
   workflow_dispatch:
+    inputs:
+      execute_plan_run:
+        description: 'Run id of a reviewed plan to execute (empty: plan only, delete nothing)'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+  actions: read
 
 jobs:
   plan:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
@@ -23,15 +33,28 @@ jobs:
 
       - run: uv sync
 
-      - name: Plan
+      - name: Fetch the reviewed plan
+        if: inputs.execute_plan_run != ''
+        uses: actions/download-artifact@v4
+        with:
+          name: retention-plan
+          path: approved
+          run-id: ${{ inputs.execute_plan_run }}
+          github-token: ${{ github.token }}
+
+      - name: Plan, and execute the reviewed plan when one is named
         env:
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
           R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
-        run: uv run --frozen python scripts/plan_generation_retention.py --output retention-plan.json | tee -a "$GITHUB_STEP_SUMMARY"
+          EXECUTE: ${{ inputs.execute_plan_run != '' && 'approved/retention-plan.json' || '' }}
+        run: |
+          uv run --frozen python scripts/plan_generation_retention.py --output retention-plan.json \
+            ${EXECUTE:+--execute "$EXECUTE"} | tee -a "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: retention-plan
           path: retention-plan.json

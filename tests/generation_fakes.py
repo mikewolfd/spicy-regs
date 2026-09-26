@@ -35,6 +35,7 @@ class Store:
         self.modified = {}
         self.etags = {}  # multipart ETags only; others derive from the stored bytes
         self.writes = []
+        self.deletes = []
         self.copies = []
         self.uploads = {}
         self.reads = Counter()
@@ -91,6 +92,16 @@ class Store:
             self.etags[Key] = etag
         self.modified[Key] = datetime.now(timezone.utc)
         self.writes.append(Key)
+        return {}
+
+    def delete_objects(self, *, Bucket, Delete):
+        for item in Delete["Objects"]:
+            self.delete_object(Bucket=Bucket, Key=item["Key"])
+        return {}
+
+    def delete_object(self, *, Bucket, Key):
+        self.objects.pop(Key, None)
+        self.deletes.append(Key)
         return {}
 
     def get_paginator(self, name):
