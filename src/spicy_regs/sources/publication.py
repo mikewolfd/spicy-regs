@@ -29,6 +29,11 @@ INDEX_KEY = "publication.json"
 INDEX_LIMIT = 1024 * 1024
 PART_BYTES = 64 * 1024 * 1024
 EVIDENCE_PREFIX = "source-evidence"
+#: An evidence manifest lists every retained body and its journal every
+#: capture, so both grow with a run's reads (house communications' 1,043
+#: captures: a 261 KB manifest and a 588 KB journal, 2026-09-26). Rulespec
+#: bounds a manifest at the same 64 MiB.
+EVIDENCE_CONTROL_LIMIT = 64 * 1024 * 1024
 _IMMUTABLE_HEADERS = {"ContentType": "application/octet-stream", "CacheControl": "public, max-age=31536000, immutable"}
 _BLOB_KEY = re.compile(r"blobs/sha256/([0-9a-f]{64})\Z")
 _POINTER_ATTEMPTS = 8
@@ -111,8 +116,10 @@ def parse_index(raw: bytes) -> dict:
     return value
 
 
-def _bounded_get(url: str, *, allow_missing: bool, headers: Mapping[str, str] | None = None) -> bytes | None:
-    """GET at most ``INDEX_LIMIT`` bytes; a 404 is ``None`` only when ``allow_missing``."""
+def _bounded_get(
+    url: str, *, allow_missing: bool, headers: Mapping[str, str] | None = None, limit: int = INDEX_LIMIT
+) -> bytes | None:
+    """GET at most ``limit`` bytes; a 404 is ``None`` only when ``allow_missing``."""
     with httpx.stream("GET", url, headers={"User-Agent": "spicy-regs", **(headers or {})},
                       follow_redirects=True, timeout=60) as response:
         if allow_missing and response.status_code == 404:
@@ -121,7 +128,7 @@ def _bounded_get(url: str, *, allow_missing: bool, headers: Mapping[str, str] | 
         raw = bytearray()
         for chunk in response.iter_bytes():
             raw.extend(chunk)
-            if len(raw) > INDEX_LIMIT:
+            if len(raw) > limit:
                 raise PublicationError(f"{url} exceeds its byte limit")
     return bytes(raw)
 
@@ -139,17 +146,17 @@ def current_index(base_url: str) -> dict:
 
 
 def family_root(raw: bytes, entry: Mapping) -> dict:
-    """Parse a generation root and require it to be the one ``entry`` pins; the caller chooses where ``raw`` came from."""
+    """Parse an artifact root and require it to be the one ``entry`` pins; the caller chooses where ``raw`` came from."""
     from rulespec_artifacts import ArtifactVerificationError, expected_artifact_digest, parse_canonical_json
 
     try:
         root = parse_canonical_json(raw)
     except ArtifactVerificationError as exc:
-        raise PublicationError("Prior generation root is not canonical artifact JSON") from exc
+        raise PublicationError("Pinned root is not canonical artifact JSON") from exc
     if (not isinstance(root, dict) or root.get("artifactDigest") != entry["artifactDigest"]
             or expected_artifact_digest(root) != entry["artifactDigest"]
             or root.get("logicalId") != entry["logicalId"] or not isinstance(root.get("inputs"), list)):
-        raise PublicationError("Prior generation root differs from its captured pin")
+        raise PublicationError("Pinned root differs from its captured pin")
     return root
 
 
@@ -158,6 +165,34 @@ def load_family_root(base_url: str, entry: Mapping) -> tuple[bytes, dict]:
     raw = _bounded_get(f"{base_url.rstrip('/')}/{entry['prefix']}/artifact.json", allow_missing=False)
     assert raw is not None
     return raw, family_root(raw, entry)
+
+
+def load_evidence_journal(base_url: str, pin: Mapping) -> bytes:
+    """Read one published source-evidence journal, each hop checked against the digest above it; no blob is read.
+
+    The root must be the one ``pin`` names, its member manifest the bytes the
+    root declares, and the journal the bytes that manifest declares.
+    """
+    from rulespec_artifacts import ROOT_OBJECT_KEY, parse_admitted_json, sha256_digest
+
+    from spicy_regs.source_evidence import JOURNAL
+
+    prefix = f"{base_url.rstrip('/')}/{EVIDENCE_PREFIX}/{pin['artifactDigest'].removeprefix('sha256:')}"
+
+    def pinned(key: str, digest: str) -> bytes:
+        raw = _bounded_get(f"{prefix}/{key}", allow_missing=False, limit=EVIDENCE_CONTROL_LIMIT)
+        if raw is None or sha256_digest(raw) != digest:
+            raise PublicationError(f"Source evidence {key} differs from its declared digest")
+        return raw
+
+    raw_root = _bounded_get(f"{prefix}/{ROOT_OBJECT_KEY}", allow_missing=False)
+    assert raw_root is not None
+    for reference in family_root(raw_root, pin)["memberManifests"]:
+        manifest = parse_admitted_json(pinned(reference["objectKey"], reference["sha256"]))
+        for member in manifest["members"]:
+            if member["objectKey"] == JOURNAL:
+                return pinned(JOURNAL, member["sha256"])
+    raise PublicationError("Source evidence declares no journal")
 
 
 @contextmanager

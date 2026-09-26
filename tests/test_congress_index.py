@@ -274,6 +274,75 @@ def test_a_list_record_the_detail_route_cannot_address_is_that_rows_refusal(tmp_
     assert by_id["119-ec-4751"]["committees_json"] is not None, "the run went on to the next newest"
 
 
+class Journal:
+    """The evidence surface the walk uses: its prior's stated selection in, this run's events out."""
+
+    def __init__(self, inherited: dict | None = None):
+        self.inherited = inherited
+        self.events: list[dict] = []
+
+    def inherited_event(self, event, **match):
+        return self.inherited
+
+    def event(self, event, **fields):
+        self.events.append({"event": event, **fields})
+
+    def refusal(self, error, *, stage):
+        self.events.append({"event": "refusal", "stage": stage})
+
+    @property
+    def selection(self) -> dict:
+        (event,) = [e for e in self.events if e["event"] == "congress-index-selection"]
+        return event
+
+
+class Detailed(FixtureReader):
+    """Lists only the three communications whose details are retained here, so every one can be read."""
+
+    def records(self, route, url, *, max_pages=1):
+        for page in super().records(route, url, max_pages=max_pages):
+            if "limit=1" not in url:
+                kept = tuple(record for record in page.records if str(record["number"]) in {"4752", "4751", "136"})
+                page = SimpleNamespace(records=kept, declared_count=len(kept))
+            yield page
+
+
+def test_held_details_no_retained_response_backs_are_read_once_after_the_runs_own_queue(tmp_path):
+    """A prior that states no remainder (a legacy one, say) backs none of its held details; the remainder drains."""
+    _seed_communications(tmp_path, **{"4752": "held", "4751": "held", "136": "unread"})
+    first = Journal()
+    rows, reader = _run(tmp_path, "house_communications", reader=Detailed(), max_details=2, evidence=first)
+    assert reader.details == ["house-communication/119/ml/136", "house-communication/119/ec/4752"], (
+        "the unread row first, then re-reads newest first, under the same cap"
+    )
+    by_id = {row["communication_id"]: row for row in rows}
+    assert by_id["119-ec-4752"]["abstract"] != "prior held", "the re-read replaces the held row"
+    assert by_id["119-ec-4751"]["abstract"] == "prior held", "beyond the cap the held row stands"
+    assert first.selection["outcomes"] == {"read": 1, "reread": 1, "unevidenced": 1}
+    assert first.selection["unevidenced"] == [["119", "ec", "4751"]]
+
+    seed(tmp_path, "house_communications", rows)
+    second = Journal(first.selection)
+    rows, reader = _run(tmp_path, "house_communications", reader=Detailed(), max_details=10, evidence=second)
+    assert reader.details == ["house-communication/119/ec/4751"], "only the inherited remainder costs a request"
+    assert second.selection["unevidenced"] == []
+
+    seed(tmp_path, "house_communications", rows)
+    third = Journal(second.selection)
+    _, reader = _run(tmp_path, "house_communications", reader=Detailed(), max_details=10, evidence=third)
+    assert reader.details == [], "an empty remainder is inherited as empty: the re-read happened once"
+    assert third.selection["outcomes"] == {"held": 3}
+
+
+def test_an_unevidenced_row_whose_re_read_is_refused_stays_in_the_remainder(tmp_path):
+    _seed_communications(tmp_path, **{"4752": "held"})
+    journal = Journal()
+    reader = Detailed(refuse=frozenset({"house-communication/119/ec/4752"}))
+    rows, _ = _run(tmp_path, "house_communications", reader=reader, max_details=10, evidence=journal)
+    assert next(row for row in rows if row["communication_id"] == "119-ec-4752")["abstract"] == "prior held"
+    assert journal.selection["unevidenced"] == [["119", "ec", "4752"]]
+
+
 def test_a_prior_without_the_marker_column_reads_as_unread(tmp_path):
     """A renamed contract column is a re-read of every row, not a refusal to run."""
     import pyarrow as pa
@@ -420,6 +489,8 @@ def test_an_earlier_congress_is_listed_from_the_day_before_its_newest_or_oldest_
     }
     # The current Congress is walked whole; a cold earlier one too.
     assert _windows(held, (119, 118, 117), today) == {118: "2026-09-03T23:59:59Z"}
+    # A row whose detail no retained response backs keeps it open back to that row too.
+    assert _windows(held, (119, 118), today, unevidenced={("118", "house", "2")}) == {118: "2025-11-29T23:59:59Z"}
     # A row deferred by the detail cap keeps the window open back to it until it is read.
     held[("118", "senate", "4")] = _Held("2024-02-10T10:00:00Z", False)
     assert _windows(held, (119, 118), today) == {118: "2024-02-08T23:59:59Z"}

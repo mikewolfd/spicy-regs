@@ -8,6 +8,7 @@ SpicyDocs. Rulespec owns blob integrity and artifact admission.
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import tempfile
 from datetime import UTC, datetime
@@ -35,6 +36,7 @@ from spicy_docs.transport.credentials import CredentialRefusedError, scrub_crede
 KIND = "spicy-regs-source-evidence"
 INPUT_ROLE = "source-evidence"
 PRIOR_ROLE = "prior-generation"
+JOURNAL = "journal.jsonl"
 _CHUNK = 1024 * 1024
 
 
@@ -92,6 +94,9 @@ class CaptureEvidence:
         self.prior_input: ArtifactInput | None = None
         self.read_snapshot: dict | None = None
         self.retention_failure: str | None = None
+        #: Where the prior generation's own evidence journal is, and its events once read.
+        self._prior_evidence: tuple[str, dict] | None = None
+        self._prior_events: list[dict] | None = None
         self.event(
             "run",
             family=family,
@@ -125,7 +130,7 @@ class CaptureEvidence:
             raw = canonical_json_bytes(
                 self._safe({"event": event, "recorded_at": datetime.now(UTC).isoformat(), **fields})
             )
-            with (self.artifact_dir / "journal.jsonl").open("ab") as stream:
+            with (self.artifact_dir / JOURNAL).open("ab") as stream:
                 stream.write(raw + b"\n")
                 stream.flush()
                 os.fsync(stream.fileno())
@@ -326,6 +331,8 @@ class CaptureEvidence:
         if public_url is None:
             raise SourceEvidenceError("Managed prior evidence requires its immutable root")
         raw, root = load_family_root(public_url, prior)
+        pin = next((item for item in root["inputs"] if item.get("role") == INPUT_ROLE), None)
+        self._prior_evidence = None if pin is None else (public_url, pin)
         receipt = self._blob(raw)
         self.event(
             "lineage",
@@ -338,6 +345,23 @@ class CaptureEvidence:
                 else "Legacy prior has inputs=[]; inherited raw-source evidence gap."
             ),
         )
+
+    def inherited_event(self, event: str, **match) -> dict | None:
+        """The prior generation's last journaled ``event`` whose fields equal ``match``, or ``None``.
+
+        ``None`` also when the prior retained no evidence: no managed prior, or a
+        legacy one with ``inputs=[]``. The journal is read once, on first use,
+        and pinned through the prior root, so a rollup that never asks pays nothing.
+        """
+        if self._prior_evidence is None:
+            return None
+        if self._prior_events is None:
+            from spicy_regs.sources.publication import load_evidence_journal
+
+            self._prior_events = [json.loads(line) for line in load_evidence_journal(*self._prior_evidence).splitlines()]
+        found = [row for row in self._prior_events
+                 if row.get("event") == event and all(row.get(k) == v for k, v in match.items())]
+        return found[-1] if found else None
 
     def published_input(self, key: str, *, sha256: str) -> dict | None:
         """The generation in this run's read snapshot that published ``key`` with exactly ``sha256``.

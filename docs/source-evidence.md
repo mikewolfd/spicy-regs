@@ -46,6 +46,18 @@ with `inputs=[]` is explicitly recorded as an inherited raw-source evidence
 gap. This feature does not retroactively qualify it. Without a managed prior,
 any legacy or local merged inputs likewise remain unqualified.
 
+The Congress.gov index tables close that gap by reading again. A held detail
+that no retained response backs is read once more, after the run's own new,
+changed and unread records and under the same per-run detail cap. At first
+that is every held detail: a legacy prior backs none, and neither does an
+evidenced prior whose journal states no remainder. Each run journals what is
+left as `unevidenced` in its `congress-index-selection` event. The next run
+inherits that remainder from the prior's evidence journal, which it reads
+through the prior root, the member manifest and the journal digest, without
+reading any blob. The remainder only shrinks, so each detail is re-read once.
+A held row the publisher no longer lists cannot be re-read, and stays in the
+remainder by name.
+
 Before publishing a table pointer, the publisher requires the exact admitted
 audit input and re-admits it from storage. Missing, altered or failed evidence
 blocks publication. Existing generations with empty inputs remain readable and

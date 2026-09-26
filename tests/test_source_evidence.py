@@ -455,6 +455,7 @@ def test_prior_legacy_gap_and_new_source_pin_survive_publication(tmp_path, monke
     )
     evidence = CaptureEvidence(tmp_path, "test")
     evidence.inherit(prior, public_url="https://test.invalid")
+    assert evidence.inherited_event("lineage") is None, "a legacy prior has no journal to inherit from"
     evidence.capture(capture(), stage="used")
     directory, artifact = candidate(tmp_path, evidence, prior)
     assert "Legacy prior" in next(row for row in journal(evidence) if row["event"] == "lineage")["evidence_status"]
@@ -481,6 +482,47 @@ def test_prior_legacy_gap_and_new_source_pin_survive_publication(tmp_path, monke
     assert not any(row["event"] == "capture" for row in journal(resumed))
     assert resumed.prior_input is not None
     assert resumed.prior_input.artifact_digest == artifact.pin.artifact_digest
+
+
+@pytest.mark.parametrize("tamper", [None, "journal.jsonl", "members.json"])
+def test_the_prior_evidence_journal_is_read_through_its_pins(tmp_path, monkeypatch, tamper):
+    store = Store()
+    evidence = CaptureEvidence(tmp_path, "test")
+    evidence.inherit(pub.empty_index(), public_url=None)
+    evidence.event("congress-index-selection", table="t", unevidenced=[["119", "ec", "1"]])
+    directory, artifact = candidate(tmp_path, evidence)
+    index = pub.publish_generation(
+        directory,
+        client=store,
+        bucket="test",
+        prior_index=pub.empty_index(),
+        evidence_directories=(evidence.artifact_dir,),
+    )
+    assert evidence.inherited_event("congress-index-selection") is None, "no managed prior"
+    if tamper:
+        assert evidence.artifact is not None
+        key = f"source-evidence/{evidence.artifact.pin.artifact_digest.removeprefix('sha256:')}/{tamper}"
+        store.objects[key] += b"\n"
+
+    @contextmanager
+    def stream(method, url, **kwargs):
+        key = url.removeprefix("https://test.invalid/")
+        status, content = (200, store.objects[key]) if key in store.objects else (404, b"")
+        yield httpx.Response(status, content=content, request=httpx.Request(method, url))
+
+    monkeypatch.setattr(pub.httpx, "stream", stream)
+    resumed = CaptureEvidence(tmp_path, "test")
+    resumed.inherit(index, public_url="https://test.invalid")
+    if tamper:
+        with pytest.raises(pub.PublicationError, match="declared digest"):
+            resumed.inherited_event("congress-index-selection", table="t")
+        return
+    selection = resumed.inherited_event("congress-index-selection", table="t")
+    assert selection is not None and selection["unevidenced"] == [["119", "ec", "1"]]
+    assert resumed.inherited_event("congress-index-selection", table="other") is None
+    reads = sum(store.reads.values())
+    resumed.inherited_event("congress-index-selection", table="t")
+    assert sum(store.reads.values()) == reads, "the journal is read once"
 
 
 def test_wrong_inherited_pin_refuses_generation_and_evidence_publication(tmp_path):

@@ -4,14 +4,16 @@ built with bounded detail reads and own-output resume keyed on each table's mark
 House communications retain the publisher route on historical rows. The
 Congressional Record reconstruction is a separate, deferred acquisition. A table
 that keeps an earlier Congress in scope lists it only from the day before its
-held rows' newest stamp, so that Congress costs its changes, not a re-walk.
+held rows' newest stamp, so that Congress costs its changes, not a re-walk. A
+held detail that no retained response backs is read once more, after each
+run's own queue and under the same cap, until the journal's remainder is empty.
 """
 
 from __future__ import annotations
 
 import json
 from collections import Counter
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence, Set
 from dataclasses import dataclass
 from datetime import date, timedelta
 from operator import itemgetter
@@ -225,16 +227,33 @@ def _held_rows(prior: Path | None, spec: IndexSpec, identity: tuple[str, ...], v
     return held
 
 
+def _unevidenced(held: Mapping[tuple, _Held], table: str, evidence: CaptureEvidence | None) -> set[tuple]:
+    """Held rows whose detail no retained response backs, to be read once more under evidence.
+
+    A prior whose evidence journal states the table's remainder hands it on;
+    any other prior backs none of its held details: a legacy one
+    (``inputs=[]``), or one retained before the remainder was journaled. So
+    the set starts as every held detail and only shrinks as runs read it. A
+    run without evidence has nothing to back and re-reads nothing.
+    """
+    if evidence is None:
+        return set()
+    read = {key for key, state in held.items() if state.read}
+    selection = evidence.inherited_event("congress-index-selection", table=table)
+    stated = None if selection is None else selection.get("unevidenced")
+    return read if stated is None else read & {tuple(key) for key in stated}
+
+
 def _windows(
-    held: Mapping[tuple, _Held], congresses: Sequence[int], today: date | None = None
+    held: Mapping[tuple, _Held], congresses: Sequence[int], today: date | None = None, unevidenced: Set[tuple] = frozenset()
 ) -> dict[int, str]:
     """``fromDateTime`` per earlier Congress with held rows: the day before its newest stamp.
 
     The current Congress is walked whole. An earlier one is listed
     from the day before its newest held stamp, or before its oldest row whose
-    detail is unread, so a row deferred by the detail cap is listed again until
-    it is read. A Congress with nothing held is walked whole once. The key's
-    first part is its Congress.
+    detail is unread or unevidenced, so a row deferred by the detail cap is
+    listed again until it is read. A Congress with nothing held is walked whole
+    once. The key's first part is its Congress.
     """
     current = current_congress(today)
     earliest: dict[int, str] = {}
@@ -244,7 +263,7 @@ def _windows(
             continue
         congress = int(key[0])
         newest[congress] = max(newest.get(congress, state.stamp), state.stamp)
-        if not state.read:
+        if not state.read or key in unevidenced:
             earliest[congress] = min(earliest.get(congress, state.stamp), state.stamp)
     windows = {}
     for congress in congresses:
@@ -361,11 +380,13 @@ def build_index_table(
 
     prior = published_table(output_dir, spec.table, download_prior)
     held = _held_rows(prior, spec, identity, version)
-    windows = _windows(held, congresses) if spec.trailing_congresses else {}
+    unevidenced = _unevidenced(held, spec.table, evidence)
+    windows = _windows(held, congresses, unevidenced=unevidenced) if spec.trailing_congresses else {}
     listed = _walk(reader, spec, congresses, identity, windows)
 
     rows: list[Row] = []
-    queue: list[tuple[_Listed, Mapping[str, Any]]] = []
+    # Each wanted detail, and whether it is only a re-read for evidence of a row already held.
+    queue: list[tuple[_Listed, Mapping[str, Any], bool]] = []
     outcomes: Counter[str] = Counter()
 
     def refuse(entry: _Listed, state: _Held | None, error: Exception) -> None:
@@ -383,7 +404,8 @@ def build_index_table(
             continue
         state = held.get(entry.key)
         stamp = entry.row[version]
-        if state is not None and state.read and state.stamp == stamp:
+        reread = state is not None and state.read and state.stamp == stamp
+        if reread and entry.key not in unevidenced:
             outcomes["held"] += 1
             continue
         assert spec.detail_query is not None
@@ -398,26 +420,29 @@ def build_index_table(
         if query is None:
             # No route addresses this detail; the list row is the whole fact.
             outcomes["list_only"] += 1
+            unevidenced.discard(entry.key)
             if state is None or state.stamp != stamp:
                 rows.append(entry.row)
             continue
-        queue.append((entry, query))
+        queue.append((entry, query, reread))
 
-    # Newest first, so a bounded run advances from the present; the identity
+    # New, changed and unread records before re-reads for evidence, each tier
+    # newest first, so a bounded run advances from the present; the identity
     # breaks ties so a re-run over the same listing asks in the same order.
-    queue.sort(key=lambda item: (item[0].row[version] or "", item[0].key), reverse=True)
+    queue.sort(key=lambda item: (not item[2], item[0].row[version] or "", item[0].key), reverse=True)
     if len(queue) > max_details:
         logger.warning("{}: {:,} details wanted, taking the newest {:,}", spec.table, len(queue), max_details)
-    for position, (entry, query) in enumerate(queue):
+    for position, (entry, query, reread) in enumerate(queue):
         state = held.get(entry.key)
         if position >= max_details:
             # Not reached this run: a new record is indexed list-only so the
-            # next run finds it by its NULL marker; a held one keeps its row.
+            # next run finds it by its NULL marker; a held one keeps its row,
+            # and an unevidenced one stays in the journaled remainder.
             if state is None:
                 rows.append(entry.row)
                 outcomes["deferred"] += 1
             else:
-                outcomes["stale"] += 1
+                outcomes["unevidenced" if reread else "stale"] += 1
             continue
         try:
             detail = _detail(reader, spec, entry, query, identity)
@@ -427,13 +452,17 @@ def build_index_table(
             refuse(entry, state, error)
             continue
         rows.append(spec.shape(entry.record, detail))
-        outcomes["read"] += 1
+        outcomes["reread" if reread else "read"] += 1
+        unevidenced.discard(entry.key)
 
     logger.info("{}: {:,} listed; {}", spec.table, len(listed), dict(outcomes) or "every row complete from the list")
     if evidence is not None:
+        # ``unevidenced`` is the remainder the next run inherits (``_unevidenced``),
+        # including a held row the publisher no longer lists, which no run can re-read.
         evidence.event("congress-index-selection", table=spec.table, congresses=list(congresses),
                        windows={str(congress): start for congress, start in windows.items()},
-                       max_details=max_details, listed=len(listed), outcomes=dict(outcomes))
+                       max_details=max_details, listed=len(listed), outcomes=dict(outcomes),
+                       unevidenced=sorted(list(key) for key in unevidenced))
     output = merge_contract_table(
         output_dir, spec.table, rows, download_prior=download_prior, prior_present=prior is not None
     )
