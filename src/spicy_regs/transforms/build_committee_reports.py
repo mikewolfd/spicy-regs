@@ -54,7 +54,15 @@ from spicy_docs.transport.credentials import CredentialRefusedError, scrub_crede
 from spicy_regs.sources import r2
 from spicy_regs.sources.congress_bills import API_KEY_ENV_VARS, _resolve_api_key, listing_reader
 from spicy_regs.transforms.table_merge import merge_contract_table, merge_table, published_table
-from spicy_regs.transforms.committee_report_reads import READS_TABLE, READ_COLUMNS, RULE_VERSIONS, complete, prior_reads
+from spicy_regs.transforms.committee_report_reads import (
+    READ_COLUMNS,
+    READS_TABLE,
+    REFUSED_FINAL,
+    RULE_VERSIONS,
+    prior_reads,
+    refusal_rule,
+    settled,
+)
 from spicy_regs.source_evidence import CaptureEvidence, SourceEvidenceError
 from spicy_regs.sources.retained import RetainedGovInfoBodyAcquirer, RetainedGovInfoDiscoveryReader
 
@@ -107,6 +115,8 @@ BODY_BUDGET = GovInfoBodyBudget(
     timeout_seconds=120.0,
     min_request_interval_seconds=0.34,
 )
+#: The bounds a final refusal (:func:`_refusal_is_final`) is recorded under; raising either reads it again.
+REFUSAL_BOUNDS = f"body={BODY_BUDGET.max_body_bytes};requests={BODY_BUDGET.max_requests}"
 
 #: Cold-start window only: with no prior table there is no watermark, and
 #: thirty days back covers a daily cron with a wide margin for an outage.
@@ -242,7 +252,7 @@ def _read_bodies(acquirer: PackageBodySource, package_id: str, collection: str,
     PDF its record offers, under that PDF's own digest; the placeholder's
     capture is kept beside it. A part offering no PDF keeps its placeholder,
     marked, since nothing more is published, and so does one whose PDF every
-    later run would be refused in the same way (:func:`_pdf_refusal_is_final`),
+    later run would be refused in the same way (:func:`_refusal_is_final`),
     so the package is not re-read forever; a transient failure refuses it. The journal records digests and
     counts, never text: the bytes are retained, and a PDF's text is re-derived
     from them with the recorded versions.
@@ -268,7 +278,7 @@ def _read_bodies(acquirer: PackageBodySource, package_id: str, collection: str,
             pdfs = (acquirer.acquire_parts(package_id, prefer=("pdf",)) if collection == "CRPT"
                     else (acquirer.acquire(package_id, prefer=("pdf",)),))
         except GovInfoBodySourceError as error:
-            if not _pdf_refusal_is_final(error):
+            if not _refusal_is_final(error):
                 raise
             logger.warning("{}: offered PDF refused for good; placeholder kept for {}: {}", package_id, offered, error)
             if evidence is not None:
@@ -293,13 +303,14 @@ def _read_bodies(acquirer: PackageBodySource, package_id: str, collection: str,
     return reads
 
 
-def _pdf_refusal_is_final(error: Exception) -> bool:
-    """Whether a later run would get the same refusal of the offered PDF: the publisher's record decides it.
+def _refusal_is_final(error: Exception) -> bool:
+    """Whether a later run would get the same refusal: the publisher's record and this run's bounds decide it.
 
     A rendition a part does not offer, a report whose parts exceed the request
     budget, and a body past the byte bound (the transport's
     ``response-byte-limit`` refusal) repeat until the publisher changes the
-    package, which moves its ``last_modified``. Anything else may be transient.
+    package, which moves its ``last_modified``, or :data:`REFUSAL_BOUNDS` grows.
+    Anything else may be transient.
     """
     if isinstance(error, (GovInfoFormatNotOfferedError, GovInfoPartsOverBudgetError)):
         return True
@@ -483,14 +494,16 @@ def build_committee_reports(
                     evidence.refusal(error, stage=collection + ":listing")
                 raise
             pending = {key: row.get("last_modified") for key, row in reads.items()
-                       if key.startswith(collection + "-") and not complete(row, collection)}
+                       if key.startswith(collection + "-") and not settled(row, collection, bounds=REFUSAL_BOUNDS)}
             pending.update({key: modified for key, modified in listed.items()
-                            if not complete(reads.get(key, {}), collection, modified)})
+                            if not settled(reads.get(key, {}), collection, modified, bounds=REFUSAL_BOUNDS)})
         unchanged += len(listed) - sum(key in pending for key in listed)
         if evidence:
             evidence.event("package-selection", collection=collection, listed=listed,
                            selected=list(pending)[:max_packages], deferred=list(pending)[max_packages:],
-                           unchanged=[key for key in listed if key not in pending])
+                           unchanged=[key for key in listed if key not in pending],
+                           refused_final=sorted(key for key, row in reads.items() if key.startswith(collection + "-")
+                                                and row.get("outcome") == REFUSED_FINAL and key not in pending))
         for package_id, modified in pending.items():
             reads[package_id] = {"package_id": package_id, "last_modified": modified,
                                  "outcome": "pending", "rule_version": RULE_VERSIONS[collection],
@@ -506,9 +519,15 @@ def build_committee_reports(
                 if evidence:
                     evidence.refusal(error, stage=package_id)
                 refused += 1
-                state["outcome"] = "refused"
-                logger.warning("{}: {} refused: {}", collection, package_id,
+                if _refusal_is_final(error):
+                    # Not asked again until its stamp, the rule or the bounds move.
+                    state.update(outcome=REFUSED_FINAL, rule_version=refusal_rule(collection, REFUSAL_BOUNDS))
+                else:
+                    state["outcome"] = "refused"
+                logger.warning("{}: {} {}: {}", collection, package_id, state["outcome"].replace("_", " "),
                                scrub_credential(str(error), evidence.credential if evidence else ""))
+                if evidence:
+                    evidence.event("package-outcome", **state)
                 continue
             modified = bodies[0].body.summary.last_modified
             # A placeholder whose part offers no PDF is complete: nothing more

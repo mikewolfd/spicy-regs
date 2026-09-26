@@ -1,7 +1,8 @@
 """Own-output checkpoints for the committee-report rollups, including successful reads that produce no link.
 
 ``RULE_VERSIONS`` is the rule set that invalidates a prior read for each
-collection, and ``complete`` is the completeness test over a checkpoint row.
+collection, ``complete`` is the completeness test over a checkpoint row, and
+``settled`` adds the refusals no later run could turn into a read.
 """
 
 from pathlib import Path
@@ -65,4 +66,31 @@ def complete(row: dict, collection: str, modified: str | None = None) -> bool:
         row.get("outcome") == "complete"
         and row.get("rule_version") == RULE_VERSIONS[collection]
         and (modified is None or modified == row.get("last_modified"))
+    )
+
+
+#: A read refused for a reason every later run would meet again until the
+#: publisher changes the package: a body past the byte bound (the 1946 Pearl
+#: Harbor hearing parts, 312 and 373 MB against 24 MiB), a record stating more
+#: parts than the request budget, or no rendition the reader takes.
+REFUSED_FINAL = "refused_final"
+
+
+def refusal_rule(collection: str, bounds: str) -> str:
+    """The token a final refusal is recorded under: the collection's rule and the bounds that refused it."""
+    return f"{RULE_VERSIONS[collection]};refused-under={bounds}"
+
+
+def settled(row: dict, collection: str, modified: str | None = None, *, bounds: str) -> bool:
+    """Complete, or refused for good under the same rule and ``bounds``; either way at ``modified`` when given.
+
+    A final refusal is settled like a read while the package's ``last_modified``
+    stands: GovInfo lists no body size, and it moves a package's stamp with its
+    content (the 1946 parts' PDFs carry the package's ``Last-Modified``), so a
+    new stamp, rule or bound reads it again and nothing else does.
+    """
+    if row.get("outcome") != REFUSED_FINAL:
+        return complete(row, collection, modified)
+    return row.get("rule_version") == refusal_rule(collection, bounds) and (
+        modified is None or modified == row.get("last_modified")
     )

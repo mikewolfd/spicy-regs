@@ -7777,7 +7777,7 @@
       {
         "column_name": "outcome",
         "column_type": "VARCHAR",
-        "description": "pending, refused, detail_refused or complete; only complete permits an unchanged skip."
+        "description": "pending, refused, refused_final, detail_refused or complete. complete permits an unchanged skip; so does refused_final, a refusal every run would repeat (a body past the byte bound, parts past the request budget, no rendition taken) until the package's last_modified, the rule or the bound in rule_version moves. refused and detail_refused are read again every run."
       },
       {
         "column_name": "rule_version",

@@ -1,0 +1,34 @@
+{
+    "dateIssued": "1946-04-09",
+    "documentType": "JHRG",
+    "congress": "79",
+    "heldDates": [
+        "1946-04-09",
+        "1946-04-11",
+        "1946-05-23",
+        "1946-05-31"
+    ],
+    "session": "2",
+    "packageId": "CHRG-79jhrg79716p11",
+    "collectionCode": "CHRG",
+    "detailsLink": "https://www.govinfo.gov/app/details/CHRG-79jhrg79716p11",
+    "title": "Pearl Harbor attack. Part 11: hearings before the Joint Committee on the Investigation of the Pearl Harbor Attack, Congress of the United States, Seventy-ninth Congress, first [-second] session, pursuant to S. Con. Res. 27 ...",
+    "branch": "legislative",
+    "collectionName": "Congressional Hearings",
+    "download": {
+        "premisLink": "https://api.govinfo.gov/packages/CHRG-79jhrg79716p11/premis",
+        "zipLink": "https://api.govinfo.gov/packages/CHRG-79jhrg79716p11/zip",
+        "modsLink": "https://api.govinfo.gov/packages/CHRG-79jhrg79716p11/mods"
+    },
+    "pages": "430",
+    "chamber": "JOINT",
+    "relatedLink": "https://api.govinfo.gov/related/CHRG-79jhrg79716p11",
+    "governmentAuthor1": "Congress",
+    "publisher": "U.S. Government Printing Office",
+    "suDocClassNumber": "Y 4.P 31:P 31/PT.11",
+    "docClass": "JHRG",
+    "lastModified": "2026-09-24T12:59:27Z",
+    "category": "Congressional Committee Materials",
+    "otherIdentifier": {"ils-system-id": "996507"},
+    "granulesLink": "https://api.govinfo.gov/packages/CHRG-79jhrg79716p11/granules?offsetMark=*&pageSize=100"
+}

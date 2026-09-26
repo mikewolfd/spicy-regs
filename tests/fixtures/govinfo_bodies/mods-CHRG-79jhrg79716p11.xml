@@ -1,0 +1,132 @@
+<mods xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:exslt="http://exslt.org/common" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://www.loc.gov/mods/v3" version="3.3" xsi:schemaLocation="http://www.loc.gov/mods/v3 http://www.loc.gov/standards/mods/v3/mods-3-3.xsd" ID="P0b002ee1b8cbfb0b">
+    <name type="corporate">
+         <namePart>United States Government Publishing Office</namePart>
+         <role>
+              <roleTerm authority="marcrelator" type="text">publisher</roleTerm>
+              <roleTerm authority="marcrelator" type="code">pbl</roleTerm>
+        </role>
+         <role>
+              <roleTerm authority="marcrelator" type="text">distributor</roleTerm>
+              <roleTerm authority="marcrelator" type="code">dst</roleTerm>
+        </role>
+    </name>
+    <name type="corporate">
+         <namePart>United States</namePart>
+         <namePart>Congress</namePart>
+         <role>
+              <roleTerm authority="marcrelator" type="text">author</roleTerm>
+              <roleTerm authority="marcrelator" type="code">aut</roleTerm>
+        </role>
+         <description>Government Organization</description>
+    </name>
+    <typeOfResource>text</typeOfResource>
+    <genre authority="marcgt">government publication</genre>
+    <language>
+         <languageTerm type="code" authority="iso639-2b">eng</languageTerm>
+    </language>
+    <extension>
+         <collectionCode>CHRG</collectionCode>
+         <category>Congressional Committee Materials</category>
+         <branch>legislative</branch>
+         <dateIngested>2022-12-18</dateIngested>
+    </extension>
+    <titleInfo>
+         <title>Pearl Harbor attack. Part 11: hearings before the Joint Committee on the Investigation of the Pearl Harbor Attack, Congress of the United States, Seventy-ninth Congress, first [-second] session, pursuant to S. Con. Res. 27 ...</title>
+    </titleInfo>
+    <titleInfo type="alternative"></titleInfo>
+    <location>
+         <url displayLabel="Content Detail" access="object in context">https://www.govinfo.gov/app/details/CHRG-79jhrg79716p11</url>
+         <url displayLabel="PDF rendition" access="raw object">https://www.govinfo.gov/content/pkg/CHRG-79jhrg79716p11/pdf/CHRG-79jhrg79716p11.pdf</url>
+    </location>
+    <originInfo>
+         <publisher>U.S. Government Printing Office</publisher>
+         <dateIssued encoding="w3cdtf">1946-04-09</dateIssued>
+         <issuance>monographic</issuance>
+    </originInfo>
+    <physicalDescription>
+         <note type="source content type">deposited</note>
+         <digitalOrigin>reformatted digital</digitalOrigin>
+         <extent>430 digital object pages</extent>
+    </physicalDescription>
+    <classification authority="sudocs">Y 4.P 31:P 31/PT.11</classification>
+    <identifier type="uri">https://www.govinfo.gov/app/details/CHRG-79jhrg79716p11</identifier>
+    <identifier type="local">P0b002ee1b8cbfb0b</identifier>
+    <identifier type="ILS system id">996507</identifier>
+    <recordInfo>
+         <recordContentSource authority="marcorg">DGPO</recordContentSource>
+         <recordCreationDate encoding="w3cdtf">2022-12-18</recordCreationDate>
+         <recordChangeDate encoding="w3cdtf">2022-12-20</recordChangeDate>
+         <recordIdentifier source="DGPO">CHRG-79jhrg79716p11</recordIdentifier>
+         <recordOrigin>machine generated</recordOrigin>
+         <languageOfCataloging>
+              <languageTerm type="code" authority="iso639-2b">eng</languageTerm>
+        </languageOfCataloging>
+    </recordInfo>
+    <accessCondition type="GPO scope determination">fdlp</accessCondition>
+    <extension>
+         <docClass>JHRG</docClass>
+         <accessId>CHRG-79jhrg79716p11</accessId>
+         <type>G</type>
+         <chamber>JOINT</chamber>
+         <congress>79</congress>
+         <session>2</session>
+         <heldDate>1946-04-09</heldDate>
+         <heldDate>1946-04-11</heldDate>
+         <heldDate>1946-05-23</heldDate>
+         <heldDate>1946-05-31</heldDate>
+         <submittedMetadata>historical</submittedMetadata>
+    </extension>
+    <extension>
+         <searchTitle>Pearl Harbor attack. Part 11: hearings before the Joint Committee on the Investigation of the Pearl Harbor Attack, Congress of the United States, Seventy-ninth Congress, first [-second] session, pursuant to S. Con. Res. 27 ...</searchTitle>
+         <granuleClass>OTHERPART</granuleClass>
+         <accessId>CHRG-79jhrg79716p11</accessId>
+         <classification authority="sudocs">Y 4.P 31:P 31/PT.11</classification>
+         <heading>Part 11</heading>
+         <partNumber>11</partNumber>
+         <isAppropriation>false</isAppropriation>
+         <jacketId>79716</jacketId>
+         <congCommittee chamber="J" congress="79" type="S">
+                                    
+              <name type="authority-standard">Joint Committee on the Investigation of the Pearl Harbor Attack</name>
+                                
+        </congCommittee>
+         <bill congress="79" context="COVER" number="27" type="SCONRES"></bill>
+         <bill congress="79" context="COVER" number="54" type="SCONRES"></bill>
+         <isNomination>false</isNomination>
+         <isErrata>false</isErrata>
+    </extension>
+    <name type="corporate">
+         <namePart>United States</namePart>
+         <namePart>Congress</namePart>
+         <namePart></namePart>
+         <namePart>Joint Committee on the Investigation of the Pearl Harbor Attack</namePart>
+         <role>
+              <roleTerm authority="marcrelator" type="text">associated name</roleTerm>
+              <roleTerm authority="marcrelator" type="code">asn</roleTerm>
+        </role>
+         <description>Government Organization</description>
+    </name>
+    <relatedItem type="isReferencedBy">
+         <identifier type="Jacket citation"></identifier>
+    </relatedItem>
+    <relatedItem type="isReferencedBy">
+         <titleInfo>
+              <title>United States Senate Concurrent Resolution 27 (79th Congress)</title>
+        </titleInfo>
+         <identifier type="Congressional Bill citation">S. Con. Res. 27</identifier>
+         <extension>
+              <congress>79</congress>
+              <context>COVER</context>
+        </extension>
+    </relatedItem>
+    <relatedItem type="isReferencedBy">
+         <titleInfo>
+              <title>United States Senate Concurrent Resolution 54 (79th Congress)</title>
+        </titleInfo>
+         <identifier type="Congressional Bill citation">S. Con. Res. 54</identifier>
+         <extension>
+              <congress>79</congress>
+              <context>COVER</context>
+        </extension>
+    </relatedItem>
+</mods>

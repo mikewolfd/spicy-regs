@@ -21,7 +21,7 @@ from spicy_docs.transport.captured import CapturedBodyResponse
 
 from spicy_regs.source_evidence import CaptureEvidence
 from spicy_regs.transforms.build_committee_reports import BODY_BUDGET, build_committee_reports
-from spicy_regs.transforms.committee_report_reads import READ_COLUMNS, READS_TABLE, RULE_VERSIONS
+from spicy_regs.transforms.committee_report_reads import READ_COLUMNS, READS_TABLE, REFUSED_FINAL, RULE_VERSIONS
 from spicy_regs.transforms.table_merge import prior_scratch_path
 from tests.test_committee_reports import (
     CHRG_ID,
@@ -511,7 +511,8 @@ class SevenParts:
 def test_a_report_of_seven_parts_is_refused_before_any_body_request(tmp_path):
     """``BODY_BUDGET`` allows eight requests, and seven parts need nine: summary, MODS, then no body at all.
 
-    The refusal keeps the package's prior rows, as every refusal does, and is retried every run.
+    The refusal keeps the package's prior rows, as every refusal does. Every later run would meet it
+    again, so it is final: not asked for until the package's stamp, the rule or the budget moves.
     """
     parts = _two_part_priors(tmp_path)
     source = SevenParts()
@@ -530,7 +531,13 @@ def test_a_report_of_seven_parts_is_refused_before_any_body_request(tmp_path):
     assert "states 7 parts, which need 9 requests; the request budget allows 8" in refusal["message"]
     assert set(_keys(tables["committee_reports"])) == {(TWO_PARTS, part) for part in parts}
     assert {row["observed_at"] for row in tables["committee_reports"]} == {"prior"}
-    assert [row["outcome"] for row in tables[READS_TABLE]] == ["refused"]
+    assert [row["outcome"] for row in tables[READS_TABLE]] == [REFUSED_FINAL]
+    for name in ("committee_reports", "report_sections", READS_TABLE):
+        shutil.copyfile(tmp_path / f"{name}.parquet", prior_scratch_path(tmp_path, name))
+    again = SevenParts()
+    with GovInfoBodyAcquirer(budget=budget, api_key="test-key", transport=httpx.MockTransport(again.respond)) as owner:
+        _run(tmp_path, owner)
+    assert again.paths == [], "a final refusal is not asked for again"
 
 
 class ListedReport:
@@ -562,3 +569,97 @@ def test_a_refreshed_report_whose_read_is_refused_keeps_its_rows_and_is_retried(
     again = RetainedReport()
     _run(tmp_path, again)
     assert again.requested == [CRPT_ID]
+
+
+HEARING_1946 = "CHRG-79jhrg79716p11"
+#: The part's PDF as GovInfo serves it (HEAD, 2026-09-26): 312,487,940 bytes against the 24 MiB bound.
+PDF_1946_BYTES = 312_487_940
+
+
+class OversizedHearing:
+    """The 1946 Pearl Harbor part through the real acquirer: its retained summary and MODS, a PDF past the bound.
+
+    The PDF answer states its length and sends nothing more; the transport refuses on the stated length.
+    """
+
+    def __init__(self):
+        self.paths = []
+
+    def respond(self, request):
+        self.paths.append(request.url.path.rsplit("/", 1)[-1])
+        if request.url.path.endswith("/summary"):
+            raw, kind = (FIXTURES / f"summary-{HEARING_1946}.json").read_bytes(), "application/json"
+        elif request.url.path.endswith("/mods"):
+            raw, kind = (FIXTURES / f"mods-{HEARING_1946}.xml").read_bytes(), "application/xml"
+        else:
+            return httpx.Response(200, stream=httpx.ByteStream(b""),
+                                  headers={"content-type": "application/pdf", "content-length": str(PDF_1946_BYTES)})
+        return httpx.Response(200, stream=httpx.ByteStream(raw), headers={"content-type": kind})
+
+
+class ListedHearing:
+    """Discovery listing the 1946 part at one ``lastModified``."""
+
+    def __init__(self, modified=None):
+        self.modified = modified
+
+    def packages(self, url, *, max_pages=40):
+        listed = [{"packageId": HEARING_1946, "lastModified": self.modified}] if self.modified and "/CHRG/" in url else []
+        page = CapturedBodyResponse(requested_url=url, resolved_url=url, status_code=200, observed_at=OBSERVED_AT,
+                                    content_type="application/json", body=json.dumps(listed).encode())
+        yield SimpleNamespace(records=listed, capture=page)
+
+
+def _hearing_run(directory, reader, evidence=None):
+    source = OversizedHearing()
+    budget = replace(BODY_BUDGET, min_request_interval_seconds=0.0)
+    with GovInfoBodyAcquirer(budget=budget, api_key="test-key", transport=httpx.MockTransport(source.respond)) as owner:
+        tables = _run(directory, owner, reader=reader, evidence=evidence)
+    for name in ("hearing_transcripts", READS_TABLE):
+        if (directory / f"{name}.parquet").exists():
+            shutil.copyfile(directory / f"{name}.parquet", prior_scratch_path(directory, name))
+    return tables, source.paths
+
+
+def test_a_body_past_the_byte_bound_is_refused_once_and_not_fetched_again_until_its_stamp_moves(tmp_path, monkeypatch):
+    """The two 1946 parts cost summary, MODS and a refused PDF request on every run; now once per stamp or bound."""
+    from spicy_regs.transforms import build_committee_reports as module
+
+    evidence = CaptureEvidence(tmp_path, "committee-reports")
+    stamp = "2026-09-24T12:59:27Z"
+    first, paths = _hearing_run(tmp_path, ListedHearing(stamp), evidence)
+    assert paths == ["summary", "mods", f"{HEARING_1946}.pdf"]
+    [state] = first[READS_TABLE]
+    assert (state["outcome"], state["last_modified"]) == (REFUSED_FINAL, stamp)
+    assert state["rule_version"] == f"{RULE_VERSIONS['CHRG']};refused-under={module.REFUSAL_BOUNDS}"
+    journal = [json.loads(line) for line in (evidence.artifact_dir / "journal.jsonl").read_bytes().splitlines()]
+    [refusal] = [row for row in journal if row["event"] == "refusal"]
+    assert refusal["response"]["unavailable_reason"] == "response-byte-limit"
+    assert [row["outcome"] for row in journal if row["event"] == "package-outcome"] == [REFUSED_FINAL]
+
+    # Nothing listed, or listed at the same stamp: no request, and the selection names it as settled.
+    for reader in (ListedHearing(), ListedHearing(stamp)):
+        evidence = CaptureEvidence(tmp_path / "again", "committee-reports")
+        _, paths = _hearing_run(tmp_path, reader, evidence)
+        assert paths == []
+        journal = [json.loads(line) for line in (evidence.artifact_dir / "journal.jsonl").read_bytes().splitlines()]
+        [selection] = [row for row in journal if row["event"] == "package-selection" and row["collection"] == "CHRG"]
+        assert selection["selected"] == [] and selection["refused_final"] == [HEARING_1946]
+        shutil.rmtree(tmp_path / "again")
+
+    # A new stamp, or a larger bound, asks again.
+    _, paths = _hearing_run(tmp_path, ListedHearing("2026-10-01T00:00:00Z"))
+    assert paths == ["summary", "mods", f"{HEARING_1946}.pdf"]
+    monkeypatch.setattr(module, "REFUSAL_BOUNDS", "body=419430400;requests=8")
+    _, paths = _hearing_run(tmp_path, ListedHearing())
+    assert paths == ["summary", "mods", f"{HEARING_1946}.pdf"]
+
+
+def test_a_transient_refusal_stays_pending_every_run(tmp_path):
+    """Only a refusal the publisher's record decides is final; a transport failure is asked again."""
+    first = _run(tmp_path, RetainedReport(fail=True), reader=ListedReport("2026-09-18T12:00:00Z"))
+    assert [row["outcome"] for row in first[READS_TABLE]] == ["refused"]
+    shutil.copyfile(tmp_path / f"{READS_TABLE}.parquet", prior_scratch_path(tmp_path, READS_TABLE))
+    retry = RetainedReport(fail=True)
+    _run(tmp_path, retry)
+    assert retry.requested == [CRPT_ID]
