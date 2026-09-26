@@ -1,0 +1,200 @@
+# Tables stored as several files (design draft, 2026-09-26)
+
+Status: **draft for review** by spicy-stack-24 (publication format) and spicy-stack-83 (DocSpec, Engine).
+Nothing in `sources/publication.py` or any reader changes until both agree.
+
+Owner decision (2026-09-26): design multi-file tables for every large table first, as one cross-repository
+decision, then apply it to `bill_sections`. Decisions 46 (split `fcc_filings` by year before it passes
+~500 MB), 51 (FEC individual contributions, 2024 and 2026 only, after tables can be several files) and
+36 (keep pinned generations plus the last N) depend on it.
+
+## 1. What forces this, measured
+
+`bill_sections` is not the forcing case. Bill-family run 36256715125 (2026-09-26, 1.9M `bill_sections`
+rows, 685 MB) spent 13 s downloading the prior table, 39 s merging it and about 2 min publishing the
+whole family, evidence included. The whole-table rewrite therefore costs about 2 minutes and 2 GB of
+transfer per run. Storage per generation is bounded once decision 36's retention runs.
+
+Three cases do need several files:
+
+| Case | Size now | Why one file fails |
+| --- | --- | --- |
+| `court_opinion_clusters` | 3.95 GB, 10.1M rows, weekly | S3's single-request copy and PUT stop at 5 GiB. `_copy_unchanged_member` (`publication.py:309-319`) is one `copy_object`. R2's own cap is **unverified**. The table grows weekly. |
+| FEC individual contributions (decision 51) | not yet built; "very large" per the decision | The owner deferred it until multi-file tables exist. |
+| `fcc_filings` (decision 46) | growing by received-year backfill | The owner set a split by year before ~500 MB. |
+
+Also: `fec_source_records` is 1.17 GB and the court citation tables are 0.16–0.44 GB each. The court
+tables are rebuilt whole from each dump, so splitting helps readers there, not rewrites.
+
+## 2. Constraints from the reviewers
+
+- **24:** the generation and admission model is one member per table today. The least-change design is
+  several members per table plus a table-level entry in the generation's index and root, not a new
+  object layout. Verification stays single-pass (`operations.md` §1b: collapse the triple local
+  verification; don't add a per-member pass).
+- **83 (DocSpec 0.11.2, decision 0007, C27 step 2):**
+  - each member is staged and hard-linked without rewriting, and its sealed digest equals the
+    producer's member digest;
+  - no Iceberg field IDs in the Parquet footer, and no row group over 256 MiB uncompressed;
+  - one Iceberg table per logical table (`add_files` already takes a list);
+  - row identity from the contract's declared key across all files, so a duplicate across files refuses;
+  - the descriptor names every member with its digest and row count, so `count(*)` checks per table;
+  - partition values inside the Parquet are preferred over file-name convention alone.
+
+## 3. What assumes one file per table today
+
+From a read-only survey (spicy-regs `2716473`, DocSpec 0.11.2, spicyengine `96d0914`,
+spicysearch `0dc4d0a`):
+
+- **The index is parsed strictly everywhere.**
+  - spicy-regs `parse_index` (`sources/publication.py:79-80, 96-115`) requires `version == 1`, a
+    `<name>.parquet` table key, and exactly `{sha256, byteSize, rows, columns}` per table.
+  - DocSpec `adapters/generation_source.py:67, 205-212` does the same.
+  - A reader that meets one new field refuses the **whole** index, not just that table. Deployed MCP
+    containers and installed CLIs would stop working.
+- **spicy-regs producer side:**
+  - `generations.py:113-122, 196-199`: member = file name = table;
+  - `remote_generations.py:51-54`: staged key = `<prefix>/<name>.parquet`;
+  - `pipelines/rollups/base.py:181-190, 236-258`: one download and one parent digest per table;
+  - `publication.py:555-570`: shrink guard per member key; line 569 refuses any change to a family's
+    key set.
+- **spicy-regs consumers and checks:**
+  - `sources/r2.py:31-88` (one URL, digest-checked);
+  - `transforms/table_merge.py:104-131, 213-225` (one prior in, one file out);
+  - `build_bill_family.py:536-550, 595-605, 997-1024` (whole-table prior reads);
+  - `mcp_server.py:411-446`, `cli.py:65-128` and `local_data.py:69-106`;
+  - `generation_audit.py:309, 417-424, 980-985, 1049-1086`;
+  - `scripts/check_table_joins.py`, `check_rollup_freshness.py:145-165` and
+    `check_source_domain_drift.py`;
+  - `data_dictionary.py:764-794` (`spicy-regs-dict check --source r2`).
+  - Pin-level checks need no change: `check_ledger_pins`, `check_refresh_inputs` and
+    `check_source_refusals`.
+- **DocSpec:**
+  - reading already handles many files: `iceberg_scan` in `adapters/storage/records.py:463-465`;
+  - registering handles one: `register_parquet` (`records.py:1050-1110`), a single `memberDigest`
+    (707) and a `files == [member_digest]` check (441-445);
+  - the `AdmittedGeneration` dataclass carries one path;
+  - staging already accepts nested keys (`generation_source.py:152, 213`).
+- **No direct readers:** spicyengine and spicysearch read only DocSpec states and prepared layers
+  (`iceberg_scan`, any number of files). RefSpec, rulespec and spicyregs-web read no spicy-regs table.
+- **Not verifiable here:** `spicy-regs-ui` reads bare legacy URLs (`table_metadata.json:160`).
+- **Prior art to reuse:**
+  - spicy-docs `public_tables` already names multi-member tables `data/<col>=<value>/part-NNNNNN.parquet`
+    and declares `partitionColumns` and `maxRowsPerMember` (`public_tables/format.py:22-55, 160-206`).
+    Its reader passes the member list to one `from_parquet` (`reader.py:194-207`).
+  - The comments mirror (`comments/agency/agency_code=<X>/part-0.parquet`) partitions **outside** the
+    generation format, overwriting fixed keys non-atomically (`comments_mirror.py:113`).
+
+## 4. Proposal
+
+### 4.1 Index: publish a second index, keep the first
+
+Put multi-member tables in a new `publication.v2.json` and leave `publication.json` (version 1) exactly
+as it is for every single-member table. So:
+
+- every existing reader keeps working unchanged, including deployed MCP containers, installed CLIs and
+  DocSpec 0.11.2;
+- a reader that needs a split table moves to v2 when it is ready, with no stack-wide cutover day;
+- v2 is the source of truth; v1 is a derived view written by the same publish;
+- once no reader needs v1, it is retired in its own later change.
+
+A v2 table entry keeps the v1 fields at table level and adds its members:
+
+```json
+"bill_sections": {
+  "rows": 1903728, "byteSize": 684986563, "columns": [...],
+  "partitionColumns": ["congress"],
+  "members": [
+    {"key": "bill_sections/congress=119/part-000000.parquet",
+     "sha256": "sha256:…", "byteSize": 146203311, "rows": 453112, "partition": {"congress": "119"}}
+  ]
+}
+```
+
+A single-member table in v2 has exactly one member, and it is the same object as in v1.
+
+**Open for 24:**
+- whether the v1 and v2 writes need one conditional sequence (v2, then v1) or one shared precondition;
+- whether the table key in v2 drops `.parquet`.
+
+### 4.2 Members, and the partition column
+
+- Member keys follow `public_tables`: `generations/<family>/<digest>/<table>/<col>=<value>/part-NNNNNN.parquet`.
+  `NNNNNN` numbers the files within a partition when one would pass `maxRowsPerMember` or a byte cap.
+  A proposed cap is 1 GiB per member, well under any single-request limit.
+- The partition column must be a **declared column** of the table, stored inside the Parquet (83's
+  preference). Readers read with `hive_partitioning=false`, so no synthetic column appears and
+  `DESCRIBE` still equals the declared columns (the MCP at `mcp_server.py:438-442` and the freshness
+  check at 153-155 compare them).
+  - The bill tables have no `congress` column; it is the prefix of `bill_id`. So `bill_sections`
+    (and later `section_diff_items` and `bill_publisher_summaries`) gains a declared `congress` column
+    in its spicy-docs contract, derived from `bill_id`.
+- Every member keeps DocSpec's limits: no Iceberg field IDs, row groups ≤ 256 MiB uncompressed. The
+  table's declared identity must be unique across members, and admission checks that once per table.
+
+### 4.3 Building: touch only the partitions that changed
+
+- `merge_table` is applied per partition. A partition is re-merged only if it has fresh rows or a
+  `replace_parents` scope. Every other partition is carried forward by its prior member digest, the
+  way `carriedForward` already works per table (`base.py:181-190`).
+- So a nightly bill-family run, which reads only the sitting Congress, rewrites one partition
+  (~453k rows of 1.9M today) and copies the rest server-side.
+- **Byte-identical output from an unchanged merge is not required**, because an untouched partition
+  is not re-merged at all. (The survey found that byte-determinism of the merge is unmeasured.)
+- The bill family's whole-table reads of `bill_sections` (`build_bill_family.py:595-605, 997-1024`)
+  move to projected remote reads over the member list, as `remote_inputs` already does
+  (`base.py:68-71, 261-277`).
+
+### 4.4 Publishing and verification: single pass
+
+- `_copy_unchanged_member` decides per member by the prior member's digest, read from v2.
+- Local verification happens **once** per member, following `operations.md` §1b(b): `_run_tables`
+  passes its verified artifact to `_publish_verified_generation` instead of re-verifying.
+- **Admission read-back.** `admit_artifact` still GETs every member, copies included
+  (`publication.py:611`). That is O(family bytes), about 1 min for 0.7 GB, which is acceptable in
+  phase 1.
+  - Trusting a server-side copy by size and ETag, as `_publish_evidence` already does for evidence
+    blobs (478-488), is phase 2. It needs rulespec_artifacts support and its own measurement, and
+    it weakens what admission proves. It is **not** proposed here.
+- Retention (decision 36) counts generations, not members. Each generation keeps its own copied
+  members, so deleting a prefix never breaks another generation, and no reference counting is needed.
+
+### 4.5 Readers, in order
+
+1. **spicy-regs.** One `table_members(index, table)` resolver replaces `table_location`, returning
+   `[(url, sha256, rows)]` with one element for a v1 table. `r2.download`, the MCP views
+   (`read_parquet([...])`), the CLI, `generation_audit`, the nightly checks and the dictionary check
+   all go through it. Ships in one spicy-regs release **before** any table is published split.
+2. **DocSpec** (83): register a table from a member list (`add_files` over every member). The
+   descriptor carries each member's digest and row count, and `verify` compares the file set to the
+   member digests. It reads v2 only for families that have a split table.
+3. **Other readers:** spicy-docs `check_source_domain_drift.py` (bare URLs) and the spicyregs plugin
+   script (`query_spicy_regs.py`) either resolve through v2 or keep reading v1 tables only.
+   `spicy-regs-ui` is outside this workspace; it reads legacy bare URLs and is unaffected.
+
+### 4.6 Which tables, in which order
+
+1. **`bill_sections`** first, as the owner chose: it has the simplest partition (congress), a
+   nightly delta confined to one partition, and no external reader beyond spicy-regs itself.
+2. **`court_opinion_clusters`**, by `date_filed` year or decade (39 decades, at most 1.71M rows each),
+   before it reaches the single-object cap.
+3. **`fcc_filings`** by received year (decision 46), when it approaches 500 MB.
+4. **FEC individual contributions** (decision 51), born split, by cycle, then month or committee.
+5. **Comments:** folding the agency mirror into generations would make it atomic, but would cost an
+   8.5 GB read-back a day unless phase-2 copy trust exists. Not proposed now.
+
+## 5. Open measurements before code
+
+- R2's actual single-request `CopyObject` and PUT limits (decides how urgent `court_opinion_clusters` is).
+- The share of `bill_sections` bytes the nightly run leaves unchanged once split. Estimate: 1.45 GB of
+  1.9 GB after the 113th–114th land, since only the 119th changes.
+- Admission read-back time for a 0.9 GB split family on the runner (phase-1 acceptability).
+- Whether DuckDB `read_parquet([...])` over HTTP with about 7 members keeps MCP query latency within
+  today's single-file numbers.
+
+## 6. What this does not change
+
+- Single-member tables: same keys, same v1 entries, same digests, same DocSpec admission.
+- Generation identity, family pins, the output ledger's `qualified at` pins, and
+  `check_ledger_pins` / `check_source_refusals`.
+- The comments mirror.
