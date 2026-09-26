@@ -35,5 +35,6 @@ jobs:
       lda_since: ${{ inputs.since || '' }}
       lda_until: ${{ inputs.until || '' }}
       lda_filing_year: ${{ inputs.filing_year || '' }}
-      # A filing year is about 4,000 pages at the keyed rate (~80 minutes); the daily window takes minutes.
-      timeout_minutes: ${{ inputs.filing_year && 150 || 30 }}
+      # A filing year is read at about 875 filings a minute keyed (2026's 56,887 took 65 minutes), and
+      # LDA's largest year, 2025, states 108,999 (~125 minutes); the daily window takes minutes.
+      timeout_minutes: ${{ inputs.filing_year && 240 || 30 }}
