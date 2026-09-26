@@ -25,15 +25,21 @@ import pytest
 from spicy_docs.schemas import TABLE_CONTRACTS
 
 from spicy_regs import data_dictionary as dd
+from spicy_regs.schemas.regulations import RECORD_TYPES
 from spicy_regs.transforms.table_merge import merge_contract_table
 
 CONTRACT_NAMES = sorted(TABLE_CONTRACTS)
 
-#: Adoption fixes the registry size as well as its named hosted/unhosted partition.
-ADOPTED_CONTRACT_COUNT = 39
+#: Adoption fixes the registry size as well as its named three-way partition.
+ADOPTED_CONTRACT_COUNT = 42
 
 #: These two leave the set when their owning rollups host them.
 UNHOSTED_CONTRACTS = frozenset()
+
+#: Contracts this repository publishes through its own ``RECORD_TYPES`` (the
+#: regulatory base tables), not through ``CONTRACT_TABLES``. SpicyDocs 0.34.1
+#: contracts them so DocSpec can admit them by reference.
+RECORD_TYPE_CONTRACTS = frozenset(RECORD_TYPES)
 
 
 def _no_download(remote_key: str, local_path: Path) -> bool:
@@ -97,11 +103,13 @@ def test_a_row_missing_its_identity_is_dropped_not_published(tmp_path, name):
 def test_every_hosted_table_is_registered_everywhere():
     """A hosted table is one of the wheel's contracts, and is published, queryable and described.
 
-    The wheel ships more contracts than this repository hosts; the difference
-    is ``UNHOSTED_CONTRACTS``, stated so a new upstream contract is a decision
-    here rather than a silent omission from the hosted surface. The two sets
-    partition the registry by name, so every contract the adopted wheel ships
-    is accounted for individually rather than by a count.
+    The wheel ships more contracts than ``CONTRACT_TABLES`` hosts; the
+    difference is the regulatory base tables this repository publishes through
+    its own record types (``RECORD_TYPE_CONTRACTS``) plus ``UNHOSTED_CONTRACTS``,
+    stated so a new upstream contract is a decision here rather than a silent
+    omission from the hosted surface. The three sets partition the registry by
+    name, so every contract the adopted wheel ships is accounted for
+    individually rather than by a count.
 
     ``ADOPTED_CONTRACT_COUNT`` is the one place a number appears, and it is
     there because the partition alone cannot see one thing: adopting a wheel
@@ -117,11 +125,22 @@ def test_every_hosted_table_is_registered_everywhere():
         "so update this number in the same commit that decides what to do with the new contracts"
     )
     assert hosted <= set(TABLE_CONTRACTS), "every hosted table must be a wheel contract"
-    assert set(TABLE_CONTRACTS) - hosted == UNHOSTED_CONTRACTS, "a wheel contract is hosted or named as not yet"
+    assert hosted.isdisjoint(RECORD_TYPE_CONTRACTS) and UNHOSTED_CONTRACTS.isdisjoint(RECORD_TYPE_CONTRACTS)
+    assert set(TABLE_CONTRACTS) - hosted == UNHOSTED_CONTRACTS | RECORD_TYPE_CONTRACTS, (
+        "a wheel contract is hosted, published as a record type, or named as not yet"
+    )
     assert UNHOSTED_CONTRACTS.isdisjoint(dd.TABLES), "an unhosted contract must not be half-listed"
     assert hosted <= set(dd.TABLES)
     assert hosted <= set(mcp_server.TABLES)
     assert hosted <= set(dd.load_descriptions())
+
+
+@pytest.mark.parametrize("name", sorted(RECORD_TYPE_CONTRACTS))
+def test_record_type_declares_the_same_table_as_its_contract(name):
+    """A record type and the wheel's contract for it name the same columns, in order, and the same identity."""
+    contract, record_type = TABLE_CONTRACTS[name], RECORD_TYPES[name]
+    assert tuple(record_type.schema) == contract.columns
+    assert (record_type.dedup_key,) == contract.identity
 
 
 #: The ``congress_bills`` prefix other repositories pin by digest through

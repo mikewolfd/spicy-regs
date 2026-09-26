@@ -5,17 +5,15 @@ The optional `source-readers` extra enables the same readers for package install
 its wheels must be supplied explicitly until they are published in a registry.
 Base CLI and MCP installs do not require them.
 
-- `spicy_docs-0.34.0`: built from SpicyDocs branch `agency-scrapers-0.34.0` at `3938514`
-  (release commit; the branch sits on `main` 1e73312 and is under review), with Rulespec
-  Artifacts 1.1.1. Built September 25, 2026 UTC: **1,621,728 bytes**, SHA-256
-  `0099a5eef9d3bc658690c1584917c05a5eb7d4e517021043adb61f1d7587fdea`, byte-identical across
-  two rebuilds from a clean archive of that commit. Adds the agency scrapers (FCC filing walks
-  and document capture, SEC, FERC, CFTC, EDIS), one walled-fetch ladder for keyless sources,
-  and the OpenFEC quota pacing. FCC filings delegate count checks, pooled walks and crowded-query
-  timestamp splits to `FccEcfsReader.iter_filings`; this host keeps its overlap and publication
-  policy and streams the merge through its existing batch writer. Every row of a docket-scoped
-  selection must name the docket, so fixture rows carry `proceedings`. No rule version changes
-  for the other readers. This is a local package adoption; public tables require a subsequent run.
+- `spicy_docs-0.34.1`: built from SpicyDocs `main` at `ad02e46` (release commit), with Rulespec
+  Artifacts 1.1.1. Built September 26, 2026 UTC: **1,624,527 bytes**, SHA-256
+  `6f1d4306478c8427d2529145159661ccf9e6d3498039d52f45de0e3bbc22a55e`, byte-identical across
+  two rebuilds from a clean archive of that commit. On top of 0.34.0 it adds `TABLE_CONTRACTS`
+  for `dockets`, `documents` and `comments`, each keyed on the publisher's id with spelling
+  `value/1`, so DocSpec can admit them by reference; this host keeps publishing them through
+  its own `RECORD_TYPES`, and `tests/test_contract_tables.py` checks that each record type
+  declares the same columns and identity as its contract. No reader rule changes. 0.34.0
+  (agency scrapers, FCC filing walks, OpenFEC pacing) and its build record are at `9c2636f`.
 
 - `rulespec_artifacts-1.1.1`: exact dependency of SpicyDocs 0.26.6 and 0.27.0, built from
   Rulespec `a3acb04cbfe2cc32a89622a3523da48aa6958348`. **99,315 bytes**, SHA-256
