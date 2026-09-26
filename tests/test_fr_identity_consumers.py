@@ -340,6 +340,7 @@ def test_labelled_dockets_and_padded_numbers_join_every_rulemaking_table(tmp_pat
         ("SSA-2010-0037", "docket_rin", None, "0960-AG21"),
         ("SSA-2010-0037", "fr_cfr_ref", "20-404", "0960-AG21"),
         ("SSA-2010-0037", "document_fr_doc", "20-404", "0960-AG21"),
+        ("SSA-2010-0037", "docket_document_cites_action_notice", None, None),
         ("GIPSA-2010-FGIS-0014-NONRULEMAKING", "fr_cfr_ref", "7-800", None),
     }, "FAA-2010-0001 is named but no Regulations.gov record asserts it"
     corroboration = edges[("SSA-2010-0037", "document_fr_doc", "20-404", "0960-AG21")]
@@ -351,7 +352,7 @@ def test_labelled_dockets_and_padded_numbers_join_every_rulemaking_table(tmp_pat
     assert (corroboration["first_seen"], corroboration["last_seen"]) == ("2010-02-05", "2010-02-05")
     docket_rin = edges[("SSA-2010-0037", "docket_rin", None, "0960-AG21")]
     assert (docket_rin["first_seen"], docket_rin["last_seen"]) == ("2010-03-10", "2010-03-10")
-    assert {r["actor_id"] for r in targets} == {"spicy-regs:rule-targets:v5"}
+    assert {r["actor_id"] for r in targets} == {"spicy-regs:rule-targets:v6"}
 
     proceedings = pq.read_table(build_proceedings(tmp_path)).to_pylist()
     ssa = next(r for r in proceedings if "SSA-2010-0037" in json.loads(r["docket_ids_json"]))

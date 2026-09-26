@@ -29,7 +29,7 @@ from spicy_regs.ontology.common import (
     write_parquet_rows,
 )
 
-from spicy_regs.ontology.federal_register import FederalRegisterIndex, resolved_id
+from spicy_regs.ontology.federal_register import FederalRegisterIndex, resolved_id, rule_stage
 
 OUTPUT = "rule_targets.parquet"
 # v3: labelled FR docket values join (linked_docket_id), zero-padded and en-dash FR numbers
@@ -37,7 +37,10 @@ OUTPUT = "rule_targets.parquet"
 # v4: a docket value naming several dockets joins each (linked_docket_ids), one edge per docket.
 # v5: SpicyDocs 0.35.0 reads a docket named after prose (D1) and folds Regulations.gov's typed FR-number separators (D2);
 # rulemaking snapshots record no package version, so the actor carries the reader change.
-ACTOR_ID = "spicy-regs:rule-targets:v5"
+# v6: a docket's own document citing an FR document that is action evidence (a RIN or a rule
+# stage) is a typed edge, docket_document_cites_action_notice, with no CFR or RIN target: it
+# records the citation decision 32 counts, and unions no proceedings (decision 33 as amended).
+ACTOR_ID = "spicy-regs:rule-targets:v6"
 
 COLUMNS = (
     "docket_id",
@@ -54,12 +57,18 @@ COLUMNS = (
     "fr_references_json",
 )
 
+#: A docket's own document cites, by its fr_doc_num, an FR document that states a RIN or a
+#: rule stage. The notice is related to the docket by that citation; it is part of the
+#: docket's proceeding only if proceedings lists it there.
+CITES_ACTION_NOTICE = "docket_document_cites_action_notice"
+
 SOURCES = frozenset(
     {
         "fr_cfr_ref",
         "docket_rin",
         "document_rin",
         "document_fr_doc",
+        CITES_ACTION_NOTICE,
     }
 )
 
@@ -268,7 +277,14 @@ def build_rule_targets(
 
     for row in iter_parquet_rows(
         paths["federal_register"],
-        columns=("document_number", "publication_date", "cfr_references_json", "regulation_id_numbers_json"),
+        columns=(
+            "document_number",
+            "publication_date",
+            "cfr_references_json",
+            "regulation_id_numbers_json",
+            "document_type",
+            "title",
+        ),
     ):
         document_number = row.get("document_number")
         if not document_number:
@@ -292,13 +308,30 @@ def build_rule_targets(
             row_id=document_number,
             column="regulation_id_numbers_json",
         )
+        publication_date = row.get("publication_date")
+        published = eastern_day_text(publication_date)
+        # Action evidence as proceedings reads it, a RIN or a rule stage, whatever the CFR
+        # list holds; the citing documents' own references carry the typed edge.
+        if documents and (
+            any(normalize_rin(value) for value in raw_rins or ())
+            or rule_stage(row.get("document_type"), row.get("title"))
+        ):
+            for document in documents:
+                add_edge(
+                    docket=document["docket"],
+                    citation=None,
+                    rin=None,
+                    source=CITES_ACTION_NOTICE,
+                    evidence_id=document["document_id"],
+                    fr_reference=document["fr_reference"],
+                    first_seen=document["posted"] or published,
+                    last_seen=document["modified"] or published,
+                )
         if raw_cfr is None or raw_rins is None:
             continue
         unread_cfr.extend(raw for raw in raw_cfr if not isinstance(raw, dict))
         citations = list(dict.fromkeys(citation for raw in raw_cfr for citation in parse_cfr_citation(raw)))
         rins = list(dict.fromkeys(rin for value in raw_rins if (rin := normalize_rin(value)))) or [None]
-        publication_date = row.get("publication_date")
-        published = eastern_day_text(publication_date)
 
         if linked_dockets and citations:
             # Once per FR row, not per docket x citation x RIN.

@@ -48,16 +48,34 @@ mapped no longer exist.
 ## The rule_targets carrier
 
 `transforms/build_rule_targets.py` builds `rule_targets.parquet`
-(`ACTOR_ID = spicy-regs:rule-targets:v4`): one row per observed rule-identity
+(`ACTOR_ID = spicy-regs:rule-targets:v6`): one row per observed rule-identity
 edge, with `docket_id`, `cfr_ref` (+ `cfr_title`/`cfr_part`/`cfr_section`),
 `rin`, the `source` class the edge came from, `first_seen`/`last_seen` as
 Eastern days, and `fr_references_json` retaining each literal number-only
-observation with the status that says how it resolved. The four source classes are
+observation with the status that says how it resolved. The five source classes are
 `fr_cfr_ref` (a CFR reference read off the Federal Register's own citation),
 `docket_rin` (the docket's stated RIN), `document_rin` (a document's stated
-RIN) and `document_fr_doc` (a document-to-docket resolution). Ambiguous or
+RIN), `document_fr_doc` (a document-to-docket resolution) and
+`docket_document_cites_action_notice` (below). Ambiguous or
 missing references emit an observation row with null targets rather than an
 invented edge.
+
+A `docket_document_cites_action_notice` row says that one of the docket's own
+Regulations.gov documents cites, by its `fr_doc_num`, a Federal Register
+document that is action evidence: it states a RIN or a rule stage. It is the
+citation that makes a docket an action docket (fork delivery decision 32), and
+it is a relationship, not a rule target: `cfr_ref` and `rin` are null, so the
+row folds to one per docket. Each entry of `fr_references_json` is one
+citation: the citing document (`evidence_id`), its literal number
+(`document_number`) and the one notice it resolves to (`candidate_ids`). The
+edge unites nothing (decision 33 as amended). When the docket's proceeding
+lists the notice in `fr_document_ids_json`, the two are one proceeding;
+otherwise they are related by citation only, and the notice keeps its own
+proceeding. On the R5 re-audit's parents, 55,183 dockets cite 103,621 action
+notices in 116,642 pairs, 47,699 of them across proceedings. Uniting those
+would fuse 58,286 of 268,159 proceedings, the largest into one of 5,920
+dockets; catch-all `*_FRDOC_0001` dockets and omnibus notices do most of the
+gluing (receipt `typed-citation-join-2026-09-26/`).
 
 The carrier is flat Apache Parquet, not JSON-LD: compact identifiers and enum
 values expand deterministically to Rulespec terms, but the tables claim

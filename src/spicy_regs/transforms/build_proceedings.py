@@ -31,6 +31,7 @@ from spicy_regs.ontology.federal_register import (
     FederalRegisterIndex,
     references_json,
     resolved_id,
+    rule_stage,
 )
 
 OUTPUT = "proceedings.parquet"
@@ -77,20 +78,6 @@ _STAGE_KIND = {
 }
 
 
-def _stage_from_document(document_type: object, title: object) -> str | None:
-    kind = str(document_type or "").casefold()
-    text = f"{kind} {str(title or '').casefold()}"
-    if "withdraw" in text:
-        return "withdrawn"
-    if "supplement" in text and ("proposed" in text or "proposal" in text):
-        return "supplemental"
-    if kind == "rule" or "final rule" in text:
-        return "final"
-    if kind == "proposed rule" or "proposed rule" in text:
-        return "proposed"
-    return None
-
-
 #: The Federal Register columns that say whether a document is itself action evidence.
 _FR_EVIDENCE_COLUMNS = ("document_number", "publication_date", "regulation_id_numbers_json", "document_type", "title")
 
@@ -105,7 +92,7 @@ def _fr_rins_and_stage(row: dict, stats: JsonReadStats) -> tuple[set[str], str |
         column="regulation_id_numbers_json",
     )
     rins = set() if raw_rins is None else {rin for value in raw_rins if (rin := normalize_rin(value)) is not None}
-    return rins, _stage_from_document(row.get("document_type"), row.get("title"))
+    return rins, rule_stage(row.get("document_type"), row.get("title"))
 
 
 #: What a Federal Register row that is no action evidence states: no RIN and no stage.
@@ -263,7 +250,7 @@ def build_proceedings(
         cited = row.get("fr_doc_num")
         if (
             has_rin
-            or _stage_from_document(row.get("document_type"), row.get("title"))
+            or rule_stage(row.get("document_type"), row.get("title"))
             or (cited and resolved_id(fr_index.reference(str(cited))) in fr_action)
         ):
             action_dockets.add(docket)
@@ -395,7 +382,7 @@ def build_proceedings(
             group["agencies"].append(str(row["agency_code"]))
         add_event(
             group,
-            stage=_stage_from_document(
+            stage=rule_stage(
                 row.get("document_type"),
                 row.get("title"),
             ),

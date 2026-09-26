@@ -1,4 +1,4 @@
-"""Dated FR record keys, number-only references and the dockets an FR link names.
+"""Dated FR record keys, number-only references, the dockets an FR link names and a document's rule stage.
 
 SpicyDocs owns the source key and the comparison key a reference number reduces to
 (dashes and case folded, the sequence's zero padding removed); RefSpec's number-only
@@ -47,6 +47,25 @@ def linked_docket_ids(value: object) -> tuple[str, ...]:
     from spicy_docs.interpretation.identifier_shapes import normalize_docket_references
 
     return normalize_docket_references(value)
+
+
+def rule_stage(document_type: object, title: object) -> str | None:
+    """The rule stage a document's type and title state, or ``None``.
+
+    Read the same way off a Federal Register row and a Regulations.gov document; a stage
+    makes either one action evidence (fork delivery decisions 32 and 33), as a RIN does.
+    """
+    kind = str(document_type or "").casefold()
+    text = f"{kind} {str(title or '').casefold()}"
+    if "withdraw" in text:
+        return "withdrawn"
+    if "supplement" in text and ("proposed" in text or "proposal" in text):
+        return "supplemental"
+    if kind == "rule" or "final rule" in text:
+        return "final"
+    if kind == "proposed rule" or "proposed rule" in text:
+        return "proposed"
+    return None
 
 
 #: The digits a document number ends on: its sequence, whatever separates it.

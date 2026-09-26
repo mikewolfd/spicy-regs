@@ -65,8 +65,10 @@ MCP `table_qualification` record read these rows directly.
   the three dockets are back in proceedings. No predecessor list names a live
   sibling. Open, but not blocking:
   - A docket that is an action docket only through its own documents' citation
-    does not absorb the cited notice (572 dockets), as decision 33 reads; this
-    needs a ruling or a recorded limit.
+    does not absorb the cited notice (572 dockets), as decision 33 reads. Merging
+    by citation was measured and would fuse 58,286 proceedings; rule-targets v6
+    records the citation as a typed edge instead (decision 33 as amended, confirmed
+    by the owner 2026-09-26). Receipt `typed-citation-join-2026-09-26/`.
   - Lineage is out of scope by owner decision (2026-09-26): `identity_predecessors_json`
     is pruned at `8477dea` (proceedings v9), and the 3,010 links erased at
     `snapshot_47cca15e…` survive only in the retained snapshot `6d3dc0f2`. Continuity
