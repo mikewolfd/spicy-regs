@@ -204,7 +204,9 @@ jobs:
           # Cloudflare edge-cache purge after publish (best-effort; no-op if unset).
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
-          DATA_GOV_API_KEY: ${{ secrets.DATA_GOV_API_KEY }}
+          # The shared api.data.gov key is contended, so the roll-call votes rollup,
+          # which reads only the keyless Clerk and Senate hosts, does not receive it.
+          DATA_GOV_API_KEY: ${{ inputs.command != 'run-rollup-roll-call-votes' && secrets.DATA_GOV_API_KEY || '' }}
           # A hosted runner has tens of GB in total, so the workstation's 100 GiB
           # free-space floor would refuse any download; keep 4 GiB free instead.
           SPICY_REGS_DISK_FLOOR_GIB: '4'

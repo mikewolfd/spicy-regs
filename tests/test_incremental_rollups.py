@@ -211,29 +211,6 @@ def test_amendments_refuse_a_pool_holding_more_than_the_declared_count(tmp_path,
 # --------------------------------------------------------------------------- #
 # Roll-call votes: held roll calls are not re-read from the Clerk.
 # --------------------------------------------------------------------------- #
-HOUSE_VOTE_RECORDS = [
-    {
-        "congress": 119,
-        "sessionNumber": 1,
-        "rollCallNumber": number,
-        "legislationType": "HR",
-        "legislationNumber": "3424",
-        "sourceDataURL": f"https://clerk.house.gov/evs/2025/roll{number}.xml",
-        "startDate": "2025-09-08T18:56:00-04:00",
-        "updateDate": "2025-09-09T18:53:19-04:00",
-    }
-    for number in range(1, 41)
-]
-
-
-class StubVoteListingReader:
-    def records(self, route, url, *, max_pages=100):
-        class Page:
-            records = tuple(HOUSE_VOTE_RECORDS)
-
-        return iter((Page(),))
-
-
 class CountingVoteAcquirer:
     def __init__(self):
         self.requested: list[int] = []
@@ -243,9 +220,14 @@ class CountingVoteAcquirer:
         raise _Unavailable("stub: no Clerk file in a hermetic test")
 
     def list_house_votes(self, congress, session):
+        """The Clerk's index for the 119th's first session: rolls 1-40, newest first."""
         from types import SimpleNamespace
 
-        return SimpleNamespace(index=SimpleNamespace(votes=()))
+        from spicy_docs.sources.congress.votes import ClerkVoteIndex, ClerkVoteIndexEntry
+
+        rolls = range(40, 0, -1) if session == 1 else ()
+        entries = tuple(ClerkVoteIndexEntry(n, "8-Sep", None, None, None, None) for n in rolls)
+        return SimpleNamespace(index=ClerkVoteIndex(congress, session, 2024 + session, entries))
 
     def list_senate_votes(self, congress, session):
         from types import SimpleNamespace
@@ -289,7 +271,6 @@ def test_roll_call_votes_skips_what_it_already_published(tmp_path, monkeypatch):
     acquirer = CountingVoteAcquirer()
     build_roll_call_votes(
         tmp_path,
-        reader=StubVoteListingReader(),
         acquirer=acquirer,
         overlap=5,
         download_prior=no_download,
@@ -306,7 +287,7 @@ def test_roll_call_votes_fetches_everything_with_no_prior(tmp_path, monkeypatch)
     monkeypatch.setenv("BILL_FAMILY_CONGRESSES", "119")
     acquirer = CountingVoteAcquirer()
     build_roll_call_votes(
-        tmp_path, reader=StubVoteListingReader(), acquirer=acquirer, overlap=5, download_prior=no_download
+        tmp_path, acquirer=acquirer, overlap=5, download_prior=no_download
     )
     assert len(acquirer.requested) == 40
 
@@ -333,7 +314,7 @@ def test_a_linkage_only_row_is_not_treated_as_held(tmp_path, monkeypatch):
     )
     acquirer = CountingVoteAcquirer()
     build_roll_call_votes(
-        tmp_path, reader=StubVoteListingReader(), acquirer=acquirer, overlap=5, download_prior=no_download
+        tmp_path, acquirer=acquirer, overlap=5, download_prior=no_download
     )
     assert len(acquirer.requested) == 40
 

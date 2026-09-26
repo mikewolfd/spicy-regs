@@ -5,10 +5,11 @@ out of the same House Clerk and Senate LIS walks, so separate rollups would
 fetch every roll call twice.
 
 Reads the bill family's published ``bill_vote_references`` best-effort at
-merge time for the second of its two linkage sources — a ``soft_input``, so a
-run with no family output still acquires the native vote identities. A bill
-link remains NULL when neither reference source establishes it. The cron runs
-an hour after the family's to reuse any available links.
+merge time, its only linkage source — a ``soft_input``, so a run with no family
+output still acquires the native vote identities. A bill link remains NULL when
+no recorded reference establishes it. Both publishers are keyless, so the run
+needs no credential. The cron runs an hour after the family's to reuse any
+available links.
 """
 
 from pathlib import Path

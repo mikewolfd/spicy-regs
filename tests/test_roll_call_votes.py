@@ -1,6 +1,6 @@
 """Hermetic test for the roll-call transform's two linkage sources.
 
-No network: the listing reader and the Clerk acquirer are stubbed, and the
+No network: both chambers' indexes and the vote acquirer are stubbed, and the
 ``bill_vote_references`` table the bill family publishes is seeded where the
 transform's best-effort download looks for it.
 
@@ -24,7 +24,7 @@ from types import SimpleNamespace
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
-from spicy_docs.interpretation.vote_matching import VoteMatchError, index_vote_references, read_vote_key
+from spicy_docs.interpretation.vote_matching import index_vote_references, read_vote_key
 from spicy_docs.schemas import TABLE_CONTRACTS
 from spicy_docs.sources.congress.votes import (
     ClerkVoteIndex,
@@ -106,28 +106,6 @@ class _Page:
         self.records = tuple(records)
 
 
-class StubListingReader:
-    """Serves each ``house-vote`` record on the session its own path addresses.
-
-    The transform walks one URL per session of the Congress, so a stub that
-    ignored the path would serve every record on both walks. A duplicated
-    record names the same bill as itself and so cannot conflict with itself —
-    but it does duplicate any *genuine* disagreement, because the listing
-    reference that loses to a recorded vote then loses to it twice, and
-    ``conflict_count`` reads 2 where the input stated one disagreement. The
-    served rows are held under a different name than the Protocol's ``records``
-    method, which they would shadow.
-    """
-
-    def __init__(self, listed=()):
-        self.listed = listed
-
-    def records(self, route, url, *, max_pages=100):
-        session = int(url.rsplit("?", 1)[0].rsplit("/", 1)[-1])
-        page = [record for record in self.listed if record["sessionNumber"] == session]
-        return iter((_Page(page),)) if page else iter(())
-
-
 class _Tallied:
     """The facts ``shape_roll_call_vote`` and ``shape_member_vote`` read off a vote file, date in its chamber's spelling."""
 
@@ -164,8 +142,8 @@ class StubVoteAcquirer:
         self.house_rolls = house_rolls
 
     def list_house_votes(self, congress, session):
-        # As with the menu, empty tuples isolate listing-driven selections; the
-        # real reader refuses an empty or gapped Clerk index.
+        # As with the menu, empty tuples isolate reference-driven selections;
+        # the real reader refuses an empty or gapped Clerk index.
         entries = tuple(
             ClerkVoteIndexEntry(n, "8-Sep", None, None, None, None)
             for n in sorted(self.house_rolls, reverse=True)
@@ -192,19 +170,6 @@ class StubVoteAcquirer:
 def scoped(monkeypatch):
     """Scope the bill family to the 119th Congress."""
     monkeypatch.setenv("BILL_FAMILY_CONGRESSES", "119")
-
-
-def _house_listing_record(roll_number: int, *, bill_type: str = "HR", number: str = "3424") -> dict:
-    """One Clerk listing record linking ``roll_number`` to a bill."""
-    return {
-        "congress": 119,
-        "sessionNumber": 1,
-        "rollCallNumber": roll_number,
-        "legislationType": bill_type,
-        "legislationNumber": number,
-        "sourceDataURL": f"https://clerk.house.gov/evs/2025/roll{roll_number}.xml",
-        "startDate": "2025-09-08T18:56:00-04:00",
-    }
 
 
 # --------------------------------------------------------------------------- #
@@ -241,7 +206,6 @@ def test_recorded_action_indices_are_numeric_in_published_linkage(tmp_path, scop
     _seed_references(tmp_path, [base | {"action_index": "10"}, base | {"action_index": str(earlier_index)}])
     paths = build_roll_call_votes(
         tmp_path,
-        reader=StubListingReader(),
         acquirer=StubVoteAcquirer(),
         download_prior=_no_prior,
     )
@@ -295,7 +259,6 @@ def test_a_recorded_vote_reference_fills_the_linkage_columns(tmp_path, scoped):
     acquirer = StubVoteAcquirer()
     paths = build_roll_call_votes(
         tmp_path,
-        reader=StubListingReader(),
         acquirer=acquirer,
         overlap=0,
         download_prior=_no_prior,
@@ -311,57 +274,27 @@ def test_a_recorded_vote_reference_fills_the_linkage_columns(tmp_path, scoped):
     assert row["yea"] == "220", "the linkage does not disturb the tally half"
 
 
-def test_the_listing_still_links_a_vote_no_reference_names(tmp_path, scoped):
-    """With no family run published, the House listing's own linkage is unchanged."""
-    acquirer = StubVoteAcquirer()
-    paths = build_roll_call_votes(
-        tmp_path,
-        reader=StubListingReader([_house_listing_record(240)]),
-        acquirer=acquirer,
-        overlap=0,
-        download_prior=_no_prior,
-    )
+def test_a_roll_call_no_recorded_reference_names_is_published_unmatched(tmp_path, scoped):
+    """The recorded reference is the only linkage: an indexed roll call nothing names keeps its tally, no bill."""
+    acquirer = StubVoteAcquirer(house_rolls=(240,))
+    paths = build_roll_call_votes(tmp_path, acquirer=acquirer, overlap=0, download_prior=_no_prior)
     row = pq.read_table(paths[0]).to_pylist()[0]
-    assert row["bill_id"] == "119-hr-3424"
-    assert row["match_rule"] == "house_vote_legislation"
-    assert row["match_action_index"] is None, "a listing reference sits on no action"
-    assert row["conflict_count"] == "0"
-
-
-def test_the_bills_own_action_wins_over_the_listing(tmp_path, scoped):
-    """Both publishers name roll 240; the one written on the bill's action is the join."""
-    _seed_references(tmp_path, [row for row in _sample_rows() if row["roll_number"] == "240"])
-    paths = build_roll_call_votes(
-        tmp_path,
-        # The listing names a different bill for the same roll call.
-        reader=StubListingReader([_house_listing_record(240, number="9999")]),
-        acquirer=StubVoteAcquirer(),
-        overlap=0,
-        download_prior=_no_prior,
-    )
-    row = pq.read_table(paths[0]).to_pylist()[0]
-    assert row["bill_id"] == "119-hr-3424"
-    assert row["match_rule"] == "bill_action_recorded_vote"
-    assert row["conflict_count"] == "1", "the losing reference is counted on this row, not dropped"
+    assert acquirer.requested == [("house", 240)]
+    assert (row["bill_id"], row["match_rule"], row["match_action_index"]) == (None, "unmatched", None)
+    assert row["conflict_count"] == "0" and row["yea"] == "220"
 
 
 def test_a_conflict_is_counted_on_the_row_it_belongs_to(tmp_path, scoped):
     """Per vote, not per run: an uncontested roll call must not inherit another's count."""
-    _seed_references(tmp_path, [row for row in _sample_rows() if row["roll_number"] in ("240", "241")])
-    paths = build_roll_call_votes(
-        tmp_path,
-        reader=StubListingReader(
-            [
-                _house_listing_record(240, number="9999"),  # disagrees
-                _house_listing_record(241, number="3425"),  # agrees
-            ]
-        ),
-        acquirer=StubVoteAcquirer(),
-        overlap=0,
-        download_prior=_no_prior,
-    )
+    sample = [row for row in _sample_rows() if row["roll_number"] in ("240", "241")]
+    disagreeing = next(row for row in sample if row["roll_number"] == "240") | {
+        "bill_id": "119-hr-9999", "action_index": "99",
+    }
+    _seed_references(tmp_path, [*sample, disagreeing])
+    paths = build_roll_call_votes(tmp_path, acquirer=StubVoteAcquirer(), overlap=0, download_prior=_no_prior)
     by_roll = {row["roll_number"]: row for row in pq.read_table(paths[0]).to_pylist()}
-    assert by_roll["240"]["conflict_count"] == "1"
+    assert by_roll["240"]["bill_id"] == "119-hr-3424", "the earliest action's reference wins"
+    assert by_roll["240"]["conflict_count"] == "1", "the losing reference is counted on this row, not dropped"
     assert by_roll["241"]["conflict_count"] == "0", "one contested roll call does not contest the others"
 
 
@@ -374,7 +307,6 @@ def test_senate_references_do_not_substitute_for_menu_enumeration(tmp_path, scop
     acquirer = StubVoteAcquirer()
     paths = build_roll_call_votes(
         tmp_path,
-        reader=StubListingReader(),
         acquirer=acquirer,
         overlap=0,
         download_prior=_no_prior,
@@ -383,32 +315,14 @@ def test_senate_references_do_not_substitute_for_menu_enumeration(tmp_path, scop
     assert pq.read_table(paths[0]).to_pylist() == []
 
 
-@pytest.mark.parametrize("link", [None, "malformed"])
-def test_unlinked_house_identity_is_acquired_once(tmp_path, scoped, link):
-    record: dict[str, object] = {"congress": 119, "sessionNumber": 1, "rollCallNumber": 7}
-    if link:
-        record.update(legislationType="not-a-bill", legislationNumber="1")
-    acquirer = StubVoteAcquirer()
-    paths = build_roll_call_votes(
-        tmp_path, reader=StubListingReader([record, record]), acquirer=acquirer, download_prior=_no_prior
-    )
+def test_a_house_roll_call_a_reference_also_names_is_acquired_once(tmp_path, scoped):
+    """The index and a recorded reference reaching one roll call select it once."""
+    _seed_references(tmp_path, [row for row in _sample_rows() if row["roll_number"] == "240"])
+    acquirer = StubVoteAcquirer(house_rolls=(240,))
+    paths = build_roll_call_votes(tmp_path, acquirer=acquirer, download_prior=_no_prior)
     [row] = pq.read_table(paths[0]).to_pylist()
-    assert acquirer.requested == [("house", 7)]
-    assert row["bill_id"] is None and row["match_rule"] == "unmatched"
-    assert row["yea"] == "220"
-
-
-def test_invalid_listing_identity_refuses_without_writing_outputs(tmp_path, scoped):
-    acquirer = StubVoteAcquirer()
-    with pytest.raises(VoteMatchError, match="rollCallNumber"):
-        build_roll_call_votes(
-            tmp_path,
-            reader=StubListingReader([{"congress": 119, "sessionNumber": 1}]),
-            acquirer=acquirer,
-            download_prior=_no_prior,
-        )
-    assert acquirer.requested == []
-    assert not (tmp_path / "roll_call_votes.parquet").exists()
+    assert acquirer.requested == [("house", 240)]
+    assert row["bill_id"] == "119-hr-3424" and row["yea"] == "220"
 
 
 def test_both_chambers_keep_same_roll_number_and_native_lis_identity(tmp_path, scoped):
@@ -429,10 +343,8 @@ def test_both_chambers_keep_same_roll_number_and_native_lis_identity(tmp_path, s
             )
             return acquired
 
-    acquirer = Members(senate_rolls=(7, 7))
-    paths = build_roll_call_votes(
-        tmp_path, reader=StubListingReader([_house_listing_record(7)]), acquirer=acquirer, download_prior=_no_prior
-    )
+    acquirer = Members(senate_rolls=(7, 7), house_rolls=(7,))
+    paths = build_roll_call_votes(tmp_path, acquirer=acquirer, download_prior=_no_prior)
     votes = pq.read_table(paths[0]).to_pylist()
     members = pq.read_table(paths[1]).to_pylist()
     assert {r["vote_id"] for r in votes} == {"119-house-1-7", "119-senate-1-7"}
@@ -452,14 +364,9 @@ def test_senate_menu_failure_preserves_existing_outputs(tmp_path, scoped, error)
 
     retained = tmp_path / "roll_call_votes.parquet"
     retained.write_bytes(b"prior output")
-    acquirer = FailedMenu()
+    acquirer = FailedMenu(house_rolls=(7,))
     with pytest.raises(type(error)):
-        build_roll_call_votes(
-            tmp_path,
-            reader=StubListingReader([_house_listing_record(7)]),
-            acquirer=acquirer,
-            download_prior=_no_prior,
-        )
+        build_roll_call_votes(tmp_path, acquirer=acquirer, download_prior=_no_prior)
     assert acquirer.requested == [] and retained.read_bytes() == b"prior output"
 
 
@@ -475,16 +382,16 @@ def test_clerk_index_failure_preserves_existing_outputs(tmp_path, scoped, error)
     retained.write_bytes(b"prior output")
     acquirer = FailedIndex(senate_rolls=(1,))
     with pytest.raises(type(error)):
-        build_roll_call_votes(tmp_path, reader=StubListingReader(), acquirer=acquirer, download_prior=_no_prior)
+        build_roll_call_votes(tmp_path, acquirer=acquirer, download_prior=_no_prior)
     assert acquirer.requested == [] and retained.read_bytes() == b"prior output"
 
 
-def test_the_clerk_index_is_the_house_population_where_the_listing_is_empty(tmp_path, monkeypatch):
-    """Congress.gov answers an empty success before the 115th; the Clerk's own index still bounds the House."""
+def test_the_clerk_index_is_the_house_population_before_the_115th(tmp_path, monkeypatch):
+    """Congress.gov's listing never reached before the 115th; the Clerk's own index is the House population."""
     monkeypatch.setenv("BILL_FAMILY_CONGRESSES", "110")
     acquirer = StubVoteAcquirer(house_rolls=(1, 2, 3), senate_rolls=(1, 2))
     paths = build_roll_call_votes(
-        tmp_path, reader=StubListingReader(), acquirer=acquirer, download_prior=_no_prior, open_congresses=(119,)
+        tmp_path, acquirer=acquirer, download_prior=_no_prior, open_congresses=(119,)
     )
     assert sorted(acquirer.requested) == [("house", 1), ("house", 2), ("house", 3), ("senate", 1), ("senate", 2)]
     rows = pq.read_table(paths[0]).to_pylist()
@@ -515,7 +422,7 @@ def test_a_closed_congress_is_read_once_and_resumes_only_what_is_missing(tmp_pat
 
         acquirer = StubVoteAcquirer(house_rolls=(1, 2, 3), senate_rolls=(1, 2))
         build_roll_call_votes(
-            run, reader=StubListingReader(), acquirer=acquirer, max_votes=3, overlap=25, download_prior=prior,
+            run, acquirer=acquirer, max_votes=3, overlap=25, download_prior=prior,
             open_congresses=(119,),
         )
         requested.append(sorted(acquirer.requested))
@@ -530,7 +437,6 @@ def test_a_closed_congress_is_read_once_and_resumes_only_what_is_missing(tmp_pat
 def test_small_cap_prioritizes_unseen_votes_over_both_chamber_refreshes(tmp_path, scoped):
     import shutil
 
-    reader = StubListingReader([_house_listing_record(n) for n in (1, 2)])
     requested = []
     for attempt in range(4):
         run = tmp_path / str(attempt)
@@ -543,9 +449,9 @@ def test_small_cap_prioritizes_unseen_votes_over_both_chamber_refreshes(tmp_path
             shutil.copyfile(p, local)
             return True
 
-        acquirer = StubVoteAcquirer(senate_rolls=(1, 2))
+        acquirer = StubVoteAcquirer(senate_rolls=(1, 2), house_rolls=(1, 2))
         paths = build_roll_call_votes(
-            run, reader=reader, acquirer=acquirer, max_votes=1, overlap=25, download_prior=prior,
+            run, acquirer=acquirer, max_votes=1, overlap=25, download_prior=prior,
             open_congresses=(119,),
         )
         requested.extend(acquirer.requested)
@@ -555,10 +461,8 @@ def test_small_cap_prioritizes_unseen_votes_over_both_chamber_refreshes(tmp_path
     attempt = 4
     run = tmp_path / str(attempt)
     run.mkdir()
-    acquirer = StubVoteAcquirer(senate_rolls=(1, 2))
-    build_roll_call_votes(
-        run, reader=reader, acquirer=acquirer, max_votes=2, overlap=1, download_prior=prior, open_congresses=(119,)
-    )
+    acquirer = StubVoteAcquirer(senate_rolls=(1, 2), house_rolls=(1, 2))
+    build_roll_call_votes(run, acquirer=acquirer, max_votes=2, overlap=1, download_prior=prior, open_congresses=(119,))
     assert set(acquirer.requested) == {("house", 2), ("senate", 2)}
 
 
@@ -628,8 +532,7 @@ def test_successful_reacquisition_replaces_only_its_member_children(tmp_path, sc
 
     paths = build_roll_call_votes(
         tmp_path,
-        reader=StubListingReader([_house_listing_record(n) for n in (6, 7, 8)]),
-        acquirer=FailedVote(),
+        acquirer=FailedVote(house_rolls=(6, 7, 8)),
         download_prior=prior,
         max_votes=2,
     )
@@ -646,7 +549,6 @@ def test_the_reference_scratch_file_is_not_left_beside_the_outputs(tmp_path, sco
     _seed_references(tmp_path, _sample_rows())
     build_roll_call_votes(
         tmp_path,
-        reader=StubListingReader(),
         acquirer=StubVoteAcquirer(),
         overlap=0,
         download_prior=_no_prior,
@@ -688,7 +590,7 @@ def test_held_links_refresh_independently_of_native_fetch_and_preserve_members(
         }])
     acquirer = StubVoteAcquirer(senate_rolls=(212,))
     paths = build_roll_call_votes(
-        tmp_path, reader=StubListingReader(), acquirer=acquirer, download_prior=prior,
+        tmp_path, acquirer=acquirer, download_prior=prior,
         overlap=1 if refresh_native else 0, max_votes=1 if refresh_native else 0, open_congresses=(119,),
     )
     actual = pq.read_table(paths[0]).to_pylist()[0]
@@ -739,14 +641,11 @@ def _events(evidence, name: str) -> list[dict]:
 
 
 @pytest.mark.parametrize("refresh_native", [False, True])
-def test_a_missing_reference_input_never_relinks_a_held_house_vote_from_the_listing(
-    tmp_path, scoped, refresh_native
-):
-    """The review's case: no ``bill_vote_references`` file and a House listing that names the vote.
+def test_a_missing_reference_input_never_changes_a_held_house_link(tmp_path, scoped, refresh_native):
+    """No ``bill_vote_references`` file: an absent optional input must not act as a deletion.
 
-    The listing's reference carries no action, so taking it would null
-    ``match_action_index`` and rewrite the rule and URL — an absent optional
-    input acting as a deletion. Neither the held nor the re-read vote may change.
+    Neither the held vote nor the same vote re-read from its file may lose the
+    recorded link it was published with.
     """
     from spicy_regs.source_evidence import CaptureEvidence
 
@@ -754,10 +653,9 @@ def test_a_missing_reference_input_never_relinks_a_held_house_vote_from_the_list
     member = {**{name: old[name] for name in ("vote_id", "congress", "chamber", "session", "roll_number")},
               "member_key": "keep", "position": "Yea"}
     evidence = CaptureEvidence(tmp_path / "audit", "roll-call-votes")
-    acquirer = StubVoteAcquirer()
+    acquirer = StubVoteAcquirer(house_rolls=(240,))
     paths = build_roll_call_votes(
         tmp_path,
-        reader=StubListingReader([_house_listing_record(240)]),
         acquirer=acquirer,
         download_prior=_published({"roll_call_votes": [old], "member_votes": [member]}),
         overlap=1 if refresh_native else 0,
@@ -776,11 +674,11 @@ def test_a_missing_reference_input_never_relinks_a_held_house_vote_from_the_list
 
 
 def test_recorded_references_relink_only_held_votes_in_scope_and_count_their_conflicts(tmp_path, scoped):
-    """Two recorded references and the listing disagree on one held vote; the others stay byte-for-byte.
+    """Two recorded references disagree on one held vote; the others stay byte-for-byte.
 
     The winner is the recorded reference at the lowest action (17), exactly
-    what a fresh acquisition would publish, and ``conflict_count`` counts both
-    disagreeing references. A held vote the input does not name, and one
+    what a fresh acquisition would publish, and ``conflict_count`` counts the
+    disagreeing one. A held vote the input does not name, and one
     outside the scoped Congresses that the input does name, keep every field.
     """
     import hashlib as _hashlib
@@ -807,7 +705,6 @@ def test_recorded_references_relink_only_held_votes_in_scope_and_count_their_con
     ]
     paths = build_roll_call_votes(
         tmp_path,
-        reader=StubListingReader([_house_listing_record(240, number="9999")]),
         acquirer=StubVoteAcquirer(),
         download_prior=_published({"roll_call_votes": [relinked, unresolved, out_of_scope], "member_votes": members}),
         overlap=0,
@@ -816,7 +713,7 @@ def test_recorded_references_relink_only_held_votes_in_scope_and_count_their_con
     )
     rows = {row["vote_id"]: row for row in pq.read_table(paths[0]).to_pylist()}
     link = {"bill_id": "119-hr-1", "match_rule": "bill_action_recorded_vote", "match_action_index": "17",
-            "match_url": "https://clerk.house.gov/a", "conflict_count": "2"}
+            "match_url": "https://clerk.house.gov/a", "conflict_count": "1"}
     assert rows == {
         "119-house-1-240": relinked | link,
         "119-house-1-241": unresolved,
@@ -850,7 +747,6 @@ def test_the_published_table_still_matches_its_contract(tmp_path, scoped):
     _seed_references(tmp_path, [row for row in _sample_rows() if row["roll_number"] == "240"])
     paths = build_roll_call_votes(
         tmp_path,
-        reader=StubListingReader(),
         acquirer=StubVoteAcquirer(),
         overlap=0,
         download_prior=_no_prior,
@@ -902,11 +798,10 @@ def test_candidate_capture_merges_legacy_rows_and_is_held_on_resume(tmp_path, sc
             )
             return acquired
 
-    reader = StubListingReader([_house_listing_record(1), {"congress": 119, "sessionNumber": 1, "rollCallNumber": 2}])
     first = tmp_path / "first"
     first.mkdir()
-    acquirer = CandidateAcquirer()
-    paths = build_roll_call_votes(first, reader=reader, acquirer=acquirer, overlap=0, download_prior=legacy_prior)
+    acquirer = CandidateAcquirer(house_rolls=(1, 2))
+    paths = build_roll_call_votes(first, acquirer=acquirer, overlap=0, download_prior=legacy_prior)
     rows = {row["roll_number"]: row for row in pq.read_table(paths[0]).to_pylist()}
     assert acquirer.requested == [("house", 2)]
     assert rows["1"]["yea"] == "1" and rows["1"]["tally_kind"] is None
@@ -926,8 +821,8 @@ def test_candidate_capture_merges_legacy_rows_and_is_held_on_resume(tmp_path, sc
 
     second = tmp_path / "second"
     second.mkdir()
-    resumed = CandidateAcquirer()
-    again = build_roll_call_votes(second, reader=reader, acquirer=resumed, overlap=0, download_prior=captured_prior)
+    resumed = CandidateAcquirer(house_rolls=(1, 2))
+    again = build_roll_call_votes(second, acquirer=resumed, overlap=0, download_prior=captured_prior)
     assert resumed.requested == []
     assert pq.read_table(again[0]).to_pylist() == pq.read_table(paths[0]).to_pylist()
     assert pq.read_table(again[1]).to_pylist() == pq.read_table(paths[1]).to_pylist()
@@ -989,10 +884,9 @@ class RealBodyAcquirer(StubVoteAcquirer):
 
 
 def _real_run(output_dir, download_prior, *, acquirer=None, overlap=25):
-    acquirer = acquirer or RealBodyAcquirer(senate_rolls=(1,))
+    acquirer = acquirer or RealBodyAcquirer(senate_rolls=(1,), house_rolls=(240,))
     paths = build_roll_call_votes(
         output_dir,
-        reader=StubListingReader([_house_listing_record(240)]),
         acquirer=acquirer,
         overlap=overlap,
         download_prior=download_prior,
@@ -1013,7 +907,7 @@ def test_a_prior_published_before_vote_day_is_backfilled_without_a_refetch(tmp_p
 
     The prior is the real bodies' own published rows with ``vote_day`` removed
     (as every row published before the column existed looks), plus three
-    House roll calls the listing no longer reaches: one linkage-only (no
+    House roll calls the index no longer lists: one linkage-only (no
     tally, though its date is readable), one held with a Congress.gov UTC
     instant, and one held with no date at all.
     """
@@ -1047,7 +941,7 @@ def test_a_prior_published_before_vote_day_is_backfilled_without_a_refetch(tmp_p
 
     second = tmp_path / "second"
     second.mkdir()
-    acquirer = RealBodyAcquirer(senate_rolls=(1,))
+    acquirer = RealBodyAcquirer(senate_rolls=(1,), house_rolls=(240,))
     rows = _real_run(second, legacy_prior, acquirer=acquirer, overlap=0)
     assert acquirer.requested == [], "both real roll calls are held, so neither is fetched again"
     assert {vote_id: row["vote_day"] for vote_id, row in rows.items()} == {
@@ -1108,3 +1002,14 @@ def test_a_prior_that_has_vote_day_fills_only_its_nulls_and_is_not_rewritten_whe
     before = (prior.read_bytes(), prior.stat().st_ino, prior.stat().st_mtime_ns)
     repair()
     assert (prior.read_bytes(), prior.stat().st_ino, prior.stat().st_mtime_ns) == before, "nothing to fill, no rewrite"
+
+
+def test_the_shared_workflow_withholds_the_api_key_from_this_keyless_rollup():
+    """Every test above runs with the keys stripped (``conftest.isolate_env``); the job is not handed one either."""
+    import yaml
+
+    workflow = yaml.safe_load((Path(__file__).resolve().parents[1] / ".github/workflows/_rollup.yml").read_text())
+    [step] = [step for step in workflow["jobs"]["rollup"]["steps"] if step.get("name") == "Run rollup"]
+    assert step["env"]["DATA_GOV_API_KEY"] == (
+        "${{ inputs.command != 'run-rollup-roll-call-votes' && secrets.DATA_GOV_API_KEY || '' }}"
+    )

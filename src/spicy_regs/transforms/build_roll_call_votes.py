@@ -1,12 +1,19 @@
 """Build roll-call and member-vote tables from complete source enumerations.
 
 Each chamber's own session index determines which votes to acquire: the
-Clerk's EVS pages for the House, the LIS vote menu for the Senate. Congress.gov's
-House listing adds its linkage and keys where it serves (the 115th Congress
-on). Bill references enrich those votes independently: an unlinked procedural
-vote still has its own tally and member positions. House action references may
-add keys before an index catches up; Senate references alone never establish a
-complete Senate selection.
+Clerk's EVS pages for the House, the LIS vote menu for the Senate. Both hosts
+are keyless, so the rollup needs no credential. The bill family's recorded
+references are the only linkage: an unlinked procedural vote still has its own
+tally and member positions. House action references may add keys before an
+index catches up; Senate references alone never establish a complete Senate
+selection.
+
+Congress.gov's ``house-vote`` listing was retired as a second linkage source
+(2026-09-26): over the 115th-119th it listed exactly the Clerk index's 5,079
+House roll calls, won no published link and changed no conflict count, and
+linked only 115-1-527 and -528 (H.R. 3354), which the Clerk files state as
+their own ``legis-num``. Receipt:
+``~/Work/corpora/fork-execution-2026-09-21/votes-backfill-2026-09-26/keyless/``.
 
 Acquisition is bounded by MAX_VOTES_PER_RUN. Unseen keys precede held correction
 refreshes so a small cap cannot stall backfill. OVERLAP_VOTES applies separately
@@ -35,20 +42,11 @@ from spicy_docs.interpretation.vote_matching import (
     VoteKey,
     VoteMatchError,
     VoteReference,
-    house_vote_references,
     index_vote_references,
     match_votes,
-    read_house_vote_key,
 )
-from spicy_docs.reading.paged_json import PagedJsonBudget
 from spicy_docs.schemas.congress_activity_tables import shape_member_vote, shape_roll_call_vote
 from spicy_docs.sources.congress.bill_status import BillIdentity, BillSourceError
-from spicy_docs.sources.congress.listing import (
-    LIST_ROUTES,
-    MAX_LIMIT,
-    CongressListingReader,
-    list_route_url,
-)
 from spicy_docs.sources.congress.votes import (
     VoteAcquirer,
     VoteBudget,
@@ -60,10 +58,8 @@ from spicy_docs.sources.congress.votes import (
 )
 
 from spicy_regs.sources import r2
-from spicy_regs.sources.congress_bills import API_KEY_ENV_VARS, _resolve_api_key
 from spicy_regs.transforms.build_bill_family import VOTE_REFERENCES_TABLE
 from spicy_regs.transforms.congress_scope import congresses_from_env, default_congresses, sessions_of
-from spicy_regs.transforms.congress_walk import ListingSource
 from spicy_regs.transforms.table_merge import merge_contract_table, published_table
 
 if TYPE_CHECKING:
@@ -84,13 +80,6 @@ class VoteSource(Protocol):
     def list_senate_votes(self, congress: int, session: int) -> Any: ...
 
 
-LIST_BUDGET = PagedJsonBudget(
-    max_requests=5,  # measured retry bound: see fork-execution-2026-09-21/retry-measurement-2026-09-22
-    max_page_bytes=8 * 1024 * 1024,
-    timeout_seconds=60.0,
-    min_request_interval_seconds=0.2,
-)
-
 #: Each publisher request is paced at two a second.
 VOTE_BUDGET = VoteBudget(
     max_requests=4,
@@ -98,8 +87,6 @@ VOTE_BUDGET = VoteBudget(
     timeout_seconds=60.0,
     min_request_interval_seconds=0.5,
 )
-
-MAX_PAGES = 40
 
 #: Bound per-run source requests; larger selections resume from prior outputs.
 MAX_VOTES_PER_RUN = 1_500
@@ -116,7 +103,9 @@ OUTPUT = "roll_call_votes.parquet"
 #: The columns the reference table's rows are read back through. Each is a
 #: field of the ``VoteReference`` the family wrote, so nothing is re-derived.
 REFERENCE_COLUMNS = ("bill_id", "chamber", "congress", "session", "roll_number", "action_index", "url", "date")
-LINK_RULE_VERSION = "recorded-vote-first-numeric-action-v2"
+#: v3: the recorded reference is the only linkage; v2 indexed Congress.gov's
+#: listing after it.
+LINK_RULE_VERSION = "recorded-vote-numeric-action-v3"
 LINK_COLUMNS = ("bill_id", "match_rule", "match_action_index", "match_url", "conflict_count")
 IDENTITY_COLUMNS = ("congress", "chamber", "session", "roll_number")
 #: The bill family's reference: the bill's own action names the roll call.
@@ -153,7 +142,7 @@ def _recorded_vote_references(
 
     Scoped in DuckDB rather than read whole: the table grows one row per
     recorded vote per action across every Congress the family has run, and this
-    rollup only ever matches the ones its own listing walk reached.
+    rollup only ever matches the Congresses in its own scope.
 
     ``ORDER BY`` makes the first-wins tie-break a stated rule rather than the
     scan's accident. ``index_vote_references`` keeps the first reference it
@@ -170,7 +159,7 @@ def _recorded_vote_references(
         if evidence is not None:
             evidence.event("vote-reference-input", available=False, rule_version=LINK_RULE_VERSION)
         logger.info(
-            "Roll-call votes: no published {} table — the listing's own linkage is the only one this run",
+            "Roll-call votes: no published {} table — no roll call is linked to a bill this run",
             VOTE_REFERENCES_TABLE,
         )
         return None
@@ -326,11 +315,10 @@ def _relink_held_votes(
 
     A held vote in scope is relinked only when the bill family's recorded
     references name it; its link is then exactly what a fresh acquisition
-    would publish (the recorded reference always wins the index, and
-    ``conflict_count`` still counts every disagreeing reference). The House
-    listing's action-less reference never replaces a held link here, and an
-    unpublished input (``recorded is None``) skips the refresh entirely: an
-    absent optional input or an unresolved vote is not deletion evidence.
+    would publish (the first recorded reference wins the index, and
+    ``conflict_count`` counts every later one that disagrees). An unpublished
+    input (``recorded is None``) skips the refresh entirely: an absent
+    optional input or an unresolved vote is not deletion evidence.
     Only identity and link columns are read into Python and only link
     columns are replaced; native fields and member rows never pass through
     here. O(prior rows).
@@ -417,7 +405,6 @@ def _repair_held_votes(
 def build_roll_call_votes(
     output_dir: Path,
     *,
-    reader: ListingSource | None = None,
     acquirer: VoteSource | None = None,
     max_votes: int = MAX_VOTES_PER_RUN,
     overlap: int = OVERLAP_VOTES,
@@ -427,35 +414,21 @@ def build_roll_call_votes(
 ) -> tuple[Path, Path]:
     """Build both chambers; optional bill links never restrict native selection.
 
-    Index/menu/listing failures propagate before either output is written.
+    Index and menu failures propagate before either output is written.
     Unseen votes take priority over correction refreshes, with overlap per
     chamber for ``open_congresses`` only (default: ``default_congresses()``,
     the sitting Congress and, just after a boundary, the outgoing one).
     """
-    if reader is None:
-        api_key = _resolve_api_key()
-        if not api_key:
-            raise RuntimeError(f"Roll-call votes need an api.data.gov key (set one of {', '.join(API_KEY_ENV_VARS)})")
-        if evidence is not None:
-            evidence.credential = api_key
-        reader = CongressListingReader(
-            budget=LIST_BUDGET, api_key=api_key,
-            transport=None if evidence is None else evidence.transport(stage="vote-listing", max_bytes=LIST_BUDGET.max_page_bytes),
-        )
     acquirer = acquirer or VoteAcquirer(
         budget=VOTE_BUDGET,
         transport=None if evidence is None else evidence.transport(stage="vote-source", max_bytes=VOTE_BUDGET.max_bytes),
     )
 
-    # 1. Population from each chamber's own session index; linkage from
-    # Congress.gov's House listing, which is an empty success before the 115th
-    # Congress and so never bounds the House selection.
+    # 1. Population from each chamber's own session index.
     congresses = congresses_from_env()
-    route = LIST_ROUTES["house-vote"]
-    records: list[object] = []
     listed_keys: set[VoteKey] = set()
     for congress in congresses:
-        before, indexed = len(records), len(listed_keys)
+        indexed = len(listed_keys)
         for session in sessions_of(congress):
             # The owner reader proves each index's identity and refuses an
             # empty, failed or gapped one; a refusal cannot establish a
@@ -464,33 +437,12 @@ def build_roll_call_votes(
             listed_keys.update(locator_from_index_entry(index, entry).as_vote_key() for entry in index.votes)
             menu = acquirer.list_senate_votes(congress, session).menu
             listed_keys.update(locator_from_menu_entry(menu, entry).as_vote_key() for entry in menu.votes)
-            url = list_route_url(route, congress=congress, session=session, limit=MAX_LIMIT)
-            for page in reader.records(route, url, max_pages=MAX_PAGES):
-                records.extend(page.records)
-        logger.info(
-            "Roll-call votes: Congress {} — {:,} roll calls in the chambers' indexes, {:,} House votes listed by Congress.gov",
-            congress, len(listed_keys) - indexed, len(records) - before,
-        )
+        logger.info("Roll-call votes: Congress {} — {:,} roll calls in the chambers' indexes", congress, len(listed_keys) - indexed)
 
-    listed_keys.update(read_house_vote_key(record) for record in records)
-    listing_references: list[VoteReference] = []
-    for record in records:
-        try:
-            listing_references.extend(house_vote_references((record,)))
-        except (VoteMatchError, BillSourceError) as error:
-            # The identity was validated independently. A malformed optional
-            # bill reference must not discard that source vote.
-            logger.warning(
-                "Roll-call votes: optional House bill reference refused for {}: {}",
-                read_house_vote_key(record),
-                error,
-            )
-
-    # The bill's own action is the stronger statement, so it is indexed first
-    # and wins a disagreement; the listing's is indexed after it.
+    # Linkage: the bill's own action names the roll call.
     recorded_references = _recorded_vote_references(output_dir, congresses, download_prior, evidence=evidence)
     recorded = None if recorded_references is None else frozenset(r.vote for r in recorded_references)
-    index = index_vote_references((*(recorded_references or ()), *listing_references))
+    index = index_vote_references(recorded_references or ())
     # Per vote, not per run: the contract's sentence is "how many later
     # references disagreed with the one that won", which is a fact about one
     # roll call. A single run-wide number stamped on every row would say that
@@ -514,7 +466,7 @@ def build_roll_call_votes(
         held = _held_votes(prior_file)
         held_links = _repair_held_votes(prior_file, held, index, recorded, congresses, evidence=evidence)
 
-    # House action references can precede the House listing. Senate scope
+    # House action references can precede the Clerk's index. Senate scope
     # comes from its own menu, never from a bill-only sample.
     ordered = sorted(
         listed_keys | {key for key in index.by_vote if key.chamber == "house"},
@@ -586,12 +538,9 @@ def build_roll_call_votes(
             )
         )
         # A re-read held vote keeps its published link unless the recorded
-        # input names it now: neither silence nor the listing's action-less
-        # reference replaces a link the recorded input established.
+        # input names it now: silence never replaces an established link.
         published = held_links.get(vote_rows[-1]["vote_id"])
-        if published is not None and key not in (recorded or ()) and (
-            reference is None or published["match_rule"] == RECORDED_RULE
-        ):
+        if published is not None and key not in (recorded or ()):
             vote_rows[-1].update(published)
         for member in vote.member_votes:
             member_rows.append(shape_member_vote(member, vote=vote))
