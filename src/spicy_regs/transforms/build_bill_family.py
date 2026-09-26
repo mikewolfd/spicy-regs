@@ -615,31 +615,29 @@ def _processed_capture(entry: BillVersionCapture) -> bool:
 
 @dataclass(frozen=True, slots=True)
 class PriorIndex:
-    """Published status stamps, processed bodies and completed XML pairs."""
+    """Published status stamps, processed bodies and completed XML pairs, each looked up by bill."""
 
     bill_text_dates: Mapping[str, str | None]
-    printings: Collection[str]
-    xml_printings: Collection[str] = field(default_factory=frozenset)
+    #: Version codes with a published processed body, by bill. Keyed so a
+    #: lookup costs one bill's codes: the scan it replaces ran over every held
+    #: printing once per archive member, O(bills x printings) a run (3.6 s over
+    #: 18,924 bills and 2,394 held printings at 55671b43, and growing with both).
+    printings: Mapping[str, Collection[str]] = field(default_factory=dict)
+    #: Version codes with a complete published XML body and section rows, by bill.
+    xml_printings: Mapping[str, Collection[str]] = field(default_factory=dict)
     pairs: Collection[tuple[str, str, str]] = field(default_factory=frozenset)
     pending_bills: Collection[str] = field(default_factory=frozenset)
     #: Every published ``section_diffs`` key, by bill, less the bill: what a
     #: rebuild checks against the pairs its status establishes, retiring the rest.
     published_pairs: Mapping[str, Collection[tuple[str, str, str, str]]] = field(default_factory=dict)
 
-    @property
-    def is_cold(self) -> bool:
-        """True when the prior tables held no bills and no processed printings."""
-        return not self.bill_text_dates and not self.printings
-
     def held_codes(self, bill_id: str) -> set[str]:
         """The version codes this bill has a published processed body for."""
-        prefix = f"{bill_id}\x1f"
-        return {key[len(prefix) :] for key in self.printings if key.startswith(prefix)}
+        return set(self.printings.get(bill_id, ()))
 
     def xml_codes(self, bill_id: str) -> set[str]:
         """The version codes this bill has a complete published XML body and section rows for."""
-        prefix = f"{bill_id}\x1f"
-        return {key[len(prefix) :] for key in self.xml_printings if key.startswith(prefix)}
+        return set(self.xml_printings.get(bill_id, ()))
 
     def pending_pairs(
         self, status: Any, xml_codes: Collection[str] | None = None, completed: Collection[tuple[str, str, str]] = ()
@@ -711,10 +709,10 @@ def _prior_index(paths: Mapping[str, Path | None]) -> PriorIndex:
             ).fetchall()
         )
 
-    printings: set[str] = set()
+    printings: dict[str, set[str]] = {}
     listed: dict[str, set[str]] = {}
     dates: dict[tuple[str, str], str] = {}
-    xml_printings: set[str] = set()
+    xml_printings: dict[str, set[str]] = {}
     section_counts = {}
     sections_path = paths.get("bill_sections")
     if sections_path is not None and not _has_columns(sections_path, ("bill_id", "version_code", "source")):
@@ -750,20 +748,20 @@ def _prior_index(paths: Mapping[str, Path | None]) -> PriorIndex:
                 dates[(row["bill_id"], row["version_code"])] = row["version_date"] or ""
             if row["source"] != ACQUIRED_SOURCE or not row["sha256"] or not row["byte_size"]:
                 continue
-            key = f"{row['bill_id']}\x1f{row['version_code']}"
+            bill, code = row["bill_id"], row["version_code"]
             kind = _body_kind(row["content_type"], row["format_name"])
             if kind == "xml":
                 count = row["section_count"]
                 if sections_path is None or count is None or not count.isdigit():
                     continue
-                if int(count) != section_counts.get((row["bill_id"], row["version_code"]), 0):
+                if int(count) != section_counts.get((bill, code), 0):
                     continue
-                xml_printings.add(key)
+                xml_printings.setdefault(bill, set()).add(code)
             elif kind == "pdf" and row["cleanup_json"] is None:
                 continue
             elif kind is None:
                 continue
-            printings.add(key)
+            printings.setdefault(bill, set()).add(code)
     pairs: set[tuple[str, str, str]] = set()
     published: dict[str, set[tuple[str, str, str, str]]] = {}
     diffs_path = paths.get("section_diffs")
@@ -793,10 +791,12 @@ def _prior_index(paths: Mapping[str, Path | None]) -> PriorIndex:
                 and count == child_counts.get(key, 0)
             ):
                 pairs.add((key[0], key[1], key[3]))
-    logger.info("Bill family: prior holds {:,} bills and {:,} processed printings", len(text_dates), len(printings))
-    pending_bills = {
-        bill for bill, codes in listed.items() if any(f"{bill}\x1f{code}" not in printings for code in codes)
-    }
+    logger.info(
+        "Bill family: prior holds {:,} bills and {:,} processed printings",
+        len(text_dates),
+        sum(len(codes) for codes in printings.values()),
+    )
+    pending_bills = {bill for bill, codes in listed.items() if not codes <= printings.get(bill, set())}
     # The surviving version rows cannot establish which source rows were lost.
     # Source counts are independent of acquisition paths: congress/govinfo
     # duplicates count once, and uploaded/PDF-twin rows never fill a source gap.
@@ -808,7 +808,7 @@ def _prior_index(paths: Mapping[str, Path | None]) -> PriorIndex:
     )
     for bill, codes in listed.items():
         established = _code_pairs([(code, dates[(bill, code)]) for code in sorted(codes)])
-        xml = {code for code in codes if f"{bill}\x1f{code}" in xml_printings}
+        xml = xml_printings.get(bill, set())
         # A missing comparison, and a published one no established neighbour
         # pair accounts for -- backward, or skipping a printing -- both reopen
         # the bill; the rebuild computes the first and retires the second.
