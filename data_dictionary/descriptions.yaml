@@ -2549,8 +2549,11 @@ tables:
       Congress until the next entry, while the MODS stamps them with the filing
       one, so `bills_congress_mismatch` and `distinct_bills_beyond_index` count
       them (45 on -117hrpt705, 225 on -118hrpt967; replay receipt
-      `print-subheading-2026-09-26/`). A bill that states its own Congress
-      inline (`H.R. 6752, 115th Cong.`) still takes the report's. A committee
+      `print-subheading-2026-09-26/`). Since `bill_number` 005 a bill the
+      print sets its own Congress beside (`H.R. 6752, 115th Cong.`, `S. Res.
+      116, 112th Congress`) takes that one ahead of any subheading, and those
+      count the same way (38 citations over the 40 reports; receipt
+      `print-inline-congress-2026-09-26/`). A committee
       name both chambers hold
       (`Committee on the Judiciary`, `on the Budget`, `on Veterans' Affairs`,
       `on Armed Services`, `on Appropriations`) resolves to the chamber of the
