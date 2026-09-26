@@ -701,12 +701,12 @@
       "audits": [
         {
           "disposition": "qualified",
-          "pin": "43130abc",
+          "pin": "a6ff3892",
           "pin_kind": "artifact",
-          "date": "2026-09-25"
+          "date": "2026-09-26"
         }
       ],
-      "statement": "qualified at `43130abc…` (2026-09-25): 2,981 rows over 38 acts, all re-read under `table3-native-rows-v2` with capture-bound checkpoints. Every row replays cell for cell against its retained page. Act 119-37 has all 110 native rows, including the blank act-section rows at pages 511, 534, 534 and 563. Every earlier row survives in order. The walk ends at release point 119-73. Receipt: `repair-qualification-2026-09-25/congress-documents/`."
+      "statement": "qualified at `a6ff3892…` (2026-09-26): table `38d110cd…`, 2,983 rows over 40 acts, derived from OLRC's Table III bulk file at release point 119-73. It equals the replay of the bulk derivation row for row on `(act_key, seq)`, in every column but `observed_at`. That replay was compared with the page-walk table `fd1609ad…`, whose rows had replayed cell for cell against their retained pages on 2026-09-25. All 2,981 of those rows survive, with four act-level columns (`stated_key`, `congress`, `act_date`, `statutes_at_large_volume`) restated in the file's spelling. 119-30 and 119-53 are added; the walk never reached them, and each was probed against its OLRC page. The R8 audit pairs all 2,981 prior identities, removes none and fails nothing. Receipt: `table3-bulk-2026-09-26/` (`live/`)."
     },
     {
       "task": "T08",
