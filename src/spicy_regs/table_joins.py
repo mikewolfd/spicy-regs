@@ -94,8 +94,12 @@ JOINS: tuple[Join, ...] = (
     # The bill family and the tables that name its bills.
     _join("bill_actions", "bill_id", _BILL, "bill_id", 38_559, 0),
     _join("bill_committee_actions", "bill_id", _BILL, "bill_id", 3_009, 16,
-          reason="16 117th-Congress bills (e.g. 117-hr-8593) are absent from congress_bills; traced by the ledger "
-                 "session."),
+          reason="11 are real 117th-Congress bills congress_bills lacks: its rows below the 118th are the retired "
+                 "list walk's, which misses 1,299 BILLSTATUS bills across the 108th-117th (199 in the 117th) until "
+                 "the bill family is run for them. 2 are Senate reports keyed to their filing Congress, fixed at "
+                 "9818678 and re-keyed by the print-citation runs; 2 are bills a House report prints under a "
+                 "'116th Congress' subheading, keyed to the report's Congress; 1 (118-hr-14106) is the publisher's "
+                 "misprint. Receipt join-gaps-2026-09-26/d/."),
     _join("bill_committees", "bill_id", _BILL, "bill_id", 37_473, 0),
     _join("bill_publisher_summaries", "bill_id", _BILL, "bill_id", 17_839, 0),
     _join("bill_sections", "bill_id", _BILL, "bill_id", 1_849, 0),
@@ -127,14 +131,20 @@ JOINS: tuple[Join, ...] = (
     _join("member_votes", "bioguide_id", "members", "bioguide_id", 452, 0),
     _join("committee_assignments", "bioguide_id", "members", "bioguide_id", 532, 0),
     _join("member_votes", "vote_id", "roll_call_votes", "vote_id", 1_579, 0),
-    _join("committee_assignments", "system_code", "committees", "system_code", 163, 5, "scope",
-          "Five House codes (e.g. hsjp00, hsec00) are not in the committees roster; traced by the ledger session."),
+    _join("committee_assignments", "system_code", "committees", "system_code", 163, 5, "design",
+          "28 seats have no Congress.gov code to join and are never matched by name: 25 House seats on the "
+          "Clerk's joint committees EC00, IT00, JL00 and JP00 (typed joint with no Congress.gov code, so they keep "
+          "the legacy hs spelling; the Joint Economic Committee has three Congress.gov codes) and 3 Senate seats on "
+          "JSIK00, the 2024 inaugural committee, which Congress.gov lists in no Congress. Receipt "
+          "join-gaps-2026-09-26/e/."),
     _join("bill_committees", "system_code", "committees", "system_code", 116, 0),
     _join("committee_meetings", "committee_system_code", "committees", "system_code", 212, 0),
     _join("hearing_bill_links", "committee_system_code", "committees", "system_code", 4, 0),
     _join("hearing_bill_links", "package_id", "hearing_transcripts", "package_id", 9, 0),
-    _join("hearing_transcripts", "event_id", "committee_meetings", "event_id", 15, 7, "scope",
-          "committee_meetings covers a narrower window than the hearings; traced by the ledger session."),
+    _join("hearing_transcripts", "event_id", "committee_meetings", "event_id", 15, 7,
+          reason="The 7 are 118th-Congress House meetings Congress.gov updated in 2026 when their transcripts "
+                 "printed; committee_meetings listed only the current Congress. It now keeps the previous one, and "
+                 "its next run lists them. Receipt join-gaps-2026-09-26/f/."),
     _join("report_sections", "part_id", "committee_reports", "part_id", 142, 0),
     _join("law_code_sections", "law_id", "laws", "law_id", 70, 0),
     # Regulations.gov and the Federal Register.
@@ -156,10 +166,16 @@ JOINS: tuple[Join, ...] = (
     _join("org_committee_links", "committee_id", "fec_committees", "committee_id", 3_633, 0),
     _join("fec_source_records", "collection_id", "fec_collections", "collection_id", 647, 0),
     # Courts.
-    _join("court_opinions", "cluster_id", "court_opinion_clusters", "cluster_id", 10_069_107, 21,
-          reason="21 cluster ids at the top of the id range are beyond the clusters table."),
-    _join("court_citations", "cluster_id", "court_opinion_clusters", "cluster_id", 7_844_636, 63,
-          reason="63 cluster ids at the top of the id range are beyond the clusters table."),
+    _join("court_opinions", "cluster_id", "court_opinion_clusters", "cluster_id", 10_069_107, 21, "scope",
+          "The publisher cuts each export at a different hour, clusters first (2026-06-30: 08:16 UTC, opinions "
+          "09:56), so 21 opinions name newer clusters. All 21 are RECAP trial-court opinions that opinion search, "
+          "the clusters' catch-up, does not index, so they resolve only with the next export. Receipt "
+          "join-gaps-2026-09-26/i/."),
+    _join("court_citations", "cluster_id", "court_opinion_clusters", "cluster_id", 7_844_636, 63, "scope",
+          "The publisher cuts citations hours after clusters (2026-06-30: 19:14 vs 08:16 UTC), so 63 name newer "
+          "clusters. The clusters' id-keyed catch-up adds the 43 search indexes; the other 20 were merged away "
+          "since or are not indexed. Re-record at 20 once that catch-up is published. Receipt "
+          "join-gaps-2026-09-26/i/."),
     _join("court_dockets", "cl_docket_id", "court_opinion_clusters", "cl_docket_id", 11_475, 9_214, "design",
           "court_dockets is a PACER docket selection; most PACER dockets have no published opinion."),
     # Federal spending and registration.
