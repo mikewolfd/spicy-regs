@@ -32,6 +32,11 @@ BASELINE_RECEIPTS = (
 #: not key. ``empty``: the child publishes no key yet.
 KINDS = ("complete", "scope", "design", "empty")
 
+#: A complete join reports up to this many new orphans, or this share of its
+#: keys if larger, as LAG instead of failing (see ``Join.lag_allowance``).
+LAG_MIN = 3
+LAG_SHARE = 0.0001
+
 
 @dataclass(frozen=True)
 class Join:
@@ -62,6 +67,17 @@ class Join:
         """The baseline truncated to four decimals; ``None`` when the child had no keys to resolve."""
         pct = self.baseline_pct
         return None if pct is None else math.floor(pct * 10_000) / 10_000
+
+    def lag_allowance(self, keys: int) -> int:
+        """New orphans a complete join tolerates as lag before it fails.
+
+        A growing child can name a key its parent publishes a run later (a
+        report citing a bill BILLSTATUS has not served yet, a document naming a
+        docket before the gap fill reaches it), and failing on each such orphan
+        trains people to ignore the check. Scope and design joins keep the pure
+        rate floor: their missing count grows with the child by definition.
+        """
+        return max(LAG_MIN, math.ceil(keys * LAG_SHARE)) if self.kind == "complete" else 0
 
 
 def _join(child: str, child_columns: str | tuple[str, ...], parent: str, parent_columns: str | tuple[str, ...],

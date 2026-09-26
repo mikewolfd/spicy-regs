@@ -76,7 +76,9 @@ def _declared(keys: int, missing: int, kind: str = "complete") -> table_joins.Jo
 
 @pytest.mark.parametrize(("child", "declared", "status"), [
     (["a", "b", None], _declared(2, 0), "OK"),
-    (["a", "b", "orphan"], _declared(2, 0), "BELOW"),
+    (["a", "b", "orphan"], _declared(2, 0), "LAG"),
+    (["a", "b", "o1", "o2", "o3", "o4"], _declared(2, 0), "BELOW"),
+    (["a", "orphan"], _declared(2, 0, "scope"), "BELOW"),
     (["a", "orphan"], _declared(2, 1, "scope"), "OK"),
     (["a"], _declared(0, 0, "empty"), "UNBASELINED"),
     ([None], _declared(0, 0, "empty"), "EMPTY"),
@@ -86,7 +88,7 @@ def test_the_live_check_holds_each_join_to_its_floor(tmp_path, child, declared, 
     paths = _tables(tmp_path, child, ["a", "b"])
     result = live.measure(duckdb.connect(), declared, paths.__getitem__)
     assert result["status"] == status
-    if status == "BELOW":
+    if status == "LAG":
         assert result["examples"] == ["orphan"] and result["missing"] == 1
     assert (status in live.FAILING) == (status in {"BELOW", "UNBASELINED", "EMPTIED"})
 
@@ -98,7 +100,7 @@ def test_a_composite_join_needs_every_column_to_match(tmp_path):
     pq.write_table(pa.table({"bill_id": ["b1"], "version_code": ["ih"]}), parent)
     join = table_joins.Join("child", ("bill_id", "version_code"), "parent", ("bill_id", "version_code"), 2, 0)
     result = live.measure(duckdb.connect(), join, {"child": str(child), "parent": str(parent)}.__getitem__)
-    assert (result["status"], result["missing"], result["examples"]) == ("BELOW", 1, ["b1|enr"])
+    assert (result["status"], result["missing"], result["examples"]) == ("LAG", 1, ["b1|enr"])
 
 
 def test_the_live_check_names_the_ledger_destination_or_refuses(tmp_path, capsys):
