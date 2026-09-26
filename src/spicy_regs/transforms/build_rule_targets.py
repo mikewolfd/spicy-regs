@@ -35,7 +35,9 @@ OUTPUT = "rule_targets.parquet"
 # v3: labelled FR docket values join (linked_docket_id), zero-padded and en-dash FR numbers
 # resolve on their comparison key, and first_seen/last_seen are Eastern days, not instants.
 # v4: a docket value naming several dockets joins each (linked_docket_ids), one edge per docket.
-ACTOR_ID = "spicy-regs:rule-targets:v4"
+# v5: SpicyDocs 0.35.0 reads a docket named after prose (D1) and folds Regulations.gov's typed FR-number separators (D2);
+# rulemaking snapshots record no package version, so the actor carries the reader change.
+ACTOR_ID = "spicy-regs:rule-targets:v5"
 
 COLUMNS = (
     "docket_id",

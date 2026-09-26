@@ -54,7 +54,10 @@ Federal Register docket values are read through their label ("Docket No.
 SSA-2010-0037") and their lists ("Docket Nos. X, Y, and Z") with SpicyDocs'
 `normalize_docket_references`, which keeps a well-formed docket identifier, a
 `-RULE`-family suffix included, as itself, and refuses a value of no docket
-shape or one that opens on prose ("Public Notice: X"). A value naming several
+shape. Since SpicyDocs 0.35.0 it also reads a docket named after prose ("Public
+Notice: X", "FAR Case …, Docket No. X"; owner ruling D1, 2026-09-26), but not a
+former one ("formerly X") or a number behind another system's label ("File No.
+SR-…"). A value naming several
 dockets joins each, keyed as a separate (FR document, docket) pair; a link joins
 only a docket the Regulations.gov records assert, and a link that names none
 stays out as before.

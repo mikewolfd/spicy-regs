@@ -247,7 +247,7 @@ def test_reference_proceeding_threads_rinless_docket_and_preserves_reopening(tmp
         periods[0]["opened_by_artifact_ids_json"]
     )
     assert all(row["method"] == "deterministic" for row in periods)
-    assert all(row["actor_id"] == "spicy-regs:comment-periods:v7" for row in periods)
+    assert all(row["actor_id"] == "spicy-regs:comment-periods:v8" for row in periods)
 
 
 def test_reused_rin_does_not_collapse_or_cross_assign_distinct_dockets(tmp_path):
@@ -918,7 +918,7 @@ def test_a_nonrulemaking_docket_is_a_proceeding_only_on_action_evidence(tmp_path
     assert json.loads(by_docket[staged]["fr_document_ids_json"]) == ["2023-00001@2023-01-03"]
     assert json.loads(by_docket[with_rin]["rins_json"]) == ["2120-AA64"]
     assert not any("2021-06210@2021-03-25" in row["fr_document_ids_json"] for row in proceedings)
-    assert {row["actor_id"] for row in proceedings} == {"spicy-regs:proceedings:v7"}
+    assert {row["actor_id"] for row in proceedings} == {"spicy-regs:proceedings:v8"}
 
     # Its comment period keeps the docket as its anchor, with no proceeding.
     (period,) = pq.read_table(build_comment_periods(tmp_path)).to_pylist()

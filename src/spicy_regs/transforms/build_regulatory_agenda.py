@@ -34,8 +34,12 @@ RELATIONSHIPS_OUTPUT = "agenda_item_proceedings.parquet"
 # instant, not its UTC day. Still v3 under proceedings v6 (listed FR dockets, decisions 32
 # and 33): this code did not change, though its rows move with the proceedings they link
 # (1,834 relationship rows and 496 items on the 2026-09-23 parents from the list join alone).
-ITEM_ACTOR_ID = "spicy-regs:regulatory-agenda-items:v3"
-RELATIONSHIP_ACTOR_ID = "spicy-regs:agenda-item-proceedings:v3"
+# v4: its FR references resolve through the index, and its rows move with the proceedings
+# they link: SpicyDocs 0.35.0 reads a docket named after prose (D1) and folds Regulations.gov's
+# typed FR-number separators (D2). A rulemaking snapshot records no package version, so the
+# actor carries the reader change.
+ITEM_ACTOR_ID = "spicy-regs:regulatory-agenda-items:v4"
+RELATIONSHIP_ACTOR_ID = "spicy-regs:agenda-item-proceedings:v4"
 
 ITEM_COLUMNS = (
     "agenda_item_id",

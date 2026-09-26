@@ -255,8 +255,8 @@ def test_the_index_answers_its_own_rows_record_ids(tmp_path):
         ),
         ("Docket Nos. FMCSA-2001-9709 and FMCSA-00-7382", ("FMCSA-2001-9709", "FMCSA-00-7382")),
         ("Docket ID Number: DOT-OST-2010-0054", ("DOT-OST-2010-0054",)),
-        # A value that opens on prose names nothing, whatever it goes on to mention.
-        ("Public Notice: EIB-2023-0012", ()),
+        # A docket named after prose is read (owner ruling D1, SpicyDocs 0.35.0); a former one is not.
+        ("Public Notice: EIB-2023-0012", ("EIB-2023-0012",)),
         ("Formerly Docket Nos. 2000P-1275, 2000P-1276, and 2006P-0316, Respectively", ()),
         # The one held id the reader refuses: it states no sequence, and no link names it.
         ("GSA-NA-2005", ()),
@@ -351,7 +351,7 @@ def test_labelled_dockets_and_padded_numbers_join_every_rulemaking_table(tmp_pat
     assert (corroboration["first_seen"], corroboration["last_seen"]) == ("2010-02-05", "2010-02-05")
     docket_rin = edges[("SSA-2010-0037", "docket_rin", None, "0960-AG21")]
     assert (docket_rin["first_seen"], docket_rin["last_seen"]) == ("2010-03-10", "2010-03-10")
-    assert {r["actor_id"] for r in targets} == {"spicy-regs:rule-targets:v4"}
+    assert {r["actor_id"] for r in targets} == {"spicy-regs:rule-targets:v5"}
 
     proceedings = pq.read_table(build_proceedings(tmp_path)).to_pylist()
     ssa = next(r for r in proceedings if "SSA-2010-0037" in json.loads(r["docket_ids_json"]))
@@ -362,13 +362,13 @@ def test_labelled_dockets_and_padded_numbers_join_every_rulemaking_table(tmp_pat
         ("federal_register.document_type", "2010-02-05"),
     }
     assert not any(json.loads(r["docket_ids_json"]) == [] for r in proceedings)
-    assert {r["actor_id"] for r in proceedings} == {"spicy-regs:proceedings:v7"}
+    assert {r["actor_id"] for r in proceedings} == {"spicy-regs:proceedings:v8"}
 
     periods = pq.read_table(build_comment_periods(tmp_path)).to_pylist()
     (period,) = [r for r in periods if "federal_register.comments_close_on" in r["source"]]
     assert json.loads(period["docket_ids_json"]) == ["SSA-2010-0037"]
     assert json.loads(period["proceeding_ids_json"]) == [ssa["proceeding_id"]]
-    assert {r["actor_id"] for r in periods} == {"spicy-regs:comment-periods:v7"}
+    assert {r["actor_id"] for r in periods} == {"spicy-regs:comment-periods:v8"}
 
     items_path, relationships_path = build_regulatory_agenda(tmp_path)
     (item,) = pq.read_table(items_path).to_pylist()
@@ -376,8 +376,8 @@ def test_labelled_dockets_and_padded_numbers_join_every_rulemaking_table(tmp_pat
     relationships = {r["source"]: r for r in pq.read_table(relationships_path).to_pylist()}
     assert relationships["docket_rin"]["evidence_date"] == "2010-03-10"
     assert relationships["federal_register_rin"]["evidence_date"] == "2010-02-05"
-    assert {r["actor_id"] for r in relationships.values()} == {"spicy-regs:agenda-item-proceedings:v3"}
-    assert item["actor_id"] == "spicy-regs:regulatory-agenda-items:v3"
+    assert {r["actor_id"] for r in relationships.values()} == {"spicy-regs:agenda-item-proceedings:v4"}
+    assert item["actor_id"] == "spicy-regs:regulatory-agenda-items:v4"
 
 
 def test_the_rulemaking_generation_builds_one_federal_register_index(tmp_path, monkeypatch):
@@ -478,7 +478,7 @@ def test_a_listed_docket_value_joins_each_held_docket_once(tmp_path):
     assert edges == {
         **{(docket, "21-101"): "2011-3678@2011-02-18" for docket in FDA_DOCKETS},
         ("FMCSA-2001-9709", "49-383"): "03-2053@2003-01-29",
-    }, "FMCSA-00-7382 is read but held by no Regulations.gov record, and a prose-first value names none"
+    }, "FMCSA-00-7382 is read but held by no Regulations.gov record; the prose-first notice states no CFR part"
 
     proceedings = pq.read_table(build_proceedings(tmp_path)).to_pylist()
     by_dockets = {r["docket_ids_json"]: r for r in proceedings}
@@ -488,13 +488,17 @@ def test_a_listed_docket_value_joins_each_held_docket_once(tmp_path):
     assert json.loads(fda["cfr_refs_json"]) == ["21-101"]
     fmcsa = by_dockets['["FMCSA-2001-9709"]']
     assert json.loads(fmcsa["fr_document_ids_json"]) == ["03-2053@2003-01-29"]
-    # The prose-first value joined nothing, so its Nonrulemaking docket forms no proceeding.
+    # The prose-first notice names its Nonrulemaking docket, but a RIN-less notice is no action
+    # evidence (decision 32), so that docket still forms no proceeding.
     assert not any(
         "EIB-2023-0012" in r["docket_ids_json"] or "FMCSA-00-7382" in r["docket_ids_json"] for r in proceedings
     )
 
-    periods = pq.read_table(build_comment_periods(tmp_path)).to_pylist()
-    (period,) = periods
+    periods = {r["evidence_ids_json"]: r for r in pq.read_table(build_comment_periods(tmp_path)).to_pylist()}
+    assert set(periods) == {'["2011-3678@2011-02-18"]', '["2023-19952@2023-09-15"]'}
+    # The notice's own comment period now reaches the docket it names after prose.
+    assert json.loads(periods['["2023-19952@2023-09-15"]']["docket_ids_json"]) == ["EIB-2023-0012"]
+    period = periods['["2011-3678@2011-02-18"]']
     assert json.loads(period["docket_ids_json"]) == FDA_DOCKETS
     assert json.loads(period["proceeding_ids_json"]) == [fda["proceeding_id"]]
     assert json.loads(period["evidence_ids_json"]) == ["2011-3678@2011-02-18"]
@@ -755,6 +759,18 @@ def test_the_index_reads_each_link_row_once_and_keys_each_docket_it_names(tmp_pa
             },
         )
         for docket in FDA_DOCKETS
+    ] + [
+        (
+            "EIB-2023-0012",
+            {
+                "source": "fr_docket_links",
+                "evidence_id": "EIB-2023-0012",
+                "document_number": "2023-19952",
+                "publication_date": "2023-09-15",
+                "status": "dated",
+                "candidate_ids": ("2023-19952@2023-09-15",),
+            },
+        )
     ]
     links.unlink()
     assert list(index.docket_links(links)) == first, "replayed, not re-read"

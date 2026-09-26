@@ -34,11 +34,14 @@ def linked_docket_ids(value: object) -> tuple[str, ...]:
 
     SpicyDocs' plural reader answers the single reader's docket alone whenever there is
     one, and otherwise reads a longer label, a note after the docket, or a list ("Docket
-    Nos. X and Y"); a value that opens on prose ("Public Notice: X") names none. On the
-    same parents it joins 160,397 link rows, 817 of them to several dockets, and loses no
-    pair the single reader joined. It reads shape, not existence: 3,239 of the dockets it
-    adds (per link row) are held by no Regulations.gov record, so callers join only the
-    dockets Regulations.gov asserts.
+    Nos. X and Y"). On the same parents it joins 160,397 link rows, 817 of them to several
+    dockets, and loses no pair the single reader joined. Since 0.35.0 it also reads a
+    docket named after prose ("Public Notice: X", "FAR Case 2017-014, Docket No. X"; owner
+    ruling D1 of the 2026-09-26 drift audit), but not a former one ("formerly X") or a
+    number behind another system's label ("File No. SR-…"): on the audit's parents that
+    reads 432 of the 442 held pairs the prose rule missed, 169 of them from action
+    documents (receipt ``drift-qualification-2026-09-26/regulatory/d1d2-fix/``). It reads
+    shape, not existence, so callers join only the dockets Regulations.gov asserts.
     """
     # SpicyDocs is the source-readers extra; a base install imports this module without it.
     from spicy_docs.interpretation.identifier_shapes import normalize_docket_references

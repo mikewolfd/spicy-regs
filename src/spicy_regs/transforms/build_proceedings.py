@@ -43,7 +43,8 @@ OUTPUT = "proceedings.parquet"
 # RIN or a rule stage unites the dockets it names, any other attaching to each (decision 33).
 # v7: identity_predecessors_json is all recorded ancestry, carried from each prior row, not
 # the prior rows one generation overlapped; a sibling sharing only a cited notice is none.
-ACTOR_ID = "spicy-regs:proceedings:v7"
+# v8: SpicyDocs 0.35.0 reads a docket named after prose (D1) and folds Regulations.gov's typed FR-number separators (D2).
+ACTOR_ID = "spicy-regs:proceedings:v8"
 #: Versions whose identity_predecessors_json listed every prior row the group overlapped in
 #: one generation, a sibling sharing a cited notice included (6,786 such entries in 328
 #: rows of snapshot_47cca15e, a no-change rerun). Only their retired ids are ancestry.
