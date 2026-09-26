@@ -188,7 +188,7 @@
       "audits": [
         {
           "disposition": "PARTIAL",
-          "pin": "d380cdc0",
+          "pin": "8ab2a2cf",
           "pin_kind": "artifact",
           "date": "2026-09-26"
         },
@@ -199,7 +199,7 @@
           "date": "2026-09-24"
         }
       ],
-      "statement": "current `d380cdc0…` is PARTIAL (2026-09-26): all 420,166 identities survive with none added, and only update dates and related-bill fields change. All 513 bills that retained 110th–113th BILLSTATUS lists are still absent; the retired list walk left 1,299 missing across the 108th–117th (receipt `join-gaps-2026-09-26/d/`). Scoped repair remains qualified at `4a1949a9…` (2026-09-24). Receipts: `bill-family-d380cdc0-2026-09-26/`, `drift-qualification-2026-09-26/bills-citations/`."
+      "statement": "current `8ab2a2cf…` is PARTIAL (2026-09-26): all 420,166 identities survive, byte-identical to `934c1da3…`. All 513 bills that retained 110th–113th BILLSTATUS lists are still absent, and the retired list walk left 1,299 missing across the 108th–117th (receipt `join-gaps-2026-09-26/d/`). A status-only backfill (`max_version_fetches=0`, one Congress per dispatch) would fill them; costing is in `print-subheading-2026-09-26/backfill-cost.json`. Scoped repair remains qualified at `4a1949a9…` (2026-09-24)."
     },
     {
       "task": "T11",
@@ -482,13 +482,13 @@
       ],
       "audits": [
         {
-          "disposition": "FAILED",
-          "pin": "d380cdc0",
+          "disposition": "qualified",
+          "pin": "8ab2a2cf",
           "pin_kind": "artifact",
           "date": "2026-09-26"
         }
       ],
-      "statement": "current `d380cdc0…` is FAILED (2026-09-26): run 36219598578 at `a555f73` repairs both audited defects. No pair runs backward, 21 pairs reach an enrolled printing, and 119-hr-5334 enrolled, 119-hr-9022 reported and 119-hr-4060 introduced publish every section. The 32 stale pairs retired are exactly 18 backward and 14 that skipped the enrolled printing, and every removed item belongs to one of them. It exposes a new identity defect: a bill printed twice at one stage (119-hr-6644 `eas` and `eas2`) maps both printings to one (bill, version_code, source), so 198 section_diff_items on each side name the other printing's elements and resolve to no section. The generation audit admits every member and evidence `e3ea6ba5…`, bound to this generation, with every body of its expected kind and no credential found. Keyless vote references and archives differ only in re-observation times. The four model outputs remain uncomputed. Receipt: `bill-family-d380cdc0-2026-09-26/`."
+      "statement": "qualified at `8ab2a2cf…` (2026-09-26): SpicyDocs 0.37.0/0.38.0 (runs 36227172365 for the 119th and 36230043425 for the 118th, capped at 10 printing fetches) repair every defect the drift audit and its re-audits found. No pair runs backward; a dateless enrolled printing follows its dated predecessors. `bill_sections` is keyed on `seq` with no duplicate, and 119-hr-5334 enrolled, 119-hr-9022 reported and 119-hr-4060 introduced publish every section. A numbered reprint keeps its own code: 119-hr-6644's `eas` (198 sections) and `eas2` (276) are separate and chain placed-on-calendar → eas → engrossed-amendment-house → eas2 → enrolled, matching independent native parses of both documents; 118-hr-7643's `rh2` is separate, and no row keys a reprint's package under another code. Every diff item resolves to a published section. Each generation's removals are accounted for (32 stale pairs, then 119-hr-6644's 78 misfiled sections, stale row and 2 pairs; keyless tables differ only in re-observation times). The generation audit finds 0 failures, with evidence `18ea08d4…` admitted and bound. Limits: the four model outputs stay uncomputed, and historical bodies before the current Congress are only partly captured. Receipts: `bill-family-d380cdc0-2026-09-26/`, `bill-family-rerun-2026-09-26/`, `bill-family-8ab2a2cf-2026-09-26/`, `repeated-printings-2026-09-26/`."
     },
     {
       "task": "T08",
@@ -652,13 +652,13 @@
       ],
       "audits": [
         {
-          "disposition": "FAILED",
-          "pin": "d57faac3",
+          "disposition": "PARTIAL",
+          "pin": "8f2502b6",
           "pin_kind": "artifact",
           "date": "2026-09-26"
         }
       ],
-      "statement": "current `d57faac3…` is FAILED (2026-09-26): all prior cells and 68 parent recounts pass. Fourteen fresh parents reproduce their `text_sha256`; 13,219 citation spans replay exactly and pass pypdf/regex challenges. All eight new Senate reports cover the 117th Congress but stamp the 118th: 1,915 bill citations and 369 actions target the wrong bills (for example, H.R. 5376 → 118-hr-5376). MODS shares that stamp, and `a5d46aa6…` carried the same fault in six 119th reports. \"CLAUSE S 2(N)\" misreads as 117-s-2. Receipt: `drift-qualification-2026-09-26/bills-citations/`."
+      "statement": "current `8f2502b6…` is PARTIAL (2026-09-26): runs 36226295627 and 36227170848 re-read all 68 held parents under SpicyDocs 0.38.0 (bill_number 004, committee_name 002). The audited defects are repaired: every Senate report keys its bills in the Congress it covers, eight filed in the 118th covering the 117th and six filed in the 119th covering the 118th; Senate reports carry 1,904 Senate committee codes; `CLAUSE S 2(N)` and `S. Con. Res. 2022` are no longer bills; 116-hr-5119 and -5919 now resolve. Against the prior `ae51fc90…`, every removed row is accounted for: 12,684 rows changed only their rule versions, 3,148 re-keyed their target at the same span, and the 3 citations and 4 actions of the refused misreads dropped. The generation audit finds 0 failures, with evidence `54cb6f5f…` admitted and bound. Residuals keep it partial: 117-hr-1132 in 117hrpt705's `Prior Congresses` paragraph still joins the wrong bill, and 31 citations that state their own Congress inline (`H.R. 6752, 115th Cong.`) take the report's. Eight House codes in Senate reports are one correct `House Committee on Transportation` and 7 bare names only the House roster holds, a documented limit. bill_committee_actions → congress_bills misses 17 of 2,956 bills. Receipts: `print-citations-rerun-2026-09-26/`, `print-citations-8f2502b6-defect-check.txt`, `rerun-removals-2026-09-26.txt`."
     },
     {
       "task": "T08",
