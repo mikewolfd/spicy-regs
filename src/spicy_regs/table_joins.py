@@ -174,6 +174,14 @@ JOINS: tuple[Join, ...] = (
           reason="Normalized FR-to-Regulations.gov bridge from the materialized rulemaking snapshot. Each orphan "
                  "is one fill-docket-gaps asked for: 16 answer 404 and 67 answer 400 Invalid ID."),
     _join("fr_docket_links", "document_number", "federal_register", "document_number", 603_702, 0),
+    _join("documents", "fr_doc_num", "federal_register", "document_number", 454_231, 64_761, "design",
+          "fr_doc_num is Regulations.gov's spelling, which zero-pads where the Register did not (every "
+          "2010-2012 number: 2011-01234 is the Register's 2011-1234) and carries errata prefixes, en dashes "
+          "and citations. Compared on spicy-docs' unpadded_federal_register_document_number key, 447,929 of "
+          "the 454,231 values resolve (98.6%); the rest are citations and placeholders ('91 FR 13845', "
+          "'none'), pre-1994 numbers the table does not reach and malformed values. The resolved link is "
+          "interpretation and belongs in a typed layer over both tables, not here. Receipt "
+          "join-map-2026-09-26/fr-link-classify.txt."),
     _join("dockets", "rin", "unified_agenda", "rin", 14_421, 994, "scope",
           "unified_agenda holds every readable edition, Fall 1995 to the newest (not Spring 1995 or Spring 2012, "
           "never published, nor the two 2004 editions SpicyDocs refuses). Of the 994 RINs no edition lists, 536 "

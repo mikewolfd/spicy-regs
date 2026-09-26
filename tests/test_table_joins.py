@@ -46,8 +46,7 @@ def test_the_bundled_joins_are_a_fresh_build_of_the_declarations():
 
 def test_the_contract_shape_carries_no_measurement():
     shaped = table_joins.references()
-    assert shaped["documents"] == [{"child_columns": ["docket_id"], "parent_table": "dockets",
-                                    "parent_columns": ["docket_id"]}]
+    assert {"child_columns": ["docket_id"], "parent_table": "dockets", "parent_columns": ["docket_id"]} in shaped["documents"]
     assert all(set(entry) == {"child_columns", "parent_table", "parent_columns"}
                for entries in shaped.values() for entry in entries)
 

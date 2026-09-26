@@ -731,6 +731,22 @@
       "floor_pct": 100.0
     },
     {
+      "child": "documents",
+      "child_columns": [
+        "fr_doc_num"
+      ],
+      "parent": "federal_register",
+      "parent_columns": [
+        "document_number"
+      ],
+      "kind": "design",
+      "reason": "fr_doc_num is Regulations.gov's spelling, which zero-pads where the Register did not (every 2010-2012 number: 2011-01234 is the Register's 2011-1234) and carries errata prefixes, en dashes and citations. Compared on spicy-docs' unpadded_federal_register_document_number key, 447,929 of the 454,231 values resolve (98.6%); the rest are citations and placeholders ('91 FR 13845', 'none'), pre-1994 numbers the table does not reach and malformed values. The resolved link is interpretation and belongs in a typed layer over both tables, not here. Receipt join-map-2026-09-26/fr-link-classify.txt.",
+      "measured_via": null,
+      "baseline_keys": 454231,
+      "baseline_missing": 64761,
+      "floor_pct": 85.7427
+    },
+    {
       "child": "dockets",
       "child_columns": [
         "rin"
@@ -1285,6 +1301,15 @@
         "parent_table": "dockets",
         "parent_columns": [
           "docket_id"
+        ]
+      },
+      {
+        "child_columns": [
+          "fr_doc_num"
+        ],
+        "parent_table": "federal_register",
+        "parent_columns": [
+          "document_number"
         ]
       }
     ],
