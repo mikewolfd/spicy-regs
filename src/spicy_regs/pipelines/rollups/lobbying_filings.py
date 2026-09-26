@@ -6,23 +6,12 @@ merge with the prior published table happens inside ``build_lobbying_filings``.
 The base class still handles the shrink-guarded R2 upload of the single output.
 """
 
-import os
-from datetime import date
 from pathlib import Path
 from typing import ClassVar
 
+from spicy_regs.env_values import date_env
 from spicy_regs.pipelines.rollups.base import RollupPipeline, make_rollup_app
 from spicy_regs.transforms import build_lobbying_filings
-
-
-def _date_env(name: str) -> date | None:
-    raw = os.environ.get(name, "").strip()
-    if not raw:
-        return None
-    try:
-        return date.fromisoformat(raw)
-    except ValueError as exc:
-        raise ValueError(f"{name} must be YYYY-MM-DD, got {raw!r}") from exc
 
 
 class LobbyingFilingsRollup(RollupPipeline):
@@ -37,8 +26,8 @@ class LobbyingFilingsRollup(RollupPipeline):
         return build_lobbying_filings(
             output_dir,
             evidence=self.source_evidence,
-            since=_date_env("LDA_SINCE"),
-            until=_date_env("LDA_UNTIL"),
+            since=date_env("LDA_SINCE"),
+            until=date_env("LDA_UNTIL"),
         )
 
 

@@ -5,6 +5,11 @@ on:
     - cron: '0 21 * * *'
   workflow_dispatch:
     inputs:
+      since:
+        description: 'Re-read start date (YYYY-MM-DD); blank resumes from the prior table, 1994-01-01 refetches every document'
+        required: false
+        default: ''
+        type: string
       skip_upload:
         description: 'Skip R2 upload (dry run)'
         required: false
@@ -17,6 +22,9 @@ jobs:
     with:
       command: run-rollup-federal-register
       skip_upload: ${{ github.event_name == 'workflow_dispatch' && inputs.skip_upload || false }}
+      fr_since: ${{ inputs.since || '' }}
+      # A full re-read walks about a million documents; the daily resume takes minutes.
+      timeout_minutes: ${{ inputs.since && 240 || 30 }}
 
   docket-links:
     needs: run

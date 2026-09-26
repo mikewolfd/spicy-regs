@@ -374,6 +374,7 @@ DERIVED_SCHEMAS: dict[str, list[tuple[str, str]]] = {
         ("docket_ids_json", "VARCHAR"),
         ("regulation_id_numbers_json", "VARCHAR"),
         ("cfr_references_json", "VARCHAR"),
+        ("topics_json", "VARCHAR"),
         ("html_url", "VARCHAR"),
         ("pdf_url", "VARCHAR"),
         ("body_html_url", "VARCHAR"),

@@ -14,22 +14,12 @@ Two env overrides support catch-up / backfill runs (both optional):
 """
 
 import os
-from datetime import date
 from pathlib import Path
 from typing import ClassVar
 
+from spicy_regs.env_values import date_env
 from spicy_regs.pipelines.rollups.base import RollupPipeline, make_rollup_app
 from spicy_regs.transforms import build_fcc_filings
-
-
-def _date_env(name: str) -> date | None:
-    raw = os.environ.get(name, "").strip()
-    if not raw:
-        return None
-    try:
-        return date.fromisoformat(raw)
-    except ValueError as exc:
-        raise ValueError(f"{name} must be YYYY-MM-DD, got {raw!r}") from exc
 
 
 def _proceedings_env(name: str) -> tuple[str, ...]:
@@ -51,7 +41,7 @@ class FccFilingsRollup(RollupPipeline):
         return build_fcc_filings(
             output_dir,
             evidence=self.source_evidence,
-            since=_date_env("FCC_SINCE"),
+            since=date_env("FCC_SINCE"),
             proceedings=_proceedings_env("FCC_PROCEEDINGS"),
         )
 

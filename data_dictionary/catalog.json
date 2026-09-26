@@ -354,6 +354,7 @@
         "docket_ids_json",
         "regulation_id_numbers_json",
         "cfr_references_json",
+        "topics_json",
         "html_url",
         "pdf_url",
         "body_html_url",

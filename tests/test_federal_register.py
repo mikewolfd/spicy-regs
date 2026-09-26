@@ -15,7 +15,11 @@ from pathlib import Path
 
 import pytest
 
-from spicy_regs.transforms.build_federal_register import COLUMNS, FETCHED_COLUMNS, _shape, build_federal_register
+from spicy_docs.schemas.federal_register import FEDERAL_REGISTER_COLUMNS, project_federal_register_document
+
+from spicy_regs.transforms.build_federal_register import build_federal_register, published_columns
+
+COLUMNS = published_columns()
 
 _RAW_DOC = {
     "document_number": "2024-00001",
@@ -44,10 +48,10 @@ _RAW_DOC = {
 
 
 def test_shape_produces_exact_schema():
-    row = _shape(_RAW_DOC)
+    row = project_federal_register_document(_RAW_DOC)
     # Every fetched column present, and nothing extra; ``rin`` is derived in the merge.
-    assert set(row) == set(FETCHED_COLUMNS)
-    assert COLUMNS == (*FETCHED_COLUMNS, "rin")
+    assert set(row) == set(FEDERAL_REGISTER_COLUMNS)
+    assert COLUMNS == (*FEDERAL_REGISTER_COLUMNS, "rin")
 
 
 def _collision_documents():
@@ -123,13 +127,13 @@ def test_unknown_or_noncanonical_date_refuses_before_output(tmp_path, date_value
 
 
 def test_shape_maps_and_serializes_fields():
-    row = _shape(_RAW_DOC)
+    row = project_federal_register_document(_RAW_DOC)
     assert row["document_number"] == "2024-00001"
     assert row["document_type"] == "Proposed Rule"  # API `type` -> document_type
     # Array fields serialize to JSON strings.
-    assert json.loads(row["docket_ids_json"]) == ["EPA-HQ-OAR-2024-0001", "FRL-1234-01-OAR"]
-    assert json.loads(row["regulation_id_numbers_json"]) == ["2060-AV12"]
-    assert json.loads(row["cfr_references_json"])[0]["part"] == 60
+    assert json.loads(row["docket_ids_json"] or "null") == ["EPA-HQ-OAR-2024-0001", "FRL-1234-01-OAR"]
+    assert json.loads(row["regulation_id_numbers_json"] or "null") == ["2060-AV12"]
+    assert json.loads(row["cfr_references_json"] or "null")[0]["part"] == 60
     # agency_slugs is a comma-joined string of slugs, skipping agencies with none.
     assert row["agency_slugs"] == "environmental-protection-agency"
     # Integer scalars stringify (schema is all-VARCHAR).
@@ -142,7 +146,7 @@ def test_shape_maps_and_serializes_fields():
 
 
 def test_shape_handles_missing_arrays():
-    row = _shape({"document_number": "x"})
+    row = project_federal_register_document({"document_number": "x"})
     assert row["docket_ids_json"] == "[]"
     assert row["regulation_id_numbers_json"] == "[]"
     assert row["cfr_references_json"] == "[]"
@@ -195,7 +199,7 @@ def test_rin_is_derived_for_every_row_whatever_the_priors_width(tmp_path, prior_
     import pyarrow as pa
     import pyarrow.parquet as pq
 
-    columns = FETCHED_COLUMNS if prior_width == "fetched" else COLUMNS
+    columns = FEDERAL_REGISTER_COLUMNS if prior_width == "fetched" else COLUMNS
     prior_rows = [
         {
             "document_number": "P-two",
@@ -225,3 +229,28 @@ def test_rin_is_derived_for_every_row_whatever_the_priors_width(tmp_path, prior_
     assert by_number["P-two"]["rin"] == "1111-AA11", "the first of several; the array keeps the rest"
     assert by_number["P-none"]["rin"] is None
     assert by_number["P-null"]["rin"] is None
+
+
+def test_a_prior_that_predates_topics_merges_and_fresh_rows_carry_them(tmp_path):
+    """The live table predates ``topics_json`` (2026-09-26): its rows read NULL, re-fetched rows gain topics."""
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    width = [c for c in FEDERAL_REGISTER_COLUMNS if c != "topics_json"]
+    prior = [
+        {"document_number": "P-old", "publication_date": "2024-01-01"},
+        {"document_number": "F-again", "publication_date": "2024-03-01"},
+    ]
+    pq.write_table(pa.Table.from_pylist([dict.fromkeys(width) | row for row in prior],
+                                        schema=pa.schema([(c, pa.string()) for c in width])),
+                   tmp_path / "_fr_prior.parquet")
+    fresh = [dict(_RAW_DOC, document_number="F-again", publication_date="2024-03-01",
+                  topics=["Air pollution control", "Reporting and recordkeeping requirements"])]
+
+    out = build_federal_register(tmp_path, since=date(2024, 3, 1), documents=lambda start: iter(fresh),
+                                 download_prior=lambda k, p: False)
+    table = pq.read_table(out)
+    assert table.schema.names == list(COLUMNS)
+    by_number = {row["document_number"]: row for row in table.to_pylist()}
+    assert by_number["P-old"]["topics_json"] is None
+    assert by_number["F-again"]["topics_json"] == '["Air pollution control", "Reporting and recordkeeping requirements"]'

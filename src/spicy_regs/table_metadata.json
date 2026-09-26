@@ -1146,6 +1146,11 @@
         "description": "JSON array of CFR citations as `{title, part, chapter, citation_url}` objects. The join key to the CFR."
       },
       {
+        "column_name": "topics_json",
+        "column_type": "VARCHAR",
+        "description": "JSON array of the publisher's CFR index terms (`topics`, e.g. `[\"Air pollution control\"]`); `[]` when it lists none. NULL on a row not fetched since the column was added (2026-09-26) until a re-read refills it."
+      },
+      {
         "column_name": "html_url",
         "column_type": "VARCHAR",
         "description": "URL of the document's HTML page on federalregister.gov."

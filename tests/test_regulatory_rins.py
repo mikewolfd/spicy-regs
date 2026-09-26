@@ -16,7 +16,9 @@ import pytest
 
 from spicy_regs.ontology.common import JsonReadStats, write_parquet_rows
 from spicy_regs.ontology.rins import proceeding_rins
-from spicy_regs.transforms.build_federal_register import _shape, build_federal_register
+from spicy_docs.schemas.federal_register import project_federal_register_document
+
+from spicy_regs.transforms.build_federal_register import build_federal_register
 from spicy_regs.transforms.build_proceedings import build_proceedings
 
 
@@ -38,12 +40,12 @@ def native_record():
 def test_native_federal_register_keeps_every_rin_in_proceeding(tmp_path):
     native = native_record()
     assert native["regulation_id_numbers"] == ["3206-AO36", "3206-AO80"]
-    shaped = _shape(native)
-    assert json.loads(shaped["regulation_id_numbers_json"]) == native["regulation_id_numbers"]
+    shaped = project_federal_register_document(native)
+    assert json.loads(shaped["regulation_id_numbers_json"] or "null") == native["regulation_id_numbers"]
     fr_path = build_federal_register(tmp_path, documents=lambda since: [native], download_prior=lambda *args: False)
     [hosted] = pq.read_table(fr_path).to_pylist()
     assert hosted["rin"] == "3206-AO36"
-    assert json.loads(hosted["regulation_id_numbers_json"]) == native["regulation_id_numbers"]
+    assert json.loads(hosted["regulation_id_numbers_json"] or "null") == native["regulation_id_numbers"]
     for table, key in (
         ("dockets", "docket_id"),
         ("documents", "document_id"),
@@ -54,9 +56,9 @@ def test_native_federal_register_keeps_every_rin_in_proceeding(tmp_path):
     result = build_proceedings(tmp_path, run_id="native-rins", asserted_at="2026-09-21T00:00:00Z")
     [row] = pq.read_table(result).to_pylist()
     assert row["rin"] is None
-    assert json.loads(row["rins_json"]) == native["regulation_id_numbers"]
-    assert json.loads(row["fr_document_ids_json"]) == ["2026-17334@2026-08-25"]
-    assert json.loads(row["docket_ids_json"]) == []  # No invented parsed docket from freeform source labels.
+    assert json.loads(row["rins_json"] or "null") == native["regulation_id_numbers"]
+    assert json.loads(row["fr_document_ids_json"] or "null") == ["2026-17334@2026-08-25"]
+    assert json.loads(row["docket_ids_json"] or "null") == []  # No invented parsed docket from freeform source labels.
 
 
 @pytest.mark.parametrize(
@@ -78,7 +80,7 @@ def test_complete_rin_reader_and_legacy_limit(row, expected, malformed):
 
 
 def test_documented_all_rin_join_keeps_dated_identities():
-    native = _shape(native_record())
+    native = project_federal_register_document(native_record())
     # Explicit controls: a second publication date and repeated/placeholder RINs.
     other_date = {
         **native,
@@ -106,4 +108,4 @@ def test_documented_all_rin_join_keeps_dated_identities():
         for communication, rin in [("control-first", "3206-AO36"), ("control-second", "3206-AO80")]
         for day in ["2026-08-25", "2026-08-26"]
     ]
-    assert json.loads(native["regulation_id_numbers_json"]) == ["3206-AO36", "3206-AO80"]
+    assert json.loads(native["regulation_id_numbers_json"] or "null") == ["3206-AO36", "3206-AO80"]

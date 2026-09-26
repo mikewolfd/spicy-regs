@@ -37,7 +37,6 @@ publishing a truncated table.
 
 from __future__ import annotations
 
-import os
 from collections.abc import Callable
 from datetime import date, datetime, timedelta
 from operator import itemgetter
@@ -54,6 +53,7 @@ from spicy_docs.sources.congress.listing import (
     list_route_url,
 )
 
+from spicy_regs.env_values import date_env
 from spicy_regs.sources import r2
 from spicy_regs.sources.congress_bills import API_KEY_ENV_VARS, _resolve_api_key, list_identity
 from spicy_regs.transforms.congress_scope import congresses_from_env
@@ -104,17 +104,6 @@ def _prior_max_update_date(prior_file: Path) -> date | None:
         return date.fromisoformat(str(row[0])[:10])
     except ValueError:
         return None
-
-
-def _date_env(name: str) -> date | None:
-    """Parse a ``YYYY-MM-DD`` env var, or None when unset; a malformed value raises ValueError naming it."""
-    raw = os.environ.get(name, "").strip()
-    if not raw:
-        return None
-    try:
-        return date.fromisoformat(raw)
-    except ValueError as exc:
-        raise ValueError(f"{name} must be YYYY-MM-DD, got {raw!r}") from exc
 
 
 def _instant(day: date | None, *, end: bool = False) -> str | None:
@@ -172,8 +161,8 @@ def build_amendments(
 
     # 2. The window: from the stored watermark minus an overlap, forward at
     # most one catch-up span.
-    since = since or _date_env("AMENDMENTS_SINCE")
-    until = until or _date_env("AMENDMENTS_UNTIL")
+    since = since or date_env("AMENDMENTS_SINCE")
+    until = until or date_env("AMENDMENTS_UNTIL")
     if since is None and have_prior:
         watermark = _prior_max_update_date(prior_file)
         since = (watermark - timedelta(days=OVERLAP_DAYS)) if watermark else None

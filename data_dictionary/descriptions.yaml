@@ -556,6 +556,7 @@ tables:
       docket_ids_json: "JSON array of docket identifier strings referenced by the document (e.g. regulations.gov docket numbers). Joins to `dockets`/`documents` via `fr_docket_links`."
       regulation_id_numbers_json: "JSON array of Regulation Identifier Numbers (RINs). The join key to the Unified Agenda. Often `[]`."
       cfr_references_json: "JSON array of CFR citations as `{title, part, chapter, citation_url}` objects. The join key to the CFR."
+      topics_json: "JSON array of the publisher's CFR index terms (`topics`, e.g. `[\"Air pollution control\"]`); `[]` when it lists none. NULL on a row not fetched since the column was added (2026-09-26) until a re-read refills it."
       html_url: "URL of the document's HTML page on federalregister.gov."
       pdf_url: "URL of the document's PDF rendition."
       body_html_url: >-

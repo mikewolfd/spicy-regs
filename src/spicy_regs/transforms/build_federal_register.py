@@ -1,8 +1,11 @@
 """Transform: build ``federal_register.parquet`` from the FR REST API.
 
-Produces the exact 22 all-VARCHAR columns existing consumers expect (the
-``fr-docket-links`` rollup and the UI's ``normalizeFRRow``), so in-repo
-ingestion is a drop-in replacement for the former external path.
+Produces SpicyDocs' public projection (``FEDERAL_REGISTER_COLUMNS``, all
+VARCHAR, through ``project_federal_register_document``) plus the derived
+``rin``: one owner for the column list and the value mapping, not a local
+copy (consolidation plan B2). ``topics_json`` is the publisher's ``topics``;
+a row published before that column existed reads NULL until it is fetched
+again, and a full re-read (``since`` at the epoch) refills every row.
 
 Incremental by design: best-effort prior from R2, fetch documents published
 since its max ``publication_date`` minus a short overlap, then dedup on
@@ -24,7 +27,6 @@ while the merge preserves whatever the prior table had.
 
 from __future__ import annotations
 
-import json
 from collections.abc import Callable, Iterable, Iterator
 from datetime import date, timedelta
 from pathlib import Path
@@ -44,75 +46,26 @@ FR_EPOCH = date(1994, 1, 1)
 # documents added/corrected after their nominal publication date are picked up.
 OVERLAP_DAYS = 7
 
-# The fetched shape: 22 columns, all VARCHAR, in the exact order the existing
-# table uses. ``COLUMNS`` appends the one derived column.
-FETCHED_COLUMNS = (
-    "document_number",
-    "title",
-    "abstract",
-    "document_type",
-    "publication_date",
-    "effective_on",
-    "comments_close_on",
-    "signing_date",
-    "agencies_json",
-    "agency_slugs",
-    "docket_ids_json",
-    "regulation_id_numbers_json",
-    "cfr_references_json",
-    "html_url",
-    "pdf_url",
-    "body_html_url",
-    "volume",
-    "start_page",
-    "end_page",
-    "subtype",
-    "executive_order_number",
-    "modify_date",
-)
-COLUMNS = (*FETCHED_COLUMNS, "rin")
-_SCHEMA = pa.schema([(c, pa.string()) for c in FETCHED_COLUMNS])
+
+def published_columns() -> tuple[str, ...]:
+    """The published width: SpicyDocs' projection plus the derived ``rin``.
+
+    A function, not a constant, because base installs import this module
+    without the source-readers extra that carries SpicyDocs.
+    """
+    from spicy_docs.schemas.federal_register import FEDERAL_REGISTER_COLUMNS
+
+    return (*FEDERAL_REGISTER_COLUMNS, "rin")
 
 #: ``rin`` as a projection of the array, for every row of the merged table.
 #: ``[]`` and NULL both give NULL: a join key is present or it is not.
 _RIN_SQL = "json_extract_string(regulation_id_numbers_json, '$[0]')"
 
 
-def _s(value: object) -> str | None:
-    """Coerce a scalar to str, preserving NULL. (volume/pages/EO # come as ints.)"""
-    if value is None:
-        return None
-    return str(value)
-
-
-def _shape(doc: dict) -> dict:
-    """Map one raw FR API document onto the published column shape."""
-    agencies = doc.get("agencies") or []
-    slugs = ",".join(a["slug"] for a in agencies if isinstance(a, dict) and a.get("slug"))
-    return {
-        "document_number": doc.get("document_number"),
-        "title": doc.get("title"),
-        "abstract": doc.get("abstract"),
-        "document_type": doc.get("type"),
-        "publication_date": doc.get("publication_date"),
-        "effective_on": doc.get("effective_on"),
-        "comments_close_on": doc.get("comments_close_on"),
-        "signing_date": doc.get("signing_date"),
-        "agencies_json": json.dumps(agencies),
-        "agency_slugs": slugs or None,
-        "docket_ids_json": json.dumps(doc.get("docket_ids") or []),
-        "regulation_id_numbers_json": json.dumps(doc.get("regulation_id_numbers") or []),
-        "cfr_references_json": json.dumps(doc.get("cfr_references") or []),
-        "html_url": doc.get("html_url"),
-        "pdf_url": doc.get("pdf_url"),
-        "body_html_url": doc.get("body_html_url"),
-        "volume": _s(doc.get("volume")),
-        "start_page": _s(doc.get("start_page")),
-        "end_page": _s(doc.get("end_page")),
-        "subtype": doc.get("subtype"),
-        "executive_order_number": _s(doc.get("executive_order_number")),
-        "modify_date": None,
-    }
+def _prior_columns(prior_file: Path, columns: tuple[str, ...]) -> str:
+    """``columns`` as selected from the prior table; one it predates reads NULL."""
+    held = set(pq.read_schema(prior_file).names)
+    return ", ".join(c if c in held else f"CAST(NULL AS VARCHAR) AS {c}" for c in columns)
 
 
 def _prior_max_publication_date(prior_file: Path) -> date | None:
@@ -179,9 +132,11 @@ def build_federal_register(
     SpicyDocs' Federal Register acquisition, and a hermetic test passes its own.
     """
     import duckdb
+    from spicy_docs.schemas.federal_register import FEDERAL_REGISTER_COLUMNS, project_federal_register_document
 
     out_file = output_dir / OUTPUT
     prior_file = output_dir / "_fr_prior.parquet"
+    schema = pa.schema([(c, pa.string()) for c in FEDERAL_REGISTER_COLUMNS])
 
     # 1. Pull the prior table (best effort — absence just means full backfill).
     have_prior = prior_file.exists() or download_prior(OUTPUT, prior_file)
@@ -198,9 +153,9 @@ def build_federal_register(
 
     # 3. Fetch + shape into a "new rows" parquet.
     fetch = documents or _live_federal_register_documents
-    rows = [_shape(doc) for doc in fetch(since)]
+    rows = [project_federal_register_document(doc) for doc in fetch(since)]
     new_file = output_dir / "_fr_new.parquet"
-    table = pa.Table.from_pylist(rows, schema=_SCHEMA) if rows else _SCHEMA.empty_table()
+    table = pa.Table.from_pylist(rows, schema=schema) if rows else schema.empty_table()
     pq.write_table(table, new_file, compression="zstd")
     logger.info("FR: fetched {:,} documents this run", len(rows))
 
@@ -215,12 +170,14 @@ def build_federal_register(
     con.execute("SET threads=2")
     con.execute(f"SET temp_directory='{spill_dir}'")
 
-    # The fetched columns are what both files carry; a prior that already has
-    # ``rin`` is not read for it, since the projection below recomputes it.
-    cols = ", ".join(FETCHED_COLUMNS)
+    # The projection's columns are what both sides carry; a prior that already
+    # has ``rin`` is not read for it, since the projection below recomputes it,
+    # and a column the prior predates (``topics_json``) reads NULL.
+    cols = ", ".join(FEDERAL_REGISTER_COLUMNS)
     if have_prior:
         union = (
-            f"SELECT {cols}, file_row_number AS _row, 0 AS _src FROM read_parquet('{prior_file}', file_row_number=true) "
+            f"SELECT {_prior_columns(prior_file, FEDERAL_REGISTER_COLUMNS)}, file_row_number AS _row, 0 AS _src "
+            f"FROM read_parquet('{prior_file}', file_row_number=true) "
             f"UNION ALL BY NAME "
             f"SELECT {cols}, file_row_number AS _row, 1 AS _src FROM read_parquet('{new_file}', file_row_number=true)"
         )
