@@ -873,6 +873,40 @@
       "baseline_keys": 140849,
       "baseline_missing": 20417,
       "floor_pct": 85.5043
+    },
+    {
+      "child": "lobbying_activities",
+      "child_columns": [
+        "filing_uuid"
+      ],
+      "parent": "lobbying_filings",
+      "parent_columns": [
+        "filing_uuid"
+      ],
+      "kind": "complete",
+      "reason": "",
+      "measured_via": null,
+      "baseline_keys": 247,
+      "baseline_missing": 0,
+      "floor_pct": 100.0
+    },
+    {
+      "child": "lobbying_activity_lobbyists",
+      "child_columns": [
+        "filing_uuid",
+        "activity_index"
+      ],
+      "parent": "lobbying_activities",
+      "parent_columns": [
+        "filing_uuid",
+        "activity_index"
+      ],
+      "kind": "complete",
+      "reason": "",
+      "measured_via": null,
+      "baseline_keys": 522,
+      "baseline_missing": 0,
+      "floor_pct": 100.0
     }
   ],
   "references": {
@@ -1440,6 +1474,30 @@
         "parent_table": "sam_entities",
         "parent_columns": [
           "uei"
+        ]
+      }
+    ],
+    "lobbying_activities": [
+      {
+        "child_columns": [
+          "filing_uuid"
+        ],
+        "parent_table": "lobbying_filings",
+        "parent_columns": [
+          "filing_uuid"
+        ]
+      }
+    ],
+    "lobbying_activity_lobbyists": [
+      {
+        "child_columns": [
+          "filing_uuid",
+          "activity_index"
+        ],
+        "parent_table": "lobbying_activities",
+        "parent_columns": [
+          "filing_uuid",
+          "activity_index"
         ]
       }
     ]

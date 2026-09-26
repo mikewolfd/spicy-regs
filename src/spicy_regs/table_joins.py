@@ -225,6 +225,11 @@ JOINS: tuple[Join, ...] = (
           "recipients 85.5%, with 120,432 UEIs resolving against 6,390 before. Of a 40-UEI sample of the orphans, "
           "the entity API held no public record for 38. Receipts join-map-2026-09-26/sam-entities-after-backfill.json "
           "and usaspending-unresolved-uei-sample-2026-09-26.txt."),
+    # Lobbying disclosure: the activity tables joined the family at run 36264742453 (added_tables). Receipt
+    # join-map-2026-09-26/lobbying-activities-after-migration.json.
+    _join("lobbying_activities", "filing_uuid", "lobbying_filings", "filing_uuid", 247, 0),
+    _join("lobbying_activity_lobbyists", ("filing_uuid", "activity_index"),
+          "lobbying_activities", ("filing_uuid", "activity_index"), 522, 0),
 )
 
 #: Tables outside the dictionary's registry, read from the materialized rulemaking snapshot.
