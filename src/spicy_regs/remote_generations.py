@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING
 import duckdb
 import pyarrow.parquet as pq
 
-from spicy_regs.generations import _verify_generation, _write_generation_metadata
+from spicy_regs.generations import verify_generation_source, _write_generation_metadata
 from spicy_regs.sources.publication import (
     PART_BYTES,
     PublicationError,
@@ -94,7 +94,7 @@ def _verify_remote(source, *, expected_pin=None):
     """Admit the artifact, then require staged receipts to equal independently verified bytes."""
     from rulespec_artifacts import iter_member_descriptors
 
-    artifact = _verify_generation(source, source.table_info, expected_pin=expected_pin)
+    artifact = verify_generation_source(source, source.table_info, expected_pin=expected_pin)
     if set(artifact.root["spec"]["tables"]) != set(source.members):
         raise ValueError("Staged receipts differ from the declared generation")
     for descriptor in iter_member_descriptors(artifact, source):

@@ -371,7 +371,7 @@ def _publication(con, base: PublicBase, source: _ArtifactSource, entry: Mapping,
     """Admit every member byte, then reconcile index, manifest, root and observed bytes per table."""
     from rulespec_artifacts import ArtifactPin, iter_member_descriptors
 
-    from spicy_regs.generations import _verify_generation
+    from spicy_regs.generations import verify_generation_source
 
     def table_info(key: str) -> dict:
         infos[key] = _table_info(con, _parquet(base, entry["prefix"], key))
@@ -381,7 +381,7 @@ def _publication(con, base: PublicBase, source: _ArtifactSource, entry: Mapping,
                                "prefix": entry["prefix"]}
     members: dict[str, dict] = {}
     try:
-        artifact = _verify_generation(source, table_info,
+        artifact = verify_generation_source(source, table_info,
                                       expected_pin=ArtifactPin(entry["logicalId"], entry["artifactDigest"]))
     except _READ_ERRORS as error:
         section["admission"] = {"admitted": False, "error": f"{type(error).__name__}: {error}"}
@@ -1044,9 +1044,9 @@ def _scrubbed(value: Any, secrets: Sequence[str]) -> Any:
 
 
 def _implementation() -> str:
-    from spicy_regs.generations import _implementation_id
+    from spicy_regs.generations import implementation_id
 
-    return _implementation_id()
+    return implementation_id()
 
 
 def main(argv: Sequence[str] | None = None) -> int:

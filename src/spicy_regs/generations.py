@@ -37,7 +37,7 @@ def _table_info(path: Path) -> dict:
     }
 
 
-def _implementation_id() -> str:
+def implementation_id() -> str:
     """Content digest of this package's Python sources, recorded in every generation root."""
     digest = hashlib.sha256()
     root = Path(__file__).parent
@@ -51,12 +51,12 @@ def verify_generation(directory: Path, *, expected_pin=None):
     """Hash every member and reconcile actual Parquet counts/shape; fail closed."""
     from rulespec_artifacts import LocalMemberSource
 
-    return _verify_generation(
+    return verify_generation_source(
         LocalMemberSource(directory), lambda key: _table_info(directory / key), expected_pin=expected_pin
     )
 
 
-def _verify_generation(source, table_info: Callable[[str], dict], *, expected_pin=None):
+def verify_generation_source(source, table_info: Callable[[str], dict], *, expected_pin=None):
     """Apply the same artifact and table checks to local or pinned remote bytes."""
     from rulespec_artifacts import admit_artifact, iter_member_descriptors
 
@@ -222,7 +222,7 @@ def _write_generation_metadata(
         manifest = write_member_manifest(
             stream, scope_kind="global", scope_id=family, object_key=MANIFEST, members=members
         )
-    implementation = _implementation_id()
+    implementation = implementation_id()
     root = build_artifact_root(
         kind=KIND,
         spec={

@@ -360,7 +360,7 @@ class CaptureEvidence:
                 f"Source retention failed ({self.retention_failure}); evidence cannot seal as a complete build"
             )
         self.event("build-outcome", outcome=outcome)
-        from spicy_regs.generations import _implementation_id
+        from spicy_regs.generations import implementation_id
 
         source = LocalMemberSource(self.artifact_dir)
         members = [
@@ -371,7 +371,7 @@ class CaptureEvidence:
             manifest = write_member_manifest(
                 stream, scope_kind="global", scope_id=self.family, object_key="members.json", members=members
             )
-        implementation = _implementation_id()
+        implementation = implementation_id()
         root = build_artifact_root(
             kind=KIND,
             spec={

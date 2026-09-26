@@ -138,12 +138,10 @@ def current_index(base_url: str) -> dict:
     return held[1] if held is not None and held[0] == base_url.rstrip("/") else load_index(base_url)
 
 
-def load_family_root(base_url: str, entry: Mapping) -> tuple[bytes, dict]:
-    """Read only the pinned prior root for lineage; this does not re-admit its tables."""
+def family_root(raw: bytes, entry: Mapping) -> dict:
+    """Parse a generation root and require it to be the one ``entry`` pins; the caller chooses where ``raw`` came from."""
     from rulespec_artifacts import ArtifactVerificationError, expected_artifact_digest, parse_canonical_json
 
-    raw = _bounded_get(f"{base_url.rstrip('/')}/{entry['prefix']}/artifact.json", allow_missing=False)
-    assert raw is not None
     try:
         root = parse_canonical_json(raw)
     except ArtifactVerificationError as exc:
@@ -152,7 +150,14 @@ def load_family_root(base_url: str, entry: Mapping) -> tuple[bytes, dict]:
             or expected_artifact_digest(root) != entry["artifactDigest"]
             or root.get("logicalId") != entry["logicalId"] or not isinstance(root.get("inputs"), list)):
         raise PublicationError("Prior generation root differs from its captured pin")
-    return raw, root
+    return root
+
+
+def load_family_root(base_url: str, entry: Mapping) -> tuple[bytes, dict]:
+    """Read only the pinned prior root for lineage over HTTPS; this does not re-admit its tables."""
+    raw = _bounded_get(f"{base_url.rstrip('/')}/{entry['prefix']}/artifact.json", allow_missing=False)
+    assert raw is not None
+    return raw, family_root(raw, entry)
 
 
 @contextmanager
