@@ -5,15 +5,15 @@ The optional `source-readers` extra enables the same readers for package install
 its wheels must be supplied explicitly until they are published in a registry.
 Base CLI and MCP installs do not require them.
 
-- `spicy_docs-0.35.0`: built from SpicyDocs `main` at `0ecac5c` (release commit), with Rulespec
-  Artifacts 1.1.1. Built September 26, 2026 UTC: **1,637,071 bytes**, SHA-256
-  `8b16e5caa206119b2d875fb0b49a3da96a9a54ec2ca2304a4ee7699a4bf7db8c`, byte-identical across
+- `spicy_docs-0.36.0`: built from SpicyDocs `main` at `b299db9` (release commit), with Rulespec
+  Artifacts 1.1.1. Built September 26, 2026 UTC: **1,639,482 bytes**, SHA-256
+  `7b2c61240c63e76d73a8e2fc3bdf85d9b78e766f1297343ac5f8cf3a1786887c`, byte-identical across
   two rebuilds from a clean archive of that commit with `SOURCE_DATE_EPOCH` at its commit time.
-  It carries the 2026-09-26 drift-audit repairs: printings pair by date and then a dateless
-  enrolled printing by its stage (public `printing_order`), `bill_sections` keyed on `seq`,
-  activity-report bills keyed in the Congress the report covers with chamber-scoped committees,
-  a docket read after prose (D1) and Regulations.gov's typed FR-number separators (D2). Its
-  release commit lists the breaking signatures. 0.34.1 and its build record are at `d11702f`.
+  It adds the Regulations.gov docket-detail read (`RegulationsGovApiReader.docket`, for
+  `fill-docket-gaps`) and table-contract `references`, which `tests/test_table_joins.py` holds to
+  `table_joins`. It also credits a renewal SAM still holds Active toward an extract's declared
+  count, listing each on `SamBulkExtract.superseded`; `build_sam_entities` journals each as a
+  `sam-superseded-credited` event. 0.35.0 and its build record are at `9bffc97`.
 
 - `rulespec_artifacts-1.1.1`: exact dependency of SpicyDocs 0.26.6 and 0.27.0, built from
   Rulespec `a3acb04cbfe2cc32a89622a3523da48aa6958348`. **99,315 bytes**, SHA-256

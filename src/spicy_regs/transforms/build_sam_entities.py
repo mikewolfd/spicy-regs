@@ -168,6 +168,11 @@ def _iter_sam_entities(
                 ),
             )
             yield from emit(extractor.records())
+            # A renewal SAM still holds Active is credited toward the file's count; the journal
+            # names each one so an audit can check none was dated on or after the trigger.
+            if evidence is not None:
+                for credit in extractor.superseded:
+                    evidence.event("sam-superseded-credited", stage=f"sam-extract:{year}", **credit)
         return
 
     # partition: the owner's adaptive windowed walk under the reach bound.

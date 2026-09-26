@@ -273,6 +273,8 @@ def test_a_multi_year_run_shares_one_wait_and_refuses_the_year_it_cannot_reach(m
     triggered = []
 
     class SpendsTheWait:
+        superseded: list[dict] = []
+
         def __init__(self, **kwargs):
             triggered.append(kwargs)
 

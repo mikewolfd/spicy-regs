@@ -323,6 +323,31 @@ def test_sam_extract_keeps_complete_raw_file_before_registration_mapping(tmp_pat
     assert any(e['event'] == 'selection' and e['since_year'] == 2026 for e in journal(evidence))
 
 
+
+def test_sam_extract_journals_each_renewal_it_credits_toward_the_count(tmp_path, monkeypatch):
+    """SAM counts a renewal's prior record while it stays Active (2007: WRERXDACNQ31); the journal names it."""
+    from tests.test_sam_entities import _RAW_ENTITY
+    evidence = CaptureEvidence(tmp_path, 'sam-entities')
+    monkeypatch.setenv('SAM_API_KEY', 'fixture-key')
+
+    def version(updated, expires):
+        return {**_RAW_ENTITY, 'entityRegistration': {**_RAW_ENTITY['entityRegistration'], 'entityEFTIndicator': None,
+                                                      'lastUpdateDate': updated, 'registrationExpirationDate': expires}}
+
+    older, newer = version('2024-09-04', '2026-09-30'), version('2026-09-09', '2027-08-27')
+    body = json.dumps({'totalRecords': 2, 'entityData': [older, newer]}).encode()
+    original = evidence.transport
+    monkeypatch.setattr(evidence, 'transport', lambda *a, **kw: original(
+        httpx.MockTransport(lambda r: httpx.Response(200, content=body)), **kw))
+    rows = list(sam._iter_sam_entities(mode='extract', registration_status='A', since_year=2026, until_year=2026,
+                                     year_windows=True, max_records=None, evidence=evidence))
+    assert rows == [newer]
+    [credit] = [e for e in journal(evidence) if e['event'] == 'sam-superseded-credited']
+    assert credit['stage'] == 'sam-extract:2026' and credit['uei'] == _RAW_ENTITY['entityRegistration']['ueiSAM']
+    assert (credit['superseded_last_update'], credit['kept_last_update']) == ('2024-09-04', '2026-09-09')
+    assert (credit['superseded_expiration'], credit['kept_expiration']) == ('2026-09-30', '2027-08-27')
+    assert credit['kept_last_update'] < credit['trigger_day']
+
 def test_invalid_content_encoding_keeps_complete_native_response(tmp_path):
     evidence = CaptureEvidence(tmp_path, 'test')
     raw = b'not actually gzip'
