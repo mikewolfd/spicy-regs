@@ -850,11 +850,11 @@
         "uei"
       ],
       "kind": "scope",
-      "reason": "sam_entities holds SAM's public active registrations, every registration year from 1996 plus two older ones. A recipient can name a UEI with none: of a 40-UEI sample of these orphans, the entity API held no public record for 38, one was Inactive, and one was activated after the 2026 year was last read. Receipts join-map-2026-09-26/sam-entities-after-backfill.json and usaspending-unresolved-uei-sample-2026-09-26.txt.",
+      "reason": "sam_entities holds SAM's public active registrations, every registration year from 1996 plus two older ones. A recipient can name a UEI with none: of a 40-UEI sample of these orphans, the entity API held no public record for 38, one was Inactive, and one was activated after the 2026 year was then last read. Receipts join-map-2026-09-26/sam-entities-after-backfill.json and usaspending-unresolved-uei-sample-2026-09-26.txt.",
       "measured_via": null,
       "baseline_keys": 7274,
-      "baseline_missing": 920,
-      "floor_pct": 87.3522
+      "baseline_missing": 884,
+      "floor_pct": 87.8471
     }
   ],
   "references": {
