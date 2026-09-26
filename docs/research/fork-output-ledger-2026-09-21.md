@@ -67,9 +67,10 @@ MCP `table_qualification` record read these rows directly.
   - A docket that is an action docket only through its own documents' citation
     does not absorb the cited notice (572 dockets), as decision 33 reads; this
     needs a ruling or a recorded limit.
-  - The 3,010 decisions 32–33 lineage links erased at `snapshot_47cca15e…` stay
-    unrestored, by owner decision (2026-09-26: not needed). They survive in the
-    retained snapshot `6d3dc0f2` and its receipts.
+  - Lineage is out of scope by owner decision (2026-09-26): `identity_predecessors_json`
+    is pruned at `8477dea` (proceedings v9), and the 3,010 links erased at
+    `snapshot_47cca15e…` survive only in the retained snapshot `6d3dc0f2`. Continuity
+    is kept by stable ids and `supersedes_id`.
   - Ten docket values stay unread.
   D4: derived rollups record no parent digests (receipt `regulatory/results.json`);
   fixed at `4396f2e` and closed 2026-09-26. The refresh run 36224680634 published
