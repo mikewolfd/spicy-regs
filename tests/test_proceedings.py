@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 
 import pyarrow.parquet as pq
 import pytest
@@ -917,15 +918,18 @@ def test_a_nonrulemaking_docket_is_a_proceeding_only_on_action_evidence(tmp_path
     assert json.loads(by_docket[staged]["fr_document_ids_json"]) == ["2023-00001@2023-01-03"]
     assert json.loads(by_docket[with_rin]["rins_json"]) == ["2120-AA64"]
     assert not any("2021-06210@2021-03-25" in row["fr_document_ids_json"] for row in proceedings)
-    assert {row["actor_id"] for row in proceedings} == {"spicy-regs:proceedings:v6"}
+    assert {row["actor_id"] for row in proceedings} == {"spicy-regs:proceedings:v7"}
 
     # Its comment period keeps the docket as its anchor, with no proceeding.
     (period,) = pq.read_table(build_comment_periods(tmp_path)).to_pylist()
     assert (json.loads(period["docket_ids_json"]), period["proceeding_ids_json"]) == ([shell], "[]")
 
 
-def _identity_fixture(tmp_path, groups, prior):
-    """Rulemaking dockets, one Proposed Rule uniting each group of two or more, and prior ids."""
+def _identity_fixture(tmp_path, groups, prior, *, actor_id=None):
+    """Rulemaking dockets, one Proposed Rule uniting each group of two or more, and prior rows.
+
+    A prior row is ``(id, dockets)`` or ``(id, dockets, recorded predecessors)``, built by ``actor_id``.
+    """
     dockets = sorted({docket for group in groups for docket in group})
     _write(
         tmp_path / "dockets.parquet",
@@ -954,8 +958,17 @@ def _identity_fixture(tmp_path, groups, prior):
     )
     _write(
         tmp_path / "_proceedings_prior.parquet",
-        ("proceeding_id", "docket_ids_json", "fr_document_ids_json"),
-        [{"proceeding_id": pid, "docket_ids_json": json.dumps(ds), "fr_document_ids_json": "[]"} for pid, ds in prior],
+        ("proceeding_id", "docket_ids_json", "fr_document_ids_json", "identity_predecessors_json", "actor_id"),
+        [
+            {
+                "proceeding_id": pid,
+                "docket_ids_json": json.dumps(ds),
+                "fr_document_ids_json": "[]",
+                "identity_predecessors_json": json.dumps(recorded[0] if recorded else []),
+                "actor_id": actor_id,
+            }
+            for pid, ds, *recorded in prior
+        ],
     )
     rows = pq.read_table(build_proceedings(tmp_path)).to_pylist()
     assert len({row["proceeding_id"] for row in rows}) == len(rows)
@@ -995,3 +1008,49 @@ def test_a_hold_lifted_mid_pass_lets_the_waiting_group_take_its_best_id(tmp_path
         (b, d, e): "proceeding_q",
         (f,): "proceeding_r",
     }
+
+
+def test_a_merge_carries_the_lineage_every_absorbed_proceeding_recorded(tmp_path):
+    """Prior P = {a,b} descends from O and Q = {c} from N; {a,b,c} unite, continue P and list N, O and Q.
+
+    A rerun over the same sources lists them still. Re-deriving lineage from one generation of
+    overlap lost it: the no-change rerun snapshot_47cca15e dropped the links that
+    snapshot_6d3dc0f2 recorded for the decisions 32-33 splits and merges.
+    """
+    a, b, c = (f"EPA-HQ-OAR-2020-000{n}" for n in range(1, 4))
+    prior = [("proceeding_p", [a, b], ["proceeding_o"]), ("proceeding_q", [c], ["proceeding_n"])]
+    merged = _identity_fixture(tmp_path, [[a, b, c]], prior)[(a, b, c)]
+    assert merged["proceeding_id"] == merged["supersedes_id"] == "proceeding_p"
+    assert json.loads(merged["identity_predecessors_json"]) == ["proceeding_n", "proceeding_o", "proceeding_q"]
+
+    shutil.copyfile(tmp_path / "proceedings.parquet", tmp_path / "_proceedings_prior.parquet")
+    (rerun,) = pq.read_table(build_proceedings(tmp_path)).to_pylist()
+    assert rerun["proceeding_id"] == rerun["supersedes_id"] == "proceeding_p"
+    assert rerun["identity_predecessors_json"] == merged["identity_predecessors_json"]
+
+
+def test_each_side_of_a_split_inherits_the_lineage_it_overlaps(tmp_path):
+    """Prior P = {a,b} descends from O; {a} continues P and lists O, and {b} lists O and P."""
+    a, b = "EPA-HQ-OAR-2020-0001", "EPA-HQ-OAR-2020-0002"
+    by_dockets = _identity_fixture(tmp_path, [[a], [b]], [("proceeding_p", [a, b], ["proceeding_o"])])
+    assert by_dockets[(a,)]["proceeding_id"] == by_dockets[(a,)]["supersedes_id"] == "proceeding_p"
+    assert json.loads(by_dockets[(a,)]["identity_predecessors_json"]) == ["proceeding_o"]
+    assert by_dockets[(b,)]["supersedes_id"] is None
+    assert json.loads(by_dockets[(b,)]["identity_predecessors_json"]) == ["proceeding_o", "proceeding_p"]
+
+
+def test_an_older_generations_list_carries_only_the_ids_it_retired(tmp_path):
+    """Before v7 a row listed every prior it overlapped, siblings sharing a cited notice included.
+
+    P lists G, which its generation no longer held, and its live sibling Q; Q lists P. Only G is
+    carried: a live id in such a list may be a split's parent or a sibling, and nothing says which.
+    """
+    a, b = "EPA-HQ-OAR-2020-0001", "EPA-HQ-OAR-2020-0002"
+    by_dockets = _identity_fixture(
+        tmp_path,
+        [[a], [b]],
+        [("proceeding_p", [a], ["proceeding_g", "proceeding_q"]), ("proceeding_q", [b], ["proceeding_p"])],
+        actor_id="spicy-regs:proceedings:v6",
+    )
+    assert json.loads(by_dockets[(a,)]["identity_predecessors_json"]) == ["proceeding_g"]
+    assert json.loads(by_dockets[(b,)]["identity_predecessors_json"]) == []

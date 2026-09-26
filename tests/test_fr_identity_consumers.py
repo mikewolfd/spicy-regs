@@ -362,7 +362,7 @@ def test_labelled_dockets_and_padded_numbers_join_every_rulemaking_table(tmp_pat
         ("federal_register.document_type", "2010-02-05"),
     }
     assert not any(json.loads(r["docket_ids_json"]) == [] for r in proceedings)
-    assert {r["actor_id"] for r in proceedings} == {"spicy-regs:proceedings:v6"}
+    assert {r["actor_id"] for r in proceedings} == {"spicy-regs:proceedings:v7"}
 
     periods = pq.read_table(build_comment_periods(tmp_path)).to_pylist()
     (period,) = [r for r in periods if "federal_register.comments_close_on" in r["source"]]
@@ -636,6 +636,53 @@ def test_only_an_action_document_merges_the_dockets_it_names(tmp_path):
         else:
             assert row["proceeding_id"] == stable_id("proceeding", "docket", docket)
             assert json.loads(row["identity_predecessors_json"]) == [merged_id]
+
+    # A rerun keeps each row's lineage, and the Notice all four cite makes none of them a
+    # predecessor of another: re-deriving it did, 6,786 times in the rerun snapshot_47cca15e.
+    shutil.copyfile(tmp_path / "proceedings.parquet", tmp_path / "_proceedings_prior.parquet")
+    rerun = {r["proceeding_id"]: r for r in pq.read_table(build_proceedings(tmp_path)).to_pylist()}
+    assert rerun.keys() == {r["proceeding_id"] for r in proceedings}
+    for row in proceedings:
+        assert rerun[row["proceeding_id"]]["identity_predecessors_json"] == row["identity_predecessors_json"]
+
+
+def test_a_retired_proceeding_that_shares_only_a_cited_notice_is_a_predecessor(tmp_path):
+    """An older proceeding of the Notice alone is retired; each docket's proceeding now citing it names it."""
+    _listed_inputs(tmp_path)
+    _with_records(
+        tmp_path,
+        [
+            {
+                "document_number": "2016-23295",
+                "publication_date": "2016-09-27",
+                "document_type": "Notice",
+                "title": "Adequacy Status of the Cleveland-Akron-Lorain and Columbus, Ohio Areas",
+                "docket_ids_json": json.dumps([*EPA_NOTICE, "FRL-9953-10-Region 5"]),
+            }
+        ],
+        EPA_NOTICE,
+    )
+    build_rule_targets(tmp_path)
+    own = {docket: stable_id("proceeding", "docket", docket) for docket in EPA_NOTICE}
+    _write(
+        tmp_path,
+        "_proceedings_prior",
+        ("proceeding_id", "docket_ids_json", "fr_document_ids_json"),
+        [
+            *({"proceeding_id": own[d], "docket_ids_json": json.dumps([d]), "fr_document_ids_json": "[]"} for d in own),
+            {
+                "proceeding_id": "proceeding_notice",
+                "docket_ids_json": "[]",
+                "fr_document_ids_json": '["2016-23295@2016-09-27"]',
+            },
+        ],
+    )
+
+    proceedings = pq.read_table(build_proceedings(tmp_path)).to_pylist()
+    for docket in EPA_NOTICE:
+        (row,) = [r for r in proceedings if json.loads(r["docket_ids_json"]) == [docket]]
+        assert row["proceeding_id"] == row["supersedes_id"] == own[docket]
+        assert json.loads(row["identity_predecessors_json"]) == ["proceeding_notice"]
 
 
 def test_a_notice_several_proceedings_hold_opens_a_period_listing_each(tmp_path):
