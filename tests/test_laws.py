@@ -117,24 +117,26 @@ class StubUslm:
         raise AssertionError(f"the stub holds no PLAW for {selection}")
 
 
-def _bulk_zip(member: bytes = BULK_EXCERPT, release_point: str = "119-73") -> bytes:
-    """The bulk zip OLRC serves: one ``fulldump@<release point>.xml`` member, with a fixed timestamp."""
+def _bulk_zip(member: bytes = BULK_EXCERPT, release_point: str = "119-73", name: str | None = None) -> bytes:
+    """The bulk zip OLRC serves: one ``fulldump@<release point>.xml`` member (or ``name``), with a fixed timestamp."""
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
-        archive.writestr(zipfile.ZipInfo(f"fulldump@{release_point}.xml", date_time=(2026, 1, 23, 0, 0, 0)), member)
+        archive.writestr(zipfile.ZipInfo(name or f"fulldump@{release_point}.xml", date_time=(2026, 1, 23, 0, 0, 0)),
+                         member)
     return buffer.getvalue()
 
 
 class StubOlrc:
     """Serves the classification fixtures and one Table III bulk zip, read through the wheel's own bulk reader.
 
-    ``bulk`` is the zip's member, or an exception every bulk read raises.
+    ``bulk`` is the zip's member, or an exception every bulk read raises; ``member_name`` renames the member.
     """
 
     def __init__(self, *, bulk: bytes | Exception = BULK_EXCERPT, release_point="119-73", observed_at=OBSERVED_AT,
-                 index_error=None):
+                 index_error=None, member_name=None):
         self.bulk = bulk
         self.release_point = release_point
+        self.member_name = member_name
         self.observed_at = observed_at
         self.index_error = index_error
         self.tables: list[tuple[int, int, str]] = []
@@ -156,7 +158,7 @@ class StubOlrc:
         self.bulk_reads += 1
         if isinstance(self.bulk, Exception):
             raise self.bulk
-        body = _bulk_zip(self.bulk, self.release_point)
+        body = _bulk_zip(self.bulk, self.release_point, self.member_name)
         return SimpleNamespace(result=read_table3_bulk_archive(body), capture=_Capture(body, self.observed_at))
 
 

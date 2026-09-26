@@ -59,6 +59,16 @@ jobs:
         if: always()
         run: uv run --frozen python scripts/check_table_joins.py
 
+      # A source a build refused while publishing the rest of its family (Table
+      # III inside laws) has no age budget to breach: Table III lags months by
+      # design. Its build journals the refusal, and this fails while the
+      # family's current generation holds one.
+      - name: Check journaled source refusals
+        if: always()
+        env:
+          R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL }}
+        run: uv run --frozen python scripts/check_source_refusals.py
+
       - name: Save row-count history
         if: always()
         uses: actions/cache/save@v4

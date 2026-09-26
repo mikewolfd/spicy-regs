@@ -48,9 +48,12 @@ say it is unchanged: while every scoped Congress holds a checkpoint for this
 member, release point and rule, nothing is derived. Otherwise every scoped act
 is derived again, and only an act whose rows changed, or which the file no
 longer lists, is published, its whole row set replaced. A failed read, or one
-the retirement guard refuses, publishes nothing and keeps every checkpoint. A ``401``/``403`` from any of the
-three publishers aborts the run. Needs an api.data.gov key for the list route;
-the PLAW and OLRC routes are keyless.
+the retirement guard or the reader refuses, publishes nothing for Table III and
+keeps every checkpoint, while ``laws`` and ``law_code_sections`` publish as
+usual; a refusal is journaled, and the nightly
+``scripts/check_source_refusals.py`` fails on it. A ``401``/``403`` from any of
+the three publishers aborts the run. Needs an api.data.gov key for the list
+route; the PLAW and OLRC routes are keyless.
 """
 
 from __future__ import annotations
@@ -494,31 +497,40 @@ def _table3_rows(
     The read is refused, publishing nothing and keeping every checkpoint, when
     its release point sorts before ``published_release_point`` (the newest the
     table or a checkpoint states), when it drops an act without advancing past
-    it, or when it drops more than :data:`TABLE3_MAX_RETIRED_PER_RELEASE`. A
-    failed read changes nothing either.
+    it, when it drops more than :data:`TABLE3_MAX_RETIRED_PER_RELEASE`, or when
+    the reader refuses the file itself (a renamed or reshaped member, a
+    malformed zip, a ``404``). Each refusal journals ``table3-bulk-refused``,
+    which the nightly ``scripts/check_source_refusals.py`` fails on, because it
+    repeats every run until someone acts: the rest of the laws family still
+    publishes. A transport failure changes nothing and is only logged; the next
+    run retries it.
     """
     unchanged = Table3Read([], [], None)
+    rule, scope = table3_rule(), sorted(congresses)
+    published = _newest_release_point([published_release_point, *(c.get("release_point") for c in checkpoints.values())])
+    stated: dict[str, object] = {"published_release_point": published, "rule": rule, "congresses": scope}
+
+    def refuse(reason: str, **fields: object) -> Table3Read:
+        logger.warning("Laws: Table III bulk refused ({}) — every row stands: {} {}", reason, stated, fields or "")
+        if evidence:
+            evidence.event("table3-bulk-refused", reason=reason, **stated, **fields)
+        return unchanged
+
     try:
         acquired = olrc.acquire_table3_bulk()
-    except (UsCodeSourceError, httpx.HTTPError, ConnectionError) as error:
+    except UsCodeSourceError as error:
+        if evidence:
+            evidence.refusal(error, stage="table3:bulk")
+        return refuse("file-refused", error_type=type(error).__name__, message=_transport_error(error)[:500])
+    except (httpx.HTTPError, ConnectionError) as error:
         if evidence:
             evidence.refusal(error, stage="table3:bulk")
         logger.warning("Laws: Table III bulk not established — every row stands: {}", _transport_error(error))
         return unchanged
     if evidence:
         evidence.capture(acquired.capture, stage="table3:bulk")
-    bulk, rule = acquired.result, table3_rule()
-    scope = sorted(congresses)
-    published = _newest_release_point([published_release_point, *(c.get("release_point") for c in checkpoints.values())])
-    stated = {"release_point": bulk.release_point, "published_release_point": published,
-              "member_sha256": bulk.member_sha256, "rule": rule, "congresses": scope}
-
-    def refuse(reason: str, **fields: object) -> Table3Read:
-        logger.warning("Laws: Table III bulk refused ({}) — every row stands: release point {} against published {} {}",
-                       reason, bulk.release_point, published, fields or "")
-        if evidence:
-            evidence.event("table3-bulk-refused", reason=reason, **stated, **fields)
-        return unchanged
+    bulk = acquired.result
+    stated |= {"release_point": bulk.release_point, "member_sha256": bulk.member_sha256}
 
     point, held_point = _public_law(bulk.release_point), _public_law(published)
     if point is None:  # the member name's grammar makes this unreachable; a refusal, not a crash, if it moves
