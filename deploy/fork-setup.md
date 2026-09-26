@@ -43,7 +43,11 @@ The existing workflows read the following **repository secrets** from
 | `R2_SECRET_ACCESS_KEY` | Matching S3 secret, supplied through a secure prompt |
 
 `CLOUDFLARE_ACCOUNT_ID` is also recorded as a repository variable for deployment
-tools. GitHub does not copy upstream secrets into a fork. Keep the five storage
+tools. Set the repository variable `PUBLISH_DOCKET_SEARCH` to `true` only where
+the Spicy Regs web app reads this bucket: the regulatory refresh then builds the
+app's `docket_search.json.gz`. The fork leaves it unset because its app
+deployment reads upstream's copy; upstream must set it before adopting this
+workflow. GitHub does not copy upstream secrets into a fork. Keep the five storage
 settings consistent: readers use the public URL while writers use the S3 endpoint
 and bucket. The [R2 authentication guide](https://developers.cloudflare.com/r2/api/tokens/)
 describes the separate S3 credentials; a Wrangler OAuth login is not an S3 key.

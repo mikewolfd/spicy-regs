@@ -131,3 +131,12 @@ def test_refresh_publishes_the_families_before_the_mirror_captures_base_versions
     assert jobs["base-families"]["with"]["skip_upload"] == "${{ inputs.skip_upload }}"
     assert jobs["mirror"]["needs"] == "base-families"
     assert jobs["derived"]["needs"] == "mirror" and jobs["org-links"]["needs"] == "mirror"
+
+
+def test_the_browser_search_blob_is_built_only_where_its_app_reads_this_bucket():
+    """docket_search.json.gz has one reader, the web app; the fork's deployment reads upstream's copy."""
+    jobs = yaml.safe_load((REPO_ROOT / ".github/workflows/_regulations-refresh.yml").read_text())["jobs"]
+    assert "run-rollup-docket-search" not in jobs["derived"]["strategy"]["matrix"]["command"]
+    assert jobs["docket-search"]["with"]["command"] == "run-rollup-docket-search"
+    assert "vars.PUBLISH_DOCKET_SEARCH == 'true'" in jobs["docket-search"]["if"]
+    assert "docket-search" in jobs["verify"]["needs"]

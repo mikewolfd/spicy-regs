@@ -38,12 +38,23 @@ jobs:
           - run-rollup-feed-summary
           - run-rollup-agency-stats
           - run-rollup-agency-monthly-volume
-          - run-rollup-docket-search
           - run-rollup-discovery-signals
     uses: ./.github/workflows/_rollup.yml
     secrets: inherit
     with:
       command: ${{ matrix.command }}
+      timeout_minutes: 60
+  # docket_search.json.gz feeds the Spicy Regs web app's in-browser MiniSearch,
+  # which reads the bucket it is deployed against. Only a repository whose app
+  # reads this bucket sets PUBLISH_DOCKET_SEARCH=true; the fork's app deployment
+  # reads upstream's copy, so the fork does not build one nobody reads.
+  docket-search:
+    needs: mirror
+    if: ${{ !inputs.skip_upload && vars.PUBLISH_DOCKET_SEARCH == 'true' }}
+    uses: ./.github/workflows/_rollup.yml
+    secrets: inherit
+    with:
+      command: run-rollup-docket-search
       timeout_minutes: 60
   org-links:
     needs: mirror
@@ -58,7 +69,7 @@ jobs:
     uses: ./.github/workflows/materialize-rulemaking.yml
     secrets: inherit
   verify:
-    needs: [mirror, derived, org-links, rulemaking]
+    needs: [mirror, derived, docket-search, org-links, rulemaking]
     if: ${{ always() && !inputs.skip_upload && needs.mirror.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
