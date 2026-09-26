@@ -42,6 +42,7 @@ from spicy_docs.interpretation.bill_actions import (
 from spicy_docs.interpretation.citations import (
     CITATION_RULE_SET_VERSION,
     CITATION_RULES_BY_NAME,
+    COMMITTEE_CHAMBERS,
     committee_vocabulary,
     find_citations,
 )
@@ -52,6 +53,7 @@ from spicy_docs.schemas.budget_volume_tables import (
     budget_index_stated_keys,
     shape_budget_volume,
 )
+from spicy_docs.schemas.committee_report_tables import CHAMBER_BY_DOCUMENT_TYPE
 from spicy_docs.schemas.document_citation_tables import (
     GOVINFO_PACKAGE,
     activity_report_stated_keys,
@@ -158,12 +160,25 @@ ROSTER_BUDGET = CommitteeRosterBudget(
     min_request_interval_seconds=0.2,
 )
 
-#: The committee whose print this is, for ``find_bill_actions``. It uses the
-#: chamber for one thing only: a hearing or a markup is the committee's own
-#: act, so its action code follows the actor rather than the measure. Every
-#: package this transform reads for actions is a **House** committee's activity
-#: report — the title rule and the ``hrpt`` package type both say so.
-ACTIVITY_REPORT_CHAMBER = "house"
+def _report_chamber(package_id: str) -> str | None:
+    """Whose committee wrote a CRPT activity report: ``house`` or ``senate``, or ``None`` when its id states neither.
+
+    Read off the package id's own document-type code through spicy-docs'
+    ``CHAMBER_BY_DOCUMENT_TYPE`` (``hrpt`` House; ``srpt`` and ``erpt``
+    Senate), never assumed: until 2026-09-26 it was the constant ``"house"``,
+    while the title rule admits Senate reports (the window holds 14). The
+    chamber decides two things -- which chamber's committee a name both hold
+    means (``Committee on the Judiciary`` in CRPT-118srpt11 is ``ssju00``), and
+    a hearing's or markup's action code, which follows the committee that
+    acted. A package whose id states neither is refused before any request.
+    """
+    try:
+        document_type = parse_package_id(package_id).document_type
+    except ValueError:
+        return None
+    chamber = CHAMBER_BY_DOCUMENT_TYPE.get(document_type or "")
+    return chamber if chamber in COMMITTEE_CHAMBERS else None
+
 
 #: What one package's acquisition and reading can refuse with, short of a
 #: credential refusal, which propagates and aborts the run.
@@ -226,7 +241,7 @@ def _held_packages(prior_file: Path | None) -> dict[str, tuple[str | None, str |
     }
 
 
-def _processing_versions(vocabulary: tuple[tuple[str, str], ...]) -> dict[str, str]:
+def _processing_versions(vocabularies: Mapping[str, tuple[tuple[str, str], ...]]) -> dict[str, str]:
     """Identify citation, action and body-reading inputs even when no finding exists.
 
     The dependency release also covers body-text derivation and row shaping;
@@ -245,8 +260,8 @@ def _processing_versions(vocabulary: tuple[tuple[str, str], ...]) -> dict[str, s
             "covered_congress_rules": COVERED_CONGRESS_RULE_VERSION,
             "action_rules": PRINT_ACTION_RULE_SET_VERSION,
             "action_vocabulary": PRINT_ACTION_VOCABULARY_VERSION,
-            "committee_chamber": ACTIVITY_REPORT_CHAMBER,
-            "committee_vocabulary": sorted(vocabulary),
+            "committee_chamber_by_document_type": sorted(CHAMBER_BY_DOCUMENT_TYPE.items()),
+            "committee_vocabulary": {chamber: sorted(vocabulary) for chamber, vocabulary in vocabularies.items()},
         },
     }
     return {
@@ -308,12 +323,14 @@ def _listed(
     return accepted
 
 
-def _roster_vocabulary(rosters: RosterSource, congress: int) -> tuple[tuple[str, str], ...]:
-    """The committee names ``find_citations`` resolves against, from both chamber files.
+def _roster_vocabulary(rosters: RosterSource, congress: int) -> dict[str, tuple[tuple[str, str], ...]]:
+    """The committee names ``find_citations`` resolves against, from both chamber files, read for each chamber's print.
 
-    A file that refuses leaves its chamber out of the vocabulary, which makes
-    ``committees_unresolved`` larger and invents nothing. Both routes are
-    keyless, so neither refusal is a credential refusal.
+    Both vocabularies hold every name either file states; they differ only on
+    a name both chambers hold, which each gives to its own chamber. A file that
+    refuses leaves its chamber out, which makes ``committees_unresolved``
+    larger and invents nothing. Both routes are keyless, so neither refusal is
+    a credential refusal.
     """
     house: list[Any] = []
     senate: list[Any] = []
@@ -331,9 +348,11 @@ def _roster_vocabulary(rosters: RosterSource, congress: int) -> tuple[tuple[str,
                 label,
                 scrub_credential(str(error), ""),
             )
-    vocabulary = committee_vocabulary(house=house, senate=senate)
-    logger.info("Print citations: committee vocabulary holds {:,} names", len(vocabulary))
-    return vocabulary
+    vocabularies = {
+        chamber: committee_vocabulary(house=house, senate=senate, chamber=chamber) for chamber in COMMITTEE_CHAMBERS
+    }
+    logger.info("Print citations: committee vocabulary holds {:,} names", len(vocabularies["house"]))
+    return vocabularies
 
 
 def _read_body(acquirer: PackageBodySource, package_id: str) -> tuple[Any, BodyText]:
@@ -447,8 +466,8 @@ def build_print_citations(
     since = _issue_floor()
     logger.info("BUDGET: {} measured parts admitted by the package grammar", len(MEASURED_BUDGET_PARTS))
 
-    vocabulary = _roster_vocabulary(rosters, current_congress())
-    processing_versions = _processing_versions(vocabulary)
+    vocabularies = _roster_vocabulary(rosters, current_congress())
+    processing_versions = _processing_versions(vocabularies)
     # A parent checkpoint alone can overtake failed child publication. Every
     # table affected by a read must carry the same successful-read checkpoint.
     outputs_for = {
@@ -506,6 +525,11 @@ def build_print_citations(
 
     for collection, package_id in scheduled:
         rows = rows_for[collection]
+        chamber = _report_chamber(package_id) if collection == CRPT else None
+        if collection == CRPT and chamber is None:
+            refusals["NoStatedChamber"] += 1
+            logger.warning("CRPT: {} states no House or Senate chamber in its id; refused before any request", package_id)
+            continue
         try:
             package, derived = _read_body(acquirer, package_id)
         except CredentialRefusedError:
@@ -538,7 +562,7 @@ def build_print_citations(
             derived.text,
             pages=derived.pages,
             congress=None if covered is None else covered.congress,
-            committees=vocabulary if collection == CRPT else (),
+            committees=vocabularies[chamber] if chamber is not None else (),
         )
         for finding in findings:
             kinds[finding.kind] += 1
@@ -577,7 +601,7 @@ def build_print_citations(
         citation_rows.extend(shape_document_citation(f, provenance, stated_by_index=stated) for f in findings)
 
         if collection == CRPT:
-            reading = find_bill_actions(derived.text, findings, committee_chamber=ACTIVITY_REPORT_CHAMBER)
+            reading = find_bill_actions(derived.text, findings, committee_chamber=chamber)
             action_rows.extend(
                 shape_bill_committee_action(
                     action,

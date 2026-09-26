@@ -2437,7 +2437,7 @@ tables:
     columns_from: spicy_docs
 
   house_activity_reports:
-    label: "House committee activity reports"
+    label: "Committee activity reports (House and Senate)"
     coverage: >-
       Sampled. The adoption walk from the 2023-01-01 issue floor read 2,256 CRPT
       listing rows. The shared title rule accepted 41 of 74 titles naming activity;
@@ -2447,8 +2447,10 @@ tables:
       Receipt: `rollups-0-24-0-adoption-2026-09-20/`. Local output only; not uploaded.
     measured_on: "2026-09-20"
     summary: >-
-      One row per captured end-of-Congress House committee activity report
-      package, with what its print adds to its own MODS index. Joins
+      One row per captured end-of-Congress committee activity report package,
+      House or Senate (the table's name predates its Senate rows; the package
+      id's `hrpt`/`srpt` says which), with what its print adds to its own MODS
+      index. Joins
       `document_citations` on `package_id` = `document_key` and
       `text_sha256`. All columns are stored as VARCHAR.
     data_quality: >-
@@ -2473,7 +2475,12 @@ tables:
       Senate report `bills_congress_mismatch` and `distinct_bills_beyond_index`
       count the MODS's wrong Congress, not new yield (2026-09-26 drift audit:
       the eight Senate reports on the 117th had published 1,915 citations under
-      118th-Congress bills before the fix).
+      118th-Congress bills before the fix). A committee name both chambers hold
+      (`Committee on the Judiciary`, `on the Budget`, `on Veterans' Affairs`,
+      `on Armed Services`, `on Appropriations`) resolves to the chamber of the
+      report's own committee, read off the package id; before 2026-09-26 the
+      House won every such name, and the Senate reports published 1,746
+      House codes for their own committees, 1,718 of them `hsju00`.
       `committees_unresolved` is **a floor, not a defect count**: the Senate
       `cvc` roster states only the committees its listed senators sit on, so a
       name it does not reach stays unresolved rather than being guessed.

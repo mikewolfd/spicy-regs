@@ -1,0 +1,27 @@
+<senators>
+<lastUpdate>
+<date>Wednesday, September 23, 2026</date>
+<time>5:00:10 AM EDT</time>
+</lastUpdate>
+<senator lis_member_id="S441">
+<name>
+<prefix>Ms.</prefix>
+<first>Darline </first>
+<last>Graham</last>
+<suffix>        
+</suffix>
+</name>
+<party>R</party>
+<state>SC</state>
+<homeTown>Lexington</homeTown>
+<stateRank>2</stateRank>
+<bioguideId>G000608</bioguideId>
+<office>211 Russell </office>
+<committees>
+<committee code="SSJU00">Committee on the Judiciary</committee>
+<committee code="SSEV00">Committee on Environment and Public Works</committee>
+<committee code="SSAP00">Committee on Appropriations</committee>
+<committee code="SSBU00">Committee on the Budget</committee>
+</committees>
+</senator>
+</senators>

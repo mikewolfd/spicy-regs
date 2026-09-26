@@ -491,6 +491,104 @@ def test_a_report_stating_no_congress_publishes_its_bills_unresolved_and_attache
 
 
 # --------------------------------------------------------------------------
+# Whose committee wrote the report.
+# --------------------------------------------------------------------------
+
+ROSTERS = Path(__file__).parent / "fixtures" / "congress_rosters"
+
+#: CRPT-118srpt99's transmittal letter names its own committee as every
+#: report does, unqualified -- a name both chambers hold. The hearing sentence
+#: is written for this test: srpt99 states no hearing, and a hearing is the
+#: phrasing whose code follows the committee that acted.
+CHAMBER_PAGES = [
+    *SENATE_PAGES,
+    ["herewith a report on the activities of the Committee on the Budget",
+     "On March 3, 2021, the Committee on the Budget held a hearing on S. 232."],
+]  # fmt: skip
+
+
+class _FixtureRosters:
+    """The wheel's House excerpt (its complete ``<committees>`` block) and a Senate excerpt reaching the Budget committee."""
+
+    def acquire_house(self, *, congress, session=None, max_bytes=None):
+        from spicy_docs.sources.congress.committee_rosters import parse_house_member_data
+
+        roster = parse_house_member_data((ROSTERS / "memberdata-119-excerpt.xml").read_bytes(), congress=119)
+        return SimpleNamespace(roster=roster)
+
+    def acquire_senate(self, *, max_bytes=None):
+        from spicy_docs.sources.congress.committee_rosters import parse_senate_cvc
+
+        return SimpleNamespace(roster=parse_senate_cvc((ROSTERS / "cvc-member-data-budget-excerpt.xml").read_bytes()))
+
+
+def _committee_and_hearing(tmp_path: Path, package_id: str) -> tuple[set, set]:
+    acquirer = _Acquirer({package_id: _package(package_id, pages=CHAMBER_PAGES, title=SENATE_TITLE)})
+    reader = _Reader({"CRPT": [_listing(package_id, SENATE_TITLE)]})
+    _, _, actions, citations = build_print_citations(
+        tmp_path, reader=reader, acquirer=acquirer, rosters=_FixtureRosters(), download_prior=_no_download
+    )
+    committees = {
+        (row["target_key"], row["target_resolved"]) for row in _rows(citations) if row["cite_kind"] == "committee_name"
+    }
+    hearings = {
+        (row["chamber"], row["billstatus_action_code"])
+        for row in _rows(actions)
+        if row["print_phrasing"] == "held_hearing"
+    }
+    return committees, hearings
+
+
+def test_a_senate_report_names_its_own_chambers_committee_and_its_hearings_carry_senate_codes(tmp_path):
+    """CRPT-118srpt99 is a Senate report: ``Committee on the Budget`` is ``ssbu00``, not the House's ``hsbu00``."""
+    committees, hearings = _committee_and_hearing(tmp_path, SENATE_ID)
+    assert committees == {("ssbu00", "true")}
+    assert hearings == {("senate", "13100")}
+
+
+def test_the_same_print_under_a_house_id_names_the_house_committee(tmp_path):
+    """The chamber comes from the id alone: the same words in an ``hrpt`` package are the House's, as before."""
+    committees, hearings = _committee_and_hearing(tmp_path, CRPT_ID)
+    assert committees == {("hsbu00", "true")}
+    assert hearings == {("house", "H21000")}
+
+
+def test_a_change_to_how_the_chamber_is_read_revisits_held_reports(tmp_path, monkeypatch):
+    """The chamber map is a processing input: a report read under another map is read again."""
+    from spicy_docs.schemas.committee_report_tables import CHAMBER_BY_DOCUMENT_TYPE
+
+    listing = _listing(CRPT_ID, "ACTIVITY REPORT of the COMMITTEE")
+    acquirer = _Acquirer({CRPT_ID: _package(CRPT_ID, pages=REPORT_PAGES)})
+    _publish_as_prior(_build(tmp_path, _Reader({"CRPT": [listing]}), acquirer))
+    acquirer.asked.clear()
+    monkeypatch.setattr(
+        "spicy_regs.transforms.build_print_citations.CHAMBER_BY_DOCUMENT_TYPE",
+        {**CHAMBER_BY_DOCUMENT_TYPE, "erpt": "joint"},
+    )
+    _build(tmp_path, _Reader({"CRPT": [listing]}), acquirer)
+    assert acquirer.asked == [CRPT_ID]
+
+
+def test_a_report_whose_id_states_no_chamber_is_refused_before_any_request(tmp_path, monkeypatch):
+    """No default chamber: an id the chamber map does not place is a counted refusal, never fetched or published."""
+    from loguru import logger
+
+    monkeypatch.setattr(
+        "spicy_regs.transforms.build_print_citations.CHAMBER_BY_DOCUMENT_TYPE", {"hrpt": "house"}
+    )
+    acquirer = _Acquirer({SENATE_ID: _package(SENATE_ID, pages=CHAMBER_PAGES, title=SENATE_TITLE)})
+    messages: list[str] = []
+    sink = logger.add(lambda message: messages.append(message.record["message"]))
+    try:
+        paths = _build(tmp_path, _Reader({"CRPT": [_listing(SENATE_ID, SENATE_TITLE)]}), acquirer)
+    finally:
+        logger.remove(sink)
+    assert acquirer.asked == []
+    assert all(not _rows(path) for path in paths)
+    assert any("refusals by reason" in message and "NoStatedChamber" in message for message in messages)
+
+
+# --------------------------------------------------------------------------
 # The pass itself.
 # --------------------------------------------------------------------------
 

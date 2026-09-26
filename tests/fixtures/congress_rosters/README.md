@@ -18,6 +18,19 @@ about coverage or what the publisher serves today.
 | `memberdata-119-excerpt.xml` | `tests/fixtures/congress_rosters/` (`d5f3e50`) | `https://clerk.house.gov/xml/lists/MemberData.xml`, 2026-09-19 (556,936 bytes, `sha256:07aec659…cb18`): everything before `<members>`, five complete `<member>` elements (AK00, AL01, AL03, CA11 and the FL20 vacancy), and the complete `<committees>` block, closed | 47,942 | `e08fe24e5b524b6d5cefc98be01e95862089b78711c204010966b9f5ba8c945d` |
 | `cvc-member-data-excerpt.xml` | `tests/fixtures/congress_rosters/` (`d5f3e50`) | `https://www.senate.gov/legislative/LIS_MEMBER/cvc_member_data.xml`, 2026-09-19 (67,618 bytes, `sha256:9dd64488…6d96`): everything through `<lastUpdate>`, six complete `<senator>` elements, closed | 3,847 | `e11c521410a81b5d9992314e84021a3ecffc9d438e832b9438e602b53d26683a` |
 
+One file is not the wheel's: `cvc-member-data-budget-excerpt.xml` (720
+bytes, `sha256:dd823b9001903129d5788b882d5ff7d7a896662e3b5337ab83d133828ea27f93`)
+is the same reduction of a later capture -- everything through `<lastUpdate>`,
+senator S441's complete `<senator>` element (Judiciary, Environment and Public
+Works, Appropriations, Budget), closed -- because the wheel's excerpt reaches
+no Senate Budget or Judiciary committee. Source: the keyless 2026-09-24 read of
+`https://www.senate.gov/legislative/LIS_MEMBER/cvc_member_data.xml` retained in
+`corpora/fork-execution-2026-09-21/drift-audit-2026-09-24/committee-rosters/raw/`
+(67,619 bytes, `sha256:d3a74c1a…f64a`), cut by `build_fixtures.py` in
+`corpora/supply-2026-09-02/receipts/fix-print-citations-2026-09-26/`.
+`tests/test_print_citations.py` uses it to prove a Senate report's
+`Committee on the Budget` is `ssbu00`.
+
 The whole-file facts the tests do not establish — 236 served of 238 declared
 on the committee route, 2,516 House assignments, 450 Senate seats, 9
 placeholders, the 555-vs-541 member comparison — are receipted in
