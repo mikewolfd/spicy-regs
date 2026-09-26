@@ -34,7 +34,6 @@ from spicy_regs.ontology.federal_register import (
     resolved_id,
     rule_stage,
 )
-from spicy_regs.transforms.build_rule_targets import DOCUMENT_SOURCES
 
 OUTPUT = "proceedings.parquet"
 # v5: labelled FR docket values join (linked_docket_id), and stage events fall on the
@@ -52,7 +51,10 @@ OUTPUT = "proceedings.parquet"
 # v10: an agency's Federal Register feed docket (*_FRDOC_*, catch_all_docket) takes nothing from
 # its own documents: no action evidence, RIN, CFR part, stage event or title (decision 32 as
 # amended, owner ruling 2026-09-26).
-ACTOR_ID = "spicy-regs:proceedings:v10"
+# v11: a feed docket forms a proceeding only on a RIN it states, not on Regulations.gov's
+# Rulemaking type, and no FR link naming it counts; four title families of feeds under
+# ordinary ids join the _FRDOC_ ones (decision 32 as amended, owner rulings 2026-09-26).
+ACTOR_ID = "spicy-regs:proceedings:v11"
 
 COLUMNS = (
     "proceeding_id",
@@ -218,6 +220,9 @@ def build_proceedings(
     # Establish source-backed docket membership before trusting FR link rows.
     trusted_dockets: set[str] = set()
     action_dockets: set[str] = set()
+    # Federal Register feed dockets (catch_all_docket): nothing they hold, and no FR document
+    # naming them, is evidence of their proceeding (decision 32 as amended 2026-09-26).
+    catch_alls: set[str] = set()
     docket_metadata: dict[str, dict] = {}
     for row in iter_parquet_rows(
         paths["dockets"], columns=("docket_id", "rin", "docket_type", "title", "agency_code", "modify_date")
@@ -229,8 +234,14 @@ def build_proceedings(
         docket_metadata[docket] = row
         # A docket is action evidence by its RIN or its type being exactly Rulemaking: the
         # substring test this replaced also matched Nonrulemaking, and made a single-docket
-        # proceeding of every one of those shells (fork delivery decision 32).
-        if normalize_rin(row.get("rin")) or str(row.get("docket_type") or "").casefold() == "rulemaking":
+        # proceeding of every one of those shells (fork delivery decision 32). A feed docket is
+        # one only by its RIN: Regulations.gov types every _FRDOC_ feed Rulemaking.
+        rin = normalize_rin(row.get("rin"))
+        if catch_all_docket(docket, row.get("title")):
+            catch_alls.add(docket)
+        elif str(row.get("docket_type") or "").casefold() == "rulemaking":
+            action_dockets.add(docket)
+        if rin:
             action_dockets.add(docket)
 
     for row in iter_parquet_rows(
@@ -241,9 +252,10 @@ def build_proceedings(
         if docket is None:
             continue
         trusted_dockets.add(docket)
-        # A catch-all's documents post other rulemakings' FR documents: none is its evidence,
-        # so it is an action docket only by its own RIN or type (decision 32 as amended).
-        if catch_all_docket(docket):
+        # A feed docket's documents post other rulemakings' FR documents: none is its evidence.
+        if docket not in docket_metadata and catch_all_docket(docket):
+            catch_alls.add(docket)
+        if docket in catch_alls:
             continue
         raw_rins = parse_json_list(
             row.get("additional_rins"),
@@ -267,11 +279,12 @@ def build_proceedings(
     # An FR link names a docket; it makes the docket an action docket only when the
     # document is itself action evidence (decision 32 as amended). A RIN-less notice, or a
     # reference that resolves to no one document, attaches to the docket's proceeding if it
-    # has one and founds none.
+    # has one and founds none. A link to a feed docket is none of these: DOT filed its 2025
+    # denied-boarding rule (2025-02814) under its Miscellaneous feed, DOT-OST-2009-0092.
     linked_dockets_by_fr: dict[str, set[str]] = defaultdict(set)
     unresolved_links_by_docket: dict[str, list[dict]] = defaultdict(list)
     for docket, reference in fr_index.docket_links(paths["fr_docket_links"]):
-        if docket not in trusted_dockets:
+        if docket not in trusted_dockets or docket in catch_alls:
             continue
         if identity := resolved_id(reference):
             linked_dockets_by_fr[identity].add(docket)
@@ -373,7 +386,7 @@ def build_proceedings(
     ):
         docket = normalize_regsgov_identifier(row.get("docket_id"))
         key = group_key_by_docket.get(docket or "")
-        if key is None or catch_all_docket(docket or ""):
+        if key is None or docket in catch_alls:
             continue
         group = groups[key]
         raw_rins = parse_json_list(
@@ -438,12 +451,13 @@ def build_proceedings(
             )
 
     for row in iter_parquet_rows(
-        paths["rule_targets"],
-        columns=("docket_id", "rin", "cfr_ref", "cfr_title", "cfr_part", "cfr_section", "source"),
+        paths["rule_targets"], columns=("docket_id", "rin", "cfr_ref", "cfr_title", "cfr_part", "cfr_section")
     ):
         docket = normalize_regsgov_identifier(row.get("docket_id"))
         key = group_key_by_docket.get(docket or "")
-        if key is None or (catch_all_docket(docket or "") and row.get("source") in DOCUMENT_SOURCES):
+        # A feed docket's own RIN is read off its docket row above; every other edge of its
+        # comes from the documents it posts.
+        if key is None or docket in catch_alls:
             continue
         group = groups[key]
         if rin := normalize_rin(row.get("rin")):

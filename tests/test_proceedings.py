@@ -249,7 +249,7 @@ def test_reference_proceeding_threads_rinless_docket_and_preserves_reopening(tmp
         periods[0]["opened_by_artifact_ids_json"]
     )
     assert all(row["method"] == "deterministic" for row in periods)
-    assert all(row["actor_id"] == "spicy-regs:comment-periods:v9" for row in periods)
+    assert all(row["actor_id"] == "spicy-regs:comment-periods:v10" for row in periods)
 
 
 def test_reused_rin_does_not_collapse_or_cross_assign_distinct_dockets(tmp_path):
@@ -918,7 +918,7 @@ def test_a_nonrulemaking_docket_is_a_proceeding_only_on_action_evidence(tmp_path
     assert json.loads(by_docket[staged]["fr_document_ids_json"]) == ["2023-00001@2023-01-03"]
     assert json.loads(by_docket[with_rin]["rins_json"]) == ["2120-AA64"]
     assert not any("2021-06210@2021-03-25" in row["fr_document_ids_json"] for row in proceedings)
-    assert {row["actor_id"] for row in proceedings} == {"spicy-regs:proceedings:v10"}
+    assert {row["actor_id"] for row in proceedings} == {"spicy-regs:proceedings:v11"}
 
     # Its comment period keeps the docket as its anchor, with no proceeding.
     (period,) = pq.read_table(build_comment_periods(tmp_path)).to_pylist()
@@ -998,19 +998,31 @@ def test_a_hold_lifted_mid_pass_lets_the_waiting_group_take_its_best_id(tmp_path
 
 
 @pytest.mark.parametrize(
-    ("docket", "expected"),
+    ("docket", "title", "expected"),
     [
-        ("EPA_FRDOC_0001", True),
-        ("NOAA_FRDOC_0001", True),
-        ("CCC_FRDOC_0001", True),
-        ("EPA-HQ-OAR-2021-0317", False),
-        ("FAA-2013-0259", False),  # a feed-like title, outside the ruling
-        ("EPA_FRDOC", False),
-        ("GIPSA-2010-FGIS-0014-NONRULEMAKING", False),
+        ("EPA_FRDOC_0001", "Recently Posted EPA Rules and Notices from FR Feed.", True),
+        ("NOAA_FRDOC_0001", "FR Pending Documents", True),
+        ("BSC_FRDOC_0001", None, True),  # the identifier alone
+        ("FAA-2013-0259", "Federal Registers for Applications, Notices, and Orders - Miscellaneous", True),
+        ("DOT-OST-2009-0092", "Federal Registers for Applications, Notices and Orders - Miscellaneous", True),
+        ("TSA-2013-0001", "Federal Registers for Applications, Notices, and Orders - Miscellaneous", True),
+        ("HHS-OS-2022-0008", "HHS 2022 Publications", True),
+        ("EIA-2009-0002", "Title: This docket contains Federal Register Notices from the DOE EIA FDMS sandbox.", True),
+        ("EERE-2011-OT-0001", "This docket contains Federal Register Notices from the EERE-OT FDMS Sandbox", True),
+        ("BPA-2011-0001", "This docket contains Federal Register Notices from the BPA sandbox.", True),
+        ("WAPA-2011-0001", "This docket contains Federal Register Notices from the DOE WAPA FDMS sandbox. ", True),
+        ("FAA-2007-0004", "Duplicate FR Feed Documents", True),
+        # Neither id nor title alone makes a feed.
+        ("FAA-2013-0259", None, False),
+        ("EPA-HQ-OAR-2021-0317", "Federal Registers for Applications, Notices, and Orders - Miscellaneous", False),
+        ("CDC-2016-0088", "HHS 2022 Publications", False),
+        ("CFPB-2018-0042", "Policy on No-Action Letters and the BCFP Product Sandbox", False),
+        ("DOT-OST-2009-0083", "Standard Instrument Approach Procedures; Miscellaneous Amendments", False),
+        ("EPA_FRDOC", None, False),
     ],
 )
-def test_catch_all_dockets_are_the_federal_register_feed_dockets(docket, expected):
-    assert catch_all_docket(docket) is expected
+def test_catch_all_dockets_are_the_federal_register_feed_dockets(docket, title, expected):
+    assert catch_all_docket(docket, title) is expected
 
 
 def test_a_catch_all_docket_takes_nothing_from_the_documents_it_posts(tmp_path):
@@ -1019,12 +1031,21 @@ def test_a_catch_all_docket_takes_nothing_from_the_documents_it_posts(tmp_path):
     NOAA_FRDOC_0001 posts the Amendment 5 drift-gillnet proposal (2017-19662, RIN 0648-BG81,
     which names no docket) with the RIN on its own document; EPA_FRDOC_0001 posts the 2012
     extremely-hazardous-substances rule (2012-6910, RIN 2050-AF08), whose docket is
-    EPA-HQ-SFUND-2010-0586. Each feed docket stays a proceeding by its type, holds no RIN,
-    CFR part or stage of those rules and tracks no agenda item; the citations stay typed edges.
+    EPA-HQ-SFUND-2010-0586; DOT filed its 2025 denied-boarding rule (2025-02814, RIN
+    2105-AF30) under its Miscellaneous feed, DOT-OST-2009-0092, which the rule names. No feed
+    forms a proceeding on its Rulemaking type or on those rules; FMC_FRDOC_0001 does on the
+    RIN it states, and holds that alone. No feed tracks an agenda item, and the citations stay
+    typed edges.
     """
     feeds = {
-        "NOAA_FRDOC_0001": ("FR Pending Documents", "NOAA"),
-        "EPA_FRDOC_0001": ("Recently Posted EPA Rules and Notices from FR Feed.", "EPA"),
+        "NOAA_FRDOC_0001": ("FR Pending Documents", "NOAA", "Rulemaking", "Not Assigned"),
+        "EPA_FRDOC_0001": ("Recently Posted EPA Rules and Notices from FR Feed.", "EPA", "Rulemaking", "Not Assigned"),
+        "DOT-OST-2009-0092": (
+            "Federal Registers for Applications, Notices and Orders - Miscellaneous",
+            "DOT",
+            "Nonrulemaking",
+            None,
+        ),
     }
     _write(
         tmp_path / "dockets.parquet",
@@ -1034,13 +1055,21 @@ def test_a_catch_all_docket_takes_nothing_from_the_documents_it_posts(tmp_path):
                 {
                     "docket_id": docket,
                     "title": title,
-                    "docket_type": "Rulemaking",
-                    "rin": "Not Assigned",
+                    "docket_type": docket_type,
+                    "rin": rin,
                     "agency_code": agency,
                     "modify_date": "2026-09-25T12:26:10Z",
                 }
-                for docket, (title, agency) in feeds.items()
+                for docket, (title, agency, docket_type, rin) in feeds.items()
             ),
+            {
+                "docket_id": "FMC_FRDOC_0001",
+                "title": "Recently Posted FMC Rules and Notices.",
+                "docket_type": "Rulemaking",
+                "rin": "3072-AC92",
+                "agency_code": "FMC",
+                "modify_date": "2026-09-22T12:26:00Z",
+            },
             {
                 "docket_id": "EPA-HQ-SFUND-2010-0586",
                 "title": "Emergency Planning and Community Right-to-Know Act; Amendments to Emergency Planning and Notification",
@@ -1096,6 +1125,15 @@ def test_a_catch_all_docket_takes_nothing_from_the_documents_it_posts(tmp_path):
                 "agency_code": "EPA",
                 "posted_date": "2012-04-27T04:00:00Z",
             },
+            {
+                "document_id": "DOT-OST-2009-0092-0557",
+                "docket_id": "DOT-OST-2009-0092",
+                "document_type": "Rule",
+                "title": "Periodic Revisions to Denied Boarding Compensation and Domestic Baggage Liability Limits",
+                "fr_doc_num": "2025-02814",
+                "agency_code": "DOT",
+                "posted_date": "2025-02-20T05:00:00Z",
+            },
         ],
     )
     _write(
@@ -1130,14 +1168,30 @@ def test_a_catch_all_docket_takes_nothing_from_the_documents_it_posts(tmp_path):
                 "regulation_id_numbers_json": '["2050-AF08"]',
                 "cfr_references_json": '[{"chapter": null, "citation_url": null, "part": 355, "title": 40}]',
             },
+            {
+                "document_number": "2025-02814",
+                "publication_date": "2025-02-20",
+                "document_type": "Rule",
+                "title": "Periodic Revisions to Denied Boarding Compensation and Domestic Baggage Liability Limits",
+                "docket_ids_json": '["Docket No. DOT-OST-2009-0092"]',
+                "regulation_id_numbers_json": '["2105-AF30"]',
+                "cfr_references_json": "[]",
+            },
         ],
     )
     _write(
         tmp_path / "fr_docket_links.parquet",
         ("document_number", "publication_date", "docket_id"),
         [
-            {"document_number": "2012-6910", "publication_date": "2012-03-22", "docket_id": docket}
-            for docket in ("EPA-HQ-SFUND-2010-0586", "FRL-9651-1")
+            *(
+                {"document_number": "2012-6910", "publication_date": "2012-03-22", "docket_id": docket}
+                for docket in ("EPA-HQ-SFUND-2010-0586", "FRL-9651-1")
+            ),
+            {
+                "document_number": "2025-02814",
+                "publication_date": "2025-02-20",
+                "docket_id": "Docket No. DOT-OST-2009-0092",
+            },
         ],
     )
     _write(tmp_path / "unified_agenda.parquet", ("rin", "agenda_edition"), [])
@@ -1160,36 +1214,30 @@ def test_a_catch_all_docket_takes_nothing_from_the_documents_it_posts(tmp_path):
     } >= {
         ("NOAA_FRDOC_0001", "NOAA_FRDOC_0001-4419", "2017-19662@2017-09-15"),
         ("EPA_FRDOC_0001", "EPA_FRDOC_0001-12068", "2012-6910@2012-03-22"),
+        ("DOT-OST-2009-0092", "DOT-OST-2009-0092-0557", "2025-02814@2025-02-20"),
     }
     by_dockets = {tuple(json.loads(row["docket_ids_json"])): row for row in proceedings}
-    for docket, (title, agency) in feeds.items():
-        feed = by_dockets[(docket,)]  # a proceeding by its type, Rulemaking, like any other docket
-        assert (feed["title"], feed["agency_code"]) == (title, agency)
-        assert (
-            feed["rins_json"]
-            == feed["cfr_refs_json"]
-            == feed["stage_events_json"]
-            == feed["fr_document_ids_json"]
-            == "[]"
-        )
-        assert feed["current_stage"] is None
-    # The rules keep their RINs where they belong.
-    noaa_notice = by_dockets[()]
-    assert json.loads(noaa_notice["fr_document_ids_json"]) == ["2017-19662@2017-09-15"]
+    by_notice = {tuple(json.loads(row["fr_document_ids_json"])): row for row in proceedings}
+    # No feed is a proceeding on its type or on the rules it posts; FMC's is, on its own RIN.
+    assert set(by_dockets) == {("EPA-HQ-SFUND-2010-0586",), ("FMC_FRDOC_0001",), ()}
+    fmc = by_dockets[("FMC_FRDOC_0001",)]
+    assert json.loads(fmc["rins_json"]) == ["3072-AC92"]
+    assert fmc["cfr_refs_json"] == fmc["stage_events_json"] == fmc["fr_document_ids_json"] == "[]"
+    # The rules keep their RINs where they belong; the DOT rule is its own FR-only proceeding.
+    noaa_notice = by_notice[("2017-19662@2017-09-15",)]
     assert json.loads(noaa_notice["rins_json"]) == ["0648-BG81"]
+    dot_rule = by_notice[("2025-02814@2025-02-20",)]
+    assert (json.loads(dot_rule["docket_ids_json"]), json.loads(dot_rule["rins_json"])) == ([], ["2105-AF30"])
     epa_rule = by_dockets[("EPA-HQ-SFUND-2010-0586",)]
     assert json.loads(epa_rule["rins_json"]) == ["2050-AF08"]
     assert json.loads(epa_rule["cfr_refs_json"]) == ["40-355"]
-    # An agenda item tracks the rule's proceeding, never the feed's.
+    # An agenda item tracks the rule's proceeding, never a feed's.
     assert {(row["rin"], row["proceeding_id"], row["source"]) for row in links} == {
         ("0648-BG81", noaa_notice["proceeding_id"], "federal_register_rin"),
         ("2050-AF08", epa_rule["proceeding_id"], "federal_register_rin"),
+        ("2105-AF30", dot_rule["proceeding_id"], "federal_register_rin"),
+        ("3072-AC92", fmc["proceeding_id"], "docket_rin"),
     }
-    assert {row["rin"]: row["scope_status"] for row in items} == {
-        "0648-BG81": "single_observed",
-        "2050-AF08": "single_observed",
-    }
-    # The feed document's own comment period keeps its own RIN, and no other.
-    feed_proceeding = by_dockets[("NOAA_FRDOC_0001",)]["proceeding_id"]
-    (feed_period,) = [row for row in periods if feed_proceeding in json.loads(row["proceeding_ids_json"])]
-    assert json.loads(feed_period["rins_json"]) == ["0648-BG81"]
+    # The feed document's own comment period stays with its docket, under its own RIN.
+    (feed_period,) = [row for row in periods if "NOAA_FRDOC_0001" in json.loads(row["docket_ids_json"])]
+    assert (json.loads(feed_period["proceeding_ids_json"]), json.loads(feed_period["rins_json"])) == ([], ["0648-BG81"])

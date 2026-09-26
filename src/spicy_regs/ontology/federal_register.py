@@ -69,29 +69,66 @@ def rule_stage(document_type: object, title: object) -> str | None:
 
 
 #: Regulations.gov's Federal Register feed dockets, one per agency (``EPA_FRDOC_0001``).
-_CATCH_ALL_DOCKET = re.compile(r"[A-Z0-9]+_FRDOC_\d{4}")
+_FRDOC_DOCKET = re.compile(r"[A-Z0-9]+_FRDOC_\d{4}")
+
+#: Feed dockets agencies keep under ordinary ids: (family, id pattern, title pattern). Both must
+#: match, the title whitespace-collapsed and casefolded, so a docket merely titled alike stays out.
+#: Counts are the dockets each takes on the R5 re-audit's parents, and together no other.
+_FEED_DOCKETS: tuple[tuple[str, re.Pattern[str], re.Pattern[str]], ...] = (
+    (
+        # DOT's modal feed dockets and TSA's copy (12): FAA-2013-0259, DOT-OST-2009-0092, ...
+        "dot_miscellaneous",
+        re.compile(r"(?:DOT-OST|FAA|FHWA|FMCSA|FRA|FTA|MARAD|NHTSA|PHMSA|SLSDC|TSA)-\d{4}-\d{4}"),
+        re.compile(r"federal registers for applications, notices,? and orders - miscellaneous"),
+    ),
+    (
+        # HHS's yearly publication dockets (4): HHS-OS-2022-0008 "HHS 2022 Publications", ...
+        "hhs_publications",
+        re.compile(r"HHS-OS-\d{4}-\d{4}"),
+        re.compile(r"hhs \d{4} publications"),
+    ),
+    (
+        # The DOE family's FDMS sandboxes (23): DOE-HQ, BPA, EERE, EIA, NNSA, SWPA and WAPA.
+        "doe_fdms_sandbox",
+        re.compile(r"(?:BPA|DOE-HQ|EERE|EIA|NNSA|SWPA|WAPA)-\d{4}(?:-OT)?-\d{4}"),
+        re.compile(
+            r"(?:title: )?this docket contains federal register notices from the "
+            r"(?:doe )?(?:bpa|doe|eere(?:-ot)?|eia|nnsa|swpa|wapa) (?:fdms )?sandbox\.?"
+        ),
+    ),
+    (
+        # FAA's duplicates of the feed (1): FAA-2007-0004.
+        "faa_duplicate_feed",
+        re.compile(r"FAA-\d{4}-\d{4}"),
+        re.compile(r"duplicate fr feed documents"),
+    ),
+)
 
 
-def catch_all_docket(docket: str) -> bool:
-    """Whether a normalized Regulations.gov docket id is an agency's Federal Register feed docket.
+def catch_all_docket(docket: str, title: object = None) -> bool:
+    """Whether a normalized Regulations.gov docket is a Federal Register feed docket.
 
-    A feed docket holds the FR documents of that agency's rulemakings, so none of its own
-    documents is evidence of its own proceeding: their RINs, stages and citations belong to
-    the rulemakings they post. It forms a proceeding only on its own RIN or docket type, like
-    any other docket (fork delivery decision 32 as amended, owner ruling 2026-09-26).
+    A feed docket holds the FR documents of an agency's rulemakings. None of its documents,
+    and no FR document naming it, is evidence of its own proceeding: their RINs, stages and
+    citations belong to the rulemakings they post. It forms a proceeding only on a RIN it
+    states itself; Regulations.gov types every ``_FRDOC_`` docket Rulemaking, so the type
+    alone makes none (fork delivery decision 32 as amended, owner rulings 2026-09-26).
 
-    On the R5 re-audit's parents the identifier is the whole test. All 176 such dockets end
-    ``_FRDOC_0001`` and are typed Rulemaking; 155 of the 175 with documents are titled
-    "Recently Posted ... Rules and Notices" and the rest are feed dockets titled after a
-    document ("FR Pending Documents", "Temporary Holding Docket"). Their documents are FR
-    documents (median 100%), they cite up to 1,324 distinct action notices (median 18), no
-    FR document names one of them, and through those documents they held 6,025 RINs of
-    which 7 were their own. No data test finds the rest: 50 or more cited action notices
-    and no RIN of the docket's own also takes 18 program series (FEMA flood-elevation
-    determinations, the National Priorities List, NMFS in-season actions) beside 6
-    feed-titled dockets (receipt ``frdoc-catchalls-2026-09-26/``).
+    ``_FRDOC_`` is the identifier alone: all 176 on the R5 re-audit's parents end
+    ``_FRDOC_0001``; 155 of the 175 with documents are titled "Recently Posted ... Rules and
+    Notices" and the rest are feeds titled after a document ("FR Pending Documents",
+    "Temporary Holding Docket"). Their documents are FR documents (median 100%), they cite up
+    to 1,324 distinct action notices (median 18), and through them they held 6,025 RINs, 7
+    their own. The four :data:`_FEED_DOCKETS` families take 40 more by id and title (12 DOT,
+    4 HHS, 23 DOE sandboxes, 1 FAA), 26 of them proceedings holding 774 RINs. No data test
+    finds feeds: 50 or more cited action notices and no RIN of the docket's own also takes
+    18 program series (FEMA flood elevations, the National Priorities List, NMFS in-season
+    actions) (receipt ``frdoc-catchalls-2026-09-26/``).
     """
-    return _CATCH_ALL_DOCKET.fullmatch(docket) is not None
+    if _FRDOC_DOCKET.fullmatch(docket):
+        return True
+    text = " ".join(str(title or "").split()).casefold()
+    return any(ids.fullmatch(docket) and titles.fullmatch(text) for _, ids, titles in _FEED_DOCKETS)
 
 
 #: The digits a document number ends on: its sequence, whatever separates it.

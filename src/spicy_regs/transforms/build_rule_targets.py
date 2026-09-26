@@ -62,10 +62,7 @@ COLUMNS = (
 #: docket's proceeding only if proceedings lists it there.
 CITES_ACTION_NOTICE = "docket_document_cites_action_notice"
 
-#: The sources a docket's own documents yield; the others are its own RIN and the FR links naming it.
-DOCUMENT_SOURCES = frozenset({"document_rin", "document_fr_doc", CITES_ACTION_NOTICE})
-
-SOURCES = frozenset({"fr_cfr_ref", "docket_rin", *DOCUMENT_SOURCES})
+SOURCES = frozenset({"fr_cfr_ref", "docket_rin", "document_rin", "document_fr_doc", CITES_ACTION_NOTICE})
 
 
 def _date_bounds(*days: str | None) -> tuple[str | None, str | None]:

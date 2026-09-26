@@ -42,8 +42,10 @@ RELATIONSHIPS_OUTPUT = "agenda_item_proceedings.parquet"
 # v5: an item tracks a proceeding only through a RIN the proceeding holds, so a catch-all
 # Federal Register feed docket (proceedings v10) tracks none of the rules it posts; items it
 # tracked keep their other links and count one fewer (decision 32 as amended 2026-09-26).
-ITEM_ACTOR_ID = "spicy-regs:regulatory-agenda-items:v5"
-RELATIONSHIP_ACTOR_ID = "spicy-regs:agenda-item-proceedings:v5"
+# v6: code unchanged; the feed dockets' proceedings go (proceedings v11), and with them the two
+# links FAA-2007-0004's documents gave 2120-AA64.
+ITEM_ACTOR_ID = "spicy-regs:regulatory-agenda-items:v6"
+RELATIONSHIP_ACTOR_ID = "spicy-regs:agenda-item-proceedings:v6"
 
 ITEM_COLUMNS = (
     "agenda_item_id",

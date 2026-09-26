@@ -70,12 +70,13 @@ MCP `table_qualification` record read these rows directly.
     by citation was measured and would fuse 58,286 proceedings; rule-targets v6
     records the citation as a typed edge instead (decision 33 as amended, confirmed
     by the owner 2026-09-26). Receipt `typed-citation-join-2026-09-26/`.
-  - Catch-all feed dockets (`*_FRDOC_*`, 176) took the RINs, CFR parts, stages and
-    agenda links of the rules they post: 6,025 RINs and 547 links, 7 of each their own.
-    By owner ruling (decision 32 as amended 2026-09-26) proceedings v10 takes none of
-    them; agenda v5 links an item only through a RIN its proceeding holds. Not yet
-    published. Forty feed-titled dockets outside the `_FRDOC_` identifier await a
-    ruling; 26 of them are proceedings holding 774 RINs. Receipt `frdoc-catchalls-2026-09-26/`.
+  - Catch-all feed dockets (`*_FRDOC_*`, 176, and 40 more in four title families)
+    took the RINs, CFR parts, stages and agenda links of the rules they post. By owner
+    rulings (decision 32 as amended 2026-09-26) proceedings v10 takes none of them, and
+    v11 makes a feed a proceeding only on a RIN it states: 194 feed proceedings go and
+    7 stay, and every RIN they held stays held elsewhere. Agenda v5 links an item only
+    through a RIN its proceeding holds. Not yet published. Receipt
+    `frdoc-catchalls-2026-09-26/`.
   - Lineage is out of scope by owner decision (2026-09-26): `identity_predecessors_json`
     is pruned at `8477dea` (proceedings v9), and the 3,010 links erased at
     `snapshot_47cca15e…` survive only in the retained snapshot `6d3dc0f2`. Continuity
