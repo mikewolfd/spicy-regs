@@ -73,8 +73,15 @@ spicysearch `0dc4d0a`):
   - reading already handles many files: `iceberg_scan` in `adapters/storage/records.py:463-465`;
   - registering handles one: `register_parquet` (`records.py:1050-1110`), a single `memberDigest`
     (707) and a `files == [member_digest]` check (441-445);
-  - the `AdmittedGeneration` dataclass carries one path;
-  - staging already accepts nested keys (`generation_source.py:152, 213`).
+  - `AdmittedGeneration` and `stage_generation` (`generation_source.py`) return one `path` and one
+    `member`, and `admit_generation` (`application/generation_admission.py`) passes that one member to
+    registration;
+  - `generation_source.py:205-212` also requires each member's `record_count` to equal its table's
+    `rows`, and `set(tables) == set(members)`;
+  - staging already accepts nested keys (`generation_source.py:152, 213`);
+  - everything downstream of the Iceberg table (identity minting, the later-generation join,
+    membership, the occurrence index, `table()`, Engine) runs over the table relation and doesn't
+    depend on how many files there are (confirmed by 83).
 - **No direct readers:** spicyengine and spicysearch read only DocSpec states and prepared layers
   (`iceberg_scan`, any number of files). RefSpec, rulespec and spicyregs-web read no spicy-regs table.
 - **Not verifiable here:** `spicy-regs-ui` reads bare legacy URLs (`table_metadata.json:160`).
@@ -111,7 +118,10 @@ A v2 table entry keeps the v1 fields at table level and adds its members:
 }
 ```
 
-A single-member table in v2 has exactly one member, and it is the same object as in v1.
+A single-member table in v2 has exactly one member, and it is the same object as in v1. Each v2 family
+entry carries what DocSpec pins on, as v1 does: `logicalId`, `artifactDigest` and `publicationStatus`.
+A member's `key` is relative to the generation prefix, so a carried-forward member keeps the same `key`
+and `sha256` from one generation to the next (§4.3 relies on this).
 
 **Open for 24:**
 - whether the v1 and v2 writes need one conditional sequence (v2, then v1) or one shared precondition;
@@ -128,9 +138,13 @@ A single-member table in v2 has exactly one member, and it is the same object as
   check at 153-155 compare them).
   - The bill tables have no `congress` column; it is the prefix of `bill_id`. So `bill_sections`
     (and later `section_diff_items` and `bill_publisher_summaries`) gains a declared `congress` column
-    in its spicy-docs contract, derived from `bill_id`.
-- Every member keeps DocSpec's limits: no Iceberg field IDs, row groups ≤ 256 MiB uncompressed. The
-  table's declared identity must be unique across members, and admission checks that once per table.
+    in its spicy-docs contract, derived from `bill_id`. The identity stays `bill_id`-based. An identity
+    that included the new column would make DocSpec re-mint every row.
+- Every member keeps DocSpec's limits: no Iceberg field IDs, row groups ≤ 256 MiB uncompressed. A
+  1 GiB member cap is within DocSpec's exemption, since referenced files skip `max_member_bytes`.
+- The table's declared identity must be unique across members. That costs nothing extra: DocSpec's
+  identity pass is already one `GROUP BY` over the whole table relation, which becomes one Iceberg
+  table over all members. No per-member pass is added.
 
 ### 4.3 Building: touch only the partitions that changed
 
@@ -141,6 +155,11 @@ A single-member table in v2 has exactly one member, and it is the same object as
   (~453k rows of 1.9M today) and copies the rest server-side.
 - **Byte-identical output from an unchanged merge is not required**, because an untouched partition
   is not re-merged at all. (The survey found that byte-determinism of the merge is unmeasured.)
+- **DocSpec gains the same saving.** When a later generation's member has the same `key` and `sha256`
+  as the prior generation's, DocSpec admission can skip its all-column comparison for that partition
+  and compare only the changed members' rows. Today that comparison runs over the whole table at
+  about 2.6 s per million rows, roughly half a minute for `court_opinion_clusters`' 10M rows. Per
+  partition, admission becomes O(changed partitions): seconds.
 - The bill family's whole-table reads of `bill_sections` (`build_bill_family.py:595-605, 997-1024`)
   move to projected remote reads over the member list, as `remote_inputs` already does
   (`base.py:68-71, 261-277`).
@@ -165,9 +184,16 @@ A single-member table in v2 has exactly one member, and it is the same object as
    `[(url, sha256, rows)]` with one element for a v1 table. `r2.download`, the MCP views
    (`read_parquet([...])`), the CLI, `generation_audit`, the nightly checks and the dictionary check
    all go through it. Ships in one spicy-regs release **before** any table is published split.
-2. **DocSpec** (83): register a table from a member list (`add_files` over every member). The
-   descriptor carries each member's digest and row count, and `verify` compares the file set to the
-   member digests. It reads v2 only for families that have a split table.
+2. **DocSpec** (83):
+   - `stage_generation` and `admit_generation` carry a member list;
+   - `register_parquet` registers one Iceberg table over it (`add_files` over every member);
+   - the row check changes from one equality to a sum: each member's footer rows equal its entry, and
+     the entries sum to the table's `rows`;
+   - `verify` compares the Iceberg data-file digests with the member digests as sorted sets, since the
+     catalog's file order is not the descriptor's;
+   - the sealed layer records every file's digest, as it does today, and nothing else in the seal
+     changes;
+   - it reads v2 only for families that have a split table.
 3. **Other readers:** spicy-docs `check_source_domain_drift.py` (bare URLs) and the spicyregs plugin
    script (`query_spicy_regs.py`) either resolve through v2 or keep reading v1 tables only.
    `spicy-regs-ui` is outside this workspace; it reads legacy bare URLs and is unaffected.
@@ -181,7 +207,19 @@ A single-member table in v2 has exactly one member, and it is the same object as
 3. **`fcc_filings`** by received year (decision 46), when it approaches 500 MB.
 4. **FEC individual contributions** (decision 51), born split, by cycle, then month or committee.
 5. **Comments:** folding the agency mirror into generations would make it atomic, but would cost an
-   8.5 GB read-back a day unless phase-2 copy trust exists. Not proposed now.
+   8.5 GB read-back a day unless phase-2 copy trust exists. Not proposed now. DocSpec's admission of
+   `comments` (182 agency files) waits on this design: once the mirror folds in, the v2 member list
+   is what makes it admissible.
+
+## Review record
+
+- **spicy-stack-83 (DocSpec 0.11.2, Engine 0.9.1), 2026-09-26:** the shape works for DocSpec as drafted.
+  Four corrections and additions were folded in: §3's DocSpec single-file spots, §4.1's family pin
+  fields, §4.2's identity rule and existing uniqueness pass, §4.3's per-partition admission saving,
+  and §4.5's sorted-set `verify`. It agrees with the 1 GiB member cap, the ≤ 256 MiB row groups, the
+  phase-1 O(family) read-back ("documents' 77 MB took 5.4 s"), and not trusting size and ETag in
+  admission. Engine needs nothing.
+- **spicy-stack-24 (publication format):** pending.
 
 ## 5. Open measurements before code
 
