@@ -500,13 +500,13 @@
       ],
       "audits": [
         {
-          "disposition": "PARTIAL",
-          "pin": "559fd5f4",
+          "disposition": "qualified",
+          "pin": "94c5868b",
           "pin_kind": "artifact",
           "date": "2026-09-26"
         }
       ],
-      "statement": "current `559fd5f4…` is PARTIAL (2026-09-26): 7,100 rows, all 7,095 identities of `af5ef4c3…` retained, five additions and 12 changes (`update_date`, latest action). These match the run's logged window of 42 rows (2026-09-20 to 2026-09-25). The generation retained no source evidence (`inputs=[]`). In a post-publication sample of all 17 rows, 187 stable cells match. Of the latest-action pairs, 7 occur in native action history and nine equal a native NULL. SA 6782's published 2026-09-23 action is absent from today's history. Each `update_date` lies in the window and is monotone. Receipt: `drift-qualification-2026-09-26/congress-docs/`."
+      "statement": "qualified at `94c5868b…` (2026-09-26): 7,106 rows. R8 admits evidence `4aee7cd8…` (51 members, bound, 0 failures). All 48 rows of the retained 09-21…09-26 window (one list page declaring 48, and 48 details) replay cell for cell through an independent raw-JSON parser: 864 of 864 match. The other 7,058 rows equal the qualified `af5ef4c3…`, and no identity of it or of `559fd5f4…` is lost. SA 6782's missing 09-23 action is a Congress.gov restatement: the retained responses carry the publisher's 09-25 11:08Z stamps, and a native read at 09-26 12:25Z shows the same stamp and no 09-23 action. Receipt: `amend-hc-qualification-2026-09-26/amendments/`."
     },
     {
       "task": "T08",
@@ -732,12 +732,12 @@
       "audits": [
         {
           "disposition": "PARTIAL",
-          "pin": "37625a89",
+          "pin": "257e889a",
           "pin_kind": "artifact",
           "date": "2026-09-26"
         }
       ],
-      "statement": "current `37625a89…` is PARTIAL (2026-09-26): all 4,992 identities of `333e422d…` survive, and exactly 1,000 list-only rows gain detail. Those rows are the head of the 1,992-row queue under the builder's newest-first order and 1,000-per-run cap, as the run log states. All list columns are unchanged, and all 10,000 derived cells agree with their JSON and the RIN rule. A post-publication sample of 40 more fills matches all 1280 native cells (1920 with the earlier 20). No source evidence was retained. Receipt: `drift-qualification-2026-09-26/congress-docs/`."
+      "statement": "current `257e889a…` is PARTIAL (2026-09-26): 5,006 rows. R8 admits evidence `8ca61398…` (1,045 members, bound). An independent replay matches list membership (5,006 = listed = declared), all 34,042 list cells, and 16,000 detail cells of the 1,000 rows read this run. Limits: 6 rows are list-only past the cap, and 4,000 older details were read before evidence was retained. `a663f38` re-reads once every held detail no retained response backs; it is self-limiting and journals the remaining list. It is draining in paced runs, and the table qualifies once a generation has no list-only rows and an empty unverified list. Receipt: `amend-hc-qualification-2026-09-26/house-communications/`."
     },
     {
       "task": "T08",
