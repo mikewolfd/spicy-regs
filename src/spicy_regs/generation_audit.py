@@ -714,7 +714,11 @@ def _evidence(base: PublicBase, root: Mapping | None, family: str, run: _Run,
 
     from spicy_regs.source_evidence import INPUT_ROLE, PRIOR_ROLE, verify_evidence
 
-    inputs = (root or {}).get("inputs") or []
+    if root is None:
+        run.limits.append("The generation root is unreadable, so its source-evidence inputs are unknown and no "
+                          "source response was assessed.")
+        return {"status": "unknown", "inputs": None}
+    inputs = root.get("inputs") or []
     declared = [item for item in inputs if item.get("role") == INPUT_ROLE]
     if not declared:
         run.limits.append("The generation declares no source-evidence input, so no source response was admitted, "
@@ -1057,7 +1061,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                                         "'none' skips conservation (default: the captured prior)")
     parser.add_argument("--base", help="Public base URL or a local directory laid out like the bucket "
                                        "(default: SPICY_REGS_R2_URL, R2_PUBLIC_URL, then the project default)")
-    parser.add_argument("--index", type=Path, help="Audit against this frozen publication.json, not the live one")
+    parser.add_argument("--index", type=Path, help="Audit against this frozen publication.json, not the live one; "
+                                                   "requires --base, the bucket the index was read from")
     parser.add_argument("--output", type=Path, help="Write the JSON report here (default: stdout)")
     parser.add_argument("--retain", type=Path, help="Write the index, roots, manifests and journal read here")
     parser.add_argument("--env-file", type=Path, action="append", default=[],
@@ -1067,6 +1072,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--memory-limit", default="2GB")
     parser.add_argument("--threads", type=int, default=2)
     args = parser.parse_args(argv)
+    if args.index and not args.base:
+        # A frozen index names generations in one bucket; paired with a defaulted base it audits another
+        # bucket's absence of them, and every check fails for a reason that is not the generation's.
+        parser.error("--index requires --base: name the bucket the frozen index was read from")
     try:
         from spicy_regs.public_url import resolve_r2_base_url
 
@@ -1083,6 +1092,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     else:
         sys.stdout.write(text)
     summary = report["summary"]
-    print(f"{report['family']} {report['sections']['publication']['pin']['artifactDigest'][7:15]}: "
+    print(f"{report['family']} {report['sections']['publication']['pin']['artifactDigest'][7:15]} at {report['base']}: "
           f"fail={summary['fail']} review={summary['review']} empty={summary['empty_tables']}", file=sys.stderr)
     return 1 if summary["fail"] else 0

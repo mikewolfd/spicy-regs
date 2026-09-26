@@ -275,7 +275,32 @@ def test_changed_member_bytes_fail_admission_and_the_cli_exit(tmp_path, capsys):
     assert not report["sections"]["publication"]["admission"]["admitted"]
     assert "generation-not-admitted" in codes(report, "fail")
     assert report["dispositions"]["t"]["publication"] == "failed"
-    assert "fail=" in capsys.readouterr().err
+    assert f"at {base.location}: fail=" in capsys.readouterr().err
+
+
+def test_a_frozen_index_without_its_base_refuses_before_any_read(tmp_path, capsys):
+    """2026-09-26: a fork index audited against the defaulted upstream base failed all 57 checks."""
+    index = tmp_path / "publication.json"
+    index.write_text("{}")
+
+    with pytest.raises(SystemExit) as refused:
+        main(["--family", "test", "--index", str(index)])
+
+    assert refused.value.code == 2
+    assert "--index requires --base" in capsys.readouterr().err
+
+
+def test_an_unreadable_root_leaves_evidence_unknown_not_absent(tmp_path):
+    store = Store()
+    index = publish(tmp_path, store, "current", {"t.parquet": rows(("1", "a"))})
+    base = public_base(store, tmp_path / "public")
+    Path(base.path(index["families"]["test"]["prefix"] + "/artifact.json")).unlink()
+
+    report = audit(base, family="test", declarations=DECLARED, prior="none")
+
+    assert report["sections"]["evidence"]["status"] == "unknown"
+    assert any("root is unreadable" in limit for limit in report["limits"])
+    assert not any("declares no source-evidence input" in limit for limit in report["limits"])
 
 
 def test_sniff_sees_past_an_xml_prolog_and_the_scan_counts_a_split_match_once():
