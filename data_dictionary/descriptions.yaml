@@ -1760,19 +1760,26 @@ tables:
       The four tally columns are the publisher's own counts or they are NULL; they
       are never zero-filled. All columns are stored as VARCHAR.
     data_quality: >-
-      The bill linkage has one publisher source: `bill_action_recorded_vote` is a
-      `recordedVotes` entry on the bill's own action, read from
-      `bill_vote_references`, and the earliest action naming a roll call wins.
-      Every other row is `unmatched`, including a roll call no bill's action
-      records, whose Clerk file may still print a `legis-num`. The contract's
-      `house_vote_legislation` rule (Congress.gov's `house-vote` listing) is no
-      longer produced and no published row carries it: over the 115th-119th that
-      listing named exactly the Clerk index's roll calls and linked two that no
-      recorded reference names, 115-1-527 and -528 (H.R. 3354), so it was retired
-      with the api.data.gov key it needed (2026-09-26). `conflict_count` is per
-      roll call, not per run: it counts the later references that named a
-      different bill for *this* roll call, and they are kept rather than dropped.
-      With no bill-family run published, these columns stay unset on new rows. Each run fills a NULL `vote_day` on
+      Two statements link a roll call to a bill, and `match_rule` names the one
+      that did. `bill_action_recorded_vote`: a `recordedVotes` entry on the
+      bill's own action, read from `bill_vote_references`. `vote_file_legislation`:
+      the vote file's own statement of its measure, the Clerk's `legis_num` or the
+      Senate's document (or, on an amendment vote, the document it amends), with
+      the file's own URL as `match_url`. The bill's action wins; where two bills'
+      actions record one roll call, the one the file names wins (the Senate
+      passing a House bill after its Senate twin); with no recorded reference the
+      file links alone. A procedural question, a nomination, a treaty or two
+      different bills link nothing. Measured on the 108th and 119th (receipt
+      `votes-backfill-2026-09-26/file-links/`), the files add 881 links and agree
+      with the recorded reference on 1,803 of the 1,809 roll calls both link; the
+      six others are those Senate passages. `conflict_count` is per roll call,
+      not per run: it counts the later references, the file's included, that
+      named a different bill for *this* roll call, and they are kept rather than
+      dropped. A held row is relinked from its own columns without a fetch; a
+      House row published before `legis_num` existed is read again once to gain
+      it. The contract's `house_vote_legislation` rule (Congress.gov's
+      `house-vote` listing) is no longer produced and no published row carries
+      it: it was retired with the api.data.gov key it needed (2026-09-26). Each run fills a NULL `vote_day` on
       every held (completely captured) roll call from its own `vote_date` before
       merging, so a row published before the column existed gains it without a
       re-fetch. An incomplete capture is not held: it is re-fetched first each run

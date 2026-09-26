@@ -2,11 +2,22 @@
 
 Each chamber's own session index determines which votes to acquire: the
 Clerk's EVS pages for the House, the LIS vote menu for the Senate. Both hosts
-are keyless, so the rollup needs no credential. The bill family's recorded
-references are the only linkage: an unlinked procedural vote still has its own
-tally and member positions. House action references may add keys before an
-index catches up; Senate references alone never establish a complete Senate
-selection.
+are keyless, so the rollup needs no credential. Two statements link a roll
+call to a bill, and ``match_rule`` names the one that did: the bill family's
+recorded references (the bill's own action records the vote) and the vote
+file's own statement of its measure (spicy-docs ``read_vote_file_statement``:
+the Clerk's legis-num, the Senate's document or amended document). The bill's
+action wins; where two bills' actions record one vote, the one the file names
+wins, since positions in two different bills' action lists do not compare; with
+no recorded reference the file links alone. An unlinked procedural vote still
+has its own tally and member positions. House action references may add keys
+before an index catches up; Senate references alone never establish a complete
+Senate selection.
+
+A held row is relinked from its own columns, never refetched: ``legis_num`` for
+the House, ``documents_json``/``amendments_json`` for the Senate. A House row
+published before ``legis_num`` existed is not held until it carries one, so
+each is read again once.
 
 Congress.gov's ``house-vote`` listing was retired as a second linkage source
 (2026-09-26): over the 115th-119th it listed exactly the Clerk index's 5,079
@@ -31,8 +42,8 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections import Counter
-from collections.abc import Callable, Collection, Sequence
+from collections import Counter, defaultdict
+from collections.abc import Callable, Collection, Mapping, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol, cast
 
@@ -40,10 +51,11 @@ from loguru import logger
 from spicy_docs.interpretation.vote_matching import (
     VOTE_CHAMBERS,
     VoteKey,
+    VoteMatch,
     VoteMatchError,
     VoteReference,
     index_vote_references,
-    match_votes,
+    read_vote_file_statement,
 )
 from spicy_docs.schemas.congress_activity_tables import shape_member_vote, shape_roll_call_vote
 from spicy_docs.sources.congress.bill_status import BillIdentity, BillSourceError
@@ -64,7 +76,6 @@ from spicy_regs.transforms.table_merge import merge_contract_table, published_ta
 
 if TYPE_CHECKING:
     import pyarrow as pa
-    from spicy_docs.interpretation.vote_matching import VoteIndex
     from spicy_docs.sources.congress.votes import Chamber
 
     from spicy_regs.source_evidence import CaptureEvidence
@@ -103,11 +114,14 @@ OUTPUT = "roll_call_votes.parquet"
 #: The columns the reference table's rows are read back through. Each is a
 #: field of the ``VoteReference`` the family wrote, so nothing is re-derived.
 REFERENCE_COLUMNS = ("bill_id", "chamber", "congress", "session", "roll_number", "action_index", "url", "date")
-#: v3: the recorded reference is the only linkage; v2 indexed Congress.gov's
-#: listing after it.
-LINK_RULE_VERSION = "recorded-vote-numeric-action-v3"
+#: v4: the vote file's own statement chooses among disagreeing recorded
+#: references and links alone where none exists; v3 used recorded references
+#: only, v2 indexed Congress.gov's listing after them.
+LINK_RULE_VERSION = "recorded-vote-then-vote-file-v4"
 LINK_COLUMNS = ("bill_id", "match_rule", "match_action_index", "match_url", "conflict_count")
 IDENTITY_COLUMNS = ("congress", "chamber", "session", "roll_number")
+#: The row's own statement of its measure, read by spicy-docs ``read_vote_file_statement``.
+STATEMENT_COLUMNS = ("source_url", "legis_num", "documents_json", "amendments_json")
 #: The bill family's reference: the bill's own action names the roll call.
 RECORDED_RULE = "bill_action_recorded_vote"
 
@@ -215,6 +229,8 @@ def _held_votes(prior_file: Path) -> set[tuple[str, ...]]:
     Legacy rows have no tally kind and keep the existing non-NULL yea rule.
     Candidate elections have no yea/nay total; their explicit kind, native
     count map and reconciled member count distinguish capture from linkage.
+    A House row without ``legis_num`` (published before the column) is not
+    held: its file is read once more so its own statement can link it.
     """
     if not prior_file.exists():
         return set()
@@ -236,14 +252,14 @@ def _held_votes(prior_file: Path) -> set[tuple[str, ...]]:
         "present",
         "not_voting",
     }
-    if not candidate_columns.issubset(columns):
-        return held
     candidates = (
         relation.filter(
             "tally_kind = 'candidates' AND yea IS NULL AND nay IS NULL AND present IS NULL AND not_voting IS NULL"
         )
         .project("congress, chamber, session, roll_number, tallies_json, member_vote_count, source_url")
         .fetchall()
+        if candidate_columns.issubset(columns)
+        else ()
     )
     for *parts, raw_tallies, raw_count, source_url in candidates:
         try:
@@ -263,7 +279,40 @@ def _held_votes(prior_file: Path) -> set[tuple[str, ...]]:
             and sum(tallies.values()) == member_count
         ):
             held.add(tuple(str(part) for part in parts))
+    unstated = relation.filter("chamber = 'house'" + (" AND legis_num IS NULL" if "legis_num" in columns else ""))
+    held -= {tuple(str(part) for part in row) for row in unstated.project(", ".join(IDENTITY_COLUMNS)).fetchall()}
     return held
+
+
+def _link_columns(
+    key: VoteKey, recorded: Sequence[VoteReference], stated: VoteReference | None
+) -> dict[str, str | None]:
+    """One roll call's link columns: its bill's own action, chosen by its file where actions disagree, else its file.
+
+    ``recorded`` keeps the family's action order; the reference naming the
+    bill the file states moves first, since a lower action index in a different
+    bill's list says nothing about which bill the vote was on. The file's own
+    reference follows, so it links only a vote no action records and otherwise
+    counts in ``conflict_count`` when it disagrees. O(references to this vote).
+    """
+    ordered = sorted(recorded, key=lambda reference: stated is None or reference.bill != stated.bill)
+    index = index_vote_references((*ordered, *(() if stated is None else (stated,))))
+    winner = index.by_vote.get(key)
+    match = (
+        VoteMatch(key, None, "unmatched")
+        if winner is None
+        else VoteMatch(key, winner.bill, winner.rule, winner.url, winner.date)
+    )
+    shaped = shape_roll_call_vote(
+        key, match=match, action_index=None if winner is None else winner.action_index,
+        conflict_count=len(index.conflicts),
+    )
+    return {name: shaped[name] for name in LINK_COLUMNS}
+
+
+def _stated_reference(row: Mapping[str, object]) -> VoteReference | None:
+    """The bill the row's own file names, from its native columns; ``None`` when it names none."""
+    return read_vote_file_statement(row).reference
 
 
 def _backfill_vote_day(table: pa.Table, held: set[tuple[str, ...]]) -> tuple[pa.Table, int]:
@@ -308,69 +357,68 @@ def _backfill_vote_day(table: pa.Table, held: set[tuple[str, ...]]) -> tuple[pa.
 
 
 def _relink_held_votes(
-    table: pa.Table, held: set[tuple[str, ...]], index: VoteIndex, recorded: frozenset[VoteKey] | None,
-    congresses: Sequence[int], *, evidence: CaptureEvidence | None = None,
+    table: pa.Table, held: set[tuple[str, ...]], recorded_by_vote: Mapping[VoteKey, Sequence[VoteReference]],
+    recorded: frozenset[VoteKey] | None, congresses: Sequence[int], *, evidence: CaptureEvidence | None = None,
 ) -> tuple[pa.Table, int, dict[str, dict]]:
-    """Refresh held votes' derived links from the recorded-vote input only; return the table, count and held links.
+    """Refresh held votes' derived links without their files; return the table, count and held links.
 
-    A held vote in scope is relinked only when the bill family's recorded
-    references name it; its link is then exactly what a fresh acquisition
-    would publish (the first recorded reference wins the index, and
-    ``conflict_count`` counts every later one that disagrees). An unpublished
-    input (``recorded is None``) skips the refresh entirely: an absent
-    optional input or an unresolved vote is not deletion evidence.
-    Only identity and link columns are read into Python and only link
-    columns are replaced; native fields and member rows never pass through
-    here. O(prior rows).
+    A held vote in scope is relinked when the bill family's recorded
+    references name it, or when its own columns state a bill and its published
+    link is not a recorded one; the link is then exactly what a fresh
+    acquisition would publish (``_link_columns``). A recorded link the input
+    no longer names is kept, as is every link when the input is unpublished
+    (``recorded is None``) and the row states nothing: an absent optional input
+    or an unresolved vote is not deletion evidence. Only identity, statement
+    and link columns are read into Python and only link columns are replaced;
+    native fields and member rows never pass through here. O(prior rows).
     """
     import pyarrow as pa
 
     scope = {str(congress) for congress in congresses}
+    names = table.column_names
     vote_ids = table.column("vote_id").to_pylist()
-    links = {
-        name: table.column(name).to_pylist() if name in table.column_names else [None] * table.num_rows
-        for name in LINK_COLUMNS
+    links = {name: table.column(name).to_pylist() if name in names else [None] * table.num_rows for name in LINK_COLUMNS}
+    statements = {
+        name: table.column(name).to_pylist() if name in names else [None] * table.num_rows
+        for name in STATEMENT_COLUMNS
     }
-    in_scope: list[tuple[int, tuple[str, ...]]] = []
+    relinked, unchanged, unresolved = [], 0, []
+    in_scope = 0
     for row, parts in enumerate(zip(*(table.column(name).to_pylist() for name in IDENTITY_COLUMNS))):
         identity = tuple(str(part) for part in parts)
-        if identity in held and identity[0] in scope:
-            in_scope.append((row, identity))
-    by_identity: dict[tuple[str, ...], VoteKey] = {
-        (str(key.congress), key.chamber, str(key.session), str(key.roll_number)): key for key in recorded or ()
-    }
-    targets = [(row, by_identity[identity]) for row, identity in in_scope if identity in by_identity]
-    conflicts = Counter(reference.vote for reference, _ in index.conflicts)
-    relinked = []
-    for (row, key), match in zip(targets, match_votes((key for _, key in targets), index)):
-        shaped = shape_roll_call_vote(
-            key, match=match, action_index=index.by_vote[key].action_index, conflict_count=conflicts.get(key, 0)
+        if identity not in held or identity[0] not in scope:
+            continue
+        in_scope += 1
+        key = VoteKey(int(identity[0]), identity[1], int(identity[2]), int(identity[3]))
+        references = recorded_by_vote.get(key, ())
+        stated = _stated_reference(
+            dict(zip(IDENTITY_COLUMNS, identity)) | {name: statements[name][row] for name in STATEMENT_COLUMNS}
         )
         previous = {name: links[name][row] for name in LINK_COLUMNS}
-        if any(previous[name] != shaped[name] for name in LINK_COLUMNS):
-            relinked.append({"vote_id": vote_ids[row], "previous": previous,
-                             **{name: shaped[name] for name in LINK_COLUMNS}})
-            for name in LINK_COLUMNS:
-                links[name][row] = shaped[name]
-    unresolved = [vote_ids[row] for row, identity in in_scope if identity not in by_identity]
-    if recorded is None:
-        logger.warning(
-            "Roll-call votes: no recorded-vote input — derived links on {:,} held roll call(s) kept as published",
-            len(in_scope),
-        )
-    else:
-        logger.info(
-            "Roll-call votes: refreshed derived links on {:,} of {:,} held roll calls; {:,} unresolved kept as published",
-            len(relinked), len(in_scope), len(unresolved),
-        )
+        if not references and (stated is None or previous["match_rule"] == RECORDED_RULE):
+            unresolved.append(vote_ids[row])
+            continue
+        current = _link_columns(key, references, stated)
+        if current == previous:
+            unchanged += 1
+            continue
+        relinked.append({"vote_id": vote_ids[row], "previous": previous, **current})
+        for name in LINK_COLUMNS:
+            links[name][row] = current[name]
+    logger.info(
+        "Roll-call votes: refreshed derived links on {:,} of {:,} held roll calls ({}); {:,} kept as published",
+        len(relinked), in_scope, "no recorded-vote input" if recorded is None else "recorded-vote input read",
+        len(unresolved),
+    )
     if evidence is not None:
         evidence.event(
             "held-vote-linkage", rule_version=LINK_RULE_VERSION, input_available=recorded is not None,
-            held_in_scope=len(in_scope), relinked=relinked, unchanged=len(targets) - len(relinked),
-            unresolved_prior_preserved=unresolved,
+            held_in_scope=in_scope, relinked=relinked, unchanged=unchanged, unresolved_prior_preserved=unresolved,
         )
     held_links = {
-        vote_ids[row]: {name: links[name][row] for name in LINK_COLUMNS} for row, _ in in_scope
+        vote_ids[row]: {name: links[name][row] for name in LINK_COLUMNS}
+        for row, parts in enumerate(zip(*(table.column(name).to_pylist() for name in IDENTITY_COLUMNS)))
+        if tuple(str(part) for part in parts) in held
     }
     if relinked:
         # All native columns retain their existing Arrow type and values.
@@ -382,8 +430,8 @@ def _relink_held_votes(
 
 
 def _repair_held_votes(
-    prior_file: Path, held: set[tuple[str, ...]], index: VoteIndex, recorded: frozenset[VoteKey] | None,
-    congresses: Sequence[int], *, evidence: CaptureEvidence | None = None,
+    prior_file: Path, held: set[tuple[str, ...]], recorded_by_vote: Mapping[VoteKey, Sequence[VoteReference]],
+    recorded: frozenset[VoteKey] | None, congresses: Sequence[int], *, evidence: CaptureEvidence | None = None,
 ) -> dict[str, dict]:
     """Backfill ``vote_day`` and refresh held links in one read and at most one rewrite of ``prior_file``.
 
@@ -394,7 +442,9 @@ def _repair_held_votes(
 
     table = pq.read_table(prior_file)
     table, filled = _backfill_vote_day(table, held)
-    table, relinked, held_links = _relink_held_votes(table, held, index, recorded, congresses, evidence=evidence)
+    table, relinked, held_links = _relink_held_votes(
+        table, held, recorded_by_vote, recorded, congresses, evidence=evidence
+    )
     if filled or relinked:
         staged = prior_file.with_name(f".{prior_file.name}.partial")
         pq.write_table(table, staged, compression="zstd")
@@ -439,23 +489,18 @@ def build_roll_call_votes(
             listed_keys.update(locator_from_menu_entry(menu, entry).as_vote_key() for entry in menu.votes)
         logger.info("Roll-call votes: Congress {} — {:,} roll calls in the chambers' indexes", congress, len(listed_keys) - indexed)
 
-    # Linkage: the bill's own action names the roll call.
+    # Linkage: the bill's own action names the roll call; the vote file's own
+    # statement is read per row below, from the file or the held row.
     recorded_references = _recorded_vote_references(output_dir, congresses, download_prior, evidence=evidence)
     recorded = None if recorded_references is None else frozenset(r.vote for r in recorded_references)
-    index = index_vote_references(recorded_references or ())
-    # Per vote, not per run: the contract's sentence is "how many later
-    # references disagreed with the one that won", which is a fact about one
-    # roll call. A single run-wide number stamped on every row would say that
-    # every roll call was contested whenever any one of them was.
-    conflicts: Counter[VoteKey] = Counter(held.vote for held, _ in index.conflicts)
-    if conflicts:
-        logger.warning(
-            "Roll-call votes: {:,} roll call(s) claimed by two references — {:,} disagreements in total",
-            len(conflicts),
-            sum(conflicts.values()),
-        )
-    by_rule = Counter(reference.rule for reference in index.by_vote.values())
-    logger.info("Roll-call votes: {:,} roll calls indexed by rule — {}", len(index.by_vote), dict(by_rule))
+    recorded_by_vote: dict[VoteKey, list[VoteReference]] = defaultdict(list)
+    for reference in recorded_references or ():
+        recorded_by_vote[reference.vote].append(reference)
+    contested = sum(1 for references in recorded_by_vote.values() if len({r.bill for r in references}) > 1)
+    logger.info(
+        "Roll-call votes: {:,} roll calls recorded by a bill's action, {:,} by two bills' actions",
+        len(recorded_by_vote), contested,
+    )
 
     # 2. Counts and positions, newest first, bounded, and skipping what is held.
     prior_file = published_table(output_dir, NAME, download_prior)
@@ -464,12 +509,12 @@ def build_roll_call_votes(
     held_links: dict[str, dict] = {}
     if prior_file is not None:
         held = _held_votes(prior_file)
-        held_links = _repair_held_votes(prior_file, held, index, recorded, congresses, evidence=evidence)
+        held_links = _repair_held_votes(prior_file, held, recorded_by_vote, recorded, congresses, evidence=evidence)
 
     # House action references can precede the Clerk's index. Senate scope
     # comes from its own menu, never from a bill-only sample.
     ordered = sorted(
-        listed_keys | {key for key in index.by_vote if key.chamber == "house"},
+        listed_keys | {key for key in recorded_by_vote if key.chamber == "house"},
         key=lambda k: (k.congress, k.session, k.roll_number, k.chamber),
         reverse=True,
     )
@@ -499,7 +544,6 @@ def build_roll_call_votes(
     if len(keys) > max_votes:
         logger.warning("Roll-call votes: {:,} roll calls to fetch, taking the newest {:,}", len(keys), max_votes)
         keys = keys[:max_votes]
-    matches = {match.vote: match for match in match_votes(keys, index)}
 
     vote_rows: list[dict] = []
     member_rows: list[dict] = []
@@ -526,22 +570,14 @@ def build_roll_call_votes(
             refused += 1
             logger.warning("Roll-call votes: {} refused: {}", locator.url(), error)
             continue
-        reference = index.by_vote.get(key)
-        vote_rows.append(
-            shape_roll_call_vote(
-                vote,
-                match=matches.get(key),
-                tally=vote.tallies,
-                member_vote_count=len(vote.member_votes),
-                action_index=None if reference is None else reference.action_index,
-                conflict_count=conflicts.get(key, 0),
-            )
-        )
-        # A re-read held vote keeps its published link unless the recorded
-        # input names it now: silence never replaces an established link.
-        published = held_links.get(vote_rows[-1]["vote_id"])
-        if published is not None and key not in (recorded or ()):
-            vote_rows[-1].update(published)
+        row = shape_roll_call_vote(vote, tally=vote.tallies, member_vote_count=len(vote.member_votes))
+        row.update(_link_columns(key, recorded_by_vote.get(key, ()), _stated_reference(row)))
+        # A re-read held vote keeps a recorded link the input no longer names:
+        # silence never replaces an established link.
+        published = held_links.get(str(row["vote_id"]))
+        if published is not None and key not in (recorded or ()) and published["match_rule"] == RECORDED_RULE:
+            row.update(published)
+        vote_rows.append(row)
         for member in vote.member_votes:
             member_rows.append(shape_member_vote(member, vote=vote))
 

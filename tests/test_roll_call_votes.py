@@ -120,6 +120,9 @@ class _Tallied:
         self.result = "Passed"
         self.tallies = {"yea-total": 220, "nay-total": 210}
         self.member_votes = ()
+        # The real reader's Clerk shape: a captured House file keeps its legis-num (here none).
+        self.publisher = "clerk" if locator.chamber == "house" else "senate-lis"
+        self.legis_num = None
 
     @property
     def day(self):
@@ -275,7 +278,7 @@ def test_a_recorded_vote_reference_fills_the_linkage_columns(tmp_path, scoped):
 
 
 def test_a_roll_call_no_recorded_reference_names_is_published_unmatched(tmp_path, scoped):
-    """The recorded reference is the only linkage: an indexed roll call nothing names keeps its tally, no bill."""
+    """No bill action records it and its file states no measure: the roll call keeps its tally, and no bill."""
     acquirer = StubVoteAcquirer(house_rolls=(240,))
     paths = build_roll_call_votes(tmp_path, acquirer=acquirer, overlap=0, download_prior=_no_prior)
     row = pq.read_table(paths[0]).to_pylist()[0]
@@ -762,14 +765,15 @@ def test_candidate_capture_merges_legacy_rows_and_is_held_on_resume(tmp_path, sc
         for c in TABLE_CONTRACTS["roll_call_votes"].columns
         if c not in {"tally_kind", "documents_json", "amendments_json"}
     ]
+    # A Senate row: it predates tally_kind and needs no legis_num to be held.
     legacy = {
-        "vote_id": "119-house-1-1",
+        "vote_id": "119-senate-1-1",
         "congress": "119",
-        "chamber": "house",
+        "chamber": "senate",
         "session": "1",
         "roll_number": "1",
         "yea": "1",
-        "vote_date": "2025-01-03",
+        "vote_date": "January 3, 2025,  12:00 PM",
     }
 
     def legacy_prior(remote, local):
@@ -800,7 +804,7 @@ def test_candidate_capture_merges_legacy_rows_and_is_held_on_resume(tmp_path, sc
 
     first = tmp_path / "first"
     first.mkdir()
-    acquirer = CandidateAcquirer(house_rolls=(1, 2))
+    acquirer = CandidateAcquirer(house_rolls=(2,), senate_rolls=(1,))
     paths = build_roll_call_votes(first, acquirer=acquirer, overlap=0, download_prior=legacy_prior)
     rows = {row["roll_number"]: row for row in pq.read_table(paths[0]).to_pylist()}
     assert acquirer.requested == [("house", 2)]
@@ -821,7 +825,7 @@ def test_candidate_capture_merges_legacy_rows_and_is_held_on_resume(tmp_path, sc
 
     second = tmp_path / "second"
     second.mkdir()
-    resumed = CandidateAcquirer(house_rolls=(1, 2))
+    resumed = CandidateAcquirer(house_rolls=(2,), senate_rolls=(1,))
     again = build_roll_call_votes(second, acquirer=resumed, overlap=0, download_prior=captured_prior)
     assert resumed.requested == []
     assert pq.read_table(again[0]).to_pylist() == pq.read_table(paths[0]).to_pylist()
@@ -976,6 +980,7 @@ def test_a_prior_that_has_vote_day_fills_only_its_nulls_and_is_not_rewritten_whe
             "tally_kind": "positions" if yea else None,
             "vote_date": vote_date,
             "vote_day": day,
+            "legis_num": "QUORUM" if yea else None,
         }
 
     prior = tmp_path / "prior.parquet"
@@ -988,7 +993,7 @@ def test_a_prior_that_has_vote_day_fills_only_its_nulls_and_is_not_rewritten_whe
 
     def repair():
         # No recorded-vote input: only vote_day can change.
-        return _repair_held_votes(prior, _held_votes(prior), index_vote_references(()), None, (119,))
+        return _repair_held_votes(prior, _held_votes(prior), {}, None, (119,))
 
     repair()
     table = pq.read_table(prior)
@@ -1013,3 +1018,90 @@ def test_the_shared_workflow_withholds_the_api_key_from_this_keyless_rollup():
     assert step["env"]["DATA_GOV_API_KEY"] == (
         "${{ inputs.command != 'run-rollup-roll-call-votes' && secrets.DATA_GOV_API_KEY || '' }}"
     )
+
+
+# --------------------------------------------------------------------------- #
+# The vote file's own statement of its measure.
+# --------------------------------------------------------------------------- #
+FILE_RULE = "vote_file_legislation"
+
+
+def test_the_vote_file_links_what_no_bill_action_records(tmp_path, scoped):
+    """The Clerk's legis-num and the Senate's document link each real file, under their own rule and URL."""
+    rows = _real_run(tmp_path, _no_prior)
+    assert {vote_id: (row["bill_id"], row["match_rule"], row["match_action_index"]) for vote_id, row in rows.items()} == {
+        "119-house-1-240": ("119-hr-3424", FILE_RULE, None),
+        "119-senate-1-1": ("119-s-5", FILE_RULE, None),
+    }
+    assert all(row["match_url"] == row["source_url"] and row["conflict_count"] == "0" for row in rows.values())
+    assert rows["119-house-1-240"]["legis_num"] == "H R 3424" and rows["119-senate-1-1"]["legis_num"] is None
+
+
+def test_the_file_chooses_between_two_bills_actions_that_record_one_vote(tmp_path, scoped):
+    """A lower action index in another bill's list is no evidence; the bill the file names wins, and the other counts."""
+    base = {**_sample_rows()[0], "congress": "119", "chamber": "senate", "session": "1", "roll_number": "1"}
+    _seed_references(tmp_path, [
+        base | {"bill_id": "119-s-99", "action_index": "0", "url": "https://www.senate.gov/a"},
+        base | {"bill_id": "119-s-5", "action_index": "30", "url": "https://www.senate.gov/b"},
+    ])
+    rows = _real_run(tmp_path, _no_prior)
+    senate = rows["119-senate-1-1"]
+    assert (senate["bill_id"], senate["match_rule"], senate["match_action_index"], senate["match_url"]) == (
+        "119-s-5", "bill_action_recorded_vote", "30", "https://www.senate.gov/b",
+    )
+    assert senate["conflict_count"] == "1"
+
+
+def test_a_bills_own_action_wins_over_a_disagreeing_file_and_the_file_is_counted(tmp_path, scoped):
+    base = next(row for row in _sample_rows() if row["chamber"] == "house" and row["roll_number"] == "240")
+    _seed_references(tmp_path, [base | {"bill_id": "119-hr-1", "action_index": "4"}])
+    house = _real_run(tmp_path, _no_prior)["119-house-1-240"]
+    assert (house["bill_id"], house["match_rule"], house["conflict_count"]) == ("119-hr-1", "bill_action_recorded_vote", "1")
+
+
+def test_held_rows_relink_from_their_own_columns_without_a_fetch(tmp_path, scoped):
+    """No file is fetched: the House row's legis_num and the Senate row's documents link them; a recorded link stays."""
+    stated_house = _held_row(7) | {"legis_num": "H R 7", **dict.fromkeys(("bill_id", "match_action_index", "match_url"))}
+    stated_house |= {"match_rule": "unmatched", "conflict_count": "0"}
+    senate = {**_held_row(9), "vote_id": "119-senate-1-9", "chamber": "senate", "legis_num": None,
+              "documents_json": json.dumps([{"congress": 119, "type": "S.Res.", "number": "30"}]),
+              "amendments_json": "[]", "bill_id": None, "match_rule": "unmatched", "match_action_index": None,
+              "match_url": None, "conflict_count": "0"}
+    recorded_link = _held_row(8) | {"legis_num": "H R 9999"}  # its action's link stands; the family no longer names it
+    acquirer = StubVoteAcquirer()
+    paths = build_roll_call_votes(
+        tmp_path, acquirer=acquirer, overlap=0, max_votes=0,
+        download_prior=_published({"roll_call_votes": [stated_house, senate, recorded_link], "member_votes": []}),
+    )
+    rows = {row["vote_id"]: row for row in pq.read_table(paths[0]).to_pylist()}
+    assert acquirer.requested == []
+    assert (rows["119-house-1-7"]["bill_id"], rows["119-house-1-7"]["match_rule"]) == ("119-hr-7", FILE_RULE)
+    assert rows["119-house-1-7"]["match_url"] == stated_house["source_url"]
+    assert (rows["119-senate-1-9"]["bill_id"], rows["119-senate-1-9"]["match_rule"]) == ("119-sres-30", FILE_RULE)
+    assert rows["119-house-1-8"] == recorded_link
+
+
+def test_a_house_row_published_before_legis_num_is_read_once_more_then_held(tmp_path, scoped):
+    """Its own statement is in no column, so its file is read again once; the re-read row is held from then on."""
+    import shutil
+
+    legacy = {**_held_row(240), "legis_num": None}
+    first = tmp_path / "first"
+    first.mkdir()
+    acquirer = RealBodyAcquirer(house_rolls=(240,))
+    rows = _real_run(first, _published({"roll_call_votes": [legacy], "member_votes": []}), acquirer=acquirer, overlap=0)
+    assert acquirer.requested == [("house", 240)]
+    assert rows["119-house-1-240"]["legis_num"] == "H R 3424"
+
+    def captured(remote, local):
+        source = first / remote
+        if not source.exists():
+            return False
+        shutil.copyfile(source, local)
+        return True
+
+    second = tmp_path / "second"
+    second.mkdir()
+    resumed = RealBodyAcquirer(house_rolls=(240,))
+    assert _real_run(second, captured, acquirer=resumed, overlap=0) == rows
+    assert resumed.requested == []

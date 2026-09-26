@@ -263,6 +263,7 @@ def test_roll_call_votes_skips_what_it_already_published(tmp_path, monkeypatch):
                 "session": "1",
                 "roll_number": str(n),
                 "yea": "220",
+                "legis_num": "H R 3424",
             }
             for n in range(1, 41)
         ],
