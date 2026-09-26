@@ -2480,7 +2480,16 @@ tables:
       `on Armed Services`, `on Appropriations`) resolves to the chamber of the
       report's own committee, read off the package id; before 2026-09-26 the
       House won every such name, and the Senate reports published 1,746
-      House codes for their own committees, 1,718 of them `hsju00`.
+      House codes for their own committees, 1,718 of them `hsju00`. A chamber
+      the print names before a committee (`Senate Committee on Armed
+      Services`) selects that chamber's committees instead (76 rows moved,
+      24 of them `hshm00` to `ssga00`). **Limit:** 7 bare committee names in
+      Senate reports reach a name only the House roster holds and keep the
+      House's code, because the print names no chamber: 5 `hshm00` (a wrapped
+      `Committee on Homeland Security and Governmental Affairs`, or its
+      `Committee on Home-` fragment) and 2 `hsso00` (`Select Committee on
+      Ethics`). Read them as ambiguous, not as House committees. Receipt:
+      `fix-print-citations-2026-09-26/replay-qualified.json`.
       `committees_unresolved` is **a floor, not a defect count**: the Senate
       `cvc` roster states only the committees its listed senators sit on, so a
       name it does not reach stays unresolved rather than being guessed.

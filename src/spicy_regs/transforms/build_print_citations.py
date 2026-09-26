@@ -168,7 +168,9 @@ def _report_chamber(package_id: str) -> str | None:
     Senate), never assumed: until 2026-09-26 it was the constant ``"house"``,
     while the title rule admits Senate reports (the window holds 14). The
     chamber decides two things -- which chamber's committee a name both hold
-    means (``Committee on the Judiciary`` in CRPT-118srpt11 is ``ssju00``), and
+    means when the print names no chamber before it (``Committee on the
+    Judiciary`` in CRPT-118srpt11 is ``ssju00``; ``Senate Committee on ...``
+    is the Senate's in any report), and
     a hearing's or markup's action code, which follows the committee that
     acted. A package whose id states neither is refused before any request.
     """
@@ -241,7 +243,7 @@ def _held_packages(prior_file: Path | None) -> dict[str, tuple[str | None, str |
     }
 
 
-def _processing_versions(vocabularies: Mapping[str, tuple[tuple[str, str], ...]]) -> dict[str, str]:
+def _processing_versions(vocabularies: Mapping[str, Mapping[str, tuple[tuple[str, str], ...]]]) -> dict[str, str]:
     """Identify citation, action and body-reading inputs even when no finding exists.
 
     The dependency release also covers body-text derivation and row shaping;
@@ -261,7 +263,10 @@ def _processing_versions(vocabularies: Mapping[str, tuple[tuple[str, str], ...]]
             "action_rules": PRINT_ACTION_RULE_SET_VERSION,
             "action_vocabulary": PRINT_ACTION_VOCABULARY_VERSION,
             "committee_chamber_by_document_type": sorted(CHAMBER_BY_DOCUMENT_TYPE.items()),
-            "committee_vocabulary": {chamber: sorted(vocabulary) for chamber, vocabulary in vocabularies.items()},
+            "committee_vocabulary": {
+                reading: {chamber: sorted(vocabulary) for chamber, vocabulary in by_chamber.items()}
+                for reading, by_chamber in vocabularies.items()
+            },
         },
     }
     return {
@@ -323,14 +328,16 @@ def _listed(
     return accepted
 
 
-def _roster_vocabulary(rosters: RosterSource, congress: int) -> dict[str, tuple[tuple[str, str], ...]]:
-    """The committee names ``find_citations`` resolves against, from both chamber files, read for each chamber's print.
+def _roster_vocabulary(rosters: RosterSource, congress: int) -> dict[str, dict[str, tuple[tuple[str, str], ...]]]:
+    """The committee names ``find_citations`` resolves against, from both chamber files, by chamber and reading.
 
-    Both vocabularies hold every name either file states; they differ only on
-    a name both chambers hold, which each gives to its own chamber. A file that
-    refuses leaves its chamber out, which makes ``committees_unresolved``
-    larger and invents nothing. Both routes are keyless, so neither refusal is
-    a credential refusal.
+    ``report`` is read for each chamber's print: every name either file
+    states, a name both chambers hold given to that chamber. ``named`` is each
+    chamber's own committees alone, for a name the print qualifies with its
+    chamber (``Senate Committee on Armed Services``). A file that refuses
+    leaves its chamber out, which makes ``committees_unresolved`` larger and
+    invents nothing. Both routes are keyless, so neither refusal is a
+    credential refusal.
     """
     house: list[Any] = []
     senate: list[Any] = []
@@ -349,9 +356,13 @@ def _roster_vocabulary(rosters: RosterSource, congress: int) -> dict[str, tuple[
                 scrub_credential(str(error), ""),
             )
     vocabularies = {
-        chamber: committee_vocabulary(house=house, senate=senate, chamber=chamber) for chamber in COMMITTEE_CHAMBERS
+        reading: {
+            chamber: committee_vocabulary(house=house, senate=senate, chamber=chamber, own_only=reading == "named")
+            for chamber in COMMITTEE_CHAMBERS
+        }
+        for reading in ("report", "named")
     }
-    logger.info("Print citations: committee vocabulary holds {:,} names", len(vocabularies["house"]))
+    logger.info("Print citations: committee vocabulary holds {:,} names", len(vocabularies["report"]["house"]))
     return vocabularies
 
 
@@ -562,7 +573,8 @@ def build_print_citations(
             derived.text,
             pages=derived.pages,
             congress=None if covered is None else covered.congress,
-            committees=vocabularies[chamber] if chamber is not None else (),
+            committees=vocabularies["report"][chamber] if chamber is not None else (),
+            chamber_committees=vocabularies["named"] if chamber is not None else None,
         )
         for finding in findings:
             kinds[finding.kind] += 1

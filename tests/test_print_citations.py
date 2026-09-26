@@ -553,6 +553,37 @@ def test_the_same_print_under_a_house_id_names_the_house_committee(tmp_path):
     assert hearings == {("house", "H21000")}
 
 
+@pytest.mark.parametrize(
+    ("package_id", "named", "expected"),
+    [
+        (CRPT_ID, "Senate Committee on the Budget", ["hsbu00", "ssbu00"]),
+        (SENATE_ID, "House Committee on the Budget", ["ssbu00", "hsbu00"]),
+        # Only the House roster holds this exact name; the Senate's committee is
+        # the longer "... and Governmental Affairs", which this Senate excerpt
+        # does not reach. Senate-named, it must not take the House's hshm00.
+        (SENATE_ID, "Senate Committee on Homeland Security", ["ssbu00", "COMMITTEEONHOMELANDSECURITY"]),
+    ],
+)
+def test_a_chamber_the_print_names_before_a_committee_wins_over_the_reports(tmp_path, package_id, named, expected):
+    """``the Senate Committee on the Budget`` in a House report is ``ssbu00``; the bare name beside it stays the House's.
+
+    The reverse holds in CRPT-118srpt99: its own ``Committee on the Budget`` is
+    ``ssbu00`` and a ``House Committee on the Budget`` is ``hsbu00``. A named
+    chamber is read among that chamber's committees only.
+    """
+    pages = [*SENATE_PAGES, ["herewith a report on the activities of the Committee on the Budget,",
+                             f"prepared with the staff of the {named}."]]  # fmt: skip
+    acquirer = _Acquirer({package_id: _package(package_id, pages=pages, title=SENATE_TITLE)})
+    reader = _Reader({"CRPT": [_listing(package_id, SENATE_TITLE)]})
+    _, _, _, citations = build_print_citations(
+        tmp_path, reader=reader, acquirer=acquirer, rosters=_FixtureRosters(), download_prior=_no_download
+    )
+    rows = sorted(
+        (int(row["span_start"]), row["target_key"]) for row in _rows(citations) if row["cite_kind"] == "committee_name"
+    )
+    assert [key for _start, key in rows] == expected
+
+
 def test_a_change_to_how_the_chamber_is_read_revisits_held_reports(tmp_path, monkeypatch):
     """The chamber map is a processing input: a report read under another map is read again."""
     from spicy_docs.schemas.committee_report_tables import CHAMBER_BY_DOCUMENT_TYPE
