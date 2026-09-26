@@ -23,6 +23,7 @@ from typing import ClassVar
 
 from loguru import logger
 
+from spicy_regs.env_values import int_env
 from spicy_regs.pipelines.rollups.base import RollupPipeline, make_rollup_app
 from spicy_regs.transforms.build_sam_entities import MIN_REGISTRATION_YEAR as _MIN_REGISTRATION_YEAR
 from spicy_regs.transforms import build_sam_entities
@@ -43,16 +44,6 @@ def _rotating_year(today: date) -> int:
     return _MIN_REGISTRATION_YEAR + (day // 2) % (today.year - _MIN_REGISTRATION_YEAR)
 
 
-def _int_env(name: str) -> int | None:
-    raw = os.environ.get(name, "").strip()
-    if not raw:
-        return None
-    try:
-        return int(raw)
-    except ValueError:
-        raise ValueError(f"{name} must be an integer or blank") from None
-
-
 class SamEntitiesRollup(RollupPipeline):
     """Federal entity registry ingested from the SAM.gov Entity API (api.data.gov key)."""
 
@@ -63,9 +54,9 @@ class SamEntitiesRollup(RollupPipeline):
 
     def build(self, output_dir: Path) -> Path:
         mode = os.environ.get("SAM_INGEST_MODE", "extract").strip() or "extract"
-        since = _int_env("SAM_SINCE_YEAR")
-        until = _int_env("SAM_UNTIL_YEAR")
-        max_records = _int_env("SAM_MAX_RECORDS")  # blank/0 -> unbounded within the window(s)
+        since = int_env("SAM_SINCE_YEAR")
+        until = int_env("SAM_UNTIL_YEAR")
+        max_records = int_env("SAM_MAX_RECORDS")  # blank/0 -> unbounded within the window(s)
         if (since is None) != (until is None):
             raise ValueError("Set both SAM_SINCE_YEAR and SAM_UNTIL_YEAR for an explicit selection")
         if max_records is not None and max_records < 0:

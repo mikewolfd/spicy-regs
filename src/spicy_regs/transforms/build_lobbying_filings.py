@@ -1,8 +1,14 @@
 """Transform: build ``lobbying_filings.parquet`` from the Senate LDA REST API.
 
-Produces a pinned, all-VARCHAR schema keyed by ``filing_uuid``. Nested and
-array-valued fields (lobbying activities, the government entities lobbied) are
-serialized as JSON strings so the published table stays flat and portable.
+Produces three all-VARCHAR tables. ``lobbying_filings`` is keyed by
+``filing_uuid``, with the activities and entities it has always carried as JSON.
+``lobbying_activities`` holds one row per activity a filing reports, keyed
+``(filing_uuid, activity_index)``. ``lobbying_activity_lobbyists`` holds one row
+per lobbyist an activity names, keyed ``(filing_uuid, activity_index,
+lobbyist_index)`` (owner decision 47). An index is the position in the filing's
+own list: LDA never edits a filing, since an amendment is a new filing, so the
+positions are stable. The lobbyists were dropped before, so history is read
+once, with the shape that keeps them.
 
 Incremental by design (mirrors ``build_federal_register``): a full re-fetch of
 the multi-million-row LDA archive every run would be wasteful *and* would trip
@@ -140,6 +146,32 @@ COLUMNS = (
 )
 _SCHEMA = pa.schema([(c, pa.string()) for c in COLUMNS])
 
+ACTIVITIES_OUTPUT = "lobbying_activities.parquet"
+ACTIVITY_COLUMNS = (
+    "filing_uuid",
+    "activity_index",
+    "general_issue_code",
+    "general_issue_code_display",
+    "description",
+    "foreign_entity_issues",
+    "government_entities_json",
+)
+LOBBYISTS_OUTPUT = "lobbying_activity_lobbyists.parquet"
+LOBBYIST_COLUMNS = (
+    "filing_uuid",
+    "activity_index",
+    "lobbyist_index",
+    "lobbyist_id",
+    "prefix",
+    "first_name",
+    "nickname",
+    "middle_name",
+    "last_name",
+    "suffix",
+    "covered_position",
+    "new",
+)
+
 
 def _s(value: object) -> str | None:
     """Coerce a scalar to str, preserving NULL. (ids come as ints.)"""
@@ -209,6 +241,53 @@ def _shape(filing: dict) -> dict:
     }
 
 
+def _activity_rows(filing: dict) -> list[dict]:
+    """One row per activity the filing reports, at its position in the filing's own list."""
+    rows = []
+    for index, act in enumerate(filing.get("lobbying_activities") or []):
+        if not isinstance(act, dict):
+            continue
+        entities = [{"id": e.get("id"), "name": e.get("name")} for e in act.get("government_entities") or []
+                    if isinstance(e, dict)]
+        rows.append({
+            "filing_uuid": filing.get("filing_uuid"),
+            "activity_index": str(index),
+            "general_issue_code": act.get("general_issue_code"),
+            "general_issue_code_display": act.get("general_issue_code_display"),
+            "description": act.get("description"),
+            "foreign_entity_issues": act.get("foreign_entity_issues"),
+            "government_entities_json": json.dumps(entities),
+        })
+    return rows
+
+
+def _lobbyist_rows(filing: dict) -> list[dict]:
+    """One row per lobbyist an activity names, at its positions in the filing's lists."""
+    rows = []
+    for index, act in enumerate(filing.get("lobbying_activities") or []):
+        if not isinstance(act, dict):
+            continue
+        for position, entry in enumerate(act.get("lobbyists") or []):
+            if not isinstance(entry, dict):
+                continue
+            person = entry.get("lobbyist") if isinstance(entry.get("lobbyist"), dict) else {}
+            rows.append({
+                "filing_uuid": filing.get("filing_uuid"),
+                "activity_index": str(index),
+                "lobbyist_index": str(position),
+                "lobbyist_id": _s(person.get("id")),
+                "prefix": person.get("prefix"),
+                "first_name": person.get("first_name"),
+                "nickname": person.get("nickname"),
+                "middle_name": person.get("middle_name"),
+                "last_name": person.get("last_name"),
+                "suffix": person.get("suffix"),
+                "covered_position": entry.get("covered_position"),
+                "new": _s(entry.get("new")),
+            })
+    return rows
+
+
 def _prior_max_dt_posted(prior_file: Path) -> date | None:
     """Largest ``dt_posted`` date in the prior table, or None if empty/absent."""
     if not prior_file.exists():
@@ -232,11 +311,10 @@ def build_lobbying_filings(
     until: date | None = None,
     filing_year: int | None = None,
     max_records: int | None = None,
-) -> Path:
-    """Build ``lobbying_filings.parquet`` (incremental merge with the prior table)."""
+) -> tuple[Path, Path, Path]:
+    """Build the filings, activities and lobbyists tables, each merged with its prior table."""
     import duckdb
 
-    out_file = output_dir / OUTPUT
     prior_file = output_dir / "_lda_prior.parquet"
 
     # 1. Pull the prior table (best effort — absence just means full backfill).
@@ -276,13 +354,16 @@ def build_lobbying_filings(
         evidence.event("selection", stage="lobbying", url=url, max_records=max_records)
         transport = evidence.transport(stage="lobbying-response", max_bytes=budget.max_page_bytes)
     with LdaFilingsReader(budget=budget, api_key=api_key, transport=transport) as reader:
-        rows = [_shape(f) for f in _iter_filings(reader, url, max_records=max_records)]
-    new_file = output_dir / "_lda_new.parquet"
-    table = pa.Table.from_pylist(rows, schema=_SCHEMA) if rows else _SCHEMA.empty_table()
-    pq.write_table(table, new_file, compression="zstd")
-    logger.info("LDA: fetched {:,} filings this run", len(rows))
+        filings = list(_iter_filings(reader, url, max_records=max_records))
+    fresh = {
+        OUTPUT: (COLUMNS, [_shape(f) for f in filings]),
+        ACTIVITIES_OUTPUT: (ACTIVITY_COLUMNS, [row for f in filings for row in _activity_rows(f)]),
+        LOBBYISTS_OUTPUT: (LOBBYIST_COLUMNS, [row for f in filings for row in _lobbyist_rows(f)]),
+    }
+    logger.info("LDA: fetched {:,} filings ({:,} activities, {:,} lobbyist rows) this run", len(filings),
+                len(fresh[ACTIVITIES_OUTPUT][1]), len(fresh[LOBBYISTS_OUTPUT][1]))
 
-    # 4. Merge prior + new, dedup on filing_uuid preferring the new row.
+    # 4. Merge each table's prior + new, dedup on its identity preferring the new row.
     spill_dir = output_dir / ".duckdb_tmp"
     spill_dir.mkdir(exist_ok=True)
     con = duckdb.connect()
@@ -290,22 +371,34 @@ def build_lobbying_filings(
     con.execute("SET preserve_insertion_order=false")
     con.execute("SET threads=2")
     con.execute(f"SET temp_directory='{spill_dir}'")
-
-    merge_local_prior(
-        con,
-        columns=COLUMNS,
-        identity="filing_uuid",
-        order_by="dt_posted DESC, filing_uuid",
-        prior_file=prior_file if have_prior else None,
-        new_file=new_file,
-        out_file=out_file,
-    )
-    con.close()
-
-    # Housekeeping: drop scratch files so they aren't mistaken for outputs.
-    for scratch in (prior_file, new_file):
-        scratch.unlink(missing_ok=True)
-
-    total = pq.ParquetFile(out_file).metadata.num_rows
-    logger.info("Lobbying filings: {:,} rows", total)
-    return out_file
+    shapes: dict[str, tuple[str | tuple[str, ...], str]] = {
+        OUTPUT: ("filing_uuid", "dt_posted DESC, filing_uuid"),
+        ACTIVITIES_OUTPUT: (("filing_uuid", "activity_index"), "filing_uuid, CAST(activity_index AS INTEGER)"),
+        LOBBYISTS_OUTPUT: (("filing_uuid", "activity_index", "lobbyist_index"),
+                           "filing_uuid, CAST(activity_index AS INTEGER), CAST(lobbyist_index AS INTEGER)"),
+    }
+    priors: dict[str, tuple[Path, bool]] = {OUTPUT: (prior_file, have_prior)}
+    outputs = []
+    try:
+        for key, (columns, rows) in fresh.items():
+            identity, order_by = shapes[key]
+            if key in priors:
+                table_prior, table_has_prior = priors[key]
+            else:
+                table_prior = output_dir / f"_{key.removesuffix('.parquet')}_prior.parquet"
+                table_has_prior = table_prior.exists() or r2.download(key, table_prior)
+            schema = pa.schema([(c, pa.string()) for c in columns])
+            new_file = output_dir / f"_{key.removesuffix('.parquet')}_new.parquet"
+            pq.write_table(pa.Table.from_pylist(rows, schema=schema) if rows else schema.empty_table(), new_file,
+                           compression="zstd")
+            out = output_dir / key
+            merge_local_prior(con, columns=columns, identity=identity, order_by=order_by,
+                              prior_file=table_prior if table_has_prior else None, new_file=new_file, out_file=out)
+            # Housekeeping: drop scratch files so they aren't mistaken for outputs.
+            for scratch in (table_prior, new_file):
+                scratch.unlink(missing_ok=True)
+            outputs.append(out)
+            logger.info("{}: {:,} rows", key, pq.ParquetFile(out).metadata.num_rows)
+    finally:
+        con.close()
+    return outputs[0], outputs[1], outputs[2]

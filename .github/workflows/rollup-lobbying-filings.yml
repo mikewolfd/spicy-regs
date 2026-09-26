@@ -20,6 +20,11 @@ on:
         required: false
         default: ''
         type: string
+      filing_year:
+        description: 'Read one whole filing year (history backfill, decision 47); blank uses the posted-date window'
+        required: false
+        default: ''
+        type: string
 jobs:
   run:
     uses: ./.github/workflows/_rollup.yml
@@ -29,3 +34,6 @@ jobs:
       skip_upload: ${{ github.event_name == 'workflow_dispatch' && inputs.skip_upload || false }}
       lda_since: ${{ inputs.since || '' }}
       lda_until: ${{ inputs.until || '' }}
+      lda_filing_year: ${{ inputs.filing_year || '' }}
+      # A filing year is about 4,000 pages at the keyed rate (~80 minutes); the daily window takes minutes.
+      timeout_minutes: ${{ inputs.filing_year && 150 || 30 }}

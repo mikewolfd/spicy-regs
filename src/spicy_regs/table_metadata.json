@@ -1395,6 +1395,127 @@
     "grain": null,
     "identity_columns": []
   },
+  "lobbying_activities": {
+    "table": "lobbying_activities",
+    "label": "Lobbying activities",
+    "summary": "One row per lobbying activity an LDA filing reports: the issue area, the registrant's description of what was lobbied, foreign-entity interests, and the government entities contacted for that activity. Keyed `(filing_uuid, activity_index)`, the position in the filing's own list, which is stable because LDA never edits a filing (an amendment is a new filing). Joins to `lobbying_filings` on `filing_uuid`. All columns are stored as VARCHAR.",
+    "coverage": "Window. Rows exist for the filings read since this table was added (2026-09-26); the filing-year backfill of `lobbying_filings` (owner decision 47) fills history, one year per run.",
+    "kind": "window",
+    "measured_on": "2026-09-26",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "filing_uuid",
+        "column_type": "VARCHAR",
+        "description": "The filing this activity belongs to; joins to `lobbying_filings.filing_uuid`."
+      },
+      {
+        "column_name": "activity_index",
+        "column_type": "VARCHAR",
+        "description": "The activity's position in the filing's list, from `0`. With `filing_uuid`, the key."
+      },
+      {
+        "column_name": "general_issue_code",
+        "column_type": "VARCHAR",
+        "description": "LDA general issue area code (e.g. `SCI`, `HCR`)."
+      },
+      {
+        "column_name": "general_issue_code_display",
+        "column_type": "VARCHAR",
+        "description": "The issue area's name (e.g. `Science/Technology`)."
+      },
+      {
+        "column_name": "description",
+        "column_type": "VARCHAR",
+        "description": "The registrant's description of the specific lobbying, often naming bills (e.g. `S. 3597`)."
+      },
+      {
+        "column_name": "foreign_entity_issues",
+        "column_type": "VARCHAR",
+        "description": "The registrant's statement of any foreign entity's interest in the issue; often null."
+      },
+      {
+        "column_name": "government_entities_json",
+        "column_type": "VARCHAR",
+        "description": "JSON array of the government entities contacted for this activity, `{id, name}` objects (e.g. `SENATE`)."
+      }
+    ],
+    "grain": null,
+    "identity_columns": []
+  },
+  "lobbying_activity_lobbyists": {
+    "table": "lobbying_activity_lobbyists",
+    "label": "Lobbyists named on lobbying activities",
+    "summary": "One row per lobbyist an LDA filing names on one of its activities, with the lobbyist's LDA id and name parts, any covered official position they held, and whether the filing lists them as new. Keyed `(filing_uuid, activity_index, lobbyist_index)`, positions in the filing's own lists. Joins to `lobbying_activities` on `(filing_uuid, activity_index)`. All columns are stored as VARCHAR.",
+    "coverage": "Window. Rows exist for the filings read since this table was added (2026-09-26); the filing-year backfill of `lobbying_filings` fills history.",
+    "kind": "window",
+    "measured_on": "2026-09-26",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "filing_uuid",
+        "column_type": "VARCHAR",
+        "description": "The filing; joins to `lobbying_filings.filing_uuid`."
+      },
+      {
+        "column_name": "activity_index",
+        "column_type": "VARCHAR",
+        "description": "The activity's position in the filing; with `filing_uuid`, joins to `lobbying_activities`."
+      },
+      {
+        "column_name": "lobbyist_index",
+        "column_type": "VARCHAR",
+        "description": "The lobbyist's position in the activity's list, from `0`. Completes the key."
+      },
+      {
+        "column_name": "lobbyist_id",
+        "column_type": "VARCHAR",
+        "description": "LDA lobbyist id: the stable identity of the person across filings."
+      },
+      {
+        "column_name": "prefix",
+        "column_type": "VARCHAR",
+        "description": "Name prefix as filed; often null."
+      },
+      {
+        "column_name": "first_name",
+        "column_type": "VARCHAR",
+        "description": "First name as filed (LDA prints names upper-case)."
+      },
+      {
+        "column_name": "nickname",
+        "column_type": "VARCHAR",
+        "description": "Nickname as filed; often null."
+      },
+      {
+        "column_name": "middle_name",
+        "column_type": "VARCHAR",
+        "description": "Middle name as filed; often null."
+      },
+      {
+        "column_name": "last_name",
+        "column_type": "VARCHAR",
+        "description": "Last name as filed."
+      },
+      {
+        "column_name": "suffix",
+        "column_type": "VARCHAR",
+        "description": "Name suffix as filed; often null."
+      },
+      {
+        "column_name": "covered_position",
+        "column_type": "VARCHAR",
+        "description": "The covered executive- or legislative-branch position the lobbyist held, as filed; null when none."
+      },
+      {
+        "column_name": "new",
+        "column_type": "VARCHAR",
+        "description": "`True` when the filing lists the lobbyist as new for this activity, `False` otherwise."
+      }
+    ],
+    "grain": null,
+    "identity_columns": []
+  },
   "fec_committees": {
     "table": "fec_committees",
     "label": "Political committees",

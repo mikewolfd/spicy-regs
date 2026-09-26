@@ -409,7 +409,7 @@ def test_the_rotation_rereads_the_current_year_every_other_day_and_cycles_the_ol
 
 
 def test_int_env_parses_blank_and_bad_values(monkeypatch):
-    from spicy_regs.pipelines.rollups.sam_entities import _int_env
+    from spicy_regs.env_values import int_env as _int_env
 
     monkeypatch.delenv("SAM_MAX_RECORDS", raising=False)
     assert _int_env("SAM_MAX_RECORDS") is None

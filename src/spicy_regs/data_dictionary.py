@@ -163,6 +163,8 @@ TABLES: tuple[str, ...] = (
     "federal_register",
     "sam_entities",
     "lobbying_filings",
+    "lobbying_activities",
+    "lobbying_activity_lobbyists",
     "fec_committees",
     "fec_source_catalog",
     "fec_collections",
@@ -218,6 +220,8 @@ MCP_QUERYABLE: frozenset[str] = frozenset(
         "federal_register",
         "sam_entities",
         "lobbying_filings",
+        "lobbying_activities",
+        "lobbying_activity_lobbyists",
         "fec_committees",
         "fec_source_catalog",
         "fec_collections",
@@ -385,25 +389,6 @@ DERIVED_SCHEMAS: dict[str, list[tuple[str, str]]] = {
         ("executive_order_number", "VARCHAR"),
         ("modify_date", "VARCHAR"),
         ("rin", "VARCHAR"),
-    ],
-    # Ingested from the Senate LDA REST API (build_lobbying_filings); all columns
-    # are stored as VARCHAR, nested/array fields serialized as JSON strings.
-    # Keyed by filing_uuid.
-    "lobbying_filings": [
-        ("filing_uuid", "VARCHAR"),
-        ("filing_type", "VARCHAR"),
-        ("filing_year", "VARCHAR"),
-        ("filing_period", "VARCHAR"),
-        ("dt_posted", "VARCHAR"),
-        ("registrant_name", "VARCHAR"),
-        ("registrant_id", "VARCHAR"),
-        ("client_name", "VARCHAR"),
-        ("client_id", "VARCHAR"),
-        ("income", "VARCHAR"),
-        ("expenses", "VARCHAR"),
-        ("lobbying_activities_json", "VARCHAR"),
-        ("government_entities_json", "VARCHAR"),
-        ("url", "VARCHAR"),
     ],
     # Ingested from the OpenFEC /committees endpoint (build_fec_committees); a
     # committee/PAC reference dimension, all columns stored as VARCHAR with array
@@ -711,6 +696,11 @@ def expected_schemas() -> dict[str, list[tuple[str, str]]]:
     from spicy_regs.transforms.build_court_bulk_tables import CITATION_MAP, CITATIONS, OPINIONS, PARENTHETICALS
     from spicy_regs.transforms.build_member_vote_terms import COLUMNS as MEMBER_VOTE_TERM_COLUMNS
     from spicy_regs.transforms.build_sam_entities import COLUMNS as SAM_COLUMNS
+    from spicy_regs.transforms.build_lobbying_filings import (
+        ACTIVITY_COLUMNS as LOBBYING_ACTIVITY_COLUMNS,
+        COLUMNS as LOBBYING_COLUMNS,
+        LOBBYIST_COLUMNS as LOBBYING_LOBBYIST_COLUMNS,
+    )
 
     builder_columns = {
         "fec_source_catalog": FEC_CATALOG_COLUMNS,
@@ -725,6 +715,9 @@ def expected_schemas() -> dict[str, list[tuple[str, str]]]:
         "court_opinions": OPINIONS.columns,
         "member_vote_terms": MEMBER_VOTE_TERM_COLUMNS,
         "sam_entities": SAM_COLUMNS,
+        "lobbying_filings": LOBBYING_COLUMNS,
+        "lobbying_activities": LOBBYING_ACTIVITY_COLUMNS,
+        "lobbying_activity_lobbyists": LOBBYING_LOBBYIST_COLUMNS,
     }
     for name in TABLES:
         if name in builder_columns:

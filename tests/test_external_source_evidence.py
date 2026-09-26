@@ -405,7 +405,7 @@ def test_lobbying_retains_each_page_without_the_key(tmp_path, monkeypatch, tee):
     evidence = CaptureEvidence(tmp_path / 'audit', 'lobbying-filings')
     raw = json.dumps({'count': 1, 'next': None, 'previous': None, 'results': [{'filing_uuid': 'f-1'}]}).encode()
     tee(evidence, lambda request: json_response(raw))
-    output = lda.build_lobbying_filings(tmp_path, evidence=evidence, since=date(2026, 9, 1), until=date(2026, 9, 2))
+    output, *_ = lda.build_lobbying_filings(tmp_path, evidence=evidence, since=date(2026, 9, 1), until=date(2026, 9, 2))
     assert [row['filing_uuid'] for row in pq.read_table(output).to_pylist()] == ['f-1']
     [capture] = captures(evidence)
     assert capture['stage'] == 'lobbying-response' and payload(evidence, capture) == raw

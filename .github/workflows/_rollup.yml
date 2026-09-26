@@ -128,6 +128,11 @@ on:
         required: false
         default: false
         type: boolean
+      lda_filing_year:
+        description: 'Optional LDA filing year to read whole, instead of the posted-date window (history backfill)'
+        required: false
+        default: ''
+        type: string
       fcc_proceedings:
         description: 'Optional comma-separated FCC proceeding names to scope the filings fetch (e.g. 17-108,23-320)'
         required: false
@@ -251,6 +256,7 @@ jobs:
           FCC_SINCE: ${{ inputs.fcc_since }}
           FR_SINCE: ${{ inputs.fr_since }}
           USASPENDING_EVERY_FUNDED: ${{ inputs.usaspending_every_funded }}
+          LDA_FILING_YEAR: ${{ inputs.lda_filing_year }}
           FCC_PROCEEDINGS: ${{ inputs.fcc_proceedings }}
           # Only the court_dockets rollup gets the CourtListener token: its daily
           # delta is a few search pages, and keyless runs were timing out on 429s

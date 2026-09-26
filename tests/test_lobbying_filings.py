@@ -207,7 +207,7 @@ def test_max_records_stops_the_walk_mid_page(tmp_path, monkeypatch):
             _page(["a", "b", "c", "d", "e"], f"{API}/filings/?page=2", count=100)
         ),
     )
-    out = bld.build_lobbying_filings(tmp_path, max_records=3)
+    out, *_ = bld.build_lobbying_filings(tmp_path, max_records=3)
     assert len(calls) == 1
     assert [row["filing_uuid"] for row in pq.read_table(out).to_pylist()] == ["a", "b", "c"]
 
@@ -262,7 +262,7 @@ def test_reader_failure_aborts_actual_rollup_before_output_or_publication(
     assert sleeps == ([0.0, 0.0] if retried else [])
     assert not (tmp_path / "generations").exists()
     assert not list((tmp_path / ".builds").rglob(OUTPUT))
-    assert not list(tmp_path.rglob("_lda_new.parquet"))
+    assert not list(tmp_path.rglob("_*_new.parquet"))
     if have_prior:
         assert prior.read_bytes() == original
         assert pq.read_table(prior).to_pylist()[0]["filing_uuid"] == _RAW_FILING["filing_uuid"]
@@ -288,3 +288,48 @@ def test_malformed_success_cannot_become_empty_or_partial_output(tmp_path, monke
     with pytest.raises(error):
         bld.build_lobbying_filings(tmp_path)
     assert not list(tmp_path.glob("*.parquet"))
+
+
+_FILING_WITH_ACTIVITIES = {
+    "filing_uuid": "f-1",
+    "lobbying_activities": [
+        {
+            "general_issue_code": "SCI",
+            "general_issue_code_display": "Science/Technology",
+            "description": "Quantum computing policy, including S. 3597.",
+            "foreign_entity_issues": "Bluefors OY has interest in this issue area.",
+            "lobbyists": [
+                {"lobbyist": {"id": 67914, "first_name": "GARY", "last_name": "GALLANT"},
+                 "covered_position": None, "new": False},
+                {"lobbyist": {"id": 70001, "first_name": "ANA", "last_name": "RUIZ"},
+                 "covered_position": "Legislative Assistant, Sen. X", "new": True},
+            ],
+            "government_entities": [{"id": 2, "name": "HOUSE OF REPRESENTATIVES"}, {"id": 1, "name": "SENATE"}],
+        },
+        {"general_issue_code": "TRD", "description": "Export controls.", "lobbyists": [], "government_entities": []},
+    ],
+}
+
+
+def test_each_activity_and_each_named_lobbyist_is_a_row_at_its_position(tmp_path, monkeypatch):
+    """Decision 47: the lobbyists the filings table dropped become rows, keyed by position in the filing."""
+    _no_prior(monkeypatch)
+    _mock_http(monkeypatch, lambda request, number: _json_response(
+        {"count": 1, "next": None, "previous": None, "results": [_FILING_WITH_ACTIVITIES]}))
+    filings, activities, lobbyists = bld.build_lobbying_filings(tmp_path, since=date(2026, 9, 1), until=date(2026, 9, 2))
+
+    assert [r["filing_uuid"] for r in pq.read_table(filings).to_pylist()] == ["f-1"]
+    acts = pq.read_table(activities).to_pylist()
+    assert [(a["activity_index"], a["general_issue_code"]) for a in acts] == [("0", "SCI"), ("1", "TRD")]
+    assert json.loads(acts[0]["government_entities_json"]) == [{"id": 2, "name": "HOUSE OF REPRESENTATIVES"},
+                                                               {"id": 1, "name": "SENATE"}]
+    people = pq.read_table(lobbyists).to_pylist()
+    assert [(p["activity_index"], p["lobbyist_index"], p["lobbyist_id"], p["last_name"], p["new"]) for p in people] == [
+        ("0", "0", "67914", "GALLANT", "False"), ("0", "1", "70001", "RUIZ", "True")]
+    assert people[1]["covered_position"] == "Legislative Assistant, Sen. X"
+
+
+def test_the_rollup_declares_its_two_new_tables_as_an_explicit_migration():
+    from spicy_regs.pipelines.rollups.lobbying_filings import LobbyingFilingsRollup
+
+    assert set(LobbyingFilingsRollup.outputs) - set(LobbyingFilingsRollup.added_tables) == {"lobbying_filings.parquet"}

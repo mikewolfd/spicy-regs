@@ -54,6 +54,8 @@ TABLES = (
     "federal_register",
     "sam_entities",
     "lobbying_filings",
+    "lobbying_activities",
+    "lobbying_activity_lobbyists",
     "fec_committees",
     "fec_source_catalog",
     "fec_collections",

@@ -23,3 +23,14 @@ def flag_env(name: str) -> bool:
     if raw not in ("", "true", "false"):
         raise ValueError(f"{name} must be true or false, got {raw!r}")
     return raw == "true"
+
+
+def int_env(name: str) -> int | None:
+    """An integer env var, or None when unset; anything else raises ValueError naming it."""
+    raw = os.environ.get(name, "").strip()
+    if not raw:
+        return None
+    try:
+        return int(raw)
+    except ValueError:
+        raise ValueError(f"{name} must be an integer or blank") from None
