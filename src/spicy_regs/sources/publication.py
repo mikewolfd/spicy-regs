@@ -29,6 +29,8 @@ INDEX_KEY = "publication.json"
 INDEX_LIMIT = 1024 * 1024
 PART_BYTES = 64 * 1024 * 1024
 EVIDENCE_PREFIX = "source-evidence"
+#: Concurrent blob requests while publishing evidence, as r2.py bounds its uploads.
+EVIDENCE_WORKERS = 8
 #: An evidence manifest lists every retained body and its journal every
 #: capture, so both grow with a run's reads (house communications' 1,043
 #: captures: a 261 KB manifest and a 588 KB journal, 2026-09-26). Rulespec
@@ -419,16 +421,15 @@ class _S3Members:
 class _EvidenceMembers:
     """Admission source for one evidence artifact whose blobs live in the shared prefix.
 
-    Metadata members come from ``source-evidence/<digest>/``; each
-    ``blobs/sha256/<hex>`` member comes from ``source-evidence/blobs/…``, or
-    from the locally admitted copy when the stored object's size and ETag
-    already equal those bytes (``trusted``).
+    Metadata members come from ``source-evidence/<digest>/``. Each
+    ``blobs/sha256/<hex>`` member comes from the locally admitted copy when the
+    stored object's size and ETag already equal those bytes (``trusted``), and
+    otherwise from ``fetched``, the bytes read back from the shared prefix.
     """
 
-    def __init__(self, client, bucket: str, prefix: str, local, blobs: set[str], trusted: set[str]):
+    def __init__(self, client, bucket: str, prefix: str, local, blobs: set[str], trusted: set[str], fetched):
         self.artifact = _S3Members(client, bucket, prefix)
-        self.shared = _S3Members(client, bucket, EVIDENCE_PREFIX)
-        self.local, self.blobs, self.trusted = local, blobs, trusted
+        self.local, self.blobs, self.trusted, self.fetched = local, blobs, trusted, fetched
 
     def keys(self):
         yield from sorted({*self.artifact.keys(), *self.blobs})
@@ -436,7 +437,7 @@ class _EvidenceMembers:
     @contextmanager
     def open(self, object_key: str) -> Iterator[BinaryIO]:
         source = (self.local if object_key in self.trusted
-                  else self.shared if object_key in self.blobs else self.artifact)
+                  else self.fetched if object_key in self.blobs else self.artifact)
         with source.open(object_key) as stream:
             yield stream
 
@@ -447,34 +448,67 @@ def _publish_evidence(client, bucket: str, path: Path, artifact) -> None:
     Blob members are content-addressed, so each is stored once at
     ``source-evidence/blobs/sha256/<hex>`` for every artifact that cites it.
     A new blob is created from bytes that hash to its key and is read back once
-    by admission. An existing blob whose size and ETag equal the local bytes is
-    not transferred again; any other existing object is read back and refused
-    unless its bytes match. Small metadata stays under the artifact's prefix.
+    before admission. An existing blob whose size and ETag equal the local
+    bytes is not transferred again; any other existing object is read back and
+    refused unless its bytes match. Small metadata stays under the artifact's
+    prefix. Blob requests run ``EVIDENCE_WORKERS`` at a time: a run retains
+    thousands of small responses, and one round trip after another took 23.5
+    minutes for 1,810 of them (bill family, 2026-09-26). The metadata is written
+    after every blob exists, and every blob is read back after the metadata, so
+    admission still sees the stored state the pointer will cite.
     """
-    from rulespec_artifacts import LocalMemberSource, admit_artifact, iter_member_descriptors
+    from concurrent.futures import ThreadPoolExecutor
+    from tempfile import TemporaryDirectory
+
+    from rulespec_artifacts import LocalMemberSource, MemberNotFoundError, admit_artifact, iter_member_descriptors
 
     local = LocalMemberSource(path)
     prefix = f"{EVIDENCE_PREFIX}/{artifact.pin.artifact_digest.removeprefix('sha256:')}"
     declared = {member.object_key: member for member in iter_member_descriptors(artifact, local)}
-    blobs, trusted = set(), set()
+    blobs, metadata = [], []
     for key in sorted(local.keys()):
         match, member = _BLOB_KEY.fullmatch(key), declared.get(key)
         if match is None or member is None:
-            _put_immutable(client, bucket, f"{prefix}/{key}", path / key)
+            metadata.append(key)
             continue
         if member.sha256 != "sha256:" + match[1]:
             raise PublicationError(f"Evidence blob {key} is not addressed by its content")
-        blobs.add(key)
+        blobs.append(key)
+
+    def store(key: str) -> bool:
+        """Create the blob if absent; ``True`` when the stored object already equals the local bytes."""
         stored = _head(client, bucket, f"{EVIDENCE_PREFIX}/{key}")
         if stored is None:
-            _put_immutable(client, bucket, f"{EVIDENCE_PREFIX}/{key}", path / key, sha256=member.sha256)
-            continue
+            _put_immutable(client, bucket, f"{EVIDENCE_PREFIX}/{key}", path / key, sha256=declared[key].sha256)
+            return False
         identity = file_identity(path / key)
         if (stored["ContentLength"], stored.get("ETag")) == (identity["bytes"], identity["etag"]):
-            trusted.add(key)
-        else:
-            logger.warning("Stored evidence blob {} differs from its expected identity; reading it back", key)
-    admit_artifact(_EvidenceMembers(client, bucket, prefix, local, blobs, trusted), expected_pin=artifact.pin)
+            return True
+        logger.warning("Stored evidence blob {} differs from its expected identity; reading it back", key)
+        return False
+
+    shared = _S3Members(client, bucket, EVIDENCE_PREFIX)
+    with ThreadPoolExecutor(max_workers=EVIDENCE_WORKERS) as pool, TemporaryDirectory() as scratch:
+        trusted = {key for key, same in zip(blobs, pool.map(store, blobs), strict=True) if same}
+        for key in metadata:
+            _put_immutable(client, bucket, f"{prefix}/{key}", path / key)
+
+        def fetch(key: str) -> None:
+            """Read one stored blob back; a missing one stays absent, so admission refuses it."""
+            target = Path(scratch) / key
+            target.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                with shared.open(key) as stream, target.open("wb") as out:
+                    while chunk := stream.read(1 << 20):
+                        out.write(chunk)
+            except MemberNotFoundError:
+                target.unlink(missing_ok=True)
+
+        list(pool.map(fetch, [key for key in blobs if key not in trusted]))
+        admit_artifact(
+            _EvidenceMembers(client, bucket, prefix, local, set(blobs), trusted, LocalMemberSource(Path(scratch))),
+            expected_pin=artifact.pin,
+        )
 
 
 def publish_generation(directory: Path, *, client, bucket: str, prior_index: Mapping,

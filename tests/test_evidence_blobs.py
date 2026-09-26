@@ -97,3 +97,29 @@ def test_upload_refuses_bytes_that_differ_from_their_content_address(tmp_path):
     with pytest.raises(pub.PublicationError, match="differ"):
         pub._put_immutable(store, "test", "source-evidence/blobs/sha256/x", path, sha256="sha256:" + "0" * 64)
     assert not store.objects
+
+
+def test_blob_requests_run_concurrently(tmp_path):
+    """1,810 serial round trips took 23.5 minutes (bill family, 2026-09-26); two requests must overlap."""
+    import threading
+
+    (tmp_path / "one").mkdir()
+    directory, evidence = evidence_run(tmp_path, "one", BODY, b"a second response", b"a third response")
+    both, arrivals, lock = threading.Barrier(2, timeout=5), [], threading.Lock()
+
+    class Overlapping(Store):
+        def head_object(self, *, Bucket, Key):
+            with lock:
+                arrivals.append(Key)
+                first_two = "/blobs/" in Key and len([k for k in arrivals if "/blobs/" in k]) <= 2
+            if first_two:
+                try:
+                    both.wait()
+                except threading.BrokenBarrierError:
+                    pass
+            return super().head_object(Bucket=Bucket, Key=Key)
+
+    store = Overlapping()
+    publish(store, directory, evidence)
+    assert not both.broken, "no two blob requests were in flight together"
+    assert all(store.writes.count(key) == 1 and store.reads[key] == 1 for key in blob_keys(evidence))
