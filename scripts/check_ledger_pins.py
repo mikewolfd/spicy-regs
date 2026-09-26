@@ -11,6 +11,10 @@ object outside the index (dockets, documents, comments and its index) records
 ``verified at table digest `<8 hex>…` (<date>; ETag `<8 hex>…`)``, and its ETag is
 compared with a HEAD of the public object. Read-only.
 
+``OK`` means a row's qualified pin is still the live one. It is pin equality,
+not a semantic quality gate: ``scripts/audit_generation.py`` writes the
+machine-readable audit of what a pin actually holds.
+
 The publisher checked is the one the ledger names in its ``Public data
 destination`` line, not whatever the environment happens to point at: a clean
 run against another bucket would prove nothing about this ledger. An explicit
@@ -158,6 +162,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"{status:<9} {detail}")
     counts = Counter(status for status, _ in results)
     print("\n" + " ".join(f"{status}={counts[status]}" for status in ("OK", "NO-PIN", *FAILING)))
+    print("OK compares pins only; audit what a pin holds with scripts/audit_generation.py.")
     return 1 if any(counts[status] for status in FAILING) else 0
 
 
