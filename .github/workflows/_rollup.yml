@@ -123,6 +123,11 @@ on:
         required: false
         default: ''
         type: string
+      usaspending_every_funded:
+        description: 'Walk every USAspending recipient funded in the trailing 12 months instead of the top pages'
+        required: false
+        default: false
+        type: boolean
       fcc_proceedings:
         description: 'Optional comma-separated FCC proceeding names to scope the filings fetch (e.g. 17-108,23-320)'
         required: false
@@ -245,6 +250,7 @@ jobs:
           SENATE_EXPENDITURES_SINCE: ${{ inputs.senate_expenditures_since }}
           FCC_SINCE: ${{ inputs.fcc_since }}
           FR_SINCE: ${{ inputs.fr_since }}
+          USASPENDING_EVERY_FUNDED: ${{ inputs.usaspending_every_funded }}
           FCC_PROCEEDINGS: ${{ inputs.fcc_proceedings }}
           # Only the court_dockets rollup gets the CourtListener token: its daily
           # delta is a few search pages, and keyless runs were timing out on 429s

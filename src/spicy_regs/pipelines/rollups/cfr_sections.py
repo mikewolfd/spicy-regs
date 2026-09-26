@@ -12,10 +12,10 @@ Requires an api.data.gov key (``DATA_GOV_API_KEY``); a keyless run refuses.
 re-places every listed package instead of only the changed ones.
 """
 
-import os
 from pathlib import Path
 from typing import ClassVar
 
+from spicy_regs.env_values import flag_env
 from spicy_regs.pipelines.rollups.base import RollupPipeline, make_rollup_app
 from spicy_regs.transforms import build_cfr_sections
 
@@ -28,15 +28,7 @@ class CfrSectionsRollup(RollupPipeline):
     output: ClassVar[str] = "cfr_sections.parquet"
 
     def build(self, output_dir: Path) -> Path:
-        return build_cfr_sections(output_dir, replace_all=_flag_env("CFR_REPLACE_ALL"))
-
-
-def _flag_env(name: str) -> bool:
-    """``true`` or ``false`` (any case; blank is false), refusing anything else."""
-    raw = os.environ.get(name, "").strip().lower()
-    if raw not in ("", "true", "false"):
-        raise ValueError(f"{name} must be true or false, got {raw!r}")
-    return raw == "true"
+        return build_cfr_sections(output_dir, replace_all=flag_env("CFR_REPLACE_ALL"))
 
 
 app = make_rollup_app(CfrSectionsRollup)

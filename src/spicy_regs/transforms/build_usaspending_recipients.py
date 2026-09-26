@@ -8,22 +8,25 @@ funding. The same UEI can appear at multiple ``recipient_level`` values (parent
 ``P`` / child ``C`` / standalone ``R``), so ``recipient_id``, unique per level,
 is the primary/dedup key; consumers filter by level and join on ``uei``.
 
-Scope is deliberately bounded to the **top-N recipients by trailing-12-month federal
-award amount**: the endpoint reports ~18M recipients across all history, so a
-full walk is infeasible and the largest-funded organizations are both the most
-resolution-useful and naturally bounded. There is no watermark — recipients
-are a reference dimension, not a time series — so each run fetches the current
-top-N and merges it with the prior table, dedup on ``recipient_id`` preferring
-the fresh row, which keeps the row count monotonic and clear of the R2
-catastrophic-shrink guard.
+Two selections of the ranking by trailing-12-month federal award amount. The
+daily one reads the top ``DEFAULT_MAX_PAGES`` pages. The weekly one
+(``every_funded``) walks until the ranking reaches a non-positive amount: every
+recipient funded in the last twelve months, about 231,700 on 2026-09-26 (the
+funded tail ended near page 2,317 of the endpoint's ~18M-recipient history),
+refused rather than truncated if the tail has not come by ``FUNDED_WALK_PAGE_BOUND``.
+There is no watermark: recipients are a reference dimension, not a time series.
+Each run merges with the prior table, dedup on ``recipient_id`` preferring the
+fresh row, and a recipient that drops out of the window keeps its last observed
+amount and ``observed_at`` (owner decision 48).
 """
 
 from __future__ import annotations
 
 import json
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
+from decimal import Decimal
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import httpx
 import pyarrow as pa
@@ -42,6 +45,8 @@ OUTPUT = "usaspending_recipients.parquet"
 # operational scope control over the top-N ranking, not the whole population.
 PER_PAGE = 100
 DEFAULT_MAX_PAGES = 100
+#: The weekly walk's bound: about twice the page the funded tail ended on (2,317, 2026-09-26).
+FUNDED_WALK_PAGE_BOUND = 5_000
 _MAX_REQUESTS_PER_PAGE = 5
 
 # The published schema, all VARCHAR, in a fixed order (``data_dictionary`` declares
@@ -87,6 +92,7 @@ def _iter_recipient_rows(
     transport: httpx.BaseTransport | None = None,
     evidence: CaptureEvidence | None = None,
     include_observation: bool = False,
+    every_funded: bool = False,
 ) -> Iterator[dict]:
     """Yield the selected top-page recipient ranking through SpicyDocs' evidenced reader.
 
@@ -96,12 +102,14 @@ def _iter_recipient_rows(
     completes this selected scope, not the entire recipient population. A page
     whose metadata omits or contradicts its continuation, a continuation that
     skips a page or follows an empty page, and a missing or repeated recipient
-    ``id`` refuse the selection.
+    ``id`` refuse the selection. With ``every_funded`` the walk instead ends on the
+    first page that reaches a non-positive amount, yielding only the positive
+    ones, and refuses if the bound comes first.
     """
     from spicy_docs.reading.paged_json import PagedJsonBudget, PagedJsonSourceError
     from spicy_docs.sources.usaspending import UsaspendingRecipientsReader, recipients_request
 
-    pages = DEFAULT_MAX_PAGES if max_pages is None else max_pages
+    pages = max_pages if max_pages is not None else FUNDED_WALK_PAGE_BOUND if every_funded else DEFAULT_MAX_PAGES
     url, body = recipients_request(limit=per_page)
     budget = PagedJsonBudget(
         max_requests=_MAX_REQUESTS_PER_PAGE,
@@ -114,7 +122,8 @@ def _iter_recipient_rows(
         # The owner requests identity encoding and reads raw bytes, so each
         # page's ``capture.sha256`` names the blob this tee retains; the tee
         # alone also keeps retries and pages the owner refuses.
-        evidence.event("selection", stage="usaspending", url=url, request_body=body, max_pages=pages)
+        evidence.event("selection", stage="usaspending", url=url, request_body=body, max_pages=pages,
+                       every_funded=every_funded)
         transport = evidence.transport(transport, stage="usaspending-response", max_bytes=budget.max_page_bytes)
     with UsaspendingRecipientsReader(budget=budget, transport=transport) as reader:
         for index, page in enumerate(reader.recipients(body, max_pages=pages)):
@@ -136,24 +145,42 @@ def _iter_recipient_rows(
                 # time, so the journal carries that too, keyed by the same digest.
                 evidence.event("page-read", stage="usaspending", sha256=page.capture.sha256,
                                observed_at=page.capture.observed_at, records=len(page.records))
+            reached_unfunded = False
             for record in page.records:
                 identity = record.get("id")
                 if not isinstance(identity, str) or not identity.strip() or identity in seen:
                     raise PagedJsonSourceError("USAspending page contains a missing or repeated recipient identity")
                 seen.add(identity)
+                if every_funded and not _funded(record):
+                    reached_unfunded = True
+                    continue
                 observed = dict(record)
                 if include_observation:
                     observed["_source_observed_at"] = page.capture.observed_at
                     observed["_source_capture_sha256"] = page.capture.sha256
                 yield observed
+            if every_funded and (reached_unfunded or page.next_url is None):
+                return  # the ranking reached its unfunded tail, or ended
             if index + 1 == pages and page.next_url is not None:
+                if every_funded:
+                    raise PagedJsonSourceError(f"USAspending funded ranking had not ended after {pages:,} pages")
                 return  # the requested top-page selection is complete even when more pages exist
+
+
+def _funded(record: Mapping[str, Any]) -> bool:
+    """A positive trailing-12-month amount; the ranking sorts by it descending, so the first other one ends the walk.
+
+    The owner parses amounts as ``Decimal``, so a float-only test would end every walk on its first recipient.
+    """
+    amount = record.get("amount")
+    return isinstance(amount, int | float | Decimal) and not isinstance(amount, bool) and amount > 0
 
 
 def build_usaspending_recipients(
     output_dir: Path, *, max_pages: int | None = None, evidence: CaptureEvidence | None = None,
+    every_funded: bool = False,
 ) -> Path:
-    """Build ``usaspending_recipients.parquet`` (top-N merged with the prior table)."""
+    """Build ``usaspending_recipients.parquet`` (the selected ranking merged with the prior table)."""
     import duckdb
 
     out_file = output_dir / OUTPUT
@@ -168,7 +195,7 @@ def build_usaspending_recipients(
 
     # 2. Fetch + shape into a "new rows" parquet.
     rows = [_shape(doc) for doc in _iter_recipient_rows(
-        max_pages=max_pages, include_observation=True, evidence=evidence,
+        max_pages=max_pages, include_observation=True, evidence=evidence, every_funded=every_funded,
     )]
     new_file = output_dir / "_usaspending_new.parquet"
     table = pa.Table.from_pylist(rows, schema=_SCHEMA) if rows else _SCHEMA.empty_table()

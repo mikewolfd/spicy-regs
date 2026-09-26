@@ -3,8 +3,15 @@ on:
   schedule:
     # 18:00 UTC — ingest the federal-award recipient reference dimension.
     - cron: '0 18 * * *'
+    # Sundays 19:30 UTC — walk every recipient funded in the trailing 12 months (decision 48).
+    - cron: '30 19 * * 0'
   workflow_dispatch:
     inputs:
+      every_funded:
+        description: 'Walk every funded recipient (about 2,300 pages) instead of the top 100 pages'
+        required: false
+        default: false
+        type: boolean
       skip_upload:
         description: 'Skip R2 upload (dry run)'
         required: false
@@ -17,3 +24,6 @@ jobs:
     with:
       command: run-rollup-usaspending-recipients
       skip_upload: ${{ github.event_name == 'workflow_dispatch' && inputs.skip_upload || false }}
+      usaspending_every_funded: ${{ github.event.schedule == '30 19 * * 0' || inputs.every_funded == true }}
+      # The funded walk measured 20-35 minutes; the top pages take a few.
+      timeout_minutes: ${{ (github.event.schedule == '30 19 * * 0' || inputs.every_funded == true) && 60 || 30 }}

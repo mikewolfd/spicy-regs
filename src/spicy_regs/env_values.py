@@ -15,3 +15,11 @@ def date_env(name: str) -> date | None:
         return date.fromisoformat(raw)
     except ValueError as exc:
         raise ValueError(f"{name} must be YYYY-MM-DD, got {raw!r}") from exc
+
+
+def flag_env(name: str) -> bool:
+    """``true`` or ``false`` (any case; blank is false), refusing anything else."""
+    raw = os.environ.get(name, "").strip().lower()
+    if raw not in ("", "true", "false"):
+        raise ValueError(f"{name} must be true or false, got {raw!r}")
+    return raw == "true"
