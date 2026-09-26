@@ -39,13 +39,13 @@ RELATIONSHIPS_OUTPUT = "agenda_item_proceedings.parquet"
 # they link: SpicyDocs 0.35.0 reads a docket named after prose (D1) and folds Regulations.gov's
 # typed FR-number separators (D2). A rulemaking snapshot records no package version, so the
 # actor carries the reader change.
-# v5: an item tracks a proceeding only through a RIN the proceeding holds, so a catch-all
-# Federal Register feed docket (proceedings v10) tracks none of the rules it posts; items it
-# tracked keep their other links and count one fewer (decision 32 as amended 2026-09-26).
-# v6: code unchanged; the feed dockets' proceedings go (proceedings v11), and with them the two
-# links FAA-2007-0004's documents gave 2120-AA64.
-ITEM_ACTOR_ID = "spicy-regs:regulatory-agenda-items:v6"
-RELATIONSHIP_ACTOR_ID = "spicy-regs:agenda-item-proceedings:v6"
+# v5 (one bump over published v4): an item tracks a proceeding only through a RIN the
+# proceeding holds, so a Federal Register feed docket tracks none of the rules it posts; and its
+# rows move with proceedings v9, whose feed shells go with their links (two, from FAA-2007-0004
+# to 2120-AA64). Items a feed tracked keep their other links and count fewer (decision 32 as
+# amended 2026-09-26).
+ITEM_ACTOR_ID = "spicy-regs:regulatory-agenda-items:v5"
+RELATIONSHIP_ACTOR_ID = "spicy-regs:agenda-item-proceedings:v5"
 
 ITEM_COLUMNS = (
     "agenda_item_id",

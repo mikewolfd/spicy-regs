@@ -363,13 +363,13 @@ def test_labelled_dockets_and_padded_numbers_join_every_rulemaking_table(tmp_pat
         ("federal_register.document_type", "2010-02-05"),
     }
     assert not any(json.loads(r["docket_ids_json"]) == [] for r in proceedings)
-    assert {r["actor_id"] for r in proceedings} == {"spicy-regs:proceedings:v11"}
+    assert {r["actor_id"] for r in proceedings} == {"spicy-regs:proceedings:v9"}
 
     periods = pq.read_table(build_comment_periods(tmp_path)).to_pylist()
     (period,) = [r for r in periods if "federal_register.comments_close_on" in r["source"]]
     assert json.loads(period["docket_ids_json"]) == ["SSA-2010-0037"]
     assert json.loads(period["proceeding_ids_json"]) == [ssa["proceeding_id"]]
-    assert {r["actor_id"] for r in periods} == {"spicy-regs:comment-periods:v10"}
+    assert {r["actor_id"] for r in periods} == {"spicy-regs:comment-periods:v9"}
 
     items_path, relationships_path = build_regulatory_agenda(tmp_path)
     (item,) = pq.read_table(items_path).to_pylist()
@@ -377,8 +377,8 @@ def test_labelled_dockets_and_padded_numbers_join_every_rulemaking_table(tmp_pat
     relationships = {r["source"]: r for r in pq.read_table(relationships_path).to_pylist()}
     assert relationships["docket_rin"]["evidence_date"] == "2010-03-10"
     assert relationships["federal_register_rin"]["evidence_date"] == "2010-02-05"
-    assert {r["actor_id"] for r in relationships.values()} == {"spicy-regs:agenda-item-proceedings:v6"}
-    assert item["actor_id"] == "spicy-regs:regulatory-agenda-items:v6"
+    assert {r["actor_id"] for r in relationships.values()} == {"spicy-regs:agenda-item-proceedings:v5"}
+    assert item["actor_id"] == "spicy-regs:regulatory-agenda-items:v5"
 
 
 def test_the_rulemaking_generation_builds_one_federal_register_index(tmp_path, monkeypatch):

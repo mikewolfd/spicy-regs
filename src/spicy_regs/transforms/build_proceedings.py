@@ -46,15 +46,14 @@ OUTPUT = "proceedings.parquet"
 # v7: identity_predecessors_json is all recorded ancestry, carried from each prior row, not
 # the prior rows one generation overlapped; a sibling sharing only a cited notice is none.
 # v8: SpicyDocs 0.35.0 reads a docket named after prose (D1) and folds Regulations.gov's typed FR-number separators (D2).
-# v9: identity_predecessors_json is removed (owner decision 2026-09-26): no consumer read the
-# lineage, and supersedes_id with stable ids keeps continuity.
-# v10: an agency's Federal Register feed docket (*_FRDOC_*, catch_all_docket) takes nothing from
-# its own documents: no action evidence, RIN, CFR part, stage event or title (decision 32 as
-# amended, owner ruling 2026-09-26).
-# v11: a feed docket forms a proceeding only on a RIN it states, not on Regulations.gov's
-# Rulemaking type, and no FR link naming it counts; four title families of feeds under
-# ordinary ids join the _FRDOC_ ones (decision 32 as amended, owner rulings 2026-09-26).
-ACTOR_ID = "spicy-regs:proceedings:v11"
+# v9 (one bump over published v8): identity_predecessors_json is removed (owner decision
+# 2026-09-26, 8477dea): no consumer read the lineage, and supersedes_id with stable ids keeps
+# continuity. A Federal Register feed docket (catch_all_docket) takes nothing from the
+# documents it posts: no action evidence, RIN, CFR part, stage event or title (bb385d4). And a
+# feed forms a proceeding only on a RIN it states, not on Regulations.gov's Rulemaking type,
+# no FR link naming it counts, and four title families under ordinary ids are feeds beside
+# the _FRDOC_ dockets (ee6af4b). Decision 32 as amended, owner rulings 2026-09-26.
+ACTOR_ID = "spicy-regs:proceedings:v9"
 
 COLUMNS = (
     "proceeding_id",

@@ -72,10 +72,12 @@ MCP `table_qualification` record read these rows directly.
     by the owner 2026-09-26). Receipt `typed-citation-join-2026-09-26/`.
   - Catch-all feed dockets (`*_FRDOC_*`, 176, and 40 more in four title families)
     took the RINs, CFR parts, stages and agenda links of the rules they post. By owner
-    rulings (decision 32 as amended 2026-09-26) proceedings v10 takes none of them, and
-    v11 makes a feed a proceeding only on a RIN it states: 194 feed proceedings go and
-    7 stay, and every RIN they held stays held elsewhere. Agenda v5 links an item only
-    through a RIN its proceeding holds. Not yet published. Receipt
+    rulings (decision 32 as amended 2026-09-26) proceedings v9 takes none of them and
+    makes a feed a proceeding only on a RIN it states: 194 feed proceedings go and 7
+    stay, and every RIN they held stays held elsewhere. Agenda v5 links an item only
+    through a RIN its proceeding holds. Each table moves one actor over the published
+    snapshot (proceedings v9 with the lineage prune, rule-targets v6, comment periods v9,
+    agenda v5). Not yet published. Receipt
     `frdoc-catchalls-2026-09-26/`.
   - Lineage is out of scope by owner decision (2026-09-26): `identity_predecessors_json`
     is pruned at `8477dea` (proceedings v9), and the 3,010 links erased at
