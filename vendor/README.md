@@ -5,12 +5,14 @@ The optional `source-readers` extra enables the same readers for package install
 its wheels must be supplied explicitly until they are published in a registry.
 Base CLI and MCP installs do not require them.
 
-- `spicy_docs-0.39.2`: built from SpicyDocs `main` at `d6b7003` (release commit), with Rulespec
-  Artifacts 1.1.2. Built September 26, 2026 UTC: **1,644,429 bytes**, SHA-256
-  `254fbecb17a01067843167512b7a6b34750735f526c9e968b359723e08641e6d`, byte-identical across
-  two rebuilds from a clean archive of that commit with `SOURCE_DATE_EPOCH` at its commit time.
-  Code equals 0.39.1; it pins rulespec-artifacts 1.1.2. 0.39.1 (SAM stall recovery,
-  `SamBulkExtract.abandoned`) and its build record are at `13f3831`.
+- `spicy_docs-0.40.0`: built from SpicyDocs `main` at `609d5e6` (release commit). Built September 26,
+  2026 UTC: **1,648,809 bytes**, SHA-256
+  `63d91bf6a3391ce38b02308d30895aa5e5497902bcbafabcdc92ac97cdbb0b18`, byte-identical across two
+  rebuilds from a clean archive of that commit with `SOURCE_DATE_EPOCH` at its commit time. On top
+  of 0.39.2 it adds the inline-Congress citation rule (bill_number 005), every committee systemCode
+  the unscoped list states, the stated Content-Length on byte-limit refusals, the Table III bulk
+  facts with `iter_table3_chain` removed, and the House roll-call population from the Clerk's index
+  with the Senate's verdict spellings. 0.39.2 and its build record are at `a2cdc65`.
 
 - `rulespec_artifacts-1.1.2`: exact dependency of SpicyDocs 0.39.2, built from Rulespec
   `23d5f2d98973b2a7f1bf7ce4c9c7a786a4f369ab` (`packages/rulespec-artifacts` of a whole-repo
