@@ -119,7 +119,7 @@ JOINS: tuple[Join, ...] = (
     _join("bill_subjects", "bill_id", _BILL, "bill_id", 149_261, 0),
     _join("bill_summaries", "bill_id", _BILL, "bill_id", 0, 0, "empty", _MODEL_OUTPUT),
     _join("bill_versions", "bill_id", _BILL, "bill_id", 38_230, 0),
-    _join("bill_vote_references", "bill_id", _BILL, "bill_id", 1_036, 0),
+    _join("bill_vote_references", "bill_id", _BILL, "bill_id", 7_513, 0),
     _join("cbo_cost_estimates", "bill_id", _BILL, "bill_id", 2_488, 0),
     _join("committee_reports", "bill_id", _BILL, "bill_id", 137, 0),
     _join("diff_summaries", "bill_id", _BILL, "bill_id", 0, 0, "empty", _MODEL_OUTPUT),
@@ -130,7 +130,7 @@ JOINS: tuple[Join, ...] = (
     _join("laws", "bill_id", _BILL, "bill_id", 113, 0),
     _join("press_releases", "bill_id", _BILL, "bill_id", 3, 0),
     _join("public_activity_events", "bill_id", _BILL, "bill_id", 38_564, 0),
-    _join("roll_call_votes", "bill_id", _BILL, "bill_id", 509, 0),
+    _join("roll_call_votes", "bill_id", _BILL, "bill_id", 7_515, 0),
     _join("section_classifications", "bill_id", _BILL, "bill_id", 0, 0, "empty", _MODEL_OUTPUT),
     _join("section_diff_items", "bill_id", _BILL, "bill_id", 223, 0),
     _join("section_diffs", "bill_id", _BILL, "bill_id", 223, 0),
@@ -141,9 +141,12 @@ JOINS: tuple[Join, ...] = (
     _join("amendments", "sponsor_bioguide_id", "members", "bioguide_id", 187, 0),
     _join("congress_bills", "sponsor_bioguide_id", "members", "bioguide_id", 636, 0),
     _join("member_terms", "bioguide_id", "members", "bioguide_id", 12_770, 0),
-    _join("member_votes", "bioguide_id", "members", "bioguide_id", 452, 0),
+    _join("member_votes", "bioguide_id", "members", "bioguide_id", 1_261, 1, "complete",
+          "L000555 is Luke Letlow, elected in 2020, who died on 2020-12-29 before taking the seat. The Clerk's "
+          "117-house-1-1 roll lists him Not Voting; Congress.gov lists only members who served. Measured after the "
+          "108th-119th votes chain; receipt join-map-2026-09-26/vote-joins-after-votes-chain.json."),
     _join("committee_assignments", "bioguide_id", "members", "bioguide_id", 532, 0),
-    _join("member_votes", "vote_id", "roll_call_votes", "vote_id", 1_579, 0),
+    _join("member_votes", "vote_id", "roll_call_votes", "vote_id", 23_358, 0),
     _join("committee_assignments", "system_code", "committees", "system_code", 163, 5, "design",
           "28 seats have no Congress.gov code to join and are never matched by name: 25 House seats on the "
           "Clerk's joint committees EC00, IT00, JL00 and JP00 (typed joint with no Congress.gov code, so they keep "

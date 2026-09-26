@@ -160,7 +160,7 @@
       "kind": "complete",
       "reason": "",
       "measured_via": null,
-      "baseline_keys": 1036,
+      "baseline_keys": 7513,
       "baseline_missing": 0,
       "floor_pct": 100.0
     },
@@ -320,7 +320,7 @@
       "kind": "complete",
       "reason": "",
       "measured_via": null,
-      "baseline_keys": 509,
+      "baseline_keys": 7515,
       "baseline_missing": 0,
       "floor_pct": 100.0
     },
@@ -484,11 +484,11 @@
         "bioguide_id"
       ],
       "kind": "complete",
-      "reason": "",
+      "reason": "L000555 is Luke Letlow, elected in 2020, who died on 2020-12-29 before taking the seat. The Clerk's 117-house-1-1 roll lists him Not Voting; Congress.gov lists only members who served. Measured after the 108th-119th votes chain; receipt join-map-2026-09-26/vote-joins-after-votes-chain.json.",
       "measured_via": null,
-      "baseline_keys": 452,
-      "baseline_missing": 0,
-      "floor_pct": 100.0
+      "baseline_keys": 1261,
+      "baseline_missing": 1,
+      "floor_pct": 99.9206
     },
     {
       "child": "committee_assignments",
@@ -518,7 +518,7 @@
       "kind": "complete",
       "reason": "",
       "measured_via": null,
-      "baseline_keys": 1579,
+      "baseline_keys": 23358,
       "baseline_missing": 0,
       "floor_pct": 100.0
     },
