@@ -6,7 +6,9 @@
     "receipts": [
       "~/Work/corpora/fork-execution-2026-09-21/join-map-2026-09-26/results.json",
       "~/Work/corpora/fork-execution-2026-09-21/join-map-2026-09-26/rule-targets-baseline.json",
-      "~/Work/corpora/fork-execution-2026-09-21/join-map-2026-09-26/unified-agenda-rin-after-backfill.json"
+      "~/Work/corpora/fork-execution-2026-09-21/join-map-2026-09-26/unified-agenda-rin-after-backfill.json",
+      "~/Work/corpora/fork-execution-2026-09-21/join-map-2026-09-26/dockets-after-gap-fill.json",
+      "~/Work/corpora/fork-execution-2026-09-21/join-map-2026-09-26/sam-entities-after-backfill.json"
     ]
   },
   "kinds": [
@@ -656,11 +658,11 @@
         "docket_id"
       ],
       "kind": "complete",
-      "reason": "137 dockets have documents in the Mirrulations mirror but no docket record there.",
+      "reason": "The mirror lacks these dockets' records, and fill-docket-gaps asked the Regulations.gov API for each (docket_gap_outcomes.parquet, re-asked after 30 days): 47 answer 404, which the publisher does not publish, and 67 answer 400 Invalid ID, legacy -RULEMAKING/-NONRULEMAKING ids whose unsuffixed forms it does not serve either. It served 23 more, merged 2026-09-26. Receipt join-map-2026-09-26/dockets-after-gap-fill.json.",
       "measured_via": null,
-      "baseline_keys": 278625,
-      "baseline_missing": 137,
-      "floor_pct": 99.9508
+      "baseline_keys": 278651,
+      "baseline_missing": 114,
+      "floor_pct": 99.959
     },
     {
       "child": "comments",
@@ -672,11 +674,11 @@
         "docket_id"
       ],
       "kind": "complete",
-      "reason": "28 dockets have comments in the Mirrulations mirror but no docket record there.",
+      "reason": "Asked of the Regulations.gov API by fill-docket-gaps like documents' orphans: 6 answer 404 and 22 answer 400 Invalid ID (legacy -RULEMAKING/-NONRULEMAKING ids).",
       "measured_via": "comments_index",
-      "baseline_keys": 60215,
+      "baseline_keys": 60221,
       "baseline_missing": 28,
-      "floor_pct": 99.9534
+      "floor_pct": 99.9535
     },
     {
       "child": "fr_docket_links",
@@ -704,11 +706,11 @@
         "docket_id"
       ],
       "kind": "complete",
-      "reason": "Normalized FR-to-Regulations.gov bridge from the materialized rulemaking snapshot.",
+      "reason": "Normalized FR-to-Regulations.gov bridge from the materialized rulemaking snapshot. Each orphan is one fill-docket-gaps asked for: 16 answer 404 and 67 answer 400 Invalid ID.",
       "measured_via": null,
-      "baseline_keys": 143004,
-      "baseline_missing": 98,
-      "floor_pct": 99.9314
+      "baseline_keys": 143012,
+      "baseline_missing": 83,
+      "floor_pct": 99.9419
     },
     {
       "child": "fr_docket_links",
@@ -848,11 +850,11 @@
         "uei"
       ],
       "kind": "scope",
-      "reason": "sam_entities holds only the registration years loaded so far.",
+      "reason": "sam_entities holds SAM's public active registrations, every registration year from 1996 plus two older ones. A recipient can name a UEI with none: of a 40-UEI sample of these orphans, the entity API held no public record for 38, one was Inactive, and one was activated after the 2026 year was last read. Receipts join-map-2026-09-26/sam-entities-after-backfill.json and usaspending-unresolved-uei-sample-2026-09-26.txt.",
       "measured_via": null,
       "baseline_keys": 7274,
-      "baseline_missing": 5269,
-      "floor_pct": 27.5639
+      "baseline_missing": 920,
+      "floor_pct": 87.3522
     }
   ],
   "references": {

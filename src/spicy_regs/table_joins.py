@@ -27,6 +27,8 @@ BASELINE_RECEIPTS = (
     "~/Work/corpora/fork-execution-2026-09-21/join-map-2026-09-26/results.json",
     "~/Work/corpora/fork-execution-2026-09-21/join-map-2026-09-26/rule-targets-baseline.json",
     "~/Work/corpora/fork-execution-2026-09-21/join-map-2026-09-26/unified-agenda-rin-after-backfill.json",
+    "~/Work/corpora/fork-execution-2026-09-21/join-map-2026-09-26/dockets-after-gap-fill.json",
+    "~/Work/corpora/fork-execution-2026-09-21/join-map-2026-09-26/sam-entities-after-backfill.json",
 )
 
 #: Expected resolution. ``complete``: every key should resolve and an orphan is
@@ -151,15 +153,21 @@ JOINS: tuple[Join, ...] = (
     _join("report_sections", "part_id", "committee_reports", "part_id", 142, 0),
     _join("law_code_sections", "law_id", "laws", "law_id", 70, 0),
     # Regulations.gov and the Federal Register.
-    _join("documents", "docket_id", "dockets", "docket_id", 278_625, 137,
-          reason="137 dockets have documents in the Mirrulations mirror but no docket record there."),
-    _join("comments", "docket_id", "dockets", "docket_id", 60_215, 28, measured_via="comments_index",
-          reason="28 dockets have comments in the Mirrulations mirror but no docket record there."),
+    _join("documents", "docket_id", "dockets", "docket_id", 278_651, 114,
+          reason="The mirror lacks these dockets' records, and fill-docket-gaps asked the Regulations.gov API for "
+                 "each (docket_gap_outcomes.parquet, re-asked after 30 days): 47 answer 404, which the publisher "
+                 "does not publish, and 67 answer 400 Invalid ID, legacy -RULEMAKING/-NONRULEMAKING ids whose "
+                 "unsuffixed forms it does not serve either. It served 23 more, merged 2026-09-26. Receipt "
+                 "join-map-2026-09-26/dockets-after-gap-fill.json."),
+    _join("comments", "docket_id", "dockets", "docket_id", 60_221, 28, measured_via="comments_index",
+          reason="Asked of the Regulations.gov API by fill-docket-gaps like documents' orphans: 6 answer 404 and 22 "
+                 "answer 400 Invalid ID (legacy -RULEMAKING/-NONRULEMAKING ids)."),
     _join("fr_docket_links", "docket_id", "dockets", "docket_id", 612_342, 592_102, "design",
           "Raw publisher docket labels (many are agency docket numbers); the normalized bridge is "
           "rule_targets.docket_id -> dockets."),
-    _join("rule_targets", "docket_id", "dockets", "docket_id", 143_004, 98,
-          reason="Normalized FR-to-Regulations.gov bridge from the materialized rulemaking snapshot."),
+    _join("rule_targets", "docket_id", "dockets", "docket_id", 143_012, 83,
+          reason="Normalized FR-to-Regulations.gov bridge from the materialized rulemaking snapshot. Each orphan "
+                 "is one fill-docket-gaps asked for: 16 answer 404 and 67 answer 400 Invalid ID."),
     _join("fr_docket_links", "document_number", "federal_register", "document_number", 603_702, 0),
     _join("dockets", "rin", "unified_agenda", "rin", 14_421, 994, "scope",
           "unified_agenda holds every readable edition, Fall 1995 to the newest (not Spring 1995 or Spring 2012, "
@@ -189,8 +197,12 @@ JOINS: tuple[Join, ...] = (
     _join("court_dockets", "cl_docket_id", "court_opinion_clusters", "cl_docket_id", 11_475, 9_214, "design",
           "court_dockets is a PACER docket selection; most PACER dockets have no published opinion."),
     # Federal spending and registration.
-    _join("usaspending_recipients", "uei", "sam_entities", "uei", 7_274, 5_269, "scope",
-          "sam_entities holds only the registration years loaded so far."),
+    _join("usaspending_recipients", "uei", "sam_entities", "uei", 7_274, 920, "scope",
+          "sam_entities holds SAM's public active registrations, every registration year from 1996 plus two "
+          "older ones. A recipient can name a UEI with none: of a 40-UEI sample of these orphans, the entity API "
+          "held no public record for 38, one was Inactive, and one was activated after the 2026 year was last "
+          "read. Receipts join-map-2026-09-26/sam-entities-after-backfill.json and "
+          "usaspending-unresolved-uei-sample-2026-09-26.txt."),
 )
 
 #: Tables outside the dictionary's registry, read from the materialized rulemaking snapshot.
