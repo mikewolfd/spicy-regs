@@ -48,8 +48,8 @@ MCP `table_qualification` record read these rows directly.
   their rows state. FCC filings, SAM, lobbying, CRS and court dockets have no
   retained source responses in their producing runs, so only publication
   integrity is verified.
-- **Rulemaking (R5 not met).** Snapshot `snapshot_dcda51db…` qualifies with the
-  limits its row names, but the R5 gate is not met: three dockets
+- **Rulemaking (R5 met at `snapshot_911969b4…`).** Snapshot `snapshot_dcda51db…` qualified with the
+  limits its row names, but the R5 gate was not met: three dockets
   (`FAR-2018-0003`, `DHS-2004-0009`, `FDA-1999-F-0118`) are retired wrongly.
   D1: the SpicyDocs docket-name reader misses several native formats (the
   FAR-case form needs an owner ruling). D2: document numbers containing spaces
@@ -59,8 +59,17 @@ MCP `table_qualification` record read these rows directly.
   and all 39 missing references (receipt `regulatory/d1d2-fix/`). D3 is in code
   at `635c42c`: lineage now carries all recorded ancestry, and a proceeding no
   longer lists as a predecessor a sibling that shares only a cited notice
-  (receipt `regulatory/d3-fix/`). Each closes when the next rulemaking snapshot
-  is audited.
+  (receipt `regulatory/d3-fix/`). All three closed at `snapshot_911969b4…`
+  (2026-09-26, receipt `r5-reaudit-2026-09-26/`). An independent rebuild of
+  decisions 32–33 with the pinned reader reproduces all 268,159 proceedings, and
+  the three dockets are back in proceedings. No predecessor list names a live
+  sibling. Open, but not blocking:
+  - A docket that is an action docket only through its own documents' citation
+    does not absorb the cited notice (572 dockets), as decision 33 reads; this
+    needs a ruling or a recorded limit.
+  - The 3,010 decisions 32–33 lineage links erased at `snapshot_47cca15e…` are
+    not restored.
+  - Ten docket values stay unread.
   D4: derived rollups record no parent digests (receipt `regulatory/results.json`);
   fixed at `4396f2e` and closed 2026-09-26. The refresh run 36224680634 published
   feed summary, agency stats, monthly volume, org committee links and discovery
@@ -190,7 +199,7 @@ then published the full registry at `4b1ca622…`; see its T04 row.
 | T06 | `run-pipeline` | `comments/agency_code=<agency>/docket_id=<docket>/year=<year>/month=<month>/part-0.parquet` | unproduced on the fork (probed keys answer 404); the comments deliveries wrote `comments.parquet` and its index directly |
 | T07 | `publish-comments-mirror.yml` | `comments.parquet` | published by hosted sweep run 36177463432 (snapshot 3697835162427868969) and verified at table digest `0d11e204…` (2026-09-26; ETag `1970f15e…`): 26,311,037 rows with unique IDs across 180 agencies. Its publisher refuses the loss of any previously published ID, and every index group equals a recount (receipt `hosted-sweep-readback-2026-09-26/readback.json`; [hosted qualification](comments-publication-efficiency-2026-09-25.md#hosted-qualification)). The earlier local recovery (table `b90e1105…`, 26,303,691 rows) retained every previously published ID. The catalog export adds 2,413,288 rows to the prior public population. Public bytes, unique IDs and index coverage are verified; wider native-source qualification remains open. Earlier native and attachment-text repairs are retained in `comment-text-repair-2026-09-23/`; current publication receipts are in `comments-local-export-2026-09-25/`. |
 | T07 | `publish-comments-mirror.yml` | `comments/agency/agency_code=<agency>/part-0.parquet` | republished by hosted sweep run 36177463432 with the 26,311,037-row snapshot; the publisher read back every file and the verify job's public check passed, but these files were not re-hashed independently. The 2026-09-25 local-recovery files held the same 26,303,691 IDs as that monolith and agreed with every index group; `comments-local-export-2026-09-25/public-object-verification.json` records each file’s digest, ETag and row count |
-| T17 | `materialize-rulemaking` | `rule_targets.parquet`, `proceedings.parquet`, `regulatory_agenda_items.parquet`, `agenda_item_proceedings.parquet`, `comment_periods.parquet` | qualified at `snapshot_dcda51db…` (2026-09-26): every public digest and input digest matches the frozen parents. There are zero dangling references, and identity continuity is exact. Given the producer's docket reader, an independent SQL rebuild of decisions 32–33 reproduces all 268,336 proceedings exactly and adds one (FDA-1999-F-0118). From `snapshot_837754c3…`, 191,845 proceedings retired as no-action shells, 3,009 merged, 31 split and the rest retained. Three dockets (FAR-2018-0003, DHS-2004-0009, FDA-1999-F-0118) were removed against decision 32 by reader limits, so R5 is not met. Receipt: `drift-qualification-2026-09-26/regulatory/`. |
+| T17 | `materialize-rulemaking` | `rule_targets.parquet`, `proceedings.parquet`, `regulatory_agenda_items.parquet`, `agenda_item_proceedings.parquet`, `comment_periods.parquet` | qualified at `snapshot_911969b4…` (2026-09-26): every public digest matches its manifest, and every input digest matches a published parent admitted against its own pin: dockets `e601dbf6…`, documents `7c98ef8c…`, federal-register `40dfab8e…`, fr-docket-links `acc047d1…` and unified-agenda `649cfd28…`. Actors are rule-targets v5, proceedings v8, comment-periods v8 and agenda v4, and no reference dangles. With SpicyDocs 0.38.0's docket reader, an independent SQL rebuild of decisions 32–33 reproduces all 268,159 proceedings exactly. Every difference from a relaxed scan traces to 105 reader-disagreement pairs: former identifiers, fused or broken labels, and the 10 values the D1 receipt leaves unread. FAR-2018-0003 and DHS-2004-0009 now hold their action notices, and FDA-1999-F-0118 is restored under its original id. Its notice 99-20888 names only `99F-0001`, so it stays FR-only, as decision 33 reads. From `snapshot_837754c3…`, 191,842 proceedings retired as no-action shells, 3,189 merged and 31 split, with the rest retained and none unexplained. No link pair is lost except one former identifier the D1 ruling fences. No predecessor list names a live sibling, and all 178 links trace. Limits: the 3,010 lineage links erased at `snapshot_47cca15e…` are not restored; 572 citation-only action dockets do not absorb the notices they cite. Receipt: `r5-reaudit-2026-09-26/`. |
 
 ## September 24 report refresh
 

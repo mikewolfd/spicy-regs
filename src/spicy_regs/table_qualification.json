@@ -887,12 +887,12 @@
       "audits": [
         {
           "disposition": "qualified",
-          "pin": "snapshot_dcda51db",
+          "pin": "snapshot_911969b4",
           "pin_kind": "snapshot",
           "date": "2026-09-26"
         }
       ],
-      "statement": "qualified at `snapshot_dcda51db…` (2026-09-26): every public digest and input digest matches the frozen parents. There are zero dangling references, and identity continuity is exact. Given the producer's docket reader, an independent SQL rebuild of decisions 32–33 reproduces all 268,336 proceedings exactly and adds one (FDA-1999-F-0118). From `snapshot_837754c3…`, 191,845 proceedings retired as no-action shells, 3,009 merged, 31 split and the rest retained. Three dockets (FAR-2018-0003, DHS-2004-0009, FDA-1999-F-0118) were removed against decision 32 by reader limits, so R5 is not met. Receipt: `drift-qualification-2026-09-26/regulatory/`."
+      "statement": "qualified at `snapshot_911969b4…` (2026-09-26): every public digest matches its manifest, and every input digest matches a published parent admitted against its own pin: dockets `e601dbf6…`, documents `7c98ef8c…`, federal-register `40dfab8e…`, fr-docket-links `acc047d1…` and unified-agenda `649cfd28…`. Actors are rule-targets v5, proceedings v8, comment-periods v8 and agenda v4, and no reference dangles. With SpicyDocs 0.38.0's docket reader, an independent SQL rebuild of decisions 32–33 reproduces all 268,159 proceedings exactly. Every difference from a relaxed scan traces to 105 reader-disagreement pairs: former identifiers, fused or broken labels, and the 10 values the D1 receipt leaves unread. FAR-2018-0003 and DHS-2004-0009 now hold their action notices, and FDA-1999-F-0118 is restored under its original id. Its notice 99-20888 names only `99F-0001`, so it stays FR-only, as decision 33 reads. From `snapshot_837754c3…`, 191,842 proceedings retired as no-action shells, 3,189 merged and 31 split, with the rest retained and none unexplained. No link pair is lost except one former identifier the D1 ruling fences. No predecessor list names a live sibling, and all 178 links trace. Limits: the 3,010 lineage links erased at `snapshot_47cca15e…` are not restored; 572 citation-only action dockets do not absorb the notices they cite. Receipt: `r5-reaudit-2026-09-26/`."
     }
   ]
 }
