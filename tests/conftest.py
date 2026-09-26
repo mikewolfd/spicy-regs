@@ -81,6 +81,23 @@ def list_mirrulations_through_fake_resources(monkeypatch: pytest.MonkeyPatch) ->
 
 
 @pytest.fixture
+def remote(monkeypatch: pytest.MonkeyPatch):
+    """A fake bucket whose publication index is read back from its own stored pointer."""
+    from spicy_regs.sources import publication as pub, r2
+    from tests.generation_fakes import Store
+
+    store = Store()
+    monkeypatch.setenv("R2_PUBLIC_URL", "https://example.test")
+    monkeypatch.setenv("R2_ACCESS_KEY_ID", "fake")
+    monkeypatch.setenv("R2_SECRET_ACCESS_KEY", "fake")
+    monkeypatch.setenv("R2_BUCKET_NAME", "spicy-regs")
+    monkeypatch.setattr(r2, "get_r2_client", lambda: store)
+    monkeypatch.setattr(pub, "load_index", lambda url: (
+        pub.parse_index(store.objects[pub.INDEX_KEY]) if pub.INDEX_KEY in store.objects else pub.empty_index()))
+    return store
+
+
+@pytest.fixture
 def tmp_output(tmp_path: Path) -> Path:
     """Return a temporary output directory."""
     out = tmp_path / "output"

@@ -83,6 +83,9 @@ class RollupPipeline(Pipeline):
     publication_family: ClassVar[str | None] = None
     generation_tables: ClassVar[bool] = True
     retain_source_evidence: ClassVar[bool] = False
+    #: Tables this rollup adds to its published family: the explicit migration publication requires before a
+    #: family's table set may grow. Inert once they are published; never a way to drop one.
+    added_tables: ClassVar[tuple[str, ...]] = ()
 
     #: The single artifact this rollup writes and publishes (e.g.
     #: ``"feed_summary.parquet"``). Its R2 remote key is the same filename.
@@ -214,6 +217,7 @@ class RollupPipeline(Pipeline):
                 destination, client=r2.get_r2_client(),
                 bucket=getenv("R2_BUCKET_NAME", "spicy-regs"), prior_index=prior_index,
                 evidence_directories=(self.source_evidence.artifact_dir,) if self.source_evidence else (),
+                added_tables=frozenset(self.added_tables),
             )
             from spicy_regs.sources.cloudflare import purge_urls
 

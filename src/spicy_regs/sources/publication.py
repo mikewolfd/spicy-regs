@@ -512,13 +512,15 @@ def _publish_evidence(client, bucket: str, path: Path, artifact) -> None:
 
 
 def publish_generation(directory: Path, *, client, bucket: str, prior_index: Mapping,
-                       evidence_directories: tuple[Path, ...] = ()) -> dict:
+                       evidence_directories: tuple[Path, ...] = (), added_tables: frozenset[str] = frozenset()) -> dict:
     """Verify/upload/verify, then compare-and-swap the publication pointer.
 
     Validation and conditional-write refusals preserve the current pointer.
     A transport failure after the pointer request can have an uncertain result;
     reread the index to establish whether the complete generation is current.
-    Unreferenced immutable uploads may remain and are safe to reuse. A pointer
+    ``added_tables`` is an explicit migration: the family's table set may grow by
+    exactly those tables, and never shrink. Unreferenced immutable uploads may
+    remain and are safe to reuse. A pointer
     moved by another family's writer is reread and this family's entry merged
     onto it, which equals a first attempt made a moment later; a change to this
     family or its tables refuses as stale and never overwrites the other writer.
@@ -530,14 +532,14 @@ def publish_generation(directory: Path, *, client, bucket: str, prior_index: Map
     artifact = verify_generation(directory)
     return _publish_verified_generation(
         artifact, LocalMemberSource(directory), client=client, bucket=bucket, prior_index=prior_index,
-        evidence_directories=evidence_directories,
+        evidence_directories=evidence_directories, added_tables=added_tables,
         upload_member=lambda prefix, key: _put_immutable(client, bucket, prefix + "/" + key, directory / key),
     )
 
 
 def _publish_verified_generation(
     artifact, source, *, upload_member, client, bucket: str, prior_index: Mapping,
-    evidence_directories: tuple[Path, ...] = (),
+    evidence_directories: tuple[Path, ...] = (), added_tables: frozenset[str] = frozenset(),
 ) -> dict:
     """Shared publication gates; both callers fully verify their source first."""
     from botocore.exceptions import ClientError
@@ -566,7 +568,9 @@ def _publish_verified_generation(
             **artifact.root["spec"]["tables"][key],
         }
     old_family = index["families"].get(family)
-    if old_family is not None and set(old_family["tables"]) != set(tables):
+    # The table set may change only by an explicit migration: exactly the declared added tables join, none leave.
+    # A union, so the declaration is inert once those tables are published.
+    if old_family is not None and set(tables) != set(old_family["tables"]) | set(added_tables):
         raise PublicationError("Family membership changed; explicit migration is required")
     entry = {
         "prefix": prefix,

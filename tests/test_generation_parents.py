@@ -45,18 +45,6 @@ class _Derived(RollupPipeline):
         return _table(output_dir / self.output, "derived")
 
 
-@pytest.fixture
-def remote(monkeypatch):
-    store = Store()
-    monkeypatch.setenv("R2_PUBLIC_URL", "https://example.test")
-    monkeypatch.setenv("R2_ACCESS_KEY_ID", "fake")
-    monkeypatch.setenv("R2_SECRET_ACCESS_KEY", "fake")
-    monkeypatch.setenv("R2_BUCKET_NAME", "spicy-regs")
-    monkeypatch.setattr(r2, "get_r2_client", lambda: store)
-    monkeypatch.setattr(pub, "load_index", lambda url: (
-        pub.parse_index(store.objects[pub.INDEX_KEY]) if pub.INDEX_KEY in store.objects else pub.empty_index()))
-    return store
-
 
 def _serve(monkeypatch, store: Store, versions: list[dict]) -> bytes:
     """Serve the managed member and a bare object; report ``versions`` for the remote input in turn."""

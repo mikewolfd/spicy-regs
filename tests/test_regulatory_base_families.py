@@ -28,19 +28,6 @@ def _dockets(ids: list[str]) -> pl.DataFrame:
     return pl.DataFrame(rows, schema=DOCKETS.schema)
 
 
-@pytest.fixture
-def remote(monkeypatch):
-    """A fake bucket whose index is read back from its own stored pointer."""
-    store = Store()
-    monkeypatch.setenv("R2_PUBLIC_URL", "https://example.test")
-    monkeypatch.setenv("R2_ACCESS_KEY_ID", "fake")
-    monkeypatch.setenv("R2_SECRET_ACCESS_KEY", "fake")
-    monkeypatch.setenv("R2_BUCKET_NAME", "spicy-regs")
-    monkeypatch.setattr(r2, "get_r2_client", lambda: store)
-    monkeypatch.setattr(pub, "load_index", lambda url: (
-        pub.parse_index(store.objects[pub.INDEX_KEY]) if pub.INDEX_KEY in store.objects else pub.empty_index()))
-    return store
-
 
 def _working_copy(monkeypatch, frame: pl.DataFrame) -> list[str]:
     read = []
