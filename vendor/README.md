@@ -5,14 +5,15 @@ The optional `source-readers` extra enables the same readers for package install
 its wheels must be supplied explicitly until they are published in a registry.
 Base CLI and MCP installs do not require them.
 
-- `spicy_docs-0.38.0`: built from SpicyDocs `main` at `29f4969` (release commit), with Rulespec
-  Artifacts 1.1.1. Built September 26, 2026 UTC: **1,643,673 bytes**, SHA-256
-  `b5d794f5370fd8dc222ba8e1441894280b737877269229c1c54306c18a1532d6`, byte-identical across
+- `spicy_docs-0.39.1`: built from SpicyDocs `main` at `fe5f863` (release commit), with Rulespec
+  Artifacts 1.1.1. Built September 26, 2026 UTC: **1,644,429 bytes**, SHA-256
+  `7fc6b65cc1678777bdb0bdb917fa949a669cdfe091d2198606208a6e9108d760`, byte-identical across
   two rebuilds from a clean archive of that commit with `SOURCE_DATE_EPOCH` at its commit time.
-  On top of 0.37.0 it keys a bill printed under an activity report's Congress subheading
-  (`116th Congress`) in that Congress until the next entry (`congress_subheading_scopes`,
-  `bill_number` 004). It changes only the citation readers. 0.37.0 and its build record are at
-  `8602581`.
+  On top of 0.38.0 a SAM extract still generating 50 minutes after its trigger is abandoned and
+  the selection triggered afresh, at most three times, each abandonment listed on
+  `SamBulkExtract.abandoned` (integers and strings only, so the evidence journal can retain it),
+  which `build_sam_entities` journals. It changes only the SAM extract reader; 0.39.0 carried a
+  float the journal refuses and was never adopted. 0.38.0 and its build record are at `797d2f0`.
 
 - `rulespec_artifacts-1.1.1`: exact dependency of SpicyDocs 0.26.6 and 0.27.0, built from
   Rulespec `a3acb04cbfe2cc32a89622a3523da48aa6958348`. **99,315 bytes**, SHA-256

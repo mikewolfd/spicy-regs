@@ -130,6 +130,7 @@ def test_a_completed_extract_year_retires_what_it_no_longer_holds(tmp_path, monk
 
     class Extract:
         superseded: list[dict] = []
+        abandoned: list[dict] = []
 
         def __init__(self, **kwargs):
             assert kwargs["year"] == 2002
@@ -274,7 +275,7 @@ def test_fetch_rejects_unknown_mode(monkeypatch):
 
 
 def test_the_extract_waits_past_the_measured_generation_and_inside_the_job(monkeypatch):
-    """The 2026 extract was ready 46 minutes after its trigger; the reader must refuse before the job is cancelled."""
+    """Room for two stalled 50-minute triggers and the slowest file; the reader must refuse before the job is cancelled."""
     import yaml
     from spicy_docs.sources import sam_extract
 
@@ -283,6 +284,9 @@ def test_the_extract_waits_past_the_measured_generation_and_inside_the_job(monke
     made = []
 
     class Recorded:
+        superseded: list[dict] = []
+        abandoned: list[dict] = []
+
         def __init__(self, **kwargs):
             made.append(kwargs)
 
@@ -305,8 +309,40 @@ def test_the_extract_waits_past_the_measured_generation_and_inside_the_job(monke
     assert EXTRACT_MAX_WAIT - 1 < wait <= EXTRACT_MAX_WAIT
     workflow = Path(__file__).resolve().parents[1] / ".github/workflows/rollup-sam-entities.yml"
     job_minutes = yaml.safe_load(workflow.read_text())["jobs"]["run"]["with"]["timeout_minutes"]
-    assert 46 * 60 < EXTRACT_MAX_WAIT <= (job_minutes - 10) * 60
+    assert 2 * sam_extract.EXTRACT_ATTEMPT_WAIT + 46 * 60 < EXTRACT_MAX_WAIT <= (job_minutes - 10) * 60
 
+
+def test_each_abandoned_trigger_is_journaled_even_when_the_year_is_then_refused(monkeypatch, tmp_path):
+    """A stalled job and a slow file look alike in a CI log; the journal keeps the abandoned tokens."""
+    import json
+
+    from spicy_docs.sources import sam_extract
+
+    from spicy_regs.source_evidence import CaptureEvidence
+
+    stalled = {"attempt": 1, "token": "Tok1", "triggered_at": "2026-09-26T07:32:40+00:00",
+               "last_poll": "HTTP 400", "waited_seconds": 3000}
+
+    class Stalls:
+        superseded: list[dict] = []
+
+        def __init__(self, **kwargs):
+            self.abandoned: list[dict] = []
+
+        def records(self):
+            self.abandoned.append(stalled)
+            raise SamExtractError("SAM extract did not finish within its 9000 s wait; last poll: HTTP 400")
+            yield  # a generator, like the reader
+
+    monkeypatch.setattr(sam_extract, "SamBulkExtract", Stalls)
+    monkeypatch.setenv("SAM_API_KEY", "fixture-key-0123456789")  # the journal scrubs the key
+    evidence = CaptureEvidence(tmp_path, "sam-entities")
+    with pytest.raises(SamExtractError, match="did not finish"):
+        list(_iter_sam_entities(mode="extract", registration_status="A", since_year=2026, until_year=2026,
+                                year_windows=True, max_records=None, evidence=evidence))
+    journal = [json.loads(line) for line in (evidence.artifact_dir / "journal.jsonl").read_text().splitlines()]
+    [event] = [e for e in journal if e["event"] == "sam-extract-abandoned"]
+    assert event["stage"] == "sam-extract:2026" and {k: event[k] for k in stalled} == stalled
 
 def test_a_multi_year_run_shares_one_wait_and_refuses_the_year_it_cannot_reach(monkeypatch, tmp_path):
     """The years share the run's wait: a year with none left is refused before its trigger, and nothing is published.
@@ -327,6 +363,7 @@ def test_a_multi_year_run_shares_one_wait_and_refuses_the_year_it_cannot_reach(m
 
     class SpendsTheWait:
         superseded: list[dict] = []
+        abandoned: list[dict] = []
 
         def __init__(self, **kwargs):
             triggered.append(kwargs)

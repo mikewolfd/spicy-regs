@@ -74,14 +74,14 @@ MIN_REGISTRATION_YEAR = 1996
 
 # Monotonic seconds, from the run's first extract trigger, that all of its extracts
 # may take: each year's reader waits only what is left, and a year with none left
-# is refused before its trigger. The 2026 registration-year extract (147,256 rows,
-# 71.5 MB gzip) was still generating 21 minutes after its trigger and ready at the
-# next poll, 46 minutes after it (spicy-docs sam_extract.py; receipts in
-# sam-initial-load-2026-09-23/), past spicy-docs' 25-minute default. An hour clears
-# 46 minutes and leaves 15 of rollup-sam-entities.yml's 75 for setup, download,
-# merge and upload. A scheduled run fetches one rotating year; a multi-year
-# dispatch shares the hour, so it refuses rather than being cancelled by the job.
-EXTRACT_MAX_WAIT = 60 * 60.0
+# is refused before its trigger. SpicyDocs abandons a trigger still generating after
+# 50 minutes and re-triggers, at most three times (sam_extract.EXTRACT_ATTEMPT_WAIT:
+# normal files are ready within 3.5 minutes, the 2026 year within 21-46, and stalled
+# jobs never). 150 minutes lets the slowest year survive two stalls and leaves 15 of
+# rollup-sam-entities.yml's 165 for setup, download, merge and upload. A scheduled
+# run fetches one year; a multi-year dispatch shares this wait, so it refuses rather
+# than being cancelled by the job.
+EXTRACT_MAX_WAIT = 150 * 60.0
 
 #: Retained bytes allowed for one year's extract response when evidence is on;
 #: the 2026 registration-year extract above is 71.5 MB gzip.
@@ -186,7 +186,14 @@ def _iter_sam_entities(
                     stage=f"sam-extract:{year}", max_bytes=EXTRACT_RETENTION_BYTES
                 ),
             )
-            yield from emit(extractor.records())
+            try:
+                yield from emit(extractor.records())
+            finally:
+                # Each abandoned trigger, even when the year is then refused, so an audit can
+                # tell a stalled job from a slow file.
+                if evidence is not None:
+                    for stalled in extractor.abandoned:
+                        evidence.event("sam-extract-abandoned", stage=f"sam-extract:{year}", **stalled)
             # A renewal SAM still holds Active is credited toward the file's count; the journal
             # names each one so an audit can check none was dated on or after the trigger.
             if evidence is not None:

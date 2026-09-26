@@ -44,6 +44,7 @@ jobs:
       sam_until_year: ${{ inputs.sam_until_year || '' }}
       sam_max_records: ${{ inputs.sam_max_records || '' }}
       skip_upload: ${{ github.event_name == 'workflow_dispatch' && inputs.skip_upload || false }}
-      # The 2026 extract took 21-46 minutes to generate; the reader waits up to an hour
-      # (build_sam_entities.EXTRACT_MAX_WAIT) and must refuse before the job is cancelled.
-      timeout_minutes: 75
+      # The 2026 extract takes 21-46 minutes and some jobs stall; the reader re-triggers a
+      # stalled one and waits up to 150 minutes in all (build_sam_entities.EXTRACT_MAX_WAIT),
+      # refusing before the job is cancelled.
+      timeout_minutes: 165
