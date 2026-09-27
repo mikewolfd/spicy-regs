@@ -6,7 +6,7 @@
 
 One member, input digest, term index and affiliation index. Literal dates and their parsing states remain separate from any dated membership decision.
 
-**Coverage.** Sampled. Retained native term replay preserves every nested party interval, including overlaps and conflicting assertions. Application output is implemented; a complete refreshed roster publication has not yet been verified. *(measured 2026-09-27)*
+**Coverage.** Sampled. The complete retained September 25 community crosswalk captures were replayed and published on September 27 as members generation 00cad6cf5255d605. All 59 source affiliation occurrences were reconciled, and exact public hashes and rows verified. Member and term identities and existing native values were preserved. This is the selected community crosswalk, not an official or newly acquired roster. Receipt: spicy-regs-t19-members-20260927/public-readback.json. *(measured 2026-09-27)*
 
 - **Parquet file:** `member_party_affiliations.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
