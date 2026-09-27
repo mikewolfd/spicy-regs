@@ -1,0 +1,1367 @@
+{
+  "format": "spicyregs-join-delivery-execution-v1",
+  "as_of": "2026-09-27",
+  "scope": "Parallel implementation and verified deployment of scoped work across the proposal, with two source publications and explicit remaining acceptance per task; not completion of the full proposal.",
+  "proposal": "join-delivery-tasks-2026-09-27.json",
+  "finalization": {
+    "source_wheel_pin": {
+      "version": "0.47.0",
+      "source_commit": "7440dd4a3c446962174b5c3048e313d34a3b287b",
+      "wheel_sha256": "3a614d4aa16b0416e58690e7659037fef3397d3d6ce7ca21c1cc0e2c8ab42d29",
+      "reproducible_builds": 2,
+      "registry_uploaded": false
+    },
+    "repository_checks": {
+      "provider": "./scripts/check passed: 10354 passed, 4 skipped, 50 deselected",
+      "consumer": "ruff, ty, dictionary and full pytest passed: 3238 passed, 2 skipped, 4 deselected; installed provider wheel; consumer-gate-final.log"
+    },
+    "deployment": {
+      "worker": "spicy-regs-mcp",
+      "url": "https://spicy-regs-mcp.mdeeb.workers.dev/mcp",
+      "version": "faa8b3ab-ed99-456a-a234-18b6b6ac3006",
+      "code_commit": "d42c1b514608d1586a253e34524ce2d8f6ec9c7e",
+      "container_image": "sha256:6836698d23c6ff3ed56ecd69a2f1ae08aa1c8cc40e91a7d9da6c06a6428b3992",
+      "live_verification": "Initial smoke exposed the FEC OOM, retained unchanged as historical evidence. Corrected in final_rollout_after_runtime_fixes and verified live."
+    },
+    "data_publication": {
+      "members": {
+        "generation": "sha256:00cad6cf5255d605f681a89705c22257e2975ed86c2dee61e90f3be278d51851",
+        "rows": {
+          "members": 12770,
+          "member_terms": 45535,
+          "member_party_affiliations": 59
+        },
+        "source": "complete retained September25 community crosswalk captures",
+        "public_readback": "all three exact hashes and counts verified"
+      },
+      "comments": "Nullable catalog migration verified; three retained native comments replayed in read-only preview, parent targets found at a selected public pin; no catalog data write or public export.",
+      "bill_cosponsors": "Provider pinned and consumer builder installed; source backfill and publication pending.",
+      "house_communications": {
+        "generation": "sha256:94d28167db0a56a3670d0a3ceca17e610b0a54f7b3c1e0c6b91617affaa2a994",
+        "rows": 5006,
+        "rin_occurrences": 2076,
+        "prior_rows_columns": "all unchanged",
+        "public_readback": "exact hash/counts verified",
+        "origin_requests": 0,
+        "source_fidelity": "inherited from prior generation"
+      }
+    },
+    "final_rollout_after_runtime_fixes": {
+      "worker": "spicy-regs-mcp",
+      "worker_version": "ea8d54f5-a2f4-4871-b9b0-016ef595b518",
+      "container_image": "sha256:1d558a710949494a7b43e39be5027124f07259754e8ccb9ffd3ecd401020efb5",
+      "application_id": "a03e7803-34bd-43ef-93b6-271a54859b74",
+      "code_commit": "8380ac8c7adc4265c101de2186c0a5d7ba2ed906",
+      "url": "https://spicy-regs-mcp.mdeeb.workers.dev/mcp",
+      "rollout_strategy": "immediate",
+      "cli_deploy_success": true,
+      "verified_new_serving_rule": "fec-companion-location-v2",
+      "live_receipt": "/Users/mikewolfd/.codex/artifacts/spicy-regs-join-implementation-20260927/final-smoke-summary.json",
+      "live_passed": true,
+      "rollout_scope": "New container verified through public endpoint; per-instance fleet completion is not asserted by the CLI deployment response.",
+      "status": "deployed_and_public_endpoint_verified",
+      "scope": "FEC bounded hash joins and compact companion navigation, exec-based graceful shutdown, publication qualification metadata; application also includes historical-schema repair/export fix."
+    }
+  },
+  "evidence_roots": [
+    "/Users/mikewolfd/.codex/artifacts/spicy-regs-join-tasks-20260927/",
+    "/Users/mikewolfd/.codex/artifacts/spicy-regs-t24-gao-20260927/receipt.json",
+    "/Users/mikewolfd/.codex/artifacts/spicy-regs-join-implementation-20260927/",
+    "/Users/mikewolfd/.codex/artifacts/spicy-regs-t19-members-20260927/",
+    "/Users/mikewolfd/.codex/artifacts/spicy-regs-t18-refresh-20260927/",
+    "/Users/mikewolfd/.codex/artifacts/spicy-regs-join-implementation-20260927",
+    "/Users/mikewolfd/.codex/artifacts/spicy-regs-array-population-20260927",
+    "/Users/mikewolfd/.codex/artifacts/spicy-regs-fec-serving-20260927",
+    "/Users/mikewolfd/.codex/artifacts/spicy-regs-fec-evidence-20260927",
+    "/Users/mikewolfd/.codex/artifacts/spicy-regs-join-delivery-t01-t02-20260927"
+  ],
+  "tasks": [
+    {
+      "id": "T01",
+      "title": "Correct join keys and publish measured cardinality",
+      "proposal_ids": [
+        "P01",
+        "P22"
+      ],
+      "depends_on": [],
+      "implementation_state": "implemented_and_qualified_at_selected_input_pins",
+      "implemented": "Full-key references and measured cardinality",
+      "implementation_paths": [
+        "spicy-regs/src/spicy_regs/table_joins.py",
+        "spicy-regs/scripts/check_table_joins.py",
+        "spicy-regs/src/spicy_regs/join_measurements.json",
+        "spicy-docs/src/spicy_docs/schemas/bill_version_tables.py",
+        "spicy-docs/src/spicy_docs/schemas/bill_diff_tables.py",
+        "spicy-docs/src/spicy_docs/schemas/committee_report_tables.py"
+      ],
+      "validated_scope": "Full selected key columns measured at independent publication pins on 2026-09-27; version, report-part, hearing and both attribute joins report OK. Synthetic collisions cover full-key separation.",
+      "validation_paths": [
+        "spicy-regs/tests/test_join_cardinality.py",
+        "spicy-regs/tests/test_table_joins.py"
+      ],
+      "remaining_acceptance": "None for the selected full-key delivery. Measurements are tied to independent table pins; broader source completeness and an atomic cross-table snapshot are not claimed.",
+      "acceptance_complete": true,
+      "data_publication_state": "Views use selected existing publications; no new independently materialized task artifact claimed.",
+      "deployed_verification_state": "Generated join metadata and serving code deployed in app 8380ac8; complete key-column measurements retained in join_measurements.json."
+    },
+    {
+      "id": "T02",
+      "title": "Resolve citation targets against selected publications",
+      "proposal_ids": [
+        "P16",
+        "P02"
+      ],
+      "depends_on": [
+        "T01"
+      ],
+      "implementation_state": "implemented_scoped_work; acceptance_remaining",
+      "implemented": "Bounded target resolver beside source findings",
+      "implementation_paths": [
+        "spicy-regs/src/spicy_regs/citation_resolution.py",
+        "spicy-regs/src/spicy_regs/mcp_server.py"
+      ],
+      "validated_scope": "Found/missing/ambiguous/unsupported/unread states, target pins, dated FR routes, alternate identities, set-valued RIN matches, deduplicated batches, timeout outcomes and source-text digest qualification are tested. Earlier eight-kind target-coverage report reproduced over complete selected key columns with the source-text digest predicate; receipt citation-coverage.json captured 2026-09-27T20:22:35Z. Counts are scoped to its exact pins, not subsequent publications.",
+      "validation_paths": [
+        "spicy-regs/tests/test_citation_resolution.py",
+        "spicy-regs/tests/test_mcp_relationships.py"
+      ],
+      "remaining_acceptance": "The selected eight-kind coverage replay is complete. Wider family/source interpretation qualification remains in T17/T24; published lookup coverage must be recomputed when selected inputs change.",
+      "acceptance_complete": false,
+      "data_publication_state": "Views use selected existing publications; no new independently materialized task artifact claimed.",
+      "deployed_verification_state": "Bounded positive live case verified on Worker faa8b3ab-ed99-456a-a234-18b6b6ac3006; full population acceptance remains.",
+      "live_receipt": "/Users/mikewolfd/.codex/artifacts/spicy-regs-join-implementation-20260927/resolve-live.json"
+    },
+    {
+      "id": "T03",
+      "title": "Recover source-stated comment-to-document links",
+      "proposal_ids": [
+        "P03",
+        "P21",
+        "P22"
+      ],
+      "depends_on": [
+        "T01",
+        "T02"
+      ],
+      "implementation_state": "implemented_scoped_work; acceptance_remaining",
+      "implemented": "Native comment fields, views and explicit repair",
+      "implementation_paths": [
+        "spicy-docs/src/spicy_docs/schemas/regulations.py",
+        "spicy-regs/src/spicy_regs/schemas/regulations.py",
+        "spicy-regs/src/spicy_regs/relationship_views/comments.py",
+        "spicy-regs/src/spicy_regs/sources/iceberg.py",
+        "spicy-regs/src/spicy_regs/pipelines/repair_regulations.py"
+      ],
+      "validated_scope": "Native null-docket fixture preserves all three namespaces and absent/null/empty map states. Local migration/export tests retain old rows as unread; repair handles equal timestamps, newer priors, enrichment, pinned snapshots and read-only migration previews. Live fork Iceberg nullable-column migration verified schema 0 to 4 at unchanged data snapshot 3490173674155493736; no comment replay/export yet. Three retained native ODNI records previewed at the migrated schema/current data snapshot. All twelve new cells match source values, null dockets and other fields are preserved. Both explicit parent documents have one target under documents generation b5e567d1. Historical-schema reads now NULL-fill supported fields independently of current write-schema readiness; exporter regression is covered.",
+      "validation_paths": [
+        "spicy-regs/tests/test_comment_references.py",
+        "spicy-regs/tests/test_regulatory_source_repair.py"
+      ],
+      "remaining_acceptance": "Apply corrections through a qualified catalog replacement path and publish corrected exports. Existing DELETE+INSERT reliability limitation remains documented; no destructive catalog rebuild was attempted. Wider retained replay remains.",
+      "acceptance_complete": false,
+      "data_publication_state": "Live schema migration and bounded read-only source replay verified; catalog row corrections/public export pending.",
+      "deployed_verification_state": "Comment views correctly unsupported on old served export; comment-schema-live.json verifies this limitation."
+    },
+    {
+      "id": "T04",
+      "title": "Expose publisher-listed related bills",
+      "proposal_ids": [
+        "P07"
+      ],
+      "depends_on": [
+        "T01",
+        "T02"
+      ],
+      "implementation_state": "implemented_scoped_work; acceptance_remaining",
+      "implemented": "Related-bill occurrences and distinct directed pairs",
+      "implementation_paths": [
+        "spicy-regs/src/spicy_regs/relationship_views/congress.py",
+        "spicy-regs/src/spicy_regs/relationship_views/core.py"
+      ],
+      "validated_scope": "Duplicate occurrences, complete relationship-details objects, malformed elements and directional pair semantics are covered. Complete selected column replay reconciles 142698 held occurrences and distinct pairs against source arrays, preserving 248469 SQL NULL arrays separately from empty arrays.",
+      "validation_paths": [
+        "spicy-regs/tests/test_relationship_views.py"
+      ],
+      "remaining_acceptance": "Held-array conservation and distinct-pair counts are verified at bill-family 72899ab3; source completeness and related-target existence are not established by these measurements.",
+      "acceptance_complete": false,
+      "data_publication_state": "Views use selected existing publications; no new independently materialized task artifact claimed.",
+      "deployed_verification_state": "Bounded positive live case verified on Worker faa8b3ab-ed99-456a-a234-18b6b6ac3006; full population acceptance remains.",
+      "live_receipt": "/Users/mikewolfd/.codex/artifacts/spicy-regs-join-implementation-20260927/bill-related-live.json"
+    },
+    {
+      "id": "T05",
+      "title": "Preserve and publish dated cosponsorship",
+      "proposal_ids": [
+        "P08",
+        "P19"
+      ],
+      "depends_on": [
+        "T01"
+      ],
+      "implementation_state": "implemented_scoped_work; acceptance_remaining",
+      "implemented": "Source cosponsors and correction-safe output",
+      "implementation_paths": [
+        "spicy-docs/src/spicy_docs/sources/congress/bill_status.py",
+        "spicy-docs/src/spicy_docs/schemas/bill_tables.py",
+        "spicy-docs/src/spicy_docs/interpretation/bill_family.py",
+        "spicy-regs/src/spicy_regs/transforms/build_bill_family.py"
+      ],
+      "validated_scope": "Retained 49-entry block replayed; literal dates, original flag, party/state/district, raw XML and digest/ordinal retained. Absent/empty correction clears prior scope; v3 archive and bill checks reopen old readers and missing outputs.",
+      "validation_paths": [
+        "spicy-docs/tests/test_source_relationship_rows.py",
+        "spicy-regs/tests/test_bill_family.py"
+      ],
+      "remaining_acceptance": "Cosponsor data backfill/publication, retained positive withdrawal-date specimen and published count reconciliation remain required. Provider 0.47.0 is pinned and tested.",
+      "acceptance_complete": false,
+      "data_publication_state": "Provider 0.47.0 adopted; bill_cosponsors source backfill/publication pending.",
+      "deployed_verification_state": "Current serving implementation deployed; task-specific population/live acceptance not established."
+    },
+    {
+      "id": "T06",
+      "title": "Expose meeting, hearing and publication references",
+      "proposal_ids": [
+        "P09"
+      ],
+      "depends_on": [
+        "T01",
+        "T02"
+      ],
+      "implementation_state": "implemented_scoped_work; acceptance_remaining",
+      "implemented": "Independent meeting/hearing occurrence views",
+      "implementation_paths": [
+        "spicy-regs/src/spicy_regs/relationship_views/congress.py"
+      ],
+      "validated_scope": "Retained meeting fixture checks jackets, witnesses and offered documents independently; full Congress/chamber/event keys, duplicate values and meeting status survive.",
+      "validation_paths": [
+        "spicy-regs/tests/test_relationship_views_retained.py",
+        "spicy-regs/tests/test_relationship_views.py"
+      ],
+      "remaining_acceptance": "Population reconciliation and jacket target checks. Earlier shapers lost source absent/null distinctions; held-array states cannot recover them.",
+      "acceptance_complete": false,
+      "data_publication_state": "Views use selected existing publications; no new independently materialized task artifact claimed.",
+      "deployed_verification_state": "Current serving implementation deployed; task-specific population/live acceptance not established."
+    },
+    {
+      "id": "T07",
+      "title": "Expose vote document references without pairing unrelated lists",
+      "proposal_ids": [
+        "P10"
+      ],
+      "depends_on": [
+        "T01",
+        "T02"
+      ],
+      "implementation_state": "implemented_scoped_work; acceptance_remaining",
+      "implemented": "Independent vote document/amendment observations",
+      "implementation_paths": [
+        "spicy-regs/src/spicy_regs/relationship_views/congress.py"
+      ],
+      "validated_scope": "Retained Senate vote keeps all native document blocks alongside empty-ID amendment blocks; PN55-25 suffix and native Congress survive. No positional zip or current-Congress fallback. Complete held arrays reconcile 9067 document observations (3550 unsupported) and 9067 independently retained, deliberately unrouted amendment objects.",
+      "validation_paths": [
+        "spicy-regs/tests/test_relationship_views_retained.py",
+        "spicy-regs/tests/test_relationship_views.py"
+      ],
+      "remaining_acceptance": "Positive native amendment/treaty specimens before their routing; full missing-nomination coverage remains. Bounded live vote-document query succeeded.",
+      "acceptance_complete": false,
+      "data_publication_state": "Views use selected existing publications; no new independently materialized task artifact claimed.",
+      "deployed_verification_state": "Bounded positive live case verified on Worker faa8b3ab-ed99-456a-a234-18b6b6ac3006; full population acceptance remains.",
+      "live_receipt": "/Users/mikewolfd/.codex/artifacts/spicy-regs-join-implementation-20260927/vote-documents-live.json"
+    },
+    {
+      "id": "T08",
+      "title": "Connect members to source-listed FEC candidate IDs",
+      "proposal_ids": [
+        "P11"
+      ],
+      "depends_on": [
+        "T01",
+        "T02"
+      ],
+      "implementation_state": "implemented_scoped_work; acceptance_remaining",
+      "implemented": "Member FEC identifier occurrence/pair views",
+      "implementation_paths": [
+        "spicy-regs/src/spicy_regs/relationship_views/congress.py"
+      ],
+      "validated_scope": "Candidate-ID shape including presidential IDs, source list order, duplicates, roster and crosswalk context tested. Complete member FEC array replay reconciles 1738 valid occurrences and pairs at members 00cad6cf.",
+      "validation_paths": [
+        "spicy-regs/tests/test_relationship_views.py"
+      ],
+      "remaining_acceptance": "Pinned crosswalk conflicts and complete candidate/committee/cycle reconciliation remain. Bounded live member-FEC query succeeded; historical linkage is not authorization or a donation.",
+      "acceptance_complete": false,
+      "data_publication_state": "Views use selected existing publications; no new independently materialized task artifact claimed.",
+      "deployed_verification_state": "Bounded positive live case verified on Worker faa8b3ab-ed99-456a-a234-18b6b6ac3006; full population acceptance remains.",
+      "live_receipt": "/Users/mikewolfd/.codex/artifacts/spicy-regs-join-implementation-20260927/member-fec-live.json"
+    },
+    {
+      "id": "T09",
+      "title": "Make FEC relationship evidence directly inspectable",
+      "proposal_ids": [
+        "P12"
+      ],
+      "depends_on": [
+        "T01"
+      ],
+      "implementation_state": "implemented_scoped_work; acceptance_remaining",
+      "implemented": "FEC companion evidence navigation",
+      "implementation_paths": [
+        "spicy-regs/src/spicy_regs/relationship_views/fec.py",
+        "spicy-regs/src/spicy_regs/transforms/fec_relationships.py"
+      ],
+      "validated_scope": "Companion multiplicity, recorded digest equality, unresolved records and explicit empty-list observations tested without multiplying observations. Corrected public query completes in 3.864 seconds; same selected input benchmark completes at 512 MB in 6.67 seconds. Compact digest candidates preserve duplicates/nulls; full companion records remain accessible by collection_id/source_record_id. One end-to-end retained-page verification passed for C00000059: full 123,668-byte page digest matches observation/companion, /results/0 equals companion metadata, and sponsor_candidate_list is an empty list. The digest names whole page bytes, not normalized record JSON.",
+      "validation_paths": [
+        "spicy-regs/tests/test_relationship_views_navigation.py"
+      ],
+      "remaining_acceptance": "Wider selected companion cases and relationship kinds need byte-level qualification. One empty-list case is verified against retained page bytes; serving source_bytes_status remains not_checked because runtime navigation itself does not hash raw captures.",
+      "acceptance_complete": false,
+      "data_publication_state": "Views use selected existing publications; no new independently materialized task artifact claimed.",
+      "deployed_verification_state": "Passed on Worker ea8d54f5-a2f4-4871-b9b0-016ef595b518: found companion, rule fec-companion-location-v2, 3.864s. Initial failing receipt remains retained."
+    },
+    {
+      "id": "T10",
+      "title": "Expose FCC filing membership and retain native role detail",
+      "proposal_ids": [
+        "P14"
+      ],
+      "depends_on": [
+        "T01",
+        "T02"
+      ],
+      "implementation_state": "implemented_scoped_work; acceptance_remaining",
+      "implemented": "Held FCC proceeding occurrences",
+      "implementation_paths": [
+        "spicy-regs/src/spicy_regs/relationship_views/regulatory.py"
+      ],
+      "validated_scope": "Independent held proceeding-name membership preserves repeated and unsupported elements.",
+      "validation_paths": [
+        "spicy-regs/tests/test_relationship_views.py"
+      ],
+      "remaining_acceptance": "Native numeric proceeding IDs and participant roles discarded upstream still need source repair and native fixtures; population replay remains pending.",
+      "acceptance_complete": false,
+      "data_publication_state": "Views use selected existing publications; no new independently materialized task artifact claimed.",
+      "deployed_verification_state": "Current serving implementation deployed; task-specific population/live acceptance not established."
+    },
+    {
+      "id": "T11",
+      "title": "Publish complete regulatory memberships and identifier candidates",
+      "proposal_ids": [
+        "P02",
+        "P03"
+      ],
+      "depends_on": [
+        "T01",
+        "T02"
+      ],
+      "implementation_state": "implemented_scoped_work; acceptance_remaining",
+      "implemented": "Regulatory memberships and agenda editions",
+      "implementation_paths": [
+        "spicy-regs/src/spicy_regs/relationship_views/regulatory.py",
+        "spicy-regs/src/spicy_regs/relationship_views/agenda.py"
+      ],
+      "validated_scope": "FR RIN/docket arrays use dated document identity; other held memberships expand independently; exact RIN/edition/URL targets retain duplicates and ambiguity. Full selected FR arrays reconcile 121795 RIN observations (236 unsupported) and 899632 docket observations (2 unsupported); valid distinct-pair counts are 121559 and 899630.",
+      "validation_paths": [
+        "spicy-regs/tests/test_relationship_views.py",
+        "spicy-regs/tests/test_relationship_views_navigation.py"
+      ],
+      "remaining_acceptance": "Free-text docket normalization, lifecycle date routing and their native qualification remain unimplemented; full lifecycle/agenda reconciliation remains. Bounded live FR-RIN query succeeded.",
+      "acceptance_complete": false,
+      "data_publication_state": "Views use selected existing publications; no new independently materialized task artifact claimed.",
+      "deployed_verification_state": "Bounded positive live case verified on Worker faa8b3ab-ed99-456a-a234-18b6b6ac3006; full population acceptance remains.",
+      "live_receipt": "/Users/mikewolfd/.codex/artifacts/spicy-regs-join-implementation-20260927/fr-rins-live.json"
+    },
+    {
+      "id": "T12",
+      "title": "Publish structured CFR references and authority observations",
+      "proposal_ids": [
+        "P05"
+      ],
+      "depends_on": [
+        "T01",
+        "T02"
+      ],
+      "implementation_state": "implemented_scoped_work; acceptance_remaining",
+      "implemented": "Reusable CFR AUTH/SOURCE source rows",
+      "implementation_paths": [
+        "spicy-docs/src/spicy_docs/schemas/native_reference_rows.py",
+        "spicy-docs/src/spicy_docs/sources/cfr/authority.py"
+      ],
+      "validated_scope": "Native part fragment preserves separate roles, literal text, text runs, XML path/ancestry and unknown title/edition. Existing scanner remains source owner.",
+      "validation_paths": [
+        "spicy-docs/tests/test_native_reference_rows.py"
+      ],
+      "remaining_acceptance": "Complete application write/refresh/resolution pipeline; positive PARAUTH/SECAUTH shapes and complete authority coverage are not qualified.",
+      "acceptance_complete": false,
+      "data_publication_state": "Provider implementation pinned; wider application pipeline/output publication not established.",
+      "deployed_verification_state": "Provider code delivery is not end-to-end application or live source qualification."
+    },
+    {
+      "id": "T13",
+      "title": "Publish native U.S. Code references and classification links",
+      "proposal_ids": [
+        "P06"
+      ],
+      "depends_on": [
+        "T01",
+        "T02"
+      ],
+      "implementation_state": "implemented_scoped_work; acceptance_remaining",
+      "implemented": "Reusable native USC reference/source-credit rows",
+      "implementation_paths": [
+        "spicy-docs/src/spicy_docs/schemas/native_reference_rows.py",
+        "spicy-docs/src/spicy_docs/sources/uscode/references.py"
+      ],
+      "validated_scope": "Retained section-423 fragment yields 30 native href observations and one separate source credit; absent/empty/unknown hrefs and edition uncertainty survive.",
+      "validation_paths": [
+        "spicy-docs/tests/test_native_reference_rows.py"
+      ],
+      "remaining_acceptance": "Full application occurrence pipeline, selected-edition classification links and population reconciliation; historical source credit is not current legal effect.",
+      "acceptance_complete": false,
+      "data_publication_state": "Provider implementation pinned; wider application pipeline/output publication not established.",
+      "deployed_verification_state": "Provider code delivery is not end-to-end application or live source qualification."
+    },
+    {
+      "id": "T14",
+      "title": "Join spending recipients to SAM without multiplying money",
+      "proposal_ids": [
+        "P13"
+      ],
+      "depends_on": [
+        "T01"
+      ],
+      "implementation_state": "implemented_scoped_work; acceptance_remaining",
+      "implemented": "UEI identifiers and nonmultiplying recipient enrichment",
+      "implementation_paths": [
+        "spicy-regs/src/spicy_regs/relationship_views/entities.py"
+      ],
+      "validated_scope": "Registrations aggregate before enrichment, preserving recipient grain, original amounts and registration multiplicity; literal/null EFT and UEI namespaces remain.",
+      "validation_paths": [
+        "spicy-regs/tests/test_relationship_views_navigation.py"
+      ],
+      "remaining_acceptance": "Native retained and published cohort reconciliation of exact amounts/recipients; no inferred current registration or disjoint parent/child totals.",
+      "acceptance_complete": false,
+      "data_publication_state": "Views use selected existing publications; no new independently materialized task artifact claimed.",
+      "deployed_verification_state": "Current serving implementation deployed; task-specific population/live acceptance not established."
+    },
+    {
+      "id": "T15",
+      "title": "Expose the existing court graph with typed endpoints",
+      "proposal_ids": [
+        "P15"
+      ],
+      "depends_on": [
+        "T01",
+        "T02"
+      ],
+      "implementation_state": "implemented_scoped_work; acceptance_remaining",
+      "implemented": "Typed court graph endpoint views",
+      "implementation_paths": [
+        "spicy-regs/src/spicy_regs/relationship_views/courts.py"
+      ],
+      "validated_scope": "Native endpoint kinds/direction and missing/duplicate target handling tested; no name-based substitution or snippet-to-body claim.",
+      "validation_paths": [
+        "spicy-regs/tests/test_relationship_views_navigation.py"
+      ],
+      "remaining_acceptance": "Bounded population-wide graph validation and missing-body acquisitions remain; independent Supreme Court crosswalk is unqualified. A selected live court endpoint query succeeded.",
+      "acceptance_complete": false,
+      "data_publication_state": "Views use selected existing publications; no new independently materialized task artifact claimed.",
+      "deployed_verification_state": "Bounded positive live case verified on Worker faa8b3ab-ed99-456a-a234-18b6b6ac3006; full population acceptance remains.",
+      "live_receipt": "/Users/mikewolfd/.codex/artifacts/spicy-regs-join-implementation-20260927/court-live.json"
+    },
+    {
+      "id": "T16",
+      "title": "Publish a source-artifact reference index",
+      "proposal_ids": [
+        "P21"
+      ],
+      "depends_on": [
+        "T01"
+      ],
+      "implementation_state": "implemented_scoped_work; acceptance_remaining",
+      "implemented": "Selected offered-artifact views",
+      "implementation_paths": [
+        "spicy-regs/src/spicy_regs/relationship_views/artifacts_topics.py",
+        "spicy-regs/src/spicy_regs/relationship_views/congress.py"
+      ],
+      "validated_scope": "Held document/FCC artifact arrays and meeting offered documents preserve occurrences and native rendition fields; URLs do not imply acquired bytes.",
+      "validation_paths": [
+        "spicy-regs/tests/test_relationship_views_navigation.py",
+        "spicy-regs/tests/test_relationship_views_retained.py"
+      ],
+      "remaining_acceptance": "Every enabled source rendition family needs native positive/empty/redirect/duplicate-role replay and retained receipt linkage; no universal artifact index or automatic acquisition.",
+      "acceptance_complete": false,
+      "data_publication_state": "Views use selected existing publications; no new independently materialized task artifact claimed.",
+      "deployed_verification_state": "Current serving implementation deployed; task-specific population/live acceptance not established."
+    },
+    {
+      "id": "T17",
+      "title": "Extend citation extraction through source-specific adapters",
+      "proposal_ids": [
+        "P17"
+      ],
+      "depends_on": [
+        "T02",
+        "T16"
+      ],
+      "implementation_state": "implemented_scoped_work; acceptance_remaining",
+      "implemented": "Citation context provenance and explicit abstention",
+      "implementation_paths": [
+        "spicy-docs/src/spicy_docs/interpretation/citations.py",
+        "spicy-docs/src/spicy_docs/schemas/document_citation_tables.py"
+      ],
+      "validated_scope": "Retained historical inline/subheading contexts distinguish their rule from document fallback; strict mode can refuse fallback while preserving source mention.",
+      "validation_paths": [
+        "spicy-docs/tests/test_citation_context_qualification.py",
+        "spicy-docs/tests/test_citations.py"
+      ],
+      "remaining_acceptance": "Broader bill/report/FCC/LDA/comment adapters, reviewed precision/recall, complete-read clearing, scheduling and bounded retained publication are not complete.",
+      "acceptance_complete": false,
+      "data_publication_state": "Provider implementation pinned; wider application pipeline/output publication not established.",
+      "deployed_verification_state": "Provider code delivery is not end-to-end application or live source qualification."
+    },
+    {
+      "id": "T18",
+      "title": "Preserve and expose structured report and communication references",
+      "proposal_ids": [
+        "P18",
+        "P06",
+        "P20"
+      ],
+      "depends_on": [
+        "T02",
+        "T11"
+      ],
+      "implementation_state": "implemented_scoped_work; acceptance_remaining",
+      "implemented": "All communication RIN occurrences and retained repair",
+      "implementation_paths": [
+        "spicy-docs/src/spicy_docs/interpretation/communication_rin.py",
+        "spicy-docs/src/spicy_docs/schemas/congress_index_tables.py",
+        "spicy-regs/src/spicy_regs/transforms/build_congress_index.py",
+        "spicy-regs/src/spicy_regs/relationship_views/congress.py"
+      ],
+      "validated_scope": "Positive retained multi-RIN specimen; compatibility scalar kept; array spans, field digest and route retained. Old held report_nature can be repaired without acquisition, preserving unread versus empty.",
+      "validation_paths": [
+        "spicy-docs/tests/test_communication_rin_occurrences.py",
+        "spicy-regs/tests/test_communication_rin_projection.py",
+        "spicy-regs/tests/test_relationship_views_navigation.py"
+      ],
+      "remaining_acceptance": "Published held report_nature RIN repair and exact public readback are complete. Full role-specific legal-authority/report-requirement/committee projections, repeated-edition reconciliation and wider population checks remain beyond this RIN route.",
+      "acceptance_complete": false,
+      "data_publication_state": "Published generation sha256:94d28167db0a56a3670d0a3ceca17e610b0a54f7b3c1e0c6b91617affaa2a994; exact public hash/counts verified, zero origin requests; source fidelity inherited.",
+      "deployed_verification_state": "Live count 2076 and communication 119-ec-4554 exact three RINs/spans/field digest verified at the published generation; target existence remains not_checked.",
+      "live_receipt": "/Users/mikewolfd/.codex/artifacts/spicy-regs-live-members-rins-20260927/summary.json"
+    },
+    {
+      "id": "T19",
+      "title": "Preserve party intervals and qualify dated roles",
+      "proposal_ids": [
+        "P19"
+      ],
+      "depends_on": [
+        "T01"
+      ],
+      "implementation_state": "implemented_scoped_work; acceptance_remaining",
+      "implemented": "Affiliation occurrence output and dated party candidates",
+      "implementation_paths": [
+        "spicy-docs/src/spicy_docs/sources/legislators.py",
+        "spicy-docs/src/spicy_docs/schemas/legislator_tables.py",
+        "spicy-regs/src/spicy_regs/transforms/build_members.py",
+        "spicy-regs/src/spicy_regs/pipelines/rollups/members.py",
+        "spicy-regs/src/spicy_regs/relationship_views/affiliations.py"
+      ],
+      "validated_scope": "Native T000254 intervals retained with raw JSON and source ordinals. Both rosters read before full affiliation replacement. Half-open downstream policy tests transitions, gaps, overlaps and missing ends; no term-party fallback.",
+      "validation_paths": [
+        "spicy-docs/tests/test_source_relationship_rows.py",
+        "spicy-regs/tests/test_source_evidence.py",
+        "spicy-regs/tests/test_relationship_views_navigation.py"
+      ],
+      "remaining_acceptance": "Provider pin, complete retained roster rebuild and publication/readback are complete; live affiliation schema and selected dated-party example are verified. Wider population checks and committee-assignment historical-date semantics remain separately unqualified.",
+      "acceptance_complete": false,
+      "data_publication_state": "Published members generation sha256:00cad6cf5255d605f681a89705c22257e2975ed86c2dee61e90f3be278d51851; all three public hashes/counts verified.",
+      "deployed_verification_state": "Live count 59 and vote 119-house-1-1 / member K000401 on 2025-01-03 verified: Republican, found, source_interval, target_count=1 at the published generation.",
+      "live_receipt": "/Users/mikewolfd/.codex/artifacts/spicy-regs-live-members-rins-20260927/summary.json"
+    },
+    {
+      "id": "T20",
+      "title": "Add namespaced agency and topic occurrence views",
+      "proposal_ids": [
+        "P04",
+        "P20"
+      ],
+      "depends_on": [
+        "T01",
+        "T02"
+      ],
+      "implementation_state": "implemented_scoped_work; acceptance_remaining",
+      "implemented": "Namespaced native agency/topic observations",
+      "implementation_paths": [
+        "spicy-regs/src/spicy_regs/relationship_views/artifacts_topics.py"
+      ],
+      "validated_scope": "FR agencies/topics, Congress subjects and LDA contacted-entity arrays retain native namespace and objects; empty contacts create no edge.",
+      "validation_paths": [
+        "spicy-regs/tests/test_relationship_views_navigation.py"
+      ],
+      "remaining_acceptance": "Accepted RefSpec mappings, historical validity, contested/unmatched mapping workflow and per-route native-ID/abstention evidence remain pending.",
+      "acceptance_complete": false,
+      "data_publication_state": "Views use selected existing publications; no new independently materialized task artifact claimed.",
+      "deployed_verification_state": "Current serving implementation deployed; task-specific population/live acceptance not established."
+    },
+    {
+      "id": "T21",
+      "title": "Anchor each text difference to both exact source versions",
+      "proposal_ids": [
+        "P24"
+      ],
+      "depends_on": [
+        "T01"
+      ],
+      "implementation_state": "implemented_scoped_work; acceptance_remaining",
+      "implemented": "Exact diff version and section endpoints",
+      "implementation_paths": [
+        "spicy-regs/src/spicy_regs/relationship_views/diffs.py",
+        "spicy-docs/src/spicy_docs/schemas/bill_diff_tables.py"
+      ],
+      "validated_scope": "Both provider-specific endpoints, text-digest agreement, missing sides, engine revision and duplicate candidates stay separate without multiplication.",
+      "validation_paths": [
+        "spicy-regs/tests/test_relationship_views_navigation.py",
+        "spicy-regs/tests/test_join_cardinality.py"
+      ],
+      "remaining_acceptance": "Native insertion/deletion/renumbering/movement cohort and wider selected-publication reconciliation remain. A bounded live diff endpoint query succeeded.",
+      "acceptance_complete": false,
+      "data_publication_state": "Views use selected existing publications; no new independently materialized task artifact claimed.",
+      "deployed_verification_state": "Bounded positive live case verified on Worker faa8b3ab-ed99-456a-a234-18b6b6ac3006; full population acceptance remains.",
+      "live_receipt": "/Users/mikewolfd/.codex/artifacts/spicy-regs-join-implementation-20260927/diff-live.json"
+    },
+    {
+      "id": "T22",
+      "title": "Build an evidence-backed identity candidate queue",
+      "proposal_ids": [
+        "P25"
+      ],
+      "depends_on": [
+        "T09",
+        "T14",
+        "T20"
+      ],
+      "implementation_state": "implemented_scoped_work; acceptance_remaining",
+      "implemented": "Pending identity candidate view",
+      "implementation_paths": [
+        "spicy-regs/src/spicy_regs/relationship_views/identity_candidates.py"
+      ],
+      "validated_scope": "Existing name matches preserve features, alternatives, repeats and source dates; publication-digest candidate IDs only for pinned sources. No accepted identity or money attribution.",
+      "validation_paths": [
+        "spicy-regs/tests/test_relationship_views_navigation.py"
+      ],
+      "remaining_acceptance": "Review/acceptance/revocation workflow and truth set for same-name entities, renames and parent/subsidiary cases remain unimplemented. Live pending-candidate query succeeded; no identity was accepted.",
+      "acceptance_complete": false,
+      "data_publication_state": "Views use selected existing publications; no new independently materialized task artifact claimed.",
+      "deployed_verification_state": "Bounded positive live case verified on Worker faa8b3ab-ed99-456a-a234-18b6b6ac3006; full population acceptance remains.",
+      "live_receipt": "/Users/mikewolfd/.codex/artifacts/spicy-regs-join-implementation-20260927/identity-candidate-live.json"
+    },
+    {
+      "id": "T23",
+      "title": "Qualify Senate expenditure line extraction before publishing payments",
+      "proposal_ids": [
+        "P26"
+      ],
+      "depends_on": [
+        "T01",
+        "T16"
+      ],
+      "implementation_state": "implemented_scoped_work; acceptance_remaining",
+      "implemented": "Pinned manual payment truth set and refusal gate",
+      "implementation_paths": [
+        "spicy-docs/src/spicy_docs/reading/senate_payment_review.py",
+        "spicy-docs/tests/fixtures/senate_expenditures/payment-review-2026-09-27.json"
+      ],
+      "validated_scope": "High-resolution native B-1243/B-1244 review corrects DJST20250194/ERAJ SHIRVANI; exact decimal strings, word boxes, raw cells, negative summary/total observations and unresolved continuation retained. Focused native Senate suite passed on 2026-09-27.",
+      "validation_paths": [
+        "spicy-docs/tests/test_senate_payment_review.py",
+        "spicy-docs/tests/test_senate_expenditures.py"
+      ],
+      "remaining_acceptance": "No automated payment parser or publication qualification. Complete cross-page grouping, office-origin/boundary proof, negative payment examples, payment reconciliation and C/D layouts remain unsupported.",
+      "acceptance_complete": false,
+      "data_publication_state": "Provider implementation pinned; wider application pipeline/output publication not established.",
+      "deployed_verification_state": "Provider code delivery is not end-to-end application or live source qualification."
+    },
+    {
+      "id": "T24",
+      "title": "Acquire the missing targets and bodies that unlock useful links",
+      "proposal_ids": [
+        "P27"
+      ],
+      "depends_on": [
+        "T02",
+        "T15",
+        "T16"
+      ],
+      "implementation_state": "implemented_scoped_work; acceptance_remaining",
+      "implemented": "Bounded missing-target queue and one GAO acquisition",
+      "implementation_paths": [
+        "spicy-regs/src/spicy_regs/acquisition_queue.py",
+        "spicy-docs/src/spicy_docs/sources/gao/files.py"
+      ],
+      "validated_scope": "Queue requires qualified source/target pins and explicit retained inspection, deduplicates/ranks occurrences, names provider APIs and abstains on unselected USC editions. On 2026-09-27 GAO-17-317 acquired in one request, PDF validated and cover identity checked.",
+      "validation_paths": [
+        "spicy-regs/tests/test_acquisition_queue.py"
+      ],
+      "remaining_acceptance": "No acquired-body publication or target-table re-resolution; law/USC/court end-to-end cohorts, refusal/retry paths and historical edition coverage remain.",
+      "acceptance_complete": false,
+      "data_publication_state": "One GAO PDF acquired and identity checked; not published or re-resolved.",
+      "deployed_verification_state": "Queue code deployed; end-to-end acquisition/publication/re-resolution remains incomplete."
+    },
+    {
+      "id": "T25",
+      "title": "Make aggregate joins and coverage claims reproducible",
+      "proposal_ids": [
+        "P23",
+        "P28"
+      ],
+      "depends_on": [
+        "T01"
+      ],
+      "implementation_state": "implemented_scoped_work; acceptance_remaining",
+      "implemented": "Explicit per-input view coverage metadata",
+      "implementation_paths": [
+        "spicy-regs/src/spicy_regs/relationship_views/core.py",
+        "spicy-regs/src/spicy_regs/mcp_server.py",
+        "spicy-regs/src/spicy_regs/join_measurements.json"
+      ],
+      "validated_scope": "Views expose schema-derived columns, inherited population, grain, per-table publication metadata and unsupported/unread states; dated key-only join measurements retain independent pins.",
+      "validation_paths": [
+        "spicy-regs/tests/test_mcp_relationships.py",
+        "spicy-regs/tests/test_relationship_views.py"
+      ],
+      "remaining_acceptance": "Full comments/index, agency, lifecycle, feed and checkpoint aggregate reconciliation is not implemented; installation does not measure row counts or completeness.",
+      "acceptance_complete": false,
+      "data_publication_state": "Views use selected existing publications; no new independently materialized task artifact claimed.",
+      "deployed_verification_state": "Current serving implementation deployed; task-specific population/live acceptance not established."
+    }
+  ],
+  "dated_local_validation": {
+    "observed_on": "2026-09-27",
+    "relationship_agent_report": {
+      "focused_tests_passed": 24,
+      "schema_only_available": 94,
+      "schema_only_unsupported": 7,
+      "schema_only_unavailable": 1,
+      "unsupported_reason": "Old comment reference and communication RIN columns absent in selected schemas.",
+      "unavailable_reason": "New member_party_affiliations table absent in selected publication.",
+      "limits": "Schema-only replay and scoped tests; no deployment or population completeness claim."
+    },
+    "source_provider_focused_tests_passed": 1358,
+    "senate_focused_tests_passed": 72,
+    "limits": "Earlier focused runs; final full provider and consumer gate results are recorded in finalization.repository_checks."
+  },
+  "live_verification": {
+    "observed_on": "2026-09-27",
+    "worker_version": "faa8b3ab-ed99-456a-a234-18b6b6ac3006",
+    "summary_path": "/Users/mikewolfd/.codex/artifacts/spicy-regs-join-implementation-20260927/live-smoke-summary.json",
+    "request_receipts_directory": "/Users/mikewolfd/.codex/artifacts/spicy-regs-join-implementation-20260927/",
+    "discovery": {
+      "elapsed_ms": 48135,
+      "tables": 190,
+      "views": {
+        "available": 98,
+        "unsupported": 4,
+        "unavailable": 0
+      }
+    },
+    "positive_cases": [
+      "comment-schema-live",
+      "party-schema-live",
+      "vote-documents-live",
+      "bill-related-live",
+      "member-fec-live",
+      "fr-rins-live",
+      "court-live",
+      "diff-live",
+      "identity-candidate-live",
+      "resolve-live"
+    ],
+    "security_refusals": [
+      "security-file-live",
+      "security-write-live"
+    ],
+    "resolver_scope": {
+      "input_occurrences": 20,
+      "target_status_counts": {
+        "found": 20
+      },
+      "reason_counts": {},
+      "distinct_target_keys_read": 20,
+      "distinct_target_keys_selected": 20,
+      "target_batches": 1,
+      "partial": true,
+      "max_target_keys": 20,
+      "max_candidates": 100,
+      "occurrence_selection": {
+        "status": "capped",
+        "max_occurrences": 20,
+        "meaning": "Held citation rows for this document; not extraction recall or source completeness."
+      }
+    },
+    "overall_passed": false,
+    "open_failure": {
+      "view": "fec_relationship_evidence",
+      "receipt": "/Users/mikewolfd/.codex/artifacts/spicy-regs-join-implementation-20260927/fec-evidence-live.json",
+      "error": "Out of Memory: failed to allocate 2.0 MiB at 8.3 GiB/8.3 GiB used",
+      "status": "fix_in_progress; deployed_retest_required"
+    }
+  },
+  "live_t18_t19_verification": {
+    "observed_on": "2026-09-27",
+    "summary_path": "/Users/mikewolfd/.codex/artifacts/spicy-regs-live-members-rins-20260927/summary.json",
+    "validation_path": "/Users/mikewolfd/.codex/artifacts/spicy-regs-live-members-rins-20260927/validation.json",
+    "validation": {
+      "passed": true,
+      "assertions": [
+        "exact counts",
+        "three exact RINs and source spans/digest",
+        "published RIN generation pin",
+        "positive date-qualified party and member generation pin"
+      ],
+      "latency_ms": {
+        "counts": 49956,
+        "multi-rin": 615,
+        "party-dated": 3018
+      }
+    },
+    "counts": [
+      {
+        "relation": "member_party_affiliations",
+        "n": 59
+      },
+      {
+        "relation": "house_communication_rins_occurrences",
+        "n": 2076
+      }
+    ],
+    "input_publications": {
+      "member_party_affiliations": {
+        "status": "managed_generation",
+        "family": "members",
+        "artifact_digest": "sha256:00cad6cf5255d605f681a89705c22257e2975ed86c2dee61e90f3be278d51851"
+      },
+      "member_vote_terms": {
+        "status": "managed_generation",
+        "family": "member-vote-terms",
+        "artifact_digest": "sha256:742bf0afe6df11684590ce16d7aa872162ca3f841b1350f3e018310b64f9afc8"
+      },
+      "house_communications": {
+        "status": "managed_generation",
+        "family": "house-communications",
+        "artifact_digest": "sha256:94d28167db0a56a3670d0a3ceca17e610b0a54f7b3c1e0c6b91617affaa2a994"
+      }
+    },
+    "communication_example": [
+      {
+        "congress": "119",
+        "communication_type": "ec",
+        "number": "4554",
+        "source_ordinal": 0,
+        "target_key": "2125-AF80",
+        "target_status": "not_checked",
+        "matched_text": "2125-AF80",
+        "span_start": "111",
+        "span_end": "120",
+        "field_sha256": "e6e636a1750116a610b6c8f34bf15f5584cf845c508eba71db9ccb6a96692a06",
+        "extraction_rule": "report_nature/shared_rin",
+        "extraction_rule_version": "004"
+      },
+      {
+        "congress": "119",
+        "communication_type": "ec",
+        "number": "4554",
+        "source_ordinal": 1,
+        "target_key": "2130-AD05",
+        "target_status": "not_checked",
+        "matched_text": "2130-AD05",
+        "span_start": "122",
+        "span_end": "131",
+        "field_sha256": "e6e636a1750116a610b6c8f34bf15f5584cf845c508eba71db9ccb6a96692a06",
+        "extraction_rule": "report_nature/shared_rin",
+        "extraction_rule_version": "004"
+      },
+      {
+        "congress": "119",
+        "communication_type": "ec",
+        "number": "4554",
+        "source_ordinal": 2,
+        "target_key": "2132-AB51",
+        "target_status": "not_checked",
+        "matched_text": "2132-AB51",
+        "span_start": "133",
+        "span_end": "142",
+        "field_sha256": "e6e636a1750116a610b6c8f34bf15f5584cf845c508eba71db9ccb6a96692a06",
+        "extraction_rule": "report_nature/shared_rin",
+        "extraction_rule_version": "004"
+      }
+    ],
+    "party_example": {
+      "vote_id": "119-house-1-1",
+      "bioguide_id": "K000401",
+      "vote_day": "2025-01-03",
+      "term_index": "1",
+      "dated_party": "Republican",
+      "target_status": "found",
+      "party_status": "source_interval",
+      "target_count": 1,
+      "target_publication_json": "{\"artifact_digest\": \"sha256:00cad6cf5255d605f681a89705c22257e2975ed86c2dee61e90f3be278d51851\", \"family\": \"members\", \"status\": \"managed_generation\"}"
+    },
+    "scope": "Same deployed rollout and published pins; selected positive cases, not full population qualification or a newer rollout."
+  },
+  "final_live_verification": {
+    "passed": true,
+    "cases": [
+      {
+        "label": "final-fec-description",
+        "http": 200,
+        "elapsed_ms": 33089,
+        "error": null,
+        "passed": true
+      },
+      {
+        "label": "final-fec-query",
+        "http": 200,
+        "elapsed_ms": 3864,
+        "error": null,
+        "passed": true,
+        "target_status": "found",
+        "rule_version": "fec-companion-location-v2"
+      },
+      {
+        "label": "final-description-member_party_affiliations",
+        "http": 200,
+        "elapsed_ms": 154,
+        "error": null,
+        "passed": true
+      },
+      {
+        "label": "final-description-house_communications",
+        "http": 200,
+        "elapsed_ms": 147,
+        "error": null,
+        "passed": true
+      },
+      {
+        "label": "final-counts",
+        "http": 200,
+        "elapsed_ms": 309,
+        "error": null,
+        "passed": true
+      },
+      {
+        "label": "final-citation-resolution",
+        "http": 200,
+        "elapsed_ms": 956,
+        "error": null,
+        "passed": true
+      },
+      {
+        "label": "final-security-file",
+        "http": 200,
+        "elapsed_ms": 74,
+        "error": true,
+        "passed": true,
+        "expected_refusal": true
+      },
+      {
+        "label": "final-security-write",
+        "http": 200,
+        "elapsed_ms": 87,
+        "error": true,
+        "passed": true,
+        "expected_refusal": true
+      }
+    ]
+  },
+  "comment_repair_preview": {
+    "scope": "three retained native ODNI comments; read-only catalog preview and public parent lookup",
+    "catalog_snapshot": {
+      "schema_id": 4,
+      "snapshot_id": 3490173674155493736,
+      "table_uuid": "01a0d3fc-be18-70b0-abeb-e0f6e58d6cff"
+    },
+    "source_receipts": {
+      "kind": "exact retained mirror comment fixtures",
+      "records": [
+        {
+          "canonical_sha256": "330f705e354dbe5e617cc96c3783bf970b444fd88346e3890ed15238e9c92642",
+          "checked_at": "2026-09-24T23:02:26.407750+00:00",
+          "etag": "\"f3cb74ed1bfb95467c313220b1a9f88a\"",
+          "retained_file": "ODNI-2009-0003-0002.source.json",
+          "retained_sha256": "f4dd6d025d2fcf6eda2dfb47633728efa6b9dc41a41aa8c77a5dd3e61ae41832",
+          "sha256": "f4dd6d025d2fcf6eda2dfb47633728efa6b9dc41a41aa8c77a5dd3e61ae41832",
+          "size": 1725,
+          "source": "s3://mirrulations/raw-data/ODNI/ODNI-2009-0003/text-ODNI-2009-0003/comments/ODNI-2009-0003-0002.json"
+        },
+        {
+          "canonical_sha256": "448a8c71d0f1f9b94de5b0e1be22964a396d30a185be544b57e83d9def44dac0",
+          "checked_at": "2026-09-24T23:02:26.450871+00:00",
+          "etag": "\"bf555f6cf5f3620f85a6a34161ccae10\"",
+          "retained_file": "ODNI-2009-0004-0002.source.json",
+          "retained_sha256": "d5ac7aa71069e0b52efc05497f623f804118b029db76ba0a967680ed64433413",
+          "sha256": "d5ac7aa71069e0b52efc05497f623f804118b029db76ba0a967680ed64433413",
+          "size": 1697,
+          "source": "s3://mirrulations/raw-data/ODNI/ODNI-2009-0004/text-ODNI-2009-0004/comments/ODNI-2009-0004-0002.json"
+        },
+        {
+          "canonical_sha256": "eff089206c265c7c5c612522f93ea54d4b6047647f54ddaf566bb574a04f9536",
+          "checked_at": "2026-09-24T23:02:26.499025+00:00",
+          "etag": "\"8bfd9376dfcc24799e55e21935e2281c\"",
+          "retained_file": "ODNI-2009-0004-0003.source.json",
+          "retained_sha256": "84b284b310b5386e668c3374ddaac66f0c309da86543426760637150e2b17a80",
+          "sha256": "84b284b310b5386e668c3374ddaac66f0c309da86543426760637150e2b17a80",
+          "size": 1708,
+          "source": "s3://mirrulations/raw-data/ODNI/ODNI-2009-0004/text-ODNI-2009-0004/comments/ODNI-2009-0004-0003.json"
+        }
+      ]
+    },
+    "schema_migration_required": [],
+    "snapshot_columns_null_filled": [
+      "comment_on_document_id",
+      "comment_on_object_id",
+      "comment_reference_values_json",
+      "original_document_id"
+    ],
+    "input_records": 3,
+    "missing_identities": [],
+    "changed_rows": 3,
+    "changed_columns_per_row": {
+      "ODNI-2009-0003-0002": [
+        "comment_on_document_id",
+        "comment_on_object_id",
+        "comment_reference_values_json",
+        "original_document_id"
+      ],
+      "ODNI-2009-0004-0002": [
+        "comment_on_document_id",
+        "comment_on_object_id",
+        "comment_reference_values_json",
+        "original_document_id"
+      ],
+      "ODNI-2009-0004-0003": [
+        "comment_on_document_id",
+        "comment_on_object_id",
+        "comment_reference_values_json",
+        "original_document_id"
+      ]
+    },
+    "null_dockets_preserved": true,
+    "target_publication": {
+      "status": "managed_generation",
+      "family": "documents",
+      "artifact_digest": "sha256:b5e567d1114948f5f4cf0cf998adc4e87a5582cf1777c4d6e414f8f468ec721c"
+    },
+    "parent_targets": [
+      {
+        "document_id": "ODNI-2009-0004-0001",
+        "target_count": 1
+      },
+      {
+        "document_id": "ODNI-2009-0003-0001",
+        "target_count": 1
+      }
+    ],
+    "catalog_rows_written": false,
+    "public_export": false,
+    "remaining": "Apply/publication requires a qualified replacement path; existing DELETE+INSERT catalog limitation is documented in iceberg._merge. No destructive catalog rebuild was performed."
+  },
+  "array_population_reconciliation": [
+    {
+      "view": "bill_related_bills",
+      "source_table": "congress_bills",
+      "source_field": "related_bills_json",
+      "source_keys": [
+        "bill_id"
+      ],
+      "pin": {
+        "family": "bill-family",
+        "artifact_digest": "sha256:72899ab3dbf4944700841130ec218e6d03cab3dbafed943dbf88d7e0b2daa6b7",
+        "status": "managed_generation"
+      },
+      "sql": "WITH original AS (\n SELECT count(*) source_rows,\n coalesce(sum(CASE WHEN json_type(TRY_CAST(\"related_bills_json\" AS JSON))='ARRAY' THEN json_array_length(TRY_CAST(\"related_bills_json\" AS JSON)) ELSE 0 END),0) expected_occurrences\n FROM \"congress_bills\"),\n dispositions AS (SELECT parsing_status, count(*) n FROM \"bill_related_bills_occurrences\" GROUP BY parsing_status),\n statuses AS (SELECT field_state,count(*) n FROM \"bill_related_bills_field_states\" GROUP BY field_state)\n SELECT original.*,\n (SELECT count(*) FROM \"bill_related_bills_occurrences\") actual_occurrences,\n (SELECT count(*) FROM \"bill_related_bills_occurrences\" WHERE parsing_status <> 'valid') invalid_occurrences,\n (SELECT count(*) FROM \"bill_related_bills_occurrences\" WHERE target_status='unsupported') unrouted_occurrences,\n (SELECT count(*) FROM \"bill_related_bills_pairs\") distinct_source_target_pairs,\n (SELECT to_json(list(struct_pack(status:=parsing_status,n:=n))) FROM dispositions) disposition_counts_json,\n (SELECT to_json(list(struct_pack(status:=field_state,n:=n))) FROM statuses) field_state_counts_json\n FROM original",
+      "elapsed_seconds": 2.422,
+      "metrics": {
+        "source_rows": 421465,
+        "expected_occurrences": 142698,
+        "actual_occurrences": 142698,
+        "invalid_occurrences": 0,
+        "unrouted_occurrences": 0,
+        "distinct_source_target_pairs": 142698,
+        "disposition_counts_json": "[{\"status\":\"valid\",\"n\":142698}]",
+        "field_state_counts_json": "[{\"status\":\"empty_array\",\"n\":89594},{\"status\":\"populated_array\",\"n\":83402},{\"status\":\"sql_null\",\"n\":248469}]"
+      },
+      "passed": true
+    },
+    {
+      "view": "member_fec_ids",
+      "source_table": "members",
+      "source_field": "fec_ids_json",
+      "source_keys": [
+        "bioguide_id"
+      ],
+      "pin": {
+        "family": "members",
+        "artifact_digest": "sha256:00cad6cf5255d605f681a89705c22257e2975ed86c2dee61e90f3be278d51851",
+        "status": "managed_generation"
+      },
+      "sql": "WITH original AS (\n SELECT count(*) source_rows,\n coalesce(sum(CASE WHEN json_type(TRY_CAST(\"fec_ids_json\" AS JSON))='ARRAY' THEN json_array_length(TRY_CAST(\"fec_ids_json\" AS JSON)) ELSE 0 END),0) expected_occurrences\n FROM \"members\"),\n dispositions AS (SELECT parsing_status, count(*) n FROM \"member_fec_ids_occurrences\" GROUP BY parsing_status),\n statuses AS (SELECT field_state,count(*) n FROM \"member_fec_ids_field_states\" GROUP BY field_state)\n SELECT original.*,\n (SELECT count(*) FROM \"member_fec_ids_occurrences\") actual_occurrences,\n (SELECT count(*) FROM \"member_fec_ids_occurrences\" WHERE parsing_status <> 'valid') invalid_occurrences,\n (SELECT count(*) FROM \"member_fec_ids_occurrences\" WHERE target_status='unsupported') unrouted_occurrences,\n (SELECT count(*) FROM \"member_fec_ids_pairs\") distinct_source_target_pairs,\n (SELECT to_json(list(struct_pack(status:=parsing_status,n:=n))) FROM dispositions) disposition_counts_json,\n (SELECT to_json(list(struct_pack(status:=field_state,n:=n))) FROM statuses) field_state_counts_json\n FROM original",
+      "elapsed_seconds": 0.457,
+      "metrics": {
+        "source_rows": 12770,
+        "expected_occurrences": 1738,
+        "actual_occurrences": 1738,
+        "invalid_occurrences": 0,
+        "unrouted_occurrences": 0,
+        "distinct_source_target_pairs": 1738,
+        "disposition_counts_json": "[{\"status\":\"valid\",\"n\":1738}]",
+        "field_state_counts_json": "[{\"status\":\"empty_array\",\"n\":11238},{\"status\":\"populated_array\",\"n\":1532}]"
+      },
+      "passed": true
+    },
+    {
+      "view": "vote_documents",
+      "source_table": "roll_call_votes",
+      "source_field": "documents_json",
+      "source_keys": [
+        "vote_id"
+      ],
+      "pin": {
+        "family": "roll-call-votes",
+        "artifact_digest": "sha256:319402160c37eaa27c34fa0b404a18c3e98aaadd1b9da9c0612b4dde7bd94651",
+        "status": "managed_generation"
+      },
+      "sql": "WITH original AS (\n SELECT count(*) source_rows,\n coalesce(sum(CASE WHEN json_type(TRY_CAST(\"documents_json\" AS JSON))='ARRAY' THEN json_array_length(TRY_CAST(\"documents_json\" AS JSON)) ELSE 0 END),0) expected_occurrences\n FROM \"roll_call_votes\"),\n dispositions AS (SELECT parsing_status, count(*) n FROM \"vote_documents_occurrences\" GROUP BY parsing_status),\n statuses AS (SELECT field_state,count(*) n FROM \"vote_documents_field_states\" GROUP BY field_state)\n SELECT original.*,\n (SELECT count(*) FROM \"vote_documents_occurrences\") actual_occurrences,\n (SELECT count(*) FROM \"vote_documents_occurrences\" WHERE parsing_status <> 'valid') invalid_occurrences,\n (SELECT count(*) FROM \"vote_documents_occurrences\" WHERE target_status='unsupported') unrouted_occurrences,\n (SELECT count(*) FROM \"vote_documents_pairs\") distinct_source_target_pairs,\n (SELECT to_json(list(struct_pack(status:=parsing_status,n:=n))) FROM dispositions) disposition_counts_json,\n (SELECT to_json(list(struct_pack(status:=field_state,n:=n))) FROM statuses) field_state_counts_json\n FROM original",
+      "elapsed_seconds": 0.448,
+      "metrics": {
+        "source_rows": 23358,
+        "expected_occurrences": 9067,
+        "actual_occurrences": 9067,
+        "invalid_occurrences": 3550,
+        "unrouted_occurrences": 3550,
+        "distinct_source_target_pairs": 5517,
+        "disposition_counts_json": "[{\"status\":\"unsupported_element\",\"n\":3550},{\"status\":\"valid\",\"n\":5517}]",
+        "field_state_counts_json": "[{\"status\":\"populated_array\",\"n\":8161},{\"status\":\"empty_array\",\"n\":15197}]"
+      },
+      "passed": true
+    },
+    {
+      "view": "vote_amendments",
+      "source_table": "roll_call_votes",
+      "source_field": "amendments_json",
+      "source_keys": [
+        "vote_id"
+      ],
+      "pin": {
+        "family": "roll-call-votes",
+        "artifact_digest": "sha256:319402160c37eaa27c34fa0b404a18c3e98aaadd1b9da9c0612b4dde7bd94651",
+        "status": "managed_generation"
+      },
+      "sql": "WITH original AS (\n SELECT count(*) source_rows,\n coalesce(sum(CASE WHEN json_type(TRY_CAST(\"amendments_json\" AS JSON))='ARRAY' THEN json_array_length(TRY_CAST(\"amendments_json\" AS JSON)) ELSE 0 END),0) expected_occurrences\n FROM \"roll_call_votes\"),\n dispositions AS (SELECT parsing_status, count(*) n FROM \"vote_amendments_occurrences\" GROUP BY parsing_status),\n statuses AS (SELECT field_state,count(*) n FROM \"vote_amendments_field_states\" GROUP BY field_state)\n SELECT original.*,\n (SELECT count(*) FROM \"vote_amendments_occurrences\") actual_occurrences,\n (SELECT count(*) FROM \"vote_amendments_occurrences\" WHERE parsing_status <> 'valid') invalid_occurrences,\n (SELECT count(*) FROM \"vote_amendments_occurrences\" WHERE target_status='unsupported') unrouted_occurrences,\n (SELECT count(*) FROM \"vote_amendments_pairs\") distinct_source_target_pairs,\n (SELECT to_json(list(struct_pack(status:=parsing_status,n:=n))) FROM dispositions) disposition_counts_json,\n (SELECT to_json(list(struct_pack(status:=field_state,n:=n))) FROM statuses) field_state_counts_json\n FROM original",
+      "elapsed_seconds": 0.221,
+      "metrics": {
+        "source_rows": 23358,
+        "expected_occurrences": 9067,
+        "actual_occurrences": 9067,
+        "invalid_occurrences": 0,
+        "unrouted_occurrences": 9067,
+        "distinct_source_target_pairs": 0,
+        "disposition_counts_json": "[{\"status\":\"valid\",\"n\":9067}]",
+        "field_state_counts_json": "[{\"status\":\"populated_array\",\"n\":8161},{\"status\":\"empty_array\",\"n\":15197}]"
+      },
+      "passed": true
+    },
+    {
+      "view": "federal_register_rins",
+      "source_table": "federal_register",
+      "source_field": "regulation_id_numbers_json",
+      "source_keys": [
+        "document_number",
+        "publication_date"
+      ],
+      "pin": {
+        "family": "federal-register",
+        "artifact_digest": "sha256:497be73c5c70ccd14cc1d5f99200e76a703baf4860fbe20c5025587a57a4e1d7",
+        "status": "managed_generation"
+      },
+      "sql": "WITH original AS (\n SELECT count(*) source_rows,\n coalesce(sum(CASE WHEN json_type(TRY_CAST(\"regulation_id_numbers_json\" AS JSON))='ARRAY' THEN json_array_length(TRY_CAST(\"regulation_id_numbers_json\" AS JSON)) ELSE 0 END),0) expected_occurrences\n FROM \"federal_register\"),\n dispositions AS (SELECT parsing_status, count(*) n FROM \"federal_register_rins_occurrences\" GROUP BY parsing_status),\n statuses AS (SELECT field_state,count(*) n FROM \"federal_register_rins_field_states\" GROUP BY field_state)\n SELECT original.*,\n (SELECT count(*) FROM \"federal_register_rins_occurrences\") actual_occurrences,\n (SELECT count(*) FROM \"federal_register_rins_occurrences\" WHERE parsing_status <> 'valid') invalid_occurrences,\n (SELECT count(*) FROM \"federal_register_rins_occurrences\" WHERE target_status='unsupported') unrouted_occurrences,\n (SELECT count(*) FROM \"federal_register_rins_pairs\") distinct_source_target_pairs,\n (SELECT to_json(list(struct_pack(status:=parsing_status,n:=n))) FROM dispositions) disposition_counts_json,\n (SELECT to_json(list(struct_pack(status:=field_state,n:=n))) FROM statuses) field_state_counts_json\n FROM original",
+      "elapsed_seconds": 2.66,
+      "metrics": {
+        "source_rows": 1009313,
+        "expected_occurrences": 121795,
+        "actual_occurrences": 121795,
+        "invalid_occurrences": 236,
+        "unrouted_occurrences": 236,
+        "distinct_source_target_pairs": 121559,
+        "disposition_counts_json": "[{\"status\":\"valid\",\"n\":121559},{\"status\":\"unsupported_element\",\"n\":236}]",
+        "field_state_counts_json": "[{\"status\":\"empty_array\",\"n\":890359},{\"status\":\"populated_array\",\"n\":118954}]"
+      },
+      "passed": true
+    },
+    {
+      "view": "federal_register_dockets",
+      "source_table": "federal_register",
+      "source_field": "docket_ids_json",
+      "source_keys": [
+        "document_number",
+        "publication_date"
+      ],
+      "pin": {
+        "family": "federal-register",
+        "artifact_digest": "sha256:497be73c5c70ccd14cc1d5f99200e76a703baf4860fbe20c5025587a57a4e1d7",
+        "status": "managed_generation"
+      },
+      "sql": "WITH original AS (\n SELECT count(*) source_rows,\n coalesce(sum(CASE WHEN json_type(TRY_CAST(\"docket_ids_json\" AS JSON))='ARRAY' THEN json_array_length(TRY_CAST(\"docket_ids_json\" AS JSON)) ELSE 0 END),0) expected_occurrences\n FROM \"federal_register\"),\n dispositions AS (SELECT parsing_status, count(*) n FROM \"federal_register_dockets_occurrences\" GROUP BY parsing_status),\n statuses AS (SELECT field_state,count(*) n FROM \"federal_register_dockets_field_states\" GROUP BY field_state)\n SELECT original.*,\n (SELECT count(*) FROM \"federal_register_dockets_occurrences\") actual_occurrences,\n (SELECT count(*) FROM \"federal_register_dockets_occurrences\" WHERE parsing_status <> 'valid') invalid_occurrences,\n (SELECT count(*) FROM \"federal_register_dockets_occurrences\" WHERE target_status='unsupported') unrouted_occurrences,\n (SELECT count(*) FROM \"federal_register_dockets_pairs\") distinct_source_target_pairs,\n (SELECT to_json(list(struct_pack(status:=parsing_status,n:=n))) FROM dispositions) disposition_counts_json,\n (SELECT to_json(list(struct_pack(status:=field_state,n:=n))) FROM statuses) field_state_counts_json\n FROM original",
+      "elapsed_seconds": 7.061,
+      "metrics": {
+        "source_rows": 1009313,
+        "expected_occurrences": 899632,
+        "actual_occurrences": 899632,
+        "invalid_occurrences": 2,
+        "unrouted_occurrences": 2,
+        "distinct_source_target_pairs": 899630,
+        "disposition_counts_json": "[{\"status\":\"valid\",\"n\":899630},{\"status\":\"unsupported_element\",\"n\":2}]",
+        "field_state_counts_json": "[{\"status\":\"populated_array\",\"n\":603935},{\"status\":\"empty_array\",\"n\":405378}]"
+      },
+      "passed": true
+    }
+  ],
+  "fec_query_benchmark": {
+    "query": "SELECT * FROM fec_relationship_evidence LIMIT 1",
+    "pins": {
+      "fec_relationships": {
+        "family": "fec-observations",
+        "artifact_digest": "sha256:11bcb620974dff661fe22a76b9e10f0d416ef54c334ecd010dccd0a6ba1898f8",
+        "member_sha256": "sha256:2838913cb69f588f1428afd0a775eb70096567abdc9467b84649a078f8ae610d",
+        "bytes": 4782212
+      },
+      "fec_source_records": {
+        "family": "fec-observations",
+        "artifact_digest": "sha256:11bcb620974dff661fe22a76b9e10f0d416ef54c334ecd010dccd0a6ba1898f8",
+        "member_sha256": "sha256:14226eb911fce4c35ef02f8e32030e3fa6d0facbfaa56979abfdf20be850bbd6",
+        "bytes": 1166784377
+      }
+    },
+    "memory_limit": "512MB",
+    "threads": 2,
+    "timeout_seconds": 180,
+    "relationship_rows_and_distinct_locators": [
+      183390,
+      183390
+    ],
+    "status": "success",
+    "elapsed_seconds": 6.665530499994929
+  },
+  "selected_fec_evidence_verification": {
+    "status": "selected_case_verified_against_retained_page_bytes",
+    "case_count": 1,
+    "public_companion_selection": "/Users/mikewolfd/.codex/artifacts/spicy-regs-fec-evidence-20260927/companion.json",
+    "public_companion_url": "https://pub-72e95c0c20a84508b42b03a6ff6d55f8.r2.dev/generations/fec-observations/11bcb620974dff661fe22a76b9e10f0d416ef54c334ecd010dccd0a6ba1898f8/fec_source_records.parquet",
+    "publication_pin": "sha256:11bcb620974dff661fe22a76b9e10f0d416ef54c334ecd010dccd0a6ba1898f8",
+    "navigation_receipt": "/Users/mikewolfd/.codex/artifacts/spicy-regs-fec-serving-20260927/result.json",
+    "source_path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/fec-relationships-2026-09-12/blobs/sha256/16cb7b2b2b9139860593328928d00c148f36437420dcc70e3ae8beda1c5363e6",
+    "retained_copy": "/Users/mikewolfd/.codex/artifacts/spicy-regs-fec-evidence-20260927/retained-page.json",
+    "byte_size": 123668,
+    "full_sha256": "sha256:16cb7b2b2b9139860593328928d00c148f36437420dcc70e3ae8beda1c5363e6",
+    "digest_meaning": "SHA-256 of complete retained HTTP response page bytes, not normalized record JSON.",
+    "json_pointer": "/results/0",
+    "field_pointer": "/results/0/sponsor_candidate_list",
+    "selected_value": [],
+    "committee_id": "C00000059",
+    "collection_id": "committee-selected-census-20260912",
+    "companion_metadata_equals_pointed_source_record": true,
+    "all_relationship_source_fields_equal": true,
+    "relationship_value_status": "empty_list",
+    "relationship_object_id": null,
+    "source_observed_at": "2026-09-12T16:56:45.446842+00:00",
+    "origin_requests": 0,
+    "retained_read_limit_bytes": 33554432,
+    "limitations": [
+      "One selected observation only; not qualification of all FEC records or relationship kinds.",
+      "Retained source body verified locally; this does not establish public availability of its raw capture.",
+      "The immutable public Parquet path was selected; full 1.17GB Parquet bytes were not rehashed in this bounded case.",
+      "Empty sponsor list is the captured page value, not proof of no sponsors across time or other sources.",
+      "No independent source freshness or deployment check was performed."
+    ]
+  },
+  "citation_coverage_replay": {
+    "receipt": "/Users/mikewolfd/.codex/artifacts/spicy-regs-join-delivery-t01-t02-20260927/citation-coverage.json",
+    "captured_at": "2026-09-27T20:22:35.078213+00:00",
+    "scope": "full selected key columns; source digest predicate; eight previously audited citation kinds",
+    "counts": [
+      {
+        "cite_kind": "bill_number",
+        "current_digest_occurrences": 25693,
+        "distinct_keys": 6484,
+        "normalized_occurrences": 25621,
+        "occurrences_with_target": 25610,
+        "occurrences_with_multiple_target_rows": 0,
+        "missing_distinct_keys": 11
+      },
+      {
+        "cite_kind": "public_law",
+        "current_digest_occurrences": 9916,
+        "distinct_keys": 1267,
+        "normalized_occurrences": 9916,
+        "occurrences_with_target": 1024,
+        "occurrences_with_multiple_target_rows": 0,
+        "missing_distinct_keys": 1255
+      },
+      {
+        "cite_kind": "usc_section",
+        "current_digest_occurrences": 8325,
+        "distinct_keys": 1794,
+        "normalized_occurrences": 8285,
+        "occurrences_with_target": 1113,
+        "occurrences_with_multiple_target_rows": 461,
+        "missing_distinct_keys": 1569
+      },
+      {
+        "cite_kind": "cfr_section",
+        "current_digest_occurrences": 244,
+        "distinct_keys": 95,
+        "normalized_occurrences": 244,
+        "occurrences_with_target": 231,
+        "occurrences_with_multiple_target_rows": 61,
+        "missing_distinct_keys": 7
+      },
+      {
+        "cite_kind": "committee_name",
+        "current_digest_occurrences": 7206,
+        "distinct_keys": 214,
+        "normalized_occurrences": 6065,
+        "occurrences_with_target": 6065,
+        "occurrences_with_multiple_target_rows": 0,
+        "missing_distinct_keys": 0
+      },
+      {
+        "cite_kind": "gao_product_id",
+        "current_digest_occurrences": 337,
+        "distinct_keys": 248,
+        "normalized_occurrences": 337,
+        "occurrences_with_target": 0,
+        "occurrences_with_multiple_target_rows": 0,
+        "missing_distinct_keys": 248
+      },
+      {
+        "cite_kind": "crs_report_id",
+        "current_digest_occurrences": 5,
+        "distinct_keys": 3,
+        "normalized_occurrences": 5,
+        "occurrences_with_target": 5,
+        "occurrences_with_multiple_target_rows": 0,
+        "missing_distinct_keys": 0
+      },
+      {
+        "cite_kind": "docket_number",
+        "current_digest_occurrences": 151,
+        "distinct_keys": 140,
+        "normalized_occurrences": 151,
+        "occurrences_with_target": 130,
+        "occurrences_with_multiple_target_rows": 0,
+        "missing_distinct_keys": 20
+      }
+    ],
+    "limit": "Coverage belongs to these exact selected inputs; later target publications may differ. This measures lookup coverage, not extraction recall."
+  }
+}
