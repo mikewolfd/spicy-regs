@@ -102,9 +102,9 @@ def test_a_generation_stays_for_the_grace_after_it_stops_being_current(tmp_path,
 def test_an_upload_off_the_chain_is_kept_only_while_newer_than_current(tmp_path, remote):
     """A publish that has not swapped yet may be in flight; one older than current lost its swap."""
     first = _publish(_Base, tmp_path / "first", remote, 1)[0]
-    index = remote.objects[pub.INDEX_KEY]
+    pointers = {key: remote.objects[key] for key in (pub.INDEX_V2_KEY, pub.INDEX_KEY)}
     pending = _publish(_Base, tmp_path / "pending", remote, 1)[0]
-    remote.objects[pub.INDEX_KEY] = index  # as if its swap had not happened yet
+    remote.objects.update(pointers)  # as if its swap had not happened yet
     assert _kept(_plan(remote), "base")[pending] == ["written after the current generation: a publish may be in flight"]
 
     current = _publish(_Base, tmp_path / "after", remote, 1)[0]

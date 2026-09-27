@@ -206,14 +206,14 @@ def test_concurrent_pointer_change_survives(tmp_path):
     rivals = []
 
     def concurrent(key):
-        if key == pub.INDEX_KEY:  # a new object version on every attempt
+        if key == pub.INDEX_V2_KEY:  # a new object version on every attempt
             rivals.append(store.objects[key] + b" ")
             store.objects[key] = rivals[-1]
 
     store.before_put = concurrent
     with pytest.raises(pub.PublicationError, match="concurrently"):
         publish(store, directory, member, prior)
-    assert store.objects[pub.INDEX_KEY] == rivals[-1]
+    assert store.objects[pub.INDEX_V2_KEY] == rivals[-1]
 
 
 def test_stale_family_refuses_before_promotion(tmp_path):

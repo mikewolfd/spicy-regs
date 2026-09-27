@@ -450,18 +450,66 @@ def _get_bounded(client, bucket: str, key: str) -> tuple[bytes, str] | None:
     return raw, response["ETag"]
 
 
-def _stored_index(client, bucket: str) -> tuple[dict, str | None]:
-    """Read the stored index and its conditional-write token; absent means empty and unpinned.
+def derive_v1(index: Mapping) -> dict:
+    """The version-1 view of ``index``: split tables omitted, and a family left with none omitted too."""
+    families = {}
+    for name, entry in index["families"].items():
+        tables = {key: table for key, table in entry["tables"].items() if "members" not in table}
+        if tables:
+            families[name] = {**entry, "tables": tables}
+    return {**empty_index(), "families": families}
 
-    A response without an ETag refuses.
+
+def _stored_index(client, bucket: str) -> tuple[dict, str | None]:
+    """Read the stored version-2 index and its conditional-write token.
+
+    Until version 2 is first written, the version-1 index stands in with no token, so that write creates version 2
+    from it; absent both, empty and unpinned. A response without an ETag refuses.
     """
-    stored = _get_bounded(client, bucket, INDEX_KEY)
-    if stored is None:
-        return empty_index(), None
-    raw, etag = stored
-    if not isinstance(etag, str) or not etag:
-        raise PublicationError("Publication index has no conditional-write token")
-    return parse_index(raw), etag
+    for key in (INDEX_V2_KEY, INDEX_KEY):
+        stored = _get_bounded(client, bucket, key)
+        if stored is not None:
+            raw, etag = stored
+            if not isinstance(etag, str) or not etag:
+                raise PublicationError("Publication index has no conditional-write token")
+            return {**parse_index(raw), "version": 2}, etag if key == INDEX_V2_KEY else None
+    return {**empty_index(), "version": 2}, None
+
+
+def _write_v1(client, bucket: str, family: str) -> None:
+    """Write ``publication.json`` as :func:`derive_v1` of the stored version 2, under its own conditional write.
+
+    Version 1's token is read before version 2, so a writer that loses this race rederives from the newer version 2.
+    Version 1 differing from version 2 in a family other than ``family`` means a writer skipped version 2 (one that
+    predates it) or a writer stopped between the two writes; version 2 wins, and the overwritten families are logged.
+    """
+    from botocore.exceptions import ClientError
+    from rulespec_artifacts import canonical_json_bytes
+
+    for _ in range(_POINTER_ATTEMPTS):
+        stored = _get_bounded(client, bucket, INDEX_KEY)
+        derived = derive_v1(_stored_index(client, bucket)[0])
+        raw = canonical_json_bytes(derived)
+        if stored is not None:
+            if stored[0] == raw:
+                return
+            try:
+                before = parse_index(stored[0])["families"]
+            except PublicationError:
+                before = {}
+            if stale := sorted(name for name in set(before) | set(derived["families"])
+                               if name != family and before.get(name) != derived["families"].get(name)):
+                logger.warning("publication: {} differed from {} in {}; rewriting it from version 2",
+                               INDEX_KEY, INDEX_V2_KEY, ", ".join(stale))
+        condition = {"IfMatch": stored[1]} if stored is not None else {"IfNoneMatch": "*"}
+        try:
+            client.put_object(Bucket=bucket, Key=INDEX_KEY, Body=raw, ContentType="application/json",
+                              CacheControl="no-store, no-cache, must-revalidate", **condition)
+            return
+        except ClientError as exc:
+            if not _precondition(exc):
+                raise
+    raise PublicationError(f"{INDEX_KEY} kept changing; derive it again from {INDEX_V2_KEY}")
 
 
 def _copy_unchanged_member(client, bucket: str, source_key: str, destination_key: str) -> None:
@@ -773,22 +821,25 @@ def _publish_verified_generation(
     admit_artifact(_S3Members(client, bucket, prefix), expected_pin=artifact.pin)
     # Each lost race means another writer's pointer write succeeded, so
     # contention resolves in at most one round per concurrent writer.
+    # Version 2 is the pointer; version 1 is derived from it afterwards (multi-file design §4.1).
     for _ in range(_POINTER_ATTEMPTS):
         updated, raw = _merge_family(index, family, entry)
         condition = {"IfMatch": etag} if etag is not None else {"IfNoneMatch": "*"}
         try:
             client.put_object(
                 Bucket=bucket,
-                Key=INDEX_KEY,
+                Key=INDEX_V2_KEY,
                 Body=raw,
                 ContentType="application/json",
                 CacheControl="no-store, no-cache, must-revalidate",
                 **condition,
             )
-            return updated
         except ClientError as exc:
             if not _precondition(exc):
                 raise
+        else:
+            _write_v1(client, bucket, family)
+            return updated
         logger.info("publication: pointer moved concurrently; merging {} onto the reread index", family)
         index, etag = _stored_index(client, bucket)
         _assert_family_unchanged(index, prior_index, family)

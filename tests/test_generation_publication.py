@@ -35,23 +35,24 @@ def test_complete_generation_then_pointer_and_exact_readback(tmp_path):
     directory, artifact = build(tmp_path)
     store = Store()
     index = publish(store, directory)
-    assert store.writes[-1] == pub.INDEX_KEY
+    assert store.writes[-2:] == [pub.INDEX_V2_KEY, pub.INDEX_KEY]
     assert index["families"]["test"]["artifactDigest"] == artifact.pin.artifact_digest
     for key in ("a.parquet", "b.parquet"):
         location, info = pub.single_member(index, key).path, pub.table_descriptor(index, key)
         assert info is not None
         assert store.objects[location] == (directory / key).read_bytes()
         assert info["rows"] == 1
-    assert pub.parse_index(store.objects[pub.INDEX_KEY]) == index
+    assert pub.parse_index(store.objects[pub.INDEX_V2_KEY]) == index
+    assert pub.parse_index(store.objects[pub.INDEX_KEY]) == pub.derive_v1(index)
 
 
-@pytest.mark.parametrize("failure", ["a.parquet", "b.parquet", "artifact.json", "members.json", pub.INDEX_KEY])
+@pytest.mark.parametrize("failure", ["a.parquet", "b.parquet", "artifact.json", "members.json", pub.INDEX_V2_KEY])
 def test_interruption_never_changes_previous_complete_generation(tmp_path, failure):
     old, _ = build(tmp_path)
     new, _ = build(tmp_path, "two", value="two")
     store = Store()
     prior = publish(store, old)
-    old_pointer = store.objects[pub.INDEX_KEY]
+    old_pointers = {key: store.objects[key] for key in (pub.INDEX_V2_KEY, pub.INDEX_KEY)}
     old_members = {key: store.objects[pub.single_member(prior, key).path] for key in ("a.parquet", "b.parquet")}
 
     def interrupt(key):
@@ -61,7 +62,7 @@ def test_interruption_never_changes_previous_complete_generation(tmp_path, failu
     store.before_put = interrupt
     with pytest.raises(OSError, match="interrupted"):
         publish(store, new, prior)
-    assert store.objects[pub.INDEX_KEY] == old_pointer
+    assert {key: store.objects[key] for key in old_pointers} == old_pointers
     for key, raw in old_members.items():
         assert store.objects[pub.single_member(prior, key).path] == raw
 
@@ -92,14 +93,14 @@ def test_persistent_contention_refuses_and_preserves_concurrent_writer(tmp_path)
     rivals = []
 
     def concurrent(key):
-        if key == pub.INDEX_KEY:  # semantically same, a new object version on every attempt
+        if key == pub.INDEX_V2_KEY:  # semantically same, a new object version on every attempt
             rivals.append(json.dumps(prior, indent=len(rivals)).encode())
             store.objects[key] = rivals[-1]
 
     store.before_put = concurrent
     with pytest.raises(pub.PublicationError, match="concurrently"):
         publish(store, new, prior)
-    assert store.objects[pub.INDEX_KEY] == rivals[-1]
+    assert store.objects[pub.INDEX_V2_KEY] == rivals[-1]
     assert len(rivals) == pub._POINTER_ATTEMPTS
 
 
@@ -112,7 +113,7 @@ def test_concurrent_sibling_family_is_merged_not_overwritten(tmp_path):
     rival = publish(Store(), sibling)["families"]["other"]
 
     def concurrent(key):
-        if key == pub.INDEX_KEY:
+        if key == pub.INDEX_V2_KEY:
             store.before_put = None
             index = pub.parse_index(store.objects[key])
             index["families"]["other"] = rival
@@ -122,7 +123,8 @@ def test_concurrent_sibling_family_is_merged_not_overwritten(tmp_path):
     published = publish(store, new, prior)
     assert published["families"]["other"] == rival
     assert published["families"]["test"]["artifactDigest"] == artifact.pin.artifact_digest
-    assert pub.parse_index(store.objects[pub.INDEX_KEY]) == published
+    assert pub.parse_index(store.objects[pub.INDEX_V2_KEY]) == published
+    assert pub.parse_index(store.objects[pub.INDEX_KEY]) == pub.derive_v1(published)
 
 
 def test_conditional_request_conflict_is_retried_like_a_refused_pointer_write(tmp_path):
@@ -132,7 +134,7 @@ def test_conditional_request_conflict_is_retried_like_a_refused_pointer_write(tm
     prior = publish(store, old)
 
     def conflict(key):
-        if key == pub.INDEX_KEY:
+        if key == pub.INDEX_V2_KEY:
             store.before_put = None
             raise error("ConditionalRequestConflict")
 
@@ -149,17 +151,17 @@ def test_concurrent_same_family_commit_refuses_as_stale(tmp_path):
     other = Store()
     other.objects = dict(store.objects)
     publish(other, third, prior)
-    rival = other.objects[pub.INDEX_KEY]
+    rival = other.objects[pub.INDEX_V2_KEY]
 
     def concurrent(key):
-        if key == pub.INDEX_KEY:
+        if key == pub.INDEX_V2_KEY:
             store.before_put = None
             store.objects[key] = rival
 
     store.before_put = concurrent
     with pytest.raises(pub.PublicationError, match="changed since"):
         publish(store, new, prior)
-    assert store.objects[pub.INDEX_KEY] == rival
+    assert store.objects[pub.INDEX_V2_KEY] == rival
 
 
 def test_stale_family_build_and_cross_family_takeover_refuse(tmp_path):
@@ -237,7 +239,7 @@ def test_snapshot_keeps_all_downloads_on_one_generation(tmp_path, monkeypatch):
         if key not in store.objects:
             yield httpx.Response(404, request=httpx.Request(method, url))
             return
-        if key == pub.INDEX_KEY:
+        if key == pub.INDEX_V2_KEY:
             raw = store.objects[key]
             publish(store, new, prior)
         else:
@@ -251,7 +253,7 @@ def test_snapshot_keeps_all_downloads_on_one_generation(tmp_path, monkeypatch):
             target = tmp_path / key
             assert r2.download(key, target)
             assert pq.read_table(target).to_pylist() == [{"id": "one"}]
-    assert calls.count(pub.INDEX_KEY) == 1
+    assert calls.count(pub.INDEX_V2_KEY) == 1
 
 
 def test_managed_download_refuses_corruption_without_replacing_prior(tmp_path, monkeypatch):
@@ -428,3 +430,69 @@ def test_partial_writer_carries_exact_siblings_and_refuses_cold_start(tmp_path, 
     generation = next((tmp_path / "warm" / "generations").iterdir())
     artifact = verify_generation(generation)
     assert artifact.root["spec"]["carriedForward"] == {"b.parquet": index["families"]["test"]["artifactDigest"]}
+
+
+def test_an_interrupted_version_1_write_is_repaired_from_version_2_by_the_next_publish(tmp_path):
+    """Version 2 is the pointer; a writer stopping before version 1 leaves it behind until any writer derives it."""
+    old, _ = build(tmp_path)
+    new, _ = build(tmp_path, "two", value="two")
+    sibling, _ = build(tmp_path, "other", family="other", keys=("c.parquet",))
+    store = Store()
+    prior = publish(store, old)
+    stale = store.objects[pub.INDEX_KEY]
+
+    def interrupt(key):
+        if key == pub.INDEX_KEY:
+            raise OSError("interrupted transfer")
+
+    store.before_put = interrupt
+    with pytest.raises(OSError, match="interrupted"):
+        publish(store, new, prior)
+    current = pub.parse_index(store.objects[pub.INDEX_V2_KEY])
+    assert current["families"]["test"] != prior["families"]["test"] and store.objects[pub.INDEX_KEY] == stale
+
+    store.before_put = None
+    published = publish(store, sibling, current)
+    assert pub.parse_index(store.objects[pub.INDEX_KEY]) == pub.derive_v1(published)
+    assert published["families"]["test"] == current["families"]["test"]
+
+
+def test_a_raced_version_1_write_rederives_from_the_newer_version_2(tmp_path):
+    """A rival publishing after this writer read version 2 for its version-1 write leaves version 1 at the newer state.
+
+    The rival runs once this writer's read of version 2 has been answered, the interleaving that would let a writer
+    reading version 2 before version 1's token write an older state over a newer one.
+    """
+    old, _ = build(tmp_path)
+    new, _ = build(tmp_path, "two", value="two")
+    sibling, _ = build(tmp_path, "other", family="other", keys=("c.parquet",))
+    store = Store()
+    prior = publish(store, old)
+    armed = []
+    get_object = store.get_object
+
+    def get(*, Bucket, Key):
+        response = get_object(Bucket=Bucket, Key=Key)
+        if Key == pub.INDEX_V2_KEY and armed:
+            armed.clear()
+            store.get_object = get_object
+            publish(store, sibling, pub.parse_index(store.objects[pub.INDEX_V2_KEY]))
+        return response
+
+    store.before_put = lambda key: armed.append(key) if key == pub.INDEX_V2_KEY else None
+    store.get_object = get
+    publish(store, new, prior)
+    final = pub.parse_index(store.objects[pub.INDEX_V2_KEY])
+    assert set(final["families"]) == {"test", "other"}
+    assert pub.parse_index(store.objects[pub.INDEX_KEY]) == pub.derive_v1(final)
+
+
+def test_version_1_omits_split_tables_and_a_family_left_without_tables():
+    single = {"sha256": "sha256:" + "c" * 64, "byteSize": 1, "rows": 1, "columns": [["id", "VARCHAR"]]}
+    split = {"byteSize": 1, "rows": 1, "columns": [["id", "VARCHAR"]], "partitionColumns": ["id"], "members": []}
+    family = {"prefix": "p", "logicalId": "urn:x", "artifactDigest": "sha256:" + "d" * 64}
+    index = {"format": "spicy-regs-publication", "version": 2, "families": {
+        "mixed": {**family, "tables": {"one.parquet": single, "many.parquet": split}},
+        "split": {**family, "tables": {"all.parquet": split}}}}
+    assert pub.derive_v1(index) == {"format": "spicy-regs-publication", "version": 1, "families": {
+        "mixed": {**family, "tables": {"one.parquet": single}}}}
