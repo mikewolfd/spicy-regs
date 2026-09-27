@@ -47,6 +47,8 @@ jobs:
         command:
           - run-rollup-dockets
           - run-rollup-documents
+          - run-rollup-docket-attributes
+          - run-rollup-document-attributes
     uses: ./.github/workflows/_rollup.yml
     secrets: inherit
     with:
