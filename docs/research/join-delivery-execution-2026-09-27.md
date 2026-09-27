@@ -1,6 +1,6 @@
 # Join delivery execution — 2026-09-27
 
-Parallel work is implemented, pinned and deployed. The live server now exposes source-preserving relationship views and bounded citation target resolution; the members and House communication refreshes are published and verified through public bytes and MCP. **The full proposal is not complete.** Remaining source qualification, wider adoption and backfills are listed per task below.
+Parallel work is implemented, pinned and deployed. The live server now exposes source-preserving relationship views and bounded citation target resolution; members, House communications, Federal Register links, partial FCC enrichment, GAO metadata and bounded citation additions are published and verified through public bytes and MCP. **The full proposal is not complete.** Remaining source qualification, wider adoption and backfills are listed per task below.
 
 This ledger follows the [proposal](join-delivery-tasks-2026-09-27.md). The [machine-readable ledger](join-delivery-execution-2026-09-27.json) retains exact code paths, tests, publication pins, measurements and remaining acceptance. Paths in the task ledger are relative to the workspace root. SpicyDocs owns source behavior; SpicyRegs owns application behavior.
 
@@ -10,7 +10,8 @@ This ledger follows the [proposal](join-delivery-tasks-2026-09-27.md). The [mach
 | --- | --- |
 | Provider | SpicyDocs 0.48.0 from `983463c`; two byte-identical wheel builds, vendored and tested in SpicyRegs. No registry upload. |
 | Repository checks | Provider gate: 10,366 passed. Final consumer lint, types, dictionary and full suite: 3,307 passed. Logs: `provider-wave2-gate.log`, `consumer-wave2-gate-final.log`, `cloudflare-wave2-check.log`. |
-| Corrective deployment | App `8380ac8`; Worker `ea8d54f5-a2f4-4871-b9b0-016ef595b518`; image `1d558a710949494a7b43e39be5027124f07259754e8ccb9ffd3ecd401020efb5`. New rule and metadata verified through the public endpoint. |
+| First corrective deployment | App `8380ac8`; Worker `ea8d54f5-a2f4-4871-b9b0-016ef595b518`; image `1d558a710949494a7b43e39be5027124f07259754e8ccb9ffd3ecd401020efb5`. New rule and metadata verified through the public endpoint. |
+| Latest deployment | App `8082191`; Worker `1146ddba-bf85-4a71-8dd9-e87eaf8bf16f`; image `dac8a5518fc7aaeb40a6642e8dd6e53adfc62e9e065881ee1b548fbfca90c014`. All 14 bounded public checks passed; `wave2-smoke-summary.json`. |
 | Members publication | Generation `00cad6cf…`: 59 affiliation occurrences; all prior member/term identities and native values preserved. All three public table hashes/counts match. |
 | Communications publication | Generation `94d28167…`: 2,076 RIN occurrences on 2,046 rows; all 5,006 prior rows and 32 prior columns preserved. Public hash/counts match. |
 | Comments | Nullable catalog migration and three-record read-only repair preview verified. Catalog row corrections and public export remain pending. |
@@ -22,7 +23,7 @@ Primary execution evidence: `/Users/mikewolfd/.codex/artifacts/spicy-regs-join-i
 
 ## Verified live behavior
 
-Discovery measured 190 tables/views: 98 derived views available, four comment views unsupported against the older served schema, and none unavailable. Bounded reads passed for vote documents, related bills, member FEC identifiers, FR RINs, court endpoints, diff endpoints and pending identity candidates. The citation tool returned 20 found targets in an explicitly capped, partial selection. Local-file access and write attempts were rejected.
+The first release discovery measured 190 tables/views: 98 derived views available, four comment views unsupported against the older served schema, and none unavailable. Bounded reads passed for vote documents, related bills, member FEC identifiers, FR RINs, court endpoints, diff endpoints and pending identity candidates. The citation tool returned 20 found targets in an explicitly capped, partial selection. Local-file access and write attempts were rejected.
 
 The first live FEC query exhausted 8.3 GiB. That failing receipt is retained in `fec-evidence-live.json`. The corrected view groups only referenced companion keys, keeps compact candidate digests and uses hash joins. Full companion evidence remains accessible through `fec_source_records` by collection/record identity. The same selected-input query completed in 6.67 seconds at a 512 MB local memory limit and in **3.864 seconds through the corrected public endpoint**. `final-smoke-summary.json` records all final checks passing. This is a measured query, not a general latency guarantee; the final cold description request took 33.089 seconds.
 
@@ -35,6 +36,8 @@ A separate retained-byte check verified FEC committee `C00000059` end to end: th
 The earlier citation coverage report was also reproduced for all eight audited citation kinds over complete selected key columns with the source-text digest predicate. Exact SQL and pins are in `spicy-regs-join-delivery-t01-t02-20260927/citation-coverage.json`. This dated lookup measurement is distinct from the final capped live query and from extraction recall.
 
 ## Second parallel release
+
+The final public check discovers 194 available tables/views, including 102 available derived views and four comment views unsupported against the older export. All fourteen bounded checks pass. FCC preserves 525 native-enriched rows among 5,780 total; 702 of 708 native proceeding occurrences find exact targets and six remain unsupported. FR candidates, GAO metadata/citation join, held-field source digest checks, unstated-Congress abstention, lifecycle routing and file/write refusals pass. Initial rollout verification hit the previous container; the final cold runtime check took 34.333 seconds. No fleet-wide completion or general latency claim follows from these checks.
 
 Public readback verifies the full Federal Register link refresh, partial FCC native enrichment, one GAO target addition, and bounded held-field citation additions. All preserve prior rows/cells; the citation writer also preserves every sibling table byte. Exact pins and receipts are in `finalization.second_wave_publications` in the JSON ledger.
 
@@ -181,7 +184,7 @@ Three retained native ODNI comments replayed in a read-only preview: only the fo
 
 **Remaining:** Replay the remaining 5,255 unread rows and qualify full proceeding target coverage; no attachment body acquisition.
 
-**Delivery:** Published with full public byte readback: sha256:34b970d51a425d8f57c5565f8ec9f540ebb73667f7ddf72bc878c862d190af87 Second-wave code integration complete; public endpoint verification is recorded in finalization.second_wave_deployment when performed.
+**Delivery:** Published with full public byte readback: sha256:34b970d51a425d8f57c5565f8ec9f540ebb73667f7ddf72bc878c862d190af87 Published FCC coverage and all native view counts verified live; 702 proceeding occurrences found,6unsupported. Worker1146ddba, app8082191; wave2-smoke-summary.json.
 
 ### T11 — Publish complete regulatory memberships and identifier candidates
 
@@ -193,7 +196,7 @@ Three retained native ODNI comments replayed in a read-only preview: only the fo
 
 **Remaining:** Full lifecycle/agenda population reconciliation and wider dated native examples remain. Empty normalized candidate arrays mean no supported interpretation.
 
-**Delivery:** Published with full public byte readback: sha256:b443a813335e8a7cd38f03fdcf199e6c3a93040ba23b4aad39dcc844f7aabfdf Second-wave code integration complete; public endpoint verification is recorded in finalization.second_wave_deployment when performed.
+**Delivery:** Published with full public byte readback: sha256:b443a813335e8a7cd38f03fdcf199e6c3a93040ba23b4aad39dcc844f7aabfdf Published FR row/candidate totals and bounded lifecycle date evidence verified live. Worker1146ddba, app8082191; wave2-smoke-summary.json.
 
 ### T12 — Publish structured CFR references and authority observations
 
@@ -205,7 +208,7 @@ Three retained native ODNI comments replayed in a read-only preview: only the fo
 
 **Remaining:** Public admission requires enclosing publisher input/edition association; retained fragments remain local. Positive PARAUTH/SECAUTH and full authority coverage remain unqualified.
 
-**Delivery:** Verified local native-reference generation; public admission withheld for enclosing-input/edition association. Second-wave code integration complete; public endpoint verification is recorded in finalization.second_wave_deployment when performed.
+**Delivery:** Verified local native-reference generation; public admission withheld for enclosing-input/edition association. Registration deployed; native fragment data remains local and unavailable in public MCP, pending enclosing publisher qualification.
 
 ### T13 — Publish native U.S. Code references and classification links
 
@@ -217,7 +220,7 @@ Three retained native ODNI comments replayed in a read-only preview: only the fo
 
 **Remaining:** Qualify enclosing publisher editions and complete selected-edition classification population before public admission. Source credit is not current legal effect.
 
-**Delivery:** Verified local native-reference generation; public admission withheld for enclosing-input/edition association. Second-wave code integration complete; public endpoint verification is recorded in finalization.second_wave_deployment when performed.
+**Delivery:** Verified local native-reference generation; public admission withheld for enclosing-input/edition association. Registration deployed; native fragment data remains local and unavailable in public MCP, pending enclosing publisher qualification.
 
 ### T14 — Join spending recipients to SAM without multiplying money
 
@@ -253,7 +256,7 @@ Three retained native ODNI comments replayed in a read-only preview: only the fo
 
 **Remaining:** Every further enabled rendition needs native positive/empty/redirect/role qualification. Offered assets are not acquired bodies or a universal artifact index.
 
-**Delivery:** Published with full public byte readback: sha256:34b970d51a425d8f57c5565f8ec9f540ebb73667f7ddf72bc878c862d190af87 Second-wave code integration complete; public endpoint verification is recorded in finalization.second_wave_deployment when performed.
+**Delivery:** Published with full public byte readback: sha256:34b970d51a425d8f57c5565f8ec9f540ebb73667f7ddf72bc878c862d190af87 238 offered artifact observations verified live; acquisition remains not_checked. Worker1146ddba, app8082191; wave2-smoke-summary.json.
 
 ### T17 — Extend citation extraction through source-specific adapters
 
@@ -265,7 +268,7 @@ Three retained native ODNI comments replayed in a read-only preview: only the fo
 
 **Remaining:** Wider reviewed recall, FCC body qualification, managed comment publication and scheduling remain. Committee names excluded by default after a line-wrap precision defect; executive orders/verbose FR references remain misses; USC note qualifiers do not identify exact note targets.
 
-**Delivery:** Published with full public byte readback: sha256:a9fa600caf2081003f15cf04f8ed1721c5732c71d4cf273110bc3b699f0ea294 Second-wave code integration complete; public endpoint verification is recorded in finalization.second_wave_deployment when performed.
+**Delivery:** Published with full public byte readback: sha256:a9fa600caf2081003f15cf04f8ed1721c5732c71d4cf273110bc3b699f0ea294 42 new held-field findings verified live; full-key source digest checks and missing-Congress abstention pass. Worker1146ddba, app8082191; wave2-smoke-summary.json.
 
 ### T18 — Preserve and expose structured report and communication references
 
@@ -301,7 +304,7 @@ Three retained native ODNI comments replayed in a read-only preview: only the fo
 
 **Remaining:** Historical succession and topic mappings remain unqualified. This is an application-library API, not an additional deployed MCP tool.
 
-**Delivery:** Local source-qualified scope only; broader publication or acceptance is not implied. Second-wave code integration complete; public endpoint verification is recorded in finalization.second_wave_deployment when performed.
+**Delivery:** Local source-qualified scope only; broader publication or acceptance is not implied. Local API/CLI/reader checks passed; not a newly exposed MCP tool or accepted identity/payment publication.
 
 ### T21 — Anchor each text difference to both exact source versions
 
@@ -325,7 +328,7 @@ Three retained native ODNI comments replayed in a read-only preview: only the fo
 
 **Remaining:** Real same-name/rename/subsidiary truth sets and actual reviewed decisions remain; no mapping or money-attribution edge was accepted or published.
 
-**Delivery:** Local source-qualified scope only; broader publication or acceptance is not implied. Second-wave code integration complete; public endpoint verification is recorded in finalization.second_wave_deployment when performed.
+**Delivery:** Local source-qualified scope only; broader publication or acceptance is not implied. Local API/CLI/reader checks passed; not a newly exposed MCP tool or accepted identity/payment publication.
 
 ### T23 — Qualify Senate expenditure line extraction before publishing payments
 
@@ -337,7 +340,7 @@ Three retained native ODNI comments replayed in a read-only preview: only the fo
 
 **Remaining:** Candidate output is partial and not payment-publication-qualified. Full group/section reconciliation, cross-page office origin, negative payment examples and C/D layouts remain.
 
-**Delivery:** Local source-qualified scope only; broader publication or acceptance is not implied. Second-wave code integration complete; public endpoint verification is recorded in finalization.second_wave_deployment when performed.
+**Delivery:** Local source-qualified scope only; broader publication or acceptance is not implied. Local API/CLI/reader checks passed; not a newly exposed MCP tool or accepted identity/payment publication.
 
 ### T24 — Acquire the missing targets and bodies that unlock useful links
 
@@ -349,7 +352,7 @@ Three retained native ODNI comments replayed in a read-only preview: only the fo
 
 **Remaining:** Metadata schema has no body-text/reference columns; PDF bytes are evidence, not a published extracted text row. Law/USC/court cohorts and historical edition coverage remain.
 
-**Delivery:** Published with full public byte readback: sha256:566318c5740235cd9fb849f9281476fc6e3bb13120b3f03a1971196e33dd2737 Second-wave code integration complete; public endpoint verification is recorded in finalization.second_wave_deployment when performed.
+**Delivery:** Published with full public byte readback: sha256:566318c5740235cd9fb849f9281476fc6e3bb13120b3f03a1971196e33dd2737 New GAO metadata row and its citation join verified live. Worker1146ddba, app8082191; wave2-smoke-summary.json.
 
 ### T25 — Make aggregate joins and coverage claims reproducible
 
@@ -361,7 +364,7 @@ Three retained native ODNI comments replayed in a read-only preview: only the fo
 
 **Remaining:** Comments/index and lifecycle totals abstain UNPINNED pending materialized/catalog lineage support; source checkpoint reconciliation and central MCP aggregate display remain.
 
-**Delivery:** Local source-qualified scope only; broader publication or acceptance is not implied. Second-wave code integration complete; public endpoint verification is recorded in finalization.second_wave_deployment when performed.
+**Delivery:** Local source-qualified scope only; broader publication or acceptance is not implied. Local API/CLI/reader checks passed; not a newly exposed MCP tool or accepted identity/payment publication.
 
 ## Remaining delivery work
 
