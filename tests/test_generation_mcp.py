@@ -80,7 +80,7 @@ def connection_fixture(monkeypatch, index, locations, *, tables=("a", "b", "lega
     monkeypatch.setattr(mcp_server.duckdb, "connect", Connection)
     monkeypatch.setattr(pub, "load_index", lambda url: index)
     serve_documents(monkeypatch, documents or {})
-    monkeypatch.setattr(mcp_server, "_apply_security_settings", lambda con: None)
+    monkeypatch.setattr(mcp_server, "_apply_security_settings", lambda con, allowed_paths=None: None)
     monkeypatch.setattr(mcp_server, "TABLES", tables)
     return built
 

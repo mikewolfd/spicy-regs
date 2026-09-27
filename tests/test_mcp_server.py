@@ -14,6 +14,7 @@ from uuid import UUID
 
 import duckdb
 import pytest
+from mcp.server.fastmcp.exceptions import ToolError
 
 from spicy_regs import mcp_server
 
@@ -145,9 +146,8 @@ def test_describe_unknown_table_refuses_names_outside_declarations_and_snapshot(
     # adopted, so validity now includes the captured connection's admitted names.
     con = duckdb.connect()
     monkeypatch.setattr(mcp_server, "_get_connection", lambda: con)
-    result = _tool_data(mcp_server.build_server(), "describe_table", {"table": "not_a_table"})
-    assert result["error"] == "Unknown table 'not_a_table'"
-    assert result["declared_tables"] == list(mcp_server.TABLES)
+    with pytest.raises(ToolError, match="Unknown table 'not_a_table'.*list_sources"):
+        _tool_data(mcp_server.build_server(), "describe_table", {"table": "not_a_table"})
     con.close()
 
 
@@ -170,6 +170,16 @@ def test_local_directory_runs_actual_connection_without_remote_fallback(tmp_path
     monkeypatch.setattr(
         publication, "load_index", lambda url: (_ for _ in ()).throw(AssertionError("Remote index read"))
     )
+    loaded = []
+    apply_security = mcp_server._apply_security_settings
+
+    def inspect_then_lock(con, allowed_paths=None):
+        loaded.extend(con.execute(
+            "SELECT extension_name FROM duckdb_extensions() WHERE loaded AND extension_name IN ('httpfs', 'iceberg')"
+        ).fetchall())
+        apply_security(con, allowed_paths)
+
+    monkeypatch.setattr(mcp_server, "_apply_security_settings", inspect_then_lock)
     server = mcp_server.build_server()
     sources = _tool_data(server, "list_sources", {})
     assert sources["source"] == "local"
@@ -177,13 +187,6 @@ def test_local_directory_runs_actual_connection_without_remote_fallback(tmp_path
     assert "base_url" not in sources
     assert sources["tables"] == ["fec_committees"]
     assert sources["publication"]["fec_committees"] == {"status": "local_unversioned"}
-    loaded = (
-        mcp_server._get_connection()
-        .execute(
-            "SELECT extension_name FROM duckdb_extensions() WHERE loaded AND extension_name IN ('httpfs', 'iceberg')"
-        )
-        .fetchall()
-    )
     assert loaded == []
     described = _tool_data(server, "describe_table", {"table": "fec_committees"})
     assert described["available"] is True
@@ -191,8 +194,8 @@ def test_local_directory_runs_actual_connection_without_remote_fallback(tmp_path
     queried = _tool_data(server, "query_sql", {"sql": "SELECT committee_id FROM fec_committees"})
     assert queried["source"] == "local"
     assert queried["rows"] == [{"committee_id": "C00000001"}]
-    refused = _tool_data(server, "query_sql", {"sql": "DROP VIEW fec_committees"})
-    assert "read-only" in refused["error"]
+    with pytest.raises(ToolError, match="read-only"):
+        _tool_data(server, "query_sql", {"sql": "DROP VIEW fec_committees"})
 
 
 @pytest.mark.parametrize("directory", ["", "/nonexistent-spicy-regs-directory"])
@@ -300,6 +303,14 @@ def test_sandbox_allows_in_memory_query():
     assert con.execute("SELECT count(*) FROM range(100)").fetchone() == (100,)
 
 
+def test_sandbox_preserves_secret_settings_after_the_manager_is_initialized():
+    with duckdb.connect() as con:
+        con.execute("SET allow_persistent_secrets=false")
+        con.execute("SELECT * FROM duckdb_secrets()").fetchall()
+        mcp_server._apply_security_settings(con)
+        assert con.execute("SELECT current_setting('allow_persistent_secrets')").fetchone() == (False,)
+
+
 def test_sandbox_survives_temp_spill():
     """A query that exceeds memory must not raise the LocalFileSystem error.
 
@@ -348,7 +359,6 @@ READ_FORMS = [
     "WITH a AS (SELECT 1) SELECT * FROM a",
     "FROM range(3)",
     "DESCRIBE SELECT 1",
-    "EXPLAIN SELECT 1",
     "SHOW ALL TABLES",
     "SUMMARIZE SELECT 1",
     "VALUES (1), (2)",
@@ -358,6 +368,10 @@ READ_FORMS = [
 ]
 
 WRITE_FORMS = [
+    ("EXPLAIN SELECT 1", "EXPLAIN"),
+    ("EXPLAIN ANALYZE DELETE FROM harmless_fixture", "EXPLAIN"),
+    ("EXPLAIN (ANALYZE) DELETE FROM harmless_fixture", "EXPLAIN"),
+    ("EXPLAIN /* nested statement */ ANALYZE SET enable_external_access=true", "EXPLAIN"),
     ("COPY (SELECT 1) TO '/tmp/probe.csv'", "COPY"),
     ("ATTACH '/tmp/probe.db' AS z", "ATTACH"),
     ("EXPORT DATABASE '/tmp/probe'", "EXPORT"),
@@ -379,7 +393,7 @@ WRITE_FORMS = [
 def test_read_forms_pass_the_guard(sql):
     """Every read shape a client might send must survive the allowlist.
 
-    The allowlist is only {SELECT, EXPLAIN} because DuckDB's parser folds
+    The allowlist is only {SELECT} because DuckDB's parser folds
     DESCRIBE/SHOW/SUMMARIZE/VALUES and the FROM-first shorthand into SELECT.
     If that ever stops holding, these are the cases that break.
     """
@@ -423,10 +437,10 @@ def test_query_sql_refuses_a_write_without_executing_it(monkeypatch, tmp_path):
     server = module.build_server()
     target = tmp_path / "written.csv"
 
-    result = asyncio.run(server.call_tool("query_sql", {"sql": f"COPY (SELECT 1) TO '{target}'", "max_rows": 1}))
+    with pytest.raises(ToolError, match="read-only"):
+        asyncio.run(server.call_tool("query_sql", {"sql": f"COPY (SELECT 1) TO '{target}'", "max_rows": 1}))
 
     assert not target.exists()
-    assert "read-only" in str(result)
     module._reset_connection_cache()
 
 
@@ -442,42 +456,30 @@ def test_query_sql_still_runs_a_select(monkeypatch):
     module._reset_connection_cache()
 
 
-def test_comments_catalog_view_dedups_on_read():
-    """The catalog-backed ``comments`` view keeps one row per comment_id.
-
-    The R2 Data Catalog can physically carry duplicate comment_id rows: the ETL
-    upsert removes superseded rows with a plain ``DELETE``, which does not reliably
-    take on the catalog, so a re-merged comment_id can leave its old row behind.
-    ``_build_connection`` wraps the catalog table in a per-comment_id QUALIFY so the read
-    surface stays single-valued regardless. This locks in that dedup expression:
-    the newest ``modify_date`` wins, exactly one row survives per id, and
-    non-duplicated ids are untouched — which is also the ``count(*) ==
-    count(DISTINCT comment_id)`` invariant the freshness check relies on.
-    """
+def test_explain_analyze_cannot_modify_shared_tables(monkeypatch):
     con = duckdb.connect()
-    con.execute(
-        """
-        CREATE TABLE raw (comment_id VARCHAR, modify_date VARCHAR, comment VARCHAR);
-        INSERT INTO raw VALUES
-            ('c1', '2024-01-01', 'old'),
-            ('c1', '2024-03-01', 'new'),
-            ('c1', '2024-02-01', 'mid'),
-            ('c2', NULL, 'only-null'),
-            ('c3', '2024-05-01', 'unique');
-        """
+    con.execute('CREATE TABLE harmless_fixture AS SELECT 1 AS id')
+    mcp_server._apply_security_settings(con)
+    monkeypatch.setattr(mcp_server, "_get_connection", lambda: con)
+    with pytest.raises(ToolError, match="read-only.*EXPLAIN"):
+        _tool_data(mcp_server.build_server(), "query_sql", {"sql": "EXPLAIN ANALYZE DELETE FROM harmless_fixture"})
+    assert con.execute('SELECT * FROM harmless_fixture').fetchall() == [(1,)]
+    con.close()
+
+
+def test_catalog_configuration_is_refused_before_external_setup(monkeypatch):
+    monkeypatch.setattr(mcp_server, "DATA_DIR", None)
+    monkeypatch.setattr(mcp_server, "_resolve_catalog_config", lambda: {"namespace": "default"})
+    monkeypatch.setattr(
+        mcp_server.duckdb, "connect", lambda: (_ for _ in ()).throw(AssertionError("Database setup started"))
     )
-    # The exact dedup wrapper used by the catalog `comments` view in `_build_connection`.
-    con.execute(
-        "CREATE VIEW comments AS SELECT * FROM raw "
-        "QUALIFY ROW_NUMBER() OVER "
-        "(PARTITION BY comment_id ORDER BY modify_date DESC NULLS LAST) = 1"
+    from spicy_regs.sources import publication
+
+    monkeypatch.setattr(
+        publication, "load_index", lambda url: (_ for _ in ()).throw(AssertionError("Remote index read"))
     )
-    rows = con.execute("SELECT comment_id, comment FROM comments ORDER BY comment_id").fetchall()
-    assert rows == [("c1", "new"), ("c2", "only-null"), ("c3", "unique")]
-    counts = con.execute("SELECT count(*), count(DISTINCT comment_id) FROM comments").fetchone()
-    assert counts is not None
-    total, distinct = counts
-    assert total == distinct == 3
+    with pytest.raises(RuntimeError, match="MCP catalog reads require dynamic file access"):
+        mcp_server._build_connection()
 
 
 @pytest.mark.integration

@@ -26,8 +26,7 @@ Strip them and the server still runs, but every client goes blind. Verify with
 `asyncio.run(build_server().list_tools())`.
 
 **Inline `# type: ignore` / `# noqa` are directives, not comments.** `ty` and
-`ruff` gate merges and both read them. `_build_connection` needs `# type: ignore[index]`
-on `catalog["namespace"]`.
+`ruff` gate merges and both read them.
 
 ## Connection setup (`_build_connection`, `_get_connection`, `_apply_security_settings`)
 
@@ -35,18 +34,29 @@ on `catalog["namespace"]`.
   extensions under `<home_directory>/.duckdb`, and the default home is read-only
   or undefined on serverless hosts — hence `_resolve_home_directory` defaulting
   to the temp dir (`SPICY_REGS_HOME_DIR` overrides).
-- **Do NOT disable `LocalFileSystem`.** It looks like an obvious guard against
-  user SQL reading local files, but httpfs reads the system CA bundle off the
-  local filesystem on every TLS handshake. Disabling it breaks the only thing
-  this server does: the moment a view binds you get `File system LocalFileSystem
-  has been disabled by configuration`.
-- `SET temp_directory=''` is the sandbox that replaces it. `temp_directory`
-  defaults to a local `.tmp` that is read-only on serverless hosts, so a spilling
-  query (big GROUP BY/ORDER BY) fails there regardless. Empty disables spilling —
-  queries run in memory or fail with a clear OOM.
-- `_apply_security_settings` is deliberately separate from `_build_connection` so the
-  sandbox is testable without network. Run it after httpfs loads and before any
-  user SQL; `SET lock_configuration=true` is last because it freezes everything.
+- Keep `LocalFileSystem` enabled. Disabling it breaks httpfs reads. Instead,
+  set `allowed_paths` to the exact local paths or HTTPS URLs selected for the
+  published views and set `enable_external_access=false`. DuckDB then refuses
+  unrelated file access, including reads hidden in nested queries.
+- `allow_persistent_secrets=false` prevents httpfs from consulting an unrelated
+  on-disk secrets directory. Set it immediately after connecting, before binding
+  any remote views: httpfs initializes the secret manager, after which DuckDB
+  refuses even setting the same value again. The final restriction step checks
+  the value before setting it. Load required extensions before restrictions.
+- Apply memory and spill-directory settings before disabling external access;
+  DuckDB refuses changes to `temp_directory` after that boundary is locked.
+  A configured spill directory is an engine resource, not an allowed SQL input.
+- Apply `_apply_security_settings` after trusted view construction has collected
+  selected member paths and before the connection reaches any user query.
+  `lock_configuration=true` stays last. Local and HTTPS controls, path escapes,
+  and the deployed `/etc/os-release` reproduction are covered by retained
+  experiments and the MCP regression tests.
+- The public SQL server refuses configured direct Iceberg reads before setup: its dynamically
+  discovered manifest and data paths have not been scoped to this file boundary.
+  The fork currently serves published Parquet and configures no catalog on its
+  Worker. ETL ingestion and mirror publication continue to use Iceberg. See
+  `docs/research/mcp-chaos-2026-09-27.md` for the catalog comparison and adoption
+  criteria; enabling unrestricted reads to make a catalog query pass is not a fix.
 
 ## The read-only statement guard
 
@@ -56,10 +66,12 @@ all reach the container filesystem, and on Cloud Run that filesystem is
 in-memory — a large enough `COPY` evicts the instance. The service is
 `--allow-unauthenticated`, so that is an anonymous availability lever.
 
-The obvious fix, `SET disabled_filesystems='LocalFileSystem'`, is the one thing
-that must not be done (see above — httpfs needs the CA bundle). Hence
-`_first_write_statement`, which classifies with DuckDB's own parser via
-`extract_statements` and admits only `SELECT` and `EXPLAIN`.
+Native file permissions constrain reads to selected data files. They do not
+replace `_first_write_statement`, which classifies with DuckDB's own parser and
+admits only `SELECT`. The outer `EXPLAIN` statement type hides its inner
+statement: `EXPLAIN ANALYZE DELETE ...` executes the deletion, so all `EXPLAIN`
+forms are refused until the inner statement can be reliably classified. The statement guard also refuses SQL that
+changes configuration or writes permitted files.
 
 **Do not swap the parser for a prefix regex.** The parser is what makes leading
 comments (`/* c */ COPY ...`), `COPY` inside a string literal, and stacked
@@ -68,7 +80,7 @@ matters most: `execute` runs every statement in the string but returns only the
 last result, so a trailing write would otherwise land with nothing in the
 response to show for it.
 
-**The two-entry allowlist is not as narrow as it looks.** DuckDB folds
+**The SELECT allowlist includes other read forms.** DuckDB folds
 `DESCRIBE`, `SHOW`, `SUMMARIZE`, `VALUES`, `TABLE`, and the FROM-first
 shorthand (`FROM comments LIMIT 1`) into `StatementType.SELECT`, so all of them
 still run. `tests/test_mcp_server.py::test_read_forms_pass_the_guard` pins that
@@ -79,13 +91,12 @@ Matching is on `StatementType.name`, not the enum member, because duckdb's type
 stubs do not declare the members and `ty` gates merges — comparing names keeps
 the check honest without a blanket type-ignore.
 
-This guard does **not** stop local file *reads*: `read_text`, `read_csv`, and
-`read_blob` are `SELECT`s. Nothing sensitive sits on the container filesystem
-today (the R2 catalog token arrives as an env var, `getenv` does not exist in
-DuckDB, and `duckdb_secrets()` redacts the token), so the exposure is latent
-rather than live. It stops being latent the moment a secret is mounted as a
-file — if the catalog token ever moves to a Cloud Run secret *volume*, this
-needs a companion path check.
+The two controls work together: `read_text`, `read_csv`, and `read_blob` are
+SELECTs, but native file permissions refuse any file not selected for the views.
+A result with duplicate column labels is rejected with alias guidance, because
+JSON row objects would otherwise silently overwrite values. One-row lookahead
+sets `truncated` only when `max_rows` actually omits a row. Validation refusals
+raise tool errors so MCP reports `isError: true` consistently.
 
 ## The statement timeout
 
@@ -102,37 +113,22 @@ Keep the app timeout at or below the platform request timeout. In practice the
 binding limit is usually the *MCP client*, which typically gives up at 60–120s.
 The stdio entrypoint has no platform limit at all.
 
-## Iceberg catalog attach (`_attach_catalog`)
+## Iceberg and the comments mirror
 
-Best-effort by design: a bad token, network failure, or missing table falls back
-to the monolithic `comments.parquet` rather than taking the server down. Must run
-**before** `_apply_security_settings` locks the configuration.
+Iceberg remains the ingestion and update store for comments. The MCP reads its
+published Parquet mirror. Direct catalog configuration is refused before any
+remote setup; dynamic manifest and data access has not been qualified against
+the selected-file restrictions. The old best-effort attach and catalog view
+were removed rather than retaining an unreachable, unrestricted fallback.
 
-`INSTALL avro` / `LOAD avro` explicitly, before iceberg, is load-bearing. DuckDB
-1.5's iceberg extension reads Avro manifests via a separate `avro` extension and
-tries to auto-install it lazily during `LOAD` — but that nested install doesn't
-inherit the session's `home_directory` in serverless sandboxes and dies with
-`Can't find the home directory at ''`, failing the whole attach so comments
-silently fall back to the frozen monolith. Installing it explicitly runs on the
-same top-level path that already installs httpfs/iceberg fine. Wrapped in its own
-try/except because on DuckDB <1.5 avro isn't separate and `INSTALL avro` errors.
+The 2026-09-27 comparison matched the catalog table UUID, snapshot and schema to
+the mirror receipt, then matched the public object ETags and sizes to that
+receipt. This supports current publication agreement, not a new source-content
+audit. Legacy comments files still have mutable URLs; the MCP does not yet
+expose their publication receipt or pin an immutable comments generation.
 
-## Why the comments view has a QUALIFY
-
-The catalog table can physically hold duplicate `comment_id` rows. DuckDB's
-Iceberg engine has no `MERGE INTO`, so the ETL upsert (`iceberg._merge`) removes
-superseded rows with a plain `DELETE` — and `DELETE` does not reliably remove
-prior rows on the R2 Data Catalog (the same limitation `dedupe_table` works
-around by never deleting). Any re-merged `comment_id` can leave its old row
-beside the new one. The `QUALIFY ROW_NUMBER() OVER (PARTITION BY comment_id ORDER
-BY modify_date DESC NULLS LAST) = 1` makes the read surface single-valued
-regardless, so counts aren't inflated. Physical compaction happens out-of-band via
-`scripts/dedupe_comments_catalog.py`. A filter on `agency_code`/`docket_id` pushes
-down ahead of the window, so point lookups only dedup rows they touch.
-
-A table in `TABLES` whose parquet isn't published yet (a new source whose first
-upload hasn't run) is skipped with a warning rather than breaking every query —
-same degradation strategy as the catalog fallback.
+A table in `TABLES` whose Parquet is not published yet is skipped with a warning.
+A missing managed generation member still refuses the connection.
 
 ## The rulemaking snapshot (`_spicy_rulemaking`)
 

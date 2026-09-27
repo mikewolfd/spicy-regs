@@ -35,6 +35,7 @@ BASELINE_RECEIPTS = (
     "~/Work/corpora/fork-execution-2026-09-21/rulemaking-exposure-2026-09-27/proposed-joins.json",
     "~/Work/corpora/fork-execution-2026-09-21/join-map-2026-09-26/rulemaking-exposure-independent.json",
     "~/Work/corpora/fork-execution-2026-09-21/join-map-2026-09-26/rulemaking-exposure-independent-2.json",
+    "~/.codex/artifacts/spicy-regs-mcp-repair-20260927/01-fr-composite-baseline.json",
 )
 
 #: Expected resolution. ``complete``: every key should resolve and an orphan is
@@ -200,7 +201,10 @@ JOINS: tuple[Join, ...] = (
     _join("rule_targets", "docket_id", "dockets", "docket_id", 143_012, 83,
           reason="Normalized FR-to-Regulations.gov bridge from the materialized rulemaking snapshot. Each orphan "
                  "is one fill-docket-gaps asked for: 16 answer 404 and 67 answer 400 Invalid ID."),
-    _join("fr_docket_links", "document_number", "federal_register", "document_number", 603_702, 0),
+    _join("fr_docket_links", ("document_number", "publication_date"),
+          "federal_register", ("document_number", "publication_date"), 603_935, 0,
+          reason="Measured 2026-09-27 on the live fork. A document number can occur on distinct publication dates; "
+                 "both fields identify the referenced record. Receipt 01-fr-composite-baseline.json."),
     _join("documents", "fr_doc_num", "federal_register", "document_number", 454_231, 64_761, "design",
           "fr_doc_num is Regulations.gov's spelling, which zero-pads where the Register did not (every "
           "2010-2012 number: 2011-01234 is the Register's 2011-1234) and carries errata prefixes, en dashes "

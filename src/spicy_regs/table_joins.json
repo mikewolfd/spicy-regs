@@ -13,7 +13,8 @@
       "~/Work/corpora/fork-execution-2026-09-21/committee-fixes-2026-09-26/3-rosters-118/runs.json",
       "~/Work/corpora/fork-execution-2026-09-21/rulemaking-exposure-2026-09-27/proposed-joins.json",
       "~/Work/corpora/fork-execution-2026-09-21/join-map-2026-09-26/rulemaking-exposure-independent.json",
-      "~/Work/corpora/fork-execution-2026-09-21/join-map-2026-09-26/rulemaking-exposure-independent-2.json"
+      "~/Work/corpora/fork-execution-2026-09-21/join-map-2026-09-26/rulemaking-exposure-independent-2.json",
+      "~/.codex/artifacts/spicy-regs-mcp-repair-20260927/01-fr-composite-baseline.json"
     ]
   },
   "kinds": [
@@ -720,16 +721,18 @@
     {
       "child": "fr_docket_links",
       "child_columns": [
-        "document_number"
+        "document_number",
+        "publication_date"
       ],
       "parent": "federal_register",
       "parent_columns": [
-        "document_number"
+        "document_number",
+        "publication_date"
       ],
       "kind": "complete",
-      "reason": "",
+      "reason": "Measured 2026-09-27 on the live fork. A document number can occur on distinct publication dates; both fields identify the referenced record. Receipt 01-fr-composite-baseline.json.",
       "measured_via": null,
-      "baseline_keys": 603702,
+      "baseline_keys": 603935,
       "baseline_missing": 0,
       "floor_pct": 100.0
     },
@@ -1637,11 +1640,13 @@
       },
       {
         "child_columns": [
-          "document_number"
+          "document_number",
+          "publication_date"
         ],
         "parent_table": "federal_register",
         "parent_columns": [
-          "document_number"
+          "document_number",
+          "publication_date"
         ]
       }
     ],

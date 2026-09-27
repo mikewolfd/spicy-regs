@@ -54,17 +54,19 @@ npm run deploy         # builds the image, pushes it, rolls out the container
 
 `wrangler` prints a `*.workers.dev` URL; smoke-test the MCP handshake against `/mcp`.
 
-### Catalog (deferred, add before cutover)
+### Catalog and public reads
 
-Without complete Iceberg settings, `comments` reads from the configured bucket's
-`comments.parquet` mirror. To use this account's catalog, set `R2_CATALOG_URI`,
-`R2_CATALOG_WAREHOUSE` and `R2_CATALOG_NAMESPACE` in the Wrangler `vars` block,
-install the secret, then redeploy. The Worker forwards all four into Python:
+The MCP reads the configured bucket's published Parquet, including the comments
+mirror. Keep `R2_CATALOG_URI` and `R2_CATALOG_WAREHOUSE` empty on this Worker.
+Complete catalog configuration is refused: its dynamic file access has not been
+qualified against the public SQL server's selected-file restrictions.
 
-```bash
-npx wrangler secret put R2_CATALOG_TOKEN
-npm run deploy
-```
+Iceberg remains the ingestion and update store. The
+[2026-09-27 comparison](../../docs/research/mcp-chaos-2026-09-27.md#iceberg-decision)
+matched the current comments catalog snapshot to the published mirror receipt
+and public objects. Direct catalog access showed no freshness benefit in that
+measurement. ETL credentials belong to the ingestion workflows, independently
+of this public serving configuration.
 
 ## Before cutover (don't skip)
 
