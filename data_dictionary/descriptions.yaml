@@ -561,7 +561,7 @@ tables:
       rin: "The proceeding's RIN when it holds exactly one, else NULL; a query aid, never its identity (`rins_json` lists every RIN)."
       docket_ids_json: "JSON array of the Regulations.gov dockets the proceeding comprises; `[]` for a docket-less proceeding."
       title: "Title of its most recently dated titled document."
-      agency_code: "The agency code most of its documents carry, or for a docket-less proceeding its Register agency's code; NULL when none maps."
+      agency_code: "The agency code most of its documents carry. A docket-less proceeding takes its Register document's agency code. Each Register agency maps to one Regulations.gov code through RefSpec's agency projection and agency registry, whose identity bridges and successions give a defunct agency its current successor's code whatever the document's date: a 1998 Health Care Finance Administration notice is CMS. A split agency maps only when every successor gives the same one code. A department named with one of its own agencies yields to it (Transportation Department with FAA is FAA), and a department signing with one of its own unmapped bureaus keeps the department's code. NULL when no agency maps or the agencies are unrelated."
       current_stage: "The one stage (`proposed`, `supplemental`, `final` or `withdrawn`) of its latest dated events; NULL when none, or when that day's events disagree."
       stage_events_json: "JSON array of its stage events, one per staged document: `{effective_date, event_kind, evidence_id, joined_by, source, stage}`."
       fr_document_numbers_json: "JSON array of the Federal Register document numbers it holds."
