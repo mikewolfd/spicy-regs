@@ -282,7 +282,7 @@ OWN_TABLES = {
 def test_every_family_table_is_published(family):
     expected = {contract for contract, _ in FAMILY_TABLES} | {"public_activity_events", *OWN_TABLES}
     assert set(family) == expected
-    assert len(family) == 18
+    assert "bill_cosponsors" in family
 
 
 def test_each_published_table_matches_its_contract_schema_or_its_own(family):
@@ -1811,3 +1811,17 @@ def test_the_billstatus_zip_the_family_builds_from_is_retained_whole(tmp_path, m
     assert zipped["stage"] == "bill-status-bulk" and _retained(evidence, zipped) == raw
     assert any(event["event"] == "bill-family-selection" for event in journal)
     assert _no_secret(evidence, "fixture-key-0123456789")
+
+
+def test_cosponsor_refresh_clears_prior_occurrences(tmp_path, scoped):
+    raw = (FIXTURES / "status-119hr6028.xml").read_bytes()
+    populated = raw.replace(b"</bill>", b"<cosponsors><item><bioguideId>A000001</bioguideId><sponsorshipDate>2025-01-03</sponsorshipDate></item></cosponsors></bill>")
+    first = _run(tmp_path / "first", StubBulkAcquirer(status=populated), _no_prior)
+    assert len(pq.read_table(first["bill_cosponsors"])) == 1
+    empty = re.sub(rb"<cosponsors>.*?</cosponsors>", b"<cosponsors/>", populated, flags=re.S)
+    # A rule change invalidates old checkpoints even with unchanged publisher dates.
+    bills = pq.read_table(first["congress_bills"])
+    bills = bills.drop(["cosponsors_outcome"])
+    pq.write_table(bills, first["congress_bills"])
+    second = _run(tmp_path / "second", StubBulkAcquirer(status=empty), _prior_from(tmp_path / "first"))
+    assert pq.read_table(second["bill_cosponsors"]).num_rows == 0

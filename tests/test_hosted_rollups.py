@@ -194,7 +194,8 @@ def test_a_soft_input_is_an_ingest_output_its_writer_produces_first(rollup, soft
 
 
 def test_the_bill_family_declares_all_fourteen_plus_its_own_four():
-    assert len(BillFamilyRollup.outputs) == 18
+    assert "bill_cosponsors.parquet" in BillFamilyRollup.outputs
+    assert len(BillFamilyRollup.outputs) == 19
     assert BillFamilyRollup.outputs[0] == "congress_bills.parquet"
     assert set(BillFamilyRollup.outputs[-4:]) == {f"{name}.parquet" for name in BILL_OWN_TABLES}
     # The property the freshness checker uses resolves to the first key.
@@ -370,3 +371,10 @@ def test_the_reusable_workflow_declares_every_input_the_callers_pass():
     for rollup in HOSTED_ROLLUPS:
         passed = set(yaml.safe_load((WORKFLOWS / f"rollup-{rollup.name}.yml").read_text())["jobs"]["run"]["with"])
         assert passed <= declared, f"rollup-{rollup.name}.yml passes undeclared {sorted(passed - declared)}"
+
+
+def test_member_and_cosponsor_family_growth_is_explicit():
+    assert MembersRollup.added_tables == ("member_party_affiliations.parquet",)
+    assert BillFamilyRollup.added_tables == ("bill_cosponsors.parquet",)
+    for rollup in (MembersRollup, BillFamilyRollup):
+        assert set(rollup.added_tables) <= set(rollup.outputs)

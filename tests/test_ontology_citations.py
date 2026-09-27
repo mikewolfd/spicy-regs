@@ -121,4 +121,4 @@ def test_the_rin_grammar_has_one_definition():
         if r"\d{4}-[A-Z]{2}\d{2}" in path.read_text()
     )
 
-    assert restating == ["src/spicy_regs/ontology/citations.py"]
+    assert restating == ["src/spicy_regs/identifiers.py"]

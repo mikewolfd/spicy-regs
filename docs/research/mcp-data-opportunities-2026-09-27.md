@@ -2,6 +2,8 @@
 
 **All 91 advertised tables were readable: 85 populated, six empty.** Each was counted once; schemas matched declarations and publication pins agreed at discovery, count time and final discovery. See the [MCP experiment report](mcp-chaos-2026-09-27.md).
 
+The subsequent [populated-table join audit](populated-table-joins-2026-09-27.md) maps every populated table to existing and proposed relationships, refreshes changed publications, and records live join measurements and extraction priorities.
+
 ## Evidence and completed findings
 
 Local evidence, outside Git: `/Users/mikewolfd/.codex/artifacts/spicy-regs-full-data-inventory-20260927/`. Its `report.md`, `research-readiness-matrix.json`, `verification.json` and raw responses retain methods, schemas, identities, joins, coverage, queries and pins. The run used 181 requests, concurrency two and 35-second timeouts; no reads failed or counts repeated.

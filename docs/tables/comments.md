@@ -19,6 +19,10 @@ One row per public comment — the largest table (tens of millions of rows). On 
 | --- | --- | --- |
 | `comment_id` 🔑 | `VARCHAR` | Unique comment identifier. Primary key / dedup key. |
 | `docket_id` | `VARCHAR` | Source-supplied docket identifier for joining to `dockets.docket_id`. Null when the source does not identify a docket; mirror directory names and comment ID prefixes do not fill this field. |
+| `comment_on_document_id` | `VARCHAR` | Literal Regulations.gov commentOnDocumentId: the named parent document, independently nullable from docket_id. No identifier-prefix inference. |
+| `comment_on_object_id` | `VARCHAR` | Literal commentOn in the native object-ID namespace; not interchangeable with a public document key. |
+| `original_document_id` | `VARCHAR` | Literal originalDocumentId, retained as an unresolved legacy source reference. |
+| `comment_reference_values_json` | `VARCHAR` | JSON map containing only present source parent-reference fields, preserving null and empty values. {} means the source was read and fields were absent; SQL NULL means legacy or unread. |
 | `agency_code` | `VARCHAR` | Receiving agency's short code. |
 | `first_name` | `VARCHAR` | Commenter's first name, when provided. Often null. |
 | `last_name` | `VARCHAR` | Commenter's last name, when provided. Often null. |

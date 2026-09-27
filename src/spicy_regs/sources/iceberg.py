@@ -114,50 +114,59 @@ def _qualified(record_type: RecordType) -> str:
     return f'{_schema_ref()}."{record_type.name}"'
 
 
-def _ensure_table(con, record_type: RecordType) -> bool:
+def _ensure_table(con, record_type: RecordType) -> str | None:
     """Create the namespace + table (all columns VARCHAR) if they don't exist.
 
     The schema mirrors the published Parquet: every column is a UTF-8 string
     (see :mod:`spicy_regs.schemas.regulations`), so a flat ``VARCHAR`` table is
-    a faithful representation and keeps upserts/export type-safe. Returns whether
-    the PDF diagnostic column was added to an existing table. Iceberg callers
-    must reopen after that change; :func:`_connect_for_table` handles this.
+    a faithful representation and keeps upserts/export type-safe. Returns the
+    nullable column added to an existing table, if any. Iceberg callers must
+    reopen after each change; :func:`_connect_for_table` handles this.
     """
     columns = ", ".join(f'"{col}" VARCHAR' for col in record_type.schema)
     con.execute(f"CREATE SCHEMA IF NOT EXISTS {_schema_ref()};")
     con.execute(f"CREATE TABLE IF NOT EXISTS {_qualified(record_type)} ({columns});")
-    return _ensure_pdf_results_column(con, record_type)
+    return _ensure_nullable_column(con, record_type)
 
 
 _PDF_RESULTS_COLUMN = "pdf_extraction_results_json"
+_COMMENT_REFERENCE_COLUMNS = (
+    "comment_on_document_id", "comment_on_object_id", "original_document_id", "comment_reference_values_json",
+)
 
 
-def _pdf_results_column_type(con, record_type: RecordType) -> str | None:
-    existing = {row[0]: row[1] for row in con.execute(f"DESCRIBE {_qualified(record_type)}").fetchall()}
-    return existing.get(_PDF_RESULTS_COLUMN)
+def _column_types(con, record_type: RecordType) -> dict[str, str]:
+    return {row[0]: row[1] for row in con.execute(f"DESCRIBE {_qualified(record_type)}").fetchall()}
 
 
-def _ensure_pdf_results_column(con, record_type: RecordType) -> bool:
-    """Add the one nullable PDF-attempt field to current document/comment tables."""
-    column = _PDF_RESULTS_COLUMN
-    if record_type.name not in ("documents", "comments") or column not in record_type.schema:
-        return False
+def _ensure_nullable_column(con, record_type: RecordType, *, existing: dict[str, str] | None = None) -> str | None:
+    """Add one explicitly supported nullable field; never invent source values.
+
+    A migration uses one ALTER per connection because Iceberg can cache the old
+    schema. Validate all existing migration fields before changing any of them.
+    """
+    if record_type.name not in ("documents", "comments"):
+        return None
+    columns = (_PDF_RESULTS_COLUMN,) + (_COMMENT_REFERENCE_COLUMNS if record_type.name == "comments" else ())
+    columns = tuple(column for column in columns if column in record_type.schema)
     table = _qualified(record_type)
-    existing_type = _pdf_results_column_type(con, record_type)
-    if existing_type is None:
-        con.execute(f'ALTER TABLE {table} ADD COLUMN "{column}" VARCHAR;')
-        return True
-    if existing_type != "VARCHAR":
-        raise ValueError(f"{table}.{column} must be VARCHAR, found {existing_type}")
-    return False
+    existing = _column_types(con, record_type) if existing is None else existing
+    for column in columns:
+        if column in existing and existing[column] != "VARCHAR":
+            raise ValueError(f"{table}.{column} must be VARCHAR, found {existing[column]}")
+    for column in columns:
+        if column not in existing:
+            con.execute(f'ALTER TABLE {table} ADD COLUMN "{column}" VARCHAR;')
+            return column
+    return None
 
 
 def _connect_for_table(record_type: RecordType):
     """Prepare the table and return a connection with its current schema.
 
     DuckDB's Iceberg catalog caches the pre-ALTER schema on the connection.
-    Reopen only after this migration, then verify the field without issuing
-    another ALTER. A failed reopen leaves the completed DDL for the next run.
+    Reopen after each migration, then verify that field before adding another.
+    A failed reopen leaves completed DDL for the next run.
     """
     con = _connect()
     try:
@@ -167,16 +176,18 @@ def _connect_for_table(record_type: RecordType):
     except Exception:
         con.close()
         raise
-    if changed:
+    while changed is not None:
         con.close()
         con = _connect()
         try:
-            existing_type = _pdf_results_column_type(con, record_type)
+            existing = _column_types(con, record_type)
+            existing_type = existing.get(changed)
             if existing_type != "VARCHAR":
                 raise ValueError(
-                    f"{_qualified(record_type)}.{_PDF_RESULTS_COLUMN} must be VARCHAR after migration, "
+                    f"{_qualified(record_type)}.{changed} must be VARCHAR after migration, "
                     f"found {existing_type or 'missing'}"
                 )
+            changed = _ensure_nullable_column(con, record_type, existing=existing)
         except Exception:
             con.close()
             raise
@@ -291,10 +302,11 @@ def _export_parquet(con, record_type: RecordType, output_dir: Path) -> Path:
 
     sort_cols = [c for c in ("agency_code", "modify_date") if c in record_type.schema]
     order_by = f"ORDER BY {', '.join(sort_cols)}" if sort_cols else ""
+    columns = ", ".join(f'"{column}"' for column in record_type.schema)
 
     con.execute(
         f"""
-        COPY (SELECT * FROM {_qualified(record_type)} {order_by})
+        COPY (SELECT {columns} FROM {_qualified(record_type)} {order_by})
         TO '{_sql_str(str(out_file))}'
         (FORMAT PARQUET, COMPRESSION ZSTD, ROW_GROUP_SIZE 100000);
         """

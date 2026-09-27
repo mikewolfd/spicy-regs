@@ -5,6 +5,17 @@ The optional `source-readers` extra enables the same readers for package install
 its wheels must be supplied explicitly until they are published in a registry.
 Base CLI and MCP installs do not require them.
 
+- `spicy_docs-0.47.0`: built from SpicyDocs `7440dd4a3c446962174b5c3048e313d34a3b287b`,
+  September 27, 2026: **1,685,325 bytes**, SHA-256
+  `3a614d4aa16b0416e58690e7659037fef3397d3d6ce7ca21c1cc0e2c8ab42d29`, byte-identical
+  across two builds. Preserves dated bill cosponsors, nested member party intervals,
+  native comment-parent references and all communication RIN occurrences. Adds native
+  legal-reference row helpers, explicit citation-context provenance and an opt-in
+  strict Congress policy. Senate payment review remains a qualification gate, not a
+  published payment parser. The source repository gate and receiving tests are recorded
+  in `docs/research/join-delivery-execution-2026-09-27.md`. Vendored adoption only;
+  no package-registry upload is asserted.
+
 - `spicy_docs-0.46.0`: released by spicy-stack-11 from SpicyDocs `main` at `f486e73`, September 27,
   2026: **1,677,177 bytes**, SHA-256
   `2af2dfff55f0e2801bdc2ac2d928cbbd4e63701afbd87b719dd597736ef0b799`, byte-identical across two builds

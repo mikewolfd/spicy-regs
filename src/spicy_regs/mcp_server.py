@@ -95,6 +95,7 @@ TABLES = (
     # test_mcp_server_tables_match_dictionary keeps the two lists equal.
     "bill_actions",
     "bill_committees",
+    "bill_cosponsors",
     "bill_publisher_summaries",
     "bill_versions",
     "bill_sections",
@@ -111,6 +112,7 @@ TABLES = (
     "member_votes",
     "members",
     "member_terms",
+    "member_party_affiliations",
     "member_vote_terms",
     "committee_reports",
     "report_sections",
@@ -187,7 +189,9 @@ INSTRUCTIONS = (
     "not establish publication or freshness. qualification reports the output "
     "ledger's audit disposition for its own pin beside the live pin; it is not a "
     "verification flag for the live generation. Always LIMIT exploratory results. "
-    "Cite source identifiers, evidence locators and dates from returned rows."
+    "Cite source identifiers, evidence locators and dates from returned rows. "
+    "Derived relationship views retain source occurrences separately from distinct pairs. "
+    "Use resolve_document_citations for bounded target lookups; a normalized citation key alone does not prove existence."
 )
 
 ICONS = [Icon(src=ICON_DATA_URI, mimeType="image/png", sizes=["512x512"])]
@@ -452,6 +456,7 @@ def _build_connection() -> duckdb.DuckDBPyConnection:
                 con.close()
                 raise RuntimeError(f"Published generation member unavailable: {name}") from exc
             logger.warning("table %s not available at %s; skipping view: %s", name, urls, exc)
+    _install_relationship_views(con)
     _apply_security_settings(con, allowed_paths)
     return con
 
@@ -497,6 +502,21 @@ def _connection_rulemaking(cursor: duckdb.DuckDBPyConnection) -> dict:
     return _pinned_record(cursor, "_spicy_rulemaking") or {"snapshot_id": None, "tables": {}}
 
 
+def _connection_relationships(cursor: duckdb.DuckDBPyConnection) -> dict:
+    """Definitions and dependency availability bound alongside this connection's source views."""
+    return _pinned_record(cursor, "_spicy_relationships") or {}
+
+
+def _install_relationship_views(con: duckdb.DuckDBPyConnection) -> None:
+    """Bind trusted SQL definitions before locking the connection; no source row scan."""
+    from spicy_regs.relationship_views import install_relationship_views
+
+    status = _publication_status(con)
+    relationships = install_relationship_views(con, status["tables"], publication=status["publication"])
+    con.execute("CREATE TABLE _spicy_relationships (snapshot VARCHAR)")
+    con.execute("INSERT INTO _spicy_relationships VALUES (?)", [json.dumps(relationships)])
+
+
 def _publication_status(cursor: duckdb.DuckDBPyConnection) -> dict:
     """Describe actual availability and pins from this connection's snapshot."""
     index = _connection_index(cursor)
@@ -528,10 +548,22 @@ def _publication_status(cursor: duckdb.DuckDBPyConnection) -> dict:
         for key, record in rulemaking["tables"].items()
     }
     fallback = "local_unversioned" if DATA_DIR is not None else "legacy_unversioned"
+    derived = {
+        name: {
+            "status": "derived_view",
+            "rule_version": value["metadata"]["rule_version"],
+            "dependencies": value["dependencies"],
+            "input_publications": value["metadata"]["input_publications"],
+        }
+        for name, value in _connection_relationships(cursor).items() if value["status"] == "available"
+    }
     return {
         "tables": available,
         "declared_tables": list(TABLES),
-        "publication": {name: managed.get(name) or snapshot.get(name, {"status": fallback}) for name in available},
+        "publication": {
+            name: derived.get(name) or managed.get(name) or snapshot.get(name, {"status": fallback})
+            for name in available
+        },
         "verification": (
             "Managed local bytes rehashed at connection creation; file changes checked around tool statements."
             if local is not None
@@ -774,7 +806,10 @@ def _available_tables(cursor: duckdb.DuckDBPyConnection) -> list[str]:
     snapshot = [key.removesuffix(".parquet") for key in _connection_rulemaking(cursor)["tables"]]
     local = _connection_local_selection(cursor) if DATA_DIR is not None else None
     selected = local["selected_tables"] if local is not None else []
-    return [name for name in dict.fromkeys((*TABLES, *managed, *snapshot, *selected)) if name in registered]
+    relationships = _connection_relationships(cursor)
+    return [
+        name for name in dict.fromkeys((*TABLES, *managed, *snapshot, *selected, *relationships)) if name in registered
+    ]
 
 
 def _register_tools(mcp: FastMCP) -> None:
@@ -793,19 +828,32 @@ def _register_tools(mcp: FastMCP) -> None:
         with _statement_timeout(cursor):
             available = _available_tables(cursor)
         metadata = _table_metadata()
+        relationships = _connection_relationships(cursor)
         scope, tables = _qualification(cursor, available, statements=False)
         return {
             **_source_details(cursor),
             "tables": available,
             "declared_tables": list(TABLES),
             "unavailable_tables": [name for name in TABLES if name not in available],
+            "relationship_views": {
+                name: {**entry, "metadata": {
+                    key: value for key, value in entry["metadata"].items()
+                    if key in {"label", "summary", "view_kind", "rule_version", "identity_columns"}
+                }} for name, entry in relationships.items()
+            },
+            "relationship_details": "Use describe_table for columns, source-field states, input pins and coverage semantics.",
             "availability_basis": "Views loaded in the current connection; not a full data or freshness audit.",
             "connection_ttl_seconds": _CONNECTION_TTL_SECONDS,
             "publication": _publication_status(cursor)["publication"],
             "qualification": scope if tables is None else {**scope, "status": "applies", "tables": tables},
             "datasets": [
-                {"table": name, "label": metadata.get(name, {}).get("label", name), "available": name in available}
-                for name in dict.fromkeys((*TABLES, *available))
+                {
+                    "table": name,
+                    "label": metadata.get(name, relationships.get(name, {}).get("metadata", {})).get("label", name),
+                    "available": name in available,
+                    "kind": "derived_view" if name in relationships else "source_table",
+                }
+                for name in dict.fromkeys((*TABLES, *available, *relationships))
             ],
         }
 
@@ -825,9 +873,14 @@ def _register_tools(mcp: FastMCP) -> None:
         cursor = _get_connection().cursor()
         with _statement_timeout(cursor):
             status = _publication_status(cursor)
-        if table not in TABLES and table not in status["tables"]:
+        relationships = _connection_relationships(cursor)
+        if table not in TABLES and table not in status["tables"] and table not in relationships:
             raise ValueError(f"Unknown table '{table}'; use list_sources to discover table names")
-        entry = _table_metadata().get(table, {"table": table, "columns": []})
+        entry: dict[str, Any]
+        if table in relationships:
+            entry = {"table": table, "columns": [], **relationships[table]["metadata"]}
+        else:
+            entry = _table_metadata().get(table, {"table": table, "columns": []})
         declared = {column["column_name"]: column for column in entry["columns"]}
         with _statement_timeout(cursor):
             available = table in status["tables"]
@@ -851,6 +904,7 @@ def _register_tools(mcp: FastMCP) -> None:
             "table": table,
             **_source_details(cursor),
             "available": available,
+            **({"relationship": relationships[table]} if table in relationships else {}),
             "publication": status["publication"].get(table, {"status": "unavailable"}),
             "qualification": scope if qualified is None else {**scope, **qualified[table]},
             "joins": _table_joins(table),
@@ -909,9 +963,87 @@ def _register_tools(mcp: FastMCP) -> None:
             "connection_publication": _publication_status(cursor)["publication"],
         }
 
+    @mcp.tool()
+    def resolve_document_citations(
+        document_kind: str,
+        document_key: str,
+        max_occurrences: Annotated[int, Field(ge=1, le=500)] = 100,
+    ) -> dict[str, Any]:
+        """Resolve a bounded document's held citations against this connection's selected targets.
+
+        Findings retain their spelling, text digest and extraction rule. Target
+        lookup does not validate extraction precision or legal applicability.
+        Missing, ambiguous, unsupported, unread and stale results stay explicit.
+        A capped response sets truncated; it does not establish whole-document coverage.
+        acquisition_queue plans qualified missing targets for retained-evidence
+        inspection. It performs no acquisition or publication.
+        """
+        from spicy_regs.acquisition_queue import build_missing_target_queue
+        from spicy_regs.citation_resolution import SOURCE_TABLES, resolve_citations
+
+        cursor = _get_connection().cursor()
+        with _statement_timeout(cursor):
+            status = _publication_status(cursor)
+            if "document_citations" not in status["tables"]:
+                raise ValueError("document_citations is not available in this connection")
+            cursor.execute(
+                "SELECT * FROM document_citations WHERE document_kind = ? AND document_key = ? "
+                "ORDER BY cite_kind, span_start, rule_version LIMIT ?",
+                [document_kind, document_key, max_occurrences + 1],
+            )
+            columns = [column[0] for column in cursor.description]
+            rows = cursor.fetchall()
+            # This tool reads text findings. A legacy file without the digest
+            # column must not fall through the resolver's native-field API.
+            occurrences = [
+                {"text_sha256": None, **dict(zip(columns, row, strict=True))}
+                for row in rows[:max_occurrences]
+            ]
+            source_digests = {}
+            parent = SOURCE_TABLES.get(document_kind)
+            source_read = {"table": parent, "status": "unavailable" if parent else "unsupported"}
+            if parent in status["tables"]:
+                try:
+                    values = cursor.execute(
+                        f'SELECT DISTINCT text_sha256 FROM "{parent}" WHERE package_id = ? LIMIT 2',
+                        [document_key],
+                    ).fetchall()
+                except duckdb.InterruptException:
+                    raise
+                except duckdb.Error as error:
+                    source_read.update(status="read_failure", error_type=type(error).__name__)
+                else:
+                    source_read["status"] = "ambiguous" if len(values) > 1 else "missing_digest"
+                    if len(values) == 1 and values[0][0]:
+                        source_digests[(document_kind, document_key)] = values[0][0]
+                        source_read["status"] = "read"
+            result = resolve_citations(
+                cursor, occurrences, status["publication"], source_digests=source_digests,
+                max_target_keys=max_occurrences,
+            )
+            capped = len(rows) > max_occurrences
+            result["coverage"]["occurrence_selection"] = {
+                "status": "capped" if capped else "complete_held_selection",
+                "max_occurrences": max_occurrences,
+                "meaning": "Held citation rows for this document; not extraction recall or source completeness.",
+            }
+            if capped:
+                result["coverage"]["partial"] = True
+        return {
+            **_source_details(cursor), **_jsonify(result),
+            "document_kind": document_kind, "document_key": document_key,
+            "max_occurrences": max_occurrences, "truncated": len(rows) > max_occurrences,
+            "source_read": source_read,
+            "acquisition_queue": build_missing_target_queue(
+                result, input_snapshots={document_kind: status["publication"].get(parent, {})},
+                intended_query="Resolve the cited target for this held document", max_items=max_occurrences,
+            ),
+            "connection_publication": status["publication"],
+        }
+
 
 def build_server() -> FastMCP:
-    """Build the stdio FastMCP server with the three read-only table tools."""
+    """Build the stdio FastMCP server with discovery, read-only queries and citation lookup."""
     mcp = FastMCP("spicy-regs", instructions=INSTRUCTIONS, icons=ICONS)
     _register_tools(mcp)
     return mcp

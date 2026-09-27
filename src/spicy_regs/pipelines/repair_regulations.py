@@ -147,10 +147,22 @@ def _repair_comments(
         snapshot = iceberg._read_snapshot(con, record_type)
         if expected_snapshot is not None and snapshot.snapshot_id != expected_snapshot:
             raise RuntimeError(f"catalog is at snapshot {snapshot.snapshot_id}, not the reviewed {expected_snapshot}")
+        prior_sql = iceberg._snapshot_query(record_type, snapshot)
+        prior_columns = {row[0] for row in con.execute(f"DESCRIBE ({prior_sql})").fetchall()}
+        missing_columns = set(columns) - prior_columns
+        unsupported_missing = missing_columns - set(iceberg._COMMENT_REFERENCE_COLUMNS)
+        if unsupported_missing:
+            raise ValueError("Unsupported missing comment columns: " + ", ".join(sorted(unsupported_missing)))
+        # A dry run must not migrate the catalog. Nullable fields absent from
+        # the reviewed snapshot represent unread source values, never empty lists.
+        prior_project = ", ".join(
+            f'NULL::VARCHAR AS "{column}"' if column in missing_columns
+            else f'CAST("{column}" AS VARCHAR) AS "{column}"' for column in columns
+        )
         con.execute(f"CREATE TEMP TABLE _repair_fresh AS SELECT {project} FROM read_parquet([{files}], union_by_name=true)")
         con.execute(f"""
             CREATE TEMP TABLE _repair_prior AS
-            SELECT {project} FROM ({iceberg._snapshot_query(record_type, snapshot)})
+            SELECT {prior_project} FROM ({prior_sql})
             WHERE "{key}" IN (SELECT "{key}" FROM _repair_fresh)
         """)
         corrected = correction_query(con, fresh_sql="SELECT * FROM _repair_fresh",
@@ -170,6 +182,7 @@ def _repair_comments(
             "mode": "apply" if apply else "dry-run",
             "source": dict(source_pins) if source_pins is not None else None,
             "catalog_snapshot": asdict(snapshot),
+            "schema_migration_required": sorted(missing_columns),
             "identities": [row[0] for row in con.execute(f'SELECT "{key}" FROM _repair_fresh ORDER BY 1').fetchall()],
             "missing_identities": [row[0] for row in con.execute(f"""
                 SELECT "{key}" FROM _repair_fresh EXCEPT SELECT "{key}" FROM _repair_prior ORDER BY 1
@@ -186,6 +199,11 @@ def _repair_comments(
         path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n")
         if not apply:
             return receipt
+        if missing_columns:
+            raise ValueError(
+                "Migrate the comments schema through the catalog ingestion/export path, "
+                "then rerun the repair against its new snapshot; missing: " + ", ".join(sorted(missing_columns))
+            )
         if receipt["missing_identities"]:
             raise ValueError(
                 f"comment repair corrects existing rows; {len(receipt['missing_identities'])} staged "

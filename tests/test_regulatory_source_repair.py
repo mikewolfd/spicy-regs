@@ -214,6 +214,26 @@ def test_comment_apply_corrects_at_an_equal_timestamp_and_keeps_enrichment(tmp_p
     assert receipt(tmp_path)["rows"] == [] and receipt(tmp_path)["applied_snapshot"] is None
 
 
+def test_comment_legacy_schema_is_reviewable_but_apply_requires_migration(tmp_path, catalog):
+    catalog.seed([comment_prior()])
+    with iceberg._connect() as con:
+        for column in iceberg._COMMENT_REFERENCE_COLUMNS:
+            con.execute(f'ALTER TABLE {iceberg._qualified(COMMENT)} DROP COLUMN "{column}"')
+    before = catalog.rows()
+    repair_records([raw(COMMENT_ID)], table="comments", output_dir=tmp_path)
+    assert receipt(tmp_path)["schema_migration_required"] == sorted(iceberg._COMMENT_REFERENCE_COLUMNS)
+    assert receipt(tmp_path)["rows"][0]["comment_reference_values_json"] is not None
+    assert catalog.rows() == before
+    with pytest.raises(ValueError, match="Migrate the comments schema"):
+        repair_records([raw(COMMENT_ID)], table="comments", output_dir=tmp_path, apply=True, expected_snapshot=1)
+    assert catalog.rows() == before
+    with iceberg._connect_for_table(COMMENT):
+        pass
+    repair_records([raw(COMMENT_ID)], table="comments", output_dir=tmp_path, apply=True)
+    assert receipt(tmp_path)["schema_migration_required"] == []
+    assert catalog.rows()[0]["comment_reference_values_json"] is not None
+
+
 def test_comment_repair_keeps_a_newer_prior(tmp_path, catalog):
     catalog.seed([comment_prior(modify_date="2026-09-21T00:00:00Z")])
     before = catalog.rows()

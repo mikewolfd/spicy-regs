@@ -20,6 +20,7 @@ One row per term a legislator served, in the crosswalk's own order. All columns 
 | `term_start` | `VARCHAR` | Start date of this term. |
 | `term_end` | `VARCHAR` | End date of this term, where the crosswalk states one. |
 | `term_state` | `VARCHAR` | State this term was served for. |
-| `term_party` | `VARCHAR` | Party for this term.  One value per term, not a history: a mid-term switch collapses. |
+| `term_party` | `VARCHAR` | The separate source term-level party assertion, not a dated history. |
 | `term_district` | `VARCHAR` | District for this term, spelled as the publisher does; absent for a Senate term. |
 | `observed_at` | `VARCHAR` | The parent capture's instant, carried so a term list versions with the member row it came from. |
+| `party_affiliations_state` | `VARCHAR` | Nested list state: unread, absent, null, empty or populated. |

@@ -174,6 +174,26 @@
         "description": "Source-supplied docket identifier for joining to `dockets.docket_id`. Null when the source does not identify a docket; mirror directory names and comment ID prefixes do not fill this field."
       },
       {
+        "column_name": "comment_on_document_id",
+        "column_type": "VARCHAR",
+        "description": "Literal Regulations.gov commentOnDocumentId: the named parent document, independently nullable from docket_id. No identifier-prefix inference."
+      },
+      {
+        "column_name": "comment_on_object_id",
+        "column_type": "VARCHAR",
+        "description": "Literal commentOn in the native object-ID namespace; not interchangeable with a public document key."
+      },
+      {
+        "column_name": "original_document_id",
+        "column_type": "VARCHAR",
+        "description": "Literal originalDocumentId, retained as an unresolved legacy source reference."
+      },
+      {
+        "column_name": "comment_reference_values_json",
+        "column_type": "VARCHAR",
+        "description": "JSON map containing only present source parent-reference fields, preserving null and empty values. {} means the source was read and fields were absent; SQL NULL means legacy or unread."
+      },
+      {
         "column_name": "agency_code",
         "column_type": "VARCHAR",
         "description": "Receiving agency's short code."
@@ -290,7 +310,12 @@
       }
     ],
     "grain": null,
-    "identity_columns": []
+    "identity_columns": [
+      "agency_code",
+      "docket_id",
+      "year",
+      "month"
+    ]
   },
   "feed_summary": {
     "table": "feed_summary",
@@ -348,7 +373,9 @@
       }
     ],
     "grain": null,
-    "identity_columns": []
+    "identity_columns": [
+      "docket_id"
+    ]
   },
   "agency_stats": {
     "table": "agency_stats",
@@ -381,7 +408,9 @@
       }
     ],
     "grain": null,
-    "identity_columns": []
+    "identity_columns": [
+      "agency_code"
+    ]
   },
   "agency_monthly_volume": {
     "table": "agency_monthly_volume",
@@ -419,7 +448,12 @@
       }
     ],
     "grain": null,
-    "identity_columns": []
+    "identity_columns": [
+      "agency_code",
+      "year",
+      "month",
+      "document_type"
+    ]
   },
   "fr_docket_links": {
     "table": "fr_docket_links",
@@ -511,7 +545,7 @@
         "description": "Executive order number, for presidential documents."
       }
     ],
-    "grain": null,
+    "grain": "One source docket-array occurrence per dated Federal Register record; identical elements can repeat, and this legacy table has no occurrence ordinal. No unique row identity is declared. See the occurrence views for an ordinal-bearing identity.",
     "identity_columns": []
   },
   "discovery_signals": {
@@ -545,7 +579,9 @@
       }
     ],
     "grain": null,
-    "identity_columns": []
+    "identity_columns": [
+      "agency_code"
+    ]
   },
   "cfr_sections": {
     "table": "cfr_sections",
@@ -613,7 +649,10 @@
       }
     ],
     "grain": null,
-    "identity_columns": []
+    "identity_columns": [
+      "package_id",
+      "granule_id"
+    ]
   },
   "congress_bills": {
     "table": "congress_bills",
@@ -873,6 +912,11 @@
         "column_name": "url_source",
         "column_type": "VARCHAR",
         "description": "Who stated url, and so which kind of URL it is: billstatus (the BILLSTATUS legislationUrl, the congress.gov page), congress_api (the Congress.gov detail record's legislationUrl, the same page), congress_api_list (the Congress.gov list route's url, the API resource), or inherited (this observation stated none and a host merge kept an earlier observation's value; its lineage is that earlier source, not a fresh read). NULL when url is NULL or the row predates this label."
+      },
+      {
+        "column_name": "cosponsors_outcome",
+        "column_type": "VARCHAR",
+        "description": "Source list state: absent, empty or populated; NULL means not read."
       }
     ],
     "grain": "One row per bill or resolution, as one BILLSTATUS document states it.",
@@ -1021,7 +1065,10 @@
       }
     ],
     "grain": null,
-    "identity_columns": []
+    "identity_columns": [
+      "rin",
+      "agenda_edition"
+    ]
   },
   "rule_targets": {
     "table": "rule_targets",
@@ -1979,7 +2026,10 @@
       }
     ],
     "grain": null,
-    "identity_columns": []
+    "identity_columns": [
+      "uei",
+      "entity_eft_indicator"
+    ]
   },
   "lobbying_filings": {
     "table": "lobbying_filings",
@@ -2062,7 +2112,9 @@
       }
     ],
     "grain": null,
-    "identity_columns": []
+    "identity_columns": [
+      "filing_uuid"
+    ]
   },
   "lobbying_activities": {
     "table": "lobbying_activities",
@@ -2110,7 +2162,10 @@
       }
     ],
     "grain": null,
-    "identity_columns": []
+    "identity_columns": [
+      "filing_uuid",
+      "activity_index"
+    ]
   },
   "lobbying_activity_lobbyists": {
     "table": "lobbying_activity_lobbyists",
@@ -2183,7 +2238,11 @@
       }
     ],
     "grain": null,
-    "identity_columns": []
+    "identity_columns": [
+      "filing_uuid",
+      "activity_index",
+      "lobbyist_index"
+    ]
   },
   "fec_committees": {
     "table": "fec_committees",
@@ -2622,7 +2681,11 @@
       }
     ],
     "grain": "One reported relationship or explicit absence state at one source location.",
-    "identity_columns": []
+    "identity_columns": [
+      "source_sha256",
+      "source_locator_json",
+      "relationship_type"
+    ]
   },
   "org_committee_links": {
     "table": "org_committee_links",
@@ -2786,7 +2849,9 @@
       }
     ],
     "grain": null,
-    "identity_columns": []
+    "identity_columns": [
+      "report_id"
+    ]
   },
   "crs_reports": {
     "table": "crs_reports",
@@ -2839,7 +2904,9 @@
       }
     ],
     "grain": null,
-    "identity_columns": []
+    "identity_columns": [
+      "report_id"
+    ]
   },
   "court_dockets": {
     "table": "court_dockets",
@@ -2967,7 +3034,9 @@
       }
     ],
     "grain": null,
-    "identity_columns": []
+    "identity_columns": [
+      "cl_docket_id"
+    ]
   },
   "court_docket_groups": {
     "table": "court_docket_groups",
@@ -3516,7 +3585,10 @@
       }
     ],
     "grain": null,
-    "identity_columns": []
+    "identity_columns": [
+      "vote_id",
+      "member_key"
+    ]
   },
   "usaspending_recipients": {
     "table": "usaspending_recipients",
@@ -3569,7 +3641,9 @@
       }
     ],
     "grain": null,
-    "identity_columns": []
+    "identity_columns": [
+      "recipient_id"
+    ]
   },
   "fcc_proceedings": {
     "table": "fcc_proceedings",
@@ -3652,7 +3726,9 @@
       }
     ],
     "grain": null,
-    "identity_columns": []
+    "identity_columns": [
+      "name"
+    ]
   },
   "fcc_filings": {
     "table": "fcc_filings",
@@ -3755,7 +3831,9 @@
       }
     ],
     "grain": null,
-    "identity_columns": []
+    "identity_columns": [
+      "id_submission"
+    ]
   },
   "bill_actions": {
     "table": "bill_actions",
@@ -3907,6 +3985,98 @@
     "identity_columns": [
       "bill_id",
       "system_code"
+    ]
+  },
+  "bill_cosponsors": {
+    "table": "bill_cosponsors",
+    "label": "Bill cosponsor source occurrences",
+    "summary": "One source-listed cosponsor per bill, exact input digest and list ordinal. Repeated assertions remain separate; absent or empty successfully read lists replace prior rows.",
+    "coverage": "Sampled. Retained BILLSTATUS replay qualifies sponsorship dates and original-cosponsor flags. Application output is implemented; no public backfill is asserted. Withdrawal date behavior still needs a positive native source specimen.",
+    "kind": "sampled",
+    "measured_on": "2026-09-27",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "bill_id",
+        "column_type": "VARCHAR",
+        "description": "The bill whose source lists the cosponsor."
+      },
+      {
+        "column_name": "input_sha256",
+        "column_type": "VARCHAR",
+        "description": "Digest of the complete input XML bytes, not the reserialized item."
+      },
+      {
+        "column_name": "cosponsor_index",
+        "column_type": "VARCHAR",
+        "description": "Zero-based position in the source cosponsors list, including repeated members."
+      },
+      {
+        "column_name": "bioguide_id",
+        "column_type": "VARCHAR",
+        "description": "Source member identifier; its presence does not prove target resolution."
+      },
+      {
+        "column_name": "full_name",
+        "column_type": "VARCHAR",
+        "description": "The source's fullName literal."
+      },
+      {
+        "column_name": "sponsorship_date",
+        "column_type": "VARCHAR",
+        "description": "Literal sponsorshipDate; absent is NULL and present empty is an empty string."
+      },
+      {
+        "column_name": "sponsorship_date_status",
+        "column_type": "VARCHAR",
+        "description": "Calendar spelling status: absent, empty, valid or invalid."
+      },
+      {
+        "column_name": "is_original_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal isOriginalCosponsor text, without Boolean coercion."
+      },
+      {
+        "column_name": "sponsorship_withdrawn_date",
+        "column_type": "VARCHAR",
+        "description": "Literal sponsorshipWithdrawnDate; positive native-date qualification is pending."
+      },
+      {
+        "column_name": "sponsorship_withdrawn_date_status",
+        "column_type": "VARCHAR",
+        "description": "Calendar spelling status, not confirmation of a withdrawal event."
+      },
+      {
+        "column_name": "party",
+        "column_type": "VARCHAR",
+        "description": "Party as the cosponsor entry states it."
+      },
+      {
+        "column_name": "state",
+        "column_type": "VARCHAR",
+        "description": "State as the cosponsor entry states it."
+      },
+      {
+        "column_name": "district",
+        "column_type": "VARCHAR",
+        "description": "District as the cosponsor entry states it."
+      },
+      {
+        "column_name": "source_path",
+        "column_type": "VARCHAR",
+        "description": "XPath to the occurrence in the retained XML."
+      },
+      {
+        "column_name": "source_xml",
+        "column_type": "VARCHAR",
+        "description": "Reserialized source item preserving other fields; original bytes are pinned separately."
+      }
+    ],
+    "grain": "One cosponsor occurrence in one retained BILLSTATUS observation.",
+    "identity_columns": [
+      "bill_id",
+      "input_sha256",
+      "cosponsor_index"
     ]
   },
   "bill_publisher_summaries": {
@@ -5630,7 +5800,7 @@
       {
         "column_name": "term_party",
         "column_type": "VARCHAR",
-        "description": "Party for this term.  One value per term, not a history: a mid-term switch collapses."
+        "description": "The separate source term-level party assertion, not a dated history."
       },
       {
         "column_name": "term_district",
@@ -5641,12 +5811,100 @@
         "column_name": "observed_at",
         "column_type": "VARCHAR",
         "description": "The parent capture's instant, carried so a term list versions with the member row it came from."
+      },
+      {
+        "column_name": "party_affiliations_state",
+        "column_type": "VARCHAR",
+        "description": "Nested list state: unread, absent, null, empty or populated."
       }
     ],
     "grain": "One row per term a legislator served, in the crosswalk's own order.",
     "identity_columns": [
       "bioguide_id",
       "term_index"
+    ]
+  },
+  "member_party_affiliations": {
+    "table": "member_party_affiliations",
+    "label": "Member party affiliation source intervals",
+    "summary": "One member, input digest, term index and affiliation index. Literal dates and their parsing states remain separate from any dated membership decision.",
+    "coverage": "Sampled. Retained native term replay preserves every nested party interval, including overlaps and conflicting assertions. Application output is implemented; a complete refreshed roster publication has not yet been verified.",
+    "kind": "sampled",
+    "measured_on": "2026-09-27",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "bioguide_id",
+        "column_type": "VARCHAR",
+        "description": "The source's member identifier."
+      },
+      {
+        "column_name": "input_sha256",
+        "column_type": "VARCHAR",
+        "description": "Digest of the complete retained crosswalk JSON bytes."
+      },
+      {
+        "column_name": "term_index",
+        "column_type": "VARCHAR",
+        "description": "Zero-based source term position."
+      },
+      {
+        "column_name": "affiliation_index",
+        "column_type": "VARCHAR",
+        "description": "Zero-based affiliation position within the source term."
+      },
+      {
+        "column_name": "party",
+        "column_type": "VARCHAR",
+        "description": "Literal nested party; NULL is not filled from the term-level party."
+      },
+      {
+        "column_name": "affiliation_start",
+        "column_type": "VARCHAR",
+        "description": "Literal nested start date; interval boundary policy belongs to the consumer."
+      },
+      {
+        "column_name": "affiliation_end",
+        "column_type": "VARCHAR",
+        "description": "Literal nested end date; a missing end does not imply an open interval."
+      },
+      {
+        "column_name": "start_status",
+        "column_type": "VARCHAR",
+        "description": "Calendar spelling status: absent, empty, valid or invalid."
+      },
+      {
+        "column_name": "end_status",
+        "column_type": "VARCHAR",
+        "description": "Calendar spelling status: absent, empty, valid or invalid."
+      },
+      {
+        "column_name": "term_party",
+        "column_type": "VARCHAR",
+        "description": "The separate term-level party assertion, not a dated fallback."
+      },
+      {
+        "column_name": "source_path",
+        "column_type": "VARCHAR",
+        "description": "JSON pointer to the affiliation in the retained capture."
+      },
+      {
+        "column_name": "source_json",
+        "column_type": "VARCHAR",
+        "description": "Complete affiliation object, retaining absent, null and unknown fields."
+      },
+      {
+        "column_name": "observed_at",
+        "column_type": "VARCHAR",
+        "description": "Caller-supplied capture instant; not a source affiliation date."
+      }
+    ],
+    "grain": "One nested party affiliation in one retained community-crosswalk observation.",
+    "identity_columns": [
+      "bioguide_id",
+      "input_sha256",
+      "term_index",
+      "affiliation_index"
     ]
   },
   "committee_reports": {
@@ -7554,6 +7812,11 @@
         "description": "The Regulation Identifier Number read from report_nature, where the rule found one."
       },
       {
+        "column_name": "rin_occurrences_json",
+        "column_type": "VARCHAR",
+        "description": "All interpreted RIN occurrences supplied by the consumer, with exact field spans and digest. NULL means unread; [] means the supplied field was read and contained no RIN."
+      },
+      {
         "column_name": "rin_rule",
         "column_type": "VARCHAR",
         "description": "Which RIN rule fired (`report_nature_rin_label`), or `unmatched`; NULL where the rule was not run."
@@ -8683,7 +8946,7 @@
       {
         "column_name": "target_rule",
         "column_type": "VARCHAR",
-        "description": "How the key was reached.  The rule's own name for every kind but `committee_name`, where it is the resolution route: `exact` and `roster_prefix` are lookups in the roster vocabulary, while `name_prefix` and `sibling_prefix` are inferences from the printed text of this one document.  A consumer wanting only roster lookups filters on this column rather than on `target_resolved`."
+        "description": "How the key was reached. Bill routes distinguish inline_congress, congress_subheading, document_fallback, unstated and document_fallback_refused after the bill_number: prefix. A document fallback is context supplied by the caller, not proof of historical applicability. Other kinds use the rule name except `committee_name`, where it is the resolution route: `exact` and `roster_prefix` are lookups in the roster vocabulary, while `name_prefix` and `sibling_prefix` are inferences from the printed text of this one document.  A consumer wanting only roster lookups filters on this column rather than on `target_resolved`."
       },
       {
         "column_name": "stated_by_index",
@@ -8971,7 +9234,10 @@
       }
     ],
     "grain": null,
-    "identity_columns": []
+    "identity_columns": [
+      "congress",
+      "bill_type"
+    ]
   },
   "bill_vote_references": {
     "table": "bill_vote_references",
@@ -9034,7 +9300,14 @@
       }
     ],
     "grain": null,
-    "identity_columns": []
+    "identity_columns": [
+      "bill_id",
+      "chamber",
+      "congress",
+      "session",
+      "roll_number",
+      "action_index"
+    ]
   },
   "bill_family_backfills": {
     "table": "bill_family_backfills",
@@ -9077,7 +9350,11 @@
       }
     ],
     "grain": null,
-    "identity_columns": []
+    "identity_columns": [
+      "congress",
+      "bill_type",
+      "number"
+    ]
   },
   "bill_family_backfill_walks": {
     "table": "bill_family_backfill_walks",
@@ -9140,7 +9417,10 @@
       }
     ],
     "grain": null,
-    "identity_columns": []
+    "identity_columns": [
+      "congress",
+      "bill_type"
+    ]
   },
   "committee_report_reads": {
     "table": "committee_report_reads",
@@ -9178,6 +9458,8 @@
       }
     ],
     "grain": null,
-    "identity_columns": []
+    "identity_columns": [
+      "package_id"
+    ]
   }
 }

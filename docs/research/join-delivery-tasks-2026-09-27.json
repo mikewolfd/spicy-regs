@@ -1,0 +1,2003 @@
+{
+  "format": "spicyregs-join-delivery-proposal-v1",
+  "reviewed_on": "2026-09-27",
+  "status": "proposal_only",
+  "reviewed_code_revisions": {
+    "spicy-docs": "f486e733d5363416652338d898907210b924d5f2",
+    "spicy-regs": "a86bb01ca5eec36db1527b067d13b8ff3b5a21ed"
+  },
+  "scope": "All populated tables in the prior audit, with selected raw specimens and owner parser review.",
+  "prior_audit": "/Users/mikewolfd/Work/spicy-stack/spicy-regs/docs/research/populated-table-joins-2026-09-27.json",
+  "source_review_evidence": "/Users/mikewolfd/.codex/artifacts/spicy-regs-join-tasks-20260927",
+  "publication_claim": "No relationship implementation or deployment in this task-proposal turn.",
+  "tasks": [
+    {
+      "id": "T01",
+      "title": "Correct join keys and publish measured cardinality",
+      "status": "proposed",
+      "owner": "SpicyRegs",
+      "depends_on": [],
+      "proposal_ids": [
+        "P01",
+        "P22"
+      ],
+      "change": "Update `src/spicy_regs/table_joins.py`, its generated JSON and table metadata through their existing generation path. Declare `(bill_id,version_code,source)` for bill versions, `(package_id,part_id)` for report parts, and `(congress,chamber,event_id)` for meetings. Complete missing identity declarations. Rebaseline the populated document/docket attribute relationships before removing their stale `empty` classification.",
+      "output_and_example": "Each join declares the full key, observed parent multiplicity, unmatched distinct keys, input/output row counts, selected publications and measurement scope. Example: a version reference with `source=govinfo` joins only the matching provider version.",
+      "acceptance": "Every advertised key change has a replayable query over pinned inputs; duplicate parent keys are either rejected or declared as multiplicity. Regression cases cover reused version codes, report-part IDs and event IDs. Do not describe preventive key hardening as a reproduced production duplication defect: the earlier audit did not observe that amplification. Full attribute rebaselining must replace the earlier bounded parent sample.",
+      "document_anchor": "#t01--correct-join-keys-and-publish-measured-cardinality",
+      "implementation_complete": false,
+      "source_scope_qualified": false,
+      "data_published": false,
+      "deployed_verified": false
+    },
+    {
+      "id": "T02",
+      "title": "Resolve citation targets against selected publications",
+      "status": "proposed",
+      "owner": "SpicyRegs",
+      "depends_on": [
+        "T01"
+      ],
+      "proposal_ids": [
+        "P16",
+        "P02"
+      ],
+      "change": "Add a resolution layer beside `document_citations`, reusing `ontology/citations.py`, the current join catalog and the source findings from SpicyDocs `interpretation/citations.py`. Preserve the existing meaning of `target_resolved` during a documented migration; expose an unambiguous `target_status` and target snapshot. Route by citation kind, including dated FR identities and alternate citation systems.",
+      "output_and_example": "A source occurrence yields `(occurrence_key, target_kind, normalized_key, target_snapshot, status, candidate_keys, resolution_rule, expected_cardinality)`. A single-target reference is found only after a unique qualified match in that selection; an ambiguous result retains candidates. Routes intentionally matching several records, such as RIN-to-agenda editions, retain that set and its declared grain. Example: the retained `Public Law 114\u2013254` finding supplies `114-public-254`; the resolver still has to look up the selected laws table.",
+      "acceptance": "Tests cover found, missing, ambiguous, unsupported and unread targets; reused FR numbers; partial citations; and an unchanged source with a newly available target. Resolve each distinct target key once per snapshot. Reproduce the earlier occurrence/target coverage report without treating key normalization as existence. Keep the source-text digest predicate. A found target proves a lookup, not that the extractor interpreted its context correctly; expose the derivation rule and context so T17's extraction checks remain a separate gate.",
+      "document_anchor": "#t02--resolve-citation-targets-against-selected-publications",
+      "implementation_complete": false,
+      "source_scope_qualified": false,
+      "data_published": false,
+      "deployed_verified": false
+    },
+    {
+      "id": "T03",
+      "title": "Recover source-stated comment-to-document links",
+      "status": "proposed",
+      "owner": "SpicyDocs verification, then SpicyRegs projection",
+      "depends_on": [
+        "T01",
+        "T02"
+      ],
+      "proposal_ids": [
+        "P03",
+        "P21",
+        "P22"
+      ],
+      "change": "Reuse SpicyDocs `sources/regulations_gov/records.py:classify_comment` and its existing allowed fields. Extend SpicyRegs `schemas/regulations.py:_extract_comment` and the corresponding schema/export path to retain `commentOnDocumentId`, `commentOn` and `originalDocumentId` as separate source values. Expose `comment_document_references` from the explicit parent-document ID.",
+      "output_and_example": "The retained ODNI comment produces `(ODNI-2009-0004-0002, ODNI-2009-0004-0001, comment_on_document, /data/attributes/commentOnDocumentId)`, with `docket_id=null`. Preserve `0900006480a18cfe` as a native object reference and `ODNI_FRDOC_0001-0004` as an unresolved original-document reference.",
+      "acceptance": "Replay the null-docket fixture and a bounded retained cohort with absent/null/empty parent fields; resolve named documents against a pinned target. No identifier-prefix docket inference and no equality across the three identifier namespaces. Verify schema evolution and Iceberg/public export preservation before a checkpointed larger replay; avoid an exploratory scan of all comment bodies.",
+      "document_anchor": "#t03--recover-source-stated-comment-to-document-links",
+      "implementation_complete": false,
+      "source_scope_qualified": false,
+      "data_published": false,
+      "deployed_verified": false
+    },
+    {
+      "id": "T04",
+      "title": "Expose publisher-listed related bills",
+      "status": "proposed",
+      "owner": "SpicyRegs",
+      "depends_on": [
+        "T01",
+        "T02"
+      ],
+      "proposal_ids": [
+        "P07"
+      ],
+      "change": "Reuse SpicyDocs `sources/congress/bill_status.py:RelatedBill` and `parse_bill_status`; project the already retained related-bill arrays. No new text parser. Publish an occurrence view and a distinct related-bill pair view.",
+      "output_and_example": "The reduced native status for `119-hr-300` yields `119-hr-1630`, source ordinal 0, relationship type `Related bill`, identifying authority `CRS`, and the complete relationship-details list. Keep direction and every publisher label; do not infer reciprocity or identical bill text.",
+      "acceptance": "Source array element counts reconcile with occurrences, repeated pairs remain visible in the occurrence view, and the pair view reproduces the earlier pinned coverage result. Malformed elements receive a recorded disposition. A retained fixture with multiple relationship details proves that only the first detail is not selected silently.",
+      "document_anchor": "#t04--expose-publisher-listed-related-bills",
+      "implementation_complete": false,
+      "source_scope_qualified": false,
+      "data_published": false,
+      "deployed_verified": false
+    },
+    {
+      "id": "T05",
+      "title": "Preserve and publish dated cosponsorship",
+      "status": "proposed",
+      "owner": "SpicyDocs reader, then SpicyRegs table",
+      "depends_on": [
+        "T01"
+      ],
+      "proposal_ids": [
+        "P08",
+        "P19"
+      ],
+      "change": "Extend the bill-status model with a source-faithful cosponsor type, or equivalent explicit cosponsor fields, rather than overloading the two-field `BillSponsor`. Preserve sponsorship date, original status, withdrawal date when supplied, and source party/state/district. Add a `bill_cosponsors` projection keyed by bill/source observation/list ordinal, with member ID as a reference.",
+      "output_and_example": "`118-hr-1`, ordinal 0, `M001159`, `sponsorship_date=2023-03-14`, `is_original_raw=True`, state `WA`, district `5`. A missing withdrawal field stays missing; it does not prove that withdrawal never occurred.",
+      "acceptance": "Replaying the retained 49-entry cosponsor block preserves every entry and field. Add a retained positive withdrawal example before claiming withdrawal support. Test absent/empty lists, repeated member entries, malformed dates and historical member targets. Reconcile the published count using its documented inclusion of withdrawn entries. Deliver provider tests/pin first, consumer projection second.",
+      "document_anchor": "#t05--preserve-and-publish-dated-cosponsorship",
+      "implementation_complete": false,
+      "source_scope_qualified": false,
+      "data_published": false,
+      "deployed_verified": false
+    },
+    {
+      "id": "T06",
+      "title": "Expose meeting, hearing and publication references",
+      "status": "proposed",
+      "owner": "SpicyRegs using SpicyDocs projections",
+      "depends_on": [
+        "T01",
+        "T02"
+      ],
+      "proposal_ids": [
+        "P09"
+      ],
+      "change": "Reuse `schemas/congress_index_tables.py:shape_committee_meeting` and current meeting/hearing shapers. Publish independent occurrence views for meeting bills, hearing jackets, committees and offered documents, retaining meeting status and full scoped keys. Keep witness records and their native locators; infer no witness/document pairing.",
+      "output_and_example": "Meeting `(119,house,119565)` yields nine bill occurrences, starting with `119-hr-1653`. Meeting `(119,house,119003)` yields jacket references `63019` and `64431`. These examples do not connect those jackets to the other meeting's bills.",
+      "acceptance": "Reconcile every array separately, preserve duplicates, resolve hearing jackets with Congress/chamber, and retain canceled/postponed status. The current shaper maps a missing detail field to `[]` once a detail object exists; it does not preserve absent/null/empty distinctions at that field. If the output promises those distinctions, add a raw-field-state projection and fixtures first. Do not fabricate them from existing arrays.",
+      "document_anchor": "#t06--expose-meeting-hearing-and-publication-references",
+      "implementation_complete": false,
+      "source_scope_qualified": false,
+      "data_published": false,
+      "deployed_verified": false
+    },
+    {
+      "id": "T07",
+      "title": "Expose vote document references without pairing unrelated lists",
+      "status": "proposed",
+      "owner": "SpicyRegs",
+      "depends_on": [
+        "T01",
+        "T02"
+      ],
+      "proposal_ids": [
+        "P10"
+      ],
+      "change": "Reuse SpicyDocs `sources/congress/votes.py:parse_senate_vote`, `VoteDocument` and `VoteAmendment`. Expand documents and amendments into separately keyed occurrences. Route native PN references to nominations; route bills, amendments and treaties only under their respective source shapes.",
+      "output_and_example": "Vote `119-senate-1-522`, document ordinal 0, native Congress `119`, native type `PN`, native number `55-25`, target citation `PN55-25`. The corresponding empty amendment block creates no amendment target.",
+      "acceptance": "The retained full vote produces all 48 document occurrences, including suffixes, with independent amendment observations. Preserve unsupported/missing targets and distinguish confirmations from other motion/question types. Add positive native amendment/treaty specimens before enabling their routing. Recompute missing-nomination coverage at the chosen publication; no default-current-Congress fallback.",
+      "document_anchor": "#t07--expose-vote-document-references-without-pairing-unrelated-lists",
+      "implementation_complete": false,
+      "source_scope_qualified": false,
+      "data_published": false,
+      "deployed_verified": false
+    },
+    {
+      "id": "T08",
+      "title": "Connect members to source-listed FEC candidate IDs",
+      "status": "proposed",
+      "owner": "SpicyRegs",
+      "depends_on": [
+        "T01",
+        "T02"
+      ],
+      "proposal_ids": [
+        "P11"
+      ],
+      "change": "Expand `members.fec_ids_json` through a `member_fec_ids` view. Reuse SpicyDocs `sources/legislators.py:parse_legislators` and `schemas/legislator_tables.py:shape_member`; use existing FEC candidate/committee relationships for the next step.",
+      "output_and_example": "Member `C000127` produces source-listed IDs `S8WA00194` and `H2WA01054`, each with its list ordinal and community-crosswalk provenance. Preserve the supported presidential candidate-ID shape too.",
+      "acceptance": "Reconcile the source list, check crosswalk conflicts, distinguish each candidate/committee/member path from distinct committees, and retain FEC cycle/designation fields where the source states them. No election cycle from ID spelling, no present authorization from historical linkage, and no donation claim. The earlier measured paths are a baseline at their pins, not a permanent expected count.",
+      "document_anchor": "#t08--connect-members-to-source-listed-fec-candidate-ids",
+      "implementation_complete": false,
+      "source_scope_qualified": false,
+      "data_published": false,
+      "deployed_verified": false
+    },
+    {
+      "id": "T09",
+      "title": "Make FEC relationship evidence directly inspectable",
+      "status": "proposed",
+      "owner": "SpicyRegs, reusing SpicyDocs metadata",
+      "depends_on": [
+        "T01"
+      ],
+      "proposal_ids": [
+        "P12"
+      ],
+      "change": "Reuse `transforms/fec_relationships.py:api_relationships`, the source companion catalog, and SpicyDocs `sources/fec/metadata.py`. Provide a lookup from each relationship observation to its exact source file/digest/record pointer and native value.",
+      "output_and_example": "The retained `C00008896` record has `committee.candidate_ids=[]`, a cycles array and designation `U`. It yields an `empty_list` observation at `/results/0/committee/candidate_ids`, not a candidate edge. Preserve nested source fields and exact decimal handling.",
+      "acceptance": "Verify existence and digest of each selected companion, not just non-null coordinates. Replay scalar, list, empty, absent, null and malformed cases. Keep candidate membership, committee designation, filing association and source observations as different relation types. The earlier coordinate-completeness measurement is not substituted for this byte-level check.",
+      "document_anchor": "#t09--make-fec-relationship-evidence-directly-inspectable",
+      "implementation_complete": false,
+      "source_scope_qualified": false,
+      "data_published": false,
+      "deployed_verified": false
+    },
+    {
+      "id": "T10",
+      "title": "Expose FCC filing membership and retain native role detail",
+      "status": "proposed",
+      "owner": "SpicyRegs; existing SpicyDocs reader supplies raw captures",
+      "depends_on": [
+        "T01",
+        "T02"
+      ],
+      "proposal_ids": [
+        "P14"
+      ],
+      "change": "First expose filing-to-proceeding occurrences from held arrays. Then extend the selected-field projection in `transforms/build_fcc_ecfs.py:_shape_filing` from retained `FccEcfsReader` records where native proceeding IDs or participant/asset fields were discarded. Keep filer, author and other roles separate.",
+      "output_and_example": "Filing `26110074741` lists FCC proceeding `26-189`, native proceeding ID `1784669453334`, bureau `PSHSB`; filer `Scott Pingrey` has a name only in this specimen. Produce the membership with source ordinal and both native identifiers. A name-only filer remains a role observation, not a resolved person.",
+      "acceptance": "Match held arrays without losing repeats, qualify the native-ID/name relationship against the selected proceeding population, and never match an FCC short docket number to a court or Regulations.gov number by spelling alone. Obtain a retained nonempty document/participant specimen before claiming support for additional fields. Do not reacquire raw records already retained by the capture journal.",
+      "document_anchor": "#t10--expose-fcc-filing-membership-and-retain-native-role-detail",
+      "implementation_complete": false,
+      "source_scope_qualified": false,
+      "data_published": false,
+      "deployed_verified": false
+    },
+    {
+      "id": "T11",
+      "title": "Publish complete regulatory memberships and identifier candidates",
+      "status": "proposed",
+      "owner": "SpicyRegs using SpicyDocs normalizers",
+      "depends_on": [
+        "T01",
+        "T02"
+      ],
+      "proposal_ids": [
+        "P02",
+        "P03"
+      ],
+      "change": "Expand all native FR RINs/dockets, document additional RINs, agenda-edition membership, proceeding membership and comment-period memberships. Reuse `schemas/federal_register.py:project_federal_register_document`, `interpretation/identifier_shapes.py:normalize_docket_references`, `unpadded_federal_register_document_number`, and the existing proceeding/lifecycle builders. Retain native and normalized values side by side.",
+      "output_and_example": "FR `(2026-17334,2026-08-25)` yields RINs `3206-AO36` and `3206-AO80` and each stated docket string. A document's posting date cannot supply a missing FR publication date. Route lifecycle date evidence by `dated_by`, rather than assuming its record's source supplied the date.",
+      "acceptance": "Source-array counts reconcile; each agenda match retains edition; shared RINs do not collapse separate actions. Preserve multiple candidate matches. Synthetic controls show `94-0190` and `94-190` both normalize to `94-190`; therefore that normalizer cannot establish unique identity. Preserve excluded historical docket mentions and SEC file numbers in raw evidence; broaden recognition only with a retained source cohort and a named rule.",
+      "document_anchor": "#t11--publish-complete-regulatory-memberships-and-identifier-candidates",
+      "implementation_complete": false,
+      "source_scope_qualified": false,
+      "data_published": false,
+      "deployed_verified": false
+    },
+    {
+      "id": "T12",
+      "title": "Publish structured CFR references and authority observations",
+      "status": "proposed",
+      "owner": "SpicyDocs extraction qualification, then SpicyRegs resolution",
+      "depends_on": [
+        "T01",
+        "T02"
+      ],
+      "proposal_ids": [
+        "P05"
+      ],
+      "change": "Project native FR `cfr_references`, parse explicit regulatory `cfrPart` values with the existing grammar, and add authority/source-note occurrences from `sources/cfr/authority.py:scan_ecfr_authority_notes`. Record part/section scope from XML ancestry and capture metadata. Keep authority and source-note relationships distinct.",
+      "output_and_example": "`cfrPart=\"17 CFR Part 2\"` yields title 17/part 2 without a section. The part-18 `AUTH` text yields a source-stated authority occurrence for `44 U.S.C. 1506` at its XML path, with `parse_status=partial`; the separate `SOURCE` text supplies `37 FR 23609`. Preserve the rest of both notes.",
+      "acceptance": "Complete the raw-to-output trace for both specimens, including input digest and unresolved portions. Scope title/date only from source metadata: the isolated part fragment itself does not state a CFR title. Qualify `PARAUTH`/`SECAUTH` and other unsupported forms separately before claiming complete authority coverage. Part-only references never become fabricated section targets; historical compilation and FR page citations use typed resolution.",
+      "document_anchor": "#t12--publish-structured-cfr-references-and-authority-observations",
+      "implementation_complete": false,
+      "source_scope_qualified": false,
+      "data_published": false,
+      "deployed_verified": false
+    },
+    {
+      "id": "T13",
+      "title": "Publish native U.S. Code references and classification links",
+      "status": "proposed",
+      "owner": "SpicyRegs projection using SpicyDocs scanners/normalizers",
+      "depends_on": [
+        "T01",
+        "T02"
+      ],
+      "proposal_ids": [
+        "P06"
+      ],
+      "change": "Use `sources/uscode/references.py:scan_uscode_references` for native XML `ref` and `sourceCredit` observations. Reuse `schemas/tables.py:usc_section_key` for compatible section spellings and the held law-code/Table III records. Preserve source hrefs, fragment identifiers, release/edition and amendment-history context.",
+      "output_and_example": "The retained section `/us/usc/t5/s423` names `/us/usc/t5/s401` in a native href; publish the occurrence and exact XML location. Its source credit states `Pub. L. 117\u2013286, \u00a7 3(b), Dec. 27, 2022, 136 Stat. 4255`; retain that text as a separate historical assertion before extracting typed references.",
+      "acceptance": "Replay all 30 reference observations and the source credit in this fragment, retain unrecognized href forms, and label its unspecified release point as unknown. Test letter suffixes and dash forms while preserving raw spellings. Classification rows remain many-to-many and edition-aware; source credit does not automatically prove current legal effect. Report observed overlap separately from normalization gains\u2014the previous sample showed no gain from normalization.",
+      "document_anchor": "#t13--publish-native-us-code-references-and-classification-links",
+      "implementation_complete": false,
+      "source_scope_qualified": false,
+      "data_published": false,
+      "deployed_verified": false
+    },
+    {
+      "id": "T14",
+      "title": "Join spending recipients to SAM without multiplying money",
+      "status": "proposed",
+      "owner": "SpicyRegs",
+      "depends_on": [
+        "T01"
+      ],
+      "proposal_ids": [
+        "P13"
+      ],
+      "change": "Publish a distinct UEI identifier view and a separate UEI-to-SAM-registration relation. Reuse SpicyDocs SAM validation and the current SAM/USAspending shapers. Preserve provider IDs, recipient level, native UEI spelling, DUNS and registration EFT fields; treat each identifier system separately.",
+      "output_and_example": "The retained SAM record has UEI `CJLMN78UULH4` and null EFT code; the retained USAspending record has a provider recipient ID ending `-R`, UEI `JE73CDQUAPA7`, and recipient level `R`. These two specimens illustrate different grains and are not claimed to match each other. On matching production UEIs, one recipient may lead to several registration rows.",
+      "acceptance": "Reconcile recipient counts and exact decimal totals before and after the entity-level enrichment. Report registration multiplicity separately. No arbitrary current/first registration selection, no null-to-empty identity rewrite, and no adding parent/child recipient totals as if disjoint. Validate the declared shape and disposition of malformed identifiers before any normalization.",
+      "document_anchor": "#t14--join-spending-recipients-to-sam-without-multiplying-money",
+      "implementation_complete": false,
+      "source_scope_qualified": false,
+      "data_published": false,
+      "deployed_verified": false
+    },
+    {
+      "id": "T15",
+      "title": "Expose the existing court graph with typed endpoints",
+      "status": "proposed",
+      "owner": "SpicyRegs using SpicyDocs CourtListener readers",
+      "depends_on": [
+        "T01",
+        "T02"
+      ],
+      "proposal_ids": [
+        "P15"
+      ],
+      "change": "Connect held courts, dockets, opinion clusters, opinions and citation edges using provider IDs and the current `build_court_*` transforms. Reuse `sources/courtlistener/{csv,local,search}.py`; keep search-result snippets distinct from acquired opinion text. Treat the separate Supreme Court source as a distinct identity route until a crosswalk is qualified.",
+      "output_and_example": "A retained CourtListener search result identifies cluster `10960737`, docket `74714368`, court `connappct`, and nested opinion `11428342` with cited-opinion IDs. Publish native endpoint references with missing-target status; the snippet is not a full opinion body.",
+      "acceptance": "Validate endpoint ID types, direction and selected-population coverage in projected key batches. Resolve citations at the correct opinion/cluster level without substituting case-name matches. Start with retained target-ID cohorts; perform the full graph check as a bounded offline job, not repeated broad MCP joins. Missing targets feed T24.",
+      "document_anchor": "#t15--expose-the-existing-court-graph-with-typed-endpoints",
+      "implementation_complete": false,
+      "source_scope_qualified": false,
+      "data_published": false,
+      "deployed_verified": false
+    },
+    {
+      "id": "T16",
+      "title": "Publish a source-artifact reference index",
+      "status": "proposed",
+      "owner": "SpicyDocs source rendition interfaces; SpicyRegs application index",
+      "depends_on": [
+        "T01"
+      ],
+      "proposal_ids": [
+        "P21"
+      ],
+      "change": "Reuse source rendition/file-reference readers, including Regulations.gov `comment_rendition_rows`, GovInfo bodies, meeting documents and FCC raw document arrays. Publish `(source_key, source_version, role, ordinal, offered_url, format, source_size, retained_digest, acquisition_status)` with provider locators. Retain every alternative rendition and attachment role.",
+      "output_and_example": "A source may offer a PDF URL while `retained_digest` is null and acquisition status is `not_acquired`; an acquired rendition points to its retained bytes and receipt. No URL-only record is described as a processed body.",
+      "acceptance": "Replay at least one nonempty native attachment/rendition case per enabled family, plus empty/missing cases, redirects and duplicate URLs in different roles. Offered, retained, parsed and refused states stay separate. Do not deduplicate away source occurrences or let T16 automatically fetch everything. T24 chooses bounded acquisitions using this index.",
+      "document_anchor": "#t16--publish-a-source-artifact-reference-index",
+      "implementation_complete": false,
+      "source_scope_qualified": false,
+      "data_published": false,
+      "deployed_verified": false
+    },
+    {
+      "id": "T17",
+      "title": "Extend citation extraction through source-specific adapters",
+      "status": "proposed",
+      "owner": "SpicyDocs reusable interpretation; SpicyRegs scheduling/writer",
+      "depends_on": [
+        "T02",
+        "T16"
+      ],
+      "proposal_ids": [
+        "P17"
+      ],
+      "change": "Reuse `interpretation/citations.py:find_citations`, its grammar and `schemas/document_citation_tables.py`; extend the existing application citation write path rather than creating per-source citation stores. First qualify held bill/report text, then independently qualify FCC, LDA activity text and comment bodies. Each enabled family gets a bounded retained cohort, source context and a read-completion record.",
+      "output_and_example": "`Public Law 114\u2013254` in retained budget text yields a source-text digest, span, exact matched text and normalized key; T02 supplies target existence. LDA activity text `transportation and infrastructure funding` produces no bill identifier. Its prior covered-position text does not establish current employment.",
+      "acceptance": "Score precision and missed mentions against reviewed source spans, including negative and historical-Congress cases. The current citation code documents limits to fallback document Congress; qualify explicit/historical context and abstention before broad use. A successful zero-result reread clears only that complete source/text/rule scope; failed or capped reads preserve earlier findings. Bound body reads and checkpoint work; do not scan the entire comment corpus interactively.",
+      "document_anchor": "#t17--extend-citation-extraction-through-source-specific-adapters",
+      "implementation_complete": false,
+      "source_scope_qualified": false,
+      "data_published": false,
+      "deployed_verified": false
+    },
+    {
+      "id": "T18",
+      "title": "Preserve and expose structured report and communication references",
+      "status": "proposed",
+      "owner": "SpicyDocs existing readers; SpicyRegs field projections",
+      "depends_on": [
+        "T02",
+        "T11"
+      ],
+      "proposal_ids": [
+        "P18",
+        "P06",
+        "P20"
+      ],
+      "change": "Reuse `sources/congress/record_communications.py`, `interpretation/communication_rin.py`, report MODS readers and existing report-section tables. Project legal-authority, committee-referral, RIN and stated subject fields with their roles, rather than treating them all as undifferentiated text mentions. Preserve report requirements and communication identities under their complete source keys.",
+      "output_and_example": "Retained House communication 4329, in `CREC-2016-02-12-pt1-PgH815-4`, states docket `OSHA-2015-0003`, RIN `1218-AC97`, `5 U.S.C. 801(a)(1)(A)`, Public Law `104-121`, and a committee referral. Emit separately located role-specific observations. Entry 4340 retains `General Counsel, Peace Corps` even though the existing official/agency splitter refuses to split it.",
+      "acceptance": "Replay the existing publisher-detail comparisons and source HTML, keeping joint referrals and unresolved splits. The current `rin_from_report_nature` returns only the first labeled RIN: retain its compatibility result and add an all-occurrences function only after qualifying a positive multi-RIN source specimen. Retain MODS fields directly where present; do not replace them with inferred prose values. Test source correction and repeated communication editions.",
+      "document_anchor": "#t18--preserve-and-expose-structured-report-and-communication-references",
+      "implementation_complete": false,
+      "source_scope_qualified": false,
+      "data_published": false,
+      "deployed_verified": false
+    },
+    {
+      "id": "T19",
+      "title": "Preserve party intervals and qualify dated roles",
+      "status": "proposed",
+      "owner": "SpicyDocs source model, then SpicyRegs dated joins",
+      "depends_on": [
+        "T01"
+      ],
+      "proposal_ids": [
+        "P19"
+      ],
+      "change": "Extend `sources/legislators.py:Term` and `schemas/legislator_tables.py` to preserve nested `party_affiliations` in source order. Publish member/term/affiliation occurrences, then use the selected source dates in the existing member-vote-term path. Review committee assignment date semantics separately before using them as historical membership.",
+      "output_and_example": "`T000254`, term index 3, yields Democrat `1961-01-03` to `1964-09-16` and Republican `1964-09-16` to `1967-01-03`; retain the term-level `Republican` assertion separately. These are source-listed dates, not a newly inferred political history.",
+      "acceptance": "The retained historical record replays without losing either interval. State interval boundary semantics and test the transition date, overlaps, gaps and missing end dates. A current roster cannot fill historical unknowns. Distinguish a dated native affiliation from a fallback term-level value. Provider change/pin precedes rebuilding dated application outputs.",
+      "document_anchor": "#t19--preserve-party-intervals-and-qualify-dated-roles",
+      "implementation_complete": false,
+      "source_scope_qualified": false,
+      "data_published": false,
+      "deployed_verified": false
+    },
+    {
+      "id": "T20",
+      "title": "Add namespaced agency and topic occurrence views",
+      "status": "proposed",
+      "owner": "SpicyRegs consuming source vocabulary and RefSpec artifacts",
+      "depends_on": [
+        "T01",
+        "T02"
+      ],
+      "proposal_ids": [
+        "P04",
+        "P20"
+      ],
+      "change": "Expand native FR agencies/topics, Congress subjects/policy areas, LDA issue/contacted-agency objects and regulatory keywords. Reuse existing source readers and the committed RefSpec agency projection/unresolved artifacts. Publish provider namespace/ID/label/version before any cross-source mapping; review proposed mapping rows with evidence and dates.",
+      "output_and_example": "FR agency ID `406` and slug `personnel-management-office` stay FR identifiers. LDA activity index 0 in filing `a934e791-d564-4fd3-8b78-041f8cfcf115` has issue `BUD` and an empty government-entity list. Its description does not create a contacted-agency edge. The existing LDA activity/lobbyist rows already preserve indexes; reuse them.",
+      "acceptance": "Reconcile array occurrences and publish unmatched or contested mappings. Check Regulatory `display_properties_json` before interpreting a field: `organization` can mean \u201cPre-EDOCKET ID.\u201d Cross-source topics are related concepts only under a reviewed mapping, not identical merely because labels match. Demonstrate a native-ID match, historical mapping and abstention for each enabled mapping route.",
+      "document_anchor": "#t20--add-namespaced-agency-and-topic-occurrence-views",
+      "implementation_complete": false,
+      "source_scope_qualified": false,
+      "data_published": false,
+      "deployed_verified": false
+    },
+    {
+      "id": "T21",
+      "title": "Anchor each text difference to both exact source versions",
+      "status": "proposed",
+      "owner": "SpicyRegs metadata/projection, reusing SpicyDocs diff output",
+      "depends_on": [
+        "T01"
+      ],
+      "proposal_ids": [
+        "P24"
+      ],
+      "change": "Use `schemas/bill_diff_tables.py` and `interpretation/section_diff.py` outputs to expose exact from/to version identities and source-specific section locators. Include version source, text digests and rule revision; keep unchanged and unmatched section outcomes when the current output supports them.",
+      "output_and_example": "A change row points independently to `(bill_id,from_version_code,from_source,from_section_locator)` and its corresponding complete `to_*` identity. Section numbering alone does not establish continuity between versions.",
+      "acceptance": "Both endpoints resolve on full keys with no row multiplication. Replay insertion, deletion, renumbering, moved text, equal version code from different providers and missing endpoint text. Change the diff algorithm only if a retained counterexample requires it; the immediate task is faithful endpoint navigation, not a new semantic amendment engine.",
+      "document_anchor": "#t21--anchor-each-text-difference-to-both-exact-source-versions",
+      "implementation_complete": false,
+      "source_scope_qualified": false,
+      "data_published": false,
+      "deployed_verified": false
+    },
+    {
+      "id": "T22",
+      "title": "Build an evidence-backed identity candidate queue",
+      "status": "proposed",
+      "owner": "SpicyRegs review workflow; RefSpec for accepted reusable mappings",
+      "depends_on": [
+        "T09",
+        "T14",
+        "T20"
+      ],
+      "proposal_ids": [
+        "P25"
+      ],
+      "change": "Keep current `org_committee_links` and other name matches as candidates with explicit method and status. Retrieve candidates using bounded normalized-name/address indexes and provider identifiers; record positive and conflicting evidence. Accepted links require a source identifier or a review decision with supporting sources and validity scope.",
+      "output_and_example": "A name-only FCC filer or Regulations.gov organization produces `(source_observation, candidate_entity, match_features, evidence_locations, decision=pending)`. It does not silently become a SAM entity, FEC committee or lobbyist. Preserve the observed name exactly.",
+      "acceptance": "A retained review set includes same-name/different-entity, historical rename, parent/subsidiary and unresolved cases. Reviewed matches retain decision provenance and can be revoked/rebuilt. No all-pairs corpus comparison and no funds aggregation through pending links. Distinguish acting role, represented client, employer and recipient rather than flattening them into one organization relation.",
+      "document_anchor": "#t22--build-an-evidence-backed-identity-candidate-queue",
+      "implementation_complete": false,
+      "source_scope_qualified": false,
+      "data_published": false,
+      "deployed_verified": false
+    },
+    {
+      "id": "T23",
+      "title": "Qualify Senate expenditure line extraction before publishing payments",
+      "status": "proposed",
+      "owner": "SpicyDocs reusable PDF extraction, then SpicyRegs interpretation",
+      "depends_on": [
+        "T01",
+        "T16"
+      ],
+      "proposal_ids": [
+        "P26"
+      ],
+      "change": "Start from `schemas/senate_expenditure_tables.py`, `shape_senate_expenditure_rows`, `page_context`, `parse_amount` and `summary_totals`. Create a hand-checked line-level truth set on the retained PDF ranges before extending the parser. Preserve parent cells, bounding boxes, printed/source page mapping, header roles and section boundaries.",
+      "output_and_example": "Printed B-1243 lists document `DJST20250194`, payee `ERAJ SHIRVANI`, and three expense lines with separate amounts. B-1244 continues the office's statement without restating the office heading. Candidate output must distinguish document/payee groups from individual expense lines; no one-to-one zip of extracted names, dates and amounts is justified.",
+      "acceptance": "Visual annotation and parser output agree for multiline descriptions, repeated payees, subtotal/total rows, negative values and continuation pages. Carry office context only within a proven section boundary and keep the origin page of that context. Reconcile complete summary sections with decimal arithmetic and stated totals. Retain unsupported/unparsed blocks. Publish only qualified grids and reporting periods; this review does not cover the later compensation/mail-allocation sections.",
+      "document_anchor": "#t23--qualify-senate-expenditure-line-extraction-before-publishing-payments",
+      "implementation_complete": false,
+      "source_scope_qualified": false,
+      "data_published": false,
+      "deployed_verified": false
+    },
+    {
+      "id": "T24",
+      "title": "Acquire the missing targets and bodies that unlock useful links",
+      "status": "proposed",
+      "owner": "SpicyDocs acquisition; SpicyRegs selection and publication",
+      "depends_on": [
+        "T02",
+        "T15",
+        "T16"
+      ],
+      "proposal_ids": [
+        "P27"
+      ],
+      "change": "Produce a deduplicated missing-target/body queue from resolution and artifact states, grouped by provider/native identifier/edition. Rank by source occurrences affected, unique records affected and intended user query. Inspect retained bytes/catalogs before selecting an origin acquisition route. Start with the missing law/USC/GAO targets surfaced by the audit and selected court opinion bodies.",
+      "output_and_example": "A work item carries exact requested identity, source scope, requesting occurrences, acquisition route, retained receipt/digest, and successful/empty/refused/unavailable outcome. An acquired body advances to extraction and publication only after its source qualification checks.",
+      "acceptance": "Complete a bounded end-to-end cohort for each enabled source, including refusal and retry paths, then re-resolve only affected occurrences against the new publication. A search snippet, offered URL, schema/catalog entry or failed fetch cannot count as an acquired body. No false empty tables on authentication/source failure. Document remaining historical editions and population gaps.",
+      "document_anchor": "#t24--acquire-the-missing-targets-and-bodies-that-unlock-useful-links",
+      "implementation_complete": false,
+      "source_scope_qualified": false,
+      "data_published": false,
+      "deployed_verified": false
+    },
+    {
+      "id": "T25",
+      "title": "Make aggregate joins and coverage claims reproducible",
+      "status": "proposed",
+      "owner": "SpicyRegs catalog/validation and existing ingestion receipts",
+      "depends_on": [
+        "T01"
+      ],
+      "proposal_ids": [
+        "P23",
+        "P28"
+      ],
+      "change": "Attach source selection, measurement period, table grain and read/publication status to aggregate and operational views. Reconcile comments/index, agency statistics, lifecycle summaries, feed summaries and source-coverage/checkpoint records within their declared generation. Use catalog snapshots for bulk input selection and retain public export pins separately.",
+      "output_and_example": "A comments-index row remains an `(agency_code,docket_id,year,month)` cohort, including nullable keys. A lifecycle date may cite FR even when the event was assembled from a Regulations.gov record. A successful source checkpoint reports its actual selection; it does not assert an entire archive was ingested.",
+      "acceptance": "Aggregate each side at the comparison grain before joining; use null-aware equality for nullable grouping keys; verify totals before/after enrichment. Tests distinguish failed, capped, valid empty, acquired, parsed and published states. Retain per-table snapshots when no atomic multi-table selection exists. Show user-facing coverage in the data dictionary/MCP response without claiming unversioned files have immutable identity.",
+      "document_anchor": "#t25--make-aggregate-joins-and-coverage-claims-reproducible",
+      "implementation_complete": false,
+      "source_scope_qualified": false,
+      "data_published": false,
+      "deployed_verified": false
+    }
+  ],
+  "proposal_to_tasks": {
+    "P01": [
+      "T01"
+    ],
+    "P02": [
+      "T02",
+      "T11"
+    ],
+    "P03": [
+      "T03",
+      "T11"
+    ],
+    "P04": [
+      "T20"
+    ],
+    "P05": [
+      "T12"
+    ],
+    "P06": [
+      "T13",
+      "T18"
+    ],
+    "P07": [
+      "T04"
+    ],
+    "P08": [
+      "T05"
+    ],
+    "P09": [
+      "T06"
+    ],
+    "P10": [
+      "T07"
+    ],
+    "P11": [
+      "T08"
+    ],
+    "P12": [
+      "T09"
+    ],
+    "P13": [
+      "T14"
+    ],
+    "P14": [
+      "T10"
+    ],
+    "P15": [
+      "T15"
+    ],
+    "P16": [
+      "T02"
+    ],
+    "P17": [
+      "T17"
+    ],
+    "P18": [
+      "T18"
+    ],
+    "P19": [
+      "T05",
+      "T19"
+    ],
+    "P20": [
+      "T18",
+      "T20"
+    ],
+    "P21": [
+      "T03",
+      "T16"
+    ],
+    "P22": [
+      "T01",
+      "T03"
+    ],
+    "P23": [
+      "T25"
+    ],
+    "P24": [
+      "T21"
+    ],
+    "P25": [
+      "T22"
+    ],
+    "P26": [
+      "T23"
+    ],
+    "P27": [
+      "T24"
+    ],
+    "P28": [
+      "T25"
+    ]
+  },
+  "table_to_tasks": [
+    {
+      "table": "dockets",
+      "reviewed_grain": "docket_id",
+      "proposal_ids": [
+        "P02",
+        "P03",
+        "P04",
+        "P23"
+      ],
+      "task_ids": [
+        "T02",
+        "T03",
+        "T11",
+        "T20",
+        "T25"
+      ],
+      "row_count_at_prior_audit_pin": 279429,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "documents",
+      "reviewed_grain": "document_id",
+      "proposal_ids": [
+        "P02",
+        "P05",
+        "P17",
+        "P21",
+        "P22"
+      ],
+      "task_ids": [
+        "T01",
+        "T02",
+        "T03",
+        "T11",
+        "T12",
+        "T16",
+        "T17"
+      ],
+      "row_count_at_prior_audit_pin": 2002888,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "comments",
+      "reviewed_grain": "comment_id",
+      "proposal_ids": [
+        "P17",
+        "P21",
+        "P25"
+      ],
+      "task_ids": [
+        "T03",
+        "T16",
+        "T17",
+        "T22"
+      ],
+      "row_count_at_prior_audit_pin": 26314331,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "comments_index",
+      "reviewed_grain": "agency_code + docket_id + year + month",
+      "proposal_ids": [
+        "P23"
+      ],
+      "task_ids": [
+        "T25"
+      ],
+      "row_count_at_prior_audit_pin": 143408,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "feed_summary",
+      "reviewed_grain": "docket_id",
+      "proposal_ids": [
+        "P03",
+        "P23"
+      ],
+      "task_ids": [
+        "T03",
+        "T11",
+        "T25"
+      ],
+      "row_count_at_prior_audit_pin": 279429,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "agency_stats",
+      "reviewed_grain": "agency_code",
+      "proposal_ids": [
+        "P04",
+        "P23"
+      ],
+      "task_ids": [
+        "T20",
+        "T25"
+      ],
+      "row_count_at_prior_audit_pin": 316,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "agency_monthly_volume",
+      "reviewed_grain": "agency_code + year + month + document_type",
+      "proposal_ids": [
+        "P04",
+        "P23"
+      ],
+      "task_ids": [
+        "T20",
+        "T25"
+      ],
+      "row_count_at_prior_audit_pin": 77972,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "fr_docket_links",
+      "reviewed_grain": "docket_id + document_number + publication_date, subject to source duplicates",
+      "proposal_ids": [
+        "P01",
+        "P02"
+      ],
+      "task_ids": [
+        "T01",
+        "T02",
+        "T11"
+      ],
+      "row_count_at_prior_audit_pin": 899630,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "discovery_signals",
+      "reviewed_grain": "agency_code within one computed window",
+      "proposal_ids": [
+        "P04",
+        "P23"
+      ],
+      "task_ids": [
+        "T20",
+        "T25"
+      ],
+      "row_count_at_prior_audit_pin": 8,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "cfr_sections",
+      "reviewed_grain": "granule_id; package and edition identify the annual source",
+      "proposal_ids": [
+        "P05",
+        "P06",
+        "P21"
+      ],
+      "task_ids": [
+        "T03",
+        "T12",
+        "T13",
+        "T16",
+        "T18"
+      ],
+      "row_count_at_prior_audit_pin": 321010,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "congress_bills",
+      "reviewed_grain": "bill_id = congress + type + number",
+      "proposal_ids": [
+        "P07",
+        "P08",
+        "P19"
+      ],
+      "task_ids": [
+        "T04",
+        "T05",
+        "T19"
+      ],
+      "row_count_at_prior_audit_pin": 421465,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "bill_subjects",
+      "reviewed_grain": "bill_id",
+      "proposal_ids": [
+        "P20"
+      ],
+      "task_ids": [
+        "T18",
+        "T20"
+      ],
+      "row_count_at_prior_audit_pin": 175095,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "unified_agenda",
+      "reviewed_grain": "rin + agenda_edition",
+      "proposal_ids": [
+        "P02",
+        "P05",
+        "P06",
+        "P23"
+      ],
+      "task_ids": [
+        "T02",
+        "T11",
+        "T12",
+        "T13",
+        "T18",
+        "T25"
+      ],
+      "row_count_at_prior_audit_pin": 233250,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "federal_register",
+      "reviewed_grain": "document_number + publication_date",
+      "proposal_ids": [
+        "P02",
+        "P04",
+        "P05",
+        "P16",
+        "P20"
+      ],
+      "task_ids": [
+        "T02",
+        "T11",
+        "T12",
+        "T18",
+        "T20"
+      ],
+      "row_count_at_prior_audit_pin": 1009313,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "rule_targets",
+      "reviewed_grain": "docket_id + cfr_ref + rin + source; evidence retained separately",
+      "proposal_ids": [
+        "P02",
+        "P03",
+        "P05",
+        "P16"
+      ],
+      "task_ids": [
+        "T02",
+        "T03",
+        "T11",
+        "T12"
+      ],
+      "row_count_at_prior_audit_pin": 617135,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "proceedings",
+      "reviewed_grain": "proceeding_id",
+      "proposal_ids": [
+        "P03",
+        "P05",
+        "P23"
+      ],
+      "task_ids": [
+        "T03",
+        "T11",
+        "T12",
+        "T25"
+      ],
+      "row_count_at_prior_audit_pin": 172742,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "regulatory_agenda_items",
+      "reviewed_grain": "agenda_item_id",
+      "proposal_ids": [
+        "P02",
+        "P03"
+      ],
+      "task_ids": [
+        "T02",
+        "T03",
+        "T11"
+      ],
+      "row_count_at_prior_audit_pin": 52092,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "agenda_item_proceedings",
+      "reviewed_grain": "relationship_id",
+      "proposal_ids": [
+        "P03",
+        "P16"
+      ],
+      "task_ids": [
+        "T02",
+        "T03",
+        "T11"
+      ],
+      "row_count_at_prior_audit_pin": 148011,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "comment_periods",
+      "reviewed_grain": "comment_period_id",
+      "proposal_ids": [
+        "P03",
+        "P21",
+        "P23"
+      ],
+      "task_ids": [
+        "T03",
+        "T11",
+        "T16",
+        "T25"
+      ],
+      "row_count_at_prior_audit_pin": 281635,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "rulemaking_lifecycles",
+      "reviewed_grain": "proceeding_id",
+      "proposal_ids": [
+        "P03",
+        "P23"
+      ],
+      "task_ids": [
+        "T03",
+        "T11",
+        "T25"
+      ],
+      "row_count_at_prior_audit_pin": 75270,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "lifecycle_events",
+      "reviewed_grain": "proceeding_id + document_id",
+      "proposal_ids": [
+        "P03",
+        "P16",
+        "P23"
+      ],
+      "task_ids": [
+        "T02",
+        "T03",
+        "T11",
+        "T25"
+      ],
+      "row_count_at_prior_audit_pin": 135362,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "agency_lifecycle_stats",
+      "reviewed_grain": "agency_code + stratum within a run/censor date",
+      "proposal_ids": [
+        "P04",
+        "P23"
+      ],
+      "task_ids": [
+        "T20",
+        "T25"
+      ],
+      "row_count_at_prior_audit_pin": 344,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "sam_entities",
+      "reviewed_grain": "uei + entity_eft_indicator",
+      "proposal_ids": [
+        "P13",
+        "P25"
+      ],
+      "task_ids": [
+        "T14",
+        "T22"
+      ],
+      "row_count_at_prior_audit_pin": 792846,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "lobbying_filings",
+      "reviewed_grain": "filing_uuid",
+      "proposal_ids": [
+        "P04",
+        "P13",
+        "P17",
+        "P25"
+      ],
+      "task_ids": [
+        "T14",
+        "T17",
+        "T20",
+        "T22"
+      ],
+      "row_count_at_prior_audit_pin": 934408,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "lobbying_activities",
+      "reviewed_grain": "filing_uuid + activity_index",
+      "proposal_ids": [
+        "P04",
+        "P17",
+        "P20"
+      ],
+      "task_ids": [
+        "T17",
+        "T18",
+        "T20"
+      ],
+      "row_count_at_prior_audit_pin": 1814037,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "lobbying_activity_lobbyists",
+      "reviewed_grain": "filing_uuid + activity_index + lobbyist_index",
+      "proposal_ids": [
+        "P19",
+        "P25"
+      ],
+      "task_ids": [
+        "T05",
+        "T19",
+        "T22"
+      ],
+      "row_count_at_prior_audit_pin": 4735060,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "fec_committees",
+      "reviewed_grain": "committee_id",
+      "proposal_ids": [
+        "P11",
+        "P12",
+        "P20"
+      ],
+      "task_ids": [
+        "T08",
+        "T09",
+        "T18",
+        "T20"
+      ],
+      "row_count_at_prior_audit_pin": 89689,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "fec_committee_history",
+      "reviewed_grain": "committee_id + cycle",
+      "proposal_ids": [
+        "P11",
+        "P12",
+        "P25"
+      ],
+      "task_ids": [
+        "T08",
+        "T09",
+        "T22"
+      ],
+      "row_count_at_prior_audit_pin": 298395,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "document_attributes",
+      "reviewed_grain": "document_id",
+      "proposal_ids": [
+        "P01",
+        "P05",
+        "P22"
+      ],
+      "task_ids": [
+        "T01",
+        "T03",
+        "T12"
+      ],
+      "row_count_at_prior_audit_pin": 2002888,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "docket_attributes",
+      "reviewed_grain": "docket_id",
+      "proposal_ids": [
+        "P01",
+        "P20",
+        "P22"
+      ],
+      "task_ids": [
+        "T01",
+        "T03",
+        "T18",
+        "T20"
+      ],
+      "row_count_at_prior_audit_pin": 279406,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "fec_source_catalog",
+      "reviewed_grain": "source_family",
+      "proposal_ids": [
+        "P12",
+        "P27",
+        "P28"
+      ],
+      "task_ids": [
+        "T09",
+        "T24",
+        "T25"
+      ],
+      "row_count_at_prior_audit_pin": 26,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "fec_collections",
+      "reviewed_grain": "collection_id",
+      "proposal_ids": [
+        "P12",
+        "P28"
+      ],
+      "task_ids": [
+        "T09",
+        "T25"
+      ],
+      "row_count_at_prior_audit_pin": 649,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "fec_source_records",
+      "reviewed_grain": "collection_id + source_record_id",
+      "proposal_ids": [
+        "P11",
+        "P12",
+        "P21",
+        "P27"
+      ],
+      "task_ids": [
+        "T03",
+        "T08",
+        "T09",
+        "T16",
+        "T24"
+      ],
+      "row_count_at_prior_audit_pin": 13717161,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "fec_relationships",
+      "reviewed_grain": "source digest + source locator + relation/role + array position; occurrence identity",
+      "proposal_ids": [
+        "P11",
+        "P12",
+        "P25"
+      ],
+      "task_ids": [
+        "T08",
+        "T09",
+        "T22"
+      ],
+      "row_count_at_prior_audit_pin": 183390,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "org_committee_links",
+      "reviewed_grain": "organization + committee_id",
+      "proposal_ids": [
+        "P25"
+      ],
+      "task_ids": [
+        "T22"
+      ],
+      "row_count_at_prior_audit_pin": 5740,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "gao_reports",
+      "reviewed_grain": "report_id",
+      "proposal_ids": [
+        "P16",
+        "P27"
+      ],
+      "task_ids": [
+        "T02",
+        "T24"
+      ],
+      "row_count_at_prior_audit_pin": 42,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "crs_reports",
+      "reviewed_grain": "report_id with version retained",
+      "proposal_ids": [
+        "P16",
+        "P27"
+      ],
+      "task_ids": [
+        "T02",
+        "T24"
+      ],
+      "row_count_at_prior_audit_pin": 14145,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "court_dockets",
+      "reviewed_grain": "cl_docket_id",
+      "proposal_ids": [
+        "P15",
+        "P25"
+      ],
+      "task_ids": [
+        "T15",
+        "T22"
+      ],
+      "row_count_at_prior_audit_pin": 11478,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "court_docket_groups",
+      "reviewed_grain": "cl_docket_id within edition/rule_version",
+      "proposal_ids": [
+        "P15"
+      ],
+      "task_ids": [
+        "T15"
+      ],
+      "row_count_at_prior_audit_pin": 901,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "court_opinion_clusters",
+      "reviewed_grain": "cluster_id",
+      "proposal_ids": [
+        "P15",
+        "P17",
+        "P27"
+      ],
+      "task_ids": [
+        "T15",
+        "T17",
+        "T24"
+      ],
+      "row_count_at_prior_audit_pin": 10070727,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "court_citations",
+      "reviewed_grain": "citation_id",
+      "proposal_ids": [
+        "P15",
+        "P16"
+      ],
+      "task_ids": [
+        "T02",
+        "T15"
+      ],
+      "row_count_at_prior_audit_pin": 18123788,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "court_citation_map",
+      "reviewed_grain": "citing_opinion_id + cited_opinion_id",
+      "proposal_ids": [
+        "P15"
+      ],
+      "task_ids": [
+        "T15"
+      ],
+      "row_count_at_prior_audit_pin": 77460014,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "court_parentheticals",
+      "reviewed_grain": "parenthetical_id",
+      "proposal_ids": [
+        "P15",
+        "P17"
+      ],
+      "task_ids": [
+        "T15",
+        "T17"
+      ],
+      "row_count_at_prior_audit_pin": 6408887,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "court_opinions",
+      "reviewed_grain": "opinion_id",
+      "proposal_ids": [
+        "P15",
+        "P21",
+        "P27"
+      ],
+      "task_ids": [
+        "T03",
+        "T15",
+        "T16",
+        "T24"
+      ],
+      "row_count_at_prior_audit_pin": 10798347,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "usaspending_recipients",
+      "reviewed_grain": "recipient_id including recipient_level",
+      "proposal_ids": [
+        "P13",
+        "P25"
+      ],
+      "task_ids": [
+        "T14",
+        "T22"
+      ],
+      "row_count_at_prior_audit_pin": 231700,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "fcc_proceedings",
+      "reviewed_grain": "name; id_proceeding retained as separate native ID",
+      "proposal_ids": [
+        "P04",
+        "P14"
+      ],
+      "task_ids": [
+        "T10",
+        "T20"
+      ],
+      "row_count_at_prior_audit_pin": 21684,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "fcc_filings",
+      "reviewed_grain": "id_submission",
+      "proposal_ids": [
+        "P14",
+        "P17",
+        "P21",
+        "P25"
+      ],
+      "task_ids": [
+        "T03",
+        "T10",
+        "T16",
+        "T17",
+        "T22"
+      ],
+      "row_count_at_prior_audit_pin": 5780,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "bill_actions",
+      "reviewed_grain": "bill_id + action_index",
+      "proposal_ids": [
+        "P01",
+        "P17",
+        "P19"
+      ],
+      "task_ids": [
+        "T01",
+        "T05",
+        "T17",
+        "T19"
+      ],
+      "row_count_at_prior_audit_pin": 930779,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "bill_committees",
+      "reviewed_grain": "bill_id + system_code",
+      "proposal_ids": [
+        "P19"
+      ],
+      "task_ids": [
+        "T05",
+        "T19"
+      ],
+      "row_count_at_prior_audit_pin": 286100,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "bill_publisher_summaries",
+      "reviewed_grain": "bill_id + summary_version_code + action_date",
+      "proposal_ids": [
+        "P17",
+        "P21"
+      ],
+      "task_ids": [
+        "T03",
+        "T16",
+        "T17"
+      ],
+      "row_count_at_prior_audit_pin": 189604,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "bill_versions",
+      "reviewed_grain": "bill_id + version_code + source",
+      "proposal_ids": [
+        "P01",
+        "P21",
+        "P24"
+      ],
+      "task_ids": [
+        "T01",
+        "T03",
+        "T16",
+        "T21"
+      ],
+      "row_count_at_prior_audit_pin": 225706,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "bill_sections",
+      "reviewed_grain": "bill_id + version_code + source + seq",
+      "proposal_ids": [
+        "P01",
+        "P17",
+        "P24"
+      ],
+      "task_ids": [
+        "T01",
+        "T17",
+        "T21"
+      ],
+      "row_count_at_prior_audit_pin": 2659863,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "section_diffs",
+      "reviewed_grain": "bill_id + from_version_code + from_source + to_version_code + to_source",
+      "proposal_ids": [
+        "P01",
+        "P24"
+      ],
+      "task_ids": [
+        "T01",
+        "T21"
+      ],
+      "row_count_at_prior_audit_pin": 28431,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "section_diff_items",
+      "reviewed_grain": "full section_diffs key + seq",
+      "proposal_ids": [
+        "P24"
+      ],
+      "task_ids": [
+        "T21"
+      ],
+      "row_count_at_prior_audit_pin": 1150597,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "public_activity_events",
+      "reviewed_grain": "bill_id + event_type + subject_id + occurred_at",
+      "proposal_ids": [
+        "P21",
+        "P23"
+      ],
+      "task_ids": [
+        "T03",
+        "T16",
+        "T25"
+      ],
+      "row_count_at_prior_audit_pin": 420867,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "amendments",
+      "reviewed_grain": "amendment_id = congress + type + number",
+      "proposal_ids": [
+        "P10",
+        "P19"
+      ],
+      "task_ids": [
+        "T05",
+        "T07",
+        "T19"
+      ],
+      "row_count_at_prior_audit_pin": 7106,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "press_releases",
+      "reviewed_grain": "release_id",
+      "proposal_ids": [
+        "P17",
+        "P21",
+        "P25"
+      ],
+      "task_ids": [
+        "T03",
+        "T16",
+        "T17",
+        "T22"
+      ],
+      "row_count_at_prior_audit_pin": 36,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "roll_call_votes",
+      "reviewed_grain": "vote_id = congress + chamber + session + roll_number",
+      "proposal_ids": [
+        "P10",
+        "P19"
+      ],
+      "task_ids": [
+        "T05",
+        "T07",
+        "T19"
+      ],
+      "row_count_at_prior_audit_pin": 23358,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "member_votes",
+      "reviewed_grain": "vote_id + member_key",
+      "proposal_ids": [
+        "P19"
+      ],
+      "task_ids": [
+        "T05",
+        "T19"
+      ],
+      "row_count_at_prior_audit_pin": 7384694,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "members",
+      "reviewed_grain": "bioguide_id",
+      "proposal_ids": [
+        "P11",
+        "P19",
+        "P25"
+      ],
+      "task_ids": [
+        "T05",
+        "T08",
+        "T19",
+        "T22"
+      ],
+      "row_count_at_prior_audit_pin": 12770,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "member_terms",
+      "reviewed_grain": "bioguide_id + term_index",
+      "proposal_ids": [
+        "P19"
+      ],
+      "task_ids": [
+        "T05",
+        "T19"
+      ],
+      "row_count_at_prior_audit_pin": 45535,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "member_vote_terms",
+      "reviewed_grain": "vote_id + member_key",
+      "proposal_ids": [
+        "P19"
+      ],
+      "task_ids": [
+        "T05",
+        "T19"
+      ],
+      "row_count_at_prior_audit_pin": 7384694,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "committee_reports",
+      "reviewed_grain": "package_id + part_id",
+      "proposal_ids": [
+        "P01",
+        "P18",
+        "P21"
+      ],
+      "task_ids": [
+        "T01",
+        "T03",
+        "T16",
+        "T18"
+      ],
+      "row_count_at_prior_audit_pin": 146,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "report_sections",
+      "reviewed_grain": "package_id + part_id + seq",
+      "proposal_ids": [
+        "P01",
+        "P17",
+        "P21"
+      ],
+      "task_ids": [
+        "T01",
+        "T03",
+        "T16",
+        "T17"
+      ],
+      "row_count_at_prior_audit_pin": 1953,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "hearing_transcripts",
+      "reviewed_grain": "package_id",
+      "proposal_ids": [
+        "P01",
+        "P09",
+        "P21"
+      ],
+      "task_ids": [
+        "T01",
+        "T03",
+        "T06",
+        "T16"
+      ],
+      "row_count_at_prior_audit_pin": 145,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "hearing_bill_links",
+      "reviewed_grain": "package_id + bill_id + link_source",
+      "proposal_ids": [
+        "P09"
+      ],
+      "task_ids": [
+        "T06"
+      ],
+      "row_count_at_prior_audit_pin": 86,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "cbo_cost_estimates",
+      "reviewed_grain": "bill_id + publication_id",
+      "proposal_ids": [
+        "P18",
+        "P21"
+      ],
+      "task_ids": [
+        "T03",
+        "T16",
+        "T18"
+      ],
+      "row_count_at_prior_audit_pin": 12732,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "house_activity_reports",
+      "reviewed_grain": "package_id",
+      "proposal_ids": [
+        "P16",
+        "P18",
+        "P19",
+        "P21"
+      ],
+      "task_ids": [
+        "T02",
+        "T03",
+        "T05",
+        "T16",
+        "T18",
+        "T19"
+      ],
+      "row_count_at_prior_audit_pin": 40,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "budget_volumes",
+      "reviewed_grain": "package_id",
+      "proposal_ids": [
+        "P05",
+        "P06",
+        "P16",
+        "P18",
+        "P21"
+      ],
+      "task_ids": [
+        "T02",
+        "T03",
+        "T12",
+        "T13",
+        "T16",
+        "T18"
+      ],
+      "row_count_at_prior_audit_pin": 29,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "bill_committee_actions",
+      "reviewed_grain": "document_key + text_sha256 + bill_id + print_phrasing + span_start",
+      "proposal_ids": [
+        "P16",
+        "P19"
+      ],
+      "task_ids": [
+        "T02",
+        "T05",
+        "T19"
+      ],
+      "row_count_at_prior_audit_pin": 12695,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "document_citations",
+      "reviewed_grain": "document_key + text_sha256 + cite_kind + target_key + span_start",
+      "proposal_ids": [
+        "P05",
+        "P06",
+        "P15",
+        "P16",
+        "P17"
+      ],
+      "task_ids": [
+        "T02",
+        "T12",
+        "T13",
+        "T15",
+        "T17",
+        "T18"
+      ],
+      "row_count_at_prior_audit_pin": 52674,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "senate_expenditures",
+      "reviewed_grain": "package_id + file_name + page + table_ordinal + row_ordinal + text_sha256",
+      "proposal_ids": [
+        "P21",
+        "P26"
+      ],
+      "task_ids": [
+        "T03",
+        "T16",
+        "T23"
+      ],
+      "row_count_at_prior_audit_pin": 2623,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "laws",
+      "reviewed_grain": "congress + law_type + number; law_id is its joined form",
+      "proposal_ids": [
+        "P06",
+        "P16"
+      ],
+      "task_ids": [
+        "T02",
+        "T13",
+        "T18"
+      ],
+      "row_count_at_prior_audit_pin": 113,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "law_code_sections",
+      "reviewed_grain": "congress + session + seq",
+      "proposal_ids": [
+        "P06"
+      ],
+      "task_ids": [
+        "T13",
+        "T18"
+      ],
+      "row_count_at_prior_audit_pin": 3655,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "table3_records",
+      "reviewed_grain": "act_key + seq within release_point",
+      "proposal_ids": [
+        "P06"
+      ],
+      "task_ids": [
+        "T13",
+        "T18"
+      ],
+      "row_count_at_prior_audit_pin": 2983,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "committees",
+      "reviewed_grain": "system_code",
+      "proposal_ids": [
+        "P19",
+        "P20"
+      ],
+      "task_ids": [
+        "T05",
+        "T18",
+        "T19",
+        "T20"
+      ],
+      "row_count_at_prior_audit_pin": 817,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "committee_assignments",
+      "reviewed_grain": "congress + system_code + bioguide_id",
+      "proposal_ids": [
+        "P19"
+      ],
+      "task_ids": [
+        "T05",
+        "T19"
+      ],
+      "row_count_at_prior_audit_pin": 2966,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "house_communications",
+      "reviewed_grain": "communication_id = congress + communication_type + number",
+      "proposal_ids": [
+        "P02",
+        "P04",
+        "P18",
+        "P19"
+      ],
+      "task_ids": [
+        "T02",
+        "T05",
+        "T11",
+        "T18",
+        "T19",
+        "T20"
+      ],
+      "row_count_at_prior_audit_pin": 5006,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "committee_meetings",
+      "reviewed_grain": "congress + chamber + event_id",
+      "proposal_ids": [
+        "P09",
+        "P19",
+        "P21",
+        "P25"
+      ],
+      "task_ids": [
+        "T03",
+        "T05",
+        "T06",
+        "T16",
+        "T19",
+        "T22"
+      ],
+      "row_count_at_prior_audit_pin": 6096,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "record_issues",
+      "reviewed_grain": "volume + issue; package_id provides GovInfo link",
+      "proposal_ids": [
+        "P18",
+        "P21",
+        "P27"
+      ],
+      "task_ids": [
+        "T03",
+        "T16",
+        "T18",
+        "T24"
+      ],
+      "row_count_at_prior_audit_pin": 368,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "treaties",
+      "reviewed_grain": "congress_received + number + suffix; treaty_id",
+      "proposal_ids": [
+        "P10",
+        "P18",
+        "P20"
+      ],
+      "task_ids": [
+        "T07",
+        "T18",
+        "T20"
+      ],
+      "row_count_at_prior_audit_pin": 2,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "nominations",
+      "reviewed_grain": "congress + citation, including part suffix",
+      "proposal_ids": [
+        "P10",
+        "P19",
+        "P25"
+      ],
+      "task_ids": [
+        "T05",
+        "T07",
+        "T19",
+        "T22"
+      ],
+      "row_count_at_prior_audit_pin": 2214,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "bill_family_archives",
+      "reviewed_grain": "name/link for a captured source listing",
+      "proposal_ids": [
+        "P28"
+      ],
+      "task_ids": [
+        "T25"
+      ],
+      "row_count_at_prior_audit_pin": 96,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "bill_vote_references",
+      "reviewed_grain": "bill_id + chamber + congress + session + roll_number + action_index",
+      "proposal_ids": [
+        "P01",
+        "P10"
+      ],
+      "task_ids": [
+        "T01",
+        "T07"
+      ],
+      "row_count_at_prior_audit_pin": 19775,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    },
+    {
+      "table": "committee_report_reads",
+      "reviewed_grain": "package_id checkpoint",
+      "proposal_ids": [
+        "P28"
+      ],
+      "task_ids": [
+        "T25"
+      ],
+      "row_count_at_prior_audit_pin": 292,
+      "raw_source_review_scope": "Selected specimen review; see task and evidence manifest. No assertion that every source record was replayed."
+    }
+  ],
+  "excluded_empty_tables_from_prior_audit": [
+    {
+      "table": "financial_changes",
+      "row_count": 0,
+      "coverage_note": "Sampled. The adoption run produced 0 rows in this output from the 118th Congress's HR and S BILLSTATUS archives, processing 16,213 bills in one pass. The pass used 16 requests (8 keyed, 8 keyless), with the printing cap fixed at four and model calls disabled. No consecutive pair had both parsed bodies in the four-printing sample. Receipt: `rollups-0-24-0-adoption-2026-09-20/`. Local output only; not uploaded."
+    },
+    {
+      "table": "section_classifications",
+      "row_count": 0,
+      "coverage_note": "Sampled. The adoption run produced 0 rows in this output from the 118th Congress's HR and S BILLSTATUS archives, processing 16,213 bills in one pass. The pass used 16 requests (8 keyed, 8 keyless), with the printing cap fixed at four and model calls disabled. Model calls were capped at zero, so this run measures no classification yield. Receipt: `rollups-0-24-0-adoption-2026-09-20/`. Local output only; not uploaded."
+    },
+    {
+      "table": "bill_summaries",
+      "row_count": 0,
+      "coverage_note": "Sampled. The adoption run produced 0 rows in this output from the 118th Congress's HR and S BILLSTATUS archives, processing 16,213 bills in one pass. The pass used 16 requests (8 keyed, 8 keyless), with the printing cap fixed at four and model calls disabled. Model calls were capped at zero, so this run measures no summary yield. Receipt: `rollups-0-24-0-adoption-2026-09-20/`. Local output only; not uploaded."
+    },
+    {
+      "table": "diff_summaries",
+      "row_count": 0,
+      "coverage_note": "Sampled. The adoption run produced 0 rows in this output from the 118th Congress's HR and S BILLSTATUS archives, processing 16,213 bills in one pass. The pass used 16 requests (8 keyed, 8 keyless), with the printing cap fixed at four and model calls disabled. Model calls were capped at zero, so this run measures no summary yield. Receipt: `rollups-0-24-0-adoption-2026-09-20/`. Local output only; not uploaded."
+    },
+    {
+      "table": "bill_family_backfills",
+      "row_count": 0,
+      "coverage_note": "Not a range. The adoption run produced 0 rows in this output from the 118th Congress's HR and S BILLSTATUS archives, processing 16,213 bills in one pass. The pass used 16 requests (8 keyed, 8 keyless), with the printing cap fixed at four and model calls disabled. The pre-108th API backfill route was outside the declared scope. Receipt: `rollups-0-24-0-adoption-2026-09-20/`. Local output only; not uploaded."
+    },
+    {
+      "table": "bill_family_backfill_walks",
+      "row_count": 0,
+      "coverage_note": "Not a range. The adoption run produced 0 rows in this output from the 118th Congress's HR and S BILLSTATUS archives, processing 16,213 bills in one pass. The pass used 16 requests (8 keyed, 8 keyless), with the printing cap fixed at four and model calls disabled. The pre-108th API backfill route was outside the declared scope. Receipt: `rollups-0-24-0-adoption-2026-09-20/`. Local output only; not uploaded."
+    }
+  ],
+  "revisions": [
+    {
+      "date": "2026-09-27",
+      "change": "Corrected Senate transcription DUST20250194 / ERAI SHIRVANI to DJST20250194 / ERAJ SHIRVANI after high-resolution native PDF review; proposal status unchanged.",
+      "evidence": "spicy-docs/tests/fixtures/senate_expenditures/payment-review-2026-09-27.json",
+      "input_sha256": "32834f1078045ef2d298cfbe664db9527d0eb39e1557fe9eb656e2ba38e1f7b6"
+    }
+  ]
+}

@@ -1,0 +1,597 @@
+{
+  "chamber": "House",
+  "committees": [
+    {
+      "name": "House Oversight and Government Reform",
+      "systemCode": "hsgo00",
+      "url": "https://api.congress.gov/v3/committee/house/hsgo00?format=json"
+    }
+  ],
+  "congress": 119,
+  "date": "2026-03-04T14:00:00Z",
+  "eventId": "119003",
+  "hearingTranscript": [
+    {
+      "jacketNumber": 63019,
+      "url": "https://api.congress.gov/v3/hearing/119/house/63019?format=json"
+    },
+    {
+      "jacketNumber": 64431,
+      "url": "https://api.congress.gov/v3/hearing/119/house/64431?format=json"
+    }
+  ],
+  "location": {
+    "building": "Capitol",
+    "room": "HVC-210"
+  },
+  "meetingDocuments": [
+    {
+      "description": "Transcript Errata",
+      "documentType": "Hearing: Cover Page",
+      "format": "PDF",
+      "name": "Transcript Errata",
+      "url": "https://www.congress.gov/119/meeting/house/119003/documents/HHRG-119-GO00-20260304-CPg.pdf"
+    },
+    {
+      "description": "Transcript",
+      "documentType": "Hearing: Transcript",
+      "format": "PDF",
+      "name": "Transcript",
+      "url": "https://www.congress.gov/119/meeting/house/119003/documents/HHRG-119-GO00-Transcript-20260304.pdf"
+    },
+    {
+      "description": "Notice",
+      "documentType": "Support Document",
+      "format": "PDF",
+      "name": "Notice",
+      "url": "https://www.congress.gov/119/meeting/house/119003/documents/HHRG-119-GO00-20260304-SD001.pdf"
+    },
+    {
+      "description": "Memo",
+      "documentType": "Support Document",
+      "format": "PDF",
+      "name": "Memo",
+      "url": "https://www.congress.gov/119/meeting/house/119003/documents/HHRG-119-GO00-20260304-SD002.pdf"
+    },
+    {
+      "description": "Time Change Notice",
+      "documentType": "Support Document",
+      "format": "PDF",
+      "name": "Time Change Notice",
+      "url": "https://www.congress.gov/119/meeting/house/119003/documents/HHRG-119-GO00-20260304-SD003.pdf"
+    },
+    {
+      "description": "Attendance Sheet",
+      "documentType": "Hearing: Member Roster",
+      "format": "PDF",
+      "name": "Attendance Sheet",
+      "url": "https://www.congress.gov/119/meeting/house/119003/documents/HHRG-119-GO00-20260304-MbrRoster.pdf"
+    },
+    {
+      "description": "Krishnamoorthi Motion to Subpoena Department of Homeland Security Secretary Kristi Noem",
+      "documentType": "Support Document",
+      "format": "PDF",
+      "name": "Krishnamoorthi Motion to Subpoena Department of Homeland Security Secretary Kristi Noem",
+      "url": "https://www.congress.gov/119/meeting/house/119003/documents/HHRG-119-GO00-20260304-SD004.pdf"
+    },
+    {
+      "description": "Mace Motion to Subpoena Attorney General Pamela Bondi",
+      "documentType": "Support Document",
+      "format": "PDF",
+      "name": "Mace Motion to Subpoena Attorney General Pamela Bondi",
+      "url": "https://www.congress.gov/119/meeting/house/119003/documents/HHRG-119-GO00-20260304-SD005.pdf"
+    },
+    {
+      "description": "Mace Motion to Subpoena the Office of Congressional Workplace Rights",
+      "documentType": "Support Document",
+      "format": "PDF",
+      "name": "Mace Motion to Subpoena the Office of Congressional Workplace Rights",
+      "url": "https://www.congress.gov/119/meeting/house/119003/documents/HHRG-119-GO00-20260304-SD006.pdf"
+    },
+    {
+      "description": "Bell Motion to Subpoena Greg Bovino",
+      "documentType": "Support Document",
+      "format": "PDF",
+      "name": "Bell Motion to Subpoena Greg Bovino",
+      "url": "https://www.congress.gov/119/meeting/house/119003/documents/HHRG-119-GO00-20260304-SD007.pdf"
+    },
+    {
+      "description": "Garcia Amendment to Mace Motion to Subpoena Office of Congressional Workplace Rights",
+      "documentType": "Committee Amendment",
+      "format": "PDF",
+      "name": "Garcia Amendment to Mace Motion to Subpoena Office of Congressional Workplace Rights",
+      "url": "https://www.congress.gov/119/meeting/house/119003/documents/BILLS-119-MaceMotion2-G000598-Amdt-1.pdf"
+    },
+    {
+      "description": "Vote #01: Krishnamoorthi Motion to Subpoena Homeland Security Secretary Kristi Noem. The motion failed by a recorded vote of 19-24.",
+      "documentType": "Committee Recorded Vote",
+      "format": "PDF",
+      "name": "Vote #01: Krishnamoorthi Motion to Subpoena Homeland Security Secretary Kristi Noem. The motion failed by a recorded vote of 19-24.",
+      "url": "https://www.congress.gov/119/meeting/house/119003/documents/CRPT-119-GO00-Vote001-20260304.pdf"
+    },
+    {
+      "description": "Vote #02: Mace Motion to Subpoena Attorney General Pamela Bondi. The motion passed by a recorded vote of 24-19.",
+      "documentType": "Committee Recorded Vote",
+      "format": "PDF",
+      "name": "Vote #02: Mace Motion to Subpoena Attorney General Pamela Bondi. The motion passed by a recorded vote of 24-19.",
+      "url": "https://www.congress.gov/119/meeting/house/119003/documents/CRPT-119-GO00-Vote002-20260304.pdf"
+    },
+    {
+      "description": "Vote #03: Bell Motion to Subpoena Gregory Bovino, Commander-at-Large of the US Border Patrol. The motion failed by a recorded vote of 19-22.",
+      "documentType": "Committee Recorded Vote",
+      "format": "PDF",
+      "name": "Vote #03: Bell Motion to Subpoena Gregory Bovino, Commander-at-Large of the US Border Patrol. The motion failed by a recorded vote of 19-22.",
+      "url": "https://www.congress.gov/119/meeting/house/119003/documents/CRPT-119-GO00-Vote003-20260304.pdf"
+    },
+    {
+      "description": "UC - Comer - Staff Report - The Cost of Doing Nothing: How Tim Walz and Keith Ellison Fueled Minnesota's Fraud Explosion",
+      "documentType": "Support Document",
+      "format": "PDF",
+      "name": "UC - Comer - Staff Report - The Cost of Doing Nothing: How Tim Walz and Keith Ellison Fueled Minnesota's Fraud Explosion",
+      "url": "https://www.congress.gov/119/meeting/house/119003/documents/HHRG-119-GO00-20260304-SD008.pdf"
+    },
+    {
+      "description": "UC - McCollum - Statement for the Record",
+      "documentType": "Support Document",
+      "format": "PDF",
+      "name": "UC - McCollum - Statement for the Record",
+      "url": "https://www.congress.gov/119/meeting/house/119003/documents/HHRG-119-GO00-20260304-SD009.pdf"
+    },
+    {
+      "description": "UC - Biggs - Article - Biden clemency for convicted fraudsters met with outrage, 'Slap in the face' - Fox News",
+      "documentType": "Support Document",
+      "format": "PDF",
+      "name": "UC - Biggs - Article - Biden clemency for convicted fraudsters met with outrage, 'Slap in the face' - Fox News",
+      "url": "https://www.congress.gov/119/meeting/house/119003/documents/HHRG-119-GO00-20260304-SD010.pdf"
+    },
+    {
+      "description": "UC - Biggs - Article - Biden's clemency and pardon list includes former elected official, lawyers and medical bill company owner - NBC News",
+      "documentType": "Support Document",
+      "format": "PDF",
+      "name": "UC - Biggs - Article - Biden's clemency and pardon list includes former elected official, lawyers and medical bill company owner - NBC News",
+      "url": "https://www.congress.gov/119/meeting/house/119003/documents/HHRG-119-GO00-20260304-SD011.pdf"
+    },
+    {
+      "description": "UC - Biggs - Article - Minnesota AG who took $10K from scammers says fraud scandal is \u2018political theater\u2019 - NYP",
+      "documentType": "Support Document",
+      "format": "PDF",
+      "name": "UC - Biggs - Article - Minnesota AG who took $10K from scammers says fraud scandal is \u2018political theater\u2019 - NYP",
+      "url": "https://www.congress.gov/119/meeting/house/119003/documents/HHRG-119-GO00-20260304-SD012.pdf"
+    },
+    {
+      "description": "UC - Biggs - Article - North Dakota judge blasts Biden for setting fraudsters free - North Dakota Monitor",
+      "documentType": "Support Document",
+      "format": "PDF",
+      "name": "UC - Biggs - Article - North Dakota judge blasts Biden for setting fraudsters free - North Dakota Monitor",
+      "url": "https://www.congress.gov/119/meeting/house/119003/documents/HHRG-119-GO00-20260304-SD013.pdf"
+    },
+    {
+      "description": "UC - Biggs - Article - The drug dealers, thieves and gang leaders who are granted clemency by Biden - Daily Mail",
+      "documentType": "Support Document",
+      "format": "PDF",
+      "name": "UC - Biggs - Article - The drug dealers, thieves and gang leaders who are granted clemency by Biden - Daily Mail",
+      "url": "https://www.congress.gov/119/meeting/house/119003/documents/HHRG-119-GO00-20260304-SD014.pdf"
+    },
+    {
+      "description": "UC - Biggs - Article - Victims Shocked After Biden Grants Clemency to Kids for Cash - CNN",
+      "documentType": "Support Document",
+      "format": "PDF",
+      "name": "UC - Biggs - Article - Victims Shocked After Biden Grants Clemency to Kids for Cash - CNN",
+      "url": "https://www.congress.gov/119/meeting/house/119003/documents/HHRG-119-GO00-20260304-SD015.pdf"
+    },
+    {
+      "description": "UC - Biggs - Article - Who Has Joe Biden Pardoned, Full List - Newsweek",
+      "documentType": "Support Document",
+      "format": "PDF",
+      "name": "UC - Biggs - Article - Who Has Joe Biden Pardoned, Full List - Newsweek",
+      "url": "https://www.congress.gov/119/meeting/house/119003/documents/HHRG-119-GO00-20260304-SD016.pdf"
+    },
+    {
+      "description": "UC - Cloud - Matthew 25 NIV",
+      "documentType": "Support Document",
+      "format": "PDF",
+      "name": "UC - Cloud - Matthew 25 NIV",
+      "url": "https://www.congress.gov/119/meeting/house/119003/documents/HHRG-119-GO00-20260304-SD017.pdf"
+    },
+    {
+      "description": "UC - Comer - Article - Vance, Rosen Warn Minnesota, Medicaid funds frozen as fraud prosecutions ramp up - Alpha News MN",
+      "documentType": "Support Document",
+      "format": "PDF",
+      "name": "UC - Comer - Article - Vance, Rosen Warn Minnesota, Medicaid funds frozen as fraud prosecutions ramp up - Alpha News MN",
+      "url": "https://www.congress.gov/119/meeting/house/119003/documents/HHRG-119-GO00-20260304-SD018.pdf"
+    },
+    {
+      "description": "UC - Donalds - Minnesota Fraud_ What is the \u2018Right\u2019 Number - Jim Nobles - MN Star Tribune",
+      "documentType": "Support Document",
+      "format": "PDF",
+      "name": "UC - Donalds - Minnesota Fraud_ What is the \u2018Right\u2019 Number - Jim Nobles - MN Star Tribune",
+      "url": "https://www.congress.gov/119/meeting/house/119003/documents/HHRG-119-GO00-20260304-SD019.pdf"
+    },
+    {
+      "description": "UC - Gill - Letter to Chairman Comer re fraud - America First Policy Institute",
+      "documentType": "Support Document",
+      "format": "PDF",
+      "name": "UC - Gill - Letter to Chairman Comer re fraud - America First Policy Institute",
+      "url": "https://www.congress.gov/119/meeting/house/119003/documents/HHRG-119-GO00-20260304-SD020.pdf"
+    },
+    {
+      "description": "UC - Grothman - Report - MN Financial and Compliance Report on Federally-Assisted Programs",
+      "documentType": "Support Document",
+      "format": "PDF",
+      "name": "UC - Grothman - Report - MN Financial and Compliance Report on Federally-Assisted Programs",
+      "url": "https://www.congress.gov/119/meeting/house/119003/documents/HHRG-119-GO00-20260304-SD021.pdf"
+    },
+    {
+      "description": "UC - McGuire - Article - KARE 11 Investigates_ Evicted, homeless, paying the price for Minnesota\u2019s fraud crisis - Kare 11",
+      "documentType": "Support Document",
+      "format": "PDF",
+      "name": "UC - McGuire - Article - KARE 11 Investigates_ Evicted, homeless, paying the price for Minnesota\u2019s fraud crisis - Kare 11",
+      "url": "https://www.congress.gov/119/meeting/house/119003/documents/HHRG-119-GO00-20260304-SD022.pdf"
+    },
+    {
+      "description": "UC - Timmons - Report - Roadmap to Program Integrity and Fraud Prevention",
+      "documentType": "Support Document",
+      "format": "PDF",
+      "name": "UC - Timmons - Report - Roadmap to Program Integrity and Fraud Prevention",
+      "url": "https://www.congress.gov/119/meeting/house/119003/documents/HHRG-119-GO00-20260304-SD023.pdf"
+    },
+    {
+      "description": "UC - Brown - Memo - Trump's Pardons Cheat Victims - Judiciary Dems",
+      "documentType": "Support Document",
+      "format": "PDF",
+      "name": "UC - Brown - Memo - Trump's Pardons Cheat Victims - Judiciary Dems",
+      "url": "https://www.congress.gov/119/meeting/house/119003/documents/HHRG-119-GO00-20260304-SD024.pdf"
+    },
+    {
+      "description": "UC - Frost - Article - Fraud focus why is Trump granting clemency - The Guardian",
+      "documentType": "Support Document",
+      "format": "PDF",
+      "name": "UC - Frost - Article - Fraud focus why is Trump granting clemency - The Guardian",
+      "url": "https://www.congress.gov/119/meeting/house/119003/documents/HHRG-119-GO00-20260304-SD025.pdf"
+    },
+    {
+      "description": "UC - Pressley - Article - Parental stress, raids, and isolation - Hechinger Report",
+      "documentType": "Support Document",
+      "format": "PDF",
+      "name": "UC - Pressley - Article - Parental stress, raids, and isolation - Hechinger Report",
+      "url": "https://www.congress.gov/119/meeting/house/119003/documents/HHRG-119-GO00-20260304-SD026.pdf"
+    },
+    {
+      "description": "UC - Pressley - Letter - State Legislators Tell Congress",
+      "documentType": "Support Document",
+      "format": "PDF",
+      "name": "UC - Pressley - Letter - State Legislators Tell Congress",
+      "url": "https://www.congress.gov/119/meeting/house/119003/documents/HHRG-119-GO00-20260304-SD027.pdf"
+    },
+    {
+      "description": "UC - Randall - Article - \u2018Somalis are the scapegoat\u2019 - The Guardian",
+      "documentType": "Support Document",
+      "format": "PDF",
+      "name": "UC - Randall - Article - \u2018Somalis are the scapegoat\u2019 - The Guardian",
+      "url": "https://www.congress.gov/119/meeting/house/119003/documents/HHRG-119-GO00-20260304-SD028.pdf"
+    },
+    {
+      "description": "UC - Randall - Article - How Trump Has Exploited Pardons - ProPublica",
+      "documentType": "Support Document",
+      "format": "PDF",
+      "name": "UC - Randall - Article - How Trump Has Exploited Pardons - ProPublica",
+      "url": "https://www.congress.gov/119/meeting/house/119003/documents/HHRG-119-GO00-20260304-SD029.pdf"
+    },
+    {
+      "description": "UC - Randall - Article - Military Commander Tells Troops - HuffPost",
+      "documentType": "Support Document",
+      "format": "PDF",
+      "name": "UC - Randall - Article - Military Commander Tells Troops - HuffPost",
+      "url": "https://www.congress.gov/119/meeting/house/119003/documents/HHRG-119-GO00-20260304-SD030.pdf"
+    },
+    {
+      "description": "UC - Randall - Article - Trump\u2019s pardons wipe out payments - Washington Post",
+      "documentType": "Support Document",
+      "format": "PDF",
+      "name": "UC - Randall - Article - Trump\u2019s pardons wipe out payments - Washington Post",
+      "url": "https://www.congress.gov/119/meeting/house/119003/documents/HHRG-119-GO00-20260304-SD031.pdf"
+    },
+    {
+      "description": "UC - Randall - Article - Trump's flurry of pardons - ABC News",
+      "documentType": "Support Document",
+      "format": "PDF",
+      "name": "UC - Randall - Article - Trump's flurry of pardons - ABC News",
+      "url": "https://www.congress.gov/119/meeting/house/119003/documents/HHRG-119-GO00-20260304-SD032.pdf"
+    },
+    {
+      "description": "UC - Tlaib - Article - Fraud focus, why is Trump granting clemency - The Guardian",
+      "documentType": "Support Document",
+      "format": "PDF",
+      "name": "UC - Tlaib - Article - Fraud focus, why is Trump granting clemency - The Guardian",
+      "url": "https://www.congress.gov/119/meeting/house/119003/documents/HHRG-119-GO00-20260304-SD033.pdf"
+    },
+    {
+      "description": "UC - Walkinshaw - Article - Trump aide Homan accepted $50,000 - Reuters",
+      "documentType": "Support Document",
+      "format": "PDF",
+      "name": "UC - Walkinshaw - Article - Trump aide Homan accepted $50,000 - Reuters",
+      "url": "https://www.congress.gov/119/meeting/house/119003/documents/HHRG-119-GO00-20260304-SD034.pdf"
+    },
+    {
+      "description": "Garcia - Article - Attorney General Keith Ellison, My meeting before Feeding our Future raid was routine - MN Star Tribune",
+      "documentType": "Support Document",
+      "format": "PDF",
+      "name": "Garcia - Article - Attorney General Keith Ellison, My meeting before Feeding our Future raid was routine - MN Star Tribune",
+      "url": "https://www.congress.gov/119/meeting/house/119003/documents/HHRG-119-GO00-20260304-SD035.pdf"
+    },
+    {
+      "description": "Garcia - Article - New Filings Detail Harrowing Accounts of ICE and Border Patrol Violence - ACLU",
+      "documentType": "Support Document",
+      "format": "PDF",
+      "name": "Garcia - Article - New Filings Detail Harrowing Accounts of ICE and Border Patrol Violence - ACLU",
+      "url": "https://www.congress.gov/119/meeting/house/119003/documents/HHRG-119-GO00-20260304-SD036.pdf"
+    },
+    {
+      "description": "Garcia - Article - Operation Metro Surge results in 203 million impact - City of Minneapolis",
+      "documentType": "Support Document",
+      "format": "PDF",
+      "name": "Garcia - Article - Operation Metro Surge results in 203 million impact - City of Minneapolis",
+      "url": "https://www.congress.gov/119/meeting/house/119003/documents/HHRG-119-GO00-20260304-SD037.pdf"
+    },
+    {
+      "description": "Garcia - Article - Source disputes story prompting Trump's comments about Somalis in MN - Star Tribune",
+      "documentType": "Support Document",
+      "format": "PDF",
+      "name": "Garcia - Article - Source disputes story prompting Trump's comments about Somalis in MN - Star Tribune",
+      "url": "https://www.congress.gov/119/meeting/house/119003/documents/HHRG-119-GO00-20260304-SD038.pdf"
+    },
+    {
+      "description": "Garcia - Article - States ranked by Medicaid fraud dollars in 2022 - Becker's Hospital Review",
+      "documentType": "Support Document",
+      "format": "PDF",
+      "name": "Garcia - Article - States ranked by Medicaid fraud dollars in 2022 - Becker's Hospital Review",
+      "url": "https://www.congress.gov/119/meeting/house/119003/documents/HHRG-119-GO00-20260304-SD039.pdf"
+    },
+    {
+      "description": "Garcia - Article - The ICE Shooting Came During an Operation Focused on Somali Immigrants - New York Times",
+      "documentType": "Support Document",
+      "format": "PDF",
+      "name": "Garcia - Article - The ICE Shooting Came During an Operation Focused on Somali Immigrants - New York Times",
+      "url": "https://www.congress.gov/119/meeting/house/119003/documents/HHRG-119-GO00-20260304-SD040.pdf"
+    },
+    {
+      "description": "Garcia - Article - US citizen says ICE detained him in underwear in frigid cold with no warrant - AP News",
+      "documentType": "Support Document",
+      "format": "PDF",
+      "name": "Garcia - Article - US citizen says ICE detained him in underwear in frigid cold with no warrant - AP News",
+      "url": "https://www.congress.gov/119/meeting/house/119003/documents/HHRG-119-GO00-20260304-SD041.pdf"
+    },
+    {
+      "description": "Garcia - Dec 2025 Advisory Opinion - MN AG Ellison",
+      "documentType": "Support Document",
+      "format": "PDF",
+      "name": "Garcia - Dec 2025 Advisory Opinion - MN AG Ellison",
+      "url": "https://www.congress.gov/119/meeting/house/119003/documents/HHRG-119-GO00-20260304-SD042.pdf"
+    },
+    {
+      "description": "Garcia - Feb 2025 Advisory Opinion - MN AG Ellison",
+      "documentType": "Support Document",
+      "format": "PDF",
+      "name": "Garcia - Feb 2025 Advisory Opinion - MN AG Ellison",
+      "url": "https://www.congress.gov/119/meeting/house/119003/documents/HHRG-119-GO00-20260304-SD043.pdf"
+    },
+    {
+      "description": "Garcia - H.F. 2354 - Medical Assistance Protection (MAP) Act",
+      "documentType": "Support Document",
+      "format": "PDF",
+      "name": "Garcia - H.F. 2354 - Medical Assistance Protection (MAP) Act",
+      "url": "https://www.congress.gov/119/meeting/house/119003/documents/HHRG-119-GO00-20260304-SD044.pdf"
+    },
+    {
+      "description": "Garcia - MN Stat. 8.01",
+      "documentType": "Support Document",
+      "format": "PDF",
+      "name": "Garcia - MN Stat. 8.01",
+      "url": "https://www.congress.gov/119/meeting/house/119003/documents/HHRG-119-GO00-20260304-SD045.pdf"
+    },
+    {
+      "description": "Garcia - MN Stat. 388.051",
+      "documentType": "Support Document",
+      "format": "PDF",
+      "name": "Garcia - MN Stat. 388.051",
+      "url": "https://www.congress.gov/119/meeting/house/119003/documents/HHRG-119-GO00-20260304-SD046.pdf"
+    },
+    {
+      "description": "Garcia - MN Stat. 631.50",
+      "documentType": "Support Document",
+      "format": "PDF",
+      "name": "Garcia - MN Stat. 631.50",
+      "url": "https://www.congress.gov/119/meeting/house/119003/documents/HHRG-119-GO00-20260304-SD047.pdf"
+    },
+    {
+      "description": "Garcia - Notification - RY 2025 Medicaid Improper Payment Rates - CMS",
+      "documentType": "Support Document",
+      "format": "PDF",
+      "name": "Garcia - Notification - RY 2025 Medicaid Improper Payment Rates - CMS",
+      "url": "https://www.congress.gov/119/meeting/house/119003/documents/HHRG-119-GO00-20260304-SD048.pdf"
+    },
+    {
+      "description": "Garcia - Report - Public Corruption by State - Cato",
+      "documentType": "Support Document",
+      "format": "PDF",
+      "name": "Garcia - Report - Public Corruption by State - Cato",
+      "url": "https://www.congress.gov/119/meeting/house/119003/documents/HHRG-119-GO00-20260304-SD049.pdf"
+    },
+    {
+      "description": "UC - Garcia - Report - Public Corruption by State - Cato",
+      "documentType": "Support Document",
+      "format": "PDF",
+      "name": "UC - Garcia - Report - Public Corruption by State - Cato",
+      "url": "https://www.congress.gov/119/meeting/house/119003/documents/HHRG-119-GO00-20260304-SD050.pdf"
+    },
+    {
+      "description": "UC - Higgins - Article - Gov Walz Calls for Tougher Medicaid Fraud Penalties as FBI Investigates Autism Centers - MN Star Tribune",
+      "documentType": "Support Document",
+      "format": "PDF",
+      "name": "UC - Higgins - Article - Gov Walz Calls for Tougher Medicaid Fraud Penalties as FBI Investigates Autism Centers - MN Star Tribune",
+      "url": "https://www.congress.gov/119/meeting/house/119003/documents/HHRG-119-GO00-20260304-SD063.pdf"
+    },
+    {
+      "description": "UC - Biggs - Article - Aimee Bock Alleges Gov Tim Walz, AG Keith Ellison Knew of MN Fraud - FoxNews",
+      "documentType": "Support Document",
+      "format": "PDF",
+      "name": "UC - Biggs - Article - Aimee Bock Alleges Gov Tim Walz, AG Keith Ellison Knew of MN Fraud - FoxNews",
+      "url": "https://www.congress.gov/119/meeting/house/119003/documents/HHRG-119-GO00-20260304-SD051.pdf"
+    },
+    {
+      "description": "UC - Biggs - Article - Anti-ICE Agitators Set Up Blockade on MN Street, Check Divers' License Plates - AlphaNews",
+      "documentType": "Support Document",
+      "format": "PDF",
+      "name": "UC - Biggs - Article - Anti-ICE Agitators Set Up Blockade on MN Street, Check Divers' License Plates - AlphaNews",
+      "url": "https://www.congress.gov/119/meeting/house/119003/documents/HHRG-119-GO00-20260304-SD052.pdf"
+    },
+    {
+      "description": "UC - Biggs - Article - Conservatives Blast Dems, Walz for Likening ICE Agents to Nazi Police Force - Fox News",
+      "documentType": "Support Document",
+      "format": "PDF",
+      "name": "UC - Biggs - Article - Conservatives Blast Dems, Walz for Likening ICE Agents to Nazi Police Force - Fox News",
+      "url": "https://www.congress.gov/119/meeting/house/119003/documents/HHRG-119-GO00-20260304-SD053.pdf"
+    },
+    {
+      "description": "UC - Biggs - Article - ICE Restricted from MN-Owned Parking Areas, Mayor Frey Orders - Fox9",
+      "documentType": "Support Document",
+      "format": "PDF",
+      "name": "UC - Biggs - Article - ICE Restricted from MN-Owned Parking Areas, Mayor Frey Orders - Fox9",
+      "url": "https://www.congress.gov/119/meeting/house/119003/documents/HHRG-119-GO00-20260304-SD054.pdf"
+    },
+    {
+      "description": "UC - Biggs - Article - MN AG's Legal Opinion Could Threaten Some County Agreements with ICE - MN Reformer",
+      "documentType": "Support Document",
+      "format": "PDF",
+      "name": "UC - Biggs - Article - MN AG's Legal Opinion Could Threaten Some County Agreements with ICE - MN Reformer",
+      "url": "https://www.congress.gov/119/meeting/house/119003/documents/HHRG-119-GO00-20260304-SD055.pdf"
+    },
+    {
+      "description": "UC - Biggs - Article - MN Grandma Jailed for Defying Walz COVID Lockdown Orders Warns 'You Do Not Want Tyranny At This Level' - FoxNews",
+      "documentType": "Support Document",
+      "format": "PDF",
+      "name": "UC - Biggs - Article - MN Grandma Jailed for Defying Walz COVID Lockdown Orders Warns 'You Do Not Want Tyranny At This Level' - FoxNews",
+      "url": "https://www.congress.gov/119/meeting/house/119003/documents/HHRG-119-GO00-20260304-SD056.pdf"
+    },
+    {
+      "description": "UC - Biggs - Article - MN Mom Jailed over COVID Accuses Walz of 'Tyranny' - The Express",
+      "documentType": "Support Document",
+      "format": "PDF",
+      "name": "UC - Biggs - Article - MN Mom Jailed over COVID Accuses Walz of 'Tyranny' - The Express",
+      "url": "https://www.congress.gov/119/meeting/house/119003/documents/HHRG-119-GO00-20260304-SD057.pdf"
+    },
+    {
+      "description": "UC - Biggs - Article - Mother Ponders 'Taking Out' Her Own Kids To Avoid ICE - Daily Caller",
+      "documentType": "Support Document",
+      "format": "PDF",
+      "name": "UC - Biggs - Article - Mother Ponders 'Taking Out' Her Own Kids To Avoid ICE - Daily Caller",
+      "url": "https://www.congress.gov/119/meeting/house/119003/documents/HHRG-119-GO00-20260304-SD058.pdf"
+    },
+    {
+      "description": "UC - Biggs - Article - SCOOP, Tim Walz Accused of Stonewalling Key Probe as Somali Fraud Sweeps His State - Daily Caller",
+      "documentType": "Support Document",
+      "format": "PDF",
+      "name": "UC - Biggs - Article - SCOOP, Tim Walz Accused of Stonewalling Key Probe as Somali Fraud Sweeps His State - Daily Caller",
+      "url": "https://www.congress.gov/119/meeting/house/119003/documents/HHRG-119-GO00-20260304-SD059.pdf"
+    },
+    {
+      "description": "UC - Biggs - Article - Tim Walz Urges Minnesotans to 'Resist' Federal 'Occupation' - Breitbart",
+      "documentType": "Support Document",
+      "format": "PDF",
+      "name": "UC - Biggs - Article - Tim Walz Urges Minnesotans to 'Resist' Federal 'Occupation' - Breitbart",
+      "url": "https://www.congress.gov/119/meeting/house/119003/documents/HHRG-119-GO00-20260304-SD060.pdf"
+    },
+    {
+      "description": "UC - Biggs - Article - Tim Walz Was a COVID-19 Tyrant - Reason",
+      "documentType": "Support Document",
+      "format": "PDF",
+      "name": "UC - Biggs - Article - Tim Walz Was a COVID-19 Tyrant - Reason",
+      "url": "https://www.congress.gov/119/meeting/house/119003/documents/HHRG-119-GO00-20260304-SD061.pdf"
+    },
+    {
+      "description": "UC - Biggs - Article - Walz, Omar Using ICE Operations to Distract from Fraud Scandal - Breitbart",
+      "documentType": "Support Document",
+      "format": "PDF",
+      "name": "UC - Biggs - Article - Walz, Omar Using ICE Operations to Distract from Fraud Scandal - Breitbart",
+      "url": "https://www.congress.gov/119/meeting/house/119003/documents/HHRG-119-GO00-20260304-SD062.pdf"
+    }
+  ],
+  "meetingStatus": "Rescheduled",
+  "title": "\u201cOversight of Fraud and Misuse of Federal Funds in Minnesota: Part II\u201d",
+  "type": "Hearing",
+  "updateDate": "2026-09-09T20:11:38Z",
+  "videos": [
+    {
+      "name": "Oversight of Fraud and Misuse of Federal Funds in Minnesota: Part II",
+      "url": "https://www.congress.gov/event/119th-Congress/house-event/119003"
+    },
+    {
+      "name": "Oversight of Fraud and Misuse of Federal Funds in Minnesota: Part II",
+      "url": "https://www.youtube.com/watch?v=b87f2TLR3m0"
+    }
+  ],
+  "witnessDocuments": [
+    {
+      "documentType": "Witness Biography",
+      "format": "PDF",
+      "url": "https://www.congress.gov/119/meeting/house/119003/witnesses/HHRG-119-GO00-Bio-TollgaardM-20260304.pdf"
+    },
+    {
+      "documentType": "Witness Statement",
+      "format": "PDF",
+      "url": "https://www.congress.gov/119/meeting/house/119003/witnesses/HHRG-119-GO00-Wstate-TollgaardM-20260304.pdf"
+    },
+    {
+      "documentType": "Witness Truth in Testimony",
+      "format": "PDF",
+      "url": "https://www.congress.gov/119/meeting/house/119003/witnesses/HHRG-119-GO00-TTF-TollgaardM-20260304.pdf"
+    },
+    {
+      "documentType": "Witness Statement",
+      "format": "PDF",
+      "url": "https://www.congress.gov/119/meeting/house/119003/witnesses/HHRG-119-GO00-Wstate-EllisonK-20260304.pdf"
+    },
+    {
+      "documentType": "Witness Truth in Testimony",
+      "format": "PDF",
+      "url": "https://www.congress.gov/119/meeting/house/119003/witnesses/HHRG-119-GO00-TTF-EllisonK-20260304.pdf"
+    },
+    {
+      "documentType": "Witness Truth in Testimony",
+      "format": "PDF",
+      "url": "https://www.congress.gov/119/meeting/house/119003/witnesses/HHRG-119-GO00-TTF-WalzT-20260304.pdf"
+    },
+    {
+      "documentType": "Witness Biography",
+      "format": "PDF",
+      "url": "https://www.congress.gov/119/meeting/house/119003/witnesses/HHRG-119-GO00-Bio-WalzT-20260304.pdf"
+    },
+    {
+      "documentType": "Witness Statement",
+      "format": "PDF",
+      "url": "https://www.congress.gov/119/meeting/house/119003/witnesses/HHRG-119-GO00-Wstate-WalzT-20260304.pdf"
+    },
+    {
+      "documentType": "Witness Biography",
+      "format": "PDF",
+      "url": "https://www.congress.gov/119/meeting/house/119003/witnesses/HHRG-119-GO00-Bio-EllisonK-20260304.pdf"
+    }
+  ],
+  "witnesses": [
+    {
+      "name": "Rev. Mariah Furness Tollgaard",
+      "organization": "Hamline Church United Methodist",
+      "position": "Senior Pastor"
+    },
+    {
+      "name": "The Honorable Keith Ellison",
+      "organization": "State of Minnesota",
+      "position": "Attorney General"
+    },
+    {
+      "name": "The Honorable Tim Walz",
+      "organization": "State of Minnesota",
+      "position": "Governor"
+    }
+  ]
+}

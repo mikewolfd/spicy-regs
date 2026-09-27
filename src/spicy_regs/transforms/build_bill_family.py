@@ -149,11 +149,10 @@ ARCHIVE_IDENTITY: tuple[str, ...] = ("congress", "bill_type")
 
 # Qualifies the folder's status: every member parsed and every rebuilt bill
 # shaped. A source listing stamp alone never proves that this work completed.
-# v1 also required each bill's bodies and XML pairs, which are now the body
-# pass's by each printing's own state; a v1 list is read as v2, since it
-# states strictly more.
-ARCHIVE_COMPLETION_KEY = "spicy_regs.bill_family.completed_archive_scopes.v2"
-ARCHIVE_COMPLETION_KEYS_READ = (ARCHIVE_COMPLETION_KEY, "spicy_regs.bill_family.completed_archive_scopes.v1")
+# v3 requires the dated cosponsor reader. Earlier completion cannot qualify
+# this output, even when the publisher archive stamp is unchanged.
+ARCHIVE_COMPLETION_KEY = "spicy_regs.bill_family.completed_archive_scopes.v3"
+ARCHIVE_COMPLETION_KEYS_READ = (ARCHIVE_COMPLETION_KEY,)
 
 #: The roll calls each bill's own actions record, one row per ``recordedVotes``
 #: entry. Not a contract table — nothing in ``spicy_docs.schemas`` shapes it —
@@ -303,6 +302,7 @@ _SNAPSHOT_ARG = {
 FAMILY_TABLES: tuple[tuple[str, str], ...] = (
     ("congress_bills", "bills"),
     ("bill_actions", "bill_actions"),
+    ("bill_cosponsors", "bill_cosponsors"),
     ("bill_committees", "bill_committees"),
     ("bill_publisher_summaries", "bill_publisher_summaries"),
     ("bill_versions", "bill_versions"),
@@ -543,6 +543,7 @@ def _download_prior(output_dir: Path, download_prior: Callable[[str, Path], bool
             "section_diffs",
             "section_diff_items",
             "cbo_cost_estimates",
+            "bill_cosponsors",
             ARCHIVES_TABLE,
             BACKFILLS_TABLE,
             BACKFILL_WALKS_TABLE,
@@ -584,6 +585,16 @@ def _prior_index(paths: Mapping[str, Path | None]) -> PriorIndex:
                 "WHERE cbo_cost_estimates_outcome IS NOT NULL"
             ).fetchall()
         )
+
+    # Publisher stamps cannot qualify rows produced before the occurrence reader.
+    if (bills_path is not None and paths.get("bill_cosponsors") is not None
+            and _has_columns(bills_path, ("bill_id", "cosponsors_outcome"))):
+        qualified = {row[0] for row in duckdb.sql(
+            f"SELECT bill_id FROM read_parquet('{bills_path}') WHERE cosponsors_outcome IS NOT NULL"
+        ).fetchall()}
+        text_dates = {key: value for key, value in text_dates.items() if key in qualified}
+    else:
+        text_dates = {}
 
     printings: dict[str, set[str]] = {}
     listed: dict[str, set[str]] = {}
@@ -1492,7 +1503,7 @@ def build_bill_family(
     download_prior: Callable[[str, Path], bool] = r2.download,
     evidence: CaptureEvidence | None = None,
 ) -> tuple[Path, ...]:
-    """Build all eighteen bill-family outputs; returns one path per table."""
+    """Build bill-family outputs; returns one path per table."""
     if isinstance(max_version_fetches, bool) or not isinstance(max_version_fetches, int) or max_version_fetches < 0:
         raise ValueError("max_version_fetches must be a nonnegative integer; zero disables acquisition")
     congresses = congresses_from_env()
@@ -1859,6 +1870,14 @@ def build_bill_family(
     # Each scope names parents whose prior child rows this run replaces --
     # emptying them where the run publishes none.
     replaced: dict[str, ReplacementScope] = {
+        "bill_cosponsors": (
+            "bill_id",
+            {identifier for row in folded.bills
+             if (identifier := row["bill_id"]) is not None
+             and row.get("cosponsors_outcome") in {"absent", "empty", "populated"}
+             and not any(ref.table == "bill_cosponsors" and ref.identity[0] == row["bill_id"]
+                         for ref in folded.refusals)},
+        ),
         "cbo_cost_estimates": (
             "bill_id",
             {

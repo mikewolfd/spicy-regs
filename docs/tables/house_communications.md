@@ -39,6 +39,7 @@ One row per House executive communication, as the Congress.gov house-communicati
 | `matching_requirement_count` | `VARCHAR` | How many requirements the detail lists; every one is in matching_requirements_json. |
 | `matching_requirements_json` | `VARCHAR` | Every matching requirement the detail lists, as a JSON array of numbers. NULL where no detail was read. |
 | `rin` | `VARCHAR` | The Regulation Identifier Number read from report_nature, where the rule found one. |
+| `rin_occurrences_json` | `VARCHAR` | All interpreted RIN occurrences supplied by the consumer, with exact field spans and digest. NULL means unread; [] means the supplied field was read and contained no RIN. |
 | `rin_rule` | `VARCHAR` | Which RIN rule fired (`report_nature_rin_label`), or `unmatched`; NULL where the rule was not run. |
 | `rin_matched_text` | `VARCHAR` | The exact text the RIN rule matched, so a false positive is readable from the row. |
 | `update_date` | `VARCHAR` | The publisher's updateDate; the merge prefers the larger value, except across source_route, where a `congress-gov-detail` row always wins. |

@@ -17,14 +17,16 @@ those to a join declared here. Standard library only: the MCP image imports it.
 
 from __future__ import annotations
 
+import json
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 RECORD = Path(__file__).with_name("table_joins.json")
 RECORD_FORMAT = "spicy-regs-table-joins"
 BASELINE_DATE = "2026-09-26"
 BASELINE_RECEIPTS = (
+    "src/spicy_regs/join_measurements.json",
     "~/Work/corpora/fork-execution-2026-09-21/join-map-2026-09-26/results.json",
     "~/Work/corpora/fork-execution-2026-09-21/join-map-2026-09-26/rule-targets-baseline.json",
     "~/Work/corpora/fork-execution-2026-09-21/join-map-2026-09-26/unified-agenda-rin-after-backfill.json",
@@ -64,6 +66,8 @@ class Join:
     #: A table read in the child's place when it carries the same distinct keys
     #: more cheaply (the comments index for the 26M-row comments table).
     measured_via: str | None = None
+    expected_cardinality: str = "unspecified"
+    measurement: dict | None = None
 
     @property
     def name(self) -> str:
@@ -101,10 +105,11 @@ class Join:
 
 
 def _join(child: str, child_columns: str | tuple[str, ...], parent: str, parent_columns: str | tuple[str, ...],
-          keys: int, missing: int, kind: str = "complete", reason: str = "", measured_via: str | None = None) -> Join:
+          keys: int, missing: int, kind: str = "complete", reason: str = "", measured_via: str | None = None,
+          expected_cardinality: str = "unspecified", measurement: dict | None = None) -> Join:
     as_tuple = lambda columns: (columns,) if isinstance(columns, str) else columns  # noqa: E731
     return Join(child, as_tuple(child_columns), parent, as_tuple(parent_columns), keys, missing, kind, reason,
-                measured_via)
+                measured_via, expected_cardinality, measurement)
 
 
 _MODEL_OUTPUT = "Model output not yet computed (needs GEMINI_API_KEY); the table publishes no rows."
@@ -125,6 +130,10 @@ def _unlisted_rins(x_pattern: int, well_formed: int, placeholder: int, detail: s
 JOINS: tuple[Join, ...] = (
     # The bill family and the tables that name its bills.
     _join("bill_actions", "bill_id", _BILL, "bill_id", 38_559, 0),
+    _join("bill_cosponsors", "bill_id", _BILL, "bill_id", 0, 0, "empty",
+          "New source-occurrence output; public population not yet baselined."),
+    _join("bill_cosponsors", "bioguide_id", "members", "bioguide_id", 0, 0, "empty",
+          "Source-listed member identifier; public cosponsor output not yet baselined."),
     _join("bill_committee_actions", "bill_id", _BILL, "bill_id", 2_956, 1,
           reason="1 (118-hr-14106) is the publisher's misprint. The 16 of 2026-09-26 are resolved: the "
                  "status-only bill-family backfill of the 108th-117th filled the list walk's 1,299-bill gap, the "
@@ -151,13 +160,15 @@ JOINS: tuple[Join, ...] = (
     _join("section_classifications", "bill_id", _BILL, "bill_id", 0, 0, "empty", _MODEL_OUTPUT),
     _join("section_diff_items", "bill_id", _BILL, "bill_id", 223, 0),
     _join("section_diffs", "bill_id", _BILL, "bill_id", 223, 0),
-    _join("bill_sections", ("bill_id", "version_code"), "bill_versions", ("bill_id", "version_code"), 2_397, 0),
-    _join("section_diffs", ("bill_id", "from_version_code"), "bill_versions", ("bill_id", "version_code"), 548, 0),
-    _join("section_diffs", ("bill_id", "to_version_code"), "bill_versions", ("bill_id", "version_code"), 548, 0),
+    _join("bill_sections", ("bill_id", "version_code", "source"), "bill_versions", ("bill_id", "version_code", "source"), 2_397, 0),
+    _join("section_diffs", ("bill_id", "from_version_code", "from_source"), "bill_versions", ("bill_id", "version_code", "source"), 548, 0),
+    _join("section_diffs", ("bill_id", "to_version_code", "to_source"), "bill_versions", ("bill_id", "version_code", "source"), 548, 0),
     # People, votes and committees.
     _join("amendments", "sponsor_bioguide_id", "members", "bioguide_id", 187, 0),
     _join("congress_bills", "sponsor_bioguide_id", "members", "bioguide_id", 636, 0),
     _join("member_terms", "bioguide_id", "members", "bioguide_id", 12_770, 0),
+    _join("member_party_affiliations", ("bioguide_id", "term_index"), "member_terms", ("bioguide_id", "term_index"),
+          0, 0, "empty", "New source interval occurrences; current roster backfill and public baseline pending."),
     _join("member_votes", "bioguide_id", "members", "bioguide_id", 1_261, 1, "complete",
           "L000555 is Luke Letlow, elected in 2020, who died on 2020-12-29 before taking the seat. The Clerk's "
           "117-house-1-1 roll lists him Not Voting; Congress.gov lists only members who served. Measured after the "
@@ -179,11 +190,11 @@ JOINS: tuple[Join, ...] = (
                  "bodies hlfd00, hlvc00 and htzt00 are on no 119th list. Same local run and receipt."),
     _join("hearing_bill_links", "committee_system_code", "committees", "system_code", 4, 0),
     _join("hearing_bill_links", "package_id", "hearing_transcripts", "package_id", 9, 0),
-    _join("hearing_transcripts", "event_id", "committee_meetings", "event_id", 16, 0,
+    _join("hearing_transcripts", ("congress", "chamber", "event_id"), "committee_meetings", ("congress", "chamber", "event_id"), 16, 0,
           reason="Complete since committee_meetings keeps the previous Congress: the 7 orphans of the first "
                  "baseline were 118th-Congress meetings it had not listed (join-gaps-2026-09-26/f/). Receipt "
                  "join-map-2026-09-26/live-check-after-fixes.json."),
-    _join("report_sections", "part_id", "committee_reports", "part_id", 142, 0),
+    _join("report_sections", ("package_id", "part_id"), "committee_reports", ("package_id", "part_id"), 142, 0),
     _join("law_code_sections", "law_id", "laws", "law_id", 70, 0),
     # Regulations.gov and the Federal Register.
     _join("documents", "docket_id", "dockets", "docket_id", 278_651, 114,
@@ -294,6 +305,21 @@ JOINS: tuple[Join, ...] = (
 )
 
 
+# New full-key/attribute baselines include raw-row cardinality and immutable input
+# URLs. Keep historical declarations above as lineage; replace their measured
+# values only from the replayable complete-input receipt.
+_MEASUREMENTS = json.loads(Path(__file__).with_name("join_measurements.json").read_text())["results"]
+_MEASURED_BY_NAME = {item["join"]: item for item in _MEASUREMENTS}
+JOINS = tuple(
+    replace(join, baseline_keys=measurement["keys"], baseline_missing=measurement["missing"],
+            kind="complete", expected_cardinality="one", measurement=measurement,
+            reason="Full selected-input measurement on 2026-09-27; immutable URLs, SQL and cardinality in "
+                   "join_measurements.json. Full-key hardening does not assert prior production amplification.")
+    if (measurement := _MEASURED_BY_NAME.get(join.name)) is not None else join
+    for join in JOINS
+)
+
+
 def joins_for(table: str) -> dict[str, list[dict]]:
     """The declared joins where ``table`` is the child (``outgoing``) or the parent (``incoming``)."""
     return {
@@ -315,6 +341,8 @@ def record(join: Join) -> dict:
         "baseline_keys": join.baseline_keys,
         "baseline_missing": join.baseline_missing,
         "floor_pct": join.floor_pct,
+        "expected_cardinality": join.expected_cardinality,
+        "measurement": join.measurement,
     }
 
 

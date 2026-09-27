@@ -62,6 +62,7 @@ class BillFamilyRollup(RollupPipeline):
     )
 
     retain_source_evidence: ClassVar[bool] = True
+    added_tables: ClassVar[tuple[str, ...]] = ("bill_cosponsors.parquet",)
 
     def build(self, output_dir: Path) -> tuple[Path, ...]:
         raw = os.environ.get("BILL_FAMILY_MAX_VERSION_FETCHES", "").strip()

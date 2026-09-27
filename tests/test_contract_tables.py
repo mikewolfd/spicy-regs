@@ -32,8 +32,8 @@ CONTRACT_NAMES = sorted(TABLE_CONTRACTS)
 
 #: Adoption fixes the registry size as well as its named three-way partition.
 #: SpicyDocs 0.42.0 adds ``federal_register``, hosted by its own rollup; 0.43.0 adds ``fec_committee_history``;
-#: 0.44.0 adds the typed ``document_attributes`` and ``docket_attributes`` (decisions 65-67).
-ADOPTED_CONTRACT_COUNT = 46
+#: 0.44.0 adds the typed attributes; 0.47.0 adds bill cosponsors and member party intervals.
+ADOPTED_CONTRACT_COUNT = 48
 
 #: A contract here leaves the set when its owning rollup hosts it.
 UNHOSTED_CONTRACTS = frozenset()
@@ -169,4 +169,5 @@ def test_congress_bills_keeps_its_frozen_prefix():
     assert contract.identity == ("bill_id",)
     assert len(contract.columns) > 10, "the family appends columns; it does not replace them"
     dictionary = [column for column, _ in dd.expected_schemas()["congress_bills"]]
-    assert tuple(dictionary) == contract.columns and dictionary[-1] == "url_source"
+    assert tuple(dictionary) == contract.columns
+    assert dictionary[-2:] == ["url_source", "cosponsors_outcome"]

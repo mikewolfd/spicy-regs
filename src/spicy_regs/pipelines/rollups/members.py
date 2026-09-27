@@ -1,6 +1,6 @@
-"""Rollup pipeline: members.parquet and member_terms.parquet.
+"""Rollup pipeline: members, terms and party-affiliation occurrences.
 
-Two outputs from one pass: both tables are read out of the same two roster
+Related outputs from one pass: the tables are read out of the same two roster
 captures, and a legislator's terms are only in hand while the roster is.
 """
 
@@ -16,8 +16,9 @@ class MembersRollup(RollupPipeline):
 
     name: ClassVar[str] = "members"
     retain_source_evidence: ClassVar[bool] = True
+    added_tables: ClassVar[tuple[str, ...]] = ("member_party_affiliations.parquet",)
     inputs: ClassVar[tuple[str, ...]] = ()
-    outputs: ClassVar[tuple[str, ...]] = ("members.parquet", "member_terms.parquet")
+    outputs: ClassVar[tuple[str, ...]] = ("members.parquet", "member_terms.parquet", "member_party_affiliations.parquet")
 
     def build(self, output_dir: Path) -> tuple[Path, ...]:
         return build_members(output_dir, evidence=self.source_evidence)

@@ -33,6 +33,16 @@ def _extract_comment(d: dict) -> dict:
     return {
         "comment_id": d.get("data", {}).get("id"),
         "docket_id": (v.strip('"') if (v := attrs.get("docketId")) else v),
+        # These are distinct publisher identifier systems. A comment can name
+        # its parent document while its source docket remains explicitly NULL.
+        "comment_on_document_id": attrs.get("commentOnDocumentId"),
+        "comment_on_object_id": attrs.get("commentOn"),
+        "original_document_id": attrs.get("originalDocumentId"),
+        # An observed {} differs from NULL in a generation written before
+        # these fields were retained. Present null/empty values stay visible.
+        "comment_reference_values_json": json_dumps({
+            key: attrs[key] for key in ("commentOnDocumentId", "commentOn", "originalDocumentId") if key in attrs
+        }),
         "agency_code": attrs.get("agencyId"),
         "first_name": attrs.get("firstName"),
         "last_name": attrs.get("lastName"),
@@ -155,6 +165,10 @@ COMMENT = RecordType(
     schema={
         "comment_id": pl.Utf8,
         "docket_id": pl.Utf8,
+        "comment_on_document_id": pl.Utf8,
+        "comment_on_object_id": pl.Utf8,
+        "original_document_id": pl.Utf8,
+        "comment_reference_values_json": pl.Utf8,
         "agency_code": pl.Utf8,
         "first_name": pl.Utf8,
         "last_name": pl.Utf8,
