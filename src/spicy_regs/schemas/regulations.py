@@ -65,9 +65,14 @@ def _extract_comment(d: dict) -> dict:
     }
 
 
-def _extract_document(d: dict) -> dict:
+def _extract_document(d: dict, *, attachment_relationship=None) -> dict:
     """Map a regulations.gov document payload to a flat record, keeping every file rendition in attachments_json."""
     attrs = d.get("data", {}).get("attributes", {})
+    related = None
+    if attachment_relationship is not None:
+        from spicy_docs.sources.regulations_gov.attachment_records import attachment_records_json
+
+        related = attachment_records_json(d, attachment_relationship)
 
     # Each fileFormats entry is one downloadable rendition of the document
     # (e.g. content.pdf), carrying its own URL, format, and byte size. Keep the
@@ -90,6 +95,7 @@ def _extract_document(d: dict) -> dict:
         "comment_end_date": attrs.get("commentEndDate"),
         "file_url": attachments[0]["url"] if attachments else None,
         "attachments_json": json_dumps(attachments) if attachments else None,
+        "attachment_records_json": related,
         "fr_doc_num": attrs.get("frDocNum"),
         "withdrawn": attrs.get("withdrawn"),
         "reason_withdrawn": attrs.get("reasonWithdrawn"),
@@ -142,6 +148,7 @@ DOCUMENT = RecordType(
         "comment_end_date": pl.Utf8,
         "file_url": pl.Utf8,
         "attachments_json": pl.Utf8,
+        "attachment_records_json": pl.Utf8,
         "fr_doc_num": pl.Utf8,
         "withdrawn": pl.Utf8,
         "reason_withdrawn": pl.Utf8,

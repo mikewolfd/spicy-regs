@@ -342,6 +342,13 @@ REF-072 bridge and succession evidence is returned separately from REF-038
 identity candidates. The owner's current-lineage policy ignores dates, so it does
 not establish identity on a requested historical date or money attribution.
 
+Document content renditions and separate attachments retain different roles.
+`document_attachment_records_*` and `document_attachment_renditions` require
+`attachment_records_json`, which comes from an explicitly read attachment
+relationship. Older published document schemas report these views as unsupported.
+In newly shaped rows, NULL means unread; `[]` means a validated complete empty
+response. Restricted attachment records remain visible even without a file URL.
+
 `list_sources` returns queryable tables in `tables`, all supported names in
 `declared_tables`, and missing views in `unavailable_tables`. Availability
 reflects the current cached connection, which normally refreshes after five

@@ -1,6 +1,6 @@
 # Join delivery execution — 2026-09-27
 
-Third-wave source qualification and selected data publications are verified. Third-wave deployment and live verification remain pending. The full proposal is not complete: each task below separates its selected acceptance from wider source coverage and remaining work.
+Third-wave source qualification and selected data publications are verified. Third-wave application deployment and 17 bounded public MCP checks passed; the serialized comments refresh is running. The full proposal is not complete: each task below separates its selected acceptance from wider source coverage and remaining work.
 
 The [machine-readable ledger](join-delivery-execution-2026-09-27.json) retains exact evidence, publication pins, tests and prior deployment history. This ledger follows the [proposal](join-delivery-tasks-2026-09-27.md). Source behavior belongs to SpicyDocs; application behavior belongs to SpicyRegs.
 
@@ -9,7 +9,9 @@ The [machine-readable ledger](join-delivery-execution-2026-09-27.json) retains e
 - Provider: SpicyDocs 0.48.1 at `8bcfef5`; two identical wheel builds with SHA-256 `6f5ca008096fe60765a49183345fc78acde2ffa99c2451720d53c14a5b554a0b`. No registry upload.
 - Third-wave bill-family, FCC, native legal references, court PDF extractions and citation generations are published, with all public member bytes verified. Exact pins and receipts are in `finalization.third_wave_publications`.
 - Comments: three native ODNI rows were corrected in catalog snapshot `50021510906269595`, changing twelve intended cells. Independent replay found no remaining changes. The full 26,314,364-row mirror is validated locally; hosted mirror publication and consumer refresh remain pending.
-- Serving: the previously verified second-wave deployment remains the last claimed live state: app `8082191`, Worker `1146ddba-bf85-4a71-8dd9-e87eaf8bf16f`. Third-wave release IDs and live results will be recorded after verification.
+- Serving: app `4466d85`, Worker `16bf8167-287e-4d59-ad43-2903fb4d301a`, image `77573fd0…`. All 17 bounded public checks passed after the replacement container started; the interrupted initial rollout probe is retained. This verifies observed requests, not every instance.
+- Code: [SpicyRegs PR #1](https://github.com/mikewolfd/spicy-regs/pull/1) and [SpicyDocs PR #4](https://github.com/mikewolfd/spicy-docs/pull/4) are pushed as draft reviews. Provider gate and 3,361 consumer tests passed, plus lint, types, dictionary, strict docs, Cloudflare and minimal-container checks.
+- Comments refresh: [run 36356400996](https://github.com/mikewolfd/spicy-regs/actions/runs/36356400996) holds the shared writer lock; base publications passed and mirror export is running.
 - Concurrent write protection: two live catalog connections verified refusal of intervening updates, unexpected inserts and a commit after the prior-row check. The latter returned a catalog snapshot conflict (HTTP 409); intended NULL replacement passed. Scratch tables were removed.
 - Public publication, local qualification and deployed behavior are separate claims. Independent table generations do not form an atomic cross-table snapshot. Source commits are pushed in [SpicyDocs PR #4](https://github.com/mikewolfd/spicy-docs/pull/4); package-registry release remains separate.
 
@@ -101,9 +103,9 @@ The endpoint is [the fork MCP server](https://spicy-regs-mcp.mdeeb.workers.dev/m
 
 **Verified:** All 649 FEC collection counts reconcile to 13,717,161 source records and 183,390 relationships. Every relationship has one companion with matching recorded page digest; selected positive and empty native cases are byte-qualified. Native scalar, positive list, empty list and null fields replay from a fully rehashed retained OpenFEC page; absent and malformed cases remain synthetic tests.
 
-**Remaining:** Wider raw-byte qualification across relationship kinds remains; recorded digest equality is distinct from rehashing every original page.
+**Selected acceptance:** Complete. Selected byte-qualified replay and required shape tests pass; rehashing every original page is outside the selected acceptance.
 
-**Selected acceptance:** Remaining acceptance is explicit; full task completion is not claimed.
+**Expansion limits:** Wider raw-byte qualification across relationship kinds remains; recorded digest equality is distinct from rehashing every original page.
 
 **Code:** `spicy-regs/src/spicy_regs/relationship_views/fec.py`; `spicy-regs/src/spicy_regs/transforms/fec_relationships.py`.
 
@@ -161,19 +163,19 @@ The endpoint is [the fork MCP server](https://spicy-regs-mcp.mdeeb.workers.dev/m
 
 **Verified:** Full pinned graph checked offline within bounded memory. Missing endpoints: opinion–cluster 21; cluster–docket 10,067,451; citation citing 3,758 / cited 1; reporter–cluster 63; parenthetical described 0 / describing 618; no ambiguous endpoints. Three offered native PDFs match held SHA1 and publish derived text.
 
-**Remaining:** Independent Supreme Court crosswalk remains unqualified; missing targets are acquisition candidates, not case-name matches.
+**Selected acceptance:** Complete. Full selected typed graph checks pass. The original requires the independent Supreme Court route to stay separate until qualified, not to force a crosswalk.
 
-**Selected acceptance:** Remaining acceptance is explicit; full task completion is not claimed.
+**Expansion limits:** Independent Supreme Court crosswalk remains unqualified; missing targets are acquisition candidates, not case-name matches.
 
 **Code:** `spicy-regs/src/spicy_regs/relationship_views/courts.py`.
 
 ### T16 — Publish a source-artifact reference index
 
-**Verified:** FCC offered URLs now link to three retained-body digests and extraction outcomes; three court offered PDFs retain redirects, native fingerprints and derived-text outcomes. Source occurrences remain separate.
+**Verified:** FCC offered URLs now link to three retained-body digests and extraction outcomes; three court offered PDFs retain redirects, native fingerprints and derived-text outcomes. Source occurrences remain separate. Added a native-qualified document attachment relationship field and record/rendition views. Main formats keep the document_content role; restricted attachments survive without URLs; unread is NULL and validated complete empty is []. HTTP failure, pagination, forged document association and capture/record mismatch refuse.
 
-**Remaining:** Further enabled rendition families still need their own positive/empty/missing/redirect/role qualification; no universal artifact index claim.
+**Remaining:** Publish a bounded, source-edition-associated attachment backfill before claiming this new relationship is available on public documents. Existing public schema is explicitly unsupported for the attachment views; native fixture and local view qualification do not prove a public backfill.
 
-**Selected acceptance:** Remaining acceptance is explicit; full task completion is not claimed.
+**Selected acceptance:** Publication remains pending.
 
 **Code:** `spicy-regs/src/spicy_regs/relationship_views/artifacts_topics.py`; `spicy-regs/src/spicy_regs/relationship_views/congress.py`; `spicy-regs/src/spicy_regs/relationship_views/fcc_native.py`.
 
@@ -181,19 +183,19 @@ The endpoint is [the fork MCP server](https://spicy-regs-mcp.mdeeb.workers.dev/m
 
 **Verified:** Added communication role fields and derived court PDF adapter through existing bounded writer. Court review retains 18 exact findings plus successful zero; an actual proclamation false positive caused source-specific docket-rule exclusion. Complete rereads preserve correction/zero/failure semantics.
 
-**Remaining:** Wider reviewed recall and additional body families remain. Committee names, executive orders, verbose FR and exact statutory-note targets retain documented limitations; comment-publication input remains pending.
+**Selected acceptance:** Complete. Qualified enabled cohorts pass reviewed-span, historical-context and scoped correction/failure checks. Additional bodies and broader recall are expansion scope.
 
-**Selected acceptance:** Remaining acceptance is explicit; full task completion is not claimed.
+**Expansion limits:** Wider reviewed recall and additional body families remain. Committee names, executive orders, verbose FR and exact statutory-note targets retain documented limitations; comment-publication input remains pending.
 
 **Code:** `spicy-docs/src/spicy_docs/interpretation/citations.py`; `spicy-docs/src/spicy_docs/schemas/document_citation_tables.py`; `spicy-regs/src/spicy_regs/citation_sources.py`; `spicy-regs/src/spicy_regs/transforms/held_citations.py`; `spicy-regs/src/spicy_regs/pipelines/rollups/held_citations.py`; `spicy-regs/src/spicy_regs/mcp_server.py`.
 
 ### T18 — Preserve and expose structured report and communication references
 
-**Verified:** Published 12 role-specific communication authority/report-description findings with exact spans and pins; missing printed entries stay unread. Prior all-RIN route remains published and qualified.
+**Verified:** Published 12 role-specific communication authority/report-description findings with exact spans and pins; missing printed entries stay unread. Prior all-RIN route remains published and qualified. Retained native HTML preserves three-way joint referrals and the unresolved Peace Corps sender. Two acquired native 2004 editions contain the same 26 communication identities; merge retains 26 current rows and both originals. No actual publisher correction is claimed.
 
-**Remaining:** Full committee/referral role coverage and repeated-edition population review remain beyond the qualified selected source fields.
+**Remaining:** None for the bounded original acceptance. Actual publisher corrections were not observed; separate constructed controls verify correction behavior.
 
-**Selected acceptance:** Remaining acceptance is explicit; full task completion is not claimed.
+**Selected acceptance:** Complete for the bounded original scope.
 
 **Code:** `spicy-docs/src/spicy_docs/interpretation/communication_rin.py`; `spicy-docs/src/spicy_docs/schemas/congress_index_tables.py`; `spicy-regs/src/spicy_regs/transforms/build_congress_index.py`; `spicy-regs/src/spicy_regs/relationship_views/congress.py`.
 
@@ -229,7 +231,7 @@ The endpoint is [the fork MCP server](https://spicy-regs-mcp.mdeeb.workers.dev/m
 
 ### T22 — Build an evidence-backed identity candidate queue
 
-**Verified:** Real three-candidate GOA review retained: one rejected for insufficient identity evidence, two pending, no accepted money-attribution edge. Review decisions retain pinned hash-chain provenance.
+**Verified:** Real three-candidate GOA review retained: one rejected for insufficient identity evidence, two pending, no accepted money-attribution edge. Review decisions retain pinned hash-chain provenance. Four same-ID FEC name-change candidates were found in a fixed native page cohort; dated rename remains unqualified. Native lobbying roles, SAM legal/DBA names and connected-organization names do not establish parent/subsidiary identity.
 
 **Remaining:** Historical rename/parent-subsidiary truth sets and source-supported accepted mappings remain incomplete; pending links cannot carry funds.
 
@@ -239,11 +241,11 @@ The endpoint is [the fork MCP server](https://spicy-regs-mcp.mdeeb.workers.dev/m
 
 ### T23 — Qualify Senate expenditure line extraction before publishing payments
 
-**Verified:** Both retained complete summary sections reconcile all seven monetary columns with Decimal difference 0.00. Native negative amounts and C/D grids reviewed; missing page-local office/layout support stays refused.
+**Verified:** Both retained complete summary sections reconcile all seven monetary columns with Decimal difference 0.00. Native negative amounts and C/D grids reviewed; missing page-local office/layout support stays refused. Complete retained B-1243–B-1245 office section: travel detail 13,713.22 and asset detail 69,709.04 exactly match native category totals. The implemented digest-pinned ReviewedOfficeSection produces 56 partial candidates on B-1243–1245, preserves office origin B-1243/source page17, and stops before B-1246. Independent review confirms the original continuation criterion is met.
 
-**Remaining:** Complete B payment/office reconciliation and proven cross-page office context remain unqualified. C/D grids are separate meanings, not ordinary payments.
+**Remaining:** None for the bounded original qualification behavior. Numeric document IDs, unpriced lines, negative payment candidates and whole-office reconstruction remain unsupported; partial output retains publication_qualified=false.
 
-**Selected acceptance:** Remaining acceptance is explicit; full task completion is not claimed.
+**Selected acceptance:** Complete for the bounded original scope.
 
 **Code:** `spicy-docs/src/spicy_docs/reading/senate_payment_review.py`; `spicy-docs/tests/fixtures/senate_expenditures/payment-review-2026-09-27.json`; `spicy-docs/src/spicy_docs/reading/senate_payment_candidates.py`.
 
@@ -251,9 +253,9 @@ The endpoint is [the fork MCP server](https://spicy-regs-mcp.mdeeb.workers.dev/m
 
 **Verified:** GAO target metadata, complete native legal inputs and three court PDF bodies are now published; 18 court citations re-resolved incrementally. Fingerprints, extraction outcomes and failed initial candidates retained separately.
 
-**Remaining:** Broader source/edition cohorts and missing targets remain. GAO PDF bytes are evidence without a published derived-text field; no source-wide completeness claim.
+**Selected acceptance:** Complete. Bounded enabled source cohorts completed acquisition, publication and affected-occurrence re-resolution with refusal/retry evidence. Additional targets and historical editions remain documented expansion scope.
 
-**Selected acceptance:** Remaining acceptance is explicit; full task completion is not claimed.
+**Expansion limits:** Broader source/edition cohorts and missing targets remain. GAO PDF bytes are evidence without a published derived-text field; no source-wide completeness claim.
 
 **Code:** `spicy-regs/src/spicy_regs/acquisition_queue.py`; `spicy-docs/src/spicy_docs/sources/gao/files.py`; `spicy-regs/src/spicy_regs/transforms/build_gao_target.py`; `spicy-docs/src/spicy_docs/sources/gao/product_metadata.py`.
 
@@ -261,9 +263,9 @@ The endpoint is [the fork MCP server](https://spicy-regs-mcp.mdeeb.workers.dev/m
 
 **Verified:** Materialized and catalog-export lineage now supported. Agency-comment, feed-comment, lifecycle checks pass at exact pins; public comments-index scan timed out and local mirror check succeeds. Checkpoints distinguish 96 listings, legacy v2 markers (no current v3 reusable completion), 40 refusal maps, empty backfills, 290 complete / 2 size-refused report reads and 2 complete native legal reads.
 
-**Remaining:** Public comments/index and dependent-output reconciliation awaits serialized mirror refresh. MCP metadata declares checks/grain/policy without inventing live measurements.
+**Selected acceptance:** Complete. Exact selected comparisons, resource bounds, lineage and differentiated processing states pass. Current hosted mirror refresh is tracked separately as a freshness/publication gate.
 
-**Selected acceptance:** Remaining acceptance is explicit; full task completion is not claimed.
+**Expansion limits:** Public comments/index and dependent-output reconciliation awaits serialized mirror refresh. MCP metadata declares checks/grain/policy without inventing live measurements.
 
 **Code:** `spicy-regs/src/spicy_regs/relationship_views/core.py`; `spicy-regs/src/spicy_regs/mcp_server.py`; `spicy-regs/src/spicy_regs/join_measurements.json`; `spicy-regs/src/spicy_regs/aggregate_checks.py`; `spicy-regs/scripts/check_table_joins.py`.
 

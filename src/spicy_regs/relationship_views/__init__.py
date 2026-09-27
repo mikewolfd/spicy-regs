@@ -9,7 +9,7 @@ from typing import Any, Iterable, Mapping
 
 from .affiliations import AFFILIATION_VIEWS
 from .agenda import AGENDA_VIEWS
-from .artifacts_topics import ARTIFACT_TOPIC_RELATIONSHIPS
+from .artifacts_topics import ARTIFACT_SQL_VIEWS, ARTIFACT_TOPIC_RELATIONSHIPS
 from .courts import COURT_VIEWS
 from .diffs import DIFF_VIEWS
 from .entities import ENTITY_VIEWS
@@ -25,6 +25,7 @@ from .regulatory import REGULATORY_RELATIONSHIPS
 
 RELATIONSHIP_VIEWS = (*CONGRESS_RELATIONSHIPS, *REGULATORY_RELATIONSHIPS, *ARTIFACT_TOPIC_RELATIONSHIPS)
 SQL_RELATIONSHIP_VIEWS = (
+    *ARTIFACT_SQL_VIEWS,
     *ENTITY_VIEWS,
     *COURT_VIEWS,
     *DIFF_VIEWS,

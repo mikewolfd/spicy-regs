@@ -343,7 +343,12 @@
       {
         "column_name": "attachments_json",
         "column_type": "VARCHAR",
-        "description": "JSON array of every downloadable rendition: `[{url, format, size}]`. Null when the document has no files."
+        "description": "JSON array of the main document's fileFormats renditions: `[{url, format, size}]`. This compatibility field does not contain separately listed attachment resources. Null when no main renditions were retained."
+      },
+      {
+        "column_name": "attachment_records_json",
+        "column_type": "VARCHAR",
+        "description": "Literal records from an explicitly read document attachment relationship, preserving attachment IDs, restrictions and alternative file formats. Null means the relationship was not read; an empty array means a validated complete read returned no attachments. A main document response alone cannot establish attachment absence."
       },
       {
         "column_name": "fr_doc_num",

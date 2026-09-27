@@ -95,6 +95,7 @@
         "comment_end_date",
         "file_url",
         "attachments_json",
+        "attachment_records_json",
         "fr_doc_num",
         "withdrawn",
         "reason_withdrawn",
