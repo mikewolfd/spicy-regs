@@ -1,4 +1,201 @@
 {
+  "native_legal_references": {
+    "table": "native_legal_references",
+    "label": "Native legal-reference observations",
+    "summary": "Selected eCFR AUTH/SOURCE notes and U.S. Code href/source-credit observations, retaining source XML paths and digests. Complete reads replace the selected source/edition scope, including successful empty corrections. Candidate target matches concern held classification rows, not independently acquired legal text. Unparsed prose and unsupported forms remain visible; no universal extraction or historical completeness is implied.",
+    "coverage": "Sampled. Explicit retained-input manifests only; no public population is claimed. Edition is unknown unless supplied by the selection.",
+    "kind": "sampled",
+    "measured_on": "2026-09-27",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "scope_id",
+        "column_type": "VARCHAR",
+        "description": "Stable hash of source family, source record key and explicit edition; correction replacement scope."
+      },
+      {
+        "column_name": "source_family",
+        "column_type": "VARCHAR",
+        "description": "Source scanner family: ecfr or uscode."
+      },
+      {
+        "column_name": "source_record_key",
+        "column_type": "VARCHAR",
+        "description": "Caller-selected source record identity, retained literally."
+      },
+      {
+        "column_name": "edition",
+        "column_type": "VARCHAR",
+        "description": "Explicit selected edition, or null when the evidence does not establish one."
+      },
+      {
+        "column_name": "input_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 digest of the exact retained source XML bytes."
+      },
+      {
+        "column_name": "source_locator",
+        "column_type": "VARCHAR",
+        "description": "Manifest source locator retained literally; not proof of acquisition time or edition."
+      },
+      {
+        "column_name": "occurrence_index",
+        "column_type": "VARCHAR",
+        "description": "Scanner observation index within this source input, stored as text."
+      },
+      {
+        "column_name": "source_path",
+        "column_type": "VARCHAR",
+        "description": "Source scanner XML path locating this observation."
+      },
+      {
+        "column_name": "element_tag",
+        "column_type": "VARCHAR",
+        "description": "Literal XML element tag, including namespace where present."
+      },
+      {
+        "column_name": "attributes_json",
+        "column_type": "VARCHAR",
+        "description": "Source element attributes serialized as JSON."
+      },
+      {
+        "column_name": "ancestors_json",
+        "column_type": "VARCHAR",
+        "description": "Scanner-retained XML ancestor context serialized as JSON."
+      },
+      {
+        "column_name": "observation_kind",
+        "column_type": "VARCHAR",
+        "description": "Native reference shape reported by the owner scanner."
+      },
+      {
+        "column_name": "href",
+        "column_type": "VARCHAR",
+        "description": "Literal native href, when the observation supplies one."
+      },
+      {
+        "column_name": "text",
+        "column_type": "VARCHAR",
+        "description": "Complete scanner-retained text for this observation; interpretation may cover only part."
+      },
+      {
+        "column_name": "text_runs_json",
+        "column_type": "VARCHAR",
+        "description": "Source text runs and context retained by the scanner."
+      },
+      {
+        "column_name": "cfr_title",
+        "column_type": "VARCHAR",
+        "description": "Source-derived CFR title context, when present; not an inferred target title."
+      },
+      {
+        "column_name": "cfr_part",
+        "column_type": "VARCHAR",
+        "description": "Source-derived CFR part context, when present; part-only targets remain part-only."
+      },
+      {
+        "column_name": "interpretation_status",
+        "column_type": "VARCHAR",
+        "description": "Whether the selected native shape is supported or only partially interpreted; does not assert exhaustive extraction."
+      },
+      {
+        "column_name": "target_candidates_json",
+        "column_type": "VARCHAR",
+        "description": "Interpreted typed targets and optional pinned held-table resolution outcomes; preserves multiple candidates without multiplying observations."
+      },
+      {
+        "column_name": "rule_version",
+        "column_type": "VARCHAR",
+        "description": "Application scanner and interpretation rule version."
+      }
+    ],
+    "grain": "One source scanner observation per pinned XML input; multiple interpreted targets remain nested candidates.",
+    "identity_columns": [
+      "scope_id",
+      "input_sha256",
+      "occurrence_index"
+    ]
+  },
+  "native_legal_reference_reads": {
+    "table": "native_legal_reference_reads",
+    "label": "Native legal-reference selected-input reads",
+    "summary": "Records successful bounded source reads even when they produce no observations. Failed or incomplete inputs cannot replace prior output. Existing generation and source-evidence artifacts retain earlier captures; the current row represents the latest complete selected-shape read for its scope. Unsupported XML forms and unknown editions remain explicit.",
+    "coverage": "Sampled. Explicit retained-input manifests only; not a source-wide acquisition or completeness ledger.",
+    "kind": "sampled",
+    "measured_on": "2026-09-27",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "scope_id",
+        "column_type": "VARCHAR",
+        "description": "Stable source family/record/edition correction scope shared with native_legal_references."
+      },
+      {
+        "column_name": "source_family",
+        "column_type": "VARCHAR",
+        "description": "Source scanner family: ecfr or uscode."
+      },
+      {
+        "column_name": "source_record_key",
+        "column_type": "VARCHAR",
+        "description": "Caller-selected source record identity, retained literally."
+      },
+      {
+        "column_name": "edition",
+        "column_type": "VARCHAR",
+        "description": "Explicit selected edition, or null when unknown."
+      },
+      {
+        "column_name": "input_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 digest of exact retained XML bytes."
+      },
+      {
+        "column_name": "source_locator",
+        "column_type": "VARCHAR",
+        "description": "Literal manifest source locator, without implied acquisition date."
+      },
+      {
+        "column_name": "source_bytes",
+        "column_type": "VARCHAR",
+        "description": "Observed retained input byte length, stored as text."
+      },
+      {
+        "column_name": "occurrence_count",
+        "column_type": "VARCHAR",
+        "description": "Number of native scanner observations produced by this read, including zero."
+      },
+      {
+        "column_name": "read_status",
+        "column_type": "VARCHAR",
+        "description": "complete_selected_shapes means the selected scanner finished; it does not mean every legal-reference form is supported."
+      },
+      {
+        "column_name": "selected_shapes_json",
+        "column_type": "VARCHAR",
+        "description": "Explicit native XML forms selected for this read."
+      },
+      {
+        "column_name": "unsupported_shapes_json",
+        "column_type": "VARCHAR",
+        "description": "Known excluded forms; not a claim to enumerate every possible source shape."
+      },
+      {
+        "column_name": "manifest_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 digest of the retained manifest binding the input selection and optional target pins."
+      },
+      {
+        "column_name": "rule_version",
+        "column_type": "VARCHAR",
+        "description": "Application scanner and interpretation rule version."
+      }
+    ],
+    "grain": "One current complete selected-shape read per source/edition scope.",
+    "identity_columns": [
+      "scope_id"
+    ]
+  },
   "dockets": {
     "table": "dockets",
     "label": "Rulemaking dockets",
@@ -459,7 +656,7 @@
     "table": "fr_docket_links",
     "label": "Federal Register to docket links",
     "summary": "The Federal Register ↔ docket bridge: each `federal_register` row's `docket_ids_json` array exploded to one row per (docket_id, document_number, publication_date), carrying the FR display columns. Use this instead of an `ILIKE` scan over `federal_register.docket_ids_json` — it is sorted by `docket_id`, so `WHERE docket_id = ?` prunes row groups. This is the practical join from regulations.gov to the Federal Register using the Federal Register's own stated docket links. Built by `build_fr_docket_links`.",
-    "coverage": "Derived, and bounded by its inputs. 899,227 links from 603,693 dated Federal Register records to 612,091 docket ids, published 1994-01-03 to 2026-09-22 — the `federal_register` table's own range. The table equals a separate re-derivation from that parent row for row.",
+    "coverage": "Derived, and bounded by its inputs. 899,227 links from 603,693 dated Federal Register records to 612,091 docket ids, published 1994-01-03 to 2026-09-22 — the `federal_register` table's own range. The table equals a separate re-derivation from that parent row for row. This dated measurement predates the ordinal and normalization columns; those require rebuilding.",
     "kind": "derived",
     "measured_on": "2026-09-23",
     "data_quality": null,
@@ -467,7 +664,22 @@
       {
         "column_name": "docket_id",
         "column_type": "VARCHAR",
-        "description": "One docket ID extracted from the FR document's `docket_ids_json` array."
+        "description": "One literal docket ID extracted from the FR document's `docket_ids_json` array."
+      },
+      {
+        "column_name": "docket_source_ordinal",
+        "column_type": "BIGINT",
+        "description": "Zero-based position in the original docket array, before null/blank elements are filtered. Present only after rebuilding. Required with document_number and publication_date to identify an occurrence."
+      },
+      {
+        "column_name": "normalized_docket_candidates_json",
+        "column_type": "VARCHAR",
+        "description": "Owner-normalizer candidate interpretations of the literal docket value; an empty array means no supported interpretation, not absence of a docket."
+      },
+      {
+        "column_name": "docket_normalization_rule",
+        "column_type": "VARCHAR",
+        "description": "Digest-pinned owner identifier-normalization rule used to produce candidates."
       },
       {
         "column_name": "document_number",
@@ -545,7 +757,7 @@
         "description": "Executive order number, for presidential documents."
       }
     ],
-    "grain": "One source docket-array occurrence per dated Federal Register record; identical elements can repeat, and this legacy table has no occurrence ordinal. No unique row identity is declared. See the occurrence views for an ordinal-bearing identity.",
+    "grain": "One source docket-array occurrence per dated Federal Register record; docket_source_ordinal retains the original zero-based array position in rebuilt outputs. Older publications lack that column.",
     "identity_columns": []
   },
   "discovery_signals": {
@@ -3828,6 +4040,16 @@
         "column_name": "filing_url",
         "column_type": "VARCHAR",
         "description": "Canonical fcc.gov URL for the filing (`https://www.fcc.gov/ecfs/filing/<id_submission>`)."
+      },
+      {
+        "column_name": "native_fields_json",
+        "column_type": "VARCHAR",
+        "description": "Selected named native ECFS fields retained as JSON, preserving absent keys, nulls, empty arrays, objects and roles. SQL null in older output means unread legacy data; rebuilding is required. Not the complete API response."
+      },
+      {
+        "column_name": "native_fields_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of the exact native_fields_json string; identifies retained field bytes, not the complete API response."
       }
     ],
     "grain": null,
@@ -8981,6 +9203,7 @@
     ],
     "grain": "One row per occurrence of one cited key in one document's text: the key, the exact text that named it, and the character span it was read at.",
     "identity_columns": [
+      "document_kind",
       "document_key",
       "text_sha256",
       "cite_kind",

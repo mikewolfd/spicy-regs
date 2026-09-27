@@ -1,0 +1,20 @@
+{
+  "sources": [
+    {
+      "path": "title-05-s423.xml",
+      "source_family": "uscode",
+      "source_record_key": "/us/usc/t5/s423",
+      "edition": null,
+      "sha256": "sha256:1b48c549c44207d1d0ab796bfdbcd81a0059cf4ed822ff3c3c8652f0484bb6a1",
+      "source_locator": "retained:spicy-docs-0.47.0/title-05-s423.xml"
+    },
+    {
+      "path": "ecfr-authority-title1-part18.xml",
+      "source_family": "ecfr",
+      "source_record_key": "retained:part18-fragment",
+      "edition": null,
+      "sha256": "sha256:ea12485c4de15625298c92aa55d8120cf72e78c012a05b4e68449d514f16a5c2",
+      "source_locator": "retained:spicy-docs-0.47.0/ecfr-authority-title1-part18.xml"
+    }
+  ]
+}

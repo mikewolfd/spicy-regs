@@ -15,10 +15,12 @@ from dataclasses import dataclass
 from typing import Any
 
 from spicy_regs.identifiers import normalize_rin
+from spicy_regs.citation_sources import TEXT_SOURCES
 
 RESOLUTION_RULE = "selected-target-lookup/1"
 SOURCE_TABLES = {"govinfo_package": "house_activity_reports", "house_activity_report": "house_activity_reports", "house_activity_reports": "house_activity_reports",
                  "budget_volume": "budget_volumes", "budget_volumes": "budget_volumes"}
+SOURCE_TABLES.update({kind: source.table for kind, source in TEXT_SOURCES.items()})
 
 
 @dataclass(frozen=True)

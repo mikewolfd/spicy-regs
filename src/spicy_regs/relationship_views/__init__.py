@@ -14,6 +14,8 @@ from .courts import COURT_VIEWS
 from .diffs import DIFF_VIEWS
 from .entities import ENTITY_VIEWS
 from .fec import FEC_VIEWS
+from .fcc_native import FCC_NATIVE_VIEWS
+from .lifecycle_dates import LIFECYCLE_DATE_VIEWS
 from .identity_candidates import IDENTITY_VIEWS
 from .sql_views import column_metadata, install_sql_views
 from .comments import install_comment_references
@@ -22,7 +24,17 @@ from .core import ArrayRelationship, install_arrays
 from .regulatory import REGULATORY_RELATIONSHIPS
 
 RELATIONSHIP_VIEWS = (*CONGRESS_RELATIONSHIPS, *REGULATORY_RELATIONSHIPS, *ARTIFACT_TOPIC_RELATIONSHIPS)
-SQL_RELATIONSHIP_VIEWS = (*ENTITY_VIEWS, *COURT_VIEWS, *DIFF_VIEWS, *FEC_VIEWS, *AGENDA_VIEWS, *IDENTITY_VIEWS, *AFFILIATION_VIEWS)
+SQL_RELATIONSHIP_VIEWS = (
+    *ENTITY_VIEWS,
+    *COURT_VIEWS,
+    *DIFF_VIEWS,
+    *FEC_VIEWS,
+    *AGENDA_VIEWS,
+    *IDENTITY_VIEWS,
+    *AFFILIATION_VIEWS,
+    *FCC_NATIVE_VIEWS,
+    *LIFECYCLE_DATE_VIEWS,
+)
 
 
 def install_relationship_views(

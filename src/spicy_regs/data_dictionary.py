@@ -174,6 +174,8 @@ RULEMAKING_TABLES: tuple[str, ...] = (
 # Display order for the dictionary. The first three are the core record types;
 # the rest are derived rollups. This is the full public R2 surface.
 TABLES: tuple[str, ...] = (
+    "native_legal_references",
+    "native_legal_reference_reads",
     "dockets",
     "documents",
     "comments",
@@ -230,6 +232,8 @@ TABLES: tuple[str, ...] = (
 # "queryable via MCP" flag can't drift from what the server actually serves.
 MCP_QUERYABLE: frozenset[str] = frozenset(
     {
+        "native_legal_references",
+        "native_legal_reference_reads",
         "dockets",
         "documents",
         "comments",
@@ -332,6 +336,9 @@ DERIVED_SCHEMAS: dict[str, list[tuple[str, str]]] = {
     # one row per (docket_id, document_number, publication_date), carrying FR display columns.
     "fr_docket_links": [
         ("docket_id", "VARCHAR"),
+        ("docket_source_ordinal", "BIGINT"),
+        ("normalized_docket_candidates_json", "VARCHAR"),
+        ("docket_normalization_rule", "VARCHAR"),
         ("document_number", "VARCHAR"),
         ("title", "VARCHAR"),
         ("abstract", "VARCHAR"),
@@ -518,6 +525,8 @@ DERIVED_SCHEMAS: dict[str, list[tuple[str, str]]] = {
         ("total_page_count", "VARCHAR"),
         ("documents_json", "VARCHAR"),
         ("filing_url", "VARCHAR"),
+        ("native_fields_json", "VARCHAR"),
+        ("native_fields_sha256", "VARCHAR"),
     ],
     # The bill-family rollup's own processing state (build_bill_family):
     # one retained GovInfo bulkdata listing entry per BILLSTATUS folder, which
@@ -671,7 +680,10 @@ def expected_schemas() -> dict[str, list[tuple[str, str]]]:
         LOBBYIST_COLUMNS as LOBBYING_LOBBYIST_COLUMNS,
     )
 
+    from spicy_regs.transforms.native_legal_references import SCHEMAS as NATIVE_LEGAL_SCHEMAS
+
     builder_columns = {
+        **NATIVE_LEGAL_SCHEMAS,
         "fec_source_catalog": FEC_CATALOG_COLUMNS,
         "fec_collections": COLLECTION_COLUMNS,
         "fec_source_records": RECORD_COLUMNS,

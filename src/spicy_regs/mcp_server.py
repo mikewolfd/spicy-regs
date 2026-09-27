@@ -151,6 +151,8 @@ TABLES = (
     "bill_family_backfills",
     "bill_family_backfill_walks",
     "committee_report_reads",
+    "native_legal_references",
+    "native_legal_reference_reads",
 )
 STATEMENT_TIMEOUT = os.environ.get("SPICY_REGS_STATEMENT_TIMEOUT", "790s")
 
@@ -977,9 +979,13 @@ def _register_tools(mcp: FastMCP) -> None:
         A capped response sets truncated; it does not establish whole-document coverage.
         acquisition_queue plans qualified missing targets for retained-evidence
         inspection. It performs no acquisition or publication.
+        Held-field kinds bill_section, report_section and lobbying_activity use
+        compact JSON-list keys in their source table's full key order; comment_inline
+        uses the literal comment_id. These scopes cover only the selected field.
         """
         from spicy_regs.acquisition_queue import build_missing_target_queue
         from spicy_regs.citation_resolution import SOURCE_TABLES, resolve_citations
+        from spicy_regs.citation_sources import TEXT_SOURCES, source_digests as held_source_digests
 
         cursor = _get_connection().cursor()
         with _statement_timeout(cursor):
@@ -1004,10 +1010,13 @@ def _register_tools(mcp: FastMCP) -> None:
             source_read = {"table": parent, "status": "unavailable" if parent else "unsupported"}
             if parent in status["tables"]:
                 try:
-                    values = cursor.execute(
-                        f'SELECT DISTINCT text_sha256 FROM "{parent}" WHERE package_id = ? LIMIT 2',
-                        [document_key],
-                    ).fetchall()
+                    if document_kind in TEXT_SOURCES:
+                        values = held_source_digests(cursor, document_kind, document_key)
+                    else:
+                        values = cursor.execute(
+                            f'SELECT DISTINCT text_sha256 FROM "{parent}" WHERE package_id = ? LIMIT 2',
+                            [document_key],
+                        ).fetchall()
                 except duckdb.InterruptException:
                     raise
                 except duckdb.Error as error:

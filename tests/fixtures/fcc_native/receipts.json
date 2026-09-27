@@ -1,0 +1,20 @@
+[
+  {
+    "fixture": "positive.json",
+    "source_path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/fcc-mirror-implementation-2026-09-25/timestamp-semantics/naive-first-at-utc/limit-10.response.json",
+    "sha256": "61a2744047e41bafb1d7ff30380c4c98d562989ee47d53f156920393a7972112",
+    "bytes": 3264
+  },
+  {
+    "fixture": "alternatives.json",
+    "source_path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/fcc-mirror-implementation-2026-09-25/timestamp-semantics/naive-second-at-utc/limit-10.response.json",
+    "sha256": "566737462ee58a2eba878caf3668ae78a16e82b35f00f7eca63d36a535d0f615",
+    "bytes": 3094
+  },
+  {
+    "fixture": "empty.json",
+    "source_path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/fcc-mirror-implementation-2026-09-25/timestamp-semantics/received-april-submission-last/limit-1.response.json",
+    "sha256": "22fd139b130b179dfd23f5d6e6b08bf1899759bcd2fd79496b176dbfe0bbc7a1",
+    "bytes": 7380
+  }
+]

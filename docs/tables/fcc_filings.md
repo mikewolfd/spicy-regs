@@ -32,3 +32,5 @@ One row per FCC ECFS filing — the FCC's comment equivalent: comments, reply co
 | `total_page_count` | `VARCHAR` | Total page count across the filing's attached documents, as a numeric string. |
 | `documents_json` | `VARCHAR` | JSON array of attached documents as `{filename, src}` objects, where `src` is the fcc.gov download URL. |
 | `filing_url` | `VARCHAR` | Canonical fcc.gov URL for the filing (`https://www.fcc.gov/ecfs/filing/<id_submission>`). |
+| `native_fields_json` | `VARCHAR` | Selected named native ECFS fields retained as JSON, preserving absent keys, nulls, empty arrays, objects and roles. SQL null in older output means unread legacy data; rebuilding is required. Not the complete API response. |
+| `native_fields_sha256` | `VARCHAR` | SHA-256 of the exact native_fields_json string; identifies retained field bytes, not the complete API response. |

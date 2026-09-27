@@ -10,6 +10,9 @@ matching semantics of the old ``LIKE``, including the quirk where a few array
 elements join two IDs.
 """
 
+import hashlib
+import inspect
+import json
 from pathlib import Path
 
 import pyarrow.parquet as pq
@@ -19,6 +22,12 @@ from loguru import logger
 def build_fr_docket_links(output_dir: Path) -> Path:
     """Build ``fr_docket_links.parquet`` (exploded FR→docket links + display cols)."""
     import duckdb
+    import duckdb.func
+    from spicy_docs.interpretation import identifier_shapes
+
+    rule = "spicy_docs.normalize_docket_references@sha256:" + hashlib.sha256(
+        Path(inspect.getfile(identifier_shapes)).read_bytes()
+    ).hexdigest()
 
     fr_file = output_dir / "federal_register.parquet"
     if not fr_file.exists():
@@ -32,6 +41,8 @@ def build_fr_docket_links(output_dir: Path) -> Path:
     spill_dir.mkdir(exist_ok=True)
 
     con = duckdb.connect()
+    con.create_function("normalize_docket_candidates", lambda value: json.dumps(
+        identifier_shapes.normalize_docket_references(value)), ["VARCHAR"], "VARCHAR", null_handling=duckdb.func.FunctionNullHandling.SPECIAL)
     con.execute("SET memory_limit='4GB'")
     con.execute("SET preserve_insertion_order=false")
     con.execute("SET threads=2")
@@ -44,6 +55,9 @@ def build_fr_docket_links(output_dir: Path) -> Path:
     COPY (
         SELECT
             link.docket_id AS docket_id,
+            link.ordinality - 1 AS docket_source_ordinal,
+            normalize_docket_candidates(link.docket_id) AS normalized_docket_candidates_json,
+            '{rule}' AS docket_normalization_rule,
             fr.document_number,
             fr.title,
             fr.abstract,
@@ -60,7 +74,7 @@ def build_fr_docket_links(output_dir: Path) -> Path:
             fr.pdf_url,
             fr.executive_order_number
         FROM read_parquet('{fr_file}') fr,
-             UNNEST(CAST(json_extract(fr.docket_ids_json, '$') AS VARCHAR[])) AS link(docket_id)
+             UNNEST(CAST(json_extract(fr.docket_ids_json, '$') AS VARCHAR[])) WITH ORDINALITY AS link(docket_id, ordinality)
         WHERE fr.docket_ids_json IS NOT NULL
           AND link.docket_id IS NOT NULL
           AND TRIM(link.docket_id) <> ''

@@ -129,6 +129,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--ledger", type=Path, default=output_ledger.LEDGER)
     parser.add_argument("--index-url", help="Public base URL to check instead of the ledger's stated destination")
     parser.add_argument("--receipt", type=Path, help="Write every measurement to this JSON file")
+    parser.add_argument("--aggregate", action="append", help="Run this named aggregate check instead of join checks; repeatable")
+    parser.add_argument("--timeout-seconds", type=float, default=90, help="Aggregate query timeout, at most 90 seconds")
     args = parser.parse_args(argv)
     if args.index_url:
         base, source = args.index_url.rstrip("/"), "an explicit --index-url, not the ledger's destination"
@@ -139,6 +141,21 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"Cannot name the publisher to check: {exc}", file=sys.stderr)
             return 2
         source = "the ledger's stated destination"
+    if args.aggregate:
+        from spicy_regs.aggregate_checks import check_public
+        try:
+            with connect() as con:
+                receipt = check_public(con, base, args.aggregate, timeout_seconds=args.timeout_seconds)
+        except (httpx.HTTPError, duckdb.Error, publication.PublicationError, ValueError) as exc:
+            print(f"Aggregate selection failed: {exc}", file=sys.stderr)
+            return EXIT_UNREACHABLE
+        if args.receipt:
+            args.receipt.write_text(json.dumps(receipt, indent=2) + "\n")
+        for result in receipt["results"]:
+            print(f"{result['status']:<14} {result['check']}: {result['reason']}")
+        if any(r["status"] == "MISMATCH" for r in receipt["results"]):
+            return 1
+        return 0 if all(r["status"] in ("OK", "EMPTY") for r in receipt["results"]) else EXIT_UNREACHABLE
     print(f"Declared joins against {base} ({source}); baseline {table_joins.BASELINE_DATE}")
     try:
         results = check(connect(), table_joins.JOINS, table_urls(base))

@@ -150,12 +150,12 @@
       "audits": [
         {
           "disposition": "qualified",
-          "pin": "acc047d1",
+          "pin": "b443a813",
           "pin_kind": "artifact",
-          "date": "2026-09-26"
+          "date": "2026-09-27"
         }
       ],
-      "statement": "qualified at `acc047d1…` (2026-09-26): all 899,630 rows equal the multiset expansion of Federal Register `40dfab8e…` (DuckDB two-way EXCEPT ALL and a Python multiset). The 110 additions are exactly the new documents' links. Receipt: `drift-qualification-2026-09-26/regulatory/`."
+      "statement": "qualified at `b443a813…` (2026-09-27): all 899,630 rows and every legacy column equal prior `58baa81c…` as full multisets. The source is frozen Federal Register `30a081f4…`; every array ordinal points to its exact literal. New candidate arrays hold 246,317 interpretations across 243,615 occurrences; 656,015 have no supported interpretation, not an absent-docket claim. The owner normalizer supplies the candidates and implementation digest. Full public byte readback passed. Receipt: `spicy-regs-fr-links-candidate-20260927/validation.json` and `publication/publication-receipt.json` under the September 27 implementation artifact roots."
     },
     {
       "task": "T11",
@@ -240,18 +240,12 @@
       "audits": [
         {
           "disposition": "PARTIAL",
-          "pin": "6bdd9eef",
+          "pin": "34b970d5",
           "pin_kind": "artifact",
-          "date": "2026-09-26"
-        },
-        {
-          "disposition": "qualified",
-          "pin": "18c85718",
-          "pin_kind": "artifact",
-          "date": "2026-09-25"
+          "date": "2026-09-27"
         }
       ],
-      "statement": "current `6bdd9eef…` is PARTIAL (2026-09-26): 5,705 filings, retaining every prior row unchanged and adding 214. All 214 additions match native fields, and all 1,450 rows in the run's window match a fresh read. Run 36175655150 (`a89476e`, spicy-docs 0.32.1) predates both evidence retention and the 0.34.0 delegation, so no run-time evidence exists. Of 71 later-seen window filings, 69 were disseminated after the run and 2 were absent from a pre-run read. Earlier window qualified at `18c85718…` (2026-09-25). Receipt: `drift-qualification-2026-09-26/external/`."
+      "statement": "current `34b970d5…` is PARTIAL (2026-09-27): all 5,780 rows and every prior cell from `1fbc0964…` preserved. Exactly 525 retained source records match every old cell and receive native fields; 5,255 remain unread NULL. All source-array states, roles, asset alternatives and numeric proceeding IDs survive. New views expose 708 proceeding, 701 participant and 238 artifact observations. Per-row pointers and original page bytes are retained. Native selected-JSON digests do not claim to hash original HTTP pages. Wider retained replay and attachment bodies remain open. Receipt: `spicy-regs-fcc-partial-20260927/receipt.json` and public readback receipt."
     },
     {
       "task": "T14",
@@ -367,12 +361,12 @@
       "audits": [
         {
           "disposition": "qualified",
-          "pin": "d87cf97b",
+          "pin": "566318c5",
           "pin_kind": "artifact",
-          "date": "2026-09-25"
+          "date": "2026-09-27"
         }
       ],
-      "statement": "qualified at `d87cf97b…` (2026-09-25): 42 reports. All 11 additions and two abstract changes match native RSS; the other 29 rows are unchanged. `report_type=Report` is an explicit default, not a native feed value. This qualifies the bounded feed population; broader history and routine retained source inputs remain open. Receipt: `parallel-rollup-audit-2026-09-25/` (workstream details in the [audit report](parallel-rollup-audit-2026-09-25.md))."
+      "statement": "qualified at `566318c5…` (2026-09-27) for the bounded addition: all 42 prior rows/cells from `d2261139…` preserved, with one source-identified GAO-17-317 record added. Its title and 2017-02-15 date come from the qualified GAO product page; unknown tags/type/abstract remain NULL. Source page and retained PDF are in generation evidence; the metadata table has no body-text column. Citation re-resolution finds this target. Full public byte readback passed; broader history remains open. Receipt: `spicy-regs-t24-gao-candidate-20260927/replay-0.48/receipt.json` and `publication/publication-receipt.json`."
     },
     {
       "task": "T12",
@@ -662,12 +656,12 @@
       "audits": [
         {
           "disposition": "PARTIAL",
-          "pin": "8f2502b6",
+          "pin": "a9fa600c",
           "pin_kind": "artifact",
-          "date": "2026-09-26"
+          "date": "2026-09-27"
         }
       ],
-      "statement": "current `8f2502b6…` is PARTIAL (2026-09-26): runs 36226295627 and 36227170848 re-read all 68 held parents under SpicyDocs 0.38.0 (bill_number 004, committee_name 002). The audited defects are repaired: every Senate report keys its bills in the Congress it covers, eight filed in the 118th covering the 117th and six filed in the 119th covering the 118th; Senate reports carry 1,904 Senate committee codes; `CLAUSE S 2(N)` and `S. Con. Res. 2022` are no longer bills; 116-hr-5119 and -5919 now resolve. Against the prior `ae51fc90…`, every removed row is accounted for: 12,684 rows changed only their rule versions, 3,148 re-keyed their target at the same span, and the 3 citations and 4 actions of the refused misreads dropped. The generation audit finds 0 failures, with evidence `54cb6f5f…` admitted and bound. Residuals keep it partial: 117-hr-1132 in 117hrpt705's `Prior Congresses` paragraph still joins the wrong bill, and 31 citations that state their own Congress inline (`H.R. 6752, 115th Cong.`) take the report's. Eight House codes in Senate reports are one correct `House Committee on Transportation` and 7 bare names only the House roster holds, a documented limit. bill_committee_actions → congress_bills misses 17 of 2,956 bills. Receipts: `print-citations-rerun-2026-09-26/`, `print-citations-8f2502b6-defect-check.txt`, `rerun-removals-2026-09-26.txt`."
+      "statement": "current `a9fa600c…` is PARTIAL (2026-09-27): the bounded held-field writer preserves all 52,674 prior citation rows and all sibling table bytes, adding 42 reviewed findings from six explicit bill-section/report-section/lobbying fields. Every span/digest matches the retained literal field, and 20 bill mentions stay unresolved without a stated Congress. Selected field bytes and input generation pins are retained. Committee names are excluded from new adapter defaults after a line-wrap precision failure; executive orders and verbose FR references remain known misses. Public byte readback passed. Prior print extraction limitations remain; no whole-document or corpus recall claim. Receipt: `spicy-regs-held-citations-20260927/candidate-validation.json` and `publication/publication-receipt.json`."
     },
     {
       "task": "T08",

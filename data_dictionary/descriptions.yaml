@@ -238,13 +238,14 @@ tables:
       document_count: "Number of documents the agency posted of that type in that month."
 
   fr_docket_links:
-    grain: "One source docket-array occurrence per dated Federal Register record; identical elements can repeat, and this legacy table has no occurrence ordinal. No unique row identity is declared. See the occurrence views for an ordinal-bearing identity."
+    grain: "One source docket-array occurrence per dated Federal Register record; docket_source_ordinal retains the original zero-based array position in rebuilt outputs. Older publications lack that column."
     label: "Federal Register to docket links"
     coverage: >-
       Derived, and bounded by its inputs. 899,227 links from 603,693 dated
       Federal Register records to 612,091 docket ids, published 1994-01-03 to
       2026-09-22 — the `federal_register` table's own range. The table equals
-      a separate re-derivation from that parent row for row.
+      a separate re-derivation from that parent row for row. This dated measurement
+      predates the ordinal and normalization columns; those require rebuilding.
     measured_on: "2026-09-23"
     summary: >-
       The Federal Register ↔ docket bridge: each `federal_register` row's
@@ -256,7 +257,10 @@ tables:
       regulations.gov to the Federal Register using the Federal Register's own
       stated docket links. Built by `build_fr_docket_links`.
     columns:
-      docket_id: "One docket ID extracted from the FR document's `docket_ids_json` array."
+      docket_id: "One literal docket ID extracted from the FR document's `docket_ids_json` array."
+      docket_source_ordinal: "Zero-based position in the original docket array, before null/blank elements are filtered. Present only after rebuilding. Required with document_number and publication_date to identify an occurrence."
+      normalized_docket_candidates_json: "Owner-normalizer candidate interpretations of the literal docket value; an empty array means no supported interpretation, not absence of a docket."
+      docket_normalization_rule: "Digest-pinned owner identifier-normalization rule used to produce candidates."
       document_number: "Literal Federal Register document number. Join to `federal_register` on both this value and `publication_date`; a number can name distinct dated records."
       title: "FR document title."
       abstract: "FR document abstract."
@@ -1705,6 +1709,8 @@ tables:
       total_page_count: "Total page count across the filing's attached documents, as a numeric string."
       documents_json: "JSON array of attached documents as `{filename, src}` objects, where `src` is the fcc.gov download URL."
       filing_url: "Canonical fcc.gov URL for the filing (`https://www.fcc.gov/ecfs/filing/<id_submission>`)."
+      native_fields_json: "Selected named native ECFS fields retained as JSON, preserving absent keys, nulls, empty arrays, objects and roles. SQL null in older output means unread legacy data; rebuilding is required. Not the complete API response."
+      native_fields_sha256: "SHA-256 of the exact native_fields_json string; identifies retained field bytes, not the complete API response."
 
   # ---------------------------------------------------------------------------
   # Tables hosted from spicy-docs' table contracts.
@@ -3295,3 +3301,65 @@ tables:
       outcome: "pending, refused, refused_final, detail_refused or complete. complete permits an unchanged skip; so does refused_final, a refusal every run would repeat (a body past the byte bound, parts past the request budget, no rendition taken) until the package's last_modified or the rule moves. A body past the bound rests on the size its response stated (rule_version ends refused-under=size=<bytes>) and is read again only when the bound grows past that size; any other rests on the bounds rule_version names. refused and detail_refused are read again every run."
       rule_version: "The rules a package was read under: for a report, the installed SpicyDocs code digest (not its release string), the CBO and section readers and this repository's part and body rules; for a hearing, the hearing-link rule and the body rule. A changed token forces another read."
       observed_at: "UTC time this rollup recorded the checkpoint."
+
+  native_legal_references:
+    measured_on: "2026-09-27"
+    label: "Native legal-reference observations"
+    identity_columns: [scope_id, input_sha256, occurrence_index]
+    grain: "One source scanner observation per pinned XML input; multiple interpreted targets remain nested candidates."
+    coverage: "Sampled. Explicit retained-input manifests only; no public population is claimed. Edition is unknown unless supplied by the selection."
+    summary: >-
+      Selected eCFR AUTH/SOURCE notes and U.S. Code href/source-credit observations,
+      retaining source XML paths and digests. Complete reads replace the selected
+      source/edition scope, including successful empty corrections. Candidate target
+      matches concern held classification rows, not independently acquired legal text.
+      Unparsed prose and unsupported forms remain visible; no universal extraction or
+      historical completeness is implied.
+    columns:
+      scope_id: "Stable hash of source family, source record key and explicit edition; correction replacement scope."
+      source_family: "Source scanner family: ecfr or uscode."
+      source_record_key: "Caller-selected source record identity, retained literally."
+      edition: "Explicit selected edition, or null when the evidence does not establish one."
+      input_sha256: "SHA-256 digest of the exact retained source XML bytes."
+      source_locator: "Manifest source locator retained literally; not proof of acquisition time or edition."
+      occurrence_index: "Scanner observation index within this source input, stored as text."
+      source_path: "Source scanner XML path locating this observation."
+      element_tag: "Literal XML element tag, including namespace where present."
+      attributes_json: "Source element attributes serialized as JSON."
+      ancestors_json: "Scanner-retained XML ancestor context serialized as JSON."
+      observation_kind: "Native reference shape reported by the owner scanner."
+      href: "Literal native href, when the observation supplies one."
+      text: "Complete scanner-retained text for this observation; interpretation may cover only part."
+      text_runs_json: "Source text runs and context retained by the scanner."
+      cfr_title: "Source-derived CFR title context, when present; not an inferred target title."
+      cfr_part: "Source-derived CFR part context, when present; part-only targets remain part-only."
+      interpretation_status: "Whether the selected native shape is supported or only partially interpreted; does not assert exhaustive extraction."
+      target_candidates_json: "Interpreted typed targets and optional pinned held-table resolution outcomes; preserves multiple candidates without multiplying observations."
+      rule_version: "Application scanner and interpretation rule version."
+
+  native_legal_reference_reads:
+    measured_on: "2026-09-27"
+    label: "Native legal-reference selected-input reads"
+    identity_columns: [scope_id]
+    grain: "One current complete selected-shape read per source/edition scope."
+    coverage: "Sampled. Explicit retained-input manifests only; not a source-wide acquisition or completeness ledger."
+    summary: >-
+      Records successful bounded source reads even when they produce no observations.
+      Failed or incomplete inputs cannot replace prior output. Existing generation and
+      source-evidence artifacts retain earlier captures; the current row represents the
+      latest complete selected-shape read for its scope. Unsupported XML forms and
+      unknown editions remain explicit.
+    columns:
+      scope_id: "Stable source family/record/edition correction scope shared with native_legal_references."
+      source_family: "Source scanner family: ecfr or uscode."
+      source_record_key: "Caller-selected source record identity, retained literally."
+      edition: "Explicit selected edition, or null when unknown."
+      input_sha256: "SHA-256 digest of exact retained XML bytes."
+      source_locator: "Literal manifest source locator, without implied acquisition date."
+      source_bytes: "Observed retained input byte length, stored as text."
+      occurrence_count: "Number of native scanner observations produced by this read, including zero."
+      read_status: "complete_selected_shapes means the selected scanner finished; it does not mean every legal-reference form is supported."
+      selected_shapes_json: "Explicit native XML forms selected for this read."
+      unsupported_shapes_json: "Known excluded forms; not a claim to enumerate every possible source shape."
+      manifest_sha256: "SHA-256 digest of the retained manifest binding the input selection and optional target pins."
+      rule_version: "Application scanner and interpretation rule version."

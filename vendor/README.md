@@ -5,6 +5,15 @@ The optional `source-readers` extra enables the same readers for package install
 its wheels must be supplied explicitly until they are published in a registry.
 Base CLI and MCP installs do not require them.
 
+- `spicy_docs-0.48.0`: built from SpicyDocs `983463c9eca35fc93913fd798811e148b531516d`,
+  September 27, 2026: **1,690,539 bytes**, SHA-256
+  `ee138dd86e62c254058ce9fe5f2f159dc6aa7d82ccc4580ed47edf09d28fd7fb`, byte-identical
+  across two builds. Adds a bounded Senate payment candidate reader and qualified
+  GAO product-page metadata reader. Citation identities now include source kind.
+  Senate output remains partial candidates pending full payment reconciliation.
+  Provider and receiving gates are recorded in the join execution report.
+  Vendored adoption only; no package-registry upload is asserted.
+
 - `spicy_docs-0.47.0`: built from SpicyDocs `7440dd4a3c446962174b5c3048e313d34a3b287b`,
   September 27, 2026: **1,685,325 bytes**, SHA-256
   `3a614d4aa16b0416e58690e7659037fef3397d3d6ce7ca21c1cc0e2c8ab42d29`, byte-identical

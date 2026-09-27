@@ -21,7 +21,7 @@ dependencies = [
 [project.optional-dependencies]
 source-readers = [
     "smart-open[s3]==8.0.1", # Conditional seekable S3 streams for remote generation staging
-    "spicy-docs[acquisition,pdf,pdf-pypdf,bill-diff,courtlistener-local]==0.47.0",
+    "spicy-docs[acquisition,pdf,pdf-pypdf,bill-diff,courtlistener-local]==0.48.0",
     "pypdf==6.14.2", # Qualified PDF text and failure behavior
     "rulespec-artifacts==1.1.2",
     "deltatrack==0.1.0", # spicy-docs' bill-diff extra; git-sourced upstream, so declared here to bind the vendored wheel
@@ -35,7 +35,7 @@ embed = [
 # Checkout pipelines use the pinned source wheels; base CLI/MCP installs do not.
 source-readers = [
     "smart-open[s3]==8.0.1", # Conditional seekable S3 streams for remote generation staging
-    "spicy-docs[acquisition,pdf,pdf-pypdf,bill-diff,courtlistener-local]==0.47.0",
+    "spicy-docs[acquisition,pdf,pdf-pypdf,bill-diff,courtlistener-local]==0.48.0",
     "pypdf==6.14.2", # Qualified PDF text and failure behavior
     "rulespec-artifacts==1.1.2",
     "deltatrack==0.1.0", # spicy-docs' bill-diff extra; git-sourced upstream, so declared here to bind the vendored wheel
@@ -99,6 +99,8 @@ run-rollup-members = "spicy_regs.pipelines.rollups.members:app"
 run-rollup-member-vote-terms = "spicy_regs.pipelines.rollups.member_vote_terms:app"
 run-rollup-committee-reports = "spicy_regs.pipelines.rollups.committee_reports:app"
 # The two PDF-only families: one rollup per acquisition pass.
+run-rollup-native-legal-references = "spicy_regs.pipelines.rollups.native_legal_references:app"
+run-rollup-held-citations = "spicy_regs.pipelines.rollups.held_citations:app"
 run-rollup-print-citations = "spicy_regs.pipelines.rollups.print_citations:app"
 run-rollup-senate-expenditures = "spicy_regs.pipelines.rollups.senate_expenditures:app"
 # A8/A9 (laws and rosters)
@@ -122,7 +124,7 @@ requires = ["uv_build"]
 build-backend = "uv_build"
 
 [tool.uv.sources]
-spicy-docs = { path = "vendor/spicy_docs-0.47.0-py3-none-any.whl" }
+spicy-docs = { path = "vendor/spicy_docs-0.48.0-py3-none-any.whl" }
 rulespec-artifacts = { path = "vendor/rulespec_artifacts-1.1.2-py3-none-any.whl" }
 deltatrack = { path = "vendor/deltatrack-0.1.0-py3-none-any.whl" }
 

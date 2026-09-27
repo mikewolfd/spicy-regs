@@ -6,7 +6,7 @@
 
 The Federal Register ↔ docket bridge: each `federal_register` row's `docket_ids_json` array exploded to one row per (docket_id, document_number, publication_date), carrying the FR display columns. Use this instead of an `ILIKE` scan over `federal_register.docket_ids_json` — it is sorted by `docket_id`, so `WHERE docket_id = ?` prunes row groups. This is the practical join from regulations.gov to the Federal Register using the Federal Register's own stated docket links. Built by `build_fr_docket_links`.
 
-**Coverage.** Derived, and bounded by its inputs. 899,227 links from 603,693 dated Federal Register records to 612,091 docket ids, published 1994-01-03 to 2026-09-22 — the `federal_register` table's own range. The table equals a separate re-derivation from that parent row for row. *(measured 2026-09-23)*
+**Coverage.** Derived, and bounded by its inputs. 899,227 links from 603,693 dated Federal Register records to 612,091 docket ids, published 1994-01-03 to 2026-09-22 — the `federal_register` table's own range. The table equals a separate re-derivation from that parent row for row. This dated measurement predates the ordinal and normalization columns; those require rebuilding. *(measured 2026-09-23)*
 
 - **Parquet file:** `fr_docket_links.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
@@ -14,7 +14,10 @@ The Federal Register ↔ docket bridge: each `federal_register` row's `docket_id
 
 | Column | Type | Description |
 | --- | --- | --- |
-| `docket_id` | `VARCHAR` | One docket ID extracted from the FR document's `docket_ids_json` array. |
+| `docket_id` | `VARCHAR` | One literal docket ID extracted from the FR document's `docket_ids_json` array. |
+| `docket_source_ordinal` | `BIGINT` | Zero-based position in the original docket array, before null/blank elements are filtered. Present only after rebuilding. Required with document_number and publication_date to identify an occurrence. |
+| `normalized_docket_candidates_json` | `VARCHAR` | Owner-normalizer candidate interpretations of the literal docket value; an empty array means no supported interpretation, not absence of a docket. |
+| `docket_normalization_rule` | `VARCHAR` | Digest-pinned owner identifier-normalization rule used to produce candidates. |
 | `document_number` | `VARCHAR` | Literal Federal Register document number. Join to `federal_register` on both this value and `publication_date`; a number can name distinct dated records. |
 | `title` | `VARCHAR` | FR document title. |
 | `abstract` | `VARCHAR` | FR document abstract. |
