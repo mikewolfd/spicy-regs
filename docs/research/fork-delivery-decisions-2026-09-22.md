@@ -151,7 +151,7 @@ Commits are spicy-regs fork `main` unless named. "Left" is what remains and what
 | 37 | Conditional. | — | Only if the fork serves queries directly. |
 | 38 | Open, agency by agency. | — | Per decision 7's cohorts (spicy-regs). |
 | 39 | Open. | — | DocSpec re-compares the ~64k records first; then the ledger records the qualification. |
-| 40 | Open. | The writer is still present: `transforms/merge_comments_partitioned.py`, `comment_partitions.py`. | Remove the declaration and those writers (spicy-regs). |
+| 40 | Done on branch `retire-comment-partitions`, not yet on `main`. | `b9e13bc` removes the ETL's non-Iceberg comments writer, the `use_iceberg` dispatch input and ledger row T06. `8592fdd` drops comments from `repair_regulations` and deletes the last dated-tree modules; `comment_partitions.py` keeps only the shared validators. | Nothing; comment repair moves to the catalog (decision 70). |
 | 41 | Open. | — | Per-attachment tool fallback with the tool recorded per attachment (spicy-regs). |
 | 42 | Superseded by decisions 54–57 below. | — | ca's lane. |
 | 43 | Waiting. | — | Needs an Engine hosting decision. |
@@ -219,3 +219,10 @@ Answered through the question tool.
 | 67 | Type the attribute columns now, or VARCHAR first and types later? | **Type them now.** BOOLEAN for the three comment-window flags, INTEGER for `page_count`, UTC TIMESTAMP for the dates, and lists of strings for authors, topics and keywords. `display_properties` stays JSON text. The thin `documents` and `dockets` tables stay VARCHAR for now. | Needs per-column types in spicy-docs' `TableContract` (spicy-stack-a8), typed contract tables in spicy-regs' dictionary and publication, and typed admission in DocSpec (spicy-stack-83). |
 | 68 | Back-fill 108th–112th bill text? | **Yes, the XML that exists, per package at `max_version_fetches=3000`, after multi-file `bill_sections` and the per-package refusal memory (which also labels each printing by the rendition actually fetched). The ~21.8k printings without XML stay metadata-only.** | GovInfo has XML for about 65.4k of 85,963 packages (76%); the earlier "PDF only" note was wrong. No bulk route covers 2003–2012 printings. About 23 runs, 207k requests and 1.9 GB; `bill_sections` grows about 28%. Plan: `bill-text-108-112-plan/PLAN.md` in the fork-execution corpus. |
 | 69 | Law text for the 108th–112th? | **Roadmap a Statutes at Large reader for the laws family, after the bill-text work.** | Volumes 117–126 are the only keyless bulk text for those years (10 files, 257 MB, all 2,116 laws); they are enacted law, not printings, and need a USLM reader. |
+| 70 | Comment repair after decision 40? | **Retarget it to the catalog.** | Decision 40 removed the local comment repair with the dated tree, and comments now live only in the catalog. An explicit source reread still needs its own merge rule: the fresh mapping wins at an equal date and enrichment is kept. The ETL's upsert replaces a row only when the source date is strictly newer. |
+
+### Where decision 70 stands (2026-09-27)
+
+| # | State | Evidence | Left |
+| --- | --- | --- | --- |
+| 70 | Done on branch `comment-repair-catalog`, not yet on `main`. | `aedc751`: `--table comments` dry-runs to `comments-repair.json`; `--apply` replaces only the changed rows through the ETL's DELETE + INSERT (`iceberg.replace_rows`), checks them, and records the new snapshot. | A first real apply, outside the ETL window; the mirror job then publishes it. |

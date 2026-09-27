@@ -11,10 +11,8 @@ import pyarrow.parquet as pq
 from loguru import logger
 from spicy_docs.transport.credentials import scrub_credential
 
-from spicy_regs.enrich_pdf import apply_text_updates, with_text_columns
 from spicy_regs.schemas import RECORD_TYPES
 from spicy_regs.sources import iceberg, r2
-from spicy_regs.transforms.comment_partitions import comment_partition_path
 from spicy_regs.transforms.comment_text_updates import write_text_updates
 from spicy_regs.transforms.derived_text_pool import DerivedTextPool, TextResult
 
@@ -85,8 +83,8 @@ class PendingCommentText:
             temporary.replace(self.path)
             logger.info("Retained {} failed comment-text reads for retry", len(self.rows))
 
-    def retry(self, pool: DerivedTextPool, output_dir: Path, agencies: list[str], *, use_iceberg: bool) -> list[Path]:
-        """Retry prior failures still untouched by ingestion; preserve current metadata.
+    def retry(self, pool: DerivedTextPool, output_dir: Path, agencies: list[str]) -> None:
+        """Retry prior failures still untouched by ingestion in the catalog; preserve current metadata.
 
         Re-read only the existing row's coordinates and text state. Rows already
         filled by another path are resolved without fetching or overwriting them.
@@ -94,34 +92,11 @@ class PendingCommentText:
         """
         rows = [row for row in self._retry.values() if row["agency_code"] in agencies]
         if not rows:
-            return []
+            return
         logger.info("Retrying {} prior comment-text failures independently of raw keys", len(rows))
         pending = pl.from_dicts(rows, schema={name: pl.String for name in _COORDINATES})
         with TemporaryDirectory(dir=output_dir, prefix=".text-retry-") as staging:
-            updates = Path(staging) / "updates.parquet"
-            if use_iceberg:
-                self._retry_catalog(pool, pending, updates)
-                return []
-            changed = []
-            for path in sorted({_partition(output_dir, row) for row in rows}):
-                if not path.exists():
-                    path.parent.mkdir(parents=True, exist_ok=True)
-                    r2.download(path.relative_to(output_dir).as_posix(), path)
-                if not path.exists():
-                    continue
-                selected = with_text_columns(pl.scan_parquet(path)).select(_COLUMNS).join(
-                    pending.lazy(), on=_COORDINATES, how="semi", nulls_equal=True,
-                )
-                candidates = selected.collect(engine="streaming")
-                assert isinstance(candidates, pl.DataFrame)
-                stats = self._updates(pool, candidates, updates)
-                if stats["derived"]:
-                    replacement = Path(staging) / "comments.parquet"
-                    apply_text_updates(with_text_columns(pl.scan_parquet(path)), pl.scan_parquet(updates),
-                                       "comment_id").sink_parquet(replacement, compression="zstd")
-                    replacement.replace(path)
-                    changed.append(path)
-            return changed
+            self._retry_catalog(pool, pending, Path(staging) / "updates.parquet")
 
     def _updates(self, pool: DerivedTextPool, candidates: pl.DataFrame, updates: Path) -> dict[str, int]:
         # No attachment gate: the retained failure proves the original row was
@@ -152,11 +127,3 @@ class PendingCommentText:
         finally:
             con.close()
 
-
-def _partition(output_dir: Path, row: dict) -> Path:
-    posted = datetime.fromisoformat(row["posted_date"]) if row["posted_date"] else None
-    docket = row["docket_id"]
-    return comment_partition_path(
-        output_dir / "comments", row["agency_code"], docket.strip('"') if docket is not None else None,
-        posted.year if posted else None, posted.month if posted else None,
-    )

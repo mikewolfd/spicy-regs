@@ -1,4 +1,4 @@
-"""Unknown posted dates survive comment partitions, catalog seeds and consumers."""
+"""Unknown posted dates survive catalog seeds, the comments index, the agency mirror and consumers."""
 
 import duckdb
 import polars as pl
@@ -8,7 +8,8 @@ import pytest
 from spicy_regs.comments_health import check_comments
 from spicy_regs.schemas import COMMENT, DOCKET
 from spicy_regs.sources import iceberg
-from spicy_regs.transforms import merge_comments_partitioned, update_comments_index, write_staging
+from spicy_regs.transforms import write_staging
+from spicy_regs.transforms.comment_partitions import validate_staged_comments
 from spicy_regs.transforms.partition_comments import partition_comments
 from spicy_regs.transforms.build_feed_summary import build_feed_summary
 from spicy_regs.transforms.build_agency_stats import build_agency_stats
@@ -26,18 +27,25 @@ def comment(identity, date):
     }
 
 
-def test_unknown_dates_survive_partition_merge_catalog_seed_and_agency_mirror(tmp_path):
-    """A retry must find the unknown-date partition rather than duplicate its one row."""
+def test_unknown_dates_survive_catalog_seed_index_and_agency_mirror(tmp_path):
+    """An unknown date keeps its own NULL index group and survives the seed, the rollups and the mirror."""
     output = tmp_path / "output"
     output.mkdir()
-    stage = tmp_path / "stage"
-    rows = [comment("unknown", None), comment("known", "2025-01-01")]
-    write_staging("EPA", "comments", rows, stage, COMMENT.schema)
-    changed = merge_comments_partitioned(stage, output, COMMENT.schema, COMMENT.dedup_key, download_existing=False)
-    assert sum(pq.ParquetFile(p).metadata.num_rows for p in changed) == 2
-    # Ordinary retries must also find the unknown-date partition, not add rows.
-    changed = merge_comments_partitioned(stage, output, COMMENT.schema, COMMENT.dedup_key, download_existing=False)
-    index = update_comments_index(output, changed)
+    source = tmp_path / "source.parquet"
+    pl.DataFrame([comment("unknown", None), comment("known", "2025-01-01")], schema=COMMENT.schema).write_parquet(
+        source
+    )
+
+    with duckdb.connect() as con:
+        con.execute(f"ATTACH ':memory:' AS {iceberg._CATALOG_ALIAS}")
+        iceberg._ensure_table(con, COMMENT)
+        assert iceberg.seed_comments_from_parquet(con, str(source), COMMENT) == 2
+        got = con.execute(
+            f"SELECT comment_id,posted_date FROM {iceberg._qualified(COMMENT)} ORDER BY comment_id"
+        ).fetchall()
+        assert got == [("known", "2025-01-01"), ("unknown", None)]
+        index = iceberg._build_comments_index(con, COMMENT, output)
+        iceberg._export_parquet(con, COMMENT, output)
     assert pl.read_parquet(index)["row_count"].sum() == 2
     assert pl.read_parquet(index).filter(pl.col("year").is_null())["row_count"].to_list() == [1]
 
@@ -47,16 +55,6 @@ def test_unknown_dates_survive_partition_merge_catalog_seed_and_agency_mirror(tm
     assert pl.read_parquet(build_feed_summary(output))["comment_count"].to_list() == [2]
     assert pl.read_parquet(build_agency_stats(output))["comment_count"].to_list() == [2]
 
-    with duckdb.connect() as con:
-        con.execute(f"ATTACH ':memory:' AS {iceberg._CATALOG_ALIAS}")
-        iceberg._ensure_table(con, COMMENT)
-        pattern = str(output / "comments/agency_code=*/docket_id=*/year=*/month=*/part-0.parquet")
-        assert iceberg.seed_comments_from_parquet(con, pattern, COMMENT) == 2
-        got = con.execute(
-            f"SELECT comment_id,posted_date FROM {iceberg._qualified(COMMENT)} ORDER BY comment_id"
-        ).fetchall()
-        assert got == [("known", "2025-01-01"), ("unknown", None)]
-        iceberg._export_parquet(con, COMMENT, output)
     directory = partition_comments(output)
     [part] = directory.glob("agency_code=*/part-0.parquet")
     mirrored = {r["comment_id"]: r["posted_date"] for r in pq.ParquetFile(part).read().to_pylist()}
@@ -64,13 +62,11 @@ def test_unknown_dates_survive_partition_merge_catalog_seed_and_agency_mirror(tm
 
 
 @pytest.mark.parametrize("bad", ["not-a-date", "infinity"])
-def test_ordinary_merge_refuses_malformed_dates_before_writes(tmp_path, bad):
+def test_staged_comments_refuse_malformed_dates_before_any_merge(tmp_path, bad):
     stage = tmp_path / "stage"
-    output = tmp_path / "output"
     write_staging("EPA", "comments", [comment("bad", bad)], stage, COMMENT.schema)
     with pytest.raises(ValueError, match="invalid coordinates"):
-        merge_comments_partitioned(stage, output, COMMENT.schema, COMMENT.dedup_key, download_existing=False)
-    assert not output.exists()
+        validate_staged_comments(stage)
 
 
 def test_freshness_handles_unknown_only_agencies_and_still_flags_missing_or_lagging_rows():
@@ -84,13 +80,3 @@ def test_freshness_handles_unknown_only_agencies_and_still_flags_missing_or_lagg
         assert any('MISSING/' in error for error in errors)
         assert not any('EPA/' in error or 'unique IDs' in error for error in errors)
 
-
-def test_partial_null_partition_coordinates_refuse_index_replacement(tmp_path):
-    part = tmp_path / "comments/agency_code=EPA/docket_id=EPA-1/year=__HIVE_DEFAULT_PARTITION__/month=1/part-0.parquet"
-    part.parent.mkdir(parents=True)
-    pl.DataFrame([comment("unknown", None)], schema=COMMENT.schema).write_parquet(part)
-    index = tmp_path / "comments_index.parquet"
-    index.write_bytes(b"retained prior index")
-    with pytest.raises(ValueError, match="both be NULL"):
-        update_comments_index(tmp_path, [part])
-    assert index.read_bytes() == b"retained prior index"

@@ -54,8 +54,7 @@ def test_reviewed_exclusions_are_checkpointed_without_catalog_writes(tmp_path, m
     assert not list(output.glob("staging/comments/*.parquet"))
 
 
-@pytest.mark.parametrize("use_iceberg", [False, True])
-def test_invalid_comment_staging_refuses_before_any_dataset_merge(tmp_path, monkeypatch, use_iceberg):
+def test_invalid_comment_staging_refuses_before_any_dataset_merge(tmp_path, monkeypatch):
     """An unsafe docket outside the reviewed exclusions must protect every output."""
     comment = _comment_payload("EPA-2026-0001-0001", "EPA-2026-0001", "2026-01-01")
     comment["data"]["attributes"].update(docketId="../unsafe", title="Test of emission standards")
@@ -76,9 +75,19 @@ def test_invalid_comment_staging_refuses_before_any_dataset_merge(tmp_path, monk
     with pytest.raises(ValueError, match="invalid coordinates"):
         RegulationsPipeline(
             allow_fresh_start=True, agency=AGENCY, output_dir=output,
-            use_iceberg=use_iceberg, enrich_text=False, skip_upload=True,
+            use_iceberg=True, enrich_text=False, skip_upload=True,
         ).run()
     assert not (output / "manifest.parquet").exists()
+
+
+@pytest.mark.parametrize("sweep", [False, True])
+def test_comments_without_the_catalog_refuse_before_the_manifest(tmp_path, monkeypatch, sweep):
+    """Comments merge only into the catalog (decision 40); a run without it must not read anything."""
+    monkeypatch.setattr(Manifest, "load", lambda *a, **k: pytest.fail("the manifest was read"))
+    monkeypatch.setattr(mirrulations, "s3_resource", lambda: pytest.fail("the mirror was read"))
+    pipeline = RegulationsPipeline(agency=AGENCY, output_dir=tmp_path, batch_count=1 if sweep else None)
+    with pytest.raises(ValueError, match="--use-iceberg"):
+        pipeline.run_sweep() if sweep else pipeline.run()
 
 
 # --- fake S3 ---------------------------------------------------------------
@@ -499,92 +508,6 @@ def test_processes_multiple_agencies_in_parallel(tmp_output: Path, monkeypatch: 
 # --- upload ----------------------------------------------------------------
 
 
-def test_run_uploads_changed_comment_partitions(tmp_output: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """A comments run publishes the changed partitions and index, then the manifest."""
-    store = {
-        _comment_key("c1", "EPA-2024-0001"): dumps(
-            _comment_payload("c1", "EPA-2024-0001", "2024-01-01T00:00:00Z")
-        ).encode(),
-    }
-    monkeypatch.setattr(mirrulations, "s3_resource", lambda: _FakeS3Resource(store))
-
-    events: list[tuple[str, Any]] = []
-    monkeypatch.setattr(
-        regulations.r2,
-        "preflight_uploads",
-        lambda out, files: events.append(("preflight", list(files))),
-    )
-    monkeypatch.setattr(regulations.r2, "upload_dataset", lambda *args, **kwargs: events.append(("dataset", args)))
-    monkeypatch.setattr(
-        regulations.r2,
-        "upload_comment_partitions",
-        lambda out, changed: events.append(("partitions", (out, list(changed)))),
-    )
-    monkeypatch.setattr(
-        regulations.r2,
-        "upload_file",
-        lambda path, remote_key=None: events.append(("file", (path, remote_key))),
-    )
-
-    RegulationsPipeline(
-        allow_fresh_start=True,
-        agency=AGENCY,
-        output_dir=tmp_output,
-        only_comments=True,
-        enrich_text=False,
-        skip_upload=False,
-    ).run()
-
-    assert [label for label, _ in events] == ["preflight", "partitions", "file", "file"]
-    preflight = events[0][1]
-    assert tmp_output / "comments_index.parquet" in preflight
-    assert tmp_output / "manifest.parquet" in preflight
-    assert any(p.is_relative_to(tmp_output / "comments") for p in preflight)
-    out, changed = events[1][1]
-    assert out == tmp_output
-    assert changed and all(p.suffix == ".parquet" for p in changed)
-    assert tmp_output / "failed_keys.parquet" in preflight
-    assert events[2][1] == (tmp_output / "failed_keys.parquet", "failed_keys.parquet")
-    assert events[3][1] == (tmp_output / "manifest.parquet", "manifest.parquet")
-
-
-def test_run_does_not_advance_manifest_after_comment_upload_failure(
-    tmp_output: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """A failed comment publication must leave the remote retry checkpoint unchanged."""
-    store = {
-        _comment_key("c1", "EPA-2024-0001"): dumps(
-            _comment_payload("c1", "EPA-2024-0001", "2024-01-01T00:00:00Z")
-        ).encode(),
-    }
-    monkeypatch.setattr(mirrulations, "s3_resource", lambda: _FakeS3Resource(store))
-    monkeypatch.setattr(regulations.r2, "preflight_uploads", lambda out, files: None)
-    monkeypatch.setattr(regulations.r2, "upload_dataset", lambda *args, **kwargs: None)
-    monkeypatch.setattr(
-        regulations.r2,
-        "upload_comment_partitions",
-        lambda out, changed: (_ for _ in ()).throw(RuntimeError("comment upload failed")),
-    )
-    uploaded: list[tuple[Path, str | None]] = []
-    monkeypatch.setattr(
-        regulations.r2,
-        "upload_file",
-        lambda path, remote_key=None: uploaded.append((path, remote_key)),
-    )
-
-    with pytest.raises(RuntimeError, match="comment upload failed"):
-        RegulationsPipeline(
-            allow_fresh_start=True,
-            agency=AGENCY,
-            output_dir=tmp_output,
-            only_comments=True,
-            enrich_text=False,
-            skip_upload=False,
-        ).run()
-
-    assert (tmp_output / "manifest.parquet", "manifest.parquet") not in uploaded
-
-
 def test_run_does_not_advance_manifest_after_base_upload_failure(
     tmp_output: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -633,16 +556,12 @@ def test_run_preflight_failure_stops_all_publication(tmp_output: Path, monkeypat
         raise RuntimeError("manifest guard failed")
 
     monkeypatch.setattr(regulations.r2, "preflight_uploads", fail_preflight)
+    monkeypatch.setattr(regulations.iceberg, "merge_comments", lambda sd, rt: 1)
     attempted: list[str] = []
     monkeypatch.setattr(
         regulations.r2,
         "upload_dataset",
         lambda *args, **kwargs: attempted.append("dataset"),
-    )
-    monkeypatch.setattr(
-        regulations.r2,
-        "upload_comment_partitions",
-        lambda *args, **kwargs: attempted.append("comments"),
     )
     monkeypatch.setattr(
         regulations.r2,
@@ -656,11 +575,11 @@ def test_run_preflight_failure_stops_all_publication(tmp_output: Path, monkeypat
             agency=AGENCY,
             output_dir=tmp_output,
             only_comments=True,
+            use_iceberg=True,
             enrich_text=False,
             skip_upload=False,
         ).run()
 
-    assert tmp_output / "comments_index.parquet" in checked
     assert tmp_output / "manifest.parquet" in checked
     assert attempted == []
 
@@ -676,109 +595,6 @@ def test_catalog_ingestion_defers_index_until_mirror(tmp_output, monkeypatch):
                         only_comments=True, use_iceberg=True, enrich_text=False, skip_upload=False).run()
     assert "comments_index.parquet" not in uploaded
     assert uploaded[-1] == "manifest.parquet"
-
-
-def test_run_skips_partition_upload_when_no_comments(tmp_output: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """A dockets-only run must not call the comment-partition upload."""
-    store = {
-        _docket_key("EPA-2024-0001"): dumps(_docket_payload("EPA-2024-0001", "2024-01-01")).encode(),
-    }
-    monkeypatch.setattr(mirrulations, "s3_resource", lambda: _FakeS3Resource(store))
-
-    calls: dict[str, list] = {}
-    monkeypatch.setattr(
-        regulations.r2,
-        "upload_dataset",
-        lambda out, types: calls.setdefault("dataset", []).append((out, types)),
-    )
-    monkeypatch.setattr(
-        regulations.r2,
-        "upload_comment_partitions",
-        lambda out, changed: calls.setdefault("partitions", []).append(1),
-    )
-
-    RegulationsPipeline(
-        allow_fresh_start=True,
-        agency=AGENCY,
-        output_dir=tmp_output,
-        skip_comments=True,
-        skip_upload=False,
-    ).run()
-
-    assert "dataset" in calls
-    assert "partitions" not in calls
-
-
-def test_run_primes_comments_index_from_r2_before_merge(tmp_output: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """An incremental comments run must download the existing global index.
-
-    ``update_comments_index`` keeps the rows for partitions this batch didn't
-    touch by reading the local ``comments_index.parquet``. If that file is
-    never fetched from R2, the rebuilt index collapses to only this batch's
-    partitions and the upload shrink-guard aborts the run. Guard against the
-    regression by asserting the index is requested during the prime step and
-    that pre-existing rows survive the rebuild.
-    """
-    store = {
-        _comment_key("c1", "EPA-2024-0001"): dumps(
-            _comment_payload("c1", "EPA-2024-0001", "2024-01-01T00:00:00Z")
-        ).encode(),
-    }
-    monkeypatch.setattr(mirrulations, "s3_resource", lambda: _FakeS3Resource(store))
-    monkeypatch.setattr(regulations.r2, "upload_dataset", lambda out, types: None)
-    monkeypatch.setattr(regulations.r2, "upload_comment_partitions", lambda out, changed: None)
-
-    # A pre-existing remote index covering a partition this batch won't touch.
-    prior = pl.DataFrame(
-        {
-            "agency_code": ["NOAA"],
-            "docket_id": ["NOAA-2020-0009"],
-            "year": [2020],
-            "month": [5],
-            "row_count": [42],
-        },
-        schema={
-            "agency_code": pl.Utf8,
-            "docket_id": pl.Utf8,
-            "year": pl.Int64,
-            "month": pl.Int64,
-            "row_count": pl.Int64,
-        },
-    )
-
-    requested: list[str] = []
-
-    def fake_download(remote_key: str, local_path: Path) -> bool:
-        requested.append(remote_key)
-        if remote_key == "comments_index.parquet":
-            prior.write_parquet(local_path)
-            return True
-        return False  # partitions are absent on R2 in this test
-
-    def managed_download(remote_key: str, local_path: Path) -> bool:
-        if remote_key in {"dockets.parquet", "documents.parquet", "comments_index.parquet"}:
-            raise AssertionError(f"priming must read the working copy, not a managed family: {remote_key}")
-        return fake_download(remote_key, local_path)
-
-    monkeypatch.setattr(regulations.r2, "download_working_copy", fake_download)
-    monkeypatch.setattr(regulations.r2, "download", managed_download)
-
-    RegulationsPipeline(
-        allow_fresh_start=True,
-        agency=AGENCY,
-        output_dir=tmp_output,
-        only_comments=True,
-        enrich_text=False,
-        skip_upload=False,
-    ).run()
-
-    assert "comments_index.parquet" in requested, "existing comment index was never fetched from R2"
-
-    index = pl.read_parquet(tmp_output / "comments_index.parquet")
-    keys = set(zip(index["agency_code"].to_list(), index["docket_id"].to_list()))
-    # The untouched NOAA partition survives the rebuild alongside the new EPA one.
-    assert ("NOAA", "NOAA-2020-0009") in keys
-    assert ("EPA", "EPA-2024-0001") in keys
 
 
 # --- CLI -------------------------------------------------------------------
@@ -830,12 +646,14 @@ def test_scheduled_workflow_derives_batches_and_never_starts_fresh() -> None:
     workflow = yaml.safe_load((Path(__file__).parents[1] / ".github/workflows/etl-new-pipeline.yml").read_text())
     inputs = workflow[True]["workflow_dispatch"]["inputs"]
     assert inputs["allow_fresh_start"]["default"] is False
+    assert "use_iceberg" not in inputs  # decision 40: comments ingest only through the catalog
     script = next(
         step["run"] for step in workflow["jobs"]["etl-new"]["steps"] if step.get("name") == "Run new pipeline"
     )
     assert '--batch-count "$BATCH_COUNT"' in script
     assert "--batch-size" not in script
     assert "--no-allow-fresh-start" in script
+    assert "ARGS+=(--use-iceberg --defer-comments-publication)" in script
 
 
 @pytest.mark.parametrize(
@@ -865,7 +683,6 @@ def test_workflow_setup_validates_the_dispatch_inputs(tmp_path: Path, event, bat
         "BATCH_NUMBER": batch,
         "TIMEOUT_MINUTES": timeout,
         "SKIP_UPLOAD": "false",
-        "USE_ICEBERG": "true",
         "BATCH_COUNT": str(workflow["env"]["BATCH_COUNT"]),
         "GITHUB_OUTPUT": str(output),
     }
@@ -907,7 +724,6 @@ def test_retry_sweep_runs_only_when_no_scheduled_sweep_succeeded_today(
         "BATCH_NUMBER": "",
         "TIMEOUT_MINUTES": "",
         "SKIP_UPLOAD": "",
-        "USE_ICEBERG": "",
         "BATCH_COUNT": str(workflow["env"]["BATCH_COUNT"]),
         "GITHUB_OUTPUT": str(output),
     }
@@ -937,7 +753,7 @@ def test_sweep_reuses_manifest_and_discovers_agencies_once(tmp_output, monkeypat
         manifest.save(tmp_output)
 
     monkeypatch.setattr(RegulationsPipeline, "run", run)
-    pipe = RegulationsPipeline(output_dir=tmp_output, batch_count=2)
+    pipe = RegulationsPipeline(output_dir=tmp_output, batch_count=2, use_iceberg=True)
     pipe.run_sweep()
     assert discoveries == loads == [1]
     assert seen == [(id(manifest), ["A", "B"]), (id(manifest), ["C"])]
@@ -956,7 +772,7 @@ def test_failed_sweep_stops_before_later_batch_can_retire_pending_keys(tmp_outpu
         raise OSError("checkpoint publication failed")
 
     monkeypatch.setattr(RegulationsPipeline, "run", run)
-    pipe = RegulationsPipeline(output_dir=tmp_output, batch_count=3)
+    pipe = RegulationsPipeline(output_dir=tmp_output, batch_count=3, use_iceberg=True)
     with pytest.raises(OSError):
         pipe.run_sweep()
     assert seen == [0]

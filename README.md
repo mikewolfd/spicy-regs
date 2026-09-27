@@ -214,7 +214,7 @@ Useful flags (`uv run run-pipeline --help` for the full list):
 | `--full-refresh` | Ignore the existing manifest and rebuild from scratch |
 | `--allow-fresh-start` | Start from an empty manifest when none exists (first run) |
 | `--no-skip-upload` | Also publish to R2 (needs credentials in `.env`) |
-| `--use-iceberg` | Route dockets + comments through the R2 Data Catalog |
+| `--use-iceberg` | Route dockets + comments through the R2 Data Catalog (comments require it) |
 | `--chunk-size 50000` | Bounded-memory comment ingest for very large agencies |
 | `--no-enrich-text` | Skip filling comment `text_content` from Mirrulations' pre-extracted attachment text |
 
