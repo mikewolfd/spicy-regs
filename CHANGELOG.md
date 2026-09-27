@@ -13,13 +13,16 @@ Entries link to the pull request that introduced the change.
   proceedings** (proceedings v11, RefSpec 0.1.0.dev21's registry view, batch
   1). A Register agency bridged to an organization a Regulations.gov code
   selects takes that code (Energy Department: DOE; Labor Department: DOL). A
-  renamed agency takes its current successor's code (Health Care Finance
-  Administration: CMS; Export Administration Bureau: BIS). A split agency
-  takes none (INS, Customs Service). Expected effect over the live snapshot's
-  97,472 docket-less proceedings: 1,186 gain a code, 729 change code and none
-  lose one, so 90,848 carry a code, up from 89,662. The changes are HHS to CMS
-  467, DOC to BIS 163, DOC to EAB 84, TREAS to IIO 11, HHS to ACL 2 and HHS
-  to HHSIG 2. Docketed proceedings, and so lifecycles, do not change.
+  renamed agency takes its current successor's code whatever the document's
+  date: a 1998 Health Care Finance Administration notice is CMS, and an Export
+  Administration Bureau rule of any year is BIS. A split agency takes a code
+  only when every current successor has one and they agree; none of batch 1's
+  four splits does (INS, Customs Service, ICC, USIA). Expected effect over the
+  live snapshot's 97,472 docket-less proceedings: 1,186 gain a code, 729 change
+  code and none lose one, so 90,848 carry a code, up from 89,662. The changes
+  are HHS to CMS 467, DOC to BIS 163, DOC to EAB 84, TREAS to IIO 11, HHS to
+  ACL 2 and HHS to HHSIG 2. Docketed proceedings, and so lifecycles, do not
+  change.
 
 - **`document_attributes` and `docket_attributes` break a `modifyDate` tie by
   SpicyDocs' write-time rule** (document policy 1.3, spicy-docs 0.45.1). Among

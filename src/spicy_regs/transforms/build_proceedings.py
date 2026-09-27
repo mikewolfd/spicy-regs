@@ -79,8 +79,10 @@ OUTPUT = "proceedings.parquet"
 # specific-RIN join's RINs and the docket-side evidence that holds them (docs/ontology.md).
 # v11 (one bump over published v10): a docket-less proceeding's code also follows RefSpec's
 # agency registry view (REF-072, batch 1) through agency_code_for_fr_agencies: identity bridges
-# (Energy is DOE) and a defunct agency's current successors (HCFA is CMS; a split, none). Over the
-# live snapshot b22d81c4's 97,472 docket-less proceedings, 1,186 gain a code and 729 change it
+# (Energy is DOE), and a defunct agency's current successors whatever the document's date (a
+# 1998 Health Care Finance Administration notice is CMS). A split agency takes a code only when
+# every successor gives the same one, which none of batch 1's four splits does. Over the live
+# snapshot b22d81c4's 97,472 docket-less proceedings, 1,186 gain a code and 729 change it
 # (HHS to CMS 467, DOC to BIS 163, DOC to EAB 84, TREAS to IIO 11, HHS to ACL 2, HHS to HHSIG 2),
 # none lose one: 90,848 carry a code. No other column, and no docketed proceeding, moves.
 ACTOR_ID = "spicy-regs:proceedings:v11"

@@ -2,7 +2,9 @@
 
 REF-038 projects each code onto one roster organization. The agency registry view (REF-072,
 batch 1) adds identity bridges from Federal Register agencies to organizations codes select,
-and dated successions from defunct agencies to the organizations holding their functions now.
+and successions from defunct agencies to the organizations holding their functions now. The
+rule reads no date, the view's effective dates included: every document takes today's lineage
+whatever its own date, so a 1998 Health Care Finance Administration notice is CMS.
 Both are RefSpec's bytes, vendored in ``reference/refspec/`` and never edited here; the loader
 refuses any copy whose sha256 is not the pinned one.
 """
