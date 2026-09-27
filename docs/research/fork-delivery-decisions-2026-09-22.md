@@ -147,7 +147,7 @@ Commits are spicy-regs fork `main` unless named. "Left" is what remains and what
 | --- | --- | --- | --- |
 | 34 | Settled. | — | Nothing; the three model tables stay empty. |
 | 35 | Done. | `a7e32d2` (`topics_json`); spicy-docs 0.42.0 contract adopted in `aede342`; the full re-read of 2026-09-26 fetched all 1,009,313 documents. | The resolved document→FR link, as a DocSpec typed layer (DocSpec). |
-| 36 | Planned; nothing deleted. | Planner `283a854`, `88cd489`, `8c6680c` (the rulemaking snapshot's input tables are kept too); gated execution `a5ef304` (`plan-generation-retention.yml`). Plan run 36283796407: 117 generations (5.02 GiB) deletable, 187 kept (11.89 GiB); every ledger pin, DocSpec pin and snapshot input kept. Review list: `generation-retention-2026-09-26/review-run-36283796407.md`. | **The owner's go-ahead.** Then dispatch with `execute_plan_run`, which deletes only what that plan and a fresh one agree on. After that, decide whether retention runs on a schedule. Rulemaking snapshots and `source-evidence/` blobs are outside the plan. |
+| 36 | Executed 2026-09-27 (decision 62); weekly from then on (63). | Planner `283a854`, `88cd489`, `8c6680c` (the rulemaking snapshot's input tables are kept too); gated execution `a5ef304` (`plan-generation-retention.yml`). Plan run 36283796407: 117 generations (5.02 GiB) deletable, 187 kept (11.89 GiB); every ledger pin, DocSpec pin and snapshot input kept. Review list: `generation-retention-2026-09-26/review-run-36283796407.md`. | Nothing. Rulemaking snapshots and `source-evidence/` blobs stay outside the plan. |
 | 37 | Conditional. | — | Only if the fork serves queries directly. |
 | 38 | Open, agency by agency. | — | Per decision 7's cohorts (spicy-regs). |
 | 39 | Open. | — | DocSpec re-compares the ~64k records first; then the ledger records the qualification. |
@@ -197,3 +197,14 @@ reproduced every number (`fork-execution-2026-09-21/proceedings-v12-2026-09-26/`
 | 61 | NOAA's 0648-X… RINs. | **Kept on the row as stated, but no longer action evidence.** | They are NOAA's numbers for non-regulatory actions. 6,628 docket-less proceedings exist only through them (marine-mammal takes, council meetings). |
 | 59a | Amends 59: the title suffix's variants. | **Also type "; Interim Final Rule", "; Interim Rule", "; Final Rules", "; Proposed Rules" and ", Proposed Rule" suffixes. The ~92 titles ending at "Rule" with no agency stay untyped.** | Interim final and interim rules are Rules in the Register's modern taxonomy; plurals and a comma-led marker are the same sections. 404 rows are typed instead of 370. |
 | 60a | Amends 60: an untyped Register row. | **The Register's type wins only when the Register row states one. A copy of an Uncategorized row that its title suffix doesn't type keeps its own Regulations.gov type.** | Otherwise 74 real Rule / Proposed Rule documents lost their stage, and three dockets of 1994 FDA final rules lost their proceeding. |
+
+## Owner decisions, 2026-09-27 (retention, multi-file, next work)
+
+Answered through the question tool.
+
+| # | Question | Decision | Evidence and result |
+| --- | --- | --- | --- |
+| 62 | Execute the retention plan? | **Execute plan run 36283796407.** | Run 36284113024 deleted 117 generations (5.02 GiB) and spared none. Its fresh re-plan also found one newly superseded generation, which was left because the reviewed plan did not name it. Afterwards all 121 current tables and roots, and all 53 ledger- and DocSpec-pinned roots, still resolve. The record is `retention/2026-09-27T00:58:46.698142+00:00.json` in the bucket. |
+| 63 | How does retention run from now on? | **Weekly and automatic.** The scheduled run plans, then executes that plan against a second fresh plan under the same rules. | `plan-generation-retention.yml`, Sundays at 05:45 UTC. |
+| 64 | Take the multi-file design's §5 measurements now? | **All four now**, including a CI probe that writes a throwaway 1.1 GiB object to the fork bucket, copies it once and deletes both. | See `multi-file-tables-2026-09-26.md` §5. |
+| 65 | What comes next in spicy-regs? | **First, host DocSpec's `document_attributes` and `docket_attributes` families with their daily Regulations.gov delta. Then decision 53, FEC committee history from the bulk files.** | The attribute families wait for spicy-stack-83's export and the spicy-docs contracts. |

@@ -23,9 +23,10 @@ generation something cites and the last ``KEEP_LAST`` per family. Kept:
 
 Everything else under ``generations/`` is planned for deletion. Source evidence
 under ``source-evidence/`` is content-addressed and shared, and is not planned
-here. Planning deletes nothing. ``execute`` takes a plan a person reviewed and
-deletes only the prefixes a fresh plan also marks, so anything published,
-pinned or cited since is spared. Within a prefix it deletes the members before
+here. Planning deletes nothing. ``execute`` takes an approved plan (one a
+person reviewed, or the weekly run's own, decision 63) and deletes only the
+prefixes a fresh plan also marks, so anything published, pinned or cited since
+is spared. Within a prefix it deletes the members before
 the root, so an interrupted run leaves a root that still links the chain. Each
 execution leaves its record under ``RECORDS``.
 """
