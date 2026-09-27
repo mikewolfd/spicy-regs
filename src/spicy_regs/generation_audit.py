@@ -431,7 +431,13 @@ def _publication(con, base: PublicBase, source: _ArtifactSource, entry: Mapping,
 
 
 def _chain(base: PublicBase, root: Mapping, family: str) -> Iterator[dict]:
-    """Earlier generations' index entries, newest first, each root checked against the pin that named it."""
+    """Earlier generations' index entries, newest first, each root checked against the pin that named it.
+
+    Each link is read from the named generation's own root. Retention kept no root of a pruned generation
+    before 2026-09-27 (run 36284113024), so a walk crossing one of those ends here with an ``AuditError``.
+    """
+    from rulespec_artifacts import MemberNotFoundError
+
     seen: set[str] = set()
     entry = ((root.get("spec", {}).get("readSnapshot") or {}).get("families") or {}).get(family)
     while entry is not None:
@@ -441,6 +447,10 @@ def _chain(base: PublicBase, root: Mapping, family: str) -> Iterator[dict]:
         yield entry
         try:
             prior = family_root(base.read(f"{entry['prefix']}/{ROOT}", limit=INDEX_LIMIT), entry)
+        except MemberNotFoundError as error:
+            raise AuditError(f"{family}'s captured prior chain is broken at {entry['prefix']}: its root is absent "
+                             "(pruned), so no earlier generation is reachable; audit against a later prior or "
+                             "--prior none") from error
         except PublicationError as error:
             raise AuditError(f"The root at {entry['prefix']} differs from the pin that named it: {error}") from error
         entry = ((prior.get("spec", {}).get("readSnapshot") or {}).get("families") or {}).get(family)

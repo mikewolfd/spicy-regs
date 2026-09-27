@@ -13,7 +13,7 @@ from rulespec_artifacts import MemberNotFoundError, canonical_json_bytes, parse_
 from spicy_docs.transport.captured import CapturedBodyResponse
 
 from spicy_regs.content_checks import Scan, configured_secrets, expected_kind, sniff
-from spicy_regs.generation_audit import Declaration, PublicBase, audit, declared_tables, main
+from spicy_regs.generation_audit import AuditError, Declaration, PublicBase, audit, declared_tables, main
 from spicy_regs.generations import build_generation
 from spicy_regs.source_evidence import CaptureEvidence
 from spicy_regs.sources import publication as pub
@@ -390,6 +390,22 @@ def test_an_unreadable_prior_table_is_a_finding_and_the_report_is_still_written(
     assert {"prior-not-admitted", "prior-table-unreadable"} <= codes(report, "fail")
     assert report["dispositions"]["t"]["conservation"] == "prior-unreadable"
     assert report["dispositions"]["t"]["publication"] == "verified"
+
+
+def test_a_prior_beyond_a_pruned_root_is_refused_by_name(tmp_path):
+    store = Store()
+    first = publish(tmp_path, store, "first", {"t.parquet": rows(("1", "a"))})
+    middle = publish(tmp_path, store, "middle", {"t.parquet": rows(("1", "b"))}, prior=first)
+    publish(tmp_path, store, "current", {"t.parquet": rows(("1", "c"))}, prior=middle)
+    base = public_base(store, tmp_path / "public")
+    pruned = middle["families"]["test"]["prefix"]
+    Path(base.path(pruned + "/artifact.json")).unlink()
+    wanted = first["families"]["test"]["artifactDigest"].removeprefix("sha256:")[:8]
+
+    with pytest.raises(AuditError, match=f"chain is broken at {pruned}: its root is absent"):
+        audit(base, family="test", prior=wanted, declarations=DECLARED)
+    # The immediate prior is named by the current root itself, so it is still reachable.
+    assert audit(base, family="test", declarations=DECLARED)["sections"]["prior"]["prefix"] == pruned
 
 
 def test_a_stage_expectation_judges_a_capture_whose_own_media_type_says_html(tmp_path):
