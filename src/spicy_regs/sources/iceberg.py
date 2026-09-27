@@ -296,14 +296,12 @@ def _build_comments_index(con, record_type: RecordType, output_dir: Path, *, sou
 
     The index is the small per-``(agency_code, docket_id, year, month)`` row-count
     artifact that ``build_feed_summary`` / ``build_agency_rollups`` read instead
-    of scanning the full comments table. With comments living in the catalog
-    there is no partitioned ``comments/`` tree to count, so the index is derived
-    straight from the table — keeping the same schema (agency_code, docket_id,
-    year, month, row_count) ``transforms.update_comments_index`` produces.
+    of scanning the full comments table. This is the published index's only
+    builder: it is derived straight from the table with the schema
+    (agency_code, docket_id, year, month, row_count).
 
-    ``year`` / ``month`` come from ``posted_date`` to match the partitioning the
-    legacy path used; ``docket_id`` is trimmed of stray quotes for the same
-    reason. NULL docket IDs and dates retain NULL groups. Written atomically
+    ``year`` / ``month`` come from ``posted_date``; ``docket_id`` is trimmed of
+    stray quotes. NULL docket IDs and dates retain NULL groups. Written atomically
     via a temp file so a crashed rebuild can't leave a half-written index in place.
     """
     from spicy_regs.transforms.comment_partitions import validate_comment_coordinates
@@ -336,26 +334,24 @@ def seed_comments_from_parquet(
 ) -> int:
     """Bulk-load published comment Parquet into the catalog table; return its count.
 
-    One-time cutover helper: the partitioned ``comments/`` tree on R2 is already
-    current, so this copies it straight into the catalog ``comments`` table
-    instead of re-ingesting from Mirrulations. ``source_glob`` is read with
-    ``hive_partitioning=false`` because the partition files already carry
-    ``agency_code`` / ``docket_id`` as columns (year/month live only in the path
-    and are not table columns).
+    One-time cutover helper: it copies already-published comments straight into
+    the catalog ``comments`` table instead of re-ingesting from Mirrulations.
+    ``source_glob`` names one file or a glob of files. It is read with
+    ``hive_partitioning=false`` because the files already carry ``agency_code``
+    and ``docket_id`` as columns, so no path segment becomes a column.
 
     ``agency`` inserts only that ``agency_code``'s source rows, so a source
-    holding every agency (the fork's monolithic ``comments.parquet``, which has
-    no partition tree) loads one agency at a time. ``replace`` first deletes the
+    holding every agency (the monolithic ``comments.parquet``) loads one agency
+    at a time. ``replace`` first deletes the
     agency's existing rows: the loader runs one agency at a time, so this makes a
     re-run (after a timeout, or over an already-seeded table) replace that
     agency's rows instead of duplicating them, since the plain ``INSERT`` does no
     dedup. The caller passes it only when the agency has rows, because each
     ``DELETE`` scans the catalog table.
 
-    Columns absent from every file in the glob (an older partition written before
-    a column was added) are inserted as ``NULL`` — mirroring the schema-evolution
-    handling in ``transforms.merge_comments_partitioned`` — so a mixed-vintage
-    tree loads cleanly. The connection + any S3 secret are set up by the caller
+    Columns absent from every file in the glob (an older file written before a
+    column was added) are inserted as ``NULL``, so a mixed-vintage source loads
+    cleanly. The connection + any S3 secret are set up by the caller
     so this stays testable against a local catalog and local files.
     """
     columns = list(record_type.schema)

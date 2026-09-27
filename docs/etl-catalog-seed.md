@@ -105,9 +105,9 @@ gh workflow run seed-dockets-catalog.yml --repo mikewolfd/spicy-regs -f dry_run=
 - **Keep `upload=false`:** republishing `dockets.parquet` changes its ETag,
   which makes step 3 refuse the seed.
 
-**Comments.** The fork has no `comments/` partition tree; its comments exist
-only as the single `comments.parquet` object. Set `source_key` to that object so
-each agency is loaded from it. Run *Seed comments catalog (manual)*
+**Comments.** The fork's comments exist as the single `comments.parquet`
+object, and the seed loads each agency from it. `source_key` defaults to that
+object. Run *Seed comments catalog (manual)*
 (`seed-comments-catalog.yml`) as a one-agency smoke test, then as the full load:
 
 ```sh

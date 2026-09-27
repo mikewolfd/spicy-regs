@@ -61,13 +61,14 @@ CLI, analytics, MCP and freshness checks choose `SPICY_REGS_R2_URL`, then
 public default. Fork freshness workflows require an explicit data URL. A
 read-only override does not change where a pipeline uploads data.
 
-## Optional catalog and cache purge
+## Catalog and optional cache purge
 
-Enable the R2 Data Catalog on this account's bucket only when using Iceberg.
+The ETL needs the R2 Data Catalog on this account's bucket: every workflow run
+uses Iceberg, and comments ingest only through the catalog.
 Set `R2_CATALOG_URI`, `R2_CATALOG_WAREHOUSE`, `R2_CATALOG_TOKEN` and optionally
 `R2_CATALOG_NAMESPACE` in the fork secrets and local environment. Copy the URI
 and warehouse from the actual catalog; do not reuse an upstream catalog token.
-Scheduled ETL runs use Iceberg. The [catalog and manifest seed runbook](../docs/etl-catalog-seed.md)
+The [catalog and manifest seed runbook](../docs/etl-catalog-seed.md)
 covers enabling the catalog, loading it from the published Parquet, and
 publishing the manifest the ETL needs.
 

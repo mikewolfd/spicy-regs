@@ -27,7 +27,7 @@ def test_unproductive_answer_is_retained_not_manifested(tmp_path, monkeypatch, c
     pipeline = RegulationsPipeline(
         allow_fresh_start=True,
         agency="EPA", output_dir=tmp_path, only_comments=True, enrich_text=False,
-        use_iceberg=chunked, chunk_size=1 if chunked else 0,
+        use_iceberg=True, chunk_size=1 if chunked else 0,
     )
     pipeline.run()
     pipeline.run()
@@ -57,7 +57,7 @@ def test_access_refusal_aborts_without_checkpoint(tmp_path, monkeypatch, status,
         RegulationsPipeline(
             allow_fresh_start=True,
             agency="EPA", output_dir=tmp_path, only_comments=True, enrich_text=False,
-            use_iceberg=chunked, chunk_size=1 if chunked else 0,
+            use_iceberg=True, chunk_size=1 if chunked else 0,
         ).run()
     assert not (tmp_path / "manifest.parquet").exists()
     assert not (tmp_path / "failed_keys.parquet").exists()
@@ -96,7 +96,7 @@ def test_missing_record_identity_never_becomes_a_row_or_coverage(
         allow_fresh_start=True,
         agency="EPA", output_dir=tmp_path, only_comments=record_name == "comments",
         skip_comments=record_name != "comments",
-        enrich_text=False, use_iceberg=chunked, chunk_size=1 if chunked else 0,
+        enrich_text=False, use_iceberg=record_name == "comments", chunk_size=1 if chunked else 0,
     )
     pipeline.run()
     pipeline.run()

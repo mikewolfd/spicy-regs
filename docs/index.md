@@ -38,7 +38,7 @@ is queryable through the MCP server (`list_sources` / `describe_table` /
 | [`dockets`](tables/dockets.md) | one row per docket | `docket_id` |
 | [`documents`](tables/documents.md) | one row per document | `document_id` |
 | [`comments`](tables/comments.md) | one row per public comment | `comment_id` |
-| [`comments_index`](tables/comments_index.md) | one row per comment partition | — |
+| [`comments_index`](tables/comments_index.md) | one row per agency, docket and posting month | — |
 
 ### Rollups (pre-aggregated views of the core tables)
 

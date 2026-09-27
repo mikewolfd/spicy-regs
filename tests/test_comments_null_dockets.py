@@ -34,7 +34,7 @@ def reviewed_sources():
     return store, rows
 
 
-@pytest.mark.parametrize("mode", ["parquet", "catalog", "chunked"])
+@pytest.mark.parametrize("mode", ["catalog", "chunked"])
 def test_reviewed_comments_survive_ingestion_and_public_mirror(tmp_path, monkeypatch, mode):
     store, expected = reviewed_sources()
     assert all(row["docket_id"] is None for row in expected)
@@ -52,27 +52,22 @@ def test_reviewed_comments_survive_ingestion_and_public_mirror(tmp_path, monkeyp
     for _ in range(2):
         regulations.RegulationsPipeline(
             output_dir=output, agency="ODNI", only_comments=True, allow_fresh_start=True,
-            use_iceberg=mode != "parquet", chunk_size=1 if mode == "chunked" else 0,
+            use_iceberg=True, chunk_size=1 if mode == "chunked" else 0,
             enrich_text=False, skip_upload=True,
         ).run()
         assert set(pl.read_parquet(output / "manifest.parquet")["key"]) == set(store)
-        if mode == "parquet":
-            index = pl.read_parquet(output / "comments_index.parquet")
-            assert index["row_count"].sum() == len(expected)
-            assert index["docket_id"].null_count() == len(index)
-        else:
-            assert not (output / "comments_index.parquet").exists()
+        assert not (output / "comments_index.parquet").exists()
 
     with connect(COMMENT) as con:
-        if mode == "parquet":
-            pattern = str(output / "comments/agency_code=*/docket_id=*/year=*/month=*/part-0.parquet")
-            assert iceberg.seed_comments_from_parquet(con, pattern, COMMENT) == len(expected)
         got = con.execute(f"SELECT * FROM {iceberg._qualified(COMMENT)}").pl()
         assert got.sort("comment_id").to_dicts() == sorted(expected, key=lambda row: row["comment_id"])
     monkeypatch.setattr(iceberg, "_connect", lambda: connect(COMMENT))
     monkeypatch.setattr(iceberg, "_read_snapshot", lambda *a: iceberg.CatalogSnapshot("local", 1, 0))
     monkeypatch.setattr(iceberg, "_snapshot_query", lambda rt, _: f"SELECT * FROM {iceberg._qualified(rt)}")
     result = iceberg.export_public_comments(output, COMMENT)
+    index = pl.read_parquet(result["index"])
+    assert index["row_count"].sum() == len(expected)
+    assert index["docket_id"].null_count() == len(index)
 
     # Exercise the same per-agency files and count check used by publication.
     directory = result["partitions"]
@@ -89,7 +84,6 @@ def test_reviewed_comments_survive_ingestion_and_public_mirror(tmp_path, monkeyp
         {"agency_code": "ODNI", "docket_count": 0, "document_count": 0, "comment_count": len(expected)}
     ]
     assert pl.read_parquet(build_feed_summary(output)).is_empty()
-
 
 def test_null_partition_merge_index_and_source_correction_are_retryable(tmp_path):
     _, rows = reviewed_sources()

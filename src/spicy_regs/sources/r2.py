@@ -411,10 +411,11 @@ def upload_dataset(output_dir: Path, data_types: list[str]) -> None:
 
 
 def upload_comment_partitions(output_dir: Path, changed_files: list[Path]) -> None:
-    """Publish the changed comment partitions, then the refreshed comments index.
+    """Publish the changed per-agency comment files, then the refreshed comments index.
 
-    Refuses before the first upload if the index is missing: partitions the
-    index cannot see are rows nobody can find.
+    Each file is keyed by its path relative to ``output_dir``. Refuses before
+    the first upload if the index is missing: files the index cannot see are
+    rows nobody can find.
     """
     index_file = output_dir / "comments_index.parquet"
     if not index_file.exists():

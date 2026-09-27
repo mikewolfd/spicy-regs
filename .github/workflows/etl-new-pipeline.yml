@@ -39,11 +39,6 @@ on:
         required: false
         default: true
         type: boolean
-      use_iceberg:
-        description: 'Route dockets + comments through R2 Data Catalog (Iceberg). Dispatch runs only; scheduled runs always use Iceberg.'
-        required: false
-        default: false
-        type: boolean
       allow_fresh_start:
         description: 'Start from an empty manifest when none is published (re-downloads every agency''s full history). Scheduled runs never do.'
         required: false
@@ -81,7 +76,6 @@ jobs:
       run: ${{ steps.gen.outputs.run }}
       batch: ${{ steps.gen.outputs.batch }}
       skip_upload: ${{ steps.gen.outputs.skip_upload }}
-      use_iceberg: ${{ steps.gen.outputs.use_iceberg }}
       timeout_minutes: ${{ steps.gen.outputs.timeout_minutes }}
     steps:
       - name: Resolve sweep or manual batch
@@ -93,7 +87,6 @@ jobs:
           GH_REPO: ${{ github.repository }}
           BATCH_NUMBER: ${{ inputs.batch_number }}
           SKIP_UPLOAD: ${{ inputs.skip_upload }}
-          USE_ICEBERG: ${{ inputs.use_iceberg }}
           TIMEOUT_MINUTES: ${{ inputs.timeout_minutes }}
         run: |
           set -euo pipefail
@@ -111,7 +104,6 @@ jobs:
             TIMEOUT=360
             BATCH_NUMBER=all
             SKIP_UPLOAD=false
-            USE_ICEBERG=true
           else
             TIMEOUT="${TIMEOUT_MINUTES:-60}"
           fi
@@ -126,7 +118,6 @@ jobs:
           echo "batch=${BATCH_NUMBER:--1}" >> "$GITHUB_OUTPUT"
           echo "timeout_minutes=$TIMEOUT" >> "$GITHUB_OUTPUT"
           echo "skip_upload=$SKIP_UPLOAD" >> "$GITHUB_OUTPUT"
-          echo "use_iceberg=$USE_ICEBERG" >> "$GITHUB_OUTPUT"
 
   etl-new:
     needs: setup
@@ -160,7 +151,7 @@ jobs:
           # Cloudflare edge-cache purge after publish (best-effort; no-op if unset).
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
-          # Only used when use_iceberg is on; harmless otherwise.
+          # Every run routes dockets and comments through the catalog (decision 40).
           R2_CATALOG_URI: ${{ secrets.R2_CATALOG_URI }}
           R2_CATALOG_WAREHOUSE: ${{ secrets.R2_CATALOG_WAREHOUSE }}
           R2_CATALOG_TOKEN: ${{ secrets.R2_CATALOG_TOKEN }}
@@ -173,7 +164,6 @@ jobs:
           FULL_REFRESH: ${{ inputs.full_refresh }}
           ALLOW_FRESH_START: ${{ inputs.allow_fresh_start }}
           SKIP_UPLOAD: ${{ needs.setup.outputs.skip_upload }}
-          USE_ICEBERG: ${{ needs.setup.outputs.use_iceberg }}
         run: |
           set -euo pipefail
           if [ -n "$AGENCY" ] && ! printf '%s' "$AGENCY" | grep -Eq '^[A-Za-z0-9_-]+$'; then
@@ -190,11 +180,10 @@ jobs:
           elif [ "$BATCH" != "-1" ]; then
             ARGS+=(--batch-number "$BATCH" --batch-count "$BATCH_COUNT")
           fi
-          ARGS+=(--defer-comments-publication)
+          ARGS+=(--use-iceberg --defer-comments-publication)
           if [ "$FULL_REFRESH" = "true" ]; then ARGS+=(--full-refresh); fi
           if [ "$ALLOW_FRESH_START" = "true" ]; then ARGS+=(--allow-fresh-start); else ARGS+=(--no-allow-fresh-start); fi
           if [ "$SKIP_UPLOAD" = "true" ]; then ARGS+=(--skip-upload); else ARGS+=(--no-skip-upload); fi
-          if [ "$USE_ICEBERG" = "true" ]; then ARGS+=(--use-iceberg); fi
           echo "Running: uv run run-pipeline ${ARGS[*]}"
           uv run run-pipeline "${ARGS[@]}"
 
@@ -210,6 +199,6 @@ jobs:
 
   refresh-consumers:
     needs: [setup, etl-new]
-    if: ${{ needs.setup.outputs.skip_upload == 'false' && needs.setup.outputs.use_iceberg == 'true' }}
+    if: ${{ needs.setup.outputs.skip_upload == 'false' }}
     uses: ./.github/workflows/_regulations-refresh.yml
     secrets: inherit

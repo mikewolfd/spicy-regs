@@ -4,9 +4,9 @@
 
 **Public comment counts**
 
-A tiny per-partition row-count index for the partitioned comments. It maps each `comments/` partition to its row count so consumers can compute comment totals and discover partitions without scanning the full comments dataset. Maintained by `update_comments_index`.
+A small row-count index over `comments`. Each row counts the comments of one agency, docket and posting month, so consumers can compute comment totals without scanning the full table. It is rebuilt from the same catalog snapshot as each comments publication. Its rows are groups, not files: no Parquet file exists per row.
 
-**Coverage.** Derived. Per-partition counts over `comments`; it covers exactly what that table covers and adds no rows of its own. *(measured 2026-09-06)*
+**Coverage.** Derived. Counts over `comments` by agency, docket and posting month; it covers exactly what that table covers and adds no rows of its own. *(measured 2026-09-06)*
 
 - **Parquet file:** `comments_index.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
@@ -14,8 +14,8 @@ A tiny per-partition row-count index for the partitioned comments. It maps each 
 
 | Column | Type | Description |
 | --- | --- | --- |
-| `agency_code` | `VARCHAR` | Agency code of the partition (the `agency_code=` path segment). |
-| `docket_id` | `VARCHAR` | Source docket identifier, or NULL when unspecified. Legacy docket partitions encode NULL as `docket_id=__HIVE_DEFAULT_PARTITION__`; the stored column and index retain a true NULL. |
-| `year` | `BIGINT` | Year from `posted_date`. NULL when the source posted date is unknown; both year and month then use `__HIVE_DEFAULT_PARTITION__` in their path segments. |
-| `month` | `BIGINT` | Month (1–12) from `posted_date`. NULL together with year when the source posted date is unknown; the path segment uses `__HIVE_DEFAULT_PARTITION__`. |
-| `row_count` | `BIGINT` | Number of comment rows in that partition file. |
+| `agency_code` | `VARCHAR` | Agency code of the counted comments. |
+| `docket_id` | `VARCHAR` | Source docket identifier, or NULL when the source gives none. |
+| `year` | `BIGINT` | Year from `posted_date`. NULL when the source posted date is unknown. |
+| `month` | `BIGINT` | Month (1–12) from `posted_date`. NULL together with year when the source posted date is unknown. |
+| `row_count` | `BIGINT` | Number of comments in the group. |

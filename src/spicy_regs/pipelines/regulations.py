@@ -43,9 +43,7 @@ from spicy_regs.transforms import (
     EnrichCommentText,
     ExtractRecords,
     Transform,
-    merge_comments_partitioned,
     merge_staging_files,
-    update_comments_index,
     write_staging,
 )
 
@@ -106,8 +104,14 @@ class RegulationsPipeline(Pipeline):
         self._staging_dir: Path | None = None
         self._merged_attributes: list[str] = []
 
+    def _refuse_comments_without_catalog(self) -> None:
+        """Comments merge only into the catalog (decision 40), so refuse before any manifest is read."""
+        if not self.skip_comments and not self.use_iceberg:
+            raise ValueError("Comments ingest only through the catalog: pass --use-iceberg, or --skip-comments")
+
     def run(self, *, manifest: Manifest | None = None) -> None:
         """Run one batch; local batches sharing output_dir may reuse their manifest."""
+        self._refuse_comments_without_catalog()
         if manifest is not None and self.full_refresh:
             raise ValueError("A reused manifest cannot be combined with full_refresh")
         output_dir = self.output_dir or (Path.cwd() / "output")
@@ -138,6 +142,7 @@ class RegulationsPipeline(Pipeline):
         """
         if self.batch_number is not None or not self.batch_count or self.batch_count < 1 or self.full_refresh:
             raise ValueError("A sweep requires positive batch_count, no batch_number, and no full_refresh")
+        self._refuse_comments_without_catalog()
         output_dir = self.output_dir or Path.cwd() / "output"
         output_dir.mkdir(parents=True, exist_ok=True)
         self._sweep_agencies = self._agencies()
@@ -174,7 +179,7 @@ class RegulationsPipeline(Pipeline):
             if self._pending_text is not None:
                 self._pending_text.save()
                 if not self.skip_upload:
-                    self._publish(output_dir, record_types, {}, [])
+                    self._publish(output_dir, record_types, {})
             rmtree(staging_dir, ignore_errors=True)
             logger.info("Done!")
             return
@@ -213,9 +218,8 @@ class RegulationsPipeline(Pipeline):
         started = monotonic()
         # 3. Transform: merge per-agency staging into the deduplicated dataset.
         staged = result.rows_by_type
-        changed_comments: list[Path] = []
         if any(staged.values()):
-            changed_comments = self._merge(staging_dir, output_dir, record_types, staged)
+            self._merge(staging_dir, output_dir, record_types, staged)
             rmtree(staging_dir, ignore_errors=True)
             # Rollups (feed_summary, agency_stats, agency_monthly_volume,
             # docket_search, discovery_signals, fr_docket_links) are no
@@ -225,7 +229,7 @@ class RegulationsPipeline(Pipeline):
         else:
             logger.info("No new records staged; skipping merge.")
 
-        changed_comments = sorted(set(changed_comments) | set(self._retry_text(output_dir, agencies)))
+        self._retry_text(output_dir, agencies)
         logger.info("ETL merge and text retries completed in {:.1f}s", monotonic() - started)
         started = monotonic()
         # 4. Load: persist the manifest, then publish to R2 (off by default while vetting).
@@ -238,22 +242,20 @@ class RegulationsPipeline(Pipeline):
             logger.info("skip_upload=True — output left in {}", output_dir)
         else:
             logger.info("Uploading to R2...")
-            self._publish(output_dir, record_types, staged, changed_comments)
+            self._publish(output_dir, record_types, staged)
 
         logger.info("ETL checkpoint and publication completed in {:.1f}s", monotonic() - started)
         logger.info("Done!")
 
-    def _retry_text(self, output_dir: Path, agencies: list[str]) -> list[Path]:
-        if self._pending_text is None or self._text_pool is None:
-            return []
-        return self._pending_text.retry(self._text_pool, output_dir, agencies, use_iceberg=self.use_iceberg)
+    def _retry_text(self, output_dir: Path, agencies: list[str]) -> None:
+        if self._pending_text is not None and self._text_pool is not None:
+            self._pending_text.retry(self._text_pool, output_dir, agencies)
 
     def _publish(
         self,
         output_dir: Path,
         record_types: list[RecordType],
         staged: dict[str, int],
-        changed_comments: list[Path],
     ) -> None:
         """Publish this run's output to R2, advancing the manifest strictly last.
 
@@ -267,22 +269,16 @@ class RegulationsPipeline(Pipeline):
         """
         base_data_types = [rt.name for rt in record_types if rt.name != "comments" and staged.get(rt.name, 0)]
         base_data_types += self._merged_attributes
-        index_file = output_dir / "comments_index.parquet"
         manifest_file = output_dir / "manifest.parquet"
         unresolved_file = output_dir / "failed_keys.parquet"
         text_pending_file = output_dir / PENDING_TEXT_FILE
-        # Iceberg ingestion commits source rows only. Mirror finalization publishes
-        # the matching index after every batch has succeeded.
-        publish_index = bool(changed_comments)
-        if publish_index and not index_file.exists():
-            raise RuntimeError("Expected comments_index.parquet after publishing comment data")
+        # Comments commit to the catalog only. Mirror finalization publishes the
+        # comments, agency files and index after every batch has succeeded.
         # Manifest.save writes only when this run recorded keys, so a missing
         # file means there is no checkpoint to advance.
         publish_manifest = manifest_file.exists()
 
-        planned = r2.dataset_files(output_dir, base_data_types) + changed_comments
-        if publish_index:
-            planned.append(index_file)
+        planned = r2.dataset_files(output_dir, base_data_types)
         if unresolved_file.exists():
             planned.append(unresolved_file)
         if text_pending_file.exists():
@@ -295,11 +291,6 @@ class RegulationsPipeline(Pipeline):
         # upload_dataset would log a misleading "no files to publish" warning.
         if base_data_types:
             r2.upload_dataset(output_dir, base_data_types)
-        # Comments are partitioned, not monolithic: publish the partitions
-        # changed this run plus the refreshed index.
-        if changed_comments:
-            logger.info("Uploading {} changed comment partitions...", len(changed_comments))
-            r2.upload_comment_partitions(output_dir, changed_comments)
         if unresolved_file.exists():
             r2.upload_file(unresolved_file, remote_key=unresolved_file.name)
         if text_pending_file.exists():
@@ -355,7 +346,7 @@ class RegulationsPipeline(Pipeline):
             manifest.record(reader.last_keys)
             manifest.save(output_dir)
             if not self.skip_upload:
-                self._publish(output_dir, [comment_rt], {comment_rt.name: len(records)}, [])
+                self._publish(output_dir, [comment_rt], {comment_rt.name: len(records)})
             logger.info("[{}] comments: committed {}/{}", agency, start + len(chunk), total)
 
     # -- regulations-specific wiring ---------------------------------------
@@ -419,22 +410,11 @@ class RegulationsPipeline(Pipeline):
     def _download_existing(self, output_dir: Path, record_types: list[RecordType]) -> None:
         """Fetch existing output from R2 so an incremental run appends to it.
 
-        Monolithic ``{type}.parquet`` files are pulled whole. Comment
-        *partitions* are large and fetched on demand during the merge, but the
-        global comment index must be primed here: ``update_comments_index``
-        rebuilds the index by keeping the existing rows for partitions this run
-        didn't touch, reading them from the local ``comments_index.parquet``.
-        Without the remote index on disk, a batch that stages new comments
-        rewrites the index down to only its own ~21 agencies' partitions — and
-        the upload shrink-guard then (correctly) aborts the run.
+        Monolithic ``{type}.parquet`` files are pulled whole. Comments live in
+        the catalog, so nothing is fetched for them.
         """
         for rt in record_types:
             if rt.name == "comments":
-                if self.use_iceberg:
-                    continue
-                index_file = output_dir / "comments_index.parquet"
-                if not index_file.exists():
-                    r2.download_working_copy("comments_index.parquet", index_file)
                 continue
             local = output_dir / f"{rt.name}.parquet"
             if not local.exists():
@@ -466,20 +446,16 @@ class RegulationsPipeline(Pipeline):
         output_dir: Path,
         record_types: list[RecordType],
         staged: dict[str, int],
-    ) -> list[Path]:
-        """Merge staging files: dockets/documents monolithically, comments partitioned.
+    ) -> None:
+        """Merge staging files: documents monolithically, comments into the catalog.
 
-        When ``use_iceberg`` is set, the ``dockets`` table is routed through the
-        R2 Data Catalog (Iceberg ``MERGE INTO`` + public Parquet export) instead
-        of the whole-file ``merge_staging_files`` rewrite, and ``comments`` are
-        routed through :func:`iceberg.merge_comments` (row-level upsert into the
-        catalog; the final mirror owns index publication) instead of the
-        partitioned ``merge_comments_partitioned`` path. ``documents`` stay on
-        the existing whole-file path until the Iceberg flow is vetted for them.
-
-        Returns the comment partition files changed this run (empty when no
-        comments were staged or when comments went through Iceberg), so the
-        caller can publish exactly those to R2.
+        ``comments`` always go through :func:`iceberg.merge_comments` (a
+        row-level upsert into the catalog; the final mirror owns index
+        publication). When ``use_iceberg`` is set, ``dockets`` are routed
+        through the R2 Data Catalog (Iceberg ``MERGE INTO`` + public Parquet
+        export) instead of the whole-file ``merge_staging_files`` rewrite.
+        ``documents`` stay on the whole-file path until the Iceberg flow is
+        vetted for them.
         """
         names = [rt.name for rt in record_types]
         if "comments" in names:
@@ -508,21 +484,9 @@ class RegulationsPipeline(Pipeline):
             if (table := ATTRIBUTE_TABLES.get(name)) and self._merge_attributes(staging_dir, output_dir, table)
         ]
 
-        changed_comments: list[Path] = []
         if "comments" in names and staged.get("comments", 0) > 0:
-            if self.use_iceberg:
-                # Finalization owns the one mirror/index build after the sweep.
-                iceberg.merge_comments(staging_dir, RECORD_TYPES["comments"])
-            else:
-                changed_comments = merge_comments_partitioned(
-                    staging_dir,
-                    output_dir,
-                    schema=RECORD_TYPES["comments"].schema,
-                    dedup_key=RECORD_TYPES["comments"].dedup_key,
-                )
-                if changed_comments:
-                    update_comments_index(output_dir, changed_comments)
-        return changed_comments
+            # Finalization owns the one mirror/index build after the sweep.
+            iceberg.merge_comments(staging_dir, RECORD_TYPES["comments"])
 
 
 # --- CLI / run file --------------------------------------------------------
@@ -556,7 +520,10 @@ def main(
     ] = False,
     max_workers: Annotated[int, Parameter(help="Agencies processed in parallel")] = 4,
     text_workers: Annotated[int, Parameter(help="Comment text reads in parallel across all agencies (at most 16)")] = 8,
-    use_iceberg: Annotated[bool, Parameter(help="Route the dockets table through R2 Data Catalog (Iceberg)")] = False,
+    use_iceberg: Annotated[
+        bool,
+        Parameter(help="Route dockets and comments through R2 Data Catalog (Iceberg); comments require it"),
+    ] = False,
     enrich_text: Annotated[
         bool,
         Parameter(help="Fill comment text_content inline from Mirrulations derived-data extracted text"),
