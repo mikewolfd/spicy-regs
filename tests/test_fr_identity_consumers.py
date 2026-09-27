@@ -14,7 +14,6 @@ from loguru import logger
 
 from spicy_docs.interpretation.identifier_shapes import normalize_docket_reference
 
-from spicy_regs.ontology.citations import normalize_regsgov_identifier
 from spicy_regs.ontology.common import RunContext, stable_id, write_parquet_rows
 from spicy_regs.ontology import federal_register
 from spicy_regs.ontology.federal_register import FederalRegisterIndex, linked_docket_ids
@@ -630,7 +629,13 @@ def test_a_list_merging_a_multi_docket_proceeding_keeps_the_outranking_id(tmp_pa
         prior = pq.read_table(build_proceedings(tmp_path)).to_pylist()
     prior_by_dockets = {r["docket_ids_json"]: r["proceeding_id"] for r in prior}
     four = json.dumps([f"EPA-HQ-OAR-2010-08{n}" for n in (68, 69, 70, 71)], separators=(",", ":"))
-    assert len(prior) == 4
+    # Unlinked there, 2011-31530 attaches by 2060-AP84, which only EPA-HQ-OAR-2011-0002 states;
+    # the fr_cfr_ref rows the plural reader wrote for its other dockets hold nothing (review 2b).
+    assert {r["docket_ids_json"]: json.loads(r["fr_document_ids_json"]) for r in prior} == {
+        four: ["2012-5760@2012-03-26"],
+        '["EPA-HQ-OAR-2003-0146"]': [],
+        '["EPA-HQ-OAR-2011-0002"]': ["2011-31530@2012-01-06"],
+    }
     shutil.copyfile(tmp_path / "proceedings.parquet", tmp_path / "_proceedings_prior.parquet")
 
     (merged,) = pq.read_table(build_proceedings(tmp_path)).to_pylist()
@@ -802,30 +807,38 @@ def test_the_index_reads_each_link_row_once_and_keys_each_docket_it_names(tmp_pa
     assert list(index.docket_links(links)) == first, "replayed, not re-read"
 
 
-def test_a_label_join_continues_the_docket_id_and_retires_the_fr_only_one(tmp_path, monkeypatch):
-    """A label join absorbs the FR-only proceeding into the docket's, which keeps its id."""
+def test_a_label_join_continues_the_docket_id_and_retires_the_fr_only_one(tmp_path):
+    """A label join absorbs a prior FR-only proceeding into the docket's, which keeps its id.
+
+    The prior generation read FR docket values syntax-only and predates decision 56 (a
+    Register copy joins its docket), so 2010-2394 stood alone; its rows are written as that
+    generation published them, since today's code no longer forms the FR-only one.
+    """
     _labelled_inputs(tmp_path)
     build_rule_targets(tmp_path)
-    # The prior generation read FR docket values syntax-only, so 2010-2394 stood alone.
-    with monkeypatch.context() as before:
-        before.setattr(
-            federal_register,
-            "linked_docket_ids",
-            lambda value: tuple(filter(None, [normalize_regsgov_identifier(value)])),
-        )
-        prior = pq.read_table(build_proceedings(tmp_path)).to_pylist()
-    prior_docket = next(r for r in prior if json.loads(r["docket_ids_json"]) == ["SSA-2010-0037"])
-    prior_fr_only = next(r for r in prior if json.loads(r["fr_document_ids_json"]) == ["2010-2394@2010-02-05"])
-    assert prior_fr_only["docket_ids_json"] == "[]"
-    shutil.copyfile(tmp_path / "proceedings.parquet", tmp_path / "_proceedings_prior.parquet")
+    prior_docket = stable_id("proceeding", "docket", "SSA-2010-0037")
+    prior_fr_only = stable_id("proceeding", "fr-document", "2010-2394@2010-02-05")
+    _write(
+        tmp_path,
+        "_proceedings_prior",
+        ("proceeding_id", "docket_ids_json", "fr_document_ids_json"),
+        [
+            {"proceeding_id": prior_docket, "docket_ids_json": '["SSA-2010-0037"]', "fr_document_ids_json": "[]"},
+            {
+                "proceeding_id": prior_fr_only,
+                "docket_ids_json": "[]",
+                "fr_document_ids_json": '["2010-2394@2010-02-05"]',
+            },
+        ],
+    )
 
     merged = pq.read_table(build_proceedings(tmp_path)).to_pylist()
     ssa = next(r for r in merged if "SSA-2010-0037" in json.loads(r["docket_ids_json"]))
+    assert "2010-2394@2010-02-05" in json.loads(ssa["fr_document_ids_json"])
     # Docket overlap outranks FR overlap, so the docket's id continues.
-    assert ssa["proceeding_id"] == prior_docket["proceeding_id"]
-    assert ssa["supersedes_id"] == prior_docket["proceeding_id"]
-    assert prior_fr_only["proceeding_id"] not in {r["proceeding_id"] for r in merged}
-    assert len(merged) == len(prior) - 1
+    assert ssa["proceeding_id"] == ssa["supersedes_id"] == prior_docket
+    assert prior_fr_only not in {r["proceeding_id"] for r in merged}
+    assert all(r["docket_ids_json"] != "[]" for r in merged)
 
 
 def test_rule_targets_count_the_cfr_references_they_cannot_read(tmp_path):

@@ -351,7 +351,8 @@ def _citations(targets):
         pytest.param(
             SUCRALOSE,
             {("FDA-1999-F-0118", "FDA-1999-F-0118-0002", "99 20888", ("99-20888@1999-08-12",))},
-            {(("FDA-1999-F-0118",), ()), ((), ("99-20888@1999-08-12",))},
+            # The rule's one copy lies in the docket, so the rule joins its proceeding (decision 56).
+            {(("FDA-1999-F-0118",), ("99-20888@1999-08-12",))},
             id="FDA-1999-F-0118-cites-99-20888",
         ),
         pytest.param(
@@ -374,7 +375,7 @@ def test_a_cited_action_notice_is_a_typed_edge_that_merges_no_proceeding(
     edges = [row for row in targets if row["source"] == CITES_ACTION_NOTICE]
     assert all(row["cfr_ref"] is None and row["rin"] is None for row in edges), "a relationship, not a rule target"
     assert all(row["evidence_id"] in {citation[1] for citation in expected_citations} for row in edges)
-    # The docket stays its own proceeding and the notice its own FR-only one.
+    # Each docket stays its own proceeding; a notice copied into several stays its own FR-only one.
     assert {
         (tuple(json.loads(row["docket_ids_json"])), tuple(json.loads(row["fr_document_ids_json"])))
         for row in proceedings
@@ -409,19 +410,20 @@ def test_a_cited_notice_typed_by_title_alone_types_nothing(tmp_path):
     assert proceedings == [], "neither the petition dockets nor the notice form a proceeding"
 
 
-def test_a_cited_notice_held_only_by_a_noaa_x_rin_is_no_typed_edge(tmp_path):
-    """Decision 61: a 0648-X… code stays recorded on the edges but decides no action evidence."""
+@pytest.mark.parametrize("code", ["0648-XC39", "0660-XC00"])
+def test_a_cited_notice_held_only_by_an_x_code_is_no_typed_edge(tmp_path, code):
+    """Decision 61, every agency's: an X-pattern code stays recorded on the edges but decides nothing."""
     tables = {
         **SUCRALOSE,
         "documents": SUCRALOSE["documents"][:1],
         "federal_register": [
-            {**SUCRALOSE["federal_register"][0], "regulation_id_numbers_json": '["0648-XC39"]'},
+            {**SUCRALOSE["federal_register"][0], "regulation_id_numbers_json": f'["{code}"]'},
             SUCRALOSE["federal_register"][1],
         ],
     }
     targets, proceedings = _build(tmp_path, tables)
-    assert not _citations(targets), "an X RIN is no more action evidence than no RIN"
-    assert ("document_fr_doc", None, "0648-XC39") in {(row["source"], row["cfr_ref"], row["rin"]) for row in targets}
+    assert not _citations(targets), "an X code is no more action evidence than no RIN"
+    assert ("document_fr_doc", None, code) in {(row["source"], row["cfr_ref"], row["rin"]) for row in targets}
     assert {
         (tuple(json.loads(row["docket_ids_json"])), tuple(json.loads(row["fr_document_ids_json"])))
         for row in proceedings

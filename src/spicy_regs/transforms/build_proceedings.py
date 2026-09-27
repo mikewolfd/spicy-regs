@@ -9,6 +9,7 @@ from pathlib import Path
 import pyarrow.parquet as pq
 from loguru import logger
 
+from spicy_regs.ontology.agencies import agency_code_for_fr_agencies
 from spicy_regs.ontology.citations import (
     action_evidence_rin,
     canonical_cfr_iri,
@@ -31,6 +32,7 @@ from spicy_regs.ontology.common import (
 from spicy_regs.ontology.federal_register import (
     FederalRegisterIndex,
     catch_all_docket,
+    copy_of,
     document_rule_stage,
     references_json,
     register_rule_stage,
@@ -59,10 +61,21 @@ OUTPUT = "proceedings.parquet"
 # v10 (one bump over published v9), owner decisions 56 and 58-61: a document's rule stage comes
 # only from its own Rule / Proposed Rule type; a Regulations.gov copy of a Register row that
 # states a type takes that row's stage; the Register's 1994 Uncategorized rows are typed by
-# their "; Final/Proposed/Interim Rule(s) <AGENCY>" title suffix; NOAA's 0648-X... codes decide
-# nothing. On the 2026-09-26 parents proceedings fall from 267,965 to 205,723: 52,420
-# docket-less (40,144 SEC SRO notices) and 9,833 docketed go. 11 appear: three FDA-1977-N
-# dockets a withdrawal Notice no longer unites, and eight 1994 rules typed by their suffix.
+# their "; Final/Proposed/Interim Rule(s) <AGENCY>" title suffix; X-pattern codes (NOAA's
+# 0648-X... and, as decision 61 was extended, every agency's) decide nothing. An action Register
+# document that names no trusted, non-feed docket joins the one proceeding its Regulations.gov
+# copies in such dockets lie in, else the one docketed proceeding whose docket-side evidence
+# alone holds one of its RINs;
+# else it stands alone, under its Register agency's code (decision 56 and the owner's rulings
+# on it). A docket-side RIN is the docket's, its documents', or a copy's (rule_targets'
+# document_fr_doc), never a docket-linked Register document's (its fr_cfr_ref; review 2b). On
+# the 2026-09-26 parents proceedings fall from 267,965 to 172,742: 85,360 docket-less (40,144
+# SEC SRO notices; 28,365 joined by copy and 4,090 by RIN) and 9,874 docketed go, and no
+# docketed one merges. 11 appear: three FDA-1977-N dockets a withdrawal Notice no longer
+# unites, and eight 1994 rules typed by their suffix. 89,662 of the 97,472 docket-less
+# proceedings take a code. Each stage event says how its document joined
+# (joined_by), and fr_document_joins_json says it for every Register document, with a
+# specific-RIN join's RINs and the docket-side evidence that holds them (docs/ontology.md).
 ACTOR_ID = "spicy-regs:proceedings:v10"
 
 COLUMNS = (
@@ -79,6 +92,7 @@ COLUMNS = (
     "authority_refs_json",
     *ATTESTATION_COLUMNS,
     "fr_document_ids_json",
+    "fr_document_joins_json",
     "unresolved_fr_references_json",
     "rins_json",
 )
@@ -92,6 +106,26 @@ _STAGE_KIND = {
     "withdrawn": "proceedingWithdrawn",
     "longterm": "proceedingLongterm",
 }
+
+#: How a document joined its proceeding, its ``joined_by`` on a stage event and in
+#: fr_document_joins_json: a Regulations.gov document of the proceeding's own docket; a
+#: Register document through its own docket link, through its Regulations.gov copies (decision
+#: 56's B), or through a RIN the proceeding alone holds (its E); or the Register document a
+#: docket-less proceeding is.
+JOINED_BY = frozenset({"docket", "fr_docket_link", "fr_copy", "specific_rin", "fr_document"})
+
+
+def _holder_source(rule_targets_source: object) -> str:
+    """The holder source a rule_targets row's source class names, for decision 56's E.
+
+    The docket-side evidence by which a proceeding holds a RIN, which a join lists by name:
+    ``docket_rin`` (its dockets' rin), ``document_rin`` (its documents' RINs) and
+    ``rule_targets:document_fr_doc`` (a copy's RINs on its docket). rule_targets' docket_rin
+    and document_rin rows restate the first two and fold into them. Its fr_cfr_ref rows restate
+    a docket-linked Register document's RINs and never reach here (see the rule_targets pass).
+    """
+    source = str(rule_targets_source or "")
+    return source if source in ("docket_rin", "document_rin") else f"rule_targets:{source}"
 
 
 #: The Federal Register columns that say whether a document is itself action evidence.
@@ -124,8 +158,8 @@ def _fr_action_evidence(
     that decides action evidence nor a stage, so a later pass answers it with
     :data:`_NO_ACTION` instead of reading it again. Membership in the first map is what
     makes an FR document action evidence (decisions 32 and 33): a stage does, and so does
-    a RIN except NOAA's 0648-X… codes, which stay recorded but decide nothing (decision
-    61). The second map holds the stage of every row that carries one, typed as the
+    a RIN except an X-pattern code (0648-X…, 0660-X…), which stays recorded but decides
+    nothing (decision 61). The second map holds the stage of every row that carries one, typed as the
     Register reads it (decision 59), and the set holds every row that states no type at all,
     for decision 60's copy resolution: only a Register row that states a type overrides a
     Regulations.gov copy's own.
@@ -188,9 +222,13 @@ def build_proceedings(
     stable proceeding id. A Federal Register artifact that is itself action
     evidence (a RIN or a rule stage) connects the trusted dockets it names into
     one proceeding; any other attaches to each named docket's proceeding as a
-    reference and merges none (fork delivery decision 33). Otherwise docket and
-    artifact identities stay separate. ``fr_index`` is the generation's shared
-    index of ``federal_register.parquet``; it is built here when not supplied.
+    reference and merges none (fork delivery decision 33). One that names no
+    trusted, non-feed docket joins the one proceeding its Regulations.gov copies
+    in such dockets lie in, or else the one docketed proceeding whose docket-side
+    evidence alone holds one of its RINs; otherwise it is its own proceeding,
+    under its Register agency (decision 56). None of these unites two
+    proceedings. ``fr_index`` is the generation's shared index of
+    ``federal_register.parquet``; it is built here when not supplied.
 
     ``supersedes_id`` is the prior id a row continues.
     """
@@ -226,13 +264,18 @@ def build_proceedings(
         return {
             "dockets": set(dockets),
             "identity": identity,
-            "rins": set(),
+            # Docket-side RINs, each with the evidence that holds it (_holder_source), and the
+            # RINs of the Register documents the proceeding holds, kept apart for decision 56's E.
+            "rins": {},
+            "fr_rins": set(),
             "titles": [],
             "agencies": [],
             # Each distinct event once, in first-seen order; a list scan per event was
             # quadratic in a proceeding's events (1,635 in the largest).
             "events": {},
-            "fr_documents": set(),
+            # Each Register document the proceeding holds, by id, and how it joined
+            # (fr_document_joins_json).
+            "fr_documents": {},
             "fr_document_numbers": set(),
             "unresolved_fr_references": [],
             "cfr_refs": set(),
@@ -257,8 +300,8 @@ def build_proceedings(
         # A docket is action evidence by its RIN or its type being exactly Rulemaking: the
         # substring test this replaced also matched Nonrulemaking, and made a single-docket
         # proceeding of every one of those shells (fork delivery decision 32). A feed docket is
-        # one only by its RIN: Regulations.gov types every _FRDOC_ feed Rulemaking. NOAA's
-        # 0648-X… codes decide nothing (decision 61).
+        # one only by its RIN: Regulations.gov types every _FRDOC_ feed Rulemaking. X-pattern
+        # codes decide nothing (decision 61).
         if catch_all_docket(docket, row.get("title")):
             catch_alls.add(docket)
         elif str(row.get("docket_type") or "").casefold() == "rulemaking":
@@ -291,13 +334,9 @@ def build_proceedings(
         # stage is action evidence too (decision 32 as amended: 392 of the shells it first
         # removed held a RIN that way, through rule_targets' document_fr_doc edges). The
         # document's own stage is the Register row's when its fr_doc_num resolves to one
-        # (decision 60); its RINs decide nothing while they are all NOAA 0648-X… (decision 61).
-        cited = row.get("fr_doc_num")
-        if (
-            has_rin
-            or (cited and resolved_id(fr_index.reference(str(cited))) in fr_action)
-            or document_rule_stage(row, fr_index, fr_stages, fr_untyped)
-        ):
+        # (decision 60); its RINs decide nothing while they are all X-pattern codes (decision 61).
+        register_copy = copy_of(row, fr_index)
+        if has_rin or register_copy in fr_action or document_rule_stage(row, register_copy, fr_stages, fr_untyped):
             action_dockets.add(docket)
 
     # An FR link names a docket; it makes the docket an action docket only when the
@@ -380,17 +419,57 @@ def build_proceedings(
         date: object,
         source: str,
         evidence_id: object,
+        joined_by: str,
     ) -> None:
+        if joined_by not in JOINED_BY:
+            raise ValueError(f"unknown joined_by {joined_by!r}")
         if stage not in STAGES:
             return
-        event = {
+        event: dict[str, object] = {
             "stage": stage,
             "event_kind": _STAGE_KIND[stage],
             "effective_date": eastern_day_text(date),
             "source": source,
             "evidence_id": None if evidence_id is None else str(evidence_id),
+            "joined_by": joined_by,
         }
-        group["events"].setdefault(tuple(event.values()), event)
+        # One event per document per way it joined; a Register document's RINs and their
+        # holders are in fr_document_joins_json, not repeated here.
+        key = (stage, event["effective_date"], source, event["evidence_id"], joined_by)
+        group["events"].setdefault(key, event)
+
+    def add_fr(
+        group: dict,
+        row: dict,
+        identity: str,
+        rins: set[str] | frozenset[str],
+        stage: str | None,
+        *,
+        joined_by: str,
+        joined_rins: list[str] | None = None,
+    ) -> None:
+        """Hold a Register document in a proceeding, with how it joined, its RINs, title and stage event.
+
+        A document joined by specific RINs (decision 56's E) records every one of them that
+        points here and, over them all, the docket-side evidence that holds them.
+        """
+        join: dict[str, object] = {"fr_document_id": identity, "joined_by": joined_by}
+        if joined_rins:
+            join["joined_rins"] = joined_rins
+            join["holder_sources"] = sorted(set().union(*(group["rins"][rin] for rin in joined_rins)))
+        group["fr_documents"].setdefault(identity, join)
+        group["fr_document_numbers"].add(str(row["document_number"]).strip())
+        group["fr_rins"].update(rins)
+        if row.get("title"):
+            group["titles"].append((str(row.get("publication_date") or ""), str(row["title"])))
+        add_event(
+            group,
+            stage=stage,
+            date=row.get("publication_date"),
+            source="federal_register.document_type",
+            evidence_id=identity,
+            joined_by=joined_by,
+        )
 
     for docket, row in docket_metadata.items():
         key = group_key_by_docket.get(docket)
@@ -398,12 +477,16 @@ def build_proceedings(
             continue
         group = groups[key]
         if rin := normalize_rin(row.get("rin")):
-            group["rins"].add(rin)
+            group["rins"].setdefault(rin, set()).add("docket_rin")
         if row.get("title"):
             group["titles"].append((str(row.get("modify_date") or ""), str(row["title"])))
         if row.get("agency_code"):
             group["agencies"].append(str(row["agency_code"]))
 
+    # The proceedings each action Register document's Regulations.gov copies lie in: the
+    # groups of the trusted, non-feed dockets whose own documents resolve to it (decision 56).
+    # Every such docket is an action docket through its copy, so every copy has a group.
+    copy_groups_by_fr: dict[str, set[str]] = defaultdict(set)
     for row in iter_parquet_rows(
         paths["documents"],
         columns=(
@@ -422,6 +505,9 @@ def build_proceedings(
         if key is None or docket in catch_alls:
             continue
         group = groups[key]
+        register_copy = copy_of(row, fr_index)
+        if register_copy is not None and register_copy in fr_action:
+            copy_groups_by_fr[register_copy].add(key)
         raw_rins = parse_json_list(
             row.get("additional_rins"),
             stats=json_stats,
@@ -429,21 +515,30 @@ def build_proceedings(
             row_id=row.get("document_id"),
             column="additional_rins",
         )
-        if raw_rins is not None:
-            group["rins"].update(rin for value in raw_rins if (rin := normalize_rin(value)) is not None)
+        for value in raw_rins or ():
+            if rin := normalize_rin(value):
+                group["rins"].setdefault(rin, set()).add("document_rin")
         if row.get("title"):
             group["titles"].append((str(row.get("posted_date") or ""), str(row["title"])))
         if row.get("agency_code"):
             group["agencies"].append(str(row["agency_code"]))
         add_event(
             group,
-            stage=document_rule_stage(row, fr_index, fr_stages, fr_untyped),
+            stage=document_rule_stage(row, register_copy, fr_stages, fr_untyped),
             date=row.get("posted_date"),
             source="documents.document_type",
             evidence_id=row.get("document_id"),
+            joined_by="docket",
         )
 
-    for row in iter_parquet_rows(paths["federal_register"], columns=("document_number", "publication_date", "title")):
+    # An action Register document no trusted docket link names joins the one proceeding its
+    # Regulations.gov copies lie in (decision 56, B); copies in several proceedings unite
+    # none (decision 33). Any other waits for the RIN attachment below.
+    unlinked: list[tuple[dict, str, set[str] | frozenset[str], str | None]] = []
+    joined_by_copy = several_copy_groups = 0
+    for row in iter_parquet_rows(
+        paths["federal_register"], columns=("document_number", "publication_date", "title", "agencies_json")
+    ):
         document_number = str(row.get("document_number") or "").strip()
         if not document_number:
             continue
@@ -461,27 +556,20 @@ def build_proceedings(
             # reference of each proceeding it names.
             if len(linked_keys) != 1 and (rins or stage):
                 raise RuntimeError(f"FR document {document_number} spans unmerged docket components")
-            targets = [groups[key] for key in linked_keys]
+            for key in linked_keys:
+                add_fr(groups[key], row, identity, rins, stage, joined_by="fr_docket_link")
         elif rins or stage:
-            targets = [ensure_fr(identity)[1]]
-        else:
-            continue
-        for group in targets:
-            group["fr_documents"].add(identity)
-            group["fr_document_numbers"].add(document_number)
-            group["rins"].update(rins)
-            if row.get("title"):
-                group["titles"].append((str(row.get("publication_date") or ""), str(row["title"])))
-            add_event(
-                group,
-                stage=stage,
-                date=row.get("publication_date"),
-                source="federal_register.document_type",
-                evidence_id=identity,
-            )
+            copy_keys = copy_groups_by_fr.get(identity, ())
+            if len(copy_keys) == 1:
+                add_fr(groups[next(iter(copy_keys))], row, identity, rins, stage, joined_by="fr_copy")
+                joined_by_copy += 1
+            else:
+                several_copy_groups += len(copy_keys) > 1
+                unlinked.append((row, identity, rins, stage))
 
     for row in iter_parquet_rows(
-        paths["rule_targets"], columns=("docket_id", "rin", "cfr_ref", "cfr_title", "cfr_part", "cfr_section")
+        paths["rule_targets"],
+        columns=("docket_id", "rin", "source", "cfr_ref", "cfr_title", "cfr_part", "cfr_section"),
     ):
         docket = normalize_regsgov_identifier(row.get("docket_id"))
         key = group_key_by_docket.get(docket or "")
@@ -490,8 +578,13 @@ def build_proceedings(
         if key is None or docket in catch_alls:
             continue
         group = groups[key]
-        if rin := normalize_rin(row.get("rin")):
-            group["rins"].add(rin)
+        if (rin := normalize_rin(row.get("rin"))) and row.get("source") == "fr_cfr_ref":
+            # rule_targets writes an fr_cfr_ref row for each RIN of each Register document a
+            # docket links: a document the proceeding took in, whose RINs it records but never
+            # holds for E (owner ruling on review 2b).
+            group["fr_rins"].add(rin)
+        elif rin:
+            group["rins"].setdefault(rin, set()).add(_holder_source(row.get("source")))
         if row.get("cfr_ref"):
             group["cfr_refs"].add(str(row["cfr_ref"]))
             try:
@@ -507,6 +600,49 @@ def build_proceedings(
                     "proceedings: retained compact CFR ref but could not project Rulespec target {}",
                     row.get("cfr_ref"),
                 )
+
+    # Every group so far is docketed. A RIN one of them alone holds through docket-side evidence
+    # is specific: its dockets' rin, its documents' RINs, or a copy's RINs, which rule_targets
+    # writes on the copy's docket (document_fr_doc). A RIN it holds only through a Register
+    # document it took in by a docket link, or by this attachment, is not. On the 2026-09-26
+    # parents such RINs drew 1,016 unrelated USCG safety-zone rules to one zebra-mussel docket
+    # through the umbrella 2115-AA97, and, restated as rule_targets' fr_cfr_ref rows, 126 more
+    # documents, 56 of the 79 with comparable agency codes into another agency's docket (owner
+    # rulings on decision 56). X-pattern codes never count (decision 61).
+    holders_by_rin: dict[str, set[str]] = defaultdict(set)
+    for key, group in groups.items():
+        for rin in group["rins"]:
+            if action_evidence_rin(rin):
+                holders_by_rin[rin].add(key)
+
+    # An unlinked action document attaches to the one docketed proceeding its specific RINs
+    # point to (decision 56, E); pointing to several, it unites none (decision 33). Any other
+    # forms its own proceeding, whose agency is its Register row's one Regulations.gov code
+    # (decision 56, C): a docketed proceeding keeps its dockets' and documents' codes.
+    attached_by_rin = several_rin_proceedings = 0
+    for row, identity, rins, stage in unlinked:
+        # Each proceeding the document's specific RINs point to, with those RINs in order.
+        specific: dict[str, list[str]] = defaultdict(list)
+        for rin in sorted(rins):
+            if action_evidence_rin(rin) and len(holders := holders_by_rin.get(rin, ())) == 1:
+                specific[next(iter(holders))].append(rin)
+        if len(specific) == 1:
+            ((key, joined_rins),) = specific.items()
+            add_fr(groups[key], row, identity, rins, stage, joined_by="specific_rin", joined_rins=joined_rins)
+            attached_by_rin += 1
+            continue
+        several_rin_proceedings += len(specific) > 1
+        group = ensure_fr(identity)[1]
+        add_fr(group, row, identity, rins, stage, joined_by="fr_document")
+        agencies = parse_json_list(
+            row.get("agencies_json"),
+            stats=json_stats,
+            table="federal_register",
+            row_id=row["document_number"],
+            column="agencies_json",
+        )
+        if code := agency_code_for_fr_agencies(agencies or []):
+            group["agencies"].append(code)
 
     group_keys_by_fr_document: dict[str, set[str]] = defaultdict(set)
     for group_key, group in groups.items():
@@ -631,7 +767,7 @@ def build_proceedings(
             ),
         )
         titles = sorted(group["titles"])
-        rins = sorted(group["rins"])
+        rins = sorted(group["rins"].keys() | group["fr_rins"])
         proceeding_id = proceeding_id_by_group[group_key]
         matched_predecessors = predecessor_ids_by_group.get(group_key, set())
         rows.append(
@@ -647,6 +783,9 @@ def build_proceedings(
                 "stage_events_json": canonical_json(events),
                 "fr_document_numbers_json": canonical_json(sorted(group["fr_document_numbers"])),
                 "fr_document_ids_json": canonical_json(sorted(group["fr_documents"])),
+                "fr_document_joins_json": canonical_json(
+                    [group["fr_documents"][identity] for identity in sorted(group["fr_documents"])]
+                ),
                 "unresolved_fr_references_json": references_json(group["unresolved_fr_references"]),
                 "cfr_refs_json": canonical_json(sorted(group["cfr_refs"])),
                 "cfr_target_iris_json": canonical_json(sorted(group["cfr_target_iris"])),
@@ -673,6 +812,14 @@ def build_proceedings(
         sum(len(json.loads(row["docket_ids_json"])) > 1 for row in rows),
         sum(row["docket_ids_json"] == "[]" for row in rows),
         sum(row["rin"] is not None for row in rows),
+    )
+    logger.info(
+        "Proceedings: unlinked Register actions {:,} joined by copy, {:,} with copies in several; "
+        "{:,} attached by a specific RIN, {:,} pointing to several",
+        joined_by_copy,
+        several_copy_groups,
+        attached_by_rin,
+        several_rin_proceedings,
     )
     assert pq.ParquetFile(out_file).schema_arrow.names == list(COLUMNS)
     return out_file

@@ -947,7 +947,15 @@ def _empty_rulemaking_inputs(root):
 def _fr_rows(root, rows):
     _write(
         root / "federal_register.parquet",
-        ("document_number", "publication_date", "regulation_id_numbers_json", "document_type", "title"),
+        (
+            "document_number",
+            "publication_date",
+            "regulation_id_numbers_json",
+            "document_type",
+            "title",
+            "agencies_json",
+            "cfr_references_json",
+        ),
         rows,
     )
 
@@ -1096,13 +1104,16 @@ def test_the_registers_type_wins_for_a_regulations_gov_copy(tmp_path):
     }
     assert stages == {
         "OSHA-2024-0002-0001": "proposed",
+        # The Register proposal its copy states joins the copy's proceeding (decision 56).
+        "2024-22222@2024-02-11": "proposed",
         "EPA-2024-0003-0001": "proposed",
         "DOD-2024-0004-0001": "final",
     }
+    assert all(row["docket_ids_json"] != "[]" for row in proceedings)
 
 
-def test_noaas_x_rins_decide_no_action_evidence_but_stay_recorded(tmp_path):
-    """Decision 61: a 0648-X… code is recorded evidence of nothing; other RINs still act."""
+def test_x_codes_decide_no_action_evidence_but_stay_recorded(tmp_path):
+    """Decision 61: an X-pattern code (NOAA's 0648-X… here) is recorded evidence of nothing; other RINs act."""
     _empty_rulemaking_inputs(tmp_path)
     _write(
         tmp_path / "dockets.parquet",
@@ -1173,6 +1184,357 @@ def test_noaas_x_rins_decide_no_action_evidence_but_stay_recorded(tmp_path):
     # A real Rule whose only RIN is an X code still forms its proceeding through its type, and
     # the X code stays recorded on it.
     assert json.loads(fr_only["2024-55555"]["rins_json"]) == ["0648-XA53"]
+
+
+def _register_fixture(root, *, dockets, documents=(), register=(), links=(), rule_targets=(), build_targets=False):
+    """Dockets ``(docket_id, rin[, docket_type])``, Rulemaking unless typed, their documents, rule_targets
+    ``(docket_id, rin, source)`` rows or, with ``build_targets``, rule_targets built from the same inputs,
+    and Register rows linked as ``links`` says."""
+    assert not (rule_targets and build_targets)
+    root.mkdir(parents=True, exist_ok=True)
+    _empty_rulemaking_inputs(root)
+    _write(
+        root / "rule_targets.parquet",
+        ("docket_id", "rin", "source", "cfr_ref", "cfr_title", "cfr_part", "cfr_section"),
+        [{"docket_id": docket, "rin": rin, "source": source} for docket, rin, source in rule_targets],
+    )
+    _write(
+        root / "fr_docket_links.parquet",
+        ("docket_id", "document_number", "publication_date"),
+        [
+            {"docket_id": docket, "document_number": number, "publication_date": "2024-02-01"}
+            for docket, number in links
+        ],
+    )
+    _write(
+        root / "dockets.parquet",
+        ("docket_id", "rin", "docket_type", "title", "agency_code", "modify_date"),
+        [
+            {
+                "docket_id": docket,
+                "rin": rin,
+                "docket_type": kind[0] if kind else "Rulemaking",
+                "title": docket,
+                "agency_code": "EPA",
+            }
+            for docket, rin, *kind in dockets
+        ],
+    )
+    _write(
+        root / "documents.parquet",
+        ("document_id", "docket_id", "additional_rins", "document_type", "title", "posted_date", "fr_doc_num"),
+        [
+            {
+                "document_id": f"{docket}-{n:04d}",
+                "docket_id": docket,
+                "document_type": "Rule",
+                "title": f"Copy of {number}",
+                "posted_date": "2024-03-01",
+                "fr_doc_num": number,
+            }
+            for n, (docket, number) in enumerate(documents, start=1)
+        ],
+    )
+    _fr_rows(
+        root,
+        [
+            {"publication_date": "2024-02-01", "document_type": "Rule", "regulation_id_numbers_json": "[]", **row}
+            for row in register
+        ],
+    )
+    if build_targets:
+        build_rule_targets(root)
+    return pq.read_table(build_proceedings(root)).to_pylist()
+
+
+def _by_docket(proceedings):
+    return {docket: row for row in proceedings for docket in json.loads(row["docket_ids_json"])}
+
+
+def _docket_less(proceedings):
+    return {
+        json.loads(row["fr_document_numbers_json"])[0]: row for row in proceedings if row["docket_ids_json"] == "[]"
+    }
+
+
+def test_a_register_copy_joins_the_one_proceeding_its_copies_lie_in(tmp_path):
+    """Decision 56 (B): an unlinked Register rule joins its copies' one proceeding; copies in two unite none."""
+    proceedings = _register_fixture(
+        tmp_path,
+        dockets=[("EPA-2024-0001", None), ("EPA-2024-0002", None), ("EPA-2024-0003", None)],
+        documents=[("EPA-2024-0001", "2024-10001"), ("EPA-2024-0002", "2024-10002"), ("EPA-2024-0003", "2024-10002")],
+        register=[
+            {"document_number": "2024-10001", "title": "One copy; final rule"},
+            {"document_number": "2024-10002", "title": "Two copies; final rule"},
+        ],
+    )
+    by_docket = _by_docket(proceedings)
+    joined = by_docket["EPA-2024-0001"]
+    assert json.loads(joined["fr_document_ids_json"]) == ["2024-10001@2024-02-01"]
+    assert "2024-10001@2024-02-01" in {event["evidence_id"] for event in json.loads(joined["stage_events_json"])}
+    # Copies in two proceedings: each docket stays its own, and the rule its own docket-less one.
+    assert [json.loads(by_docket[d]["docket_ids_json"]) for d in ("EPA-2024-0002", "EPA-2024-0003")] == [
+        ["EPA-2024-0002"],
+        ["EPA-2024-0003"],
+    ]
+    assert set(_docket_less(proceedings)) == {"2024-10002"}
+
+
+def test_an_unlinked_register_rule_attaches_by_a_specific_rin(tmp_path):
+    """Decision 56 (E): a RIN one docketed proceeding alone holds attaches; shared and X RINs do not."""
+    proceedings = _register_fixture(
+        tmp_path,
+        dockets=[
+            ("DOT-2024-0001", "2120-AA01"),
+            ("DOT-2024-0002", "2120-AA02"),
+            ("DOT-2024-0003", "2120-AA02"),
+            ("NOAA-NMFS-2024-0004", "0648-XC39"),
+            ("DOT-2024-0005", "2120-AA05"),
+        ],
+        register=[
+            {"document_number": "2024-20001", "regulation_id_numbers_json": '["2120-AA01"]'},
+            {"document_number": "2024-20002", "regulation_id_numbers_json": '["2120-AA02"]'},
+            {"document_number": "2024-20003", "regulation_id_numbers_json": '["0648-XC39"]'},
+            {"document_number": "2024-20004", "regulation_id_numbers_json": '["2120-AA01", "2120-AA05"]'},
+        ],
+    )
+    attached = _by_docket(proceedings)["DOT-2024-0001"]
+    assert json.loads(attached["fr_document_ids_json"]) == ["2024-20001@2024-02-01"]
+    assert attached["current_stage"] == "final"
+    # Held by two proceedings, an X code, or specific RINs pointing to two: each stays apart.
+    assert set(_docket_less(proceedings)) == {"2024-20002", "2024-20003", "2024-20004"}
+
+
+def test_a_rin_taken_in_with_a_register_document_attracts_no_other(tmp_path):
+    """Owner rulings on decision 56 (E): a proceeding holds a RIN only through docket-side evidence.
+
+    USCG-2000-7206, a zebra-mussel docket, took in one linked safety-zone rule stating USCG's
+    umbrella RIN 2115-AA97 and the part it amends (33 CFR 165), and drew the 1,016 other
+    unlinked rules stating it. rule_targets is built from the same inputs, so the link reaches
+    the docket as an fr_cfr_ref row carrying 2115-AA97: that row holds nothing (review 2b), and
+    nor does a RIN an attached document brings. A copy's RINs, which rule_targets writes as its
+    docket's document_fr_doc row, do hold: the owner kept them.
+    """
+    d = "@2024-02-01"
+    proceedings = _register_fixture(
+        tmp_path,
+        dockets=[("USCG-2000-7206", None), ("USCG-2024-0001", "1625-AA01"), ("USCG-2024-0002", None)],
+        documents=[("USCG-2024-0002", "2024-60005")],
+        links=[("USCG-2000-7206", "2024-60001")],
+        build_targets=True,
+        register=[
+            {
+                "document_number": "2024-60001",
+                "regulation_id_numbers_json": '["2115-AA97"]',
+                "cfr_references_json": '[{"title": 33, "part": 165}]',
+            },
+            {"document_number": "2024-60002", "regulation_id_numbers_json": '["2115-AA97"]'},
+            # Attaches by its specific 1625-AA01 and brings 1625-AA99 along ...
+            {"document_number": "2024-60003", "regulation_id_numbers_json": '["1625-AA01", "1625-AA99"]'},
+            # ... which draws no document after it.
+            {"document_number": "2024-60004", "regulation_id_numbers_json": '["1625-AA99"]'},
+            {"document_number": "2024-60005", "regulation_id_numbers_json": '["2115-AA98"]'},
+            {"document_number": "2024-60006", "regulation_id_numbers_json": '["2115-AA98"]'},
+        ],
+    )
+    targets = {
+        (r["docket_id"], r["rin"], r["source"]) for r in pq.read_table(tmp_path / "rule_targets.parquet").to_pylist()
+    }
+    assert ("USCG-2000-7206", "2115-AA97", "fr_cfr_ref") in targets, "the link's RIN reaches rule_targets"
+    assert ("USCG-2024-0002", "2115-AA98", "document_fr_doc") in targets, "so does the copy's"
+    by_docket = _by_docket(proceedings)
+    joins = {
+        docket: {join["fr_document_id"]: join for join in json.loads(row["fr_document_joins_json"])}
+        for docket, row in by_docket.items()
+    }
+    assert {docket: sorted(joined) for docket, joined in joins.items()} == {
+        "USCG-2000-7206": [f"2024-60001{d}"],
+        "USCG-2024-0001": [f"2024-60003{d}"],
+        "USCG-2024-0002": [f"2024-60005{d}", f"2024-60006{d}"],
+    }
+    assert joins["USCG-2024-0002"][f"2024-60006{d}"]["holder_sources"] == ["rule_targets:document_fr_doc"]
+    # The RINs taken in stay recorded on the proceedings that took them in.
+    assert "2115-AA97" in json.loads(by_docket["USCG-2000-7206"]["rins_json"])
+    assert "1625-AA99" in json.loads(by_docket["USCG-2024-0001"]["rins_json"])
+    assert set(_docket_less(proceedings)) == {"2024-60002", "2024-60004"}
+
+
+def test_a_copy_in_a_feed_docket_counts_toward_no_proceeding(tmp_path):
+    """Decision 56 (B): only copies in trusted, non-feed dockets count, so a feed's copy splits nothing.
+
+    A feed docket forms a proceeding only on a RIN of its own (decision 32 as amended); the rule
+    it posts still joins the one other proceeding its copies lie in.
+    """
+    proceedings = _register_fixture(
+        tmp_path,
+        dockets=[("EPA_FRDOC_0001", "2060-AA09"), ("EPA-2024-0001", None)],
+        documents=[("EPA_FRDOC_0001", "2024-90001"), ("EPA-2024-0001", "2024-90001")],
+        register=[{"document_number": "2024-90001", "title": "Posted in a feed and filed in its docket; final rule"}],
+    )
+    by_docket = _by_docket(proceedings)
+    assert set(by_docket) == {"EPA_FRDOC_0001", "EPA-2024-0001"}
+    assert json.loads(by_docket["EPA-2024-0001"]["fr_document_joins_json"]) == [
+        {"fr_document_id": "2024-90001@2024-02-01", "joined_by": "fr_copy"}
+    ]
+    assert json.loads(by_docket["EPA_FRDOC_0001"]["fr_document_ids_json"]) == []
+    assert _docket_less(proceedings) == {}
+
+
+def test_a_docketed_proceeding_keeps_its_own_agency_code(tmp_path):
+    """Decision 56 (C) is for docket-less proceedings: a docketed one keeps its dockets' and documents' code."""
+    nsf = json.dumps([{"id": 366, "name": "National Science Foundation", "parent_id": None}])
+    proceedings = _register_fixture(
+        tmp_path,
+        dockets=[("EPA-2024-0001", "2060-AA01")],  # the fixture's dockets are EPA's
+        links=[("EPA-2024-0001", "2024-91001"), ("EPA-2024-0001", "2024-91002")],
+        register=[
+            {"document_number": "2024-91001", "agencies_json": nsf},
+            {"document_number": "2024-91002", "agencies_json": nsf},
+            {"document_number": "2024-91003", "agencies_json": nsf, "regulation_id_numbers_json": '["2060-AA01"]'},
+            {"document_number": "2024-91004", "agencies_json": nsf},
+        ],
+    )
+    (docketed,) = [row for row in proceedings if row["docket_ids_json"] != "[]"]
+    assert len(json.loads(docketed["fr_document_ids_json"])) == 3, "two linked, one attached by its RIN"
+    assert docketed["agency_code"] == "EPA", "its Register documents' agency, three to one, changes nothing"
+    assert _docket_less(proceedings)["2024-91004"]["agency_code"] == "NSF"
+
+
+def test_a_non_noaa_x_code_decides_nothing_and_makes_no_rin_specific(tmp_path):
+    """Decision 61, extended to every agency: NTIA's 0660-XC00 founds nothing and points nowhere.
+
+    On the 2026-09-26 parents FIRSTNET-2017-0001 held 0660-XC00 through a document of its own
+    and drew 15 unrelated NTIA notices and rules that stated it.
+    """
+    proceedings = _register_fixture(
+        tmp_path,
+        dockets=[("NTIA-2024-0001", "0660-XC00", "Nonrulemaking"), ("FIRSTNET-2017-0001", "0660-XC00")],
+        register=[
+            {"document_number": "2024-70001", "document_type": "Notice", "regulation_id_numbers_json": '["0660-XC00"]'},
+            {"document_number": "2024-70002", "regulation_id_numbers_json": '["0660-XC00"]'},
+        ],
+    )
+    by_docket = _by_docket(proceedings)
+    # The Nonrulemaking docket's X code makes it no action docket; the Rulemaking one stands by its type.
+    assert set(by_docket) == {"FIRSTNET-2017-0001"}
+    assert json.loads(by_docket["FIRSTNET-2017-0001"]["rins_json"]) == ["0660-XC00"], "still recorded"
+    assert json.loads(by_docket["FIRSTNET-2017-0001"]["fr_document_ids_json"]) == []
+    # The Notice with only the code founds nothing; the Rule stands alone by its type.
+    assert set(_docket_less(proceedings)) == {"2024-70002"}
+
+
+def test_each_register_document_says_how_it_joined(tmp_path):
+    """fr_document_joins_json: one entry per Register document; stage events carry only joined_by."""
+    proceedings = _register_fixture(
+        tmp_path,
+        dockets=[("EPA-2024-0001", "2060-AA01"), ("EPA-2024-0002", None)],
+        documents=[("EPA-2024-0001", "2024-80002")],
+        links=[("EPA-2024-0002", "2024-80001"), ("EPA-2024-0002", "2024-80008")],
+        rule_targets=[
+            ("EPA-2024-0001", "2060-AA01", "document_fr_doc"),
+            ("EPA-2024-0001", "2060-AA07", "document_rin"),
+            ("EPA-2024-0002", "2060-AA05", "fr_cfr_ref"),
+        ],
+        register=[
+            {"document_number": "2024-80001", "title": "Linked; final rule"},
+            {"document_number": "2024-80001", "title": "Linked; final rule"},  # the same row twice
+            {"document_number": "2024-80002", "title": "Copied; final rule"},
+            {"document_number": "2024-80003", "regulation_id_numbers_json": '["2060-AA01"]'},
+            {"document_number": "2024-80004"},
+            # Its RIN only a link's fr_cfr_ref row puts on a docket: it points nowhere (review 2b).
+            {"document_number": "2024-80005", "regulation_id_numbers_json": '["2060-AA05"]'},
+            # No stage: a Notice that acts by its RIN.
+            {"document_number": "2024-80006", "document_type": "Notice", "regulation_id_numbers_json": '["2060-AA07"]'},
+            # Two RINs, each this proceeding's alone.
+            {"document_number": "2024-80007", "regulation_id_numbers_json": '["2060-AA07", "2060-AA01"]'},
+            # No action evidence at all, named by a docket link.
+            {"document_number": "2024-80008", "document_type": "Notice"},
+        ],
+    )
+    for row in proceedings:
+        # One entry per Register document the proceeding holds, in id order.
+        joins = [join["fr_document_id"] for join in json.loads(row["fr_document_joins_json"])]
+        assert joins == json.loads(row["fr_document_ids_json"])
+    joins = {
+        join.pop("fr_document_id").removesuffix("@2024-02-01"): join
+        for row in proceedings
+        for join in json.loads(row["fr_document_joins_json"])
+    }
+    rule_targets_copy = "rule_targets:document_fr_doc"
+    assert joins == {
+        "2024-80001": {"joined_by": "fr_docket_link"},
+        "2024-80002": {"joined_by": "fr_copy"},
+        "2024-80003": {
+            "joined_by": "specific_rin",
+            "joined_rins": ["2060-AA01"],
+            "holder_sources": ["docket_rin", rule_targets_copy],
+        },
+        "2024-80004": {"joined_by": "fr_document"},
+        "2024-80005": {"joined_by": "fr_document"},
+        "2024-80006": {"joined_by": "specific_rin", "joined_rins": ["2060-AA07"], "holder_sources": ["document_rin"]},
+        "2024-80007": {
+            "joined_by": "specific_rin",
+            "joined_rins": ["2060-AA01", "2060-AA07"],
+            "holder_sources": ["docket_rin", "document_rin", rule_targets_copy],
+        },
+        "2024-80008": {"joined_by": "fr_docket_link"},
+    }
+    events = [event for row in proceedings for event in json.loads(row["stage_events_json"])]
+    assert {tuple(sorted(event)) for event in events} == {
+        ("effective_date", "event_kind", "evidence_id", "joined_by", "source", "stage")
+    }, "events carry only joined_by; the detail lives in fr_document_joins_json"
+    assert {event["evidence_id"].removesuffix("@2024-02-01"): event["joined_by"] for event in events} == {
+        "EPA-2024-0001-0001": "docket",
+        "2024-80001": "fr_docket_link",
+        "2024-80002": "fr_copy",
+        "2024-80003": "specific_rin",
+        "2024-80004": "fr_document",
+        "2024-80005": "fr_document",
+        "2024-80007": "specific_rin",
+    }
+    assert len(events) == 7, "the same document joined the same way is one event"
+    (linked,) = [row for row in proceedings if row["docket_ids_json"] == '["EPA-2024-0002"]']
+    assert "2060-AA05" in json.loads(linked["rins_json"]), "the fr_cfr_ref row's RIN stays recorded"
+
+
+def test_a_docket_less_proceeding_takes_its_register_agency(tmp_path):
+    """Decision 56 (C): one Regulations.gov code for a single-agency row; none for a joint one."""
+    epa = {"id": 145, "name": "Environmental Protection Agency", "parent_id": None}
+    nsf = {"id": 366, "name": "National Science Foundation", "parent_id": None}
+    proceedings = _register_fixture(
+        tmp_path,
+        dockets=[],
+        register=[
+            # The Register's agencies_json is a JSON string, as the source column stores it.
+            {"document_number": "2024-30001", "agencies_json": json.dumps([epa])},
+            {"document_number": "2024-30002", "agencies_json": json.dumps([epa, nsf])},
+        ],
+    )
+    docket_less = _docket_less(proceedings)
+    assert (docket_less["2024-30001"]["agency_code"], docket_less["2024-30002"]["agency_code"]) == ("EPA", None)
+
+
+def test_register_documents_join_and_attach_without_merging_a_docketed_proceeding(tmp_path):
+    """Decision 33 under 56: B and E add Register evidence but change no docketed id or docket set."""
+    dockets = [("EPA-2024-0001", "2060-AA01"), ("EPA-2024-0002", "2060-AA02"), ("EPA-2024-0003", "2060-AA02")]
+    documents = [("EPA-2024-0001", "2024-40001"), ("EPA-2024-0002", "2024-40002"), ("EPA-2024-0003", "2024-40002")]
+    register = [
+        {"document_number": "2024-40001"},  # one copy: joins EPA-2024-0001
+        {"document_number": "2024-40002"},  # copies in two: stays
+        {"document_number": "2024-40003", "regulation_id_numbers_json": '["2060-AA01"]'},  # specific: attaches
+        {"document_number": "2024-40004", "regulation_id_numbers_json": '["2060-AA02"]'},  # shared: stays
+        # One specific RIN beside a shared one: attaches to EPA-2024-0001.
+        {"document_number": "2024-40005", "regulation_id_numbers_json": '["2060-AA01", "2060-AA02"]'},
+    ]
+
+    def docketed(proceedings):
+        return {(row["proceeding_id"], row["docket_ids_json"]) for row in proceedings if row["docket_ids_json"] != "[]"}
+
+    with_register = _register_fixture(tmp_path / "with", dockets=dockets, documents=documents, register=register)
+    without = _register_fixture(tmp_path / "without", dockets=dockets, documents=documents)
+    assert docketed(with_register) == docketed(without)
+    assert {docket_ids for _, docket_ids in docketed(without)} == {f'["{docket}"]' for docket, _ in dockets}
+    assert set(_docket_less(with_register)) == {"2024-40002", "2024-40004"}
 
 
 def _identity_fixture(tmp_path, groups, prior):

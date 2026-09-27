@@ -43,9 +43,9 @@ OUTPUT = "rule_targets.parquet"
 # records the citation decision 32 counts, and unions no proceedings (decision 33 as amended).
 # v7 (one bump over published v6): a cited notice is action evidence by a rule stage only
 # through its own Rule / Proposed Rule type (the Register's 1994 Uncategorized rows by their
-# title suffix), and never through NOAA's 0648-X... codes (owner decisions 56, 58, 59, 61): on
-# the 2026-09-26 parents 1,682 (docket, citing document) typed citation edges leave and 31
-# appear, each in a docket that already had one.
+# title suffix), and never through an X-pattern code, NOAA's 0648-X... or any agency's (owner
+# decisions 56, 58, 59, 61 as extended): on the 2026-09-26 parents 1,694 of 618,829 rows leave,
+# all typed citation edges, and none appears (the NOAA-only rule had 1,651 leave).
 ACTOR_ID = "spicy-regs:rule-targets:v7"
 
 COLUMNS = (
@@ -309,7 +309,7 @@ def build_rule_targets(
         publication_date = row.get("publication_date")
         published = eastern_day_text(publication_date)
         # Action evidence as proceedings reads it, a RIN that decides action evidence
-        # (not NOAA's 0648-X… codes, decision 61) or a rule stage, whatever the CFR
+        # (not an X-pattern code, decision 61) or a rule stage, whatever the CFR
         # list holds; the citing documents' own references carry the typed edge.
         if documents and (
             any(action_evidence_rin(value) for value in raw_rins or ())

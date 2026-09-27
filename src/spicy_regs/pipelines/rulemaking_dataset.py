@@ -86,6 +86,7 @@ class RulemakingDatasetPipeline(MaterializedDatasetPipeline):
                 "docket_ids_json",
                 "regulation_id_numbers_json",
                 "cfr_references_json",
+                "agencies_json",
             ),
             "unified_agenda.parquet": (
                 "rin",

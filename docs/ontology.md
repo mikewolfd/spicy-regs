@@ -19,7 +19,10 @@ mapped no longer exist.
   `parse_cfr_citation` reads the Federal Register's structured CFR objects
   (the only form it states) and returns `CfrCitation` values;
   `canonical_cfr_iri` expands one; `normalize_rin` accepts only the published
-  RIN key `\d{4}-[A-Z]{2}\d{2}` and returns `None` otherwise;
+  RIN key `\d{4}-[A-Z]{2}\d{2}` and returns `None` otherwise, and
+  `action_evidence_rin` is the same less the X-pattern codes
+  (`\d{4}-X[A-Z]\d{2}`, NOAA's 0648-X… and every agency's), which stay recorded
+  but never decide action evidence (fork delivery decision 61);
   `normalize_regsgov_identifier` uppercases and keeps the agency-issued hyphen
   or underscore separators, and accepts no value whose syntax the publisher
   never issues. The prose citation grammar that lived here had no production
@@ -69,13 +72,32 @@ row folds to one per docket. Each entry of `fr_references_json` is one
 citation: the citing document (`evidence_id`), its literal number
 (`document_number`) and the one notice it resolves to (`candidate_ids`). The
 edge unites nothing (decision 33 as amended). When the docket's proceeding
-lists the notice in `fr_document_ids_json`, the two are one proceeding;
+lists the notice in `fr_document_ids_json`, the two are one proceeding, as
+they are when the notice names no trusted, non-catch-all docket and its citing
+documents in such dockets all lie in that one proceeding (decision 56);
 otherwise they are related by citation only, and the notice keeps its own
-proceeding. On the R5 re-audit's parents, 55,183 dockets cite 103,621 action
-notices in 116,642 pairs, 47,699 of them across proceedings. Uniting those
-would fuse 58,286 of 268,159 proceedings, the largest into one of 5,920
-dockets; catch-all `*_FRDOC_0001` dockets and omnibus notices do most of the
-gluing (receipt `typed-citation-join-2026-09-26/`).
+proceeding. On the R5 re-audit's parents,
+55,183 dockets cite 103,621 action notices in 116,642 pairs, 47,699 of them
+across proceedings. Uniting those would fuse 58,286 of 268,159 proceedings,
+the largest into one of 5,920 dockets; catch-all `*_FRDOC_0001` dockets and
+omnibus notices do most of the gluing (receipt `typed-citation-join-2026-09-26/`).
+
+`proceedings.fr_document_joins_json` says how each Register document the
+proceeding holds joined it, one entry per `fr_document_ids_json` id in the
+same order: `{fr_document_id, joined_by}`, where `joined_by` is
+`fr_docket_link` (through its own docket link, action evidence or not),
+`fr_copy` (through its Regulations.gov copies), `specific_rin` (through a RIN
+that only this docketed proceeding holds) or `fr_document` (the Register
+document a docket-less proceeding is). A `specific_rin` entry adds
+`joined_rins`, every RIN of the document that points here, and
+`holder_sources`, the docket-side evidence that holds them, by name:
+`docket_rin`, `document_rin` or `rule_targets:document_fr_doc`, the last a
+copy's RINs on its docket. A RIN the proceeding has only through a Register
+document it took in, by a docket link (which `rule_targets` restates as
+`fr_cfr_ref` rows) or by such an attachment, holds nothing (decision 56 and the
+owner's rulings on it). Each event in
+`stage_events_json` carries the same `joined_by`, or `docket` for a
+Regulations.gov document of the proceeding's own docket, and nothing more.
 
 The carrier is flat Apache Parquet, not JSON-LD: compact identifiers and enum
 values expand deterministically to Rulespec terms, but the tables claim

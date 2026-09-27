@@ -49,8 +49,10 @@ OUTPUT = "comment_periods.parquet"
 # proceeding, only its document's own, and one in a feed with no RIN of its own is
 # docket-anchored, as that proceeding goes, and re-keys with its evidence intact.
 # v10 (one bump over published v9): code unchanged; its rows move with proceedings v10
-# (owner decisions 56, 58-61): on the 2026-09-26 parents 286,065 -> 283,137 periods, as those of
-# removed proceedings re-key to what still anchors them or go when nothing does.
+# (owner decisions 56, 58-61): on the 2026-09-26 parents 286,065 -> 281,635 periods, as those of
+# removed proceedings re-key to what still anchors them or go when nothing does. A Register
+# document that joins a docketed proceeding (decision 56) re-keys or folds its periods there,
+# every evidence id kept.
 ACTOR_ID = "spicy-regs:comment-periods:v10"
 
 COLUMNS = (

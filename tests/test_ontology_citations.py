@@ -94,15 +94,16 @@ def test_rin_normalization(value, expected):
     assert normalize_rin(value) == expected
 
 
-def test_a_noaa_x_rin_stays_a_rin_but_decides_no_action_evidence():
-    """Decision 61: 0648-X… codes are recorded values and nothing more."""
+def test_an_x_pattern_code_stays_a_rin_but_decides_no_action_evidence():
+    """Decision 61, extended to every agency: NNNN-X… codes are recorded values and nothing more."""
     assert normalize_rin("0648-XC39") == "0648-XC39"
+    assert normalize_rin("0660-XC00") == "0660-XC00"
     assert action_evidence_rin("0648-XC39") is None
     assert action_evidence_rin("0648-Xz99") is None
+    assert action_evidence_rin("0660-XC00") is None, "NTIA's X code"
+    assert action_evidence_rin("6048-XB02") is None, "a mistyped NOAA prefix"
     assert action_evidence_rin("0648-AC64") == "0648-AC64", "NOAA's ordinary RINs still act"
-    assert action_evidence_rin("6048-XB02") == "6048-XB02", (
-        "other agencies' X-shaped RINs are the owner's call, not ours"
-    )
+    assert action_evidence_rin("0660-AA14") == "0660-AA14", "so do NTIA's"
     assert action_evidence_rin("2060AV16") is None
 
 

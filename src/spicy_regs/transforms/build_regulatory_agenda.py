@@ -45,9 +45,15 @@ RELATIONSHIPS_OUTPUT = "agenda_item_proceedings.parquet"
 # to 2120-AA64). Items a feed tracked keep their other links and count fewer (decision 32 as
 # amended 2026-09-26).
 # v6 (one bump over published v5): code unchanged; its rows move with proceedings v10. A
-# proceeding held only through NOAA's 0648-X… codes (owner decision 61) is no longer formed,
-# so its RIN links go (6,648 relationships on the 2026-09-26 parents, all 0648-X…) and the
-# items they tracked count fewer or become unresolved (1,658 items).
+# proceeding held only through X-pattern codes is no longer formed (owner decision 61, NOAA's
+# 0648-X… and as extended every agency's), so its RIN links go; and a Register document that
+# joins a docketed proceeding (decision 56) takes its RIN links along. On the 2026-09-26
+# parents decisions 58-61 alone took 6,648 relationships on 0648-X… codes from the published
+# snapshot and left 1,658 items counting fewer or unresolved. From there, this code removes
+# 25,465 relationships (22,204 on RINs, 2,750 on 0648-X… and 511 on other agencies' codes) and
+# adds 24,977 on the proceedings that now hold them, 488 fewer in all; 8,097 items that linked
+# several proceedings link one (unresolved to single_observed), and 119 that linked one link
+# none (single_observed to unresolved).
 ITEM_ACTOR_ID = "spicy-regs:regulatory-agenda-items:v6"
 RELATIONSHIP_ACTOR_ID = "spicy-regs:agenda-item-proceedings:v6"
 

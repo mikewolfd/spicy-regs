@@ -107,26 +107,30 @@ def register_states_type(document_type: object, title: object) -> bool:
     return True
 
 
+def copy_of(row: dict, fr_index: "FederalRegisterIndex") -> str | None:
+    """The one Register document a Regulations.gov document's own ``fr_doc_num`` resolves to, or ``None``."""
+    cited = row.get("fr_doc_num")
+    return resolved_id(fr_index.reference(str(cited))) if cited else None
+
+
 def document_rule_stage(
     row: dict,
-    fr_index: "FederalRegisterIndex",
+    register_copy: str | None,
     fr_stages: dict[str, str],
     fr_untyped: set[str] | frozenset[str] = frozenset(),
 ) -> str | None:
     """A Regulations.gov document's rule stage: the Register row's when it is a typed copy.
 
-    When the document's own ``fr_doc_num`` resolves, through the generation's index, to
-    exactly one Register document that states a type (:func:`register_states_type`), that
-    row's stage under :func:`register_rule_stage` wins — Regulations.gov's looser typing
-    loses (owner decision 60; on the 2026-09-26 parents 3,863 docketed proceedings hung only
-    on such copies, 3,857 of them "Rule"-typed copies of Register Notices). A copy of a
-    Register row that states no type (``fr_untyped``), and any other document, keeps its own
-    type as :func:`rule_stage` reads it (decision 60 as amended 2026-09-26).
+    ``register_copy`` is the document's :func:`copy_of`, resolved once by the caller. When
+    that Register document states a type (:func:`register_states_type`), its stage under
+    :func:`register_rule_stage` wins — Regulations.gov's looser typing loses (owner decision
+    60; on the 2026-09-26 parents 3,863 docketed proceedings hung only on such copies, 3,857
+    of them "Rule"-typed copies of Register Notices). A copy of a Register row that states
+    no type (``fr_untyped``), and any other document, keeps its own type as
+    :func:`rule_stage` reads it (decision 60 as amended 2026-09-26).
     """
-    cited = row.get("fr_doc_num")
-    if cited and (identity := resolved_id(fr_index.reference(str(cited)))) is not None:
-        if identity not in fr_untyped:
-            return fr_stages.get(identity)
+    if register_copy is not None and register_copy not in fr_untyped:
+        return fr_stages.get(register_copy)
     return rule_stage(row.get("document_type"), row.get("title"))
 
 
