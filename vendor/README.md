@@ -5,13 +5,15 @@ The optional `source-readers` extra enables the same readers for package install
 its wheels must be supplied explicitly until they are published in a registry.
 Base CLI and MCP installs do not require them.
 
-- `spicy_docs-0.45.0`: released by spicy-stack-11 from SpicyDocs `main` at `df800d7`, September 27,
-  2026: **1,676,528 bytes**, SHA-256
-  `8d73dfa7d2c7fedf5de8e12eb25edbb3a972fb914c72f9bd3fcff7daec1abbe3`, byte-identical across two builds
+- `spicy_docs-0.45.1`: released by spicy-stack-11 from SpicyDocs `main` at `bdbdaef`, September 27,
+  2026: **1,676,649 bytes**, SHA-256
+  `a63f82db3d18c74a349a0038dc8d252b9c8e2bc5c8a606fbbd0617814bde47ac`, byte-identical across two builds
   (rechecked on adoption). On top of 0.44.0 (typed table contracts and the attribute projections) it
-  describes the comment-window flags as version state, breaks a Mirrulations tie by S3 write time
-  (`reader_factory(with_keys=True)`), and takes each derived-text attachment from the best-ranked tool
-  that has it (decision 41). Earlier builds and their records are in this file's history.
+  describes the comment-window flags as version state, takes each derived-text attachment from the
+  best-ranked tool that has it (decision 41), and breaks a Mirrulations tie by S3 write time: the
+  keyed reads are `MirrulationsReader.iter_keyed_records()`, and `iter_records()` stays bare (0.45.0
+  typed both as one union, which `ty check` refused). Earlier builds and their records are in this
+  file's history.
 
 - `rulespec_artifacts-1.1.2`: exact dependency of SpicyDocs 0.39.2, built from Rulespec
   `23d5f2d98973b2a7f1bf7ce4c9c7a786a4f369ab` (`packages/rulespec-artifacts` of a whole-repo
