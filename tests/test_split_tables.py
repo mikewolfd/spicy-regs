@@ -7,9 +7,10 @@ import httpx
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
+from rulespec_artifacts import canonical_json_bytes
 
 from spicy_regs import mcp_server
-from spicy_regs.generation_audit import Declaration, audit
+from spicy_regs.generation_audit import Declaration, PublicBase, _consistency, _Run, audit
 from spicy_regs.generations import build_generation
 from spicy_regs.sources import publication as pub, r2
 from tests.generation_fakes import Store
@@ -19,6 +20,7 @@ from tests.test_generation_mcp import connection_fixture
 DIGEST = "sha256:" + "b" * 64
 PREFIX = f"generations/bills/{'b' * 64}"
 COLUMNS = [["bill_id", "VARCHAR"], ["congress", "VARCHAR"], ["body", "VARCHAR"]]
+DECLARED = {"bill_sections": Declaration(tuple(map(tuple, COLUMNS)), ("bill_id",), "test")}
 
 
 def _member(congress: str, rows: int, size: int) -> dict:
@@ -58,7 +60,10 @@ def test_a_split_table_resolves_to_its_members_and_a_single_table_to_itself():
     {"members": [_member("118", 2, 10), {**_member("119", 1, 5), "partition": {"congress": "118"}}]},
     {"members": [_member("118", 2, 10), {**_member("119", 1, 5), "key": "bill_sections/congress=119/x.parquet"}]},
     {"members": [_member("118", 3, 15), _member("118", 0, 0)]},  # one key twice
-    {"members": [{**_member("118", 3, 15), "partition": {"congress": "../118"}}]},
+    {"members": [_member("../118", 3, 15)]},  # its key spells the value; only the value grammar refuses
+    {"columns": [*COLUMNS, ["../x", "VARCHAR"]], "partitionColumns": ["../x"],  # a column spells a key directory
+     "members": [{**_member("118", 3, 15), "key": "bill_sections/../x=118/part-000000.parquet",
+                  "partition": {"../x": "118"}}]},
 ])
 def test_a_split_table_whose_members_do_not_add_up_or_name_their_partition_refuses(broken):
     with pytest.raises(pub.PublicationError, match="Invalid publication index"):
@@ -182,11 +187,9 @@ def test_the_audit_reconciles_a_split_table_member_by_member(tmp_path):
     first = _publish(tmp_path, store, "first", _outputs(tmp_path / "out1", {"118": ["118-hr1"], "119": ["119-s5"]}))
     _publish(tmp_path, store, "second", _outputs(tmp_path / "out2", {"118": ["118-hr1"], "119": ["119-s5", "119-s6"]}),
              prior=first)
-    declared = {"bill_sections": Declaration((("bill_id", "VARCHAR"), ("congress", "VARCHAR"), ("body", "VARCHAR")),
-                                             ("bill_id",), "test")}
 
     report = audit(public_base(store, tmp_path / "public"), family="bills", table="bill_sections",
-                   declarations=declared)
+                   declarations=DECLARED)
 
     table = report["sections"]["publication"]["tables"]["bill_sections.parquet"]
     assert (table["index_equals_manifest"], table["index_equals_root"], table["observed_bytes_equal_index"]) == (
@@ -198,12 +201,74 @@ def test_the_audit_reconciles_a_split_table_member_by_member(tmp_path):
     assert report["findings"] == []
 
 
+def test_the_audit_finds_one_split_member_the_index_misstates_and_retains_version_2(tmp_path):
+    """Only the second member's pin is wrong, so a check reading the first member alone would pass."""
+    store = Store()
+    _publish(tmp_path, store, "first", _outputs(tmp_path / "out1", {"118": ["118-hr1"], "119": ["119-s5"]}))
+    index = pub.parse_index(store.objects[pub.INDEX_V2_KEY])
+    index["families"]["bills"]["tables"]["bill_sections.parquet"]["members"][1]["sha256"] = "sha256:" + "0" * 64
+    store.objects[pub.INDEX_V2_KEY] = canonical_json_bytes(index)
+    retained = tmp_path / "retained"
+
+    report = audit(public_base(store, tmp_path / "public"), family="bills", table="bill_sections",
+                   declarations=DECLARED, retain=retained)
+
+    table = report["sections"]["publication"]["tables"]["bill_sections.parquet"]
+    assert (table["index_equals_manifest"], table["index_equals_root"], table["observed_bytes_equal_index"]) == (
+        False, True, False)
+    assert {f["code"] for f in report["findings"]} >= {"index-equals-manifest-false",
+                                                       "observed-bytes-equal-index-false"}
+    assert (retained / pub.INDEX_V2_KEY).read_bytes() == store.objects[pub.INDEX_V2_KEY]
+    assert not (retained / pub.INDEX_KEY).exists()
+
+
+def test_the_audit_rereads_the_etag_of_every_member_of_both_generations():
+    """ETag stability is checked per stored file, so a split member of the current or prior generation is not skipped."""
+    current = _parse(_index())["families"]["bills"]
+    prior = {**current, "prefix": f"generations/bills/{'a' * 64}"}
+    locations = [f"{entry['prefix']}/{member['key']}" for entry in (current, prior)
+                 for member in entry["tables"]["bill_sections.parquet"]["members"]]
+    moved = {locations[1], locations[2]}
+    base = PublicBase("https://data.test", client=httpx.Client(transport=httpx.MockTransport(
+        lambda request: httpx.Response(200, headers={"etag": '"moved"' if request.url.path[1:] in moved else '"e"'}))))
+    base.receipts = [{"key": location, "etag": '"e"', "complete": True} for location in locations]
+    run = _Run(samples=1, secrets={})
+
+    result = _consistency(base, current, prior, ["bill_sections.parquet"], run)
+
+    assert result["etag_stable"] == {location: location not in moved for location in locations}
+    assert sorted(f["location"] for f in run.findings) == sorted(moved)
+
+
 def test_the_shrink_guard_sums_a_split_tables_members(tmp_path):
+    """Every partition remains, but the one holding nearly all the table's bytes shrinks."""
     store = Store()
     many = [f"119-hr{n}" for n in range(3000)]
     first = _publish(tmp_path, store, "first", _outputs(tmp_path / "out1", {"118": ["118-hr1"], "119": many}))
     with pytest.raises(RuntimeError, match="shrink"):
-        _publish(tmp_path, store, "second", _outputs(tmp_path / "out2", {"118": ["118-hr1"]}), prior=first)
+        _publish(tmp_path, store, "second", _outputs(tmp_path / "out2", {"118": ["118-hr1"], "119": ["119-hr1"]}),
+                 prior=first)
+
+
+def test_a_split_table_keeps_every_partition_its_prior_generation_holds(tmp_path):
+    """A forgotten partition refuses even when the rest outweighs the shrink ratio; part files and new ones may change."""
+    store = Store()
+    many = [f"119-hr{n}" for n in range(3000)]
+    first = _publish(tmp_path, store, "first", _outputs(tmp_path / "out1", {"118": ["118-hr1"], "119": many}))
+    with pytest.raises(pub.PublicationError, match="lacks partitions its prior generation holds: congress=118"):
+        _publish(tmp_path, store, "second", _outputs(tmp_path / "out2", {"119": many}), prior=first)
+
+    out = tmp_path / "out3"
+    _sections(out, {"118": ["118-hr1"], "120": ["120-hr1"]})
+    (out / "bill_sections" / "congress=119").mkdir()
+    for part, bills in enumerate((many[:1500], many[1500:])):
+        pq.write_table(pa.table({"bill_id": bills, "congress": ["119"] * len(bills), "body": ["b"] * len(bills)}),
+                       out / "bill_sections" / "congress=119" / f"part-{part:06d}.parquet")
+    third = _publish(tmp_path, store, "third", _outputs(out), prior=first)
+    members = third["families"]["bills"]["tables"]["bill_sections.parquet"]["members"]
+    assert [member["key"].split("/", 1)[1] for member in members] == [
+        "congress=118/part-000000.parquet", "congress=119/part-000000.parquet", "congress=119/part-000001.parquet",
+        "congress=120/part-000000.parquet"]
 
 
 @pytest.mark.parametrize(("layout", "message"), [

@@ -314,12 +314,14 @@ Probe `scripts/probe_multifile.py` (`probe-multifile.yml`), runs 36288634064 and
 
 ## 7. Implementation (publication side, 2026-09-27)
 
-What the code settled, where it refines §4. Tests: `tests/test_split_tables.py`.
+What the code settled, where it refines §4. Tests: `tests/test_split_tables.py`, and for the pointers
+`tests/test_generation_publication.py`.
 
 - **Index shape.** A single-file table's v2 entry is byte-identical to its v1 entry. Only a split table carries
   `members` (and `partitionColumns`), and it has no table-level `sha256`. `derive_v1` drops split tables, and any
   family left without a table. `parse_index` refuses a v1 index listing a split table, members whose counts do not
-  sum to the table's, and a member key that does not spell its partition.
+  sum to the table's, a member key that does not spell its partition, and a partition column that is not a plain
+  name (the column spells a directory of every member key).
 - **Pointer order.** v2 is the pointer, written under its own CAS. v1 is then written as `derive_v1` of the stored
   v2 under v1's CAS. v1's token is read before v2, so a raced v1 write rederives from the newer v2.
   - Once v2 is written the generation is published. A failed v1 write (transport, or a v1 that kept moving) is
@@ -342,8 +344,25 @@ What the code settled, where it refines §4. Tests: `tests/test_split_tables.py`
   for a split table refuses.
 - **Checks, once each.** Each member's partition values are checked against its key once, at build; digests pin
   those bytes after that. Verification checks each member's columns and rows. The shrink guard runs per table, on
-  the sum of member bytes; it guards bytes as it always has, not rows as §4.4 proposed. A vanished member is not
-  journaled separately: the per-table guard bounds the loss, and nothing reads such a journal.
+  the sum of member bytes; it guards bytes as it always has, not rows as §4.4 proposed.
+- **Partition guard, not a journal.** Every partition (its column-value tuple) of a split table's prior generation
+  must reappear in the new one; part files within a partition may change, and new partitions may join. A missing
+  one refuses, naming it. This replaces §4.4's journaled member retirement: the audit does read `rows-retired`, but
+  what goes wrong in practice is a build forgetting a partition, which the shrink guard misses whenever the rest
+  outweighs its ratio. No declaration admits a dropped partition yet; one is added when a real case needs it.
+- **Builder rule.** A partition is rewritten by replacing its whole `<col>=<value>/` directory. A prior part file
+  left beside new ones would publish its rows twice, and no check sees that.
 - **Retention and audit.** Both read v2. The audit reconciles a split table member by member (index, manifest,
-  observed bytes), reads it as one relation for conservation, and compares member digests for "bytes equal".
+  observed bytes, ETag stability), reads it as one relation for conservation, and compares member digests for
+  "bytes equal". It retains the index under the key it read (`publication.v2.json` or `publication.json`).
+- **Follow-up (pre-existing).** Each member is decoded in full three times: at build, by the build's own
+  `verify_generation`, and again when `publish_generation` verifies the directory. §4.4 and `operations.md` §1b(b)
+  ask for one local verification; that change is open.
 
+**Rollout.**
+
+1. Merge only with no publish in flight.
+2. The first publish afterwards creates v2 from v1, with the bootstrap fold.
+3. Redeploy the fork MCP, a Cloudflare Worker from `deploy/cloudflare`, before any table first publishes split.
+   Worker 925124f0 runs 2963d77 and reads only `publication.json`, so a split table would disappear from it.
+4. DocSpec reads v2 before any family it admits splits (§4.5 step 2).

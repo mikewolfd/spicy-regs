@@ -99,6 +99,9 @@ def download_members(remote_key: str, directory: Path) -> list[Path]:
     A split table's members land at their ``<table>/<col>=<value>/part-NNNNNN.parquet`` keys, the layout
     ``build_generation`` takes back, so an unchanged partition republishes as a server-side copy.
     A single-file table lands at ``<table>.parquet``. Raises when R2 is unconfigured or the table is unpublished.
+
+    Rewrite a partition by replacing its whole ``<col>=<value>/`` directory: a prior part file left beside the new
+    ones would publish its rows a second time.
     """
     from spicy_regs.sources.publication import current_index, table_members
 

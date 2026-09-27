@@ -91,11 +91,15 @@ def _counts(value: Mapping) -> bool:
 
 
 def _split_table(key: str, table: Mapping) -> None:
-    """A split table: its members partition it by declared columns, and their counts sum to the table's."""
+    """A split table: its members partition it by declared columns, and their counts sum to the table's.
+
+    A partition column is a plain name, since it spells a directory of every member key.
+    """
     if set(table) != {"byteSize", "rows", "columns", "partitionColumns", "members"} or not _counts(table):
         raise ValueError("invalid split table descriptor")
     by = table["partitionColumns"]
     if (not isinstance(by, list) or not by or len(set(by)) != len(by)
+            or not all(isinstance(column, str) and _NAME.fullmatch(column) for column in by)
             or not set(by) <= {column[0] for column in table["columns"]}):
         raise ValueError("invalid partition columns")
     members, seen = table["members"], set()
@@ -844,9 +848,13 @@ def _publish_verified_generation(
         tables = table_entries(artifact.root["spec"]["tables"], members)
     except ValueError as exc:
         raise PublicationError(str(exc)) from exc
-    # The shrink guard runs per table: one partition of a split table may legitimately shrink.
+    # The guards run per table: a partition of a split table may legitimately shrink, but none may vanish,
+    # since a build that forgot a partition would otherwise pass whenever the rest outweighs the shrink ratio.
     for key, table in tables.items():
         prior = table_descriptor(index, key)
+        if missing := _partitions(prior) - _partitions(table):
+            raise PublicationError(f"{key} lacks partitions its prior generation holds: "
+                                   + ", ".join("/".join(f"{c}={v}" for c, v in p) for p in sorted(missing)))
         old_size = prior["byteSize"] if prior else _get_remote_size(client, bucket, key)
         _assert_upload_safe(table["byteSize"], old_size, key)
     old_family = index["families"].get(family)
@@ -915,6 +923,11 @@ def _publish_verified_generation(
         index, etag, _ = _stored_index(client, bucket)
         _assert_family_unchanged(index, prior_index, family)
     raise PublicationError("Publication changed concurrently; retry from a fresh snapshot")
+
+
+def _partitions(table: Mapping | None) -> set[tuple[tuple[str, str], ...]]:
+    """The partitions a split table's members hold, as ``(column, value)`` tuples; none for a single file."""
+    return {tuple(member["partition"].items()) for member in (table or {}).get("members", ())}
 
 
 def _assert_family_unchanged(index: Mapping, prior_index: Mapping, family: str) -> None:

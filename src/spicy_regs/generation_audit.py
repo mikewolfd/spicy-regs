@@ -308,10 +308,15 @@ def _one(con: duckdb.DuckDBPyConnection, sql: str, params: Sequence | Mapping | 
     return row
 
 
-def _paths(base: PublicBase, entry: Mapping, key: str) -> list[str]:
-    """Where ``key`` under ``entry``'s prefix is read from: every member of a split table, else the one file."""
+def _locations(entry: Mapping, key: str) -> list[str]:
+    """The published keys of table ``key`` under ``entry``'s prefix: every member of a split table, else the one file."""
     descriptor = entry["tables"].get(key) or {}
-    return [base.path(f"{entry['prefix']}/{member['key']}") for member in descriptor.get("members", [{"key": key}])]
+    return [f"{entry['prefix']}/{member['key']}" for member in descriptor.get("members", [{"key": key}])]
+
+
+def _paths(base: PublicBase, entry: Mapping, key: str) -> list[str]:
+    """Where table ``key`` of ``entry`` is read from."""
+    return [base.path(location) for location in _locations(entry, key)]
 
 
 def _parquet(base: PublicBase, entry: Mapping, key: str) -> str:
@@ -1117,7 +1122,7 @@ def _select(index: Mapping, family: str | None, table: str | None) -> tuple[str,
 
 
 def _consistency(base: PublicBase, entry: Mapping, prior: Mapping | None, keys: Sequence[str], run: _Run) -> dict:
-    """For an https base, each table's ETag after analysis against the ETag of its digest stream."""
+    """For an https base, each table file's ETag after analysis against the ETag of its digest stream."""
     if not base.remote:
         run.limits.append("The base is a local directory; HTTP transport and ETag stability were not exercised.")
         return {"checked": False}
@@ -1125,8 +1130,8 @@ def _consistency(base: PublicBase, entry: Mapping, prior: Mapping | None, keys: 
                       "analysis and compared with the digest stream's.")
     streamed = {receipt["key"]: receipt.get("etag") for receipt in base.receipts if receipt.get("complete")}
     stable = {}
-    for prefix in [entry["prefix"], *([prior["prefix"]] if prior else [])]:
-        for location in (f"{prefix}/{key}" for key in keys if f"{prefix}/{key}" in streamed):
+    for generation in [entry, *([prior] if prior else [])]:
+        for location in (at for key in keys for at in _locations(generation, key) if at in streamed):
             stable[location] = base.etag(location) == streamed[location]
             if not stable[location]:
                 run.finding("fail", "consistency", "etag-changed-during-audit", location=location)
