@@ -1,28 +1,62 @@
 """The Regulations.gov attribute tables: one mirror read, two rows, typed as the contract states (decisions 65-67)."""
 
-from datetime import UTC, datetime
+import random
+from datetime import UTC, datetime, timedelta
 
 import duckdb
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
+from spicy_docs.releases.observations import volatile_tie_choice
 from spicy_docs.schemas import COLUMN_TYPES, TABLE_CONTRACTS
+from spicy_docs.source_native.regulations_gov import (
+    VOLATILE_TIE_MARGIN_SECONDS as MARGIN,
+    docket_source_record_digest,
+    document_source_record_digest,
+)
+from spicy_docs.sources.mirrulations import KeyedPayload
 
 from spicy_regs.contract_types import DESCRIBED, arrow_schema, arrow_type
 from spicy_regs.pipelines import attributes_sweep
 from spicy_regs.pipelines.regulations import RegulationsPipeline
 from spicy_regs.pipelines.rollups.regulatory_base import DocketAttributesFamily, DocumentAttributesFamily
-from spicy_regs.transforms.regulations_attributes import TeeAttributes, merge_attribute_parts
+from spicy_regs.pipelines.staging import stage_agencies
+from spicy_regs.schemas import RECORD_TYPES
+from spicy_regs.transforms.regulations_attributes import (
+    ORDER_COLUMNS,
+    TeeAttributes,
+    _with_order_columns,
+    merge_attribute_parts,
+    newest_copy_sql,
+)
+
+#: A bulk-era write instant (2025-04-14) and one modifyDate the tied copies share.
+WRITTEN = datetime(2025, 4, 14, 5, 29, 57, tzinfo=UTC)
+MODIFIED = "2023-05-10T01:00:44Z"
 
 
 def _document(document_id: str, **attributes) -> dict:
     return {"data": {"id": document_id, "type": "documents", "attributes": attributes}}
 
 
-def _parts(tmp_path, table, payloads, *, batch_size=2):
+def _keyed(payload: dict, seconds: int | None = None) -> KeyedPayload:
+    """``payload`` as the keyed reader yields it, written ``seconds`` after WRITTEN (None: S3 omitted it)."""
+    written = None if seconds is None else WRITTEN + timedelta(seconds=seconds)
+    return KeyedPayload(f"raw-data/{payload['data']['id']}.json", written, payload)
+
+
+def _parts(tmp_path, table, records, *, batch_size=2):
+    keyed = [record if isinstance(record, KeyedPayload) else _keyed(record) for record in records]
     tee = TeeAttributes(table, tmp_path, batch_size=batch_size)
-    assert list(tee.apply(payloads)) == payloads, "every payload passes on unchanged"
+    assert list(tee.apply(keyed)) == [record.payload for record in keyed], "every bare payload passes on"
     return tee
+
+
+def _published(path, table):
+    """The table at ``path``, asserting it carries exactly the contract's columns, no ordering column."""
+    written = pq.read_table(path)
+    assert written.column_names == list(TABLE_CONTRACTS[table].columns)
+    return written
 
 
 @pytest.mark.parametrize("name", COLUMN_TYPES)
@@ -40,8 +74,7 @@ def test_the_tee_writes_each_records_typed_attribute_row_in_batches(tmp_path):
     (part,) = (tmp_path / "document_attributes").glob("*.parquet")
     table = pq.read_table(part)
     assert tee.rows_written == 5 and table.num_rows == 5
-    assert table.schema.remove(table.schema.get_field_index("_attributes_sha256")).remove(
-        table.schema.get_field_index("_modify_date")) == arrow_schema(TABLE_CONTRACTS["document_attributes"])
+    assert table.drop_columns(list(ORDER_COLUMNS)).schema == arrow_schema(TABLE_CONTRACTS["document_attributes"])
     row = table.to_pylist()[3]
     assert (row["document_id"], row["page_count"], row["open_for_comment"], row["topics"], row["first_name"]) == (
         "EPA-1-0003", 3, False, ["Air"], "Ada")
@@ -54,7 +87,7 @@ def test_merging_parts_over_a_prior_keeps_the_fresh_row_and_the_types(tmp_path):
     assert merge_attribute_parts("document_attributes", tmp_path / "first" / "document_attributes", None, prior) == 2
     _parts(tmp_path / "second", "document_attributes", [_document("B", pageCount=20), _document("C", pageCount=3)])
     assert merge_attribute_parts("document_attributes", tmp_path / "second" / "document_attributes", prior, prior) == 3
-    table = pq.read_table(prior)
+    table = _published(prior, "document_attributes")
     assert {r["document_id"]: r["page_count"] for r in table.to_pylist()} == {"A": 1, "B": 20, "C": 3}
     assert table.schema.field("page_count").type == pa.int32()
     assert table.schema.field("receive_date").type == pa.timestamp("us", tz="UTC")
@@ -75,11 +108,16 @@ def test_the_daily_etl_drops_attribute_rows_until_the_sweep_seeds_the_table(tmp_
 
 
 class _Reader:
-    def __init__(self, payloads, failed=()):
-        self.payloads, self.last_keys, self.failed_keys = payloads, [], list(failed)
+    """Serves ``records`` (payloads, or KeyedPayloads for a stated write) on both reader streams."""
+
+    def __init__(self, records, failed=()):
+        self.records, self.last_keys, self.failed_keys = records, [], list(failed)
 
     def iter_records(self):
-        yield from self.payloads
+        yield from (record.payload if isinstance(record, KeyedPayload) else record for record in self.records)
+
+    def iter_keyed_records(self):
+        yield from (record if isinstance(record, KeyedPayload) else _keyed(record) for record in self.records)
 
 
 def test_the_sweep_writes_both_tables_whole(tmp_path):
@@ -92,7 +130,9 @@ def test_the_sweep_writes_both_tables_whole(tmp_path):
     rows = attributes_sweep.sweep(tmp_path, agencies=["EPA", "FDA"],
                                   read_factory=lambda consumed: lambda agency, kind: _Reader(served[(agency, kind.name)]))
     assert rows == {"document_attributes": 3, "docket_attributes": 2}
-    assert pq.read_table(tmp_path / "docket_attributes.parquet").column("keywords").to_pylist() == [["air"], None]
+    assert _published(tmp_path / "docket_attributes.parquet", "docket_attributes").column(
+        "keywords").to_pylist() == [["air"], None]
+    _published(tmp_path / "document_attributes.parquet", "document_attributes")
     assert not (tmp_path / "attributes-staging").exists()
 
 
@@ -133,17 +173,94 @@ def test_the_families_publish_on_the_contracts_key():
     assert DocketAttributesFamily().key() == "docket_id"
 
 
-def test_a_duplicated_id_keeps_the_newest_modify_date_as_the_thin_table_does(tmp_path):
-    """The mirror can hold one id in two files; the pick must match ``merge_staging_files`` and repeat every run."""
-    older = _document("BIS-1-0001", pageCount=1, modifyDate="2024-01-01T00:00:00Z")
-    newer = _document("BIS-1-0001", pageCount=2, modifyDate="2025-01-01T00:00:00Z")
-    for order, name in (([older, newer], "a"), ([newer, older], "b")):
+def _pick(tmp_path, records) -> list[dict]:
+    """The published row(s) the merge keeps from ``records``, read in either order."""
+    picks = []
+    for name, order in (("forward", records), ("reverse", records[::-1])):
         _parts(tmp_path / name, "document_attributes", order, batch_size=1)
         out = tmp_path / f"{name}.parquet"
         merge_attribute_parts("document_attributes", tmp_path / name / "document_attributes", None, out)
-        table = pq.read_table(out)
-        assert table.column("page_count").to_pylist() == [2]
-        assert "_modify_date" not in table.column_names and "_attributes_sha256" not in table.column_names
+        picks.append(_published(out, "document_attributes").to_pylist())
+    assert picks[0] == picks[1], "the pick does not depend on read order"
+    return picks[0]
+
+
+def test_a_newer_modify_date_beats_any_write_time(tmp_path):
+    """The mirror can hold one id in two files; the newer version wins however long before the other it was written."""
+    older = _document("BIS-1-0001", pageCount=1, modifyDate="2024-01-01T00:00:00Z")
+    newer = _document("BIS-1-0001", pageCount=2, modifyDate="2025-01-01T00:00:00Z")
+    assert [row["page_count"] for row in _pick(tmp_path, [_keyed(older, 10 * MARGIN), _keyed(newer, 0)])] == [2]
+
+
+@pytest.mark.parametrize("apart", [MARGIN, MARGIN + 1])
+def test_a_tie_goes_to_the_newest_write_only_beyond_the_margin(tmp_path, apart):
+    """Copies tied on modifyDate that differ only in openForComment: at the margin (3600 s) the smaller record
+    digest wins; one second beyond it, the newest write wins. The smaller digest is the older write, so only the
+    margin decides."""
+    smaller, larger = sorted((_document("USA-2022-HQ-0007-0002", modifyDate=MODIFIED, openForComment=flag)
+                              for flag in (True, False)), key=document_source_record_digest)
+    (row,) = _pick(tmp_path, [_keyed(smaller, 0), _keyed(larger, apart)])
+    expected = larger if apart > MARGIN else smaller
+    assert row["open_for_comment"] is expected["data"]["attributes"]["openForComment"]
+
+
+def test_the_rule_chooses_as_spicy_docs_volatile_tie_choice_does(tmp_path):
+    """Random tied groups, including unstated writes, against SpicyDocs' own chooser (policy 1.3)."""
+    rng = random.Random(20260927)
+    offsets = [0, 1, 12, MARGIN - 1, MARGIN, MARGIN + 1, 2 * MARGIN, 2 * MARGIN + 1, 86_400]
+    rows, expected = [], {}
+    for group in range(3_000):
+        base = rng.choice([0, 1_744_641_653])
+        copies = [(ordinal, None if rng.random() < 0.08 else base + rng.choice(offsets), f"sha256:{rng.getrandbits(64):016x}")
+                  for ordinal in range(rng.randint(1, 5))]
+        expected[f"G-{group}"] = volatile_tie_choice(copies, margin_seconds=MARGIN)
+        rows += [{"document_id": f"G-{group}", "page_count": ordinal, "_modify_date": MODIFIED, "_written_at": written,
+                  "_record_digest": digest} for ordinal, written, digest in copies]
+    path = tmp_path / "copies.parquet"
+    pq.write_table(pa.Table.from_pylist(rows, schema=_with_order_columns(
+        arrow_schema(TABLE_CONTRACTS["document_attributes"]))), path)
+    chosen = duckdb.sql(newest_copy_sql(f"read_parquet('{path}')", "document_attributes")).fetchall()
+    columns = TABLE_CONTRACTS["document_attributes"].columns
+    identity, marker = columns.index("document_id"), columns.index("page_count")
+    assert {row[identity]: row[marker] for row in chosen} == expected
+
+
+def test_the_staged_order_is_the_write_time_and_spicy_docs_record_digest(tmp_path):
+    document = _document("EPA-1-0001", modifyDate=MODIFIED, openForComment=True)
+    docket = {"data": {"id": "EPA-1", "type": "dockets", "attributes": {"modifyDate": MODIFIED}}}
+    for table, payload, digest in (("document_attributes", document, document_source_record_digest),
+                                   ("docket_attributes", docket, docket_source_record_digest)):
+        _parts(tmp_path, table, [_keyed(payload, 5)])
+        (part,) = (tmp_path / table).glob("*.parquet")
+        row = pq.read_table(part).to_pylist()[0]
+        assert (row["_modify_date"], row["_written_at"], row["_record_digest"]) == (
+            MODIFIED, int(WRITTEN.timestamp()) + 5, digest(payload))
+
+
+def test_documents_and_dockets_read_keyed_and_comments_bare(tmp_path):
+    """The ETL's one factory serves every type; only the attribute tee asks for the keyed stream."""
+    calls = []
+
+    class Reader:
+        last_keys: list[str] = []
+        failed_keys: list[str] = []
+
+        def __init__(self, name):
+            self.name = name
+
+        def iter_records(self):
+            calls.append((self.name, "bare"))
+            return iter(())
+
+        def iter_keyed_records(self):
+            calls.append((self.name, "keyed"))
+            return iter(())
+
+    pipeline = RegulationsPipeline(output_dir=tmp_path)
+    pipeline._staging_dir = tmp_path / "staging"
+    stage_agencies(["EPA"], list(RECORD_TYPES.values()), tmp_path / "staging", lambda agency, kind: Reader(kind.name),
+                   transform_for=pipeline._transform_for)
+    assert sorted(calls) == [("comments", "bare"), ("dockets", "keyed"), ("documents", "keyed")]
 
 
 def test_a_refused_record_loses_only_its_attributes_row(tmp_path):
@@ -189,12 +306,28 @@ def test_combine_keeps_the_newest_version_of_an_id_two_shards_both_wrote(tmp_pat
     second = _shard(tmp_path, "b", {("FAA", "documents"): [newer]})
     rows = attributes_sweep.combine([first, second], tmp_path / "out")
     assert rows == {"document_attributes": 2, "docket_attributes": 0}
-    table = pq.read_table(tmp_path / "out" / "document_attributes.parquet")
+    table = _published(tmp_path / "out" / "document_attributes.parquet", "document_attributes")
     assert {r["document_id"]: r["page_count"] for r in table.to_pylist()} == {"DOT-1-0001": 2, "DOT-1-0002": None}
-    assert "_modify_date" not in table.column_names
     import json
 
     assert [r["id"] for r in json.loads((tmp_path / "out" / "attribute_refusals.json").read_text())["refused"]] == [""]
+
+
+def test_combine_chooses_among_every_shards_copies_at_once(tmp_path):
+    """The margin runs from the newest copy, which can be in another shard. Over all three copies b1 is newest, a1
+    falls outside the margin and a2 beats b1 on digest. Choosing within shard a first would keep a1, which b1 then
+    beats by being written more than the margin after it."""
+    a1, a2, b1 = sorted((_document("DOT-1-0001", modifyDate=MODIFIED, pageCount=n) for n in range(3)),
+                        key=document_source_record_digest)
+    writes = {"a1": 0, "a2": MARGIN - 600, "b1": MARGIN + 1}
+    assert volatile_tie_choice([(0, writes["a1"], document_source_record_digest(a1)),
+                                (1, writes["a2"], document_source_record_digest(a2)),
+                                (2, writes["b1"], document_source_record_digest(b1))], margin_seconds=MARGIN) == 1
+    first = _shard(tmp_path, "a", {("DOT", "documents"): [_keyed(a1, writes["a1"]), _keyed(a2, writes["a2"])]})
+    second = _shard(tmp_path, "b", {("FAA", "documents"): [_keyed(b1, writes["b1"])]})
+    attributes_sweep.combine([first, second], tmp_path / "out")
+    table = _published(tmp_path / "out" / "document_attributes.parquet", "document_attributes")
+    assert table.column("page_count").to_pylist() == [a2["data"]["attributes"]["pageCount"]]
 
 
 def test_combine_refuses_shards_written_without_the_ordering_columns(tmp_path):

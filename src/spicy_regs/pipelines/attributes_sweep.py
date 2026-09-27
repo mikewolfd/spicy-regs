@@ -51,8 +51,8 @@ def sweep(
     """Read every document and docket record and write both attribute tables whole; return rows per table.
 
     ``read_factory(consumed)`` builds the ``read(agency, record_type)`` for one pass, skipping ``consumed`` keys;
-    the default is the mirror's bounded reader. ``keep_order`` keeps the version-ordering columns, for a shard
-    that ``combine`` orders against the others.
+    the default is the mirror's bounded reader. ``keep_order`` keeps every copy with its ordering columns, for a
+    shard that ``combine`` orders against the others.
     """
     from spicy_docs.sources import mirrulations
 
@@ -123,30 +123,32 @@ def shard_agencies(agencies: list[str], shard: int, shards: int) -> list[str]:
 
 
 def combine(shard_dirs: list[Path], output_dir: Path) -> dict[str, int]:
-    """Union each table across the shards, keeping one row per id by the sweep's own rule; merge their receipts.
+    """Union each table's copies across the shards, keeping one row per id by the sweep's own rule; merge receipts.
 
-    The mirror files a few documents under two agencies (2 on 2026-09-27), so an id can reach two shards; the
-    newest ``modifyDate``, then the higher attributes digest, keeps one, as a single sweep would.
+    The mirror files a few documents under two agencies (2 on 2026-09-27), so an id's copies can reach two shards.
+    Every shard keeps all its copies, and the rule chooses among them once, as a single sweep would.
     """
     import duckdb
     import pyarrow.parquet as pq
 
-    from spicy_regs.transforms.regulations_attributes import ORDER_COLUMNS, ROW_GROUP_ROWS, contract, newest_sql
+    from spicy_regs.transforms.regulations_attributes import ORDER_COLUMNS, ROW_GROUP_ROWS, contract, newest_copy_sql
 
     output_dir.mkdir(parents=True, exist_ok=True)
     rows = {}
     for table in ATTRIBUTE_TABLES.values():
         files = [str(directory / f"{table}.parquet").replace("'", "''") for directory in shard_dirs]
-        source = "read_parquet([" + ", ".join(f"'{f}'" for f in files) + "])"
+        source = "read_parquet([" + ", ".join(f"'{f}'" for f in files) + "], filename=true)"
         keys = ", ".join(f'"{column}"' for column in contract(table).identity)
         out = output_dir / f"{table}.parquet"
         with duckdb.connect() as con:
             names = {row[0] for row in con.execute(f"DESCRIBE SELECT * FROM {source}").fetchall()}
             if not set(ORDER_COLUMNS) <= names:
-                raise RuntimeError(f"{table}: shard outputs lack {ORDER_COLUMNS}; sweep shards with --shard")
-            repeated = con.execute(f"SELECT count(*) - count(DISTINCT ({keys})) FROM {source}").fetchone()
+                raise RuntimeError(f"{table}: shard outputs lack {list(ORDER_COLUMNS)}; sweep shards with --shard")
+            repeated = con.execute(
+                f"SELECT count(*) FROM (SELECT {keys} FROM {source} GROUP BY {keys} HAVING count(DISTINCT filename) > 1)"
+            ).fetchone()
             con.execute(
-                f"COPY ({newest_sql(source, table, keep_order=False)} ORDER BY {keys}) TO "
+                f"COPY ({newest_copy_sql(source, table)} ORDER BY {keys}) TO "
                 f"'{str(out).replace(chr(39), chr(39) * 2)}' (FORMAT PARQUET, COMPRESSION ZSTD, ROW_GROUP_SIZE {ROW_GROUP_ROWS})"
             )
         rows[table] = pq.ParquetFile(out).metadata.num_rows

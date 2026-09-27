@@ -13,7 +13,7 @@ from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Protocol, cast
 
 if TYPE_CHECKING:
     from spicy_docs.sources.mirrulations import KeyOutcome
@@ -32,6 +32,12 @@ class Reader(Protocol):
     failed_keys: list[str]
 
     def iter_records(self): ...
+
+
+class KeyedReader(Reader, Protocol):
+    """A reader whose pass can also carry each payload's key and write time, as a keyed transform needs."""
+
+    def iter_keyed_records(self): ...
 
 
 # Factories the caller provides, keyed by (agency,) record type: build a
@@ -68,7 +74,9 @@ def stage_agencies(
     """Stage every (agency, record type) in parallel; return rows + consumed keys.
 
     Each record stream flows Reader -> Transform -> StagingWriter. When
-    ``transform_for`` is omitted the reader's records are staged as-is.
+    ``transform_for`` is omitted the reader's records are staged as-is. A keyed
+    transform reads the same pass through ``iter_keyed_records``, so its reader
+    must be a :class:`KeyedReader`.
     """
 
     def stage_one_agency(agency: str):
@@ -79,9 +87,11 @@ def stage_agencies(
         outcomes = {}
         for record_type in record_types:
             reader = read(agency, record_type)
-            records = reader.iter_records()
-            if transform_for is not None:
-                records = transform_for(record_type).apply(records)
+            transform = transform_for(record_type) if transform_for is not None else None
+            keyed = transform is not None and transform.keyed
+            records = cast(KeyedReader, reader).iter_keyed_records() if keyed else reader.iter_records()
+            if transform is not None:
+                records = transform.apply(records)
             writer = StagingWriter(agency, record_type, staging_dir)
             # write() fully drains the generator, so the reader's key lists are
             # final (including the in-run download retry) by the time we read them.

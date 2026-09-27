@@ -10,17 +10,19 @@ flatten *then* enrich) while ``stage_agencies`` still takes a single
 from __future__ import annotations
 
 from collections.abc import Iterable, Iterator
+from typing import Any
 
 from spicy_regs.transforms.base import Transform
 
 
 class Chain(Transform):
-    """Applies ``transforms`` in order over a single record stream."""
+    """Applies ``transforms`` in order over a single record stream; keyed when its first transform is."""
 
     def __init__(self, *transforms: Transform) -> None:
         self.transforms = transforms
+        self.keyed = bool(transforms) and transforms[0].keyed
 
-    def apply(self, records: Iterable[dict]) -> Iterator[dict]:
+    def apply(self, records: Iterable[Any]) -> Iterator[dict]:
         for transform in self.transforms:
             records = transform.apply(records)
         yield from records

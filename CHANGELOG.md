@@ -5,6 +5,22 @@ All notable changes to the Spicy Regs data pipeline are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Entries link to the pull request that introduced the change.
 
+## [Unreleased]
+
+### Changed
+
+- **`document_attributes` and `docket_attributes` break a `modifyDate` tie by
+  SpicyDocs' write-time rule** (document policy 1.3, spicy-docs 0.45.1). Among
+  a record's mirror copies tied at the newest `modifyDate`, the copy written
+  more than an hour after every other wins; otherwise the smallest SpicyDocs
+  record digest wins. The higher attributes digest decided before. Expected
+  effect, from the next attributes-sweep publish: about 8
+  `document_attributes` rows mirror-wide. The 27 agencies measured on
+  2026-09-27 hold 6 `open_for_comment` flips: false to true for
+  DEA-2023-0148-0026, USA-2022-HQ-0007-0002, CMS-2023-0069-0001 and
+  EPA-HQ-OMS-2021-0325-0002; true to false for EPA-R09-OAR-2018-0160-0007 and
+  FWS-R4-ES-2023-0037-0001. No docket rows and no thin-table rows change.
+
 ## [2026.08.26]
 
 The headline of this cycle: the MCP server moved off Vercel onto **Cloud Run**,
