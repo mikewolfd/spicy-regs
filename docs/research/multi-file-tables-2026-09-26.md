@@ -321,9 +321,16 @@ What the code settled, where it refines §4. Tests: `tests/test_split_tables.py`
   family left without a table. `parse_index` refuses a v1 index listing a split table, members whose counts do not
   sum to the table's, and a member key that does not spell its partition.
 - **Pointer order.** v2 is the pointer, written under its own CAS. v1 is then written as `derive_v1` of the stored
-  v2 under v1's CAS. v1's token is read before v2, so a raced v1 write rederives from the newer v2. A v1 that differs
-  from v2 in another family is overwritten, and those families are logged. The first publish after the merge
-  creates v2 from v1.
+  v2 under v1's CAS. v1's token is read before v2, so a raced v1 write rederives from the newer v2.
+  - Once v2 is written the generation is published. A failed v1 write (transport, or a v1 that kept moving) is
+    logged, not raised: "publication.json is behind publication.v2.json; the next publish rederives it".
+    Retention's `execute` also rederives v1 before it deletes anything, so no deletion strands a generation v1 names.
+- **Bootstrap.** The first publish after the merge creates v2 from v1 and keeps that v1 read (bytes and ETag); a
+  writer whose create loses to another bootstrapper keeps its read too. Its v1 write is conditional on that ETag.
+  If v1 changed since, each family whose v1 entry changed while v2's view of it still equals the bootstrap read was
+  published by a writer predating v2; it is folded into v2 under v2's CAS before v1 is derived. A family v2 changed
+  as well is v2's already. After the bootstrap nothing folds: a writer predating v2 must not publish once v2 exists,
+  which is why the branch merges only with no publish in flight.
 - **Readers.** `table_members` resolves every file of a table. `single_member` refuses a split table by name for a
   reader that takes one file: `r2.download`, the CLI download and local selections. CLI and local support for split
   tables is open, and needed only if a split table should be downloadable there. SQL reads go through

@@ -143,6 +143,24 @@ def test_execution_deletes_only_what_a_fresh_plan_agrees_on_and_keeps_each_root(
     assert [g["pruned"] for g in after["families"]["base"]["generations"] if g["digest"] == digests[0]] == [True]
 
 
+def test_execution_derives_version_1_again_before_deleting_a_generation_it_names(tmp_path, remote):
+    """Publishes that stopped between their two writes left version 1 naming a generation the plan deletes."""
+    digests = _publish(_Base, tmp_path, remote, 2)
+    stale = remote.objects[pub.INDEX_KEY]
+    digests += _publish(_Base, tmp_path / "later", remote, 3)
+    remote.objects[pub.INDEX_KEY] = stale
+    assert pub.parse_index(stale)["families"]["base"]["artifactDigest"] == f"sha256:{digests[1]}"
+    order = []
+    remote.before_put = lambda key: order.append((key, len(remote.deletes)))
+
+    plan = _plan(remote)
+    record = retention.execute(remote, "spicy-regs", plan, plan)
+
+    assert f"generations/base/{digests[1]}" in record["deleted"]
+    assert order[0] == (pub.INDEX_KEY, 0), "version 1 is written before anything is deleted"
+    assert pub.parse_index(remote.objects[pub.INDEX_KEY]) == pub.derive_v1(pub.parse_index(remote.objects[pub.INDEX_V2_KEY]))
+
+
 def test_execution_refuses_a_plan_for_another_bucket(remote):
     with pytest.raises(pub.PublicationError, match="approved plan"):
         retention.execute(remote, "spicy-regs", {"format": retention.PLAN_FORMAT, "version": 1, "bucket": "other"},

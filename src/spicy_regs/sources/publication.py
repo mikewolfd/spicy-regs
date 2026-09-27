@@ -502,11 +502,16 @@ def derive_v1(index: Mapping) -> dict:
     return {**empty_index(), "families": families}
 
 
-def _stored_index(client, bucket: str) -> tuple[dict, str | None]:
-    """Read the stored version-2 index and its conditional-write token.
+#: The version-1 index as read while version 2 was absent: its bytes and ETag, each ``None`` when it was absent too.
+Bootstrap = tuple[bytes | None, str | None]
+
+
+def _stored_index(client, bucket: str) -> tuple[dict, str | None, Bootstrap | None]:
+    """Read the stored version-2 index, its conditional-write token and, while version 2 is absent, the bootstrap.
 
     Until version 2 is first written, the version-1 index stands in with no token, so that write creates version 2
-    from it; absent both, empty and unpinned. A response without an ETag refuses.
+    from it, and the version 1 read is returned as the bootstrap for :func:`_write_v1`; absent both, empty and
+    unpinned. A response without an ETag refuses.
     """
     for key in (INDEX_V2_KEY, INDEX_KEY):
         stored = _get_bounded(client, bucket, key)
@@ -514,44 +519,75 @@ def _stored_index(client, bucket: str) -> tuple[dict, str | None]:
             raw, etag = stored
             if not isinstance(etag, str) or not etag:
                 raise PublicationError("Publication index has no conditional-write token")
-            return {**parse_index(raw), "version": 2}, etag if key == INDEX_V2_KEY else None
-    return {**empty_index(), "version": 2}, None
+            index = {**parse_index(raw), "version": 2}
+            return (index, etag, None) if key == INDEX_V2_KEY else (index, None, stored)
+    return {**empty_index(), "version": 2}, None, (None, None)
 
 
-def _write_v1(client, bucket: str, family: str) -> None:
+def _put_pointer(client, bucket: str, key: str, raw: bytes, etag: str | None) -> bool:
+    """Replace pointer ``key`` only if it still has ``etag`` (``None``: only if absent); ``False`` when it moved."""
+    from botocore.exceptions import ClientError
+
+    condition = {"IfMatch": etag} if etag is not None else {"IfNoneMatch": "*"}
+    try:
+        client.put_object(Bucket=bucket, Key=key, Body=raw, ContentType="application/json",
+                          CacheControl="no-store, no-cache, must-revalidate", **condition)
+    except ClientError as exc:
+        if not _precondition(exc):
+            raise
+        return False
+    return True
+
+
+def _write_v1(client, bucket: str, bootstrap: Bootstrap | None = None) -> None:
     """Write ``publication.json`` as :func:`derive_v1` of the stored version 2, under its own conditional write.
 
     Version 1's token is read before version 2, so a writer that loses this race rederives from the newer version 2.
-    Version 1 differing from version 2 in a family other than ``family`` means a writer skipped version 2 (one that
-    predates it) or a writer stopped between the two writes; version 2 wins, and the overwritten families are logged.
+    With no version 2 there is nothing to derive, and version 1 stays the pointer.
+
+    ``bootstrap`` is the version 1 a writer read while version 2 was absent, so its write is conditional on that ETag.
+    When version 1 changed since, :func:`_fold_v1` first moves into version 2 what a writer predating version 2 wrote
+    to version 1 alone, so deriving cannot erase it. Nothing folds once version 2 exists: a writer predating version 2
+    must not publish after the merge that introduces it, which is why that merge waits until no publish is in flight.
     """
-    from botocore.exceptions import ClientError
     from rulespec_artifacts import canonical_json_bytes
 
     for _ in range(_POINTER_ATTEMPTS):
         stored = _get_bounded(client, bucket, INDEX_KEY)
-        derived = derive_v1(_stored_index(client, bucket)[0])
-        raw = canonical_json_bytes(derived)
-        if stored is not None:
-            if stored[0] == raw:
-                return
-            try:
-                before = parse_index(stored[0])["families"]
-            except PublicationError:
-                before = {}
-            if stale := sorted(name for name in set(before) | set(derived["families"])
-                               if name != family and before.get(name) != derived["families"].get(name)):
-                logger.warning("publication: {} differed from {} in {}; rewriting it from version 2",
-                               INDEX_KEY, INDEX_V2_KEY, ", ".join(stale))
-        condition = {"IfMatch": stored[1]} if stored is not None else {"IfNoneMatch": "*"}
-        try:
-            client.put_object(Bucket=bucket, Key=INDEX_KEY, Body=raw, ContentType="application/json",
-                              CacheControl="no-store, no-cache, must-revalidate", **condition)
+        if bootstrap is not None and (stored or (None, None))[1] != bootstrap[1]:
+            _fold_v1(client, bucket, bootstrap[0], None if stored is None else stored[0])
+        index, _, absent = _stored_index(client, bucket)
+        if absent is not None:
             return
-        except ClientError as exc:
-            if not _precondition(exc):
-                raise
+        raw = canonical_json_bytes(derive_v1(index))
+        if stored is not None and stored[0] == raw:
+            return
+        if _put_pointer(client, bucket, INDEX_KEY, raw, None if stored is None else stored[1]):
+            return
     raise PublicationError(f"{INDEX_KEY} kept changing; derive it again from {INDEX_V2_KEY}")
+
+
+def _fold_v1(client, bucket: str, before: bytes | None, after: bytes | None) -> None:
+    """Move into version 2 each family written to version 1 alone between the version-1 reads ``before`` and ``after``.
+
+    A family whose version-1 entry changed while version 2's view of it still equals ``before`` was published by a
+    writer predating version 2. One whose version-2 view changed too was published through version 2, which wins.
+    """
+    was, now = ({} if raw is None else parse_index(raw)["families"] for raw in (before, after))
+    for _ in range(_POINTER_ATTEMPTS):
+        index, etag, _ = _stored_index(client, bucket)
+        view = derive_v1(index)["families"]
+        folded = sorted(name for name, entry in now.items() if entry != was.get(name) and view.get(name) == was.get(name))
+        if not folded:
+            return
+        raw = b""
+        for name in folded:
+            index, raw = _merge_family(index, name, now[name])
+        logger.warning("publication: folding {} from {} into {}; a writer predating {} published them",
+                       ", ".join(folded), INDEX_KEY, INDEX_V2_KEY, INDEX_V2_KEY)
+        if _put_pointer(client, bucket, INDEX_V2_KEY, raw, etag):
+            return
+    raise PublicationError(f"{INDEX_V2_KEY} kept changing while {INDEX_KEY} was folded into it")
 
 
 def _copy_unchanged_member(client, bucket: str, source_key: str, destination_key: str) -> None:
@@ -790,7 +826,7 @@ def _publish_verified_generation(
     evidence_directories: tuple[Path, ...] = (), added_tables: frozenset[str] = frozenset(),
 ) -> dict:
     """Shared publication gates; both callers fully verify their source first."""
-    from botocore.exceptions import ClientError
+    from botocore.exceptions import BotoCoreError, ClientError
     from rulespec_artifacts import admit_artifact, iter_member_descriptors
     from spicy_regs.sources.r2 import _assert_upload_safe, _get_remote_size
     from spicy_regs.source_evidence import INPUT_ROLE, PRIOR_ROLE, verify_evidence
@@ -800,7 +836,7 @@ def _publish_verified_generation(
     family = artifact.root["spec"]["family"]
     if not _NAME.fullmatch(family):
         raise PublicationError("Invalid family name")
-    index, etag = _stored_index(client, bucket)
+    index, etag, bootstrap = _stored_index(client, bucket)
     _assert_family_unchanged(index, prior_index, family)
     prefix = f"generations/{family}/{artifact.pin.artifact_digest.removeprefix('sha256:')}"
     members = list(iter_member_descriptors(artifact, source))
@@ -862,26 +898,21 @@ def _publish_verified_generation(
     # Each lost race means another writer's pointer write succeeded, so
     # contention resolves in at most one round per concurrent writer.
     # Version 2 is the pointer; version 1 is derived from it afterwards (multi-file design §4.1).
+    # Once version 2 is written the generation is published: a failed version-1 write is logged, not raised, and
+    # the next publish, or retention before it deletes anything, derives version 1 again. A writer that first read
+    # the index while version 2 was absent keeps that bootstrap read, so ``_write_v1`` can fold what a writer
+    # predating version 2 published meanwhile.
     for _ in range(_POINTER_ATTEMPTS):
         updated, raw = _merge_family(index, family, entry)
-        condition = {"IfMatch": etag} if etag is not None else {"IfNoneMatch": "*"}
-        try:
-            client.put_object(
-                Bucket=bucket,
-                Key=INDEX_V2_KEY,
-                Body=raw,
-                ContentType="application/json",
-                CacheControl="no-store, no-cache, must-revalidate",
-                **condition,
-            )
-        except ClientError as exc:
-            if not _precondition(exc):
-                raise
-        else:
-            _write_v1(client, bucket, family)
+        if _put_pointer(client, bucket, INDEX_V2_KEY, raw, etag):
+            try:
+                _write_v1(client, bucket, bootstrap)
+            except (BotoCoreError, ClientError, OSError, PublicationError) as exc:
+                logger.error("publication: {} is behind {}; the next publish rederives it ({}: {})",
+                             INDEX_KEY, INDEX_V2_KEY, type(exc).__name__, exc)
             return updated
         logger.info("publication: pointer moved concurrently; merging {} onto the reread index", family)
-        index, etag = _stored_index(client, bucket)
+        index, etag, _ = _stored_index(client, bucket)
         _assert_family_unchanged(index, prior_index, family)
     raise PublicationError("Publication changed concurrently; retry from a fresh snapshot")
 
