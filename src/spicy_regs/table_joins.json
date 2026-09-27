@@ -795,6 +795,22 @@
       "floor_pct": 100.0
     },
     {
+      "child": "fec_committee_history",
+      "child_columns": [
+        "committee_id"
+      ],
+      "parent": "fec_committees",
+      "parent_columns": [
+        "committee_id"
+      ],
+      "kind": "scope",
+      "reason": "fec_committees is OpenFEC's registry; the bulk committee master also names 21 committees, newest cycle 2000-2020 (15 in 2014), that the API does not serve (C00428599 and C00317453 answer an empty result). Every registry committee appears in the history. Receipt join-map-2026-09-26/fec-committee-history-first-run.json.",
+      "measured_via": null,
+      "baseline_keys": 89710,
+      "baseline_missing": 21,
+      "floor_pct": 99.9765
+    },
+    {
       "child": "fec_source_records",
       "child_columns": [
         "collection_id"
@@ -1412,6 +1428,17 @@
       }
     ],
     "org_committee_links": [
+      {
+        "child_columns": [
+          "committee_id"
+        ],
+        "parent_table": "fec_committees",
+        "parent_columns": [
+          "committee_id"
+        ]
+      }
+    ],
+    "fec_committee_history": [
       {
         "child_columns": [
           "committee_id"

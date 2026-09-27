@@ -206,6 +206,10 @@ JOINS: tuple[Join, ...] = (
           "7100 AG80). Receipt join-map-2026-09-26/unified-agenda-rin-after-backfill.json."),
     # FEC.
     _join("org_committee_links", "committee_id", "fec_committees", "committee_id", 3_633, 0),
+    _join("fec_committee_history", "committee_id", "fec_committees", "committee_id", 89_710, 21, "scope",
+          "fec_committees is OpenFEC's registry; the bulk committee master also names 21 committees, newest cycle "
+          "2000-2020 (15 in 2014), that the API does not serve (C00428599 and C00317453 answer an empty result). "
+          "Every registry committee appears in the history. Receipt join-map-2026-09-26/fec-committee-history-first-run.json."),
     _join("fec_source_records", "collection_id", "fec_collections", "collection_id", 647, 0),
     # Courts.
     _join("court_opinions", "cluster_id", "court_opinion_clusters", "cluster_id", 10_069_107, 21, "scope",
