@@ -207,6 +207,61 @@ def test_a_split_to_several_codes_gives_none():
     )
 
 
+def test_a_split_resolves_only_when_every_successor_agrees():
+    # 900010, 900011 and 900012 are coded; 900013 is not. Each original splits two ways.
+    rows = [
+        {"org": f"{FR}900010", "source_value": "SAME", "parent_org": None},
+        {"org": f"{FR}900011", "source_value": "SAME", "parent_org": None},
+        {"org": f"{FR}900012", "source_value": "OTHER", "parent_org": None},
+    ]
+    events = [
+        *(event(900001, result) for result in (900010, 900011)),  # both SAME
+        *(event(900002, result) for result in (900010, 900012)),  # SAME and OTHER: ambiguous
+        *(event(900003, result) for result in (900010, 900013)),  # SAME and an uncoded successor
+    ]
+    codes = agencies._build_projection(rows, (), events).code_by_fr_id
+    assert codes.get(900001) == "SAME"
+    assert codes.get(900002) is None
+    assert codes.get(900003) is None, "an uncoded successor is unknown, not absent"
+
+
+def test_a_split_is_read_even_where_it_gives_none():
+    # Each original also carries a code of its own, which it keeps only if its split went unread.
+    rows = [
+        {"org": f"{FR}900001", "source_value": "OWN1", "parent_org": None},
+        {"org": f"{FR}900002", "source_value": "OWN2", "parent_org": None},
+        {"org": f"{FR}900010", "source_value": "TEN", "parent_org": None},
+        {"org": f"{FR}900011", "source_value": "ELEVEN", "parent_org": None},
+    ]
+    events = [
+        *(event(900001, result) for result in (900010, 900011)),  # ambiguous
+        *(event(900002, result) for result in (900010, 900013)),  # unknown
+    ]
+    codes = agencies._build_projection(rows, (), events).code_by_fr_id
+    assert (codes.get(900001), codes.get(900002)) == (None, None)
+
+
+def test_the_views_splits_are_read():
+    # Were every result of each vendored split selected by one code, each original would take it.
+    events = agencies.registry_rows("events")
+    results = {}
+    for row in events:
+        results.setdefault(row["event_id"], set()).add(row["result"])
+    splits = {event_id: orgs for event_id, orgs in results.items() if len(orgs) > 1}
+    assert set(splits) == {"event:fr232", "event:fr510", "event:fr543", "event:fr96"}
+    rows = [
+        {"org": org, "source_value": f"ONE:{event_id}", "parent_org": None}
+        for event_id, orgs in splits.items()
+        if event_id != "event:fr96"  # Customs' results are two of INS's
+        for org in orgs
+    ]
+    codes = agencies._build_projection(rows, (), events).code_by_fr_id
+    assert codes.get(INS_ID) == "ONE:event:fr232"
+    assert codes.get(USIA_ID) == "ONE:event:fr510"
+    assert codes.get(ICC_ID) == "ONE:event:fr543"
+    assert codes.get(CUSTOMS_ID) == "ONE:event:fr232"
+
+
 def test_a_chain_resolves_to_its_end():
     # 900001 was renamed 900002, which was renamed 900003; codes select 900002 and 900003.
     rows = [

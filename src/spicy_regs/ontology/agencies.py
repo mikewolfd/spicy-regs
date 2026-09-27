@@ -117,10 +117,13 @@ def _build_projection(
 ) -> _Projection:
     """Reverse REF-038's rows, then follow the registry's bridges and each original's current successors.
 
-    A bridge gives its FR subject every code that selects its object, with the subject's
-    roster parent; an event's original gets every code that selects any current successor,
-    bridged codes included. An org resolves only where exactly one code selects it. The view
-    states no parent for an original, so its chain is left to the FR row that names it.
+    A bridge adds to its FR subject every code that selects its object, with the subject's
+    roster parent. An event's original adds every code that selects any current successor,
+    bridged codes included, but only when every current successor is coded: an uncoded
+    successor is unknown, not absent, so the original then takes no code at all. An org resolves
+    only where exactly one code selects it, so a split resolves only when all its successors
+    agree on one code. The view states no parent for an original, so its chain is left to the
+    FR row that names it.
     """
     codes: dict[str, set[str]] = defaultdict(set)
     parents: dict[str, str | None] = {}
@@ -132,8 +135,13 @@ def _build_projection(
         if parents.setdefault(subject, bridge["subject_parent"]) != bridge["subject_parent"]:
             raise ValueError(f"bridge {bridge['candidate_id']} states another parent for {subject}")
         codes[subject] |= codes.get(bridge["object"], set())
+    unknown: set[str] = set()
     for original, successors in _current_successors(events).items():  # a current successor is no original
-        codes[original] |= set().union(*(codes.get(successor, ()) for successor in successors))
+        found = [codes.get(successor, set()) for successor in successors]
+        if all(found):
+            codes[original] |= set().union(*found)
+        else:
+            unknown.add(original)
     ancestors: dict[str, frozenset[str]] = {}
 
     def ancestors_of(org: str) -> frozenset[str]:
@@ -149,7 +157,7 @@ def _build_projection(
             {
                 int(org.removeprefix(_FR_AGENCY)): next(iter(selecting))
                 for org, selecting in codes.items()
-                if org.startswith(_FR_AGENCY) and len(selecting) == 1
+                if org.startswith(_FR_AGENCY) and len(selecting) == 1 and org not in unknown
             }
         ),
         MappingProxyType({org: ancestors_of(org) for org in parents}),
@@ -166,8 +174,10 @@ def fr_agency_code(fr_agency_id: int) -> str | None:
     """The one Regulations.gov code for Federal Register agency ``fr_agency_id``, or ``None``.
 
     A code selects the agency directly (REF-038), through an identity bridge (Energy Department
-    is DOE), or through its current successors (the Health Care Finance Administration is CMS).
-    ``None`` when no code selects it, or several do: a split to several codes (INS) has none.
+    is DOE), or through its current successors when every one is coded and they give one code
+    between them (the Health Care Finance Administration is CMS). ``None`` when no code selects
+    it, or several do: INS, split to three agencies with three codes, has none, and so would a
+    split with any uncoded successor.
     """
     return _projection().code_by_fr_id.get(fr_agency_id)
 
@@ -175,7 +185,7 @@ def fr_agency_code(fr_agency_id: int) -> str | None:
 def agency_code_for_fr_agencies(agencies: Sequence[dict[str, Any]]) -> str | None:
     """The one Regulations.gov code for an FR row's parsed ``agencies_json`` entries, or ``None``.
 
-    An org named alongside its descendant is dropped by the parent chain, however many levels
+    Each entry's own code is ``fr_agency_code``'s. An org named alongside its descendant is dropped by the parent chain, however many levels
     apart (Transportation Department with FAA is FAA; Agriculture Department with GIPSA, its
     grandchild, is GIPSA). The chain is REF-038's ``parent_org`` or a bridge's roster parent;
     the view names no parent for a successor's original, so there it is the ``parent_id`` the
