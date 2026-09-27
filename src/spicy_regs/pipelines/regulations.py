@@ -35,6 +35,7 @@ from spicy_regs.schemas import RECORD_TYPES, RecordType
 from spicy_regs.sources import iceberg, r2
 from spicy_regs.pipelines.comment_text import PendingCommentText, PENDING_TEXT_FILE
 from spicy_regs.transforms.derived_text_pool import DerivedTextPool
+from spicy_regs.transforms.regulations_attributes import ATTRIBUTE_TABLES, TeeAttributes, merge_attribute_parts
 from spicy_regs.transforms.comment_partitions import validate_staged_comments
 from spicy_regs.transforms.reviewed_comments import ExcludeReviewedComments
 from spicy_regs.transforms import (
@@ -102,6 +103,8 @@ class RegulationsPipeline(Pipeline):
         self._sweep_agencies: list[str] | None = None
         self._pending_text: PendingCommentText | None = None
         self._text_pool: DerivedTextPool | None = None
+        self._staging_dir: Path | None = None
+        self._merged_attributes: list[str] = []
 
     def run(self, *, manifest: Manifest | None = None) -> None:
         """Run one batch; local batches sharing output_dir may reuse their manifest."""
@@ -156,6 +159,7 @@ class RegulationsPipeline(Pipeline):
         output_dir = self.output_dir or (Path.cwd() / "output")
         staging_dir = output_dir / "staging"
         staging_dir.mkdir(parents=True, exist_ok=True)
+        self._staging_dir = staging_dir
 
         record_types = self._record_types()
         agencies = self._agencies()
@@ -262,6 +266,7 @@ class RegulationsPipeline(Pipeline):
         every data upload has returned.
         """
         base_data_types = [rt.name for rt in record_types if rt.name != "comments" and staged.get(rt.name, 0)]
+        base_data_types += self._merged_attributes
         index_file = output_dir / "comments_index.parquet"
         manifest_file = output_dir / "manifest.parquet"
         unresolved_file = output_dir / "failed_keys.parquet"
@@ -361,6 +366,10 @@ class RegulationsPipeline(Pipeline):
         All agencies share the run's bounded comment-text pool and retry state.
         """
         extract: Transform = ExtractRecords(record_type)
+        table = ATTRIBUTE_TABLES.get(record_type.name)
+        if table is not None and self._staging_dir is not None:
+            # Decisions 65-67: the same read also yields the record's attributes row.
+            return Chain(TeeAttributes(table, self._staging_dir), extract)
         if record_type.name != "comments":
             return extract
         extract = Chain(ExcludeReviewedComments(), extract)
@@ -430,6 +439,26 @@ class RegulationsPipeline(Pipeline):
             local = output_dir / f"{rt.name}.parquet"
             if not local.exists():
                 r2.download_working_copy(f"{rt.name}.parquet", local)
+            table = ATTRIBUTE_TABLES.get(rt.name)
+            if table is not None and not (output_dir / f"{table}.parquet").exists():
+                r2.download_working_copy(f"{table}.parquet", output_dir / f"{table}.parquet")
+
+    def _merge_attributes(self, staging_dir: Path, output_dir: Path, table: str) -> bool:
+        """Merge this run's attribute rows into the table's working copy, once the full sweep has seeded it.
+
+        Before ``run-attributes-sweep`` seeds a working copy, a daily run's rows would publish a table of only
+        that day's changes, so they are dropped with a warning and the sweep's pass covers them.
+        """
+        parts = staging_dir / table
+        if not any(parts.glob("*.parquet")):
+            return False
+        prior = output_dir / f"{table}.parquet"
+        if not prior.exists():
+            logger.warning("{}: no seeded working copy yet; this run's rows wait for run-attributes-sweep", table)
+            return False
+        rows = merge_attribute_parts(table, parts, prior, prior)
+        logger.info("{}: {:,} rows after this run's merge", table, rows)
+        return True
 
     def _merge(
         self,
@@ -472,6 +501,12 @@ class RegulationsPipeline(Pipeline):
         # snapshot that the existing R2 upload (dual model) will publish.
         for name in iceberg_names:
             iceberg.merge_and_export(staging_dir, output_dir, RECORD_TYPES[name])
+
+        self._merged_attributes = [
+            table
+            for name in names
+            if (table := ATTRIBUTE_TABLES.get(name)) and self._merge_attributes(staging_dir, output_dir, table)
+        ]
 
         changed_comments: list[Path] = []
         if "comments" in names and staged.get("comments", 0) > 0:

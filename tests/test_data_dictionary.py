@@ -357,8 +357,15 @@ def test_an_inline_column_list_beside_the_marker_is_refused(tmp_path):
         dd.load_descriptions(path)
 
 
-def test_hosted_schemas_are_all_varchar_in_contract_order():
+def test_hosted_schemas_follow_the_contract_types_in_contract_order():
+    """VARCHAR unless the contract types a column (decision 67), spelled as DuckDB describes the file."""
     from spicy_docs.schemas import TABLE_CONTRACTS
 
+    from spicy_regs.contract_types import DESCRIBED
+
     for table, columns in dd.contract_schemas().items():
-        assert columns == [(c, "VARCHAR") for c in TABLE_CONTRACTS[table].columns], table
+        contract = TABLE_CONTRACTS[table]
+        assert columns == [(c, DESCRIBED[contract.column_type(c)]) for c in contract.columns], table
+    typed = dict(dd.contract_schemas()["document_attributes"])
+    assert (typed["page_count"], typed["receive_date"], typed["topics"]) == (
+        "INTEGER", "TIMESTAMP WITH TIME ZONE", "VARCHAR[]")

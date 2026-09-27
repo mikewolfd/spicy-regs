@@ -206,6 +206,11 @@ JOINS: tuple[Join, ...] = (
           "7100 AG80). Receipt join-map-2026-09-26/unified-agenda-rin-after-backfill.json."),
     # FEC.
     _join("org_committee_links", "committee_id", "fec_committees", "committee_id", 3_633, 0),
+    # The Regulations.gov attribute tables (decisions 65-67): every row is a record the thin tables also hold.
+    _join("document_attributes", "document_id", "documents", "document_id", 0, 0, "empty",
+          "Published by the regulations ETL once run-attributes-sweep seeds it; re-record at the first sweep."),
+    _join("docket_attributes", "docket_id", "dockets", "docket_id", 0, 0, "empty",
+          "Published by the regulations ETL once run-attributes-sweep seeds it; re-record at the first sweep."),
     _join("fec_committee_history", "committee_id", "fec_committees", "committee_id", 89_710, 21, "scope",
           "fec_committees is OpenFEC's registry; the bulk committee master also names 21 committees, newest cycle "
           "2000-2020 (15 in 2014), that the API does not serve (C00428599 and C00317453 answer an empty result). "

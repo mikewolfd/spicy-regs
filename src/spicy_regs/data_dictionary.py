@@ -129,6 +129,10 @@ CONTRACT_TABLES: tuple[str, ...] = (
     "federal_register",
     # The FEC bulk committee master, every cycle (spicy-docs 0.43.0, decision 53).
     "fec_committee_history",
+    # The Regulations.gov attributes the thin documents/dockets lack, typed (decisions 65-67); the
+    # regulations ETL writes them and the refresh's base families publish them.
+    "document_attributes",
+    "docket_attributes",
     # The Congress.gov index tables (gaps A5, A7, A10), each written by its own
     # rollup in pipelines/rollups/congress_index.py.
     "house_communications",
@@ -611,14 +615,15 @@ def _contracts() -> dict:
 
 
 def contract_schemas() -> dict[str, list[tuple[str, str]]]:
-    """``{table: [(column, "VARCHAR"), ...]}`` for every contract-hosted table.
+    """``{table: [(column, DuckDB type), ...]}`` for every contract-hosted table.
 
-    Every published value in these tables is a string — the host publishes
-    all-VARCHAR Parquet read through a DuckDB view — so the type is not a
-    per-column decision and is not stored per column anywhere.
+    The type is the contract's (VARCHAR unless it states one, as the Regulations.gov attribute tables do,
+    decision 67), spelled as DuckDB describes the written Parquet (``contract_types.DESCRIBED``).
     """
+    from spicy_regs.contract_types import described_columns
+
     contracts = _contracts()
-    return {name: [(column, "VARCHAR") for column in contracts[name].columns] for name in CONTRACT_TABLES}
+    return {name: described_columns(contracts[name]) for name in CONTRACT_TABLES}
 
 
 def contract_column_prose(table: str) -> dict[str, str]:

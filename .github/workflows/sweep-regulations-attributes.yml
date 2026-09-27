@@ -1,0 +1,44 @@
+name: Sweep Regulations.gov attributes
+
+# Decisions 65-67: seed document_attributes and docket_attributes with one full
+# pass over every document and docket record in the Mirrulations mirror. The
+# daily ETL merges into the working copies this writes. Dispatched bare it
+# builds and uploads the working copies as an artifact for comparison;
+# publish=true also writes them to R2. The families publish with the next
+# regulations refresh.
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: 'Write the working copies to R2 (after the comparison is clean)'
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@v4
+      - run: uv sync --frozen
+      - name: Sweep
+        env:
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL }}
+          PUBLISH: ${{ inputs.publish && '--no-skip-upload' || '--skip-upload' }}
+        run: uv run --frozen run-attributes-sweep --output-dir out "$PUBLISH"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: regulations-attributes
+          path: |
+            out/document_attributes.parquet
+            out/docket_attributes.parquet

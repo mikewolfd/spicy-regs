@@ -1,10 +1,12 @@
-"""Rollup pipelines: the ETL's dockets and documents as managed families.
+"""Rollup pipelines: the ETL's dockets, documents and their attribute tables as managed families.
 
 The ETL rewrites the bare ``dockets.parquet`` and ``documents.parquet`` after
-every sweep batch and keeps reading them as its working copies. Once a sweep
-completes, these publish each as its own generation family, so index-aware
-readers and DocSpec's by-reference admission see one verified snapshot per
-sweep. Bare-URL readers keep reading the working copies.
+every sweep batch and keeps reading them as its working copies; the same read
+merges ``docket_attributes.parquet`` and ``document_attributes.parquet``
+(decisions 65-67). Once a sweep completes, these publish each as its own
+generation family, so index-aware readers and DocSpec's by-reference admission
+see one verified snapshot per sweep. Bare-URL readers keep reading the working
+copies.
 """
 
 from pathlib import Path
@@ -28,11 +30,15 @@ MAX_ROW_GROUP_BYTES = 256 * 2**20
 class _BaseTableFamily(RollupPipeline):
     """Publish the ETL's completed working copy of one base table."""
 
+    def key(self) -> str:
+        """The column every row must carry once."""
+        return RECORD_TYPES[self.name].dedup_key
+
     def build(self, output_dir: Path) -> Path:
         path = output_dir / self.output
         if not r2.download_working_copy(self.output, path):
             raise RuntimeError(f"{self.output}: no working copy on R2 to publish")
-        key = RECORD_TYPES[self.name].dedup_key
+        key = self.key()
         rows, distinct, missing = (
             duckdb.connect()
             .from_parquet(str(path))
@@ -58,5 +64,25 @@ class DocumentsFamily(_BaseTableFamily):
     output: ClassVar[str] = "documents.parquet"
 
 
+class _AttributesFamily(_BaseTableFamily):
+    def key(self) -> str:
+        from spicy_regs.transforms.regulations_attributes import contract
+
+        (identity,) = contract(self.output.removesuffix(".parquet")).identity
+        return identity
+
+
+class DocketAttributesFamily(_AttributesFamily):
+    name: ClassVar[str] = "docket-attributes"
+    output: ClassVar[str] = "docket_attributes.parquet"
+
+
+class DocumentAttributesFamily(_AttributesFamily):
+    name: ClassVar[str] = "document-attributes"
+    output: ClassVar[str] = "document_attributes.parquet"
+
+
 dockets_app = make_rollup_app(DocketsFamily)
 documents_app = make_rollup_app(DocumentsFamily)
+docket_attributes_app = make_rollup_app(DocketAttributesFamily)
+document_attributes_app = make_rollup_app(DocumentAttributesFamily)

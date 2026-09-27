@@ -64,6 +64,10 @@ BILL_OWN_TABLES = {
 
 OWN_TABLES = BILL_OWN_TABLES | {READS_TABLE: READ_COLUMNS}
 
+#: Contract tables the regulations ETL writes in its document and docket passes, published by the regulations
+#: refresh's base families like ``documents`` itself, not by a standalone rollup (decisions 65-67).
+ETL_TABLES = {"document_attributes", "docket_attributes"}
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 WORKFLOWS = REPO_ROOT / ".github" / "workflows"
 
@@ -228,7 +232,7 @@ def test_every_hosted_table_has_exactly_one_writer():
         for key in _declared_keys(rollup):
             written.setdefault(key.removesuffix(".parquet"), []).append(rollup.name)
 
-    assert set(written) == set(dd.CONTRACT_TABLES) | set(OWN_TABLES), (
+    assert set(written) == set(dd.CONTRACT_TABLES) - ETL_TABLES | set(OWN_TABLES), (
         "every contract, plus the bill family's own two tables, must be published by exactly one rollup"
     )
     doubled = {table: names for table, names in written.items() if len(names) > 1}

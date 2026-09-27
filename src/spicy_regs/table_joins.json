@@ -795,6 +795,38 @@
       "floor_pct": 100.0
     },
     {
+      "child": "document_attributes",
+      "child_columns": [
+        "document_id"
+      ],
+      "parent": "documents",
+      "parent_columns": [
+        "document_id"
+      ],
+      "kind": "empty",
+      "reason": "Published by the regulations ETL once run-attributes-sweep seeds it; re-record at the first sweep.",
+      "measured_via": null,
+      "baseline_keys": 0,
+      "baseline_missing": 0,
+      "floor_pct": null
+    },
+    {
+      "child": "docket_attributes",
+      "child_columns": [
+        "docket_id"
+      ],
+      "parent": "dockets",
+      "parent_columns": [
+        "docket_id"
+      ],
+      "kind": "empty",
+      "reason": "Published by the regulations ETL once run-attributes-sweep seeds it; re-record at the first sweep.",
+      "measured_via": null,
+      "baseline_keys": 0,
+      "baseline_missing": 0,
+      "floor_pct": null
+    },
+    {
       "child": "fec_committee_history",
       "child_columns": [
         "committee_id"
@@ -1435,6 +1467,28 @@
         "parent_table": "fec_committees",
         "parent_columns": [
           "committee_id"
+        ]
+      }
+    ],
+    "document_attributes": [
+      {
+        "child_columns": [
+          "document_id"
+        ],
+        "parent_table": "documents",
+        "parent_columns": [
+          "document_id"
+        ]
+      }
+    ],
+    "docket_attributes": [
+      {
+        "child_columns": [
+          "docket_id"
+        ],
+        "parent_table": "dockets",
+        "parent_columns": [
+          "docket_id"
         ]
       }
     ],

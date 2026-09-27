@@ -501,6 +501,8 @@ _UNWIRED = "not wired yet: T18 queue (open-work-investigation-2026-09-26/evidenc
 EVIDENCE_EXEMPT = {
     "DocketsFamily": "republishes the ETL's own working copy; the ETL's Mirrulations reads are the source reads",
     "DocumentsFamily": "republishes the ETL's own working copy; the ETL's Mirrulations reads are the source reads",
+    "DocketAttributesFamily": "republishes the ETL's own working copy; the ETL's Mirrulations reads are the source reads",
+    "DocumentAttributesFamily": "republishes the ETL's own working copy; the ETL's Mirrulations reads are the source reads",
     "FecObservationsRollup": "builds only from a prepared retained-input archive checked against its stated digests",
     "CfrSectionsRollup": _UNWIRED,
     "CommitteeRostersRollup": _UNWIRED,

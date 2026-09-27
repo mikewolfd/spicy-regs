@@ -31,8 +31,9 @@ from spicy_regs.transforms.table_merge import merge_contract_table
 CONTRACT_NAMES = sorted(TABLE_CONTRACTS)
 
 #: Adoption fixes the registry size as well as its named three-way partition.
-#: SpicyDocs 0.42.0 adds ``federal_register``, hosted by its own rollup; 0.43.0 adds ``fec_committee_history``.
-ADOPTED_CONTRACT_COUNT = 44
+#: SpicyDocs 0.42.0 adds ``federal_register``, hosted by its own rollup; 0.43.0 adds ``fec_committee_history``;
+#: 0.44.0 adds the typed ``document_attributes`` and ``docket_attributes`` (decisions 65-67).
+ADOPTED_CONTRACT_COUNT = 46
 
 #: A contract here leaves the set when its owning rollup hosts it.
 UNHOSTED_CONTRACTS = frozenset()

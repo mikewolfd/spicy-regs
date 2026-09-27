@@ -6277,6 +6277,356 @@
       "cycle"
     ]
   },
+  "document_attributes": {
+    "table": "document_attributes",
+    "label": "Regulations.gov document attributes",
+    "summary": "One row per Regulations.gov document, keyed by `document_id`, with the attributes the thin `documents` table does not carry: abstract, authors, topics, dates, page count, comment-window flags, the submitter's stated contact details (decision 66) and the agency's display properties. Typed where the value is (decision 67): flags BOOLEAN, `page_count` INTEGER, dates TIMESTAMPTZ, authors and topics string lists. Projected from each record's API attributes by SpicyDocs' contract.",
+    "coverage": "True range. Every document record in the Mirrulations mirror, read whole by `run-attributes-sweep` and kept current by the daily regulations ETL. DocSpec's API capture of 2026-09-02 held 1,943,106 of them (receipt `regulations-attributes-20260926/`); the published count is measured at the first sweep.",
+    "kind": "true_range",
+    "measured_on": "2026-09-27",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "document_id",
+        "column_type": "VARCHAR",
+        "description": "The document's id; its API record is https://api.regulations.gov/v4/documents/{document_id}."
+      },
+      {
+        "column_name": "address1",
+        "column_type": "VARCHAR",
+        "description": "The submitter's street address, first line, as stated."
+      },
+      {
+        "column_name": "address2",
+        "column_type": "VARCHAR",
+        "description": "The submitter's street address, second line, as stated."
+      },
+      {
+        "column_name": "allow_late_comments",
+        "column_type": "BOOLEAN",
+        "description": "Whether the agency accepts comments after the period closes."
+      },
+      {
+        "column_name": "author_date",
+        "column_type": "TIMESTAMP WITH TIME ZONE",
+        "description": "When the document was written (labelled “Author/ Document Date”), a UTC instant."
+      },
+      {
+        "column_name": "authors",
+        "column_type": "VARCHAR[]",
+        "description": "The document's authors, people or organizations, in the publisher's order; almost all on Supporting & Related Material."
+      },
+      {
+        "column_name": "category",
+        "column_type": "VARCHAR",
+        "description": "The submitter's sector category the agency assigns."
+      },
+      {
+        "column_name": "cfr_part",
+        "column_type": "VARCHAR",
+        "description": "The CFR parts the document affects, free text as stated."
+      },
+      {
+        "column_name": "city",
+        "column_type": "VARCHAR",
+        "description": "The submitter's city."
+      },
+      {
+        "column_name": "comment",
+        "column_type": "VARCHAR",
+        "description": "The record's comment text as stated, markup included."
+      },
+      {
+        "column_name": "country",
+        "column_type": "VARCHAR",
+        "description": "The submitter's country."
+      },
+      {
+        "column_name": "display_properties_json",
+        "column_type": "VARCHAR",
+        "description": "The agency's labels for this record's fields: a JSON array of {label, name, tooltip}, name being the attribute it labels; json_column spelling."
+      },
+      {
+        "column_name": "doc_abstract",
+        "column_type": "VARCHAR",
+        "description": "The document's abstract or summary."
+      },
+      {
+        "column_name": "effective_date",
+        "column_type": "TIMESTAMP WITH TIME ZONE",
+        "description": "When the action takes effect, a UTC instant."
+      },
+      {
+        "column_name": "exhibit_location",
+        "column_type": "VARCHAR",
+        "description": "Where a physical exhibit is held."
+      },
+      {
+        "column_name": "exhibit_type",
+        "column_type": "VARCHAR",
+        "description": "The exhibit's type."
+      },
+      {
+        "column_name": "fax",
+        "column_type": "VARCHAR",
+        "description": "The submitter's fax number."
+      },
+      {
+        "column_name": "field1",
+        "column_type": "VARCHAR",
+        "description": "An agency-defined field; its meaning is the record's display_properties_json label (“Answer Date”, “XRIN”, “RTID”, …)."
+      },
+      {
+        "column_name": "field2",
+        "column_type": "VARCHAR",
+        "description": "An agency-defined field; its meaning is the record's display_properties_json label (labelled “File Date”)."
+      },
+      {
+        "column_name": "first_name",
+        "column_type": "VARCHAR",
+        "description": "The submitter's given name."
+      },
+      {
+        "column_name": "fr_vol_num",
+        "column_type": "VARCHAR",
+        "description": "The Federal Register volume or citation, free text as stated."
+      },
+      {
+        "column_name": "gov_agency",
+        "column_type": "VARCHAR",
+        "description": "The government body that submitted the document."
+      },
+      {
+        "column_name": "gov_agency_type",
+        "column_type": "VARCHAR",
+        "description": "That body's level: Federal, State, Local, Tribal, Regional, U.S. House of Representatives or U.S. Senate."
+      },
+      {
+        "column_name": "implementation_date",
+        "column_type": "TIMESTAMP WITH TIME ZONE",
+        "description": "The implementation or service date, a UTC instant."
+      },
+      {
+        "column_name": "last_name",
+        "column_type": "VARCHAR",
+        "description": "The submitter's family name."
+      },
+      {
+        "column_name": "legacy_id",
+        "column_type": "VARCHAR",
+        "description": "The record's id in a predecessor system (“Document Legacy ID”, “Legacy Exhibit Number”, …)."
+      },
+      {
+        "column_name": "media",
+        "column_type": "VARCHAR",
+        "description": "How the document arrived: Electronic, Paper, … (spellings vary)."
+      },
+      {
+        "column_name": "object_id",
+        "column_type": "VARCHAR",
+        "description": "The publisher's internal object handle."
+      },
+      {
+        "column_name": "omb_approval",
+        "column_type": "VARCHAR",
+        "description": "An OMB control number, as stated."
+      },
+      {
+        "column_name": "open_for_comment",
+        "column_type": "BOOLEAN",
+        "description": "Whether the document was open for comment when captured; an observation, not a live status."
+      },
+      {
+        "column_name": "organization",
+        "column_type": "VARCHAR",
+        "description": "The organization the author or submitter names."
+      },
+      {
+        "column_name": "original_document_id",
+        "column_type": "VARCHAR",
+        "description": "The id of the document this one derives from; sometimes the empty string."
+      },
+      {
+        "column_name": "page_count",
+        "column_type": "INTEGER",
+        "description": "Pages in the content file."
+      },
+      {
+        "column_name": "postmark_date",
+        "column_type": "TIMESTAMP WITH TIME ZONE",
+        "description": "The postmark date (often labelled “Answer Date”), a UTC instant."
+      },
+      {
+        "column_name": "receive_date",
+        "column_type": "TIMESTAMP WITH TIME ZONE",
+        "description": "When the agency received the document, a UTC instant."
+      },
+      {
+        "column_name": "reg_writer_instruction",
+        "column_type": "VARCHAR",
+        "description": "Agency notes (often labelled “Old Submitter”)."
+      },
+      {
+        "column_name": "restrict_reason",
+        "column_type": "VARCHAR",
+        "description": "Why access is restricted, free text."
+      },
+      {
+        "column_name": "restrict_reason_type",
+        "column_type": "VARCHAR",
+        "description": "The restriction's kind: Copyrighted, Confidential Business Information, Personally Identifiable Information or Other."
+      },
+      {
+        "column_name": "source_citation",
+        "column_type": "VARCHAR",
+        "description": "The source publication's citation."
+      },
+      {
+        "column_name": "start_end_page",
+        "column_type": "VARCHAR",
+        "description": "The Federal Register start and end pages, as stated."
+      },
+      {
+        "column_name": "state_province_region",
+        "column_type": "VARCHAR",
+        "description": "The submitter's state, province or region."
+      },
+      {
+        "column_name": "subject",
+        "column_type": "VARCHAR",
+        "description": "The subject line."
+      },
+      {
+        "column_name": "submitter_rep",
+        "column_type": "VARCHAR",
+        "description": "The name of the submitter's representative."
+      },
+      {
+        "column_name": "subtype",
+        "column_type": "VARCHAR",
+        "description": "The agency's subtype: Correspondence, Report, Decision and others."
+      },
+      {
+        "column_name": "topics",
+        "column_type": "VARCHAR[]",
+        "description": "The publisher's topics, in its order."
+      },
+      {
+        "column_name": "tracking_nbr",
+        "column_type": "VARCHAR",
+        "description": "The portal's tracking number."
+      },
+      {
+        "column_name": "within_comment_period",
+        "column_type": "BOOLEAN",
+        "description": "Whether the document arrived within the comment period, when stated."
+      },
+      {
+        "column_name": "zip",
+        "column_type": "VARCHAR",
+        "description": "The submitter's postal code."
+      }
+    ],
+    "grain": "One row per Regulations.gov document: the attributes the thin documents table does not carry.",
+    "identity_columns": [
+      "document_id"
+    ]
+  },
+  "docket_attributes": {
+    "table": "docket_attributes",
+    "label": "Regulations.gov docket attributes",
+    "summary": "One row per Regulations.gov docket, keyed by `docket_id`, with the attributes the thin `dockets` table does not carry: keywords, short title, program, organization, subtypes, status, effective date and the agency's display properties. `effective_date` is TIMESTAMPTZ and `keywords` a string list (decision 67). Projected from each record's API attributes by SpicyDocs' contract.",
+    "coverage": "True range. Every docket record in the Mirrulations mirror, read whole by `run-attributes-sweep` and kept current by the daily regulations ETL. DocSpec's API capture of 2026-09-02 held 278,607 of them (receipt `regulations-attributes-20260926/`); the published count is measured at the first sweep.",
+    "kind": "true_range",
+    "measured_on": "2026-09-27",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "docket_id",
+        "column_type": "VARCHAR",
+        "description": "The docket's id; its API record is https://api.regulations.gov/v4/dockets/{docket_id}."
+      },
+      {
+        "column_name": "category",
+        "column_type": "VARCHAR",
+        "description": "The docket's status (labelled “Disposition”): Pending, Closed and others."
+      },
+      {
+        "column_name": "display_properties_json",
+        "column_type": "VARCHAR",
+        "description": "The agency's labels for this docket's fields: a JSON array of {label, name, tooltip}; [] when none; json_column spelling."
+      },
+      {
+        "column_name": "effective_date",
+        "column_type": "TIMESTAMP WITH TIME ZONE",
+        "description": "Mostly the docket's close date (usually labelled “Docket Close Date”), a UTC instant."
+      },
+      {
+        "column_name": "field1",
+        "column_type": "VARCHAR",
+        "description": "An agency-defined field (“Related Docket's RIN”, “Related To”, …); see display_properties_json."
+      },
+      {
+        "column_name": "field2",
+        "column_type": "VARCHAR",
+        "description": "An agency-defined field (usually “Docket Status”); see display_properties_json."
+      },
+      {
+        "column_name": "generic",
+        "column_type": "VARCHAR",
+        "description": "An agency program code (“Docket Item Code”, “Location”, “Program Area”)."
+      },
+      {
+        "column_name": "keywords",
+        "column_type": "VARCHAR[]",
+        "description": "The docket's keywords, in the publisher's order."
+      },
+      {
+        "column_name": "legacy_id",
+        "column_type": "VARCHAR",
+        "description": "The docket's id in a predecessor system."
+      },
+      {
+        "column_name": "object_id",
+        "column_type": "VARCHAR",
+        "description": "The publisher's internal object handle."
+      },
+      {
+        "column_name": "organization",
+        "column_type": "VARCHAR",
+        "description": "Labelled “Pre-EDOCKET ID” or “Organization”; see display_properties_json."
+      },
+      {
+        "column_name": "petition_nbr",
+        "column_type": "VARCHAR",
+        "description": "A petition number."
+      },
+      {
+        "column_name": "program",
+        "column_type": "VARCHAR",
+        "description": "The program office (usually labelled “Center”)."
+      },
+      {
+        "column_name": "short_title",
+        "column_type": "VARCHAR",
+        "description": "A short title (sometimes labelled “Action Office”)."
+      },
+      {
+        "column_name": "sub_type",
+        "column_type": "VARCHAR",
+        "description": "The agency's docket subtype."
+      },
+      {
+        "column_name": "sub_type2",
+        "column_type": "VARCHAR",
+        "description": "A second docket subtype level."
+      }
+    ],
+    "grain": "One row per Regulations.gov docket: the attributes the thin dockets table does not carry.",
+    "identity_columns": [
+      "docket_id"
+    ]
+  },
   "house_communications": {
     "table": "house_communications",
     "label": "House executive communications",
