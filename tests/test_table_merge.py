@@ -15,7 +15,16 @@ import pyarrow as pa
 import pytest
 import pyarrow.parquet as pq
 
-from spicy_regs.transforms.table_merge import merge_table, prior_scratch_path
+from spicy_regs.generations import build_generation
+from spicy_regs.transforms import table_merge
+from spicy_regs.transforms.table_merge import (
+    Partitioning,
+    merge_partitioned_table,
+    merge_table,
+    prior_members_path,
+    prior_scratch_path,
+    published_members,
+)
 
 COLUMNS = ("id", "name", "version")
 NAME = "widgets"
@@ -537,3 +546,240 @@ def test_a_laws_table_that_cannot_be_read_leaves_congress_bills_as_merged(tmp_pa
     assert (row["title"], row["statutes_at_large_cite"]) == ("as merged", None)
     assert not laws_path.exists(), "the unreadable scratch copy is removed either way"
     assert not (tmp_path / "_congress_bills_cited.parquet").exists()
+
+
+# --------------------------------------------------------------------------- #
+# A table stored one file per partition (multi-file design §4.3).
+# --------------------------------------------------------------------------- #
+SECTIONS = ("bill_id", "seq", "body", "version", "congress")
+BY_CONGRESS = Partitioning("congress", "bill_id", lambda bill: bill.split("-", 1)[0])
+
+
+def _member(root: Path, congress: str, rows: list[dict], part: int = 0) -> Path:
+    path = root / "sections" / f"congress={congress}" / f"part-{part:06d}.parquet"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    columns = SECTIONS if all("congress" in row for row in rows) else SECTIONS[:-1]
+    pq.write_table(pa.Table.from_pylist(rows, schema=pa.schema([(c, pa.string()) for c in columns])), path)
+    return path
+
+
+def _row(bill: str, seq: str, body: str, *, congress: bool = True) -> dict:
+    return {"bill_id": bill, "seq": seq, "body": body, "version": "2026-01-01",
+            **({"congress": bill.split("-", 1)[0]} if congress else {})}
+
+
+def _merge_split(tmp_path: Path, rows: list[dict], prior: list[Path] | None, **kwargs) -> Path:
+    return merge_partitioned_table(
+        tmp_path, name="sections", columns=SECTIONS, identity=("bill_id", "seq"), version_column="version",
+        rows=rows, partitioning=BY_CONGRESS, prior=prior, **kwargs,
+    )
+
+
+def _members(table: Path) -> dict[str, bytes]:
+    return {path.relative_to(table).as_posix(): path.read_bytes() for path in sorted(table.rglob("*.parquet"))}
+
+
+def _split_rows(table: Path) -> list[dict]:
+    return sorted((row for path in sorted(table.rglob("*.parquet")) for row in pq.ParquetFile(path).read().to_pylist()),
+                  key=lambda row: (row["bill_id"], row["seq"]))
+
+
+def test_an_untouched_partition_keeps_its_bytes_and_a_rewritten_one_replaces_its_directory(tmp_path):
+    """A prior part file left beside the rewritten one would publish its rows twice; an untouched one is not re-merged."""
+    prior_dir = tmp_path / "prior"
+    old = _member(prior_dir, "118", [_row("118-hr-1", "0", "kept")])
+    held = old.read_bytes()
+    prior = [old, _member(prior_dir, "119", [_row("119-hr-1", "0", "stale")]),
+             _member(prior_dir, "119", [_row("119-hr-2", "0", "second part")], part=1)]
+    stale = tmp_path / "sections" / "congress=117" / "part-000000.parquet"  # an earlier run's output, not a prior
+    stale.parent.mkdir(parents=True)
+    stale.write_bytes(held)
+
+    out = _merge_split(tmp_path, [_row("119-hr-1", "0", "fresh")], prior)
+
+    assert list(_members(out)) == ["congress=118/part-000000.parquet", "congress=119/part-000000.parquet"]
+    assert _members(out)["congress=118/part-000000.parquet"] == held, "untouched: byte for byte, never re-merged"
+    assert [(row["bill_id"], row["body"]) for row in _split_rows(out)] == [
+        ("118-hr-1", "kept"), ("119-hr-1", "fresh"), ("119-hr-2", "second part")]
+
+
+def test_a_replacement_scope_rewrites_only_the_partitions_it_names_or_all_when_it_cannot_name_them(tmp_path):
+    prior = [_member(tmp_path / "p1", "118", [_row("118-hr-1", "0", "a")]),
+             _member(tmp_path / "p1", "119", [_row("119-hr-1", "0", "b"), _row("119-hr-2", "0", "c")])]
+    held = prior[1].read_bytes()
+    out = _merge_split(tmp_path / "one", [], prior, replace_parents=("bill_id", {"118-hr-1"}))
+    assert list(_members(out)) == ["congress=118/part-000000.parquet", "congress=119/part-000000.parquet"]
+    assert _members(out)["congress=119/part-000000.parquet"] == held
+    assert [row["bill_id"] for row in _split_rows(out)] == ["119-hr-1", "119-hr-2"], "118 kept its now-empty file"
+
+    prior = [_member(tmp_path / "p2", "118", [_row("118-hr-1", "0", "a")]),
+             _member(tmp_path / "p2", "119", [_row("119-hr-1", "0", "b"), _row("119-hr-2", "0", "c")])]
+    out = _merge_split(tmp_path / "two", [], prior, replace_parents=("seq", {"0"}))
+    assert _split_rows(out) == [] and len(_members(out)) == 2, "a scope without bill_id reaches every partition"
+
+
+def test_the_first_split_derives_the_partition_column_and_keeps_every_row(tmp_path):
+    """The prior is one file with no partition column: every row lands in its Congress's file, deriving the column."""
+    rows = [_row(bill, "0", f"body of {bill}", congress=False) for bill in ("118-hr-1", "119-hr-1", "119-s-2")]
+    rows.append({**rows[0], "seq": "1"})
+    single = tmp_path / "_sections_prior" / "sections.parquet"
+    single.parent.mkdir()
+    pq.write_table(pa.Table.from_pylist(rows), single)
+
+    out = _merge_split(tmp_path, [], [single])
+
+    assert list(_members(out)) == ["congress=118/part-000000.parquet", "congress=119/part-000000.parquet"]
+    for member in out.rglob("*.parquet"):
+        congress = member.parent.name.removeprefix("congress=")
+        read = pq.ParquetFile(member).read()
+        assert read.schema.names == list(SECTIONS)
+        assert set(read.column("congress").to_pylist()) == {congress}
+        assert all(bill.startswith(congress + "-") for bill in read.column("bill_id").to_pylist())
+    assert [{k: v for k, v in row.items() if k != "congress"} for row in _split_rows(out)] == sorted(
+        rows, key=lambda row: (row["bill_id"], row["seq"]))
+    assert not (tmp_path / "_sections_prior").exists() and not (tmp_path / "_sections_partitions").exists()
+
+
+def test_a_prior_member_outside_its_partition_layout_refuses(tmp_path):
+    loose = tmp_path / "sections" / "part-000000.parquet"
+    loose.parent.mkdir()
+    pq.write_table(pa.table({"bill_id": ["119-hr-1"]}), loose)
+    with pytest.raises(ValueError, match="is not <name>/congress=<value>"):
+        _merge_split(tmp_path / "out", [], [loose])
+
+
+def test_published_members_downloads_once_and_reads_a_cold_start_as_none(tmp_path):
+    calls = []
+
+    def download(remote_key, directory):
+        calls.append(remote_key)
+        return [_member(directory, "119", [_row("119-hr-1", "0", "x")])] if remote_key == "sections.parquet" else []
+
+    assert published_members(tmp_path, "absent", download) is None
+    first = published_members(tmp_path, "sections", download)
+    assert first == published_members(tmp_path, "sections", download) == [
+        prior_members_path(tmp_path, "sections") / "sections" / "congress=119" / "part-000000.parquet"]
+    assert calls == ["absent.parquet", "sections.parquet"], "a present prior is reused, never fetched twice"
+
+
+def test_a_column_the_contract_gains_reaches_every_partition_not_only_the_rewritten_one(tmp_path):
+    """A nightly rewriting the 119th must not leave the other partitions without the column: members share columns."""
+    prior = [_member(tmp_path / "p", "118", [_row("118-hr-1", "0", "a")]),
+             _member(tmp_path / "p", "119", [_row("119-hr-1", "0", "b")])]
+    grown = (*SECTIONS, "extra")
+    out = merge_partitioned_table(
+        tmp_path / "out", name="sections", columns=grown, identity=("bill_id", "seq"), version_column="version",
+        rows=[{**_row("119-hr-2", "0", "c"), "extra": "x"}], partitioning=BY_CONGRESS, prior=prior)
+
+    assert {path.parent.name: pq.read_schema(path).names for path in out.rglob("*.parquet")} == {
+        "congress=118": list(grown), "congress=119": list(grown)}
+    assert [(row["bill_id"], row["extra"]) for row in _split_rows(out)] == [
+        ("118-hr-1", None), ("119-hr-1", None), ("119-hr-2", "x")], "a prior row takes the new column as NULL"
+    build_generation(tmp_path / "artifact", family="sections", files=[out], expected_keys=["sections.parquet"],
+                     partitioned={"sections.parquet": ["congress"]})
+
+
+def test_a_merge_that_fails_part_way_leaves_its_prior_whole_for_the_next_attempt(tmp_path, monkeypatch):
+    """A re-run in the same directory reads the whole prior again, never a half-moved one (review S5: 2,659,863 to 1)."""
+    rows = {"118": [_row("118-hr-1", "0", "a")], "119": [_row("119-hr-1", "0", "b"), _row("119-hr-2", "0", "c")]}
+
+    def download(remote_key, directory):
+        return [_member(directory, congress, held) for congress, held in rows.items()]
+
+    real = table_merge.merge_table
+
+    def fail_once(*args, **kwargs):
+        monkeypatch.setattr(table_merge, "merge_table", real)
+        raise RuntimeError("simulated failure on the partition merged")
+
+    # The 118th is untouched and carried first; the failure comes after it, on the 119th's merge.
+    monkeypatch.setattr(table_merge, "merge_table", fail_once)
+    with pytest.raises(RuntimeError, match="simulated"):
+        _merge_split(tmp_path, [_row("119-hr-9", "0", "new")], published_members(tmp_path, "sections", download))
+
+    again = published_members(tmp_path, "sections", lambda *_: pytest.fail("the intact prior is reused"))
+    out = _merge_split(tmp_path, [_row("119-hr-9", "0", "new")], again)
+    assert [row["bill_id"] for row in _split_rows(out)] == ["118-hr-1", "119-hr-1", "119-hr-2", "119-hr-9"]
+
+
+def test_a_download_that_fails_leaves_no_prior_to_be_read(tmp_path):
+    def partial(remote_key, directory):
+        _member(directory, "118", [_row("118-hr-1", "0", "a")])
+        raise RuntimeError("connection reset after the first member")
+
+    with pytest.raises(RuntimeError, match="connection reset"):
+        published_members(tmp_path, "sections", partial)
+    assert not prior_members_path(tmp_path, "sections").exists()
+
+    def whole(remote_key, directory):
+        return [_member(directory, "118", [_row("118-hr-1", "0", "a")]), _member(directory, "119", [_row("119-hr-1", "0", "b")])]
+
+    assert [path.parent.name for path in published_members(tmp_path, "sections", whole) or []] == [
+        "congress=118", "congress=119"]
+
+
+def test_a_download_a_killed_run_left_part_way_is_discarded(tmp_path):
+    """A kill skips every cleanup; the half-written download sits in ``.partial``, never where the prior is read."""
+    killed = prior_members_path(tmp_path, "sections").with_name("_sections_prior.partial")
+    _member(killed, "117", [_row("117-hr-1", "0", "from the killed run")])
+
+    def whole(remote_key, directory):
+        return [_member(directory, "118", [_row("118-hr-1", "0", "a")])]
+
+    assert [path.parent.name for path in published_members(tmp_path, "sections", whole) or []] == ["congress=118"]
+    assert not killed.exists()
+
+
+def test_a_scope_over_a_partition_that_holds_nothing_writes_no_member(tmp_path):
+    prior = [_member(tmp_path / "p", "118", [_row("118-hr-1", "0", "a")])]
+    out = _merge_split(tmp_path, [], prior, replace_parents=("bill_id", {"120-hr-1"}))
+    assert list(_members(out)) == ["congress=118/part-000000.parquet"]
+
+
+def test_an_untouched_partition_of_several_parts_keeps_every_part(tmp_path):
+    prior = [_member(tmp_path / "p", "118", [_row("118-hr-1", "0", "a")]),
+             _member(tmp_path / "p", "118", [_row("118-hr-2", "0", "b")], part=1),
+             _member(tmp_path / "p", "119", [_row("119-hr-1", "0", "c")])]
+    held = {f"congress=118/{path.name}": path.read_bytes() for path in prior[:2]}
+    out = _merge_split(tmp_path, [_row("119-hr-2", "0", "d")], prior)
+    members = _members(out)
+    assert list(members) == [*held, "congress=119/part-000000.parquet"]
+    assert {key: members[key] for key in held} == held
+
+
+def test_a_fresh_row_lands_in_the_partition_its_identity_names_whatever_it_states(tmp_path):
+    """The partition column is the builder's to write, from the identity; a stale or missing statement cannot move a row."""
+    stale = {**_row("119-hr-5", "0", "x"), "congress": "118"}
+    missing = _row("119-hr-6", "0", "y", congress=False)
+    out = _merge_split(tmp_path, [stale, missing], None)
+    assert list(_members(out)) == ["congress=119/part-000000.parquet"]
+    assert [row["congress"] for row in _split_rows(out)] == ["119", "119"]
+
+
+def test_a_partition_whose_columns_are_the_contracts_in_another_order_is_rewritten(tmp_path):
+    """Members share one ordered column list; the same names in another order would publish a second shape."""
+    reordered = tmp_path / "p" / "sections" / "congress=118" / "part-000000.parquet"
+    reordered.parent.mkdir(parents=True)
+    pq.write_table(pa.table({c: ["118" if c == "congress" else "118-hr-1" if c == "bill_id" else "x"]
+                             for c in reversed(SECTIONS)}), reordered)
+    prior = [reordered, _member(tmp_path / "p", "119", [_row("119-hr-1", "0", "b")])]
+    out = _merge_split(tmp_path, [_row("119-hr-2", "0", "c")], prior)
+    assert {path.parent.name: pq.read_schema(path).names for path in out.rglob("*.parquet")} == {
+        "congress=118": list(SECTIONS), "congress=119": list(SECTIONS)}
+    build_generation(tmp_path / "artifact", family="sections", files=[out], expected_keys=["sections.parquet"],
+                     partitioned={"sections.parquet": ["congress"]})
+
+
+def test_every_part_of_a_partition_is_checked_for_the_contracts_columns(tmp_path):
+    """A partition whose first part has the new column and whose second lacks it is merged, by name, into one."""
+    grown = (*SECTIONS, "extra")
+    first = tmp_path / "p" / "sections" / "congress=118" / "part-000000.parquet"
+    first.parent.mkdir(parents=True)
+    pq.write_table(pa.Table.from_pylist([{**_row("118-hr-1", "0", "a"), "extra": "x"}],
+                                        schema=pa.schema([(c, pa.string()) for c in grown])), first)
+    prior = [first, _member(tmp_path / "p", "118", [_row("118-hr-2", "0", "b")], part=1)]
+    out = merge_partitioned_table(
+        tmp_path / "out", name="sections", columns=grown, identity=("bill_id", "seq"), version_column="version",
+        rows=[], partitioning=BY_CONGRESS, prior=prior)
+    assert list(_members(out)) == ["congress=118/part-000000.parquet"]
+    assert [(row["bill_id"], row["extra"]) for row in _split_rows(out)] == [("118-hr-1", "x"), ("118-hr-2", None)]

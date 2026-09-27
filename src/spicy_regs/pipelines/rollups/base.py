@@ -86,6 +86,9 @@ class RollupPipeline(Pipeline):
     #: Tables this rollup adds to its published family: the explicit migration publication requires before a
     #: family's table set may grow. Inert once they are published; never a way to drop one.
     added_tables: ClassVar[tuple[str, ...]] = ()
+    #: Outputs stored as several files, by key, to their partition columns. The build returns each as a directory
+    #: named for the table, holding ``<col>=<value>/part-NNNNNN.parquet`` (multi-file design §4.2).
+    partitioned: ClassVar[Mapping[str, tuple[str, ...]]] = {}
 
     #: The single artifact this rollup writes and publishes (e.g.
     #: ``"feed_summary.parquet"``). Its R2 remote key is the same filename.
@@ -140,7 +143,7 @@ class RollupPipeline(Pipeline):
     def _run_tables(self, output_dir: Path) -> None:
         from rulespec_artifacts import publish_directory_no_replace
         from spicy_regs.data_dictionary import expected_schemas
-        from spicy_regs.generations import build_generation, verify_generation
+        from spicy_regs.generations import build_generation, output_keys, verify_generation
         from spicy_regs.sources import publication
 
         output_dir = self.output_dir or (Path.cwd() / "output")
@@ -166,7 +169,9 @@ class RollupPipeline(Pipeline):
             out_paths = built if isinstance(built, tuple) else (built,)
             family = self.name
             expected_keys = self.outputs or (self.output,)
-            if len(out_paths) != len(expected_keys) or {p.name for p in out_paths} != set(expected_keys):
+            if len(out_paths) != len(expected_keys) or set(output_keys(out_paths, self.partitioned)) != set(
+                expected_keys
+            ):
                 raise publication.PublicationError("Build outputs differ from its declared complete set")
             carried_forward = {}
             publication_status = "complete-family"
@@ -182,10 +187,11 @@ class RollupPipeline(Pipeline):
                 else:
                     family = self.publication_family
                     expected_keys = tuple(prior["tables"])
-                    if not {p.name for p in out_paths} <= set(expected_keys):
+                    written = set(output_keys(out_paths, self.partitioned))
+                    if not written <= set(expected_keys):
                         raise publication.PublicationError("Partial writer output is outside its existing family")
                     for key in expected_keys:
-                        if key not in {p.name for p in out_paths}:
+                        if key not in written:
                             path = build_dir / key
                             if not r2.download(key, path):
                                 raise publication.PublicationError(f"Missing carried-forward member: {key}")
@@ -201,7 +207,7 @@ class RollupPipeline(Pipeline):
                 read_snapshot=prior_index, carried_forward=carried_forward,
                 publication_status=publication_status,
                 inputs=self.source_evidence.inputs() if self.source_evidence else (),
-                parents=parents,
+                parents=parents, partitioned=self.partitioned,
             )
             destination = generations / artifact.pin.artifact_digest.removeprefix("sha256:")
             if destination.exists():

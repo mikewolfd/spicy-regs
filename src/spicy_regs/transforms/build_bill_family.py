@@ -44,6 +44,7 @@ from spicy_docs.interpretation.vote_matching import (
 from spicy_docs.reading.paged_json import PagedJsonSourceError
 from spicy_docs.schemas import TABLE_CONTRACTS
 from spicy_docs.schemas.activity_events import activity_events, snapshot_from_rows
+from spicy_docs.schemas.tables import bill_congress
 from spicy_docs.schemas.tables import bill_id as bill_key
 from spicy_docs.schemas.tables import text
 from spicy_docs.sources.congress.bill_status import (
@@ -87,6 +88,7 @@ from spicy_regs.transforms.bill_family_bodies import (
     BODY_BUDGET,
     LISTED_SOURCE,
     MAX_VERSION_FETCHES,
+    PACKAGE_REFUSALS_KEY,
     TEXT_REFUSALS_KEY,
     BodyPass,
     BulkBillsSource,
@@ -103,7 +105,17 @@ from spicy_regs.transforms.congress_scope import (
     congresses_from_env,
 )
 from spicy_regs.transforms.model_call import resolve_gemini_key
-from spicy_regs.transforms.table_merge import ReplacementScope, merge_contract_table, merge_table, published_table
+from spicy_regs.sources.publication import parquet_scan
+from spicy_regs.transforms.table_merge import (
+    Partitioning,
+    ReplacementScope,
+    download_prior_members,
+    merge_contract_table,
+    merge_partitioned_table,
+    merge_table,
+    published_members,
+    published_table,
+)
 
 if TYPE_CHECKING:
     from spicy_regs.source_evidence import CaptureEvidence
@@ -315,6 +327,11 @@ FAMILY_TABLES: tuple[tuple[str, str], ...] = (
     ("diff_summaries", "diff_summaries"),
     ("cbo_cost_estimates", "cbo_cost_estimates"),
 )
+
+#: Contracts stored one file per partition (multi-file design §4.2): ``bill_sections`` by the Congress its
+#: ``bill_id`` names, derived by the contract's own ``bill_congress``. A nightly run then rewrites the sitting
+#: Congress's file, and publication copies the rest. The rollup declares these to ``build_generation``.
+PARTITIONED: Mapping[str, Partitioning] = {"bill_sections": Partitioning("congress", "bill_id", bill_congress)}
 
 
 class BulkStatusSource(Protocol):
@@ -534,12 +551,14 @@ class PriorIndex:
 
 
 def _download_prior(output_dir: Path, download_prior: Callable[[str, Path], bool]) -> dict[str, Path | None]:
-    """Fetch each prior table this run reads before merging, to the path the merge reuses in place."""
+    """Fetch each single-file prior table this run reads before merging, to the path the merge reuses in place.
+
+    ``bill_sections`` is stored one file per Congress and comes through ``published_members`` instead.
+    """
     return {
         name: published_table(output_dir, name, download_prior)
         for name in (
             *SNAPSHOT_TABLES,
-            "bill_sections",
             "section_diffs",
             "section_diff_items",
             "cbo_cost_estimates",
@@ -551,8 +570,11 @@ def _download_prior(output_dir: Path, download_prior: Callable[[str, Path], bool
     }
 
 
-def _prior_index(paths: Mapping[str, Path | None]) -> PriorIndex:
-    """Read the skip lookups out of the prior tables without materialising them."""
+def _prior_index(paths: Mapping[str, Path | None], sections: Sequence[Path] | None = None) -> PriorIndex:
+    """Read the skip lookups out of the prior tables without materialising them.
+
+    ``sections`` are the prior ``bill_sections`` files: its members, or the one file it was before it was split.
+    """
     import duckdb
 
     text_dates: dict[str, str | None] = {}
@@ -603,14 +625,13 @@ def _prior_index(paths: Mapping[str, Path | None]) -> PriorIndex:
     dates: dict[tuple[str, str], str] = {}
     xml_printings: dict[str, set[str]] = {}
     section_counts = {}
-    sections_path = paths.get("bill_sections")
-    if sections_path is not None and not _has_columns(sections_path, ("bill_id", "version_code", "source")):
-        sections_path = None
-    if sections_path is not None:
+    if sections and not _has_columns(sections, ("bill_id", "version_code", "source")):
+        sections = None
+    if sections:
         section_counts = {
             (bill, code): count
             for bill, code, count in duckdb.sql(
-                f"SELECT bill_id, version_code, count(*) FROM read_parquet('{sections_path}') "
+                f"SELECT bill_id, version_code, count(*) FROM {_scan(sections)} "
                 "WHERE source = 'govinfo' GROUP BY bill_id, version_code"
             ).fetchall()
         }
@@ -649,7 +670,7 @@ def _prior_index(paths: Mapping[str, Path | None]) -> PriorIndex:
             kind = body_kind(row["content_type"], row["format_name"])
             if kind == "xml":
                 count = row["section_count"]
-                if sections_path is None or count is None or not count.isdigit():
+                if not sections or count is None or not count.isdigit():
                     continue
                 if int(count) != section_counts.get((bill, code), 0):
                     continue
@@ -793,14 +814,23 @@ def _complete_child_scopes(
     return complete
 
 
-def _has_columns(path: Path, needed: Sequence[str]) -> bool:
+def _scan(source: Path | Sequence[Path]) -> str:
+    """A prior table's file, or a split table's members, as one relation; Hive partitioning off.
+
+    A member's ``congress=<N>`` directory would otherwise add a second, integer ``congress`` beside the stored one.
+    """
+    return parquet_scan([str(source)] if isinstance(source, Path) else [str(path) for path in source])
+
+
+def _has_columns(source: Path | Sequence[Path], needed: Sequence[str]) -> bool:
     """Whether a prior table predates the columns a lookup needs."""
     import duckdb
 
-    present = {str(row[0]) for row in duckdb.sql(f"DESCRIBE SELECT * FROM read_parquet('{path}')").fetchall()}
+    present = {str(row[0]) for row in duckdb.sql(f"DESCRIBE SELECT * FROM {_scan(source)}").fetchall()}
     missing = [column for column in needed if column not in present]
     if missing:
-        logger.info("Bill family: prior {} lacks {} — treating as cold for that lookup", path.name, missing)
+        label = source.name if isinstance(source, Path) else source[0].parent.name
+        logger.info("Bill family: prior {} lacks {} — treating as cold for that lookup", label, missing)
     return not missing
 
 
@@ -1501,9 +1531,13 @@ def build_bill_family(
     list_source: ListBackfillSource | None = None,
     max_version_fetches: int = MAX_VERSION_FETCHES,
     download_prior: Callable[[str, Path], bool] = r2.download,
+    download_members: Callable[[str, Path], Sequence[Path]] = download_prior_members,
     evidence: CaptureEvidence | None = None,
 ) -> tuple[Path, ...]:
-    """Build bill-family outputs; returns one path per table."""
+    """Build bill-family outputs, with a directory for each partitioned table.
+
+    ``download_prior`` fetches a single-file prior; ``download_members`` fetches every partitioned member.
+    """
     if isinstance(max_version_fetches, bool) or not isinstance(max_version_fetches, int) or max_version_fetches < 0:
         raise ValueError("max_version_fetches must be a nonnegative integer; zero disables acquisition")
     congresses = congresses_from_env()
@@ -1591,7 +1625,8 @@ def build_bill_family(
 
     # 1. What the last run already published, so this one can skip it.
     prior_paths = _download_prior(output_dir, download_prior)
-    index = _prior_index(prior_paths)
+    split_priors = {name: published_members(output_dir, name, download_members) for name in PARTITIONED}
+    index = _prior_index(prior_paths, split_priors["bill_sections"])
     held_archives = _held_archives(prior_paths.get(ARCHIVES_TABLE))
     # An unchanged archive still needs a read for a status row in doubt: one a
     # BILLSTATUS read wrote (it states a schema version) before this rollup
@@ -1728,7 +1763,8 @@ def build_bill_family(
         summarize=summarize,
         summarize_diff=summarize_diff_call,
         fresh_bills=[row for tables in families for row in tables.bills],
-        refusals=_held_text_refusals(prior_paths.get(ARCHIVES_TABLE)),
+        refusals=_held_refusals(prior_paths.get(ARCHIVES_TABLE), TEXT_REFUSALS_KEY),
+        package_refusals=_held_refusals(prior_paths.get(ARCHIVES_TABLE), PACKAGE_REFUSALS_KEY),
     )
 
     # 2c. The pre-BILLSTATUS backfill: same scope input, the route the
@@ -1866,6 +1902,10 @@ def build_bill_family(
         logger.warning("Bill family: retiring {:,} published printings keyed as another", len(retired_versions))
     if superseded:
         logger.info("Bill family: retiring {:,} placeholders a processed body now stands for", len(superseded))
+    # A refused per-package read is not a read: the tree-less body row the same bytes published before goes, and
+    # the listing stands alone (113-hr-1067's and 113-hr-1068's public laws kept both).
+    if body.unread:
+        logger.info("Bill family: withdrawing {:,} body rows a refused read left without a tree", len(body.unread))
     version_identity = TABLE_CONTRACTS["bill_versions"].identity
     # Each scope names parents whose prior child rows this run replaces --
     # emptying them where the run publishes none.
@@ -1892,8 +1932,8 @@ def build_bill_family(
                 }
             },
         ),
-        "bill_versions": (version_identity, retired_versions | superseded),
-        "bill_sections": (version_identity, section_scopes | retired_versions),
+        "bill_versions": (version_identity, retired_versions | superseded | body.unread),
+        "bill_sections": (version_identity, section_scopes | retired_versions | body.unread),
         "section_diffs": (pair_identity, retired_pairs),
         "section_diff_items": (pair_identity, item_scopes | retired_pairs),
         "financial_changes": (pair_identity, retired_pairs),
@@ -1901,6 +1941,19 @@ def build_bill_family(
     }
 
     def publish(contract: str, rows: Any) -> Path:
+        if contract in PARTITIONED:
+            table = TABLE_CONTRACTS[contract]
+            return merge_partitioned_table(
+                output_dir,
+                name=contract,
+                columns=table.columns,
+                identity=table.identity,
+                version_column=table.version_column,
+                rows=rows,
+                partitioning=PARTITIONED[contract],
+                prior=split_priors[contract],
+                replace_parents=replaced.get(contract),
+            )
         return merge_contract_table(
             output_dir,
             contract,
@@ -1929,6 +1982,7 @@ def build_bill_family(
             parquet_metadata={
                 ARCHIVE_COMPLETION_KEY: json.dumps(sorted(completed_archives)),
                 TEXT_REFUSALS_KEY: refusal_metadata(body.refusals),
+                PACKAGE_REFUSALS_KEY: refusal_metadata(body.package_refusals),
             },
         )
     )
@@ -1978,13 +2032,13 @@ def build_bill_family(
     return tuple(paths)
 
 
-def _held_text_refusals(path: Path | None) -> dict[str, dict[str, Any]]:
-    """The BILLS printings the last run's zips refused, by zip link, with the entry each was read at."""
+def _held_refusals(path: Path | None, key: str) -> dict[str, dict[str, Any]]:
+    """What the last run's body pass refused under ``key``: printings by BILLS zip link, or packages by id."""
     if path is None:
         return {}
     import pyarrow.parquet as pq
 
-    return refusal_state((pq.read_schema(path).metadata or {}).get(TEXT_REFUSALS_KEY.encode()))
+    return refusal_state((pq.read_schema(path).metadata or {}).get(key.encode()))
 
 
 def _in_scope(bill_id: str, congresses: Collection[int], bill_types: Collection[str]) -> bool:
@@ -2009,6 +2063,7 @@ def _run_body_pass(
     summarize_diff: DiffSummarizer | None,
     fresh_bills: Sequence[Mapping[str, Any]],
     refusals: Mapping[str, Mapping[str, Any]],
+    package_refusals: Mapping[str, Mapping[str, Any]],
 ) -> Any:
     """Plan and run the body pass over the in-scope bills with body or comparison work.
 
@@ -2033,6 +2088,7 @@ def _run_body_pass(
         "package_id",
         "offered_formats_json",
         "sha256",
+        "section_count",
     )
     rows: list[Mapping[str, Any]] = []
     path = prior_paths.get("bill_versions")
@@ -2096,6 +2152,7 @@ def _run_body_pass(
         refusals=refusals,
         summarize=summarize,
         bill_rows=bill_rows,
+        package_refusals=package_refusals,
     ).run(work)
     outcome.retired_pairs |= retired_pairs
     outcome.superseded |= redundant

@@ -147,7 +147,9 @@ def _ensure_nullable_column(con, record_type: RecordType, *, existing: dict[str,
     """
     if record_type.name not in ("documents", "comments"):
         return None
-    columns = (_PDF_RESULTS_COLUMN,) + (_COMMENT_REFERENCE_COLUMNS if record_type.name == "comments" else ())
+    columns = (_PDF_RESULTS_COLUMN,) + (
+        _COMMENT_REFERENCE_COLUMNS if record_type.name == "comments" else ("attachment_records_json",)
+    )
     columns = tuple(column for column in columns if column in record_type.schema)
     table = _qualified(record_type)
     existing = _column_types(con, record_type) if existing is None else existing

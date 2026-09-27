@@ -14,7 +14,7 @@ Base CLI and MCP installs do not require them.
   Provider and receiving gates are recorded in the join execution report.
   Vendored adoption only; no package-registry upload is asserted.
 
-- `spicy_docs-0.47.0`: built from SpicyDocs `7440dd4a3c446962174b5c3048e313d34a3b287b`,
+- Historical join-lane `spicy_docs-0.47.0` (superseded; not the retained 0.47 wheel): built from SpicyDocs `7440dd4a3c446962174b5c3048e313d34a3b287b`,
   September 27, 2026: **1,685,325 bytes**, SHA-256
   `3a614d4aa16b0416e58690e7659037fef3397d3d6ce7ca21c1cc0e2c8ab42d29`, byte-identical
   across two builds. Preserves dated bill cosponsors, nested member party intervals,
@@ -107,3 +107,17 @@ CourtListener listing, pins and raw rows use the shared provider directly. Run
 for this receiving change. Before replacing the provider wheel, also run the
 BILLSTATUS, Unified Agenda and PDF reader tests (`test_bill_subjects.py`,
 `test_unified_agenda*.py`, `test_pdf_text*.py`).
+
+The retained `spicy_docs-0.47.0-py3-none-any.whl` is the upstream bills-lane build
+from `f549c16`, SHA-256 `ff3d9bb0ada5e38df4224533b6f41a3c989b25fd4ce7f3a161d9d054150346c5`.
+Its `bill_sections.congress` addition is retained through the merged provider release;
+this older wheel is not the active dependency. The two lanes previously used the same
+version for different builds; the historical join-lane receipt above does not describe
+this retained file. The active wheel is named by `pyproject.toml` and `uv.lock`.
+
+Active `spicy_docs-0.50.0` integrates both source lanes at `8844068b355c41cd5ab7e7310cc5ba51798f741a`.
+The wheel is 1,692,745 bytes, SHA-256
+`c739bc6f6bd488ca2afcb37d1bbcff57f14c0abe051638d4679ed17abf9eb64b`,
+identical across two builds with `SOURCE_DATE_EPOCH=1790553600`. It retains the
+0.49 attachment and Senate readers and adds the upstream `bill_sections.congress`
+column and owner derivation required by partitioned bill-family output.

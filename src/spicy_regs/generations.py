@@ -187,6 +187,11 @@ def _check_parents(parents, snapshot: Mapping) -> None:
                 raise ValueError(f"Parent differs from its captured family: {key}")
 
 
+def output_keys(files: Sequence[Path], partitioned: Mapping[str, Sequence[str]]) -> list[str]:
+    """Each output's table key: a split table's directory ``<name>`` is ``<name>.parquet``, any other file its name."""
+    return [f"{path.name}.parquet" if f"{path.name}.parquet" in partitioned else path.name for path in files]
+
+
 def build_generation(
     directory: Path,
     *,
@@ -222,7 +227,7 @@ def build_generation(
     )
 
     expected, partitioned = set(expected_keys), dict(partitioned or {})
-    names = [f"{path.name}.parquet" if path.name + ".parquet" in partitioned else path.name for path in files]
+    names = output_keys(files, partitioned)
     if not expected or len(expected) != len(expected_keys) or len(set(names)) != len(names) or set(names) != expected:
         raise ValueError("Build outputs differ from the declared complete family")
     if any(Path(key).name != key or not key.endswith(".parquet") for key in expected):

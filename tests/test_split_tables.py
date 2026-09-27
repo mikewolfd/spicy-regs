@@ -2,20 +2,29 @@
 
 import argparse
 import json
+from collections.abc import Mapping
 from contextlib import contextmanager
-from typing import Any
+from typing import Any, ClassVar
 
 import httpx
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 from rulespec_artifacts import canonical_json_bytes
+from spicy_docs.schemas.tables import bill_congress
 
 from spicy_regs import cli, mcp_server
 from spicy_regs.generation_audit import Declaration, PublicBase, _consistency, _Run, audit
 from spicy_regs.generations import build_generation
 from spicy_regs.local_data import local_selection, verify_local_members
+from spicy_regs.pipelines.rollups.base import RollupPipeline
 from spicy_regs.sources import publication as pub, r2
+from spicy_regs.transforms.table_merge import (
+    Partitioning,
+    merge_partitioned_table,
+    prior_members_path,
+    published_members,
+)
 from tests.generation_fakes import Store
 from tests.test_generation_audit import public_base
 from tests.test_generation_mcp import connection_fixture
@@ -384,3 +393,84 @@ def test_a_split_download_whose_files_differ_from_its_members_refuses(tmp_path, 
         member.unlink()
     with pytest.raises(RuntimeError, match=message):
         verify_local_members(local_selection(output))
+
+
+# --------------------------------------------------------------------------- #
+# Building a split table from its published prior, through the rollup (multi-file design §4.3).
+# --------------------------------------------------------------------------- #
+class _SplitFamily(RollupPipeline):
+    """A family storing ``sections`` one file per Congress, the way the bill family stores ``bill_sections``."""
+
+    name: ClassVar[str] = "split-family"
+    outputs: ClassVar[tuple[str, ...]] = ("sections.parquet", "bills.parquet")
+    partitioned: ClassVar[Mapping[str, tuple[str, ...]]] = {"sections.parquet": ("congress",)}
+    fresh: ClassVar[tuple[dict, ...]] = ()
+
+    def build(self, output_dir):
+        sections = merge_partitioned_table(
+            output_dir, name="sections", columns=("bill_id", "congress", "body"), identity=("bill_id",),
+            version_column=None, rows=[{**row, "congress": bill_congress(row["bill_id"])} for row in self.fresh],
+            partitioning=Partitioning("congress", "bill_id", bill_congress),
+            prior=published_members(output_dir, "sections"),
+        )
+        bills = output_dir / "bills.parquet"
+        pq.write_table(pa.table({"bill_id": ["119-s-5"]}), bills)
+        return sections, bills
+
+
+def _public(monkeypatch, store) -> None:
+    """Answer the public base's GETs from the fake bucket, as r2.dev does."""
+    @contextmanager
+    def stream(method, url, **kwargs):
+        key = url.removeprefix("https://example.test/")
+        request = httpx.Request(method, url)
+        yield (httpx.Response(200, content=store.objects[key], request=request) if key in store.objects
+               else httpx.Response(404, request=request))
+
+    monkeypatch.setattr(httpx, "stream", stream)
+
+
+def test_a_rollup_declaring_a_split_table_publishes_its_members_and_copies_an_untouched_one(tmp_path, remote,
+                                                                                             monkeypatch):
+    """The nightly shape: every prior member fetched by digest, the sitting Congress rewritten, the rest copied."""
+    _public(monkeypatch, remote)
+    first = type("First", (_SplitFamily,), {"fresh": ({"bill_id": "118-hr-1", "body": "a"},
+                                                      {"bill_id": "119-s-5", "body": "b"})})
+    first(output_dir=tmp_path / "first", skip_upload=False).run()
+    published = pub.parse_index(remote.objects[pub.INDEX_V2_KEY])["families"]["split-family"]
+    split = published["tables"]["sections.parquet"]
+    assert (split["partitionColumns"], [m["key"] for m in split["members"]]) == (
+        ["congress"], ["sections/congress=118/part-000000.parquet", "sections/congress=119/part-000000.parquet"])
+    with pytest.raises(pub.PublicationError, match="read it through table_members"):
+        r2.download("sections.parquet", tmp_path / "one-file.parquet")
+
+    remote.copies.clear()
+    second = type("Second", (_SplitFamily,), {"fresh": ({"bill_id": "119-s-6", "body": "c"},)})
+    second(output_dir=tmp_path / "second", skip_upload=False).run()
+
+    entry = pub.parse_index(remote.objects[pub.INDEX_V2_KEY])["families"]["split-family"]
+    members = {m["key"]: m for m in entry["tables"]["sections.parquet"]["members"]}
+    assert members["sections/congress=118/part-000000.parquet"]["sha256"] == split["members"][0]["sha256"]
+    assert members["sections/congress=119/part-000000.parquet"]["rows"] == 2
+    assert f"{entry['prefix']}/sections/congress=118/part-000000.parquet" in remote.copies
+    assert f"{entry['prefix']}/sections/congress=119/part-000000.parquet" in remote.writes
+
+
+def test_the_bill_family_declares_bill_sections_split_by_congress():
+    from spicy_regs.pipelines.rollups.bill_family import BillFamilyRollup
+
+    assert BillFamilyRollup.partitioned == {"bill_sections.parquet": ("congress",)}
+    assert "bill_sections.parquet" in BillFamilyRollup.outputs
+
+
+def test_a_prior_split_table_is_read_member_by_member_and_an_unpublished_one_is_a_cold_start(tmp_path, monkeypatch):
+    store = Store()
+    _publish(tmp_path, store, "first", _outputs(tmp_path / "out1", {"118": ["118-hr1"], "119": ["119-s5"]}))
+    _serve(monkeypatch, store)
+    paths = published_members(tmp_path / "build", "bill_sections")
+    assert paths is not None
+    assert [path.relative_to(prior_members_path(tmp_path / "build", "bill_sections")).as_posix() for path in paths] == [
+        "bill_sections/congress=118/part-000000.parquet", "bill_sections/congress=119/part-000000.parquet"]
+    assert published_members(tmp_path / "build", "never_published") is None
+    monkeypatch.delenv("R2_PUBLIC_URL")
+    assert published_members(tmp_path / "unconfigured", "bill_sections") is None

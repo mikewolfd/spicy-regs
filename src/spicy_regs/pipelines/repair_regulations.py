@@ -21,6 +21,8 @@ from cyclopts import App
 from rulespec_artifacts import ArtifactPin, LocalMemberSource
 from spicy_docs.schemas.regulations import RECORD_TYPES as SOURCE_TYPES
 from spicy_docs.source_native import SourceNativeReleaseReader
+from spicy_docs.sources.regulations_gov.api import AttachmentRelationship
+from spicy_docs.sources.regulations_gov.attachment_records import attachment_records_json
 from spicy_docs.sources.regulations_gov.profile import (
     REGULATIONS_GOV_COMMENT_PROFILE,
     REGULATIONS_GOV_DOCKET_PROFILE,
@@ -52,6 +54,7 @@ def repair_records(
     apply: bool = False,
     expected_snapshot: int | None = None,
     source_pins: Mapping | None = None,
+    attachment_relationships: Mapping[str, AttachmentRelationship] | None = None,
 ) -> dict:
     """Stage a complete explicit reread before correcting output rows.
 
@@ -62,10 +65,20 @@ def repair_records(
     enrichment columns. Unrelated rows and newer source observations survive.
     Missing source fields are genuine NULL values, not requests to retain stale
     mapped facts. An exception during input consumption prevents every merge.
-    Comments go to the catalog (see :func:`_repair_comments`); ``apply``,
-    ``expected_snapshot`` and ``source_pins`` (recorded in the receipt) apply
-    to them only.
+    Explicit ``attachment_relationships`` must cover exactly the selected documents;
+    ``source_pins`` retains the caller's edition association. The owner checks each
+    captured relationship identity and completeness; this API does not infer that
+    a current relationship belongs to a historical public document edition.
+    Comments go to the catalog (see :func:`_repair_comments`); ``apply`` and
+    ``expected_snapshot`` apply to comments only. ``source_pins`` retains
+    provenance in the receipt for all explicit repairs.
     """
+    if attachment_relationships is not None:
+        if table != "documents":
+            raise ValueError("attachment relationships apply only to documents")
+        if not source_pins:
+            raise ValueError("attachment relationships require retained source pins and edition association")
+    remaining_relationships = set(attachment_relationships or {})
     if table not in PROFILES:
         raise ValueError(f"unsupported regulatory source table: {table}")
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -80,12 +93,19 @@ def repair_records(
             identity = row.get(host.dedup_key)
             if not isinstance(identity, str) or not identity.strip():
                 raise ValueError(f"source correction requires a nonblank {host.dedup_key}")
+            if attachment_relationships is not None:
+                if identity not in attachment_relationships:
+                    raise ValueError(f"attachment relationship unread for selected document {identity}")
+                row["attachment_records_json"] = attachment_records_json(dict(raw), attachment_relationships[identity])
+                remaining_relationships.discard(identity)
             batch.append({column: row.get(column) for column in host.schema})
             count += 1
             if len(batch) == 1000:
                 write_staging(str(count), table, batch, staging, host.schema)
                 batch.clear()
         write_staging(str(count), table, batch, staging, host.schema)
+        if remaining_relationships:
+            raise ValueError("attachment relationships contain unselected document identities")
 
         if table == "comments":
             receipt = _repair_comments(staging, output_dir, count=count, apply=apply,
@@ -118,6 +138,8 @@ def repair_records(
         "spicy_docs_version": version("spicy-docs"),
         "scope": "explicit retained input into local Parquet; no acquisition, Iceberg update or publication",
         "acquisition_manifest_changed": False,
+        "source_pins": dict(source_pins or {}),
+        "attachment_relationships_read": len(attachment_relationships) if attachment_relationships is not None else None,
     }
 
 

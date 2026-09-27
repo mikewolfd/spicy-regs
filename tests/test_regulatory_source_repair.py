@@ -357,3 +357,35 @@ def test_comment_repair_refuses_write_after_snapshot_check(tmp_path, catalog, mo
         repair_records([raw(COMMENT_ID)], table='comments', output_dir=tmp_path, apply=True)
     assert catalog.rows()[0]['title'] == 'concurrent-source'
     assert receipt(tmp_path)['applied_snapshot'] is None
+
+
+def test_explicit_attachment_relationship_repair_clears_and_preserves_enrichment(tmp_path):
+    from spicy_docs.sources.regulations_gov.api import document_attachments_url, read_attachment_relationship
+    from spicy_docs.transport.captured import CapturedBodyResponse
+
+    value = raw()
+    identity = value['data']['id']
+    expected = shaped(value)
+    write(tmp_path / 'documents.parquet', [{**expected, 'attachment_records_json': '[{"id":"old"}]',
+                                          'text_content': 'retained text'}])
+    url = document_attachments_url(identity)
+    capture = CapturedBodyResponse(requested_url=url, resolved_url=url, status_code=200,
+                                   content_type='application/json', body=b'{"data":[]}',
+                                   observed_at='2026-09-27T00:00:00Z')
+    relationship = read_attachment_relationship(capture, identity=identity)
+    result = repair_records([value], table='documents', output_dir=tmp_path,
+                            attachment_relationships={identity: relationship},
+                            source_pins={'test': 'constructed complete-empty relationship control'})
+    rows = pq.read_table(tmp_path / 'documents.parquet').to_pylist()
+    assert len(rows) == 1
+    assert rows[0]['attachment_records_json'] == '[]'
+    assert rows[0]['text_content'] == 'retained text'
+    assert result['attachment_relationships_read'] == 1
+    before = (tmp_path / 'documents.parquet').read_bytes()
+    with pytest.raises(ValueError, match='unread'):
+        repair_records([value], table='documents', output_dir=tmp_path,
+                       attachment_relationships={}, source_pins={'test': 'missing control'})
+    assert (tmp_path / 'documents.parquet').read_bytes() == before
+    with pytest.raises(ValueError, match='retained source pins'):
+        repair_records([value], table='documents', output_dir=tmp_path, attachment_relationships={identity: relationship})
+    assert (tmp_path / 'documents.parquet').read_bytes() == before

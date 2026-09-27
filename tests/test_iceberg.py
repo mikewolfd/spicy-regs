@@ -1045,3 +1045,25 @@ def test_replace_preserves_commit_error_when_transaction_already_aborted(local_c
     assert con.execute(f'SELECT title FROM {table}').fetchall() == [('prior',)]
     con.execute('BEGIN')
     con.execute('ROLLBACK')
+
+
+def test_document_attachment_nullable_migration_preserves_legacy_rows(local_catalog):
+    from spicy_regs.schemas import RECORD_TYPES
+
+    con = local_catalog
+    record = RECORD_TYPES['documents']
+    table = iceberg._qualified(record)
+    con.execute(f'CREATE SCHEMA IF NOT EXISTS {iceberg._schema_ref()}')
+    con.execute(f'CREATE TABLE {table} (document_id VARCHAR, pdf_extraction_results_json VARCHAR)')
+    con.execute(f"INSERT INTO {table} VALUES ('held', 'prior diagnostics')")
+    assert iceberg._ensure_nullable_column(con, record) == 'attachment_records_json'
+    assert con.execute(f'SELECT * FROM {table}').fetchall() == [('held', 'prior diagnostics', None)]
+    assert iceberg._ensure_nullable_column(con, record) is None
+
+
+def test_document_attachment_migration_refuses_wrong_existing_type(local_catalog):
+    from spicy_regs.schemas import RECORD_TYPES
+
+    record = RECORD_TYPES['documents']
+    with pytest.raises(ValueError, match='attachment_records_json must be VARCHAR'):
+        iceberg._ensure_nullable_column(local_catalog, record, existing={'attachment_records_json': 'INTEGER'})

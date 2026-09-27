@@ -24,7 +24,15 @@ from spicy_docs.sources.congress.bulk_bills import (
 )
 from spicy_docs.transport.captured import CapturedBodyResponse
 
-from tests.test_bill_family import FIXTURES, TEXT_FIXTURES, StubBodyAcquirer, StubBulkAcquirer, _no_prior, _prior_from
+from tests.test_bill_family import (
+    FIXTURES,
+    TEXT_FIXTURES,
+    StubBodyAcquirer,
+    StubBulkAcquirer,
+    _no_prior,
+    _priors,
+    read_output,
+)
 from tests.test_bill_family import scoped as fixture_scope
 
 scoped = fixture_scope
@@ -105,13 +113,13 @@ def run(directory: Path, bills, *, prior: Path | None = None, body=None, budget:
         body_acquirer=body,
         bills_acquirer=bills,
         max_version_fetches=budget,
-        download_prior=_prior_from(prior) if prior else _no_prior,
+        **_priors(prior),
     )
     return {path.stem: path for path in paths}, body
 
 
 def rows(paths, table):
-    return pq.read_table(paths[table]).to_pylist()
+    return read_output(paths[table]).to_pylist()
 
 
 def test_one_zip_read_gives_every_printing_it_holds_and_the_comparison(tmp_path, scoped):
@@ -148,7 +156,15 @@ def test_a_second_run_reads_no_listing_no_zip_and_rewrites_nothing(tmp_path, sco
     second, body = run(tmp_path / "second", bills, prior=tmp_path / "first")
     assert (bills.listings, bills.downloads, body.requested) == ([], [], [])
     for table in ("bill_versions", "bill_sections", "section_diffs", "section_diff_items"):
-        assert second[table].read_bytes() == first[table].read_bytes(), f"{table} is byte-identical"
+        assert _bytes(second[table]) == _bytes(first[table]), f"{table} is byte-identical"
+    assert list(_bytes(second["bill_sections"])) == ["congress=119/part-000000.parquet"]
+
+
+def _bytes(path: Path) -> bytes | dict[str, bytes]:
+    """A file's bytes, or each member's bytes of a split table by its path in the table."""
+    if not path.is_dir():
+        return path.read_bytes()
+    return {member.relative_to(path).as_posix(): member.read_bytes() for member in sorted(path.rglob("*.parquet"))}
 
 
 def test_a_printing_in_the_second_session_is_compared_with_its_first_session_neighbour(tmp_path, scoped):
@@ -199,6 +215,17 @@ def test_an_unchanged_zip_is_not_read_again_for_a_printing_it_refused(tmp_path, 
     assert len(rows(third, "section_diffs")) == 1
     metadata = pq.read_schema(third[build.ARCHIVES_TABLE]).metadata[bodies.TEXT_REFUSALS_KEY.encode()]
     assert json.loads(metadata) == {}
+
+
+def test_a_member_this_run_could_not_parse_is_not_remembered_against_its_zip(tmp_path, scoped, monkeypatch):
+    """Only the reader's refusal is the zip's to remember; a failure of this run's own leaves the zip to read again."""
+    with monkeypatch.context() as failed:
+        failed.setattr(bodies, "parse_bill_tree", lambda *_a, **_k: (_ for _ in ()).throw(OSError("disk full")))
+        first, _ = run(tmp_path / "first", FolderBills({(119, 1, "hr"): BOTH}))
+    assert json.loads(pq.read_schema(first[build.ARCHIVES_TABLE]).metadata[bodies.TEXT_REFUSALS_KEY.encode()]) == {}
+    again = FolderBills({(119, 1, "hr"): BOTH})
+    second, _ = run(tmp_path / "second", again, prior=tmp_path / "first")
+    assert again.downloads == [(119, 1, "hr")] and len(rows(second, "section_diffs")) == 1
 
 
 def test_the_bulk_pass_is_bounded_by_whole_folders(tmp_path, scoped, monkeypatch):

@@ -3,7 +3,8 @@
 Status: **agreed** by spicy-stack-24 (publication format) and spicy-stack-83 (DocSpec, Engine) on
 2026-09-26; see the review record at the end. The measurements in §5 were taken on 2026-09-27 (decision 64).
 The publication side is implemented on branch `multifile-publication` (§7) and merges once the running backfills
-finish and no publish is in flight; the builder side (per-partition merge, the `congress` column) is spicy-stack-11's.
+finish and no publish is in flight; the builder side (per-partition merge, the `congress` column) is on branch
+`multifile-builder` (§8), with spicy-docs branch `bill-sections-congress`.
 
 Owner decision (2026-09-26): design multi-file tables for every large table first, as one cross-repository
 decision, then apply it to `bill_sections`. Decisions 46 (split `fcc_filings` by year before it passes
@@ -279,17 +280,21 @@ spellings.
 
 ## 5. Measurements before code (taken 2026-09-27, owner decision 64)
 
-Probe `scripts/probe_multifile.py` (`probe-multifile.yml`), runs 36288634064 and 36288886947; receipts in
-`~/Work/corpora/multifile-probe-2026-09-27/`. Everything the probe wrote under `probes/` was deleted.
+A one-off probe, runs 36288634064 and 36288886947; receipts in `~/Work/corpora/multifile-probe-2026-09-27/`.
+Everything it wrote under `probes/` was deleted, and so was the probe once measured (its script and workflow are at
+`b1ca952`, `scripts/probe_multifile.py` and `.github/workflows/probe-multifile.yml`).
 
 - **R2 limits.** A 1.1 GiB object (1,181,116,006 bytes) went up in one PUT (72.5 s, then 82.8 s) and was copied
   by one `CopyObject` (53.9 s, then 44.4 s); sizes and ETags agree. Neither limit binds at the 1 GiB member cap,
   so the cap is a design choice, not an R2 constraint, and `court_opinion_clusters` (3.68 GiB) is not blocked on it.
 - **Unchanged share.** `bill_sections` in nightly `72899ab3` against the generation it replaced, `6849376e`, split
   by congress (the `bill_id` prefix) and compared both ways per congress: every congress is identical, so 100% of
-  the split bytes (826 MB, against 950 MB as one file) were rewritten for nothing. It was a Saturday run; a
-  weekday nightly, when the 119th changes, is still to measure, and the design's estimate (1.45 of 1.9 GB) stands
-  until then.
+  the split bytes (826 MB, against 950 MB as one file) were rewritten for nothing. It was a Saturday run. The most
+  recent weekday nightly retained, `55671b43` (2026-09-26 02:51Z, Friday's) against `5990abbb`, predates the bulk
+  backfill: its `bill_sections` held the 118th (66 rows, unchanged) and the 119th (27,248 rows, 6,403 added), so
+  0.4% of its bytes were unchanged (receipt `~/Work/corpora/fork-execution-2026-09-21/multifile-builder-2026-09-27/
+  weekday/`, whose script measures the next weekday nightly). On today's table, a nightly that changes only the
+  119th would leave 87% of the split bytes unchanged (§8's first split); that is a projection until measured.
 - **Read-back.** The whole current bill family (18 members, 1.18 GB) read back and hashed in 34.8 s on one
   stream; the 7 split members (0.83 GB) in 13.5 s with eight workers. Phase 1's O(family) read-back is acceptable.
 - **Query latency.** The MCP's view shape from the runner over the public URL, cold connection, median of three:
@@ -375,3 +380,69 @@ What the code settled, where it refines §4. Tests: `tests/test_split_tables.py`
 3. Redeploy the fork MCP, a Cloudflare Worker from `deploy/cloudflare`, before any table first publishes split.
    Worker 925124f0 runs 2963d77 and reads only `publication.json`, so a split table would disappear from it.
 4. DocSpec reads v2 before any family it admits splits (§4.5 step 2).
+
+## 8. Implementation (builder side, 2026-09-27)
+
+Branch `multifile-builder` on `multifile-publication`; the column ships in the next spicy-docs release. Tests:
+`tests/test_table_merge.py` (the per-partition merge), `tests/test_split_tables.py` (a rollup declaring a split table),
+`tests/test_bill_family*.py` (the bill family's split prior, refusal memory and rendition label).
+
+- **The column.** spicy-docs appends `congress` to the `bill_sections` contract. `schemas.tables.bill_congress` derives
+  it from the `bill_id` prefix, for the shaper and for the builder's first split. The identity is unchanged.
+- **Declaration.** `RollupPipeline.partitioned` maps an output key to its partition columns, and `_run_tables` passes
+  it to `build_generation`. The bill family derives it from `build_bill_family.PARTITIONED`: `bill_sections` by
+  `congress`, a function of `bill_id`.
+- **Prior.** `table_merge.published_members` fetches every member with `r2.download_members` into a `.partial`
+  directory renamed to `_bill_sections_prior/` once complete, so a present prior always holds every member. An
+  unconfigured R2 or an unpublished table is a cold start, as `r2.download` reads them.
+  The family's prior index reads the members as one relation with Hive partitioning off, since DuckDB would
+  otherwise add an integer `congress` from the directory. Nothing asks `r2.download` for `bill_sections` any more.
+- **Merge.** `merge_partitioned_table` merges a partition with fresh rows, a `replace_parents` scope, or a file
+  whose footer columns are not the contract's. That last is a column the contract gained since the file was written:
+  members must share one column list, so a nightly after such a release rewrites every partition once, NULL-filling
+  the new column as `merge_table` does. Each merge reads that partition's prior and writes a fresh
+  `congress=<N>/part-000000.parquet`. Every other partition is hard-linked into the output byte for byte. The prior
+  is only read, and removed once the whole table is written, so a failed run leaves it whole for the next attempt
+  (the review's S5 re-run had kept 1 of 2,659,863 rows). The output directory is built fresh, so no prior part file
+  survives beside a rewritten one. A scope that names no `bill_id` could reach any partition, so it rewrites them
+  all. A fresh row's `congress` is set from its `bill_id`, whatever it stated. An empty split table has no member,
+  which `build_generation` refuses; `bill_sections` is never empty.
+- **Reading a member.** Turn partition discovery off: `hive_partitioning = false` in DuckDB (`parquet_scan` does),
+  `partitioning=None` in pyarrow. A member stores `congress` as VARCHAR, and discovery adds a second `congress` from its
+  `congress=<N>/` directory: DuckDB types it as an integer, and `pq.read_table(<member or table directory>)` refuses
+  with "Unable to merge: Field congress has incompatible types: string vs dictionary". `pq.ParquetFile(path).read()`
+  reads the file alone.
+- **First split.** The column rule's special case. A prior that is still one file is cut in one DuckDB pass
+  (`PARTITION_BY`) by the Congress `bill_congress` derives from each distinct `bill_id`, into files without the
+  column. Every partition is therefore merged, and `merge_table` fills the column with the partition's value.
+- **Transfer.** Still O(table) down: `build_generation` copies and decodes every member, so a carried member's bytes
+  must be local. Up, only the rewritten partitions travel; publication copies the rest server-side.
+- **Per-package refusals** (decision 68's prerequisites, `bill_family_bodies.py`). A pending printing's read with no
+  section tree (a USLM public law, or XML the engine refuses), or a record the publisher answers 404 or 410 for, is
+  not a read: the printing keeps its listing. It is kept in `spicy_regs.bill_family.package_text_refusals.v1`,
+  beside the per-zip record, by package id: `{"listed", "refusal", "sha256", "engine", "status"}`. That is the
+  digest of the listing it was fetched from (its type, date, package and offered links), then `tree` with the
+  refused body's digest and the whole reader (DeltaTrack's name, version and revision, and the spicy-docs version),
+  or `unavailable` with the status. It is not fetched again while its listing and, for a tree, the reader are
+  unchanged, so a DeltaTrack or spicy-docs release retries every refused tree; any other record is asked again. A
+  tree refusal is only the reader's own `BillSourceError`: a failure of the run (no engine, a temporary file, memory)
+  is not a read and not remembered, on either route. A redirect, another 4xx, a refused format and a transport
+  failure are retried. The earlier `govinfo` row is withdrawn only for a tree refusal of its own bytes, when it
+  states no tree and a listing stands beside it (113-hr-1067 and 113-hr-1068); a 404 withdraws nothing. A held
+  neighbour read for a comparison is never remembered or withdrawn. A printing is labelled by the offered link of the
+  rendition read, so an HTML body is `html`, never `xml`.
+
+Simulated before any real publish, offline, from the live generation `72899ab3` (receipt
+`~/Work/corpora/fork-execution-2026-09-21/multifile-builder-2026-09-27/sim/receipt2.json`):
+
+- **First split.** The rollup's own `run()`, with no BILLSTATUS zip moved and no body read, split the one file
+  (2,659,863 rows, 950,009,925 bytes) into seven members, 113th-119th, of 105.9-175.9 MB (951,520,574 bytes in all).
+  Every row's `congress` equals its member's key and its `bill_id` prefix. The rows equal the prior's as multisets in
+  both directions (`EXCEPT ALL`, 0 and 0), with `congress` appended. `build_generation`'s checks passed. Published
+  by the real publisher into a directory laid out like the bucket, seeded with the live index and generation: the
+  guards passed, v2 was bootstrapped from v1, v1 omitted `bill_sections`, and 16 of the 17 single-file tables were
+  byte-identical to the live ones, so they were copied. That directory is DocSpec's v2 fixture (`fixture-v2/` beside
+  the receipt, with its README). The generation audit over it finds no failure.
+- **The nightly after it.** Read back member by member, with one new 119th-Congress bill, only
+  `congress=119/part-000000.parquet` changed digest (345,066 to 345,072 rows). Publication copied the other six.
+
