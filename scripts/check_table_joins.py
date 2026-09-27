@@ -27,7 +27,6 @@ from spicy_regs import output_ledger, table_joins
 from spicy_regs.sources import publication
 
 EXIT_UNREACHABLE = 3
-SNAPSHOT_POINTER = "materialized/rulemaking/latest.json"
 FAILING = ("BELOW", "UNBASELINED", "EMPTIED")
 
 
@@ -41,7 +40,7 @@ def table_urls(base_url: str) -> Callable[[str], str]:
     """Resolve each table once: managed tables through the publication index, rulemaking through its pointer."""
     base = base_url.rstrip("/")
     index = publication.load_index(base)
-    pointer = _get_json(f"{base}/{SNAPSHOT_POINTER}")
+    pointer = _get_json(f"{base}/{publication.SNAPSHOT_POINTER}")
     artifacts = _get_json(f"{base}/{pointer['manifest_key']}")["artifacts"]
 
     def url_of(table: str) -> str:

@@ -126,7 +126,7 @@ def test_a_pointer_naming_another_manifest_refuses():
 
 def test_fetch_live_follows_the_pointer_to_its_manifest(monkeypatch):
     base = "https://data.example"
-    documents = {f"{base}/{pins.SNAPSHOT_POINTER}": POINTER, f"{base}/{POINTER['manifest_key']}": MANIFEST}
+    documents = {f"{base}/{publication.SNAPSHOT_POINTER}": POINTER, f"{base}/{POINTER['manifest_key']}": MANIFEST}
     monkeypatch.setattr(publication, "load_index", lambda url: INDEX if url == base else pytest.fail(url))
     monkeypatch.setattr(pins, "_get_json", documents.get)
     heads = {f"{base}/dockets.parquet": ('"0a1b2c3d9e8f7a6b5c4d3e2f1a0b9c8d-303"', "1000")}

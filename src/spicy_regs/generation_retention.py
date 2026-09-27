@@ -11,6 +11,8 @@ generation something cites and the last ``KEEP_LAST`` per family. Kept:
   ``docs/`` names. The output ledger states its audits that way, and the MCP's
   qualification record is parsed from the ledger, so this covers both;
 * every generation DocSpec pins in its ``docs/pins/fork-generations.json``;
+* every generation holding a table the current rulemaking snapshot states as
+  an input, by the table's sha256, so the snapshot's inputs stay readable;
 * the managed parents a kept generation records, transitively, so its inputs
   stay readable;
 * a generation that stopped being current less than ``GRACE`` ago, when its
@@ -127,6 +129,19 @@ def docspec_pins(raw: bytes) -> dict[str, str]:
     return pins
 
 
+def _snapshot_inputs(client, bucket: str) -> tuple[str, dict[str, str]]:
+    """The current rulemaking snapshot's id and its source tables' sha256 by table key; empty when none is published."""
+    pointer = publication._get_bounded(client, bucket, publication.SNAPSHOT_POINTER)
+    if pointer is None:
+        return "", {}
+    head = json.loads(pointer[0])
+    stored = publication._get_bounded(client, bucket, head["manifest_key"])
+    if stored is None:
+        raise publication.PublicationError(f"Rulemaking pointer names a missing manifest: {head['manifest_key']}")
+    sources = json.loads(stored[0]).get("inputs", {}).get("sources", {})
+    return head["snapshot_id"], {key: f"sha256:{value['sha256']}" for key, value in sources.items()}
+
+
 def plan(client, bucket: str, *, notes: Iterable[tuple[str, str]], docspec: Mapping[str, str],
          now: datetime) -> dict:
     """Mark every generation kept or deletable under decision 36 and return the plan as a JSON-able record."""
@@ -154,6 +169,9 @@ def plan(client, bucket: str, *, notes: Iterable[tuple[str, str]], docspec: Mapp
         generation.keep.append(reason)
         return first
 
+    #: Table descriptors (with sha256) per chain generation: the index states
+    #: the current one's, and each root's readSnapshot the one it replaced.
+    described: dict[str, Mapping] = {}
     by_family: dict[str, list[Generation]] = {}
     for generation in generations.values():
         by_family.setdefault(generation.family, []).append(generation)
@@ -168,10 +186,13 @@ def plan(client, bucket: str, *, notes: Iterable[tuple[str, str]], docspec: Mapp
             raise publication.PublicationError(f"Current {family} generation {current[:8]} is not in the listing")
         chain: list[str] = []
         step: str | None = current
+        described[current] = entry["tables"]
         while step is not None and step in generations and step not in chain:
             chain.append(step)
             replaced = (root(step) or {}).get("spec", {}).get("readSnapshot", {}).get("families", {}).get(family)
             step = replaced["artifactDigest"].removeprefix("sha256:") if replaced else None
+            if replaced:
+                described.setdefault(replaced["artifactDigest"].removeprefix("sha256:"), replaced["tables"])
         for place, digest in enumerate(chain):
             superseded = generations[chain[place - 1]].newest if place else now
             if place < KEEP_LAST:
@@ -185,6 +206,11 @@ def plan(client, bucket: str, *, notes: Iterable[tuple[str, str]], docspec: Mapp
         keep(digest, "named in " + ", ".join(sorted(names)))
     for digest, reason in docspec.items():
         keep(digest, reason)
+    snapshot_id, inputs = _snapshot_inputs(client, bucket)
+    for key, sha256 in inputs.items():
+        for digest, tables in described.items():
+            if (tables.get(key) or {}).get("sha256") == sha256:
+                keep(digest, f"input of rulemaking {snapshot_id[:17]} ({key})")
 
     pending = [digest for digest, generation in generations.items() if generation.keep]
     while pending:

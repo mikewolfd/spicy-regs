@@ -1,5 +1,6 @@
 """Decision 36: keep each family's last three generations and everything cited, and plan the rest for deletion."""
 
+import hashlib
 import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -142,3 +143,16 @@ def test_execution_refuses_a_plan_for_another_bucket(remote):
     with pytest.raises(pub.PublicationError, match="approved plan"):
         retention.execute(remote, "spicy-regs", {"format": retention.PLAN_FORMAT, "version": 1, "bucket": "other"},
                           {})
+
+
+def test_a_generation_holding_a_rulemaking_snapshot_input_is_kept(tmp_path, remote):
+    """The snapshot names its inputs by table sha256, not generation; any generation holding those bytes stays."""
+    digests = _publish(_Base, tmp_path, remote, 5)
+    manifest = "materialized/rulemaking/snapshots/snapshot_abc/manifest.json"
+    table = hashlib.sha256(remote.objects[f"generations/base/{digests[0]}/base.parquet"]).hexdigest()
+    remote.objects[manifest] = json.dumps({"inputs": {"sources": {"base.parquet": {"sha256": table}}}}).encode()
+    remote.objects[pub.SNAPSHOT_POINTER] = json.dumps(
+        {"snapshot_id": "snapshot_abc", "manifest_key": manifest}).encode()
+    record = _plan(remote)
+    assert _kept(record, "base")[digests[0]] == ["input of rulemaking snapshot_abc (base.parquet)"]
+    assert record["delete"] == [f"generations/base/{digests[1]}"]

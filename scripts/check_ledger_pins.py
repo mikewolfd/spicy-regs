@@ -33,7 +33,6 @@ import httpx
 from spicy_regs.output_ledger import LEDGER, audits, ledger_destination, ledger_rows
 from spicy_regs.sources import publication
 
-SNAPSHOT_POINTER = "materialized/rulemaking/latest.json"
 FAILING = ("DRIFT", "NOT-LIVE", "MALFORMED")
 
 Live = Mapping[str, tuple[str, int]]  # table -> (pin, rows), or object -> (ETag prefix, bytes)
@@ -134,7 +133,7 @@ def fetch_live(base_url: str, ledger: str) -> tuple[dict, dict, dict]:
     """Read the publication index and the rulemaking pointer once each, and HEAD the ledger's base objects."""
     rollups = rollup_pins(publication.load_index(base_url))
     objects = object_pins(base_url, base_object_keys(ledger))
-    pointer = _get_json(f"{base_url}/{SNAPSHOT_POINTER}")
+    pointer = _get_json(f"{base_url}/{publication.SNAPSHOT_POINTER}")
     if pointer is None:
         return rollups, {}, objects
     manifest = _get_json(f"{base_url}/{pointer['manifest_key']}")

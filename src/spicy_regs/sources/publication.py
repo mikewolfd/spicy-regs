@@ -26,6 +26,8 @@ if TYPE_CHECKING:
     from botocore.exceptions import ClientError
 
 INDEX_KEY = "publication.json"
+#: The materialized rulemaking dataset's pointer to its current snapshot manifest.
+SNAPSHOT_POINTER = "materialized/rulemaking/latest.json"
 INDEX_LIMIT = 1024 * 1024
 PART_BYTES = 64 * 1024 * 1024
 EVIDENCE_PREFIX = "source-evidence"
