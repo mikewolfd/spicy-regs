@@ -5,22 +5,39 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, field
 from pathlib import Path
 
-from spicy_regs.sources.publication import empty_index, parse_index, table_location
+from spicy_regs.sources.publication import empty_index, parse_index, table_descriptor, table_members
 
 _NAME = re.compile(r"[a-z][a-z0-9_-]*\Z")
 
 
 @dataclass(frozen=True)
 class LocalSelection:
-    """One resolved local download: its files by name, publication index, and whether it is a batch."""
+    """One resolved local download: its files by name, publication index, and whether it is a batch.
+
+    A split table's entry in ``files`` is its directory; ``split`` holds its member files.
+    """
 
     directory: Path
     files: dict[str, tuple[Path, str]]
     publication: dict
     is_download: bool
+    split: dict[str, tuple[Path, ...]] = field(default_factory=dict)
+
+    def paths(self, name: str) -> tuple[Path, ...]:
+        """Every local file of table ``name``: a split table's members in index order, else its one file."""
+        return self.split.get(name) or (self.files[name][0],)
+
+
+def selection_record(index: Mapping, name: str) -> dict:
+    """What a download records for table ``name``: its file's path (a split table's member paths) and status."""
+    members = table_members(index, f"{name}.parquet")
+    split = "members" in (table_descriptor(index, f"{name}.parquet") or {})
+    return {"key": [member.path for member in members] if split else members[0].path,
+            "status": "managed" if members[0].sha256 is not None else "legacy-unversioned"}
 
 
 def _unique_pairs(pairs):
@@ -54,7 +71,7 @@ def local_selection(output_dir: Path, *, include_legacy: bool = False) -> LocalS
     if current.is_symlink() and not is_download:
         raise RuntimeError("Current download is missing download.json")
     index = empty_index()
-    result = {}
+    result, split = {}, {}
     if is_download:
         metadata = json.loads(metadata_path.read_text(), object_pairs_hook=_unique_pairs)
         if metadata.get("version") != 1 or metadata.get("status") != "complete":
@@ -66,10 +83,13 @@ def local_selection(output_dir: Path, *, include_legacy: bool = False) -> LocalS
         for name, selection in selected.items():
             if not _NAME.fullmatch(name):
                 raise RuntimeError("Current download contains an invalid table name")
-            key, published = table_location(index, f"{name}.parquet")
-            expected = {"key": key, "status": "managed" if published is not None else "legacy-unversioned"}
-            if selection != expected:
+            if selection != selection_record(index, name):
                 raise RuntimeError(f"Current download selection differs from its publication snapshot: {name}")
+            if isinstance(selection["key"], list):
+                split[name] = tuple(directory / member.key for member in table_members(index, f"{name}.parquet"))
+                _assert_exactly(directory / name, split[name])
+                result[name] = (directory / name, selection["status"])
+                continue
             path = directory / f"{name}.parquet"
             if path.is_symlink() or not path.is_file():
                 raise RuntimeError(f"Current download is missing a regular {name}.parquet")
@@ -78,7 +98,16 @@ def local_selection(output_dir: Path, *, include_legacy: bool = False) -> LocalS
         for path in sorted(root.glob("*.parquet")):
             if _NAME.fullmatch(path.stem) and path.is_file():
                 result.setdefault(path.stem, (path.resolve(), "legacy-unversioned"))
-    return LocalSelection(directory, result, index, is_download)
+    return LocalSelection(directory, result, index, is_download, split)
+
+
+def _assert_exactly(directory: Path, files: tuple[Path, ...]) -> None:
+    """A split table's directory holds exactly its member files, each a regular file, and no symlink anywhere."""
+    if directory.is_symlink() or not directory.is_dir():
+        raise RuntimeError(f"Current download is missing a regular {directory.name}/ directory")
+    found = {path for path in directory.rglob("*") if path.is_symlink() or not path.is_dir()}
+    if found != set(files) or any(path.is_symlink() or not path.is_file() for path in files):
+        raise RuntimeError(f"Current download {directory.name}/ differs from its published members")
 
 
 def file_signature(path: Path) -> list[int]:
@@ -90,23 +119,24 @@ def file_signature(path: Path) -> list[int]:
 
 
 def verify_local_members(selection: LocalSelection) -> dict[str, list[int]]:
-    """Rehash managed bytes once, returning change guards for the selected batch."""
+    """Rehash managed bytes once, every member file of a split table included; return a change guard per file."""
     signatures = {}
     if not selection.is_download:
         return signatures
-    for name, (path, status) in selection.files.items():
-        before = file_signature(path)
-        if status == "managed":
-            _, descriptor = table_location(selection.publication, f"{name}.parquet")
-            if descriptor is None:
-                raise RuntimeError(f"Local download member has no generation pin: {name}")
-            with path.open("rb") as stream:
-                digest = "sha256:" + hashlib.file_digest(stream, "sha256").hexdigest()
-            if before[2] != descriptor["byteSize"] or digest != descriptor["sha256"]:
-                raise RuntimeError(f"Local download member differs from its generation pin: {name}")
-        if file_signature(path) != before:
-            raise RuntimeError(f"Local download member changed during verification: {name}")
-        signatures[str(path)] = before
+    for name, (_, status) in selection.files.items():
+        pins = table_members(selection.publication, f"{name}.parquet") if status == "managed" else (None,)
+        for path, member in zip(selection.paths(name), pins, strict=True):
+            before = file_signature(path)
+            if member is not None:
+                if member.sha256 is None:
+                    raise RuntimeError(f"Local download member has no generation pin: {name}")
+                with path.open("rb") as stream:
+                    digest = "sha256:" + hashlib.file_digest(stream, "sha256").hexdigest()
+                if before[2] != member.byte_size or digest != member.sha256:
+                    raise RuntimeError(f"Local download member differs from its generation pin: {name}")
+            if file_signature(path) != before:
+                raise RuntimeError(f"Local download member changed during verification: {name}")
+            signatures[str(path)] = before
     return signatures
 
 

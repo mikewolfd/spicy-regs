@@ -56,7 +56,7 @@ def _serve(monkeypatch, store: Store, versions: list[dict]) -> bytes:
         if remote_key == "bare.parquet":
             local_path.write_bytes(bare_bytes)
             return True
-        location, _ = pub.table_location(pub.parse_index(store.objects[pub.INDEX_KEY]), remote_key)
+        location = pub.single_member(pub.parse_index(store.objects[pub.INDEX_KEY]), remote_key).path
         local_path.write_bytes(store.objects[location])
         return True
 

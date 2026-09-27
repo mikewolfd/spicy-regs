@@ -26,7 +26,8 @@ def test_all_published_tables_receive_integrity_checks(tmp_path, monkeypatch):
     pq.write_table(pa.table({'id': ['one']}), member)
     index = {'families': {'new_family': {
         'prefix': 'generation', 'artifactDigest': 'sha256:observed',
-        'tables': {'new_family.parquet': {'columns': [['id', 'VARCHAR']], 'rows': 1}}
+        'tables': {'new_family.parquet': {'columns': [['id', 'VARCHAR']], 'rows': 1, 'sha256': 'sha256:' + '0' * 64,
+                                          'byteSize': member.stat().st_size}}
     }}}
     monkeypatch.setattr(publication, 'snapshot', lambda _: nullcontext(index))
     assert freshness.read_freshness_rows(str(tmp_path)) == [('new_family', 'publication rows', None, 1)]

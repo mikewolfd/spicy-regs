@@ -140,14 +140,15 @@ def latest_common_dump_date(objects: Sequence[BulkObject], datasets: Sequence[st
     return max(common)
 
 
-def _highest_cluster_id(parquet: str) -> int | None:
+def _highest_cluster_id(parquet: list[str]) -> int | None:
     import duckdb
 
+    from spicy_regs.sources.publication import parquet_scan
+
     with duckdb.connect() as con:
-        if parquet.startswith("https://"):
+        if any(path.startswith("https://") for path in parquet):
             load_public_http(con)
-        path = parquet.replace("'", "''")
-        row = con.execute(f"SELECT max(TRY_CAST(cluster_id AS BIGINT)) FROM read_parquet('{path}')").fetchone()
+        row = con.execute(f"SELECT max(TRY_CAST(cluster_id AS BIGINT)) FROM {parquet_scan(parquet)}").fetchone()
         return None if row is None else row[0]
 
 
@@ -157,11 +158,11 @@ def published_cluster_ceiling() -> int | None:
     Reads that one column over the public URL (about 55 MB for ten million clusters).
     """
     from spicy_regs.public_url import resolve_r2_base_url
-    from spicy_regs.sources.publication import load_index, table_location
+    from spicy_regs.sources.publication import load_index, table_members
 
     base = resolve_r2_base_url()
-    location, descriptor = table_location(load_index(base), CLUSTERS_TABLE)
-    return None if descriptor is None else _highest_cluster_id(f"{base}/{location}")
+    members = table_members(load_index(base), CLUSTERS_TABLE)
+    return None if members[0].sha256 is None else _highest_cluster_id([f"{base}/{m.path}" for m in members])
 
 
 def _bucket_url(url: str) -> str:
@@ -239,7 +240,7 @@ def build_court_bulk_table(
         if not dump.completed:
             raise RuntimeError(f"CourtListener bulk: {local_file.name} was not read to its end")
         if cluster_ceiling is not None and table.names_clusters:
-            newest = _highest_cluster_id(str(staging))
+            newest = _highest_cluster_id([str(staging)])
             if newest is not None and newest > cluster_ceiling:
                 raise RuntimeError(
                     f"{table.output}: the {edition} export names cluster {newest:,}, above the published "

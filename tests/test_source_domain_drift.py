@@ -24,7 +24,7 @@ import pytest
 
 from scripts.check_source_domain_drift import table_urls
 from spicy_regs.data_dictionary import expected_schemas
-from spicy_regs.sources.publication import parse_index, table_location
+from spicy_regs.sources.publication import parse_index, single_member
 from spicy_regs.sources.source_domains import (
     ACCEPTED_DOMAIN_FINDINGS,
     DEFAULT_SOURCE_DOMAIN_DIR,
@@ -344,7 +344,7 @@ def test_the_snapshot_states_where_its_rows_came_from(snapshot):
         # Two origins, so this fails when the corpus moves or a generation
         # advances and nobody re-pins the snapshot — exactly how this file first
         # shipped naming a host we never served.
-        key, _ = table_location(index, f"{table}.parquet")
+        key = single_member(index, f"{table}.parquet").path
         assert source["publisher_url"] == f"{FORK_PUBLIC_URL}/{key}"
         assert str(source["bytes_digest"]).startswith("sha256:")
         assert int(source["byte_length"]) > 0
@@ -402,7 +402,7 @@ def test_the_recorded_urls_resolve_through_the_pinned_index(snapshot):
 
     index = _published_index()
     for source in snapshot.sources:
-        key, _ = table_location(index, f"{source['table']}.parquet")
+        key = single_member(index, f"{source['table']}.parquet").path
         assert source["publisher_url"] == f"{FORK_PUBLIC_URL}/{key}"
     urls = table_urls(index, FORK_PUBLIC_URL, sorted({str(one["table"]) for one in snapshot.sources}))
     assert urls["documents"] == f"{FORK_PUBLIC_URL}/documents.parquet"

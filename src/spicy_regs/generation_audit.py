@@ -55,8 +55,10 @@ from spicy_regs.sources.publication import (
     EVIDENCE_PREFIX,
     INDEX_KEY,
     INDEX_LIMIT,
+    INDEX_V2_KEY,
     PublicationError,
     family_root,
+    parquet_scan,
     parse_index,
     table_owner,
 )
@@ -306,8 +308,19 @@ def _one(con: duckdb.DuckDBPyConnection, sql: str, params: Sequence | Mapping | 
     return row
 
 
-def _parquet(base: PublicBase, prefix: str, key: str) -> str:
-    return f"read_parquet({_literal(base.path(f'{prefix}/{key}'))})"
+def _locations(entry: Mapping, key: str) -> list[str]:
+    """The published keys of table ``key`` under ``entry``'s prefix: every member of a split table, else the one file."""
+    descriptor = entry["tables"].get(key) or {}
+    return [f"{entry['prefix']}/{member['key']}" for member in descriptor.get("members", [{"key": key}])]
+
+
+def _paths(base: PublicBase, entry: Mapping, key: str) -> list[str]:
+    """Where table ``key`` of ``entry`` is read from."""
+    return [base.path(location) for location in _locations(entry, key)]
+
+
+def _parquet(base: PublicBase, entry: Mapping, key: str) -> str:
+    return parquet_scan(_paths(base, entry, key))
 
 
 def _table_info(con: duckdb.DuckDBPyConnection, source: str) -> dict:
@@ -375,7 +388,7 @@ def _publication(con, base: PublicBase, source: _ArtifactSource, entry: Mapping,
     from spicy_regs.generations import verify_generation_source
 
     def table_info(key: str) -> dict:
-        infos[key] = _table_info(con, _parquet(base, entry["prefix"], key))
+        infos[key] = _table_info(con, _parquet(base, entry, key))
         return infos[key]
 
     section: dict[str, Any] = {"pin": {"artifactDigest": entry["artifactDigest"], "logicalId": entry["logicalId"]},
@@ -414,15 +427,22 @@ def _publication(con, base: PublicBase, source: _ArtifactSource, entry: Mapping,
         run.finding("fail", "publication", "index-and-root-membership-differ", index_only=index_only, root_only=root_only)
     tables = {}
     for key, descriptor in sorted(entry["tables"].items()):
-        observed, member = source.observed.get(key, {}), members.get(key)
+        # A split table is reconciled member by member; a single file is its own one member.
+        pinned = descriptor.get("members", [{"key": key, **descriptor}])
+        observed = [source.observed.get(member["key"]) for member in pinned]
+        seen = [receipt for receipt in observed if receipt is not None]
+        manifest = [members.get(member["key"]) for member in pinned]
         checks = {
-            "index_equals_manifest": member == {k: descriptor[k] for k in ("sha256", "byteSize", "rows")},
-            "index_equals_root": root_tables.get(key) == {"columns": descriptor["columns"], "rows": descriptor["rows"]},
-            "observed_bytes_equal_index": None if not observed else (observed["sha256"], observed["bytes"])
-            == (descriptor["sha256"], descriptor["byteSize"]),
+            "index_equals_manifest": manifest == [{k: m[k] for k in ("sha256", "byteSize", "rows")} for m in pinned],
+            "index_equals_root": root_tables.get(key) == {k: v for k, v in descriptor.items()
+                                                          if k in ("columns", "rows", "partitionColumns")},
+            "observed_bytes_equal_index": None if len(seen) != len(pinned) else
+            [(o["sha256"], o["bytes"]) for o in seen] == [(m["sha256"], m["byteSize"]) for m in pinned],
         }
-        tables[key] = {"index": {k: descriptor[k] for k in ("sha256", "byteSize", "rows")}, "manifest": member,
-                       "observed": observed or None, **checks}
+        split = "members" in descriptor
+        tables[key] = {"index": {k: v for k, v in descriptor.items() if k != "columns"},
+                       "manifest": manifest if split else manifest[0],
+                       "observed": (observed if split else observed[0]) if all(observed) else None, **checks}
         for check, passed in checks.items():
             if passed is False:
                 run.finding("fail", "publication", check.replace("_", "-") + "-false", key.removesuffix(".parquet"))
@@ -644,6 +664,11 @@ def _multiset(con, common: Sequence[str], identity: Sequence[str], retyped: set[
     return result
 
 
+def _pins(descriptor: Mapping) -> list[str]:
+    """A table's byte pins: its members' digests when split, else its own."""
+    return [member["sha256"] for member in descriptor.get("members", [descriptor])]
+
+
 def _conservation(con, table: str, current: Mapping, prior: Mapping, info: Mapping, prior_info: Mapping,
                   declaration: Declaration | None, profile: dict | None, run: _Run,
                   retirement: Mapping | None = None) -> dict:
@@ -652,7 +677,7 @@ def _conservation(con, table: str, current: Mapping, prior: Mapping, info: Mappi
     Removals a build journaled (``rows-retired``) are reconciled exactly instead of being a review item.
     """
     result: dict[str, Any] = {"rows": current["rows"], "prior_rows": prior["rows"],
-                              "bytes_equal": current["sha256"] == prior["sha256"]}
+                              "bytes_equal": _pins(current) == _pins(prior)}
     types = {name: kind for name, kind in info["columns"]}
     if retirement is not None:
         common_now = [name for name, _ in prior_info["columns"] if name in types]
@@ -911,13 +936,13 @@ def _body_shapes(events: Sequence[Mapping], members: set[str] | None, run: _Run)
     return {"expected_to_observed": dict(sorted(kinds.items())), "unexpected_2xx": unexpected}
 
 
-def _cited(con, base: PublicBase, prefix: str, infos: Mapping[str, dict], digests: Sequence[str]) -> dict:
+def _cited(con, base: PublicBase, entry: Mapping, infos: Mapping[str, dict], digests: Sequence[str]) -> dict:
     """For each digest, the tables and ``*sha256*`` string columns whose cells cite it, with or without the prefix."""
     wanted = {value: digest for digest in digests for value in (digest, digest.removeprefix("sha256:"))}
     cited: dict[str, dict] = {}
     for key, info in infos.items():
         for column in [name for name, kind in info["columns"] if kind == "VARCHAR" and "sha256" in name.lower()]:
-            rows = con.execute(f"SELECT {_q(column)}, count(*) FROM {_parquet(base, prefix, key)} "
+            rows = con.execute(f"SELECT {_q(column)}, count(*) FROM {_parquet(base, entry, key)} "
                                f"WHERE {_q(column)} IN (SELECT unnest($values)) GROUP BY 1", {"values": list(wanted)})
             for value, count in rows.fetchall():
                 cited.setdefault(wanted[value], {}).setdefault(key.removesuffix(".parquet"), {})[column] = count
@@ -963,7 +988,7 @@ def audit(base: PublicBase, *, family: str | None = None, table: str | None = No
     """Audit one family's (or one table's) current generation against an optional prior pin; never writes remotely."""
     run = _Run(samples=samples, secrets={name: value.encode() for name, value in (secrets or {}).items()})
     started = _now()
-    raw_index = index_raw if index_raw is not None else base.read(INDEX_KEY, limit=INDEX_LIMIT, fresh=True)
+    raw_index = index_raw if index_raw is not None else _read_index(base)
     index = parse_index(raw_index)
     family, keys = _select(index, family, table)
     entry = index["families"][family]
@@ -992,9 +1017,8 @@ def audit(base: PublicBase, *, family: str | None = None, table: str | None = No
         for key in keys:
             name = key.removesuffix(".parquet")
             try:
-                info = infos.get(key) or _table_info(con, _parquet(base, entry["prefix"], key))
-                con.execute(f"CREATE OR REPLACE VIEW audit_current AS SELECT * FROM "
-                            f"{_parquet(base, entry['prefix'], key)}")
+                info = infos.get(key) or _table_info(con, _parquet(base, entry, key))
+                con.execute(f"CREATE OR REPLACE VIEW audit_current AS SELECT * FROM {_parquet(base, entry, key)}")
             except _UNREADABLE as error:
                 run.finding("fail", "publication", "table-unreadable", name, error=str(error))
                 for part in ("schema", "identity", "conservation"):
@@ -1016,11 +1040,11 @@ def audit(base: PublicBase, *, family: str | None = None, table: str | None = No
             if info["rows"]:
                 cells[name] = _cell_credentials(con, info["columns"], run.secrets)
             metadata[name] = scan_bytes(b"\n".join(bytes(k) + b"=" + bytes(v) for k, v in con.execute(
-                f"SELECT key, value FROM parquet_kv_metadata({_literal(base.path(entry['prefix'] + '/' + key))})"
+                f"SELECT key, value FROM parquet_kv_metadata([{', '.join(map(_literal, _paths(base, entry, key)))}])"
             ).fetchall()), run.secrets)
         unexpected = evidence.get("body_shapes", {}).get("unexpected_2xx", [])
         if unexpected:
-            cited = _cited(con, base, entry["prefix"], {k: infos[k] for k in keys if k in infos},
+            cited = _cited(con, base, entry, {k: infos[k] for k in keys if k in infos},
                            [item["sha256"] for item in unexpected])
             for item in unexpected:
                 item["cited_by"] = cited.get(item["sha256"], {})
@@ -1067,7 +1091,7 @@ def _conserve(con, base: PublicBase, name: str, key: str, descriptor: Mapping, i
         return {"status": "no-prior"}
     if key not in prior["tables"]:
         return {"status": "table-added"}
-    source = _parquet(base, prior["prefix"], key)
+    source = _parquet(base, prior, key)
     con.execute(f"CREATE OR REPLACE VIEW audit_prior AS SELECT * FROM {source}")
     return _conservation(con, name, descriptor, prior["tables"][key], info, _table_info(con, source), declaration,
                          profile, run, retirement)
@@ -1099,7 +1123,7 @@ def _select(index: Mapping, family: str | None, table: str | None) -> tuple[str,
 
 
 def _consistency(base: PublicBase, entry: Mapping, prior: Mapping | None, keys: Sequence[str], run: _Run) -> dict:
-    """For an https base, each table's ETag after analysis against the ETag of its digest stream."""
+    """For an https base, each table file's ETag after analysis against the ETag of its digest stream."""
     if not base.remote:
         run.limits.append("The base is a local directory; HTTP transport and ETag stability were not exercised.")
         return {"checked": False}
@@ -1107,17 +1131,27 @@ def _consistency(base: PublicBase, entry: Mapping, prior: Mapping | None, keys: 
                       "analysis and compared with the digest stream's.")
     streamed = {receipt["key"]: receipt.get("etag") for receipt in base.receipts if receipt.get("complete")}
     stable = {}
-    for prefix in [entry["prefix"], *([prior["prefix"]] if prior else [])]:
-        for location in (f"{prefix}/{key}" for key in keys if f"{prefix}/{key}" in streamed):
+    for generation in [entry, *([prior] if prior else [])]:
+        for location in (at for key in keys for at in _locations(generation, key) if at in streamed):
             stable[location] = base.etag(location) == streamed[location]
             if not stable[location]:
                 run.finding("fail", "consistency", "etag-changed-during-audit", location=location)
     return {"checked": True, "etag_stable": stable}
 
 
+def _read_index(base: PublicBase) -> bytes:
+    """The version-2 index, or version 1 while no version 2 is published."""
+    from rulespec_artifacts import MemberNotFoundError
+
+    try:
+        return base.read(INDEX_V2_KEY, limit=INDEX_LIMIT, fresh=True)
+    except MemberNotFoundError:
+        return base.read(INDEX_KEY, limit=INDEX_LIMIT, fresh=True)
+
+
 def _retain(directory: Path, raw_index: bytes, sources: Sequence[_ArtifactSource]) -> None:
     """Write the index and every control object read (roots, manifests, journal) under their published keys."""
-    objects = {INDEX_KEY: raw_index}
+    objects = {INDEX_V2_KEY if parse_index(raw_index)["version"] == 2 else INDEX_KEY: raw_index}
     for source in sources:
         objects.update({source.location(key): raw for key, raw in source.control.items()})
     for key, raw in objects.items():

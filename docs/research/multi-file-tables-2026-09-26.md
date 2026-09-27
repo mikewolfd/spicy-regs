@@ -1,7 +1,9 @@
 # Tables stored as several files (design draft, 2026-09-26)
 
 Status: **agreed** by spicy-stack-24 (publication format) and spicy-stack-83 (DocSpec, Engine) on
-2026-09-26; see the review record at the end. The measurements in §5 were taken on 2026-09-27 (decision 64); implementation waits for the running backfills to finish.
+2026-09-26; see the review record at the end. The measurements in §5 were taken on 2026-09-27 (decision 64).
+The publication side is implemented on branch `multifile-publication` (§7) and merges once the running backfills
+finish and no publish is in flight; the builder side (per-partition merge, the `congress` column) is spicy-stack-11's.
 
 Owner decision (2026-09-26): design multi-file tables for every large table first, as one cross-repository
 decision, then apply it to `bill_sections`. Decisions 46 (split `fcc_filings` by year before it passes
@@ -309,3 +311,67 @@ Probe `scripts/probe_multifile.py` (`probe-multifile.yml`), runs 36288634064 and
 - Generation identity, family pins, the output ledger's `qualified at` pins, and
   `check_ledger_pins` / `check_source_refusals`.
 - The comments mirror.
+
+## 7. Implementation (publication side, 2026-09-27)
+
+What the code settled, where it refines §4. Tests: `tests/test_split_tables.py`, and for the pointers
+`tests/test_generation_publication.py`.
+
+- **Index shape.** A single-file table's v2 entry is byte-identical to its v1 entry. Only a split table carries
+  `members` (and `partitionColumns`), and it has no table-level `sha256`. `derive_v1` drops split tables, and any
+  family left without a table. `parse_index` refuses a v1 index listing a split table, members whose counts do not
+  sum to the table's, a member key that does not spell its partition, and a partition column that is not a plain
+  name (the column spells a directory of every member key).
+- **Pointer order.** v2 is the pointer, written under its own CAS. v1 is then written as `derive_v1` of the stored
+  v2 under v1's CAS. v1's token is read before v2, so a raced v1 write rederives from the newer v2.
+  - Once v2 is written the generation is published. A failed v1 write (transport, or a v1 that kept moving) is
+    logged, not raised: "publication.json is behind publication.v2.json; the next publish rederives it".
+    Retention's `execute` also rederives v1 before it deletes anything, so no deletion strands a generation v1 names.
+- **Bootstrap.** The first publish after the merge creates v2 from v1 and keeps that v1 read (bytes and ETag); a
+  writer whose create loses to another bootstrapper keeps its read too. Its v1 write is conditional on that ETag.
+  If v1 changed since, each family whose v1 entry changed while v2's view of it still equals the bootstrap read was
+  published by a writer predating v2; it is folded into v2 under v2's CAS before v1 is derived. A family v2 changed
+  as well is v2's already. After the bootstrap nothing folds: a writer predating v2 must not publish once v2 exists,
+  which is why the branch merges only with no publish in flight.
+- **Readers.** `table_members` resolves every file of a table, and `Member.key` is a file's key within its
+  generation, the layout every download keeps. `single_member` refuses a split table for a reader that takes one
+  file (`r2.download`). `fetch_member` is the one verified fetch (stream, check size and digest, rename into place)
+  behind `r2.download`, `r2.download_members` and the CLI.
+  - The CLI downloads a split table to `<name>/<col>=<value>/part-NNNNNN.parquet` and records its member paths as
+    the selection's `key` (one path for a single file). A local selection requires that directory to hold exactly
+    those files, none a symlink; verification hashes each against its pin and guards each file.
+  - The MCP's local mode and `stats`, `sample`, `search` and `agencies` read the member files, never the
+    directory, so a file added to it later is not read. SQL reads go through `parquet_scan`, and the CLI's polars
+    reads also turn hive partitioning off.
+  - `spicy-regs-dict --source local` reads single-file tables only. That is acceptable because it is a developer
+    check against a flat directory of `<table>.parquet` files, and `--source r2` resolves split tables through
+    `table_members`.
+- **Builder handoff.** The builder writes every partition locally, as `<out>/<table>/<col>=<value>/part-NNNNNN.parquet`.
+  It fetches unchanged partitions with `r2.download_members`, byte for byte, and declares `partitioned={table: columns}`
+  to `build_generation`. The publisher compares each member's digest with the prior generation's member at the same
+  key, and copies an equal one server-side. No carried-member manifest is needed, and a `carriedForward` declaration
+  for a split table refuses.
+- **Checks, once each.** Each member's partition values are checked against its key once, at build; digests pin
+  those bytes after that. Verification checks each member's columns and rows. The shrink guard runs per table, on
+  the sum of member bytes; it guards bytes as it always has, not rows as §4.4 proposed.
+- **Partition guard, not a journal.** Every partition (its column-value tuple) of a split table's prior generation
+  must reappear in the new one; part files within a partition may change, and new partitions may join. A missing
+  one refuses, naming it. This replaces §4.4's journaled member retirement: the audit does read `rows-retired`, but
+  what goes wrong in practice is a build forgetting a partition, which the shrink guard misses whenever the rest
+  outweighs its ratio. No declaration admits a dropped partition yet; one is added when a real case needs it.
+- **Builder rule.** A partition is rewritten by replacing its whole `<col>=<value>/` directory. A prior part file
+  left beside new ones would publish its rows twice, and no check sees that.
+- **Retention and audit.** Both read v2. The audit reconciles a split table member by member (index, manifest,
+  observed bytes, ETag stability), reads it as one relation for conservation, and compares member digests for
+  "bytes equal". It retains the index under the key it read (`publication.v2.json` or `publication.json`).
+- **Follow-up (pre-existing).** Each member is decoded in full three times: at build, by the build's own
+  `verify_generation`, and again when `publish_generation` verifies the directory. §4.4 and `operations.md` §1b(b)
+  ask for one local verification; that change is open.
+
+**Rollout.**
+
+1. Merge only with no publish in flight.
+2. The first publish afterwards creates v2 from v1, with the bootstrap fold.
+3. Redeploy the fork MCP, a Cloudflare Worker from `deploy/cloudflare`, before any table first publishes split.
+   Worker 925124f0 runs 2963d77 and reads only `publication.json`, so a split table would disappear from it.
+4. DocSpec reads v2 before any family it admits splits (§4.5 step 2).

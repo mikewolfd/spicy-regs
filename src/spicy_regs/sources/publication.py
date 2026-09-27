@@ -5,6 +5,11 @@ the pointer once per operation and use immutable table URLs. The materialized
 rulemaking dataset publishes under its own pointer (``SNAPSHOT_POINTER``),
 which readers resolve the same way. Legacy bare URLs remain readable only for
 tables neither pointer names.
+
+A table stored as several files (a split table) is listed only in the version-2
+index, ``INDEX_V2_KEY``; the version-1 index lists every other table unchanged
+for readers that predate splitting (``docs/research/multi-file-tables-2026-09-26.md``).
+Readers resolve any table's files through :func:`table_members`.
 Source-evidence blobs are content-addressed and stored once for all artifacts.
 """
 
@@ -14,12 +19,12 @@ import base64
 import hashlib
 import json
 import re
-from collections.abc import Iterator, Mapping
+from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from contextvars import ContextVar
 from copy import deepcopy
 from pathlib import Path
-from typing import TYPE_CHECKING, BinaryIO, Callable
+from typing import TYPE_CHECKING, BinaryIO, Callable, NamedTuple
 
 import httpx
 from loguru import logger
@@ -28,6 +33,8 @@ if TYPE_CHECKING:
     from botocore.exceptions import ClientError
 
 INDEX_KEY = "publication.json"
+#: The index that also lists split tables; readers prefer it when it exists.
+INDEX_V2_KEY = "publication.v2.json"
 #: The materialized rulemaking dataset's pointer to its current snapshot manifest.
 SNAPSHOT_POINTER = "materialized/rulemaking/latest.json"
 #: A materialized snapshot id: safe in an object key and inlined SQL. ``pipelines.materialized`` writes and reads by it.
@@ -52,6 +59,9 @@ _BLOB_KEY = re.compile(r"blobs/sha256/([0-9a-f]{64})\Z")
 _POINTER_ATTEMPTS = 8
 _NAME = re.compile(r"[a-z][a-z0-9_-]*\Z")
 _DIGEST = re.compile(r"sha256:[0-9a-f]{64}\Z")
+_PARTITION_VALUE = re.compile(r"[A-Za-z0-9_.-]+\Z")
+_PART = re.compile(r"part-\d{6}\.parquet\Z")
+_MEMBER_PATH = re.compile(r"generations/[a-z][a-z0-9_-]*/[0-9a-f]{64}/(.+)\Z")
 _snapshot: ContextVar[tuple[str, dict] | None] = ContextVar("publication_snapshot", default=None)
 
 
@@ -77,8 +87,91 @@ def _pairs(pairs):
     return result
 
 
+def _counts(value: Mapping) -> bool:
+    return all(type(value[field]) is int and value[field] >= 0 for field in ("byteSize", "rows"))
+
+
+def _split_table(key: str, table: Mapping) -> None:
+    """A split table: its members partition it by declared columns, and their counts sum to the table's.
+
+    A partition column is a plain name, since it spells a directory of every member key.
+    """
+    if set(table) != {"byteSize", "rows", "columns", "partitionColumns", "members"} or not _counts(table):
+        raise ValueError("invalid split table descriptor")
+    by = table["partitionColumns"]
+    if (not isinstance(by, list) or not by or len(set(by)) != len(by)
+            or not all(isinstance(column, str) and _NAME.fullmatch(column) for column in by)
+            or not set(by) <= {column[0] for column in table["columns"]}):
+        raise ValueError("invalid partition columns")
+    members, seen = table["members"], set()
+    if not isinstance(members, list) or not members:
+        raise ValueError("split table has no members")
+    for member in members:
+        if set(member) != {"key", "sha256", "byteSize", "rows", "partition"} or not _counts(member):
+            raise ValueError("invalid member descriptor")
+        partition = member["partition"]
+        if (not isinstance(partition, dict) or list(partition) != by
+                or not all(isinstance(v, str) and _PARTITION_VALUE.fullmatch(v) for v in partition.values())):
+            raise ValueError("invalid member partition")
+        directory = "/".join([key[:-8], *(f"{column}={value}" for column, value in partition.items())])
+        name = member["key"].removeprefix(directory + "/")
+        if name == member["key"] or not _PART.fullmatch(name) or member["key"] in seen:
+            raise ValueError("member key differs from its partition")
+        if not _DIGEST.fullmatch(member["sha256"]):
+            raise ValueError("invalid member digest")
+        seen.add(member["key"])
+    if (sum(m["rows"] for m in members) != table["rows"]
+            or sum(m["byteSize"] for m in members) != table["byteSize"]):
+        raise ValueError("member counts differ from their table's")
+
+
+def member_table(key: str) -> str:
+    """The table a member key belongs to: the key itself for a single file, else ``<first directory>.parquet``."""
+    return key if "/" not in key else key.split("/", 1)[0] + ".parquet"
+
+
+def member_partition(key: str) -> dict[str, str]:
+    """A split member's ``col=value`` directories, in order; a malformed one raises ``ValueError``."""
+    partition = {}
+    for part in key.split("/")[1:-1]:
+        column, separator, value = part.partition("=")
+        if not separator:
+            raise ValueError(f"member directory is not col=value: {part!r}")
+        partition[column] = value
+    return partition
+
+
+def table_entries(tables: Mapping, members) -> dict[str, dict]:
+    """Index descriptors for a generation's declared ``tables`` from its member descriptors, in the index's shape.
+
+    A table declaring ``partitionColumns`` is split: its members are ``<table>/<col>=<value>/part-NNNNNN.parquet``
+    and must add up to it. Any other table is exactly one member at its own key. ``ValueError`` names a mismatch.
+    """
+    grouped: dict[str, list] = {}
+    for member in members:
+        grouped.setdefault(member_table(member.object_key), []).append(member)
+    if not tables or set(grouped) != set(tables):
+        raise ValueError("Generation membership differs from its table declarations")
+    entries = {}
+    for key, declared in tables.items():
+        found = sorted(grouped[key], key=lambda member: member.object_key)
+        if "partitionColumns" not in declared:
+            if [member.object_key for member in found] != [key]:
+                raise ValueError("Generation membership differs from its table declarations")
+            entries[key] = {"sha256": found[0].sha256, "byteSize": found[0].byte_size, **declared}
+            continue
+        entries[key] = {**declared, "byteSize": sum(member.byte_size for member in found), "members": [
+            {"key": member.object_key, "sha256": member.sha256, "byteSize": member.byte_size,
+             "rows": member.record_count, "partition": member_partition(member.object_key)} for member in found]}
+        _split_table(key, entries[key])
+    return entries
+
+
 def parse_index(raw: bytes) -> dict:
-    """Validate the small mutable pointer without claiming payload verification."""
+    """Validate the small mutable pointer without claiming payload verification.
+
+    Version 1 lists only single-file tables. Version 2 may also list split tables, each with its members.
+    """
     if len(raw) > INDEX_LIMIT:
         raise PublicationError("Publication index exceeds its byte limit")
     try:
@@ -87,7 +180,7 @@ def parse_index(raw: bytes) -> dict:
             set(value) != {"format", "version", "families"}
             or value["format"] != "spicy-regs-publication"
             or type(value["version"]) is not int
-            or value["version"] != 1
+            or value["version"] not in (1, 2)
             or not isinstance(value["families"], dict)
         ):
             raise ValueError("invalid publication index")
@@ -108,13 +201,7 @@ def parse_index(raw: bytes) -> dict:
                 if not key.endswith(".parquet") or not _NAME.fullmatch(key[:-8]) or key in seen:
                     raise ValueError("invalid or multiply owned table")
                 seen.add(key)
-                if set(table) != {"sha256", "byteSize", "rows", "columns"}:
-                    raise ValueError("invalid table descriptor")
-                if not _DIGEST.fullmatch(table["sha256"]):
-                    raise ValueError("invalid table digest")
-                if any(type(table[field]) is not int or table[field] < 0 for field in ("byteSize", "rows")):
-                    raise ValueError("invalid table counts")
-                columns = table["columns"]
+                columns = table.get("columns")
                 if not isinstance(columns, list) or not columns:
                     raise ValueError("missing columns")
                 if any(
@@ -124,6 +211,15 @@ def parse_index(raw: bytes) -> dict:
                     raise ValueError("invalid columns")
                 if len({c[0] for c in columns}) != len(columns):
                     raise ValueError("duplicate columns")
+                if "members" in table and value["version"] == 2:
+                    _split_table(key, table)
+                    continue
+                if set(table) != {"sha256", "byteSize", "rows", "columns"}:
+                    raise ValueError("invalid table descriptor")
+                if not _DIGEST.fullmatch(table["sha256"]):
+                    raise ValueError("invalid table digest")
+                if not _counts(table):
+                    raise ValueError("invalid table counts")
     except (ValueError, TypeError, KeyError, AttributeError) as exc:
         raise PublicationError("Invalid publication index") from exc
     return value
@@ -147,9 +243,15 @@ def _bounded_get(
 
 
 def load_index(base_url: str) -> dict:
-    """Read one bounded pointer; only a 404 permits legacy table resolution."""
-    raw = _bounded_get(f"{base_url.rstrip('/')}/{INDEX_KEY}", allow_missing=True, headers={"Cache-Control": "no-cache"})
-    return empty_index() if raw is None else parse_index(raw)
+    """Read the version-2 pointer, or the version-1 pointer while no version 2 is published.
+
+    Only a 404 on both permits legacy table resolution.
+    """
+    for key in (INDEX_V2_KEY, INDEX_KEY):
+        raw = _bounded_get(f"{base_url.rstrip('/')}/{key}", allow_missing=True, headers={"Cache-Control": "no-cache"})
+        if raw is not None:
+            return parse_index(raw)
+    return empty_index()
 
 
 def load_rulemaking_snapshot(base_url: str) -> dict | None:
@@ -193,8 +295,8 @@ def load_rulemaking_snapshot(base_url: str) -> dict | None:
     return {"snapshot_id": snapshot_id, "manifest_key": f"{prefix}/manifest.json", "tables": tables}
 
 
-def published_urls(base_url: str) -> dict[str, str]:
-    """Each table the publisher's two pointers name, by name, to its immutable URL.
+def published_urls(base_url: str) -> dict[str, list[str]]:
+    """Each table the publisher's two pointers name, by name, to its immutable file URLs.
 
     The publication index's generations come first, then the rulemaking
     snapshot's public artifacts. A table neither names is legacy: its URL is
@@ -202,11 +304,59 @@ def published_urls(base_url: str) -> dict[str, str]:
     """
     base = base_url.rstrip("/")
     index, snapshot = load_index(base), load_rulemaking_snapshot(base)
-    urls = {key.removesuffix(".parquet"): f"{base}/{entry['prefix']}/{key}"
-            for entry in index["families"].values() for key in entry["tables"] if key.endswith(".parquet")}
+    urls = {table: [f"{base}/{member.path}" for member in table_members(index, f"{table}.parquet")]
+            for table in parquet_tables(index)}
     for key, record in (snapshot or {"tables": {}})["tables"].items():
-        urls.setdefault(key.removesuffix(".parquet"), f"{base}/{record['remote_key']}")
+        urls.setdefault(key.removesuffix(".parquet"), [f"{base}/{record['remote_key']}"])
     return urls
+
+
+def fetch_member(base_url: str, member: Member, local_path: Path, label: str | None = None, *,
+                 headers: Mapping[str, str] | None = None, timeout: float | None = None) -> bool:
+    """Stream one table file to ``local_path`` through a sibling temp file, checked against its pin when it has one.
+
+    ``False`` only when an unpinned (legacy) file is absent (HTTP 404). A missing pinned member, any other status, a
+    transport error or bytes that differ from the pin raise, leaving ``local_path`` untouched and no temp file.
+    ``headers`` and ``timeout`` pass through to the request when given.
+    """
+    label = label or member.path
+    url = f"{base_url.rstrip('/')}/{member.path}"
+    temp_path = local_path.with_suffix(local_path.suffix + ".tmp")
+    request: dict = {name: value for name, value in (("headers", headers), ("timeout", timeout)) if value is not None}
+    digest, byte_size = hashlib.sha256(), 0
+    try:
+        with httpx.stream("GET", url, follow_redirects=True, **request) as response:
+            if response.status_code == 404:
+                if member.sha256 is not None:
+                    raise RuntimeError(f"Published generation member is missing: {label}")
+                logger.info("{} not found on R2 (404)", label)
+                return False
+            if response.status_code != 200:
+                raise RuntimeError(f"Failed to download {label} from R2: HTTP {response.status_code}")
+            with temp_path.open("wb") as out:
+                for chunk in response.iter_bytes():
+                    out.write(chunk)
+                    digest.update(chunk)
+                    byte_size += len(chunk)
+        if member.sha256 is not None and (
+                member.byte_size != byte_size or member.sha256 != "sha256:" + digest.hexdigest()):
+            raise RuntimeError(f"Published generation member differs from its pin: {label}")
+    except BaseException:
+        temp_path.unlink(missing_ok=True)
+        raise
+    temp_path.replace(local_path)
+    logger.info("Downloaded {} from R2", label)
+    return True
+
+
+def parquet_scan(paths: Sequence[str]) -> str:
+    """``read_parquet`` over one table's files as a SQL expression.
+
+    Hive partitioning is off: a split table stores its partition column inside each file, so a path's ``col=value``
+    must not add a second one.
+    """
+    listed = ", ".join("'" + path.replace("'", "''") + "'" for path in paths)
+    return f"read_parquet([{listed}], hive_partitioning = false)"
 
 
 def current_index(base_url: str) -> dict:
@@ -283,15 +433,54 @@ def parquet_tables(index: Mapping) -> tuple[str, ...]:
                          for key in family["tables"] if key.endswith(".parquet")}))
 
 
-def table_location(index: Mapping, key: str) -> tuple[str, dict | None]:
-    """Resolve a table key to ``(generation path, descriptor)``, or ``(key, None)`` when unpublished.
+class Member(NamedTuple):
+    """One file of a table: its path under the public base and, when published, its pin."""
+
+    path: str
+    sha256: str | None
+    byte_size: int | None
+    rows: int | None
+
+    @property
+    def key(self) -> str:
+        """The file's key within its generation, ``<table>.parquet`` or a split member's; a legacy file's own path.
+
+        A downloaded table keeps this layout locally. A pinned member's path must be
+        ``generations/<family>/<digest>/<key>``.
+        """
+        if self.sha256 is None:
+            return self.path
+        match = _MEMBER_PATH.fullmatch(self.path)
+        if match is None:
+            raise PublicationError(f"Member path is not under a generation prefix: {self.path}")
+        return match[1]
+
+
+def table_members(index: Mapping, key: str) -> tuple[Member, ...]:
+    """Every file of table ``key``, in index order; one unpinned member at the bare key when no family publishes it.
 
     The bare-key fallback is what keeps legacy table URLs readable.
     """
-    for entry in index["families"].values():
-        if key in entry["tables"]:
-            return f"{entry['prefix']}/{key}", entry["tables"][key]
-    return key, None
+    owner = table_owner(index, key)
+    if owner is None:
+        return (Member(key, None, None, None),)
+    prefix, table = owner[1]["prefix"], owner[1]["tables"][key]
+    return tuple(Member(f"{prefix}/{m['key']}", m["sha256"], m["byteSize"], m["rows"])
+                 for m in table.get("members", [{"key": key, **table}]))
+
+
+def table_descriptor(index: Mapping, key: str) -> dict | None:
+    """The index's descriptor for table ``key`` (rows, bytes, columns and, when split, members), or ``None``."""
+    owner = table_owner(index, key)
+    return None if owner is None else owner[1]["tables"][key]
+
+
+def single_member(index: Mapping, key: str) -> Member:
+    """The one file of table ``key``; a split table refuses, naming the resolver its reader needs."""
+    members = table_members(index, key)
+    if len(members) != 1:
+        raise PublicationError(f"{key} is published as {len(members)} files; read it through table_members")
+    return members[0]
 
 
 def table_owner(index: Mapping, key: str) -> tuple[str, Mapping] | None:
@@ -360,18 +549,102 @@ def _get_bounded(client, bucket: str, key: str) -> tuple[bytes, str] | None:
     return raw, response["ETag"]
 
 
-def _stored_index(client, bucket: str) -> tuple[dict, str | None]:
-    """Read the stored index and its conditional-write token; absent means empty and unpinned.
+def derive_v1(index: Mapping) -> dict:
+    """The version-1 view of ``index``: split tables omitted, and a family left with none omitted too."""
+    families = {}
+    for name, entry in index["families"].items():
+        tables = {key: table for key, table in entry["tables"].items() if "members" not in table}
+        if tables:
+            families[name] = {**entry, "tables": tables}
+    return {**empty_index(), "families": families}
 
-    A response without an ETag refuses.
+
+#: The version-1 index as read while version 2 was absent: its bytes and ETag, each ``None`` when it was absent too.
+Bootstrap = tuple[bytes | None, str | None]
+
+
+def _stored_index(client, bucket: str) -> tuple[dict, str | None, Bootstrap | None]:
+    """Read the stored version-2 index, its conditional-write token and, while version 2 is absent, the bootstrap.
+
+    Until version 2 is first written, the version-1 index stands in with no token, so that write creates version 2
+    from it, and the version 1 read is returned as the bootstrap for :func:`_write_v1`; absent both, empty and
+    unpinned. A response without an ETag refuses.
     """
-    stored = _get_bounded(client, bucket, INDEX_KEY)
-    if stored is None:
-        return empty_index(), None
-    raw, etag = stored
-    if not isinstance(etag, str) or not etag:
-        raise PublicationError("Publication index has no conditional-write token")
-    return parse_index(raw), etag
+    for key in (INDEX_V2_KEY, INDEX_KEY):
+        stored = _get_bounded(client, bucket, key)
+        if stored is not None:
+            raw, etag = stored
+            if not isinstance(etag, str) or not etag:
+                raise PublicationError("Publication index has no conditional-write token")
+            index = {**parse_index(raw), "version": 2}
+            return (index, etag, None) if key == INDEX_V2_KEY else (index, None, stored)
+    return {**empty_index(), "version": 2}, None, (None, None)
+
+
+def _put_pointer(client, bucket: str, key: str, raw: bytes, etag: str | None) -> bool:
+    """Replace pointer ``key`` only if it still has ``etag`` (``None``: only if absent); ``False`` when it moved."""
+    from botocore.exceptions import ClientError
+
+    condition = {"IfMatch": etag} if etag is not None else {"IfNoneMatch": "*"}
+    try:
+        client.put_object(Bucket=bucket, Key=key, Body=raw, ContentType="application/json",
+                          CacheControl="no-store, no-cache, must-revalidate", **condition)
+    except ClientError as exc:
+        if not _precondition(exc):
+            raise
+        return False
+    return True
+
+
+def _write_v1(client, bucket: str, bootstrap: Bootstrap | None = None) -> None:
+    """Write ``publication.json`` as :func:`derive_v1` of the stored version 2, under its own conditional write.
+
+    Version 1's token is read before version 2, so a writer that loses this race rederives from the newer version 2.
+    With no version 2 there is nothing to derive, and version 1 stays the pointer.
+
+    ``bootstrap`` is the version 1 a writer read while version 2 was absent, so its write is conditional on that ETag.
+    When version 1 changed since, :func:`_fold_v1` first moves into version 2 what a writer predating version 2 wrote
+    to version 1 alone, so deriving cannot erase it. Nothing folds once version 2 exists: a writer predating version 2
+    must not publish after the merge that introduces it, which is why that merge waits until no publish is in flight.
+    """
+    from rulespec_artifacts import canonical_json_bytes
+
+    for _ in range(_POINTER_ATTEMPTS):
+        stored = _get_bounded(client, bucket, INDEX_KEY)
+        if bootstrap is not None and (stored or (None, None))[1] != bootstrap[1]:
+            _fold_v1(client, bucket, bootstrap[0], None if stored is None else stored[0])
+        index, _, absent = _stored_index(client, bucket)
+        if absent is not None:
+            return
+        raw = canonical_json_bytes(derive_v1(index))
+        if stored is not None and stored[0] == raw:
+            return
+        if _put_pointer(client, bucket, INDEX_KEY, raw, None if stored is None else stored[1]):
+            return
+    raise PublicationError(f"{INDEX_KEY} kept changing; derive it again from {INDEX_V2_KEY}")
+
+
+def _fold_v1(client, bucket: str, before: bytes | None, after: bytes | None) -> None:
+    """Move into version 2 each family written to version 1 alone between the version-1 reads ``before`` and ``after``.
+
+    A family whose version-1 entry changed while version 2's view of it still equals ``before`` was published by a
+    writer predating version 2. One whose version-2 view changed too was published through version 2, which wins.
+    """
+    was, now = ({} if raw is None else parse_index(raw)["families"] for raw in (before, after))
+    for _ in range(_POINTER_ATTEMPTS):
+        index, etag, _ = _stored_index(client, bucket)
+        view = derive_v1(index)["families"]
+        folded = sorted(name for name, entry in now.items() if entry != was.get(name) and view.get(name) == was.get(name))
+        if not folded:
+            return
+        raw = b""
+        for name in folded:
+            index, raw = _merge_family(index, name, now[name])
+        logger.warning("publication: folding {} from {} into {}; a writer predating {} published them",
+                       ", ".join(folded), INDEX_KEY, INDEX_V2_KEY, INDEX_V2_KEY)
+        if _put_pointer(client, bucket, INDEX_V2_KEY, raw, etag):
+            return
+    raise PublicationError(f"{INDEX_V2_KEY} kept changing while {INDEX_KEY} was folded into it")
 
 
 def _copy_unchanged_member(client, bucket: str, source_key: str, destination_key: str) -> None:
@@ -610,7 +883,7 @@ def _publish_verified_generation(
     evidence_directories: tuple[Path, ...] = (), added_tables: frozenset[str] = frozenset(),
 ) -> dict:
     """Shared publication gates; both callers fully verify their source first."""
-    from botocore.exceptions import ClientError
+    from botocore.exceptions import BotoCoreError, ClientError
     from rulespec_artifacts import admit_artifact, iter_member_descriptors
     from spicy_regs.sources.r2 import _assert_upload_safe, _get_remote_size
     from spicy_regs.source_evidence import INPUT_ROLE, PRIOR_ROLE, verify_evidence
@@ -620,21 +893,23 @@ def _publish_verified_generation(
     family = artifact.root["spec"]["family"]
     if not _NAME.fullmatch(family):
         raise PublicationError("Invalid family name")
-    index, etag = _stored_index(client, bucket)
+    index, etag, bootstrap = _stored_index(client, bucket)
     _assert_family_unchanged(index, prior_index, family)
     prefix = f"generations/{family}/{artifact.pin.artifact_digest.removeprefix('sha256:')}"
-    tables = {}
-    for member in iter_member_descriptors(artifact, source):
-        key = member.object_key
-        assert key is not None
-        _, prior = table_location(index, key)
+    members = list(iter_member_descriptors(artifact, source))
+    try:
+        tables = table_entries(artifact.root["spec"]["tables"], members)
+    except ValueError as exc:
+        raise PublicationError(str(exc)) from exc
+    # The guards run per table: a partition of a split table may legitimately shrink, but none may vanish,
+    # since a build that forgot a partition would otherwise pass whenever the rest outweighs the shrink ratio.
+    for key, table in tables.items():
+        prior = table_descriptor(index, key)
+        if missing := _partitions(prior) - _partitions(table):
+            raise PublicationError(f"{key} lacks partitions its prior generation holds: "
+                                   + ", ".join("/".join(f"{c}={v}" for c, v in p) for p in sorted(missing)))
         old_size = prior["byteSize"] if prior else _get_remote_size(client, bucket, key)
-        _assert_upload_safe(member.byte_size, old_size, key)
-        tables[key] = {
-            "sha256": member.sha256,
-            "byteSize": member.byte_size,
-            **artifact.root["spec"]["tables"][key],
-        }
+        _assert_upload_safe(table["byteSize"], old_size, key)
     old_family = index["families"].get(family)
     # The table set may change only by an explicit migration: exactly the declared added tables join, none leave.
     # A union, so the declaration is inert once those tables are published.
@@ -662,17 +937,17 @@ def _publish_verified_generation(
     # digest are copied server-side instead of re-uploaded. The copy can never
     # publish wrong bytes: ``admit_artifact`` below re-verifies every member of
     # the new prefix against the artifact pin before the pointer moves.
-    prior_tables = old_family.get("tables", {}) if old_family is not None else {}
+    # A split table's members are compared one by one, so an untouched partition is copied, never re-uploaded.
+    prior_members = {
+        member["key"]: (member["sha256"], member["byteSize"])
+        for key, table in (old_family or {}).get("tables", {}).items()
+        for member in table.get("members", [{"key": key, **table}])
+    }
     prior_prefix = old_family.get("prefix") if old_family is not None else None
     reused = 0
+    current = {member.object_key: (member.sha256, member.byte_size) for member in members}
     for key in sorted(source.keys()):
-        prior_entry = prior_tables.get(key)
-        if (
-            prior_prefix is not None
-            and prior_entry is not None
-            and prior_entry.get("sha256") == tables[key]["sha256"]
-            and prior_entry.get("byteSize") == tables[key]["byteSize"]
-        ):
+        if prior_prefix is not None and key in current and prior_members.get(key) == current[key]:
             _copy_unchanged_member(client, bucket, f"{prior_prefix}/{key}", f"{prefix}/{key}")
             reused += 1
         else:
@@ -683,26 +958,29 @@ def _publish_verified_generation(
     admit_artifact(_S3Members(client, bucket, prefix), expected_pin=artifact.pin)
     # Each lost race means another writer's pointer write succeeded, so
     # contention resolves in at most one round per concurrent writer.
+    # Version 2 is the pointer; version 1 is derived from it afterwards (multi-file design §4.1).
+    # Once version 2 is written the generation is published: a failed version-1 write is logged, not raised, and
+    # the next publish, or retention before it deletes anything, derives version 1 again. A writer that first read
+    # the index while version 2 was absent keeps that bootstrap read, so ``_write_v1`` can fold what a writer
+    # predating version 2 published meanwhile.
     for _ in range(_POINTER_ATTEMPTS):
         updated, raw = _merge_family(index, family, entry)
-        condition = {"IfMatch": etag} if etag is not None else {"IfNoneMatch": "*"}
-        try:
-            client.put_object(
-                Bucket=bucket,
-                Key=INDEX_KEY,
-                Body=raw,
-                ContentType="application/json",
-                CacheControl="no-store, no-cache, must-revalidate",
-                **condition,
-            )
+        if _put_pointer(client, bucket, INDEX_V2_KEY, raw, etag):
+            try:
+                _write_v1(client, bucket, bootstrap)
+            except (BotoCoreError, ClientError, OSError, PublicationError) as exc:
+                logger.error("publication: {} is behind {}; the next publish rederives it ({}: {})",
+                             INDEX_KEY, INDEX_V2_KEY, type(exc).__name__, exc)
             return updated
-        except ClientError as exc:
-            if not _precondition(exc):
-                raise
         logger.info("publication: pointer moved concurrently; merging {} onto the reread index", family)
-        index, etag = _stored_index(client, bucket)
+        index, etag, _ = _stored_index(client, bucket)
         _assert_family_unchanged(index, prior_index, family)
     raise PublicationError("Publication changed concurrently; retry from a fresh snapshot")
+
+
+def _partitions(table: Mapping | None) -> set[tuple[tuple[str, str], ...]]:
+    """The partitions a split table's members hold, as ``(column, value)`` tuples; none for a single file."""
+    return {tuple(member["partition"].items()) for member in (table or {}).get("members", ())}
 
 
 def _assert_family_unchanged(index: Mapping, prior_index: Mapping, family: str) -> None:

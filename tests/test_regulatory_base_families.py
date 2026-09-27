@@ -46,7 +46,7 @@ def _working_copy(monkeypatch, frame: pl.DataFrame) -> list[str]:
 
 
 def _published_ids(store: Store) -> list[str]:
-    location, _ = pub.table_location(pub.parse_index(store.objects[pub.INDEX_KEY]), "dockets.parquet")
+    location = pub.single_member(pub.parse_index(store.objects[pub.INDEX_KEY]), "dockets.parquet").path
     return pl.read_parquet(io.BytesIO(store.objects[location]))["docket_id"].to_list()
 
 

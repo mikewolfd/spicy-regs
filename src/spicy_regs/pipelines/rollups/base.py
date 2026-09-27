@@ -221,7 +221,7 @@ class RollupPipeline(Pipeline):
             )
             from spicy_regs.sources.cloudflare import purge_urls
 
-            purge_urls([f"{public_url.rstrip('/')}/{publication.INDEX_KEY}"])
+            purge_urls([f"{public_url.rstrip('/')}/{key}" for key in (publication.INDEX_V2_KEY, publication.INDEX_KEY)])
         logger.info("Done!")
 
     def _prime(self, output_dir: Path, snapshot: Mapping | None = None) -> dict[str, dict]:

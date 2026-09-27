@@ -56,7 +56,7 @@ def connection_fixture(monkeypatch, index, locations, *, tables=("a", "b", "lega
         def execute(self, sql, parameters=None):
             if sql.startswith(("INSTALL ", "LOAD ", "SET ")):
                 return self
-            for url in re.findall(r"read_parquet\('([^']+)'\)", sql):
+            for url in re.findall("'(" + re.escape(mcp_server.R2_BASE_URL) + "/[^']+)'", sql):
                 self.seen.append(url)
                 key = url.removeprefix(mcp_server.R2_BASE_URL + "/")
                 if key not in locations:
@@ -90,7 +90,7 @@ def test_views_and_status_use_one_captured_generation(tmp_path, monkeypatch):
     index = publish(Store(), directory)
     legacy = tmp_path / "legacy.parquet"
     pq.write_table(pa.table({"id": ["legacy"]}), legacy)
-    locations = {pub.table_location(index, key)[0]: directory / key for key in ("a.parquet", "b.parquet")}
+    locations = {pub.single_member(index, key).path: directory / key for key in ("a.parquet", "b.parquet")}
     locations["legacy.parquet"] = legacy
     built = connection_fixture(monkeypatch, index, locations)
     mcp_server._build_connection()
@@ -102,7 +102,7 @@ def test_views_and_status_use_one_captured_generation(tmp_path, monkeypatch):
     assert status["publication"]["a"]["artifact_digest"] == index["families"]["test"]["artifactDigest"]
     assert con.inner.execute("SELECT * FROM a JOIN b USING (id)").fetchall() == [("one",)]
     assert con.seen[:2] == [
-        mcp_server.R2_BASE_URL + "/" + pub.table_location(index, key)[0] for key in ("a.parquet", "b.parquet")
+        mcp_server.R2_BASE_URL + "/" + pub.single_member(index, key).path for key in ("a.parquet", "b.parquet")
     ]
     con.inner.close()
 
@@ -114,7 +114,7 @@ def test_missing_or_wrong_schema_managed_member_refuses_connection(tmp_path, mon
     if bad == "schema":
         index = json.loads(json.dumps(index))
         index["families"]["test"]["tables"]["a.parquet"]["columns"] = [["wrong", "VARCHAR"]]
-    locations = {} if bad == "missing" else {pub.table_location(index, "a.parquet")[0]: directory / "a.parquet"}
+    locations = {} if bad == "missing" else {pub.single_member(index, "a.parquet").path: directory / "a.parquet"}
     built = connection_fixture(monkeypatch, index, locations)
     with pytest.raises(RuntimeError, match="Published"):
         mcp_server._build_connection()
@@ -371,7 +371,7 @@ def test_the_index_wins_over_the_snapshot_for_a_table_both_name(tmp_path, monkey
     index = publish(Store(), directory)
     rulemaking = write_rulemaking(tmp_path, SNAPSHOT_A, "EPA-A")
     snapshot_key = f"materialized/rulemaking/snapshots/{SNAPSHOT_A}/rule_targets.parquet"
-    locations = {pub.table_location(index, key)[0]: directory / key for key in ("a.parquet", "b.parquet")}
+    locations = {pub.single_member(index, key).path: directory / key for key in ("a.parquet", "b.parquet")}
     locations[snapshot_key] = rulemaking[snapshot_key]
     documents = rulemaking_documents(SNAPSHOT_A, tables=("a", "rule_targets"))
     built = connection_fixture(monkeypatch, index, locations, tables=("a",), documents=documents)
@@ -379,8 +379,8 @@ def test_the_index_wins_over_the_snapshot_for_a_table_both_name(tmp_path, monkey
     [con] = built
     base = mcp_server.R2_BASE_URL
     assert con.seen == [
-        f"{base}/{pub.table_location(index, 'a.parquet')[0]}",
-        f"{base}/{pub.table_location(index, 'b.parquet')[0]}",
+        f"{base}/{pub.single_member(index, 'a.parquet').path}",
+        f"{base}/{pub.single_member(index, 'b.parquet').path}",
         f"{base}/{snapshot_key}",
     ]
     status = mcp_server._publication_status(con.cursor())
@@ -389,8 +389,8 @@ def test_the_index_wins_over_the_snapshot_for_a_table_both_name(tmp_path, monkey
     assert status["publication"]["rule_targets"]["status"] == "rulemaking_snapshot"
     urls = pub.published_urls(base)
     assert (urls["a"], urls["rule_targets"]) == (
-        f"{base}/{pub.table_location(index, 'a.parquet')[0]}",
-        f"{base}/{snapshot_key}",
+        [f"{base}/{pub.single_member(index, 'a.parquet').path}"],
+        [f"{base}/{snapshot_key}"],
     )
 
 

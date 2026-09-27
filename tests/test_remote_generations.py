@@ -112,7 +112,7 @@ def test_full_remote_generation_and_publication_have_no_local_table_copy(tmp_pat
     assert {p.name for p in directory.iterdir()} == {"artifact.json", "members.json"}
     monkeypatch.setattr(remote, "PART_BYTES", 128)
     index = publish(store, directory, member)
-    key, descriptor = pub.table_location(index, "body.parquet")
+    key, descriptor = pub.single_member(index, "body.parquet").path, pub.table_descriptor(index, "body.parquet")
     assert descriptor is not None
     assert index["families"]["test"]["artifactDigest"] == artifact.pin.artifact_digest
     assert descriptor["rows"] == table.num_rows
@@ -206,14 +206,14 @@ def test_concurrent_pointer_change_survives(tmp_path):
     rivals = []
 
     def concurrent(key):
-        if key == pub.INDEX_KEY:  # a new object version on every attempt
+        if key == pub.INDEX_V2_KEY:  # a new object version on every attempt
             rivals.append(store.objects[key] + b" ")
             store.objects[key] = rivals[-1]
 
     store.before_put = concurrent
     with pytest.raises(pub.PublicationError, match="concurrently"):
         publish(store, directory, member, prior)
-    assert store.objects[pub.INDEX_KEY] == rivals[-1]
+    assert store.objects[pub.INDEX_V2_KEY] == rivals[-1]
 
 
 def test_stale_family_refuses_before_promotion(tmp_path):

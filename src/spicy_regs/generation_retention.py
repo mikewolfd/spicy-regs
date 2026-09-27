@@ -154,7 +154,7 @@ def plan(client, bucket: str, *, notes: Iterable[tuple[str, str]], docspec: Mapp
     """Mark every generation kept or deletable under decision 36 and return the plan as a JSON-able record."""
     from rulespec_artifacts import expected_artifact_digest, parse_canonical_json
 
-    index, etag = publication._stored_index(client, bucket)
+    index, etag, _ = publication._stored_index(client, bucket)
     generations, stray = inventory(client, bucket)
     roots: dict[str, dict | None] = {}
 
@@ -257,9 +257,14 @@ def plan(client, bucket: str, *, notes: Iterable[tuple[str, str]], docspec: Mapp
 
 
 def execute(client, bucket: str, approved: Mapping, fresh: Mapping) -> dict:
-    """Delete what both the reviewed plan and a fresh one mark deletable, and store the record of it."""
+    """Delete what both the reviewed plan and a fresh one mark deletable, and store the record of it.
+
+    Version 1 of the index is derived from version 2 again first: a publish that stopped between the two writes
+    leaves version 1 naming an older generation, and deleting that one would strand version 1's readers.
+    """
     if approved.get("format") != PLAN_FORMAT or approved.get("version") != 1 or approved.get("bucket") != bucket:
         raise publication.PublicationError(f"The approved plan is not a {PLAN_FORMAT} v1 plan for {bucket}")
+    publication._write_v1(client, bucket)
     doomed = sorted(set(approved["delete"]) & set(fresh["delete"]))
     for prefix in doomed:
         pages = client.get_paginator("list_objects_v2").paginate(Bucket=bucket, Prefix=f"{prefix}/")

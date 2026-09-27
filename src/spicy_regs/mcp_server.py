@@ -386,7 +386,13 @@ def _build_connection() -> duckdb.DuckDBPyConnection:
     whose schema differs from its admitted generation, or a managed or snapshot
     member that cannot be read, raises RuntimeError.
     """
-    from spicy_regs.sources.publication import load_index, load_rulemaking_snapshot, table_location
+    from spicy_regs.sources.publication import (
+        load_index,
+        load_rulemaking_snapshot,
+        parquet_scan,
+        table_descriptor,
+        table_members,
+    )
 
     local = None
     signatures = {}
@@ -434,10 +440,11 @@ def _build_connection() -> duckdb.DuckDBPyConnection:
     snapshot_names = [key.removesuffix(".parquet") for key in (rulemaking or {"tables": {}})["tables"]]
     selected_names = list(local.files) if local is not None and local.is_download else []
     for name in dict.fromkeys((*TABLES, *managed_names, *snapshot_names, *selected_names)):
-        key, published = table_location(publication_index, f"{name}.parquet")
+        published = table_descriptor(publication_index, f"{name}.parquet")
+        paths = [member.path for member in table_members(publication_index, f"{name}.parquet")]
         pinned = rulemaking["tables"].get(f"{name}.parquet") if rulemaking is not None and published is None else None
         if pinned is not None:
-            key = pinned["remote_key"]
+            paths = [pinned["remote_key"]]
         if name == "comments" and catalog_attached and published is None:
             namespace = catalog["namespace"]  # type: ignore[index]
             try:
@@ -453,12 +460,11 @@ def _build_connection() -> duckdb.DuckDBPyConnection:
         if local is not None:
             if name not in local.files:
                 continue
-            target = local.files[name][0]
-            url = str(target).replace("'", "''")
+            urls = [str(path) for path in local.paths(name)]
         else:
-            url = f"{R2_BASE_URL}/{key}"
+            urls = [f"{R2_BASE_URL}/{path}" for path in paths]
         try:
-            con.execute(f"CREATE VIEW \"{name}\" AS SELECT * FROM read_parquet('{url}')")
+            con.execute(f'CREATE VIEW "{name}" AS SELECT * FROM {parquet_scan(urls)}')
             if published is not None:
                 actual = con.execute(f'DESCRIBE "{name}"').fetchall()
                 if [[row[0], row[1]] for row in actual] != published["columns"]:
@@ -468,7 +474,7 @@ def _build_connection() -> duckdb.DuckDBPyConnection:
             if published is not None or pinned is not None or (local is not None and local.is_download):
                 con.close()
                 raise RuntimeError(f"Published generation member unavailable: {name}") from exc
-            logger.warning("table %s not available at %s; skipping view: %s", name, url, exc)
+            logger.warning("table %s not available at %s; skipping view: %s", name, urls, exc)
     return con
 
 
@@ -726,8 +732,10 @@ def _qualification(
         reads = str(DATA_DIR) if DATA_DIR is not None else R2_BASE_URL
         reason = f"This server reads {reads}; the ledger records audits only for {record['destination']}."
         return {**scope, "status": "unknown_for_publisher", "reason": reason}, None
+    # A split table has no single table digest, so only its artifact pin can match an audit.
     live = {
-        key.removesuffix(".parquet"): {"artifact": entry["artifactDigest"][7:15], "table": table["sha256"][7:15]}
+        key.removesuffix(".parquet"): {"artifact": entry["artifactDigest"][7:15],
+                                       **({"table": table["sha256"][7:15]} if "sha256" in table else {})}
         for entry in _connection_index(cursor)["families"].values()
         for key, table in entry["tables"].items()
     }

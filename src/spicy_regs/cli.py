@@ -10,7 +10,6 @@ Usage:
 """
 
 import argparse
-import hashlib
 import json
 import re
 import sys
@@ -48,11 +47,30 @@ def _table_name(value: str) -> str:
     return value
 
 
-def _local_files(output_dir: Path) -> dict[str, tuple[Path, str]]:
+def _local_selection(output_dir: Path):
     """Capture current once, then resolve selected files before legacy files."""
     from spicy_regs.local_data import local_selection
 
-    return local_selection(output_dir, include_legacy=True).files
+    return local_selection(output_dir, include_legacy=True)
+
+
+def _polars():
+    """The polars module, or exit saying how to install it."""
+    try:
+        import polars
+    except ImportError:
+        print("Please install polars: pip install polars")
+        sys.exit(1)
+    return polars
+
+
+def _read(paths, **options):
+    """One table from its local files: a split table's members as one frame, their ``col=value`` paths not columns."""
+    return _polars().read_parquet(list(paths), hive_partitioning=False, **options)
+
+
+def _megabytes(paths) -> float:
+    return sum(path.stat().st_size for path in paths) / (1024 * 1024)
 
 
 def get_output_dir(args) -> Path:
@@ -63,50 +81,37 @@ def get_output_dir(args) -> Path:
 
 
 def download_file(name: str, output_dir: Path, force: bool = False, *, base_url: str | None = None) -> Path | None:
-    """Download a parquet file from R2."""
-    from spicy_regs.sources.publication import current_index, table_location
+    """Download one table from R2: ``<name>.parquet``, or a split table's ``<name>/`` directory of members.
+
+    Each file lands at its key within the generation (``Member.key``), through ``fetch_member``: a sibling temp
+    file renamed only once complete and matching its pin, so a truncated file is never left at its path.
+    """
+    from spicy_regs.sources.publication import current_index, fetch_member, table_members
 
     _table_name(name)
     base_url = resolve_r2_base_url(base_url)
-    key, published = table_location(current_index(base_url), f"{name}.parquet")
-    url = f"{base_url}/{key}"
-    local_path = output_dir / f"{name}.parquet"
+    members = table_members(current_index(base_url), f"{name}.parquet")
+    label = members[0].key.split("/", 1)[0]
+    local_path = output_dir / label
+    files = [output_dir / member.key for member in members]
 
     # Existing loose files have no host provenance. Preserve the original
     # default-host cache behavior; a different host must supply its own bytes.
-    if local_path.exists() and not force and published is None and base_url == PUBLIC_URL:
-        size_mb = local_path.stat().st_size / (1024 * 1024)
-        print(f"  ✓ {name}.parquet already exists ({size_mb:.1f} MB)")
+    if local_path.exists() and not force and members[0].sha256 is None and base_url == PUBLIC_URL:
+        print(f"  ✓ {label} already exists ({_megabytes(files):.1f} MB)")
         return local_path
 
-    print(f"  ⬇ Downloading {name}.parquet...")
-    # Stream to a sibling temp file and rename only on success. A partial write
-    # left at local_path would be indistinguishable from a complete one on the
-    # next run (the exists() check above short-circuits), silently handing back
-    # a truncated parquet — a real risk on comments.parquet at ~2.4 GB.
-    tmp_path = local_path.with_suffix(".parquet.partial")
+    print(f"  ⬇ Downloading {label}...")
     try:
-        digest = hashlib.sha256()
-        size = 0
-        with httpx.stream("GET", url, headers=DEFAULT_HEADERS, follow_redirects=True, timeout=60.0) as resp:
-            resp.raise_for_status()
-            with open(tmp_path, "wb") as f:
-                for chunk in resp.iter_bytes():
-                    f.write(chunk)
-                    digest.update(chunk)
-                    size += len(chunk)
-        if published is not None and (
-            size != published["byteSize"] or "sha256:" + digest.hexdigest() != published["sha256"]
-        ):
-            raise ValueError(f"Downloaded member differs from its generation pin: {name}")
-        tmp_path.replace(local_path)
-        size_mb = local_path.stat().st_size / (1024 * 1024)
-        print(f"  ✓ {name}.parquet ({size_mb:.1f} MB)")
-        return local_path
-    except (httpx.HTTPError, OSError, ValueError) as e:
-        tmp_path.unlink(missing_ok=True)
-        print(f"  ✗ Failed to download {name}.parquet: {e}")
+        for member, path in zip(members, files, strict=True):
+            path.parent.mkdir(parents=True, exist_ok=True)
+            if not fetch_member(base_url, member, path, member.path, headers=DEFAULT_HEADERS, timeout=60.0):
+                raise RuntimeError(f"{member.path} is not on {base_url} (HTTP 404)")
+    except (httpx.HTTPError, OSError, RuntimeError) as e:
+        print(f"  ✗ Failed to download {label}: {e}")
         return None
+    print(f"  ✓ {label} ({_megabytes(files):.1f} MB)")
+    return local_path
 
 
 def cmd_download(args):
@@ -118,14 +123,12 @@ def cmd_download(args):
     for name in types_to_download:
         _table_name(name)
 
-    from spicy_regs.sources.publication import snapshot, table_location
+    from spicy_regs.local_data import selection_record
+    from spicy_regs.sources.publication import snapshot
 
     base_url = resolve_r2_base_url()
     with snapshot(base_url) as index:
-        selected = {}
-        for name in types_to_download:
-            key, published = table_location(index, f"{name}.parquet")
-            selected[name] = {"key": key, "status": "managed" if published is not None else "legacy-unversioned"}
+        selected = {name: selection_record(index, name) for name in types_to_download}
         managed = any(item["status"] == "managed" for item in selected.values())
         current = output_dir / "current"
         # A prior current pointer wins over loose files when reading. Stage
@@ -170,11 +173,7 @@ def cmd_download(args):
 
 def cmd_stats(args):
     """Show statistics for downloaded datasets."""
-    try:
-        import polars as pl
-    except ImportError:
-        print("Please install polars: pip install polars")
-        sys.exit(1)
+    _polars()
 
     output_dir = get_output_dir(args)
 
@@ -182,9 +181,10 @@ def cmd_stats(args):
     print("Dataset Statistics")
     print("=" * 60)
 
-    for data_type, (parquet_file, status) in _local_files(output_dir).items():
-        df = pl.read_parquet(parquet_file)
-        size_mb = parquet_file.stat().st_size / (1024 * 1024)
+    selection = _local_selection(output_dir)
+    for data_type, (_, status) in selection.files.items():
+        paths = selection.paths(data_type)
+        df, size_mb = _read(paths), _megabytes(paths)
 
         print(f"\n{data_type.upper()} ({size_mb:.1f} MB; {status})")
         print("-" * 40)
@@ -202,24 +202,22 @@ def cmd_stats(args):
 
 def cmd_sample(args):
     """Show sample rows from a dataset."""
-    try:
-        import polars as pl
-    except ImportError:
-        print("Please install polars: pip install polars")
-        sys.exit(1)
+    pl = _polars()
 
     output_dir = get_output_dir(args)
     _table_name(args.data_type)
-    parquet_file, status = _local_files(output_dir).get(
-        args.data_type, (output_dir / f"{args.data_type}.parquet", "legacy-unversioned")
-    )
+    selection = _local_selection(output_dir)
+    if args.data_type in selection.files:
+        paths, status = selection.paths(args.data_type), selection.files[args.data_type][1]
+    else:
+        paths, status = (output_dir / f"{args.data_type}.parquet",), "legacy-unversioned"
 
-    if not parquet_file.exists():
-        print(f"File not found: {parquet_file}")
+    if not all(path.exists() for path in paths):
+        print(f"File not found: {paths[0]}")
         print("Run: spicy-regs download")
         sys.exit(1)
 
-    df = pl.read_parquet(parquet_file)
+    df = _read(paths)
 
     if args.agency:
         df = df.filter(pl.col("agency_code") == args.agency)
@@ -233,11 +231,7 @@ def cmd_sample(args):
 
 def cmd_search(args):
     """Search across datasets."""
-    try:
-        import polars as pl
-    except ImportError:
-        print("Please install polars: pip install polars")
-        sys.exit(1)
+    pl = _polars()
 
     output_dir = get_output_dir(args)
     query = args.query.lower()
@@ -251,8 +245,9 @@ def cmd_search(args):
         "comments": ["title", "comment", "text_content"],
     }
 
-    for data_type, (parquet_file, status) in _local_files(output_dir).items():
-        df = pl.read_parquet(parquet_file)
+    selection = _local_selection(output_dir)
+    for data_type, (_, status) in selection.files.items():
+        df = _read(selection.paths(data_type))
         columns = search_configs.get(data_type, [name for name, dtype in df.schema.items() if dtype == pl.String])
 
         # Build filter for any column containing the query
@@ -276,20 +271,16 @@ def cmd_search(args):
 
 def cmd_agencies(args):
     """List all agencies in the dataset."""
-    try:
-        import polars as pl
-    except ImportError:
-        print("Please install polars: pip install polars")
-        sys.exit(1)
+    _polars()
 
     output_dir = get_output_dir(args)
-    files = _local_files(output_dir)
+    selection = _local_selection(output_dir)
 
     # Try to get agency list from any available file
     for data_type in ["dockets", "documents", "comments"]:
-        if data_type in files:
-            parquet_file, status = files[data_type]
-            df = pl.read_parquet(parquet_file, columns=["agency_code"])
+        if data_type in selection.files:
+            status = selection.files[data_type][1]
+            df = _read(selection.paths(data_type), columns=["agency_code"])
             agencies = df["agency_code"].unique().sort().to_list()
 
             print(f"Agencies ({len(agencies)} total; {status}):")
