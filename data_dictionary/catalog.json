@@ -1763,6 +1763,33 @@
       ]
     },
     {
+      "table": "fec_committee_history",
+      "label": "FEC committees by cycle",
+      "summary": "One row per FEC committee per two-year cycle, as that cycle's bulk committee master states it: name, treasurer, address, designation, type, party, filing frequency, interest-group category, connected organization and linked candidate. Read by the `fec-committee-history` rollup through SpicyDocs' committee-master reader, which verifies each file by digest and checks the publisher's header. Codes stay literal. `fec_committees` is the current registry from the API; this is the history, keyed on (`committee_id`, `cycle`). All columns are stored as VARCHAR.",
+      "coverage": "True range. Every cycle from 1980 through the current one: each run reads every cycle's bulk committee master whole and publishes every row. The 24 source files fetched on 2026-09-27 held 298,395 rows naming 89,710 committees (receipt `fork-execution-2026-09-21/committee-master-measure-2026-09-27/`). The current cycle's file is republished daily, so its rows change.",
+      "kind": "true_range",
+      "measured_on": "2026-09-27",
+      "data_quality": null,
+      "columns": [
+        "committee_id",
+        "cycle",
+        "name",
+        "treasurer_name",
+        "street_1",
+        "street_2",
+        "city",
+        "state",
+        "zip",
+        "designation",
+        "committee_type",
+        "party",
+        "filing_frequency",
+        "organization_type",
+        "connected_organization_name",
+        "candidate_id"
+      ]
+    },
+    {
       "table": "house_communications",
       "label": "House executive communications",
       "summary": "One row per House executive communication, as the Congress.gov house-communication list and detail routes state it, keyed on the publisher's own address. The regulatory bridge: `is_rulemaking`, the cited `legal_authority`, the committee referral, the matching House requirement and the RIN read from `report_nature`. Complete Federal Register joins unnest `regulation_id_numbers_json` and retain number plus publication date; the first-value scalar `federal_register.rin` omits other RINs. All columns are stored as VARCHAR.",

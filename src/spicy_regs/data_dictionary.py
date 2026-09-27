@@ -127,6 +127,8 @@ CONTRACT_TABLES: tuple[str, ...] = (
     "committee_assignments",
     # The Federal Register rollup (spicy-docs 0.42.0).
     "federal_register",
+    # The FEC bulk committee master, every cycle (spicy-docs 0.43.0, decision 53).
+    "fec_committee_history",
     # The Congress.gov index tables (gaps A5, A7, A10), each written by its own
     # rollup in pipelines/rollups/congress_index.py.
     "house_communications",

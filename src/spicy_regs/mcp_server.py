@@ -57,6 +57,7 @@ TABLES = (
     "lobbying_activities",
     "lobbying_activity_lobbyists",
     "fec_committees",
+    "fec_committee_history",
     "fec_source_catalog",
     "fec_collections",
     "fec_source_records",

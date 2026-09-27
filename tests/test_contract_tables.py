@@ -35,7 +35,7 @@ CONTRACT_NAMES = sorted(TABLE_CONTRACTS)
 ADOPTED_CONTRACT_COUNT = 44
 
 #: A contract here leaves the set when its owning rollup hosts it.
-UNHOSTED_CONTRACTS = frozenset({"fec_committee_history"})
+UNHOSTED_CONTRACTS = frozenset()
 
 #: Contracts this repository publishes through its own ``RECORD_TYPES`` (the
 #: regulatory base tables), not through ``CONTRACT_TABLES``. SpicyDocs 0.34.1
