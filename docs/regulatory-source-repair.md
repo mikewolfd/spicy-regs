@@ -88,16 +88,21 @@ apply refuses in three cases:
 
 It then replaces only the changed rows, by `comment_id`, with the same atomic
 `MERGE` helper the ETL and text-fill paths use. The helper refuses duplicate
-source or affected prior identities, checks exact values inside its transaction,
-and rolls back if validation fails. A successful receipt records the new snapshot.
+source or affected prior identities. Inside its transaction it compares every
+prior cell and expected absence with the captured rows, then checks the exact
+replacement values before commit. An intervening write refuses the operation;
+validation failures roll back. A successful receipt records the new snapshot.
 Older DELETE/INSERT writes may have left duplicates; this helper does not choose
 between those historical assertions.
 
 The fork qualification on 2026-09-27 used DuckDB 1.5.5 and Iceberg extension
 `45163a28`. A task-owned scratch table passed replacement, idempotent replay and
 injected post-write rollback with independent connection readback. The retained
-receipts are `catalog-merge-probe.json` and `catalog-replace-probe.json` under
-`spicy-regs-join-implementation-20260927/`. Both scratch tables were removed.
+receipts are `catalog-merge-probe.json`, `catalog-replace-probe.json` and
+`catalog-concurrency-probe.json` under `spicy-regs-join-implementation-20260927/`.
+The two-connection probe also refused intervening updates, unexpected inserts
+and a concurrent commit after the prior-row check. Matching priors permitted
+an intended NULL write. All scratch tables were removed.
 
 Run it outside the ETL's schedule. The repair does not hold the
 `comments-catalog-write` lock; snapshot checks refuse a detected intervening

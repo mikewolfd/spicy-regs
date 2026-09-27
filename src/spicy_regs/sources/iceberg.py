@@ -202,12 +202,14 @@ def _staging_files(staging_dir: Path, record_type: RecordType) -> list[Path]:
     return sorted(staging_type_dir.glob("*.parquet"))
 
 
-def replace_rows(con, record_type: RecordType, source: str) -> None:
+def replace_rows(con, record_type: RecordType, source: str, *, expected_prior: str | None = None) -> None:
     """Atomically replace selected unique keys, validating values before commit.
 
     ``source`` must be a self-contained temp table, never a projection over the
     live table (see :func:`upsert_comment_text`). Shared by the ETL upsert
-    (:func:`_merge`) and the comment source repair.
+    (:func:`_merge`) and the comment source repair. Read-modify-write callers
+    pass a self-contained ``expected_prior``; its rows and absences must still
+    match inside the write transaction. Direct replacements may omit it.
     """
     key = record_type.dedup_key
     tbl = _qualified(record_type)
@@ -222,6 +224,17 @@ def replace_rows(con, record_type: RecordType, source: str) -> None:
         return
     con.execute("BEGIN")
     try:
+        if expected_prior is not None:
+            # Compare the prepared preimage inside this write transaction, including
+            # expected absence. A newly inserted, deleted or changed row must not be
+            # overwritten by a winner selected before the transaction began.
+            scoped = f'SELECT {col_list} FROM {{table}} WHERE "{key}" IN (SELECT "{key}" FROM {source})'
+            actual = scoped.format(table=tbl)
+            expected = scoped.format(table=expected_prior)
+            changed = con.execute(f"SELECT 1 FROM (({actual} EXCEPT ALL {expected}) "
+                                  f"UNION ALL ({expected} EXCEPT ALL {actual})) LIMIT 1").fetchone()
+            if changed:
+                raise RuntimeError("Catalog replacement prior changed after preparation; rerun the operation")
         duplicate = con.execute(f'''
             SELECT t."{key}" FROM {tbl} t JOIN {source} s ON t."{key}"=s."{key}"
             GROUP BY t."{key}" HAVING count(*)<>1 LIMIT 1
@@ -242,7 +255,12 @@ def replace_rows(con, record_type: RecordType, source: str) -> None:
             raise RuntimeError("Catalog replacement did not preserve one exact row per source identity")
         con.execute("COMMIT")
     except Exception:
-        con.execute("ROLLBACK")
+        try:
+            con.execute("ROLLBACK")
+        except Exception:
+            # Failed COMMIT can already abort the transaction. Preserve the
+            # original write/conflict error rather than the cleanup failure.
+            pass
         raise
 
 
@@ -271,6 +289,7 @@ def _merge(con, staging_files: list[Path], record_type: RecordType) -> int:
     # connection can't collide.
     staged = f"_staged_{record_type.name}"
     winners = f"_winners_{record_type.name}"
+    prior = f"_prior_{record_type.name}"
 
     files_sql = ", ".join(f"'{_sql_str(str(p))}'" for p in staging_files)
     col_select = ", ".join(f'CAST("{c}" AS VARCHAR) AS "{c}"' for c in cols)
@@ -287,6 +306,8 @@ def _merge(con, staging_files: list[Path], record_type: RecordType) -> int:
         ) = 1;
         """
     )
+    con.execute(f'CREATE OR REPLACE TEMP TABLE {prior} AS SELECT * FROM {tbl} '
+                f'WHERE "{key}" IN (SELECT "{key}" FROM {staged})')
     # 2. Keep only rows that should win over the table: a new key, or one whose
     #    incoming modify_date is strictly newer (matching the old MERGE guard).
     con.execute(
@@ -294,7 +315,7 @@ def _merge(con, staging_files: list[Path], record_type: RecordType) -> int:
         CREATE OR REPLACE TEMP TABLE {winners} AS
         SELECT s.*
         FROM {staged} s
-        LEFT JOIN {tbl} t ON t."{key}" = s."{key}"
+        LEFT JOIN {prior} t ON t."{key}" = s."{key}"
         WHERE t."{key}" IS NULL
            OR t.modify_date IS NULL
            OR s.modify_date > t.modify_date;
@@ -304,11 +325,12 @@ def _merge(con, staging_files: list[Path], record_type: RecordType) -> int:
     try:
         # Avoid empty catalog commits: the snapshot is also the mirror's input identity.
         if changed:
-            replace_rows(con, record_type, winners)
+            replace_rows(con, record_type, winners, expected_prior=prior)
         return changed
     finally:
         con.execute(f"DROP TABLE IF EXISTS {staged};")
         con.execute(f"DROP TABLE IF EXISTS {winners};")
+        con.execute(f"DROP TABLE IF EXISTS {prior};")
 
 
 def _export_parquet(con, record_type: RecordType, output_dir: Path) -> Path:
@@ -573,11 +595,12 @@ def upsert_comment_text(con, record_type: RecordType, agency: str, updates: "pl.
 
     con.execute(
         f"""
-        CREATE OR REPLACE TEMP TABLE _uct_replacement AS
+        CREATE OR REPLACE TEMP TABLE _uct_prior AS
         SELECT {col_list} FROM {tbl}
         WHERE agency_code = '{ag}' AND comment_id IN (SELECT comment_id FROM _uct_updates);
         """
     )
+    con.execute("CREATE OR REPLACE TEMP TABLE _uct_replacement AS SELECT * FROM _uct_prior")
     con.execute(
         f"""
         UPDATE _uct_replacement AS r
@@ -587,9 +610,10 @@ def upsert_comment_text(con, record_type: RecordType, agency: str, updates: "pl.
         WHERE r.comment_id = u.comment_id;
         """
     )
-    replace_rows(con, record_type, "_uct_replacement")
+    replace_rows(con, record_type, "_uct_replacement", expected_prior="_uct_prior")
     con.execute("DROP TABLE IF EXISTS _uct_updates;")
     con.execute("DROP TABLE IF EXISTS _uct_replacement;")
+    con.execute("DROP TABLE IF EXISTS _uct_prior;")
 
 
 def merge_comments(staging_dir: Path, record_type: RecordType) -> int:

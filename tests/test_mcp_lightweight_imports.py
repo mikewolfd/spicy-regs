@@ -27,6 +27,7 @@ assert 'spicy_regs.ontology' not in sys.modules
 from spicy_regs.vocabulary_mapping import lookup_agency
 assert lookup_agency('regulations.gov:agency', 'OPM')['status'] == 'reviewed_mapping'
 assert lookup_agency('regulations.gov:agency', 'ARCTICGAS')['abstentions']
+assert lookup_agency('federal_register_agency', '559')['registry_evidence']['current_lineage']['code'] == 'CMS'
 assert 'spicy_regs.ontology.common' not in sys.modules
 '''
     result = subprocess.run([sys.executable, '-c', program], capture_output=True, text=True, timeout=30)

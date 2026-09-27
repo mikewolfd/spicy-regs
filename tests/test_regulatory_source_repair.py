@@ -146,8 +146,8 @@ def catalog(tmp_path, monkeypatch):
 
     real_replace = iceberg.replace_rows
 
-    def replace(con, record_type, source):
-        real_replace(con, record_type, source)
+    def replace(con, record_type, source, **kwargs):
+        real_replace(con, record_type, source, **kwargs)
         state["snapshot"] += 1
 
     monkeypatch.setattr(iceberg, "_connect", connect)
@@ -259,7 +259,7 @@ def test_comment_apply_fails_loudly_when_the_delete_leaves_the_prior_row(tmp_pat
     """The catalog's DELETE has left rows behind before; the repair checks its own write."""
     catalog.seed([comment_prior()])
     columns = ", ".join(f'"{c}"' for c in COMMENT.schema)
-    monkeypatch.setattr(iceberg, "replace_rows", lambda con, rt, source: con.execute(
+    monkeypatch.setattr(iceberg, "replace_rows", lambda con, rt, source, **kwargs: con.execute(
         f"INSERT INTO {iceberg._qualified(rt)} ({columns}) SELECT {columns} FROM {source}"))
     with pytest.raises(RuntimeError, match="DELETE left rows behind"):
         repair_records([raw(COMMENT_ID)], table="comments", output_dir=tmp_path, apply=True)
@@ -318,7 +318,9 @@ def test_correction_takes_the_text_columns_together(fresh_text, expected):
 
 
 def test_comment_migrated_write_schema_with_older_snapshot_applies(tmp_path, catalog, monkeypatch):
-    catalog.seed([comment_prior()])
+    # A genuine nullable-column migration leaves new fields NULL. Non-NULL
+    # current values absent from the historical snapshot are an intervening edit.
+    catalog.seed([{**comment_prior(), **dict.fromkeys(iceberg._COMMENT_REFERENCE_COLUMNS)}])
     historical_columns = [c for c in COMMENT.schema if c not in iceberg._COMMENT_REFERENCE_COLUMNS]
     projection = ", ".join(f'"{c}"' for c in historical_columns)
     monkeypatch.setattr(iceberg, "_snapshot_query", lambda rt, snapshot: f"SELECT {projection} FROM {iceberg._qualified(rt)}")
@@ -340,3 +342,18 @@ def test_comment_repair_refuses_wrong_current_reference_type(tmp_path, catalog):
     with pytest.raises(ValueError, match="must be VARCHAR"):
         repair_records([raw(COMMENT_ID)], table="comments", output_dir=tmp_path, apply=True)
     assert catalog.rows() == before
+
+
+def test_comment_repair_refuses_write_after_snapshot_check(tmp_path, catalog, monkeypatch):
+    catalog.seed([comment_prior()])
+    original = iceberg.replace_rows
+
+    def intervening_write(con, record_type, source, **kwargs):
+        con.execute(f"UPDATE {iceberg._qualified(record_type)} SET title='concurrent-source'")
+        original(con, record_type, source, **kwargs)
+
+    monkeypatch.setattr(iceberg, 'replace_rows', intervening_write)
+    with pytest.raises(RuntimeError, match='prior changed'):
+        repair_records([raw(COMMENT_ID)], table='comments', output_dir=tmp_path, apply=True)
+    assert catalog.rows()[0]['title'] == 'concurrent-source'
+    assert receipt(tmp_path)['applied_snapshot'] is None

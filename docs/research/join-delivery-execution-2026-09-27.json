@@ -1,14 +1,13 @@
 {
   "format": "spicyregs-join-delivery-execution-v1",
   "as_of": "2026-09-27",
-  "scope": "Parallel implementation and verified deployment of scoped work across the proposal, with two source publications and explicit remaining acceptance per task; not completion of the full proposal.",
+  "scope": "Parallel implementation, source qualification and publication at explicitly selected input pins; broader source history and unresolved interpretation cases remain separate.",
   "proposal": "join-delivery-tasks-2026-09-27.json",
   "finalization": {
     "source_wheel_pin": {
-      "version": "0.48.0",
-      "source_commit": "983463c9eca35fc93913fd798811e148b531516d",
-      "wheel_sha256": "ee138dd86e62c254058ce9fe5f2f159dc6aa7d82ccc4580ed47edf09d28fd7fb",
-      "wheel_bytes": 1690539,
+      "version": "0.48.1",
+      "source_commit": "8bcfef5",
+      "wheel_sha256": "6f5ca008096fe60765a49183345fc78acde2ffa99c2451720d53c14a5b554a0b",
       "reproducible_builds": 2,
       "registry_uploaded": false
     },
@@ -35,8 +34,179 @@
         "source": "complete retained September25 community crosswalk captures",
         "public_readback": "all three exact hashes and counts verified"
       },
-      "comments": "Nullable catalog migration verified; three retained native comments replayed in read-only preview, parent targets found at a selected public pin; no catalog data write or public export.",
-      "bill_cosponsors": "Provider pinned and consumer builder installed; source backfill and publication pending.",
+      "comments": {
+        "catalog_snapshot": 50021510906269595,
+        "schema_id": 4,
+        "repaired_rows": 3,
+        "changed_cells": 12,
+        "verified_local_mirror_rows": 26314364,
+        "public_mirror": "awaiting serialized hosted publication",
+        "receipt": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/comment-reference-repair-2026-09-27/receipt.json"
+      },
+      "bill_cosponsors": {
+        "family": "bill-family",
+        "generation": {
+          "artifactDigest": "sha256:401302170a911739b90989e1d4f81fd7ce3da7227d23192293c56e764377a168",
+          "logicalId": "urn:spicy:artifact:spicy-regs-rollup-generation:2fc4a757f0ced1b5b0c418bf71c1176b7ca732d42184208ee4808ae019979872"
+        },
+        "published": true,
+        "public_readback": [
+          {
+            "key": "bill_actions.parquet",
+            "member": "bill_actions.parquet",
+            "bytes": 9022918,
+            "sha256": "sha256:5e8b236790af4e2fa6889cc9be17bb3a81e3d2879e076bb9d36d69fd971b18f1",
+            "etag": "\"3d40a58200a0875234a7095f92781aae\"",
+            "verified": true
+          },
+          {
+            "key": "bill_committees.parquet",
+            "member": "bill_committees.parquet",
+            "bytes": 1301094,
+            "sha256": "sha256:67928bbd5a06eb06874de8da289dfcb249325ed4434dbdfce2a93752a342b3ec",
+            "etag": "\"a3ad48bee5a24ce3a4f9253632374dff\"",
+            "verified": true
+          },
+          {
+            "key": "bill_cosponsors.parquet",
+            "member": "bill_cosponsors.parquet",
+            "bytes": 3773966,
+            "sha256": "sha256:ee12c814229d9d84c25e9ad1ec0378b5fc67b59f9ba1125979bae3a2e251fc6f",
+            "etag": "\"f917448e14e9a82f045a008c131b934d\"",
+            "verified": true
+          },
+          {
+            "key": "bill_family_archives.parquet",
+            "member": "bill_family_archives.parquet",
+            "bytes": 14490,
+            "sha256": "sha256:3bb4394585a0d7d44598e03b5c76244ed4e690984bbf5ca29668af2ce9288dd7",
+            "etag": "\"5d977d8c4a6fc2de05b7b5b9aa7751c3\"",
+            "verified": true
+          },
+          {
+            "key": "bill_family_backfill_walks.parquet",
+            "member": "bill_family_backfill_walks.parquet",
+            "bytes": 333,
+            "sha256": "sha256:86e1ac46284f0b5fe8e86841be61c5dfddaf176ff3a3411b62ef397747eafe5c",
+            "etag": "\"ea0cc499a94a78986f4b146e2c9ee07b\"",
+            "verified": true
+          },
+          {
+            "key": "bill_family_backfills.parquet",
+            "member": "bill_family_backfills.parquet",
+            "bytes": 229,
+            "sha256": "sha256:8daf0697d5c5278ad333a57a78cf312b00516ecd2f1d51aef3ef476c4b318cb4",
+            "etag": "\"666bd51e3eff667405d8b37ab4c4a334\"",
+            "verified": true
+          },
+          {
+            "key": "bill_publisher_summaries.parquet",
+            "member": "bill_publisher_summaries.parquet",
+            "bytes": 50036908,
+            "sha256": "sha256:a75c43341f22f07dccfa25912c084233007762761d2ce179bbb2b00dba33c6b8",
+            "etag": "\"a81fc5e138fd0747c6e90c619758f799\"",
+            "verified": true
+          },
+          {
+            "key": "bill_sections.parquet",
+            "member": "bill_sections.parquet",
+            "bytes": 950009925,
+            "sha256": "sha256:ae284a74e8984f831e5c82426e0285f118dc00f4f3229b206e9a8fb881557d91",
+            "etag": "\"710d957b0d43c2f0ec48f03885c1638a-15\"",
+            "verified": true
+          },
+          {
+            "key": "bill_summaries.parquet",
+            "member": "bill_summaries.parquet",
+            "bytes": 426,
+            "sha256": "sha256:3d11046c5abe35ff6a01d529b221f7a025c506ba3491862635468b1eeb5bfa8d",
+            "etag": "\"fab19a64e6c42085619eaa36f35a23d7\"",
+            "verified": true
+          },
+          {
+            "key": "bill_versions.parquet",
+            "member": "bill_versions.parquet",
+            "bytes": 9467997,
+            "sha256": "sha256:6f3f399d085a7166cf58be6a0566934b98273e8b82381c7cb3f707e35c24cb8d",
+            "etag": "\"be05dbb80ae1b8ca0fadd828b58d67ab\"",
+            "verified": true
+          },
+          {
+            "key": "bill_vote_references.parquet",
+            "member": "bill_vote_references.parquet",
+            "bytes": 222518,
+            "sha256": "sha256:13b4c17567bf7b1e82db209e601922311388fc1225315908055935f9e3f4621f",
+            "etag": "\"5411f2c79df0d552b14bc1bdd75c220f\"",
+            "verified": true
+          },
+          {
+            "key": "cbo_cost_estimates.parquet",
+            "member": "cbo_cost_estimates.parquet",
+            "bytes": 625438,
+            "sha256": "sha256:5baa155dd3e61a7080dff673b8f1a127559ae11e0a4c112b8deca024ee513e28",
+            "etag": "\"eb1ff21deb2eacad0c3a6e0e4ba5ff19\"",
+            "verified": true
+          },
+          {
+            "key": "congress_bills.parquet",
+            "member": "congress_bills.parquet",
+            "bytes": 30639875,
+            "sha256": "sha256:4f08a3775def1cf839dae41e96e5557b0feba301527edec7f834557e58c1d9a2",
+            "etag": "\"7bcd2628d0e6cc591e89937d0eb638e4\"",
+            "verified": true
+          },
+          {
+            "key": "diff_summaries.parquet",
+            "member": "diff_summaries.parquet",
+            "bytes": 513,
+            "sha256": "sha256:fa8f3637dc17cb04cf86ad57787b3e02f0048d612f3af1950916e463ade15337",
+            "etag": "\"286b7eae4451c2749b829b1d65c64bcf\"",
+            "verified": true
+          },
+          {
+            "key": "financial_changes.parquet",
+            "member": "financial_changes.parquet",
+            "bytes": 346,
+            "sha256": "sha256:6566431e7d5c080394b4c49827753a85b35d257646f40c0b7e726acbfac8c9b8",
+            "etag": "\"a4e7489e7eb0c44bdffe7ff5b7d81c6c\"",
+            "verified": true
+          },
+          {
+            "key": "public_activity_events.parquet",
+            "member": "public_activity_events.parquet",
+            "bytes": 3079146,
+            "sha256": "sha256:6ad7ec70189fdff7cd4cbc1c901c0f070b785fb4925e8fe53328e1cb7f31e99c",
+            "etag": "\"55a1f60e6e746bdeff64dbd647f7dd4d\"",
+            "verified": true
+          },
+          {
+            "key": "section_classifications.parquet",
+            "member": "section_classifications.parquet",
+            "bytes": 410,
+            "sha256": "sha256:eb8b2483a28f4987c95b3b216bb932b490cba55604a94fc12b665fb6740f98a7",
+            "etag": "\"c4c9fd2b8fe45ce109c8ed5c9a3747cd\"",
+            "verified": true
+          },
+          {
+            "key": "section_diff_items.parquet",
+            "member": "section_diff_items.parquet",
+            "bytes": 120126422,
+            "sha256": "sha256:ec8d8b899987921ea1c0de37aededcd37cfa75ed7deb8aa8975f3ceee34bae74",
+            "etag": "\"9f0f6616db9f9fdfa87f16b9fb1310d4-2\"",
+            "verified": true
+          },
+          {
+            "key": "section_diffs.parquet",
+            "member": "section_diffs.parquet",
+            "bytes": 394773,
+            "sha256": "sha256:a598f4a226d1adbfabdc581d3d77dd2a9714319bfd2beef5283755991f5ccec8",
+            "etag": "\"54fc763fbf8c7f7b9ed6169ba30b5d66\"",
+            "verified": true
+          }
+        ],
+        "verified_at": "2026-09-27T22:14:05.497071+00:00",
+        "receipt_path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/legislative-joins-2026-09-27/publication/publication-receipt.json"
+      },
       "house_communications": {
         "generation": "sha256:94d28167db0a56a3670d0a3ceca17e610b0a54f7b3c1e0c6b91617affaa2a994",
         "rows": 5006,
@@ -179,6 +349,335 @@
       "live_passed": true,
       "scope": "All fourteen bounded public MCP checks passed. First rollout attempt hit an older container; retained separately. New runtime and selected publications verified; per-instance fleet completion is not asserted.",
       "verified_at": "2026-09-27T21:52:40.627063+00:00"
+    },
+    "third_wave_publications": {
+      "bill-family": {
+        "family": "bill-family",
+        "generation": {
+          "artifactDigest": "sha256:401302170a911739b90989e1d4f81fd7ce3da7227d23192293c56e764377a168",
+          "logicalId": "urn:spicy:artifact:spicy-regs-rollup-generation:2fc4a757f0ced1b5b0c418bf71c1176b7ca732d42184208ee4808ae019979872"
+        },
+        "published": true,
+        "public_readback": [
+          {
+            "key": "bill_actions.parquet",
+            "member": "bill_actions.parquet",
+            "bytes": 9022918,
+            "sha256": "sha256:5e8b236790af4e2fa6889cc9be17bb3a81e3d2879e076bb9d36d69fd971b18f1",
+            "etag": "\"3d40a58200a0875234a7095f92781aae\"",
+            "verified": true
+          },
+          {
+            "key": "bill_committees.parquet",
+            "member": "bill_committees.parquet",
+            "bytes": 1301094,
+            "sha256": "sha256:67928bbd5a06eb06874de8da289dfcb249325ed4434dbdfce2a93752a342b3ec",
+            "etag": "\"a3ad48bee5a24ce3a4f9253632374dff\"",
+            "verified": true
+          },
+          {
+            "key": "bill_cosponsors.parquet",
+            "member": "bill_cosponsors.parquet",
+            "bytes": 3773966,
+            "sha256": "sha256:ee12c814229d9d84c25e9ad1ec0378b5fc67b59f9ba1125979bae3a2e251fc6f",
+            "etag": "\"f917448e14e9a82f045a008c131b934d\"",
+            "verified": true
+          },
+          {
+            "key": "bill_family_archives.parquet",
+            "member": "bill_family_archives.parquet",
+            "bytes": 14490,
+            "sha256": "sha256:3bb4394585a0d7d44598e03b5c76244ed4e690984bbf5ca29668af2ce9288dd7",
+            "etag": "\"5d977d8c4a6fc2de05b7b5b9aa7751c3\"",
+            "verified": true
+          },
+          {
+            "key": "bill_family_backfill_walks.parquet",
+            "member": "bill_family_backfill_walks.parquet",
+            "bytes": 333,
+            "sha256": "sha256:86e1ac46284f0b5fe8e86841be61c5dfddaf176ff3a3411b62ef397747eafe5c",
+            "etag": "\"ea0cc499a94a78986f4b146e2c9ee07b\"",
+            "verified": true
+          },
+          {
+            "key": "bill_family_backfills.parquet",
+            "member": "bill_family_backfills.parquet",
+            "bytes": 229,
+            "sha256": "sha256:8daf0697d5c5278ad333a57a78cf312b00516ecd2f1d51aef3ef476c4b318cb4",
+            "etag": "\"666bd51e3eff667405d8b37ab4c4a334\"",
+            "verified": true
+          },
+          {
+            "key": "bill_publisher_summaries.parquet",
+            "member": "bill_publisher_summaries.parquet",
+            "bytes": 50036908,
+            "sha256": "sha256:a75c43341f22f07dccfa25912c084233007762761d2ce179bbb2b00dba33c6b8",
+            "etag": "\"a81fc5e138fd0747c6e90c619758f799\"",
+            "verified": true
+          },
+          {
+            "key": "bill_sections.parquet",
+            "member": "bill_sections.parquet",
+            "bytes": 950009925,
+            "sha256": "sha256:ae284a74e8984f831e5c82426e0285f118dc00f4f3229b206e9a8fb881557d91",
+            "etag": "\"710d957b0d43c2f0ec48f03885c1638a-15\"",
+            "verified": true
+          },
+          {
+            "key": "bill_summaries.parquet",
+            "member": "bill_summaries.parquet",
+            "bytes": 426,
+            "sha256": "sha256:3d11046c5abe35ff6a01d529b221f7a025c506ba3491862635468b1eeb5bfa8d",
+            "etag": "\"fab19a64e6c42085619eaa36f35a23d7\"",
+            "verified": true
+          },
+          {
+            "key": "bill_versions.parquet",
+            "member": "bill_versions.parquet",
+            "bytes": 9467997,
+            "sha256": "sha256:6f3f399d085a7166cf58be6a0566934b98273e8b82381c7cb3f707e35c24cb8d",
+            "etag": "\"be05dbb80ae1b8ca0fadd828b58d67ab\"",
+            "verified": true
+          },
+          {
+            "key": "bill_vote_references.parquet",
+            "member": "bill_vote_references.parquet",
+            "bytes": 222518,
+            "sha256": "sha256:13b4c17567bf7b1e82db209e601922311388fc1225315908055935f9e3f4621f",
+            "etag": "\"5411f2c79df0d552b14bc1bdd75c220f\"",
+            "verified": true
+          },
+          {
+            "key": "cbo_cost_estimates.parquet",
+            "member": "cbo_cost_estimates.parquet",
+            "bytes": 625438,
+            "sha256": "sha256:5baa155dd3e61a7080dff673b8f1a127559ae11e0a4c112b8deca024ee513e28",
+            "etag": "\"eb1ff21deb2eacad0c3a6e0e4ba5ff19\"",
+            "verified": true
+          },
+          {
+            "key": "congress_bills.parquet",
+            "member": "congress_bills.parquet",
+            "bytes": 30639875,
+            "sha256": "sha256:4f08a3775def1cf839dae41e96e5557b0feba301527edec7f834557e58c1d9a2",
+            "etag": "\"7bcd2628d0e6cc591e89937d0eb638e4\"",
+            "verified": true
+          },
+          {
+            "key": "diff_summaries.parquet",
+            "member": "diff_summaries.parquet",
+            "bytes": 513,
+            "sha256": "sha256:fa8f3637dc17cb04cf86ad57787b3e02f0048d612f3af1950916e463ade15337",
+            "etag": "\"286b7eae4451c2749b829b1d65c64bcf\"",
+            "verified": true
+          },
+          {
+            "key": "financial_changes.parquet",
+            "member": "financial_changes.parquet",
+            "bytes": 346,
+            "sha256": "sha256:6566431e7d5c080394b4c49827753a85b35d257646f40c0b7e726acbfac8c9b8",
+            "etag": "\"a4e7489e7eb0c44bdffe7ff5b7d81c6c\"",
+            "verified": true
+          },
+          {
+            "key": "public_activity_events.parquet",
+            "member": "public_activity_events.parquet",
+            "bytes": 3079146,
+            "sha256": "sha256:6ad7ec70189fdff7cd4cbc1c901c0f070b785fb4925e8fe53328e1cb7f31e99c",
+            "etag": "\"55a1f60e6e746bdeff64dbd647f7dd4d\"",
+            "verified": true
+          },
+          {
+            "key": "section_classifications.parquet",
+            "member": "section_classifications.parquet",
+            "bytes": 410,
+            "sha256": "sha256:eb8b2483a28f4987c95b3b216bb932b490cba55604a94fc12b665fb6740f98a7",
+            "etag": "\"c4c9fd2b8fe45ce109c8ed5c9a3747cd\"",
+            "verified": true
+          },
+          {
+            "key": "section_diff_items.parquet",
+            "member": "section_diff_items.parquet",
+            "bytes": 120126422,
+            "sha256": "sha256:ec8d8b899987921ea1c0de37aededcd37cfa75ed7deb8aa8975f3ceee34bae74",
+            "etag": "\"9f0f6616db9f9fdfa87f16b9fb1310d4-2\"",
+            "verified": true
+          },
+          {
+            "key": "section_diffs.parquet",
+            "member": "section_diffs.parquet",
+            "bytes": 394773,
+            "sha256": "sha256:a598f4a226d1adbfabdc581d3d77dd2a9714319bfd2beef5283755991f5ccec8",
+            "etag": "\"54fc763fbf8c7f7b9ed6169ba30b5d66\"",
+            "verified": true
+          }
+        ],
+        "verified_at": "2026-09-27T22:14:05.497071+00:00",
+        "receipt_path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/legislative-joins-2026-09-27/publication/publication-receipt.json"
+      },
+      "fcc-filings": {
+        "family": "fcc-filings",
+        "generation": {
+          "artifactDigest": "sha256:9c87b600aa7b5847a9d2cb7fca4467bd126f229331b3fa2372163157f308911d",
+          "logicalId": "urn:spicy:artifact:spicy-regs-rollup-generation:0661ee8fcee4d2b44392a997ef75da712bd12f49a3f85f6c4940d6c74c369679"
+        },
+        "published": true,
+        "public_readback": [
+          {
+            "key": "fcc_filings.parquet",
+            "member": "fcc_filings.parquet",
+            "bytes": 4169648,
+            "sha256": "sha256:77ea6467a2b80cf4ef0794c0a12e8ad199db696c91cd6ef335ddfa42074c8414",
+            "etag": "\"bc906e9fc586484e414adf3e8de365b8\"",
+            "verified": true
+          }
+        ],
+        "verified_at": "2026-09-27T22:15:12.410389+00:00",
+        "receipt_path": "/Users/mikewolfd/.codex/artifacts/spicy-regs-fcc-complete-20260927/publication/publication-receipt.json"
+      },
+      "native-legal-references": {
+        "family": "native-legal-references",
+        "generation": {
+          "artifactDigest": "sha256:53755e3e0076dfa5bacc5681c4316f4806bf23694693d1e8bbe551a70b1a711c",
+          "logicalId": "urn:spicy:artifact:spicy-regs-rollup-generation:c195565e89c2ecbc6a66eb0fd6153daa38e47872032ff0596ecf841f899e664e"
+        },
+        "published": true,
+        "public_readback": [
+          {
+            "key": "native_legal_reference_reads.parquet",
+            "member": "native_legal_reference_reads.parquet",
+            "bytes": 3863,
+            "sha256": "sha256:26b102153a7b0628122890ed30bd2889032e79c37ec855552b491758d4e2ef5f",
+            "etag": "\"64ff2db53ce176dd7974c87947900e6e\"",
+            "verified": true
+          },
+          {
+            "key": "native_legal_references.parquet",
+            "member": "native_legal_references.parquet",
+            "bytes": 54352,
+            "sha256": "sha256:cb6b341615c4deba73e93e0fe814b237e89856babad31d28db1e3c2abe81e4b9",
+            "etag": "\"21049d032aa5e1092c6b53fe6caad987\"",
+            "verified": true
+          }
+        ],
+        "verified_at": "2026-09-27T22:19:06.219040+00:00",
+        "receipt_path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/native-legal-full-2026-09-27/publication/publication-receipt.json"
+      },
+      "court-opinion-pdf-extractions": {
+        "family": "court-opinion-pdf-extractions",
+        "generation": {
+          "artifactDigest": "sha256:6d1e4e651ecbe1c533e0f76a29633e0a2caca9914897066925f39e76e19ef97a",
+          "logicalId": "urn:spicy:artifact:spicy-regs-rollup-generation:9b838a546f254848814825d4a3d19c05835bb5b9de9fc07105c7fdf5e7308c14"
+        },
+        "published": true,
+        "public_readback": [
+          {
+            "key": "court_opinion_pdf_extractions.parquet",
+            "member": "court_opinion_pdf_extractions.parquet",
+            "bytes": 56977,
+            "sha256": "sha256:4482aa946e7f48a4f47fe73832eea19acf18820a7d20f946f1c6366fa8ffd940",
+            "etag": "\"9fa99ea5607f3f4168f0fb035c8d83da\"",
+            "verified": true
+          }
+        ],
+        "verified_at": "2026-09-27T22:23:16.840992+00:00",
+        "receipt_path": "/Users/mikewolfd/.codex/artifacts/spicy-regs-court-cohort-20260927/publication/publication-receipt.json"
+      },
+      "print-citations": {
+        "family": "print-citations",
+        "generation": {
+          "artifactDigest": "sha256:c8e49dbb08311c860a3909e5aba4ece459b37bafc641313d526239bd1fc14131",
+          "logicalId": "urn:spicy:artifact:spicy-regs-rollup-generation:f8c31c00aa245af36651af3a37d22daa327206dc2ea231902ac51611dae577c7"
+        },
+        "published": true,
+        "public_readback": [
+          {
+            "key": "bill_committee_actions.parquet",
+            "member": "bill_committee_actions.parquet",
+            "bytes": 349200,
+            "sha256": "sha256:0a297b59e62ffc7dc35d6d08434a7d9e6787ffa1b5d159d67cfb2162102ad6d7",
+            "etag": "\"9c3ca4689ca9ddfa7072dbf1b0c6e091\"",
+            "verified": true
+          },
+          {
+            "key": "budget_volumes.parquet",
+            "member": "budget_volumes.parquet",
+            "bytes": 29590,
+            "sha256": "sha256:bb1ce88b0ffba7614118509dd6c0d0f7d9e56ecdf8567f0815f5c01204fbad97",
+            "etag": "\"cc5225a8643d0b5f7449cb3e1047866b\"",
+            "verified": true
+          },
+          {
+            "key": "document_citations.parquet",
+            "member": "document_citations.parquet",
+            "bytes": 670664,
+            "sha256": "sha256:233151248df35b28ea44029055a86093254a7f1499f988d586ac89c65923ef49",
+            "etag": "\"1bd49c882bae0e0e52c6042794d8ddef\"",
+            "verified": true
+          },
+          {
+            "key": "house_activity_reports.parquet",
+            "member": "house_activity_reports.parquet",
+            "bytes": 65089,
+            "sha256": "sha256:83deffc2d8c932cf6d0017c64239278f7dfdcd9fd5126565bdd2a7c385584cc3",
+            "etag": "\"bf828254e2aff8457b792cec0ab71e46\"",
+            "verified": true
+          }
+        ],
+        "verified_at": "2026-09-27T22:28:47.501368+00:00",
+        "receipt_path": "/Users/mikewolfd/.codex/artifacts/spicy-regs-court-citations-20260927/publication/publication-receipt.json"
+      }
+    },
+    "concurrent_publication_freshness": {
+      "state": "implemented; live probe pending",
+      "scope": "Concurrent publication freshness fix requires deployment and a bounded live probe before serving behavior is claimed."
+    },
+    "third_wave_concurrency_probe": {
+      "table": "reg_catalog.\"default\".\"codex_concurrency_probe_20260927_224257\"",
+      "duckdb_version": "1.5.5",
+      "checks": [
+        {
+          "name": "intervening_update",
+          "pass": true
+        },
+        {
+          "name": "intervening_insert",
+          "pass": true
+        },
+        {
+          "name": "matching_prior_null_write",
+          "pass": true
+        },
+        {
+          "name": "intervening_commit_after_precheck",
+          "pass": true
+        }
+      ],
+      "cleanup": true,
+      "commit_conflict_error_type": "TransactionException",
+      "commit_conflict_error": "TransactionContext Error: Failed to commit: Failed to commit Iceberg transaction: Request to 'https://catalog.cloudflarestorage.com/174055408ff1560e60601c4d12c561c4/spicy-regs/v1/fb7569d2-b815-11f1-8000-bf9675be02df/transactions/commit' returned a non-200 status code (Conflict_409). \n message: CatalogCommitConflicts, context: { expected: 3212979461552423427, found: 6208316116890896283 } => Requirement failed: Branch or tag `main`'s snapshot has changed\n type: CatalogCommitConflicts\n reason: Conflict\n"
+    },
+    "source_pull_request": "https://github.com/mikewolfd/spicy-docs/pull/4",
+    "source_branch_pushed": "codex/native-relationship-qualification",
+    "comments_previous_hosted_run": {
+      "url": "https://github.com/mikewolfd/spicy-regs/actions/runs/36351853866",
+      "status": "correctly refused changed catalog before any mirror uploads",
+      "evidence": "/Users/mikewolfd/.codex/artifacts/spicy-regs-comments-hosted-20260927/report.md"
+    },
+    "third_wave_validation": {
+      "consumer_tests": {
+        "passed": 3361,
+        "skipped": 2,
+        "deselected": 4,
+        "log": "/Users/mikewolfd/.codex/artifacts/spicy-regs-join-implementation-20260927/consumer-wave3-final-gate.log"
+      },
+      "ruff": "passed",
+      "ty": "passed",
+      "dictionary": "passed",
+      "strict_mkdocs": "passed",
+      "cloudflare_types_tsc_dry_run": "passed",
+      "minimal_container_mcp": "passed",
+      "live_concurrency": "four checks passed; scratch removed"
     }
   },
   "evidence_roots": [
@@ -220,7 +719,7 @@
       "remaining_acceptance": "None for the selected full-key delivery. Measurements are tied to independent table pins; broader source completeness and an atomic cross-table snapshot are not claimed.",
       "acceptance_complete": true,
       "data_publication_state": "Views use selected existing publications; no new independently materialized task artifact claimed.",
-      "deployed_verification_state": "Generated join metadata and serving code deployed in app 8380ac8; complete key-column measurements retained in join_measurements.json."
+      "deployed_verification_state": "Third-wave deployment and live verification pending; finalization retains earlier verified deployment IDs."
     },
     {
       "id": "T02",
@@ -232,22 +731,23 @@
       "depends_on": [
         "T01"
       ],
-      "implementation_state": "implemented_scoped_work; acceptance_remaining",
-      "implemented": "Bounded target resolver beside source findings",
+      "implementation_state": "implemented_and_qualified_at_selected_input_pins",
+      "implemented": "All 52728 citations at 026be1bc have exact current parent text digests; c8e49dbb preserves them and adds 18 digest-current court findings. Eight-kind target coverage refreshed; GAO 1/337 occurrences now found.",
       "implementation_paths": [
         "spicy-regs/src/spicy_regs/citation_resolution.py",
         "spicy-regs/src/spicy_regs/mcp_server.py"
       ],
-      "validated_scope": "Found/missing/ambiguous/unsupported/unread states, target pins, dated FR routes, alternate identities, set-valued RIN matches, deduplicated batches, timeout outcomes and source-text digest qualification are tested. Earlier eight-kind target-coverage report reproduced over complete selected key columns with the source-text digest predicate; receipt citation-coverage.json captured 2026-09-27T20:22:35Z. Counts are scoped to its exact pins, not subsequent publications.",
+      "validated_scope": "All 52728 citations at 026be1bc have exact current parent text digests; c8e49dbb preserves them and adds 18 digest-current court findings. Eight-kind target coverage refreshed; GAO 1/337 occurrences now found.",
       "validation_paths": [
         "spicy-regs/tests/test_citation_resolution.py",
         "spicy-regs/tests/test_mcp_relationships.py"
       ],
-      "remaining_acceptance": "The selected eight-kind coverage replay is complete. Wider family/source interpretation qualification remains in T17/T24; published lookup coverage must be recomputed when selected inputs change.",
-      "acceptance_complete": false,
+      "remaining_acceptance": "Recompute dated coverage after future input changes. Broader extraction/acquisition routes remain separately scoped in T17/T24.",
+      "acceptance_complete": true,
       "data_publication_state": "Views use selected existing publications; no new independently materialized task artifact claimed.",
-      "deployed_verification_state": "Bounded positive live case verified on Worker faa8b3ab-ed99-456a-a234-18b6b6ac3006; full population acceptance remains.",
-      "live_receipt": "/Users/mikewolfd/.codex/artifacts/spicy-regs-join-implementation-20260927/resolve-live.json"
+      "deployed_verification_state": "Third-wave deployment and live verification pending; finalization retains earlier verified deployment IDs.",
+      "live_receipt": "/Users/mikewolfd/.codex/artifacts/spicy-regs-join-implementation-20260927/resolve-live.json",
+      "third_wave_verification": "All 52728 citations at 026be1bc have exact current parent text digests; c8e49dbb preserves them and adds 18 digest-current court findings. Eight-kind target coverage refreshed; GAO 1/337 occurrences now found."
     },
     {
       "id": "T03",
@@ -261,8 +761,8 @@
         "T01",
         "T02"
       ],
-      "implementation_state": "implemented_scoped_work; acceptance_remaining",
-      "implemented": "Native comment fields, views and explicit repair",
+      "implementation_state": "implemented_with_explicit_remaining_acceptance",
+      "implemented": "Checked atomic MERGE/rollback qualified on live scratch catalog. Three native ODNI rows corrected in snapshot 50021510906269595; independent reread finds zero changes. Full 26314364-row mirror built and validated locally.",
       "implementation_paths": [
         "spicy-docs/src/spicy_docs/schemas/regulations.py",
         "spicy-regs/src/spicy_regs/schemas/regulations.py",
@@ -270,15 +770,16 @@
         "spicy-regs/src/spicy_regs/sources/iceberg.py",
         "spicy-regs/src/spicy_regs/pipelines/repair_regulations.py"
       ],
-      "validated_scope": "Native null-docket fixture preserves all three namespaces and absent/null/empty map states. Local migration/export tests retain old rows as unread; repair handles equal timestamps, newer priors, enrichment, pinned snapshots and read-only migration previews. Live fork Iceberg nullable-column migration verified schema 0 to 4 at unchanged data snapshot 3490173674155493736; no comment replay/export yet. Three retained native ODNI records previewed at the migrated schema/current data snapshot. All twelve new cells match source values, null dockets and other fields are preserved. Both explicit parent documents have one target under documents generation b5e567d1. Historical-schema reads now NULL-fill supported fields independently of current write-schema readiness; exporter regression is covered.",
+      "validated_scope": "Checked atomic MERGE/rollback qualified on live scratch catalog. Three native ODNI rows corrected in snapshot 50021510906269595; independent reread finds zero changes. Full 26314364-row mirror built and validated locally.",
       "validation_paths": [
         "spicy-regs/tests/test_comment_references.py",
         "spicy-regs/tests/test_regulatory_source_repair.py"
       ],
-      "remaining_acceptance": "Apply corrections through a qualified catalog replacement path and publish corrected exports. Existing DELETE+INSERT reliability limitation remains documented; no destructive catalog rebuild was attempted. Wider retained replay remains.",
+      "remaining_acceptance": "Serialize and verify hosted mirror publication/consumer refresh; wider source-reference rereads remain outside the three-record correction.",
       "acceptance_complete": false,
-      "data_publication_state": "Live schema migration and bounded read-only source replay verified; catalog row corrections/public export pending.",
-      "deployed_verification_state": "Comment views correctly unsupported on old served export; comment-schema-live.json verifies this limitation."
+      "data_publication_state": "Three catalog rows corrected at snapshot 50021510906269595. Full local mirror validated; hosted mirror publication and consumer refresh pending.",
+      "deployed_verification_state": "Third-wave deployment and live verification pending; finalization retains earlier verified deployment IDs.",
+      "third_wave_verification": "Checked atomic MERGE/rollback qualified on live scratch catalog. Three native ODNI rows corrected in snapshot 50021510906269595; independent reread finds zero changes. Full 26314364-row mirror built and validated locally."
     },
     {
       "id": "T04",
@@ -290,21 +791,22 @@
         "T01",
         "T02"
       ],
-      "implementation_state": "implemented_scoped_work; acceptance_remaining",
-      "implemented": "Related-bill occurrences and distinct directed pairs",
+      "implementation_state": "implemented_and_qualified_at_selected_input_pins",
+      "implemented": "All 142698 retained related-bill occurrences conserved and resolve uniquely at selected pins; native multiple-details fixture retained.",
       "implementation_paths": [
         "spicy-regs/src/spicy_regs/relationship_views/congress.py",
         "spicy-regs/src/spicy_regs/relationship_views/core.py"
       ],
-      "validated_scope": "Duplicate occurrences, complete relationship-details objects, malformed elements and directional pair semantics are covered. Complete selected column replay reconciles 142698 held occurrences and distinct pairs against source arrays, preserving 248469 SQL NULL arrays separately from empty arrays.",
+      "validated_scope": "All 142698 retained related-bill occurrences conserved and resolve uniquely at selected pins; native multiple-details fixture retained.",
       "validation_paths": [
         "spicy-regs/tests/test_relationship_views.py"
       ],
-      "remaining_acceptance": "Held-array conservation and distinct-pair counts are verified at bill-family 72899ab3; source completeness and related-target existence are not established by these measurements.",
-      "acceptance_complete": false,
+      "remaining_acceptance": "Selected task acceptance complete; no reciprocal or identical-text relationship is inferred.",
+      "acceptance_complete": true,
       "data_publication_state": "Views use selected existing publications; no new independently materialized task artifact claimed.",
-      "deployed_verification_state": "Bounded positive live case verified on Worker faa8b3ab-ed99-456a-a234-18b6b6ac3006; full population acceptance remains.",
-      "live_receipt": "/Users/mikewolfd/.codex/artifacts/spicy-regs-join-implementation-20260927/bill-related-live.json"
+      "deployed_verification_state": "Third-wave deployment and live verification pending; finalization retains earlier verified deployment IDs.",
+      "live_receipt": "/Users/mikewolfd/.codex/artifacts/spicy-regs-join-implementation-20260927/bill-related-live.json",
+      "third_wave_verification": "All 142698 retained related-bill occurrences conserved and resolve uniquely at selected pins; native multiple-details fixture retained."
     },
     {
       "id": "T05",
@@ -316,23 +818,24 @@
       "depends_on": [
         "T01"
       ],
-      "implementation_state": "implemented_scoped_work; acceptance_remaining",
-      "implemented": "Source cosponsors and correction-safe output",
+      "implementation_state": "implemented_and_qualified_at_selected_input_pins",
+      "implemented": "Published 146248 exact native cosponsor occurrences including 67 withdrawals; all resolve unique member IDs. 146246 sponsorship dates match one half-open chamber term; 2 boundary-day cases remain explicit missing. All 16140 selected bill counts reconcile.",
       "implementation_paths": [
         "spicy-docs/src/spicy_docs/sources/congress/bill_status.py",
         "spicy-docs/src/spicy_docs/schemas/bill_tables.py",
         "spicy-docs/src/spicy_docs/interpretation/bill_family.py",
         "spicy-regs/src/spicy_regs/transforms/build_bill_family.py"
       ],
-      "validated_scope": "Retained 49-entry block replayed; literal dates, original flag, party/state/district, raw XML and digest/ordinal retained. Absent/empty correction clears prior scope; v3 archive and bill checks reopen old readers and missing outputs.",
+      "validated_scope": "Published 146248 exact native cosponsor occurrences including 67 withdrawals; all resolve unique member IDs. 146246 sponsorship dates match one half-open chamber term; 2 boundary-day cases remain explicit missing. All 16140 selected bill counts reconcile.",
       "validation_paths": [
         "spicy-docs/tests/test_source_relationship_rows.py",
         "spicy-regs/tests/test_bill_family.py"
       ],
-      "remaining_acceptance": "Cosponsor data backfill/publication, retained positive withdrawal-date specimen and published count reconciliation remain required. Provider 0.47.0 is pinned and tested.",
-      "acceptance_complete": false,
-      "data_publication_state": "Provider 0.47.0 adopted; bill_cosponsors source backfill/publication pending.",
-      "deployed_verification_state": "Current serving implementation deployed; task-specific population/live acceptance not established."
+      "remaining_acceptance": "Selected task acceptance complete. 405325 held bills remain unread for this new field, and 19 source/held edition mismatches were skipped explicitly; those are later backfill scope.",
+      "acceptance_complete": true,
+      "data_publication_state": "Selected third-wave outputs published with public byte readback; see finalization.third_wave_publications for exact pins. This does not establish deployed consumer verification or complete source history.",
+      "deployed_verification_state": "Third-wave deployment and live verification pending; finalization retains earlier verified deployment IDs.",
+      "third_wave_verification": "Published 146248 exact native cosponsor occurrences including 67 withdrawals; all resolve unique member IDs. 146246 sponsorship dates match one half-open chamber term; 2 boundary-day cases remain explicit missing. All 16140 selected bill counts reconcile."
     },
     {
       "id": "T06",
@@ -344,20 +847,21 @@
         "T01",
         "T02"
       ],
-      "implementation_state": "implemented_scoped_work; acceptance_remaining",
-      "implemented": "Independent meeting/hearing occurrence views",
+      "implementation_state": "implemented_and_qualified_at_selected_input_pins",
+      "implemented": "All seven arrays reconcile across 6096 meetings; 3352 scoped jacket references yield 87 found/3265 missing/0 ambiguous.",
       "implementation_paths": [
         "spicy-regs/src/spicy_regs/relationship_views/congress.py"
       ],
-      "validated_scope": "Retained meeting fixture checks jackets, witnesses and offered documents independently; full Congress/chamber/event keys, duplicate values and meeting status survive.",
+      "validated_scope": "All seven arrays reconcile across 6096 meetings; 3352 scoped jacket references yield 87 found/3265 missing/0 ambiguous.",
       "validation_paths": [
         "spicy-regs/tests/test_relationship_views_retained.py",
         "spicy-regs/tests/test_relationship_views.py"
       ],
-      "remaining_acceptance": "Population reconciliation and jacket target checks. Earlier shapers lost source absent/null distinctions; held-array states cannot recover them.",
-      "acceptance_complete": false,
+      "remaining_acceptance": "Selected task acceptance complete. Earlier absent/null collapse is documented; no source states are invented from held empty arrays.",
+      "acceptance_complete": true,
       "data_publication_state": "Views use selected existing publications; no new independently materialized task artifact claimed.",
-      "deployed_verification_state": "Current serving implementation deployed; task-specific population/live acceptance not established."
+      "deployed_verification_state": "Third-wave deployment and live verification pending; finalization retains earlier verified deployment IDs.",
+      "third_wave_verification": "All seven arrays reconcile across 6096 meetings; 3352 scoped jacket references yield 87 found/3265 missing/0 ambiguous."
     },
     {
       "id": "T07",
@@ -369,21 +873,22 @@
         "T01",
         "T02"
       ],
-      "implementation_state": "implemented_scoped_work; acceptance_remaining",
-      "implemented": "Independent vote document/amendment observations",
+      "implementation_state": "implemented_and_qualified_at_selected_input_pins",
+      "implemented": "Native Senate amendment/treaty fixtures qualify vote-native-routing/2. 3000 S.Amdt. routes yield 166 found/2834 missing; 22 typed treaty routes remain missing. Native treaty Congress stays 108 for vote 109.",
       "implementation_paths": [
         "spicy-regs/src/spicy_regs/relationship_views/congress.py"
       ],
-      "validated_scope": "Retained Senate vote keeps all native document blocks alongside empty-ID amendment blocks; PN55-25 suffix and native Congress survive. No positional zip or current-Congress fallback. Complete held arrays reconcile 9067 document observations (3550 unsupported) and 9067 independently retained, deliberately unrouted amendment objects.",
+      "validated_scope": "Native Senate amendment/treaty fixtures qualify vote-native-routing/2. 3000 S.Amdt. routes yield 166 found/2834 missing; 22 typed treaty routes remain missing. Native treaty Congress stays 108 for vote 109.",
       "validation_paths": [
         "spicy-regs/tests/test_relationship_views_retained.py",
         "spicy-regs/tests/test_relationship_views.py"
       ],
-      "remaining_acceptance": "Positive native amendment/treaty specimens before their routing; full missing-nomination coverage remains. Bounded live vote-document query succeeded.",
-      "acceptance_complete": false,
+      "remaining_acceptance": "Selected routing acceptance complete; broader target acquisition is T24 scope. Missing nomination targets remain explicit.",
+      "acceptance_complete": true,
       "data_publication_state": "Views use selected existing publications; no new independently materialized task artifact claimed.",
-      "deployed_verification_state": "Bounded positive live case verified on Worker faa8b3ab-ed99-456a-a234-18b6b6ac3006; full population acceptance remains.",
-      "live_receipt": "/Users/mikewolfd/.codex/artifacts/spicy-regs-join-implementation-20260927/vote-documents-live.json"
+      "deployed_verification_state": "Third-wave deployment and live verification pending; finalization retains earlier verified deployment IDs.",
+      "live_receipt": "/Users/mikewolfd/.codex/artifacts/spicy-regs-join-implementation-20260927/vote-documents-live.json",
+      "third_wave_verification": "Native Senate amendment/treaty fixtures qualify vote-native-routing/2. 3000 S.Amdt. routes yield 166 found/2834 missing; 22 typed treaty routes remain missing. Native treaty Congress stays 108 for vote 109."
     },
     {
       "id": "T08",
@@ -395,20 +900,21 @@
         "T01",
         "T02"
       ],
-      "implementation_state": "implemented_scoped_work; acceptance_remaining",
-      "implemented": "Member FEC identifier occurrence/pair views",
+      "implementation_state": "implemented_and_qualified_at_selected_input_pins",
+      "implemented": "All 1738 member FEC occurrences valid candidate IDs; 935 have selected candidate records, 803 do not. No candidate ID is shared across bioguide IDs. P000619/H2AK01158 source page and native cycle arrays replay exactly.",
       "implementation_paths": [
         "spicy-regs/src/spicy_regs/relationship_views/congress.py"
       ],
-      "validated_scope": "Candidate-ID shape including presidential IDs, source list order, duplicates, roster and crosswalk context tested. Complete member FEC array replay reconciles 1738 valid occurrences and pairs at members 00cad6cf.",
+      "validated_scope": "All 1738 member FEC occurrences valid candidate IDs; 935 have selected candidate records, 803 do not. No candidate ID is shared across bioguide IDs. P000619/H2AK01158 source page and native cycle arrays replay exactly.",
       "validation_paths": [
         "spicy-regs/tests/test_relationship_views.py"
       ],
-      "remaining_acceptance": "Pinned crosswalk conflicts and complete candidate/committee/cycle reconciliation remain. Bounded live member-FEC query succeeded; historical linkage is not authorization or a donation.",
-      "acceptance_complete": false,
+      "remaining_acceptance": "Selected task acceptance complete; historical candidate linkage never implies current committee authorization or donation attribution.",
+      "acceptance_complete": true,
       "data_publication_state": "Views use selected existing publications; no new independently materialized task artifact claimed.",
-      "deployed_verification_state": "Bounded positive live case verified on Worker faa8b3ab-ed99-456a-a234-18b6b6ac3006; full population acceptance remains.",
-      "live_receipt": "/Users/mikewolfd/.codex/artifacts/spicy-regs-join-implementation-20260927/member-fec-live.json"
+      "deployed_verification_state": "Third-wave deployment and live verification pending; finalization retains earlier verified deployment IDs.",
+      "live_receipt": "/Users/mikewolfd/.codex/artifacts/spicy-regs-join-implementation-20260927/member-fec-live.json",
+      "third_wave_verification": "All 1738 member FEC occurrences valid candidate IDs; 935 have selected candidate records, 803 do not. No candidate ID is shared across bioguide IDs. P000619/H2AK01158 source page and native cycle arrays replay exactly."
     },
     {
       "id": "T09",
@@ -419,20 +925,22 @@
       "depends_on": [
         "T01"
       ],
-      "implementation_state": "implemented_scoped_work; acceptance_remaining",
-      "implemented": "FEC companion evidence navigation",
+      "implementation_state": "implemented_with_explicit_remaining_acceptance",
+      "implemented": "All 649 FEC collection counts reconcile to 13,717,161 source records and 183,390 relationships. Every relationship has one companion with matching recorded page digest; selected positive and empty native cases are byte-qualified. Native scalar, positive list, empty list and null fields replay from a fully rehashed retained OpenFEC page; absent and malformed cases remain synthetic tests.",
       "implementation_paths": [
         "spicy-regs/src/spicy_regs/relationship_views/fec.py",
         "spicy-regs/src/spicy_regs/transforms/fec_relationships.py"
       ],
-      "validated_scope": "Companion multiplicity, recorded digest equality, unresolved records and explicit empty-list observations tested without multiplying observations. Corrected public query completes in 3.864 seconds; same selected input benchmark completes at 512 MB in 6.67 seconds. Compact digest candidates preserve duplicates/nulls; full companion records remain accessible by collection_id/source_record_id. One end-to-end retained-page verification passed for C00000059: full 123,668-byte page digest matches observation/companion, /results/0 equals companion metadata, and sponsor_candidate_list is an empty list. The digest names whole page bytes, not normalized record JSON.",
+      "validated_scope": "All 649 FEC collection counts reconcile to 13,717,161 source records and 183,390 relationships. Every relationship has one companion with matching recorded page digest; selected positive and empty native cases are byte-qualified. Native scalar, positive list, empty list and null fields replay from a fully rehashed retained OpenFEC page; absent and malformed cases remain synthetic tests.",
       "validation_paths": [
         "spicy-regs/tests/test_relationship_views_navigation.py"
       ],
-      "remaining_acceptance": "Wider selected companion cases and relationship kinds need byte-level qualification. One empty-list case is verified against retained page bytes; serving source_bytes_status remains not_checked because runtime navigation itself does not hash raw captures.",
+      "remaining_acceptance": "Wider raw-byte qualification across relationship kinds remains; recorded digest equality is distinct from rehashing every original page.",
       "acceptance_complete": false,
       "data_publication_state": "Views use selected existing publications; no new independently materialized task artifact claimed.",
-      "deployed_verification_state": "Passed on Worker ea8d54f5-a2f4-4871-b9b0-016ef595b518: found companion, rule fec-companion-location-v2, 3.864s. Initial failing receipt remains retained."
+      "deployed_verification_state": "Third-wave deployment and live verification pending; finalization retains earlier verified deployment IDs.",
+      "third_wave_verification": "All 649 FEC collection counts reconcile to 13,717,161 source records and 183,390 relationships. Every relationship has one companion with matching recorded page digest; selected positive and empty native cases are byte-qualified. Native scalar, positive list, empty list and null fields replay from a fully rehashed retained OpenFEC page; absent and malformed cases remain synthetic tests.",
+      "native_shape_receipt": "/Users/mikewolfd/.codex/artifacts/spicy-regs-entity-fec-reconcile-20260927/t09-native-shapes.json"
     },
     {
       "id": "T10",
@@ -444,22 +952,23 @@
         "T01",
         "T02"
       ],
-      "implementation_state": "implemented_scoped_work; acceptance_remaining",
-      "implemented": "Native FCC fields and independent proceeding, participant and artifact observations",
+      "implementation_state": "implemented_and_qualified_at_selected_input_pins",
+      "implemented": "All 5780 held FCC rows now source-qualified and published; one explicit proceeding-name correction, all other prior cells unchanged. Native proceeding references: 8,498 found, 9 missing, 154 unsupported. Three offered PDFs acquired with diagnostics.",
       "implementation_paths": [
         "spicy-regs/src/spicy_regs/relationship_views/regulatory.py",
         "spicy-regs/src/spicy_regs/relationship_views/fcc_native.py",
         "spicy-regs/src/spicy_regs/transforms/build_fcc_ecfs.py"
       ],
-      "validated_scope": "All 5,780 prior rows/18 columns preserved; 525 exact old-cell matches enriched from one verified retained page. Source states distinguish empty/absent/unread. 708 proceeding, 701 participant and 238 artifact observations conserve selected arrays.",
+      "validated_scope": "All 5780 held FCC rows now source-qualified and published; one explicit proceeding-name correction, all other prior cells unchanged. Native proceeding references: 8,498 found, 9 missing, 154 unsupported. Three offered PDFs acquired with diagnostics.",
       "validation_paths": [
         "spicy-regs/tests/test_relationship_views.py",
         "spicy-regs/tests/test_fcc_native.py"
       ],
-      "remaining_acceptance": "Replay the remaining 5,255 unread rows and qualify full proceeding target coverage; no attachment body acquisition.",
-      "acceptance_complete": false,
-      "data_publication_state": "Published with full public byte readback: sha256:34b970d51a425d8f57c5565f8ec9f540ebb73667f7ddf72bc878c862d190af87",
-      "deployed_verification_state": "Published FCC coverage and all native view counts verified live; 702 proceeding occurrences found,6unsupported. Worker1146ddba, app8082191; wave2-smoke-summary.json."
+      "remaining_acceptance": "Selected task acceptance complete. Complete FCC archive and attachment text coverage are not claimed.",
+      "acceptance_complete": true,
+      "data_publication_state": "Selected third-wave outputs published with public byte readback; see finalization.third_wave_publications for exact pins. This does not establish deployed consumer verification or complete source history.",
+      "deployed_verification_state": "Third-wave deployment and live verification pending; finalization retains earlier verified deployment IDs.",
+      "third_wave_verification": "All 5780 held FCC rows now source-qualified and published; one explicit proceeding-name correction, all other prior cells unchanged. Native proceeding references: 8,498 found, 9 missing, 154 unsupported. Three offered PDFs acquired with diagnostics."
     },
     {
       "id": "T11",
@@ -472,25 +981,26 @@
         "T01",
         "T02"
       ],
-      "implementation_state": "implemented_scoped_work; acceptance_remaining",
-      "implemented": "Owner docket normalization and source-routed lifecycle date evidence",
+      "implementation_state": "implemented_and_qualified_at_selected_input_pins",
+      "implemented": "Nine full membership arrays conserve selected source counts. All 135362 lifecycle date references resolve uniquely, including 72 Regulations.gov events dated by FR. 52092 agenda items retain editions; 5845 missing. Native month-only timetable values remain literal alongside application date policy.",
       "implementation_paths": [
         "spicy-regs/src/spicy_regs/relationship_views/regulatory.py",
         "spicy-regs/src/spicy_regs/relationship_views/agenda.py",
         "spicy-regs/src/spicy_regs/transforms/build_fr_docket_links.py",
         "spicy-regs/src/spicy_regs/relationship_views/lifecycle_dates.py"
       ],
-      "validated_scope": "Published full FR expansion has 899,630 rows, all old cells preserved, exact ordinals, 246,317 candidates across 243,615 occurrences. Lifecycle targets route by dated_by independently of stage source.",
+      "validated_scope": "Nine full membership arrays conserve selected source counts. All 135362 lifecycle date references resolve uniquely, including 72 Regulations.gov events dated by FR. 52092 agenda items retain editions; 5845 missing. Native month-only timetable values remain literal alongside application date policy.",
       "validation_paths": [
         "spicy-regs/tests/test_relationship_views.py",
         "spicy-regs/tests/test_relationship_views_navigation.py",
         "spicy-regs/tests/test_regulatory_navigation.py"
       ],
-      "remaining_acceptance": "Full lifecycle/agenda population reconciliation and wider dated native examples remain. Empty normalized candidate arrays mean no supported interpretation.",
-      "acceptance_complete": false,
+      "remaining_acceptance": "Selected task acceptance complete; unsupported historical identifier forms remain source observations.",
+      "acceptance_complete": true,
       "data_publication_state": "Published with full public byte readback: sha256:b443a813335e8a7cd38f03fdcf199e6c3a93040ba23b4aad39dcc844f7aabfdf",
-      "deployed_verification_state": "Published FR row/candidate totals and bounded lifecycle date evidence verified live. Worker1146ddba, app8082191; wave2-smoke-summary.json.",
-      "live_receipt": "/Users/mikewolfd/.codex/artifacts/spicy-regs-join-implementation-20260927/fr-rins-live.json"
+      "deployed_verification_state": "Third-wave deployment and live verification pending; finalization retains earlier verified deployment IDs.",
+      "live_receipt": "/Users/mikewolfd/.codex/artifacts/spicy-regs-join-implementation-20260927/fr-rins-live.json",
+      "third_wave_verification": "Nine full membership arrays conserve selected source counts. All 135362 lifecycle date references resolve uniquely, including 72 Regulations.gov events dated by FR. 52092 agenda items retain editions; 5845 missing. Native month-only timetable values remain literal alongside application date policy."
     },
     {
       "id": "T12",
@@ -502,23 +1012,24 @@
         "T01",
         "T02"
       ],
-      "implementation_state": "implemented_scoped_work; acceptance_remaining",
-      "implemented": "Retained-input native CFR occurrence and read-state publication pipeline",
+      "implementation_state": "implemented_and_qualified_at_selected_input_pins",
+      "implemented": "Complete retained eCFR Title 1 requested as of 2026-08-10 admitted and published with 60 AUTH/SOURCE observations; exact enclosing bytes and capture metadata verified.",
       "implementation_paths": [
         "spicy-docs/src/spicy_docs/schemas/native_reference_rows.py",
         "spicy-docs/src/spicy_docs/sources/cfr/authority.py",
         "spicy-regs/src/spicy_regs/transforms/native_legal_references.py",
         "spicy-regs/src/spicy_regs/pipelines/rollups/native_legal_references.py"
       ],
-      "validated_scope": "Full local lifecycle verifies source evidence and generation; native XML AUTH/SOURCE occurrences preserve raw paths/attributes, unknown edition and unsupported part-only targets. Failed scans cannot replace prior; complete empty corrections clear their scopes.",
+      "validated_scope": "Complete retained eCFR Title 1 requested as of 2026-08-10 admitted and published with 60 AUTH/SOURCE observations; exact enclosing bytes and capture metadata verified.",
       "validation_paths": [
         "spicy-docs/tests/test_native_reference_rows.py",
         "spicy-regs/tests/test_native_legal_references.py"
       ],
-      "remaining_acceptance": "Public admission requires enclosing publisher input/edition association; retained fragments remain local. Positive PARAUTH/SECAUTH and full authority coverage remain unqualified.",
-      "acceptance_complete": false,
-      "data_publication_state": "Verified local native-reference generation; public admission withheld for enclosing-input/edition association.",
-      "deployed_verification_state": "Registration deployed; native fragment data remains local and unavailable in public MCP, pending enclosing publisher qualification."
+      "remaining_acceptance": "Selected source trace complete. PARAUTH/SECAUTH and other authority forms remain explicitly unsupported until separately qualified.",
+      "acceptance_complete": true,
+      "data_publication_state": "Selected third-wave outputs published with public byte readback; see finalization.third_wave_publications for exact pins. This does not establish deployed consumer verification or complete source history.",
+      "deployed_verification_state": "Third-wave deployment and live verification pending; finalization retains earlier verified deployment IDs.",
+      "third_wave_verification": "Complete retained eCFR Title 1 requested as of 2026-08-10 admitted and published with 60 AUTH/SOURCE observations; exact enclosing bytes and capture metadata verified."
     },
     {
       "id": "T13",
@@ -530,23 +1041,24 @@
         "T01",
         "T02"
       ],
-      "implementation_state": "implemented_scoped_work; acceptance_remaining",
-      "implemented": "Retained-input native US Code reference/source-credit pipeline and selected target resolution",
+      "implementation_state": "implemented_and_qualified_at_selected_input_pins",
+      "implemented": "Complete retained USC Title 1 release 119-103 ZIP/XML admitted and published with 821 href/source-credit observations. Exact statute/public-law hrefs supported; scoped classification targets retain edition and many-to-many grain.",
       "implementation_paths": [
         "spicy-docs/src/spicy_docs/schemas/native_reference_rows.py",
         "spicy-docs/src/spicy_docs/sources/uscode/references.py",
         "spicy-regs/src/spicy_regs/transforms/native_legal_references.py",
         "spicy-regs/src/spicy_regs/pipelines/rollups/native_legal_references.py"
       ],
-      "validated_scope": "Local native candidate has 33 total occurrences and two complete reads across US Code/CFR fragments. Exact source hashes/paths retained; changed target pins re-resolve without duplicating observations.",
+      "validated_scope": "Complete retained USC Title 1 release 119-103 ZIP/XML admitted and published with 821 href/source-credit observations. Exact statute/public-law hrefs supported; scoped classification targets retain edition and many-to-many grain.",
       "validation_paths": [
         "spicy-docs/tests/test_native_reference_rows.py",
         "spicy-regs/tests/test_native_legal_references.py"
       ],
-      "remaining_acceptance": "Qualify enclosing publisher editions and complete selected-edition classification population before public admission. Source credit is not current legal effect.",
-      "acceptance_complete": false,
-      "data_publication_state": "Verified local native-reference generation; public admission withheld for enclosing-input/edition association.",
-      "deployed_verification_state": "Registration deployed; native fragment data remains local and unavailable in public MCP, pending enclosing publisher qualification."
+      "remaining_acceptance": "Selected task acceptance complete; full Code body coverage/current legal effect and other editions are not inferred.",
+      "acceptance_complete": true,
+      "data_publication_state": "Selected third-wave outputs published with public byte readback; see finalization.third_wave_publications for exact pins. This does not establish deployed consumer verification or complete source history.",
+      "deployed_verification_state": "Third-wave deployment and live verification pending; finalization retains earlier verified deployment IDs.",
+      "third_wave_verification": "Complete retained USC Title 1 release 119-103 ZIP/XML admitted and published with 821 href/source-credit observations. Exact statute/public-law hrefs supported; scoped classification targets retain edition and many-to-many grain."
     },
     {
       "id": "T14",
@@ -557,19 +1069,20 @@
       "depends_on": [
         "T01"
       ],
-      "implementation_state": "implemented_scoped_work; acceptance_remaining",
-      "implemented": "UEI identifiers and nonmultiplying recipient enrichment",
+      "implementation_state": "implemented_and_qualified_at_selected_input_pins",
+      "implemented": "Recipient/SAM selected population verified: 188535 matched, 24,286 valid UEIs missing, 19,431 null/unsupported; 1935 matched recipients have registration multiplicity. Exact Decimal totals conserved separately for P/C/R levels; one native response row replays every field.",
       "implementation_paths": [
         "spicy-regs/src/spicy_regs/relationship_views/entities.py"
       ],
-      "validated_scope": "Registrations aggregate before enrichment, preserving recipient grain, original amounts and registration multiplicity; literal/null EFT and UEI namespaces remain.",
+      "validated_scope": "Recipient/SAM selected population verified: 188535 matched, 24,286 valid UEIs missing, 19,431 null/unsupported; 1935 matched recipients have registration multiplicity. Exact Decimal totals conserved separately for P/C/R levels; one native response row replays every field.",
       "validation_paths": [
         "spicy-regs/tests/test_relationship_views_navigation.py"
       ],
-      "remaining_acceptance": "Native retained and published cohort reconciliation of exact amounts/recipients; no inferred current registration or disjoint parent/child totals.",
-      "acceptance_complete": false,
+      "remaining_acceptance": "Selected task acceptance complete; no cross-level grand total or arbitrary current registration choice.",
+      "acceptance_complete": true,
       "data_publication_state": "Views use selected existing publications; no new independently materialized task artifact claimed.",
-      "deployed_verification_state": "Current serving implementation deployed; task-specific population/live acceptance not established."
+      "deployed_verification_state": "Third-wave deployment and live verification pending; finalization retains earlier verified deployment IDs.",
+      "third_wave_verification": "Recipient/SAM selected population verified: 188535 matched, 24,286 valid UEIs missing, 19,431 null/unsupported; 1935 matched recipients have registration multiplicity. Exact Decimal totals conserved separately for P/C/R levels; one native response row replays every field."
     },
     {
       "id": "T15",
@@ -581,20 +1094,21 @@
         "T01",
         "T02"
       ],
-      "implementation_state": "implemented_scoped_work; acceptance_remaining",
-      "implemented": "Typed court graph endpoint views",
+      "implementation_state": "implemented_with_explicit_remaining_acceptance",
+      "implemented": "Full pinned graph checked offline within bounded memory. Missing endpoints: opinion\u2013cluster 21; cluster\u2013docket 10,067,451; citation citing 3,758 / cited 1; reporter\u2013cluster 63; parenthetical described 0 / describing 618; no ambiguous endpoints. Three offered native PDFs match held SHA1 and publish derived text.",
       "implementation_paths": [
         "spicy-regs/src/spicy_regs/relationship_views/courts.py"
       ],
-      "validated_scope": "Native endpoint kinds/direction and missing/duplicate target handling tested; no name-based substitution or snippet-to-body claim.",
+      "validated_scope": "Full pinned graph checked offline within bounded memory. Missing endpoints: opinion\u2013cluster 21; cluster\u2013docket 10,067,451; citation citing 3,758 / cited 1; reporter\u2013cluster 63; parenthetical described 0 / describing 618; no ambiguous endpoints. Three offered native PDFs match held SHA1 and publish derived text.",
       "validation_paths": [
         "spicy-regs/tests/test_relationship_views_navigation.py"
       ],
-      "remaining_acceptance": "Bounded population-wide graph validation and missing-body acquisitions remain; independent Supreme Court crosswalk is unqualified. A selected live court endpoint query succeeded.",
+      "remaining_acceptance": "Independent Supreme Court crosswalk remains unqualified; missing targets are acquisition candidates, not case-name matches.",
       "acceptance_complete": false,
-      "data_publication_state": "Views use selected existing publications; no new independently materialized task artifact claimed.",
-      "deployed_verification_state": "Bounded positive live case verified on Worker faa8b3ab-ed99-456a-a234-18b6b6ac3006; full population acceptance remains.",
-      "live_receipt": "/Users/mikewolfd/.codex/artifacts/spicy-regs-join-implementation-20260927/court-live.json"
+      "data_publication_state": "Selected third-wave outputs published with public byte readback; see finalization.third_wave_publications for exact pins. This does not establish deployed consumer verification or complete source history.",
+      "deployed_verification_state": "Third-wave deployment and live verification pending; finalization retains earlier verified deployment IDs.",
+      "live_receipt": "/Users/mikewolfd/.codex/artifacts/spicy-regs-join-implementation-20260927/court-live.json",
+      "third_wave_verification": "Full pinned graph checked offline within bounded memory. Missing endpoints: opinion\u2013cluster 21; cluster\u2013docket 10,067,451; citation citing 3,758 / cited 1; reporter\u2013cluster 63; parenthetical described 0 / describing 618; no ambiguous endpoints. Three offered native PDFs match held SHA1 and publish derived text."
     },
     {
       "id": "T16",
@@ -605,23 +1119,24 @@
       "depends_on": [
         "T01"
       ],
-      "implementation_state": "implemented_scoped_work; acceptance_remaining",
-      "implemented": "FCC native asset alternatives and roles alongside existing offered-artifact views",
+      "implementation_state": "implemented_with_explicit_remaining_acceptance",
+      "implemented": "FCC offered URLs now link to three retained-body digests and extraction outcomes; three court offered PDFs retain redirects, native fingerprints and derived-text outcomes. Source occurrences remain separate.",
       "implementation_paths": [
         "spicy-regs/src/spicy_regs/relationship_views/artifacts_topics.py",
         "spicy-regs/src/spicy_regs/relationship_views/congress.py",
         "spicy-regs/src/spicy_regs/relationship_views/fcc_native.py"
       ],
-      "validated_scope": "Published partial FCC replay preserves 238 offered artifacts, including native file arrays and empty/read-state distinctions. Capture page and per-record pointers are retained.",
+      "validated_scope": "FCC offered URLs now link to three retained-body digests and extraction outcomes; three court offered PDFs retain redirects, native fingerprints and derived-text outcomes. Source occurrences remain separate.",
       "validation_paths": [
         "spicy-regs/tests/test_relationship_views_navigation.py",
         "spicy-regs/tests/test_relationship_views_retained.py",
         "spicy-regs/tests/test_fcc_native.py"
       ],
-      "remaining_acceptance": "Every further enabled rendition needs native positive/empty/redirect/role qualification. Offered assets are not acquired bodies or a universal artifact index.",
+      "remaining_acceptance": "Further enabled rendition families still need their own positive/empty/missing/redirect/role qualification; no universal artifact index claim.",
       "acceptance_complete": false,
       "data_publication_state": "Published with full public byte readback: sha256:34b970d51a425d8f57c5565f8ec9f540ebb73667f7ddf72bc878c862d190af87",
-      "deployed_verification_state": "238 offered artifact observations verified live; acquisition remains not_checked. Worker1146ddba, app8082191; wave2-smoke-summary.json."
+      "deployed_verification_state": "Third-wave deployment and live verification pending; finalization retains earlier verified deployment IDs.",
+      "third_wave_verification": "FCC offered URLs now link to three retained-body digests and extraction outcomes; three court offered PDFs retain redirects, native fingerprints and derived-text outcomes. Source occurrences remain separate."
     },
     {
       "id": "T17",
@@ -633,8 +1148,8 @@
         "T02",
         "T16"
       ],
-      "implementation_state": "implemented_scoped_work; acceptance_remaining",
-      "implemented": "Bounded source-field adapters into shared citation publication and MCP resolution",
+      "implementation_state": "implemented_with_explicit_remaining_acceptance",
+      "implemented": "Added communication role fields and derived court PDF adapter through existing bounded writer. Court review retains 18 exact findings plus successful zero; an actual proclamation false positive caused source-specific docket-rule exclusion. Complete rereads preserve correction/zero/failure semantics.",
       "implementation_paths": [
         "spicy-docs/src/spicy_docs/interpretation/citations.py",
         "spicy-docs/src/spicy_docs/schemas/document_citation_tables.py",
@@ -643,16 +1158,17 @@
         "spicy-regs/src/spicy_regs/pipelines/rollups/held_citations.py",
         "spicy-regs/src/spicy_regs/mcp_server.py"
       ],
-      "validated_scope": "Six reviewed bill/report/lobbying fields add 42 findings while preserving 52,674 prior citations and all sibling bytes. Spans and hashes exactly match retained field text; 20 bill mentions abstain without stated Congress. Native comment negatives, zero-result corrections, source-kind collisions, duplicate parents and failed/capped reads are tested.",
+      "validated_scope": "Added communication role fields and derived court PDF adapter through existing bounded writer. Court review retains 18 exact findings plus successful zero; an actual proclamation false positive caused source-specific docket-rule exclusion. Complete rereads preserve correction/zero/failure semantics.",
       "validation_paths": [
         "spicy-docs/tests/test_citation_context_qualification.py",
         "spicy-docs/tests/test_citations.py",
         "spicy-regs/tests/test_held_citations.py"
       ],
-      "remaining_acceptance": "Wider reviewed recall, FCC body qualification, managed comment publication and scheduling remain. Committee names excluded by default after a line-wrap precision defect; executive orders/verbose FR references remain misses; USC note qualifiers do not identify exact note targets.",
+      "remaining_acceptance": "Wider reviewed recall and additional body families remain. Committee names, executive orders, verbose FR and exact statutory-note targets retain documented limitations; comment-publication input remains pending.",
       "acceptance_complete": false,
-      "data_publication_state": "Published with full public byte readback: sha256:a9fa600caf2081003f15cf04f8ed1721c5732c71d4cf273110bc3b699f0ea294",
-      "deployed_verification_state": "42 new held-field findings verified live; full-key source digest checks and missing-Congress abstention pass. Worker1146ddba, app8082191; wave2-smoke-summary.json."
+      "data_publication_state": "Selected third-wave outputs published with public byte readback; see finalization.third_wave_publications for exact pins. This does not establish deployed consumer verification or complete source history.",
+      "deployed_verification_state": "Third-wave deployment and live verification pending; finalization retains earlier verified deployment IDs.",
+      "third_wave_verification": "Added communication role fields and derived court PDF adapter through existing bounded writer. Court review retains 18 exact findings plus successful zero; an actual proclamation false positive caused source-specific docket-rule exclusion. Complete rereads preserve correction/zero/failure semantics."
     },
     {
       "id": "T18",
@@ -666,25 +1182,26 @@
         "T02",
         "T11"
       ],
-      "implementation_state": "implemented_scoped_work; acceptance_remaining",
-      "implemented": "All communication RIN occurrences and retained repair",
+      "implementation_state": "implemented_with_explicit_remaining_acceptance",
+      "implemented": "Published 12 role-specific communication authority/report-description findings with exact spans and pins; missing printed entries stay unread. Prior all-RIN route remains published and qualified.",
       "implementation_paths": [
         "spicy-docs/src/spicy_docs/interpretation/communication_rin.py",
         "spicy-docs/src/spicy_docs/schemas/congress_index_tables.py",
         "spicy-regs/src/spicy_regs/transforms/build_congress_index.py",
         "spicy-regs/src/spicy_regs/relationship_views/congress.py"
       ],
-      "validated_scope": "Positive retained multi-RIN specimen; compatibility scalar kept; array spans, field digest and route retained. Old held report_nature can be repaired without acquisition, preserving unread versus empty.",
+      "validated_scope": "Published 12 role-specific communication authority/report-description findings with exact spans and pins; missing printed entries stay unread. Prior all-RIN route remains published and qualified.",
       "validation_paths": [
         "spicy-docs/tests/test_communication_rin_occurrences.py",
         "spicy-regs/tests/test_communication_rin_projection.py",
         "spicy-regs/tests/test_relationship_views_navigation.py"
       ],
-      "remaining_acceptance": "Published held report_nature RIN repair and exact public readback are complete. Full role-specific legal-authority/report-requirement/committee projections, repeated-edition reconciliation and wider population checks remain beyond this RIN route.",
+      "remaining_acceptance": "Full committee/referral role coverage and repeated-edition population review remain beyond the qualified selected source fields.",
       "acceptance_complete": false,
-      "data_publication_state": "Published generation sha256:94d28167db0a56a3670d0a3ceca17e610b0a54f7b3c1e0c6b91617affaa2a994; exact public hash/counts verified, zero origin requests; source fidelity inherited.",
-      "deployed_verification_state": "Live count 2076 and communication 119-ec-4554 exact three RINs/spans/field digest verified at the published generation; target existence remains not_checked.",
-      "live_receipt": "/Users/mikewolfd/.codex/artifacts/spicy-regs-live-members-rins-20260927/summary.json"
+      "data_publication_state": "Selected third-wave outputs published with public byte readback; see finalization.third_wave_publications for exact pins. This does not establish deployed consumer verification or complete source history.",
+      "deployed_verification_state": "Third-wave deployment and live verification pending; finalization retains earlier verified deployment IDs.",
+      "live_receipt": "/Users/mikewolfd/.codex/artifacts/spicy-regs-live-members-rins-20260927/summary.json",
+      "third_wave_verification": "Published 12 role-specific communication authority/report-description findings with exact spans and pins; missing printed entries stay unread. Prior all-RIN route remains published and qualified."
     },
     {
       "id": "T19",
@@ -695,8 +1212,8 @@
       "depends_on": [
         "T01"
       ],
-      "implementation_state": "implemented_scoped_work; acceptance_remaining",
-      "implemented": "Affiliation occurrence output and dated party candidates",
+      "implementation_state": "implemented_and_qualified_at_selected_input_pins",
+      "implemented": "All 59 native affiliations resolve unique terms and valid interval dates. Existing transition/overlap/gap/fallback tests and public dated example retained.",
       "implementation_paths": [
         "spicy-docs/src/spicy_docs/sources/legislators.py",
         "spicy-docs/src/spicy_docs/schemas/legislator_tables.py",
@@ -704,17 +1221,18 @@
         "spicy-regs/src/spicy_regs/pipelines/rollups/members.py",
         "spicy-regs/src/spicy_regs/relationship_views/affiliations.py"
       ],
-      "validated_scope": "Native T000254 intervals retained with raw JSON and source ordinals. Both rosters read before full affiliation replacement. Half-open downstream policy tests transitions, gaps, overlaps and missing ends; no term-party fallback.",
+      "validated_scope": "All 59 native affiliations resolve unique terms and valid interval dates. Existing transition/overlap/gap/fallback tests and public dated example retained.",
       "validation_paths": [
         "spicy-docs/tests/test_source_relationship_rows.py",
         "spicy-regs/tests/test_source_evidence.py",
         "spicy-regs/tests/test_relationship_views_navigation.py"
       ],
-      "remaining_acceptance": "Provider pin, complete retained roster rebuild and publication/readback are complete; live affiliation schema and selected dated-party example are verified. Wider population checks and committee-assignment historical-date semantics remain separately unqualified.",
-      "acceptance_complete": false,
+      "remaining_acceptance": "Selected affiliation task acceptance complete. Committee-assignment historical semantics remain a distinct unqualified route.",
+      "acceptance_complete": true,
       "data_publication_state": "Published members generation sha256:00cad6cf5255d605f681a89705c22257e2975ed86c2dee61e90f3be278d51851; all three public hashes/counts verified.",
-      "deployed_verification_state": "Live count 59 and vote 119-house-1-1 / member K000401 on 2025-01-03 verified: Republican, found, source_interval, target_count=1 at the published generation.",
-      "live_receipt": "/Users/mikewolfd/.codex/artifacts/spicy-regs-live-members-rins-20260927/summary.json"
+      "deployed_verification_state": "Third-wave deployment and live verification pending; finalization retains earlier verified deployment IDs.",
+      "live_receipt": "/Users/mikewolfd/.codex/artifacts/spicy-regs-live-members-rins-20260927/summary.json",
+      "third_wave_verification": "All 59 native affiliations resolve unique terms and valid interval dates. Existing transition/overlap/gap/fallback tests and public dated example retained."
     },
     {
       "id": "T20",
@@ -727,21 +1245,22 @@
         "T01",
         "T02"
       ],
-      "implementation_state": "implemented_scoped_work; acceptance_remaining",
-      "implemented": "Exact namespaced lookup over accepted vendored REF-038 agency mappings",
+      "implementation_state": "implemented_with_explicit_remaining_acceptance",
+      "implemented": "Exact agency lookup exposed through the application/MCP with digest-admitted owner files, current-lineage evidence and explicit temporal/topic abstentions; minimal runtime excludes PyArrow.",
       "implementation_paths": [
         "spicy-regs/src/spicy_regs/relationship_views/artifacts_topics.py",
         "spicy-regs/src/spicy_regs/vocabulary_mapping.py"
       ],
-      "validated_scope": "Library lookup verifies pinned projection/manifest, retains evidence and contested/unmatched states. Native OPM/FAA/ARCTICGAS controls pass; dates abstain because succession/validity artifacts are not adopted.",
+      "validated_scope": "Exact agency lookup exposed through the application/MCP with digest-admitted owner files, current-lineage evidence and explicit temporal/topic abstentions; minimal runtime excludes PyArrow.",
       "validation_paths": [
         "spicy-regs/tests/test_relationship_views_navigation.py",
         "spicy-regs/tests/test_vocabulary_mapping.py"
       ],
-      "remaining_acceptance": "Historical succession and topic mappings remain unqualified. This is an application-library API, not an additional deployed MCP tool.",
+      "remaining_acceptance": "Historical event dates do not establish validity intervals; topic mapping and dated identity routes require separate owner evidence.",
       "acceptance_complete": false,
       "data_publication_state": "Local source-qualified scope only; broader publication or acceptance is not implied.",
-      "deployed_verification_state": "Local API/CLI/reader checks passed; not a newly exposed MCP tool or accepted identity/payment publication."
+      "deployed_verification_state": "Third-wave deployment and live verification pending; finalization retains earlier verified deployment IDs.",
+      "third_wave_verification": "Exact agency lookup exposed through the application/MCP with digest-admitted owner files, current-lineage evidence and explicit temporal/topic abstentions; minimal runtime excludes PyArrow."
     },
     {
       "id": "T21",
@@ -752,22 +1271,23 @@
       "depends_on": [
         "T01"
       ],
-      "implementation_state": "implemented_scoped_work; acceptance_remaining",
-      "implemented": "Exact diff version and section endpoints",
+      "implementation_state": "implemented_and_qualified_at_selected_input_pins",
+      "implemented": "All 28431 pairs have unique full-key version endpoints; 881383 from and 1,076,723 to section endpoints have exact digest matches. Missing sides remain explicit. Native HR5334 covers additions/removals/move/renumber with changed text.",
       "implementation_paths": [
         "spicy-regs/src/spicy_regs/relationship_views/diffs.py",
         "spicy-docs/src/spicy_docs/schemas/bill_diff_tables.py"
       ],
-      "validated_scope": "Both provider-specific endpoints, text-digest agreement, missing sides, engine revision and duplicate candidates stay separate without multiplication.",
+      "validated_scope": "All 28431 pairs have unique full-key version endpoints; 881383 from and 1,076,723 to section endpoints have exact digest matches. Missing sides remain explicit. Native HR5334 covers additions/removals/move/renumber with changed text.",
       "validation_paths": [
         "spicy-regs/tests/test_relationship_views_navigation.py",
         "spicy-regs/tests/test_join_cardinality.py"
       ],
-      "remaining_acceptance": "Native insertion/deletion/renumbering/movement cohort and wider selected-publication reconciliation remain. A bounded live diff endpoint query succeeded.",
-      "acceptance_complete": false,
+      "remaining_acceptance": "Selected task acceptance complete; no new semantic amendment interpretation or identity from section numbering.",
+      "acceptance_complete": true,
       "data_publication_state": "Views use selected existing publications; no new independently materialized task artifact claimed.",
-      "deployed_verification_state": "Bounded positive live case verified on Worker faa8b3ab-ed99-456a-a234-18b6b6ac3006; full population acceptance remains.",
-      "live_receipt": "/Users/mikewolfd/.codex/artifacts/spicy-regs-join-implementation-20260927/diff-live.json"
+      "deployed_verification_state": "Third-wave deployment and live verification pending; finalization retains earlier verified deployment IDs.",
+      "live_receipt": "/Users/mikewolfd/.codex/artifacts/spicy-regs-join-implementation-20260927/diff-live.json",
+      "third_wave_verification": "All 28431 pairs have unique full-key version endpoints; 881383 from and 1,076,723 to section endpoints have exact digest matches. Missing sides remain explicit. Native HR5334 covers additions/removals/move/renumber with changed text."
     },
     {
       "id": "T22",
@@ -780,22 +1300,23 @@
         "T14",
         "T20"
       ],
-      "implementation_state": "implemented_scoped_work; acceptance_remaining",
-      "implemented": "Local evidence-backed acceptance/rejection/revocation workflow",
+      "implementation_state": "implemented_with_explicit_remaining_acceptance",
+      "implemented": "Real three-candidate GOA review retained: one rejected for insufficient identity evidence, two pending, no accepted money-attribution edge. Review decisions retain pinned hash-chain provenance.",
       "implementation_paths": [
         "spicy-regs/src/spicy_regs/relationship_views/identity_candidates.py",
         "spicy-regs/src/spicy_regs/identity_review.py"
       ],
-      "validated_scope": "Explicit CLI decisions bind full candidate bytes and source pin, reviewer, evidence, role and dates. Locked/fsynced hash-chain replay refuses stale candidates/heads and tampering; revocation is tested.",
+      "validated_scope": "Real three-candidate GOA review retained: one rejected for insufficient identity evidence, two pending, no accepted money-attribution edge. Review decisions retain pinned hash-chain provenance.",
       "validation_paths": [
         "spicy-regs/tests/test_relationship_views_navigation.py",
         "spicy-regs/tests/test_identity_review.py"
       ],
-      "remaining_acceptance": "Real same-name/rename/subsidiary truth sets and actual reviewed decisions remain; no mapping or money-attribution edge was accepted or published.",
+      "remaining_acceptance": "Historical rename/parent-subsidiary truth sets and source-supported accepted mappings remain incomplete; pending links cannot carry funds.",
       "acceptance_complete": false,
       "data_publication_state": "Local source-qualified scope only; broader publication or acceptance is not implied.",
-      "deployed_verification_state": "Local API/CLI/reader checks passed; not a newly exposed MCP tool or accepted identity/payment publication.",
-      "live_receipt": "/Users/mikewolfd/.codex/artifacts/spicy-regs-join-implementation-20260927/identity-candidate-live.json"
+      "deployed_verification_state": "Third-wave deployment and live verification pending; finalization retains earlier verified deployment IDs.",
+      "live_receipt": "/Users/mikewolfd/.codex/artifacts/spicy-regs-join-implementation-20260927/identity-candidate-live.json",
+      "third_wave_verification": "Real three-candidate GOA review retained: one rejected for insufficient identity evidence, two pending, no accepted money-attribution edge. Review decisions retain pinned hash-chain provenance."
     },
     {
       "id": "T23",
@@ -807,23 +1328,24 @@
         "T01",
         "T16"
       ],
-      "implementation_state": "implemented_scoped_work; acceptance_remaining",
-      "implemented": "Bounded native Senate payment candidate reader",
+      "implementation_state": "implemented_with_explicit_remaining_acceptance",
+      "implemented": "Both retained complete summary sections reconcile all seven monetary columns with Decimal difference 0.00. Native negative amounts and C/D grids reviewed; missing page-local office/layout support stays refused.",
       "implementation_paths": [
         "spicy-docs/src/spicy_docs/reading/senate_payment_review.py",
         "spicy-docs/tests/fixtures/senate_expenditures/payment-review-2026-09-27.json",
         "spicy-docs/src/spicy_docs/reading/senate_payment_candidates.py"
       ],
-      "validated_scope": "Native B-1243 candidates match DJST20250194 / ERAJ SHIRVANI amounts 13.20, 165.89, 291.72. Raw word/header boxes retained; B-1244 office attribution, summaries, unpriced text attachment and unsupported families refuse.",
+      "validated_scope": "Both retained complete summary sections reconcile all seven monetary columns with Decimal difference 0.00. Native negative amounts and C/D grids reviewed; missing page-local office/layout support stays refused.",
       "validation_paths": [
         "spicy-docs/tests/test_senate_payment_review.py",
         "spicy-docs/tests/test_senate_expenditures.py",
         "spicy-docs/tests/test_senate_payment_candidates.py"
       ],
-      "remaining_acceptance": "Candidate output is partial and not payment-publication-qualified. Full group/section reconciliation, cross-page office origin, negative payment examples and C/D layouts remain.",
+      "remaining_acceptance": "Complete B payment/office reconciliation and proven cross-page office context remain unqualified. C/D grids are separate meanings, not ordinary payments.",
       "acceptance_complete": false,
       "data_publication_state": "Local source-qualified scope only; broader publication or acceptance is not implied.",
-      "deployed_verification_state": "Local API/CLI/reader checks passed; not a newly exposed MCP tool or accepted identity/payment publication."
+      "deployed_verification_state": "Third-wave deployment and live verification pending; finalization retains earlier verified deployment IDs.",
+      "third_wave_verification": "Both retained complete summary sections reconcile all seven monetary columns with Decimal difference 0.00. Native negative amounts and C/D grids reviewed; missing page-local office/layout support stays refused."
     },
     {
       "id": "T24",
@@ -836,24 +1358,25 @@
         "T15",
         "T16"
       ],
-      "implementation_state": "implemented_scoped_work; acceptance_remaining",
-      "implemented": "Explicit retained-first GAO target repair through source-owned metadata reader",
+      "implementation_state": "implemented_with_explicit_remaining_acceptance",
+      "implemented": "GAO target metadata, complete native legal inputs and three court PDF bodies are now published; 18 court citations re-resolved incrementally. Fingerprints, extraction outcomes and failed initial candidates retained separately.",
       "implementation_paths": [
         "spicy-regs/src/spicy_regs/acquisition_queue.py",
         "spicy-docs/src/spicy_docs/sources/gao/files.py",
         "spicy-regs/src/spicy_regs/transforms/build_gao_target.py",
         "spicy-docs/src/spicy_docs/sources/gao/product_metadata.py"
       ],
-      "validated_scope": "GAO-17-317 page title and explicit 2017-02-15 date qualified; prior 42 rows/cells preserved and one target added. Original cited key resolves found against candidate; public bytes verified. Retained PDF/page evidence attached; initial credential refusals and explicit retry/replay tests retained.",
+      "validated_scope": "GAO target metadata, complete native legal inputs and three court PDF bodies are now published; 18 court citations re-resolved incrementally. Fingerprints, extraction outcomes and failed initial candidates retained separately.",
       "validation_paths": [
         "spicy-regs/tests/test_acquisition_queue.py",
         "spicy-regs/tests/test_gao_target.py",
         "spicy-docs/tests/test_gao_product_metadata.py"
       ],
-      "remaining_acceptance": "Metadata schema has no body-text/reference columns; PDF bytes are evidence, not a published extracted text row. Law/USC/court cohorts and historical edition coverage remain.",
+      "remaining_acceptance": "Broader source/edition cohorts and missing targets remain. GAO PDF bytes are evidence without a published derived-text field; no source-wide completeness claim.",
       "acceptance_complete": false,
-      "data_publication_state": "Published with full public byte readback: sha256:566318c5740235cd9fb849f9281476fc6e3bb13120b3f03a1971196e33dd2737",
-      "deployed_verification_state": "New GAO metadata row and its citation join verified live. Worker1146ddba, app8082191; wave2-smoke-summary.json."
+      "data_publication_state": "Selected third-wave outputs published with public byte readback; see finalization.third_wave_publications for exact pins. This does not establish deployed consumer verification or complete source history.",
+      "deployed_verification_state": "Third-wave deployment and live verification pending; finalization retains earlier verified deployment IDs.",
+      "third_wave_verification": "GAO target metadata, complete native legal inputs and three court PDF bodies are now published; 18 court citations re-resolved incrementally. Fingerprints, extraction outcomes and failed initial candidates retained separately."
     },
     {
       "id": "T25",
@@ -865,8 +1388,8 @@
       "depends_on": [
         "T01"
       ],
-      "implementation_state": "implemented_scoped_work; acceptance_remaining",
-      "implemented": "Pin-aware aggregate checks in existing join-checker CLI",
+      "implementation_state": "implemented_with_explicit_remaining_acceptance",
+      "implemented": "Materialized and catalog-export lineage now supported. Agency-comment, feed-comment, lifecycle checks pass at exact pins; public comments-index scan timed out and local mirror check succeeds. Checkpoints distinguish 96 listings, legacy v2 markers (no current v3 reusable completion), 40 refusal maps, empty backfills, 290 complete / 2 size-refused report reads and 2 complete native legal reads.",
       "implementation_paths": [
         "spicy-regs/src/spicy_regs/relationship_views/core.py",
         "spicy-regs/src/spicy_regs/mcp_server.py",
@@ -874,16 +1397,17 @@
         "spicy-regs/src/spicy_regs/aggregate_checks.py",
         "spicy-regs/scripts/check_table_joins.py"
       ],
-      "validated_scope": "Four complete selected-file checks pass with zero differing groups: agency dockets, agency documents, monthly documents and feed dockets. Verified parent SHA lineage qualifies comparisons; capped/failed/parsed-only inputs cannot establish completeness.",
+      "validated_scope": "Materialized and catalog-export lineage now supported. Agency-comment, feed-comment, lifecycle checks pass at exact pins; public comments-index scan timed out and local mirror check succeeds. Checkpoints distinguish 96 listings, legacy v2 markers (no current v3 reusable completion), 40 refusal maps, empty backfills, 290 complete / 2 size-refused report reads and 2 complete native legal reads.",
       "validation_paths": [
         "spicy-regs/tests/test_mcp_relationships.py",
         "spicy-regs/tests/test_relationship_views.py",
         "spicy-regs/tests/test_aggregate_checks.py"
       ],
-      "remaining_acceptance": "Comments/index and lifecycle totals abstain UNPINNED pending materialized/catalog lineage support; source checkpoint reconciliation and central MCP aggregate display remain.",
+      "remaining_acceptance": "Public comments/index and dependent-output reconciliation awaits serialized mirror refresh. MCP metadata declares checks/grain/policy without inventing live measurements.",
       "acceptance_complete": false,
       "data_publication_state": "Local source-qualified scope only; broader publication or acceptance is not implied.",
-      "deployed_verification_state": "Local API/CLI/reader checks passed; not a newly exposed MCP tool or accepted identity/payment publication."
+      "deployed_verification_state": "Third-wave deployment and live verification pending; finalization retains earlier verified deployment IDs.",
+      "third_wave_verification": "Materialized and catalog-export lineage now supported. Agency-comment, feed-comment, lifecycle checks pass at exact pins; public comments-index scan timed out and local mirror check succeeds. Checkpoints distinguish 96 listings, legacy v2 markers (no current v3 reusable completion), 40 refusal maps, empty backfills, 290 complete / 2 size-refused report reads and 2 complete native legal reads."
     }
   ],
   "dated_local_validation": {
@@ -1632,5 +2156,16 @@
       "available": 102,
       "unsupported": 4
     }
+  },
+  "third_wave_evidence": {
+    "legislative": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/legislative-joins-2026-09-27",
+    "comments": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/comment-reference-repair-2026-09-27",
+    "native_legal": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/native-legal-full-2026-09-27",
+    "identity": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/identity-vocabulary-cases-2026-09-27",
+    "senate": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/senate-reconciliation-2026-09-27",
+    "court_fec_spending": "/Users/mikewolfd/.codex/artifacts/spicy-regs-entity-fec-reconcile-20260927/delivery.md",
+    "citation_checkpoints": "/Users/mikewolfd/.codex/artifacts/spicy-regs-citation-refresh-20260927/report.md",
+    "aggregate_lineage": "/Users/mikewolfd/.codex/artifacts/spicy-regs-t25-aggregate-20260927/public-reconciliation-extended.json",
+    "fec_native_shapes": "/Users/mikewolfd/.codex/artifacts/spicy-regs-entity-fec-reconcile-20260927/t09-native-shapes.json"
   }
 }

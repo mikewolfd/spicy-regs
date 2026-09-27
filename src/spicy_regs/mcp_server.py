@@ -827,8 +827,10 @@ def _register_tools(mcp: FastMCP) -> None:
         Namespaces are regulations.gov:agency (e.g. OPM) and
         federal_register_agency (e.g. 406). Labels are not identifiers.
         Return mapping evidence, publication pins and documented abstentions.
-        Parent relationships are not identity. This mapping is undated: supplying
-        on_date preserves candidates but cannot establish historical identity.
+        Parent relationships and succession events are not identity. REF-072 bridge
+        and event evidence stays separate from REF-038 candidates. Current-lineage
+        lookup follows the owner policy without dates; on_date preserves evidence
+        but cannot establish historical identity.
         No acquisition, new adjudication, or money attribution is performed.
         """
         from spicy_regs.vocabulary_mapping import lookup_agency as lookup

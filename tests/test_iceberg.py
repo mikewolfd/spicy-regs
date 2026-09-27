@@ -970,3 +970,78 @@ def test_export_migrated_comments_fills_old_snapshot_fields_with_null(tmp_path, 
     assert rows.height == 1
     for column in iceberg._COMMENT_REFERENCE_COLUMNS:
         assert rows[column].to_list() == [None]
+
+
+@pytest.mark.parametrize('prior_exists', [False, True])
+def test_merge_refuses_intervening_insert_or_update(tmp_path, local_catalog, monkeypatch, prior_exists):
+    con = local_catalog
+    iceberg._ensure_table(con, DOCKET)
+    table = iceberg._qualified(DOCKET)
+    if prior_exists:
+        con.execute(f"INSERT INTO {table} (docket_id,title,modify_date) VALUES ('D','old','2025-01-01')")
+    staging = tmp_path / 'staging'
+    _write_staging(staging, 'EPA', [_docket('D','EPA','prepared','2025-02-01')])
+    real_replace = iceberg.replace_rows
+
+    def intervening_write(connection, record_type, source, **kwargs):
+        if prior_exists:
+            connection.execute(f"UPDATE {table} SET title='concurrent',modify_date='2026-01-01' WHERE docket_id='D'")
+        else:
+            connection.execute(f"INSERT INTO {table} (docket_id,title,modify_date) VALUES ('D','concurrent','2026-01-01')")
+        real_replace(connection, record_type, source, **kwargs)
+
+    monkeypatch.setattr(iceberg, 'replace_rows', intervening_write)
+    with pytest.raises(RuntimeError, match='prior changed'):
+        iceberg._merge(con, iceberg._staging_files(staging, DOCKET), DOCKET)
+    assert con.execute(f'SELECT title,modify_date FROM {table}').fetchall() == [('concurrent','2026-01-01')]
+    # Refusal leaves no open failed transaction.
+    con.execute('BEGIN')
+    con.execute('ROLLBACK')
+
+
+def test_text_fill_refuses_intervening_unrelated_cell_change(tmp_path, local_catalog, monkeypatch):
+    con = local_catalog
+    iceberg._ensure_table(con, COMMENT)
+    table = iceberg._qualified(COMMENT)
+    con.execute(f"INSERT INTO {table} (comment_id,agency_code,docket_id) VALUES ('c1','EPA','old')")
+    real_replace = iceberg.replace_rows
+
+    def intervening_write(connection, record_type, source, **kwargs):
+        connection.execute(f"UPDATE {table} SET docket_id='newer-source' WHERE comment_id='c1'")
+        real_replace(connection, record_type, source, **kwargs)
+
+    monkeypatch.setattr(iceberg, 'replace_rows', intervening_write)
+    updates = pl.DataFrame({'comment_id':['c1'], '_new_text':['filled'], '_new_status':['ok']})
+    with pytest.raises(RuntimeError, match='prior changed'):
+        iceberg.upsert_comment_text(con, COMMENT, 'EPA', updates)
+    assert con.execute(f'SELECT docket_id,text_content FROM {table}').fetchall() == [('newer-source',None)]
+
+
+def test_replace_preserves_commit_error_when_transaction_already_aborted(local_catalog):
+    con = local_catalog
+    iceberg._ensure_table(con, DOCKET)
+    table = iceberg._qualified(DOCKET)
+    con.execute(f"INSERT INTO {table} (docket_id,title) VALUES ('D','prior')")
+    con.execute(f'CREATE TEMP TABLE replacement AS SELECT * FROM {table}')
+    con.execute("UPDATE replacement SET title='replacement'")
+    conflict = duckdb.TransactionException('simulated concurrent catalog commit conflict')
+
+    class AbortedCommit:
+        rollback_attempts = 0
+
+        def execute(self, sql):
+            if sql == 'COMMIT':
+                con.execute('ROLLBACK')
+                raise conflict
+            if sql == 'ROLLBACK':
+                self.rollback_attempts += 1
+            return con.execute(sql)
+
+    connection = AbortedCommit()
+    with pytest.raises(duckdb.TransactionException, match='concurrent catalog commit conflict') as raised:
+        iceberg.replace_rows(connection, DOCKET, 'replacement')
+    assert raised.value is conflict
+    assert connection.rollback_attempts == 1
+    assert con.execute(f'SELECT title FROM {table}').fetchall() == [('prior',)]
+    con.execute('BEGIN')
+    con.execute('ROLLBACK')

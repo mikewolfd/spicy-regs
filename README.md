@@ -338,7 +338,9 @@ are `regulations.gov:agency` (for example, `OPM`) and
 digests and documented abstentions without opening corpus tables. Labels do not
 match identifiers, parent agencies are separate relationships, and an `on_date`
 request remains `temporal_scope_unqualified` for an otherwise mapped agency.
-This undated mapping cannot establish historical succession or money attribution.
+REF-072 bridge and succession evidence is returned separately from REF-038
+identity candidates. The owner's current-lineage policy ignores dates, so it does
+not establish identity on a requested historical date or money attribution.
 
 `list_sources` returns queryable tables in `tables`, all supported names in
 `declared_tables`, and missing views in `unavailable_tables`. Availability

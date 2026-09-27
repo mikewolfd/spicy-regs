@@ -218,7 +218,7 @@ def _repair_comments(
         if iceberg._read_snapshot(con, record_type) != snapshot:
             raise RuntimeError("the comments catalog moved since the repair read it; rerun the repair")
         if rows:
-            iceberg.replace_rows(con, record_type, "_repair_write")
+            iceberg.replace_rows(con, record_type, "_repair_write", expected_prior="_repair_prior")
             same = " AND ".join(f't."{column}" IS NOT DISTINCT FROM w."{column}"' for column in columns)
             found, matching = con.execute(f"""
                 SELECT count(*), count(*) FILTER (WHERE {same})

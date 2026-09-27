@@ -45,3 +45,18 @@ def test_lookup_refuses_tampered_vendored_evidence(tmp_path, monkeypatch, filena
     monkeypatch.setattr(vocabulary_mapping, "files", lambda _: tmp_path)
     with pytest.raises(ValueError, match="differs|not RefSpec"):
         vocabulary_mapping.lookup_agency("regulations.gov:agency", "ARCTICGAS")
+
+
+@pytest.mark.parametrize("filename", ["view-manifest.json", "tables/agency-registry-events.parquet"])
+def test_registry_lookup_refuses_tampered_owner_artifacts(tmp_path, monkeypatch, filename):
+    from spicy_regs.ontology import agencies
+
+    root = tmp_path / "registry"
+    shutil.copytree(str(agencies.AGENCY_REGISTRY_VIEW_PATH), root)
+    file = root / filename
+    data = bytearray(file.read_bytes())
+    data[len(data) // 2] ^= 1
+    file.write_bytes(data)
+    monkeypatch.setattr(agencies, "AGENCY_REGISTRY_VIEW_PATH", root)
+    with pytest.raises(ValueError, match="differs|not RefSpec"):
+        vocabulary_mapping.lookup_agency("federal_register_agency", "559")
