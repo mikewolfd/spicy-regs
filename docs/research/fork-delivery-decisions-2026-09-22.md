@@ -164,7 +164,7 @@ Commits are spicy-regs fork `main` unless named. "Left" is what remains and what
 | 50 | Filling. | `add9bd9`. Every run re-reads up to 15 packed id queries at the published 12 s interval. Run 36266967475 filled 692 of 3,693 dockets; 3,001 remain, about five more daily runs. | Full `/parties/` records for agency-party dockets linked to a rulemaking. These wait for ca's proceedings fix (decisions 54–57), which moves the rulemaking links. |
 | 51 | Waiting. | — | Multi-file tables, then the 2024 and 2026 cycles only. |
 | 52 | Not started. | — | SEC, FERC and CFTC readers. EDIS needs a signed-in session client and spicy-docs checkpoints first. |
-| 53 | Not started. | — | Read the 24 bulk committee-master files; drop the 897 paged requests a day to a daily delta. |
+| 53 | Mostly done. | `fec_committees` reads only committees filed in the past week, plus a Sunday full walk (`5424cb7`; dispatch 36284714434 read 1,921 committees in about a minute, not 897 pages). `fec_committee_history` is published from every cycle's committee master through spicy-docs 0.43.0's reader (`a31ba19`, `2a21eea`; run 36286703784: 298,395 rows, 89,710 committees). Every registry committee appears in the history (`dacb1af`). | Replace the Sunday walk with a completeness check against the history's committee IDs, once a few weeks of Sunday walks show the delta misses nothing. |
 
 Also open, outside these decisions:
 - ~~Re-measure the vote joins when ca's votes chain ends.~~ Done in `b0497ee`: all four hold. L000555 (Luke Letlow, who died before taking the seat) is the one baselined orphan.
