@@ -369,3 +369,53 @@ def test_hosted_schemas_follow_the_contract_types_in_contract_order():
     typed = dict(dd.contract_schemas()["document_attributes"])
     assert (typed["page_count"], typed["receive_date"], typed["topics"]) == (
         "INTEGER", "TIMESTAMP WITH TIME ZONE", "VARCHAR[]")
+
+
+# --------------------------------------------------------------------------- #
+# The materialized rulemaking dataset: builders' own schemas, served from the snapshot pointer.
+# --------------------------------------------------------------------------- #
+RULEMAKING_IDENTITY = {
+    "rule_targets": ["docket_id", "cfr_ref", "rin", "source"],
+    "proceedings": ["proceeding_id"],
+    "regulatory_agenda_items": ["agenda_item_id"],
+    "agenda_item_proceedings": ["relationship_id"],
+    "comment_periods": ["comment_period_id"],
+    "rulemaking_lifecycles": ["proceeding_id"],
+    "lifecycle_events": ["proceeding_id", "document_id"],
+    "agency_lifecycle_stats": ["agency_code", "stratum"],
+}
+
+
+def test_each_rulemaking_table_names_its_identity_and_where_it_is_published():
+    assert tuple(RULEMAKING_IDENTITY) == dd.RULEMAKING_TABLES
+    metadata = json.loads(dd.DEFAULT_MCP_METADATA_PATH.read_text(encoding="utf-8"))
+    for table, identity in RULEMAKING_IDENTITY.items():
+        entry = metadata[table]
+        assert (entry["identity_columns"], entry["kind"]) == (identity, "derived"), table
+        assert entry["grain"] and entry["label"] and entry["measured_on"], table
+        page = (dd.DEFAULT_DOCS_TABLES_DIR / f"{table}.md").read_text(encoding="utf-8")
+        assert "in the snapshot that `materialized/rulemaking/latest.json` names" in page, table
+        assert "**MCP `query_sql` support:** Configured" in page, table
+
+
+def test_a_pointer_that_names_no_publication_is_unreadable_not_drift(monkeypatch):
+    from spicy_regs.sources.publication import PublicationError
+
+    def refuse(*_):
+        raise PublicationError("Invalid rulemaking snapshot")
+
+    monkeypatch.setattr(dd, "discover_schemas", refuse)
+    args = dd.build_parser().parse_args(["check", "--source", "r2"])
+    assert args.func(args) == dd.EXIT_SOURCE_UNREACHABLE
+
+
+def test_live_check_holds_declared_types_to_the_published_file(monkeypatch, capsys):
+    """A DATE column published as VARCHAR keeps its name, so only the type comparison can see it."""
+    declared = dd.expected_schemas()["rulemaking_lifecycles"]
+    drifted = [(column, "VARCHAR" if column == "proposal_date" else kind) for column, kind in declared]
+    args = dd.build_parser().parse_args(["check", "--source", "r2"])
+    monkeypatch.setattr(dd, "discover_schemas", lambda *_: {"rulemaking_lifecycles": drifted})
+    assert args.func(args) == 1
+    assert "[rulemaking_lifecycles.proposal_date] in-code type DATE but live parquet VARCHAR" in capsys.readouterr().err
+    monkeypatch.setattr(dd, "discover_schemas", lambda *_: {"rulemaking_lifecycles": declared})
+    assert args.func(args) == 0

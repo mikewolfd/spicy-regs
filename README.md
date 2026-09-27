@@ -96,8 +96,13 @@ loaded availability and `describe_table` to compare the actual schema.
 
 **Rollups** — small, denormalized, meant to be read whole: `feed_summary`,
 `agency_stats`, `agency_monthly_volume`, `comments_index`, `docket_search`,
-`discovery_signals`, `fr_docket_links`. Rulemaking lifecycles are a stage of
-the rulemaking dataset (`materialize-rulemaking`; see `docs/ontology.md`).
+`discovery_signals`, `fr_docket_links`.
+
+**Rulemaking dataset** — derived tables that publish together as one snapshot
+(`materialize-rulemaking`; see `docs/ontology.md`), queryable through MCP:
+`rule_targets`, `proceedings`, `regulatory_agenda_items`,
+`agenda_item_proceedings`, `comment_periods`, `rulemaking_lifecycles`,
+`lifecycle_events`, `agency_lifecycle_stats`.
 
 **Complementary federal sources** — each ingested from its own API so the
 rulemaking lifecycle, the organizations engaged in it, and its downstream

@@ -2,8 +2,9 @@
 
 A join names a child table and columns and the parent table and columns they
 reference. It resolves when a distinct non-null child key occurs in the parent.
-Each carries the rate measured on the live fork tables on 2026-09-26
-(``BASELINE_RECEIPTS``); its floor is that rate truncated to four decimals, and
+Each carries the rate measured on the live fork tables on 2026-09-26, the
+rulemaking dataset's on 2026-09-27 (``BASELINE_RECEIPTS``, and the date in each
+reason); its floor is that rate truncated to four decimals, and
 ``scripts/check_table_joins.py`` fails a join that falls below it. Joins that
 are low by design, or by a table's current selection, are declared with that
 rate and the reason, so the check still covers them. ``spicy-regs-dict
@@ -31,6 +32,9 @@ BASELINE_RECEIPTS = (
     "~/Work/corpora/fork-execution-2026-09-21/join-map-2026-09-26/sam-entities-after-backfill.json",
     "~/Work/corpora/fork-execution-2026-09-21/join-map-2026-09-26/live-check-after-fixes.json",
     "~/Work/corpora/fork-execution-2026-09-21/committee-fixes-2026-09-26/3-rosters-118/runs.json",
+    "~/Work/corpora/fork-execution-2026-09-21/rulemaking-exposure-2026-09-27/proposed-joins.json",
+    "~/Work/corpora/fork-execution-2026-09-21/join-map-2026-09-26/rulemaking-exposure-independent.json",
+    "~/Work/corpora/fork-execution-2026-09-21/join-map-2026-09-26/rulemaking-exposure-independent-2.json",
 )
 
 #: Expected resolution. ``complete``: every key should resolve and an orphan is
@@ -104,6 +108,18 @@ def _join(child: str, child_columns: str | tuple[str, ...], parent: str, parent_
 
 _MODEL_OUTPUT = "Model output not yet computed (needs GEMINI_API_KEY); the table publishes no rows."
 _BILL = "congress_bills"
+#: Where the rulemaking dataset's joins were measured, twice independently (the pointer's snapshot, not a table pin).
+_RULEMAKING = ("Measured 2026-09-27 on snapshot_f31a4045…; receipts rulemaking-exposure-2026-09-27/proposed-joins.json "
+               "and join-map-2026-09-26/rulemaking-exposure-independent.json, -2.json.")
+
+
+def _unlisted_rins(x_pattern: int, well_formed: int, placeholder: int, detail: str = "") -> str:
+    """A RIN join's scope reason: the three kinds of RIN no Unified Agenda edition lists (receipt rin_orphans.json)."""
+    return (f"unified_agenda holds every readable edition, Fall 1995 to the newest (202510). Of the RINs no edition "
+            f"lists, {x_pattern:,} are X-pattern codes (NOAA's 0648-X in-season series and other agencies', never on "
+            f"the agenda; decision 61), {well_formed:,} are well formed but unlisted{detail}, and {placeholder} is the "
+            f"placeholder 0000-AA00. {_RULEMAKING}")
+
 
 JOINS: tuple[Join, ...] = (
     # The bill family and the tables that name its bills.
@@ -204,6 +220,35 @@ JOINS: tuple[Join, ...] = (
           "lists, 2,211 are NMFS's 0648-X in-season series (every one), 1,409 first appear before Fall 1995, 179 "
           "first appear in 2026, after the newest edition, and 460 are malformed as printed (3206-XXXX, "
           "7100 AG80). Receipt join-map-2026-09-26/unified-agenda-rin-after-backfill.json."),
+    # The materialized rulemaking dataset (rule_targets' docket join is above), read through its snapshot pointer.
+    _join("agenda_item_proceedings", "proceeding_id", "proceedings", "proceeding_id", 80_688, 0, reason=_RULEMAKING),
+    _join("agenda_item_proceedings", "agenda_item_id", "regulatory_agenda_items", "agenda_item_id", 35_451, 0,
+          reason=_RULEMAKING),
+    _join("rulemaking_lifecycles", "proceeding_id", "proceedings", "proceeding_id", 75_270, 0, reason=_RULEMAKING),
+    _join("lifecycle_events", "proceeding_id", "rulemaking_lifecycles", "proceeding_id", 65_278, 0,
+          reason=_RULEMAKING),
+    *(_join("rulemaking_lifecycles", ("proceeding_id", f"{role}_document_id"), "lifecycle_events",
+            ("proceeding_id", "document_id"), keys, 0,
+            reason=f"The {role} anchor is one of its proceeding's events. {_RULEMAKING}")
+      for role, keys in (("proposal", 36_697), ("final", 55_640), ("withdrawal", 721))),
+    _join("lifecycle_events", "document_id", "documents", "document_id", 131_476, 105_768, "design",
+          "Three id kinds, told apart by dated_by, each resolving 100% in its own table: regulations_gov a "
+          "Regulations.gov document id (25,708 keys, all in documents), federal_register a dated Register record id "
+          "number@YYYY-MM-DD (104,995, all in federal_register), unified_agenda an agenda item id (773, all in "
+          "regulatory_agenda_items). source does not tell them apart: 72 events Regulations.gov typed are copies of "
+          f"untyped Register rows and carry Register ids. {_RULEMAKING}"),
+    _join("regulatory_agenda_items", ("rin", "latest_agenda_edition"), "unified_agenda", ("rin", "agenda_edition"),
+          46_247, 0, reason=f"An item with no latest edition is one no edition lists. {_RULEMAKING}"),
+    _join("rule_targets", "rin", "unified_agenda", "rin", 22_290, 2_299, "scope",
+          _unlisted_rins(1_269, 1_029, 1, " (854 first dated 1995-2025, 174 in 2026, after the newest edition, "
+                                          "and 1 before Fall 1995)")),
+    _join("proceedings", "rin", "unified_agenda", "rin", 30_536, 3_833, "scope", _unlisted_rins(802, 3_030, 1)),
+    _join("regulatory_agenda_items", "rin", "unified_agenda", "rin", 52_092, 5_845, "scope",
+          _unlisted_rins(2_410, 3_434, 1, " (an item exists for every RIN any source states)")),
+    _join("rule_targets", "cfr_ref", "cfr_sections", "cfr_ref", 6_144, 810, "scope",
+          "cfr_ref names a CFR part (title-part). cfr_sections holds the 2025–2026 edition of all 49 titles; 796 of "
+          "the missing parts no longer exist in it (removed or redesignated since the citing document) and 14 exist "
+          "only as sections without a part row. Receipt join-map-2026-09-26/rulemaking-exposure-independent-2.json."),
     # FEC.
     _join("org_committee_links", "committee_id", "fec_committees", "committee_id", 3_633, 0),
     # The Regulations.gov attribute tables (decisions 65-67): every row is a record the thin tables also hold.
@@ -243,9 +288,6 @@ JOINS: tuple[Join, ...] = (
     _join("lobbying_activity_lobbyists", ("filing_uuid", "activity_index"),
           "lobbying_activities", ("filing_uuid", "activity_index"), 522, 0),
 )
-
-#: Tables outside the dictionary's registry, read from the materialized rulemaking snapshot.
-MATERIALIZED_TABLES = frozenset({"rule_targets"})
 
 
 def joins_for(table: str) -> dict[str, list[dict]]:
@@ -315,8 +357,6 @@ def declaration_errors(schemas: dict[str, list[tuple[str, str]]]) -> list[str]:
         if (join.kind == "empty") != (join.baseline_keys == 0) and join.kind != "design":
             errors.append(f"{join.name}: an empty join has no baseline keys, and only an empty join may")
         for table, columns in ((join.child, join.child_columns), (join.parent, join.parent_columns)):
-            if table in MATERIALIZED_TABLES:
-                continue
             known = {name for name, _ in schemas.get(table, [])}
             if not known:
                 errors.append(f"{join.name}: {table} is not a dictionary table")

@@ -92,6 +92,18 @@ job fails, but the families still publish whatever it served.
   and labels managed generations versus legacy data. Query responses include the
   connection's publication pins. The remote query reader relies on immutability;
   it does not rehash whole tables for each query.
+- The rulemaking dataset publishes under its own pointer,
+  `materialized/rulemaking/latest.json`. Each MCP connection build reads it once
+  beside the index (`publication.load_rulemaking_snapshot`): as the pipeline reads
+  its prior generation, the pointer and its manifest must be one readable format
+  of this dataset naming one snapshot, and each public artifact must sit under
+  that snapshot's prefix. An invalid pointer refuses the connection, as an
+  invalid index does. Views read those immutable keys, so a moved pointer is seen
+  when the cached connection rebuilds (`SPICY_REGS_CONNECTION_TTL`, default 300
+  seconds), and a member that cannot be read refuses the connection. The
+  manifest states no columns, so `describe_table` compares each view with the
+  dictionary. Status reports `rulemaking_snapshot` with the snapshot id, and the
+  ledger's `snapshot_…` pins compare with it. Local MCP does not read the pointer.
 - CLI download accepts rollup names. When the requested set includes managed data,
   it downloads the requested set into one batch, verifies every managed member,
   records the index and selected keys, then switches `current` only on success.
@@ -105,8 +117,10 @@ job fails, but the families still publish whatever it served.
   ordinary replacement or mutation after verification. A new `current` target
   takes effect when the cached connection rebuilds. These checks do not make
   writable local storage immutable or establish the source's completeness.
-- Dictionary remote schema discovery captures the same index. Declared schema
-  pages alone continue to make no claim of production availability.
+- Dictionary remote schema discovery captures the same index and rulemaking
+  pointer (`publication.published_urls`), as does `scripts/check_table_joins.py`,
+  and holds each live column's type to its declaration as well as its name.
+  Declared schema pages alone continue to make no claim of production availability.
 
 ## Auditing a published generation
 

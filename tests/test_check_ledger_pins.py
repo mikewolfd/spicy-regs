@@ -50,14 +50,34 @@ POINTER = {
     "snapshot_id": SNAPSHOT,
 }
 MANIFEST = {
+    "format_version": 2,
+    "dataset": "rulemaking",
     "snapshot_id": SNAPSHOT,
     "artifacts": {
-        "rule_targets.parquet": {"rows": 517311, "visibility": "public"},
-        "proceedings.parquet": {"rows": 515121, "visibility": "public"},
-        "comment_periods.parquet": {"rows": 306582, "visibility": "public"},
-        "_proceedings_state.parquet": {"rows": 1, "visibility": "internal"},
+        key: {"remote_key": f"materialized/rulemaking/snapshots/{SNAPSHOT}/{key}", "rows": rows, "visibility": visibility}
+        for key, rows, visibility in (
+            ("rule_targets.parquet", 517311, "public"),
+            ("proceedings.parquet", 515121, "public"),
+            ("comment_periods.parquet", 306582, "public"),
+            ("_proceedings_state.parquet", 1, "internal"),
+        )
     },
 }
+BASE = "https://data.example"
+
+
+def _serve(monkeypatch, pointer: dict = POINTER, manifest: dict = MANIFEST) -> None:
+    """Answer the publication module's bounded GETs with the rulemaking pointer and manifest."""
+    documents = {f"{BASE}/{publication.SNAPSHOT_POINTER}": pointer, f"{BASE}/{pointer['manifest_key']}": manifest}
+    monkeypatch.setattr(publication, "_bounded_get",
+                        lambda url, **_: json.dumps(documents[url]).encode() if url in documents else None)
+
+
+def _snapshot(pointer: dict = POINTER, manifest: dict = MANIFEST) -> dict | None:
+    """The fixture read by the real loader, so it cannot drift from the snapshot contract."""
+    with pytest.MonkeyPatch.context() as patch:
+        _serve(patch, pointer, manifest)
+        return publication.load_rulemaking_snapshot(BASE)
 
 LEDGER = """\
 | Task | Producer | Output | Delivery state |
@@ -81,7 +101,7 @@ OBJECTS = {"dockets.parquet": ("0a1b2c3d", 1000), "documents.parquet": ("fffffff
 
 
 def _results() -> dict[str, tuple[str, str]]:
-    rows = pins.check(LEDGER, pins.rollup_pins(INDEX), pins.snapshot_pins(POINTER, MANIFEST), OBJECTS)
+    rows = pins.check(LEDGER, pins.rollup_pins(INDEX), pins.snapshot_pins(_snapshot()), OBJECTS)
     return {detail.split()[1].rstrip(","): (status, detail) for status, detail in rows}
 
 
@@ -121,17 +141,19 @@ def test_a_row_with_two_conforming_phrases_is_malformed():
 
 def test_a_pointer_naming_another_manifest_refuses():
     with pytest.raises(publication.PublicationError):
-        pins.snapshot_pins(POINTER, {**MANIFEST, "snapshot_id": "snapshot_" + "f" * 32})
+        _snapshot(manifest={**MANIFEST, "snapshot_id": "snapshot_" + "f" * 32})
+
+
+def test_no_published_pointer_pins_no_snapshot_table():
+    assert pins.snapshot_pins(None) == {}
 
 
 def test_fetch_live_follows_the_pointer_to_its_manifest(monkeypatch):
-    base = "https://data.example"
-    documents = {f"{base}/{publication.SNAPSHOT_POINTER}": POINTER, f"{base}/{POINTER['manifest_key']}": MANIFEST}
-    monkeypatch.setattr(publication, "load_index", lambda url: INDEX if url == base else pytest.fail(url))
-    monkeypatch.setattr(pins, "_get_json", documents.get)
-    heads = {f"{base}/dockets.parquet": ('"0a1b2c3d9e8f7a6b5c4d3e2f1a0b9c8d-303"', "1000")}
+    monkeypatch.setattr(publication, "load_index", lambda url: INDEX if url == BASE else pytest.fail(url))
+    _serve(monkeypatch)
+    heads = {f"{BASE}/dockets.parquet": ('"0a1b2c3d9e8f7a6b5c4d3e2f1a0b9c8d-303"', "1000")}
     monkeypatch.setattr(pins.httpx, "head", lambda url, **_: _Head(*heads[url]) if url in heads else _Head())
-    rollups, snapshots, objects = pins.fetch_live(base, LEDGER)
+    rollups, snapshots, objects = pins.fetch_live(BASE, LEDGER)
     assert rollups["court_citation_map.parquet"] == ("f1e2e523", 20)
     assert snapshots["proceedings.parquet"] == ("snapshot_0e799850", 515121)
     assert objects == {"dockets.parquet": ("0a1b2c3d", 1000)}  # documents answers 404; comments records no ETag
@@ -148,7 +170,7 @@ class _Head:
 
 def test_exit_code_fails_only_on_drift_not_live_or_malformed(monkeypatch, tmp_path, capsys):
     monkeypatch.setattr(
-        pins, "fetch_live", lambda url, text: (pins.rollup_pins(INDEX), pins.snapshot_pins(POINTER, MANIFEST), OBJECTS)
+        pins, "fetch_live", lambda url, text: (pins.rollup_pins(INDEX), pins.snapshot_pins(_snapshot()), OBJECTS)
     )
     ledger = tmp_path / "ledger.md"
     ledger.write_text(LEDGER, encoding="utf-8")

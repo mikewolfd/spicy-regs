@@ -64,6 +64,15 @@ nav:
       - bill_subjects: tables/bill_subjects.md
       - unified_agenda: tables/unified_agenda.md
       - federal_register: tables/federal_register.md
+      # The materialized rulemaking dataset (materialized/rulemaking/latest.json)
+      - rule_targets: tables/rule_targets.md
+      - proceedings: tables/proceedings.md
+      - regulatory_agenda_items: tables/regulatory_agenda_items.md
+      - agenda_item_proceedings: tables/agenda_item_proceedings.md
+      - comment_periods: tables/comment_periods.md
+      - rulemaking_lifecycles: tables/rulemaking_lifecycles.md
+      - lifecycle_events: tables/lifecycle_events.md
+      - agency_lifecycle_stats: tables/agency_lifecycle_stats.md
       - sam_entities: tables/sam_entities.md
       - lobbying_filings: tables/lobbying_filings.md
       - fec_committees: tables/fec_committees.md

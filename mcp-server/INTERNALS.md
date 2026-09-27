@@ -134,6 +134,45 @@ A table in `TABLES` whose parquet isn't published yet (a new source whose first
 upload hasn't run) is skipped with a warning rather than breaking every query —
 same degradation strategy as the catalog fallback.
 
+## The rulemaking snapshot (`_spicy_rulemaking`)
+
+The materialized rulemaking dataset (`rule_targets` through
+`agency_lifecycle_stats`) is not in `publication.json`: it publishes all its
+tables at once under `materialized/rulemaking/snapshots/<id>/` and then
+replaces `materialized/rulemaking/latest.json`. `_build_connection` reads that
+pointer and the manifest it names once, beside the index, through
+`publication.load_rulemaking_snapshot`, and pins the result in
+`_spicy_rulemaking` the way `_spicy_publication` pins the index. The same view
+loop then points each rulemaking view at its immutable snapshot key; there is no
+second view path.
+
+- **How often.** Once per connection build: the first tool call, then whenever
+  the cached connection is older than `SPICY_REGS_CONNECTION_TTL` (300 s by
+  default). A moved pointer is therefore served from the next rebuild, while
+  cursors on the old connection keep the snapshot they started with.
+- **Refused, not guessed.** As `pipelines.materialized` reads its prior
+  generation, the pointer and manifest must be one readable format version, of
+  this dataset, naming one snapshot, and every public artifact must sit at
+  `<snapshot prefix>/<name>.parquet`: the key is inlined into
+  `read_parquet('…')`. An artifact without `visibility: public` is never
+  served. A snapshot member that cannot be read refuses the connection, as a
+  managed member does.
+- **Blast radius.** A pointer or manifest that fails those checks refuses the
+  whole connection, every table with it, exactly as an invalid
+  `publication.json` does through `load_index` today. Degrading to "rulemaking
+  tables unavailable" would be possible but would make a broken publication look
+  like an unpublished one; it is left as the index's behavior on purpose.
+- **No schema pin.** The manifest records bytes, digest and rows but no columns,
+  so the build cannot compare a view with a descriptor. `describe_table`
+  compares it with the dictionary instead (`schema_matches_declared`), and
+  `spicy-regs-dict check --source r2` holds each declared type to the file.
+- **Local mode** never reads the pointer; a rulemaking table there is a loose
+  Parquet file like any other.
+- **Parsed once.** Each pinned record (`_spicy_publication`, `_spicy_rulemaking`,
+  `_spicy_local_selection`) is JSON in the connection, read by several helpers
+  per tool call; `_parsed_pin` parses each distinct document once and shares the
+  result, which callers must not mutate.
+
 ## Declared joins (`_table_joins`)
 
 `describe_table` lists the cross-table joins the table makes (`outgoing`) and
@@ -157,7 +196,8 @@ refuses a stale copy. `_ledger` reads it once per process.
   proves nothing about this ledger.
 - **Pins compare by kind.** A family pin compares with the snapshot's
   `artifactDigest`; a base object's `verified at table digest` pin compares with
-  its managed table's `sha256`. A table the index does not manage has no live
+  its managed table's `sha256`; a `snapshot_…` pin compares with the rulemaking
+  snapshot the connection pinned. A table neither pointer names has no live
   pin, and the reply says it cannot compare rather than guessing from a bare URL.
 - **Separate fields, never one verified flag.** `ledger_disposition` is the
   row's word (`qualified`, `PARTIAL`, `FAILED`, `verified`) for `ledger_pin`

@@ -31,6 +31,14 @@ Complementary federal sources (each also queryable by name via the MCP server):
 - Organizations & influence: `sam_entities.parquet`, `lobbying_filings.parquet`, `fec_committees.parquet`, `org_committee_links.parquet`
 - Outcomes & context: `usaspending_recipients.parquet`, `court_dockets.parquet`, `gao_reports.parquet`, `crs_reports.parquet`
 
+The rulemaking dataset (also queryable by name via the MCP server) publishes as one snapshot, not at bare
+`<table>.parquet` keys:
+
+- `rule_targets`, `proceedings`, `regulatory_agenda_items`, `agenda_item_proceedings`, `comment_periods`,
+  `rulemaking_lifecycles`, `lifecycle_events`, `agency_lifecycle_stats`
+- To read one directly, fetch `materialized/rulemaking/latest.json`; its `manifest_key` names the snapshot's
+  manifest, whose `artifacts["<table>.parquet"].remote_key` is the file's immutable key.
+
 See the [Data Dictionary](https://civictechdc.github.io/spicy-regs/) for each table's columns, keys, and coverage/scope notes.
 
 > **Comments read surface.** `comments_index.parquet` (per-partition counts) is

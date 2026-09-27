@@ -30,26 +30,11 @@ EXIT_UNREACHABLE = 3
 FAILING = ("BELOW", "UNBASELINED", "EMPTIED")
 
 
-def _get_json(url: str) -> dict:
-    response = httpx.get(url, headers={"Cache-Control": "no-cache"}, follow_redirects=True, timeout=60)
-    response.raise_for_status()
-    return response.json()
-
-
 def table_urls(base_url: str) -> Callable[[str], str]:
-    """Resolve each table once: managed tables through the publication index, rulemaking through its pointer."""
+    """Resolve each table once: through the publication index, then the rulemaking pointer, else its legacy key."""
     base = base_url.rstrip("/")
-    index = publication.load_index(base)
-    pointer = _get_json(f"{base}/{publication.SNAPSHOT_POINTER}")
-    artifacts = _get_json(f"{base}/{pointer['manifest_key']}")["artifacts"]
-
-    def url_of(table: str) -> str:
-        if table in table_joins.MATERIALIZED_TABLES:
-            return f"{base}/{artifacts[f'{table}.parquet']['remote_key']}"
-        location, _ = publication.table_location(index, f"{table}.parquet")
-        return f"{base}/{location}"
-
-    return url_of
+    urls = publication.published_urls(base)
+    return lambda table: urls.get(table, f"{base}/{table}.parquet")
 
 
 def connect() -> duckdb.DuckDBPyConnection:

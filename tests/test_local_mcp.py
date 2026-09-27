@@ -21,6 +21,9 @@ def serve(monkeypatch, directory):
     monkeypatch.setattr(mcp_server, "DATA_DIR", directory)
     monkeypatch.setattr(mcp_server, "TABLES", ("a", "b", "dockets", "other"))
     monkeypatch.setattr(publication, "load_index", lambda _: pytest.fail("Local reader fetched remote index"))
+    monkeypatch.setattr(
+        publication, "load_rulemaking_snapshot", lambda _: pytest.fail("Local reader fetched the pointer")
+    )
     con = mcp_server._build_connection()
     monkeypatch.setattr(mcp_server, "_get_connection", lambda: con)
     return con, mcp_server.build_server()

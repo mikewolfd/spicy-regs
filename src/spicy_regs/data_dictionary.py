@@ -4,9 +4,10 @@
 The data dictionary has two layers:
 
 * **Schema (source of truth, in code).** Column names and types come from
-  :data:`spicy_regs.schemas.regulations.RECORD_TYPES` for the three core tables
-  and from :data:`DERIVED_SCHEMAS` below for the four rollup tables. This keeps
-  generation deterministic and offline.
+  :data:`spicy_regs.schemas.regulations.RECORD_TYPES` for the core tables, the
+  spicy-docs contracts for the hosted tables, a builder's own column list or
+  Arrow schema where it has one, and :data:`DERIVED_SCHEMAS` below for the
+  rest. This keeps generation deterministic and offline.
 * **Descriptions (curated prose).** Human descriptions live in
   ``data_dictionary/descriptions.yaml``, keyed by table and column.
 
@@ -40,6 +41,7 @@ from dotenv import load_dotenv
 
 from spicy_regs import output_ledger, table_joins
 from spicy_regs.schemas.regulations import RECORD_TYPES
+from spicy_regs.sources.publication import SNAPSHOT_POINTER, PublicationError
 
 # Repo layout anchors (this file lives at src/spicy_regs/data_dictionary.py).
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -151,6 +153,21 @@ CONTRACT_TABLES: tuple[str, ...] = (
 )
 
 
+#: The materialized rulemaking dataset's public tables, in its stage order. They
+#: publish under their own snapshot pointer (``publication.SNAPSHOT_POINTER``),
+#: not the publication index. Listed literally; test_generation_mcp pins them to
+#: the pipeline's ``published_outputs``.
+RULEMAKING_TABLES: tuple[str, ...] = (
+    "rule_targets",
+    "proceedings",
+    "regulatory_agenda_items",
+    "agenda_item_proceedings",
+    "comment_periods",
+    "rulemaking_lifecycles",
+    "lifecycle_events",
+    "agency_lifecycle_stats",
+)
+
 # Display order for the dictionary. The first three are the core record types;
 # the rest are derived rollups. This is the full public R2 surface.
 TABLES: tuple[str, ...] = (
@@ -167,6 +184,7 @@ TABLES: tuple[str, ...] = (
     "congress_bills",
     "bill_subjects",
     "unified_agenda",
+    *RULEMAKING_TABLES,
     "sam_entities",
     "lobbying_filings",
     "lobbying_activities",
@@ -251,6 +269,7 @@ MCP_QUERYABLE: frozenset[str] = frozenset(
         "bill_family_backfill_walks",
         "committee_report_reads",
         "member_vote_terms",
+        *RULEMAKING_TABLES,
         *CONTRACT_TABLES,
     }
 )
@@ -627,6 +646,13 @@ def expected_schemas() -> dict[str, list[tuple[str, str]]]:
     """Return ``{table: [(column, type_label), ...]}`` for all tables (offline)."""
     schemas: dict[str, list[tuple[str, str]]] = {}
     from_contracts = contract_schemas()
+    from spicy_regs.contract_types import described_schema
+    from spicy_regs.transforms.build_agency_lifecycle_stats import SCHEMA as AGENCY_LIFECYCLE_STATS_SCHEMA
+    from spicy_regs.transforms.build_comment_periods import COLUMNS as COMMENT_PERIOD_COLUMNS
+    from spicy_regs.transforms.build_lifecycles import EVENT_SCHEMA, LIFECYCLE_SCHEMA
+    from spicy_regs.transforms.build_proceedings import COLUMNS as PROCEEDING_COLUMNS
+    from spicy_regs.transforms.build_regulatory_agenda import ITEM_COLUMNS, RELATIONSHIP_COLUMNS
+    from spicy_regs.transforms.build_rule_targets import COLUMNS as RULE_TARGET_COLUMNS
     from spicy_regs.transforms.build_fec_observations import COLLECTION_COLUMNS, RECORD_COLUMNS
     from spicy_regs.transforms.build_fec_source_catalog import COLUMNS as FEC_CATALOG_COLUMNS
     from spicy_regs.transforms.fec_relationships import COLUMNS as FEC_RELATIONSHIP_COLUMNS
@@ -659,10 +685,23 @@ def expected_schemas() -> dict[str, list[tuple[str, str]]]:
         "lobbying_filings": LOBBYING_COLUMNS,
         "lobbying_activities": LOBBYING_ACTIVITY_COLUMNS,
         "lobbying_activity_lobbyists": LOBBYING_LOBBYIST_COLUMNS,
+        "rule_targets": RULE_TARGET_COLUMNS,
+        "proceedings": PROCEEDING_COLUMNS,
+        "regulatory_agenda_items": ITEM_COLUMNS,
+        "agenda_item_proceedings": RELATIONSHIP_COLUMNS,
+        "comment_periods": COMMENT_PERIOD_COLUMNS,
+    }
+    # Writers that type their columns natively (DATE, INTEGER, BOOLEAN), spelled as DuckDB describes the file.
+    builder_schemas = {
+        "rulemaking_lifecycles": LIFECYCLE_SCHEMA,
+        "lifecycle_events": EVENT_SCHEMA,
+        "agency_lifecycle_stats": AGENCY_LIFECYCLE_STATS_SCHEMA,
     }
     for name in TABLES:
         if name in builder_columns:
             schemas[name] = [(column, "VARCHAR") for column in builder_columns[name]]
+        elif name in builder_schemas:
+            schemas[name] = described_schema(builder_schemas[name])
         elif name in from_contracts:
             schemas[name] = list(from_contracts[name])
         elif name in RECORD_TYPES:
@@ -691,21 +730,21 @@ def discover_schemas(source: str, base: str | None = None) -> dict[str, list[tup
 
     ``source`` is ``"r2"`` (remote https bucket; needs the httpfs extension) or
     ``"local"`` (a directory of ``<table>.parquet`` files). Mirrors the
-    connection recipe in :mod:`spicy_regs.mcp_server`.
+    connection recipe in :mod:`spicy_regs.mcp_server`: a remote table resolves
+    through the publication index, then the rulemaking snapshot pointer, then
+    its bare legacy key.
     """
     import duckdb
 
     if source == "r2":
-        from spicy_regs.sources.publication import load_index, parquet_tables, table_location
+        from spicy_regs.sources.publication import published_urls
 
         base_url = (base or DEFAULT_R2_BASE_URL).rstrip("/")
-        publication_index = load_index(base_url)
-        names = tuple(dict.fromkeys(("dockets", "documents", "comments", "comments_index",
-                                     *parquet_tables(publication_index))))
+        urls = published_urls(base_url)
+        names = tuple(dict.fromkeys(("dockets", "documents", "comments", "comments_index", *urls)))
 
         def url_for(name: str) -> str:
-            key, _ = table_location(publication_index, f"{name}.parquet")
-            return f"{base_url}/{key}"
+            return urls.get(name, f"{base_url}/{name}.parquet")
 
     elif source == "local":
         base_dir = Path(base or "./spicy-regs-data")
@@ -840,12 +879,20 @@ def check_schema_drift(
     expected: dict[str, list[tuple[str, str]]],
     live: dict[str, list[tuple[str, str]]],
 ) -> list[str]:
-    """Reconcile the in-code expected schema against a live (parquet) schema."""
+    """Reconcile the in-code expected schema against a live (parquet) schema: its columns, then each one's type.
+
+    Names alone would pass a DATE column published as VARCHAR, so a typed
+    declaration (the lifecycle and attribute tables) is held to the file too.
+    """
     errors: list[str] = []
     for table in sorted(set(expected) | set(live)):
-        exp_cols = [c for c, _ in expected.get(table, [])]
-        live_cols = [c for c, _ in live.get(table, [])]
-        errors.extend(_reconcile_columns(table, "in-code schema", exp_cols, "live parquet", live_cols))
+        exp_types, live_types = dict(expected.get(table, [])), dict(live.get(table, []))
+        errors.extend(_reconcile_columns(table, "in-code schema", list(exp_types), "live parquet", list(live_types)))
+        errors.extend(
+            f"[{table}.{column}] in-code type {exp_types[column]} but live parquet {live_types[column]}"
+            for column in exp_types
+            if column in live_types and exp_types[column] != live_types[column]
+        )
     return errors
 
 
@@ -924,8 +971,9 @@ def _render_table_page(
     if data_quality:
         lines += [f"**Data quality.** {data_quality}", ""]
     queryable = "Configured" if table in MCP_QUERYABLE else "Not configured"
+    where = f", in the snapshot that `{SNAPSHOT_POINTER}` names" if table in RULEMAKING_TABLES else ""
     lines += [
-        f"- **Parquet file:** `{table}.parquet`",
+        f"- **Parquet file:** `{table}.parquet`{where}",
         f"- **MCP `query_sql` support:** {queryable}; requires an available artifact.",
         "- **Publication status:** Not established by this schema page or its measurement date.",
     ]
@@ -994,9 +1042,10 @@ def cmd_check(args: argparse.Namespace) -> int:
             live = exc.schemas
             unreadable = True
             print(f"! Some live schemas could not be read:\n{exc}", file=sys.stderr)
-        except (duckdb.IOException, duckdb.HTTPException, httpx.HTTPError, OSError) as exc:
-            # Only the "could not read it" failures. A malformed parquet or a
-            # bad query is a real problem and must not be reported as an outage.
+        except (duckdb.IOException, duckdb.HTTPException, httpx.HTTPError, OSError, PublicationError) as exc:
+            # Only the "could not read it" failures, and a pointer that cannot name
+            # one publication. A malformed parquet or a bad query is a real
+            # problem and must not be reported as an outage.
             print(f"! Could not read the live {args.source} schema: {exc}", file=sys.stderr)
             print("  Drift was NOT checked. This is not a pass.", file=sys.stderr)
             return EXIT_SOURCE_UNREACHABLE

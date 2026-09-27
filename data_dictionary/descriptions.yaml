@@ -494,6 +494,315 @@ tables:
       first_action_date: "Earliest distinct calendar date derived from the timetable, or NULL when none is derivable. Source month-only dates (MM/00/YYYY) use day 01 here; timetable_json retains their original precision."
       next_action_date: "Second distinct calendar date derived from the timetable, or NULL when fewer than two dates are derivable. May be historical; it is not selected relative to today. Source month-only dates use day 01 here; timetable_json retains the literal dates."
       url: "URL of the entry's detail page on reginfo.gov."
+  # The materialized rulemaking dataset (`materialize-rulemaking`): eight tables that publish as one
+  # snapshot under `materialized/rulemaking/latest.json`, not the publication index. Meanings follow
+  # docs/ontology.md and each builder's docstring.
+  rule_targets:
+    label: "Rule identity edges (docket, CFR, RIN)"
+    coverage: >-
+      Derived, and bounded by its inputs: `dockets`, `documents`,
+      `federal_register` and `fr_docket_links` as the snapshot's manifest pins
+      them. `snapshot_91b19da7…` holds 617,135 edges, and a replay from the
+      manifest's own inputs reproduces it byte for byte.
+    measured_on: "2026-09-27"
+    summary: >-
+      The rule-identity spine: one row per observed edge between a
+      Regulations.gov docket, a CFR part and a RIN, with the `source` class of
+      evidence that states it (docs/ontology.md, "The rule_targets carrier").
+      A missing or ambiguous reference leaves its target NULL rather than
+      inventing one, and a `docket_document_cites_action_notice` row is a
+      citation, with both targets NULL. Keyed (`docket_id`, `cfr_ref`, `rin`,
+      `source`), NULLs included; joins `dockets` on `docket_id` and
+      `unified_agenda` on `rin`. Built by `build_rule_targets`; all columns are
+      VARCHAR.
+    grain: "One observed docket, CFR and RIN edge per evidence source class."
+    identity_columns: [docket_id, cfr_ref, rin, source]
+    columns:
+      docket_id: "Regulations.gov docket the edge belongs to, normalized; joins `dockets.docket_id`."
+      cfr_ref: "CFR reference the rule targets, `title-part` or `title-part.section` (e.g. `40-60`); NULL on a RIN-only or citation edge."
+      cfr_title: "The CFR title of `cfr_ref` (e.g. `40`)."
+      cfr_part: "The CFR part of `cfr_ref` (e.g. `60`)."
+      cfr_section: "The CFR section of `cfr_ref` when it names one; NULL for a part-level reference."
+      rin: "Regulation Identifier Number the edge carries (e.g. `2060-AV16`); NULL on a CFR-only or citation edge."
+      source: "The evidence class: `fr_cfr_ref`, `docket_rin`, `document_rin`, `document_fr_doc` or `docket_document_cites_action_notice`."
+      evidence_id: "The least id of the records stating the edge: the docket for `docket_rin`, a dated Register record id (`number@YYYY-MM-DD`) for `fr_cfr_ref`, else a Regulations.gov document id."
+      first_seen: "Earliest Eastern day any evidence for the edge is dated, `YYYY-MM-DD`."
+      last_seen: "Latest Eastern day any evidence for the edge is dated, `YYYY-MM-DD`."
+      method: "How the row was asserted; `deterministic` (computed by rule) throughout."
+      actor_id: "The builder that asserted the row, with its version (`spicy-regs:rule-targets:v<n>`), bumped when its published rows change."
+      run_id: "The materialization run that built the snapshot (e.g. `rulemaking-20260927T062656Z`)."
+      asserted_at: "When that run asserted the row, as a UTC ISO 8601 instant."
+      supersedes_id: "Id of a prior row this one continues; always NULL here, since an edge has no id of its own."
+      fr_references_json: "JSON array of the literal Federal Register number references behind the edge, each with the `status` saying how it resolved (`dated`, `single_candidate_in_input`, `ambiguous`, `missing`, or a folded or unpadded match)."
+  proceedings:
+    label: "Rulemaking proceedings"
+    coverage: >-
+      Derived, and bounded by its inputs (`dockets`, `documents`,
+      `federal_register`, `fr_docket_links` and `rule_targets`) and the prior
+      generation it continues ids from. `snapshot_91b19da7…` holds 172,742
+      proceedings: 75,270 docketed and 97,472 docket-less (single Register
+      documents).
+    measured_on: "2026-09-27"
+    summary: >-
+      One row per rulemaking proceeding: the dockets that are one action, the
+      Register documents that joined it, their stage events, RINs and CFR
+      targets. A RIN names a Unified Agenda item, never a proceeding: it is
+      carried as evidence and never groups dockets. A docket-less proceeding
+      is one Register document. Keyed `proceeding_id`, which continues across
+      generations when its dockets or Register documents overlap a prior one.
+      Joined by `agenda_item_proceedings`, `comment_periods` and
+      `rulemaking_lifecycles` on `proceeding_id`. Built by
+      `build_proceedings`; all columns are VARCHAR, lists as JSON strings.
+    grain: "One rulemaking proceeding: the dockets and Register documents that are one action."
+    identity_columns: [proceeding_id]
+    columns:
+      proceeding_id: "Stable opaque id of the proceeding (`proceeding_<24 hex>`), continued from the prior generation where it overlaps one."
+      rin: "The proceeding's RIN when it holds exactly one, else NULL; a query aid, never its identity (`rins_json` lists every RIN)."
+      docket_ids_json: "JSON array of the Regulations.gov dockets the proceeding comprises; `[]` for a docket-less proceeding."
+      title: "Title of its most recently dated titled document."
+      agency_code: "The agency code most of its documents carry, or for a docket-less proceeding its Register agency's code; NULL when none maps."
+      current_stage: "The one stage (`proposed`, `supplemental`, `final` or `withdrawn`) of its latest dated events; NULL when none, or when that day's events disagree."
+      stage_events_json: "JSON array of its stage events, one per staged document: `{effective_date, event_kind, evidence_id, joined_by, source, stage}`."
+      fr_document_numbers_json: "JSON array of the Federal Register document numbers it holds."
+      cfr_refs_json: "JSON array of the CFR references (`title-part`) that the `rule_targets` edges of its dockets name."
+      cfr_target_iris_json: "The same CFR references as Rulespec identifiers (e.g. `urn:rkaf:us:cfr:40:60`)."
+      authority_refs_json: "Always `[]`: legal authority belongs to the editioned Unified Agenda entry, never to an action."
+      method: "How the row was asserted; `deterministic` (computed by rule) throughout."
+      actor_id: "The builder that asserted the row, with its version (`spicy-regs:proceedings:v<n>`), bumped when its published rows change."
+      run_id: "The materialization run that built the snapshot (e.g. `rulemaking-20260927T062656Z`)."
+      asserted_at: "When that run asserted the row, as a UTC ISO 8601 instant."
+      supersedes_id: "The prior generation's `proceeding_id` this proceeding continues, so equal to `proceeding_id` on a continuing row (the id carries over); NULL for a proceeding new in this generation."
+      fr_document_ids_json: "JSON array of the dated Federal Register record ids (`number@YYYY-MM-DD`) it holds."
+      fr_document_joins_json: "How each `fr_document_ids_json` document joined, in the same order: `{fr_document_id, joined_by}`, `joined_by` being `fr_docket_link`, `fr_copy`, `specific_rin` or `fr_document`."
+      unresolved_fr_references_json: "JSON array of Register number references it holds that resolve to no single record, each with its candidates and status."
+      rins_json: "JSON array of every RIN it holds, from its dockets, documents and Register documents."
+  regulatory_agenda_items:
+    label: "Regulatory Agenda items"
+    coverage: >-
+      Derived, and bounded by its inputs: every RIN that `unified_agenda`,
+      `dockets`, `documents` or `federal_register` states. `snapshot_91b19da7…`
+      holds 52,092 items.
+    measured_on: "2026-09-27"
+    summary: >-
+      One row per Regulation Identifier Number: the durable Regulatory Agenda
+      item a RIN identifies, with how many proceedings evidence links it to
+      and whether its scope is resolved. Keyed `agenda_item_id`
+      (`urn:rkaf:us:rin:<rin>`), one per `rin`; joined by
+      `agenda_item_proceedings` on `agenda_item_id`, and to `unified_agenda`
+      on `rin`. Built by `build_regulatory_agenda`; all columns are VARCHAR.
+    grain: "One durable Regulatory Agenda item per RIN."
+    identity_columns: [agenda_item_id]
+    columns:
+      agenda_item_id: "The item's id, `urn:rkaf:us:rin:<rin>`."
+      rin: "The Regulation Identifier Number the item is (e.g. `2060-AV16`)."
+      scope_status: "`recurring` (its latest Agenda priority is Routine and Frequent), `single_observed` (evidence links one proceeding) or `unresolved` (none or several)."
+      scope_basis: "Why `scope_status` holds: `latest_agenda_priority_routine_and_frequent`, `one_evidence_linked_proceeding`, `zero_evidence_linked_proceedings` or `multiple_evidence_linked_proceedings`."
+      linked_proceeding_count: "How many proceedings `agenda_item_proceedings` links the item to, as a decimal string."
+      observation_count: "How many distinct Unified Agenda entries (edition and URL) list the RIN, as a decimal string; `0` when no edition does."
+      latest_agenda_edition: "The latest Unified Agenda edition listing the RIN, `YYYYMM`; NULL when no edition does."
+      first_seen: "Earliest Eastern day any source dates the RIN: an Agenda edition or action date, a docket or document date, or a Register publication."
+      last_seen: "Latest Eastern day any source dates the RIN."
+      method: "How the row was asserted; `deterministic` (computed by rule) throughout."
+      actor_id: "The builder that asserted the row, with its version (`spicy-regs:regulatory-agenda-items:v<n>`), bumped when its published rows change."
+      run_id: "The materialization run that built the snapshot (e.g. `rulemaking-20260927T062656Z`)."
+      asserted_at: "When that run asserted the row, as a UTC ISO 8601 instant."
+      supersedes_id: "Id of a prior row this one continues; always NULL here, since an item's id is its RIN."
+      unresolved_fr_references_json: "JSON array of unresolved Register number references from the Register documents that state this RIN."
+  agenda_item_proceedings:
+    label: "Agenda item to proceeding links"
+    coverage: >-
+      Derived, and bounded by its inputs: `dockets`, `documents` and
+      `federal_register` records that state a RIN the proceeding holds.
+      `snapshot_91b19da7…` holds 148,011 links.
+    measured_on: "2026-09-27"
+    summary: >-
+      One row per piece of evidence that an agenda item tracks a proceeding: a
+      docket, Regulations.gov document or Register document that directly
+      reports the RIN for that proceeding. Unified Agenda equality alone never
+      links an action. Keyed `relationship_id`; joins
+      `regulatory_agenda_items` on `agenda_item_id`, `proceedings` on
+      `proceeding_id` and `unified_agenda` on `rin`. Built by
+      `build_regulatory_agenda`; all columns are VARCHAR.
+    grain: "One evidence record linking one agenda item (RIN) to one proceeding."
+    identity_columns: [relationship_id]
+    columns:
+      relationship_id: "Stable id of the link (`agenda_proceeding_relationship_<24 hex>`), from its RIN, proceeding, source and evidence."
+      agenda_item_id: "The agenda item; joins `regulatory_agenda_items.agenda_item_id`."
+      rin: "The item's Regulation Identifier Number."
+      proceeding_id: "The proceeding the item tracks; joins `proceedings.proceeding_id`."
+      relationship_role: "The link's role; `agenda_tracks_proceeding` throughout."
+      source: "What reported the RIN: `docket_rin` (the docket), `document_rin` (a document's `additional_rins`) or `federal_register_rin` (a Register document)."
+      evidence_id: "The reporting record, by `source`: a docket id, a Regulations.gov document id, or a dated Register record id (`number@YYYY-MM-DD`)."
+      evidence_uri: "Public URL of that record on regulations.gov or federalregister.gov."
+      evidence_date: "Eastern day of the evidence: the docket's or document's latest date, or the Register publication date."
+      method: "How the row was asserted; `deterministic` (computed by rule) throughout."
+      actor_id: "The builder that asserted the row, with its version (`spicy-regs:agenda-item-proceedings:v<n>`), bumped when its published rows change."
+      run_id: "The materialization run that built the snapshot (e.g. `rulemaking-20260927T062656Z`)."
+      asserted_at: "When that run asserted the row, as a UTC ISO 8601 instant."
+      supersedes_id: "Id of a prior row this one continues; always NULL here."
+  comment_periods:
+    label: "Public comment periods"
+    coverage: >-
+      Derived, and bounded by its inputs: `documents` with a comment end date
+      and `federal_register` records with `comments_close_on`.
+      `snapshot_91b19da7…` holds 281,635 periods.
+    measured_on: "2026-09-27"
+    summary: >-
+      One row per continuous public-comment interval, reopenings included:
+      overlapping or adjacent intervals from Regulations.gov documents and
+      Register notices of the same dockets (else the same proceedings) merge
+      into one, so an extension lengthens a period and a reopening starts a
+      new one. A period keeps its docket anchors when its proceeding is
+      unresolved. Keyed `comment_period_id`. Its proceedings, dockets and RINs
+      are JSON lists, so it joins through them rather than by a column. Built
+      by `build_comment_periods`; all columns are VARCHAR.
+    grain: "One continuous public-comment interval of one set of dockets or proceedings."
+    identity_columns: [comment_period_id]
+    columns:
+      comment_period_id: "Stable id of the period (`comment_period_<24 hex>`), from its proceedings, dockets and open date."
+      proceeding_ids_json: "JSON array of the proceedings the period is open in; `[]` when none resolves (docket-only)."
+      rins_json: "JSON array of the RINs its documents and proceedings carry."
+      docket_ids_json: "JSON array of the Regulations.gov dockets the period is anchored to; `[]` for a Register notice naming none."
+      open_date: "Eastern day the period opens: a document's comment start (else its posting) or the notice's publication, `YYYY-MM-DD`."
+      close_date: "Eastern day the merged period closes, `YYYY-MM-DD`."
+      source: "The sources of its merged intervals, `+`-joined: `documents.comment_end_date` and `federal_register.comments_close_on`."
+      opened_by_artifact_ids_json: "JSON array of public URLs of the documents whose interval opens the period on `open_date`."
+      evidence_ids_json: "JSON array of every record merged into the period: Regulations.gov document ids and dated Register record ids."
+      method: "How the row was asserted; `deterministic` (computed by rule) throughout."
+      actor_id: "The builder that asserted the row, with its version (`spicy-regs:comment-periods:v<n>`), bumped when its published rows change."
+      run_id: "The materialization run that built the snapshot (e.g. `rulemaking-20260927T062656Z`)."
+      asserted_at: "When that run asserted the row, as a UTC ISO 8601 instant."
+      supersedes_id: "Id of a prior row this one continues; always NULL here."
+      unresolved_fr_references_json: "JSON array of unresolved Register number references attached to its evidence."
+  rulemaking_lifecycles:
+    label: "Rulemaking lifecycles"
+    coverage: >-
+      Derived, and bounded by its inputs: every docketed proceeding, paired
+      from its cleaned `lifecycle_events`. `snapshot_91b19da7…` holds 75,270
+      lifecycles (25,861 finalized, 28,387 final without a proposal, 10,186
+      no anchor, 8,723 open, 1,252 companion, 721 withdrawn, 140 upload
+      pairs), censored at 2026-09-25.
+    measured_on: "2026-09-27"
+    data_quality: >-
+      A Regulations.gov document whose stated Register number resolves to no
+      Register row is dated by its upload, which for a legacy document can be
+      years after the rule: on snapshot_9b2c770e's inputs 262 lifecycles
+      anchor on such a document, 74 of them upload pairs outside survival (docs/ontology.md).
+    summary: >-
+      One row per docketed proceeding (owner decisions 54-56c): its earliest
+      proposal, the earliest final strictly after it, or what else its events
+      make (`kind`), with survival columns (`outcome`, `duration_days`,
+      `censor_date`) for time-to-final estimates, Unified Agenda status and
+      routine-family strata. A docket-less proceeding is one Register
+      document that cannot pair and is left out. Keyed `proceeding_id`; joins
+      `proceedings` on it and is joined by `lifecycle_events`. Built by
+      `build_lifecycles`; dates are DATE, counts INTEGER and flags BOOLEAN.
+      Replaces the documents-based rollup withdrawn on 2026-09-23.
+    grain: "One lifecycle per docketed proceeding."
+    identity_columns: [proceeding_id]
+    columns:
+      proceeding_id: "The docketed proceeding the lifecycle reads; joins `proceedings.proceeding_id`."
+      agency_code: "The proceeding's agency code."
+      kind: "What its events make: `finalized`, `companion`, `upload_pair`, `withdrawn`, `open`, `final_without_observed_proposal` or `no_anchor`."
+      proposal_date: "Day of the earliest proposed event; NULL without a proposal."
+      proposal_document_id: "The proposal's document: a dated Register record id (`number@YYYY-MM-DD`) when the Register dates it, else a Regulations.gov document id."
+      proposal_form: "The proposal's form from its title: `proposed`, `advance_proposed`, `comment_period` or `correction`."
+      final_date: "Day of the final the lifecycle pairs or anchors on; NULL without one."
+      final_document_id: "The final's document, spelled as `proposal_document_id` is."
+      final_form: "The final's form from its title: `final`, `interim_final`, `direct_final` or `correction`."
+      finals_before_proposal: "Finals dated before the proposal, counted and never paired; NULL without a proposal."
+      withdrawal_date: "Day of the withdrawal that makes it `withdrawn`; NULL otherwise."
+      withdrawal_document_id: "The withdrawal: a dated Register record id, or the agenda item id (`urn:rkaf:us:rin:<rin>`) of an Agenda withdrawal."
+      withdrawal_source: "Who withdrew it: `federal_register` or `unified_agenda`."
+      outcome: "Its survival outcome: `final`, `withdrawn` (a competing outcome) or `censored`; NULL for a kind outside survival."
+      duration_days: "Days from the proposal to the final, the withdrawal or `censor_date`; NULL without an outcome."
+      censor_date: "The generation's last event day, capped at the run's day, where open lifecycles are censored; one date in every row."
+      open_signal: "What the latest Unified Agenda entry of its specific RINs says (`agenda_completed_final`, `agenda_completed_withdrawn`, `agenda_completed_other`, `agenda_long_term`, `agenda_active`, `agenda_dropped_off`), else `not_on_agenda` or `no_specific_rin`."
+      routine_family: "The routine family its agency and titles name (`airworthiness_directive`, `airspace`, `state_air_plan`, `pesticide_tolerance`, `coast_guard_local`); NULL otherwise."
+      agenda_priority: "That Agenda entry's `priority_category` (e.g. `Economically Significant`); NULL without one."
+      agenda_major: "That Agenda entry's `major` (`Yes`, `No` or `Undetermined`); NULL without one."
+      specific_rins_json: "JSON array of the RINs the proceeding's docket-side evidence alone holds."
+      anchored_by_specific_rin: "Whether its proposal or final anchor joined the proceeding by specific RIN (decision 56c)."
+      pre_2008_coverage: "Whether it is anchored before 2008, when Regulations.gov coverage is thin; NULL without an anchor, or for an upload pair from 2008 on."
+      method: "How the row was asserted; `deterministic` (computed by rule) throughout."
+      actor_id: "The builder that asserted the row, with its version (`spicy-regs:rulemaking-lifecycles:v<n>`), bumped when its published rows change."
+      run_id: "The materialization run that built the snapshot (e.g. `rulemaking-20260927T062656Z`)."
+      asserted_at: "When that run asserted the row, as a UTC ISO 8601 instant."
+      supersedes_id: "Id of a prior row this one continues; always NULL here."
+  lifecycle_events:
+    label: "Rulemaking lifecycle events"
+    coverage: >-
+      Derived, and bounded by its inputs: the stage events of every docketed
+      proceeding, one per document, less those undated or dated after the
+      run's day. `snapshot_91b19da7…` holds 135,362 events.
+    measured_on: "2026-09-27"
+    summary: >-
+      One row per staged document of a docketed proceeding: the events each
+      `rulemaking_lifecycles` row is paired from. A Regulations.gov copy of a
+      Register document is that document, dated by the Register, and an
+      Agenda entry completed as withdrawn adds its dated withdrawal. Keyed
+      (`proceeding_id`, `document_id`); `dated_by` says which kind of id
+      `document_id` is. Joins `rulemaking_lifecycles` on `proceeding_id`.
+      Built by `build_lifecycles`; `event_date` is DATE.
+    grain: "One stage event per document of one docketed proceeding."
+    identity_columns: [proceeding_id, document_id]
+    columns:
+      proceeding_id: "The proceeding; joins `rulemaking_lifecycles.proceeding_id`."
+      document_id: "The document, by `dated_by`: a dated Register record id (`number@YYYY-MM-DD`), a Regulations.gov document id, or an agenda item id (`urn:rkaf:us:rin:<rin>`)."
+      stage: "The stage the event records: `proposed`, `supplemental`, `final` or `withdrawn`."
+      event_date: "The event's day, from the source `dated_by` names."
+      source: "Who typed the stage: `federal_register` (for its copies too, wherever it states a type), `regulations_gov` or `unified_agenda`."
+      dated_by: "Whose day `event_date` is, and so which kind of id `document_id` is: `federal_register`, `regulations_gov` (its upload) or `unified_agenda`."
+      evidence_id: "The proceedings stage event it came from: that record's own id, or `<agenda item id>@<edition>` for an Agenda withdrawal."
+      joined_by: "How the document joined the proceeding: `docket`, `fr_docket_link`, `fr_copy`, `specific_rin` or `agenda_rin`."
+      document_form: "Its stage refined by its title: `proposed`, `advance_proposed`, `comment_period`, `final`, `interim_final`, `direct_final`, `correction`, `supplemental` or `withdrawn`."
+      anchor_role: "`proposal`, `final` or `withdrawal` when the lifecycle anchors on this document; NULL otherwise."
+      method: "How the row was asserted; `deterministic` (computed by rule) throughout."
+      actor_id: "The builder that asserted the row, with its version (`spicy-regs:lifecycle-events:v<n>`), bumped when its published rows change."
+      run_id: "The materialization run that built the snapshot (e.g. `rulemaking-20260927T062656Z`)."
+      asserted_at: "When that run asserted the row, as a UTC ISO 8601 instant."
+      supersedes_id: "Id of a prior row this one continues; always NULL here."
+  agency_lifecycle_stats:
+    label: "Time to final rule by agency"
+    coverage: >-
+      Derived from `rulemaking_lifecycles` with a survival outcome.
+      `snapshot_91b19da7…` holds 344 cells, 172 of them suppressed under 30
+      rules; every unsuppressed estimate equals R's multi-state `survfit`.
+    measured_on: "2026-09-27"
+    summary: >-
+      The Aalen-Johansen cumulative incidence of a final rule, withdrawal
+      competing (decision 54a), per agency and for all agencies
+      (`agency_code` NULL), overall, routine, non-routine and per routine
+      family: the first day it reaches each quartile, NULL where it never
+      does, with a 95% interval from the log-log band. A cell under 30 rules
+      keeps its row, `suppressed`, with no estimates; the Parquet metadata
+      states the estimator exactly. Keyed (`agency_code`, `stratum`). Built
+      by `build_agency_lifecycle_stats`; counts and days are INTEGER.
+    grain: "One agency (or all agencies) and one stratum of rules."
+    identity_columns: [agency_code, stratum]
+    columns:
+      agency_code: "The agency the cell covers; NULL for all agencies together."
+      stratum: "The rules counted: `all`, `routine`, `non_routine`, or one routine family."
+      rules: "Lifecycles in the cell with a survival outcome."
+      finals: "How many of them became final."
+      withdrawals: "How many of them were withdrawn."
+      censored: "How many of them were still open at `censor_date`."
+      suppressed: "Whether the cell has fewer than 30 rules and so carries no estimates."
+      q1_days: "First day the cumulative incidence of a final reaches 25%; NULL where it never does or the cell is suppressed."
+      q1_lower_days: "Lower end of the 95% interval of `q1_days`: the first day the band's upper edge reaches 25%; NULL where it never does or the cell is suppressed."
+      q1_upper_days: "Upper end of the 95% interval of `q1_days`: the first day the band's lower edge reaches 25%; NULL where it never does."
+      median_days: "First day the cumulative incidence of a final reaches 50%: the median time to final; NULL where it never does or the cell is suppressed."
+      median_lower_days: "Lower end of the 95% interval of `median_days`: the first day the band's upper edge reaches 50%; NULL where it never does or the cell is suppressed."
+      median_upper_days: "Upper end of the 95% interval of `median_days`; NULL where the band's lower edge never reaches 50%."
+      q3_days: "First day the cumulative incidence of a final reaches 75%; NULL where it never does or the cell is suppressed."
+      q3_lower_days: "Lower end of the 95% interval of `q3_days`: the first day the band's upper edge reaches 75%; NULL where it never does or the cell is suppressed."
+      q3_upper_days: "Upper end of the 95% interval of `q3_days`; NULL where the band's lower edge never reaches 75%."
+      censor_date: "The lifecycles' censor date, where the estimates' open rules are censored."
+      method: "How the row was asserted; `deterministic` (computed by rule) throughout."
+      actor_id: "The builder that asserted the row, with its version (`spicy-regs:agency-lifecycle-stats:v<n>`), bumped when its published rows change."
+      run_id: "The materialization run that built the snapshot (e.g. `rulemaking-20260927T062656Z`)."
+      asserted_at: "When that run asserted the row, as a UTC ISO 8601 instant."
+      supersedes_id: "Id of a prior row this one continues; always NULL here."
   federal_register:
     label: "Federal Register documents"
     coverage: >-

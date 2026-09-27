@@ -135,3 +135,16 @@ def test_the_live_check_names_the_ledger_destination_or_refuses(tmp_path, capsys
     ledger.write_text("No destination stated here.\n", encoding="utf-8")
     assert live.main(["--ledger", str(ledger)]) == 2
     assert "public data destinations" in capsys.readouterr().err
+
+
+def test_the_live_check_reads_rulemaking_tables_through_the_snapshot_pointer(monkeypatch):
+    """Managed tables resolve through the index, rulemaking tables through their pointer, the rest to legacy keys."""
+    from tests.test_check_ledger_pins import BASE, INDEX, SNAPSHOT, _serve
+
+    monkeypatch.setattr(live.publication, "load_index", lambda url: INDEX)
+    _serve(monkeypatch)
+    url_of = live.table_urls(BASE + "/")
+    assert url_of("rule_targets") == f"{BASE}/materialized/rulemaking/snapshots/{SNAPSHOT}/rule_targets.parquet"
+    assert url_of("nominations") == f"{BASE}/{INDEX['families']['nominations']['prefix']}/nominations.parquet"
+    assert url_of("dockets") == f"{BASE}/dockets.parquet"
+    assert url_of("_proceedings_state") == f"{BASE}/_proceedings_state.parquet"  # internal: never a snapshot URL

@@ -29,9 +29,9 @@ from loguru import logger
 from spicy_regs.ontology.common import RunContext, canonical_json, stable_id
 from spicy_regs.pipelines.base import Pipeline
 from spicy_regs.sources import r2
+from spicy_regs.sources.publication import SNAPSHOT_FORMAT_VERSIONS, SNAPSHOT_ID
 
 _SAFE_NAME = re.compile(r"^[a-z0-9][a-z0-9-]*$")
-_SAFE_SNAPSHOT_ID = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
 
 #: The snapshot format this build writes.
 #:
@@ -42,12 +42,6 @@ _SAFE_SNAPSHOT_ID = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
 #: as absent. A public resolver that cannot distinguish those two answers is
 #: one missing key away from handing out an internal object's URL.
 _FORMAT_VERSION = 2
-
-#: Versions this build can *read*. A published snapshot outlives the code that
-#: wrote it, and the prior generation a run restores from was written before
-#: this bump, so refusing version 1 outright would strand every existing
-#: dataset's state at its next build.
-SUPPORTED_FORMAT_VERSIONS = (1, 2)
 
 #: The version at which each added field becomes required. Below it the field
 #: is unconstrained, because a snapshot cannot be held to a rule that did not
@@ -94,9 +88,9 @@ def _read_json(path: Path) -> dict:
 
 def _manifest_format_version(value: object, *, label: str) -> int:
     """Return a readable snapshot format version, or refuse the document."""
-    if value not in SUPPORTED_FORMAT_VERSIONS:
+    if value not in SNAPSHOT_FORMAT_VERSIONS:
         raise RuntimeError(
-            f"Unsupported {label} snapshot format version {value!r}; this build reads {list(SUPPORTED_FORMAT_VERSIONS)}"
+            f"Unsupported {label} snapshot format version {value!r}; this build reads {list(SNAPSHOT_FORMAT_VERSIONS)}"
         )
     assert isinstance(value, int)  # membership above narrows it
     return value
@@ -313,7 +307,7 @@ class MaterializedDatasetPipeline(Pipeline):
         if pointer.get("dataset") != self.dataset_name:
             raise RuntimeError(f"Invalid {self.dataset_name} latest pointer")
         snapshot_id = str(pointer.get("snapshot_id") or "")
-        if not _SAFE_SNAPSHOT_ID.fullmatch(snapshot_id):
+        if not SNAPSHOT_ID.fullmatch(snapshot_id):
             raise RuntimeError(f"Invalid {self.dataset_name} snapshot id")
         expected_prefix = f"{_ROOT_PREFIX}/{self.dataset_name}/snapshots/{snapshot_id}/"
         manifest_key = _safe_remote_key(

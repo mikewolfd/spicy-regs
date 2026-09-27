@@ -51,6 +51,16 @@ TABLES = (
     "bill_subjects",
     "unified_agenda",
     "federal_register",
+    # The materialized rulemaking dataset, read through its own snapshot pointer
+    # (publication.SNAPSHOT_POINTER), not the publication index.
+    "rule_targets",
+    "proceedings",
+    "regulatory_agenda_items",
+    "agenda_item_proceedings",
+    "comment_periods",
+    "rulemaking_lifecycles",
+    "lifecycle_events",
+    "agency_lifecycle_stats",
     "sam_entities",
     "lobbying_filings",
     "lobbying_activities",
@@ -370,11 +380,13 @@ def _attach_catalog(con: duckdb.DuckDBPyConnection, config: dict[str, str]) -> b
 def _build_connection() -> duckdb.DuckDBPyConnection:
     """Open a DuckDB connection with one view per available table, pinned to one publication snapshot.
 
+    A remote connection reads the publication index and the rulemaking pointer
+    once each; a rulemaking table's view reads the snapshot the pointer names.
     Local managed bytes are rehashed before their views are created; a view
-    whose schema differs from its admitted generation, or a managed member that
-    cannot be read, raises RuntimeError.
+    whose schema differs from its admitted generation, or a managed or snapshot
+    member that cannot be read, raises RuntimeError.
     """
-    from spicy_regs.sources.publication import load_index, table_location
+    from spicy_regs.sources.publication import load_index, load_rulemaking_snapshot, table_location
 
     local = None
     signatures = {}
@@ -384,6 +396,7 @@ def _build_connection() -> duckdb.DuckDBPyConnection:
         local = local_selection(DATA_DIR)
         signatures = verify_local_members(local)
     publication_index = local.publication if local is not None else load_index(R2_BASE_URL)
+    rulemaking = None if local is not None else load_rulemaking_snapshot(R2_BASE_URL)
     con = duckdb.connect()
     con.execute(f"SET home_directory='{HOME_DIRECTORY.replace(chr(39), chr(39) * 2)}'")
     if DATA_DIR is None:
@@ -398,6 +411,9 @@ def _build_connection() -> duckdb.DuckDBPyConnection:
     # temporary tables. Keep the pin alongside the views they actually query.
     con.execute("CREATE TABLE _spicy_publication (snapshot VARCHAR)")
     con.execute("INSERT INTO _spicy_publication VALUES (?)", [json.dumps(publication_index)])
+    if rulemaking is not None:
+        con.execute("CREATE TABLE _spicy_rulemaking (snapshot VARCHAR)")
+        con.execute("INSERT INTO _spicy_rulemaking VALUES (?)", [json.dumps(rulemaking)])
     if local is not None and local.is_download:
         con.execute("CREATE TABLE _spicy_local_selection (snapshot VARCHAR)")
         con.execute(
@@ -415,9 +431,13 @@ def _build_connection() -> duckdb.DuckDBPyConnection:
     managed_names = [
         key.removesuffix(".parquet") for e in publication_index["families"].values() for key in e["tables"]
     ]
+    snapshot_names = [key.removesuffix(".parquet") for key in (rulemaking or {"tables": {}})["tables"]]
     selected_names = list(local.files) if local is not None and local.is_download else []
-    for name in dict.fromkeys((*TABLES, *managed_names, *selected_names)):
+    for name in dict.fromkeys((*TABLES, *managed_names, *snapshot_names, *selected_names)):
         key, published = table_location(publication_index, f"{name}.parquet")
+        pinned = rulemaking["tables"].get(f"{name}.parquet") if rulemaking is not None and published is None else None
+        if pinned is not None:
+            key = pinned["remote_key"]
         if name == "comments" and catalog_attached and published is None:
             namespace = catalog["namespace"]  # type: ignore[index]
             try:
@@ -445,11 +465,21 @@ def _build_connection() -> duckdb.DuckDBPyConnection:
                     con.close()
                     raise RuntimeError(f"Published schema differs from admitted generation: {name}")
         except duckdb.Error as exc:
-            if published is not None or (local is not None and local.is_download):
+            if published is not None or pinned is not None or (local is not None and local.is_download):
                 con.close()
                 raise RuntimeError(f"Published generation member unavailable: {name}") from exc
             logger.warning("table %s not available at %s; skipping view: %s", name, url, exc)
     return con
+
+
+@lru_cache(maxsize=16)
+def _parsed_pin(raw: str) -> dict:
+    """A pinned JSON record, parsed once per distinct document, so once per connection rather than per helper call.
+
+    One tool call reads the same pins in several helpers; the index alone is tens of kilobytes. Callers must not
+    mutate the shared result.
+    """
+    return json.loads(raw)
 
 
 def _connection_index(cursor: duckdb.DuckDBPyConnection) -> dict:
@@ -458,24 +488,35 @@ def _connection_index(cursor: duckdb.DuckDBPyConnection) -> dict:
         row = cursor.execute("SELECT snapshot FROM _spicy_publication").fetchone()
         if row is None:
             raise RuntimeError("Missing publication snapshot")
-        return json.loads(row[0])
+        return _parsed_pin(row[0])
     except duckdb.CatalogException:
         # Explicitly injected local connections have no publication admission.
         return {"families": {}}
 
 
-def _connection_local_selection(cursor: duckdb.DuckDBPyConnection) -> dict | None:
-    """The local-selection snapshot pinned in this connection, or None when it has none."""
+def _pinned_record(cursor: duckdb.DuckDBPyConnection, table: str) -> dict | None:
+    """The JSON record this connection pinned in ``table`` when it was built, or None when it pinned none."""
     try:
-        row = cursor.execute("SELECT snapshot FROM _spicy_local_selection").fetchone()
-        return json.loads(row[0]) if row is not None else None
+        row = cursor.execute(f"SELECT snapshot FROM {table}").fetchone()
+        return _parsed_pin(row[0]) if row is not None else None
     except duckdb.CatalogException:
         return None
+
+
+def _connection_local_selection(cursor: duckdb.DuckDBPyConnection) -> dict | None:
+    """The local-selection snapshot pinned in this connection, or None when it has none."""
+    return _pinned_record(cursor, "_spicy_local_selection")
+
+
+def _connection_rulemaking(cursor: duckdb.DuckDBPyConnection) -> dict:
+    """The rulemaking snapshot pinned in this connection; empty when it read none (local, injected or unpublished)."""
+    return _pinned_record(cursor, "_spicy_rulemaking") or {"snapshot_id": None, "tables": {}}
 
 
 def _publication_status(cursor: duckdb.DuckDBPyConnection) -> dict:
     """Describe actual availability and pins from this connection's snapshot."""
     index = _connection_index(cursor)
+    rulemaking = _connection_rulemaking(cursor)
     available = _available_tables(cursor)
     local = _connection_local_selection(cursor) if DATA_DIR is not None else None
     managed = {
@@ -494,15 +535,29 @@ def _publication_status(cursor: duckdb.DuckDBPyConnection) -> dict:
         for family, entry in index["families"].items()
         for key in entry["tables"]
     }
+    snapshot = {
+        key.removesuffix(".parquet"): {
+            "status": "rulemaking_snapshot",
+            "snapshot_id": rulemaking["snapshot_id"],
+            "sha256": f"sha256:{record['sha256']}",
+        }
+        for key, record in rulemaking["tables"].items()
+    }
     fallback = "local_unversioned" if DATA_DIR is not None else "legacy_unversioned"
     return {
         "tables": available,
         "declared_tables": list(TABLES),
-        "publication": {name: managed.get(name, {"status": fallback}) for name in available},
+        "publication": {name: managed.get(name) or snapshot.get(name, {"status": fallback}) for name in available},
         "verification": (
             "Managed local bytes rehashed at connection creation; file changes checked around tool statements."
             if local is not None
             else "Managed remote bytes verified before publication; this reader pins URLs and checks schemas."
+            + (
+                " Rulemaking snapshot URLs are pinned by the pointer read at connection creation; their manifest"
+                " states no columns, so describe_table compares their schemas with the dictionary."
+                if snapshot
+                else ""
+            )
         ),
     }
 
@@ -521,9 +576,11 @@ def _publication_status(cursor: duckdb.DuckDBPyConnection) -> dict:
 # connection — so the statement-timeout interrupt (below) hits only that cursor,
 # never a sibling request.
 #
-# Staleness: the views hold parquet footers and the catalog attach pins an
-# Iceberg snapshot, both taken at build time. The ETL republishes daily, so a
-# connection older than the TTL is rebuilt to pick up new data. On rebuild we
+# Staleness: the publication index and the rulemaking pointer are each read
+# once per build, the views hold parquet footers at the immutable URLs they
+# name, and the catalog attach pins an Iceberg snapshot, all taken at build
+# time. The ETL republishes daily, so a connection older than the TTL is
+# rebuilt to pick up new data, a moved pointer included. On rebuild we
 # only drop the module reference to the old connection — never close it — so any
 # cursor still mid-query keeps working (a cursor outlives its parent losing its
 # last Python reference); the old connection is reclaimed once its cursors drain.
@@ -659,8 +716,9 @@ def _qualification(
     """The ledger's scope fields and each table's audit beside its live pin; no tables for another publisher.
 
     Live pins come from this connection's publication snapshot: the family
-    artifact digest, or the table digest for a base object's ``table`` pin. A
-    table the index does not manage has no live pin to compare.
+    artifact digest, or the table digest for a base object's ``table`` pin,
+    and for a rulemaking table the ``snapshot`` its pointer named. A table
+    neither pointer names has no live pin to compare.
     """
     record, rows = _ledger()
     scope = {"ledger": record["ledger"], "ledger_destination": record["destination"], "basis": QUALIFICATION_BASIS}
@@ -673,6 +731,9 @@ def _qualification(
         for entry in _connection_index(cursor)["families"].values()
         for key, table in entry["tables"].items()
     }
+    rulemaking = _connection_rulemaking(cursor)
+    for key in rulemaking["tables"]:
+        live.setdefault(key.removesuffix(".parquet"), {"snapshot": rulemaking["snapshot_id"][: len("snapshot_") + 8]})
     return scope, {name: _table_qualification(rows.get(name, []), live.get(name, {}), statements) for name in tables}
 
 
@@ -681,7 +742,10 @@ def _table_qualification(rows: list[dict], live: dict[str, str], statements: boo
     audits = [audit for row in rows for audit in row["audits"]]
     result: dict[str, Any]
     if not audits:
-        result = {"status": "no_audit_recorded" if rows else "not_in_ledger", "live_pin": live.get("artifact")}
+        result = {
+            "status": "no_audit_recorded" if rows else "not_in_ledger",
+            "live_pin": live.get("artifact", live.get("snapshot")),
+        }
     else:
         matched = [audit for audit in audits if live.get(audit["pin_kind"]) == audit["pin"]]
         audit = max(matched or audits, key=lambda item: item["date"])
@@ -719,9 +783,10 @@ def _available_tables(cursor: duckdb.DuckDBPyConnection) -> list[str]:
         for entry in _connection_index(cursor)["families"].values()
         for key in entry["tables"]
     ]
+    snapshot = [key.removesuffix(".parquet") for key in _connection_rulemaking(cursor)["tables"]]
     local = _connection_local_selection(cursor) if DATA_DIR is not None else None
     selected = local["selected_tables"] if local is not None else []
-    return [name for name in dict.fromkeys((*TABLES, *managed, *selected)) if name in registered]
+    return [name for name in dict.fromkeys((*TABLES, *managed, *snapshot, *selected)) if name in registered]
 
 
 def _register_tools(mcp: FastMCP) -> None:

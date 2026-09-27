@@ -975,22 +975,27 @@ def test_the_stages_follow_proceedings_and_the_agenda_and_publish_in_its_generat
 def test_the_documents_based_rollup_is_gone_with_no_dangling_reference():
     assert not (REPO_ROOT / "src/spicy_regs/transforms/build_rulemaking_lifecycles.py").exists()
     assert not (REPO_ROOT / "src/spicy_regs/pipelines/rollups/rulemaking_lifecycles.py").exists()
-    assert not (REPO_ROOT / "docs/tables/rulemaking_lifecycles.md").exists()
     scripts = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text())["project"]["scripts"]
     assert "run-rollup-lifecycles" not in scripts
-    # The new table lives in the rulemaking generation; MCP and dictionary exposure is a later unit.
-    assert "rulemaking_lifecycles" not in mcp_server.TABLES
-    assert "rulemaking_lifecycles" not in dd.TABLES
-    assert "rulemaking_lifecycles" not in dd.MCP_QUERYABLE
+    # The name now belongs to the rulemaking dataset's stage, which MCP and the dictionary expose from the
+    # snapshot pointer. The rollup's literal schema, its own columns and its prose are gone from every
+    # place that described it.
+    assert "rulemaking_lifecycles" in mcp_server.TABLES and "rulemaking_lifecycles" in dd.MCP_QUERYABLE
     assert "rulemaking_lifecycles" not in dd.DERIVED_SCHEMAS
+    declared = dd.expected_schemas()["rulemaking_lifecycles"]
+    assert [column for column, _ in declared] == LIFECYCLE_SCHEMA.names
+    assert not {"docket_id", "title", "proposed_date", "days"} & {column for column, _ in declared}
+    rollup_prose = ("build_rulemaking_lifecycles", "Proposed→final rulemaking arcs", "`stuck`", "`pair`")
     for path in (
         "data_dictionary/descriptions.yaml",
         "data_dictionary/catalog.json",
         "src/spicy_regs/table_metadata.json",
+        "docs/tables/rulemaking_lifecycles.md",
         "mkdocs.yml",
         "deploy/cloudrun/deploy.sh",
     ):
-        assert "rulemaking_lifecycles" not in (REPO_ROOT / path).read_text(encoding="utf-8"), path
+        text = (REPO_ROOT / path).read_text(encoding="utf-8")
+        assert not any(marker in text for marker in rollup_prose), path
     # The new table reuses the name, so the qualification record may name it only as a T17 rulemaking output.
     record = json.loads((REPO_ROOT / "src/spicy_regs/table_qualification.json").read_text(encoding="utf-8"))
     naming = [row["task"] for row in record["rows"] if "rulemaking_lifecycles" in row["tables"]]

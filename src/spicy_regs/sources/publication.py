@@ -1,8 +1,10 @@
 """Immutable table generations and a single conditional publication pointer.
 
 Writers verify all remote bytes before changing the pointer. Readers resolve
-the pointer once per operation and use immutable table URLs. Legacy bare URLs
-remain readable only for tables not yet present in the publication index.
+the pointer once per operation and use immutable table URLs. The materialized
+rulemaking dataset publishes under its own pointer (``SNAPSHOT_POINTER``),
+which readers resolve the same way. Legacy bare URLs remain readable only for
+tables neither pointer names.
 Source-evidence blobs are content-addressed and stored once for all artifacts.
 """
 
@@ -28,6 +30,13 @@ if TYPE_CHECKING:
 INDEX_KEY = "publication.json"
 #: The materialized rulemaking dataset's pointer to its current snapshot manifest.
 SNAPSHOT_POINTER = "materialized/rulemaking/latest.json"
+#: A materialized snapshot id: safe in an object key and inlined SQL. ``pipelines.materialized`` writes and reads by it.
+SNAPSHOT_ID = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
+#: Snapshot format versions a reader accepts. A published snapshot outlives the
+#: code that wrote it, and the prior generation a run restores from was written
+#: before version 2 made ``visibility`` required, so refusing version 1 outright
+#: would strand every existing dataset's state at its next build.
+SNAPSHOT_FORMAT_VERSIONS = (1, 2)
 INDEX_LIMIT = 1024 * 1024
 PART_BYTES = 64 * 1024 * 1024
 EVIDENCE_PREFIX = "source-evidence"
@@ -141,6 +150,63 @@ def load_index(base_url: str) -> dict:
     """Read one bounded pointer; only a 404 permits legacy table resolution."""
     raw = _bounded_get(f"{base_url.rstrip('/')}/{INDEX_KEY}", allow_missing=True, headers={"Cache-Control": "no-cache"})
     return empty_index() if raw is None else parse_index(raw)
+
+
+def load_rulemaking_snapshot(base_url: str) -> dict | None:
+    """Read the rulemaking pointer and the manifest it names, once; ``None`` while no snapshot is published.
+
+    Returns the snapshot id, its manifest key and, by table key, the record of
+    each artifact the manifest marks public. As ``pipelines.materialized``
+    reads its prior generation, both documents must be a readable format
+    version, the same one, of this dataset and one snapshot; each public
+    artifact must also sit at its own name under that snapshot's prefix,
+    because readers inline these keys into URLs and SQL. An artifact that does
+    not say it is public is left out.
+    """
+    base = base_url.rstrip("/")
+    raw = _bounded_get(f"{base}/{SNAPSHOT_POINTER}", allow_missing=True, headers={"Cache-Control": "no-cache"})
+    if raw is None:
+        return None
+    root = SNAPSHOT_POINTER.removesuffix("latest.json")
+    dataset = root.removeprefix("materialized/").rstrip("/")
+    try:
+        pointer = json.loads(raw, object_pairs_hook=_pairs)
+        snapshot_id = pointer["snapshot_id"]
+        prefix = f"{root}snapshots/{snapshot_id}"
+        if pointer["format_version"] not in SNAPSHOT_FORMAT_VERSIONS or pointer["dataset"] != dataset:
+            raise ValueError("pointer is not a readable rulemaking pointer")
+        if not SNAPSHOT_ID.fullmatch(snapshot_id) or pointer["manifest_key"] != f"{prefix}/manifest.json":
+            raise ValueError("pointer names no manifest of its own snapshot")
+        raw = _bounded_get(f"{base}/{prefix}/manifest.json", allow_missing=False)
+        assert raw is not None
+        manifest = json.loads(raw, object_pairs_hook=_pairs)
+        if (manifest["format_version"], manifest["dataset"], manifest["snapshot_id"]) != (
+            pointer["format_version"], dataset, snapshot_id
+        ):
+            raise ValueError("pointer and manifest name different snapshots")
+        tables = {key: record for key, record in manifest["artifacts"].items() if record.get("visibility") == "public"}
+        for key, record in tables.items():
+            if not key.endswith(".parquet") or not _NAME.fullmatch(key[:-8]) or record["remote_key"] != f"{prefix}/{key}":
+                raise ValueError(f"public artifact {key!r} is not its snapshot's member")
+    except (ValueError, TypeError, KeyError, AttributeError) as exc:
+        raise PublicationError("Invalid rulemaking snapshot") from exc
+    return {"snapshot_id": snapshot_id, "manifest_key": f"{prefix}/manifest.json", "tables": tables}
+
+
+def published_urls(base_url: str) -> dict[str, str]:
+    """Each table the publisher's two pointers name, by name, to its immutable URL.
+
+    The publication index's generations come first, then the rulemaking
+    snapshot's public artifacts. A table neither names is legacy: its URL is
+    the bare ``<name>.parquet`` key, which the caller adds.
+    """
+    base = base_url.rstrip("/")
+    index, snapshot = load_index(base), load_rulemaking_snapshot(base)
+    urls = {key.removesuffix(".parquet"): f"{base}/{entry['prefix']}/{key}"
+            for entry in index["families"].values() for key in entry["tables"] if key.endswith(".parquet")}
+    for key, record in (snapshot or {"tables": {}})["tables"].items():
+        urls.setdefault(key.removesuffix(".parquet"), f"{base}/{record['remote_key']}")
+    return urls
 
 
 def current_index(base_url: str) -> dict:

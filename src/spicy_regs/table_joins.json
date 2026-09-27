@@ -10,7 +10,10 @@
       "~/Work/corpora/fork-execution-2026-09-21/join-map-2026-09-26/dockets-after-gap-fill.json",
       "~/Work/corpora/fork-execution-2026-09-21/join-map-2026-09-26/sam-entities-after-backfill.json",
       "~/Work/corpora/fork-execution-2026-09-21/join-map-2026-09-26/live-check-after-fixes.json",
-      "~/Work/corpora/fork-execution-2026-09-21/committee-fixes-2026-09-26/3-rosters-118/runs.json"
+      "~/Work/corpora/fork-execution-2026-09-21/committee-fixes-2026-09-26/3-rosters-118/runs.json",
+      "~/Work/corpora/fork-execution-2026-09-21/rulemaking-exposure-2026-09-27/proposed-joins.json",
+      "~/Work/corpora/fork-execution-2026-09-21/join-map-2026-09-26/rulemaking-exposure-independent.json",
+      "~/Work/corpora/fork-execution-2026-09-21/join-map-2026-09-26/rulemaking-exposure-independent-2.json"
     ]
   },
   "kinds": [
@@ -779,6 +782,222 @@
       "floor_pct": 83.0168
     },
     {
+      "child": "agenda_item_proceedings",
+      "child_columns": [
+        "proceeding_id"
+      ],
+      "parent": "proceedings",
+      "parent_columns": [
+        "proceeding_id"
+      ],
+      "kind": "complete",
+      "reason": "Measured 2026-09-27 on snapshot_f31a4045…; receipts rulemaking-exposure-2026-09-27/proposed-joins.json and join-map-2026-09-26/rulemaking-exposure-independent.json, -2.json.",
+      "measured_via": null,
+      "baseline_keys": 80688,
+      "baseline_missing": 0,
+      "floor_pct": 100.0
+    },
+    {
+      "child": "agenda_item_proceedings",
+      "child_columns": [
+        "agenda_item_id"
+      ],
+      "parent": "regulatory_agenda_items",
+      "parent_columns": [
+        "agenda_item_id"
+      ],
+      "kind": "complete",
+      "reason": "Measured 2026-09-27 on snapshot_f31a4045…; receipts rulemaking-exposure-2026-09-27/proposed-joins.json and join-map-2026-09-26/rulemaking-exposure-independent.json, -2.json.",
+      "measured_via": null,
+      "baseline_keys": 35451,
+      "baseline_missing": 0,
+      "floor_pct": 100.0
+    },
+    {
+      "child": "rulemaking_lifecycles",
+      "child_columns": [
+        "proceeding_id"
+      ],
+      "parent": "proceedings",
+      "parent_columns": [
+        "proceeding_id"
+      ],
+      "kind": "complete",
+      "reason": "Measured 2026-09-27 on snapshot_f31a4045…; receipts rulemaking-exposure-2026-09-27/proposed-joins.json and join-map-2026-09-26/rulemaking-exposure-independent.json, -2.json.",
+      "measured_via": null,
+      "baseline_keys": 75270,
+      "baseline_missing": 0,
+      "floor_pct": 100.0
+    },
+    {
+      "child": "lifecycle_events",
+      "child_columns": [
+        "proceeding_id"
+      ],
+      "parent": "rulemaking_lifecycles",
+      "parent_columns": [
+        "proceeding_id"
+      ],
+      "kind": "complete",
+      "reason": "Measured 2026-09-27 on snapshot_f31a4045…; receipts rulemaking-exposure-2026-09-27/proposed-joins.json and join-map-2026-09-26/rulemaking-exposure-independent.json, -2.json.",
+      "measured_via": null,
+      "baseline_keys": 65278,
+      "baseline_missing": 0,
+      "floor_pct": 100.0
+    },
+    {
+      "child": "rulemaking_lifecycles",
+      "child_columns": [
+        "proceeding_id",
+        "proposal_document_id"
+      ],
+      "parent": "lifecycle_events",
+      "parent_columns": [
+        "proceeding_id",
+        "document_id"
+      ],
+      "kind": "complete",
+      "reason": "The proposal anchor is one of its proceeding's events. Measured 2026-09-27 on snapshot_f31a4045…; receipts rulemaking-exposure-2026-09-27/proposed-joins.json and join-map-2026-09-26/rulemaking-exposure-independent.json, -2.json.",
+      "measured_via": null,
+      "baseline_keys": 36697,
+      "baseline_missing": 0,
+      "floor_pct": 100.0
+    },
+    {
+      "child": "rulemaking_lifecycles",
+      "child_columns": [
+        "proceeding_id",
+        "final_document_id"
+      ],
+      "parent": "lifecycle_events",
+      "parent_columns": [
+        "proceeding_id",
+        "document_id"
+      ],
+      "kind": "complete",
+      "reason": "The final anchor is one of its proceeding's events. Measured 2026-09-27 on snapshot_f31a4045…; receipts rulemaking-exposure-2026-09-27/proposed-joins.json and join-map-2026-09-26/rulemaking-exposure-independent.json, -2.json.",
+      "measured_via": null,
+      "baseline_keys": 55640,
+      "baseline_missing": 0,
+      "floor_pct": 100.0
+    },
+    {
+      "child": "rulemaking_lifecycles",
+      "child_columns": [
+        "proceeding_id",
+        "withdrawal_document_id"
+      ],
+      "parent": "lifecycle_events",
+      "parent_columns": [
+        "proceeding_id",
+        "document_id"
+      ],
+      "kind": "complete",
+      "reason": "The withdrawal anchor is one of its proceeding's events. Measured 2026-09-27 on snapshot_f31a4045…; receipts rulemaking-exposure-2026-09-27/proposed-joins.json and join-map-2026-09-26/rulemaking-exposure-independent.json, -2.json.",
+      "measured_via": null,
+      "baseline_keys": 721,
+      "baseline_missing": 0,
+      "floor_pct": 100.0
+    },
+    {
+      "child": "lifecycle_events",
+      "child_columns": [
+        "document_id"
+      ],
+      "parent": "documents",
+      "parent_columns": [
+        "document_id"
+      ],
+      "kind": "design",
+      "reason": "Three id kinds, told apart by dated_by, each resolving 100% in its own table: regulations_gov a Regulations.gov document id (25,708 keys, all in documents), federal_register a dated Register record id number@YYYY-MM-DD (104,995, all in federal_register), unified_agenda an agenda item id (773, all in regulatory_agenda_items). source does not tell them apart: 72 events Regulations.gov typed are copies of untyped Register rows and carry Register ids. Measured 2026-09-27 on snapshot_f31a4045…; receipts rulemaking-exposure-2026-09-27/proposed-joins.json and join-map-2026-09-26/rulemaking-exposure-independent.json, -2.json.",
+      "measured_via": null,
+      "baseline_keys": 131476,
+      "baseline_missing": 105768,
+      "floor_pct": 19.5533
+    },
+    {
+      "child": "regulatory_agenda_items",
+      "child_columns": [
+        "rin",
+        "latest_agenda_edition"
+      ],
+      "parent": "unified_agenda",
+      "parent_columns": [
+        "rin",
+        "agenda_edition"
+      ],
+      "kind": "complete",
+      "reason": "An item with no latest edition is one no edition lists. Measured 2026-09-27 on snapshot_f31a4045…; receipts rulemaking-exposure-2026-09-27/proposed-joins.json and join-map-2026-09-26/rulemaking-exposure-independent.json, -2.json.",
+      "measured_via": null,
+      "baseline_keys": 46247,
+      "baseline_missing": 0,
+      "floor_pct": 100.0
+    },
+    {
+      "child": "rule_targets",
+      "child_columns": [
+        "rin"
+      ],
+      "parent": "unified_agenda",
+      "parent_columns": [
+        "rin"
+      ],
+      "kind": "scope",
+      "reason": "unified_agenda holds every readable edition, Fall 1995 to the newest (202510). Of the RINs no edition lists, 1,269 are X-pattern codes (NOAA's 0648-X in-season series and other agencies', never on the agenda; decision 61), 1,029 are well formed but unlisted (854 first dated 1995-2025, 174 in 2026, after the newest edition, and 1 before Fall 1995), and 1 is the placeholder 0000-AA00. Measured 2026-09-27 on snapshot_f31a4045…; receipts rulemaking-exposure-2026-09-27/proposed-joins.json and join-map-2026-09-26/rulemaking-exposure-independent.json, -2.json.",
+      "measured_via": null,
+      "baseline_keys": 22290,
+      "baseline_missing": 2299,
+      "floor_pct": 89.6859
+    },
+    {
+      "child": "proceedings",
+      "child_columns": [
+        "rin"
+      ],
+      "parent": "unified_agenda",
+      "parent_columns": [
+        "rin"
+      ],
+      "kind": "scope",
+      "reason": "unified_agenda holds every readable edition, Fall 1995 to the newest (202510). Of the RINs no edition lists, 802 are X-pattern codes (NOAA's 0648-X in-season series and other agencies', never on the agenda; decision 61), 3,030 are well formed but unlisted, and 1 is the placeholder 0000-AA00. Measured 2026-09-27 on snapshot_f31a4045…; receipts rulemaking-exposure-2026-09-27/proposed-joins.json and join-map-2026-09-26/rulemaking-exposure-independent.json, -2.json.",
+      "measured_via": null,
+      "baseline_keys": 30536,
+      "baseline_missing": 3833,
+      "floor_pct": 87.4476
+    },
+    {
+      "child": "regulatory_agenda_items",
+      "child_columns": [
+        "rin"
+      ],
+      "parent": "unified_agenda",
+      "parent_columns": [
+        "rin"
+      ],
+      "kind": "scope",
+      "reason": "unified_agenda holds every readable edition, Fall 1995 to the newest (202510). Of the RINs no edition lists, 2,410 are X-pattern codes (NOAA's 0648-X in-season series and other agencies', never on the agenda; decision 61), 3,434 are well formed but unlisted (an item exists for every RIN any source states), and 1 is the placeholder 0000-AA00. Measured 2026-09-27 on snapshot_f31a4045…; receipts rulemaking-exposure-2026-09-27/proposed-joins.json and join-map-2026-09-26/rulemaking-exposure-independent.json, -2.json.",
+      "measured_via": null,
+      "baseline_keys": 52092,
+      "baseline_missing": 5845,
+      "floor_pct": 88.7794
+    },
+    {
+      "child": "rule_targets",
+      "child_columns": [
+        "cfr_ref"
+      ],
+      "parent": "cfr_sections",
+      "parent_columns": [
+        "cfr_ref"
+      ],
+      "kind": "scope",
+      "reason": "cfr_ref names a CFR part (title-part). cfr_sections holds the 2025–2026 edition of all 49 titles; 796 of the missing parts no longer exist in it (removed or redesignated since the citing document) and 14 exist only as sections without a part row. Receipt join-map-2026-09-26/rulemaking-exposure-independent-2.json.",
+      "measured_via": null,
+      "baseline_keys": 6144,
+      "baseline_missing": 810,
+      "floor_pct": 86.8164
+    },
+    {
       "child": "org_committee_links",
       "child_columns": [
         "committee_id"
@@ -1435,6 +1654,24 @@
         "parent_columns": [
           "docket_id"
         ]
+      },
+      {
+        "child_columns": [
+          "rin"
+        ],
+        "parent_table": "unified_agenda",
+        "parent_columns": [
+          "rin"
+        ]
+      },
+      {
+        "child_columns": [
+          "cfr_ref"
+        ],
+        "parent_table": "cfr_sections",
+        "parent_columns": [
+          "cfr_ref"
+        ]
       }
     ],
     "dockets": [
@@ -1449,6 +1686,123 @@
       }
     ],
     "federal_register": [
+      {
+        "child_columns": [
+          "rin"
+        ],
+        "parent_table": "unified_agenda",
+        "parent_columns": [
+          "rin"
+        ]
+      }
+    ],
+    "agenda_item_proceedings": [
+      {
+        "child_columns": [
+          "proceeding_id"
+        ],
+        "parent_table": "proceedings",
+        "parent_columns": [
+          "proceeding_id"
+        ]
+      },
+      {
+        "child_columns": [
+          "agenda_item_id"
+        ],
+        "parent_table": "regulatory_agenda_items",
+        "parent_columns": [
+          "agenda_item_id"
+        ]
+      }
+    ],
+    "rulemaking_lifecycles": [
+      {
+        "child_columns": [
+          "proceeding_id"
+        ],
+        "parent_table": "proceedings",
+        "parent_columns": [
+          "proceeding_id"
+        ]
+      },
+      {
+        "child_columns": [
+          "proceeding_id",
+          "proposal_document_id"
+        ],
+        "parent_table": "lifecycle_events",
+        "parent_columns": [
+          "proceeding_id",
+          "document_id"
+        ]
+      },
+      {
+        "child_columns": [
+          "proceeding_id",
+          "final_document_id"
+        ],
+        "parent_table": "lifecycle_events",
+        "parent_columns": [
+          "proceeding_id",
+          "document_id"
+        ]
+      },
+      {
+        "child_columns": [
+          "proceeding_id",
+          "withdrawal_document_id"
+        ],
+        "parent_table": "lifecycle_events",
+        "parent_columns": [
+          "proceeding_id",
+          "document_id"
+        ]
+      }
+    ],
+    "lifecycle_events": [
+      {
+        "child_columns": [
+          "proceeding_id"
+        ],
+        "parent_table": "rulemaking_lifecycles",
+        "parent_columns": [
+          "proceeding_id"
+        ]
+      },
+      {
+        "child_columns": [
+          "document_id"
+        ],
+        "parent_table": "documents",
+        "parent_columns": [
+          "document_id"
+        ]
+      }
+    ],
+    "regulatory_agenda_items": [
+      {
+        "child_columns": [
+          "rin",
+          "latest_agenda_edition"
+        ],
+        "parent_table": "unified_agenda",
+        "parent_columns": [
+          "rin",
+          "agenda_edition"
+        ]
+      },
+      {
+        "child_columns": [
+          "rin"
+        ],
+        "parent_table": "unified_agenda",
+        "parent_columns": [
+          "rin"
+        ]
+      }
+    ],
+    "proceedings": [
       {
         "child_columns": [
           "rin"

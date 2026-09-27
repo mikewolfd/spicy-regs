@@ -59,6 +59,23 @@ is queryable through the MCP server (`list_sources` / `describe_table` /
 | [`fcc_proceedings`](tables/fcc_proceedings.md) | one row per FCC proceeding (docket) | `name` |
 | [`fcc_filings`](tables/fcc_filings.md) | one row per FCC ECFS filing (comment) | `id_submission` |
 
+### Rulemaking dataset (derived, one snapshot)
+
+These tables publish together as one snapshot under
+`materialized/rulemaking/latest.json`, not at `<name>.parquet`; the MCP server
+reads the snapshot that pointer names.
+
+| Table | Grain | Key |
+| --- | --- | --- |
+| [`rule_targets`](tables/rule_targets.md) | one docket, CFR and RIN edge per evidence class | `docket_id` + `cfr_ref` + `rin` + `source` |
+| [`proceedings`](tables/proceedings.md) | one rulemaking proceeding | `proceeding_id` |
+| [`regulatory_agenda_items`](tables/regulatory_agenda_items.md) | one agenda item per RIN | `agenda_item_id` |
+| [`agenda_item_proceedings`](tables/agenda_item_proceedings.md) | one evidence link from an agenda item to a proceeding | `relationship_id` |
+| [`comment_periods`](tables/comment_periods.md) | one continuous public-comment interval | `comment_period_id` |
+| [`rulemaking_lifecycles`](tables/rulemaking_lifecycles.md) | one lifecycle per docketed proceeding | `proceeding_id` |
+| [`lifecycle_events`](tables/lifecycle_events.md) | one stage event per document of a proceeding | `proceeding_id` + `document_id` |
+| [`agency_lifecycle_stats`](tables/agency_lifecycle_stats.md) | one agency (or all) and stratum | `agency_code` + `stratum` |
+
 ### Organizations & influence
 
 | Table | Grain | Key |

@@ -27,6 +27,7 @@ Published at `4b1ca622…` (2026-09-25); the field audit is pending |
 | T06 | `run-pipeline` | `dockets.parquet` | publication verified at table digest `308b35c6…` \
 (2026-09-26; ETag `50d8cfba…`) |
 | T15 | `run-rollup-discovery-signals` | `discovery_signals.parquet` | withdrawn 2026-09-23 |
+| T17 | `materialize-rulemaking` | `rulemaking_lifecycles.parquet` | qualified at `snapshot_91b19da7…` (2026-09-27) |
 | T06 | `run-pipeline` | `comments/agency_code=<agency>/part-0.parquet` | unproduced on the fork |
 """
 RECORD = output_ledger.qualification_record(LEDGER)
@@ -177,6 +178,24 @@ def test_a_table_the_index_does_not_manage_cannot_be_compared(monkeypatch):
         "308b35c6",
         "verified",
     )
+
+
+@pytest.mark.parametrize(
+    ("snapshot_id", "generation"),
+    [("snapshot_91b19da7" + "0" * 24, "current generation audited"), ("snapshot_" + "f" * 32, "newer generation, not yet audited")],
+)
+def test_a_rulemaking_table_is_compared_with_the_snapshot_its_pointer_named(monkeypatch, snapshot_id, generation):
+    server = _serve(monkeypatch, _index())
+    con = mcp_server._get_connection()
+    pinned = {"snapshot_id": snapshot_id, "tables": {"rulemaking_lifecycles.parquet": {"sha256": "0" * 64}}}
+    con.execute("CREATE TABLE _spicy_rulemaking (snapshot VARCHAR)")
+    con.execute("INSERT INTO _spicy_rulemaking VALUES (?)", [json.dumps(pinned)])
+    con.execute("CREATE TABLE rulemaking_lifecycles (id VARCHAR)")
+    listed = _tool_data(server, "list_sources", {})
+    report = listed["qualification"]["tables"]["rulemaking_lifecycles"]
+    assert (report["pin_kind"], report["live_pin"], report["ledger_pin"]) == ("snapshot", snapshot_id[:17], "snapshot_91b19da7")
+    assert (report["generation"], report["ledger_disposition"]) == (generation, "qualified")
+    assert listed["publication"]["rulemaking_lifecycles"]["snapshot_id"] == snapshot_id
 
 
 @pytest.mark.parametrize("reads", ["another publisher", "a local directory"])

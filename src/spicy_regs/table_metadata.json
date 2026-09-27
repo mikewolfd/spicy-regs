@@ -1023,6 +1023,856 @@
     "grain": null,
     "identity_columns": []
   },
+  "rule_targets": {
+    "table": "rule_targets",
+    "label": "Rule identity edges (docket, CFR, RIN)",
+    "summary": "The rule-identity spine: one row per observed edge between a Regulations.gov docket, a CFR part and a RIN, with the `source` class of evidence that states it (docs/ontology.md, \"The rule_targets carrier\"). A missing or ambiguous reference leaves its target NULL rather than inventing one, and a `docket_document_cites_action_notice` row is a citation, with both targets NULL. Keyed (`docket_id`, `cfr_ref`, `rin`, `source`), NULLs included; joins `dockets` on `docket_id` and `unified_agenda` on `rin`. Built by `build_rule_targets`; all columns are VARCHAR.",
+    "coverage": "Derived, and bounded by its inputs: `dockets`, `documents`, `federal_register` and `fr_docket_links` as the snapshot's manifest pins them. `snapshot_91b19da7…` holds 617,135 edges, and a replay from the manifest's own inputs reproduces it byte for byte.",
+    "kind": "derived",
+    "measured_on": "2026-09-27",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "docket_id",
+        "column_type": "VARCHAR",
+        "description": "Regulations.gov docket the edge belongs to, normalized; joins `dockets.docket_id`."
+      },
+      {
+        "column_name": "cfr_ref",
+        "column_type": "VARCHAR",
+        "description": "CFR reference the rule targets, `title-part` or `title-part.section` (e.g. `40-60`); NULL on a RIN-only or citation edge."
+      },
+      {
+        "column_name": "cfr_title",
+        "column_type": "VARCHAR",
+        "description": "The CFR title of `cfr_ref` (e.g. `40`)."
+      },
+      {
+        "column_name": "cfr_part",
+        "column_type": "VARCHAR",
+        "description": "The CFR part of `cfr_ref` (e.g. `60`)."
+      },
+      {
+        "column_name": "cfr_section",
+        "column_type": "VARCHAR",
+        "description": "The CFR section of `cfr_ref` when it names one; NULL for a part-level reference."
+      },
+      {
+        "column_name": "rin",
+        "column_type": "VARCHAR",
+        "description": "Regulation Identifier Number the edge carries (e.g. `2060-AV16`); NULL on a CFR-only or citation edge."
+      },
+      {
+        "column_name": "source",
+        "column_type": "VARCHAR",
+        "description": "The evidence class: `fr_cfr_ref`, `docket_rin`, `document_rin`, `document_fr_doc` or `docket_document_cites_action_notice`."
+      },
+      {
+        "column_name": "evidence_id",
+        "column_type": "VARCHAR",
+        "description": "The least id of the records stating the edge: the docket for `docket_rin`, a dated Register record id (`number@YYYY-MM-DD`) for `fr_cfr_ref`, else a Regulations.gov document id."
+      },
+      {
+        "column_name": "first_seen",
+        "column_type": "VARCHAR",
+        "description": "Earliest Eastern day any evidence for the edge is dated, `YYYY-MM-DD`."
+      },
+      {
+        "column_name": "last_seen",
+        "column_type": "VARCHAR",
+        "description": "Latest Eastern day any evidence for the edge is dated, `YYYY-MM-DD`."
+      },
+      {
+        "column_name": "method",
+        "column_type": "VARCHAR",
+        "description": "How the row was asserted; `deterministic` (computed by rule) throughout."
+      },
+      {
+        "column_name": "actor_id",
+        "column_type": "VARCHAR",
+        "description": "The builder that asserted the row, with its version (`spicy-regs:rule-targets:v<n>`), bumped when its published rows change."
+      },
+      {
+        "column_name": "run_id",
+        "column_type": "VARCHAR",
+        "description": "The materialization run that built the snapshot (e.g. `rulemaking-20260927T062656Z`)."
+      },
+      {
+        "column_name": "asserted_at",
+        "column_type": "VARCHAR",
+        "description": "When that run asserted the row, as a UTC ISO 8601 instant."
+      },
+      {
+        "column_name": "supersedes_id",
+        "column_type": "VARCHAR",
+        "description": "Id of a prior row this one continues; always NULL here, since an edge has no id of its own."
+      },
+      {
+        "column_name": "fr_references_json",
+        "column_type": "VARCHAR",
+        "description": "JSON array of the literal Federal Register number references behind the edge, each with the `status` saying how it resolved (`dated`, `single_candidate_in_input`, `ambiguous`, `missing`, or a folded or unpadded match)."
+      }
+    ],
+    "grain": "One observed docket, CFR and RIN edge per evidence source class.",
+    "identity_columns": [
+      "docket_id",
+      "cfr_ref",
+      "rin",
+      "source"
+    ]
+  },
+  "proceedings": {
+    "table": "proceedings",
+    "label": "Rulemaking proceedings",
+    "summary": "One row per rulemaking proceeding: the dockets that are one action, the Register documents that joined it, their stage events, RINs and CFR targets. A RIN names a Unified Agenda item, never a proceeding: it is carried as evidence and never groups dockets. A docket-less proceeding is one Register document. Keyed `proceeding_id`, which continues across generations when its dockets or Register documents overlap a prior one. Joined by `agenda_item_proceedings`, `comment_periods` and `rulemaking_lifecycles` on `proceeding_id`. Built by `build_proceedings`; all columns are VARCHAR, lists as JSON strings.",
+    "coverage": "Derived, and bounded by its inputs (`dockets`, `documents`, `federal_register`, `fr_docket_links` and `rule_targets`) and the prior generation it continues ids from. `snapshot_91b19da7…` holds 172,742 proceedings: 75,270 docketed and 97,472 docket-less (single Register documents).",
+    "kind": "derived",
+    "measured_on": "2026-09-27",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "proceeding_id",
+        "column_type": "VARCHAR",
+        "description": "Stable opaque id of the proceeding (`proceeding_<24 hex>`), continued from the prior generation where it overlaps one."
+      },
+      {
+        "column_name": "rin",
+        "column_type": "VARCHAR",
+        "description": "The proceeding's RIN when it holds exactly one, else NULL; a query aid, never its identity (`rins_json` lists every RIN)."
+      },
+      {
+        "column_name": "docket_ids_json",
+        "column_type": "VARCHAR",
+        "description": "JSON array of the Regulations.gov dockets the proceeding comprises; `[]` for a docket-less proceeding."
+      },
+      {
+        "column_name": "title",
+        "column_type": "VARCHAR",
+        "description": "Title of its most recently dated titled document."
+      },
+      {
+        "column_name": "agency_code",
+        "column_type": "VARCHAR",
+        "description": "The agency code most of its documents carry, or for a docket-less proceeding its Register agency's code; NULL when none maps."
+      },
+      {
+        "column_name": "current_stage",
+        "column_type": "VARCHAR",
+        "description": "The one stage (`proposed`, `supplemental`, `final` or `withdrawn`) of its latest dated events; NULL when none, or when that day's events disagree."
+      },
+      {
+        "column_name": "stage_events_json",
+        "column_type": "VARCHAR",
+        "description": "JSON array of its stage events, one per staged document: `{effective_date, event_kind, evidence_id, joined_by, source, stage}`."
+      },
+      {
+        "column_name": "fr_document_numbers_json",
+        "column_type": "VARCHAR",
+        "description": "JSON array of the Federal Register document numbers it holds."
+      },
+      {
+        "column_name": "cfr_refs_json",
+        "column_type": "VARCHAR",
+        "description": "JSON array of the CFR references (`title-part`) that the `rule_targets` edges of its dockets name."
+      },
+      {
+        "column_name": "cfr_target_iris_json",
+        "column_type": "VARCHAR",
+        "description": "The same CFR references as Rulespec identifiers (e.g. `urn:rkaf:us:cfr:40:60`)."
+      },
+      {
+        "column_name": "authority_refs_json",
+        "column_type": "VARCHAR",
+        "description": "Always `[]`: legal authority belongs to the editioned Unified Agenda entry, never to an action."
+      },
+      {
+        "column_name": "method",
+        "column_type": "VARCHAR",
+        "description": "How the row was asserted; `deterministic` (computed by rule) throughout."
+      },
+      {
+        "column_name": "actor_id",
+        "column_type": "VARCHAR",
+        "description": "The builder that asserted the row, with its version (`spicy-regs:proceedings:v<n>`), bumped when its published rows change."
+      },
+      {
+        "column_name": "run_id",
+        "column_type": "VARCHAR",
+        "description": "The materialization run that built the snapshot (e.g. `rulemaking-20260927T062656Z`)."
+      },
+      {
+        "column_name": "asserted_at",
+        "column_type": "VARCHAR",
+        "description": "When that run asserted the row, as a UTC ISO 8601 instant."
+      },
+      {
+        "column_name": "supersedes_id",
+        "column_type": "VARCHAR",
+        "description": "The prior generation's `proceeding_id` this proceeding continues, so equal to `proceeding_id` on a continuing row (the id carries over); NULL for a proceeding new in this generation."
+      },
+      {
+        "column_name": "fr_document_ids_json",
+        "column_type": "VARCHAR",
+        "description": "JSON array of the dated Federal Register record ids (`number@YYYY-MM-DD`) it holds."
+      },
+      {
+        "column_name": "fr_document_joins_json",
+        "column_type": "VARCHAR",
+        "description": "How each `fr_document_ids_json` document joined, in the same order: `{fr_document_id, joined_by}`, `joined_by` being `fr_docket_link`, `fr_copy`, `specific_rin` or `fr_document`."
+      },
+      {
+        "column_name": "unresolved_fr_references_json",
+        "column_type": "VARCHAR",
+        "description": "JSON array of Register number references it holds that resolve to no single record, each with its candidates and status."
+      },
+      {
+        "column_name": "rins_json",
+        "column_type": "VARCHAR",
+        "description": "JSON array of every RIN it holds, from its dockets, documents and Register documents."
+      }
+    ],
+    "grain": "One rulemaking proceeding: the dockets and Register documents that are one action.",
+    "identity_columns": [
+      "proceeding_id"
+    ]
+  },
+  "regulatory_agenda_items": {
+    "table": "regulatory_agenda_items",
+    "label": "Regulatory Agenda items",
+    "summary": "One row per Regulation Identifier Number: the durable Regulatory Agenda item a RIN identifies, with how many proceedings evidence links it to and whether its scope is resolved. Keyed `agenda_item_id` (`urn:rkaf:us:rin:<rin>`), one per `rin`; joined by `agenda_item_proceedings` on `agenda_item_id`, and to `unified_agenda` on `rin`. Built by `build_regulatory_agenda`; all columns are VARCHAR.",
+    "coverage": "Derived, and bounded by its inputs: every RIN that `unified_agenda`, `dockets`, `documents` or `federal_register` states. `snapshot_91b19da7…` holds 52,092 items.",
+    "kind": "derived",
+    "measured_on": "2026-09-27",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "agenda_item_id",
+        "column_type": "VARCHAR",
+        "description": "The item's id, `urn:rkaf:us:rin:<rin>`."
+      },
+      {
+        "column_name": "rin",
+        "column_type": "VARCHAR",
+        "description": "The Regulation Identifier Number the item is (e.g. `2060-AV16`)."
+      },
+      {
+        "column_name": "scope_status",
+        "column_type": "VARCHAR",
+        "description": "`recurring` (its latest Agenda priority is Routine and Frequent), `single_observed` (evidence links one proceeding) or `unresolved` (none or several)."
+      },
+      {
+        "column_name": "scope_basis",
+        "column_type": "VARCHAR",
+        "description": "Why `scope_status` holds: `latest_agenda_priority_routine_and_frequent`, `one_evidence_linked_proceeding`, `zero_evidence_linked_proceedings` or `multiple_evidence_linked_proceedings`."
+      },
+      {
+        "column_name": "linked_proceeding_count",
+        "column_type": "VARCHAR",
+        "description": "How many proceedings `agenda_item_proceedings` links the item to, as a decimal string."
+      },
+      {
+        "column_name": "observation_count",
+        "column_type": "VARCHAR",
+        "description": "How many distinct Unified Agenda entries (edition and URL) list the RIN, as a decimal string; `0` when no edition does."
+      },
+      {
+        "column_name": "latest_agenda_edition",
+        "column_type": "VARCHAR",
+        "description": "The latest Unified Agenda edition listing the RIN, `YYYYMM`; NULL when no edition does."
+      },
+      {
+        "column_name": "first_seen",
+        "column_type": "VARCHAR",
+        "description": "Earliest Eastern day any source dates the RIN: an Agenda edition or action date, a docket or document date, or a Register publication."
+      },
+      {
+        "column_name": "last_seen",
+        "column_type": "VARCHAR",
+        "description": "Latest Eastern day any source dates the RIN."
+      },
+      {
+        "column_name": "method",
+        "column_type": "VARCHAR",
+        "description": "How the row was asserted; `deterministic` (computed by rule) throughout."
+      },
+      {
+        "column_name": "actor_id",
+        "column_type": "VARCHAR",
+        "description": "The builder that asserted the row, with its version (`spicy-regs:regulatory-agenda-items:v<n>`), bumped when its published rows change."
+      },
+      {
+        "column_name": "run_id",
+        "column_type": "VARCHAR",
+        "description": "The materialization run that built the snapshot (e.g. `rulemaking-20260927T062656Z`)."
+      },
+      {
+        "column_name": "asserted_at",
+        "column_type": "VARCHAR",
+        "description": "When that run asserted the row, as a UTC ISO 8601 instant."
+      },
+      {
+        "column_name": "supersedes_id",
+        "column_type": "VARCHAR",
+        "description": "Id of a prior row this one continues; always NULL here, since an item's id is its RIN."
+      },
+      {
+        "column_name": "unresolved_fr_references_json",
+        "column_type": "VARCHAR",
+        "description": "JSON array of unresolved Register number references from the Register documents that state this RIN."
+      }
+    ],
+    "grain": "One durable Regulatory Agenda item per RIN.",
+    "identity_columns": [
+      "agenda_item_id"
+    ]
+  },
+  "agenda_item_proceedings": {
+    "table": "agenda_item_proceedings",
+    "label": "Agenda item to proceeding links",
+    "summary": "One row per piece of evidence that an agenda item tracks a proceeding: a docket, Regulations.gov document or Register document that directly reports the RIN for that proceeding. Unified Agenda equality alone never links an action. Keyed `relationship_id`; joins `regulatory_agenda_items` on `agenda_item_id`, `proceedings` on `proceeding_id` and `unified_agenda` on `rin`. Built by `build_regulatory_agenda`; all columns are VARCHAR.",
+    "coverage": "Derived, and bounded by its inputs: `dockets`, `documents` and `federal_register` records that state a RIN the proceeding holds. `snapshot_91b19da7…` holds 148,011 links.",
+    "kind": "derived",
+    "measured_on": "2026-09-27",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "relationship_id",
+        "column_type": "VARCHAR",
+        "description": "Stable id of the link (`agenda_proceeding_relationship_<24 hex>`), from its RIN, proceeding, source and evidence."
+      },
+      {
+        "column_name": "agenda_item_id",
+        "column_type": "VARCHAR",
+        "description": "The agenda item; joins `regulatory_agenda_items.agenda_item_id`."
+      },
+      {
+        "column_name": "rin",
+        "column_type": "VARCHAR",
+        "description": "The item's Regulation Identifier Number."
+      },
+      {
+        "column_name": "proceeding_id",
+        "column_type": "VARCHAR",
+        "description": "The proceeding the item tracks; joins `proceedings.proceeding_id`."
+      },
+      {
+        "column_name": "relationship_role",
+        "column_type": "VARCHAR",
+        "description": "The link's role; `agenda_tracks_proceeding` throughout."
+      },
+      {
+        "column_name": "source",
+        "column_type": "VARCHAR",
+        "description": "What reported the RIN: `docket_rin` (the docket), `document_rin` (a document's `additional_rins`) or `federal_register_rin` (a Register document)."
+      },
+      {
+        "column_name": "evidence_id",
+        "column_type": "VARCHAR",
+        "description": "The reporting record, by `source`: a docket id, a Regulations.gov document id, or a dated Register record id (`number@YYYY-MM-DD`)."
+      },
+      {
+        "column_name": "evidence_uri",
+        "column_type": "VARCHAR",
+        "description": "Public URL of that record on regulations.gov or federalregister.gov."
+      },
+      {
+        "column_name": "evidence_date",
+        "column_type": "VARCHAR",
+        "description": "Eastern day of the evidence: the docket's or document's latest date, or the Register publication date."
+      },
+      {
+        "column_name": "method",
+        "column_type": "VARCHAR",
+        "description": "How the row was asserted; `deterministic` (computed by rule) throughout."
+      },
+      {
+        "column_name": "actor_id",
+        "column_type": "VARCHAR",
+        "description": "The builder that asserted the row, with its version (`spicy-regs:agenda-item-proceedings:v<n>`), bumped when its published rows change."
+      },
+      {
+        "column_name": "run_id",
+        "column_type": "VARCHAR",
+        "description": "The materialization run that built the snapshot (e.g. `rulemaking-20260927T062656Z`)."
+      },
+      {
+        "column_name": "asserted_at",
+        "column_type": "VARCHAR",
+        "description": "When that run asserted the row, as a UTC ISO 8601 instant."
+      },
+      {
+        "column_name": "supersedes_id",
+        "column_type": "VARCHAR",
+        "description": "Id of a prior row this one continues; always NULL here."
+      }
+    ],
+    "grain": "One evidence record linking one agenda item (RIN) to one proceeding.",
+    "identity_columns": [
+      "relationship_id"
+    ]
+  },
+  "comment_periods": {
+    "table": "comment_periods",
+    "label": "Public comment periods",
+    "summary": "One row per continuous public-comment interval, reopenings included: overlapping or adjacent intervals from Regulations.gov documents and Register notices of the same dockets (else the same proceedings) merge into one, so an extension lengthens a period and a reopening starts a new one. A period keeps its docket anchors when its proceeding is unresolved. Keyed `comment_period_id`. Its proceedings, dockets and RINs are JSON lists, so it joins through them rather than by a column. Built by `build_comment_periods`; all columns are VARCHAR.",
+    "coverage": "Derived, and bounded by its inputs: `documents` with a comment end date and `federal_register` records with `comments_close_on`. `snapshot_91b19da7…` holds 281,635 periods.",
+    "kind": "derived",
+    "measured_on": "2026-09-27",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "comment_period_id",
+        "column_type": "VARCHAR",
+        "description": "Stable id of the period (`comment_period_<24 hex>`), from its proceedings, dockets and open date."
+      },
+      {
+        "column_name": "proceeding_ids_json",
+        "column_type": "VARCHAR",
+        "description": "JSON array of the proceedings the period is open in; `[]` when none resolves (docket-only)."
+      },
+      {
+        "column_name": "rins_json",
+        "column_type": "VARCHAR",
+        "description": "JSON array of the RINs its documents and proceedings carry."
+      },
+      {
+        "column_name": "docket_ids_json",
+        "column_type": "VARCHAR",
+        "description": "JSON array of the Regulations.gov dockets the period is anchored to; `[]` for a Register notice naming none."
+      },
+      {
+        "column_name": "open_date",
+        "column_type": "VARCHAR",
+        "description": "Eastern day the period opens: a document's comment start (else its posting) or the notice's publication, `YYYY-MM-DD`."
+      },
+      {
+        "column_name": "close_date",
+        "column_type": "VARCHAR",
+        "description": "Eastern day the merged period closes, `YYYY-MM-DD`."
+      },
+      {
+        "column_name": "source",
+        "column_type": "VARCHAR",
+        "description": "The sources of its merged intervals, `+`-joined: `documents.comment_end_date` and `federal_register.comments_close_on`."
+      },
+      {
+        "column_name": "opened_by_artifact_ids_json",
+        "column_type": "VARCHAR",
+        "description": "JSON array of public URLs of the documents whose interval opens the period on `open_date`."
+      },
+      {
+        "column_name": "evidence_ids_json",
+        "column_type": "VARCHAR",
+        "description": "JSON array of every record merged into the period: Regulations.gov document ids and dated Register record ids."
+      },
+      {
+        "column_name": "method",
+        "column_type": "VARCHAR",
+        "description": "How the row was asserted; `deterministic` (computed by rule) throughout."
+      },
+      {
+        "column_name": "actor_id",
+        "column_type": "VARCHAR",
+        "description": "The builder that asserted the row, with its version (`spicy-regs:comment-periods:v<n>`), bumped when its published rows change."
+      },
+      {
+        "column_name": "run_id",
+        "column_type": "VARCHAR",
+        "description": "The materialization run that built the snapshot (e.g. `rulemaking-20260927T062656Z`)."
+      },
+      {
+        "column_name": "asserted_at",
+        "column_type": "VARCHAR",
+        "description": "When that run asserted the row, as a UTC ISO 8601 instant."
+      },
+      {
+        "column_name": "supersedes_id",
+        "column_type": "VARCHAR",
+        "description": "Id of a prior row this one continues; always NULL here."
+      },
+      {
+        "column_name": "unresolved_fr_references_json",
+        "column_type": "VARCHAR",
+        "description": "JSON array of unresolved Register number references attached to its evidence."
+      }
+    ],
+    "grain": "One continuous public-comment interval of one set of dockets or proceedings.",
+    "identity_columns": [
+      "comment_period_id"
+    ]
+  },
+  "rulemaking_lifecycles": {
+    "table": "rulemaking_lifecycles",
+    "label": "Rulemaking lifecycles",
+    "summary": "One row per docketed proceeding (owner decisions 54-56c): its earliest proposal, the earliest final strictly after it, or what else its events make (`kind`), with survival columns (`outcome`, `duration_days`, `censor_date`) for time-to-final estimates, Unified Agenda status and routine-family strata. A docket-less proceeding is one Register document that cannot pair and is left out. Keyed `proceeding_id`; joins `proceedings` on it and is joined by `lifecycle_events`. Built by `build_lifecycles`; dates are DATE, counts INTEGER and flags BOOLEAN. Replaces the documents-based rollup withdrawn on 2026-09-23.",
+    "coverage": "Derived, and bounded by its inputs: every docketed proceeding, paired from its cleaned `lifecycle_events`. `snapshot_91b19da7…` holds 75,270 lifecycles (25,861 finalized, 28,387 final without a proposal, 10,186 no anchor, 8,723 open, 1,252 companion, 721 withdrawn, 140 upload pairs), censored at 2026-09-25.",
+    "kind": "derived",
+    "measured_on": "2026-09-27",
+    "data_quality": "A Regulations.gov document whose stated Register number resolves to no Register row is dated by its upload, which for a legacy document can be years after the rule: on snapshot_9b2c770e's inputs 262 lifecycles anchor on such a document, 74 of them upload pairs outside survival (docs/ontology.md).",
+    "columns": [
+      {
+        "column_name": "proceeding_id",
+        "column_type": "VARCHAR",
+        "description": "The docketed proceeding the lifecycle reads; joins `proceedings.proceeding_id`."
+      },
+      {
+        "column_name": "agency_code",
+        "column_type": "VARCHAR",
+        "description": "The proceeding's agency code."
+      },
+      {
+        "column_name": "kind",
+        "column_type": "VARCHAR",
+        "description": "What its events make: `finalized`, `companion`, `upload_pair`, `withdrawn`, `open`, `final_without_observed_proposal` or `no_anchor`."
+      },
+      {
+        "column_name": "proposal_date",
+        "column_type": "DATE",
+        "description": "Day of the earliest proposed event; NULL without a proposal."
+      },
+      {
+        "column_name": "proposal_document_id",
+        "column_type": "VARCHAR",
+        "description": "The proposal's document: a dated Register record id (`number@YYYY-MM-DD`) when the Register dates it, else a Regulations.gov document id."
+      },
+      {
+        "column_name": "proposal_form",
+        "column_type": "VARCHAR",
+        "description": "The proposal's form from its title: `proposed`, `advance_proposed`, `comment_period` or `correction`."
+      },
+      {
+        "column_name": "final_date",
+        "column_type": "DATE",
+        "description": "Day of the final the lifecycle pairs or anchors on; NULL without one."
+      },
+      {
+        "column_name": "final_document_id",
+        "column_type": "VARCHAR",
+        "description": "The final's document, spelled as `proposal_document_id` is."
+      },
+      {
+        "column_name": "final_form",
+        "column_type": "VARCHAR",
+        "description": "The final's form from its title: `final`, `interim_final`, `direct_final` or `correction`."
+      },
+      {
+        "column_name": "finals_before_proposal",
+        "column_type": "INTEGER",
+        "description": "Finals dated before the proposal, counted and never paired; NULL without a proposal."
+      },
+      {
+        "column_name": "withdrawal_date",
+        "column_type": "DATE",
+        "description": "Day of the withdrawal that makes it `withdrawn`; NULL otherwise."
+      },
+      {
+        "column_name": "withdrawal_document_id",
+        "column_type": "VARCHAR",
+        "description": "The withdrawal: a dated Register record id, or the agenda item id (`urn:rkaf:us:rin:<rin>`) of an Agenda withdrawal."
+      },
+      {
+        "column_name": "withdrawal_source",
+        "column_type": "VARCHAR",
+        "description": "Who withdrew it: `federal_register` or `unified_agenda`."
+      },
+      {
+        "column_name": "outcome",
+        "column_type": "VARCHAR",
+        "description": "Its survival outcome: `final`, `withdrawn` (a competing outcome) or `censored`; NULL for a kind outside survival."
+      },
+      {
+        "column_name": "duration_days",
+        "column_type": "INTEGER",
+        "description": "Days from the proposal to the final, the withdrawal or `censor_date`; NULL without an outcome."
+      },
+      {
+        "column_name": "censor_date",
+        "column_type": "DATE",
+        "description": "The generation's last event day, capped at the run's day, where open lifecycles are censored; one date in every row."
+      },
+      {
+        "column_name": "open_signal",
+        "column_type": "VARCHAR",
+        "description": "What the latest Unified Agenda entry of its specific RINs says (`agenda_completed_final`, `agenda_completed_withdrawn`, `agenda_completed_other`, `agenda_long_term`, `agenda_active`, `agenda_dropped_off`), else `not_on_agenda` or `no_specific_rin`."
+      },
+      {
+        "column_name": "routine_family",
+        "column_type": "VARCHAR",
+        "description": "The routine family its agency and titles name (`airworthiness_directive`, `airspace`, `state_air_plan`, `pesticide_tolerance`, `coast_guard_local`); NULL otherwise."
+      },
+      {
+        "column_name": "agenda_priority",
+        "column_type": "VARCHAR",
+        "description": "That Agenda entry's `priority_category` (e.g. `Economically Significant`); NULL without one."
+      },
+      {
+        "column_name": "agenda_major",
+        "column_type": "VARCHAR",
+        "description": "That Agenda entry's `major` (`Yes`, `No` or `Undetermined`); NULL without one."
+      },
+      {
+        "column_name": "specific_rins_json",
+        "column_type": "VARCHAR",
+        "description": "JSON array of the RINs the proceeding's docket-side evidence alone holds."
+      },
+      {
+        "column_name": "anchored_by_specific_rin",
+        "column_type": "BOOLEAN",
+        "description": "Whether its proposal or final anchor joined the proceeding by specific RIN (decision 56c)."
+      },
+      {
+        "column_name": "pre_2008_coverage",
+        "column_type": "BOOLEAN",
+        "description": "Whether it is anchored before 2008, when Regulations.gov coverage is thin; NULL without an anchor, or for an upload pair from 2008 on."
+      },
+      {
+        "column_name": "method",
+        "column_type": "VARCHAR",
+        "description": "How the row was asserted; `deterministic` (computed by rule) throughout."
+      },
+      {
+        "column_name": "actor_id",
+        "column_type": "VARCHAR",
+        "description": "The builder that asserted the row, with its version (`spicy-regs:rulemaking-lifecycles:v<n>`), bumped when its published rows change."
+      },
+      {
+        "column_name": "run_id",
+        "column_type": "VARCHAR",
+        "description": "The materialization run that built the snapshot (e.g. `rulemaking-20260927T062656Z`)."
+      },
+      {
+        "column_name": "asserted_at",
+        "column_type": "VARCHAR",
+        "description": "When that run asserted the row, as a UTC ISO 8601 instant."
+      },
+      {
+        "column_name": "supersedes_id",
+        "column_type": "VARCHAR",
+        "description": "Id of a prior row this one continues; always NULL here."
+      }
+    ],
+    "grain": "One lifecycle per docketed proceeding.",
+    "identity_columns": [
+      "proceeding_id"
+    ]
+  },
+  "lifecycle_events": {
+    "table": "lifecycle_events",
+    "label": "Rulemaking lifecycle events",
+    "summary": "One row per staged document of a docketed proceeding: the events each `rulemaking_lifecycles` row is paired from. A Regulations.gov copy of a Register document is that document, dated by the Register, and an Agenda entry completed as withdrawn adds its dated withdrawal. Keyed (`proceeding_id`, `document_id`); `dated_by` says which kind of id `document_id` is. Joins `rulemaking_lifecycles` on `proceeding_id`. Built by `build_lifecycles`; `event_date` is DATE.",
+    "coverage": "Derived, and bounded by its inputs: the stage events of every docketed proceeding, one per document, less those undated or dated after the run's day. `snapshot_91b19da7…` holds 135,362 events.",
+    "kind": "derived",
+    "measured_on": "2026-09-27",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "proceeding_id",
+        "column_type": "VARCHAR",
+        "description": "The proceeding; joins `rulemaking_lifecycles.proceeding_id`."
+      },
+      {
+        "column_name": "document_id",
+        "column_type": "VARCHAR",
+        "description": "The document, by `dated_by`: a dated Register record id (`number@YYYY-MM-DD`), a Regulations.gov document id, or an agenda item id (`urn:rkaf:us:rin:<rin>`)."
+      },
+      {
+        "column_name": "stage",
+        "column_type": "VARCHAR",
+        "description": "The stage the event records: `proposed`, `supplemental`, `final` or `withdrawn`."
+      },
+      {
+        "column_name": "event_date",
+        "column_type": "DATE",
+        "description": "The event's day, from the source `dated_by` names."
+      },
+      {
+        "column_name": "source",
+        "column_type": "VARCHAR",
+        "description": "Who typed the stage: `federal_register` (for its copies too, wherever it states a type), `regulations_gov` or `unified_agenda`."
+      },
+      {
+        "column_name": "dated_by",
+        "column_type": "VARCHAR",
+        "description": "Whose day `event_date` is, and so which kind of id `document_id` is: `federal_register`, `regulations_gov` (its upload) or `unified_agenda`."
+      },
+      {
+        "column_name": "evidence_id",
+        "column_type": "VARCHAR",
+        "description": "The proceedings stage event it came from: that record's own id, or `<agenda item id>@<edition>` for an Agenda withdrawal."
+      },
+      {
+        "column_name": "joined_by",
+        "column_type": "VARCHAR",
+        "description": "How the document joined the proceeding: `docket`, `fr_docket_link`, `fr_copy`, `specific_rin` or `agenda_rin`."
+      },
+      {
+        "column_name": "document_form",
+        "column_type": "VARCHAR",
+        "description": "Its stage refined by its title: `proposed`, `advance_proposed`, `comment_period`, `final`, `interim_final`, `direct_final`, `correction`, `supplemental` or `withdrawn`."
+      },
+      {
+        "column_name": "anchor_role",
+        "column_type": "VARCHAR",
+        "description": "`proposal`, `final` or `withdrawal` when the lifecycle anchors on this document; NULL otherwise."
+      },
+      {
+        "column_name": "method",
+        "column_type": "VARCHAR",
+        "description": "How the row was asserted; `deterministic` (computed by rule) throughout."
+      },
+      {
+        "column_name": "actor_id",
+        "column_type": "VARCHAR",
+        "description": "The builder that asserted the row, with its version (`spicy-regs:lifecycle-events:v<n>`), bumped when its published rows change."
+      },
+      {
+        "column_name": "run_id",
+        "column_type": "VARCHAR",
+        "description": "The materialization run that built the snapshot (e.g. `rulemaking-20260927T062656Z`)."
+      },
+      {
+        "column_name": "asserted_at",
+        "column_type": "VARCHAR",
+        "description": "When that run asserted the row, as a UTC ISO 8601 instant."
+      },
+      {
+        "column_name": "supersedes_id",
+        "column_type": "VARCHAR",
+        "description": "Id of a prior row this one continues; always NULL here."
+      }
+    ],
+    "grain": "One stage event per document of one docketed proceeding.",
+    "identity_columns": [
+      "proceeding_id",
+      "document_id"
+    ]
+  },
+  "agency_lifecycle_stats": {
+    "table": "agency_lifecycle_stats",
+    "label": "Time to final rule by agency",
+    "summary": "The Aalen-Johansen cumulative incidence of a final rule, withdrawal competing (decision 54a), per agency and for all agencies (`agency_code` NULL), overall, routine, non-routine and per routine family: the first day it reaches each quartile, NULL where it never does, with a 95% interval from the log-log band. A cell under 30 rules keeps its row, `suppressed`, with no estimates; the Parquet metadata states the estimator exactly. Keyed (`agency_code`, `stratum`). Built by `build_agency_lifecycle_stats`; counts and days are INTEGER.",
+    "coverage": "Derived from `rulemaking_lifecycles` with a survival outcome. `snapshot_91b19da7…` holds 344 cells, 172 of them suppressed under 30 rules; every unsuppressed estimate equals R's multi-state `survfit`.",
+    "kind": "derived",
+    "measured_on": "2026-09-27",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "agency_code",
+        "column_type": "VARCHAR",
+        "description": "The agency the cell covers; NULL for all agencies together."
+      },
+      {
+        "column_name": "stratum",
+        "column_type": "VARCHAR",
+        "description": "The rules counted: `all`, `routine`, `non_routine`, or one routine family."
+      },
+      {
+        "column_name": "rules",
+        "column_type": "INTEGER",
+        "description": "Lifecycles in the cell with a survival outcome."
+      },
+      {
+        "column_name": "finals",
+        "column_type": "INTEGER",
+        "description": "How many of them became final."
+      },
+      {
+        "column_name": "withdrawals",
+        "column_type": "INTEGER",
+        "description": "How many of them were withdrawn."
+      },
+      {
+        "column_name": "censored",
+        "column_type": "INTEGER",
+        "description": "How many of them were still open at `censor_date`."
+      },
+      {
+        "column_name": "suppressed",
+        "column_type": "BOOLEAN",
+        "description": "Whether the cell has fewer than 30 rules and so carries no estimates."
+      },
+      {
+        "column_name": "q1_days",
+        "column_type": "INTEGER",
+        "description": "First day the cumulative incidence of a final reaches 25%; NULL where it never does or the cell is suppressed."
+      },
+      {
+        "column_name": "q1_lower_days",
+        "column_type": "INTEGER",
+        "description": "Lower end of the 95% interval of `q1_days`: the first day the band's upper edge reaches 25%; NULL where it never does or the cell is suppressed."
+      },
+      {
+        "column_name": "q1_upper_days",
+        "column_type": "INTEGER",
+        "description": "Upper end of the 95% interval of `q1_days`: the first day the band's lower edge reaches 25%; NULL where it never does."
+      },
+      {
+        "column_name": "median_days",
+        "column_type": "INTEGER",
+        "description": "First day the cumulative incidence of a final reaches 50%: the median time to final; NULL where it never does or the cell is suppressed."
+      },
+      {
+        "column_name": "median_lower_days",
+        "column_type": "INTEGER",
+        "description": "Lower end of the 95% interval of `median_days`: the first day the band's upper edge reaches 50%; NULL where it never does or the cell is suppressed."
+      },
+      {
+        "column_name": "median_upper_days",
+        "column_type": "INTEGER",
+        "description": "Upper end of the 95% interval of `median_days`; NULL where the band's lower edge never reaches 50%."
+      },
+      {
+        "column_name": "q3_days",
+        "column_type": "INTEGER",
+        "description": "First day the cumulative incidence of a final reaches 75%; NULL where it never does or the cell is suppressed."
+      },
+      {
+        "column_name": "q3_lower_days",
+        "column_type": "INTEGER",
+        "description": "Lower end of the 95% interval of `q3_days`: the first day the band's upper edge reaches 75%; NULL where it never does or the cell is suppressed."
+      },
+      {
+        "column_name": "q3_upper_days",
+        "column_type": "INTEGER",
+        "description": "Upper end of the 95% interval of `q3_days`; NULL where the band's lower edge never reaches 75%."
+      },
+      {
+        "column_name": "censor_date",
+        "column_type": "DATE",
+        "description": "The lifecycles' censor date, where the estimates' open rules are censored."
+      },
+      {
+        "column_name": "method",
+        "column_type": "VARCHAR",
+        "description": "How the row was asserted; `deterministic` (computed by rule) throughout."
+      },
+      {
+        "column_name": "actor_id",
+        "column_type": "VARCHAR",
+        "description": "The builder that asserted the row, with its version (`spicy-regs:agency-lifecycle-stats:v<n>`), bumped when its published rows change."
+      },
+      {
+        "column_name": "run_id",
+        "column_type": "VARCHAR",
+        "description": "The materialization run that built the snapshot (e.g. `rulemaking-20260927T062656Z`)."
+      },
+      {
+        "column_name": "asserted_at",
+        "column_type": "VARCHAR",
+        "description": "When that run asserted the row, as a UTC ISO 8601 instant."
+      },
+      {
+        "column_name": "supersedes_id",
+        "column_type": "VARCHAR",
+        "description": "Id of a prior row this one continues; always NULL here."
+      }
+    ],
+    "grain": "One agency (or all agencies) and one stratum of rules.",
+    "identity_columns": [
+      "agency_code",
+      "stratum"
+    ]
+  },
   "sam_entities": {
     "table": "sam_entities",
     "label": "Federal entity registry",

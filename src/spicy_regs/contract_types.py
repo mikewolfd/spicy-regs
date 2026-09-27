@@ -3,7 +3,8 @@
 A contract spells a column's type with DocSpec's table-profile name (``spicy_docs.schemas.COLUMN_TYPES``); VARCHAR is
 the default. Here each name maps to the Arrow type the writers use and to DuckDB's ``DESCRIBE`` spelling, which the
 publication descriptors and the dictionary carry and DocSpec's admission compares with the footer. Timestamps are
-microsecond precision, as admission requires.
+microsecond precision, as admission requires. A writer with its own Arrow schema (the rulemaking lifecycle tables) is
+spelled the same way.
 """
 
 from __future__ import annotations
@@ -54,3 +55,9 @@ def arrow_schema(contract) -> pa.Schema:
 def described_columns(contract) -> list[tuple[str, str]]:
     """``[(column, DuckDB type)]`` as a written member's footer describes it."""
     return [(column, DESCRIBED[contract.column_type(column)]) for column in contract.columns]
+
+
+def described_schema(schema: pa.Schema) -> list[tuple[str, str]]:
+    """``[(column, DuckDB type)]`` for a writer's own Arrow schema; a type no contract names raises KeyError."""
+    spelled = {arrow_type(name): DESCRIBED[name] for name in DESCRIBED}
+    return [(field.name, spelled[field.type]) for field in schema]

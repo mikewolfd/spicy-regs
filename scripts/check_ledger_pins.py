@@ -47,16 +47,12 @@ def rollup_pins(index: Mapping) -> dict[str, tuple[str, int]]:
     }
 
 
-def snapshot_pins(pointer: Mapping, manifest: Mapping) -> dict[str, tuple[str, int]]:
-    """Map each public rulemaking artifact to the pointer's short snapshot pin and its row count."""
-    if manifest.get("snapshot_id") != pointer["snapshot_id"]:
-        raise publication.PublicationError("Rulemaking pointer and manifest name different snapshots")
-    pin = pointer["snapshot_id"][: len("snapshot_") + 8]
-    return {
-        name: (pin, record["rows"])
-        for name, record in manifest["artifacts"].items()
-        if record.get("visibility", "public") == "public"
-    }
+def snapshot_pins(snapshot: Mapping | None) -> dict[str, tuple[str, int]]:
+    """Map each public rulemaking artifact to the pointer's short snapshot pin and its row count; none while unpublished."""
+    if snapshot is None:
+        return {}
+    pin = snapshot["snapshot_id"][: len("snapshot_") + 8]
+    return {name: (pin, record["rows"]) for name, record in snapshot["tables"].items()}
 
 
 def base_object_keys(text: str) -> list[str]:
@@ -106,16 +102,6 @@ def _detail(task: str, tables: list[str], qualified: str, live: list, unit: str)
     return f"{task} {', '.join(tables) or '-'}  qualified={qualified}  live={live_pins}  {unit}={sizes}"
 
 
-def _get_json(url: str) -> dict | None:
-    """GET one small public JSON object; a 404 means unpublished."""
-    headers = {"User-Agent": "spicy-regs", "Cache-Control": "no-cache"}
-    response = httpx.get(url, headers=headers, follow_redirects=True, timeout=60)
-    if response.status_code == 404:
-        return None
-    response.raise_for_status()
-    return response.json()
-
-
 def object_pins(base_url: str, keys: Sequence[str]) -> dict[str, tuple[str, int]]:
     """HEAD each public base object; map it to its ETag's first 8 hex digits and its size."""
     pins = {}
@@ -133,13 +119,7 @@ def fetch_live(base_url: str, ledger: str) -> tuple[dict, dict, dict]:
     """Read the publication index and the rulemaking pointer once each, and HEAD the ledger's base objects."""
     rollups = rollup_pins(publication.load_index(base_url))
     objects = object_pins(base_url, base_object_keys(ledger))
-    pointer = _get_json(f"{base_url}/{publication.SNAPSHOT_POINTER}")
-    if pointer is None:
-        return rollups, {}, objects
-    manifest = _get_json(f"{base_url}/{pointer['manifest_key']}")
-    if manifest is None:
-        raise publication.PublicationError(f"Rulemaking pointer names a missing manifest: {pointer['manifest_key']}")
-    return rollups, snapshot_pins(pointer, manifest), objects
+    return rollups, snapshot_pins(publication.load_rulemaking_snapshot(base_url)), objects
 
 
 def main(argv: Sequence[str] | None = None) -> int:
