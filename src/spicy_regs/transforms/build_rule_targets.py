@@ -14,6 +14,7 @@ from loguru import logger
 
 from spicy_regs.ontology.citations import (
     CfrCitation,
+    action_evidence_rin,
     normalize_regsgov_identifier,
     normalize_rin,
     parse_cfr_citation,
@@ -29,7 +30,7 @@ from spicy_regs.ontology.common import (
     write_parquet_rows,
 )
 
-from spicy_regs.ontology.federal_register import FederalRegisterIndex, resolved_id, rule_stage
+from spicy_regs.ontology.federal_register import FederalRegisterIndex, register_rule_stage, resolved_id
 
 OUTPUT = "rule_targets.parquet"
 # v3: labelled FR docket values join (linked_docket_id), zero-padded and en-dash FR numbers
@@ -40,7 +41,12 @@ OUTPUT = "rule_targets.parquet"
 # v6: a docket's own document citing an FR document that is action evidence (a RIN or a rule
 # stage) is a typed edge, docket_document_cites_action_notice, with no CFR or RIN target: it
 # records the citation decision 32 counts, and unions no proceedings (decision 33 as amended).
-ACTOR_ID = "spicy-regs:rule-targets:v6"
+# v7 (one bump over published v6): a cited notice is action evidence by a rule stage only
+# through its own Rule / Proposed Rule type (the Register's 1994 Uncategorized rows by their
+# title suffix), and never through NOAA's 0648-X... codes (owner decisions 56, 58, 59, 61): on
+# the 2026-09-26 parents 1,682 (docket, citing document) typed citation edges leave and 31
+# appear, each in a docket that already had one.
+ACTOR_ID = "spicy-regs:rule-targets:v7"
 
 COLUMNS = (
     "docket_id",
@@ -302,11 +308,12 @@ def build_rule_targets(
         )
         publication_date = row.get("publication_date")
         published = eastern_day_text(publication_date)
-        # Action evidence as proceedings reads it, a RIN or a rule stage, whatever the CFR
+        # Action evidence as proceedings reads it, a RIN that decides action evidence
+        # (not NOAA's 0648-X… codes, decision 61) or a rule stage, whatever the CFR
         # list holds; the citing documents' own references carry the typed edge.
         if documents and (
-            any(normalize_rin(value) for value in raw_rins or ())
-            or rule_stage(row.get("document_type"), row.get("title"))
+            any(action_evidence_rin(value) for value in raw_rins or ())
+            or register_rule_stage(row.get("document_type"), row.get("title"))
         ):
             for document in documents:
                 add_edge(

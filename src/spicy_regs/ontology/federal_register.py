@@ -50,22 +50,84 @@ def linked_docket_ids(value: object) -> tuple[str, ...]:
 
 
 def rule_stage(document_type: object, title: object) -> str | None:
-    """The rule stage a document's type and title state, or ``None``.
+    """The rule stage a document's own type and title state, or ``None``.
 
     Read the same way off a Federal Register row and a Regulations.gov document; a stage
     makes either one action evidence (fork delivery decisions 32 and 33), as a RIN does.
+    A document carries a stage only when its source type is ``Rule`` or ``Proposed Rule``
+    (casefolded, as the source spells ``document_type``; owner decision 56): a title-only
+    reading made, on the 2026-09-26 live snapshot, 8,211 "final" and 7,929 "proposed" stage
+    events of Supporting & Related Material documents, 4,835 "withdrawn" of Other documents
+    ("withdrawal as attorney of record"), and 40,144 docket-less SEC SRO-notice proceedings
+    of FR Notices ("Notice of Filing of Proposed Rule Change"). Within the two types the
+    title refines: "withdraw" withdraws, "supplement" with "proposed" or "proposal"
+    supplements, else a Rule is final and a Proposed Rule proposed.
     """
     kind = str(document_type or "").casefold()
-    text = f"{kind} {str(title or '').casefold()}"
+    if kind not in ("rule", "proposed rule"):
+        return None
+    text = str(title or "").casefold()
     if "withdraw" in text:
         return "withdrawn"
     if "supplement" in text and ("proposed" in text or "proposal" in text):
         return "supplemental"
-    if kind == "rule" or "final rule" in text:
-        return "final"
-    if kind == "proposed rule" or "proposed rule" in text:
-        return "proposed"
-    return None
+    return "final" if kind == "rule" else "proposed"
+
+
+#: A 1994 Register title's typed suffix: "; Final Rule DEPARTMENT OF EDUCATION". The
+#: agency name the title appends is spelled in capitals. Owner decision 59, and as amended
+#: 2026-09-26 its section-marker variants: interim final and interim rules are Rules in the
+#: Register's own taxonomy, and plurals and a comma-led marker are the same sections.
+_UNCATEGORIZED_SUFFIX = re.compile(
+    r"[;,] (Interim Final Rules?|Interim Rules?|Final Rules?|Proposed Rules?) [A-Z][A-Z0-9 &(),'/.-]*$"
+)
+
+
+def register_rule_stage(document_type: object, title: object) -> str | None:
+    """The Register row's rule stage, an Uncategorized row typed from its title first.
+
+    The Register left 32,645 rows (32,374 of them 1994's) ``Uncategorized Document``;
+    their titles often append the action and the agency ("; Final Rule ENVIRONMENTAL
+    PROTECTION AGENCY"). Only that suffix types a row, and only a Register row reads
+    this way (owner decision 59): everything else stays :func:`rule_stage`'s plain
+    typed reading.
+    """
+    if str(document_type or "").casefold() == "uncategorized document" and (
+        match := _UNCATEGORIZED_SUFFIX.search(str(title or ""))
+    ):
+        document_type = "Proposed Rule" if match.group(1).startswith("Proposed") else "Rule"
+    return rule_stage(document_type, title)
+
+
+def register_states_type(document_type: object, title: object) -> bool:
+    """Whether a Register row states a type: any but ``Uncategorized Document`` or empty, or its suffix types it."""
+    kind = str(document_type or "").casefold()
+    if kind in ("", "uncategorized document"):
+        return bool(kind) and _UNCATEGORIZED_SUFFIX.search(str(title or "")) is not None
+    return True
+
+
+def document_rule_stage(
+    row: dict,
+    fr_index: "FederalRegisterIndex",
+    fr_stages: dict[str, str],
+    fr_untyped: set[str] | frozenset[str] = frozenset(),
+) -> str | None:
+    """A Regulations.gov document's rule stage: the Register row's when it is a typed copy.
+
+    When the document's own ``fr_doc_num`` resolves, through the generation's index, to
+    exactly one Register document that states a type (:func:`register_states_type`), that
+    row's stage under :func:`register_rule_stage` wins — Regulations.gov's looser typing
+    loses (owner decision 60; on the 2026-09-26 parents 3,863 docketed proceedings hung only
+    on such copies, 3,857 of them "Rule"-typed copies of Register Notices). A copy of a
+    Register row that states no type (``fr_untyped``), and any other document, keeps its own
+    type as :func:`rule_stage` reads it (decision 60 as amended 2026-09-26).
+    """
+    cited = row.get("fr_doc_num")
+    if cited and (identity := resolved_id(fr_index.reference(str(cited)))) is not None:
+        if identity not in fr_untyped:
+            return fr_stages.get(identity)
+    return rule_stage(row.get("document_type"), row.get("title"))
 
 
 #: Regulations.gov's Federal Register feed dockets, one per agency (``EPA_FRDOC_0001``).

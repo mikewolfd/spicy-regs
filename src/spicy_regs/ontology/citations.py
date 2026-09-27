@@ -79,6 +79,24 @@ def normalize_rin(value: object) -> str | None:
     return text if _RIN.fullmatch(text) else None
 
 
+#: NOAA's 0648-X… codes: the Register spells a fishery docket identifier exactly like a
+#: RIN (0648-XA00…0648-XZ99, 2,195 distinct on the 2026-09-26 parents). They name no
+#: rulemaking of their own, so they stop deciding action evidence (owner decision 61).
+_NOAA_X_RIN = re.compile(r"^0648-X[A-Z]\d{2}$")
+
+
+def action_evidence_rin(value: object) -> str | None:
+    """The RIN a value states when a RIN decides action evidence, or ``None``.
+
+    Every RIN :func:`normalize_rin` admits stays a recorded value — on its row, in a
+    proceeding's rins, in rule_targets edges; NOAA's 0648-X… codes alone (owner
+    decision 61) stop making a Register row, a Regulations.gov document or a docket
+    action evidence.
+    """
+    rin = normalize_rin(value)
+    return None if rin is None or _NOAA_X_RIN.fullmatch(rin) else rin
+
+
 def normalize_regsgov_identifier(identifier: object) -> str | None:
     """Return a canonical Regulations.gov identifier when syntax permits it."""
     value = str(identifier or "").strip().upper()

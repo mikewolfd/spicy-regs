@@ -273,6 +273,82 @@ def test_a_federal_register_docket_value_is_read_through_its_label_and_list(stat
     assert linked_docket_ids(stated) == dockets
 
 
+@pytest.mark.parametrize(
+    ("document_type", "title", "expected"),
+    [
+        # A stage comes from the document's own type, never the title alone (decision 56).
+        ("Supporting & Related Material", "Final Rule Response to Comments", None),
+        ("Other", "Withdrawal as attorney", None),
+        ("Notice", "Notice of Filing of Proposed Rule Change", None),
+        (None, "Final Rule", None),
+        # Within Rule and Proposed Rule the title refines the stage.
+        ("Proposed Rule", "Airworthiness Directives; Withdrawal", "withdrawn"),
+        ("Proposed Rule", "Supplemental notice of proposed rulemaking", "supplemental"),
+        # "withdraw" outranks "supplement": a withdrawn supplement withdraws.
+        ("Proposed Rule", "Withdrawal of Supplemental Proposed Rulemaking", "withdrawn"),
+        ("Rule", "Guidance Documents; Withdrawal", "withdrawn"),
+        ("Rule", "Energy Conservation Standards", "final"),
+        ("Proposed Rule", "Energy Conservation Standards", "proposed"),
+        # The source spells its type with either case.
+        ("PROPOSED RULE", "Standards proposal", "proposed"),
+    ],
+)
+def test_rule_stage_is_carried_only_by_a_rule_or_proposed_rule(document_type, title, expected):
+    assert federal_register.rule_stage(document_type, title) == expected
+
+
+@pytest.mark.parametrize(
+    ("document_type", "title", "expected"),
+    [
+        # Real 1994 titles (snapshot_7eafd657): the suffix types the row (decision 59).
+        (
+            "Uncategorized Document",
+            "Federal Family Education Loan Program; Final Rule DEPARTMENT OF EDUCATION",
+            "final",
+        ),
+        (
+            "Uncategorized Document",
+            "Overflights of Units of the National Park System; Proposed Rule DEPARTMENT OF TRANSPORTATION",
+            "proposed",
+        ),
+        # Its section-marker variants (decision 59 as amended): interim rules are Rules, and
+        # plurals and a comma-led marker are the same sections.
+        (
+            "Uncategorized Document",
+            "Financial Assistance Rules; Implementation of OMB Circular A-110; Interim Final Rule DEPARTMENT OF ENERGY",
+            "final",
+        ),
+        (
+            "Uncategorized Document",
+            "Career and Career-Conditional Employment; Interim Rule OFFICE OF PERSONNEL MANAGEMENT",
+            "final",
+        ),
+        (
+            "Uncategorized Document",
+            "Rulemaking for EDGAR System and Adoption of Updated EDGAR Filer Manual; Final Rules SECURITIES AND EXCHANGE COMMISSION",
+            "final",
+        ),
+        (
+            "Uncategorized Document",
+            "Revisions to Committee Regulations, Proposed Rule COMMITTEE FOR PURCHASE FROM PEOPLE WHO ARE BLIND OR SEVERELY DISABLED",
+            "proposed",
+        ),
+        # No agency appended, or prose where the agency would be: no typing.
+        ("Uncategorized Document", "Acid Rain Program: Permits; Final Rule", None),
+        ("Uncategorized Document", "Pesticides; Proposed Rule Revoking Certain Food Additive Regulations", None),
+        ("Uncategorized Document", "Lead Fishing Sinkers; Response to Citizens' Petition; Proposed Rule -", None),
+        # Only the Register's Uncategorized rows read this way; other types never re-type.
+        ("Notice", "Student Assistance General Provisions; Final Rule DEPARTMENT OF EDUCATION", None),
+    ],
+)
+def test_an_uncategorized_register_row_types_from_its_title_suffix(document_type, title, expected):
+    assert federal_register.register_rule_stage(document_type, title) == expected
+    # The plain typed reading never types an Uncategorized row: Regulations.gov documents
+    # with that type carry no stage even when their title carries the suffix.
+    if document_type == "Uncategorized Document" and expected is not None:
+        assert federal_register.rule_stage(document_type, title) is None
+
+
 def _labelled_inputs(root):
     records = [
         {
@@ -352,7 +428,7 @@ def test_labelled_dockets_and_padded_numbers_join_every_rulemaking_table(tmp_pat
     assert (corroboration["first_seen"], corroboration["last_seen"]) == ("2010-02-05", "2010-02-05")
     docket_rin = edges[("SSA-2010-0037", "docket_rin", None, "0960-AG21")]
     assert (docket_rin["first_seen"], docket_rin["last_seen"]) == ("2010-03-10", "2010-03-10")
-    assert {r["actor_id"] for r in targets} == {"spicy-regs:rule-targets:v6"}
+    assert {r["actor_id"] for r in targets} == {"spicy-regs:rule-targets:v7"}
 
     proceedings = pq.read_table(build_proceedings(tmp_path)).to_pylist()
     ssa = next(r for r in proceedings if "SSA-2010-0037" in json.loads(r["docket_ids_json"]))
@@ -363,13 +439,13 @@ def test_labelled_dockets_and_padded_numbers_join_every_rulemaking_table(tmp_pat
         ("federal_register.document_type", "2010-02-05"),
     }
     assert not any(json.loads(r["docket_ids_json"]) == [] for r in proceedings)
-    assert {r["actor_id"] for r in proceedings} == {"spicy-regs:proceedings:v9"}
+    assert {r["actor_id"] for r in proceedings} == {"spicy-regs:proceedings:v10"}
 
     periods = pq.read_table(build_comment_periods(tmp_path)).to_pylist()
     (period,) = [r for r in periods if "federal_register.comments_close_on" in r["source"]]
     assert json.loads(period["docket_ids_json"]) == ["SSA-2010-0037"]
     assert json.loads(period["proceeding_ids_json"]) == [ssa["proceeding_id"]]
-    assert {r["actor_id"] for r in periods} == {"spicy-regs:comment-periods:v9"}
+    assert {r["actor_id"] for r in periods} == {"spicy-regs:comment-periods:v10"}
 
     items_path, relationships_path = build_regulatory_agenda(tmp_path)
     (item,) = pq.read_table(items_path).to_pylist()
@@ -377,8 +453,8 @@ def test_labelled_dockets_and_padded_numbers_join_every_rulemaking_table(tmp_pat
     relationships = {r["source"]: r for r in pq.read_table(relationships_path).to_pylist()}
     assert relationships["docket_rin"]["evidence_date"] == "2010-03-10"
     assert relationships["federal_register_rin"]["evidence_date"] == "2010-02-05"
-    assert {r["actor_id"] for r in relationships.values()} == {"spicy-regs:agenda-item-proceedings:v5"}
-    assert item["actor_id"] == "spicy-regs:regulatory-agenda-items:v5"
+    assert {r["actor_id"] for r in relationships.values()} == {"spicy-regs:agenda-item-proceedings:v6"}
+    assert item["actor_id"] == "spicy-regs:regulatory-agenda-items:v6"
 
 
 def test_the_rulemaking_generation_builds_one_federal_register_index(tmp_path, monkeypatch):
@@ -768,3 +844,18 @@ def test_rule_targets_count_the_cfr_references_they_cannot_read(tmp_path):
 
     assert {r["cfr_ref"] for r in targets if r["docket_id"] == "SSA-2010-0037"} == {None, "20-404"}
     assert any("dropped 1 Federal Register CFR references that are not objects" in m for m in messages)
+
+
+@pytest.mark.parametrize(
+    ("document_type", "title", "states"),
+    [
+        ("Notice", "Fishery Management Plan; Notice", True),
+        ("Rule", "Air standards", True),
+        ("Uncategorized Document", "Federal Family Education Loan Program; Final Rule DEPARTMENT OF EDUCATION", True),
+        ("Uncategorized Document", "Defense Acquisition Regulations", False),
+        ("", "Anything", False),
+    ],
+)
+def test_a_register_row_states_a_type_unless_it_is_untyped(document_type, title, states):
+    """Decision 60 as amended: only a Register row that states a type overrides a copy's own."""
+    assert federal_register.register_states_type(document_type, title) is states

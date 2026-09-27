@@ -48,7 +48,10 @@ OUTPUT = "comment_periods.parquet"
 # in a Federal Register feed docket takes none of the posted rules' RINs through its
 # proceeding, only its document's own, and one in a feed with no RIN of its own is
 # docket-anchored, as that proceeding goes, and re-keys with its evidence intact.
-ACTOR_ID = "spicy-regs:comment-periods:v9"
+# v10 (one bump over published v9): code unchanged; its rows move with proceedings v10
+# (owner decisions 56, 58-61): on the 2026-09-26 parents 286,065 -> 283,137 periods, as those of
+# removed proceedings re-key to what still anchors them or go when nothing does.
+ACTOR_ID = "spicy-regs:comment-periods:v10"
 
 COLUMNS = (
     "comment_period_id",

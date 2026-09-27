@@ -44,8 +44,12 @@ RELATIONSHIPS_OUTPUT = "agenda_item_proceedings.parquet"
 # rows move with proceedings v9, whose feed shells go with their links (two, from FAA-2007-0004
 # to 2120-AA64). Items a feed tracked keep their other links and count fewer (decision 32 as
 # amended 2026-09-26).
-ITEM_ACTOR_ID = "spicy-regs:regulatory-agenda-items:v5"
-RELATIONSHIP_ACTOR_ID = "spicy-regs:agenda-item-proceedings:v5"
+# v6 (one bump over published v5): code unchanged; its rows move with proceedings v10. A
+# proceeding held only through NOAA's 0648-X… codes (owner decision 61) is no longer formed,
+# so its RIN links go (6,648 relationships on the 2026-09-26 parents, all 0648-X…) and the
+# items they tracked count fewer or become unresolved (1,658 items).
+ITEM_ACTOR_ID = "spicy-regs:regulatory-agenda-items:v6"
+RELATIONSHIP_ACTOR_ID = "spicy-regs:agenda-item-proceedings:v6"
 
 ITEM_COLUMNS = (
     "agenda_item_id",

@@ -10,6 +10,7 @@ import pyarrow.parquet as pq
 from loguru import logger
 
 from spicy_regs.ontology.citations import (
+    action_evidence_rin,
     canonical_cfr_iri,
     normalize_regsgov_identifier,
     normalize_rin,
@@ -30,9 +31,11 @@ from spicy_regs.ontology.common import (
 from spicy_regs.ontology.federal_register import (
     FederalRegisterIndex,
     catch_all_docket,
+    document_rule_stage,
     references_json,
+    register_rule_stage,
+    register_states_type,
     resolved_id,
-    rule_stage,
 )
 
 OUTPUT = "proceedings.parquet"
@@ -53,7 +56,14 @@ OUTPUT = "proceedings.parquet"
 # feed forms a proceeding only on a RIN it states, not on Regulations.gov's Rulemaking type,
 # no FR link naming it counts, and four title families under ordinary ids are feeds beside
 # the _FRDOC_ dockets (ee6af4b). Decision 32 as amended, owner rulings 2026-09-26.
-ACTOR_ID = "spicy-regs:proceedings:v9"
+# v10 (one bump over published v9), owner decisions 56 and 58-61: a document's rule stage comes
+# only from its own Rule / Proposed Rule type; a Regulations.gov copy of a Register row that
+# states a type takes that row's stage; the Register's 1994 Uncategorized rows are typed by
+# their "; Final/Proposed/Interim Rule(s) <AGENCY>" title suffix; NOAA's 0648-X... codes decide
+# nothing. On the 2026-09-26 parents proceedings fall from 267,965 to 205,723: 52,420
+# docket-less (40,144 SEC SRO notices) and 9,833 docketed go. 11 appear: three FDA-1977-N
+# dockets a withdrawal Notice no longer unites, and eight 1994 rules typed by their suffix.
+ACTOR_ID = "spicy-regs:proceedings:v10"
 
 COLUMNS = (
     "proceeding_id",
@@ -98,7 +108,7 @@ def _fr_rins_and_stage(row: dict, stats: JsonReadStats) -> tuple[set[str], str |
         column="regulation_id_numbers_json",
     )
     rins = set() if raw_rins is None else {rin for value in raw_rins if (rin := normalize_rin(value)) is not None}
-    return rins, rule_stage(row.get("document_type"), row.get("title"))
+    return rins, register_rule_stage(row.get("document_type"), row.get("title"))
 
 
 #: What a Federal Register row that is no action evidence states: no RIN and no stage.
@@ -107,21 +117,34 @@ _NO_ACTION: tuple[frozenset[str], None] = (frozenset(), None)
 
 def _fr_action_evidence(
     path: Path, fr_index: FederalRegisterIndex, stats: JsonReadStats
-) -> dict[str, tuple[set[str], str | None]]:
-    """The RINs and stage of every Federal Register row that states either, by dated identity.
+) -> tuple[dict[str, tuple[set[str], str | None]], dict[str, str], set[str]]:
+    """The RINs and stage of every action-evidence Federal Register row, and every row's stage.
 
-    One pass, each row read once: a row left out states neither, so a later pass answers
-    it with :data:`_NO_ACTION` instead of reading it again. Membership here is what makes
-    an FR document action evidence (decisions 32 and 33).
+    One pass, each row read once: a row left out of the first map states neither a RIN
+    that decides action evidence nor a stage, so a later pass answers it with
+    :data:`_NO_ACTION` instead of reading it again. Membership in the first map is what
+    makes an FR document action evidence (decisions 32 and 33): a stage does, and so does
+    a RIN except NOAA's 0648-X… codes, which stay recorded but decide nothing (decision
+    61). The second map holds the stage of every row that carries one, typed as the
+    Register reads it (decision 59), and the set holds every row that states no type at all,
+    for decision 60's copy resolution: only a Register row that states a type overrides a
+    Regulations.gov copy's own.
     """
     evidence: dict[str, tuple[set[str], str | None]] = {}
+    stages: dict[str, str] = {}
+    untyped: set[str] = set()
     for row in iter_parquet_rows(path, columns=_FR_EVIDENCE_COLUMNS):
         if not str(row.get("document_number") or "").strip():
             continue
+        identity = fr_index.record_id(row)
         rins, stage = _fr_rins_and_stage(row, stats)
-        if rins or stage:
-            evidence[fr_index.record_id(row)] = (rins, stage)
-    return evidence
+        if stage:
+            stages[identity] = stage
+        elif not register_states_type(row.get("document_type"), row.get("title")):
+            untyped.add(identity)
+        if stage or any(action_evidence_rin(rin) for rin in rins):
+            evidence[identity] = (rins, stage)
+    return evidence, stages, untyped
 
 
 def _current_stage_from_events(events: list[dict]) -> str | None:
@@ -193,7 +216,7 @@ def build_proceedings(
     if not prior_file.exists() and (output_dir / OUTPUT).exists():
         prior_file = output_dir / OUTPUT
     prior_proceedings = read_parquet_rows(prior_file)
-    fr_action = _fr_action_evidence(paths["federal_register"], fr_index, json_stats)
+    fr_action, fr_stages, fr_untyped = _fr_action_evidence(paths["federal_register"], fr_index, json_stats)
 
     def empty_group(
         *,
@@ -234,13 +257,13 @@ def build_proceedings(
         # A docket is action evidence by its RIN or its type being exactly Rulemaking: the
         # substring test this replaced also matched Nonrulemaking, and made a single-docket
         # proceeding of every one of those shells (fork delivery decision 32). A feed docket is
-        # one only by its RIN: Regulations.gov types every _FRDOC_ feed Rulemaking.
-        rin = normalize_rin(row.get("rin"))
+        # one only by its RIN: Regulations.gov types every _FRDOC_ feed Rulemaking. NOAA's
+        # 0648-X… codes decide nothing (decision 61).
         if catch_all_docket(docket, row.get("title")):
             catch_alls.add(docket)
         elif str(row.get("docket_type") or "").casefold() == "rulemaking":
             action_dockets.add(docket)
-        if rin:
+        if action_evidence_rin(row.get("rin")):
             action_dockets.add(docket)
 
     for row in iter_parquet_rows(
@@ -263,15 +286,17 @@ def build_proceedings(
             row_id=row.get("document_id"),
             column="additional_rins",
         )
-        has_rin = raw_rins is not None and any(normalize_rin(value) for value in raw_rins)
+        has_rin = raw_rins is not None and any(action_evidence_rin(value) for value in raw_rins)
         # A document of the docket's own that cites an FR document stating a RIN or a rule
         # stage is action evidence too (decision 32 as amended: 392 of the shells it first
-        # removed held a RIN that way, through rule_targets' document_fr_doc edges).
+        # removed held a RIN that way, through rule_targets' document_fr_doc edges). The
+        # document's own stage is the Register row's when its fr_doc_num resolves to one
+        # (decision 60); its RINs decide nothing while they are all NOAA 0648-X… (decision 61).
         cited = row.get("fr_doc_num")
         if (
             has_rin
-            or rule_stage(row.get("document_type"), row.get("title"))
             or (cited and resolved_id(fr_index.reference(str(cited))) in fr_action)
+            or document_rule_stage(row, fr_index, fr_stages, fr_untyped)
         ):
             action_dockets.add(docket)
 
@@ -381,7 +406,16 @@ def build_proceedings(
 
     for row in iter_parquet_rows(
         paths["documents"],
-        columns=("document_id", "docket_id", "additional_rins", "document_type", "title", "agency_code", "posted_date"),
+        columns=(
+            "document_id",
+            "docket_id",
+            "additional_rins",
+            "document_type",
+            "title",
+            "agency_code",
+            "posted_date",
+            "fr_doc_num",
+        ),
     ):
         docket = normalize_regsgov_identifier(row.get("docket_id"))
         key = group_key_by_docket.get(docket or "")
@@ -403,10 +437,7 @@ def build_proceedings(
             group["agencies"].append(str(row["agency_code"]))
         add_event(
             group,
-            stage=rule_stage(
-                row.get("document_type"),
-                row.get("title"),
-            ),
+            stage=document_rule_stage(row, fr_index, fr_stages, fr_untyped),
             date=row.get("posted_date"),
             source="documents.document_type",
             evidence_id=row.get("document_id"),

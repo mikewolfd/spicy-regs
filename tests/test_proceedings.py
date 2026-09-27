@@ -249,7 +249,7 @@ def test_reference_proceeding_threads_rinless_docket_and_preserves_reopening(tmp
         periods[0]["opened_by_artifact_ids_json"]
     )
     assert all(row["method"] == "deterministic" for row in periods)
-    assert all(row["actor_id"] == "spicy-regs:comment-periods:v9" for row in periods)
+    assert all(row["actor_id"] == "spicy-regs:comment-periods:v10" for row in periods)
 
 
 def test_reused_rin_does_not_collapse_or_cross_assign_distinct_dockets(tmp_path):
@@ -918,11 +918,261 @@ def test_a_nonrulemaking_docket_is_a_proceeding_only_on_action_evidence(tmp_path
     assert json.loads(by_docket[staged]["fr_document_ids_json"]) == ["2023-00001@2023-01-03"]
     assert json.loads(by_docket[with_rin]["rins_json"]) == ["2120-AA64"]
     assert not any("2021-06210@2021-03-25" in row["fr_document_ids_json"] for row in proceedings)
-    assert {row["actor_id"] for row in proceedings} == {"spicy-regs:proceedings:v9"}
+    assert {row["actor_id"] for row in proceedings} == {"spicy-regs:proceedings:v10"}
 
     # Its comment period keeps the docket as its anchor, with no proceeding.
     (period,) = pq.read_table(build_comment_periods(tmp_path)).to_pylist()
     assert (json.loads(period["docket_ids_json"]), period["proceeding_ids_json"]) == ([shell], "[]")
+
+
+def _empty_rulemaking_inputs(root):
+    _write(
+        root / "dockets.parquet",
+        ("docket_id", "rin", "docket_type", "title", "agency_code", "modify_date"),
+        [],
+    )
+    _write(
+        root / "documents.parquet",
+        ("document_id", "docket_id", "additional_rins", "document_type", "title", "posted_date", "fr_doc_num"),
+        [],
+    )
+    _write(
+        root / "fr_docket_links.parquet",
+        ("docket_id", "document_number", "publication_date"),
+        [],
+    )
+    _write(root / "rule_targets.parquet", ("docket_id", "rin", "cfr_ref", "cfr_title", "cfr_part", "cfr_section"), [])
+
+
+def _fr_rows(root, rows):
+    _write(
+        root / "federal_register.parquet",
+        ("document_number", "publication_date", "regulation_id_numbers_json", "document_type", "title"),
+        rows,
+    )
+
+
+def test_an_sro_register_notice_forms_no_proceeding(tmp_path):
+    """An SEC SRO notice's title says "Proposed Rule Change"; its type says Notice (decision 56)."""
+    _empty_rulemaking_inputs(tmp_path)
+    _fr_rows(
+        tmp_path,
+        [
+            {
+                "document_number": "2024-12345",
+                "publication_date": "2024-02-01",
+                "regulation_id_numbers_json": "[]",
+                "document_type": "Notice",
+                "title": (
+                    "Self-Regulatory Organizations; Notice of Filing of Proposed Rule Change by "
+                    "the New York Stock Exchange, LLC"
+                ),
+            }
+        ],
+    )
+    assert pq.read_table(build_proceedings(tmp_path)).to_pylist() == []
+
+
+def test_a_1994_uncategorized_row_types_from_its_title_suffix(tmp_path):
+    """Decision 59: "; Final Rule DEPARTMENT OF EDUCATION" founds a proceeding; no agency, none."""
+    _empty_rulemaking_inputs(tmp_path)
+    _fr_rows(
+        tmp_path,
+        [
+            {
+                "document_number": "94-29324",
+                "publication_date": "1994-12-01",
+                "regulation_id_numbers_json": "[]",
+                "document_type": "Uncategorized Document",
+                "title": "Federal Pell Grant Program; Final Rule DEPARTMENT OF EDUCATION",
+            },
+            {
+                "document_number": "94-28708",
+                "publication_date": "1994-11-22",
+                "regulation_id_numbers_json": "[]",
+                "document_type": "Uncategorized Document",
+                "title": "Acid Rain Program: Permits; Final Rule",
+            },
+        ],
+    )
+    proceedings = pq.read_table(build_proceedings(tmp_path)).to_pylist()
+    assert [row["current_stage"] for row in proceedings] == ["final"]
+    assert json.loads(proceedings[0]["fr_document_ids_json"]) == ["94-29324@1994-12-01"]
+
+
+def test_the_registers_type_wins_for_a_regulations_gov_copy(tmp_path):
+    """Decision 60: a document whose fr_doc_num resolves to one Register row takes that row's stage."""
+    _empty_rulemaking_inputs(tmp_path)
+    _write(
+        tmp_path / "dockets.parquet",
+        ("docket_id", "rin", "docket_type", "title", "agency_code", "modify_date"),
+        [
+            {"docket_id": docket, "rin": None, "docket_type": "Nonrulemaking", "title": docket}
+            for docket in ("NOAA-2024-0001", "OSHA-2024-0002", "EPA-2024-0003", "DOD-2024-0004")
+        ],
+    )
+    _write(
+        tmp_path / "documents.parquet",
+        ("document_id", "docket_id", "additional_rins", "document_type", "title", "posted_date", "fr_doc_num"),
+        [
+            {
+                # A "Rule"-typed copy of a Register Notice: no stage, so no action docket.
+                "document_id": "NOAA-2024-0001-0001",
+                "docket_id": "NOAA-2024-0001",
+                "additional_rins": "[]",
+                "document_type": "Rule",
+                "title": "Fishery Management Plan; Final Rule",
+                "posted_date": "2024-03-01",
+                "fr_doc_num": "2024-11111",
+            },
+            {
+                # An untyped copy of a Register Proposed Rule: the Register's stage wins.
+                "document_id": "OSHA-2024-0002-0001",
+                "docket_id": "OSHA-2024-0002",
+                "additional_rins": "[]",
+                "document_type": "Other",
+                "title": "Workplace standards",
+                "posted_date": "2024-03-02",
+                "fr_doc_num": "2024-22222",
+            },
+            {
+                # A number the Register does not hold: the document's own type applies.
+                "document_id": "EPA-2024-0003-0001",
+                "docket_id": "EPA-2024-0003",
+                "additional_rins": "[]",
+                "document_type": "Proposed Rule",
+                "title": "Air standards proposal",
+                "posted_date": "2024-03-03",
+                "fr_doc_num": "2024-99999",
+            },
+            {
+                # A copy of a Register row that states no type: the document's own type
+                # stands (decision 60 as amended 2026-09-26).
+                "document_id": "DOD-2024-0004-0001",
+                "docket_id": "DOD-2024-0004",
+                "additional_rins": "[]",
+                "document_type": "Rule",
+                "title": "Defense acquisition final rule",
+                "posted_date": "2024-03-04",
+                "fr_doc_num": "2024-44444",
+            },
+        ],
+    )
+    _fr_rows(
+        tmp_path,
+        [
+            {
+                "document_number": "2024-44444",
+                "publication_date": "2024-02-12",
+                "regulation_id_numbers_json": "[]",
+                "document_type": "Uncategorized Document",
+                "title": "Defense Acquisition Regulations",
+            },
+            {
+                "document_number": "2024-11111",
+                "publication_date": "2024-02-10",
+                "regulation_id_numbers_json": "[]",
+                "document_type": "Notice",
+                "title": "Fishery Management Plan; Notice",
+            },
+            {
+                "document_number": "2024-22222",
+                "publication_date": "2024-02-11",
+                "regulation_id_numbers_json": "[]",
+                "document_type": "Proposed Rule",
+                "title": "Workplace standards; Proposed Rule",
+            },
+        ],
+    )
+    proceedings = pq.read_table(build_proceedings(tmp_path)).to_pylist()
+    by_docket = {docket: row for row in proceedings for docket in json.loads(row["docket_ids_json"])}
+    assert set(by_docket) == {"OSHA-2024-0002", "EPA-2024-0003", "DOD-2024-0004"}, (
+        "the Notice-copy's docket is no action docket"
+    )
+    stages = {
+        event["evidence_id"]: event["stage"]
+        for row in by_docket.values()
+        for event in json.loads(row["stage_events_json"])
+    }
+    assert stages == {
+        "OSHA-2024-0002-0001": "proposed",
+        "EPA-2024-0003-0001": "proposed",
+        "DOD-2024-0004-0001": "final",
+    }
+
+
+def test_noaas_x_rins_decide_no_action_evidence_but_stay_recorded(tmp_path):
+    """Decision 61: a 0648-X… code is recorded evidence of nothing; other RINs still act."""
+    _empty_rulemaking_inputs(tmp_path)
+    _write(
+        tmp_path / "dockets.parquet",
+        ("docket_id", "rin", "docket_type", "title", "agency_code", "modify_date"),
+        [
+            {"docket_id": "NOAA-NMFS-2024-0001", "rin": "0648-XC39", "docket_type": "Nonrulemaking", "title": "X-only"},
+            {"docket_id": "EPA-2024-0002", "rin": "2060-AV12", "docket_type": "Nonrulemaking", "title": "Real RIN"},
+            {"docket_id": "NOAA-NMFS-2024-0003", "rin": "0648-XC39", "docket_type": "Rulemaking", "title": "Typed"},
+            {
+                "docket_id": "NOAA-NMFS-2024-0004",
+                "rin": None,
+                "docket_type": "Nonrulemaking",
+                "title": "Document shell",
+            },
+        ],
+    )
+    _write(
+        tmp_path / "documents.parquet",
+        ("document_id", "docket_id", "additional_rins", "document_type", "title", "posted_date", "fr_doc_num"),
+        [
+            {
+                "document_id": "NOAA-NMFS-2024-0004-0001",
+                "docket_id": "NOAA-NMFS-2024-0004",
+                "additional_rins": '["0648-XH24"]',
+                "document_type": "Notice",
+                "title": "In-season adjustment",
+                "posted_date": "2024-03-01",
+            }
+        ],
+    )
+    _fr_rows(
+        tmp_path,
+        [
+            {
+                "document_number": "2024-33333",
+                "publication_date": "2024-02-20",
+                "regulation_id_numbers_json": '["0648-XW87"]',
+                "document_type": "Notice",
+                "title": "Fisheries of the Exclusive Economic Zone; Closure",
+            },
+            {
+                "document_number": "2024-44444",
+                "publication_date": "2024-02-21",
+                "regulation_id_numbers_json": '["2120-AA64"]',
+                "document_type": "Notice",
+                "title": "Airspace revision",
+            },
+            {
+                "document_number": "2024-55555",
+                "publication_date": "2024-02-22",
+                "regulation_id_numbers_json": '["0648-XA53"]',
+                "document_type": "Rule",
+                "title": "Fisheries of the Exclusive Economic Zone; Final rule",
+            },
+        ],
+    )
+    proceedings = pq.read_table(build_proceedings(tmp_path)).to_pylist()
+    by_docket = {docket: row for row in proceedings for docket in json.loads(row["docket_ids_json"])}
+    # The X-only docket founds nothing; the real RIN and the Rulemaking type still do.
+    assert set(by_docket) == {"EPA-2024-0002", "NOAA-NMFS-2024-0003"}
+    # The X RIN stays recorded on the proceeding that exists by its type.
+    assert json.loads(by_docket["NOAA-NMFS-2024-0003"]["rins_json"]) == ["0648-XC39"]
+    # An FR row whose only RIN is an X code founds no docket-less proceeding; a real RIN still does.
+    fr_only = {
+        json.loads(row["fr_document_numbers_json"])[0]: row for row in proceedings if row["docket_ids_json"] == "[]"
+    }
+    assert set(fr_only) == {"2024-44444", "2024-55555"}
+    # A real Rule whose only RIN is an X code still forms its proceeding through its type, and
+    # the X code stays recorded on it.
+    assert json.loads(fr_only["2024-55555"]["rins_json"]) == ["0648-XA53"]
 
 
 def _identity_fixture(tmp_path, groups, prior):

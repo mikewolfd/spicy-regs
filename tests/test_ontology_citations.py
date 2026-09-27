@@ -13,6 +13,7 @@ import pytest
 
 from spicy_regs.ontology.citations import (
     CfrCitation,
+    action_evidence_rin,
     canonical_cfr_iri,
     normalize_regsgov_identifier,
     normalize_rin,
@@ -91,6 +92,18 @@ def test_regulations_gov_identifier_normalization_matches_repaired_grammar():
 )
 def test_rin_normalization(value, expected):
     assert normalize_rin(value) == expected
+
+
+def test_a_noaa_x_rin_stays_a_rin_but_decides_no_action_evidence():
+    """Decision 61: 0648-X… codes are recorded values and nothing more."""
+    assert normalize_rin("0648-XC39") == "0648-XC39"
+    assert action_evidence_rin("0648-XC39") is None
+    assert action_evidence_rin("0648-Xz99") is None
+    assert action_evidence_rin("0648-AC64") == "0648-AC64", "NOAA's ordinary RINs still act"
+    assert action_evidence_rin("6048-XB02") == "6048-XB02", (
+        "other agencies' X-shaped RINs are the owner's call, not ours"
+    )
+    assert action_evidence_rin("2060AV16") is None
 
 
 def test_the_rin_grammar_has_one_definition():

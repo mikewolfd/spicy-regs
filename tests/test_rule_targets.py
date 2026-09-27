@@ -106,7 +106,7 @@ def test_rule_target_spine_emits_only_action_specific_edges(tmp_path):
     }
     assert pq.ParquetFile(output).schema_arrow.names == list(COLUMNS)
     assert all(row["method"] == "deterministic" for row in rows)
-    assert all(row["actor_id"] == "spicy-regs:rule-targets:v6" for row in rows)
+    assert all(row["actor_id"] == "spicy-regs:rule-targets:v7" for row in rows)
     assert all(row["run_id"] == "golden-run" for row in rows)
 
 
@@ -260,8 +260,11 @@ SUCRALOSE = {
         for number, day in (("99-518", "1999-01-11"), ("99-20888", "1999-08-12"))
     ],
 }
-# Fan-out: FDA's withdrawal of 128 suitability petitions, E7-3043, is posted in 42 petition
-# dockets and names only "Docket No. 2004P-0262"; three of them.
+# Fan-out rows: FDA's withdrawal of 128 suitability petitions, E7-3043, posted in 42 petition
+# dockets naming only "Docket No. 2004P-0262"; three of them. The notice is a Notice whose
+# title says "Withdrawal of Approval", so under decision 56 it carries no stage; the fixture
+# gives it a RIN, the other way a cited notice is action evidence, so the typed edges and the
+# no-merge shape stay proven. The RIN-less Notice itself is the negative case below.
 WITHDRAWAL_DOCKETS = ("FDA-1982-N-0006", "FDA-1984-N-0016", "FDA-1984-P-0015")
 WITHDRAWAL_DOCUMENTS = ("FDA-1982-N-0006-0012", "FDA-1984-N-0016-0001", "FDA-1984-P-0015-0001")
 SUITABILITY = {
@@ -294,7 +297,7 @@ SUITABILITY = {
             "document_type": "Notice",
             "title": "Withdrawal of Approval of 128 Suitability Petitions",
             "cfr_references_json": "[]",
-            "regulation_id_numbers_json": "[]",
+            "regulation_id_numbers_json": '["0910-AF12"]',
         }
     ],
     "fr_docket_links": [
@@ -393,3 +396,33 @@ def test_a_cited_notice_with_no_rin_or_stage_is_no_typed_edge(tmp_path):
         (tuple(json.loads(row["docket_ids_json"])), tuple(json.loads(row["fr_document_ids_json"])))
         for row in proceedings
     } == {((), ("99-20888@1999-08-12",))}, "a Nonrulemaking docket citing no action notice is no action docket"
+
+
+def test_a_cited_notice_typed_by_title_alone_types_nothing(tmp_path):
+    """E7-3043 without its fixture RIN: "Withdrawal of Approval" on a Notice is no stage (decision 56)."""
+    tables = {
+        **SUITABILITY,
+        "federal_register": [{**SUITABILITY["federal_register"][0], "regulation_id_numbers_json": "[]"}],
+    }
+    targets, proceedings = _build(tmp_path, tables)
+    assert not _citations(targets), "no RIN and no typed stage, so no citation is action evidence"
+    assert proceedings == [], "neither the petition dockets nor the notice form a proceeding"
+
+
+def test_a_cited_notice_held_only_by_a_noaa_x_rin_is_no_typed_edge(tmp_path):
+    """Decision 61: a 0648-X… code stays recorded on the edges but decides no action evidence."""
+    tables = {
+        **SUCRALOSE,
+        "documents": SUCRALOSE["documents"][:1],
+        "federal_register": [
+            {**SUCRALOSE["federal_register"][0], "regulation_id_numbers_json": '["0648-XC39"]'},
+            SUCRALOSE["federal_register"][1],
+        ],
+    }
+    targets, proceedings = _build(tmp_path, tables)
+    assert not _citations(targets), "an X RIN is no more action evidence than no RIN"
+    assert ("document_fr_doc", None, "0648-XC39") in {(row["source"], row["cfr_ref"], row["rin"]) for row in targets}
+    assert {
+        (tuple(json.loads(row["docket_ids_json"])), tuple(json.loads(row["fr_document_ids_json"])))
+        for row in proceedings
+    } == {((), ("99-20888@1999-08-12",))}, "the X-coded notice founds nothing; the typed rule still does"

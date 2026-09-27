@@ -47,9 +47,9 @@ mapped no longer exist.
 
 ## The rule_targets carrier
 
-`transforms/build_rule_targets.py` builds `rule_targets.parquet`
-(`ACTOR_ID = spicy-regs:rule-targets:v6`): one row per observed rule-identity
-edge, with `docket_id`, `cfr_ref` (+ `cfr_title`/`cfr_part`/`cfr_section`),
+`transforms/build_rule_targets.py` builds `rule_targets.parquet` (versioned by
+the builder's `ACTOR_ID` constant, one bump per published row change): one row
+per observed rule-identity edge, with `docket_id`, `cfr_ref` (+ `cfr_title`/`cfr_part`/`cfr_section`),
 `rin`, the `source` class the edge came from, `first_seen`/`last_seen` as
 Eastern days, and `fr_references_json` retaining each literal number-only
 observation with the status that says how it resolved. The five source classes are
