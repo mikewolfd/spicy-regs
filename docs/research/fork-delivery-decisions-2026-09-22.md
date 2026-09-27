@@ -225,4 +225,4 @@ Answered through the question tool.
 
 | # | State | Evidence | Left |
 | --- | --- | --- | --- |
-| 70 | In progress on branch `comment-repair-catalog`. | — | Land the catalog repair; then a first real apply outside the ETL window. |
+| 70 | Done on branch `comment-repair-catalog`, not yet on `main`. | `aedc751`: `--table comments` dry-runs to `comments-repair.json`; `--apply` replaces only the changed rows through the ETL's DELETE + INSERT (`iceberg.replace_rows`), checks them, and records the new snapshot. | A first real apply, outside the ETL window; the mirror job then publishes it. |
