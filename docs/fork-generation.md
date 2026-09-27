@@ -42,7 +42,9 @@ failed dispositions; the execution log records the dated work and receipts.
   `7550f0e` and awaits release. R6 (model outputs) is out of scope by the
   owner's decision.
 - **R7 (hosted MCP):** live at `https://spicy-regs-mcp.mdeeb.workers.dev/mcp`
-  since 2026-09-25 (deployed from `f2df979`; `f51248f` had fixed the image, which
+  since 2026-09-25, redeployed 2026-09-27 from `2963d77` (Worker version `925124f0…`, image
+  `a0692172…`) so it serves the eight rulemaking tables through the snapshot pointer; the R7 smoke and
+  typed lifecycle queries pass live (receipt `rulemaking-exposure-2026-09-27/deploy/`). First deployed from `f2df979`; `f51248f` had fixed the image, which
   had lacked a runtime package since 2026-09-22). The three tools and five
   cross-source joins pass against the fork's published data (FEC to legislators
   and votes, laws to Table III, compiled hearing dates, organization to

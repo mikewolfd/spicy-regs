@@ -88,8 +88,8 @@ Run `npm run check` before deployment. This generates types, checks TypeScript,
 and builds the container locally. It does not deploy it or populate the bucket.
 
 The fork's server is live at `https://spicy-regs-mcp.mdeeb.workers.dev/mcp`
-(first deployed 2026-09-25 from `f2df979`, after Containers was enabled on the
-account; the first attempt uploaded only the Worker because the Containers API
+(first deployed 2026-09-25 from `f2df979`, redeployed 2026-09-27 from `2963d77` as version
+`925124f0…`; the first deploy came after Containers was enabled on the account; the first attempt uploaded only the Worker because the Containers API
 answered 401). A remote MCP client adds that URL as a connector. The same smoke
 script was run against the exact image locally and against the live endpoint:
 the three tools answer, `describe_table` names each table's managed generation,
