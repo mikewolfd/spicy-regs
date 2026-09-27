@@ -112,7 +112,7 @@ def test_full_remote_generation_and_publication_have_no_local_table_copy(tmp_pat
     assert {p.name for p in directory.iterdir()} == {"artifact.json", "members.json"}
     monkeypatch.setattr(remote, "PART_BYTES", 128)
     index = publish(store, directory, member)
-    key, descriptor = pub.table_location(index, "body.parquet")
+    key, descriptor = pub.single_member(index, "body.parquet").path, pub.table_descriptor(index, "body.parquet")
     assert descriptor is not None
     assert index["families"]["test"]["artifactDigest"] == artifact.pin.artifact_digest
     assert descriptor["rows"] == table.num_rows

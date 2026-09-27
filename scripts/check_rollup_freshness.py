@@ -106,34 +106,34 @@ SKIPPED = {
 }
 
 
-def _query(sources: Mapping[str, str]) -> str:
+def _query(sources: Mapping[str, list[str]]) -> str:
     branches = []
     for check in DATE_CHECKS:
         if check.table not in sources:
             continue
         label = check.label or check.column
-        target = sources[check.table].replace("'", "''")
+        target = publication.parquet_scan(sources[check.table])
         branches.append(
             f"""SELECT '{check.table}' AS table_name, '{label}' AS metric,
                        CAST(MAX(TRY_CAST({check.column} AS TIMESTAMP)) AS VARCHAR) AS latest,
                        COUNT(*)::BIGINT AS row_count
-                FROM read_parquet('{target}')"""
+                FROM {target}"""
         )
     for table in ROW_CHANGE_BUDGETS:
         if table not in sources:
             continue
-        target = sources[table].replace("'", "''")
+        target = publication.parquet_scan(sources[table])
         branches.append(
             f"""SELECT '{table}' AS table_name, 'row count' AS metric,
                        NULL::VARCHAR AS latest, COUNT(*)::BIGINT AS row_count
-                FROM read_parquet('{target}')"""
+                FROM {target}"""
         )
     dated = {check.table for check in DATE_CHECKS}
     for table in sorted(set(sources) - dated - set(ROW_CHANGE_BUDGETS)):
-        target = sources[table].replace("'", "''")
+        target = publication.parquet_scan(sources[table])
         branches.append(
             f"SELECT '{table}' AS table_name, 'publication rows' AS metric, "
-            f"NULL::VARCHAR AS latest, COUNT(*)::BIGINT AS row_count FROM read_parquet('{target}')"
+            f"NULL::VARCHAR AS latest, COUNT(*)::BIGINT AS row_count FROM {target}"
         )
     return "\nUNION ALL\n".join(branches)
 
@@ -147,17 +147,19 @@ def read_freshness_rows(base_url: str) -> list[FreshnessRow]:
         con = duckdb.connect()
         try:
             for table in tables:
-                key, descriptor = publication.table_location(index, f"{table}.parquet")
-                target = f"{base_url.rstrip('/')}/{key}"
+                descriptor = publication.table_descriptor(index, f"{table}.parquet")
+                keys = [member.path for member in publication.table_members(index, f"{table}.parquet")]
+                target = [f"{base_url.rstrip('/')}/{key}" for key in keys]
                 if descriptor is not None:
-                    actual = con.execute("DESCRIBE SELECT * FROM read_parquet(?)", [target]).fetchall()
+                    actual = con.execute(f"DESCRIBE SELECT * FROM {publication.parquet_scan(target)}").fetchall()
                     if [[row[0], row[1]] for row in actual] != descriptor["columns"]:
                         raise publication.PublicationError(f"Published freshness schema differs from its pin: {table}")
                     family = next(
                         entry for entry in index["families"].values() if f"{table}.parquet" in entry["tables"]
                     )
                     print(
-                        f"SOURCE: {table} managed artifact={family['artifactDigest']} member={key} (byte digest not rechecked)"
+                        f"SOURCE: {table} managed artifact={family['artifactDigest']} members={','.join(keys)} "
+                        "(byte digest not rechecked)"
                     )
                 else:
                     print(f"SOURCE: {table} legacy url={target} (no publication pin)")

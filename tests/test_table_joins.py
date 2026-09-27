@@ -79,12 +79,12 @@ def test_describe_table_lists_the_joins_a_table_makes_and_receives(monkeypatch):
     assert joins["baseline"]["receipts"]
 
 
-def _tables(tmp_path, child_ids, parent_ids) -> dict[str, str]:
+def _tables(tmp_path, child_ids, parent_ids) -> dict[str, list[str]]:
     paths = {}
     for name, ids in (("child", child_ids), ("parent", parent_ids)):
         path = tmp_path / f"{name}.parquet"
         pq.write_table(pa.table({"key_id": pa.array(ids, pa.string())}), path)
-        paths[name] = str(path)
+        paths[name] = [str(path)]
     return paths
 
 
@@ -126,7 +126,7 @@ def test_a_composite_join_needs_every_column_to_match(tmp_path):
     pq.write_table(pa.table({"bill_id": ["b1", "b1"], "version_code": ["ih", "enr"]}), child)
     pq.write_table(pa.table({"bill_id": ["b1"], "version_code": ["ih"]}), parent)
     join = table_joins.Join("child", ("bill_id", "version_code"), "parent", ("bill_id", "version_code"), 2, 0)
-    result = live.measure(duckdb.connect(), join, {"child": str(child), "parent": str(parent)}.__getitem__)
+    result = live.measure(duckdb.connect(), join, {"child": [str(child)], "parent": [str(parent)]}.__getitem__)
     assert (result["status"], result["missing"], result["examples"]) == ("LAG", 1, ["b1|enr"])
 
 
@@ -144,7 +144,7 @@ def test_the_live_check_reads_rulemaking_tables_through_the_snapshot_pointer(mon
     monkeypatch.setattr(live.publication, "load_index", lambda url: INDEX)
     _serve(monkeypatch)
     url_of = live.table_urls(BASE + "/")
-    assert url_of("rule_targets") == f"{BASE}/materialized/rulemaking/snapshots/{SNAPSHOT}/rule_targets.parquet"
-    assert url_of("nominations") == f"{BASE}/{INDEX['families']['nominations']['prefix']}/nominations.parquet"
-    assert url_of("dockets") == f"{BASE}/dockets.parquet"
-    assert url_of("_proceedings_state") == f"{BASE}/_proceedings_state.parquet"  # internal: never a snapshot URL
+    assert url_of("rule_targets") == [f"{BASE}/materialized/rulemaking/snapshots/{SNAPSHOT}/rule_targets.parquet"]
+    assert url_of("nominations") == [f"{BASE}/{INDEX['families']['nominations']['prefix']}/nominations.parquet"]
+    assert url_of("dockets") == [f"{BASE}/dockets.parquet"]
+    assert url_of("_proceedings_state") == [f"{BASE}/_proceedings_state.parquet"]  # internal: never a snapshot URL

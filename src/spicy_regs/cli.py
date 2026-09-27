@@ -64,17 +64,17 @@ def get_output_dir(args) -> Path:
 
 def download_file(name: str, output_dir: Path, force: bool = False, *, base_url: str | None = None) -> Path | None:
     """Download a parquet file from R2."""
-    from spicy_regs.sources.publication import current_index, table_location
+    from spicy_regs.sources.publication import current_index, single_member
 
     _table_name(name)
     base_url = resolve_r2_base_url(base_url)
-    key, published = table_location(current_index(base_url), f"{name}.parquet")
-    url = f"{base_url}/{key}"
+    member = single_member(current_index(base_url), f"{name}.parquet")
+    url = f"{base_url}/{member.path}"
     local_path = output_dir / f"{name}.parquet"
 
     # Existing loose files have no host provenance. Preserve the original
     # default-host cache behavior; a different host must supply its own bytes.
-    if local_path.exists() and not force and published is None and base_url == PUBLIC_URL:
+    if local_path.exists() and not force and member.sha256 is None and base_url == PUBLIC_URL:
         size_mb = local_path.stat().st_size / (1024 * 1024)
         print(f"  ✓ {name}.parquet already exists ({size_mb:.1f} MB)")
         return local_path
@@ -95,9 +95,7 @@ def download_file(name: str, output_dir: Path, force: bool = False, *, base_url:
                     f.write(chunk)
                     digest.update(chunk)
                     size += len(chunk)
-        if published is not None and (
-            size != published["byteSize"] or "sha256:" + digest.hexdigest() != published["sha256"]
-        ):
+        if member.sha256 is not None and (size != member.byte_size or "sha256:" + digest.hexdigest() != member.sha256):
             raise ValueError(f"Downloaded member differs from its generation pin: {name}")
         tmp_path.replace(local_path)
         size_mb = local_path.stat().st_size / (1024 * 1024)
@@ -118,14 +116,15 @@ def cmd_download(args):
     for name in types_to_download:
         _table_name(name)
 
-    from spicy_regs.sources.publication import snapshot, table_location
+    from spicy_regs.sources.publication import single_member, snapshot
 
     base_url = resolve_r2_base_url()
     with snapshot(base_url) as index:
         selected = {}
         for name in types_to_download:
-            key, published = table_location(index, f"{name}.parquet")
-            selected[name] = {"key": key, "status": "managed" if published is not None else "legacy-unversioned"}
+            member = single_member(index, f"{name}.parquet")
+            selected[name] = {"key": member.path,
+                              "status": "managed" if member.sha256 is not None else "legacy-unversioned"}
         managed = any(item["status"] == "managed" for item in selected.values())
         current = output_dir / "current"
         # A prior current pointer wins over loose files when reading. Stage

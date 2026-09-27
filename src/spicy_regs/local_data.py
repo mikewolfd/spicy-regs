@@ -8,7 +8,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from spicy_regs.sources.publication import empty_index, parse_index, table_location
+from spicy_regs.sources.publication import empty_index, parse_index, single_member
 
 _NAME = re.compile(r"[a-z][a-z0-9_-]*\Z")
 
@@ -66,8 +66,8 @@ def local_selection(output_dir: Path, *, include_legacy: bool = False) -> LocalS
         for name, selection in selected.items():
             if not _NAME.fullmatch(name):
                 raise RuntimeError("Current download contains an invalid table name")
-            key, published = table_location(index, f"{name}.parquet")
-            expected = {"key": key, "status": "managed" if published is not None else "legacy-unversioned"}
+            member = single_member(index, f"{name}.parquet")
+            expected = {"key": member.path, "status": "managed" if member.sha256 is not None else "legacy-unversioned"}
             if selection != expected:
                 raise RuntimeError(f"Current download selection differs from its publication snapshot: {name}")
             path = directory / f"{name}.parquet"
@@ -97,12 +97,12 @@ def verify_local_members(selection: LocalSelection) -> dict[str, list[int]]:
     for name, (path, status) in selection.files.items():
         before = file_signature(path)
         if status == "managed":
-            _, descriptor = table_location(selection.publication, f"{name}.parquet")
-            if descriptor is None:
+            member = single_member(selection.publication, f"{name}.parquet")
+            if member.sha256 is None:
                 raise RuntimeError(f"Local download member has no generation pin: {name}")
             with path.open("rb") as stream:
                 digest = "sha256:" + hashlib.file_digest(stream, "sha256").hexdigest()
-            if before[2] != descriptor["byteSize"] or digest != descriptor["sha256"]:
+            if before[2] != member.byte_size or digest != member.sha256:
                 raise RuntimeError(f"Local download member differs from its generation pin: {name}")
         if file_signature(path) != before:
             raise RuntimeError(f"Local download member changed during verification: {name}")

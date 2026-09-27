@@ -52,10 +52,10 @@ def download_from_r2(remote_key: str, local_path: Path, *, bare: bool = False) -
         logger.warning("R2_PUBLIC_URL not set; cannot download {}", remote_key)
         return False
 
-    from spicy_regs.sources.publication import current_index, table_location
+    from spicy_regs.sources.publication import Member, current_index, single_member
 
-    resolved, descriptor = (remote_key, None) if bare else table_location(current_index(public_url), remote_key)
-    url = f"{public_url.rstrip('/')}/{resolved}"
+    member = Member(remote_key, None, None, None) if bare else single_member(current_index(public_url), remote_key)
+    url = f"{public_url.rstrip('/')}/{member.path}"
     temp_path = local_path.with_suffix(local_path.suffix + ".tmp")
     digest = hashlib.sha256()
     byte_size = 0
@@ -63,7 +63,7 @@ def download_from_r2(remote_key: str, local_path: Path, *, bare: bool = False) -
     try:
         with httpx.stream("GET", url, follow_redirects=True) as response:
             if response.status_code == 404:
-                if descriptor is not None:
+                if member.sha256 is not None:
                     raise RuntimeError(f"Published generation member is missing: {remote_key}")
                 logger.info("{} not found on R2 (404)", remote_key)
                 return False
@@ -74,8 +74,8 @@ def download_from_r2(remote_key: str, local_path: Path, *, bare: bool = False) -
                     f.write(chunk)
                     digest.update(chunk)
                     byte_size += len(chunk)
-            if descriptor is not None and (
-                descriptor["byteSize"] != byte_size or descriptor["sha256"] != "sha256:" + digest.hexdigest()
+            if member.sha256 is not None and (
+                member.byte_size != byte_size or member.sha256 != "sha256:" + digest.hexdigest()
             ):
                 raise RuntimeError(f"Published generation member differs from its pin: {remote_key}")
     except BaseException:

@@ -78,7 +78,7 @@ def test_a_note_or_docspec_pin_keeps_an_older_generation(tmp_path, remote):
 
 def test_a_kept_generation_keeps_the_parent_it_read(tmp_path, monkeypatch, remote):
     def download(remote_key, local_path):
-        location, _ = pub.table_location(pub.parse_index(remote.objects[pub.INDEX_KEY]), remote_key)
+        location = pub.single_member(pub.parse_index(remote.objects[pub.INDEX_KEY]), remote_key).path
         local_path.write_bytes(remote.objects[location])
         return True
 

@@ -42,7 +42,7 @@ from dotenv import load_dotenv
 from spicy_regs import output_ledger, table_joins
 from spicy_regs.duckdb_settings import load_public_http
 from spicy_regs.schemas.regulations import RECORD_TYPES
-from spicy_regs.sources.publication import SNAPSHOT_POINTER, PublicationError
+from spicy_regs.sources.publication import SNAPSHOT_POINTER, PublicationError, parquet_scan
 
 # Repo layout anchors (this file lives at src/spicy_regs/data_dictionary.py).
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -744,15 +744,15 @@ def discover_schemas(source: str, base: str | None = None) -> dict[str, list[tup
         urls = published_urls(base_url)
         names = tuple(dict.fromkeys(("dockets", "documents", "comments", "comments_index", *urls)))
 
-        def url_for(name: str) -> str:
-            return urls.get(name, f"{base_url}/{name}.parquet")
+        def url_for(name: str) -> list[str]:
+            return urls.get(name, [f"{base_url}/{name}.parquet"])
 
     elif source == "local":
         base_dir = Path(base or "./spicy-regs-data")
         names = TABLES
 
-        def url_for(name: str) -> str:
-            return str(base_dir / f"{name}.parquet")
+        def url_for(name: str) -> list[str]:
+            return [str(base_dir / f"{name}.parquet")]
 
     else:
         raise ValueError(f"Unknown source {source!r}; expected 'r2' or 'local'")
@@ -764,9 +764,8 @@ def discover_schemas(source: str, base: str | None = None) -> dict[str, list[tup
         if source == "r2":
             load_public_http(con)
         for name in names:
-            target = url_for(name).replace("'", "''")
             try:
-                rows = con.execute(f"DESCRIBE SELECT * FROM read_parquet('{target}')").fetchall()
+                rows = con.execute(f"DESCRIBE SELECT * FROM {parquet_scan(url_for(name))}").fetchall()
                 schemas[name] = [(row[0], row[1]) for row in rows]
             except (duckdb.IOException, duckdb.HTTPException, OSError) as exc:
                 failures.append(f"[{name}] {exc}")

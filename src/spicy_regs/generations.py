@@ -89,7 +89,7 @@ def verify_generation_source(source, table_info: Callable[[str], dict], *, expec
     if spec["publicationStatus"] not in {"complete-family", "local-partial"}:
         raise ValueError("Invalid generation publication status")
     tables = spec["tables"]
-    from spicy_regs.sources.publication import parse_index, table_location
+    from spicy_regs.sources.publication import parse_index, table_descriptor
     from rulespec_artifacts import canonical_json_bytes
 
     snapshot = spec["readSnapshot"]
@@ -122,7 +122,7 @@ def verify_generation_source(source, table_info: Callable[[str], dict], *, expec
             raise ValueError(f"Generation table shape/count mismatch: {key}")
         if key in carried:
             prior = snapshot.get("families", {}).get(spec["family"])
-            descriptor = table_location(snapshot, key)[1] if prior else None
+            descriptor = table_descriptor(snapshot, key) if prior else None
             if (
                 prior is None
                 or carried[key] != prior["artifactDigest"]

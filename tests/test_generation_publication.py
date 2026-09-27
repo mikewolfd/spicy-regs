@@ -38,7 +38,7 @@ def test_complete_generation_then_pointer_and_exact_readback(tmp_path):
     assert store.writes[-1] == pub.INDEX_KEY
     assert index["families"]["test"]["artifactDigest"] == artifact.pin.artifact_digest
     for key in ("a.parquet", "b.parquet"):
-        location, info = pub.table_location(index, key)
+        location, info = pub.single_member(index, key).path, pub.table_descriptor(index, key)
         assert info is not None
         assert store.objects[location] == (directory / key).read_bytes()
         assert info["rows"] == 1
@@ -52,7 +52,7 @@ def test_interruption_never_changes_previous_complete_generation(tmp_path, failu
     store = Store()
     prior = publish(store, old)
     old_pointer = store.objects[pub.INDEX_KEY]
-    old_members = {key: store.objects[pub.table_location(prior, key)[0]] for key in ("a.parquet", "b.parquet")}
+    old_members = {key: store.objects[pub.single_member(prior, key).path] for key in ("a.parquet", "b.parquet")}
 
     def interrupt(key):
         if key.endswith(failure):
@@ -63,7 +63,7 @@ def test_interruption_never_changes_previous_complete_generation(tmp_path, failu
         publish(store, new, prior)
     assert store.objects[pub.INDEX_KEY] == old_pointer
     for key, raw in old_members.items():
-        assert store.objects[pub.table_location(prior, key)[0]] == raw
+        assert store.objects[pub.single_member(prior, key).path] == raw
 
 
 def test_corrupt_uploaded_bytes_never_become_published(tmp_path):
@@ -234,6 +234,9 @@ def test_snapshot_keeps_all_downloads_on_one_generation(tmp_path, monkeypatch):
     def stream(method, url, **kwargs):
         key = url.removeprefix("https://test/")
         calls.append(key)
+        if key not in store.objects:
+            yield httpx.Response(404, request=httpx.Request(method, url))
+            return
         if key == pub.INDEX_KEY:
             raw = store.objects[key]
             publish(store, new, prior)
@@ -327,14 +330,14 @@ def test_rollup_ignores_stale_cached_prior_and_keeps_it_as_evidence(tmp_path, mo
     monkeypatch.setattr(cloudflare, "purge_urls", lambda urls: None)
 
     def download(key, path):
-        location, _ = pub.table_location(pub.current_index("https://example.test"), key)
+        location = pub.single_member(pub.current_index("https://example.test"), key).path
         path.write_bytes(store.objects[location])
         return True
 
     monkeypatch.setattr(r2, "download", download)
     Ingest(output_dir=retained, skip_upload=False).run()
     current = pub.parse_index(store.objects[pub.INDEX_KEY])
-    location, _ = pub.table_location(current, "a.parquet")
+    location = pub.single_member(current, "a.parquet").path
     from io import BytesIO
 
     assert pq.read_table(BytesIO(store.objects[location])).to_pylist() == [{"id": "B"}]
@@ -357,14 +360,14 @@ def test_unchanged_members_are_copied_not_reuploaded(tmp_path):
     prior = publish(store, old)
     publish(store, new, prior=prior)
     index = pub.parse_index(store.objects[pub.INDEX_KEY])
-    b_loc, b_info = pub.table_location(index, "b.parquet")
+    b_loc, b_info = pub.single_member(index, "b.parquet").path, pub.table_descriptor(index, "b.parquet")
     assert b_info is not None
     assert b_info["sha256"] == prior["families"]["test"]["tables"]["b.parquet"]["sha256"]
     assert store.objects[b_loc] == (new / "b.parquet").read_bytes()
     # b was copied server-side from the prior prefix, not uploaded as bytes;
     # a was uploaded under the new prefix.
     assert store.copies == [b_loc]
-    a_loc, _ = pub.table_location(index, "a.parquet")
+    a_loc = pub.single_member(index, "a.parquet").path
     assert a_loc in store.writes and a_loc not in store.copies
 
 
@@ -376,8 +379,7 @@ def test_a_changed_member_still_uploads_bytes(tmp_path):
     publish(store, new, prior=prior)
     index = pub.parse_index(store.objects[pub.INDEX_KEY])
     for key in ("a.parquet", "b.parquet"):
-        location, info = pub.table_location(index, key)
-        assert store.objects[location] == (new / key).read_bytes()
+        assert store.objects[pub.single_member(index, key).path] == (new / key).read_bytes()
     assert store.copies == []
 
 
@@ -415,14 +417,14 @@ def test_partial_writer_carries_exact_siblings_and_refuses_cold_start(tmp_path, 
     monkeypatch.setattr(pub, "load_index", lambda url: index)
 
     def download(key, path):
-        path.write_bytes(store.objects[pub.table_location(pub.current_index("https://example.test"), key)[0]])
+        path.write_bytes(store.objects[pub.single_member(pub.current_index("https://example.test"), key).path])
         return True
 
     monkeypatch.setattr(r2, "download", download)
     Partial(output_dir=tmp_path / "warm", skip_upload=False).run()
     current = pub.parse_index(store.objects[pub.INDEX_KEY])
     assert set(current["families"]) == {"test"}
-    assert store.objects[pub.table_location(current, "b.parquet")[0]] == (old / "b.parquet").read_bytes()
+    assert store.objects[pub.single_member(current, "b.parquet").path] == (old / "b.parquet").read_bytes()
     generation = next((tmp_path / "warm" / "generations").iterdir())
     artifact = verify_generation(generation)
     assert artifact.root["spec"]["carriedForward"] == {"b.parquet": index["families"]["test"]["artifactDigest"]}

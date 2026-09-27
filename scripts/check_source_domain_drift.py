@@ -43,7 +43,7 @@ from pathlib import Path
 
 from spicy_regs.data_dictionary import TABLES
 from spicy_regs.public_url import resolve_r2_base_url
-from spicy_regs.sources.publication import current_index, table_location
+from spicy_regs.sources.publication import current_index, single_member
 from spicy_regs.sources.source_domains import (
     DEFAULT_SOURCE_DOMAIN_DIR,
     OBSERVED_SNAPSHOT_FILENAME,
@@ -73,7 +73,7 @@ def table_urls(index: Mapping, base_url: str, tables: Iterable[str]) -> dict[str
     """
 
     base = base_url.rstrip("/")
-    return {table: f"{base}/{table_location(index, f'{table}.parquet')[0]}" for table in tables}
+    return {table: f"{base}/{single_member(index, f'{table}.parquet').path}" for table in tables}
 
 
 def _connect():

@@ -302,7 +302,7 @@ def test_rollup_defaults_to_local_generation_and_publishes_complete_family(tmp_p
     assert store.writes[-1] == publication.INDEX_KEY
     assert list((tmp_path / "outputs" / "generations").iterdir()) == [local_generation]
     for key in index["families"]["fec-observations"]["tables"]:
-        remote_key, _ = publication.table_location(index, key)
+        remote_key = publication.single_member(index, key).path
         assert store.objects[remote_key] == (local_generation / key).read_bytes()
 
 

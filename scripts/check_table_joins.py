@@ -31,11 +31,11 @@ EXIT_UNREACHABLE = 3
 FAILING = ("BELOW", "UNBASELINED", "EMPTIED")
 
 
-def table_urls(base_url: str) -> Callable[[str], str]:
+def table_urls(base_url: str) -> Callable[[str], list[str]]:
     """Resolve each table once: through the publication index, then the rulemaking pointer, else its legacy key."""
     base = base_url.rstrip("/")
     urls = publication.published_urls(base)
-    return lambda table: urls.get(table, f"{base}/{table}.parquet")
+    return lambda table: urls.get(table, [f"{base}/{table}.parquet"])
 
 
 def connect() -> duckdb.DuckDBPyConnection:
@@ -50,11 +50,7 @@ def _quote(name: str) -> str:
     return '"' + name.replace('"', '""') + '"'
 
 
-def _literal(text: str) -> str:
-    return "'" + text.replace("'", "''") + "'"
-
-
-def measure(con: duckdb.DuckDBPyConnection, join: table_joins.Join, url_of: Callable[[str], str]) -> dict:
+def measure(con: duckdb.DuckDBPyConnection, join: table_joins.Join, url_of: Callable[[str], list[str]]) -> dict:
     """Distinct non-null child keys, how many the parent lacks, a few examples, and the verdict, in one pass."""
     child = [_quote(column) for column in join.child_columns]
     parent = [_quote(column) for column in join.parent_columns]
@@ -62,10 +58,10 @@ def measure(con: duckdb.DuckDBPyConnection, join: table_joins.Join, url_of: Call
     on = " AND ".join(f"c.c{i} = p.p{i}" for i in range(len(child)))
     keys, missing, examples = con.execute(f"""
         WITH c AS (SELECT DISTINCT {', '.join(f'{col} AS c{i}' for i, col in enumerate(child))}
-                   FROM read_parquet({_literal(url_of(join.measured_via or join.child))})
+                   FROM {publication.parquet_scan(url_of(join.measured_via or join.child))}
                    WHERE {' AND '.join(f'{col} IS NOT NULL' for col in child)}),
              p AS (SELECT DISTINCT {', '.join(f'{col} AS p{i}' for i, col in enumerate(parent))}, true AS present
-                   FROM read_parquet({_literal(url_of(join.parent))})),
+                   FROM {publication.parquet_scan(url_of(join.parent))}),
              j AS (SELECT {keys_sql}, p.present IS NULL AS missing FROM c LEFT JOIN p ON {on})
         SELECT count(*), count(*) FILTER (WHERE missing),
                (list(concat_ws('|', {keys_sql})) FILTER (WHERE missing))[1:3]

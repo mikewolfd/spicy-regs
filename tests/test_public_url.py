@@ -150,10 +150,10 @@ class MinimalReader(importlib.abc.MetaPathFinder):
             raise ImportError('ETL dependency unavailable: ' + fullname)
 sys.meta_path.insert(0, MinimalReader())
 from spicy_regs import mcp_server
-from spicy_regs.sources.publication import empty_index, parse_index, table_location
+from spicy_regs.sources.publication import Member, empty_index, parse_index, table_members
 import json
 assert parse_index(json.dumps(empty_index()).encode()) == empty_index()
-assert table_location(empty_index(), 'dockets.parquet') == ('dockets.parquet', None)
+assert table_members(empty_index(), 'dockets.parquet') == (Member('dockets.parquet', None, None, None),)
 con = mcp_server._build_connection()
 assert con.execute('SELECT docket_id FROM dockets').fetchall() == [('fork-docket',)]
 con.close()
