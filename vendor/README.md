@@ -5,14 +5,13 @@ The optional `source-readers` extra enables the same readers for package install
 its wheels must be supplied explicitly until they are published in a registry.
 Base CLI and MCP installs do not require them.
 
-- `spicy_docs-0.41.1`: built from SpicyDocs `main` at `0840b59` (release commit). Built September 26,
-  2026 UTC: **1,659,614 bytes**, SHA-256
-  `495dd097ebb676764d1aa2ba417da10c144373b38bebc5c1612555e555673ff3`, byte-identical across two
-  rebuilds from a clean archive of that commit with `SOURCE_DATE_EPOCH` at its commit time. On top
-  of 0.41.0 it reads every Senate vote menu of the 108th-118th: a vote the menu states is withheld
-  (116-2-216, a secret session) is listed with `data_available=False`, and a question naming several
-  amendments keeps them all (`question_measures`). 0.41.0 (reads BILLSTATUS 1.0.0 and the BILLS bulk
-  zips, links a roll call to the bill its file names) and its build record are at `a54f418`.
+- `spicy_docs-0.45.0`: released by spicy-stack-11 from SpicyDocs `main` at `df800d7`, September 27,
+  2026: **1,676,528 bytes**, SHA-256
+  `8d73dfa7d2c7fedf5de8e12eb25edbb3a972fb914c72f9bd3fcff7daec1abbe3`, byte-identical across two builds
+  (rechecked on adoption). On top of 0.44.0 (typed table contracts and the attribute projections) it
+  describes the comment-window flags as version state, breaks a Mirrulations tie by S3 write time
+  (`reader_factory(with_keys=True)`), and takes each derived-text attachment from the best-ranked tool
+  that has it (decision 41). Earlier builds and their records are in this file's history.
 
 - `rulespec_artifacts-1.1.2`: exact dependency of SpicyDocs 0.39.2, built from Rulespec
   `23d5f2d98973b2a7f1bf7ce4c9c7a786a4f369ab` (`packages/rulespec-artifacts` of a whole-repo

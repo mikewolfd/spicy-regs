@@ -146,25 +146,21 @@ def test_fill_orders_attachments_by_number_not_listing_order() -> None:
     assert [a["attachment"] for a in json.loads(fill.provenance)["attachments"]] == [1, 2, 10]
 
 
-def test_fill_takes_one_tool_by_the_pinned_order_and_records_provenance() -> None:
+def test_fill_takes_each_attachment_from_the_best_ranked_tool_and_records_provenance() -> None:
+    """Attachment 1 comes from pypdf alone, never doubled with pdfminer's copy; 3, which pypdf lacks, from pdfminer."""
     store = _store()
     fill = _fill(_FakeS3Resource(store), "0040")
     assert fill is not None
-    assert fill.text == "pypdf one"  # never concatenated with pdfminer's text for the same attachment
-    key = derived_key(*ACF, "pypdf", "0040", 1)
+    assert fill.text == "pypdf one\n\npdfminer three"
+    first, third = derived_key(*ACF, "pypdf", "0040", 1), derived_key(*ACF, "pdfminer", "0040", 3)
     assert json.loads(fill.provenance) == {
         "comment_id": "ACF-2025-0038-0040",
         "tool": "pypdf",
         "available_tools": ["pypdf", "pdfminer"],
         "attachments": [
-            {
-                "attachment": 1,
-                "tool": "pypdf",
-                "key": key,
-                "size": len(store[key]),
-                "etag": f'"etag:{key}"',
-                "sha256": hashlib.sha256(store[key]).hexdigest(),
-            }
+            {"attachment": number, "tool": tool, "key": key, "size": len(store[key]), "etag": f'"etag:{key}"',
+             "sha256": hashlib.sha256(store[key]).hexdigest()}
+            for number, tool, key in ((1, "pypdf", first), (3, "pdfminer", third))
         ],
         "only_in_other_tools": [3],
     }
