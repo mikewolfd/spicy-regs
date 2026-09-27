@@ -44,7 +44,6 @@ TABLES = (
     "feed_summary",
     "agency_stats",
     "agency_monthly_volume",
-    "rulemaking_lifecycles",
     "fr_docket_links",
     "discovery_signals",
     "cfr_sections",

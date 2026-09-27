@@ -26,12 +26,12 @@ earlier selection qualified at `86137cc2…` (2026-09-23) |
 Published at `4b1ca622…` (2026-09-25); the field audit is pending |
 | T06 | `run-pipeline` | `dockets.parquet` | publication verified at table digest `308b35c6…` \
 (2026-09-26; ETag `50d8cfba…`) |
-| T15 | `run-rollup-lifecycles` | `rulemaking_lifecycles.parquet` | withdrawn 2026-09-23 |
+| T15 | `run-rollup-discovery-signals` | `discovery_signals.parquet` | withdrawn 2026-09-23 |
 | T06 | `run-pipeline` | `comments/agency_code=<agency>/part-0.parquet` | unproduced on the fork |
 """
 RECORD = output_ledger.qualification_record(LEDGER)
 BUNDLED_DESTINATION = output_ledger.ledger_destination(output_ledger.LEDGER.read_text(encoding="utf-8"))
-SERVED = ("committee_reports", "laws", "bill_subjects", "fec_committees", "dockets", "rulemaking_lifecycles")
+SERVED = ("committee_reports", "laws", "bill_subjects", "fec_committees", "dockets", "discovery_signals")
 
 
 def _index(committee_reports: str = "95810b26", bill_subjects: str = "1b067027") -> dict:
@@ -79,7 +79,7 @@ def test_each_audit_keeps_the_rows_word_pin_and_kind():
     assert _audits("dockets") == [
         {"disposition": "verified", "pin": "308b35c6", "pin_kind": "table", "date": "2026-09-26", "etag": "50d8cfba"}
     ]
-    [withdrawn] = [row for row in RECORD["rows"] if row["tables"] == ["rulemaking_lifecycles"]]
+    [withdrawn] = [row for row in RECORD["rows"] if row["tables"] == ["discovery_signals"]]
     assert (withdrawn["audits"], withdrawn["statement"]) == ([], "withdrawn 2026-09-23")
     assert [row["task"] for row in RECORD["rows"]].count("T06") == 1  # a partition pattern names no table
 
@@ -137,7 +137,7 @@ def test_live_and_ledger_pins_are_separate_fields_never_one_verified_flag(monkey
     # A base object's table digest is compared with its managed table digest, not the family pin.
     assert (tables["dockets"]["pin_kind"], tables["dockets"]["live_pin"]) == ("table", "308b35c6")
     assert tables["dockets"]["generation"] == "current generation audited"
-    assert tables["rulemaking_lifecycles"] == {"status": "no_audit_recorded", "live_pin": None}
+    assert tables["discovery_signals"] == {"status": "no_audit_recorded", "live_pin": None}
     assert not any("verified" in key for entry in tables.values() for key in entry)
 
 

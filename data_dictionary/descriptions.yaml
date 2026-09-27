@@ -228,30 +228,6 @@ tables:
       document_type: "Document category counted in this bucket (e.g. `Rule`, `Notice`)."
       document_count: "Number of documents the agency posted of that type in that month."
 
-  rulemaking_lifecycles:
-    label: "Rulemaking timelines"
-    coverage: >-
-      Derived. Proposed-to-final pairs over `documents`; it covers exactly
-      what that table covers.
-    measured_on: "2026-09-06"
-    summary: >-
-      Proposed→final rulemaking arcs, one row per docket, discriminated by
-      `kind`: `pair` rows are completed rulemakings (earliest Proposed Rule
-      matched to the earliest subsequent Rule in the same docket, with elapsed
-      `days`); `stuck` rows are Proposed Rules with no matching Rule, where
-      `final_date` and `days` are NULL. Bounded to `proposed_date >= 2010-01-01`.
-      Built by `build_rulemaking_lifecycles` from `documents`. Note that pairing
-      is per docket, so a docket carrying several RINs across successive
-      rulemakings collapses to a single arc.
-    columns:
-      kind: "`pair` (completed: proposed and final both present) or `stuck` (proposed with no final rule in the docket)."
-      docket_id: "Docket the arc belongs to."
-      agency_code: "Agency short code, from the Proposed Rule."
-      title: "Title of the Proposed Rule that opens the arc."
-      proposed_date: "`posted_date` of the earliest Proposed Rule in the docket."
-      final_date: "`posted_date` of the earliest Rule at or after `proposed_date`. NULL when `kind` is `stuck`."
-      days: "Calendar days from `proposed_date` to `final_date`. NULL when `kind` is `stuck`."
-
   fr_docket_links:
     label: "Federal Register to docket links"
     coverage: >-

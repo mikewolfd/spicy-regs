@@ -12,7 +12,9 @@ from spicy_regs.ontology.common import RunContext
 from spicy_regs.ontology.federal_register import FederalRegisterIndex
 from spicy_regs.pipelines.materialized import DatasetStage, MaterializedDatasetPipeline
 from spicy_regs.transforms import (
+    build_agency_lifecycle_stats,
     build_comment_periods,
+    build_lifecycles,
     build_proceedings,
     build_regulatory_agenda,
     build_rule_targets,
@@ -26,8 +28,10 @@ class RulemakingDatasetPipeline(MaterializedDatasetPipeline):
     in the Code, and a document number in the Federal Register. Nothing joins
     the four. These stages do: ``rule_targets`` is the docket ↔ CFR ↔ RIN
     spine; ``proceedings`` promotes each rulemaking to a first-class record with
-    its actions; ``regulatory_agenda`` links agenda items to those actions; and
-    ``comment_periods`` materializes every comment interval, reopenings included.
+    its actions; ``regulatory_agenda`` links agenda items to those actions;
+    ``comment_periods`` materializes every comment interval, reopenings included;
+    ``lifecycles`` pairs each docketed proceeding's proposal with its final from
+    its cleaned events; and ``agency-lifecycle-stats`` estimates time to final.
 
     Stages run in dependency order and publish atomically as one generation
     under ``materialized/rulemaking/``, so a consumer never sees a spine from
@@ -50,6 +54,9 @@ class RulemakingDatasetPipeline(MaterializedDatasetPipeline):
         "regulatory_agenda_items.parquet",
         "agenda_item_proceedings.parquet",
         "comment_periods.parquet",
+        "rulemaking_lifecycles.parquet",
+        "lifecycle_events.parquet",
+        "agency_lifecycle_stats.parquet",
     )
 
     def source_column_requirements(self) -> dict[str, tuple[str, ...]]:
@@ -97,6 +104,8 @@ class RulemakingDatasetPipeline(MaterializedDatasetPipeline):
                 "agency_code",
                 "rule_stage",
                 "priority_category",
+                "major",
+                "timetable_json",
                 "first_action_date",
                 "next_action_date",
                 "url",
@@ -135,6 +144,14 @@ class RulemakingDatasetPipeline(MaterializedDatasetPipeline):
                 output_dir, run_id=context.run_id, asserted_at=context.asserted_at, fr_index=fr_index(output_dir)
             )
 
+        def lifecycles(output_dir: Path, context: RunContext) -> None:
+            build_lifecycles(
+                output_dir, run_id=context.run_id, asserted_at=context.asserted_at, fr_index=fr_index(output_dir)
+            )
+
+        def agency_lifecycle_stats(output_dir: Path, context: RunContext) -> None:
+            build_agency_lifecycle_stats(output_dir, run_id=context.run_id, asserted_at=context.asserted_at)
+
         return (
             DatasetStage(
                 name="rule-targets",
@@ -159,6 +176,18 @@ class RulemakingDatasetPipeline(MaterializedDatasetPipeline):
                 depends_on=("proceedings",),
                 outputs=("comment_periods.parquet",),
                 build=comment_periods,
+            ),
+            DatasetStage(
+                name="lifecycles",
+                depends_on=("proceedings", "regulatory-agenda"),
+                outputs=("rulemaking_lifecycles.parquet", "lifecycle_events.parquet"),
+                build=lifecycles,
+            ),
+            DatasetStage(
+                name="agency-lifecycle-stats",
+                depends_on=("lifecycles",),
+                outputs=("agency_lifecycle_stats.parquet",),
+                build=agency_lifecycle_stats,
             ),
         )
 

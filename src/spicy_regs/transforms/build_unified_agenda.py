@@ -97,30 +97,27 @@ def _s(value: object) -> str | None:
 _MDY = re.compile(r"^(\d{1,2})/(\d{1,2})/(\d{4})$")
 
 
-def _iso_dates(timetable: list) -> list[str]:
-    """Return the timetable's real action dates as sorted ISO ``YYYY-MM-DD``.
+def timetable_date(raw: object) -> date | None:
+    """One timetable action's date, or ``None``.
 
     A date the calendar rejects (``02/30/2024``) is dropped, never clamped into a
     *different* real date; ``00`` stays reginfo's month-only marker for the 1st.
     """
-    dates: set[str] = set()
-    for entry in timetable:
-        raw = (entry or {}).get("date")
-        if not isinstance(raw, str):
-            continue
-        m = _MDY.match(raw.strip())
-        if not m:
-            continue
-        month, day, year = int(m.group(1)), int(m.group(2)), int(m.group(3))
-        try:
-            action_date = date(year, month, day or 1)
-        except ValueError:
-            # Warn only here. The regex miss above fires 538 times per edition on
-            # reginfo's own "To Be Determined" and would bury this.
-            logger.warning("Unified Agenda: dropped impossible timetable date {!r}", raw.strip())
-            continue
-        dates.add(action_date.isoformat())
-    return sorted(dates)
+    if not isinstance(raw, str) or not (m := _MDY.match(raw.strip())):
+        return None
+    month, day, year = int(m.group(1)), int(m.group(2)), int(m.group(3))
+    try:
+        return date(year, month, day or 1)
+    except ValueError:
+        # Warn only here. The regex miss above fires 538 times per edition on
+        # reginfo's own "To Be Determined" and would bury this.
+        logger.warning("Unified Agenda: dropped impossible timetable date {!r}", raw.strip())
+        return None
+
+
+def _iso_dates(timetable: list) -> list[str]:
+    """Return the timetable's real action dates (:func:`timetable_date`) as sorted ISO ``YYYY-MM-DD``."""
+    return sorted({day.isoformat() for entry in timetable if (day := timetable_date((entry or {}).get("date")))})
 
 
 def _shape(doc: dict) -> dict:

@@ -101,7 +101,8 @@ def _source_date(*values: object) -> str | None:
     return dates[-1] if dates else None
 
 
-def _agenda_item_id(rin: str) -> str:
+def agenda_item_id(rin: str) -> str:
+    """The durable agenda item a RIN identifies (``urn:rkaf:us:rin:<rin>``)."""
     return f"urn:rkaf:us:rin:{rin}"
 
 
@@ -238,7 +239,7 @@ def build_regulatory_agenda(
                     "agenda_proceeding_relationship",
                     *key,
                 ),
-                "agenda_item_id": _agenda_item_id(rin),
+                "agenda_item_id": agenda_item_id(rin),
                 "rin": rin,
                 "proceeding_id": proceeding_id,
                 "relationship_role": "agenda_tracks_proceeding",
@@ -378,7 +379,7 @@ def build_regulatory_agenda(
         dates = sorted(seen_dates.get(rin, ()))
         item_rows.append(
             {
-                "agenda_item_id": _agenda_item_id(rin),
+                "agenda_item_id": agenda_item_id(rin),
                 "rin": rin,
                 "scope_status": scope_status,
                 "scope_basis": scope_basis,

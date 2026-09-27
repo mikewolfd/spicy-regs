@@ -1,6 +1,6 @@
 """Base class for decoupled, per-rollup pipelines, each on its own cron.
 
-Each rollup (``feed_summary``, ``agency_stats``, ``rulemaking_lifecycles``, ...)
+Each rollup (``feed_summary``, ``agency_stats``, ``discovery_signals``, ...)
 is materialized by its own :class:`RollupPipeline` subclass with its own console
 entry (``run-rollup-*``) and GitHub Actions workflow, so it can be re-run or
 backfilled alone and a failure stays isolated to one artifact. ``run()`` reads

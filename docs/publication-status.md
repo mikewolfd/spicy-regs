@@ -26,6 +26,8 @@ The public `congress_bills` file has 419,571 rows and 10 columns. The local
 described as unproduced all exist publicly: `agency_stats`,
 `agency_monthly_volume`, `discovery_signals`, `feed_summary`,
 `rulemaking_lifecycles`, and `org_committee_links`. They remain declared.
+(Since withdrawn: that documents-based `rulemaking_lifecycles` was withdrawn on
+2026-09-23 and its rollup deleted; the rulemaking dataset builds its successor.)
 `bill_subjects` has a local output but returned 404 at its public URL.
 
 The availability set matches the 24-table declaration at upstream commit

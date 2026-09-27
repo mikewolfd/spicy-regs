@@ -99,6 +99,76 @@ def register_rule_stage(document_type: object, title: object) -> str | None:
     return rule_stage(document_type, title)
 
 
+#: A title segment (between ``;``, ``:``, ``,`` or a dash with a space on either side) that is the
+#: Register's correction phrasing: "Correction(s)", "Correcting Amendment(s)",
+#: "Technical/Editorial/Miscellaneous Corrections", "Correction of/to/for …", "Technical Corrections
+#: Relating to …", "Correction notice", or one ending "… technical correction(s)". Of the 6,958 Register
+#: Rule and Proposed Rule titles saying "correct" on snapshot_9b2c770e, the bare substring also took
+#: "Correctional Facilities", "Voluntary Fiduciary Correction Program", "Correction Action for SWMUs",
+#: "Corrective Action" and "Reports of Corrections and Removals", which are rules, not corrections.
+_CORRECTION_SEGMENT = re.compile(
+    r"^(?:and\s+)?(?:(?:minor\s+)?editorial\s+|technical\s+|miscellaneous\s+|cfr\s+)?"
+    r"(?:corrections?|correcting\s+amendments?)(?:\s+(?:and|of|to|for|notice|relating)\b.*)?$"
+    r"|\btechnical\s+corrections?$"
+)
+#: The title's last segment may also end in the phrase ("…; Land Disposal Restrictions Correction",
+#: "…; Proposed Correction"), except a Clean Air Act "error correction", which is a rule. Only the last:
+#: "…; Updates and Corrections; and Export Controls on …" is a rule that also corrects.
+_CORRECTION_ENDING = re.compile(r"(?<!error )\b(?:corrections?|correcting\s+amendments?)$")
+_TITLE_SEGMENTS = re.compile(r"[;:,]|\s[-\u2013\u2014]|[-\u2013\u2014]\s")
+#: A trailing docket or source note: "[W-99-10-I-A-2]", "(Federal Register Publication)", "(Original)".
+_TRAILING_NOTE = re.compile(r"\s*(?:\[[^\]]*\]|\([^)]*\))$")
+
+
+def _without_trailing_notes(text: str) -> str:
+    """The text less trailing bracketed or parenthetical notes and closing punctuation."""
+    previous = None
+    while previous != text:
+        previous = text
+        text = _TRAILING_NOTE.sub("", text).rstrip(" .\"'\u201d\u2019")
+    return text
+
+
+def is_correction(title: object) -> bool:
+    """Whether a title states the document is a correction, as the Register phrases one.
+
+    Trailing notes are stripped first, from the title and from each segment, so "…; Correction
+    [W-99-10-I-A-2]" and "…; Correction (Federal Register Publication)" read as corrections, and a
+    dash with a space on one side splits too ("U.S. DOT/FAA - Correction -Airworthiness Directives").
+    """
+    text = _without_trailing_notes(" ".join(str(title or "").split()).casefold())
+    segments = [_without_trailing_notes(segment.strip()) for segment in _TITLE_SEGMENTS.split(text)]
+    return any(_CORRECTION_SEGMENT.search(segment) for segment in segments) or bool(
+        _CORRECTION_ENDING.search(segments[-1])
+    )
+
+
+def document_form(stage: str | None, title: object) -> str | None:
+    """A staged document's form: its :func:`rule_stage` refined by its own title's markers (decision 55).
+
+    Within a final: ``correction`` (:func:`is_correction`), ``interim_final`` ("interim final"
+    or "interim rule", the markers decision 59a types), ``direct_final``, else ``final``.
+    Within a proposal: ``correction``, ``comment_period`` (a comment period extended or
+    reopened), ``advance_proposed`` (an advance notice), else ``proposed``. Any other stage is
+    its own form. The stage itself is never re-read: a title only names the kind of document
+    the source's type already staged.
+    """
+    if stage not in ("proposed", "final"):
+        return stage
+    text = str(title or "").casefold()
+    if is_correction(text):
+        return "correction"
+    if stage == "final":
+        if "interim final" in text or "interim rule" in text:
+            return "interim_final"
+        return "direct_final" if "direct final" in text else "final"
+    if "comment period" in text and ("exten" in text or "reopen" in text):
+        return "comment_period"
+    if "advance notice of proposed rulemaking" in text or "anprm" in text:
+        return "advance_proposed"
+    return "proposed"
+
+
 def register_states_type(document_type: object, title: object) -> bool:
     """Whether a Register row states a type: any but ``Uncategorized Document`` or empty, or its suffix types it."""
     kind = str(document_type or "").casefold()

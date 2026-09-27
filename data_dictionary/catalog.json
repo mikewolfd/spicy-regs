@@ -145,24 +145,6 @@
       ]
     },
     {
-      "table": "rulemaking_lifecycles",
-      "label": "Rulemaking timelines",
-      "summary": "Proposed→final rulemaking arcs, one row per docket, discriminated by `kind`: `pair` rows are completed rulemakings (earliest Proposed Rule matched to the earliest subsequent Rule in the same docket, with elapsed `days`); `stuck` rows are Proposed Rules with no matching Rule, where `final_date` and `days` are NULL. Bounded to `proposed_date >= 2010-01-01`. Built by `build_rulemaking_lifecycles` from `documents`. Note that pairing is per docket, so a docket carrying several RINs across successive rulemakings collapses to a single arc.",
-      "coverage": "Derived. Proposed-to-final pairs over `documents`; it covers exactly what that table covers.",
-      "kind": "derived",
-      "measured_on": "2026-09-06",
-      "data_quality": null,
-      "columns": [
-        "kind",
-        "docket_id",
-        "agency_code",
-        "title",
-        "proposed_date",
-        "final_date",
-        "days"
-      ]
-    },
-    {
       "table": "fr_docket_links",
       "label": "Federal Register to docket links",
       "summary": "The Federal Register ↔ docket bridge: each `federal_register` row's `docket_ids_json` array exploded to one row per (docket_id, document_number, publication_date), carrying the FR display columns. Use this instead of an `ILIKE` scan over `federal_register.docket_ids_json` — it is sorted by `docket_id`, so `WHERE docket_id = ?` prunes row groups. This is the practical join from regulations.gov to the Federal Register using the Federal Register's own stated docket links. Built by `build_fr_docket_links`.",

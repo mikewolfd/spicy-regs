@@ -82,7 +82,7 @@ code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 30 "$BASE/")"
 tools="$(curl -sS --max-time 60 -X POST "$BASE/mcp" \
   -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"list_sources","arguments":{}}}')"
-for t in rulemaking_lifecycles fr_docket_links discovery_signals; do
+for t in fr_docket_links discovery_signals; do
   case "$tools" in
     *"$t"*) echo "  ok   table $t" ;;
     *)      echo "  FAIL table $t missing from list_sources"; fail=1 ;;

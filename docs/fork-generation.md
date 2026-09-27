@@ -140,8 +140,9 @@ failed dispositions; the execution log records the dated work and receipts.
   replay. Wider registration years and lobbying history remain open.
 - **T15:** summaries, link tables and docket search have refreshed against the
   catch-up parents and pass independent complete transformation replays.
-  Wider source qualification of those parents remains separate. `rulemaking_lifecycles` is
-  withdrawn (decision 4), and its dispatch workflow has been removed. Docket
+  Wider source qualification of those parents remains separate. The documents-based
+  `rulemaking_lifecycles` rollup is deleted; lifecycles are a rulemaking-dataset stage
+  (T17, decisions 54–55). Docket
   search omits the 18 dockets with neither title nor abstract; the other limits
   are in each table's dictionary entry. See the ledger.
 - **T17:** the current rulemaking snapshot passes public/input digest and
@@ -358,8 +359,8 @@ The original order, kept for the record:
 
 1. Continue **T07** native comments repair and index/partition reconciliation
    to release the remaining comment-dependent summaries and organization links.
-   Keep **T15** lifecycle inference separate until its pairing and unknown-docket
-   rules are qualified; its document parent is already delivered.
+   Lifecycles now pair within docketed proceedings as a **T17** stage (decisions
+   54–55); qualify them with the snapshot that first carries them.
 2. In parallel, continue **T09** complete bill-family qualification and the unfinished
    **T08/T11–T14** source-specific work. Each family keeps its own scope and
    access requirements; SAM, models and catalog access do not block independent
@@ -455,7 +456,7 @@ wait for verified parents before starting dependents.
 | T13 | `court-opinion-clusters`, `court-citations`, `court-opinions` | Native source qualification; retain cluster/scope/join inputs. Opinion bodies are withdrawn (decision 6). The citation tables and the text-free opinion index copy one whole export each; `court-opinions` runs only where the 54.6 GB original is retained. |
 | T01/T14 | `sam-entities`, `lobbying-filings` | Source refusal repair/access and bounded resumable acquisition. SAM's repaired scheduled selection succeeded; retain complete selected-year extracts for replay. The bounded lobbying refresh qualifies; wider histories remain open. |
 | T15 | `feed-summary`, `agency-stats` | Require `dockets`, `documents`, `comments_index`. |
-| T15 | `agency-monthly-volume`, `discovery-signals` | Require `documents`; run in the regulatory completion chain. The lifecycle research producer remains available locally, with its publication workflow removed. |
+| T15 | `agency-monthly-volume`, `discovery-signals` | Require `documents`; run in the regulatory completion chain. |
 | T15 | `docket-search` | Requires `dockets`; produces legacy `docket_search.json.gz` outside managed Parquet-family publication. |
 | T15 | `fr-docket-links` | Runs after successful `federal-register` refresh; a manual repair entry remains available. |
 | T15 | `org-committee-links` | Requires the selected completed FEC family and public comments. The regulatory chain waits for mirror publication and verifies unchanged base ETags; the direct comments read still sits outside the rollup class's declared local inputs. |
@@ -488,7 +489,7 @@ the full public readback and source qualification of its selected population.
 | `laws` | `laws`, `law_code_sections`, `table3_records` |
 | `committee-rosters` | `committees`, `committee_assignments` |
 | `build-fec-observations` | `fec_source_records`, `fec_collections`, `fec_relationships` |
-| `materialize-rulemaking` | `rule_targets`, `proceedings`, `regulatory_agenda_items`, `agenda_item_proceedings`, `comment_periods` |
+| `materialize-rulemaking` | `rule_targets`, `proceedings`, `regulatory_agenda_items`, `agenda_item_proceedings`, `comment_periods`, `rulemaking_lifecycles`, `lifecycle_events`, `agency_lifecycle_stats` |
 
 `bill_subjects` and `court_opinion_clusters` have dictionary descriptions,
 current schemas and MCP declarations as well as executable producers;

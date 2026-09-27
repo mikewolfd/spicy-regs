@@ -39,6 +39,7 @@ from spicy_regs.ontology.federal_register import (
     register_states_type,
     resolved_id,
 )
+from spicy_regs.ontology.rins import docket_side_holder, specific_rin_holders
 
 OUTPUT = "proceedings.parquet"
 # v5: labelled FR docket values join (linked_docket_id), and stage events fall on the
@@ -113,19 +114,6 @@ _STAGE_KIND = {
 #: 56's B), or through a RIN the proceeding alone holds (its E); or the Register document a
 #: docket-less proceeding is.
 JOINED_BY = frozenset({"docket", "fr_docket_link", "fr_copy", "specific_rin", "fr_document"})
-
-
-def _holder_source(rule_targets_source: object) -> str:
-    """The holder source a rule_targets row's source class names, for decision 56's E.
-
-    The docket-side evidence by which a proceeding holds a RIN, which a join lists by name:
-    ``docket_rin`` (its dockets' rin), ``document_rin`` (its documents' RINs) and
-    ``rule_targets:document_fr_doc`` (a copy's RINs on its docket). rule_targets' docket_rin
-    and document_rin rows restate the first two and fold into them. Its fr_cfr_ref rows restate
-    a docket-linked Register document's RINs and never reach here (see the rule_targets pass).
-    """
-    source = str(rule_targets_source or "")
-    return source if source in ("docket_rin", "document_rin") else f"rule_targets:{source}"
 
 
 #: The Federal Register columns that say whether a document is itself action evidence.
@@ -264,7 +252,7 @@ def build_proceedings(
         return {
             "dockets": set(dockets),
             "identity": identity,
-            # Docket-side RINs, each with the evidence that holds it (_holder_source), and the
+            # Docket-side RINs, each with the evidence that holds it (docket_side_holder), and the
             # RINs of the Register documents the proceeding holds, kept apart for decision 56's E.
             "rins": {},
             "fr_rins": set(),
@@ -578,13 +566,15 @@ def build_proceedings(
         if key is None or docket in catch_alls:
             continue
         group = groups[key]
-        if (rin := normalize_rin(row.get("rin"))) and row.get("source") == "fr_cfr_ref":
-            # rule_targets writes an fr_cfr_ref row for each RIN of each Register document a
-            # docket links: a document the proceeding took in, whose RINs it records but never
-            # holds for E (owner ruling on review 2b).
-            group["fr_rins"].add(rin)
-        elif rin:
-            group["rins"].setdefault(rin, set()).add(_holder_source(row.get("source")))
+        if rin := normalize_rin(row.get("rin")):
+            # rule_targets' docket_rin and document_rin rows restate the dockets' and documents'
+            # RINs read above and fold into them. Its fr_cfr_ref rows restate each RIN of each
+            # Register document a docket links: a document the proceeding took in, whose RINs it
+            # records but never holds for E (owner ruling on review 2b).
+            if holder := docket_side_holder(row.get("source")):
+                group["rins"].setdefault(rin, set()).add(holder)
+            else:
+                group["fr_rins"].add(rin)
         if row.get("cfr_ref"):
             group["cfr_refs"].add(str(row["cfr_ref"]))
             try:
@@ -609,11 +599,7 @@ def build_proceedings(
     # through the umbrella 2115-AA97, and, restated as rule_targets' fr_cfr_ref rows, 126 more
     # documents, 56 of the 79 with comparable agency codes into another agency's docket (owner
     # rulings on decision 56). X-pattern codes never count (decision 61).
-    holders_by_rin: dict[str, set[str]] = defaultdict(set)
-    for key, group in groups.items():
-        for rin in group["rins"]:
-            if action_evidence_rin(rin):
-                holders_by_rin[rin].add(key)
+    specific_holder = specific_rin_holders({key: group["rins"] for key, group in groups.items()})
 
     # An unlinked action document attaches to the one docketed proceeding its specific RINs
     # point to (decision 56, E); pointing to several, it unites none (decision 33). Any other
@@ -624,8 +610,8 @@ def build_proceedings(
         # Each proceeding the document's specific RINs point to, with those RINs in order.
         specific: dict[str, list[str]] = defaultdict(list)
         for rin in sorted(rins):
-            if action_evidence_rin(rin) and len(holders := holders_by_rin.get(rin, ())) == 1:
-                specific[next(iter(holders))].append(rin)
+            if holder := specific_holder.get(rin):
+                specific[holder].append(rin)
         if len(specific) == 1:
             ((key, joined_rins),) = specific.items()
             add_fr(groups[key], row, identity, rins, stage, joined_by="specific_rin", joined_rins=joined_rins)

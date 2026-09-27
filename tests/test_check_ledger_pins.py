@@ -66,7 +66,7 @@ LEDGER = """\
 | T08 | `run-rollup-nominations` | `nominations.parquet` | qualified at `4a40b55e…` (2026-09-22); newer run unaudited |
 | T13 | `run-rollup-court-citations` | `court_citations.parquet`, `court_citation_map.parquet`, `generations/<f>/` \
 | qualified at `f1e2e523…` (2026-09-22) |
-| T15 | `run-rollup-lifecycles` | `rulemaking_lifecycles.parquet` | qualified at `2f001194…` (2026-09-22) |
+| T15 | `run-rollup-retired` | `retired_table.parquet` | qualified at `2f001194…` (2026-09-22) |
 | T13 | `run-rollup-court-opinion-bodies` | `court_opinion_bodies.parquet` | withdrawn 2026-09-22 |
 | T11 | `materialize-rulemaking` | `rule_targets.parquet`, `proceedings.parquet` \
 | qualified at `snapshot_0e799850…` (2026-09-23) |
@@ -91,7 +91,7 @@ def test_each_row_is_classified_against_its_own_live_source():
         "amendments.parquet": "OK",
         "nominations.parquet": "DRIFT",
         "court_citations.parquet": "OK",
-        "rulemaking_lifecycles.parquet": "NOT-LIVE",
+        "retired_table.parquet": "NOT-LIVE",  # a family no longer in the index
         "court_opinion_bodies.parquet": "NO-PIN",
         "rule_targets.parquet": "OK",
         "comment_periods.parquet": "DRIFT",

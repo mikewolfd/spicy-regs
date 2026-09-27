@@ -161,7 +161,6 @@ TABLES: tuple[str, ...] = (
     "feed_summary",
     "agency_stats",
     "agency_monthly_volume",
-    "rulemaking_lifecycles",
     "fr_docket_links",
     "discovery_signals",
     "cfr_sections",
@@ -217,7 +216,6 @@ MCP_QUERYABLE: frozenset[str] = frozenset(
         "feed_summary",
         "agency_stats",
         "agency_monthly_volume",
-        "rulemaking_lifecycles",
         "fr_docket_links",
         "discovery_signals",
         "cfr_sections",
@@ -307,17 +305,6 @@ DERIVED_SCHEMAS: dict[str, list[tuple[str, str]]] = {
         ("edition_year", "VARCHAR"),
         ("last_modified", "VARCHAR"),
         ("url", "VARCHAR"),
-    ],
-    # Built by build_rulemaking_lifecycles from documents.parquet. Two row shapes
-    # discriminated by `kind`; bounded to proposed_date >= 2010-01-01.
-    "rulemaking_lifecycles": [
-        ("kind", "VARCHAR"),
-        ("docket_id", "VARCHAR"),
-        ("agency_code", "VARCHAR"),
-        ("title", "VARCHAR"),
-        ("proposed_date", "DATE"),
-        ("final_date", "DATE"),
-        ("days", "BIGINT"),
     ],
     # Built by build_fr_docket_links: federal_register.docket_ids_json exploded to
     # one row per (docket_id, document_number, publication_date), carrying FR display columns.

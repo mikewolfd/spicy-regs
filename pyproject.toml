@@ -73,7 +73,6 @@ run-rollup-documents = "spicy_regs.pipelines.rollups.regulatory_base:documents_a
 run-rollup-docket-attributes = "spicy_regs.pipelines.rollups.regulatory_base:docket_attributes_app"
 run-rollup-document-attributes = "spicy_regs.pipelines.rollups.regulatory_base:document_attributes_app"
 run-attributes-sweep = "spicy_regs.pipelines.attributes_sweep:app"
-run-rollup-lifecycles = "spicy_regs.pipelines.rollups.rulemaking_lifecycles:app"
 run-rollup-discovery-signals = "spicy_regs.pipelines.rollups.discovery_signals:app"
 run-rollup-fr-docket-links = "spicy_regs.pipelines.rollups.fr_docket_links:app"
 run-rollup-cfr-sections = "spicy_regs.pipelines.rollups.cfr_sections:app"

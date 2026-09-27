@@ -1,7 +1,8 @@
 name: Materialize — rulemaking join surface
 
 # Builds one generation of the rule-identity tables (rule_targets, proceedings,
-# regulatory_agenda_items, agenda_item_proceedings, comment_periods) from the
+# regulatory_agenda_items, agenda_item_proceedings, comment_periods,
+# rulemaking_lifecycles, lifecycle_events, agency_lifecycle_stats) from the
 # published base tables and publishes it atomically under
 # materialized/rulemaking/. Standalone rather than via _rollup.yml because a
 # first publication needs --allow-bootstrap, which that reusable workflow does

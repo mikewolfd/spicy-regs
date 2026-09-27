@@ -130,14 +130,6 @@
     {
       "task": "T15",
       "tables": [
-        "rulemaking_lifecycles"
-      ],
-      "audits": [],
-      "statement": "withdrawn 2026-09-23 (decision 4): the 2026-09-22 scheduled run had published generation `2f001194…` (26,519 rows); the family was conditionally removed from the index. Its workflow was deleted in `5715163` on September 24; the local research producer remains and pairing semantics remain blocked"
-    },
-    {
-      "task": "T15",
-      "tables": [
         "discovery_signals"
       ],
       "audits": [

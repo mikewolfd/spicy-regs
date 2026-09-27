@@ -218,8 +218,8 @@ class RegulationsPipeline(Pipeline):
             changed_comments = self._merge(staging_dir, output_dir, record_types, staged)
             rmtree(staging_dir, ignore_errors=True)
             # Rollups (feed_summary, agency_stats, agency_monthly_volume,
-            # docket_search, rulemaking_lifecycles, discovery_signals,
-            # fr_docket_links) are no longer built here. Each is materialized by
+            # docket_search, discovery_signals, fr_docket_links) are no
+            # longer built here. Each is materialized by
             # its own decoupled pipeline (`run-rollup-*`) on an independent cron,
             # reading the base tables this ETL publishes below.
         else:

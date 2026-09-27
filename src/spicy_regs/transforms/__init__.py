@@ -1,6 +1,7 @@
 """Package facade: re-exports every transform, merge helper and PDF-text entry point it defines."""
 
 from spicy_regs.transforms.base import Transform
+from spicy_regs.transforms.build_agency_lifecycle_stats import build_agency_lifecycle_stats
 from spicy_regs.transforms.build_agency_monthly_volume import build_agency_monthly_volume
 from spicy_regs.transforms.build_agency_rollups import build_agency_rollups
 from spicy_regs.transforms.build_agency_stats import build_agency_stats
@@ -18,13 +19,13 @@ from spicy_regs.transforms.build_member_vote_terms import build_member_vote_term
 from spicy_regs.transforms.build_court_opinion_clusters import build_court_opinion_clusters
 from spicy_regs.transforms.build_org_committee_links import build_org_committee_links
 from spicy_regs.transforms.build_comment_periods import build_comment_periods
+from spicy_regs.transforms.build_lifecycles import build_lifecycles
 from spicy_regs.transforms.build_proceedings import build_proceedings
 from spicy_regs.transforms.build_regulatory_agenda import build_regulatory_agenda
 from spicy_regs.transforms.build_rule_targets import build_rule_targets
 from spicy_regs.transforms.enrich_bill_subjects import enrich_bill_subjects
 from spicy_regs.transforms.build_gao_reports import build_gao_reports
 from spicy_regs.transforms.build_lobbying_filings import build_lobbying_filings
-from spicy_regs.transforms.build_rulemaking_lifecycles import build_rulemaking_lifecycles
 from spicy_regs.transforms.build_sam_entities import build_sam_entities
 from spicy_regs.transforms.build_search_index import INDEX_FILENAME, build_search_index
 from spicy_regs.transforms.build_unified_agenda import build_unified_agenda
@@ -68,7 +69,6 @@ __all__ = [
     "build_fcc_proceedings",
     "build_fcc_filings",
     "build_fec_committees",
-    "build_rulemaking_lifecycles",
     "build_sam_entities",
     "build_federal_register",
     "build_fr_docket_links",
@@ -77,6 +77,8 @@ __all__ = [
     "build_court_opinion_clusters",
     "build_org_committee_links",
     "build_comment_periods",
+    "build_lifecycles",
+    "build_agency_lifecycle_stats",
     "build_proceedings",
     "build_regulatory_agenda",
     "build_rule_targets",
