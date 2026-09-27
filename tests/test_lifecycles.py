@@ -987,11 +987,14 @@ def test_the_documents_based_rollup_is_gone_with_no_dangling_reference():
         "data_dictionary/descriptions.yaml",
         "data_dictionary/catalog.json",
         "src/spicy_regs/table_metadata.json",
-        "src/spicy_regs/table_qualification.json",
         "mkdocs.yml",
         "deploy/cloudrun/deploy.sh",
     ):
         assert "rulemaking_lifecycles" not in (REPO_ROOT / path).read_text(encoding="utf-8"), path
+    # The new table reuses the name, so the qualification record may name it only as a T17 rulemaking output.
+    record = json.loads((REPO_ROOT / "src/spicy_regs/table_qualification.json").read_text(encoding="utf-8"))
+    naming = [row["task"] for row in record["rows"] if "rulemaking_lifecycles" in row["tables"]]
+    assert naming in ([], ["T17"]), naming
     stale = (
         "build_rulemaking_lifecycles",
         "RulemakingLifecyclesRollup",
