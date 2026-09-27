@@ -112,6 +112,54 @@ def sweep(
     return rows
 
 
+def shard_agencies(agencies: list[str], shard: int, shards: int) -> list[str]:
+    """Agencies dealt round-robin into ``shards`` in name order, so the largest agencies land in different shards."""
+    if not 0 <= shard < shards:
+        raise ValueError(f"shard {shard} is outside 0..{shards - 1}")
+    return sorted(agencies)[shard::shards]
+
+
+def combine(shard_dirs: list[Path], output_dir: Path) -> dict[str, int]:
+    """Union each table across the shards' outputs, refusing an id two shards both wrote; merge their receipts."""
+    import duckdb
+    import pyarrow.parquet as pq
+
+    from spicy_regs.transforms.regulations_attributes import ROW_GROUP_ROWS, contract
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    rows = {}
+    for table in ATTRIBUTE_TABLES.values():
+        table_contract = contract(table)
+        files = [str(directory / f"{table}.parquet").replace("'", "''") for directory in shard_dirs]
+        source = "read_parquet([" + ", ".join(f"'{f}'" for f in files) + "])"
+        keys = ", ".join(f'"{column}"' for column in table_contract.identity)
+        columns = ", ".join(f'"{column}"' for column in table_contract.columns)
+        out = output_dir / f"{table}.parquet"
+        with duckdb.connect() as con:
+            repeated = con.execute(f"SELECT count(*) - count(DISTINCT ({keys})) FROM {source}").fetchone()
+            if repeated and repeated[0]:
+                raise RuntimeError(f"{table}: {repeated[0]} ids appear in more than one shard")
+            con.execute(
+                f"COPY (SELECT {columns} FROM {source} ORDER BY {keys}) TO '{str(out).replace(chr(39), chr(39) * 2)}' "
+                f"(FORMAT PARQUET, COMPRESSION ZSTD, ROW_GROUP_SIZE {ROW_GROUP_ROWS})"
+            )
+        rows[table] = pq.ParquetFile(out).metadata.num_rows
+        logger.info("{}: {:,} rows from {} shards", table, rows[table], len(shard_dirs))
+    receipt: dict[str, list] = {"refused": [], "unreadable_keys": []}
+    for directory in shard_dirs:
+        shard = json.loads((directory / "attribute_refusals.json").read_text(encoding="utf-8"))
+        receipt["refused"] += shard["refused"]
+        receipt["unreadable_keys"] += shard["unreadable_keys"]
+    (output_dir / "attribute_refusals.json").write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
+    return rows
+
+
+def _publish(output_dir: Path) -> None:
+    tables = list(ATTRIBUTE_TABLES.values())
+    r2.preflight_uploads(output_dir, r2.dataset_files(output_dir, tables))
+    r2.upload_dataset(output_dir, tables)
+
+
 app = App(name="run-attributes-sweep", help=__doc__)
 
 
@@ -120,16 +168,30 @@ def main(
     *,
     output_dir: Path = Path("output"),
     agency: list[str] | None = None,
+    shard: int | None = None,
+    shards: int | None = None,
     max_workers: int = 4,
     skip_upload: bool = True,
 ) -> None:
-    """Sweep the mirror into both attribute tables; with ``--no-skip-upload``, publish their working copies."""
+    """Sweep the mirror, or one ``--shard`` of ``--shards``, into both attribute tables; optionally publish them."""
+    from spicy_docs.sources import mirrulations
+
     output_dir.mkdir(parents=True, exist_ok=True)
+    if (shard is None) != (shards is None):
+        raise ValueError("--shard and --shards go together")
+    if shard is not None and shards is not None:
+        agency = shard_agencies(agency or mirrulations.discover_agencies(), shard, shards)
     sweep(output_dir, agencies=agency, max_workers=max_workers)
     if not skip_upload:
-        tables = list(ATTRIBUTE_TABLES.values())
-        r2.preflight_uploads(output_dir, r2.dataset_files(output_dir, tables))
-        r2.upload_dataset(output_dir, tables)
+        _publish(output_dir)
+
+
+@app.command(name="combine")
+def combine_command(shard_dir: list[Path], *, output_dir: Path = Path("output"), skip_upload: bool = True) -> None:
+    """Combine shard sweeps into both attribute tables; optionally publish them."""
+    combine(shard_dir, output_dir)
+    if not skip_upload:
+        _publish(output_dir)
 
 
 if __name__ == "__main__":

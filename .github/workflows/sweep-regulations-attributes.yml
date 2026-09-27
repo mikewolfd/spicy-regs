@@ -2,10 +2,10 @@ name: Sweep Regulations.gov attributes
 
 # Decisions 65-67: seed document_attributes and docket_attributes with one full
 # pass over every document and docket record in the Mirrulations mirror. The
-# daily ETL merges into the working copies this writes. Dispatched bare it
-# builds and uploads the working copies as an artifact for comparison;
-# publish=true also writes them to R2. The families publish with the next
-# regulations refresh.
+# daily ETL merges into the working copies this writes. Eight jobs each sweep a
+# round-robin shard of the agencies; one job combines them and uploads the two
+# tables as an artifact for comparison, and with publish=true also writes the
+# working copies to R2. The families publish with the next regulations refresh.
 
 on:
   workflow_dispatch:
@@ -20,6 +20,10 @@ jobs:
   sweep:
     runs-on: ubuntu-latest
     timeout-minutes: 360
+    strategy:
+      fail-fast: true
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5, 6, 7]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -27,7 +31,32 @@ jobs:
           python-version: '3.12'
       - uses: astral-sh/setup-uv@v4
       - run: uv sync --frozen
-      - name: Sweep
+      - name: Sweep shard ${{ matrix.shard }} of 8
+        run: uv run --frozen run-attributes-sweep --output-dir out --shard ${{ matrix.shard }} --shards 8
+      - uses: actions/upload-artifact@v4
+        with:
+          name: regulations-attributes-shard-${{ matrix.shard }}
+          path: |
+            out/document_attributes.parquet
+            out/docket_attributes.parquet
+            out/attribute_refusals.json
+
+  combine:
+    needs: sweep
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@v4
+      - run: uv sync --frozen
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: regulations-attributes-shard-*
+          path: shards
+      - name: Combine
         env:
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
@@ -35,10 +64,11 @@ jobs:
           R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
           R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL }}
           PUBLISH: ${{ inputs.publish && '--no-skip-upload' || '--skip-upload' }}
-        run: uv run --frozen run-attributes-sweep --output-dir out "$PUBLISH"
+        run: uv run --frozen run-attributes-sweep combine shards/regulations-attributes-shard-* --output-dir out "$PUBLISH"
       - uses: actions/upload-artifact@v4
         with:
           name: regulations-attributes
           path: |
             out/document_attributes.parquet
             out/docket_attributes.parquet
+            out/attribute_refusals.json

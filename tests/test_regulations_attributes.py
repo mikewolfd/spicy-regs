@@ -163,3 +163,31 @@ def test_the_sweep_reports_refusals_beside_the_tables(tmp_path):
     assert rows["docket_attributes"] == 0
     receipt = json.loads((tmp_path / "attribute_refusals.json").read_text())
     assert [(r["table"], r["id"]) for r in receipt["refused"]] == [("docket_attributes", "")]
+
+
+def test_shards_deal_agencies_round_robin_in_name_order():
+    agencies = ["FDA", "EPA", "BIS", "CMS", "DOT"]
+    shards = [attributes_sweep.shard_agencies(agencies, n, 2) for n in range(2)]
+    assert shards == [["BIS", "DOT", "FDA"], ["CMS", "EPA"]]
+    with pytest.raises(ValueError, match="outside"):
+        attributes_sweep.shard_agencies(agencies, 2, 2)
+
+
+def _shard(tmp_path, name, served):
+    out = tmp_path / name
+    attributes_sweep.sweep(out, agencies=sorted({agency for agency, _ in served}),
+                           read_factory=lambda consumed: lambda agency, kind: _Reader(served.get((agency, kind.name), [])))
+    return out
+
+
+def test_combine_unions_the_shards_and_refuses_an_id_two_shards_wrote(tmp_path):
+    first = _shard(tmp_path, "a", {("EPA", "documents"): [_document("EPA-1-0001")],
+                                   ("EPA", "dockets"): [{"data": {"id": "", "attributes": {}}}]})
+    second = _shard(tmp_path, "b", {("FDA", "documents"): [_document("FDA-1-0001"), _document("FDA-1-0002")]})
+    rows = attributes_sweep.combine([first, second], tmp_path / "out")
+    assert rows == {"document_attributes": 3, "docket_attributes": 0}
+    import json
+
+    assert [r["id"] for r in json.loads((tmp_path / "out" / "attribute_refusals.json").read_text())["refused"]] == [""]
+    with pytest.raises(RuntimeError, match="more than one shard"):
+        attributes_sweep.combine([first, first], tmp_path / "again")
