@@ -175,6 +175,71 @@ def test_a_bridge_carries_its_subjects_roster_parent():
     assert agencies.agency_code_for_fr_agencies(entries) == "EAB"
 
 
+def test_a_bridge_onto_an_already_coded_agency_adds_codes():
+    # The refused Ex-Im bridge's shape: USEIB selects FR 151 and EIB the eCFR bank, so bridged
+    # FR 151 would carry both and resolve to neither (the cost the owner refused).
+    (exim,) = [row for row in agencies.registry_rows("non-emissions") if row["subject"] == f"{FR}{EXIM_ID}"]
+    bridge = {
+        "candidate_id": exim["item_id"],
+        "subject": exim["subject"],
+        "subject_parent": None,
+        "object": exim["object"],
+    }
+    ref038 = agencies._build_projection(agencies.projection_rows(), (), ())
+    bridged = agencies._build_projection(agencies.projection_rows(), [bridge], ())
+    assert ref038.code_by_fr_id[EXIM_ID] == "USEIB"
+    assert EXIM_ID not in bridged.code_by_fr_id
+
+
+def test_an_entrys_parent_id_never_overrides_a_stated_chain(monkeypatch):
+    rows = [
+        {"org": f"{FR}900020", "source_value": "PARENT", "parent_org": None},
+        {"org": f"{FR}900021", "source_value": "CHILD", "parent_org": f"{FR}900020"},
+    ]
+    projection = agencies._build_projection(rows, (), ())
+    monkeypatch.setattr(agencies, "_projection", lambda: projection)
+    assert agencies.agency_code_for_fr_agencies([{"id": 900020}, {"id": 900021, "parent_id": 900099}]) == "CHILD"
+
+
+def test_a_bridge_subject_keeps_its_sealed_parent_whatever_its_entry_says():
+    # The bridge seals the Economic Analysis Bureau under Commerce; a row naming HHS as its parent moves nothing.
+    commerce_row = [{"id": COMMERCE_ID}, {"id": BEA_ID, "parent_id": HHS_ID}]
+    hhs_row = [{"id": HHS_ID}, {"id": BEA_ID, "parent_id": HHS_ID}]
+    assert agencies.agency_code_for_fr_agencies(commerce_row) == "EAB"
+    assert agencies.agency_code_for_fr_agencies(hhs_row) is None
+
+
+def test_an_originals_chain_from_its_entry_reaches_its_grandparents(monkeypatch):
+    # 900033 was renamed 900032. Its entry names 900031 as parent, whose stated parent is 900030.
+    rows = [
+        {"org": f"{FR}900030", "source_value": "GRAND", "parent_org": None},
+        {"org": f"{FR}900031", "source_value": "MIDDLE", "parent_org": f"{FR}900030"},
+        {"org": f"{FR}900032", "source_value": "SUCCESSOR", "parent_org": None},
+    ]
+    projection = agencies._build_projection(rows, (), [event(900033, 900032)])
+    monkeypatch.setattr(agencies, "_projection", lambda: projection)
+    entries = [{"id": 900030}, {"id": 900033, "parent_id": 900031}]
+    assert agencies.agency_code_for_fr_agencies(entries) == "SUCCESSOR"
+
+
+def test_an_original_without_a_parent_id_stands_apart_from_its_department(monkeypatch):
+    # With no parent_id, HCFA (CMS) and HHS are two unrelated coded agencies: a joint document.
+    entries = [{"id": HHS_ID, "name": "Health and Human Services Department"}, {"id": HCFA_ID}]
+    assert agencies.agency_code_for_fr_agencies(entries) is None
+    # The same answer as REF-038 alone, where HCFA was an unresolved agency with no parent_id.
+    ref038 = agencies._build_projection(agencies.projection_rows(), (), ())
+    monkeypatch.setattr(agencies, "_projection", lambda: ref038)
+    assert agencies.agency_code_for_fr_agencies(entries) is None
+
+
+def test_an_originals_differing_parent_id_is_taken_as_the_row_states():
+    # A row naming Commerce as HCFA's parent puts HCFA under Commerce, and so away from HHS.
+    assert (
+        agencies.agency_code_for_fr_agencies([{"id": COMMERCE_ID}, {"id": HCFA_ID, "parent_id": COMMERCE_ID}]) == "CMS"
+    )
+    assert agencies.agency_code_for_fr_agencies([{"id": HHS_ID}, {"id": HCFA_ID, "parent_id": COMMERCE_ID}]) is None
+
+
 def test_a_rename_reroutes_to_the_successors_code():
     assert agencies.fr_agency_code(HCFA_ID) == "CMS"
     hcfa = [
