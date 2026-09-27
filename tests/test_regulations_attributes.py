@@ -175,19 +175,32 @@ def test_shards_deal_agencies_round_robin_in_name_order():
 
 def _shard(tmp_path, name, served):
     out = tmp_path / name
-    attributes_sweep.sweep(out, agencies=sorted({agency for agency, _ in served}),
+    attributes_sweep.sweep(out, agencies=sorted({agency for agency, _ in served}), keep_order=True,
                            read_factory=lambda consumed: lambda agency, kind: _Reader(served.get((agency, kind.name), [])))
     return out
 
 
-def test_combine_unions_the_shards_and_refuses_an_id_two_shards_wrote(tmp_path):
-    first = _shard(tmp_path, "a", {("EPA", "documents"): [_document("EPA-1-0001")],
-                                   ("EPA", "dockets"): [{"data": {"id": "", "attributes": {}}}]})
-    second = _shard(tmp_path, "b", {("FDA", "documents"): [_document("FDA-1-0001"), _document("FDA-1-0002")]})
+def test_combine_keeps_the_newest_version_of_an_id_two_shards_both_wrote(tmp_path):
+    """The mirror files a few documents under two agencies; combine keeps one row as a single sweep would."""
+    older = _document("DOT-1-0001", pageCount=1, modifyDate="2024-01-01T00:00:00Z")
+    newer = _document("DOT-1-0001", pageCount=2, modifyDate="2025-01-01T00:00:00Z")
+    first = _shard(tmp_path, "a", {("DOT", "documents"): [older, _document("DOT-1-0002")],
+                                   ("DOT", "dockets"): [{"data": {"id": "", "attributes": {}}}]})
+    second = _shard(tmp_path, "b", {("FAA", "documents"): [newer]})
     rows = attributes_sweep.combine([first, second], tmp_path / "out")
-    assert rows == {"document_attributes": 3, "docket_attributes": 0}
+    assert rows == {"document_attributes": 2, "docket_attributes": 0}
+    table = pq.read_table(tmp_path / "out" / "document_attributes.parquet")
+    assert {r["document_id"]: r["page_count"] for r in table.to_pylist()} == {"DOT-1-0001": 2, "DOT-1-0002": None}
+    assert "_modify_date" not in table.column_names
     import json
 
     assert [r["id"] for r in json.loads((tmp_path / "out" / "attribute_refusals.json").read_text())["refused"]] == [""]
-    with pytest.raises(RuntimeError, match="more than one shard"):
-        attributes_sweep.combine([first, first], tmp_path / "again")
+
+
+def test_combine_refuses_shards_written_without_the_ordering_columns(tmp_path):
+    served = {("EPA", "documents"): [_document("EPA-1-0001")]}
+    plain = tmp_path / "plain"
+    attributes_sweep.sweep(plain, agencies=["EPA"],
+                           read_factory=lambda consumed: lambda agency, kind: _Reader(served.get((agency, kind.name), [])))
+    with pytest.raises(RuntimeError, match="lack"):
+        attributes_sweep.combine([plain], tmp_path / "out")

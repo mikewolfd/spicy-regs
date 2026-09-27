@@ -46,11 +46,13 @@ def sweep(
     max_workers: int = 4,
     download_workers: int = DOWNLOAD_WORKERS,
     read_factory=None,
+    keep_order: bool = False,
 ) -> dict[str, int]:
     """Read every document and docket record and write both attribute tables whole; return rows per table.
 
     ``read_factory(consumed)`` builds the ``read(agency, record_type)`` for one pass, skipping ``consumed`` keys;
-    the default is the mirror's bounded reader.
+    the default is the mirror's bounded reader. ``keep_order`` keeps the version-ordering columns, for a shard
+    that ``combine`` orders against the others.
     """
     from spicy_docs.sources import mirrulations
 
@@ -106,7 +108,8 @@ def sweep(
     (output_dir / "attribute_refusals.json").write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
     rows = {}
     for table in ATTRIBUTE_TABLES.values():
-        rows[table] = merge_attribute_parts(table, staging / table, None, output_dir / f"{table}.parquet")
+        rows[table] = merge_attribute_parts(table, staging / table, None, output_dir / f"{table}.parquet",
+                                            keep_order=keep_order)
         logger.info("{}: {:,} rows", table, rows[table])
     rmtree(staging, ignore_errors=True)
     return rows
@@ -120,31 +123,35 @@ def shard_agencies(agencies: list[str], shard: int, shards: int) -> list[str]:
 
 
 def combine(shard_dirs: list[Path], output_dir: Path) -> dict[str, int]:
-    """Union each table across the shards' outputs, refusing an id two shards both wrote; merge their receipts."""
+    """Union each table across the shards, keeping one row per id by the sweep's own rule; merge their receipts.
+
+    The mirror files a few documents under two agencies (2 on 2026-09-27), so an id can reach two shards; the
+    newest ``modifyDate``, then the higher attributes digest, keeps one, as a single sweep would.
+    """
     import duckdb
     import pyarrow.parquet as pq
 
-    from spicy_regs.transforms.regulations_attributes import ROW_GROUP_ROWS, contract
+    from spicy_regs.transforms.regulations_attributes import ORDER_COLUMNS, ROW_GROUP_ROWS, contract, newest_sql
 
     output_dir.mkdir(parents=True, exist_ok=True)
     rows = {}
     for table in ATTRIBUTE_TABLES.values():
-        table_contract = contract(table)
         files = [str(directory / f"{table}.parquet").replace("'", "''") for directory in shard_dirs]
         source = "read_parquet([" + ", ".join(f"'{f}'" for f in files) + "])"
-        keys = ", ".join(f'"{column}"' for column in table_contract.identity)
-        columns = ", ".join(f'"{column}"' for column in table_contract.columns)
+        keys = ", ".join(f'"{column}"' for column in contract(table).identity)
         out = output_dir / f"{table}.parquet"
         with duckdb.connect() as con:
+            names = {row[0] for row in con.execute(f"DESCRIBE SELECT * FROM {source}").fetchall()}
+            if not set(ORDER_COLUMNS) <= names:
+                raise RuntimeError(f"{table}: shard outputs lack {ORDER_COLUMNS}; sweep shards with --shard")
             repeated = con.execute(f"SELECT count(*) - count(DISTINCT ({keys})) FROM {source}").fetchone()
-            if repeated and repeated[0]:
-                raise RuntimeError(f"{table}: {repeated[0]} ids appear in more than one shard")
             con.execute(
-                f"COPY (SELECT {columns} FROM {source} ORDER BY {keys}) TO '{str(out).replace(chr(39), chr(39) * 2)}' "
-                f"(FORMAT PARQUET, COMPRESSION ZSTD, ROW_GROUP_SIZE {ROW_GROUP_ROWS})"
+                f"COPY ({newest_sql(source, table, keep_order=False)} ORDER BY {keys}) TO "
+                f"'{str(out).replace(chr(39), chr(39) * 2)}' (FORMAT PARQUET, COMPRESSION ZSTD, ROW_GROUP_SIZE {ROW_GROUP_ROWS})"
             )
         rows[table] = pq.ParquetFile(out).metadata.num_rows
-        logger.info("{}: {:,} rows from {} shards", table, rows[table], len(shard_dirs))
+        logger.info("{}: {:,} rows from {} shards; {} ids reached more than one shard", table, rows[table],
+                    len(shard_dirs), repeated[0] if repeated else 0)
     receipt: dict[str, list] = {"refused": [], "unreadable_keys": []}
     for directory in shard_dirs:
         shard = json.loads((directory / "attribute_refusals.json").read_text(encoding="utf-8"))
@@ -181,7 +188,7 @@ def main(
         raise ValueError("--shard and --shards go together")
     if shard is not None and shards is not None:
         agency = shard_agencies(agency or mirrulations.discover_agencies(), shard, shards)
-    sweep(output_dir, agencies=agency, max_workers=max_workers)
+    sweep(output_dir, agencies=agency, max_workers=max_workers, keep_order=shard is not None)
     if not skip_upload:
         _publish(output_dir)
 

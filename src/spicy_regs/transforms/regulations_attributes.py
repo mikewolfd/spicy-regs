@@ -114,41 +114,58 @@ class TeeAttributes(Transform):
 ROW_GROUP_ROWS = 20_000
 
 
-def merge_attribute_parts(table: str, parts: Path, prior: Path | None, out: Path) -> int:
+def newest_sql(source: str, table: str, *, keep_order: bool) -> str:
+    """One row per identity from ``source`` (SQL): the newest ``modifyDate``, then the higher attributes digest."""
+    table_contract = contract(table)
+    columns = ", ".join(f'"{column}"' for column in (*table_contract.columns, *(ORDER_COLUMNS if keep_order else ())))
+    keys = ", ".join(f'"{column}"' for column in table_contract.identity)
+    return (
+        f"SELECT {columns} FROM (SELECT *, ROW_NUMBER() OVER (PARTITION BY {keys} "
+        f"ORDER BY _modify_date DESC NULLS LAST, _attributes_sha256 DESC) AS _rn FROM {source}) WHERE _rn = 1"
+    )
+
+
+def merge_attribute_parts(table: str, parts: Path, prior: Path | None, out: Path, *, keep_order: bool = False) -> int:
     """Merge the part files under ``parts`` over ``prior`` into ``out`` by the contract's identity; the fresh row wins.
 
     Types are the contract's: the parts are written with its Arrow schema, and DuckDB keeps each column's type
-    through the union. Returns the rows written.
+    through the union. ``keep_order`` writes a table with no prior that keeps ``ORDER_COLUMNS``, so a sweep shard's
+    rows can still be ordered against another shard's (the mirror files a few documents under two agencies).
+    Returns the rows written.
     """
     import duckdb
+    import pyarrow as pa
     import pyarrow.parquet as pq
 
+    from spicy_regs.contract_types import arrow_schema
     from spicy_regs.transforms.table_merge import merge_local_prior
 
+    if keep_order and prior is not None:
+        raise ValueError("keep_order writes a whole table; it takes no prior")
     table_contract = contract(table)
+    keys = ", ".join(f'"{column}"' for column in table_contract.identity)
+    target = str(out).replace("'", "''")
     if not any(parts.glob("*.parquet")):
         # No record projected: an empty table on first write, else the prior unchanged.
         if prior is None:
-            from spicy_regs.contract_types import arrow_schema
-
-            pq.write_table(arrow_schema(table_contract).empty_table(), out, compression="zstd")
+            schema = arrow_schema(table_contract)
+            for column in ORDER_COLUMNS if keep_order else ():
+                schema = schema.append(pa.field(column, pa.string()))
+            pq.write_table(schema.empty_table(), out, compression="zstd")
         elif prior != out:
             out.write_bytes(prior.read_bytes())
         return pq.ParquetFile(out).metadata.num_rows
-    staged = out.with_name(f".{out.name}.merging")
-    fresh = out.with_name(f".{out.name}.fresh")
-    columns = ", ".join(f'"{column}"' for column in table_contract.columns)
-    keys = ", ".join(f'"{column}"' for column in table_contract.identity)
-    parts_glob = str(parts / "*.parquet").replace("'", "''")
+    source = f"read_parquet('{str(parts / '*.parquet').replace(chr(39), chr(39) * 2)}')"
     with duckdb.connect() as con:
         con.execute("SET preserve_insertion_order=false")
-        con.execute(
-            f"""COPY (SELECT {columns} FROM (
-                    SELECT *, ROW_NUMBER() OVER (
-                        PARTITION BY {keys} ORDER BY _modify_date DESC NULLS LAST, _attributes_sha256 DESC) AS _rn
-                    FROM read_parquet('{parts_glob}'))
-                WHERE _rn = 1) TO '{str(fresh).replace("'", "''")}' (FORMAT PARQUET, COMPRESSION ZSTD)"""
-        )
+        if keep_order:
+            con.execute(f"COPY ({newest_sql(source, table, keep_order=True)} ORDER BY {keys}) TO '{target}' "
+                        f"(FORMAT PARQUET, COMPRESSION ZSTD, ROW_GROUP_SIZE {ROW_GROUP_ROWS})")
+            return pq.ParquetFile(out).metadata.num_rows
+        staged = out.with_name(f".{out.name}.merging")
+        fresh = out.with_name(f".{out.name}.fresh")
+        con.execute(f"COPY ({newest_sql(source, table, keep_order=False)}) TO "
+                    f"'{str(fresh).replace(chr(39), chr(39) * 2)}' (FORMAT PARQUET, COMPRESSION ZSTD)")
         merge_local_prior(
             con,
             columns=table_contract.columns,
