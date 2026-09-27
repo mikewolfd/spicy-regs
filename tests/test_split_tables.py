@@ -2,6 +2,7 @@
 
 import json
 from contextlib import contextmanager
+from typing import Any
 
 import httpx
 import pyarrow as pa
@@ -76,7 +77,7 @@ def test_only_version_2_may_list_a_split_table():
 
 
 def test_readers_prefer_the_version_2_index_and_fall_back_to_version_1(monkeypatch):
-    v1 = {**_index(), "version": 1}
+    v1: dict[str, Any] = {**_index(), "version": 1}
     v1["families"]["bills"]["tables"].pop("bill_sections.parquet")
     served = {pub.INDEX_KEY: v1, pub.INDEX_V2_KEY: _index()}
     monkeypatch.setattr(pub, "_bounded_get", lambda url, **_: (
@@ -225,7 +226,7 @@ def test_the_audit_finds_one_split_member_the_index_misstates_and_retains_versio
 def test_the_audit_rereads_the_etag_of_every_member_of_both_generations():
     """ETag stability is checked per stored file, so a split member of the current or prior generation is not skipped."""
     current = _parse(_index())["families"]["bills"]
-    prior = {**current, "prefix": f"generations/bills/{'a' * 64}"}
+    prior: dict[str, Any] = {**current, "prefix": f"generations/bills/{'a' * 64}"}
     locations = [f"{entry['prefix']}/{member['key']}" for entry in (current, prior)
                  for member in entry["tables"]["bill_sections.parquet"]["members"]]
     moved = {locations[1], locations[2]}

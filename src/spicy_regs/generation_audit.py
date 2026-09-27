@@ -430,13 +430,14 @@ def _publication(con, base: PublicBase, source: _ArtifactSource, entry: Mapping,
         # A split table is reconciled member by member; a single file is its own one member.
         pinned = descriptor.get("members", [{"key": key, **descriptor}])
         observed = [source.observed.get(member["key"]) for member in pinned]
+        seen = [receipt for receipt in observed if receipt is not None]
         manifest = [members.get(member["key"]) for member in pinned]
         checks = {
             "index_equals_manifest": manifest == [{k: m[k] for k in ("sha256", "byteSize", "rows")} for m in pinned],
             "index_equals_root": root_tables.get(key) == {k: v for k, v in descriptor.items()
                                                           if k in ("columns", "rows", "partitionColumns")},
-            "observed_bytes_equal_index": None if not all(observed) else
-            [(o["sha256"], o["bytes"]) for o in observed] == [(m["sha256"], m["byteSize"]) for m in pinned],
+            "observed_bytes_equal_index": None if len(seen) != len(pinned) else
+            [(o["sha256"], o["bytes"]) for o in seen] == [(m["sha256"], m["byteSize"]) for m in pinned],
         }
         split = "members" in descriptor
         tables[key] = {"index": {k: v for k, v in descriptor.items() if k != "columns"},

@@ -86,7 +86,8 @@ def verdict(join: table_joins.Join, keys: int, missing: int, examples: Sequence[
             "examples": list(examples)}
 
 
-def check(con: duckdb.DuckDBPyConnection, joins: Iterable[table_joins.Join], url_of: Callable[[str], str]) -> list[dict]:
+def check(con: duckdb.DuckDBPyConnection, joins: Iterable[table_joins.Join],
+          url_of: Callable[[str], list[str]]) -> list[dict]:
     return [measure(con, join, url_of) for join in joins]
 
 

@@ -550,7 +550,7 @@ def test_folding_moves_only_families_version_1_alone_changed():
     assert pub.parse_index(store.objects[pub.INDEX_V2_KEY]) == index(2, f="3", g="2")
 
 
-def test_a_raced_version_1_write_rederives_from_the_newer_version_2(tmp_path):
+def test_a_raced_version_1_write_rederives_from_the_newer_version_2(tmp_path, monkeypatch):
     """A rival publishing after this writer read version 2 for its version-1 write leaves version 1 at the newer state.
 
     The rival runs once this writer's read of version 2 has been answered, the interleaving that would let a writer
@@ -568,12 +568,12 @@ def test_a_raced_version_1_write_rederives_from_the_newer_version_2(tmp_path):
         response = get_object(Bucket=Bucket, Key=Key)
         if Key == pub.INDEX_V2_KEY and armed:
             armed.clear()
-            store.get_object = get_object
+            store.before_put = None  # the rival's own version-2 write must not re-arm this
             publish(store, sibling, pub.parse_index(store.objects[pub.INDEX_V2_KEY]))
         return response
 
     store.before_put = lambda key: armed.append(key) if key == pub.INDEX_V2_KEY else None
-    store.get_object = get
+    monkeypatch.setattr(store, "get_object", get)
     publish(store, new, prior)
     final = pub.parse_index(store.objects[pub.INDEX_V2_KEY])
     assert set(final["families"]) == {"test", "other"}

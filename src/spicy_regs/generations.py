@@ -131,13 +131,15 @@ def verify_generation_source(source, table_info: Callable[[str], dict], *, expec
     table_entries(tables, members)
     for member in members:
         key = member.object_key
+        if key is None:
+            raise ValueError("Generation members must be plain Parquet filenames")
         table = tables[member_table(key)]
         if "partitionColumns" in table:
             actual = table_info(key)
             if actual["columns"] != table["columns"] or member.record_count != actual["rows"]:
                 raise ValueError(f"Generation table shape/count mismatch: {key}")
             continue
-        if key is None or Path(key).name != key or not key.endswith(".parquet"):
+        if Path(key).name != key or not key.endswith(".parquet"):
             raise ValueError("Generation members must be plain Parquet filenames")
         actual = table_info(key)
         if actual != tables[key] or member.record_count != actual["rows"]:
