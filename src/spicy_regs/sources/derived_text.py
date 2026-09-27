@@ -1,19 +1,19 @@
 """Comment ``text_content`` from Mirrulations' own attachment extraction (``derived-data``), with provenance.
 
-spicy-docs lists a docket's extracted text once, picks one tool per comment by its
-pinned ``DERIVED_TEXT_TOOLS`` order, orders attachments by number and fetches them
-pinned to their listed ETags (``list_docket_derived_text``, ``fetch_derived_text``).
-The tool is chosen by which objects exist, not by what they hold, so when the chosen
-tool's objects are all blank the comment gets no fill, never the other tool's text.
-This module decides what a comment row gets from that:
+spicy-docs lists a docket's extracted text once and takes each attachment from the
+best-ranked tool in its pinned ``DERIVED_TEXT_TOOLS`` order that has an object for it
+(decision 41), orders attachments by number and fetches them pinned to their listed
+ETags (``list_docket_derived_text``, ``fetch_derived_text``). A tool is chosen by which
+objects exist, not by what they hold, so a blank primary object is kept, never replaced
+by another tool's text. This module decides what a comment row gets from that:
 
-* ``text_content`` -- the chosen tool's attachments, each stripped, blank ones dropped,
+* ``text_content`` -- the selected attachments, each stripped, blank ones dropped,
   joined with a blank line;
 * ``text_extraction_status`` -- ``derived``: SpicyRegs did not run the extractor, so the
   text is not ``ok`` (decision 19, ``docs/research/fork-delivery-decisions-2026-09-22.md``);
-* ``pdf_extraction_results_json`` -- the comment's provenance record: chosen tool,
-  available tools, each attachment's key, size, ETag and SHA-256, and the attachment
-  numbers only another tool has.
+* ``pdf_extraction_results_json`` -- the comment's provenance record: primary tool,
+  available tools, each attachment's tool, key, size, ETag and SHA-256, and the
+  attachment numbers taken from a tool other than the primary.
 
 A refused docket listing or a failed fetch raises :class:`DerivedTextUnavailable`, so the
 comment stays pending rather than being recorded as having no text. A 401/403 raises

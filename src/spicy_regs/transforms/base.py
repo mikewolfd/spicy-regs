@@ -10,10 +10,18 @@ they live in the columnar bulk modules of :mod:`spicy_regs.transforms`.
 
 from abc import ABC, abstractmethod
 from collections.abc import Iterable, Iterator
+from typing import Any
 
 
 class Transform(ABC):
-    """Maps a stream of records to another stream of records."""
+    """Maps a stream of records to another stream of records.
+
+    ``keyed`` asks the staging engine for the reader's keyed stream
+    (``iter_keyed_records``: each payload with its key and write time) instead of
+    bare payloads, so a keyed transform's input is ``KeyedPayload`` values.
+    """
+
+    keyed: bool = False
 
     @abstractmethod
-    def apply(self, records: Iterable[dict]) -> Iterator[dict]: ...
+    def apply(self, records: Iterable[Any]) -> Iterator[dict]: ...

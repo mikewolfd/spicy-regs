@@ -17,7 +17,7 @@ One row per Regulations.gov document, keyed by `document_id`, with the attribute
 | `document_id` | `VARCHAR` | The document's id; its API record is https://api.regulations.gov/v4/documents/{document_id}. |
 | `address1` | `VARCHAR` | The submitter's street address, first line, as stated. |
 | `address2` | `VARCHAR` | The submitter's street address, second line, as stated. |
-| `allow_late_comments` | `BOOLEAN` | Whether the agency accepts comments after the period closes. |
+| `allow_late_comments` | `BOOLEAN` | Whether the agency accepts comments after the period closes, as the publisher stated it on the record's latest version; the comment window's state comes from its dates. |
 | `author_date` | `TIMESTAMP WITH TIME ZONE` | When the document was written (labelled “Author/ Document Date”), a UTC instant. |
 | `authors` | `VARCHAR[]` | The document's authors, people or organizations, in the publisher's order; almost all on Supporting & Related Material. |
 | `category` | `VARCHAR` | The submitter's sector category the agency assigns. |
@@ -43,7 +43,7 @@ One row per Regulations.gov document, keyed by `document_id`, with the attribute
 | `media` | `VARCHAR` | How the document arrived: Electronic, Paper, … (spellings vary). |
 | `object_id` | `VARCHAR` | The publisher's internal object handle. |
 | `omb_approval` | `VARCHAR` | An OMB control number, as stated. |
-| `open_for_comment` | `BOOLEAN` | Whether the document was open for comment when captured; an observation, not a live status. |
+| `open_for_comment` | `BOOLEAN` | Whether the document was open for comment, an observation as the publisher stated it on the record's latest version rather than a live status; the comment window's state comes from its dates. |
 | `organization` | `VARCHAR` | The organization the author or submitter names. |
 | `original_document_id` | `VARCHAR` | The id of the document this one derives from; sometimes the empty string. |
 | `page_count` | `INTEGER` | Pages in the content file. |
@@ -60,5 +60,5 @@ One row per Regulations.gov document, keyed by `document_id`, with the attribute
 | `subtype` | `VARCHAR` | The agency's subtype: Correspondence, Report, Decision and others. |
 | `topics` | `VARCHAR[]` | The publisher's topics, in its order. |
 | `tracking_nbr` | `VARCHAR` | The portal's tracking number. |
-| `within_comment_period` | `BOOLEAN` | Whether the document arrived within the comment period, when stated. |
+| `within_comment_period` | `BOOLEAN` | Whether the document arrived within the comment period, where given, as the publisher stated it on the record's latest version; the comment window's state comes from its dates. |
 | `zip` | `VARCHAR` | The submitter's postal code. |

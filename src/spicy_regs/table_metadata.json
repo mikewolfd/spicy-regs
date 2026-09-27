@@ -246,7 +246,7 @@
       {
         "column_name": "pdf_extraction_results_json",
         "column_type": "VARCHAR",
-        "description": "Provenance of `text_content`. For `derived` rows, a JSON object `{comment_id, tool, available_tools, attachments:[{attachment, tool, key, size, etag, sha256}], only_in_other_tools}`: the tool the text came from (the first of `pypdf`, `pdfminer` with an object for the comment, chosen by the objects' existence rather than their content, so a blank object is never replaced by the other tool's text), every tool with an object for it, each attachment's S3 key, listed size and ETag and the SHA-256 of the bytes read (null when the text was kept without re-reading them), and the attachment numbers only another tool extracted, which the text leaves out. About 125 bytes plus 330 per attachment (31 KB at 92 attachments, the published maximum). Otherwise an ordered JSON array from the latest PDF attempt: `{url, source_sha256, status, page_count, error}` per distinct selected URL; SHA-256 identifies observed bytes, and no-bytes fetch failures have null digest/page count and a generic error. Null when neither is recorded."
+        "description": "Provenance of `text_content`. For `derived` rows, a JSON object `{comment_id, tool, available_tools, attachments:[{attachment, tool, key, size, etag, sha256}], only_in_other_tools}`: the primary tool (the first of `pypdf`, `pdfminer` with an object for the comment), every tool with an object for it, each attachment's tool, S3 key, listed size and ETag and the SHA-256 of the bytes read (null when the text was kept without re-reading them), and the attachment numbers taken from a tool other than the primary because the primary has no object for them (decision 41); those are in the text. A primary object that exists is kept even when blank. About 125 bytes plus 330 per attachment (31 KB at 92 attachments, the published maximum). Otherwise an ordered JSON array from the latest PDF attempt: `{url, source_sha256, status, page_count, error}` per distinct selected URL; SHA-256 identifies observed bytes, and no-bytes fetch failures have null digest/page count and a generic error. Null when neither is recorded."
       }
     ],
     "grain": null,
@@ -7106,7 +7106,7 @@
       {
         "column_name": "allow_late_comments",
         "column_type": "BOOLEAN",
-        "description": "Whether the agency accepts comments after the period closes."
+        "description": "Whether the agency accepts comments after the period closes, as the publisher stated it on the record's latest version; the comment window's state comes from its dates."
       },
       {
         "column_name": "author_date",
@@ -7236,7 +7236,7 @@
       {
         "column_name": "open_for_comment",
         "column_type": "BOOLEAN",
-        "description": "Whether the document was open for comment when captured; an observation, not a live status."
+        "description": "Whether the document was open for comment, an observation as the publisher stated it on the record's latest version rather than a live status; the comment window's state comes from its dates."
       },
       {
         "column_name": "organization",
@@ -7321,7 +7321,7 @@
       {
         "column_name": "within_comment_period",
         "column_type": "BOOLEAN",
-        "description": "Whether the document arrived within the comment period, when stated."
+        "description": "Whether the document arrived within the comment period, where given, as the publisher stated it on the record's latest version; the comment window's state comes from its dates."
       },
       {
         "column_name": "zip",
