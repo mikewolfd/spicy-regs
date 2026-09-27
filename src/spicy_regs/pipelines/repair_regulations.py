@@ -147,10 +147,15 @@ def _repair_comments(
         snapshot = iceberg._read_snapshot(con, record_type)
         if expected_snapshot is not None and snapshot.snapshot_id != expected_snapshot:
             raise RuntimeError(f"catalog is at snapshot {snapshot.snapshot_id}, not the reviewed {expected_snapshot}")
+        current_columns = iceberg._column_types(con, record_type)
+        missing_write_columns = set(columns) - current_columns.keys()
+        for column in iceberg._COMMENT_REFERENCE_COLUMNS:
+            if column in current_columns and current_columns[column] != "VARCHAR":
+                raise ValueError(f"comments.{column} must be VARCHAR, found {current_columns[column]}")
         prior_sql = iceberg._snapshot_query(record_type, snapshot)
         prior_columns = {row[0] for row in con.execute(f"DESCRIBE ({prior_sql})").fetchall()}
         missing_columns = set(columns) - prior_columns
-        unsupported_missing = missing_columns - set(iceberg._COMMENT_REFERENCE_COLUMNS)
+        unsupported_missing = (missing_columns | missing_write_columns) - set(iceberg._COMMENT_REFERENCE_COLUMNS)
         if unsupported_missing:
             raise ValueError("Unsupported missing comment columns: " + ", ".join(sorted(unsupported_missing)))
         # A dry run must not migrate the catalog. Nullable fields absent from
@@ -182,7 +187,8 @@ def _repair_comments(
             "mode": "apply" if apply else "dry-run",
             "source": dict(source_pins) if source_pins is not None else None,
             "catalog_snapshot": asdict(snapshot),
-            "schema_migration_required": sorted(missing_columns),
+            "schema_migration_required": sorted(missing_write_columns),
+            "snapshot_columns_null_filled": sorted(missing_columns),
             "identities": [row[0] for row in con.execute(f'SELECT "{key}" FROM _repair_fresh ORDER BY 1').fetchall()],
             "missing_identities": [row[0] for row in con.execute(f"""
                 SELECT "{key}" FROM _repair_fresh EXCEPT SELECT "{key}" FROM _repair_prior ORDER BY 1
@@ -199,10 +205,10 @@ def _repair_comments(
         path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n")
         if not apply:
             return receipt
-        if missing_columns:
+        if missing_write_columns:
             raise ValueError(
                 "Migrate the comments schema through the catalog ingestion/export path, "
-                "then rerun the repair against its new snapshot; missing: " + ", ".join(sorted(missing_columns))
+                "then rerun the repair against its current write schema; missing: " + ", ".join(sorted(missing_write_columns))
             )
         if receipt["missing_identities"]:
             raise ValueError(

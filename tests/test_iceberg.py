@@ -941,3 +941,21 @@ def test_dedupe_swap_leaves_the_journal_to_resume_when_retries_run_out(tmp_path,
     assert iceberg.dedupe_recovery_pending(con, COMMENT)
     assert iceberg.dedupe_table(con, COMMENT) == (4, 2)
     assert not iceberg.dedupe_recovery_pending(con, COMMENT)
+
+
+def test_export_migrated_comments_fills_old_snapshot_fields_with_null(tmp_path, local_catalog, monkeypatch):
+    con = local_catalog
+    iceberg._ensure_table(con, COMMENT)
+    staging = tmp_path / "staging"
+    _write_comment_staging(staging, "EPA", [_comment("c1", "EPA-1", "EPA", "2025-01-15T00:00:00Z")])
+    iceberg._merge(con, iceberg._staging_files(staging, COMMENT), COMMENT)
+    old_columns = [c for c in COMMENT.schema if c not in iceberg._COMMENT_REFERENCE_COLUMNS]
+    projection = ", ".join(f'"{c}"' for c in old_columns)
+    monkeypatch.setattr(iceberg, "_connect", lambda: con)
+    monkeypatch.setattr(iceberg, "_read_snapshot", lambda *_: iceberg.CatalogSnapshot("local", 1, 4))
+    monkeypatch.setattr(iceberg, "_snapshot_query", lambda rt, snap: f"SELECT {projection} FROM {iceberg._qualified(rt)}")
+    result = iceberg.export_public_comments(tmp_path / "out", COMMENT)
+    rows = pl.read_parquet(result["comments"])
+    assert rows.height == 1
+    for column in iceberg._COMMENT_REFERENCE_COLUMNS:
+        assert rows[column].to_list() == [None]

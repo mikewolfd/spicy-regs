@@ -315,3 +315,28 @@ def test_correction_takes_the_text_columns_together(fresh_text, expected):
     )
     row = con.execute(query).fetchone()
     assert row is not None and row[2:] == expected
+
+
+def test_comment_migrated_write_schema_with_older_snapshot_applies(tmp_path, catalog, monkeypatch):
+    catalog.seed([comment_prior()])
+    historical_columns = [c for c in COMMENT.schema if c not in iceberg._COMMENT_REFERENCE_COLUMNS]
+    projection = ", ".join(f'"{c}"' for c in historical_columns)
+    monkeypatch.setattr(iceberg, "_snapshot_query", lambda rt, snapshot: f"SELECT {projection} FROM {iceberg._qualified(rt)}")
+    repair_records([raw(COMMENT_ID)], table="comments", output_dir=tmp_path)
+    preview = receipt(tmp_path)
+    assert preview["schema_migration_required"] == []
+    assert preview["snapshot_columns_null_filled"] == sorted(iceberg._COMMENT_REFERENCE_COLUMNS)
+    assert preview["changes"][0]["cells"]["comment_reference_values_json"]["before"] is None
+    repair_records([raw(COMMENT_ID)], table="comments", output_dir=tmp_path, apply=True, expected_snapshot=1)
+    assert receipt(tmp_path)["applied_snapshot"]["snapshot_id"] == 2
+    assert catalog.rows()[0]["comment_reference_values_json"] is not None
+
+
+def test_comment_repair_refuses_wrong_current_reference_type(tmp_path, catalog):
+    catalog.seed([comment_prior(comment_on_document_id=None)])
+    with iceberg._connect() as con:
+        con.execute(f'ALTER TABLE {iceberg._qualified(COMMENT)} ALTER COLUMN comment_on_document_id TYPE INTEGER')
+    before = catalog.rows()
+    with pytest.raises(ValueError, match="must be VARCHAR"):
+        repair_records([raw(COMMENT_ID)], table="comments", output_dir=tmp_path, apply=True)
+    assert catalog.rows() == before
