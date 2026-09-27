@@ -343,6 +343,9 @@ What the code settled, where it refines §4. Tests: `tests/test_split_tables.py`
   - The MCP's local mode and `stats`, `sample`, `search` and `agencies` read the member files, never the
     directory, so a file added to it later is not read. SQL reads go through `parquet_scan`, and the CLI's polars
     reads also turn hive partitioning off.
+  - `spicy-regs-dict --source local` reads single-file tables only. That is acceptable because it is a developer
+    check against a flat directory of `<table>.parquet` files, and `--source r2` resolves split tables through
+    `table_members`.
 - **Builder handoff.** The builder writes every partition locally, as `<out>/<table>/<col>=<value>/part-NNNNNN.parquet`.
   It fetches unchanged partitions with `r2.download_members`, byte for byte, and declares `partitioned={table: columns}`
   to `build_generation`. The publisher compares each member's digest with the prior generation's member at the same
