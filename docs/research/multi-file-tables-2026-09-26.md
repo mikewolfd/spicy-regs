@@ -1,8 +1,7 @@
 # Tables stored as several files (design draft, 2026-09-26)
 
 Status: **agreed** by spicy-stack-24 (publication format) and spicy-stack-83 (DocSpec, Engine) on
-2026-09-26; see the review record at the end. The measurements in §5 come before any code, and
-implementation waits for the running backfills to finish.
+2026-09-26; see the review record at the end. The measurements in §5 were taken on 2026-09-27 (decision 64); implementation waits for the running backfills to finish.
 
 Owner decision (2026-09-26): design multi-file tables for every large table first, as one cross-repository
 decision, then apply it to `bill_sections`. Decisions 46 (split `fcc_filings` by year before it passes
@@ -276,15 +275,33 @@ spellings.
   `documents`, none proposed, so nothing depends on it now. Message 83 before the first split in an
   admitted family; `comments` will be the first. Partitioning by a function of the identity is agreed.
 
-## 5. Open measurements before code
+## 5. Measurements before code (taken 2026-09-27, owner decision 64)
 
-- R2's actual single-request `CopyObject` and PUT limits, measured with a real 1.1 GiB `CopyObject`
-  before the 1 GiB member cap is fixed (it also decides how urgent `court_opinion_clusters` is).
-- The share of `bill_sections` bytes the nightly run leaves unchanged once split. Estimate: 1.45 GB of
-  1.9 GB after the 113th–114th land, since only the 119th changes.
-- Admission read-back time for a 0.9 GB split family on the runner (phase-1 acceptability).
-- Whether DuckDB `read_parquet([...])` over HTTP with about 7 members keeps MCP query latency within
-  today's single-file numbers.
+Probe `scripts/probe_multifile.py` (`probe-multifile.yml`), runs 36288634064 and 36288886947; receipts in
+`~/Work/corpora/multifile-probe-2026-09-27/`. Everything the probe wrote under `probes/` was deleted.
+
+- **R2 limits.** A 1.1 GiB object (1,181,116,006 bytes) went up in one PUT (72.5 s, then 82.8 s) and was copied
+  by one `CopyObject` (53.9 s, then 44.4 s); sizes and ETags agree. Neither limit binds at the 1 GiB member cap,
+  so the cap is a design choice, not an R2 constraint, and `court_opinion_clusters` (3.68 GiB) is not blocked on it.
+- **Unchanged share.** `bill_sections` in nightly `72899ab3` against the generation it replaced, `6849376e`, split
+  by congress (the `bill_id` prefix) and compared both ways per congress: every congress is identical, so 100% of
+  the split bytes (826 MB, against 950 MB as one file) were rewritten for nothing. It was a Saturday run; a
+  weekday nightly, when the 119th changes, is still to measure, and the design's estimate (1.45 of 1.9 GB) stands
+  until then.
+- **Read-back.** The whole current bill family (18 members, 1.18 GB) read back and hashed in 34.8 s on one
+  stream; the 7 split members (0.83 GB) in 13.5 s with eight workers. Phase 1's O(family) read-back is acceptable.
+- **Query latency.** The MCP's view shape from the runner over the public URL, cold connection, median of three:
+
+  | Query | One file | Seven members |
+  | --- | ---: | ---: |
+  | `count(*)` | 0.18 s | 1.40 s |
+  | one congress (`bill_id LIKE '118-%'`) | 0.70 s | 1.34 s |
+  | point lookup (bill_id, version_code) | 2.73 s | 1.85 s |
+  | `GROUP BY version_code` scan | 2.68 s | 3.40 s |
+
+  Split members cost up to about 1.2 s more on metadata-bound queries: a cold view reads seven footers instead
+  of one. A point lookup is faster, because whole members fall away. The MCP should hold its connection (and
+  DuckDB's metadata cache) warm before the first split family is served.
 
 ## 6. What this does not change
 
