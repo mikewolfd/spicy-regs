@@ -333,10 +333,16 @@ What the code settled, where it refines §4. Tests: `tests/test_split_tables.py`
   published by a writer predating v2; it is folded into v2 under v2's CAS before v1 is derived. A family v2 changed
   as well is v2's already. After the bootstrap nothing folds: a writer predating v2 must not publish once v2 exists,
   which is why the branch merges only with no publish in flight.
-- **Readers.** `table_members` resolves every file of a table. `single_member` refuses a split table by name for a
-  reader that takes one file: `r2.download`, the CLI download and local selections. CLI and local support for split
-  tables is open, and needed only if a split table should be downloadable there. SQL reads go through
-  `parquet_scan`, which turns hive partitioning off.
+- **Readers.** `table_members` resolves every file of a table, and `Member.key` is a file's key within its
+  generation, the layout every download keeps. `single_member` refuses a split table for a reader that takes one
+  file (`r2.download`). `fetch_member` is the one verified fetch (stream, check size and digest, rename into place)
+  behind `r2.download`, `r2.download_members` and the CLI.
+  - The CLI downloads a split table to `<name>/<col>=<value>/part-NNNNNN.parquet` and records its member paths as
+    the selection's `key` (one path for a single file). A local selection requires that directory to hold exactly
+    those files, none a symlink; verification hashes each against its pin and guards each file.
+  - The MCP's local mode and `stats`, `sample`, `search` and `agencies` read the member files, never the
+    directory, so a file added to it later is not read. SQL reads go through `parquet_scan`, and the CLI's polars
+    reads also turn hive partitioning off.
 - **Builder handoff.** The builder writes every partition locally, as `<out>/<table>/<col>=<value>/part-NNNNNN.parquet`.
   It fetches unchanged partitions with `r2.download_members`, byte for byte, and declares `partitioned={table: columns}`
   to `build_generation`. The publisher compares each member's digest with the prior generation's member at the same

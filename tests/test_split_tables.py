@@ -1,5 +1,6 @@
 """Tables stored as several files: the version-2 index, readers, building, publishing and the audit (multi-file design)."""
 
+import argparse
 import json
 from contextlib import contextmanager
 from typing import Any
@@ -10,13 +11,16 @@ import pyarrow.parquet as pq
 import pytest
 from rulespec_artifacts import canonical_json_bytes
 
-from spicy_regs import mcp_server
+from spicy_regs import cli, mcp_server
 from spicy_regs.generation_audit import Declaration, PublicBase, _consistency, _Run, audit
 from spicy_regs.generations import build_generation
+from spicy_regs.local_data import local_selection, verify_local_members
 from spicy_regs.sources import publication as pub, r2
 from tests.generation_fakes import Store
 from tests.test_generation_audit import public_base
 from tests.test_generation_mcp import connection_fixture
+from tests.test_local_mcp import serve
+from tests.test_mcp_server import _tool_data
 
 DIGEST = "sha256:" + "b" * 64
 PREFIX = f"generations/bills/{'b' * 64}"
@@ -52,6 +56,12 @@ def test_a_split_table_resolves_to_its_members_and_a_single_table_to_itself():
         f"{PREFIX}/congress_bills.parquet", "sha256:" + "c" * 64, 7, 1)
     with pytest.raises(pub.PublicationError, match="2 files; read it through table_members"):
         pub.single_member(index, "bill_sections.parquet")
+    # A member's key within its generation is the layout a download keeps; a legacy file's key is its own path.
+    assert [m.key for m in pub.table_members(index, "bill_sections.parquet")] == [
+        "bill_sections/congress=118/part-000000.parquet", "bill_sections/congress=119/part-000000.parquet"]
+    assert pub.table_members(index, "legacy.parquet")[0].key == "legacy.parquet"
+    with pytest.raises(pub.PublicationError, match="not under a generation prefix"):
+        _ = pub.Member("generations/bills/short/x.parquet", DIGEST, 1, 1).key
 
 
 @pytest.mark.parametrize("broken", [
@@ -297,3 +307,80 @@ def test_members_of_one_split_table_must_share_their_columns(tmp_path):
     with pytest.raises(ValueError, match="differ in columns"):
         build_generation(tmp_path / "artifact", family="bills", files=_outputs(out), expected_keys=KEYS,
                          partitioned=SPLIT)
+
+
+# --------------------------------------------------------------------------- #
+# The CLI and local mode read a split table (multi-file design §7, Readers).
+# --------------------------------------------------------------------------- #
+def _download_split(tmp_path, monkeypatch):
+    """Publish a bills family with a split table into the fake bucket, then download both tables with the CLI."""
+    store = Store()
+    _publish(tmp_path, store, "first", _outputs(tmp_path / "out1", {"118": ["118-hr1", "118-hr2"], "119": ["119-s5"]}))
+    _serve(monkeypatch, store)
+    monkeypatch.delenv("SPICY_REGS_R2_URL", raising=False)
+    output = tmp_path / "data"
+    cli.cmd_download(argparse.Namespace(output_dir=output, types=["bill_sections", "congress_bills"], force=False))
+    return output, (output / "current").resolve(strict=True)
+
+
+def test_a_split_table_downloads_verifies_and_is_read_locally_without_a_hive_column(tmp_path, monkeypatch, capsys):
+    output, batch = _download_split(tmp_path, monkeypatch)
+    metadata = json.loads((batch / "download.json").read_text())
+    prefix = metadata["publication"]["families"]["bills"]["prefix"]
+    members = [f"bill_sections/congress={n}/part-000000.parquet" for n in ("118", "119")]
+    assert metadata["selected"] == {
+        "bill_sections": {"key": [f"{prefix}/{key}" for key in members], "status": "managed"},
+        "congress_bills": {"key": f"{prefix}/congress_bills.parquet", "status": "managed"}}
+
+    selection = local_selection(output)
+    assert selection.files["bill_sections"] == (batch / "bill_sections", "managed")
+    assert selection.paths("bill_sections") == tuple(batch / key for key in members)
+    assert set(verify_local_members(selection)) == {str(batch / key) for key in [*members, "congress_bills.parquet"]}
+
+    con, server = serve(monkeypatch, output)
+    try:
+        assert [row[0] for row in con.execute("DESCRIBE bill_sections").fetchall()] == ["bill_id", "congress", "body"]
+        result = _tool_data(server, "query_sql", {"sql": "SELECT congress, count(*) AS n FROM bill_sections "
+                                                         "GROUP BY 1 ORDER BY 1"})
+        assert result["rows"] == [{"congress": "118", "n": 2}, {"congress": "119", "n": 1}]
+        # The view names the verified member files, so a file added to the directory later is never read.
+        extra = batch / "bill_sections" / "congress=119" / "part-000001.parquet"
+        extra.write_bytes((batch / members[1]).read_bytes())
+        count = _tool_data(server, "query_sql", {"sql": "SELECT count(*) AS n FROM bill_sections"})
+        extra.unlink()
+        assert count["rows"] == [{"n": 3}]
+    finally:
+        con.close()
+
+    capsys.readouterr()
+    args = argparse.Namespace(output_dir=output, data_type="bill_sections", agency=None, n=3, query="118-hr2", limit=5)
+    cli.cmd_stats(args)
+    stats = capsys.readouterr().out
+    assert "BILL_SECTIONS" in stats and "Rows: 3" in stats and "Columns: bill_id, congress, body\n" in stats
+    cli.cmd_sample(args)
+    cli.cmd_search(args)
+    assert "3 total rows; managed" in (out := capsys.readouterr().out) and "118-hr2" in out
+
+
+@pytest.mark.parametrize(("damage", "message"), [
+    ("tampered", "differs from its generation pin"),
+    ("extra", "differs from its published members"),
+    ("symlink", "differs from its published members"),
+    ("missing", "differs from its published members"),
+])
+def test_a_split_download_whose_files_differ_from_its_members_refuses(tmp_path, monkeypatch, damage, message):
+    output, batch = _download_split(tmp_path, monkeypatch)
+    member = batch / "bill_sections" / "congress=119" / "part-000000.parquet"
+    raw = member.read_bytes()
+    if damage == "tampered":
+        member.write_bytes(raw[:-1] + bytes([raw[-1] ^ 1]))
+    elif damage == "extra":
+        member.with_name("part-000001.parquet").write_bytes(raw)
+    elif damage == "symlink":
+        (tmp_path / "elsewhere.parquet").write_bytes(raw)
+        member.unlink()
+        member.symlink_to(tmp_path / "elsewhere.parquet")
+    else:
+        member.unlink()
+    with pytest.raises(RuntimeError, match=message):
+        verify_local_members(local_selection(output))

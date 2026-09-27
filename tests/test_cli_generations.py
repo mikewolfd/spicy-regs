@@ -115,7 +115,7 @@ def test_host_switch_to_legacy_replaces_current_without_losing_previous_bytes(tm
     for host in ("https://fork.example", cli.PUBLIC_URL):
         monkeypatch.setenv("R2_PUBLIC_URL", host)
         current = _download(tmp_path, "dockets")
-        path, status = cli._local_files(tmp_path)["dockets"]
+        path, status = cli._local_selection(tmp_path).files["dockets"]
         assert path == current / "dockets.parquet"
         assert status == "legacy-unversioned"
         assert pl.read_parquet(path)["docket_id"].to_list() == [f"{host}/dockets.parquet"]
@@ -142,7 +142,7 @@ def test_failed_legacy_host_switch_keeps_prior_current(tmp_path, monkeypatch):
     with pytest.raises(RuntimeError, match="Download incomplete"):
         _download(tmp_path, "dockets")
     assert (tmp_path / "current").resolve() == old
-    assert pl.read_parquet(cli._local_files(tmp_path)["a"][0])["id"].to_list() == ["old-a"]
+    assert pl.read_parquet(cli._local_selection(tmp_path).files["a"][0])["id"].to_list() == ["old-a"]
 
 
 @pytest.mark.parametrize("failure", ["hash", "http"])
@@ -218,7 +218,7 @@ def test_invalid_current_does_not_fall_back_to_stale_root(tmp_path, monkeypatch,
         metadata["status"] = "incomplete"
         (batch / "download.json").write_text(json.dumps(metadata))
     with pytest.raises(RuntimeError, match="Current download"):
-        cli._local_files(tmp_path)
+        cli._local_selection(tmp_path)
 
 
 def test_mixed_batch_labels_legacy_and_readers_prefer_selected_files(tmp_path, monkeypatch, capsys):
@@ -249,12 +249,12 @@ def test_reader_holds_one_local_batch_if_current_switches_during_operation(tmp_p
     read = pl.read_parquet
     visited = []
 
-    def switch_after_first(path, **kwargs):
-        visited.append(Path(path))
+    def switch_after_first(paths, **kwargs):
+        visited.extend(Path(path) for path in paths)
         if len(visited) == 1:
             (tmp_path / "current").unlink()
             (tmp_path / "current").symlink_to(new)
-        return read(path, **kwargs)
+        return read(paths, **kwargs)
 
     monkeypatch.setattr(pl, "read_parquet", switch_after_first)
     cli.cmd_search(argparse.Namespace(output_dir=tmp_path, query="old", limit=5))

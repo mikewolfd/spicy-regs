@@ -61,6 +61,7 @@ _NAME = re.compile(r"[a-z][a-z0-9_-]*\Z")
 _DIGEST = re.compile(r"sha256:[0-9a-f]{64}\Z")
 _PARTITION_VALUE = re.compile(r"[A-Za-z0-9_.-]+\Z")
 _PART = re.compile(r"part-\d{6}\.parquet\Z")
+_MEMBER_PATH = re.compile(r"generations/[a-z][a-z0-9_-]*/[0-9a-f]{64}/(.+)\Z")
 _snapshot: ContextVar[tuple[str, dict] | None] = ContextVar("publication_snapshot", default=None)
 
 
@@ -310,6 +311,44 @@ def published_urls(base_url: str) -> dict[str, list[str]]:
     return urls
 
 
+def fetch_member(base_url: str, member: Member, local_path: Path, label: str | None = None, *,
+                 headers: Mapping[str, str] | None = None, timeout: float | None = None) -> bool:
+    """Stream one table file to ``local_path`` through a sibling temp file, checked against its pin when it has one.
+
+    ``False`` only when an unpinned (legacy) file is absent (HTTP 404). A missing pinned member, any other status, a
+    transport error or bytes that differ from the pin raise, leaving ``local_path`` untouched and no temp file.
+    ``headers`` and ``timeout`` pass through to the request when given.
+    """
+    label = label or member.path
+    url = f"{base_url.rstrip('/')}/{member.path}"
+    temp_path = local_path.with_suffix(local_path.suffix + ".tmp")
+    request: dict = {name: value for name, value in (("headers", headers), ("timeout", timeout)) if value is not None}
+    digest, byte_size = hashlib.sha256(), 0
+    try:
+        with httpx.stream("GET", url, follow_redirects=True, **request) as response:
+            if response.status_code == 404:
+                if member.sha256 is not None:
+                    raise RuntimeError(f"Published generation member is missing: {label}")
+                logger.info("{} not found on R2 (404)", label)
+                return False
+            if response.status_code != 200:
+                raise RuntimeError(f"Failed to download {label} from R2: HTTP {response.status_code}")
+            with temp_path.open("wb") as out:
+                for chunk in response.iter_bytes():
+                    out.write(chunk)
+                    digest.update(chunk)
+                    byte_size += len(chunk)
+        if member.sha256 is not None and (
+                member.byte_size != byte_size or member.sha256 != "sha256:" + digest.hexdigest()):
+            raise RuntimeError(f"Published generation member differs from its pin: {label}")
+    except BaseException:
+        temp_path.unlink(missing_ok=True)
+        raise
+    temp_path.replace(local_path)
+    logger.info("Downloaded {} from R2", label)
+    return True
+
+
 def parquet_scan(paths: Sequence[str]) -> str:
     """``read_parquet`` over one table's files as a SQL expression.
 
@@ -401,6 +440,20 @@ class Member(NamedTuple):
     sha256: str | None
     byte_size: int | None
     rows: int | None
+
+    @property
+    def key(self) -> str:
+        """The file's key within its generation, ``<table>.parquet`` or a split member's; a legacy file's own path.
+
+        A downloaded table keeps this layout locally. A pinned member's path must be
+        ``generations/<family>/<digest>/<key>``.
+        """
+        if self.sha256 is None:
+            return self.path
+        match = _MEMBER_PATH.fullmatch(self.path)
+        if match is None:
+            raise PublicationError(f"Member path is not under a generation prefix: {self.path}")
+        return match[1]
 
 
 def table_members(index: Mapping, key: str) -> tuple[Member, ...]:

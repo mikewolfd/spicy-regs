@@ -52,45 +52,10 @@ def download_from_r2(remote_key: str, local_path: Path, *, bare: bool = False) -
         logger.warning("R2_PUBLIC_URL not set; cannot download {}", remote_key)
         return False
 
-    from spicy_regs.sources.publication import Member, current_index, single_member
+    from spicy_regs.sources.publication import Member, current_index, fetch_member, single_member
 
     member = Member(remote_key, None, None, None) if bare else single_member(current_index(public_url), remote_key)
-    return _fetch(public_url, member, local_path, remote_key)
-
-
-def _fetch(public_url: str, member, local_path: Path, label: str) -> bool:
-    """Stream one member to ``local_path`` through a temp file, checked against its pin when it has one."""
-    url = f"{public_url.rstrip('/')}/{member.path}"
-    temp_path = local_path.with_suffix(local_path.suffix + ".tmp")
-    digest = hashlib.sha256()
-    byte_size = 0
-
-    try:
-        with httpx.stream("GET", url, follow_redirects=True) as response:
-            if response.status_code == 404:
-                if member.sha256 is not None:
-                    raise RuntimeError(f"Published generation member is missing: {label}")
-                logger.info("{} not found on R2 (404)", label)
-                return False
-            if response.status_code != 200:
-                raise RuntimeError(f"Failed to download {label} from R2: HTTP {response.status_code}")
-            with open(temp_path, "wb") as f:
-                for chunk in response.iter_bytes():
-                    f.write(chunk)
-                    digest.update(chunk)
-                    byte_size += len(chunk)
-            if member.sha256 is not None and (
-                member.byte_size != byte_size or member.sha256 != "sha256:" + digest.hexdigest()
-            ):
-                raise RuntimeError(f"Published generation member differs from its pin: {label}")
-    except BaseException:
-        if temp_path.exists():
-            temp_path.unlink()
-        raise
-
-    temp_path.replace(local_path)
-    logger.info("Downloaded {} from R2", label)
-    return True
+    return fetch_member(public_url, member, local_path, remote_key)
 
 
 def download_members(remote_key: str, directory: Path) -> list[Path]:
@@ -103,21 +68,19 @@ def download_members(remote_key: str, directory: Path) -> list[Path]:
     Rewrite a partition by replacing its whole ``<col>=<value>/`` directory: a prior part file left beside the new
     ones would publish its rows a second time.
     """
-    from spicy_regs.sources.publication import current_index, table_members
+    from spicy_regs.sources.publication import current_index, fetch_member, table_members
 
     public_url = getenv("R2_PUBLIC_URL")
     if not public_url:
         raise RuntimeError(f"R2_PUBLIC_URL not set; cannot download {remote_key}")
-    index = current_index(public_url)
-    members = table_members(index, remote_key)
+    members = table_members(current_index(public_url), remote_key)
     if members[0].sha256 is None:
         raise RuntimeError(f"{remote_key} is not published by any family")
-    prefix = next(entry["prefix"] for entry in index["families"].values() if remote_key in entry["tables"])
     paths = []
     for member in members:
-        path = directory / member.path.removeprefix(prefix + "/")
+        path = directory / member.key
         path.parent.mkdir(parents=True, exist_ok=True)
-        _fetch(public_url, member, path, member.path)
+        fetch_member(public_url, member, path, member.path)
         paths.append(path)
     return paths
 

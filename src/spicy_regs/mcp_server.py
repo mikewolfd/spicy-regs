@@ -460,7 +460,7 @@ def _build_connection() -> duckdb.DuckDBPyConnection:
         if local is not None:
             if name not in local.files:
                 continue
-            urls = [str(local.files[name][0])]
+            urls = [str(path) for path in local.paths(name)]
         else:
             urls = [f"{R2_BASE_URL}/{path}" for path in paths]
         try:
