@@ -26,8 +26,11 @@ under ``source-evidence/`` is content-addressed and shared, and is not planned
 here. Planning deletes nothing. ``execute`` takes an approved plan (one a
 person reviewed, or the weekly run's own, decision 63) and deletes only the
 prefixes a fresh plan also marks, so anything published, pinned or cited since
-is spared. Within a prefix it deletes the members before
-the root, so an interrupted run leaves a root that still links the chain. Each
+is spared. It deletes a generation's members and keeps its root
+(``artifact.json``, tens of KB): an audit walks the roots' ``readSnapshot``
+chain from a pinned generation back to a pinned prior, and a missing
+intermediate root breaks that walk (spicy-stack-a8, 2026-09-27). A generation
+holding only its root is reported as pruned and never planned again. Each
 execution leaves its record under ``RECORDS``.
 """
 
@@ -72,6 +75,8 @@ class Generation:
     digest: str
     bytes: int = 0
     objects: int = 0
+    #: Whether any object but the root is stored; a root alone is a pruned generation's chain link.
+    has_members: bool = False
     newest: datetime = _NEVER
     keep: list[str] = field(default_factory=list)
 
@@ -95,6 +100,7 @@ def inventory(client, bucket: str) -> tuple[dict[str, Generation], list[str]]:
                 raise publication.PublicationError(f"Generation {match[2][:8]} is stored under two families")
             generation.bytes += item["Size"]
             generation.objects += 1
+            generation.has_members |= not item["Key"].endswith(f"/{ROOT}")
             generation.newest = max(generation.newest, item["LastModified"])
     return found, stray
 
@@ -229,10 +235,11 @@ def plan(client, bucket: str, *, notes: Iterable[tuple[str, str]], docspec: Mapp
         family["generations"].append({
             "digest": generation.digest, "bytes": generation.bytes, "objects": generation.objects,
             "newest": generation.newest.isoformat(),
-            "keep": generation.keep,
+            "keep": generation.keep, "pruned": not generation.has_members,
         })
-    kept = [g for g in generations.values() if g.keep]
-    deleted = sorted((g for g in generations.values() if not g.keep), key=lambda g: g.prefix)
+    pruned = [g for g in generations.values() if not g.has_members]
+    kept = [g for g in generations.values() if g.keep and g.has_members]
+    deleted = sorted((g for g in generations.values() if not g.keep and g.has_members), key=lambda g: g.prefix)
     return {
         "format": PLAN_FORMAT, "version": 1, "planned_at": now.isoformat(), "bucket": bucket,
         "index_etag": etag, "keep_last": KEEP_LAST,
@@ -240,6 +247,7 @@ def plan(client, bucket: str, *, notes: Iterable[tuple[str, str]], docspec: Mapp
             "generations": len(generations), "bytes": sum(g.bytes for g in generations.values()),
             "keep_generations": len(kept), "keep_bytes": sum(g.bytes for g in kept),
             "delete_generations": len(deleted), "delete_bytes": sum(g.bytes for g in deleted),
+            "pruned_generations": len(pruned), "pruned_bytes": sum(g.bytes for g in pruned),
         },
         "unlisted_docspec_pins": sorted(set(docspec) - set(generations)),
         "stray_keys": stray,
@@ -264,8 +272,6 @@ def execute(client, bucket: str, approved: Mapping, fresh: Mapping) -> dict:
                 Bucket=bucket, Delete={"Objects": [{"Key": key} for key in batch], "Quiet": True}).get("Errors")
             if failed:
                 raise publication.PublicationError(f"Deleting {prefix} failed for {len(failed)} objects")
-        if root in keys:
-            client.delete_object(Bucket=bucket, Key=root)
     record = {
         "format": "spicy-regs-generation-retention-record", "version": 1,
         "approved_plan": approved["planned_at"], "fresh_plan": fresh["planned_at"],
@@ -281,8 +287,8 @@ def summary(record: Mapping) -> list[str]:
     gib = 1024 ** 3
     lines = ["| family | generations | keep | keep GiB | delete | delete GiB |", "|---|---:|---:|---:|---:|---:|"]
     for family, entry in record["families"].items():
-        held = [g for g in entry["generations"] if g["keep"]]
-        gone = [g for g in entry["generations"] if not g["keep"]]
+        held = [g for g in entry["generations"] if g["keep"] and not g.get("pruned")]
+        gone = [g for g in entry["generations"] if not g["keep"] and not g.get("pruned")]
         lines.append(f"| {family} | {len(entry['generations'])} | {len(held)} | "
                      f"{sum(g['bytes'] for g in held) / gib:.2f} | {len(gone)} | "
                      f"{sum(g['bytes'] for g in gone) / gib:.2f} |")
@@ -290,6 +296,9 @@ def summary(record: Mapping) -> list[str]:
     lines.append(f"| **all** | {totals['generations']} | {totals['keep_generations']} | "
                  f"{totals['keep_bytes'] / gib:.2f} | {totals['delete_generations']} | "
                  f"{totals['delete_bytes'] / gib:.2f} |")
+    if totals.get("pruned_generations"):
+        lines.append(f"\nPruned generations kept as roots for audit chains: {totals['pruned_generations']} "
+                     f"({totals['pruned_bytes'] / 1024 ** 2:.1f} MiB)")
     if record["unlisted_docspec_pins"]:
         lines.append(f"\nDocSpec pins no longer stored: {', '.join(d[:8] for d in record['unlisted_docspec_pins'])}")
     if record["stray_keys"]:
