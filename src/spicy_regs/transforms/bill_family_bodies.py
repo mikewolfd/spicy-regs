@@ -14,7 +14,12 @@ read once for all of them. A printing the zip refused, or the engine could not
 parse, is remembered with the zip entry it was read at, so an unchanged zip is
 not downloaded again for it. Before the 113th, and for a printing no listing
 names, the per-package route (``PackageBodySource``) remains, under the run's
-``max_version_fetches`` cap, newest Congress first.
+``max_version_fetches`` cap, newest Congress first. A package that route read
+without a section tree, or whose record the publisher answered 404 or 410 for,
+is remembered the same way: with the listing it was fetched from and, for a
+tree, the bytes and the engine that refused them. It is not fetched again while
+its listing and that engine are unchanged. Either route labels a printing by the
+rendition it actually read.
 
 Every bill with work is built by the provider's ``build_bill_printings``: the
 newly read printings emit their rows, held neighbours take part in order and
@@ -25,8 +30,9 @@ provider's, applied exactly as the status pass applies them.
 What is written scales with what was read: each bill built emits the rows of
 the printings it read and of the comparisons they complete, and a listed
 placeholder a body now stands for is retired, so a printing has one
-``bill_versions`` row. The merge still rewrites each table whole, since the
-publication holds one member per table.
+``bill_versions`` row. The merge rewrites each table whole except
+``bill_sections``, which is stored one file per Congress and rewrites only the
+Congresses this run read.
 
 Cost, with B bills with work, P pending printings, Q pending comparisons and F
 BILLS folders naming a needed printing: planning is O(rows of the B bills)
@@ -40,10 +46,12 @@ three keyed requests a printing (summary, MODS, body) under a cap of 600 a run.
 
 from __future__ import annotations
 
+import hashlib
 import json
 from collections import defaultdict
 from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
+from importlib.metadata import version as package_version
 from typing import Any, Protocol
 
 from loguru import logger
@@ -58,7 +66,7 @@ from spicy_docs.interpretation.bill_family import (
     build_bill_printings,
 )
 from spicy_docs.sources.congress.bill_acquisition import BillSourceUnavailableError
-from spicy_docs.sources.congress.bill_status import BillIdentity, BillTextFormat, BillTextVersion
+from spicy_docs.sources.congress.bill_status import BillIdentity, BillSourceError, BillTextFormat, BillTextVersion
 from spicy_docs.sources.congress.bill_tree import engine_available, parse_bill_tree
 from spicy_docs.sources.congress.bill_versions import (
     DEFAULT_FORMAT_PREFERENCE,
@@ -68,7 +76,7 @@ from spicy_docs.sources.congress.bill_versions import (
     printing_order,
 )
 from spicy_docs.sources.congress.bulk_bills import BULK_BILLS_FLOOR, BULK_BILLS_SESSIONS
-from spicy_docs.sources.govinfo.body_acquisition import GovInfoBodyBudget
+from spicy_docs.sources.govinfo.body_acquisition import GovInfoBodyBudget, GovInfoPackageUnavailableError
 from spicy_docs.transport.credentials import CredentialRefusedError, scrub_credential
 
 from spicy_regs.source_evidence import SourceEvidenceError
@@ -107,6 +115,23 @@ LISTED_SOURCE = "congress"
 #: like the status scopes' completion list: an unchanged zip is not downloaded
 #: again for a printing it already failed, and a moved one is.
 TEXT_REFUSALS_KEY = "spicy_regs.bill_family.text_archive_refusals.v1"
+
+#: The pending printings the per-package route refused, by package id, each as
+#: ``{"listed", "refusal", "sha256", "engine", "status"}``: the digest of the
+#: listing it was fetched from (``listed_digest``), and either a ``tree`` refusal
+#: with the refused body's digest and the reader that refused it (``reader_id``),
+#: or an ``unavailable`` one with the publisher's 404 or 410. Parquet metadata on
+#: the archives table beside ``TEXT_REFUSALS_KEY``, which it mirrors per package:
+#: a package is not fetched again while its listing, and for a tree the reader,
+#: are unchanged, so a DeltaTrack or spicy-docs release retries every tree it
+#: refused, and any other ``refusal`` value is asked again. Its own key, so the
+#: per-zip record keeps its shape; no published run has written it yet.
+PACKAGE_REFUSALS_KEY = "spicy_regs.bill_family.package_text_refusals.v1"
+
+#: The answers that say a package's record is not there on every run
+#: (``BILLS-116hr7440cph``'s summary answers 404). A redirect, a refused format and
+#: a transport failure are not remembered: the next run asks again.
+ABSENT_STATUSES = (404, 410)
 
 
 class PackageBodySource(Protocol):
@@ -166,6 +191,10 @@ class Printing:
     held: bool
     xml: bool
     sha256: str | None
+    #: A ``congress`` listing row stands for this printing, beside any body row.
+    listed: bool
+    #: The published ``govinfo`` row (whose digest is ``sha256``) states no section tree.
+    treeless: bool = False
 
     @property
     def chosen(self) -> BillTextFormat | None:
@@ -227,7 +256,10 @@ class BodyOutcome:
     superseded: set[tuple[str, str, str]] = field(default_factory=set)
     #: Published comparisons no established neighbour pair accounts for.
     retired_pairs: set[tuple[str, ...]] = field(default_factory=set)
+    #: ``(bill_id, version_code, source)`` of body rows a refused read withdraws, so its listing stands alone.
+    unread: set[tuple[str, str, str]] = field(default_factory=set)
     refusals: dict[str, dict[str, Any]] = field(default_factory=dict)
+    package_refusals: dict[str, dict[str, Any]] = field(default_factory=dict)
     listings: int = 0
     zips: int = 0
     zips_not_needed: int = 0
@@ -240,6 +272,16 @@ def bill_identity(bill_id: str) -> BillIdentity:
     """``119-hr-983`` back to its identity; the provider's own ``bill_id`` spelling."""
     congress, bill_type, number = bill_id.split("-")
     return BillIdentity(int(congress), bill_type, int(number))
+
+
+def listed_digest(printing: Printing) -> str:
+    """The package as the printing's listing states it, which is everything a per-package fetch is made from.
+
+    The run has no cheaper statement of a package than its listing: GovInfo's own stamp costs a keyed request.
+    """
+    version = printing.version
+    facts = [version.type, version.date, version.package_id, [[f.url, f.type, f.package_id] for f in version.formats]]
+    return "sha256:" + hashlib.sha256(json.dumps(facts, separators=(",", ":")).encode()).hexdigest()
 
 
 def _version(row: Mapping[str, Any]) -> BillTextVersion:
@@ -274,10 +316,13 @@ def plan_work(
     """
     by_bill: dict[str, dict[str, Mapping[str, Any]]] = defaultdict(dict)
     digests: dict[tuple[str, str], str] = {}
+    treeless: set[tuple[str, str]] = set()
     for row in rows:
         bill, code = row["bill_id"], row["version_code"]
         if row["source"] == ACQUIRED_SOURCE and row.get("sha256"):
             digests[(bill, code)] = row["sha256"]
+            if row.get("section_count") is None:
+                treeless.add((bill, code))
         if row["source"] not in (LISTED_SOURCE, ACQUIRED_SOURCE):
             continue
         if code not in by_bill[bill] or row["source"] == LISTED_SOURCE:
@@ -295,6 +340,8 @@ def plan_work(
                 held=code in held_codes,
                 xml=code in xml_codes,
                 sha256=digests.get((bill, code)),
+                listed=row["source"] == LISTED_SOURCE,
+                treeless=(bill, code) in treeless,
             )
             for code, row in facts.items()
         ]
@@ -330,15 +377,35 @@ def _groups(work: Sequence[BillWork]) -> list[tuple[tuple[int, str], list[BillWo
     return sorted(groups.items(), key=lambda item: (-item[0][0], item[0][1]))
 
 
+def reader_id(engine: EngineStamp) -> str:
+    """The whole bill-tree reader a tree refusal is remembered against: DeltaTrack and spicy-docs' reader around it.
+
+    Either's release may read what this one refused (a spicy-docs that learns USLM reads 113-hr-1067's public law).
+    """
+    return f"{engine.name} {engine.version} {engine.revision} spicy-docs {package_version('spicy-docs')}"
+
+
+class TreeUnread(Exception):
+    """This run could not read a tree for a reason of its own, not the reader's: nothing is remembered."""
+
+
 def _parse(body: bytes, code: str, label: str) -> Any:
-    """The section tree of an XML body, or ``None`` with the refusal logged."""
+    """The section tree of an XML body, or ``None`` when the reader refuses the document (``BillSourceError``).
+
+    Any other failure -- the engine not installed, a temporary file the reader could not write, memory -- says
+    nothing about the document: it raises :class:`TreeUnread`, and the printing is read again next run, as after a
+    transport failure. Remembered, it would never be: a 108th-112th printing's listing does not move.
+    """
     if not engine_available():
-        return None
+        raise TreeUnread("the bill-tree engine is not installed")
     try:
         return parse_bill_tree(body, version=code)
-    except Exception as error:  # noqa: BLE001 — an unparsed printing is a NULL tree
+    except BillSourceError as error:
         logger.warning("Bill family: {} tree refused: {}", label, scrub_credential(str(error), ""))
         return None
+    except Exception as error:  # noqa: BLE001 — one printing's failure is not the run's
+        logger.warning("Bill family: {} tree not read this run: {}", label, scrub_credential(str(error), ""))
+        raise TreeUnread(str(error)) from error
 
 
 class BodyPass:
@@ -357,6 +424,7 @@ class BodyPass:
         summarize: BillSummarizer | None = None,
         bill_rows: Mapping[str, Mapping[str, Any]] | None = None,
         max_bulk_printings: int | None = None,
+        package_refusals: Mapping[str, Mapping[str, Any]] | None = None,
     ) -> None:
         self.bills_source = bills_source
         self.body_source = body_source
@@ -369,8 +437,14 @@ class BodyPass:
         self.summarize = summarize
         self.bill_rows = bill_rows or {}
         self.prior_refusals = refusals
+        self.prior_package_refusals = package_refusals or {}
+        #: What a remembered tree refusal names, so another reader reads the tree again.
+        self.reader_id = reader_id(engine)
         self.max_bulk_printings = MAX_BULK_PRINTINGS if max_bulk_printings is None else max_bulk_printings
-        self.outcome = BodyOutcome(refusals={link: dict(entry) for link, entry in refusals.items()})
+        self.outcome = BodyOutcome(
+            refusals={link: dict(entry) for link, entry in refusals.items()},
+            package_refusals={package: dict(entry) for package, entry in self.prior_package_refusals.items()},
+        )
         #: Each BILLS zip this group read: its entry, and the pending printings it refused.
         self._read_zips: dict[str, tuple[Any, set[str]]] = {}
 
@@ -458,11 +532,54 @@ class BodyPass:
             self._read_zips[listing.zip_entry.link] = (listing.zip_entry, refused)
 
     # -- per package -----------------------------------------------------------
+    def _refused_package(self, printing: Printing) -> bool:
+        """Whether the per-package route refused this package when last fetched, and nothing it depends on moved since.
+
+        That is its listing, and for a tree the reader that refused it. Only the two refusals ``_refuse`` records
+        count; any other record is asked again.
+        """
+        prior = self.prior_package_refusals.get(printing.package_id or "")
+        if prior is None or prior.get("listed") != listed_digest(printing):
+            return False
+        if prior.get("refusal") == "tree":
+            return prior.get("engine") == self.reader_id
+        return prior.get("refusal") == "unavailable" and prior.get("status") in ABSENT_STATUSES
+
+    def _refuse(
+        self, bill: BillWork, printing: Printing, *, refusal: str, sha256: str | None = None, status: int | None = None
+    ) -> None:
+        """Remember a pending printing's refusal, and withdraw the tree-less body row these same bytes published.
+
+        Only a printing this run reads for itself is remembered: a held neighbour read for a comparison keeps its
+        body. The withdrawal needs the listing beside the body row, so the printing keeps one row, and the refused
+        bytes to be the row's own: a body read before under other bytes is not this refusal's to withdraw.
+        """
+        if printing.code not in bill.pending or not printing.package_id:
+            return
+        self.outcome.package_refusals[printing.package_id] = {
+            "listed": listed_digest(printing),
+            "refusal": refusal,
+            "sha256": sha256,
+            "engine": self.reader_id if refusal == "tree" else None,
+            "status": status,
+        }
+        if refusal == "tree" and printing.listed and printing.treeless and printing.sha256 == sha256:
+            self.outcome.unread.add((bill.bill_id, printing.code, ACQUIRED_SOURCE))
+
     def _fetch(self, bill: BillWork, code: str, documents: dict[tuple[str, str], Document]) -> None:
-        """One printing through the per-package route, under the run's cap, as the status pass used to."""
+        """One printing through the per-package route, under the run's cap, as the status pass used to.
+
+        An XML body with no section tree, and a record the publisher answers 404 or 410 for, are not reads: the
+        printing keeps its listing, and is remembered so it is not fetched again (``_refused_package``).
+        """
         printing = bill.by_code[code]
-        chosen = printing.chosen
-        if self.body_source is None or chosen is None or not printing.package_id or self.remaining[0] <= 0:
+        if (
+            self.body_source is None
+            or printing.chosen is None
+            or not printing.package_id
+            or self.remaining[0] <= 0
+            or self._refused_package(printing)
+        ):
             return
         self.remaining[0] -= 1
         self.outcome.fetched += 1
@@ -474,11 +591,21 @@ class BodyPass:
             logger.warning(
                 "Bill family: {} {} body refused: {}", printing.package_id, code, scrub_credential(str(error), "")
             )
+            if isinstance(error, GovInfoPackageUnavailableError) and error.capture.status_code in ABSENT_STATUSES:
+                self._refuse(bill, printing, refusal="unavailable", status=error.capture.status_code)
             return
         body = package.body_capture
+        # Labelled by the rendition read, never the listing's preferred link: a public law whose package has
+        # no XML is read as HTML, and an ``xml`` label on it would be judged an XML body with no tree.
+        fetched = BillTextFormat(body.requested_url, None, printing.package_id)
+        name = format_name(fetched)
+        chosen = next((item for item in printing.version.formats if name and format_name(item) == name), fetched)
         document = cleanup = None
         if package.format == "xml":
-            document = _parse(body.body, code, printing.package_id)
+            try:
+                document = _parse(body.body, code, printing.package_id)
+            except TreeUnread:
+                return  # not read, and not remembered: fetched again next run
         elif package.format == "pdf":
             # Keyed on the rendition actually fetched; only the PDF branch of
             # ``body_text`` yields the ``GpoCleanupRecord`` the cleanup_* columns
@@ -490,14 +617,26 @@ class BodyPass:
                 logger.warning(
                     "Bill family: {} PDF text refused: {}", printing.package_id, scrub_credential(str(error), "")
                 )
+        if document is None and body_kind(body.content_type, name) == "xml":
+            # USLM (113-hr-1067's public law) is XML the bill-tree reader does not parse.
+            self._refuse(bill, printing, refusal="tree", sha256=body.sha256)
+            return
+        self.outcome.package_refusals.pop(printing.package_id, None)
         documents[(bill.bill_id, code)] = Document(body, document, cleanup, chosen)
 
     # -- build ---------------------------------------------------------------
     def _parsed(self, bill: BillWork, code: str, read: Document | None) -> Document | None:
-        """A bulk member's tree, parsed now; a member the engine refuses is not read, and is remembered."""
+        """A bulk member's tree, parsed now; a member the reader refuses is not read, and is remembered.
+
+        A member this run could not parse for a reason of its own is not read either, but not remembered, so the
+        zip is read again for it.
+        """
         if read is None or read.link is None or read.document is not None:
             return read
-        read.document = _parse(read.body.body, code, bill.by_code[code].package_id or code)
+        try:
+            read.document = _parse(read.body.body, code, bill.by_code[code].package_id or code)
+        except TreeUnread:
+            return None
         if read.document is not None:
             return read
         if code in bill.pending:
@@ -667,8 +806,10 @@ __all__ = [
     "ACQUIRED_SOURCE",
     "BODY_BUDGET",
     "LISTED_SOURCE",
+    "ABSENT_STATUSES",
     "MAX_BULK_PRINTINGS",
     "MAX_VERSION_FETCHES",
+    "PACKAGE_REFUSALS_KEY",
     "TEXT_REFUSALS_KEY",
     "BillWork",
     "BodyOutcome",
@@ -678,8 +819,10 @@ __all__ = [
     "Printing",
     "bill_identity",
     "body_kind",
+    "listed_digest",
     "plan_work",
     "processed_capture",
+    "reader_id",
     "refusal_metadata",
     "refusal_state",
 ]

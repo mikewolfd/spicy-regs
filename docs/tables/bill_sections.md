@@ -34,3 +34,4 @@ One row per content-bearing node of one bill version, in document order. All col
 | `body_chars` | `VARCHAR` | Character length of body. |
 | `body_sha256` | `VARCHAR` | Digest of body's UTF-8 bytes, so an unchanged section is recognisable without a join. |
 | `version_date` | `VARCHAR` | The parent printing's date, carried so this table versions with its parent. |
+| `congress` | `VARCHAR` | The Congress of the bill, the prefix of bill_id (119 for 119-hr-1), so a host can store the table one file per Congress. |

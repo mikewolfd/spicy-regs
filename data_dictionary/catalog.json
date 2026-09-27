@@ -1248,7 +1248,8 @@
         "seq",
         "body_chars",
         "body_sha256",
-        "version_date"
+        "version_date",
+        "congress"
       ]
     },
     {

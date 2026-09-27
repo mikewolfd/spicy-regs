@@ -8,6 +8,9 @@ verifies; an invalid budget is refused before any acquisition or output.
 
 import importlib
 import json
+import shutil
+from hashlib import sha256
+from importlib.metadata import version as package_version
 from dataclasses import replace
 from pathlib import Path
 
@@ -16,21 +19,27 @@ import pyarrow as pa
 import pytest
 import yaml
 
-from spicy_docs.sources.congress.bill_status import parse_bill_status
+from spicy_docs.sources.congress.bill_status import BillSourceError, parse_bill_status
+from spicy_docs.sources.govinfo.body_acquisition import GovInfoPackageUnavailableError
+from spicy_docs.transport.captured import CapturedBodyResponse
 from spicy_docs.transport.credentials import CredentialRefusedError
 from tests.test_bill_family import (
     FIXTURES,
     IDENTITY,
     _Archive,
     _Member,
+    _Package,
     StubBodyAcquirer,
     StubBulkAcquirer,
     StubChangedBodyAcquirer,
     StubPdfBodyAcquirer,
     _no_prior,
     _pdf_only_status,
-    _prior_from,
+    _priors,
+    read_output,
     scoped as fixture_scope,
+    write_output,
+    zip_entry,
 )
 
 scoped = fixture_scope
@@ -49,7 +58,7 @@ def run(directory, *, prior=None, budget=600, bulk=None, body=None):
         bulk_acquirer=bulk,
         body_acquirer=body,
         max_version_fetches=budget,
-        download_prior=_prior_from(prior) if prior else _no_prior,
+        **_priors(prior),
     )
     return {path.stem: path for path in paths}, bulk, body
 
@@ -130,25 +139,382 @@ def test_one_body_caps_resume_then_retry_pending_pair_without_metadata_change(tm
     assert acquired(fourth) == acquired(third)
 
 
-def test_failed_xml_parse_is_not_a_completed_govinfo_body(tmp_path, scoped, monkeypatch):
+def package_refusals(paths):
+    metadata = pq.read_schema(paths[build.ARCHIVES_TABLE]).metadata or {}
+    return json.loads(metadata[bodies.PACKAGE_REFUSALS_KEY.encode()])
+
+
+def _moved_listing() -> bytes:
+    """The fixture bill restated: a new text stamp, and each printing listed under another date."""
+    body = (FIXTURES / "status-119hr6028.xml").read_bytes()
+    for old, new in (
+        (b"2026-09-09T17:31:22Z", b"2026-09-20T00:00:00Z"),
+        (b"2025-11-12T05:00:00Z", b"2025-11-13T05:00:00Z"),
+        (b"2026-06-08T04:00:00Z", b"2026-06-09T04:00:00Z"),
+    ):
+        assert old in body
+        body = body.replace(old, new)
+    return body
+
+
+def _no_tree(monkeypatch, error: Exception | None = None):
+    """The reader refuses every tree (the ``BillSourceError`` a document it cannot flatten raises), or fails ``error``."""
+    error = error or BillSourceError("bill XML cannot be flattened: no legis-body")
+    monkeypatch.setattr(bodies, "parse_bill_tree", lambda *_args, **_kwargs: (_ for _ in ()).throw(error))
+
+
+def reader(stamp) -> str:
+    """The whole reader a tree refusal names, spelled out rather than through ``bodies.reader_id``."""
+    return f"{stamp.name} {stamp.version} {stamp.revision} spicy-docs {package_version('spicy-docs')}"
+
+
+def test_a_refused_tree_is_not_a_read_and_is_not_fetched_again_until_its_listing_moves(tmp_path, scoped, monkeypatch):
+    """Bulk remembers a refusal per zip; the per-package route per package, with the listing, bytes and engine."""
     with monkeypatch.context() as failed:
-        failed.setattr(
-            bodies, "parse_bill_tree", lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("bad XML"))
-        )
-        first, _, _ = run(tmp_path / "first")
-    assert all(row["sha256"] and row["section_count"] is None for row in acquired(first).values())
+        _no_tree(failed)
+        first, _, body = run(tmp_path / "first")
+    assert len(body.requested) == 2
+    assert acquired(first) == {}, "no body row: the listing stands alone"
+    refused = package_refusals(first)
+    assert sorted(refused) == ["BILLS-119hr6028eh", "BILLS-119hr6028ih"]
+    stamp = build.engine_stamp()
+    for package, entry in refused.items():
+        body_bytes = (FIXTURES / f"text-{package.removeprefix('BILLS-')}.xml").read_bytes()
+        assert entry == {
+            "listed": entry["listed"],
+            "refusal": "tree",
+            "sha256": "sha256:" + sha256(body_bytes).hexdigest(),
+            "engine": reader(stamp),
+            "status": None,
+        }
+
     second, bulk, body = run(tmp_path / "second", prior=tmp_path / "first")
-    assert bulk.zip_downloads == [] and len(body.requested) == 2
-    assert all(row["section_count"] for row in acquired(second).values())
+    assert (bulk.zip_downloads, body.requested) == ([], []), "an unchanged listing is not fetched again"
+    assert package_refusals(second) == refused
+
+    moved = StubBulkAcquirer(entry=lambda c, t: zip_entry(c, t, size=31_658_670), status=_moved_listing())
+    third, _, body = run(tmp_path / "third", prior=tmp_path / "second", bulk=moved)
+    assert sorted(body.requested) == sorted(refused), "a restated listing is fetched once more"
+    assert all(row["section_count"] for row in acquired(third).values()) and len(acquired(third)) == 2
+    assert package_refusals(third) == {}
+
+
+@pytest.mark.parametrize("error", [OSError("No space left on device"), MemoryError()], ids=["temp-file", "memory"])
+def test_a_tree_this_run_could_not_read_is_neither_a_read_nor_remembered(tmp_path, scoped, monkeypatch, error):
+    """Only the reader's own refusal says something about the document; a 108th printing's listing never moves."""
+    with monkeypatch.context() as failed:
+        _no_tree(failed, error)
+        first, _, body = run(tmp_path / "first")
+    assert len(body.requested) == 2
+    assert acquired(first) == {} and package_refusals(first) == {}
+    second, _, body = run(tmp_path / "second", prior=tmp_path / "first")
+    assert len(body.requested) == 2, "read again next run, as after a transport failure"
+    assert len(acquired(second)) == 2 and all(row["section_count"] for row in acquired(second).values())
+
+
+def _unavailable(status: int) -> GovInfoPackageUnavailableError:
+    url = "https://api.govinfo.gov/packages/BILLS-119hr6028eh/summary"
+    return GovInfoPackageUnavailableError(
+        CapturedBodyResponse(url, url, status, "application/json", "2026-09-19T00:00:00Z", b"{}"),
+        label="package summary",
+    )
+
+
+@pytest.mark.parametrize("absent", [404, 410])
+@pytest.mark.parametrize(
+    "other",
+    [_unavailable(302), _unavailable(400), _unavailable(451), ValueError("HTTP 502 from the transport")],
+    ids=["redirect", "400", "451", "502"],
+)
+def test_only_a_404_or_410_is_remembered_as_absent(tmp_path, scoped, absent, other):
+    """``BILLS-116hr7440cph``'s summary answers 404 on every run; a redirect, another 4xx or a 502 establishes nothing."""
+
+    class Absent(StubBodyAcquirer):
+        def acquire(self, package_id, **kwargs):
+            self.requested.append(package_id)
+            raise _unavailable(absent) if package_id.endswith("eh") else other
+
+    first, _, body = run(tmp_path / "first", body=Absent())
+    assert sorted(body.requested) == ["BILLS-119hr6028eh", "BILLS-119hr6028ih"]
+    [(package, entry)] = package_refusals(first).items()
+    assert (package, entry["refusal"], entry["status"], entry["sha256"], entry["engine"]) == (
+        "BILLS-119hr6028eh",
+        "unavailable",
+        absent,
+        None,
+        None,
+    )
+    _, _, body = run(tmp_path / "second", prior=tmp_path / "first", body=Absent())
+    assert body.requested == ["BILLS-119hr6028ih"], "only what the publisher did not answer absent is asked again"
+
+
+@pytest.mark.parametrize("same_bytes", [True, False], ids=["same-bytes", "other-bytes"])
+def test_a_refused_read_withdraws_only_the_tree_less_row_its_own_bytes_published(
+    tmp_path, scoped, monkeypatch, same_bytes
+):
+    """113-hr-1067's public law kept a listing and a body row without a tree; a refused re-read of the same bytes
+    leaves the listing alone, in ``bill_versions`` and ``bill_sections``; a body row of other bytes is not its to go."""
+    with monkeypatch.context() as failed:
+        _no_tree(failed)
+        first, _, _ = run(tmp_path / "first")
+    versions = pq.read_table(first["bill_versions"])
+    listed = [row for row in versions.to_pylist() if row["version_code"] == "introduced-in-house"]
+    body_bytes = (FIXTURES / "text-119hr6028ih.xml").read_bytes()
+    digest = "sha256:" + (sha256(body_bytes).hexdigest() if same_bytes else "0" * 64)
+    tree_less = {
+        **listed[0],
+        "source": "govinfo",
+        "sha256": digest,
+        "byte_size": str(len(body_bytes)),
+        "content_type": "application/xml",
+        "format_name": "xml",
+        "section_count": None,
+    }
+    pq.write_table(
+        pa.Table.from_pylist([*versions.to_pylist(), tree_less], schema=versions.schema), first["bill_versions"]
+    )
+    columns = build.TABLE_CONTRACTS["bill_sections"].columns
+    stale = {c: None for c in columns} | {
+        "bill_id": "119-hr-6028",
+        "version_code": "introduced-in-house",
+        "source": "govinfo",
+        "seq": "0",
+        "congress": "119",
+    }
+    write_output(
+        first["bill_sections"], pa.Table.from_pylist([stale], schema=pa.schema([(c, pa.string()) for c in columns]))
+    )
+    pq.write_table(
+        pq.read_table(first[build.ARCHIVES_TABLE]).replace_schema_metadata(
+            {
+                **(pq.read_schema(first[build.ARCHIVES_TABLE]).metadata or {}),
+                bodies.PACKAGE_REFUSALS_KEY.encode(): b"{}",
+            }
+        ),
+        first[build.ARCHIVES_TABLE],
+    )
+
+    with monkeypatch.context() as failed:
+        _no_tree(failed)
+        second, _, body = run(tmp_path / "second", prior=tmp_path / "first")
+    assert sorted(body.requested) == ["BILLS-119hr6028eh", "BILLS-119hr6028ih"]
+    rows = {(row["version_code"], row["source"]) for row in pq.read_table(second["bill_versions"]).to_pylist()}
+    sections = [(row["version_code"], row["source"]) for row in read_output(second["bill_sections"]).to_pylist()]
+    assert ("introduced-in-house", "congress") in rows
+    assert (("introduced-in-house", "govinfo") in rows) is not same_bytes
+    assert (sections == [("introduced-in-house", "govinfo")]) is not same_bytes
+
+
+# --------------------------------------------------------------------------- #
+# The per-package route on one printing at a time: ``BodyPass`` over planned work.
+# --------------------------------------------------------------------------- #
+PUBLIC_LAW = ("113-hr-1067", "public-law", "BILLS-113hr1067enr")
+PLAW_URL = "https://www.govinfo.gov/content/pkg/PLAW-113publ237/uslm/PLAW-113publ237.xml"
+PLAW_LINK = {"url": PLAW_URL, "type": None, "package_id": None}
+USLM = b'<?xml version="1.0"?><pLaw xmlns="http://schemas.gpo.gov/xml/uslm"><main>Public Law 113-237</main></pLaw>'
+USLM_DIGEST = "sha256:" + sha256(USLM).hexdigest()
+
+
+def _row(key, formats, *, source="congress", digest=None, section_count=None, date="2014-12-19T04:59:59Z"):
+    bill, code, package = key
+    return {
+        "bill_id": bill,
+        "version_code": code,
+        "source": source,
+        "label": code.replace("-", " ").title(),
+        "version_date": date,
+        "package_id": package,
+        "offered_formats_json": json.dumps(formats),
+        "sha256": digest,
+        "section_count": section_count,
+    }
+
+
+class Rendition(StubBodyAcquirer):
+    """Serves the packages in ``uslm`` their USLM rendition, as the public law's MODS offers it; others the fixture XML."""
+
+    def __init__(self, uslm=()):
+        super().__init__()
+        self.uslm = set(uslm)
+
+    def acquire(self, package_id, *, max_bytes=None):
+        if package_id not in self.uslm:
+            return super().acquire(package_id, max_bytes=max_bytes)
+        self.requested.append(package_id)
+        url = f"https://www.govinfo.gov/content/pkg/{package_id}/uslm/{package_id}.xml"
+        return _Package(
+            "uslm",
+            CapturedBodyResponse(url, url, 200, "application/xml", "2026-09-19T00:00:00Z", USLM),
+            media_type="application/xml",
+        )
+
+
+def _pass(rows, source, *, held=None, package_refusals=None):
+    held = held or {}
+    work, _, _ = bodies.plan_work(
+        rows,
+        held=lambda bill: held.get(bill, ()),
+        xml=lambda bill: held.get(bill, ()),
+        complete_pairs=set(),
+        published_pairs={},
+    )
+    return bodies.BodyPass(
+        bills_source=None,
+        body_source=source,
+        remaining=[10],
+        engine=build.engine_stamp(),
+        classify=None,
+        summarize_diff=None,
+        refusals={},
+        package_refusals=package_refusals,
+    ).run(work)
+
+
+@pytest.mark.parametrize(
+    ("rows", "withdrawn"),
+    [
+        ([_row(PUBLIC_LAW, [PLAW_LINK]), _row(PUBLIC_LAW, [PLAW_LINK], source="govinfo", digest=USLM_DIGEST)], True),
+        # No listing beside the body row: withdrawing it would leave the printing no row at all.
+        ([_row(PUBLIC_LAW, [PLAW_LINK], source="govinfo", digest=USLM_DIGEST)], False),
+        # A body of other bytes is another read; this refusal says nothing about it.
+        (
+            [
+                _row(PUBLIC_LAW, [PLAW_LINK]),
+                _row(PUBLIC_LAW, [PLAW_LINK], source="govinfo", digest="sha256:" + "0" * 64),
+            ],
+            False,
+        ),
+        # A body row stating a tree is a processed read, whatever a refusal of the same bytes says now.
+        (
+            [
+                _row(PUBLIC_LAW, [PLAW_LINK]),
+                _row(PUBLIC_LAW, [PLAW_LINK], source="govinfo", digest=USLM_DIGEST, section_count="4"),
+            ],
+            False,
+        ),
+    ],
+    ids=["listed-same-bytes", "no-listing", "other-bytes", "with-a-tree"],
+)
+def test_a_uslm_body_is_a_refused_tree_that_withdraws_only_its_own_tree_less_row(rows, withdrawn):
+    """The live shape of 113-hr-1067's public law: its package offers USLM, which the bill-tree reader does not read."""
+    source = Rendition(uslm={PUBLIC_LAW[2]})
+    outcome = _pass(rows, source)
+    assert source.requested == [PUBLIC_LAW[2]]
+    assert outcome.families == [], "a refused tree is not a read: no body row is written"
+    entry = outcome.package_refusals[PUBLIC_LAW[2]]
+    assert (entry["refusal"], entry["sha256"]) == ("tree", USLM_DIGEST)
+    assert outcome.unread == ({(PUBLIC_LAW[0], PUBLIC_LAW[1], "govinfo")} if withdrawn else set())
+
+
+def test_a_held_neighbour_read_for_a_comparison_is_never_remembered_or_withdrawn():
+    """119-hr-6028's introduced printing is held; the engrossed one is new, so both are read, and the held one refuses."""
+    ih = ("119-hr-6028", "introduced-in-house", "BILLS-119hr6028ih")
+    eh = ("119-hr-6028", "engrossed-in-house", "BILLS-119hr6028eh")
+
+    def link(package):
+        return [
+            {
+                "url": f"https://www.govinfo.gov/content/pkg/{package}/xml/{package}.xml",
+                "type": None,
+                "package_id": package,
+            }
+        ]
+
+    rows = [
+        _row(ih, link(ih[2]), source="govinfo", digest=USLM_DIGEST, section_count="3", date="2025-11-12T05:00:00Z"),
+        _row(eh, link(eh[2]), date="2026-06-08T04:00:00Z"),
+    ]
+    source = Rendition(uslm={ih[2]})
+    outcome = _pass(rows, source, held={"119-hr-6028": {"introduced-in-house"}})
+    assert source.requested == [eh[2], ih[2]], "the new printing, then the neighbour its comparison needs"
+    assert outcome.package_refusals == {} and outcome.unread == set()
+
+
+def test_a_404_withdraws_nothing_even_beside_a_tree_less_row():
+    """Absence says nothing about the bytes a row published: the printing keeps both its rows, and is remembered."""
+
+    class Gone(StubBodyAcquirer):
+        def acquire(self, package_id, **kwargs):
+            self.requested.append(package_id)
+            raise _unavailable(404)
+
+    rows = [_row(PUBLIC_LAW, [PLAW_LINK]), _row(PUBLIC_LAW, [PLAW_LINK], source="govinfo", digest=USLM_DIGEST)]
+    outcome = _pass(rows, Gone())
+    assert outcome.package_refusals[PUBLIC_LAW[2]]["refusal"] == "unavailable"
+    assert outcome.unread == set()
+
+
+def test_a_refusal_is_asked_again_once_its_listing_or_its_engine_moves():
+    rows = [_row(PUBLIC_LAW, [PLAW_LINK])]
+    work, _, _ = bodies.plan_work(rows, held=lambda _: (), xml=lambda _: (), complete_pairs=set(), published_pairs={})
+    listed = bodies.listed_digest(work[0].by_code[PUBLIC_LAW[1]])
+    engine = reader(build.engine_stamp())
+
+    def asked(rows, **entry) -> list[str]:
+        source = Rendition(uslm={PUBLIC_LAW[2]})
+        refusal = {"listed": listed, "refusal": "tree", "sha256": USLM_DIGEST, "engine": engine, "status": None}
+        _pass(rows, source, package_refusals={PUBLIC_LAW[2]: refusal | entry})
+        return source.requested
+
+    assert asked(rows) == [], "unchanged listing and reader"
+    assert asked(rows, engine=engine.replace("spicy-docs ", "spicy-docs 0.0.")) == [PUBLIC_LAW[2]], (
+        "a spicy-docs release reads the tree again"
+    )
+    assert asked(rows, engine="deltatrack 0.0.9 older") == [PUBLIC_LAW[2]], "another engine reads the tree again"
+    assert asked(rows, refusal="unavailable", engine="another", status=404) == [], "an absence names no reader"
+    assert asked(rows, refusal="unavailable", engine=None, status=451) == [PUBLIC_LAW[2]], "not an absence"
+    assert asked(rows, refusal="later-kind", engine=None) == [PUBLIC_LAW[2]], "an unknown refusal is asked again"
+    pdf = {**PLAW_LINK, "url": PLAW_URL.replace("/uslm/", "/pdf/").replace(".xml", ".pdf")}
+    assert asked([_row(PUBLIC_LAW, [PLAW_LINK, pdf])]) == [PUBLIC_LAW[2]], "a listing offering another format moved"
+
+
+class HtmlOnly(StubBodyAcquirer):
+    """A package with no XML rendition: its MODS offers HTML, whatever link the listing states (the plan's 527)."""
+
+    def acquire(self, package_id, *, max_bytes=None):
+        self.requested.append(package_id)
+        url = f"https://www.govinfo.gov/content/pkg/{package_id}/html/{package_id}.htm"
+        capture = CapturedBodyResponse(
+            url, url, 200, "text/html", "2026-09-19T00:00:00Z", b"<html><pre>text</pre></html>"
+        )
+        return _Package("htm", capture, media_type="text/html")
+
+
+def test_a_printing_is_labelled_by_the_rendition_read_not_the_link_the_listing_prefers(tmp_path, scoped):
+    first, _, body = run(tmp_path / "first", body=HtmlOnly())
+    assert len(body.requested) == 2
+    for row in acquired(first).values():
+        assert (row["format_name"], row["content_type"]) == ("html", "text/html")
+        assert row["requested_url"].endswith(".htm")
+    assert package_refusals(first) == {}, "an HTML body is a read, not a refused XML tree"
+    listed = {
+        row["version_code"] for row in pq.read_table(first["bill_versions"]).to_pylist() if row["source"] == "congress"
+    }
+    assert listed == set(), "each body stands for its listing"
+    _, _, body = run(tmp_path / "second", prior=tmp_path / "first", body=HtmlOnly())
+    assert body.requested == [], "a body read is held, never fetched again"
+
+
+def test_the_label_is_the_offered_link_of_the_rendition_read_with_the_publishers_own_type():
+    """A list-route printing states typed links: read as HTML, the row names the HTML link's type, not the XML one's."""
+    key = ("108-hr-1", "introduced-in-house", "BILLS-108hr1ih")
+    base = f"https://www.govinfo.gov/content/pkg/{key[2]}"
+    offered = [
+        {"url": f"{base}/xml/{key[2]}.xml", "type": "Formatted XML", "package_id": key[2]},
+        {"url": f"{base}/html/{key[2]}.htm", "type": "HTML", "package_id": key[2]},
+    ]
+    outcome = _pass([_row(key, offered, date="2003-01-07T05:00:00Z")], HtmlOnly())
+    [row] = [row for tables in outcome.families for row in tables.bill_versions if row["source"] == "govinfo"]
+    assert (row["format_name"], row["format_type"], row["content_type"]) == ("html", "HTML", "text/html")
 
 
 def test_missing_published_sections_make_their_printings_pending_again(tmp_path, scoped):
     first, _, _ = run(tmp_path / "first")
-    sections = pq.read_table(first["bill_sections"])
-    pq.write_table(sections.slice(0, 0), first["bill_sections"])
+    sections = read_output(first["bill_sections"])
+    write_output(first["bill_sections"], sections.slice(0, 0))
     second, bulk, body = run(tmp_path / "second", prior=tmp_path / "first")
     assert bulk.zip_downloads == [] and len(body.requested) == 2
-    assert pq.read_table(second["bill_sections"]).num_rows == sections.num_rows
+    assert read_output(second["bill_sections"]).num_rows == sections.num_rows
 
 
 def test_failed_pdf_cleanup_retries_by_printing_state(tmp_path, scoped, monkeypatch):
@@ -273,8 +639,12 @@ def test_credential_refusal_preserves_every_existing_output(tmp_path, scoped):
     retry = tmp_path / "retry"
     retry.mkdir()
     for path in first.values():
-        (retry / path.name).write_bytes(path.read_bytes())
-    before = {path.name: path.read_bytes() for path in retry.glob("*.parquet")}
+        if path.is_dir():
+            shutil.copytree(path, retry / path.name)
+        else:
+            (retry / path.name).write_bytes(path.read_bytes())
+    before = {path.relative_to(retry): path.read_bytes() for path in retry.rglob("*.parquet")}
+    assert any(len(name.parts) > 1 for name in before), "a split table's members are among the outputs"
 
     class Denied(StubBodyAcquirer):
         def acquire(self, package_id, **kwargs):
@@ -285,7 +655,7 @@ def test_credential_refusal_preserves_every_existing_output(tmp_path, scoped):
             retry,
             bulk_acquirer=StubBulkAcquirer(),
             body_acquirer=Denied(),
-            download_prior=_prior_from(tmp_path / "first"),
+            **_priors(tmp_path / "first"),
         )
     assert {name: (retry / name).read_bytes() for name in before} == before
 
@@ -409,10 +779,13 @@ def test_corrected_retry_replaces_removed_sections_and_diff_items_only_in_succes
     first, _, _ = run(tmp_path / "first", body=StubChangedBodyAcquirer())
     preserved = {}
     for name in ("bill_sections", "section_diffs", "section_diff_items"):
-        table = pq.read_table(first[name])
+        table = read_output(first[name])
         rows = table.to_pylist()
-        preserved[name] = [{**row, "bill_id": "118-hr-99"} for row in rows]
-        pq.write_table(pa.Table.from_pylist(rows + preserved[name], schema=table.schema), first[name])
+        # A section carries its bill's Congress, which its split table is stored by.
+        preserved[name] = [
+            {**row, "bill_id": "118-hr-99", **({"congress": "118"} if "congress" in row else {})} for row in rows
+        ]
+        write_output(first[name], pa.Table.from_pylist(rows + preserved[name], schema=table.schema))
 
     # A missing child makes the existing XML pair retryable. The source now
     # returns the original short bill, which has fewer sections and diff items.
@@ -422,9 +795,9 @@ def test_corrected_retry_replaces_removed_sections_and_diff_items_only_in_succes
     second, _, bodies = run(tmp_path / "second", prior=tmp_path / "first")
     assert len(bodies.requested) == 2
     for name in preserved:
-        rows = pq.read_table(second[name]).to_pylist()
+        rows = read_output(second[name]).to_pylist()
         assert [row for row in rows if row["bill_id"] == "118-hr-99"] == preserved[name]
-    sections = [row for row in pq.read_table(second["bill_sections"]).to_pylist() if row["bill_id"] == "119-hr-6028"]
+    sections = [row for row in read_output(second["bill_sections"]).to_pylist() if row["bill_id"] == "119-hr-6028"]
     # Each original printing has a masthead, enacting clause and short-title node.
     assert len(sections) == 6 and all(row["heading"] != "Funding" for row in sections)
     items = [row for row in pq.read_table(second["section_diff_items"]).to_pylist() if row["bill_id"] == "119-hr-6028"]
@@ -443,7 +816,7 @@ def test_failed_or_unattempted_retry_preserves_retained_child_scopes(tmp_path, s
     path = first["section_diffs"]
     parents = pq.read_table(path)
     pq.write_table(parents.slice(0, 0), path)
-    before_sections = pq.read_table(first["bill_sections"]).to_pylist()
+    before_sections = read_output(first["bill_sections"]).to_pylist()
     before_items = pq.read_table(first["section_diff_items"]).to_pylist()
 
     class Refused(StubBodyAcquirer):
@@ -453,6 +826,6 @@ def test_failed_or_unattempted_retry_preserves_retained_child_scopes(tmp_path, s
 
     second, _, bodies = run(tmp_path / "second", prior=tmp_path / "first", body=Refused(), budget=budget)
     assert len(bodies.requested) == budget
-    assert pq.read_table(second["bill_sections"]).to_pylist() == before_sections
+    assert read_output(second["bill_sections"]).to_pylist() == before_sections
     assert pq.read_table(second["section_diff_items"]).to_pylist() == before_items
     assert pq.read_table(second["section_diffs"]).num_rows == 0, "the comparison stays pending"
