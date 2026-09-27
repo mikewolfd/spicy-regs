@@ -56,6 +56,8 @@ from pathlib import Path
 import pyarrow.parquet as pq
 from loguru import logger
 
+from spicy_regs.duckdb_settings import load_public_http
+
 OUTPUT = "org_committee_links.parquet"
 
 DEFAULT_R2_BASE_URL = "https://data.spicy-regs.dev"
@@ -459,8 +461,7 @@ def build_org_committee_links(output_dir: Path) -> Path:
     con.execute("SET threads=2")
     con.execute(f"SET temp_directory='{spill_dir}'")
     if comments_source.startswith("https://"):
-        con.execute("INSTALL httpfs")
-        con.execute("LOAD httpfs")
+        load_public_http(con)
 
     logger.info("Building org ↔ committee links via DuckDB...")
     con.execute(build_query(comments_source, str(committees_file), str(out_file)))

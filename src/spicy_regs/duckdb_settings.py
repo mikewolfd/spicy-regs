@@ -17,6 +17,19 @@ def memory_limit(raw: str, source: str) -> str:
     return value
 
 
+#: Patient retries for batch reads of the public r2.dev endpoint, which answers 429 under load
+#: (org-links failed the 2026-09-27 refresh on one). Up to about eight minutes of backoff per request,
+#: so interactive readers such as the MCP server keep DuckDB's defaults.
+PUBLIC_HTTP_RETRIES = {"http_retries": 8, "http_retry_wait_ms": 2000, "http_retry_backoff": 2}
+
+
+def load_public_http(con) -> None:
+    """Load httpfs on ``con`` with :data:`PUBLIC_HTTP_RETRIES`."""
+    con.execute("INSTALL httpfs; LOAD httpfs")
+    for name, value in PUBLIC_HTTP_RETRIES.items():
+        con.execute(f"SET {name} = ?", [value])
+
+
 @dataclass(frozen=True)
 class ExportResources:
     """Shared comments writer budgets; targets, not hard process-memory ceilings."""

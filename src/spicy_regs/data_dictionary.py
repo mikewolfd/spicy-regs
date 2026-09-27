@@ -40,6 +40,7 @@ import polars as pl
 from dotenv import load_dotenv
 
 from spicy_regs import output_ledger, table_joins
+from spicy_regs.duckdb_settings import load_public_http
 from spicy_regs.schemas.regulations import RECORD_TYPES
 from spicy_regs.sources.publication import SNAPSHOT_POINTER, PublicationError
 
@@ -761,7 +762,7 @@ def discover_schemas(source: str, base: str | None = None) -> dict[str, list[tup
     with duckdb.connect() as con:
         con.execute(f"SET home_directory='{tempfile.gettempdir()}'")
         if source == "r2":
-            con.execute("INSTALL httpfs; LOAD httpfs")
+            load_public_http(con)
         for name in names:
             target = url_for(name).replace("'", "''")
             try:

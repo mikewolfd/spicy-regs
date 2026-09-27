@@ -318,12 +318,12 @@ def _table_info(con: duckdb.DuckDBPyConnection, source: str) -> dict:
 
 @contextmanager
 def _connect(base: PublicBase, memory_limit: str, threads: int) -> Iterator[duckdb.DuckDBPyConnection]:
-    from spicy_regs.duckdb_settings import ExportResources
+    from spicy_regs.duckdb_settings import ExportResources, load_public_http
 
     with tempfile.TemporaryDirectory(prefix="generation-audit-") as spill, duckdb.connect() as con:
         con.execute(f"SET home_directory={_literal(tempfile.gettempdir())}")
         if base.remote:
-            con.execute("INSTALL httpfs; LOAD httpfs")
+            load_public_http(con)
         ExportResources(memory=memory_limit, threads=threads).configure(con, Path(spill))
         yield con
 

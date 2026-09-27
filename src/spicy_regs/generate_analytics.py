@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 import duckdb
 
+from spicy_regs.duckdb_settings import load_public_http
 from spicy_regs.public_url import resolve_r2_base_url
 
 
@@ -31,8 +32,7 @@ def generate_analytics(parquet_dir: Path | None = None, output_dir: Path | None 
         documents_src = f"'{parquet_dir}/documents.parquet'"
     else:
         base_url = resolve_r2_base_url()
-        # Install httpfs for remote access
-        conn.execute("INSTALL httpfs; LOAD httpfs;")
+        load_public_http(conn)
         comments_src = f"'{base_url}/comments.parquet'"
         dockets_src = f"'{base_url}/dockets.parquet'"
         documents_src = f"'{base_url}/documents.parquet'"

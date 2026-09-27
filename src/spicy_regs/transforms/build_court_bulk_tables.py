@@ -39,6 +39,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 from loguru import logger
 
+from spicy_regs.duckdb_settings import load_public_http
 from spicy_regs.transforms._courtlistener_writer import check_headroom
 
 if TYPE_CHECKING:
@@ -144,7 +145,7 @@ def _highest_cluster_id(parquet: str) -> int | None:
 
     with duckdb.connect() as con:
         if parquet.startswith("https://"):
-            con.execute("INSTALL httpfs; LOAD httpfs")
+            load_public_http(con)
         path = parquet.replace("'", "''")
         row = con.execute(f"SELECT max(TRY_CAST(cluster_id AS BIGINT)) FROM read_parquet('{path}')").fetchone()
         return None if row is None else row[0]

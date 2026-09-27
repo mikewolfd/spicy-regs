@@ -24,6 +24,7 @@ import duckdb
 import httpx
 
 from spicy_regs import output_ledger, table_joins
+from spicy_regs.duckdb_settings import load_public_http
 from spicy_regs.sources import publication
 
 EXIT_UNREACHABLE = 3
@@ -40,9 +41,8 @@ def table_urls(base_url: str) -> Callable[[str], str]:
 def connect() -> duckdb.DuckDBPyConnection:
     """Modest concurrency and patient retries: the public r2.dev endpoint answers 429 under load."""
     con = duckdb.connect()
-    for statement in ("INSTALL httpfs", "LOAD httpfs", "SET threads = 2", "SET http_retries = 8",
-                      "SET http_retry_wait_ms = 2000", "SET http_retry_backoff = 2"):
-        con.execute(statement)
+    load_public_http(con)
+    con.execute("SET threads = 2")
     return con
 
 
