@@ -77,3 +77,7 @@ Provenance, from `view-manifest.json`:
   `sha256:7fe88a9167a9363f5c2bfdcd3911953b7323abe1564d40586991c9612f95f4bc`
 - `release.sourceReleaseDigest`: `sha256:69001a4381ddf35cdba6d44fa52f579d7dfa07627c4c74da3dde2b0d8a39f8f0`
 - `canonicalPayloadDigest`: `sha256:a07e47940d1c430e165a458cb879fbae1f4b97716e157104240d55d70a9a2775`
+
+`agency_code_for_fr_agencies` reads the bridges and events. It never reads the
+non-emissions: the Export-Import Bank, Udall Foundation, IBWC and CISA items
+leave REF-038's codes as they are.

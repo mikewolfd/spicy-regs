@@ -1,4 +1,4 @@
-"""The REF-038 agency lookup: reverse codes for FR agency ids, one code per FR row."""
+"""The agency lookup: REF-038's projection with the registry view's bridges and successions, one code per FR row."""
 
 from __future__ import annotations
 
@@ -13,23 +13,37 @@ import pytest
 
 from spicy_regs.ontology import agencies
 
-# FR agency ids looked up from the replay's federal_register.parquet agencies_json and
-# RefSpec's vendored projection; each names the agency it belongs to.
+# FR agency ids looked up from the replay's federal_register.parquet agencies_json, RefSpec's
+# vendored projection and its registry view; each names the agency it belongs to.
 EPA_ID = 145  # Environmental Protection Agency
 DOT_ID = 492  # Transportation Department, the parent of the FAA entry below
 FAA_ID = 159  # Federal Aviation Administration
 NSF_ID = 366  # National Science Foundation
-DOE_ID = 136  # Energy Department; DOE projects onto an eCFR org, not an FR one
+DOE_ID = 136  # Energy Department; DOE selects an eCFR org, which bridge same:fr136 joins
+LABOR_ID = 271  # Labor Department; DOL likewise, through same:fr271
 FERC_ID = 167  # Federal Energy Regulatory Commission, Energy Department's child
 USDA_ID = 12  # Agriculture Department, GIPSA's grandparent below
 GIPSA_ID = 218  # Grain Inspection, Packers and Stockyards Administration, under AMS (9)
-ED_ID = 126  # Education Department
-LABOR_ID = 271  # Labor Department; DOL projects onto an eCFR org, not an FR one
+COMMERCE_ID = 54  # Commerce Department
+BEA_ID = 118  # Economic Analysis Bureau, Commerce's child; same:fr118 joins the eCFR's, which EAB selects
+EXPORT_ADMIN_ID = 150  # Export Administration Bureau, renamed Industry and Security Bureau (BIS) 2002-04-18
 CNCS_ID = 91  # Corporation for National and Community Service
 HHS_ID = 221  # Health and Human Services Department
-HCFA_ID = 559  # Health Care Finance Administration, HHS's unresolved child (parent_id 221)
+HCFA_ID = 559  # Health Care Finance Administration, renamed CMS 2001-06-29 (parent_id 221)
+TREASURY_ID = 497  # Treasury Department
+IIO_ID = 259  # International Investment Office, renamed Investment Security Office (603) 2008-11-21
+FISCAL_SERVICE_ID = 196  # Bureau of the Fiscal Service, Treasury's child no code selects
+POSTAL_RATE_ID = 564  # Postal Rate Commission, redesignated Postal Regulatory Commission (409) 2006-12-20
 JUSTICE_ID = 268  # Justice Department
-INS_ID = 232  # Immigration and Naturalization Service, Justice's unresolved child (parent_id 268)
+INS_ID = 232  # Immigration and Naturalization Service, split to USCIS, CBP and ICE 2003-03-01
+USIA_ID = 510  # United States Information Agency, split to State and the BBG 1999-10-01
+CUSTOMS_ID = 96  # Customs Service, split to CBP and ICE 2003-03-01
+ICC_ID = 543  # Interstate Commerce Commission, split to the STB and Transportation 1996-01-01
+MINES_ID = 290  # Mines Bureau, an Interior child no code selects
+INTERIOR_ID = 253  # Interior Department
+EXIM_ID = 151  # Export-Import Bank: the owner refused its bridge (a non-emission)
+UDALL_ID = 296  # Udall Foundation: its bridge is held (a non-emission)
+IBWC_ID = 255  # International Boundary and Water Commission: its bridge was withdrawn
 
 #: RefSpec dev19's published ambiguous pairs: both codes of each pair project onto one org.
 DEV19_AMBIGUOUS_PAIRS = (("FR", "OFR"), ("FPPO", "OFPP"), ("ACHP", "HPAC"), ("CDFI", "CDFIF"), ("CNCS", "CORP"))
@@ -38,6 +52,12 @@ REGISTRY_TABLES = {
     "events": agencies.AGENCY_REGISTRY_EVENTS_SHA256,
     "non-emissions": agencies.AGENCY_REGISTRY_NON_EMISSIONS_SHA256,
 }
+FR = "urn:ref:federal-register-agency:"
+
+
+def event(original: int, result: int) -> dict:
+    """One synthetic view event row, (event, result), in the view's shape."""
+    return {"originals": [f"{FR}{original}"], "result": f"{FR}{result}"}
 
 
 def test_fr_agency_code_resolves_epa():
@@ -62,12 +82,6 @@ def test_two_unrelated_agencies_resolve_to_none():
 
 def test_unknown_fr_agency_id_resolves_to_none():
     assert agencies.fr_agency_code(999_999) is None
-
-
-def test_doe_energy_department_is_the_documented_gap():
-    entries = [{"id": DOE_ID, "name": "Energy Department"}]
-    assert agencies.fr_agency_code(DOE_ID) is None
-    assert agencies.agency_code_for_fr_agencies(entries) is None
 
 
 def test_several_codes_projecting_onto_one_org_resolve_to_none():
@@ -103,11 +117,15 @@ def test_malformed_entries_are_skipped():
     assert agencies.agency_code_for_fr_agencies(entries) == "EPA"  # ty: ignore[invalid-argument-type]
 
 
-def test_unresolved_parent_of_the_chosen_agency_is_accepted():
+def test_unresolved_ancestor_of_the_chosen_agency_is_accepted(monkeypatch):
+    # REF-038 alone, before the registry bridged the Energy Department: no code selected it.
+    ref038 = agencies._build_projection(agencies.projection_rows(), (), ())
+    monkeypatch.setattr(agencies, "_projection", lambda: ref038)
     entries = [
         {"id": DOE_ID, "name": "Energy Department"},
         {"id": FERC_ID, "name": "Federal Energy Regulatory Commission"},
     ]
+    assert agencies.fr_agency_code(DOE_ID) is None
     assert agencies.agency_code_for_fr_agencies(entries) == "FERC"
 
 
@@ -121,26 +139,114 @@ def test_ancestor_two_levels_up_collapses_to_the_most_specific():
 
 def test_unresolved_unrelated_agency_makes_a_joint_document():
     entries = [
-        {"id": ED_ID, "name": "Education Department"},
-        {"id": LABOR_ID, "name": "Labor Department"},
+        {"id": EPA_ID, "name": "Environmental Protection Agency"},
+        {"id": MINES_ID, "name": "Mines Bureau", "parent_id": INTERIOR_ID},
     ]
     assert agencies.agency_code_for_fr_agencies(entries) is None
 
 
 def test_unresolved_child_of_the_chosen_agency_is_the_departments_code():
     entries = [
-        {"id": HHS_ID, "name": "Health and Human Services Department"},
-        {"id": HCFA_ID, "name": "Health Care Finance Administration", "parent_id": HHS_ID},
+        {"id": TREASURY_ID, "name": "Treasury Department"},
+        {"id": FISCAL_SERVICE_ID, "name": "Bureau of the Fiscal Service", "parent_id": TREASURY_ID},
     ]
-    assert agencies.agency_code_for_fr_agencies(entries) == "HHS"
+    assert agencies.agency_code_for_fr_agencies(entries) == "TREAS"
 
 
 def test_justice_with_ins_is_the_justice_departments_code():
+    # INS split three ways, so no one code selects it: it stays Justice's unresolved bureau.
     entries = [
         {"id": JUSTICE_ID, "name": "Justice Department"},
         {"id": INS_ID, "name": "Immigration and Naturalization Service", "parent_id": JUSTICE_ID},
     ]
     assert agencies.agency_code_for_fr_agencies(entries) == "DOJ"
+
+
+def test_a_bridge_gains_its_counterparts_code():
+    assert agencies.fr_agency_code(DOE_ID) == "DOE"
+    assert agencies.fr_agency_code(LABOR_ID) == "DOL"
+    assert agencies.agency_code_for_fr_agencies([{"id": DOE_ID, "name": "Energy Department"}]) == "DOE"
+
+
+def test_a_bridge_carries_its_subjects_roster_parent():
+    # No parent_id on the entries: the chain Commerce -> Economic Analysis Bureau is the bridge's.
+    entries = [{"id": COMMERCE_ID, "name": "Commerce Department"}, {"id": BEA_ID, "name": "Economic Analysis Bureau"}]
+    assert agencies.agency_code_for_fr_agencies(entries) == "EAB"
+
+
+def test_a_rename_reroutes_to_the_successors_code():
+    assert agencies.fr_agency_code(HCFA_ID) == "CMS"
+    hcfa = [
+        {"id": HHS_ID, "name": "Health and Human Services Department"},
+        {"id": HCFA_ID, "name": "Health Care Finance Administration", "parent_id": HHS_ID},
+    ]
+    export_administration = [
+        {"id": COMMERCE_ID, "name": "Commerce Department"},
+        {"id": EXPORT_ADMIN_ID, "name": "Export Administration Bureau", "parent_id": COMMERCE_ID},
+    ]
+    assert agencies.agency_code_for_fr_agencies(hcfa) == "CMS"  # HHS under REF-038 alone
+    assert agencies.agency_code_for_fr_agencies(export_administration) == "BIS"  # DOC under REF-038 alone
+
+
+def test_a_succession_reaches_its_successors_bridged_code():
+    # Neither successor is selected by a code in REF-038; each is reached only through its bridge.
+    iio = [
+        {"id": TREASURY_ID, "name": "Treasury Department"},
+        {"id": IIO_ID, "name": "International Investment Office", "parent_id": TREASURY_ID},
+    ]
+    assert agencies.agency_code_for_fr_agencies(iio) == "IIO"
+    assert agencies.fr_agency_code(POSTAL_RATE_ID) == "PRC"
+
+
+def test_a_split_to_several_codes_gives_none():
+    for split in (INS_ID, USIA_ID, CUSTOMS_ID, ICC_ID):
+        assert agencies.fr_agency_code(split) is None, split
+    assert (
+        agencies.agency_code_for_fr_agencies([{"id": INS_ID, "name": "Immigration and Naturalization Service"}]) is None
+    )
+
+
+def test_a_chain_resolves_to_its_end():
+    # 900001 was renamed 900002, which was renamed 900003; codes select 900002 and 900003.
+    rows = [
+        {"org": f"{FR}900002", "source_value": "MIDDLE", "parent_org": None},
+        {"org": f"{FR}900003", "source_value": "END", "parent_org": None},
+    ]
+    projection = agencies._build_projection(rows, (), [event(900001, 900002), event(900002, 900003)])
+    assert projection.code_by_fr_id[900001] == "END"
+    assert 900002 not in projection.code_by_fr_id  # MIDDLE and END both select it
+
+
+def test_a_cycle_is_refused():
+    rows = [{"org": f"{FR}900003", "source_value": "END", "parent_org": None}]
+    events = [event(900001, 900002), event(900002, 900001), event(900002, 900003)]
+    with pytest.raises(ValueError, match="cycle"):
+        agencies._build_projection(rows, (), events)
+
+
+def test_a_bridge_stating_another_parent_is_refused():
+    rows = [{"org": f"{FR}900001", "source_value": "ONE", "parent_org": f"{FR}900002"}]
+    bridge = {
+        "candidate_id": "same:fr900001",
+        "subject": f"{FR}900001",
+        "subject_parent": f"{FR}900003",
+        "object": "urn:ref:ecfr-agency:one",
+    }
+    with pytest.raises(ValueError, match="another parent"):
+        agencies._build_projection(rows, [bridge], ())
+
+
+def test_non_emissions_add_nothing():
+    items = {row["item_id"] for row in agencies.registry_rows("non-emissions")}
+    assert items == {
+        "no-fr-bridge:regs:CISA",
+        "same:fr151:ecfr:export-import-bank",
+        "same:fr255:ecfr:international-boundary-and-water-commission-united-states-and-mexico",
+        "same:fr296:fh:300000070",
+    }
+    assert agencies.fr_agency_code(EXIM_ID) == "USEIB"  # the refused bridge would add EIB, leaving none
+    assert agencies.fr_agency_code(UDALL_ID) is None
+    assert agencies.fr_agency_code(IBWC_ID) is None
 
 
 def test_vendored_companions_match_the_readmes_pinned_digests():
