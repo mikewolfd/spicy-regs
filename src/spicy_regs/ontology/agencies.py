@@ -7,7 +7,7 @@ here; the loader refuses any copy whose sha256 is not the pinned one.
 from __future__ import annotations
 
 import hashlib
-from functools import lru_cache
+from functools import cache, lru_cache
 from importlib.resources import files
 from types import MappingProxyType
 from typing import Any, Mapping, NamedTuple, Sequence
@@ -20,25 +20,48 @@ AGENCY_PROJECTION_SHA256 = "c9ec0fde1bf5fda17402983880bc091e9caa417845178f232214
 AGENCY_PROJECTION_UNRESOLVED_SHA256 = "e32e814c3c7489d82df6dbdbc00fd6e16694628c08e7300a9473bcaa0659b065"
 VIEW_MANIFEST_SHA256 = "991acd29368b17fb66eea770f36c71385c5faee1a368008a4240281e4c8536d8"
 
-#: The vendored projection table.
+#: Pinned digests of the vendored agency registry view (RefSpec 0.1.0.dev21); the manifest's
+#: is the pin RefSpec's design note names. See ``reference/refspec/README.md``.
+AGENCY_REGISTRY_MANIFEST_SHA256 = "77b357cc06fe3e67bcacb0591833884087572727064f89643e10aa2a28ad6b87"
+AGENCY_REGISTRY_BRIDGES_SHA256 = "2e33905b475c6a1adf27960ecf170a1b4c82df2baf20ac13df9307bb687dd898"
+AGENCY_REGISTRY_EVENTS_SHA256 = "09e35a12adcb16581b131fcb187d4d2e07b8d005d431163431c303f1b6fecf2e"
+AGENCY_REGISTRY_NON_EMISSIONS_SHA256 = "da863e467f00f16a6b7a9ff1a3e1182fb8e7488f8b7d33f0d7f0c403a0663e24"
+
+#: The vendored projection table, and the registry view's directory (manifest plus ``tables/``).
 AGENCY_PROJECTION_PATH = files("spicy_regs").joinpath("reference/refspec/agency-projection.parquet")
+AGENCY_REGISTRY_VIEW_PATH = files("spicy_regs").joinpath("reference/refspec/agency-registry-view")
+
+_REGISTRY_TABLE_SHA256 = {
+    "bridges": AGENCY_REGISTRY_BRIDGES_SHA256,
+    "events": AGENCY_REGISTRY_EVENTS_SHA256,
+    "non-emissions": AGENCY_REGISTRY_NON_EMISSIONS_SHA256,
+}
 
 _FR_AGENCY = "urn:ref:federal-register-agency:"
 
 
-@lru_cache(maxsize=3)
+@cache
 def _read_pinned(path: Any, sha256: str) -> tuple[Mapping[str, Any], ...]:
     """Read a vendored RefSpec table, raising unless the bytes match the pinned digest."""
     data = path.read_bytes()
     digest = hashlib.sha256(data).hexdigest()
     if digest != sha256:
         raise ValueError(f"{path.name} is not RefSpec's file: sha256 {digest}, pinned {sha256}")
-    return tuple(MappingProxyType(row) for row in pq.read_table(pa.BufferReader(data)).to_pylist())
+    # One thread: decoding the registry's nested columns on pyarrow's CPU pool left the pool's
+    # destructor waiting at interpreter exit (macOS, pyarrow 23: 12 of 12 runs hung, 0 of 12 without).
+    table = pq.read_table(pa.BufferReader(data), use_threads=False)
+    return tuple(MappingProxyType(row) for row in table.to_pylist())
 
 
 def projection_rows() -> tuple[Mapping[str, Any], ...]:
     """The vendored REF-038 projection rows, read once and cached."""
     return _read_pinned(AGENCY_PROJECTION_PATH, AGENCY_PROJECTION_SHA256)
+
+
+def registry_rows(table: str) -> tuple[Mapping[str, Any], ...]:
+    """The vendored registry view's ``bridges``, ``events`` or ``non-emissions`` rows, read once and cached."""
+    path = AGENCY_REGISTRY_VIEW_PATH.joinpath(f"tables/agency-registry-{table}.parquet")
+    return _read_pinned(path, _REGISTRY_TABLE_SHA256[table])
 
 
 class _Projection(NamedTuple):

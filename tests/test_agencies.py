@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import hashlib
+import json
+import shutil
 from collections import Counter
 from importlib.resources import files
+from pathlib import Path
 
 import pytest
 
@@ -30,6 +33,11 @@ INS_ID = 232  # Immigration and Naturalization Service, Justice's unresolved chi
 
 #: RefSpec dev19's published ambiguous pairs: both codes of each pair project onto one org.
 DEV19_AMBIGUOUS_PAIRS = (("FR", "OFR"), ("FPPO", "OFPP"), ("ACHP", "HPAC"), ("CDFI", "CDFIF"), ("CNCS", "CORP"))
+REGISTRY_TABLES = {
+    "bridges": agencies.AGENCY_REGISTRY_BRIDGES_SHA256,
+    "events": agencies.AGENCY_REGISTRY_EVENTS_SHA256,
+    "non-emissions": agencies.AGENCY_REGISTRY_NON_EMISSIONS_SHA256,
+}
 
 
 def test_fr_agency_code_resolves_epa():
@@ -74,6 +82,19 @@ def test_tampered_projection_bytes_are_refused(tmp_path, monkeypatch):
     monkeypatch.setattr(agencies, "AGENCY_PROJECTION_PATH", tampered)
     with pytest.raises(ValueError, match="is not RefSpec's file"):
         agencies.projection_rows()
+
+
+@pytest.mark.parametrize("table", sorted(REGISTRY_TABLES))
+def test_tampered_registry_bytes_are_refused(tmp_path, monkeypatch, table):
+    view = tmp_path / "agency-registry-view"
+    shutil.copytree(Path(str(agencies.AGENCY_REGISTRY_VIEW_PATH)), view)
+    tampered = view / f"tables/agency-registry-{table}.parquet"
+    data = bytearray(tampered.read_bytes())
+    data[len(data) // 2] ^= 1
+    tampered.write_bytes(data)
+    monkeypatch.setattr(agencies, "AGENCY_REGISTRY_VIEW_PATH", view)
+    with pytest.raises(ValueError, match="is not RefSpec's file"):
+        agencies.registry_rows(table)
 
 
 def test_malformed_entries_are_skipped():
@@ -128,6 +149,17 @@ def test_vendored_companions_match_the_readmes_pinned_digests():
     manifest = base.joinpath("view-manifest.json").read_bytes()
     assert hashlib.sha256(unresolved).hexdigest() == agencies.AGENCY_PROJECTION_UNRESOLVED_SHA256
     assert hashlib.sha256(manifest).hexdigest() == agencies.VIEW_MANIFEST_SHA256
+
+
+def test_registry_manifest_is_the_pin_and_names_each_vendored_table():
+    data = agencies.AGENCY_REGISTRY_VIEW_PATH.joinpath("view-manifest.json").read_bytes()
+    assert hashlib.sha256(data).hexdigest() == agencies.AGENCY_REGISTRY_MANIFEST_SHA256
+    members = {member["path"]: member for member in json.loads(data)["members"]}
+    assert set(members) == {f"tables/agency-registry-{table}.parquet" for table in REGISTRY_TABLES}
+    for table, sha256 in REGISTRY_TABLES.items():
+        member = members[f"tables/agency-registry-{table}.parquet"]
+        assert member["sha256"] == f"sha256:{sha256}"
+        assert member["rowCount"] == len(agencies.registry_rows(table))
 
 
 def test_refspec_dev19_ambiguity_agrees_with_the_reverse_lookup():
