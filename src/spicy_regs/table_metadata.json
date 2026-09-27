@@ -1153,7 +1153,7 @@
       {
         "column_name": "agency_code",
         "column_type": "VARCHAR",
-        "description": "The agency code most of its documents carry, or for a docket-less proceeding its Register agency's code; NULL when none maps."
+        "description": "The agency code most of its documents carry. A docket-less proceeding takes the one code its Register agencies map to through RefSpec's agency projection and registry, which follow identity bridges and a defunct agency's current successor (a Health Care Finance Administration notice is CMS); NULL when none or several map."
       },
       {
         "column_name": "current_stage",

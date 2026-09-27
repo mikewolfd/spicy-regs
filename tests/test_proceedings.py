@@ -918,7 +918,7 @@ def test_a_nonrulemaking_docket_is_a_proceeding_only_on_action_evidence(tmp_path
     assert json.loads(by_docket[staged]["fr_document_ids_json"]) == ["2023-00001@2023-01-03"]
     assert json.loads(by_docket[with_rin]["rins_json"]) == ["2120-AA64"]
     assert not any("2021-06210@2021-03-25" in row["fr_document_ids_json"] for row in proceedings)
-    assert {row["actor_id"] for row in proceedings} == {"spicy-regs:proceedings:v10"}
+    assert {row["actor_id"] for row in proceedings} == {"spicy-regs:proceedings:v11"}
 
     # Its comment period keeps the docket as its anchor, with no proceeding.
     (period,) = pq.read_table(build_comment_periods(tmp_path)).to_pylist()
@@ -1512,6 +1512,25 @@ def test_a_docket_less_proceeding_takes_its_register_agency(tmp_path):
     )
     docket_less = _docket_less(proceedings)
     assert (docket_less["2024-30001"]["agency_code"], docket_less["2024-30002"]["agency_code"]) == ("EPA", None)
+
+
+def test_a_docket_less_proceeding_follows_the_agency_registry(tmp_path):
+    """Proceedings v11: a bridged agency takes its counterpart's code, a renamed one its successor's."""
+    energy = {"id": 136, "name": "Energy Department", "parent_id": None}
+    hhs = {"id": 221, "name": "Health and Human Services Department", "parent_id": None}
+    hcfa = {"id": 559, "name": "Health Care Finance Administration", "parent_id": 221}
+    ins = {"id": 232, "name": "Immigration and Naturalization Service", "parent_id": 268}
+    proceedings = _register_fixture(
+        tmp_path,
+        dockets=[],
+        register=[
+            {"document_number": "2024-30003", "agencies_json": json.dumps([energy])},
+            {"document_number": "2024-30004", "agencies_json": json.dumps([hhs, hcfa])},
+            {"document_number": "2024-30005", "agencies_json": json.dumps([ins])},
+        ],
+    )
+    codes = {number: row["agency_code"] for number, row in _docket_less(proceedings).items()}
+    assert codes == {"2024-30003": "DOE", "2024-30004": "CMS", "2024-30005": None}, "INS split three ways"
 
 
 def test_register_documents_join_and_attach_without_merging_a_docketed_proceeding(tmp_path):
