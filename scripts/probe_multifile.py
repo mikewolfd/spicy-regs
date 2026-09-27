@@ -98,7 +98,7 @@ def _exists(client, bucket: str, key: str) -> bool:
         return False
 
 
-def bill_sections(client, bucket: str, public: str, prefix: str, work: Path) -> dict:
+def bill_sections(client, bucket: str, public: str, prefix: str, work: Path, receipt: dict) -> None:
     import duckdb
 
     from spicy_regs.sources import publication as pub
@@ -108,10 +108,10 @@ def bill_sections(client, bucket: str, public: str, prefix: str, work: Path) -> 
     _, root = pub.load_family_root(public, entry)
     prior = root["spec"]["readSnapshot"]["families"]["bill-family"]
     key = "bill_sections.parquet"
-    receipt: dict = {
+    receipt.update({
         "current": entry["artifactDigest"], "replaced": prior["artifactDigest"],
         "carried_forward": sorted(root["spec"].get("carriedForward", {})),
-    }
+    })
 
     # 3a. Read-back of the whole current family, as admission reads it.
     started = time.monotonic()
@@ -125,15 +125,24 @@ def bill_sections(client, bucket: str, public: str, prefix: str, work: Path) -> 
         "replaced": _download(client, bucket, f"{prior['prefix']}/{key}", replaced),
     }
     con = duckdb.connect()
-    con.execute("SET memory_limit='4GB'")
+    # A hosted runner has 16 GB. One statement sorting and partitioning all 950 MB ran out at 4 GB
+    # (run 36288634064), so each congress is written by its own statement.
+    con.execute("SET memory_limit='10GB'")
+    con.execute("SET preserve_insertion_order=false")
     con.execute(f"SET temp_directory='{work / 'spill'}'")
     congress = "split_part(bill_id, '-', 1)"
     split = work / "split"
-    con.execute(
-        f"COPY (SELECT *, {congress} AS congress FROM read_parquet('{current}') ORDER BY bill_id, version_code, source, seq) "
-        f"TO '{split}' (FORMAT PARQUET, PARTITION_BY (congress), COMPRESSION ZSTD, ROW_GROUP_SIZE 50000)"
-    )
-    members = {path.parent.name.removeprefix("congress="): path for path in sorted(split.glob("congress=*/*.parquet"))}
+    split.mkdir()
+    numbers = [row[0] for row in con.execute(
+        f"SELECT DISTINCT {congress} FROM read_parquet('{current}') ORDER BY 1").fetchall()]
+    members = {}
+    for number in numbers:
+        members[number] = split / f"congress={number}.parquet"
+        con.execute(
+            f"COPY (SELECT * FROM read_parquet('{current}') WHERE {congress} = '{number}' "
+            f"ORDER BY bill_id, version_code, source, seq) "
+            f"TO '{members[number]}' (FORMAT PARQUET, COMPRESSION ZSTD, ROW_GROUP_SIZE 50000)"
+        )
 
     # 2. Congresses whose rows are identical in both directions.
     unchanged, per_congress = 0, {}
@@ -184,7 +193,6 @@ def bill_sections(client, bucket: str, public: str, prefix: str, work: Path) -> 
             latency.setdefault(name, {})[shape] = round(statistics.median(runs), 3)
     receipt["query_latency_seconds"] = latency
     con.close()
-    return receipt
 
 
 def main(argv=None) -> int:
@@ -201,7 +209,8 @@ def main(argv=None) -> int:
         with tempfile.TemporaryDirectory() as tmp:
             work = Path(tmp)
             receipt["r2_limits"] = r2_limits(client, bucket, prefix, work)
-            receipt["bill_sections"] = bill_sections(client, bucket, public, prefix, work)
+            receipt["bill_sections"] = {}
+            bill_sections(client, bucket, public, prefix, work, receipt["bill_sections"])
     finally:
         pages = client.get_paginator("list_objects_v2").paginate(Bucket=bucket, Prefix=f"{prefix}/")
         leftover = [item["Key"] for page in pages for item in page.get("Contents", ())]
