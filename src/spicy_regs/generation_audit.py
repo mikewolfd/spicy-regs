@@ -854,12 +854,14 @@ def _body_shapes(events: Sequence[Mapping], members: set[str] | None, run: _Run)
 
     A capture whose URL and media type state no kind takes its stage's kind when every other capture in that
     stage that states one agrees, so an HTML error page answered as ``text/html`` by a JSON API is still judged.
+    A page requested as HTML (the Clerk's ``index.asp`` beside its XML roll calls) is judged as HTML and never
+    sets or splits its stage's kind.
     """
     captures = [e for e in events if e.get("event") == "capture" and isinstance(e.get("sha256"), str)]
     stated = [(e, expected_kind(str(e.get("requested_url") or ""), e.get("content_type"))) for e in captures]
     by_stage: dict[object, set[str]] = {}
     for event, kind in stated:
-        if kind:
+        if kind and kind != "html":
             by_stage.setdefault(event.get("stage"), set()).add(kind)
     kinds: Counter[str] = Counter()
     encodings: Counter[str] = Counter()

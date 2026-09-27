@@ -60,8 +60,8 @@ _HTML_ROOTS = frozenset(b"""a b body br center div em font form h1 h2 h3 h4 h5 h
     noscript ol p pre script span strong style title u ul""".split())
 #: Compression a response body can carry that ``Scan`` does not decode; each is reported as a limit.
 _UNDECODED = ((b"BZh", "bzip2"), (b"\xfd7zXZ\x00", "xz"), (b"\x28\xb5\x2f\xfd", "zstd"))
-_SUFFIX_KINDS = {".json": "json", ".xml": "xml", ".htm": "html", ".html": "html", ".shtml": "html", ".pdf": "pdf",
-                 ".zip": "zip"}
+_SUFFIX_KINDS = {".json": "json", ".xml": "xml", ".htm": "html", ".html": "html", ".shtml": "html", ".asp": "html",
+                 ".aspx": "html", ".pdf": "pdf", ".zip": "zip"}
 _SECRET_NAME = re.compile(r"KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL|_GOV$", re.I)
 
 

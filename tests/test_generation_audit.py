@@ -406,6 +406,22 @@ def test_a_stage_expectation_judges_a_capture_whose_own_media_type_says_html(tmp
         "https://api.test/filings/?page=2", "json", "stage", "html")
 
 
+def test_an_html_page_beside_a_stages_xml_is_judged_as_html_and_leaves_the_stage_kind(tmp_path):
+    store = Store()
+    evidence_generation(tmp_path, store, [
+        capture("https://clerk.test/evs/2003/roll001.xml", USLM.read_bytes()),
+        capture("https://clerk.test/evs/2003/index.asp", HTML_200.read_bytes(), content_type="text/html"),
+        capture("https://clerk.test/evs/2003/roll002", HTML_200.read_bytes(), content_type="text/html"),
+    ])
+
+    report = audit(public_base(store, tmp_path / "public"), family="test", declarations=CITING)
+
+    (item,) = report["sections"]["evidence"]["body_shapes"]["unexpected_2xx"]
+    assert (item["requested_url"], item["expected"], item["expected_from"]) == (
+        "https://clerk.test/evs/2003/roll002", "xml", "stage")
+    assert expected_kind("https://clerk.test/evs/2003/index.asp", "text/html") == "html"
+
+
 def test_a_second_gzip_member_is_decoded_and_scanned():
     body = gzip.compress(b"first ") + gzip.compress(b"second api_key=ABCDEFGH12345678 " + KEY.encode())
     scan = Scan({"k": KEY.encode()})
