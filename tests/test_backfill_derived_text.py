@@ -575,3 +575,22 @@ def test_workers_are_capped_at_the_s3_pool(monkeypatch, tmp_path) -> None:
             updates_path=tmp_path / f"{requested}.parquet",
         )
     assert sizes == [4, DEFAULT_DOWNLOAD_WORKERS]
+
+
+def test_catalog_backfill_rederives_only_the_named_comments() -> None:
+    """Decision 41's refill: --overwrite with comment ids re-derives those rows and leaves every other derived row."""
+    con = duckdb.connect()
+    con.execute(f"ATTACH ':memory:' AS {iceberg._CATALOG_ALIAS};")
+    try:
+        _seed_catalog(con, [
+            {"comment_id": cid, "docket_id": "ACF-2025-0038", "agency_code": "ACF", "attachments_json": _attach(),
+             "modify_date": "2025-01-01", "text_content": "stale", "text_extraction_status": "derived"}
+            for cid in ("ACF-2025-0038-0004", "ACF-2025-0038-0040")
+        ])
+        stats = _backfill_agency_in_catalog(con, COMMENT, "ACF", resource_factory=_factory(), overwrite=True,
+                                            comment_ids=frozenset({"ACF-2025-0038-0004"}))
+        assert stats["selected"] == 1
+        out = dict(con.execute(f"SELECT comment_id, text_content FROM {iceberg._qualified(COMMENT)}").fetchall())
+        assert out == {"ACF-2025-0038-0004": "Wisconsin DCF comment body", "ACF-2025-0038-0040": "stale"}
+    finally:
+        con.close()

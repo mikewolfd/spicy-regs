@@ -60,6 +60,11 @@ on:
         required: false
         default: true
         type: boolean
+      comment_ids:
+        description: 'Comma-separated comment ids to re-derive (step 1 only; needs agency naming their agencies, and overwrite to re-fill derived rows)'
+        required: false
+        default: ''
+        type: string
       overwrite:
         description: 'Re-process rows that already have a text_extraction_status (step 1 re-fills only derived rows)'
         required: false
@@ -124,12 +129,14 @@ jobs:
           LIMIT: ${{ inputs.limit }}
           OVERWRITE: ${{ inputs.overwrite }}
           DISCOVER_FROM_DERIVED: ${{ inputs.discover_from_derived }}
+          COMMENT_IDS: ${{ inputs.comment_ids }}
         run: |
           args=()
           if [ "$FULL_LOAD" != "true" ] && [ -n "$AGENCY" ]; then args+=(--agency "$AGENCY"); fi
           if [ -n "$LIMIT" ] && [ "$LIMIT" != "0" ]; then args+=(--limit "$LIMIT"); fi
           if [ "$OVERWRITE" = "true" ]; then args+=(--overwrite); fi
           if [ "$DISCOVER_FROM_DERIVED" = "true" ]; then args+=(--discover-from-derived); fi
+          if [ -n "$COMMENT_IDS" ]; then args+=(--comment-ids "$COMMENT_IDS"); fi
           echo "Running: uv run backfill-comment-text --use-iceberg ${args[*]}"
           uv run backfill-comment-text --use-iceberg "${args[@]}"
 

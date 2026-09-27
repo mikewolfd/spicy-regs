@@ -330,6 +330,7 @@ def _backfill_agency_in_catalog(
     max_workers: int = 8,
     overwrite: bool = False,
     discover_from_derived: bool = False,
+    comment_ids: frozenset[str] | None = None,
 ) -> dict[str, int]:
     """Fill + upsert one agency's candidate comments in the attached catalog.
 
@@ -355,6 +356,9 @@ def _backfill_agency_in_catalog(
     attachment_filter = (
         "" if discover_from_derived else "AND attachments_json IS NOT NULL AND TRIM(attachments_json) NOT IN ('', '[]')"
     )
+    # A targeted refill (decision 41's fallen-back attachments) names its comments instead of a whole agency.
+    id_filter = ("AND comment_id IN (" + ", ".join(f"'{iceberg._sql_str(c)}'" for c in sorted(comment_ids)) + ")"
+                 if comment_ids else "")
     limit_sql = f" LIMIT {int(limit)}" if limit is not None else ""
     candidates = con.execute(
         f"""
@@ -363,6 +367,7 @@ def _backfill_agency_in_catalog(
         WHERE agency_code = '{ag}'
           {attachment_filter}
           {status_filter}
+          {id_filter}
         {limit_sql}
         """
     ).pl()
@@ -409,6 +414,7 @@ def backfill_comments_catalog(
     max_workers: int = 8,
     overwrite: bool = False,
     discover_from_derived: bool = False,
+    comment_ids: frozenset[str] | None = None,
 ) -> dict[str, int]:
     """Backfill ``text_content`` directly in the R2 Data Catalog (durable path).
 
@@ -449,6 +455,7 @@ def backfill_comments_catalog(
                 max_workers=max_workers,
                 overwrite=overwrite,
                 discover_from_derived=discover_from_derived,
+                comment_ids=comment_ids,
             )
             for key, value in stats.items():
                 totals[key] += value
@@ -501,7 +508,16 @@ def main() -> None:
         "derived-data listing itself decides whether extracted text exists. More expensive "
         "(every docket in scope gets listed); scope with --agency/--limit.",
     )
+    parser.add_argument(
+        "--comment-ids",
+        default=None,
+        help="Comma-separated comment ids: with --use-iceberg and --agency, only these are candidates "
+        "(add --overwrite to re-fill rows already derived)",
+    )
     args = parser.parse_args()
+    comment_ids = frozenset(c.strip() for c in args.comment_ids.split(",") if c.strip()) if args.comment_ids else None
+    if comment_ids and not (args.use_iceberg and args.agency):
+        parser.error("--comment-ids needs --use-iceberg and --agency (the agencies those comments belong to)")
 
     # Durable path: write the catalog (the system of record the mirror is
     # regenerated from). The published-Parquet paths below are not durable under
@@ -517,6 +533,7 @@ def main() -> None:
             max_workers=args.max_workers,
             overwrite=args.overwrite,
             discover_from_derived=args.discover_from_derived,
+            comment_ids=comment_ids,
         )
         _exit_on_failures(stats)
         return
