@@ -58,6 +58,9 @@ on:
 env:
   # A scheduled sweep splits the discovered agencies into this many batches.
   BATCH_COUNT: 15
+  # A native crash (exit 139) prints every thread's Python stack instead of nothing
+  # (run 36326715409 segfaulted in the R2 publish step and left no trace).
+  PYTHONFAULTHANDLER: "1"
 
 concurrency:
   # Serialize every writer to the Iceberg `comments` table. The upsert is a
