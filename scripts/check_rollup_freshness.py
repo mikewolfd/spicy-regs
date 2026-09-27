@@ -12,6 +12,10 @@ One publication snapshot selects all inputs. Remote column scans check managed
 members against their declared schemas and row counts. This monitor does not
 download or hash whole files: the publisher and CLI own byte-pin verification.
 Tables outside the index keep the legacy remote column-read path.
+
+The comment corpus gets a coverage check instead of a date watermark: per-agency
+row counts from ``comments_index.parquet``, compared with the last known-good
+counts in the state file (see :func:`evaluate_comment_coverage`).
 """
 
 from __future__ import annotations
@@ -31,7 +35,7 @@ from spicy_regs.public_url import resolve_r2_base_url
 from spicy_regs.sources import publication
 
 FreshnessRow = tuple[str, str, str | None, int]
-FreshnessState = dict[str, dict[str, int | str]]
+FreshnessState = dict[str, dict]
 
 
 @dataclass(frozen=True)
@@ -172,6 +176,65 @@ def read_freshness_rows(base_url: str) -> list[FreshnessRow]:
     return rows
 
 
+# Comment coverage. A dedupe swap that died mid-refill left `comments` with 103 of
+# 179 agencies (#197), and nothing alerted for weeks: check-comments-freshness
+# only compares agencies present in both the index and the rows, and the lost
+# agencies were gone from both, so it stayed green. Knowing an agency *should*
+# exist takes memory, which is what the state file is for. It holds the last
+# known-good per-agency counts, and flags an agency that vanished, one that lost
+# at least half its rows (and at least COVERAGE_MIN_AGENCY_DROP rows, so small
+# agencies and the dedupe trickle don't page), or a corpus-wide drop beyond
+# COVERAGE_MAX_TOTAL_DROP. On a failure the baseline is left alone, so the alert
+# keeps firing until the rows come back or --accept-comment-coverage rebaselines.
+COMMENTS_INDEX = "comments_index"
+COVERAGE_STATE_KEY = "comments_coverage"
+COVERAGE_MAX_AGENCY_DROP = 0.5
+COVERAGE_MIN_AGENCY_DROP = 1_000
+COVERAGE_MAX_TOTAL_DROP = 0.02
+
+
+def read_comment_counts(base_url: str) -> dict[str, int]:
+    """Per-agency comment rows from the published ``comments_index`` (small: one row per group)."""
+    target = publication.parquet_scan([f"{base_url.rstrip('/')}/{COMMENTS_INDEX}.parquet"])
+    with duckdb.connect() as con:
+        return dict(con.execute(f"""SELECT agency_code, CAST(SUM(row_count) AS BIGINT) FROM {target}
+                                    WHERE agency_code IS NOT NULL GROUP BY agency_code""").fetchall())
+
+
+def evaluate_comment_coverage(
+    counts: dict[str, int],
+    state: FreshnessState,
+    today: date,
+    accept: bool = False,
+) -> list[str]:
+    """Flag agencies that vanished or lost most of their comments since the baseline.
+
+    Updates the baseline in ``state`` only when nothing is flagged, or when
+    ``accept`` is set (a deliberate change being rebaselined).
+    """
+    baseline = state.get(COVERAGE_STATE_KEY, {}).get("agencies", {})
+    failures: list[str] = []
+    for agency, before in sorted(baseline.items(), key=lambda kv: -kv[1]):
+        after = counts.get(agency)
+        if after is None:
+            failures.append(f"comments: agency {agency} vanished (had {before:,} rows)")
+        elif before - after >= COVERAGE_MIN_AGENCY_DROP and after < before * (1 - COVERAGE_MAX_AGENCY_DROP):
+            failures.append(f"comments: agency {agency} fell {before:,} -> {after:,} rows")
+    before_total, after_total = sum(baseline.values()), sum(counts.values())
+    if before_total and after_total < before_total * (1 - COVERAGE_MAX_TOTAL_DROP):
+        failures.append(f"comments: total fell {before_total:,} -> {after_total:,} rows")
+
+    if failures and not accept:
+        print(f"FAIL: comments coverage — {len(failures)} problem(s); baseline kept")
+    else:
+        if failures:
+            print(f"ACCEPTED: comments coverage rebaselined over {len(failures)} problem(s)")
+            failures = []
+        state[COVERAGE_STATE_KEY] = {"agencies": dict(counts), "as_of": today.isoformat()}
+        print(f"OK: comments coverage agencies={len(counts)} rows={after_total:,}")
+    return failures
+
+
 def _parse_latest(raw: str | None) -> date | None:
     if not raw:
         return None
@@ -239,6 +302,11 @@ def main() -> int:
     parser.add_argument("--base-url")
     parser.add_argument("--state-file", type=Path, default=Path(".rollup-freshness-state.json"))
     parser.add_argument("--today", type=date.fromisoformat, default=date.today(), help="Testing override (YYYY-MM-DD)")
+    parser.add_argument(
+        "--accept-comment-coverage",
+        action="store_true",
+        help="Rebaseline comment coverage to today's counts (after a deliberate removal)",
+    )
     args = parser.parse_args()
     args.base_url = resolve_r2_base_url(args.base_url)
 
@@ -249,12 +317,14 @@ def main() -> int:
 
     try:
         rows = read_freshness_rows(args.base_url)
+        comment_counts = read_comment_counts(args.base_url)
     except (duckdb.Error, httpx.HTTPError, publication.PublicationError) as exc:
         print(f"Freshness inputs could not be verified: {exc}", file=sys.stderr)
         return 1
 
     failures = evaluate_date_rows(rows, args.today)
     failures.extend(evaluate_row_changes(rows, state, args.today))
+    failures.extend(evaluate_comment_coverage(comment_counts, state, args.today, args.accept_comment_coverage))
     args.state_file.write_text(json.dumps(state, indent=2, sort_keys=True) + "\n")
 
     for table, reason in SKIPPED.items():
