@@ -6,17 +6,14 @@ from pathlib import Path
 
 import duckdb
 import polars as pl
-import pyarrow.parquet as pq
 import pytest
 
 from spicy_regs.comments_health import check_comments
 from spicy_regs.pipelines import regulations
 from spicy_regs.schemas import COMMENT, DOCKET
 from spicy_regs.sources import iceberg
-from spicy_regs.transforms import merge_comments_partitioned, update_comments_index, write_staging
 from spicy_regs.transforms.build_agency_stats import build_agency_stats
 from spicy_regs.transforms.build_feed_summary import build_feed_summary
-from spicy_regs.transforms.comment_partitions import HIVE_NULL
 from tests.test_regulations_pipeline import _FakeS3Resource
 
 
@@ -85,34 +82,3 @@ def test_reviewed_comments_survive_ingestion_and_public_mirror(tmp_path, monkeyp
     ]
     assert pl.read_parquet(build_feed_summary(output)).is_empty()
 
-def test_null_partition_merge_index_and_source_correction_are_retryable(tmp_path):
-    _, rows = reviewed_sources()
-    rows.append({**rows[0], "comment_id": "known-docket", "docket_id": "ODNI-known"})
-    rows.append({**rows[0], "comment_id": "unknown-date", "posted_date": None})
-    stage = tmp_path / "stage"
-    output = tmp_path / "output"
-    write_staging("ODNI", "comments", rows, stage, COMMENT.schema)
-    for attempt, correction in enumerate([False, False, True, True]):
-        changed = merge_comments_partitioned(
-            stage, output, COMMENT.schema, COMMENT.dedup_key,
-            source_correction=correction, download_existing=False,
-        )
-        index = update_comments_index(output, changed)
-        assert pl.read_parquet(index)["row_count"].sum() == len(rows)
-        assert any(f"docket_id={HIVE_NULL}" in str(path) for path in changed)
-        got = [row for path in changed for row in pq.ParquetFile(path).read().to_pylist()]
-        assert sorted(got, key=lambda row: row["comment_id"]) == sorted(rows, key=lambda row: row["comment_id"])
-        if attempt == 1:
-            rows[0]["title"] = "Corrected source title at the same source timestamp"
-            write_staging("ODNI", "comments", rows, stage, COMMENT.schema)
-
-    # A known/unknown relationship change is still a move across partitions;
-    # bounded corrections must refuse it without leaving an old duplicate.
-    before = {path: path.read_bytes() for path in output.rglob("*.parquet")}
-    rows[0]["docket_id"] = "ODNI-new"
-    write_staging("ODNI", "comments", rows, stage, COMMENT.schema)
-    with pytest.raises(ValueError, match="cannot relocate"):
-        merge_comments_partitioned(
-            stage, output, COMMENT.schema, COMMENT.dedup_key, source_correction=True, download_existing=False,
-        )
-    assert {path: path.read_bytes() for path in output.rglob("*.parquet")} == before

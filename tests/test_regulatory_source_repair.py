@@ -6,12 +6,10 @@ from pathlib import Path
 
 import pyarrow as pa
 import pyarrow.parquet as pq
-import polars as pl
 import pytest
 
 from spicy_regs.pipelines.repair_regulations import repair_records
 from spicy_regs.schemas import RECORD_TYPES
-from spicy_regs.transforms.update_comments_index import update_comments_index
 
 
 FIXTURES = Path(__file__).parent / "fixtures/regulatory_recovery"
@@ -131,109 +129,11 @@ def test_failed_input_preserves_prior_and_can_retry(tmp_path, fault):
     assert pq.read_table(path).to_pylist()[0]["fr_doc_num"] == "06-04731"
 
 
-def test_comment_repair_preserves_local_partition_and_enrichment(tmp_path):
-    value = raw("ACF-2009-0004-0002")
-    expected = shaped(value, "comments")
-    path = tmp_path / "comments/agency_code=ACF/docket_id=ACF-2009-0004/year=2009/month=3/part-0.parquet"
-    prior = {**expected, "attachments_json": None, "organization": None, "text_content": "retained text"}
-    write(path, [prior], "comments")
-    repair_records([value], table="comments", output_dir=tmp_path)
-    [row] = pq.ParquetFile(path).read().to_pylist()
-    assert row["attachments_json"] == expected["attachments_json"]
-    assert row["organization"] == "FLORIDA DEPARTMENT OF REVENUE, CSE"
-    assert row["text_content"] == "retained text"
-    assert (tmp_path / "comments_index.parquet").exists()
-    repair_records([value], table="comments", output_dir=tmp_path)
-    assert pq.ParquetFile(path).read().to_pylist() == [row]
-
-
-@pytest.mark.parametrize("coordinate,invalid", [("agencyId", None), ("docketId", "../unsafe")])
-def test_comment_with_invalid_partition_coordinate_refuses(tmp_path, coordinate, invalid):
-    value = raw("ACF-2009-0004-0002")
-    value["data"]["attributes"][coordinate] = invalid
-    with pytest.raises(ValueError, match="partition"):
-        repair_records([value], table="comments", output_dir=tmp_path)
+def test_comment_repair_refuses_because_comments_live_in_the_catalog(tmp_path):
+    """Decision 40 retired the local dated partition tree this repair wrote; comments are not a local table."""
+    with pytest.raises(ValueError, match="unsupported regulatory source table: comments"):
+        repair_records([raw("ACF-2009-0004-0002")], table="comments", output_dir=tmp_path)
     assert not list(tmp_path.rglob("*.parquet"))
-
-
-def test_comment_relocation_refuses_before_creating_duplicate(tmp_path):
-    value = raw("ACF-2009-0004-0002")
-    old_path = tmp_path / "comments/agency_code=ACF/docket_id=ACF-2009-0004/year=2009/month=3/part-0.parquet"
-    write(old_path, [shaped(value, "comments")], "comments")
-    before = old_path.read_bytes()
-    value["data"]["attributes"]["postedDate"] = "2009-04-11T04:00:00Z"
-    with pytest.raises(ValueError, match="relocate"):
-        repair_records([value], table="comments", output_dir=tmp_path)
-    assert old_path.read_bytes() == before
-    assert list((tmp_path / "comments").rglob("*.parquet")) == [old_path]
-
-
-def test_comment_in_noncanonical_part_refuses_before_creating_duplicate(tmp_path):
-    value = raw("ACF-2009-0004-0002")
-    old_path = tmp_path / "comments/agency_code=ACF/docket_id=ACF-2009-0004/year=2009/month=3/part-1.parquet"
-    write(old_path, [shaped(value, "comments")], "comments")
-    before = old_path.read_bytes()
-    with pytest.raises(ValueError, match="relocate"):
-        repair_records([value], table="comments", output_dir=tmp_path)
-    assert old_path.read_bytes() == before
-    assert list((tmp_path / "comments").rglob("*.parquet")) == [old_path]
-
-
-def test_comment_failed_replacement_keeps_prior_and_remains_retryable(tmp_path, monkeypatch):
-    value = raw("ACF-2009-0004-0002")
-    path = tmp_path / "comments/agency_code=ACF/docket_id=ACF-2009-0004/year=2009/month=3/part-0.parquet"
-    write(path, [{**shaped(value, "comments"), "attachments_json": None}], "comments")
-    before = path.read_bytes()
-    replace = Path.replace
-
-    def fail_partition_replace(self, target):
-        if Path(target) == path:
-            raise OSError("injected partition replacement failure")
-        return replace(self, target)
-
-    with monkeypatch.context() as context:
-        context.setattr(Path, "replace", fail_partition_replace)
-        with pytest.raises(OSError, match="injected"):
-            repair_records([value], table="comments", output_dir=tmp_path)
-    assert path.read_bytes() == before
-    assert path.with_suffix(".tmp.parquet").exists()
-    repair_records([value], table="comments", output_dir=tmp_path)
-    assert pq.ParquetFile(path).read().to_pylist()[0]["attachments_json"] is not None
-
-
-@pytest.mark.parametrize("failure_kind", ["write", "replace"])
-def test_comment_index_failure_preserves_prior_and_remains_retryable(tmp_path, monkeypatch, failure_kind):
-    value = raw("ACF-2009-0004-0002")
-    path = tmp_path / "comments/agency_code=ACF/docket_id=ACF-2009-0004/year=2009/month=3/part-0.parquet"
-    write(path, [{**shaped(value, "comments"), "attachments_json": None}], "comments")
-    index = update_comments_index(tmp_path, [path])
-    before = index.read_bytes()
-    replace = Path.replace
-    write_parquet = pl.DataFrame.write_parquet
-
-    def fail_index_write(self, target, *args, **kwargs):
-        if Path(target).name.startswith("comments_index."):
-            Path(target).write_bytes(b"injected incomplete index")
-            raise OSError("injected index write failure")
-        return write_parquet(self, target, *args, **kwargs)
-
-    def fail_index_replace(self, target):
-        if Path(target) == index:
-            raise OSError("injected index replacement failure")
-        return replace(self, target)
-
-    with monkeypatch.context() as context:
-        if failure_kind == "write":
-            context.setattr(pl.DataFrame, "write_parquet", fail_index_write)
-        else:
-            context.setattr(Path, "replace", fail_index_replace)
-        with pytest.raises(OSError, match="injected"):
-            repair_records([value], table="comments", output_dir=tmp_path)
-    assert index.read_bytes() == before
-    assert pq.ParquetFile(path).read().to_pylist()[0]["attachments_json"] is not None
-    repair_records([value], table="comments", output_dir=tmp_path)
-    assert pq.ParquetFile(path).read().to_pylist()[0]["attachments_json"] is not None
-    assert pl.read_parquet(index)["row_count"].to_list() == [1]
 
 
 def test_literal_rin_and_placeholders_are_not_rewritten(tmp_path):
@@ -243,36 +143,6 @@ def test_literal_rin_and_placeholders_are_not_rewritten(tmp_path):
     value["data"]["attributes"]["rin"] = "Not Assigned"
     repair_records([value], table="dockets", output_dir=tmp_path)
     assert pq.read_table(tmp_path / "dockets.parquet").to_pylist()[0]["rin"] == "Not Assigned"
-
-
-def test_unknown_date_comment_repair_preserves_nulls_and_retries(tmp_path):
-    value = raw("ACF-2009-0004-0002")
-    value["data"]["attributes"]["postedDate"] = None
-    path = tmp_path / (
-        "comments/agency_code=ACF/docket_id=ACF-2009-0004/"
-        "year=__HIVE_DEFAULT_PARTITION__/month=__HIVE_DEFAULT_PARTITION__/part-0.parquet"
-    )
-    expected = shaped(value, "comments")
-    write(path, [{**expected, "organization": None, "text_content": "prior enrichment"}], "comments")
-    repair_records([value], table="comments", output_dir=tmp_path)
-    [row] = pq.ParquetFile(path).read().to_pylist()
-    assert row["organization"] == expected["organization"]
-    assert row["posted_date"] is None
-    assert row["text_content"] == "prior enrichment"
-    repair_records([value], table="comments", output_dir=tmp_path)
-    assert pq.ParquetFile(path).read().to_pylist() == [row]
-    index = pq.read_table(tmp_path / "comments_index.parquet").to_pylist()
-    assert len(index) == 1 and index[0]["year"] is None and index[0]["month"] is None
-    assert index[0]["row_count"] == 1
-
-    # A later observed date changes the partition; bounded repair must refuse
-    # rather than create a second copy of the retained identity.
-    before = path.read_bytes()
-    value["data"]["attributes"]["postedDate"] = "2009-03-01T00:00:00Z"
-    with pytest.raises(ValueError, match="relocate"):
-        repair_records([value], table="comments", output_dir=tmp_path)
-    assert path.read_bytes() == before
-    assert list((tmp_path / "comments").rglob("part-0.parquet")) == [path]
 
 
 @pytest.mark.parametrize(

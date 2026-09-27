@@ -8,7 +8,7 @@ import pytest
 from spicy_regs.comments_health import check_comments
 from spicy_regs.schemas import COMMENT, DOCKET
 from spicy_regs.sources import iceberg
-from spicy_regs.transforms import update_comments_index, write_staging
+from spicy_regs.transforms import write_staging
 from spicy_regs.transforms.comment_partitions import validate_staged_comments
 from spicy_regs.transforms.partition_comments import partition_comments
 from spicy_regs.transforms.build_feed_summary import build_feed_summary
@@ -80,12 +80,3 @@ def test_freshness_handles_unknown_only_agencies_and_still_flags_missing_or_lagg
         assert any('MISSING/' in error for error in errors)
         assert not any('EPA/' in error or 'unique IDs' in error for error in errors)
 
-def test_partial_null_partition_coordinates_refuse_index_replacement(tmp_path):
-    part = tmp_path / "comments/agency_code=EPA/docket_id=EPA-1/year=__HIVE_DEFAULT_PARTITION__/month=1/part-0.parquet"
-    part.parent.mkdir(parents=True)
-    pl.DataFrame([comment("unknown", None)], schema=COMMENT.schema).write_parquet(part)
-    index = tmp_path / "comments_index.parquet"
-    index.write_bytes(b"retained prior index")
-    with pytest.raises(ValueError, match="both be NULL"):
-        update_comments_index(tmp_path, [part])
-    assert index.read_bytes() == b"retained prior index"

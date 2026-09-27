@@ -18,23 +18,21 @@ from rulespec_artifacts import ArtifactPin, LocalMemberSource
 from spicy_docs.schemas.regulations import RECORD_TYPES as SOURCE_TYPES
 from spicy_docs.source_native import SourceNativeReleaseReader
 from spicy_docs.sources.regulations_gov.profile import (
-    REGULATIONS_GOV_COMMENT_PROFILE,
     REGULATIONS_GOV_DOCKET_PROFILE,
     REGULATIONS_GOV_DOCUMENT_PROFILE,
 )
 from spicy_docs.storage.blobs import LocalSourceNativeBlobStore
 
 from spicy_regs.schemas import RECORD_TYPES
-from spicy_regs.transforms.merge_comments_partitioned import merge_comments_partitioned
 from spicy_regs.transforms.merge_staging_files import merge_staging_files
-from spicy_regs.transforms.update_comments_index import update_comments_index
 from spicy_regs.transforms.write_staging import write_staging
 
 
+# Comments are absent: they live in the catalog, and the local dated partition
+# tree this tool repaired is retired (decision 40).
 PROFILES = {
     "dockets": REGULATIONS_GOV_DOCKET_PROFILE,
     "documents": REGULATIONS_GOV_DOCUMENT_PROFILE,
-    "comments": REGULATIONS_GOV_COMMENT_PROFILE,
 }
 
 
@@ -72,26 +70,15 @@ def repair_records(records: Iterable[Mapping], *, table: str, output_dir: Path) 
 
         changed: list[Path] = []
         if count:
-            if table == "comments":
-                changed = merge_comments_partitioned(
-                    staging,
-                    output_dir,
-                    host.schema,
-                    host.dedup_key,
-                    source_correction=True,
-                    download_existing=False,
-                )
-                update_comments_index(output_dir, changed)
-            else:
-                merge_staging_files(
-                    staging,
-                    output_dir,
-                    [table],
-                    {table: host.schema},
-                    {table: host.dedup_key},
-                    source_correction=True,
-                )
-                changed = [output_dir / f"{table}.parquet"]
+            merge_staging_files(
+                staging,
+                output_dir,
+                [table],
+                {table: host.schema},
+                {table: host.dedup_key},
+                source_correction=True,
+            )
+            changed = [output_dir / f"{table}.parquet"]
     return {
         "table": table,
         "input_records": count,
@@ -120,7 +107,6 @@ def main(
 
     Existing local Parquet files are the prior generation. No remote prior is
     downloaded: operators must retain the intended files before this command.
-    Comments use the existing partition layout and preserve its local index.
     """
     if table not in PROFILES:
         raise ValueError(f"table must be one of {', '.join(PROFILES)}")
