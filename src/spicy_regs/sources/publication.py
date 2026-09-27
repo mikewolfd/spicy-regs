@@ -120,6 +120,48 @@ def _split_table(key: str, table: Mapping) -> None:
         raise ValueError("member counts differ from their table's")
 
 
+def member_table(key: str) -> str:
+    """The table a member key belongs to: the key itself for a single file, else ``<first directory>.parquet``."""
+    return key if "/" not in key else key.split("/", 1)[0] + ".parquet"
+
+
+def member_partition(key: str) -> dict[str, str]:
+    """A split member's ``col=value`` directories, in order; a malformed one raises ``ValueError``."""
+    partition = {}
+    for part in key.split("/")[1:-1]:
+        column, separator, value = part.partition("=")
+        if not separator:
+            raise ValueError(f"member directory is not col=value: {part!r}")
+        partition[column] = value
+    return partition
+
+
+def table_entries(tables: Mapping, members) -> dict[str, dict]:
+    """Index descriptors for a generation's declared ``tables`` from its member descriptors, in the index's shape.
+
+    A table declaring ``partitionColumns`` is split: its members are ``<table>/<col>=<value>/part-NNNNNN.parquet``
+    and must add up to it. Any other table is exactly one member at its own key. ``ValueError`` names a mismatch.
+    """
+    grouped: dict[str, list] = {}
+    for member in members:
+        grouped.setdefault(member_table(member.object_key), []).append(member)
+    if not tables or set(grouped) != set(tables):
+        raise ValueError("Generation membership differs from its table declarations")
+    entries = {}
+    for key, declared in tables.items():
+        found = sorted(grouped[key], key=lambda member: member.object_key)
+        if "partitionColumns" not in declared:
+            if [member.object_key for member in found] != [key]:
+                raise ValueError("Generation membership differs from its table declarations")
+            entries[key] = {"sha256": found[0].sha256, "byteSize": found[0].byte_size, **declared}
+            continue
+        entries[key] = {**declared, "byteSize": sum(member.byte_size for member in found), "members": [
+            {"key": member.object_key, "sha256": member.sha256, "byteSize": member.byte_size,
+             "rows": member.record_count, "partition": member_partition(member.object_key)} for member in found]}
+        _split_table(key, entries[key])
+    return entries
+
+
 def parse_index(raw: bytes) -> dict:
     """Validate the small mutable pointer without claiming payload verification.
 
@@ -761,18 +803,16 @@ def _publish_verified_generation(
     index, etag = _stored_index(client, bucket)
     _assert_family_unchanged(index, prior_index, family)
     prefix = f"generations/{family}/{artifact.pin.artifact_digest.removeprefix('sha256:')}"
-    tables = {}
-    for member in iter_member_descriptors(artifact, source):
-        key = member.object_key
-        assert key is not None
+    members = list(iter_member_descriptors(artifact, source))
+    try:
+        tables = table_entries(artifact.root["spec"]["tables"], members)
+    except ValueError as exc:
+        raise PublicationError(str(exc)) from exc
+    # The shrink guard runs per table: one partition of a split table may legitimately shrink.
+    for key, table in tables.items():
         prior = table_descriptor(index, key)
         old_size = prior["byteSize"] if prior else _get_remote_size(client, bucket, key)
-        _assert_upload_safe(member.byte_size, old_size, key)
-        tables[key] = {
-            "sha256": member.sha256,
-            "byteSize": member.byte_size,
-            **artifact.root["spec"]["tables"][key],
-        }
+        _assert_upload_safe(table["byteSize"], old_size, key)
     old_family = index["families"].get(family)
     # The table set may change only by an explicit migration: exactly the declared added tables join, none leave.
     # A union, so the declaration is inert once those tables are published.
@@ -800,17 +840,17 @@ def _publish_verified_generation(
     # digest are copied server-side instead of re-uploaded. The copy can never
     # publish wrong bytes: ``admit_artifact`` below re-verifies every member of
     # the new prefix against the artifact pin before the pointer moves.
-    prior_tables = old_family.get("tables", {}) if old_family is not None else {}
+    # A split table's members are compared one by one, so an untouched partition is copied, never re-uploaded.
+    prior_members = {
+        member["key"]: (member["sha256"], member["byteSize"])
+        for key, table in (old_family or {}).get("tables", {}).items()
+        for member in table.get("members", [{"key": key, **table}])
+    }
     prior_prefix = old_family.get("prefix") if old_family is not None else None
     reused = 0
+    current = {member.object_key: (member.sha256, member.byte_size) for member in members}
     for key in sorted(source.keys()):
-        prior_entry = prior_tables.get(key)
-        if (
-            prior_prefix is not None
-            and prior_entry is not None
-            and prior_entry.get("sha256") == tables[key]["sha256"]
-            and prior_entry.get("byteSize") == tables[key]["byteSize"]
-        ):
+        if prior_prefix is not None and key in current and prior_members.get(key) == current[key]:
             _copy_unchanged_member(client, bucket, f"{prior_prefix}/{key}", f"{prefix}/{key}")
             reused += 1
         else:

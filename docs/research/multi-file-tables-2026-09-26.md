@@ -1,7 +1,9 @@
 # Tables stored as several files (design draft, 2026-09-26)
 
 Status: **agreed** by spicy-stack-24 (publication format) and spicy-stack-83 (DocSpec, Engine) on
-2026-09-26; see the review record at the end. The measurements in §5 were taken on 2026-09-27 (decision 64); implementation waits for the running backfills to finish.
+2026-09-26; see the review record at the end. The measurements in §5 were taken on 2026-09-27 (decision 64).
+The publication side is implemented on branch `multifile-publication` (§7) and merges once the running backfills
+finish and no publish is in flight; the builder side (per-partition merge, the `congress` column) is spicy-stack-11's.
 
 Owner decision (2026-09-26): design multi-file tables for every large table first, as one cross-repository
 decision, then apply it to `bill_sections`. Decisions 46 (split `fcc_filings` by year before it passes
@@ -309,3 +311,32 @@ Probe `scripts/probe_multifile.py` (`probe-multifile.yml`), runs 36288634064 and
 - Generation identity, family pins, the output ledger's `qualified at` pins, and
   `check_ledger_pins` / `check_source_refusals`.
 - The comments mirror.
+
+## 7. Implementation (publication side, 2026-09-27)
+
+What the code settled, where it refines §4. Tests: `tests/test_split_tables.py`.
+
+- **Index shape.** A single-file table's v2 entry is byte-identical to its v1 entry. Only a split table carries
+  `members` (and `partitionColumns`), and it has no table-level `sha256`. `derive_v1` drops split tables, and any
+  family left without a table. `parse_index` refuses a v1 index listing a split table, members whose counts do not
+  sum to the table's, and a member key that does not spell its partition.
+- **Pointer order.** v2 is the pointer, written under its own CAS. v1 is then written as `derive_v1` of the stored
+  v2 under v1's CAS. v1's token is read before v2, so a raced v1 write rederives from the newer v2. A v1 that differs
+  from v2 in another family is overwritten, and those families are logged. The first publish after the merge
+  creates v2 from v1.
+- **Readers.** `table_members` resolves every file of a table. `single_member` refuses a split table by name for a
+  reader that takes one file: `r2.download`, the CLI download and local selections. CLI and local support for split
+  tables is open, and needed only if a split table should be downloadable there. SQL reads go through
+  `parquet_scan`, which turns hive partitioning off.
+- **Builder handoff.** The builder writes every partition locally, as `<out>/<table>/<col>=<value>/part-NNNNNN.parquet`.
+  It fetches unchanged partitions with `r2.download_members`, byte for byte, and declares `partitioned={table: columns}`
+  to `build_generation`. The publisher compares each member's digest with the prior generation's member at the same
+  key, and copies an equal one server-side. No carried-member manifest is needed, and a `carriedForward` declaration
+  for a split table refuses.
+- **Checks, once each.** Each member's partition values are checked against its key once, at build; digests pin
+  those bytes after that. Verification checks each member's columns and rows. The shrink guard runs per table, on
+  the sum of member bytes; it guards bytes as it always has, not rows as §4.4 proposed. A vanished member is not
+  journaled separately: the per-table guard bounds the loss, and nothing reads such a journal.
+- **Retention and audit.** Both read v2. The audit reconciles a split table member by member (index, manifest,
+  observed bytes), reads it as one relation for conservation, and compares member digests for "bytes equal".
+

@@ -20,12 +20,17 @@ import pyarrow.parquet as pq
 
 KIND = "spicy-regs-rollup-generation"
 MANIFEST = "members.json"
+_PART_NAME = re.compile(r"part-\d{6}\.parquet\Z")
 
 
 def _table_info(path: Path) -> dict:
-    """Observed columns and row count for one Parquet file; decoding all pages catches a body/footer mismatch."""
+    """Observed columns and row count for one Parquet file; decoding all pages catches a body/footer mismatch.
+
+    Hive partitioning is off: a split member's ``col=value`` directory must not add a column its file lacks.
+    """
     with duckdb.connect() as con:
-        columns = con.execute("DESCRIBE SELECT * FROM read_parquet(?)", [str(path)]).fetchall()
+        columns = con.execute("DESCRIBE SELECT * FROM read_parquet(?, hive_partitioning = false)",
+                              [str(path)]).fetchall()
     # A readable footer does not establish readable data pages. Decode every
     # column in bounded batches before qualifying these bytes for publication.
     with pq.ParquetFile(path) as parquet:
@@ -36,6 +41,16 @@ def _table_info(path: Path) -> dict:
         "columns": [[row[0], row[1]] for row in columns],
         "rows": rows,
     }
+
+
+def _check_partition(path: Path, partition: Mapping[str, str]) -> None:
+    """Every row of a split member holds the partition values its key names, compared as text."""
+    selected = ", ".join('CAST("' + column.replace('"', '""') + '" AS VARCHAR)' for column in partition)
+    with duckdb.connect() as con:
+        found = con.execute(f"SELECT DISTINCT {selected} FROM read_parquet(?, hive_partitioning = false)",
+                            [str(path)]).fetchall()
+    if any(row != tuple(partition.values()) for row in found):
+        raise ValueError(f"Split member rows differ from the partition its key names: {path.name}")
 
 
 def source_digest(root: Path, suffixes: tuple[str, ...] = (".py",)) -> str:
@@ -89,7 +104,7 @@ def verify_generation_source(source, table_info: Callable[[str], dict], *, expec
     if spec["publicationStatus"] not in {"complete-family", "local-partial"}:
         raise ValueError("Invalid generation publication status")
     tables = spec["tables"]
-    from spicy_regs.sources.publication import parse_index, table_descriptor
+    from spicy_regs.sources.publication import member_table, parse_index, table_descriptor, table_entries
     from rulespec_artifacts import canonical_json_bytes
 
     snapshot = spec["readSnapshot"]
@@ -110,11 +125,18 @@ def verify_generation_source(source, table_info: Callable[[str], dict], *, expec
             raise ValueError("Generation evidence lineage differs from its captured prior")
     if not isinstance(carried, dict) or not set(carried) <= set(tables):
         raise ValueError("Invalid carried-forward declarations")
+    if any("partitionColumns" in tables[key] for key in carried):
+        raise ValueError("A split table is carried forward member by member at publication, not declared whole")
     members = list(iter_member_descriptors(artifact, source))
-    if not tables or {m.object_key for m in members} != set(tables):
-        raise ValueError("Generation membership differs from its table declarations")
+    table_entries(tables, members)
     for member in members:
         key = member.object_key
+        table = tables[member_table(key)]
+        if "partitionColumns" in table:
+            actual = table_info(key)
+            if actual["columns"] != table["columns"] or member.record_count != actual["rows"]:
+                raise ValueError(f"Generation table shape/count mismatch: {key}")
+            continue
         if key is None or Path(key).name != key or not key.endswith(".parquet"):
             raise ValueError("Generation members must be plain Parquet filenames")
         actual = table_info(key)
@@ -175,12 +197,18 @@ def build_generation(
     publication_status: str = "complete-family",
     inputs=(),
     parents: Mapping[str, Mapping] | None = None,
+    partitioned: Mapping[str, Sequence[str]] | None = None,
 ):
     """Snapshot exactly one declared family into a new immutable artifact.
 
     ``parents`` records each input table the build read: the digest and size of
     its bytes, or the storage version of an input read in place, plus the
     family and generation when a managed family published it.
+
+    ``partitioned`` maps a table stored as several files to its partition
+    columns. Its entry in ``files`` is a directory named for the table holding
+    ``<col>=<value>/.../part-NNNNNN.parquet`` in column order; every row of a
+    member must hold its key's values, and every member the same columns.
 
     A successful empty table is a Parquet file with zero rows. An omitted
     output is a failure, never an empty success. No root is written until the
@@ -191,24 +219,27 @@ def build_generation(
         describe_member,
     )
 
-    expected = set(expected_keys)
-    names = [path.name for path in files]
+    expected, partitioned = set(expected_keys), dict(partitioned or {})
+    names = [f"{path.name}.parquet" if path.name + ".parquet" in partitioned else path.name for path in files]
     if not expected or len(expected) != len(expected_keys) or len(set(names)) != len(names) or set(names) != expected:
         raise ValueError("Build outputs differ from the declared complete family")
     if any(Path(key).name != key or not key.endswith(".parquet") for key in expected):
         raise ValueError("Output keys must be plain Parquet filenames")
     directory.mkdir(parents=True, exist_ok=False)
-    tables = {}
-    for path in sorted(files):
-        if path.is_symlink() or not path.is_file():
-            raise ValueError(f"Output is not a regular file: {path.name}")
-        target = directory / path.name
-        shutil.copyfile(path, target)
-        info = _table_info(target)
-        declared = (schemas or {}).get(path.stem)
-        if declared is not None and info["columns"] != [list(column) for column in declared]:
-            raise ValueError(f"Output differs from the declared schema: {path.name}")
-        tables[path.name] = info
+    tables, rows = {}, {}
+    for key, path in sorted(zip(names, files)):
+        if key in partitioned:
+            columns = list(partitioned[key])
+            tables[key] = {**_copy_split(path, directory, columns, rows), "partitionColumns": columns}
+        else:
+            if path.is_symlink() or not path.is_file():
+                raise ValueError(f"Output is not a regular file: {path.name}")
+            shutil.copyfile(path, directory / key)
+            tables[key] = _table_info(directory / key)
+            rows[key] = tables[key]["rows"]
+        declared = (schemas or {}).get(Path(key).stem)
+        if declared is not None and tables[key]["columns"] != [list(column) for column in declared]:
+            raise ValueError(f"Output differs from the declared schema: {key}")
     source = LocalMemberSource(directory)
     members = [
         describe_member(
@@ -216,9 +247,9 @@ def build_generation(
             object_key=key,
             role="table",
             media_type="application/vnd.apache.parquet",
-            record_count=tables[key]["rows"],
+            record_count=count,
         )
-        for key in sorted(tables)
+        for key, count in sorted(rows.items())
     ]
     _write_generation_metadata(
         directory, family=family, tables=tables, members=members, read_snapshot=read_snapshot,
@@ -226,6 +257,36 @@ def build_generation(
         parents=parents,
     )
     return verify_generation(directory)
+
+
+def _copy_split(path: Path, directory: Path, columns: list[str], rows: dict[str, int]) -> dict:
+    """Copy one split table's members into ``directory`` under ``<table>/``; return its columns and summed rows.
+
+    Each member's row count is recorded in ``rows`` by its object key.
+    """
+    if path.is_symlink() or not path.is_dir():
+        raise ValueError(f"A split output is not a directory: {path.name}")
+    found = sorted(member for member in path.rglob("*") if member.is_symlink() or not member.is_dir())
+    if not found:
+        raise ValueError(f"A split output has no members: {path.name}")
+    info, total = None, 0
+    for member in found:
+        relative = member.relative_to(path).as_posix()
+        partition = relative.split("/")[:-1]
+        if (member.is_symlink() or not member.is_file() or not _PART_NAME.fullmatch(member.name)
+                or [part.partition("=")[0] for part in partition] != columns or not all("=" in p for p in partition)):
+            raise ValueError(f"A split member is not <col>=<value>/.../part-NNNNNN.parquet: {path.name}/{relative}")
+        key = f"{path.name}/{relative}"
+        (directory / key).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(member, directory / key)
+        observed = _table_info(directory / key)
+        if info is not None and observed["columns"] != info["columns"]:
+            raise ValueError(f"Members of a split table differ in columns: {key}")
+        _check_partition(directory / key, dict(part.split("=", 1) for part in partition))
+        info, rows[key] = observed, observed["rows"]
+        total += observed["rows"]
+    assert info is not None
+    return {"columns": info["columns"], "rows": total}
 
 
 def _write_generation_metadata(
