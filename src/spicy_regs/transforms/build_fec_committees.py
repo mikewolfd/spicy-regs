@@ -3,9 +3,12 @@
 The fixed all-VARCHAR columns describe committees, not transactions or proven
 organization affiliations. Candidate IDs and cycles remain JSON strings.
 
-The default builder requires a completed unfiltered SpicyDocs traversal, merges
-it with the prior R2 table and prefers fresh whole rows for matching committee
-IDs. Prior-only rows remain observed coverage; the result is not a frozen
+The default builder requires a completed SpicyDocs traversal, merges it with
+the prior R2 table and prefers fresh whole rows for matching committee IDs. With
+a prior table the daily run reads only committees whose ``last_file_date`` is
+within ``DELTA_DAYS`` of the newest one held (owner decision 53: a few pages, not
+the 897-page registry); ``full_walk`` reads the whole registry, which the weekly
+run does for committees that change without a filing. Prior-only rows remain observed coverage; the result is not a frozen
 publisher snapshot. Raw capture evidence is retained separately, and failures
 leave any previous output intact.
 
@@ -20,6 +23,7 @@ import json
 import os
 import time
 from collections.abc import Generator, Iterable
+from datetime import date, timedelta
 from contextlib import closing
 from pathlib import Path
 from tempfile import TemporaryDirectory, mkdtemp
@@ -50,6 +54,10 @@ _MIN_INTERVAL = 1.1
 # (_rollup.yml). Stop at 25 so an overrun leaves an incomplete attempt, not a
 # killed job, and nothing is published.
 _DEADLINE_SECONDS = 25 * 60
+
+#: Re-read this far before the newest held ``last_file_date``: the publisher
+#: posts a filing's date a few days after receipt, and the overlap absorbs that.
+DELTA_DAYS = 7
 
 OUTPUT = "fec_committees.parquet"
 
@@ -125,6 +133,7 @@ def iter_fec_committee_records(
     capture_dir: Path | None = None,
     transport: httpx.BaseTransport | None = None,
     min_interval: float = _MIN_INTERVAL,
+    min_last_file_date: date | None = None,
 ) -> Generator[dict, None, None]:
     """Yield native committee metadata from one SpicyDocs ``FecClient`` traversal.
 
@@ -157,6 +166,10 @@ def iter_fec_committee_records(
             ) from None
         raise
 
+    params: dict = {"sort": "committee_id", "per_page": per_page, "page": 1}
+    if min_last_file_date is not None:
+        params["min_last_file_date"] = min_last_file_date.isoformat()
+
     def records() -> Generator[dict, None, None]:
         capture_path = Path(capture_dir or os.environ.get("FEC_CAPTURE_DIR", ".fec-captures"))
         capture_path.mkdir(parents=True, exist_ok=True)
@@ -164,8 +177,9 @@ def iter_fec_committee_records(
         state = {
             "status": "incomplete",
             "source": API_BASE + "/committees/",
-            "params": {"sort": "committee_id", "per_page": per_page, "page": 1},
-            "scope": "unfiltered source traversal; no frozen publisher snapshot",
+            "params": params,
+            "scope": ("unfiltered source traversal" if min_last_file_date is None
+                      else "committees filed since min_last_file_date") + "; no frozen publisher snapshot",
             "max_pages": bound,
             "pages": 0,
             "records": 0,
@@ -187,11 +201,7 @@ def iter_fec_committee_records(
                 ) as client,
                 (run_path / "pages.jsonl").open("w") as index,
             ):
-                for page in client.api(
-                    "/v1/committees/",
-                    params={"sort": "committee_id", "per_page": per_page, "page": 1},
-                    max_pages=bound,
-                ):
+                for page in client.api("/v1/committees/", params=params, max_pages=bound):
                     state["pages"] += 1
                     index.write(
                         json.dumps(
@@ -249,7 +259,19 @@ def iter_fec_committee_records(
     return records()
 
 
-def build_fec_committees(output_dir: Path, *, capture_dir: Path | None = None) -> Path:
+def _prior_max_last_file_date(prior_file: Path) -> date | None:
+    """The newest ``last_file_date`` the prior table holds, or ``None``."""
+    import duckdb
+
+    path = str(prior_file).replace("'", "''")
+    row = duckdb.sql(f"SELECT max(last_file_date) FROM read_parquet('{path}')").fetchone()
+    try:
+        return date.fromisoformat(str(row[0])[:10]) if row and row[0] else None
+    except ValueError:
+        return None
+
+
+def build_fec_committees(output_dir: Path, *, capture_dir: Path | None = None, full_walk: bool = False) -> Path:
     """Merge a completed walk; retain evidence under ``FEC_CAPTURE_DIR`` or locally.
 
     An explicit ``capture_dir`` wins over the environment setting. Otherwise the
@@ -268,8 +290,12 @@ def build_fec_committees(output_dir: Path, *, capture_dir: Path | None = None) -
     else:
         logger.info("FEC committees: no prior table found — clean build")
 
+    newest = None if full_walk or not have_prior else _prior_max_last_file_date(prior_file)
+    since = None if newest is None else newest - timedelta(days=DELTA_DAYS)
+    logger.info("FEC committees: {}", "whole registry" if since is None else f"committees filed since {since}")
     records = iter_fec_committee_records(
-        capture_dir=capture_dir or Path(os.environ.get("FEC_CAPTURE_DIR", output_dir / ".fec-captures"))
+        capture_dir=capture_dir or Path(os.environ.get("FEC_CAPTURE_DIR", output_dir / ".fec-captures")),
+        min_last_file_date=since,
     )
     # Closing also handles a row-shaping/Arrow failure while acquisition is
     # suspended at a yield, leaving its run marked incomplete and HTTP closed.

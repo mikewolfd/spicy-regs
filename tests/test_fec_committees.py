@@ -505,3 +505,37 @@ def test_traversal_past_its_deadline_refuses_as_incomplete(tmp_path, clock):
     state = _run_state(tmp_path)
     assert (state["status"], state["pages"], state["records"]) == ("incomplete", 3, 3)
     _assert_credential_free(tmp_path, str(refused.value))
+
+
+def test_walker_sends_the_delta_window_to_openfec(tmp_path):
+    from datetime import date
+
+    records, requests, _ = _records(tmp_path, [_page([{"committee_id": "C1"}], 1), _page([], 2)],
+                                    min_last_file_date=date(2026, 9, 18))
+    assert list(records) == [{"committee_id": "C1"}]
+    assert requests[0].url.params["min_last_file_date"] == "2026-09-18"
+    assert _run_state(tmp_path)["scope"].startswith("committees filed since")
+
+
+@pytest.mark.parametrize(("prior", "full_walk", "window"), [
+    (True, False, "2026-09-18"),
+    (True, True, None),
+    (False, False, None),
+])
+def test_builder_reads_a_week_before_the_newest_held_filing_unless_walking_whole(
+        tmp_path, monkeypatch, prior, full_walk, window):
+    module = importlib.import_module("spicy_regs.transforms.build_fec_committees")
+    monkeypatch.setattr(module.r2, "download", lambda *args: False)
+    if prior:
+        write_fec_committee_rows([{**_RAW_COMMITTEE, "last_file_date": "2026-09-25"},
+                                  {**_RAW_COMMITTEE, "committee_id": "C0", "last_file_date": "2019-01-02"}],
+                                 tmp_path / "_fec_prior.parquet")
+    seen = []
+
+    def walker(**kwargs):
+        seen.append(kwargs["min_last_file_date"])
+        return (row for row in [_RAW_COMMITTEE])
+
+    monkeypatch.setattr(module, "iter_fec_committee_records", walker)
+    module.build_fec_committees(tmp_path, full_walk=full_walk)
+    assert [None if value is None else value.isoformat() for value in seen] == [window]

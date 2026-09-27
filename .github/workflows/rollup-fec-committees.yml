@@ -4,8 +4,16 @@ on:
     # 19:30 UTC — ingest the FEC committee reference dimension ahead of the
     # evening rollup window.
     - cron: '30 19 * * *'
+    # Sundays 19:50 UTC: walk the whole registry (decision 53), for committees
+    # that change without a filing moving last_file_date.
+    - cron: '50 19 * * 0'
   workflow_dispatch:
     inputs:
+      full_walk:
+        description: 'Walk the whole committee registry (897 pages) instead of the recent-filing delta'
+        required: false
+        default: false
+        type: boolean
       skip_upload:
         description: 'Skip R2 upload (dry run)'
         required: false
@@ -18,3 +26,4 @@ jobs:
     with:
       command: run-rollup-fec-committees
       skip_upload: ${{ github.event_name == 'workflow_dispatch' && inputs.skip_upload || false }}
+      fec_committees_full_walk: ${{ github.event.schedule == '50 19 * * 0' || inputs.full_walk == true }}

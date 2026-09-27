@@ -128,6 +128,11 @@ on:
         required: false
         default: false
         type: boolean
+      fec_committees_full_walk:
+        description: 'Walk the whole FEC committee registry instead of the recent-filing delta'
+        required: false
+        default: false
+        type: boolean
       lda_filing_year:
         description: 'Optional LDA filing year to read whole, instead of the posted-date window (history backfill)'
         required: false
@@ -257,6 +262,7 @@ jobs:
           FR_SINCE: ${{ inputs.fr_since }}
           USASPENDING_EVERY_FUNDED: ${{ inputs.usaspending_every_funded }}
           LDA_FILING_YEAR: ${{ inputs.lda_filing_year }}
+          FEC_COMMITTEES_FULL_WALK: ${{ inputs.fec_committees_full_walk }}
           FCC_PROCEEDINGS: ${{ inputs.fcc_proceedings }}
           # Only the court_dockets rollup gets the CourtListener token: its daily
           # delta is a few search pages, and keyless runs were timing out on 429s

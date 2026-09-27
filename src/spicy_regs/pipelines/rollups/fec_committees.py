@@ -10,6 +10,7 @@ upload of the single output.
 from pathlib import Path
 from typing import ClassVar
 
+from spicy_regs.env_values import flag_env
 from spicy_regs.pipelines.rollups.base import RollupPipeline, make_rollup_app
 from spicy_regs.transforms import build_fec_committees
 
@@ -22,7 +23,7 @@ class FecCommitteesRollup(RollupPipeline):
     output: ClassVar[str] = "fec_committees.parquet"
 
     def build(self, output_dir: Path) -> Path:
-        return build_fec_committees(output_dir)
+        return build_fec_committees(output_dir, full_walk=flag_env("FEC_COMMITTEES_FULL_WALK"))
 
 
 app = make_rollup_app(FecCommitteesRollup)
