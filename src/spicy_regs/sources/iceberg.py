@@ -191,11 +191,24 @@ def _staging_files(staging_dir: Path, record_type: RecordType) -> list[Path]:
     return sorted(staging_type_dir.glob("*.parquet"))
 
 
+def replace_rows(con, record_type: RecordType, source: str) -> None:
+    """Replace every catalog row whose key is in ``source`` with ``source``'s row: DELETE by key, then INSERT.
+
+    ``source`` must be a self-contained temp table, never a projection over the
+    live table (see :func:`upsert_comment_text`). Shared by the ETL upsert
+    (:func:`_merge`) and the comment source repair.
+    """
+    key = record_type.dedup_key
+    tbl = _qualified(record_type)
+    col_list = ", ".join(f'"{c}"' for c in record_type.schema)
+    con.execute(f'DELETE FROM {tbl} WHERE "{key}" IN (SELECT "{key}" FROM {source});')
+    con.execute(f"INSERT INTO {tbl} ({col_list}) SELECT {col_list} FROM {source};")
+
+
 def _merge(con, staging_files: list[Path], record_type: RecordType) -> int:
     """Row-level upsert of the staged rows into the Iceberg table.
 
-    Uses the existing tested ``DELETE`` + ``INSERT`` sequence, also used by
-    :func:`seed_comments_from_parquet`.
+    Uses the tested ``DELETE`` + ``INSERT`` sequence (:func:`replace_rows`).
 
     Mirrors the dedup semantics of ``transforms.merge_staging_files``: collapse
     the staging rows to one per key (latest ``modify_date`` wins), keep only the
@@ -227,7 +240,6 @@ def _merge(con, staging_files: list[Path], record_type: RecordType) -> int:
 
     files_sql = ", ".join(f"'{_sql_str(str(p))}'" for p in staging_files)
     col_select = ", ".join(f'CAST("{c}" AS VARCHAR) AS "{c}"' for c in cols)
-    col_list = ", ".join(f'"{c}"' for c in cols)
 
     # 1. Collapse staging to one row per key (latest modify_date wins).
     con.execute(
@@ -258,8 +270,7 @@ def _merge(con, staging_files: list[Path], record_type: RecordType) -> int:
     try:
         # Avoid empty catalog commits: the snapshot is also the mirror's input identity.
         if changed:
-            con.execute(f'DELETE FROM {tbl} WHERE "{key}" IN (SELECT "{key}" FROM {winners});')
-            con.execute(f"INSERT INTO {tbl} ({col_list}) SELECT {col_list} FROM {winners};")
+            replace_rows(con, record_type, winners)
         return changed
     finally:
         con.execute(f"DROP TABLE IF EXISTS {staged};")

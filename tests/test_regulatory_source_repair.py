@@ -3,13 +3,17 @@
 from copy import deepcopy
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
+import duckdb
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 
-from spicy_regs.pipelines.repair_regulations import repair_records
-from spicy_regs.schemas import RECORD_TYPES
+from spicy_regs.pipelines.repair_regulations import COMMENT_RECEIPT, repair_records
+from spicy_regs.schemas import COMMENT, RECORD_TYPES
+from spicy_regs.sources import iceberg
+from tests.test_backfill_derived_text import _seed_catalog
 
 
 FIXTURES = Path(__file__).parent / "fixtures/regulatory_recovery"
@@ -129,11 +133,125 @@ def test_failed_input_preserves_prior_and_can_retry(tmp_path, fault):
     assert pq.read_table(path).to_pylist()[0]["fr_doc_num"] == "06-04731"
 
 
-def test_comment_repair_refuses_because_comments_live_in_the_catalog(tmp_path):
-    """Decision 40 retired the local dated partition tree this repair wrote; comments are not a local table."""
-    with pytest.raises(ValueError, match="unsupported regulatory source table: comments"):
-        repair_records([raw("ACF-2009-0004-0002")], table="comments", output_dir=tmp_path)
-    assert not list(tmp_path.rglob("*.parquet"))
+@pytest.fixture
+def catalog(tmp_path, monkeypatch):
+    """The Iceberg tests' local stand-in catalog; each replace commits one new snapshot."""
+    database = tmp_path / "catalog.duckdb"
+    state = {"snapshot": 1}
+
+    def connect():
+        con = duckdb.connect()
+        con.execute(f"ATTACH '{database}' AS {iceberg._CATALOG_ALIAS}")
+        return con
+
+    real_replace = iceberg.replace_rows
+
+    def replace(con, record_type, source):
+        real_replace(con, record_type, source)
+        state["snapshot"] += 1
+
+    monkeypatch.setattr(iceberg, "_connect", connect)
+    monkeypatch.setattr(iceberg, "_read_snapshot", lambda con, rt: iceberg.CatalogSnapshot("local", state["snapshot"], 0))
+    monkeypatch.setattr(iceberg, "_snapshot_query", lambda rt, snapshot: f"SELECT * FROM {iceberg._qualified(rt)}")
+    monkeypatch.setattr(iceberg, "replace_rows", replace)
+
+    def seed(rows):
+        with connect() as con:
+            _seed_catalog(con, rows)
+
+    def rows():
+        with connect() as con:
+            return con.execute(f"SELECT * FROM {iceberg._qualified(COMMENT)} ORDER BY comment_id").pl().to_dicts()
+
+    return SimpleNamespace(seed=seed, rows=rows)
+
+
+COMMENT_ID = "ACF-2009-0004-0002"
+UNRELATED = {**dict.fromkeys(COMMENT.schema), "comment_id": "ACF-2009-0004-0001", "agency_code": "ACF",
+             "docket_id": "ACF-2009-0004", "modify_date": "2009-03-10T00:00:00Z", "text_content": "untouched"}
+
+
+def comment_prior(**changes):
+    """The fixture comment as the catalog holds it, with stale mapped facts and a retained text fill."""
+    return {**shaped(raw(COMMENT_ID), "comments"), "organization": None, "attachments_json": None,
+            "category": "stale category", "text_content": "retained text", "text_extraction_status": "derived",
+            "pdf_extraction_results_json": '{"tool":"pypdf"}', **changes}
+
+
+def receipt(path):
+    return json.loads((path / COMMENT_RECEIPT).read_text())
+
+
+def test_comment_dry_run_writes_only_a_receipt(tmp_path, catalog):
+    catalog.seed([comment_prior(), UNRELATED])
+    before = catalog.rows()
+    output = tmp_path / "out"
+    result = repair_records([raw(COMMENT_ID)], table="comments", output_dir=output, source_pins={"logical_id": "L"})
+    assert catalog.rows() == before
+    assert [p.name for p in output.iterdir()] == [COMMENT_RECEIPT]
+    written = receipt(output)
+    assert (written["mode"], written["source"], written["catalog_snapshot"]["snapshot_id"]) == ("dry-run", {"logical_id": "L"}, 1)
+    assert written["identities"] == [COMMENT_ID] and written["missing_identities"] == []
+    [change] = written["changes"]
+    assert change["cells"]["category"] == {"before": "stale category", "after": None}
+    assert change["cells"]["organization"]["after"] == "FLORIDA DEPARTMENT OF REVENUE, CSE"
+    assert written["rows"][0]["text_content"] == "retained text"
+    assert written["applied_snapshot"] is None and result["changed_rows"] == 1
+
+
+def test_comment_apply_corrects_at_an_equal_timestamp_and_keeps_enrichment(tmp_path, catalog):
+    catalog.seed([comment_prior(), UNRELATED])
+    repair_records([raw(COMMENT_ID)], table="comments", output_dir=tmp_path, apply=True, expected_snapshot=1)
+    expected = shaped(raw(COMMENT_ID), "comments")
+    [row] = [row for row in catalog.rows() if row["comment_id"] == COMMENT_ID]
+    assert row == {**expected, "text_content": "retained text", "text_extraction_status": "derived",
+                   "pdf_extraction_results_json": '{"tool":"pypdf"}'}
+    assert row["category"] is None  # a fresh NULL clears the stale value
+    assert UNRELATED in catalog.rows()
+    assert receipt(tmp_path)["applied_snapshot"]["snapshot_id"] == 2
+    # A rerun finds nothing left to correct and commits nothing.
+    repair_records([raw(COMMENT_ID)], table="comments", output_dir=tmp_path, apply=True)
+    assert receipt(tmp_path)["rows"] == [] and receipt(tmp_path)["applied_snapshot"] is None
+
+
+def test_comment_repair_keeps_a_newer_prior(tmp_path, catalog):
+    catalog.seed([comment_prior(modify_date="2026-09-21T00:00:00Z")])
+    before = catalog.rows()
+    repair_records([raw(COMMENT_ID)], table="comments", output_dir=tmp_path, apply=True)
+    assert catalog.rows() == before
+    assert receipt(tmp_path)["changes"] == []
+
+
+@pytest.mark.parametrize("moved", ["concurrent writer", "reviewed pin"])
+def test_comment_apply_refuses_a_moved_snapshot(tmp_path, catalog, monkeypatch, moved):
+    catalog.seed([comment_prior()])
+    before = catalog.rows()
+    if moved == "concurrent writer":
+        snapshots = iter([1, 2])
+        monkeypatch.setattr(iceberg, "_read_snapshot", lambda con, rt: iceberg.CatalogSnapshot("local", next(snapshots), 0))
+    with pytest.raises(RuntimeError, match="moved since" if moved == "concurrent writer" else "not the reviewed"):
+        repair_records([raw(COMMENT_ID)], table="comments", output_dir=tmp_path, apply=True,
+                       expected_snapshot=7 if moved == "reviewed pin" else None)
+    assert catalog.rows() == before
+
+
+def test_comment_apply_fails_loudly_when_the_delete_leaves_the_prior_row(tmp_path, catalog, monkeypatch):
+    """The catalog's DELETE has left rows behind before; the repair checks its own write."""
+    catalog.seed([comment_prior()])
+    columns = ", ".join(f'"{c}"' for c in COMMENT.schema)
+    monkeypatch.setattr(iceberg, "replace_rows", lambda con, rt, source: con.execute(
+        f"INSERT INTO {iceberg._qualified(rt)} ({columns}) SELECT {columns} FROM {source}"))
+    with pytest.raises(RuntimeError, match="DELETE left rows behind"):
+        repair_records([raw(COMMENT_ID)], table="comments", output_dir=tmp_path, apply=True)
+    assert receipt(tmp_path)["applied_snapshot"] is None
+
+
+def test_comment_apply_refuses_an_identity_missing_from_the_catalog(tmp_path, catalog):
+    catalog.seed([UNRELATED])
+    with pytest.raises(ValueError, match="not in the catalog"):
+        repair_records([raw(COMMENT_ID)], table="comments", output_dir=tmp_path, apply=True)
+    assert catalog.rows() == [UNRELATED]
+    assert receipt(tmp_path)["missing_identities"] == [COMMENT_ID]
 
 
 def test_literal_rin_and_placeholders_are_not_rewritten(tmp_path):
