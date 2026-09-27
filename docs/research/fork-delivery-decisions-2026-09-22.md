@@ -151,7 +151,7 @@ Commits are spicy-regs fork `main` unless named. "Left" is what remains and what
 | 37 | Conditional. | — | Only if the fork serves queries directly. |
 | 38 | Open, agency by agency. | — | Per decision 7's cohorts (spicy-regs). |
 | 39 | Open. | — | DocSpec re-compares the ~64k records first; then the ledger records the qualification. |
-| 40 | Open. | The writer is still present: `transforms/merge_comments_partitioned.py`, `comment_partitions.py`. | Remove the declaration and those writers (spicy-regs). |
+| 40 | Done on branch `retire-comment-partitions`, not yet on `main`. | `b9e13bc` removes the ETL's non-Iceberg comments writer, the `use_iceberg` dispatch input and ledger row T06. `8592fdd` drops comments from `repair_regulations` and deletes the last dated-tree modules; `comment_partitions.py` keeps only the shared validators. | The owner confirms that comment repair may go; if it stays, it moves to the catalog. |
 | 41 | Open. | — | Per-attachment tool fallback with the tool recorded per attachment (spicy-regs). |
 | 42 | Superseded by decisions 54–57 below. | — | ca's lane. |
 | 43 | Waiting. | — | Needs an Engine hosting decision. |
