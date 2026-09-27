@@ -39,4 +39,5 @@ RUN python -c "import spicy_regs.mcp_server, spicy_regs.sources.publication, spi
 # endpoint at /mcp; --factory because build_app is a callable returning the app.
 ENV PORT=8080
 EXPOSE 8080
-CMD ["sh", "-c", "uvicorn spicy_regs.mcp_server:build_app --factory --host 0.0.0.0 --port ${PORT}"]
+# Forward rollout stop signals to the server instead of leaving a shell as PID 1.
+CMD ["sh", "-c", "exec uvicorn spicy_regs.mcp_server:build_app --factory --host 0.0.0.0 --port ${PORT}"]

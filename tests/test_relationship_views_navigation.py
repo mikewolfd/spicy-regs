@@ -231,3 +231,31 @@ def test_communication_rins_retain_scoped_keys_spans_and_source_digest():
     assert result == [('114','ec','4329',0,'1218-AC97','field-sha','20'),
                       ('114','ec','4329',1,'1218-AC97','field-sha','20')]
     assert con.execute('SELECT count(*) FROM house_communication_rins_pairs').fetchone()[0] == 1
+
+
+def test_fec_navigation_excludes_large_bodies_and_preserves_all_candidates():
+    con: Any = duckdb.connect(config={'memory_limit': '64MB', 'threads': 1})
+    table(con, 'fec_relationships', ['source_locator_json', 'source_sha256', 'source_fields_json', 'relationship_type'], [
+        ('{"collection_id":"a","source_record_id":"x"}', 'sha-one', '{}', 'candidate'),
+    ])
+    # A raw body read would exceed the memory limit; navigation must prune it.
+    con.execute("""CREATE VIEW fec_source_records AS SELECT 'a' AS collection_id, 'x' AS source_record_id,
+        CASE WHEN i%2=0 THEN 'sha-one' END AS source_sha256,
+        repeat('body-' || i::VARCHAR, 100000) AS source_record_json,
+        'metadata' AS metadata_json, '{}' AS source_locator_json, 'https://example.test/' AS source_url
+        FROM range(2000) AS rows(i)""")
+    install_relationship_views(con, ['fec_relationships', 'fec_source_records'])
+    plan = con.execute('EXPLAIN SELECT * FROM fec_relationship_evidence LIMIT 1').fetchone()[1]
+    assert 'BLOCKWISE_NL_JOIN' not in plan and 'DELIM_JOIN' not in plan
+    result = con.cursor().execute('SELECT * FROM fec_relationship_evidence LIMIT 1')
+    row = dict(zip([c[0] for c in result.description], result.fetchone(), strict=True))
+    assert row['target_count'] == 2000
+    assert row['target_status'] == 'ambiguous'
+    assert row['recorded_digest_status'] == 'not_checked'
+    candidates = json.loads(row['companion_candidates_json'])
+    assert len(candidates) == 2000
+    assert all(set(c) == {'source_sha256'} for c in candidates)
+    assert sum(c['source_sha256'] is None for c in candidates) == 1000
+    assert len(row['companion_candidates_json']) < 100000
+    assert con.execute('SELECT source_record_json FROM fec_source_records '
+                       'WHERE collection_id=? AND source_record_id=? LIMIT 1', ['a', 'x']).fetchone()[0].startswith('body-')
