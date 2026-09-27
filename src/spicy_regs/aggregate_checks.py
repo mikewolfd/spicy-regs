@@ -10,6 +10,7 @@ from threading import Timer
 from time import monotonic
 
 import duckdb
+import httpx
 
 from spicy_regs.sources import publication
 
@@ -123,6 +124,28 @@ def qualify(check: Aggregate, pins: dict, root: dict) -> tuple[str, str]:
     selected = (check.output, *check.inputs)
     if any(not pins.get(table) for table in selected):
         return "UNPINNED", "A selected table lacks a supported managed-index pin; materialized/catalog lineage is not inferred from a URL."
+    output = pins[check.output]
+    if output.get("kind") == "comments-mirror":
+        if (check.name != "comments-index" or not root.get("source")
+                or any(pins[t].get("kind") != "comments-mirror" for t in selected)
+                or any(pins[t].get("receipt_sha256") != output["receipt_sha256"] for t in selected)
+                or any(pins[t]["sha256"] != "sha256:" + root["files"][t + ".parquet"]["sha256"] for t in selected)):
+            return "INCOMPARABLE", "Comment files do not share the same catalog export receipt."
+        return "COMPARABLE", "Both public file versions match one catalog snapshot export receipt."
+    if output.get("kind") == "materialized":
+        if any(pins[t].get("snapshot_id") != root.get("snapshot_id") for t in selected):
+            return "INCOMPARABLE", "Materialized tables belong to different snapshots."
+        for table in selected:
+            record = root.get("artifacts", {}).get(table + ".parquet", {})
+            if record.get("visibility") != "public" or pins[table]["sha256"] != "sha256:" + record.get("sha256", ""):
+                return "INCOMPARABLE", "Materialized table differs from its public manifest record."
+        stages = {stage["name"]: stage for stage in root.get("stages", [])}
+        builders = {key: name for name, stage in stages.items() for key in stage["outputs"]}
+        output_stage = builders.get(check.output + ".parquet")
+        dependencies = stages.get(output_stage, {}).get("depends_on", [])
+        if not output_stage or any(builders.get(t + ".parquet") not in dependencies for t in check.inputs):
+            return "INCOMPARABLE", "The manifest does not declare the selected input stages as output dependencies."
+        return "COMPARABLE", "Public artifacts share one materialized snapshot and declared build dependency."
     spec = root.get("spec", {})
     if root.get("artifactDigest") != pins[check.output]["artifactDigest"]:
         return "INCOMPARABLE", "Output root differs from selected output generation."
@@ -132,10 +155,13 @@ def qualify(check: Aggregate, pins: dict, root: dict) -> tuple[str, str]:
     for table in check.inputs:
         key = table + ".parquet"
         parent = spec.get("parents", {}).get(key, {})
-        if parent.get("sha256") == pins[table]["sha256"]:
+        if parent.get("sha256") == pins[table]["sha256"] or (
+            pins[table].get("kind") == "comments-mirror" and parent.get("etag") == pins[table].get("etag")
+            and parent.get("byteSize") == pins[table].get("bytes")
+        ):
             continue
         if (
-            pins[table]["artifactDigest"] == pins[check.output]["artifactDigest"]
+            pins[table].get("artifactDigest") == pins[check.output]["artifactDigest"]
             and key not in carried
             and check.output + ".parquet" not in carried
         ):
@@ -234,14 +260,42 @@ def check_public(con, base: str, names: list[str], *, timeout_seconds: float = 9
         }
         if table in {BY_NAME[name].output for name in names} and family not in roots:
             _, roots[family] = publication.load_family_root(base, entry)
+    missing = tables - pins.keys()
+    if missing & {"comments", "comments_index"}:
+        comments = publication.load_comments_publication(base)
+        if comments is not None:
+            roots["comments-mirror"] = comments["receipt"]
+            for table in missing & {"comments", "comments_index"}:
+                record = comments["receipt"]["files"][table + ".parquet"]
+                pins[table] = {**record, "sha256": "sha256:" + record["sha256"], "kind": "comments-mirror",
+                               "family": "comments-mirror", "receipt_sha256": comments["receipt_sha256"],
+                               "source": comments["receipt"]["source"], "urls": [base.rstrip("/") + "/" + table + ".parquet"]}
+    missing = tables - pins.keys()
+    if missing:
+        snapshot = publication.load_rulemaking_snapshot(base)
+        if snapshot is not None:
+            roots["materialized-rulemaking"] = snapshot["manifest"]
+            for table in missing:
+                record = snapshot["tables"].get(table + ".parquet")
+                if record is not None:
+                    pins[table] = {**record, "sha256": "sha256:" + record["sha256"], "kind": "materialized",
+                                   "family": "materialized-rulemaking", "snapshot_id": snapshot["snapshot_id"],
+                                   "urls": [base.rstrip("/") + "/" + record["remote_key"]]}
     results = []
     for name in names:
         check = BY_NAME[name]
         selected = {table: pins.get(table) for table in (check.output, *check.inputs)}
         root = roots.get((pins.get(check.output) or {}).get("family"), {})
-        results.append(
-            measure(con, check, pins=selected, root=root, timeout_seconds=timeout_seconds, bind_pinned_views=True)
-        )
+        versions_match = _mutable_versions_match(selected)
+        result = measure(con, check, pins=selected, root=root, timeout_seconds=timeout_seconds,
+                         read_status="full_selected_inputs" if versions_match else "moved_public_version",
+                         bind_pinned_views=True)
+        if versions_match and not _mutable_versions_match(selected):
+            result.update(status="NOT_MEASURED", read_status="moved_public_version",
+                          reason="A fixed public comment file changed during the measurement; rerun from its new receipt.")
+            for key in ("expected_cells", "observed_cells", "expected_total", "observed_total", "mismatched_cells"):
+                result.pop(key, None)
+        results.append(result)
         if results[-1]["status"] in ("TIMEOUT", "READ_FAILURE"):
             break
     return {
@@ -252,3 +306,16 @@ def check_public(con, base: str, names: list[str], *, timeout_seconds: float = 9
         "requested_checks": names,
         "remaining_checks": names[len(results) :],
     }
+
+
+def _mutable_versions_match(pins: dict) -> bool:
+    """Fixed comment URLs are usable only while their published object versions match the receipt."""
+    for pin in pins.values():
+        if pin is None or pin.get("kind") != "comments-mirror":
+            continue
+        response = httpx.head(pin["urls"][0], follow_redirects=True, timeout=30,
+                              headers={"Cache-Control": "no-cache"})
+        response.raise_for_status()
+        if response.headers.get("etag") != pin["etag"] or int(response.headers.get("content-length", -1)) != pin["bytes"]:
+            return False
+    return True

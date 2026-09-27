@@ -12,8 +12,9 @@ from importlib.resources import files
 from types import MappingProxyType
 from typing import Any, Mapping, NamedTuple, Sequence
 
-import pyarrow as pa
-import pyarrow.parquet as pq
+import duckdb
+from tempfile import TemporaryDirectory
+from pathlib import Path
 
 #: Pinned digests of the three vendored REF-038 files; see ``reference/refspec/README.md``.
 AGENCY_PROJECTION_SHA256 = "c9ec0fde1bf5fda17402983880bc091e9caa417845178f232214606e264c049f"
@@ -33,7 +34,14 @@ def _read_pinned(path: Any, sha256: str) -> tuple[Mapping[str, Any], ...]:
     digest = hashlib.sha256(data).hexdigest()
     if digest != sha256:
         raise ValueError(f"{path.name} is not RefSpec's file: sha256 {digest}, pinned {sha256}")
-    return tuple(MappingProxyType(row) for row in pq.read_table(pa.BufferReader(data)).to_pylist())
+    # Read exactly the admitted bytes, not a mutable caller path after checking it.
+    with TemporaryDirectory(prefix="spicy-regs-agency-") as directory:
+        admitted = Path(directory) / "projection.parquet"
+        admitted.write_bytes(data)
+        with duckdb.connect() as connection:
+            cursor = connection.execute("SELECT * FROM read_parquet(?)", [str(admitted)])
+            columns = [column[0] for column in cursor.description]
+            return tuple(MappingProxyType(dict(zip(columns, row, strict=True))) for row in cursor.fetchall())
 
 
 def projection_rows() -> tuple[Mapping[str, Any], ...]:

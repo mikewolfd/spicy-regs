@@ -65,6 +65,8 @@ def test_vote_documents_independent_of_empty_amendment_blocks():
     amendments = [{'number': None, 'purpose': 'No Statement of Purpose on File.'} for _ in range(48)]
     fixture(con, 'roll_call_votes', ['vote_id', 'documents_json', 'amendments_json', 'question', 'source_url'],
             [('119-senate-1-522', json.dumps(docs), json.dumps(amendments), 'Motion', 'https://example.test/vote')])
+    con.execute("ALTER TABLE roll_call_votes ADD COLUMN congress VARCHAR DEFAULT '119'")
+    con.execute("ALTER TABLE roll_call_votes ADD COLUMN chamber VARCHAR DEFAULT 'senate'")
     install(con, ['vote_documents', 'vote_amendments'])
     observed = rows(con, 'vote_documents_occurrences')
     assert len(observed) == len(rows(con, 'vote_amendments_occurrences')) == 48

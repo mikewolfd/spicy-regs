@@ -26,7 +26,7 @@ from spicy_regs.citation_resolution import ROUTES, resolve_citations
 from spicy_regs.source_evidence import CaptureEvidence
 from spicy_regs.transforms.table_merge import merge_table, prior_scratch_path
 
-RULE = "native-legal-reference/001"
+RULE = "native-legal-reference/002"
 REFERENCE_COLUMNS = (
     "scope_id",
     "source_family",
@@ -103,22 +103,39 @@ def _interpret(row: dict) -> tuple[str, str]:
     if row["observation_kind"] == "native_reference":
         href = row.get("href")
         match = _HREF.fullmatch(href or "")
-        # Exact section hrefs only. Subsections, fragments and other namespaces
-        # remain literal observations, not silently shortened identifiers.
-        if not match or row["element_tag"] not in {"ref", "{http://xml.house.gov/schemas/uslm/1.0}ref"}:
+        statute = re.fullmatch(r"/us/stat/([1-9][0-9]*[A-Za-z]?)/([1-9][0-9]*)", href or "")
+        law = re.fullmatch(r"/us/pl/([1-9][0-9]*)/([1-9][0-9]*)", href or "")
+        allowed_tag = row["element_tag"] in {
+            "ref",
+            "{http://xml.house.gov/schemas/uslm/1.0}ref",
+            "{http://www.w3.org/1999/xhtml}a",
+        }
+        # Never shorten a subsection, fragment, range or historical act locator.
+        if not allowed_tag or not (match or statute or law):
             return "unsupported_href", _json([])
+        if match:
+            kind, target = "usc_section", match[1].upper() + "-" + str(usc_section_key(match[2]))
+            status = "native_section_href"
+        elif statute:
+            kind, target = "statutes_at_large", statute[1].upper() + "-" + statute[2]
+            status = "native_statute_href"
+        else:
+            assert law is not None
+            if int(law[1]) < 57:
+                return "unsupported_href", _json([])
+            kind, target = "public_law", law[1] + "-public-" + law[2]
+            status = "native_public_law_href"
         candidates.append(
             {
                 **common,
                 "occurrence_key": key + ":href",
-                "cite_kind": "usc_section",
-                "target_key": match[1].upper() + "-" + str(usc_section_key(match[2])),
+                "cite_kind": kind,
+                "target_key": target,
                 "matched_text": href,
                 "target_resolved": True,
-                "derivation_rule": "native-usc-section-href/001",
+                "derivation_rule": "native-legal-exact-href/002",
             }
         )
-        status = "native_section_href"
     else:
         text = row.get("text") or ""
         for index, finding in enumerate(find_citations(text, kinds=KINDS)):
@@ -201,6 +218,16 @@ def build_native_legal_references(
                 raise ValueError("repeated source/edition scope in one manifest")
             scopes.add(scope)
             body = _pinned(spec, manifest.parent, 16 * 1024 * 1024)
+            from spicy_regs.transforms.native_legal_inputs import qualify_source
+
+            facts = qualify_source(
+                spec,
+                body,
+                lambda pinned: _pinned(pinned, manifest.parent, 16 * 1024 * 1024),
+                lambda payload, **fields: _retain(evidence, payload, **fields),
+            )
+            if facts is not None:
+                _retain(evidence, _json(facts).encode(), role="native-source-qualification", scope_id=scope)
             total += len(body)
             if total > 64 * 1024 * 1024:
                 raise ValueError("total XML exceeds byte bound")
@@ -224,7 +251,12 @@ def build_native_legal_references(
             def admit(observation, shaper):
                 if len(rows) + len(fresh) >= 10_000:
                     raise ValueError("selected observation bound exceeded")
-                fresh.append(shaper(observation, occurrence_index=len(fresh), **context))
+                extra = (
+                    {"title": str(facts["metadata"]["title"])}
+                    if (family == "ecfr" and facts is not None and facts["metadata"]["title"] is not None)
+                    else {}
+                )
+                fresh.append(shaper(observation, occurrence_index=len(fresh), **context, **extra))
 
             try:
                 if family == "ecfr":

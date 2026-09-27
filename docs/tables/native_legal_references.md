@@ -6,7 +6,7 @@
 
 Selected eCFR AUTH/SOURCE notes and U.S. Code href/source-credit observations, retaining source XML paths and digests. Complete reads replace the selected source/edition scope, including successful empty corrections. Candidate target matches concern held classification rows, not independently acquired legal text. Unparsed prose and unsupported forms remain visible; no universal extraction or historical completeness is implied.
 
-**Coverage.** Sampled. Explicit retained-input manifests only; no public population is claimed. Edition is unknown unless supplied by the selection. *(measured 2026-09-27)*
+**Coverage.** Sampled. Generation 53755e3e0076dfa5 publishes 881 observations from complete retained eCFR Title 1 requested as of 2026-08-10 and USC Title 1 release 119-103. Exact enclosing input bytes and source receipts qualify both selections. Selected public target tables resolve 19 occurrences; missing, unsupported and unqueried targets remain explicit. Receipt: native-legal-full-2026-09-27/resolved-verification.json. *(measured 2026-09-27)*
 
 - **Parquet file:** `native_legal_references.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.

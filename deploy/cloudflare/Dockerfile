@@ -33,7 +33,7 @@ COPY src ./src
 RUN pip install --no-deps .
 # Fail the build, not the first request, when a module the server imports at
 # request time needs a package this image does not install.
-RUN python -c "import spicy_regs.mcp_server, spicy_regs.sources.publication, spicy_regs.local_data; import spicy_regs.relationship_views, spicy_regs.citation_resolution, spicy_regs.acquisition_queue"
+RUN python -c "import spicy_regs.mcp_server, spicy_regs.sources.publication, spicy_regs.local_data; import spicy_regs.relationship_views, spicy_regs.citation_resolution, spicy_regs.acquisition_queue; from spicy_regs.vocabulary_mapping import lookup_agency; assert lookup_agency('regulations.gov:agency', 'OPM')['status'] == 'reviewed_mapping'"
 
 # The platform sends traffic to $PORT (default 8080). build_app() mounts the MCP
 # endpoint at /mcp; --factory because build_app is a callable returning the app.

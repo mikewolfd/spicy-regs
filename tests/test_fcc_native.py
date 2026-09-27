@@ -76,3 +76,19 @@ def test_incremental_fcc_upgrades_legacy_schema_and_fresh_correction_replaces_ar
     assert by_id[new['id_submission']]['documents_json']=='[]'
     assert by_id['untouched']['native_fields_json'] is None
     assert by_id['untouched']['documents_json']==old['documents_json']
+
+
+def test_refresh_preserves_pdf_diagnostics_only_for_unchanged_offers(tmp_path):
+    old = _shape_filing(retained('positive'))
+    old['pdf_extraction_results_json'] = '[{"url":"offered","source_sha256":"sha256:retained","status":"ok"}]'
+    for changed in (False, True):
+        prior = tmp_path / 'prior.parquet'
+        pq.write_table(pa.Table.from_pylist([old], schema=_FILING_SCHEMA), prior)
+        raw = retained('positive')
+        if changed:
+            raw['documents'] = []
+        out = _merge_incremental(tmp_path, output='fcc_filings.parquet', scratch_prefix='_test',
+            columns=FILING_COLUMNS, schema=_FILING_SCHEMA, key='id_submission', order_by='date_received',
+            rows=[_shape_filing(raw)], prior_file=prior, have_prior=True)
+        result = pq.read_table(out).to_pylist()[0]
+        assert result['pdf_extraction_results_json'] == (None if changed else old['pdf_extraction_results_json'])

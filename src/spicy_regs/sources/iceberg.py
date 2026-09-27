@@ -7,7 +7,7 @@ Postgres) has to be stood up.
 
 DuckDB's ``iceberg`` and ``httpfs`` extensions provide catalog access. Version
 1.5.3 or later supports the nullable-column addition used by PDF diagnostics.
-The current upsert implementation uses DELETE + INSERT, keeping the row with
+The current upsert implementation uses a checked atomic MERGE, keeping the row with
 the most recent ``modify_date`` for each primary key.
 
 This module is the "Iceberg load" stage only, mirroring the thin-wrapper style
@@ -203,7 +203,7 @@ def _staging_files(staging_dir: Path, record_type: RecordType) -> list[Path]:
 
 
 def replace_rows(con, record_type: RecordType, source: str) -> None:
-    """Replace every catalog row whose key is in ``source`` with ``source``'s row: DELETE by key, then INSERT.
+    """Atomically replace selected unique keys, validating values before commit.
 
     ``source`` must be a self-contained temp table, never a projection over the
     live table (see :func:`upsert_comment_text`). Shared by the ETL upsert
@@ -212,14 +212,44 @@ def replace_rows(con, record_type: RecordType, source: str) -> None:
     key = record_type.dedup_key
     tbl = _qualified(record_type)
     col_list = ", ".join(f'"{c}"' for c in record_type.schema)
-    con.execute(f'DELETE FROM {tbl} WHERE "{key}" IN (SELECT "{key}" FROM {source});')
-    con.execute(f"INSERT INTO {tbl} ({col_list}) SELECT {col_list} FROM {source};")
+    count, distinct, missing = con.execute(f'''
+        SELECT count(*),count(DISTINCT "{key}"),count(*) FILTER (WHERE "{key}" IS NULL OR trim("{key}")='')
+        FROM {source}
+    ''').fetchone()
+    if missing or count != distinct:
+        raise ValueError("Catalog replacements require distinct, nonblank source identities")
+    if not count:
+        return
+    con.execute("BEGIN")
+    try:
+        duplicate = con.execute(f'''
+            SELECT t."{key}" FROM {tbl} t JOIN {source} s ON t."{key}"=s."{key}"
+            GROUP BY t."{key}" HAVING count(*)<>1 LIMIT 1
+        ''').fetchone()
+        if duplicate:
+            raise ValueError("Catalog replacement found duplicate prior identities; reconcile them before writing")
+        assignments = ", ".join(f'"{c}"=s."{c}"' for c in record_type.schema)
+        values = ", ".join(f's."{c}"' for c in record_type.schema)
+        con.execute(f'''MERGE INTO {tbl} t USING {source} s ON t."{key}"=s."{key}"
+            WHEN MATCHED THEN UPDATE SET {assignments}
+            WHEN NOT MATCHED THEN INSERT ({col_list}) VALUES ({values})''')
+        same = " AND ".join(f't."{c}" IS NOT DISTINCT FROM s."{c}"' for c in record_type.schema)
+        found, matching = con.execute(f'''
+            SELECT count(*),count(*) FILTER (WHERE {same})
+            FROM {tbl} t JOIN {source} s ON t."{key}"=s."{key}"
+        ''').fetchone()
+        if found != count or matching != count:
+            raise RuntimeError("Catalog replacement did not preserve one exact row per source identity")
+        con.execute("COMMIT")
+    except Exception:
+        con.execute("ROLLBACK")
+        raise
 
 
 def _merge(con, staging_files: list[Path], record_type: RecordType) -> int:
     """Row-level upsert of the staged rows into the Iceberg table.
 
-    Uses the tested ``DELETE`` + ``INSERT`` sequence (:func:`replace_rows`).
+    Uses a single MERGE with transactional readback (:func:`replace_rows`).
 
     Mirrors the dedup semantics of ``transforms.merge_staging_files``: collapse
     the staging rows to one per key (latest ``modify_date`` wins), keep only the
@@ -229,17 +259,10 @@ def _merge(con, staging_files: list[Path], record_type: RecordType) -> int:
     drop the rows it isn't re-inserting. ``modify_date`` is an ISO-8601 string,
     so the lexical ``>`` comparison orders chronologically.
 
-    CAVEAT — the ``DELETE`` does not reliably remove prior rows on the R2 Data
-    Catalog (the same limitation that made the one-time seed duplicate rows and
-    that :func:`dedupe_table` works around by never deleting). So a key that is
-    *re-merged* — an existing comment whose ``modify_date`` advanced, or a key the
-    redundant daily sweep re-stages — can be left behind next to its replacement,
-    growing physical duplicate ``comment_id`` rows over time. Brand-new keys are
-    unaffected (nothing to delete). This is why the read surface dedups on read
-    (``mcp_server`` wraps the ``comments`` view in a per-``comment_id`` QUALIFY)
-    and physical duplicates are reclaimed out-of-band by ``dedupe_table``; a
-    delete-free incremental upsert is not possible here because the only reliable
-    removal primitive on this catalog is a whole-table ``DROP`` + rebuild.
+    Older DELETE/INSERT writes could leave physical duplicates. MERGE support
+    requires DuckDB >=1.5.3; this path refuses affected prior duplicates rather
+    than guessing which historical row to keep. Existing duplicates remain the
+    responsibility of the explicitly invoked reconciliation path.
     """
     cols = list(record_type.schema)
     key = record_type.dedup_key
@@ -508,7 +531,7 @@ def upsert_comment_text(con, record_type: RecordType, agency: str, updates: "pl.
     the agency's rows gets ``text_content`` / ``text_extraction_status`` refreshed
     (``COALESCE`` keeps the existing value when the incoming column is NULL). The
     upsert is scoped to a single ``agency_code`` so it never touches the whole
-    tens-of-millions-row table, using the existing DELETE+INSERT sequence
+    tens-of-millions-row table, using the checked atomic replacement
     (see :func:`_merge`). No-ops on an empty
     frame; the caller is expected to have handled that case already.
 
@@ -564,10 +587,7 @@ def upsert_comment_text(con, record_type: RecordType, agency: str, updates: "pl.
         WHERE r.comment_id = u.comment_id;
         """
     )
-    con.execute(
-        f"DELETE FROM {tbl} WHERE agency_code = '{ag}' AND comment_id IN (SELECT comment_id FROM _uct_replacement);"
-    )
-    con.execute(f"INSERT INTO {tbl} ({col_list}) SELECT {col_list} FROM _uct_replacement;")
+    replace_rows(con, record_type, "_uct_replacement")
     con.execute("DROP TABLE IF EXISTS _uct_updates;")
     con.execute("DROP TABLE IF EXISTS _uct_replacement;")
 

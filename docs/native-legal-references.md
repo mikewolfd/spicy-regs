@@ -97,3 +97,30 @@ selection operation, and bind source identity and any stated edition to that
 verified evidence. Unknown edition can remain explicit where the verified source
 itself leaves it unknown. This is separate from the already verified fidelity of
 the retained fragment observations.
+
+### Complete-source qualification added on 2026-09-27
+
+A later scoped replay closes the enclosing-input gap for complete eCFR Title 1
+and U.S. Code Title 1, without changing the fragment candidate's status.
+The replay and `verification.json` live under
+`~/Work/corpora/supply-2026-09-02/receipts/native-legal-full-2026-09-27/`.
+They bind the exact full eCFR XML to its historical acquisition receipt and the
+USC XML to its validated complete publisher ZIP. The owner validators establish
+CFR title identity and USC native `Online@119-103` release identity. CFR's
+`requested-as-of:2026-08-10` explicitly identifies the request date; it is not a
+printed edition date. Supporting originals and qualification facts enter the
+existing source-evidence artifact. Upload remains a separate root-owned step.
+
+Manifest entries may include `qualification.kind` of `ecfr-retained-title` or
+`uscode-title-archive`; unsupported kinds, changed input bytes, incorrect archive
+membership and contradictory record/edition labels refuse the whole run.
+Unqualified fragments still work for local tests but do not gain qualification
+merely by passing a scanner. The full-input comparison checks every selected
+native href and note/source-credit observation. It found no PARAUTH or SECAUTH
+in these two inputs; those forms remain unsupported elsewhere.
+
+Exact native USLM `ref` and XHTML `a` hrefs to USC sections, numbered public laws,
+and Statutes at Large pages yield typed candidates. The complete Title 1 ZIP
+provides the positive evidence. Subsection tails, fragments, ranges, historical
+act locators and unfamiliar namespaces remain unsupported, with the original
+href preserved. Matching a held target still does not establish legal effect.

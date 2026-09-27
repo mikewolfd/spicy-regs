@@ -24,6 +24,10 @@ assert citation_resolution.normalize_rin is normalize_rin
 assert acquisition_queue.QUEUE_RULE
 assert relationship_views.install_relationship_views
 assert 'spicy_regs.ontology' not in sys.modules
+from spicy_regs.vocabulary_mapping import lookup_agency
+assert lookup_agency('regulations.gov:agency', 'OPM')['status'] == 'reviewed_mapping'
+assert lookup_agency('regulations.gov:agency', 'ARCTICGAS')['abstentions']
+assert 'spicy_regs.ontology.common' not in sys.modules
 '''
     result = subprocess.run([sys.executable, '-c', program], capture_output=True, text=True, timeout=30)
     assert result.returncode == 0, result.stdout + result.stderr

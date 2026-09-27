@@ -6,7 +6,7 @@
 
 One source-listed cosponsor per bill, exact input digest and list ordinal. Repeated assertions remain separate; absent or empty successfully read lists replace prior rows.
 
-**Coverage.** Sampled. Retained BILLSTATUS replay qualifies sponsorship dates and original-cosponsor flags. Application output is implemented; no public backfill is asserted. Withdrawal date behavior still needs a positive native source specimen. *(measured 2026-09-27)*
+**Coverage.** Sampled. Retained Congress 119 House and Senate BILLSTATUS archives were replayed on 2026-09-27 for source observations matching the held bill edition. Published generation 401302170a911739 contains 146,248 source occurrences, including 67 positive withdrawal dates. Every native field reconciles; bills outside the selected replay remain unread. Receipt: legislative-joins-2026-09-27/t05-candidate.json. *(measured 2026-09-27)*
 
 - **Parquet file:** `bill_cosponsors.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
@@ -22,7 +22,7 @@ One source-listed cosponsor per bill, exact input digest and list ordinal. Repea
 | `sponsorship_date` | `VARCHAR` | Literal sponsorshipDate; absent is NULL and present empty is an empty string. |
 | `sponsorship_date_status` | `VARCHAR` | Calendar spelling status: absent, empty, valid or invalid. |
 | `is_original_raw` | `VARCHAR` | Literal isOriginalCosponsor text, without Boolean coercion. |
-| `sponsorship_withdrawn_date` | `VARCHAR` | Literal sponsorshipWithdrawnDate; positive native-date qualification is pending. |
+| `sponsorship_withdrawn_date` | `VARCHAR` | Literal sponsorshipWithdrawnDate; retained BILLSTATUS source observations include positive dates. |
 | `sponsorship_withdrawn_date_status` | `VARCHAR` | Calendar spelling status, not confirmation of a withdrawal event. |
 | `party` | `VARCHAR` | Party as the cosponsor entry states it. |
 | `state` | `VARCHAR` | State as the cosponsor entry states it. |

@@ -153,6 +153,7 @@ TABLES = (
     "committee_report_reads",
     "native_legal_references",
     "native_legal_reference_reads",
+    "court_opinion_pdf_extractions",
 )
 STATEMENT_TIMEOUT = os.environ.get("SPICY_REGS_STATEMENT_TIMEOUT", "790s")
 
@@ -815,6 +816,25 @@ def _available_tables(cursor: duckdb.DuckDBPyConnection) -> list[str]:
 
 
 def _register_tools(mcp: FastMCP) -> None:
+    @mcp.tool()
+    def lookup_agency(
+        namespace: Annotated[str, Field(min_length=1, max_length=256)],
+        identifier: Annotated[str, Field(min_length=1, max_length=256)],
+        on_date: Annotated[str | None, Field(pattern=r"^\d{4}-\d{2}-\d{2}$")] = None,
+    ) -> dict[str, Any]:
+        """Look up an exact agency identifier in the pinned reviewed RefSpec mapping.
+
+        Namespaces are regulations.gov:agency (e.g. OPM) and
+        federal_register_agency (e.g. 406). Labels are not identifiers.
+        Return mapping evidence, publication pins and documented abstentions.
+        Parent relationships are not identity. This mapping is undated: supplying
+        on_date preserves candidates but cannot establish historical identity.
+        No acquisition, new adjudication, or money attribution is performed.
+        """
+        from spicy_regs.vocabulary_mapping import lookup_agency as lookup
+
+        return lookup(namespace, identifier, on_date=on_date)
+
     @mcp.tool()
     def list_sources() -> dict[str, Any]:
         """List available tables and distinguish declared outputs without a loaded view.

@@ -1673,11 +1673,13 @@ tables:
     identity_columns: [id_submission]
     label: "FCC filings"
     coverage: >-
-      Window. 5,137 filings received 2026-08-24 to 2026-09-22, the bounded
-      first run; every id and cell matched the raw pages. The rollup merges
-      incrementally, so this is the history accumulated so far and not the
-      ECFS archive.
-    measured_on: "2026-09-23"
+      Window. All 5,780 held filings were replayed against retained or reacquired native
+      source records on 2026-09-27 and published as generation 9c87b600aa7b5847.
+      One proceeding-number cell was explicitly corrected from the native source;
+      every other prior cell was preserved. Three selected offered PDFs have retained
+      extraction diagnostics. This qualifies the held population, not the ECFS archive
+      or complete attachment text. Receipt: spicy-regs-fcc-complete-20260927/receipt-final.json.
+    measured_on: "2026-09-27"
     summary: >-
       One row per FCC ECFS filing — the FCC's comment equivalent: comments,
       reply comments, ex-parte notices, letters, and other submissions —
@@ -1711,6 +1713,7 @@ tables:
       filing_url: "Canonical fcc.gov URL for the filing (`https://www.fcc.gov/ecfs/filing/<id_submission>`)."
       native_fields_json: "Selected named native ECFS fields retained as JSON, preserving absent keys, nulls, empty arrays, objects and roles. SQL null in older output means unread legacy data; rebuilding is required. Not the complete API response."
       native_fields_sha256: "SHA-256 of the exact native_fields_json string; identifies retained field bytes, not the complete API response."
+      pdf_extraction_results_json: "Outcomes for selected offered attachment URLs, retaining source SHA-256, page count and extraction status. Null when no attempt is retained. These selected attempts do not establish complete filing text coverage."
 
   # ---------------------------------------------------------------------------
   # Tables hosted from spicy-docs' table contracts.
@@ -3256,9 +3259,11 @@ tables:
     measured_on: "2026-09-27"
     label: "Bill cosponsor source occurrences"
     coverage: >-
-      Sampled. Retained BILLSTATUS replay qualifies sponsorship dates and original-cosponsor
-      flags. Application output is implemented; no public backfill is asserted. Withdrawal
-      date behavior still needs a positive native source specimen.
+      Sampled. Retained Congress 119 House and Senate BILLSTATUS archives were replayed
+      on 2026-09-27 for source observations matching the held bill edition. Published
+      generation 401302170a911739 contains 146,248 source occurrences, including 67 positive
+      withdrawal dates. Every native field reconciles; bills outside the selected replay
+      remain unread. Receipt: legislative-joins-2026-09-27/t05-candidate.json.
     summary: >-
       One source-listed cosponsor per bill, exact input digest and list ordinal. Repeated
       assertions remain separate; absent or empty successfully read lists replace prior rows.
@@ -3307,7 +3312,12 @@ tables:
     label: "Native legal-reference observations"
     identity_columns: [scope_id, input_sha256, occurrence_index]
     grain: "One source scanner observation per pinned XML input; multiple interpreted targets remain nested candidates."
-    coverage: "Sampled. Explicit retained-input manifests only; no public population is claimed. Edition is unknown unless supplied by the selection."
+    coverage: >-
+      Sampled. Generation 53755e3e0076dfa5 publishes 881 observations from complete retained
+      eCFR Title 1 requested as of 2026-08-10 and USC Title 1 release 119-103. Exact enclosing
+      input bytes and source receipts qualify both selections. Selected public target
+      tables resolve 19 occurrences; missing, unsupported and unqueried targets remain
+      explicit. Receipt: native-legal-full-2026-09-27/resolved-verification.json.
     summary: >-
       Selected eCFR AUTH/SOURCE notes and U.S. Code href/source-credit observations,
       retaining source XML paths and digests. Complete reads replace the selected
@@ -3336,6 +3346,37 @@ tables:
       interpretation_status: "Whether the selected native shape is supported or only partially interpreted; does not assert exhaustive extraction."
       target_candidates_json: "Interpreted typed targets and optional pinned held-table resolution outcomes; preserves multiple candidates without multiplying observations."
       rule_version: "Application scanner and interpretation rule version."
+
+  court_opinion_pdf_extractions:
+    measured_on: "2026-09-27"
+    label: "Selected court opinion PDF text"
+    identity_columns: [opinion_id, source_sha256]
+    grain: "One retained PDF extraction per opinion and exact observed body."
+    coverage: >-
+      Sampled. Three selected publisher PDFs were acquired on 2026-09-27. Each exact
+      body matches its held CourtListener SHA-1 and has its own SHA-256 and extraction
+      outcome. This is derived PDF text, separate from CourtListener native text fields
+      and from the complete opinion index. Receipt: spicy-regs-court-cohort-20260927/bodies-receipt.json.
+    summary: >-
+      Text from literally offered PDF URLs, tied to the selected opinion generation,
+      native body fingerprint, capture evidence and extractor version. A native digest
+      mismatch records a refusal without supplying text. Join opinion_id to court_opinions
+      and cluster_id to court_opinion_clusters; this table does not infer case-name identity.
+    columns:
+      opinion_id: "Native CourtListener opinion ID selected for acquisition."
+      cluster_id: "Native opinion cluster ID from that same held opinion row."
+      source_url: "Literal download_url offered by the selected opinion."
+      resolved_url: "Final response URL observed by the provider."
+      source_sha256: "SHA-256 of complete captured PDF bytes."
+      native_sha1: "Body SHA-1 asserted by the selected native opinion row."
+      actual_sha1: "SHA-1 independently computed over captured bytes."
+      sha1_matches: "Whether the captured bytes match the native fingerprint, stored as text."
+      text_content: "Derived PDF text when fingerprint and extraction checks succeed; null after a refusal."
+      pdf_extraction_results_json: "URL, body SHA-256, status, page count and error for the selected attempt."
+      observed_at: "Provider capture observation time."
+      extractor: "Application extraction implementation identity."
+      extractor_version: "Installed pypdf distribution version."
+      parent_opinion_publication_json: "Exact selected opinion family and its member metadata."
 
   native_legal_reference_reads:
     measured_on: "2026-09-27"

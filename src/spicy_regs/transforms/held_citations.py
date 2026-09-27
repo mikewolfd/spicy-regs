@@ -110,12 +110,16 @@ def build_held_citations(
     prior = published_table(output_dir, "document_citations", download_prior)
     states = {(s.get("document_kind"), s.get("document_key"), s.get("text_sha256")): s
               for s in read_checkpoints(prior, NAMESPACE)}
-    processing = json.dumps({"adapter": ADAPTER_VERSION, "bill_congress_policy": "explicit_only",
-                             "rules": {kind: CITATION_RULES_BY_NAME[kind].version for kind in kinds}}, sort_keys=True)
     rows, replaced, receipts = [], set(), []
     bytes_read = 0
     for selection in selections:
         spec = TEXT_SOURCES[selection.kind]
+        selected_kinds = tuple(kind for kind in kinds if kind not in spec.excluded_rules)
+        if not selected_kinds:
+            raise ValueError("No selected citation rules are qualified for this source")
+        processing = json.dumps({"adapter": ADAPTER_VERSION, "bill_congress_policy": "explicit_only",
+                                 "rules": {kind: CITATION_RULES_BY_NAME[kind].version for kind in selected_kinds},
+                                 "excluded_source_rules": spec.excluded_rules}, sort_keys=True)
         receipt: dict[str, Any] = {"document_kind": selection.kind, "document_key": selection.key,
                    "source_table": spec.table, "source_field": spec.field,
                    "source_keys": dict(zip(spec.keys, selection.keys, strict=True)),
@@ -146,9 +150,9 @@ def build_held_citations(
             if previous and all(previous.get(key) == value for key, value in state.items()):
                 receipt.update(status="unchanged_complete_field", findings=previous.get("findings"))
             else:
-                findings = find_citations(text, kinds=kinds, congress=None, bill_congress_policy="explicit_only")
+                findings = find_citations(text, kinds=selected_kinds, congress=None, bill_congress_policy="explicit_only")
                 provenance = DocumentProvenance(selection.key, selection.kind, spec.rendition,
-                                                f"literal-held-field:{spec.table}.{spec.field}/{ADAPTER_VERSION}", text_sha)
+                                                f"{spec.derivation}:{spec.table}.{spec.field}/{ADAPTER_VERSION}", text_sha)
                 rows.extend(shape_document_citation(f, provenance) for f in findings)
                 replaced.update((*identity, kind) for kind in kinds)
                 states[identity] = {**state, "findings": len(findings)}

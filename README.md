@@ -328,8 +328,17 @@ and an inline `columns:` together is refused at load.
 
 ## Use it from an AI assistant
 
-A read-only MCP server exposes SQL over the corpus with three tools:
-`list_sources()`, `describe_table(table)`, and `query_sql(sql)`.
+The read-only MCP server provides `list_sources()`, `describe_table(table)`,
+`query_sql(sql)`, `resolve_document_citations(...)`, and
+`lookup_agency(namespace, identifier, on_date=None)`.
+
+`lookup_agency` uses the pinned reviewed RefSpec mapping. Its exact namespaces
+are `regulations.gov:agency` (for example, `OPM`) and
+`federal_register_agency` (for example, `406`). It returns mapping evidence,
+digests and documented abstentions without opening corpus tables. Labels do not
+match identifiers, parent agencies are separate relationships, and an `on_date`
+request remains `temporal_scope_unqualified` for an otherwise mapped agency.
+This undated mapping cannot establish historical succession or money attribution.
 
 `list_sources` returns queryable tables in `tables`, all supported names in
 `declared_tables`, and missing views in `unavailable_tables`. Availability

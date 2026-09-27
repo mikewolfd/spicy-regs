@@ -209,6 +209,7 @@ TABLES: tuple[str, ...] = (
     "court_citation_map",
     "court_parentheticals",
     "court_opinions",
+    "court_opinion_pdf_extractions",
     "member_vote_terms",
     "usaspending_recipients",
     "fcc_proceedings",
@@ -232,6 +233,7 @@ TABLES: tuple[str, ...] = (
 # "queryable via MCP" flag can't drift from what the server actually serves.
 MCP_QUERYABLE: frozenset[str] = frozenset(
     {
+        "court_opinion_pdf_extractions",
         "native_legal_references",
         "native_legal_reference_reads",
         "dockets",
@@ -527,6 +529,7 @@ DERIVED_SCHEMAS: dict[str, list[tuple[str, str]]] = {
         ("filing_url", "VARCHAR"),
         ("native_fields_json", "VARCHAR"),
         ("native_fields_sha256", "VARCHAR"),
+        ("pdf_extraction_results_json", "VARCHAR"),
     ],
     # The bill-family rollup's own processing state (build_bill_family):
     # one retained GovInfo bulkdata listing entry per BILLSTATUS folder, which
@@ -672,6 +675,7 @@ def expected_schemas() -> dict[str, list[tuple[str, str]]]:
     from spicy_regs.transforms.build_court_opinion_clusters import COLUMNS as COURT_CLUSTER_COLUMNS
     from spicy_regs.transforms.build_courtlistener import PUBLISHED_COLUMNS as COURT_DOCKET_COLUMNS
     from spicy_regs.transforms.build_court_bulk_tables import CITATION_MAP, CITATIONS, OPINIONS, PARENTHETICALS
+    from spicy_regs.transforms.build_court_pdf_extractions import COLUMNS as COURT_PDF_COLUMNS
     from spicy_regs.transforms.build_member_vote_terms import COLUMNS as MEMBER_VOTE_TERM_COLUMNS
     from spicy_regs.transforms.build_sam_entities import COLUMNS as SAM_COLUMNS
     from spicy_regs.transforms.build_lobbying_filings import (
@@ -695,6 +699,7 @@ def expected_schemas() -> dict[str, list[tuple[str, str]]]:
         "court_citation_map": CITATION_MAP.columns,
         "court_parentheticals": PARENTHETICALS.columns,
         "court_opinions": OPINIONS.columns,
+        "court_opinion_pdf_extractions": COURT_PDF_COLUMNS,
         "member_vote_terms": MEMBER_VOTE_TERM_COLUMNS,
         "sam_entities": SAM_COLUMNS,
         "lobbying_filings": LOBBYING_COLUMNS,
@@ -1179,6 +1184,8 @@ def build_mcp_metadata(descriptions: dict, schemas: dict[str, list[tuple[str, st
     package resource adds field prose, expected types and declared row identity
     from the same inputs. It describes supported output, not observed publication.
     """
+    from spicy_regs.aggregate_checks import AGGREGATES
+
     classes = build_catalog(descriptions, schemas)["classes"]
     result = {}
     for entry in classes:
@@ -1206,6 +1213,15 @@ def build_mcp_metadata(descriptions: dict, schemas: dict[str, list[tuple[str, st
                 for name, dtype in schemas[table]
             ],
         }
+        checks = [{"name": check.name, "role": "output" if table == check.output else "input",
+                   "grain": list(check.grain), "population": check.population,
+                   "selection_policy": "Matching declared input bytes or one materialized/catalog export snapshot; "
+                   "fixed comment URLs require unchanged ETags around the read. Each check selects its own pins.",
+                   "command": f"uv run --frozen python scripts/check_table_joins.py --aggregate {check.name}",
+                   "status": "available_check_not_a_live_measurement"}
+                  for check in AGGREGATES if table in (check.output, *check.inputs)]
+        if checks:
+            result[table]["aggregate_checks"] = checks
     return result
 
 

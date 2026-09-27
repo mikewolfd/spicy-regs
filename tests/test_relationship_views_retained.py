@@ -29,6 +29,8 @@ def test_native_vote_keeps_all_document_and_amendment_occurrences():
         '119-senate-1-522', json.dumps(documents), json.dumps(amendments), vote.findtext('vote_question_text'),
         'https://www.senate.gov/legislative/LIS/roll_call_votes/vote1191/vote_119_1_00522.xml',
     ])
+    con.execute("ALTER TABLE roll_call_votes ADD COLUMN congress VARCHAR DEFAULT '119'")
+    con.execute("ALTER TABLE roll_call_votes ADD COLUMN chamber VARCHAR DEFAULT 'senate'")
     install_relationship_views(con, ['roll_call_votes'], {'roll_call_votes': {'fixture_sha256': hashlib.sha256(raw).hexdigest()}})
     assert con.execute('SELECT count(*) FROM vote_documents_occurrences').fetchone()[0] == len(documents) == 48
     assert con.execute('SELECT count(*) FROM vote_amendments_occurrences').fetchone()[0] == len(amendments) == 48
@@ -64,3 +66,35 @@ def test_native_meeting_keeps_independent_jackets_witnesses_and_offered_document
     assert con.execute('SELECT count(*) FROM meeting_witnesses_pairs').fetchone()[0] == 0
     saved = con.execute('SELECT raw_value_json FROM meeting_witness_documents_occurrences ORDER BY source_ordinal').fetchall()
     assert [json.loads(row[0]) for row in saved] == witness_docs
+
+
+def test_native_amendment_and_treaty_use_independent_source_congress():
+    con: Any = duckdb.connect()
+    con.execute('CREATE TABLE roll_call_votes(vote_id VARCHAR,congress VARCHAR,chamber VARCHAR,'
+                'documents_json VARCHAR,amendments_json VARCHAR,question VARCHAR,source_url VARCHAR)')
+    receipts = json.loads((FIXTURES / 'amendment-treaty-provenance-2026-09-27.json').read_text())
+    for filename, kind, key, congress in [
+        ('senate-vote-108-2-00172.xml', 'amendment', '108-senate-2-172', '108'),
+        ('senate-vote-109-1-00244.xml', 'treaty', '109-senate-1-244', '109'),
+    ]:
+        raw = (FIXTURES / filename).read_bytes()
+        receipt = next(r for r in receipts if r['kind'] == kind)
+        assert 'sha256:' + hashlib.sha256(raw).hexdigest() == receipt['sha256']
+        native = ET.fromstring(raw)
+        documents = [{c.tag.removeprefix('document_'): c.text for c in node} for node in native.findall('document')]
+        amendments = [{c.tag.removeprefix('amendment_'): c.text for c in node} for node in native.findall('amendment')]
+        con.execute('INSERT INTO roll_call_votes VALUES (?,?,?,?,?,?,?)', [
+            key, congress, 'senate', json.dumps(documents), json.dumps(amendments),
+            native.findtext('vote_question_text'), receipt['requested_url'],
+        ])
+    install_relationship_views(con, ['roll_call_votes'])
+    assert con.execute('SELECT target_kind,target_key FROM vote_amendments_pairs').fetchall() == [('amendment', '108-samdt-3609')]
+    assert con.execute('SELECT target_kind,target_key FROM vote_documents_pairs').fetchall() == [('treaty', '108-6')]
+    assert con.execute('SELECT count(*) FROM vote_amendments_occurrences').fetchone()[0] == 2
+    # Refuse disagreement or absent source context; do not use the computer's current Congress.
+    con.execute("UPDATE roll_call_votes SET congress='119' WHERE vote_id='108-senate-2-172'")
+    assert con.execute('SELECT count(*) FROM vote_amendments_pairs').fetchone()[0] == 0
+    con.execute("UPDATE roll_call_votes SET congress=NULL")
+    assert con.execute('SELECT count(*) FROM vote_amendments_pairs').fetchone()[0] == 0
+    # The explicit treaty identity still stands independently of this context.
+    assert con.execute('SELECT target_key FROM vote_documents_pairs').fetchall() == [('108-6',)]

@@ -62,3 +62,28 @@ These bounded reads do not establish whole-document or corpus recall. FCC body
 extraction remains disabled until a retained body route is qualified. Inline
 comments require a managed source publication before the publication CLI will
 accept them.
+
+Communication selections now keep three source roles separate:
+`communication_authority`, `communication_report_nature`, and
+`communication_record_entry`. Their full key is Congress, communication type,
+and number. Each role hashes and reads its own literal field; a null printed
+entry remains unread even when the authority field is populated. The 2026-09-27
+bounded replay of 119-ec-4554 and 119-ec-1278 retained exact spans and source pins
+under `~/Work/corpora/supply-2026-09-02/receipts/communication-held-citations-2026-09-27/`.
+Committee referrals remain the source's structured referrals, not inferred
+citation matches; unresolved official/agency splits remain unresolved.
+
+Court PDF text uses `court_opinion_derived_pdf`, keyed by the compact JSON pair
+`[opinion_id, source_sha256]`. Its source is
+`court_opinion_pdf_extractions.text_content`; the PDF digest in the key remains
+separate from the derived text digest. Citations state `pdf` rendition and
+`derived_pdf` derivation. Null/failed extraction text remains unread.
+
+The retained 2026-09-27 three-body cohort qualified exact spans and preserved
+prior citation rows. One body completed with zero supported findings. The generic
+`case_docket_number` rule misclassified Governor Proclamation `No. 20-50`, so
+this adapter excludes it and records that omission in each read checkpoint.
+State reporters, short forms and other unsupported citation types remain outside
+this qualification. Evidence and the preserving candidate are under
+`~/.codex/artifacts/spicy-regs-court-citations-20260927/verification.json`;
+publication is a separate step.

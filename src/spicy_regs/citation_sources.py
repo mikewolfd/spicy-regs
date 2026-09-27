@@ -10,9 +10,28 @@ class TextSource:
     keys: tuple[str, ...]
     field: str
     rendition: str
+    derivation: str = "literal-held-field"
+    excluded_rules: tuple[str, ...] = ()
 
 
 TEXT_SOURCES = {
+    "court_opinion_derived_pdf": TextSource(
+        "court_opinion_pdf_extractions",
+        ("opinion_id", "source_sha256"),
+        "text_content",
+        "pdf",
+        "derived_pdf",
+        ("case_docket_number",),
+    ),
+    "communication_authority": TextSource(
+        "house_communications", ("congress", "communication_type", "number"), "legal_authority", "txt"
+    ),
+    "communication_report_nature": TextSource(
+        "house_communications", ("congress", "communication_type", "number"), "report_nature", "txt"
+    ),
+    "communication_record_entry": TextSource(
+        "house_communications", ("congress", "communication_type", "number"), "record_entry_text", "txt"
+    ),
     "bill_section": TextSource("bill_sections", ("bill_id", "version_code", "source", "seq"), "body", "txt"),
     "report_section": TextSource("report_sections", ("package_id", "part_id", "seq"), "body", "txt"),
     "lobbying_activity": TextSource("lobbying_activities", ("filing_uuid", "activity_index"), "description", "txt"),

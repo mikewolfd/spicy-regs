@@ -142,30 +142,41 @@ def test_merge_keeps_existing_when_incoming_is_older(tmp_path, local_catalog) ->
     assert title == "Newer"
 
 
-def test_merge_upserts_without_merge_into(tmp_path) -> None:
-    """Keep the tested DELETE + INSERT sequence; other tests prove row semantics."""
-    _write_staging(tmp_path / "s", "EPA", [_docket("EPA-1", "EPA", "T", "2025-01-01")])
-    files = iceberg._staging_files(tmp_path / "s", DOCKET)
+def test_replacement_failure_after_write_rolls_back(local_catalog) -> None:
+    """A write or readback failure cannot leave a partially replaced catalog."""
+    con = local_catalog
+    iceberg._ensure_table(con, DOCKET)
+    table = iceberg._qualified(DOCKET)
+    con.execute(f"INSERT INTO {table} (docket_id,title) VALUES ('D','old')")
+    con.execute(f"CREATE TEMP TABLE fresh AS SELECT * REPLACE ('new' AS title) FROM {table}")
 
-    executed: list[str] = []
-
-    class _RecordingCon:
+    class FailingCon:
         def execute(self, sql, *args, **kwargs):
-            executed.append(sql)
-            return self
+            result = con.execute(sql, *args, **kwargs)
+            if sql.startswith("MERGE INTO"):
+                raise RuntimeError("readback failure after merge")
+            return result
 
-        def fetchall(self):
-            return []
+    with pytest.raises(RuntimeError, match="readback failure"):
+        iceberg.replace_rows(FailingCon(), DOCKET, "fresh")
+    assert con.execute(f"SELECT docket_id,title FROM {table}").fetchall() == [('D', 'old')]
+    iceberg.replace_rows(con, DOCKET, "fresh")
+    assert con.execute(f"SELECT docket_id,title FROM {table}").fetchall() == [('D', 'new')]
 
-        def fetchone(self):
-            return [1]
 
-    iceberg._merge(_RecordingCon(), files, DOCKET)
-
-    sql = " ".join(executed).upper()
-    assert "MERGE INTO" not in sql, "preserve the tested DELETE + INSERT sequence"
-    assert "DELETE FROM" in sql
-    assert "INSERT INTO" in sql
+@pytest.mark.parametrize("side", ["source", "prior"])
+def test_replacement_refuses_duplicate_identities_before_writing(local_catalog, side) -> None:
+    con = local_catalog
+    iceberg._ensure_table(con, DOCKET)
+    table = iceberg._qualified(DOCKET)
+    con.execute(f"INSERT INTO {table} (docket_id,title) VALUES ('D','old')")
+    con.execute(f"CREATE TEMP TABLE fresh AS SELECT * REPLACE ('new' AS title) FROM {table}")
+    duplicate_table = "fresh" if side == "source" else table
+    con.execute(f"INSERT INTO {duplicate_table} SELECT * FROM {duplicate_table}")
+    before = con.execute(f"SELECT * FROM {table}").fetchall()
+    with pytest.raises(ValueError, match="identities"):
+        iceberg.replace_rows(con, DOCKET, "fresh")
+    assert con.execute(f"SELECT * FROM {table}").fetchall() == before
 
 
 def test_export_parquet_matches_published_shape(tmp_path, local_catalog) -> None:

@@ -130,3 +130,60 @@ def test_local_partial_publication_does_not_prove_published_scope():
     args = lineage(check)
     args["root"]["spec"]["publicationStatus"] = "local-partial"
     assert qualify(check, **args)[0] == "INCOMPARABLE"
+
+
+def test_materialized_snapshot_requires_identity_and_build_dependency():
+    check = BY_NAME["lifecycle-outcomes"]
+    pins = {t: {"kind": "materialized", "snapshot_id": "s1", "sha256": "sha256:" + "a" * 64}
+            for t in (check.output, *check.inputs)}
+    root = {"snapshot_id": "s1", "artifacts": {
+        t + ".parquet": {"visibility": "public", "sha256": "a" * 64} for t in pins},
+        "stages": [{"name": "lifecycles", "outputs": ["rulemaking_lifecycles.parquet"], "depends_on": []},
+                   {"name": "stats", "outputs": ["agency_lifecycle_stats.parquet"], "depends_on": ["lifecycles"]}]}
+    assert qualify(check, pins, root)[0] == "COMPARABLE"
+    pins["rulemaking_lifecycles"]["snapshot_id"] = "s2"
+    assert qualify(check, pins, root)[0] == "INCOMPARABLE"
+    pins["rulemaking_lifecycles"]["snapshot_id"] = "s1"
+    root["stages"][1]["depends_on"] = []
+    assert qualify(check, pins, root)[0] == "INCOMPARABLE"
+
+
+def test_comment_export_requires_same_receipt_and_exact_member_identity():
+    check = BY_NAME["comments-index"]
+    pins = {t: {"kind": "comments-mirror", "receipt_sha256": "sha256:" + "b" * 64,
+                "sha256": "sha256:" + "a" * 64} for t in (check.output, *check.inputs)}
+    root = {"source": {"snapshot_id": 7}, "files": {
+        t + ".parquet": {"sha256": "a" * 64} for t in pins}}
+    assert qualify(check, pins, root)[0] == "COMPARABLE"
+    pins["comments"]["receipt_sha256"] = "sha256:" + "c" * 64
+    assert qualify(check, pins, root)[0] == "INCOMPARABLE"
+    pins["comments"]["receipt_sha256"] = pins["comments_index"]["receipt_sha256"]
+    pins["comments"]["sha256"] = "sha256:" + "d" * 64
+    assert qualify(check, pins, root)[0] == "INCOMPARABLE"
+
+
+def test_managed_rollup_can_match_exact_comment_export_storage_version():
+    check = BY_NAME["agency-comment"]
+    args = lineage(check)
+    args["pins"]["comments_index"].update(kind="comments-mirror", etag='"version"', bytes=12)
+    args["root"]["spec"]["parents"]["comments_index.parquet"] = {"etag": '"version"', "byteSize": 12}
+    assert qualify(check, **args)[0] == "COMPARABLE"
+    args["pins"]["comments_index"]["bytes"] = 13
+    assert qualify(check, **args)[0] == "INCOMPARABLE"
+
+
+def test_moving_comment_object_cannot_leave_a_successful_measurement(monkeypatch):
+    from spicy_regs import aggregate_checks as checks
+
+    monkeypatch.setattr(checks.publication, "current_index", lambda _: {"families": {}})
+    monkeypatch.setattr(checks.publication, "load_comments_publication", lambda _: {
+        "receipt_sha256": "sha256:" + "b" * 64, "receipt": {"source": {"snapshot_id": 7}, "files": {
+            t + ".parquet": {"sha256": "a" * 64, "rows": 1, "bytes": 12, "etag": '"before"'}
+            for t in ("comments", "comments_index")}}})
+    matching = iter((True, False))
+    monkeypatch.setattr(checks, "_mutable_versions_match", lambda _: next(matching))
+    monkeypatch.setattr(checks, "measure", lambda *a, **k: {"status": "OK", "expected_total": 1, "observed_total": 1})
+    receipt = checks.check_public(None, "https://example.test", ["comments-index"])
+    result = receipt["results"][0]
+    assert result["status"] == "NOT_MEASURED" and result["read_status"] == "moved_public_version"
+    assert "expected_total" not in result and "observed_total" not in result

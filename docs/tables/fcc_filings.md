@@ -6,7 +6,7 @@
 
 One row per FCC ECFS filing — the FCC's comment equivalent: comments, reply comments, ex-parte notices, letters, and other submissions — ingested from the FCC ECFS public API (`/filings`) by `build_fcc_filings`. Requires an api.data.gov key (`DATA_GOV_API_KEY`). Incremental by `date_received`, deduped on `id_submission`; each window is pooled over whole walks until one is clean or the pool holds exactly the count ECFS aggregates for it. Because ECFS holds tens of millions of filings, a first run with no prior table is bounded to the trailing 30 days; deeper history is backfilled in slices via `FCC_SINCE` and/or scoped to specific proceedings via `FCC_PROCEEDINGS`. All columns are stored as VARCHAR, array fields serialized as JSON strings.
 
-**Coverage.** Window. 5,137 filings received 2026-08-24 to 2026-09-22, the bounded first run; every id and cell matched the raw pages. The rollup merges incrementally, so this is the history accumulated so far and not the ECFS archive. *(measured 2026-09-23)*
+**Coverage.** Window. All 5,780 held filings were replayed against retained or reacquired native source records on 2026-09-27 and published as generation 9c87b600aa7b5847. One proceeding-number cell was explicitly corrected from the native source; every other prior cell was preserved. Three selected offered PDFs have retained extraction diagnostics. This qualifies the held population, not the ECFS archive or complete attachment text. Receipt: spicy-regs-fcc-complete-20260927/receipt-final.json. *(measured 2026-09-27)*
 
 - **Parquet file:** `fcc_filings.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
@@ -34,3 +34,4 @@ One row per FCC ECFS filing — the FCC's comment equivalent: comments, reply co
 | `filing_url` | `VARCHAR` | Canonical fcc.gov URL for the filing (`https://www.fcc.gov/ecfs/filing/<id_submission>`). |
 | `native_fields_json` | `VARCHAR` | Selected named native ECFS fields retained as JSON, preserving absent keys, nulls, empty arrays, objects and roles. SQL null in older output means unread legacy data; rebuilding is required. Not the complete API response. |
 | `native_fields_sha256` | `VARCHAR` | SHA-256 of the exact native_fields_json string; identifies retained field bytes, not the complete API response. |
+| `pdf_extraction_results_json` | `VARCHAR` | Outcomes for selected offered attachment URLs, retaining source SHA-256, page count and extraction status. Null when no attempt is retained. These selected attempts do not establish complete filing text coverage. |

@@ -29,23 +29,31 @@ def meeting(name: str, field: str, kind: str, expr: str, valid: str, meaning: st
     )
 
 
-# Source-native types have spelling conventions that differ from bill-table keys.
-# Only PN and the bill shapes evidenced by the held parser are routed. Treaty and
-# amendment observations remain raw until positive source cases qualify a route.
+# Source-native positive fixtures qualify PN, bill, Treaty Doc. N-N and
+# Senate S.Amdt. N shapes. The treaty number states its Congress independently
+# of the vote context; amendment blocks borrow only their own vote's Congress.
 VOTE_TYPE = value("type")
 VOTE_CONGRESS = value("congress")
 VOTE_NUMBER = value("number")
 VOTE_BILL_TYPE = f"lower(replace({VOTE_TYPE}, '.', ''))"
+TREATY_VALID = f"{VOTE_TYPE} = 'Treaty Doc.' AND regexp_full_match({VOTE_NUMBER}, '[0-9]+-[0-9]+')"
 VOTE_VALID = (
-    f"e.type = 'OBJECT' AND regexp_full_match({VOTE_CONGRESS}, '[0-9]+') AND "
+    f"e.type = 'OBJECT' AND (({TREATY_VALID}) OR (regexp_full_match({VOTE_CONGRESS}, '[0-9]+') AND "
     f"(({VOTE_TYPE} = 'PN' AND regexp_full_match({VOTE_NUMBER}, '[0-9]+(-[0-9]+)?')) OR "
-    f"({VOTE_BILL_TYPE} IN {BILL_TYPES} AND regexp_full_match({VOTE_NUMBER}, '[0-9]+')))"
+    f"({VOTE_BILL_TYPE} IN {BILL_TYPES} AND regexp_full_match({VOTE_NUMBER}, '[0-9]+')))))"
 )
-VOTE_KIND = f"CASE WHEN {VOTE_TYPE} = 'PN' THEN 'nomination' ELSE 'bill' END"
+VOTE_KIND = f"CASE WHEN {VOTE_TYPE} = 'PN' THEN 'nomination' WHEN {TREATY_VALID} THEN 'treaty' ELSE 'bill' END"
 VOTE_KEY = (
     f"CASE WHEN {VOTE_TYPE} = 'PN' THEN {VOTE_CONGRESS} || ':PN' || {VOTE_NUMBER} "
+    f"WHEN {TREATY_VALID} THEN {VOTE_NUMBER} "
     f"ELSE {VOTE_CONGRESS} || '-' || {VOTE_BILL_TYPE} || '-' || {VOTE_NUMBER} END"
 )
+AMENDMENT_VALID = (
+    f"e.type = 'OBJECT' AND s.chamber='senate' AND regexp_full_match(s.congress,'[0-9]+') "
+    f"AND regexp_full_match(s.vote_id,s.congress||'-senate-[12]-[0-9]+') "
+    f"AND regexp_full_match({value('number')}, 'S\\.Amdt\\. [0-9]+')"
+)
+AMENDMENT_KEY = f"CASE WHEN {AMENDMENT_VALID} THEN s.congress||'-samdt-'||split_part({value('number')},' ',2) END"
 
 CONGRESS_RELATIONSHIPS = (
     ArrayRelationship(
@@ -86,7 +94,9 @@ CONGRESS_RELATIONSHIPS = (
         "vote_documents", "roll_call_votes", ("vote_id",), "documents_json", "vote_document",
         VOTE_KEY, VOTE_VALID,
         "Independent native Senate document references. PN suffixes and native Congress are retained. "
+        "Treaty Doc. N-N retains its own received Congress, independently of the vote Congress. "
         "No positional relationship to amendment blocks, default Congress, or motion interpretation is inferred.",
+        rule_version="vote-native-routing/2",
         context_columns=("question", "source_url"),
         details=(("native_congress", VOTE_CONGRESS), ("native_type", VOTE_TYPE),
                  ("native_number", VOTE_NUMBER), ("native_name", value("name"))),
@@ -94,9 +104,11 @@ CONGRESS_RELATIONSHIPS = (
     ),
     ArrayRelationship(
         "vote_amendments", "roll_call_votes", ("vote_id",), "amendments_json", "amendment_observation",
-        "NULL::VARCHAR", "e.type = 'OBJECT'",
-        "Independent native amendment blocks, including empty identifier blocks. Target routing is unsupported "
-        "until positive native amendment specimens qualify it; no pairing with document arrays.",
-        context_columns=("question", "source_url"),
+        AMENDMENT_KEY, "e.type = 'OBJECT'",
+        "Independent native amendment blocks, including empty identifiers. Qualified Senate S.Amdt. N "
+        "uses the source vote Congress and chamber; it never borrows a document block or current Congress.",
+        context_columns=("congress", "chamber", "question", "source_url"),
+        target_kind_expression=f"CASE WHEN {AMENDMENT_VALID} THEN 'amendment' ELSE 'amendment_observation' END",
+        rule_version="vote-native-routing/2",
     ),
 )

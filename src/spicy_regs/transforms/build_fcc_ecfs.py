@@ -99,6 +99,7 @@ FILING_COLUMNS = (
     "filing_url",
     "native_fields_json",
     "native_fields_sha256",
+    "pdf_extraction_results_json",
 )
 _FILING_SCHEMA = pa.schema([(c, pa.string()) for c in FILING_COLUMNS])
 
@@ -164,6 +165,7 @@ def _shape_filing(raw: dict) -> dict:
     documents = raw_documents if isinstance(raw_documents, list) else []
     return {
         "id_submission": id_submission,
+        "pdf_extraction_results_json": None,
         "native_fields_json": native_fields,
         # Identity of the retained selected-field serialization, NOT an HTTP capture digest.
         "native_fields_sha256": "sha256:" + hashlib.sha256(native_fields.encode()).hexdigest(),
@@ -433,6 +435,7 @@ def _merge_incremental(
     out_file = output_dir / output
     new_file = output_dir / f"{scratch_prefix}_new.parquet"
     staged = output_dir / f".{output}.partial"
+    enriched_new = output_dir / f".{output}.diagnostics.parquet"
     aligned_prior = output_dir / f".{output}.aligned-prior.parquet"
     try:
         write_rows(rows, new_file, schema)
@@ -457,13 +460,27 @@ def _merge_incremental(
                     con.execute(f"COPY (SELECT {projection} FROM read_parquet('{prior_path}')) TO ? (FORMAT PARQUET)",
                                 [str(aligned_prior)])
                     selected_prior = aligned_prior
+            selected_new = new_file
+            if selected_prior is not None and "pdf_extraction_results_json" in columns:
+                # A declaration change invalidates earlier URL/body association. Same declarations
+                # retain their diagnostic observations even when the native page is refreshed.
+                new_path = str(new_file).replace("'", "''")
+                prior_path = str(selected_prior).replace("'", "''")
+                con.execute(
+                    f"COPY (SELECT n.* REPLACE (coalesce(n.pdf_extraction_results_json, "
+                    "CASE WHEN n.documents_json IS NOT DISTINCT FROM p.documents_json "
+                    "THEN p.pdf_extraction_results_json::VARCHAR END) AS pdf_extraction_results_json) "
+                    f"FROM read_parquet('{new_path}') n LEFT JOIN read_parquet('{prior_path}') p "
+                    "ON n.id_submission=p.id_submission) TO ? (FORMAT PARQUET)", [str(enriched_new)]
+                )
+                selected_new = enriched_new
             merge_local_prior(
                 con,
                 columns=columns,
                 identity=key,
                 order_by=f"{order_by} DESC, {key}",
                 prior_file=selected_prior,
-                new_file=new_file,
+                new_file=selected_new,
                 out_file=staged,
             )
         finally:
@@ -473,6 +490,7 @@ def _merge_incremental(
         new_file.unlink(missing_ok=True)
         staged.unlink(missing_ok=True)
         aligned_prior.unlink(missing_ok=True)
+        enriched_new.unlink(missing_ok=True)
 
     prior_file.unlink(missing_ok=True)
     return out_file

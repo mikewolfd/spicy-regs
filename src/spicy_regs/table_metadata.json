@@ -3,7 +3,7 @@
     "table": "native_legal_references",
     "label": "Native legal-reference observations",
     "summary": "Selected eCFR AUTH/SOURCE notes and U.S. Code href/source-credit observations, retaining source XML paths and digests. Complete reads replace the selected source/edition scope, including successful empty corrections. Candidate target matches concern held classification rows, not independently acquired legal text. Unparsed prose and unsupported forms remain visible; no universal extraction or historical completeness is implied.",
-    "coverage": "Sampled. Explicit retained-input manifests only; no public population is claimed. Edition is unknown unless supplied by the selection.",
+    "coverage": "Sampled. Generation 53755e3e0076dfa5 publishes 881 observations from complete retained eCFR Title 1 requested as of 2026-08-10 and USC Title 1 release 119-103. Exact enclosing input bytes and source receipts qualify both selections. Selected public target tables resolve 19 occurrences; missing, unsupported and unqueried targets remain explicit. Receipt: native-legal-full-2026-09-27/resolved-verification.json.",
     "kind": "sampled",
     "measured_on": "2026-09-27",
     "data_quality": null,
@@ -244,6 +244,41 @@
     "grain": null,
     "identity_columns": [
       "docket_id"
+    ],
+    "aggregate_checks": [
+      {
+        "name": "agency-docket",
+        "role": "input",
+        "grain": [
+          "agency_code"
+        ],
+        "population": "All held rows with non-NULL agency; zero-valued agency cells may originate in another input.",
+        "selection_policy": "Matching declared input bytes or one materialized/catalog export snapshot; fixed comment URLs require unchanged ETags around the read. Each check selects its own pins.",
+        "command": "uv run --frozen python scripts/check_table_joins.py --aggregate agency-docket",
+        "status": "available_check_not_a_live_measurement"
+      },
+      {
+        "name": "feed-dockets",
+        "role": "input",
+        "grain": [
+          "docket_id"
+        ],
+        "population": "One feed row per held docket row, including NULL docket identities.",
+        "selection_policy": "Matching declared input bytes or one materialized/catalog export snapshot; fixed comment URLs require unchanged ETags around the read. Each check selects its own pins.",
+        "command": "uv run --frozen python scripts/check_table_joins.py --aggregate feed-dockets",
+        "status": "available_check_not_a_live_measurement"
+      },
+      {
+        "name": "feed-comments",
+        "role": "input",
+        "grain": [
+          "docket_id"
+        ],
+        "population": "Comments on held docket rows only; SQL NULL dockets do not match; repeated dockets multiply as builder does.",
+        "selection_policy": "Matching declared input bytes or one materialized/catalog export snapshot; fixed comment URLs require unchanged ETags around the read. Each check selects its own pins.",
+        "command": "uv run --frozen python scripts/check_table_joins.py --aggregate feed-comments",
+        "status": "available_check_not_a_live_measurement"
+      }
     ]
   },
   "documents": {
@@ -349,6 +384,33 @@
     "grain": null,
     "identity_columns": [
       "document_id"
+    ],
+    "aggregate_checks": [
+      {
+        "name": "agency-document",
+        "role": "input",
+        "grain": [
+          "agency_code"
+        ],
+        "population": "All held rows with non-NULL agency; zero-valued agency cells may originate in another input.",
+        "selection_policy": "Matching declared input bytes or one materialized/catalog export snapshot; fixed comment URLs require unchanged ETags around the read. Each check selects its own pins.",
+        "command": "uv run --frozen python scripts/check_table_joins.py --aggregate agency-document",
+        "status": "available_check_not_a_live_measurement"
+      },
+      {
+        "name": "monthly-documents",
+        "role": "input",
+        "grain": [
+          "agency_code",
+          "year",
+          "month",
+          "document_type"
+        ],
+        "population": "Usable posted dates only; NULL, unparseable and year-zero dates omitted; NULL agency/type retained.",
+        "selection_policy": "Matching declared input bytes or one materialized/catalog export snapshot; fixed comment URLs require unchanged ETags around the read. Each check selects its own pins.",
+        "command": "uv run --frozen python scripts/check_table_joins.py --aggregate monthly-documents",
+        "status": "available_check_not_a_live_measurement"
+      }
     ]
   },
   "comments": {
@@ -469,6 +531,22 @@
     "grain": null,
     "identity_columns": [
       "comment_id"
+    ],
+    "aggregate_checks": [
+      {
+        "name": "comments-index",
+        "role": "input",
+        "grain": [
+          "agency_code",
+          "docket_id",
+          "year",
+          "month"
+        ],
+        "population": "All held comment rows, including NULL cohort keys; strict timestamp conversion as index builder.",
+        "selection_policy": "Matching declared input bytes or one materialized/catalog export snapshot; fixed comment URLs require unchanged ETags around the read. Each check selects its own pins.",
+        "command": "uv run --frozen python scripts/check_table_joins.py --aggregate comments-index",
+        "status": "available_check_not_a_live_measurement"
+      }
     ]
   },
   "comments_index": {
@@ -512,6 +590,44 @@
       "docket_id",
       "year",
       "month"
+    ],
+    "aggregate_checks": [
+      {
+        "name": "comments-index",
+        "role": "output",
+        "grain": [
+          "agency_code",
+          "docket_id",
+          "year",
+          "month"
+        ],
+        "population": "All held comment rows, including NULL cohort keys; strict timestamp conversion as index builder.",
+        "selection_policy": "Matching declared input bytes or one materialized/catalog export snapshot; fixed comment URLs require unchanged ETags around the read. Each check selects its own pins.",
+        "command": "uv run --frozen python scripts/check_table_joins.py --aggregate comments-index",
+        "status": "available_check_not_a_live_measurement"
+      },
+      {
+        "name": "agency-comment",
+        "role": "input",
+        "grain": [
+          "agency_code"
+        ],
+        "population": "All held rows with non-NULL agency; zero-valued agency cells may originate in another input.",
+        "selection_policy": "Matching declared input bytes or one materialized/catalog export snapshot; fixed comment URLs require unchanged ETags around the read. Each check selects its own pins.",
+        "command": "uv run --frozen python scripts/check_table_joins.py --aggregate agency-comment",
+        "status": "available_check_not_a_live_measurement"
+      },
+      {
+        "name": "feed-comments",
+        "role": "input",
+        "grain": [
+          "docket_id"
+        ],
+        "population": "Comments on held docket rows only; SQL NULL dockets do not match; repeated dockets multiply as builder does.",
+        "selection_policy": "Matching declared input bytes or one materialized/catalog export snapshot; fixed comment URLs require unchanged ETags around the read. Each check selects its own pins.",
+        "command": "uv run --frozen python scripts/check_table_joins.py --aggregate feed-comments",
+        "status": "available_check_not_a_live_measurement"
+      }
     ]
   },
   "feed_summary": {
@@ -572,6 +688,30 @@
     "grain": null,
     "identity_columns": [
       "docket_id"
+    ],
+    "aggregate_checks": [
+      {
+        "name": "feed-dockets",
+        "role": "output",
+        "grain": [
+          "docket_id"
+        ],
+        "population": "One feed row per held docket row, including NULL docket identities.",
+        "selection_policy": "Matching declared input bytes or one materialized/catalog export snapshot; fixed comment URLs require unchanged ETags around the read. Each check selects its own pins.",
+        "command": "uv run --frozen python scripts/check_table_joins.py --aggregate feed-dockets",
+        "status": "available_check_not_a_live_measurement"
+      },
+      {
+        "name": "feed-comments",
+        "role": "output",
+        "grain": [
+          "docket_id"
+        ],
+        "population": "Comments on held docket rows only; SQL NULL dockets do not match; repeated dockets multiply as builder does.",
+        "selection_policy": "Matching declared input bytes or one materialized/catalog export snapshot; fixed comment URLs require unchanged ETags around the read. Each check selects its own pins.",
+        "command": "uv run --frozen python scripts/check_table_joins.py --aggregate feed-comments",
+        "status": "available_check_not_a_live_measurement"
+      }
     ]
   },
   "agency_stats": {
@@ -607,6 +747,41 @@
     "grain": null,
     "identity_columns": [
       "agency_code"
+    ],
+    "aggregate_checks": [
+      {
+        "name": "agency-docket",
+        "role": "output",
+        "grain": [
+          "agency_code"
+        ],
+        "population": "All held rows with non-NULL agency; zero-valued agency cells may originate in another input.",
+        "selection_policy": "Matching declared input bytes or one materialized/catalog export snapshot; fixed comment URLs require unchanged ETags around the read. Each check selects its own pins.",
+        "command": "uv run --frozen python scripts/check_table_joins.py --aggregate agency-docket",
+        "status": "available_check_not_a_live_measurement"
+      },
+      {
+        "name": "agency-document",
+        "role": "output",
+        "grain": [
+          "agency_code"
+        ],
+        "population": "All held rows with non-NULL agency; zero-valued agency cells may originate in another input.",
+        "selection_policy": "Matching declared input bytes or one materialized/catalog export snapshot; fixed comment URLs require unchanged ETags around the read. Each check selects its own pins.",
+        "command": "uv run --frozen python scripts/check_table_joins.py --aggregate agency-document",
+        "status": "available_check_not_a_live_measurement"
+      },
+      {
+        "name": "agency-comment",
+        "role": "output",
+        "grain": [
+          "agency_code"
+        ],
+        "population": "All held rows with non-NULL agency; zero-valued agency cells may originate in another input.",
+        "selection_policy": "Matching declared input bytes or one materialized/catalog export snapshot; fixed comment URLs require unchanged ETags around the read. Each check selects its own pins.",
+        "command": "uv run --frozen python scripts/check_table_joins.py --aggregate agency-comment",
+        "status": "available_check_not_a_live_measurement"
+      }
     ]
   },
   "agency_monthly_volume": {
@@ -650,6 +825,22 @@
       "year",
       "month",
       "document_type"
+    ],
+    "aggregate_checks": [
+      {
+        "name": "monthly-documents",
+        "role": "output",
+        "grain": [
+          "agency_code",
+          "year",
+          "month",
+          "document_type"
+        ],
+        "population": "Usable posted dates only; NULL, unparseable and year-zero dates omitted; NULL agency/type retained.",
+        "selection_policy": "Matching declared input bytes or one materialized/catalog export snapshot; fixed comment URLs require unchanged ETags around the read. Each check selects its own pins.",
+        "command": "uv run --frozen python scripts/check_table_joins.py --aggregate monthly-documents",
+        "status": "available_check_not_a_live_measurement"
+      }
     ]
   },
   "fr_docket_links": {
@@ -1913,6 +2104,21 @@
     "grain": "One lifecycle per docketed proceeding.",
     "identity_columns": [
       "proceeding_id"
+    ],
+    "aggregate_checks": [
+      {
+        "name": "lifecycle-outcomes",
+        "role": "input",
+        "grain": [
+          "agency_code",
+          "censor_date",
+          "outcome"
+        ],
+        "population": "All-stratum non-NULL outcomes only, plus global NULL-agency cell; separate routine strata are overlapping.",
+        "selection_policy": "Matching declared input bytes or one materialized/catalog export snapshot; fixed comment URLs require unchanged ETags around the read. Each check selects its own pins.",
+        "command": "uv run --frozen python scripts/check_table_joins.py --aggregate lifecycle-outcomes",
+        "status": "available_check_not_a_live_measurement"
+      }
     ]
   },
   "lifecycle_events": {
@@ -2130,6 +2336,21 @@
     "identity_columns": [
       "agency_code",
       "stratum"
+    ],
+    "aggregate_checks": [
+      {
+        "name": "lifecycle-outcomes",
+        "role": "output",
+        "grain": [
+          "agency_code",
+          "censor_date",
+          "outcome"
+        ],
+        "population": "All-stratum non-NULL outcomes only, plus global NULL-agency cell; separate routine strata are overlapping.",
+        "selection_policy": "Matching declared input bytes or one materialized/catalog export snapshot; fixed comment URLs require unchanged ETags around the read. Each check selects its own pins.",
+        "command": "uv run --frozen python scripts/check_table_joins.py --aggregate lifecycle-outcomes",
+        "status": "available_check_not_a_live_measurement"
+      }
     ]
   },
   "sam_entities": {
@@ -3741,6 +3962,92 @@
       "opinion_id"
     ]
   },
+  "court_opinion_pdf_extractions": {
+    "table": "court_opinion_pdf_extractions",
+    "label": "Selected court opinion PDF text",
+    "summary": "Text from literally offered PDF URLs, tied to the selected opinion generation, native body fingerprint, capture evidence and extractor version. A native digest mismatch records a refusal without supplying text. Join opinion_id to court_opinions and cluster_id to court_opinion_clusters; this table does not infer case-name identity.",
+    "coverage": "Sampled. Three selected publisher PDFs were acquired on 2026-09-27. Each exact body matches its held CourtListener SHA-1 and has its own SHA-256 and extraction outcome. This is derived PDF text, separate from CourtListener native text fields and from the complete opinion index. Receipt: spicy-regs-court-cohort-20260927/bodies-receipt.json.",
+    "kind": "sampled",
+    "measured_on": "2026-09-27",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "opinion_id",
+        "column_type": "VARCHAR",
+        "description": "Native CourtListener opinion ID selected for acquisition."
+      },
+      {
+        "column_name": "cluster_id",
+        "column_type": "VARCHAR",
+        "description": "Native opinion cluster ID from that same held opinion row."
+      },
+      {
+        "column_name": "source_url",
+        "column_type": "VARCHAR",
+        "description": "Literal download_url offered by the selected opinion."
+      },
+      {
+        "column_name": "resolved_url",
+        "column_type": "VARCHAR",
+        "description": "Final response URL observed by the provider."
+      },
+      {
+        "column_name": "source_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of complete captured PDF bytes."
+      },
+      {
+        "column_name": "native_sha1",
+        "column_type": "VARCHAR",
+        "description": "Body SHA-1 asserted by the selected native opinion row."
+      },
+      {
+        "column_name": "actual_sha1",
+        "column_type": "VARCHAR",
+        "description": "SHA-1 independently computed over captured bytes."
+      },
+      {
+        "column_name": "sha1_matches",
+        "column_type": "VARCHAR",
+        "description": "Whether the captured bytes match the native fingerprint, stored as text."
+      },
+      {
+        "column_name": "text_content",
+        "column_type": "VARCHAR",
+        "description": "Derived PDF text when fingerprint and extraction checks succeed; null after a refusal."
+      },
+      {
+        "column_name": "pdf_extraction_results_json",
+        "column_type": "VARCHAR",
+        "description": "URL, body SHA-256, status, page count and error for the selected attempt."
+      },
+      {
+        "column_name": "observed_at",
+        "column_type": "VARCHAR",
+        "description": "Provider capture observation time."
+      },
+      {
+        "column_name": "extractor",
+        "column_type": "VARCHAR",
+        "description": "Application extraction implementation identity."
+      },
+      {
+        "column_name": "extractor_version",
+        "column_type": "VARCHAR",
+        "description": "Installed pypdf distribution version."
+      },
+      {
+        "column_name": "parent_opinion_publication_json",
+        "column_type": "VARCHAR",
+        "description": "Exact selected opinion family and its member metadata."
+      }
+    ],
+    "grain": "One retained PDF extraction per opinion and exact observed body.",
+    "identity_columns": [
+      "opinion_id",
+      "source_sha256"
+    ]
+  },
   "member_vote_terms": {
     "table": "member_vote_terms",
     "label": "Member vote terms",
@@ -3946,9 +4253,9 @@
     "table": "fcc_filings",
     "label": "FCC filings",
     "summary": "One row per FCC ECFS filing — the FCC's comment equivalent: comments, reply comments, ex-parte notices, letters, and other submissions — ingested from the FCC ECFS public API (`/filings`) by `build_fcc_filings`. Requires an api.data.gov key (`DATA_GOV_API_KEY`). Incremental by `date_received`, deduped on `id_submission`; each window is pooled over whole walks until one is clean or the pool holds exactly the count ECFS aggregates for it. Because ECFS holds tens of millions of filings, a first run with no prior table is bounded to the trailing 30 days; deeper history is backfilled in slices via `FCC_SINCE` and/or scoped to specific proceedings via `FCC_PROCEEDINGS`. All columns are stored as VARCHAR, array fields serialized as JSON strings.",
-    "coverage": "Window. 5,137 filings received 2026-08-24 to 2026-09-22, the bounded first run; every id and cell matched the raw pages. The rollup merges incrementally, so this is the history accumulated so far and not the ECFS archive.",
+    "coverage": "Window. All 5,780 held filings were replayed against retained or reacquired native source records on 2026-09-27 and published as generation 9c87b600aa7b5847. One proceeding-number cell was explicitly corrected from the native source; every other prior cell was preserved. Three selected offered PDFs have retained extraction diagnostics. This qualifies the held population, not the ECFS archive or complete attachment text. Receipt: spicy-regs-fcc-complete-20260927/receipt-final.json.",
     "kind": "window",
-    "measured_on": "2026-09-23",
+    "measured_on": "2026-09-27",
     "data_quality": null,
     "columns": [
       {
@@ -4050,6 +4357,11 @@
         "column_name": "native_fields_sha256",
         "column_type": "VARCHAR",
         "description": "SHA-256 of the exact native_fields_json string; identifies retained field bytes, not the complete API response."
+      },
+      {
+        "column_name": "pdf_extraction_results_json",
+        "column_type": "VARCHAR",
+        "description": "Outcomes for selected offered attachment URLs, retaining source SHA-256, page count and extraction status. Null when no attempt is retained. These selected attempts do not establish complete filing text coverage."
       }
     ],
     "grain": null,
@@ -4213,7 +4525,7 @@
     "table": "bill_cosponsors",
     "label": "Bill cosponsor source occurrences",
     "summary": "One source-listed cosponsor per bill, exact input digest and list ordinal. Repeated assertions remain separate; absent or empty successfully read lists replace prior rows.",
-    "coverage": "Sampled. Retained BILLSTATUS replay qualifies sponsorship dates and original-cosponsor flags. Application output is implemented; no public backfill is asserted. Withdrawal date behavior still needs a positive native source specimen.",
+    "coverage": "Sampled. Retained Congress 119 House and Senate BILLSTATUS archives were replayed on 2026-09-27 for source observations matching the held bill edition. Published generation 401302170a911739 contains 146,248 source occurrences, including 67 positive withdrawal dates. Every native field reconciles; bills outside the selected replay remain unread. Receipt: legislative-joins-2026-09-27/t05-candidate.json.",
     "kind": "sampled",
     "measured_on": "2026-09-27",
     "data_quality": null,
@@ -4261,7 +4573,7 @@
       {
         "column_name": "sponsorship_withdrawn_date",
         "column_type": "VARCHAR",
-        "description": "Literal sponsorshipWithdrawnDate; positive native-date qualification is pending."
+        "description": "Literal sponsorshipWithdrawnDate; retained BILLSTATUS source observations include positive dates."
       },
       {
         "column_name": "sponsorship_withdrawn_date_status",

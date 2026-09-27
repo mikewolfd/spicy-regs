@@ -86,15 +86,23 @@ apply refuses in three cases:
 - a staged identity is missing from the catalog, because the repair corrects
   rows and never inserts them.
 
-It then replaces only the changed rows, by `comment_id`, with the same DELETE
-and INSERT the ETL uses. It checks that each repaired identity now appears
-once, as written. If a DELETE left the old row behind, it fails loudly. Then run
-the catalog dedupe and rerun the repair: at an equal date the dedupe may keep
-either row. The receipt records the new snapshot.
+It then replaces only the changed rows, by `comment_id`, with the same atomic
+`MERGE` helper the ETL and text-fill paths use. The helper refuses duplicate
+source or affected prior identities, checks exact values inside its transaction,
+and rolls back if validation fails. A successful receipt records the new snapshot.
+Older DELETE/INSERT writes may have left duplicates; this helper does not choose
+between those historical assertions.
+
+The fork qualification on 2026-09-27 used DuckDB 1.5.5 and Iceberg extension
+`45163a28`. A task-owned scratch table passed replacement, idempotent replay and
+injected post-write rollback with independent connection readback. The retained
+receipts are `catalog-merge-probe.json` and `catalog-replace-probe.json` under
+`spicy-regs-join-implementation-20260927/`. Both scratch tables were removed.
 
 Run it outside the ETL's schedule. The repair does not hold the
-`comments-catalog-write` lock; the snapshot checks only detect a writer that
-lands before the replace. Reading the priors scans the unpartitioned table once.
+`comments-catalog-write` lock; snapshot checks refuse a detected intervening
+writer, while catalog transaction conflicts must also succeed before commit.
+Reading the priors scans the unpartitioned table once.
 
 The per-agency mirror and `comments.parquet` are not touched. The normal mirror
 job publishes the corrected rows from the next catalog snapshot.
