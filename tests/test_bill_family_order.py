@@ -25,7 +25,6 @@ from contextlib import contextmanager
 from itertools import pairwise
 from pathlib import Path
 
-import pyarrow.parquet as pq
 import pytest
 from spicy_docs.interpretation import bill_family as family_provider
 from spicy_docs.sources.congress.bill_status import BillIdentity, parse_bill_status
@@ -39,10 +38,11 @@ from tests.test_bill_family import (
     _Archive,
     _capture,
     _Member,
-    _no_prior,
     _Package,
-    _prior_from,
+    _priors,
     _seed_prior,
+    read_output,
+    write_output,
 )
 from tests.test_bill_family import scoped as fixture_scope
 
@@ -126,13 +126,13 @@ def _run(directory: Path, bulk, bodies, prior: Path | None = None) -> dict[str, 
         directory,
         bulk_acquirer=bulk,
         body_acquirer=bodies,
-        download_prior=_prior_from(prior) if prior else _no_prior,
+        **_priors(prior),
     )
     return {path.stem: path for path in paths}
 
 
 def _rows(paths: dict[str, Path], table: str) -> list[dict]:
-    return pq.read_table(paths[table]).to_pylist()
+    return read_output(paths[table]).to_pylist()
 
 
 def _pairs(paths: dict[str, Path]) -> set[tuple[str, str]]:
@@ -242,10 +242,9 @@ def test_a_published_backward_pair_alone_gives_its_bill_body_work(tmp_path):
         [{**key, "from_version_code": a, "to_version_code": b, "seq": "0"} for a, b in pairs],
     )
     paths = {
-        name: prior_scratch_path(tmp_path, name)
-        for name in ("bill_versions", "bill_sections", "section_diffs", "section_diff_items")
+        name: prior_scratch_path(tmp_path, name) for name in ("bill_versions", "section_diffs", "section_diff_items")
     }
-    index = build._prior_index(paths)
+    index = build._prior_index(paths, [prior_scratch_path(tmp_path, "bill_sections")])
     assert index.xml_codes(bill) == {"introduced-in-house", "enrolled-bill"}
     assert (bill, "introduced-in-house", "enrolled-bill") in index.pairs
     assert bill in index.body_bills and bill not in index.pending_bills
@@ -258,12 +257,12 @@ def test_the_next_run_republishes_a_silently_partial_printing_whole(tmp_path, sc
         audited = _run(tmp_path / "audited", NativeBulk(HR5334), NativeBodies(*served))
     # The old key's merge kept one of Division A's and Division B's "Sec. 1";
     # the audited 119-hr-5334 enrolled printing kept seq 3 and lost seq 80.
-    sections = pq.read_table(audited["bill_sections"])
+    sections = read_output(audited["bill_sections"])
     dropped = [row for row in sections.to_pylist() if (row["version_code"], row["seq"]) == ("enrolled-bill", "6")]
     assert dropped and dropped[0]["match_path"] == "sec. 1"
-    pq.write_table(
-        sections.filter([(row["version_code"], row["seq"]) != ("enrolled-bill", "6") for row in sections.to_pylist()]),
+    write_output(
         audited["bill_sections"],
+        sections.filter([(row["version_code"], row["seq"]) != ("enrolled-bill", "6") for row in sections.to_pylist()]),
     )
     assert ("enrolled-bill", "introduced-in-house") in _pairs(audited)
     assert _unresolved_items(audited), "the diff item naming the dropped section"

@@ -4251,6 +4251,11 @@
         "column_name": "version_date",
         "column_type": "VARCHAR",
         "description": "The parent printing's date, carried so this table versions with its parent."
+      },
+      {
+        "column_name": "congress",
+        "column_type": "VARCHAR",
+        "description": "The Congress of the bill, the prefix of bill_id (119 for 119-hr-1), so a host can store the table one file per Congress."
       }
     ],
     "grain": "One row per content-bearing node of one bill version, in document order.",

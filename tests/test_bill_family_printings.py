@@ -236,8 +236,10 @@ def test_a_row_keyed_under_another_printings_code_alone_reopens_its_bill(tmp_pat
     }
     _seed_prior(tmp_path, "section_diffs", [pair | {"item_count": "1"}])
     _seed_prior(tmp_path, "section_diff_items", [pair | {"seq": "0"}])
-    names = ("bill_versions", "bill_sections", "section_diffs", "section_diff_items")
-    index = build._prior_index({name: prior_scratch_path(tmp_path, name) for name in names})
+    names = ("bill_versions", "section_diffs", "section_diff_items")
+    index = build._prior_index(
+        {name: prior_scratch_path(tmp_path, name) for name in names}, [prior_scratch_path(tmp_path, "bill_sections")]
+    )
     assert index.xml_codes(bill) == {"introduced-in-house", "reported-in-house"}
     assert index.miskeyed_rows == {bill: {("reported-in-house", "congress", "rh2")}}
     assert bill in index.pending_bills

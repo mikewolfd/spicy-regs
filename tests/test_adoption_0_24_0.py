@@ -18,7 +18,7 @@ from spicy_docs.transport.credentials import CredentialRefusedError
 
 from spicy_regs.transforms.build_bill_family import build_bill_family
 from spicy_regs.transforms.build_committee_reports import build_committee_reports
-from spicy_regs.transforms.table_merge import prior_scratch_path
+from spicy_regs.transforms.table_merge import prior_members_path, prior_scratch_path
 from tests.test_bill_family import (
     StubBodyAcquirer, StubBulkAcquirer, _Acquisition, _Archive, _Member, _capture, _no_prior,
 )
@@ -31,9 +31,12 @@ FIXTURES = Path(__file__).parent / "fixtures" / "adoption_0_24_0"
 
 
 def retain(paths):
-    """Simulate a retained prior run by copying each output to its prior-scratch path."""
+    """Simulate a retained prior run by copying each output to its prior-scratch path, a split table's members too."""
     for path in paths:
-        shutil.copyfile(path, prior_scratch_path(path.parent, path.stem))
+        if path.is_dir():
+            shutil.copytree(path, prior_members_path(path.parent, path.name) / path.name, dirs_exist_ok=True)
+        else:
+            shutil.copyfile(path, prior_scratch_path(path.parent, path.stem))
 
 
 def test_cover_links_use_mods_and_empty_covers_resume_without_body_requests(tmp_path):

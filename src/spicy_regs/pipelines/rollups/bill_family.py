@@ -2,7 +2,9 @@
 
 Like the other ingesting rollups it reads no base table from R2, so ``inputs``
 is empty and the incremental merge with each prior published table happens
-inside the transform. It declares ``outputs`` rather than ``output`` because one
+inside the transform. ``bill_sections`` is published one file per Congress
+(``partitioned``, from the transform's ``PARTITIONED``), so a nightly rewrites
+the sitting Congress's file and publication copies the rest. It declares ``outputs`` rather than ``output`` because one
 expensive pass — the BILLSTATUS archives, the GovInfo printings and the model
 calls — fills all thirteen; thirteen rollups would repeat that pass thirteen
 times. Four further outputs ride along, all published because something reads
@@ -32,6 +34,7 @@ cron fires before this one's.
 """
 
 import os
+from collections.abc import Mapping
 from pathlib import Path
 from typing import ClassVar
 
@@ -42,6 +45,7 @@ from spicy_regs.transforms.build_bill_family import (
     BACKFILL_WALKS_TABLE,
     FAMILY_TABLES,
     MAX_VERSION_FETCHES,
+    PARTITIONED,
     VOTE_REFERENCES_TABLE,
     build_bill_family,
 )
@@ -62,6 +66,9 @@ class BillFamilyRollup(RollupPipeline):
     )
 
     retain_source_evidence: ClassVar[bool] = True
+    partitioned: ClassVar[Mapping[str, tuple[str, ...]]] = {
+        f"{name}.parquet": (partitioning.column,) for name, partitioning in PARTITIONED.items()
+    }
 
     def build(self, output_dir: Path) -> tuple[Path, ...]:
         raw = os.environ.get("BILL_FAMILY_MAX_VERSION_FETCHES", "").strip()

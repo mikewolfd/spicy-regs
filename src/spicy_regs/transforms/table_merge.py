@@ -5,12 +5,17 @@ table follows the same three steps: best-effort download the prior published
 table from R2, dedup the union of prior + freshly fetched rows on an identity
 key (preferring the fresh row), and order the result by a version column. This
 is that step, parameterised over the column tuple, identity and version column
-so a table with any key shape can use it.
+so a table with any key shape can use it. A table stored as several files runs
+the same step once per partition it touches (:func:`merge_partitioned_table`).
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable, Collection, Iterable, Mapping
+import os
+import shutil
+from collections import defaultdict
+from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 
 import pyarrow as pa
@@ -20,6 +25,9 @@ from loguru import logger
 from spicy_regs.sources import r2
 
 ReplacementScope = tuple[str, Collection[str]] | tuple[tuple[str, ...], Collection[tuple[str, ...]]]
+
+#: The one file a rewritten partition holds; ``generations.build_generation`` takes ``part-NNNNNN.parquet``.
+PARTITION_MEMBER = "part-000000.parquet"
 
 
 def merge_local_prior(
@@ -137,6 +145,247 @@ def published_table(
     return path if (path.exists() or download_prior(f"{name}.parquet", path)) else None
 
 
+def download_prior_members(remote_key: str, directory: Path) -> list[Path]:
+    """:func:`r2.download_members` for a prior; none while R2 is unconfigured or no family publishes the table.
+
+    Those two are a cold start, as :func:`r2.download` reads them, not the failures ``download_members`` raises for.
+    """
+    from spicy_regs.sources.publication import current_index, table_owner
+
+    public_url = os.getenv("R2_PUBLIC_URL")
+    if not public_url or table_owner(current_index(public_url), remote_key) is None:
+        return []
+    return r2.download_members(remote_key, directory)
+
+
+def prior_members_path(output_dir: Path, name: str) -> Path:
+    """The directory :func:`published_members` downloads a split table's prior into, and reuses when present."""
+    return output_dir / f"_{name}_prior"
+
+
+def published_members(
+    output_dir: Path, name: str, download_members: Callable[[str, Path], Sequence[Path]] = download_prior_members
+) -> list[Path] | None:
+    """The published ``name`` table's files under :func:`prior_members_path`, downloaded unless already there.
+
+    A split table's members sit at ``<name>/<col>=<value>/part-NNNNNN.parquet``, each checked against its pin; a table
+    still published as one file sits at ``<name>.parquet``, which :func:`merge_partitioned_table` splits. ``None``
+    means nothing is published, a cold start. The split table's counterpart of :func:`published_table`.
+
+    The download lands in a sibling ``.partial`` directory renamed into place once complete, so a present prior
+    directory always holds every member: a failed or killed download leaves none to be read as the prior.
+    """
+    directory = prior_members_path(output_dir, name)
+    if not directory.exists():
+        partial = directory.with_name(directory.name + ".partial")
+        shutil.rmtree(partial, ignore_errors=True)
+        partial.mkdir(parents=True)
+        try:
+            download_members(f"{name}.parquet", partial)
+        except BaseException:
+            shutil.rmtree(partial)
+            raise
+        partial.rename(directory)
+    return sorted(directory.rglob("*.parquet")) or None
+
+
+@dataclass(frozen=True, slots=True)
+class Partitioning:
+    """A table stored one file per value of ``column``, which ``value`` derives from the identity column ``source``.
+
+    The value must be a function of the identity (multi-file design §4.2): a row then lives in one partition only, so
+    carrying an untouched partition forward can never keep a stale copy of a row whose fresh copy lands in another.
+    """
+
+    column: str
+    source: str
+    value: Callable[[str], str]
+
+
+def merge_partitioned_table(
+    output_dir: Path,
+    *,
+    name: str,
+    columns: tuple[str, ...],
+    identity: tuple[str, ...],
+    version_column: str | None,
+    rows: Iterable[Mapping[str, object]],
+    partitioning: Partitioning,
+    prior: Sequence[Path] | None,
+    replace_parents: ReplacementScope | None = None,
+) -> Path:
+    """Merge ``rows`` into the table stored one file per partition; return its directory, ``output_dir / name``.
+
+    A partition is merged, by :func:`merge_table`, when it has fresh rows, a ``replace_parents`` scope, or a file
+    whose columns are not ``columns``: the contract gained a column since it was written, and every member of a
+    split table must share one column list. It is written as ``<column>=<value>/part-000000.parquet`` in a directory
+    of its own, so no prior part file survives beside it to publish its rows twice. Every other prior partition is
+    carried byte for byte, which publication copies server-side (multi-file design §4.3). A scope that does not name
+    ``partitioning.source`` could reach any partition, so it rewrites them all.
+
+    ``prior`` is what :func:`published_members` returned. The first split's prior is one ``<name>.parquet``: it is
+    cut by ``partitioning.value`` over ``source`` into files without the partition column, so the column rule merges
+    every one and fills the column with its partition's value. A fresh row's partition column is set the same way,
+    from ``source``, whatever the row stated.
+
+    The prior is only read: an untouched partition is hard-linked into the output, and the prior directory goes once
+    the whole table is written, so a run that fails part-way leaves its prior whole for the next attempt.
+
+    Cost: one merge per touched partition, each reading only that partition's prior, and one footer read per prior
+    file; the first split adds one pass over the prior. An empty table has no partition, hence no member, which
+    ``build_generation`` refuses.
+    """
+    column, source = partitioning.column, partitioning.source
+    if column not in columns or source not in identity:
+        raise ValueError(f"{name}: the partition column must be a column, derived from an identity column")
+    out, work = output_dir / name, output_dir / f"_{name}_partitions"
+    for stale in (out, work):  # an earlier run's output or leftovers here are not this run's prior
+        shutil.rmtree(stale, ignore_errors=True)
+    out.mkdir(parents=True)
+    work.mkdir()
+    held, first_split = _held_partitions(prior, name, partitioning, work)
+    fresh: dict[str, list[Mapping[str, object]]] = defaultdict(list)
+    for row in rows:
+        if (key := row.get(source)) is not None:  # the merge drops a NULL identity as well
+            value = partitioning.value(str(key))
+            fresh[value].append({**row, column: value})
+    scopes, everywhere = _scopes_by_partition(replace_parents, partitioning)
+    reshaped = {value for value, paths in held.items() if any(pq.read_schema(path).names != list(columns)
+                                                                for path in paths)}
+    touched = set(fresh) | set(scopes) | reshaped | (set(held) if everywhere else set())
+    rewritten = 0
+    for value in sorted(set(held) | touched):
+        directory = out / f"{column}={value}"
+        if value not in touched:
+            directory.mkdir()
+            for path in held[value]:
+                _link(path, directory / path.name)
+            continue
+        if value not in held and value not in fresh:
+            continue  # a scope over a partition that holds nothing
+        # No ``col=value`` in this path: DuckDB would read one as a Hive column beside the stored one.
+        scratch = work / value
+        scratch.mkdir()
+        if value in held:
+            _prior_file(held[value], prior_scratch_path(scratch, name))
+        merged = merge_table(
+            scratch,
+            name=name,
+            columns=columns,
+            identity=identity,
+            version_column=version_column,
+            rows=fresh.get(value, ()),
+            remote_key=PARTITION_MEMBER,
+            download_prior=lambda _key, _path: False,
+            prior_present=value in held,
+            replace_parents=replace_parents if everywhere else scopes.get(value),
+            prior_constants={column: value},
+        )
+        directory.mkdir()
+        os.replace(merged, directory / PARTITION_MEMBER)
+        rewritten += 1
+    shutil.rmtree(work)
+    shutil.rmtree(prior_members_path(output_dir, name), ignore_errors=True)
+    logger.info("{}: {:,} of {:,} partitions rewritten ({:,} for their columns){}", name, rewritten,
+                len(set(held) | set(fresh)), len(reshaped), " (first split)" if first_split else "")
+    return out
+
+
+def _held_partitions(
+    prior: Sequence[Path] | None, name: str, partitioning: Partitioning, work: Path
+) -> tuple[dict[str, list[Path]], bool]:
+    """The prior's files by partition value, and whether it was one unsplit file this run splits."""
+    if not prior:
+        return {}, False
+    if len(prior) == 1 and prior[0].name == f"{name}.parquet":
+        return _split_prior(prior[0], partitioning, work / "split"), True
+    held: dict[str, list[Path]] = defaultdict(list)
+    for path in prior:
+        column, separator, value = path.parent.name.partition("=")
+        if path.parent.parent.name != name or column != partitioning.column or not separator:
+            raise ValueError(f"{name}: a prior member is not <name>/{partitioning.column}=<value>/<part>: {path}")
+        held[value].append(path)
+    return dict(held), False
+
+
+def _split_prior(path: Path, partitioning: Partitioning, into: Path) -> dict[str, list[Path]]:
+    """Cut one prior file by partition in one pass, into files without the partition column; ``path`` is kept.
+
+    The value comes from ``partitioning.value`` over the distinct ``source`` values, the one derivation the rows use,
+    not a SQL restatement of it. A row whose ``source`` is NULL is dropped, as the merge drops a NULL identity. The
+    files lack the column (DuckDB writes a ``PARTITION_BY`` column only when asked), which is what has
+    :func:`merge_partitioned_table` merge each and fill the column with its partition's value.
+    """
+    from spicy_regs.sources.publication import parquet_scan
+
+    column, source = partitioning.column, partitioning.source
+    scan, target = parquet_scan([str(path)]), str(into).replace("'", "''")
+    con = _duckdb_session(into.parent)
+    try:
+        values = [value for (value,) in con.execute(f'SELECT DISTINCT "{source}" FROM {scan}').fetchall()
+                  if value is not None]
+        con.register("partition_of", pa.table({
+            source: pa.array(values, type=pa.string()),
+            column: pa.array([partitioning.value(value) for value in values], type=pa.string()),
+        }))
+        present = [str(row[0]) for row in con.execute(f"DESCRIBE SELECT * FROM {scan}").fetchall()]
+        kept = ", ".join(f'p."{c}"' for c in present if c != column)
+        con.execute(
+            f'COPY (SELECT {kept}, m."{column}" FROM {scan} p JOIN partition_of m ON p."{source}" = m."{source}")'
+            f" TO '{target}' (FORMAT PARQUET, COMPRESSION ZSTD, PARTITION_BY (\"{column}\"))"
+        )
+    finally:
+        con.close()
+    held: dict[str, list[Path]] = defaultdict(list)
+    for part in sorted(into.rglob("*.parquet")):
+        held[part.parent.name.partition("=")[2]].append(part)
+    return dict(held)
+
+
+def _scopes_by_partition(
+    replace_parents: ReplacementScope | None, partitioning: Partitioning
+) -> tuple[dict[str, ReplacementScope], bool]:
+    """Each partition's share of a replacement scope, or ``True`` when the scope cannot name its partitions."""
+    if replace_parents is None:
+        return {}, False
+    columns, values = replace_parents
+    named = (columns,) if isinstance(columns, str) else tuple(columns)
+    if partitioning.source not in named:
+        return {}, True
+    at = named.index(partitioning.source)
+    scopes: dict[str, list[tuple[str, ...]]] = defaultdict(list)
+    for value in values:
+        row = (value,) if isinstance(value, str) else tuple(value)
+        scopes[partitioning.value(row[at])].append(row)
+    return {partition: (named, rows) for partition, rows in scopes.items()}, False
+
+
+def _link(path: Path, into: Path) -> None:
+    """``into`` names ``path``'s bytes: a hard link, or a copy where the filesystem has none."""
+    try:
+        os.link(path, into)
+    except OSError:
+        shutil.copyfile(path, into)
+
+
+def _prior_file(paths: Sequence[Path], into: Path) -> None:
+    """One partition's prior as the one file ``merge_table`` reads: linked, or its parts concatenated by column name.
+
+    By name, so parts written before and after a column was appended still line up; a column one part lacks is NULL.
+    """
+    if len(paths) == 1:
+        _link(paths[0], into)
+        return
+    listed = ", ".join("'" + str(path).replace("'", "''") + "'" for path in paths)
+    target = str(into).replace("'", "''")
+    con = _duckdb_session(into.parent)
+    try:
+        con.execute(f"COPY (SELECT * FROM read_parquet([{listed}], hive_partitioning = false, union_by_name = true)) "
+                    f"TO '{target}' (FORMAT PARQUET, COMPRESSION ZSTD)")
+    finally:
+        con.close()
+
+
 def merge_table(
     output_dir: Path,
     *,
@@ -152,6 +401,7 @@ def merge_table(
     replace_parents: ReplacementScope | None = None,
     backfill_prior: Mapping[str, str] | None = None,
     parquet_metadata: Mapping[str, str] | None = None,
+    prior_constants: Mapping[str, str] | None = None,
 ) -> Path:
     """Merge freshly fetched ``rows`` against the prior ``remote_key`` table.
 
@@ -213,6 +463,10 @@ def merge_table(
     ``parquet_metadata`` writes processing checkpoints in the same artifact as
     the rows, including a successful read producing zero rows; callers supply
     the complete metadata to retain, it is not inferred from row presence.
+
+    ``prior_constants`` gives a column the prior lacks one value on every prior
+    row instead of NULL: a split table's partition column, which every row of
+    one partition holds by construction (:func:`merge_partitioned_table`).
     """
     import duckdb
 
@@ -286,6 +540,9 @@ def merge_table(
     backfill = dict(backfill_prior or {})
     if any(column not in columns or source not in columns for column, source in backfill.items()):
         raise ValueError("backfill_prior must map table columns to table columns")
+    constants = dict(prior_constants or {})
+    if not set(constants) <= set(columns):
+        raise ValueError("prior_constants must name table columns")
     if have_prior:
         # The prior table may predate columns this contract has since gained —
         # ``congress_bills`` is the live case: its first ten columns are frozen
@@ -322,6 +579,8 @@ def merge_table(
             source = source if source in prior_cols else None
             if column in prior_cols:
                 return f"COALESCE({column}, {source}) AS {column}" if source else column
+            if column in constants:
+                return "'" + constants[column].replace("'", "''") + f"' AS {column}"
             return f"{source} AS {column}" if source else f"CAST(NULL AS VARCHAR) AS {column}"
 
         prior_select = ", ".join(prior_column(c) for c in columns)

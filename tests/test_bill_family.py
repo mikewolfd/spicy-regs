@@ -24,8 +24,10 @@ from __future__ import annotations
 import json
 import re
 import shutil
+from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import TypedDict
 
 import httpx
 import pyarrow as pa
@@ -56,6 +58,8 @@ from spicy_regs.transforms.build_bill_family import (
     build_bill_family,
     engine_stamp,
 )
+from spicy_regs.sources.publication import PublicationError
+from spicy_regs.transforms.table_merge import prior_members_path, prior_scratch_path
 from tests.pdf_fixtures import make_multiline_pdf
 
 FIXTURES = Path(__file__).parent / "fixtures" / "govinfo_bills"
@@ -253,6 +257,64 @@ def _prior_from(published: Path):
     return download
 
 
+def _members_from(published: Path):
+    """A ``download_members`` that serves an earlier run's split table member for member, as ``r2.download_members``
+    lays them out; a table that run published as one file comes back as that one file."""
+
+    def download(remote_key: str, directory: Path) -> list[Path]:
+        split, single = published / remote_key.removesuffix(".parquet"), published / remote_key
+        if split.is_dir():
+            shutil.copytree(split, directory / split.name, dirs_exist_ok=True)
+            return sorted((directory / split.name).rglob("*.parquet"))
+        if single.exists():
+            shutil.copyfile(single, directory / remote_key)
+            return [directory / remote_key]
+        return []
+
+    return download
+
+
+class Priors(TypedDict, total=False):
+    """The prior seams of ``build_bill_family``."""
+
+    download_prior: Callable[[str, Path], bool]
+    download_members: Callable[[str, Path], Sequence[Path]]
+
+
+def _priors(published: Path | None) -> Priors:
+    """Both prior seams, serving an earlier run's published outputs; ``None`` is a cold start with no prior at all."""
+    if published is None:
+        return Priors(download_prior=_no_prior)
+    return Priors(download_prior=_prior_from(published), download_members=_members_from(published))
+
+
+def read_output(path: Path) -> pa.Table:
+    """One published output as a table: a file, or a split table's members in key order, Hive partitioning off.
+
+    A split table with no rows has no member, and reads as an empty table with no columns.
+    """
+    if not path.is_dir():
+        return pq.read_table(path)
+    parts = sorted(path.rglob("*.parquet"))
+    return pa.concat_tables(pq.ParquetFile(part).read() for part in parts) if parts else pa.table({})
+
+
+def write_output(path: Path, table: pa.Table) -> None:
+    """Replace one published output: a split table is rewritten one ``congress=<N>/part-000000.parquet`` per value."""
+    if not path.is_dir():
+        pq.write_table(table, path)
+        return
+    shutil.rmtree(path)
+    path.mkdir()
+    rows = table.to_pylist()
+    for congress in sorted({row["congress"] for row in rows}):
+        member = path / f"congress={congress}" / "part-000000.parquet"
+        member.parent.mkdir()
+        pq.write_table(
+            pa.Table.from_pylist([row for row in rows if row["congress"] == congress], schema=table.schema), member
+        )
+
+
 @pytest.fixture
 def family(tmp_path, monkeypatch):
     """One bill-family run over the fixture bill, keyless and offline."""
@@ -296,7 +358,7 @@ def test_each_published_table_matches_its_contract_schema(family):
         if name in OWN_TABLES:
             continue
         contract = TABLE_CONTRACTS[name]
-        assert pq.read_table(path).schema.names == list(contract.columns), name
+        assert read_output(path).schema.names == list(contract.columns), name
 
 
 def test_a_bill_with_no_recorded_votes_publishes_no_references(family):
@@ -321,7 +383,7 @@ def test_the_bill_and_its_printings_are_there(family):
 
 
 def test_sections_are_parsed_and_every_parent_exists(family):
-    sections = pq.read_table(family["bill_sections"]).to_pylist()
+    sections = read_output(family["bill_sections"]).to_pylist()
     assert sections, "the XML printings must yield sections"
     parents = {
         (row["bill_id"], row["version_code"], row["source"])
@@ -640,9 +702,6 @@ def test_the_engine_stamp_carries_the_vendored_revision():
 # --------------------------------------------------------------------------- #
 def _seed_prior(output_dir: Path, table: str, rows: list[dict]) -> None:
     """Write a prior published table where the merge and the index will find it."""
-    import pyarrow as pa
-    from spicy_regs.transforms.table_merge import prior_scratch_path
-
     contract = TABLE_CONTRACTS[table]
     filled = [{c: None for c in contract.columns} | row for row in rows]
     pq.write_table(
@@ -669,12 +728,12 @@ def scoped(monkeypatch):
 def test_an_unchanged_bill_costs_no_requests(tmp_path, scoped):
     """A completed bill skips bodies even when its folder's listing has moved."""
     first = tmp_path / "first"
-    _run(first, StubBulkAcquirer(), _no_prior)
+    _run(first, StubBulkAcquirer())
     second = tmp_path / "second"
     second.mkdir()
     body = StubBodyAcquirer()
     bulk = StubBulkAcquirer(entry=lambda c, t: zip_entry(c, t, size=31_658_670))
-    build_bill_family(second, bulk_acquirer=bulk, body_acquirer=body, download_prior=_prior_from(first))
+    build_bill_family(second, bulk_acquirer=bulk, body_acquirer=body, **_priors(first))
     assert bulk.zip_downloads == [(119, "hr")]
     assert body.requested == [], "completed status, bodies and diffs need no repeated body fetch"
 
@@ -691,10 +750,85 @@ def test_a_changed_bill_is_rebuilt(tmp_path, scoped):
     assert len(body.requested) == 2
 
 
+def test_a_split_prior_is_read_through_its_members_never_as_one_file(tmp_path, scoped):
+    """Once split, ``r2.download`` refuses ``bill_sections.parquet``; the family reads it through its members."""
+    first = tmp_path / "first"
+    _run(first, StubBulkAcquirer())
+    single_files = _prior_from(first)
+
+    def download(remote_key: str, local_path: Path) -> bool:
+        if remote_key == "bill_sections.parquet":
+            raise PublicationError("bill_sections.parquet is published as 7 files; read it through table_members")
+        return single_files(remote_key, local_path)
+
+    body = StubBodyAcquirer()
+    bulk = StubBulkAcquirer(entry=lambda c, t: zip_entry(c, t, size=31_658_670))
+    second = tmp_path / "second"
+    second.mkdir()
+    build_bill_family(
+        second, bulk_acquirer=bulk, body_acquirer=body, download_prior=download, download_members=_members_from(first)
+    )
+    assert body.requested == [], "the held sections were read from the members"
+
+
+def test_the_prior_index_reads_every_members_sections_with_their_stored_congress(tmp_path):
+    """Section counts come from each Congress's file; a member's ``congress=<N>`` directory adds no column."""
+    from spicy_regs.transforms import build_bill_family as build
+
+    printings = {"118-hr-1": 2, "119-hr-2": 1}
+    _seed_prior(
+        tmp_path,
+        "bill_versions",
+        [
+            {
+                "bill_id": bill,
+                "version_code": "introduced-in-house",
+                "source": "govinfo",
+                "sha256": "sha256:x",
+                "byte_size": "1",
+                "format_name": "xml",
+                "content_type": "text/xml",
+                "section_count": str(count),
+            }
+            for bill, count in printings.items()
+        ],
+    )
+    columns = TABLE_CONTRACTS["bill_sections"].columns
+    sections = pa.Table.from_pylist(
+        [
+            {c: None for c in columns}
+            | {
+                "bill_id": bill,
+                "version_code": "introduced-in-house",
+                "source": "govinfo",
+                "seq": str(seq),
+                "congress": bill[:3],
+            }
+            for bill, count in printings.items()
+            for seq in range(count)
+        ],
+        schema=pa.schema([(c, pa.string()) for c in columns]),
+    )
+    table = prior_members_path(tmp_path, "bill_sections") / "bill_sections"
+    table.mkdir(parents=True)
+    write_output(table, sections)
+    members = sorted(table.rglob("*.parquet"))
+    assert len(members) == 2
+
+    index = build._prior_index({"bill_versions": prior_scratch_path(tmp_path, "bill_versions")}, members)
+
+    assert {bill: index.xml_codes(bill) for bill in printings} == {bill: {"introduced-in-house"} for bill in printings}
+    import duckdb
+
+    assert ("congress", "VARCHAR") in [
+        row[:2] for row in duckdb.sql(f"DESCRIBE SELECT * FROM {build._scan(members)}").fetchall()
+    ]
+
+
 def test_printings_already_held_are_not_refetched(tmp_path, scoped):
     """Both processed printings published: changed metadata keeps their acquired facts."""
     first = tmp_path / "first"
-    prior = _run(first, StubBulkAcquirer(), _no_prior)
+    prior = _run(first, StubBulkAcquirer())
     held = pq.read_table(prior["bill_versions"]).to_pylist()
     stamp = _status_text_date()
     assert stamp is not None
@@ -703,10 +837,7 @@ def test_printings_already_held_are_not_refetched(tmp_path, scoped):
     second = tmp_path / "second"
     second.mkdir()
     bulk = StubBulkAcquirer(entry=lambda c, t: zip_entry(c, t, size=31_658_670), status=changed_status)
-    paths = {
-        p.stem: p
-        for p in build_bill_family(second, bulk_acquirer=bulk, body_acquirer=body, download_prior=_prior_from(first))
-    }
+    paths = {p.stem: p for p in build_bill_family(second, bulk_acquirer=bulk, body_acquirer=body, **_priors(first))}
     assert body.requested == [], "a completed printing needs no second fetch"
     assert pq.read_table(paths["bill_versions"]).to_pylist() == held
 
@@ -796,10 +927,10 @@ def test_the_body_plan_reads_what_is_pending_and_the_neighbours_its_comparisons_
 # --------------------------------------------------------------------------- #
 # The bulk-listing skip: a folder whose zip has not moved is not downloaded.
 # --------------------------------------------------------------------------- #
-def _run(output_dir: Path, bulk: StubBulkAcquirer, download_prior) -> dict[str, Path]:
+def _run(output_dir: Path, bulk: StubBulkAcquirer, priors: Priors | None = None) -> dict[str, Path]:
     output_dir.mkdir(exist_ok=True)
     paths = build_bill_family(
-        output_dir, bulk_acquirer=bulk, body_acquirer=StubBodyAcquirer(), download_prior=download_prior
+        output_dir, bulk_acquirer=bulk, body_acquirer=StubBodyAcquirer(), **(priors or _priors(None))
     )
     return {path.stem: path for path in paths}
 
@@ -812,7 +943,7 @@ def test_a_cold_folder_retains_the_listing_entry_it_did_not_need(tmp_path, scope
     pipeline that just never saves anything.
     """
     bulk = StubBulkAcquirer()
-    paths = _run(tmp_path / "run", bulk, _no_prior)
+    paths = _run(tmp_path / "run", bulk)
 
     assert bulk.zip_downloads == [(119, "hr")], "a cold folder downloads its zip"
     assert bulk.listings == [(119, "hr")], "and asks for the listing once, to retain the entry"
@@ -830,10 +961,10 @@ def test_a_cold_folder_retains_the_listing_entry_it_did_not_need(tmp_path, scope
 def test_a_second_run_over_an_unchanged_listing_makes_no_zip_request(tmp_path, scoped):
     """The whole point of the retained entry: the zip is proved unchanged, not re-read."""
     first = tmp_path / "run1"
-    _run(first, StubBulkAcquirer(), _no_prior)
+    _run(first, StubBulkAcquirer())
 
     second = StubBulkAcquirer()
-    paths = _run(tmp_path / "run2", second, _prior_from(first))
+    paths = _run(tmp_path / "run2", second, _priors(first))
 
     assert second.calls == [(119, "hr")], "the folder is still visited"
     assert second.listings == [(119, "hr")], "through its listing, which is the cheap half"
@@ -845,7 +976,7 @@ def test_a_second_run_over_an_unchanged_listing_makes_no_zip_request(tmp_path, s
 def test_a_list_era_row_the_zip_does_not_hold_does_not_reopen_its_folder(tmp_path, scoped):
     """119 HR 11 is reserved for the Minority Leader: listed by the old list writer, absent from BILLSTATUS."""
     first = tmp_path / "run1"
-    paths = _run(first, StubBulkAcquirer(), _no_prior)
+    paths = _run(first, StubBulkAcquirer())
     bills = pq.read_table(paths["congress_bills"])
     reserved = {column: None for column in bills.schema.names} | {
         "bill_id": "119-hr-11",
@@ -859,24 +990,24 @@ def test_a_list_era_row_the_zip_does_not_hold_does_not_reopen_its_folder(tmp_pat
     }
     pq.write_table(pa.Table.from_pylist([*bills.to_pylist(), reserved], schema=bills.schema), paths["congress_bills"])
     second = StubBulkAcquirer()
-    _run(tmp_path / "run2", second, _prior_from(first))
+    _run(tmp_path / "run2", second, _priors(first))
     assert second.zip_downloads == [], "no read of the zip can qualify a row it does not hold"
 
     legacy = reserved | {"schema_version": "3.0.0"}
     pq.write_table(pa.Table.from_pylist([*bills.to_pylist(), legacy], schema=bills.schema), paths["congress_bills"])
     third = StubBulkAcquirer()
-    _run(tmp_path / "run3", third, _prior_from(first))
+    _run(tmp_path / "run3", third, _priors(first))
     assert third.zip_downloads == [(119, "hr")], "a row a BILLSTATUS read wrote without an outcome is re-read"
 
 
 def test_a_moved_zip_is_downloaded_again(tmp_path, scoped):
     """The comparison has to be able to say no, or the skip is just a cache that never expires."""
     first = tmp_path / "run1"
-    _run(first, StubBulkAcquirer(), _no_prior)
+    _run(first, StubBulkAcquirer())
 
     # The publisher rebuilt the zip: same name and link, different size.
     moved = StubBulkAcquirer(entry=lambda c, t: zip_entry(c, t, size=31_658_670))
-    _run(tmp_path / "run2", moved, _prior_from(first))
+    _run(tmp_path / "run2", moved, _priors(first))
 
     assert moved.zip_downloads == [(119, "hr")]
     assert moved.listings == [(119, "hr")], "the listing is read once, inside acquire"
@@ -890,10 +1021,10 @@ def test_a_retained_entry_naming_another_file_does_not_wedge_the_rollup(tmp_path
     anyway would buy the same cold download for two reads instead of one.
     """
     first = tmp_path / "run1"
-    _run(first, StubBulkAcquirer(entry=lambda c, t: zip_entry(c, "sres")), _no_prior)
+    _run(first, StubBulkAcquirer(entry=lambda c, t: zip_entry(c, "sres")))
 
     renamed = StubBulkAcquirer()
-    paths = _run(tmp_path / "run2", renamed, _prior_from(first))
+    paths = _run(tmp_path / "run2", renamed, _priors(first))
 
     assert renamed.zip_downloads == [(119, "hr")], "the zip is fetched rather than the run failing"
     assert renamed.listings == [(119, "hr")], "and the folder listing is read exactly once"
@@ -914,7 +1045,7 @@ def test_a_legacy_list_url_is_re_read_not_skipped(tmp_path, scoped, prior_url_so
     damaged cells stay (``test_a_second_run_over_an_unchanged_listing_makes_no_zip_request``).
     """
     first = tmp_path / "run1"
-    held = _run(first, StubBulkAcquirer(), _no_prior)
+    held = _run(first, StubBulkAcquirer())
     bills = pq.read_table(held["congress_bills"])
     stated = bills.to_pylist()[0]
     assert stated["url"].startswith("https://www.congress.gov/bill/") and "T" in stated["update_date"]
@@ -932,9 +1063,7 @@ def test_a_legacy_list_url_is_re_read_not_skipped(tmp_path, scoped, prior_url_so
     second = StubBulkAcquirer(status=source)
     body = StubBodyAcquirer()
     (tmp_path / "run2").mkdir()
-    paths = build_bill_family(
-        tmp_path / "run2", bulk_acquirer=second, body_acquirer=body, download_prior=_prior_from(first)
-    )
+    paths = build_bill_family(tmp_path / "run2", bulk_acquirer=second, body_acquirer=body, **_priors(first))
     assert second.zip_downloads == [(119, "hr")], "the legacy URL's folder is read despite an unchanged zip"
     assert body.requested == [], "and its held printings are not fetched again"
     healed = next(p for p in paths if p.stem == "congress_bills")
@@ -945,7 +1074,7 @@ def test_a_legacy_list_url_is_re_read_not_skipped(tmp_path, scoped, prior_url_so
     assert {k: row[k] for k in damaged} == expected
 
     third = StubBulkAcquirer(status=source)
-    _run(tmp_path / "run3", third, _prior_from(tmp_path / "run2"))
+    _run(tmp_path / "run3", third, _priors(tmp_path / "run2"))
     assert third.zip_downloads == [], "proven inherited URLs do not force repeated status reads"
 
 
@@ -1196,7 +1325,7 @@ def test_the_pdf_cleanup_record_reaches_the_cleanup_columns(pdf_family):
 def test_a_pdf_only_pair_is_refused_by_name_not_silently_skipped(pdf_family):
     """No XML means no section tree, so the pair cannot be diffed — and says so."""
     paths, messages = pdf_family
-    assert pq.read_table(paths["bill_sections"]).to_pylist() == [], "a PDF printing has no section tree"
+    assert read_output(paths["bill_sections"]).to_pylist() == [], "a PDF printing has no section tree"
     assert pq.read_table(paths["section_diffs"]).to_pylist() == [], "so the consecutive pair yields no diff"
     refusals = [line for line in messages if "refusals by table" in line]
     assert refusals, "the refusal must be reported, not left as an empty table"
@@ -1410,7 +1539,7 @@ def test_the_cap_charges_pages_and_details_and_the_next_run_fills_the_rest(tmp_p
     # Not settled, so the unit is walked again (its page charged again) and
     # only the bill without a matching state row is requested.
     second = _stub_source(_two_bills())
-    build_bill_family(tmp_path, list_source=second, download_prior=_prior_from(tmp_path))
+    build_bill_family(tmp_path, list_source=second, **_priors(tmp_path))
     assert second.paged == [(92, "hr")]
     assert _numbers(second.requested) == [2190]
     bills = pq.read_table(tmp_path / "congress_bills.parquet").to_pylist()
@@ -1499,7 +1628,7 @@ def test_a_refused_bill_is_retried_first_and_a_settled_unit_is_not_walked_again(
     # Every record is accounted for (one filled, one refused), so the next run
     # makes no list request at all: the refusal is retried directly.
     second = _stub_source(_two_bills())
-    build_bill_family(tmp_path, list_source=second, download_prior=_prior_from(tmp_path))
+    build_bill_family(tmp_path, list_source=second, **_priors(tmp_path))
     assert second.paged == []
     assert _numbers(second.requested) == [2185]
     assert [(row["number"], row["refusal"]) for row in _state(tmp_path)] == [("2185", None), ("2190", None)]
@@ -1511,7 +1640,7 @@ def test_a_permanent_gap_costs_one_request_a_run_not_a_walk(tmp_path, scoped_92)
     always = lambda identity: ConnectionError("still down") if identity.number == 2185 else None  # noqa: E731
     build_bill_family(tmp_path, list_source=_stub_source(_two_bills(), detail_error=always), download_prior=_no_prior)
     third = _stub_source(_two_bills(), detail_error=always)
-    build_bill_family(tmp_path, list_source=third, download_prior=_prior_from(tmp_path))
+    build_bill_family(tmp_path, list_source=third, **_priors(tmp_path))
     assert third.paged == [] and _numbers(third.requested) == [2185]
     assert [(row["number"], row["refusal"]) for row in _state(tmp_path)] == [
         ("2185", "ConnectionError"),
@@ -1525,12 +1654,12 @@ def test_a_moved_stamp_is_refetched_once_and_counted_once(tmp_path, scoped_92):
     # The unit was settled, but a stamp only moves when the publisher edits
     # the bill; naming the Congress again with a widened scope walks it.
     second = _stub_source([moved])
-    build_bill_family(tmp_path, list_source=second, download_prior=_prior_from(tmp_path))
+    build_bill_family(tmp_path, list_source=second, **_priors(tmp_path))
     assert _numbers(second.requested) == []  # settled: the moved stamp is not seen without a walk
     # Force the walk by leaving the unit unsettled: a prior walk row that never completed.
     _unsettle(tmp_path)
     third = _stub_source([moved])
-    build_bill_family(tmp_path, list_source=third, download_prior=_prior_from(tmp_path))
+    build_bill_family(tmp_path, list_source=third, **_priors(tmp_path))
     assert _numbers(third.requested) == [2185]
     assert [row["list_update_date_including_text"] for row in _state(tmp_path)] == ["2026-09-10T00:00:00Z"]
     assert _walk_row(tmp_path)["backfilled_count"] == "1"
@@ -1547,7 +1676,7 @@ def test_an_unwalkable_record_is_counted_and_settles_the_unit(tmp_path, scoped_9
     walk = _walk_row(tmp_path)
     assert walk["unwalkable_count"] == "1" and walk["backfilled_count"] == "1" and walk["declared_count"] == "2"
     second = _stub_source([dict(_DETAIL_92_HR_2185)])
-    build_bill_family(tmp_path, list_source=second, download_prior=_prior_from(tmp_path))
+    build_bill_family(tmp_path, list_source=second, **_priors(tmp_path))
     assert second.paged == [] and second.requested == []
 
 
@@ -1566,7 +1695,7 @@ def test_a_repeated_list_entry_is_requested_once_and_counted_so_the_unit_settles
     )
     assert len(_state(tmp_path)) == 1
     second = _stub_source([record])
-    build_bill_family(tmp_path, list_source=second, download_prior=_prior_from(tmp_path))
+    build_bill_family(tmp_path, list_source=second, **_priors(tmp_path))
     assert second.paged == [] and second.requested == []
 
 
@@ -1581,7 +1710,7 @@ def test_a_refusal_retried_at_the_start_is_not_asked_for_again_by_the_walk(tmp_p
         download_prior=_no_prior,
     )
     second = _stub_source(_two_bills(), detail_error=always)
-    build_bill_family(tmp_path, list_source=second, download_prior=_prior_from(tmp_path))
+    build_bill_family(tmp_path, list_source=second, **_priors(tmp_path))
     assert second.paged == [(92, "hr")]
     assert _numbers(second.requested) == [2185, 2190]  # the retry first, then the walk fills the rest, 2185 once
 
@@ -1700,7 +1829,7 @@ def test_an_unaddressable_printing_is_never_fetched_and_spends_no_budget():
     acquirer = _RecordingAcquirer()
     budget = [10]
     forced = BillWork(
-        "119-hr-6028", IDENTITY, [Printing("private-law", version, None, False, False, None)], {"private-law"}, []
+        "119-hr-6028", IDENTITY, [Printing("private-law", version, None, False, False, None, True)], {"private-law"}, []
     )
     outcome = BodyPass(
         bills_source=None,
