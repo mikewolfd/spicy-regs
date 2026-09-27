@@ -72,28 +72,37 @@ def _current_successors(events: Iterable[Mapping[str, Any]]) -> dict[str, frozen
     """Each event's original read forward to the results no later event replaced; a cycle is refused.
 
     RefSpec's ``current_agency_successors()`` over the view's event rows, one per (event,
-    result): every chain is walked to its end, a split keeps every result, and each answer is
-    settled once and reused along every chain through it.
+    result), and its iterative depth-first walk, so no chain depth reaches the recursion limit:
+    every chain is walked to its end, a split keeps every result, and each organization's answer
+    is settled once, after all its results, and reused along every chain through it.
     """
     results_of: dict[str, set[str]] = defaultdict(set)
     for row in events:
         for original in row["originals"]:
             results_of[original].add(row["result"])
     settled: dict[str, frozenset[str]] = {}
-    walking: set[str] = set()
-
-    def current(org: str) -> frozenset[str]:
-        if org not in results_of:
-            return frozenset({org})
-        if org not in settled:
-            if org in walking:
-                raise ValueError(f"agency change events form a cycle through {org}")
-            walking.add(org)
-            settled[org] = frozenset().union(*map(current, results_of[org]))
-            walking.discard(org)
-        return settled[org]
-
-    return {org: current(org) for org in results_of}
+    for root in sorted(results_of):
+        if root in settled:
+            continue
+        path = {root}
+        stack = [(root, iter(sorted(results_of[root])))]
+        while stack:
+            org, pending = stack[-1]
+            for result in pending:
+                if result in settled or result not in results_of:
+                    continue
+                if result in path:
+                    raise ValueError(f"agency change events form a cycle through {result}")
+                path.add(result)
+                stack.append((result, iter(sorted(results_of[result]))))
+                break
+            else:
+                stack.pop()
+                path.discard(org)
+                settled[org] = frozenset().union(
+                    *(settled[result] if result in results_of else {result} for result in results_of[org])
+                )
+    return settled
 
 
 class _Projection(NamedTuple):

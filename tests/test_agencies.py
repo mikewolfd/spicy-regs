@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import shutil
+import sys
 from collections import Counter
 from importlib.resources import files
 from pathlib import Path
@@ -215,6 +216,13 @@ def test_a_chain_resolves_to_its_end():
     projection = agencies._build_projection(rows, (), [event(900001, 900002), event(900002, 900003)])
     assert projection.code_by_fr_id[900001] == "END"
     assert 900002 not in projection.code_by_fr_id  # MIDDLE and END both select it
+
+
+def test_a_chain_deeper_than_the_recursion_limit_resolves():
+    depth = sys.getrecursionlimit() * 5
+    rows = [{"org": f"{FR}{depth}", "source_value": "END", "parent_org": None}]
+    projection = agencies._build_projection(rows, (), [event(i, i + 1) for i in range(depth)])
+    assert projection.code_by_fr_id[0] == "END"
 
 
 def test_a_cycle_is_refused():
