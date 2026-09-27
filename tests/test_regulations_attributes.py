@@ -90,17 +90,42 @@ def test_the_sweep_writes_both_tables_whole(tmp_path):
         ("FDA", "documents"): [_document("FDA-1-0001"), _document("FDA-1-0002")],
     }
     rows = attributes_sweep.sweep(tmp_path, agencies=["EPA", "FDA"],
-                                  read_factory=lambda agency, kind: _Reader(served[(agency, kind.name)]))
+                                  read_factory=lambda consumed: lambda agency, kind: _Reader(served[(agency, kind.name)]))
     assert rows == {"document_attributes": 3, "docket_attributes": 2}
     assert pq.read_table(tmp_path / "docket_attributes.parquet").column("keywords").to_pylist() == [["air"], None]
     assert not (tmp_path / "attributes-staging").exists()
 
 
-def test_a_sweep_with_an_unresolved_key_writes_nothing(tmp_path):
-    with pytest.raises(RuntimeError, match="unresolved"):
+def test_a_key_that_keeps_failing_in_transport_writes_nothing(tmp_path):
+    with pytest.raises(RuntimeError, match="unread after 3 passes"):
         attributes_sweep.sweep(tmp_path, agencies=["EPA"],
-                               read_factory=lambda agency, kind: _Reader([], failed=["raw-data/EPA/x.json"]))
+                               read_factory=lambda consumed: lambda agency, kind: _Reader(
+                                   [], failed=["raw-data/EPA/x.json"]))
     assert not (tmp_path / "document_attributes.parquet").exists()
+
+
+def test_a_transport_failure_is_re_read_skipping_what_was_read(tmp_path):
+    """A connection drop costs a re-read of the failed agency's unread keys, not the sweep."""
+    passes = []
+
+    def factory(consumed):
+        passes.append(consumed)
+        first = len(passes) == 1
+
+        def read(agency, kind):
+            if kind.name != "documents":
+                return _Reader([])
+            reader = _Reader([_document("EPA-1-0001")] if first else [_document("EPA-1-0002")],
+                             failed=["raw-data/EPA/EPA-1/documents/EPA-1-0002.json"] if first else [])
+            reader.last_keys = ["raw-data/EPA/EPA-1/documents/EPA-1-0001.json"] if first else [
+                "raw-data/EPA/EPA-1/documents/EPA-1-0002.json"]
+            return reader
+
+        return read
+
+    rows = attributes_sweep.sweep(tmp_path, agencies=["EPA"], read_factory=factory)
+    assert rows["document_attributes"] == 2
+    assert passes == [frozenset(), frozenset({"raw-data/EPA/EPA-1/documents/EPA-1-0001.json"})]
 
 
 def test_the_families_publish_on_the_contracts_key():
@@ -132,9 +157,9 @@ def test_a_refused_record_loses_only_its_attributes_row(tmp_path):
 def test_the_sweep_reports_refusals_beside_the_tables(tmp_path):
     served = {("EPA", "dockets"): [{"data": {"id": "", "attributes": {}}}], ("EPA", "documents"): []}
     rows = attributes_sweep.sweep(tmp_path, agencies=["EPA"],
-                                  read_factory=lambda agency, kind: _Reader(served[(agency, kind.name)]))
+                                  read_factory=lambda consumed: lambda agency, kind: _Reader(served[(agency, kind.name)]))
     import json
 
     assert rows["docket_attributes"] == 0
-    assert [(r["table"], r["id"]) for r in json.loads((tmp_path / "attribute_refusals.json").read_text())] == [
-        ("docket_attributes", "")]
+    receipt = json.loads((tmp_path / "attribute_refusals.json").read_text())
+    assert [(r["table"], r["id"]) for r in receipt["refused"]] == [("docket_attributes", "")]
