@@ -5,15 +5,13 @@ The optional `source-readers` extra enables the same readers for package install
 its wheels must be supplied explicitly until they are published in a registry.
 Base CLI and MCP installs do not require them.
 
-- `spicy_docs-0.46.0`: released by spicy-stack-11 from SpicyDocs `main` at `f486e73`, September 27,
-  2026: **1,677,177 bytes**, SHA-256
-  `2af2dfff55f0e2801bdc2ac2d928cbbd4e63701afbd87b719dd597736ef0b799`, byte-identical across two builds
-  (rechecked on adoption). On top of 0.44.0 (typed table contracts and the attribute projections) it
-  describes the comment-window flags as version state, takes each derived-text attachment from the
-  best-ranked tool that has it (decision 41), breaks a Mirrulations tie by S3 write time (keyed reads
-  are `MirrulationsReader.iter_keyed_records()`; `iter_records()` stays bare), and declares the
-  `at-joined/1` key spelling on `bill_sections` and `fec_committee_history`. Earlier builds and their
-  records are in this file's history.
+- `spicy_docs-0.47.0`: released by the bills lane from SpicyDocs `main` at `f549c16`, September 27,
+  2026: **1,677,512 bytes**, SHA-256
+  `ff3d9bb0ada5e38df4224533b6f41a3c989b25fd4ce7f3a161d9d054150346c5`, byte-identical across two builds.
+  It is 0.46.0 (typed contracts, decision 41, the Mirrulations write-time tie-break, `at-joined/1`) plus
+  `bill_sections.congress`: the partition column the bill family splits `bill_sections` by, derived from
+  the `bill_id` prefix by `schemas.tables.bill_congress`. Earlier builds and their records are in this
+  file's history.
 
 - `rulespec_artifacts-1.1.2`: exact dependency of SpicyDocs 0.39.2, built from Rulespec
   `23d5f2d98973b2a7f1bf7ce4c9c7a786a4f369ab` (`packages/rulespec-artifacts` of a whole-repo
