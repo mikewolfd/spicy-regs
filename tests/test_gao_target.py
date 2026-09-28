@@ -59,6 +59,7 @@ def test_candidate_preserves_all_prior_cells_leaves_date_unknown_and_resolves(tm
     assert report['prior_cells_equal'] and report['candidate_rows']==2
     added=pq.read_table(out).to_pylist()[1]
     assert added['published_date'] is None and added['topics_json'] is None
+    assert added['source']=='gao_repair'
     c: Any=duckdb.connect()
     c.read_parquet(str(out)).create_view('gao_reports')
     result=resolve_citations(c,[{'cite_kind':'gao_product_id','target_key':'GAO-17-317'}],
