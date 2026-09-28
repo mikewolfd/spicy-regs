@@ -1,17 +1,21 @@
-"""Fill the comment fields a catalog row predates by re-reading every Mirrulations comment (owner decision 2026-09-28).
+"""Re-read every Mirrulations comment once, keeping everything a later column decision could need (owner, 2026-09-28).
 
 The catalog replaces a row only when its ``modify_date`` moves, and the manifest skips keys already read, so rows
-ingested before a field was retained keep it NULL: the four comment-reference columns and ``subtype`` and
-``duplicate_comments`` (``iceberg._COMMENT_ADDED_COLUMNS``). This re-reads each comment object once and fills them.
+ingested before a field was retained keep it NULL: the four comment-reference columns, ``subtype`` and
+``duplicate_comments`` (``iceberg._COMMENT_ADDED_COLUMNS``), and ``attachments_json`` wherever the row's first read
+lacked the attachments. One pass keeps, per object: its key and the GET's ETag and size; the whole thin-table row
+through ``COMMENT.extract`` (one spelling), with the body as its SHA-256 and length; and every other stated attribute
+as compact JSON (``attributes_json``: the keys the extract does not map, non-null only), which ``comment_attributes``
+is built from.
 
 Two phases, so the long read holds no lock and the catalog write holds it briefly:
 
 * ``plan`` + ``read`` touch no catalog. ``plan`` splits the ETL manifest's comment keys into fixed chunks per agency;
-  ``read`` fetches each chunk through the ETL's Mirrulations reader and writes one Parquet part per chunk, keeping
-  only the object key, ``comment_id``, ``agency_code``, ``modify_date`` and the fill columns. A part is written whole
-  or not at all, so a rerun reads only the chunks that have no part, and a chunk with transport failures stays
-  unwritten for the next run. Answers that are not transport failures (unreadable or empty objects) are kept in the
-  chunk's journal line.
+  ``read`` fetches each chunk through the ETL's Mirrulations reader and writes one Parquet part per chunk. A part is
+  written whole or not at all, so a rerun reads only the chunks that have no part, and a chunk with transport
+  failures stays unwritten for the next run. Answers that are not transport failures (unreadable or empty objects)
+  are kept in the chunk's journal line. A plan is named by the manifest digest and the record shape, so a changed
+  shape is a new plan, never parts of two shapes stitched together.
 * ``write`` (see :func:`fill_catalog`) runs under the catalog lock.
 """
 
@@ -20,8 +24,10 @@ from __future__ import annotations
 import hashlib
 import json
 import resource as rusage
+import shutil
 import sys
 import time
+import zlib
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -33,12 +39,41 @@ from loguru import logger
 from spicy_regs.schemas import COMMENT
 from spicy_regs.sources import iceberg
 
-#: The columns a fill writes: exactly the nullable columns added after the catalog table was created.
-FILL_COLUMNS = iceberg._COMMENT_ADDED_COLUMNS
+#: The columns a fill writes: the nullable columns added after the catalog table was created, and attachments_json.
+FILL_COLUMNS = (*iceberg._COMMENT_ADDED_COLUMNS, "attachments_json")
 #: Keys per chunk: the resume unit, about 17 s of reads at the measured rate.
 CHUNK_KEYS = 20_000
-PART_SCHEMA = {"key": pl.Utf8, "comment_id": pl.Utf8, "agency_code": pl.Utf8, "modify_date": pl.Utf8,
-               **{column: COMMENT.schema[column] for column in FILL_COLUMNS}}
+#: The part record's shape; a plan carries it, so a new shape is a new plan.
+RECORD_SHAPE = "s2"
+#: The ``data.attributes`` keys ``COMMENT.extract`` maps into the thin row; every other stated key is kept in
+#: ``attributes_json``. ``test_extracted_attributes_are_the_keys_the_extract_reads`` derives this set independently.
+EXTRACTED_ATTRIBUTES = frozenset({
+    "agencyId", "category", "comment", "commentOn", "commentOnDocumentId", "docketId", "documentType",
+    "duplicateComments", "firstName", "lastName", "modifyDate", "organization", "originalDocumentId", "postedDate",
+    "receiveDate", "subtype", "title",
+})
+#: Host enrichment columns: never in the source record, so never read here.
+_HOST_COLUMNS = ("text_content", "text_extraction_status", "pdf_extraction_results_json")
+PART_SCHEMA = {
+    "key": pl.Utf8, "etag": pl.Utf8, "size": pl.Int64,
+    **{c: t for c, t in COMMENT.schema.items() if c not in (*_HOST_COLUMNS, "comment")},
+    "comment_sha256": pl.Utf8, "comment_length": pl.Int64, "attributes_json": pl.Utf8,
+}
+
+
+def part_row(keyed) -> dict:
+    """One part row for a keyed Mirrulations payload: identity, the thin row, the body's digest, the other attributes."""
+    row = COMMENT.extract(keyed.payload)
+    body = row["comment"]
+    attributes = (keyed.payload.get("data") or {}).get("attributes") or {}
+    stated = {key: value for key, value in attributes.items() if key not in EXTRACTED_ATTRIBUTES and value is not None}
+    return {
+        "key": keyed.key, "etag": keyed.etag, "size": keyed.size,
+        **{column: row[column] for column in PART_SCHEMA if column in row and column != "comment"},
+        "comment_sha256": None if body is None else hashlib.sha256(body.encode()).hexdigest(),
+        "comment_length": None if body is None else len(body),
+        "attributes_json": json.dumps(stated, separators=(",", ":"), sort_keys=True, ensure_ascii=False),
+    }
 
 
 def _sql(value: str | Path) -> str:
@@ -53,11 +88,11 @@ def plan(workdir: Path, manifest: Path, *, chunk_keys: int = CHUNK_KEYS) -> Path
     """
     digest = hashlib.sha256(manifest.read_bytes()).hexdigest()
     plans = workdir / "plan"
-    target = plans / f"{digest[:16]}.parquet"
+    target = plans / f"{digest[:16]}-{RECORD_SHAPE}.parquet"
     if target.exists():
         return target
     plans.mkdir(parents=True, exist_ok=True)
-    earlier = sorted(plans.glob("*.parquet"))
+    earlier = sorted(plans.glob(f"*-{RECORD_SHAPE}.parquet"))
     temporary = target.with_suffix(".tmp")
     with duckdb.connect() as con:
         con.execute("SET preserve_insertion_order=false")
@@ -74,20 +109,29 @@ def plan(workdir: Path, manifest: Path, *, chunk_keys: int = CHUNK_KEYS) -> Path
         keys, chunks = con.execute(
             f"SELECT count(*), count(DISTINCT (agency, chunk)) FROM read_parquet({_sql(temporary)})").fetchall()[0]
     temporary.replace(target)
-    (plans / f"{digest[:16]}.json").write_text(json.dumps(
-        {"manifest": str(manifest), "manifest_sha256": digest, "keys": keys, "chunks": chunks, "chunk_keys": chunk_keys,
+    (plans / f"{digest[:16]}-{RECORD_SHAPE}.json").write_text(json.dumps(
+        {"manifest": str(manifest), "manifest_sha256": digest, "record_shape": RECORD_SHAPE, "keys": keys,
+         "chunks": chunks, "chunk_keys": chunk_keys,
          "earlier_plans": [p.name for p in earlier]}, indent=2) + "\n")
     logger.info("plan {}: {:,} new comment keys in {:,} chunks", target.name, keys, chunks)
     return target
 
 
-def _chunks(workdir: Path, agencies: set[str] | None) -> Iterator[tuple[str, str, int, list[str]]]:
-    """Every planned chunk as ``(plan id, agency, chunk, keys)``, in plan, agency and chunk order."""
-    for plan_file in sorted((workdir / "plan").glob("*.parquet")):
+def _chunks(
+    workdir: Path, agencies: set[str] | None, shard: tuple[int, int] | None = None,
+) -> Iterator[tuple[str, str, int, list[str]]]:
+    """Every planned chunk as ``(plan id, agency, chunk, keys)``, in plan, agency and chunk order.
+
+    ``shard`` ``(i, n)`` keeps the chunks whose CRC-32 of ``agency/chunk`` is ``i`` modulo ``n``: chunks, not
+    agencies, so the largest agencies spread across every process.
+    """
+    for plan_file in sorted((workdir / "plan").glob(f"*-{RECORD_SHAPE}.parquet")):
         with duckdb.connect() as con:
             index = con.execute(f"SELECT DISTINCT agency, chunk FROM {_sql(plan_file)} ORDER BY 1, 2").fetchall()
             for agency, chunk in index:
                 if agencies is not None and agency not in agencies:
+                    continue
+                if shard is not None and zlib.crc32(f"{agency}/{chunk}".encode()) % shard[1] != shard[0]:
                     continue
                 keys = [row[0] for row in con.execute(
                     f"SELECT key FROM {_sql(plan_file)} WHERE agency = ? AND chunk = ? ORDER BY key", [agency, chunk]
@@ -106,12 +150,14 @@ def _peak_rss_mb() -> float:
 
 def read(
     workdir: Path, *, workers: int = 64, agencies: list[str] | None = None, max_chunks: int | None = None,
-    max_rss_mb: float = 2048, resource=None, progress_name: str = "progress.json",
+    max_rss_mb: float = 2048, min_free_gb: float = 4, shard: tuple[int, int] | None = None, resource=None,
+    progress_name: str = "progress.json",
 ) -> dict:
     """Read every planned chunk that has no part yet; return this run's counts.
 
     ``agencies`` restricts the run (a shard); ``resource`` replaces the anonymous S3 resource in tests. The process
-    stops cleanly after the chunk that takes its peak RSS past ``max_rss_mb``; a rerun resumes after it.
+    stops cleanly before a chunk when the disk holding ``workdir`` has less than ``min_free_gb`` free, and after the
+    chunk that takes its peak RSS past ``max_rss_mb``; a rerun resumes where it stopped.
     """
     from spicy_docs.sources import mirrulations
 
@@ -124,21 +170,23 @@ def read(
     totals: dict = {"chunks": 0, "keys": 0, "rows": 0, "unresolved": 0, "deferred_chunks": 0, "stopped": None}
     started = time.monotonic()
     wanted = set(agencies) if agencies is not None else None
-    for plan_id, agency, chunk, keys in _chunks(workdir, wanted):
+    for plan_id, agency, chunk, keys in _chunks(workdir, wanted, shard):
         target = part_path(workdir, plan_id, agency, chunk)
         if target.exists():
             continue
         if max_chunks is not None and totals["chunks"] + totals["deferred_chunks"] >= max_chunks:
+            break
+        free_gb = shutil.disk_usage(workdir).free / 2**30
+        if free_gb < min_free_gb:
+            totals["stopped"] = f"{free_gb:.1f} GB free, below {min_free_gb:.1f} GB"
+            logger.warning("stopping before {} chunk {}: {}", agency, chunk, totals["stopped"])
             break
         begun = time.monotonic()
         reader = mirrulations.MirrulationsReader(
             resource, mirrulations.BUCKET, mirrulations.PREFIX, agency, source,
             key_lister=lambda keys=keys: keys, download_workers=workers,
         )
-        rows = []
-        for keyed in reader.iter_keyed_records():
-            row = COMMENT.extract(keyed.payload)
-            rows.append({"key": keyed.key, **{column: row[column] for column in PART_SCHEMA if column != "key"}})
+        rows = [part_row(keyed) for keyed in reader.iter_keyed_records()]
         transport = [o for o in reader.unresolved if o.status == mirrulations.STATUS_TRANSPORT]
         record = {"plan": plan_id, "agency": agency, "chunk": chunk, "keys": len(keys), "rows": len(rows),
                   "seconds": round(time.monotonic() - begun, 2),
@@ -175,7 +223,7 @@ def read(
 def status(workdir: Path) -> dict:
     """Planned and read chunks and keys, from the plans and the parts on disk."""
     with duckdb.connect() as con:
-        plans = sorted((workdir / "plan").glob("*.parquet"))
+        plans = sorted((workdir / "plan").glob(f"*-{RECORD_SHAPE}.parquet"))
         if not plans:
             return {"planned_keys": 0, "planned_chunks": 0, "read_chunks": 0, "read_keys": 0}
         planned = con.execute(f"""
@@ -186,13 +234,6 @@ def status(workdir: Path) -> dict:
                     if (agency, f"{plan_file.removesuffix('.parquet')}-{chunk:05d}") in done)
     return {"planned_keys": sum(row[3] for row in planned), "planned_chunks": len(planned),
             "read_chunks": len(done), "read_keys": read_keys}
-
-
-def planned_agencies(workdir: Path) -> list[str]:
-    plans = sorted((workdir / "plan").glob("*.parquet"))
-    with duckdb.connect() as con:
-        return [row[0] for row in con.execute(
-            f"SELECT DISTINCT agency FROM read_parquet([{', '.join(map(_sql, plans))}]) ORDER BY 1").fetchall()]
 
 
 app = App(name="fill-comment-fields", help=__doc__)
@@ -207,16 +248,17 @@ def plan_command(*, workdir: Path, manifest: Path, chunk_keys: int = CHUNK_KEYS)
 @app.command(name="read")
 def read_command(
     *, workdir: Path, workers: int = 64, shard: int | None = None, shards: int | None = None,
-    max_rss_mb: float = 2048,
+    max_rss_mb: float = 2048, min_free_gb: float = 4,
 ) -> None:
-    """Read the unread chunks, or one ``--shard`` of ``--shards`` (agencies dealt round-robin)."""
-    from spicy_regs.pipelines.attributes_sweep import shard_agencies
-
+    """Read the unread chunks, or one ``--shard`` of ``--shards`` (chunks dealt by CRC-32)."""
     if (shard is None) != (shards is None):
         raise ValueError("--shard and --shards go together")
-    agencies = shard_agencies(planned_agencies(workdir), shard, shards) if shard is not None and shards else None
+    pair = (shard, shards) if shard is not None and shards is not None else None
+    if pair is not None and not 0 <= pair[0] < pair[1]:
+        raise ValueError(f"shard {pair[0]} is outside 0..{pair[1] - 1}")
     name = f"progress-{shard}.json" if shard is not None else "progress.json"
-    totals = read(workdir, workers=workers, agencies=agencies, max_rss_mb=max_rss_mb, progress_name=name)
+    totals = read(workdir, workers=workers, max_rss_mb=max_rss_mb, min_free_gb=min_free_gb, shard=pair,
+                  progress_name=name)
     print(json.dumps(totals))
     if totals["deferred_chunks"] or totals["stopped"]:
         raise SystemExit(3)

@@ -48,17 +48,51 @@ def test_plan_chunks_comment_keys_per_agency_and_a_newer_manifest_adds_only_new_
     assert cf.status(tmp_path)["planned_keys"] == len(keys)
 
 
-def test_read_keeps_only_the_fill_columns_as_stated(tmp_path):
+def test_read_keeps_the_thin_row_the_body_digest_and_every_other_stated_attribute(tmp_path):
+    import hashlib
+
     store = _store()
     cf.plan(tmp_path, _manifest(tmp_path, store), chunk_keys=10)
     totals = cf.read(tmp_path, workers=2, resource=_FakeS3Resource(store))
     assert (totals["chunks"], totals["keys"], totals["rows"], totals["deferred_chunks"]) == (2, 4, 4, 0)
     rows = {row["comment_id"]: row for row in _parts(tmp_path)}
-    assert set(rows[f"{PFAS}-1811"]) == set(cf.PART_SCHEMA)  # no body, no raw JSON
-    assert (rows[f"{PFAS}-1811"]["subtype"], rows[f"{PFAS}-1811"]["duplicate_comments"]) == ("Mass Mail Campaign", 15851)
+    campaign = rows[f"{PFAS}-1811"]
+    assert list(campaign) == list(cf.PART_SCHEMA) and "comment" not in campaign
+    raw = json.loads(store[_key(f"{PFAS}-1811")])
+    attributes = raw["data"]["attributes"]
+    assert (campaign["subtype"], campaign["duplicate_comments"]) == ("Mass Mail Campaign", 15851)
+    assert json.loads(campaign["attachments_json"]) == json.loads(COMMENT.extract(raw)["attachments_json"])
+    assert campaign["comment_sha256"] == hashlib.sha256(attributes["comment"].encode()).hexdigest()
+    assert campaign["comment_length"] == len(attributes["comment"])
+    assert campaign["size"] == len(store[_key(f"{PFAS}-1811")])
+    assert json.loads(campaign["attributes_json"]) == {
+        key: value for key, value in attributes.items() if key not in cf.EXTRACTED_ATTRIBUTES and value is not None
+    }
+    assert "trackingNbr" in json.loads(campaign["attributes_json"])
     assert rows["CMS-2016-0123-0993"]["duplicate_comments"] == 0  # a stated zero stays zero
-    assert rows[f"{PFAS}-0002"]["comment_on_document_id"] is not None
     assert cf.status(tmp_path)["read_keys"] == 4
+
+
+def test_extracted_attributes_are_the_keys_the_extract_reads():
+    """Derived, not listed: a key is extracted exactly when changing its value changes the extract's row."""
+    reads = set()
+    for path in FIXTURES.glob("*.source.json"):
+        raw = json.loads(path.read_text())
+        base = COMMENT.extract(raw)
+        for key in raw["data"]["attributes"]:
+            changed = json.loads(json.dumps(raw))
+            changed["data"]["attributes"][key] = "\u2063probe"
+            if COMMENT.extract(changed) != base:
+                reads.add(key)
+    assert reads == cf.EXTRACTED_ATTRIBUTES
+
+
+def test_the_read_stops_before_a_chunk_when_the_disk_is_short(tmp_path):
+    store = _store()
+    cf.plan(tmp_path, _manifest(tmp_path, store), chunk_keys=10)
+    stopped = cf.read(tmp_path, workers=2, resource=_FakeS3Resource(store), min_free_gb=10**9)
+    assert stopped["chunks"] == 0 and "free" in stopped["stopped"]
+    assert not (tmp_path / "parts").exists()
 
 
 def test_a_chunk_with_transport_failures_is_not_written_and_a_rerun_reads_only_the_rest(tmp_path):
@@ -95,7 +129,15 @@ def test_the_read_stops_cleanly_past_its_memory_cap_and_resumes(tmp_path):
     assert cf.read(tmp_path, workers=2, resource=_FakeS3Resource(store))["chunks"] == 1
 
 
-def test_part_columns_are_the_fill_columns_plus_identity():
-    assert tuple(cf.PART_SCHEMA)[4:] == cf.FILL_COLUMNS
-    assert cf.FILL_COLUMNS[-2:] == ("subtype", "duplicate_comments")
+def test_the_part_holds_every_fill_column_typed_as_the_table():
+    assert set(cf.FILL_COLUMNS) <= set(cf.PART_SCHEMA)
+    assert cf.FILL_COLUMNS[-3:] == ("subtype", "duplicate_comments", "attachments_json")
     assert cf.PART_SCHEMA["duplicate_comments"] == COMMENT.schema["duplicate_comments"] == pl.Int32
+
+
+def test_shards_split_chunks_so_every_chunk_is_read_exactly_once(tmp_path):
+    store = _store()
+    cf.plan(tmp_path, _manifest(tmp_path, store), chunk_keys=1)
+    read = [cf.read(tmp_path, workers=2, resource=_FakeS3Resource(store), shard=(i, 3))["keys"] for i in range(3)]
+    assert sum(read) == len(store) and len(_parts(tmp_path)) == len(store)
+    assert cf.read(tmp_path, workers=2, resource=_FakeS3Resource(store))["chunks"] == 0
