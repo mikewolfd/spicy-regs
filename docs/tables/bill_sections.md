@@ -4,7 +4,7 @@
 
 **Bill sections**
 
-One row per content-bearing node of one bill version, in document order. All columns are stored as VARCHAR.
+One row per content-bearing node of one bill version, in document order. All columns are stored as VARCHAR. Published as one file per Congress; the server and the publication readers present them as one table, but a raw download holds one file for each Congress.
 
 **Coverage.** Sampled: the sections parsed from printings whose bodies the bill family acquired (source govinfo in bill_versions). *(measured 2026-09-28)*
 

@@ -363,7 +363,12 @@ def joins_record() -> dict:
     return {
         "format": RECORD_FORMAT,
         "version": 1,
-        "baseline": {"date": BASELINE_DATE, "receipts": list(BASELINE_RECEIPTS)},
+        # The server ships this record to the public; receipts kept on a maintainer's machine
+        # mean nothing there, so only repository-relative receipts are bundled.
+        "baseline": {
+            "date": BASELINE_DATE,
+            "receipts": [receipt for receipt in BASELINE_RECEIPTS if not receipt.startswith(("~", "/"))],
+        },
         "kinds": list(KINDS),
         "joins": [record(join) for join in JOINS],
         "references": references(),

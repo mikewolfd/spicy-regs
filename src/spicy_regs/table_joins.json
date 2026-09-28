@@ -4,18 +4,7 @@
   "baseline": {
     "date": "2026-09-26",
     "receipts": [
-      "src/spicy_regs/join_measurements.json",
-      "~/Work/corpora/fork-execution-2026-09-21/join-map-2026-09-26/results.json",
-      "~/Work/corpora/fork-execution-2026-09-21/join-map-2026-09-26/rule-targets-baseline.json",
-      "~/Work/corpora/fork-execution-2026-09-21/join-map-2026-09-26/unified-agenda-rin-after-backfill.json",
-      "~/Work/corpora/fork-execution-2026-09-21/join-map-2026-09-26/dockets-after-gap-fill.json",
-      "~/Work/corpora/fork-execution-2026-09-21/join-map-2026-09-26/sam-entities-after-backfill.json",
-      "~/Work/corpora/fork-execution-2026-09-21/join-map-2026-09-26/live-check-after-fixes.json",
-      "~/Work/corpora/fork-execution-2026-09-21/committee-fixes-2026-09-26/3-rosters-118/runs.json",
-      "~/Work/corpora/fork-execution-2026-09-21/rulemaking-exposure-2026-09-27/proposed-joins.json",
-      "~/Work/corpora/fork-execution-2026-09-21/join-map-2026-09-26/rulemaking-exposure-independent.json",
-      "~/Work/corpora/fork-execution-2026-09-21/join-map-2026-09-26/rulemaking-exposure-independent-2.json",
-      "~/.codex/artifacts/spicy-regs-mcp-repair-20260927/01-fr-composite-baseline.json"
+      "src/spicy_regs/join_measurements.json"
     ]
   },
   "kinds": [

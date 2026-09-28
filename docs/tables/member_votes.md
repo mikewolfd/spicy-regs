@@ -8,6 +8,8 @@ One row per member's position on one roll call. `position` keeps the publisher's
 
 **Coverage.** Sampled, and accumulating. One row per member per roll call in `roll_call_votes`, so it inherits that table's both-chambers scope, per-run cap and skip-what-is-already-held behavior exactly. *(measured 2026-09-28)*
 
+**Data quality.** House rows with `state` `XX` are the non-voting delegates and the Resident Commissioner, as the Clerk marks them. They vote only on Committee of the Whole amendments, so leave them out when ranking voting Representatives. A member who died before a term began can appear as Not Voting on its opening quorum call, as the Clerk's file lists them. One `bioguide_id` can carry more than one spelling of `member_name`; group by `bioguide_id`.
+
 - **Parquet file:** `member_votes.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
 - **Publication status:** Not established by this schema page or its measurement date.

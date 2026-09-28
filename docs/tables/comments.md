@@ -30,7 +30,7 @@ One row per public comment — the largest table (tens of millions of rows). On 
 | `organization` | `VARCHAR` | Organization the commenter represents, when provided. Often null. |
 | `category` | `VARCHAR` | Submitter category as classified on regulations.gov. Often null. |
 | `title` | `VARCHAR` | Comment title / subject line. |
-| `comment` | `VARCHAR` | Full free-text body of the comment. The largest field in the dataset. |
+| `comment` | `VARCHAR` | Full free-text body of the comment as typed into the comment form; filled for nearly every comment. Text of attached files is in `text_content`, which is filled only where an attachment was extracted. The largest field in the dataset. |
 | `document_type` | `VARCHAR` | Document category for the comment record, typically `Public Submission`. |
 | `posted_date` | `VARCHAR` | Date the comment was posted publicly (ISO 8601 string). |
 | `modify_date` | `VARCHAR` | Timestamp the comment was last modified (ISO 8601 string). |

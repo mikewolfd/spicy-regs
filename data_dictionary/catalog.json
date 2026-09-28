@@ -872,7 +872,7 @@
       "table": "gao_reports",
       "label": "Government Accountability Office reports",
       "summary": "One row per U.S. Government Accountability Office (GAO) product, ingested from the public GAO reports RSS feed by `build_gao_reports`. The federal oversight layer over the rulemakings this dataset tracks — GAO's audits, evaluations, and recommendations on how agencies implement laws and rules. GAO's bulk/search surfaces are bot-blocked, so the RSS feed (a ~25-item recent-products window) is the only anonymous machine-readable source; the table is therefore an **append-only accumulator** that grows into a rolling history over successive daily runs. Deduped on `report_id`. All columns are stored as VARCHAR.",
-      "coverage": "Window. Reports the daily job has read from the publisher's recent-items feed since this table started on 2026-09-22 (its first read reached back to 2026-09-15), plus reports added one at a time by an explicit repair. The feed lists only about 25 recent items, so a report published while the job was not reading cannot be recovered from it. Not GAO's archive.",
+      "coverage": "Window. Reports the daily job has read from the publisher's recent-items feed since this table started on 2026-09-22 (its first read reached back to 2026-09-15), plus reports added one at a time by an explicit repair, plus the reports published 2026-07-13 through 2026-09-14, copied once on 2026-09-28 from the upstream spicy-regs publication because this fork's job was not yet reading the feed then (the generation records that copy as a parent). The feed lists only about 25 recent items, so a report published while no job was reading cannot be recovered from it. Not GAO's archive.",
       "kind": "window",
       "measured_on": "2026-09-28",
       "data_quality": null,
@@ -1346,7 +1346,7 @@
     {
       "table": "bill_sections",
       "label": "Bill sections",
-      "summary": "One row per content-bearing node of one bill version, in document order. All columns are stored as VARCHAR.",
+      "summary": "One row per content-bearing node of one bill version, in document order. All columns are stored as VARCHAR. Published as one file per Congress; the server and the publication readers present them as one table, but a raw download holds one file for each Congress.",
       "coverage": "Sampled: the sections parsed from printings whose bodies the bill family acquired (source govinfo in bill_versions).",
       "kind": "sampled",
       "measured_on": "2026-09-28",
@@ -1680,7 +1680,7 @@
       "coverage": "Sampled, and accumulating. One row per member per roll call in `roll_call_votes`, so it inherits that table's both-chambers scope, per-run cap and skip-what-is-already-held behavior exactly.",
       "kind": "sampled",
       "measured_on": "2026-09-28",
-      "data_quality": null,
+      "data_quality": "House rows with `state` `XX` are the non-voting delegates and the Resident Commissioner, as the Clerk marks them. They vote only on Committee of the Whole amendments, so leave them out when ranking voting Representatives. A member who died before a term began can appear as Not Voting on its opening quorum call, as the Clerk's file lists them. One `bioguide_id` can carry more than one spelling of `member_name`; group by `bioguide_id`.",
       "columns": [
         "vote_id",
         "congress",

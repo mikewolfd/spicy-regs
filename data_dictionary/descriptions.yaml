@@ -148,7 +148,7 @@ tables:
       organization: "Organization the commenter represents, when provided. Often null."
       category: "Submitter category as classified on regulations.gov. Often null."
       title: "Comment title / subject line."
-      comment: "Full free-text body of the comment. The largest field in the dataset."
+      comment: "Full free-text body of the comment as typed into the comment form; filled for nearly every comment. Text of attached files is in `text_content`, which is filled only where an attachment was extracted. The largest field in the dataset."
       document_type: "Document category for the comment record, typically `Public Submission`."
       posted_date: "Date the comment was posted publicly (ISO 8601 string)."
       modify_date: "Timestamp the comment was last modified (ISO 8601 string)."
@@ -1249,9 +1249,13 @@ tables:
     coverage: >-
       Window. Reports the daily job has read from the publisher's recent-items
       feed since this table started on 2026-09-22 (its first read reached back
-      to 2026-09-15), plus reports added one at a time by an explicit repair.
-      The feed lists only about 25 recent items, so a report published while
-      the job was not reading cannot be recovered from it. Not GAO's archive.
+      to 2026-09-15), plus reports added one at a time by an explicit repair,
+      plus the reports published 2026-07-13 through 2026-09-14, copied once on
+      2026-09-28 from the upstream spicy-regs publication because this fork's
+      job was not yet reading the feed then (the generation records that copy
+      as a parent). The feed lists only about 25 recent items, so a report
+      published while no job was reading cannot be recovered from it. Not GAO's
+      archive.
     measured_on: "2026-09-28"
     summary: >-
       One row per U.S. Government Accountability Office (GAO) product, ingested
@@ -1877,7 +1881,9 @@ tables:
     measured_on: "2026-09-28"
     summary: >-
       One row per content-bearing node of one bill version, in document order. All
-      columns are stored as VARCHAR.
+      columns are stored as VARCHAR. Published as one file per Congress; the
+      server and the publication readers present them as one table, but a raw
+      download holds one file for each Congress.
     columns_from: spicy_docs
 
   section_diffs:
@@ -2119,6 +2125,13 @@ tables:
       publisher's own word (the Clerk spells both Aye/No and Yea/Nay) and
       `position_normalized` carries the fold, so a count and a quotation are both
       answerable. All columns are stored as VARCHAR.
+    data_quality: >-
+      House rows with `state` `XX` are the non-voting delegates and the Resident
+      Commissioner, as the Clerk marks them. They vote only on Committee of the
+      Whole amendments, so leave them out when ranking voting Representatives. A
+      member who died before a term began can appear as Not Voting on its opening
+      quorum call, as the Clerk's file lists them. One `bioguide_id` can carry
+      more than one spelling of `member_name`; group by `bioguide_id`.
     columns_from: spicy_docs
 
   members:

@@ -24,7 +24,9 @@ WORKDIR /app
 # generations logs through it; without it every tool call failed (found by the
 # 2026-09-25 local smoke before the first fork deploy). httpx: that reader's
 # client, which mcp 2 (on httpx2) no longer brings.
-RUN pip install "mcp==2.2.0" "duckdb==1.5.5" "uvicorn[standard]>=0.31.1" "loguru>=0.7" "httpx>=0.28.1,<1"
+# pytz: DuckDB imports it to return a TIMESTAMPTZ value; without it query_sql
+# failed on any such column (found by the 2026-09-28 persona re-run).
+RUN pip install "mcp==2.2.0" "duckdb==1.5.5" "uvicorn[standard]>=0.31.1" "loguru>=0.7" "httpx>=0.28.1,<1" "pytz==2026.4"
 
 # Install the package code without its declared (ETL) dependencies. mcp_server
 # imports only the local _icon module plus mcp/duckdb, so this is sufficient and
@@ -34,7 +36,7 @@ COPY src ./src
 RUN pip install --no-deps .
 # Fail the build, not the first request, when a module the server imports at
 # request time needs a package this image does not install.
-RUN python -c "import spicy_regs.mcp_server, spicy_regs.sources.publication, spicy_regs.local_data; import spicy_regs.relationship_views, spicy_regs.citation_resolution, spicy_regs.acquisition_queue; from spicy_regs.vocabulary_mapping import lookup_agency; assert lookup_agency('regulations.gov:agency', 'OPM')['status'] == 'reviewed_mapping'"
+RUN python -c "import spicy_regs.mcp_server, spicy_regs.sources.publication, spicy_regs.local_data; import spicy_regs.relationship_views, spicy_regs.citation_resolution, spicy_regs.acquisition_queue; from spicy_regs.vocabulary_mapping import lookup_agency; assert lookup_agency('regulations.gov:agency', 'OPM')['status'] == 'reviewed_mapping'; import duckdb; duckdb.sql(\"SELECT TIMESTAMPTZ '2026-01-01 00:00:00+00'\").fetchall()"
 
 # The platform sends traffic to $PORT (default 8080). build_app() mounts the MCP
 # endpoint at /mcp; --factory because build_app is a callable returning the app.
