@@ -1087,7 +1087,11 @@ def _register_tools(mcp: MCPServer) -> None:
         The connection reads either R2 or an explicitly configured local directory.
         Local mode never falls back to remote files. One view exists per
         table listed by list_sources. Always include a LIMIT in exploratory
-        queries. truncated reports whether rows beyond max_rows were omitted.
+        queries. truncated reports whether rows beyond max_rows were omitted
+        from what the statement returned; rows your own LIMIT excluded are not
+        counted, so to learn whether more exist, set LIMIT above max_rows or
+        run a COUNT. SQL is DuckDB's dialect: `~` matches the whole string
+        (use regexp_matches for a substring match, lower() for case).
         Selected columns must have unique names; alias shared names in joins.
         sql echoes the statement this reply answers.
         publication gives each table the query names: its live data version,

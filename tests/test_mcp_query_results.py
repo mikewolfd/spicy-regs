@@ -157,3 +157,10 @@ def test_tables_named_follows_sql_scope(sql, named):
     """The pins a reply carries come from these names: a false one claims a read that never happened."""
     with duckdb.connect() as con:
         assert mcp_server._tables_named(con, sql) == named
+
+
+def test_a_timestamp_with_time_zone_is_returned(client):
+    # Without pytz, DuckDB could not hand a TIMESTAMPTZ to Python and every such query failed.
+    result = call(client, "query_sql", {"sql": "SELECT TIMESTAMPTZ '2026-09-28 12:00:00+00' AS t", "max_rows": 1})
+    assert result["isError"] is False
+    assert result["structuredContent"]["rows"][0]["t"].startswith("2026-09-28")

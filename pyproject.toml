@@ -16,6 +16,7 @@ dependencies = [
     "loguru",
     "mcp>=2.2,<3", # MCPServer (mcp.server.mcpserver) runs sync tools on worker threads
     "pyyaml",  # data dictionary descriptions (src/spicy_regs/data_dictionary.py)
+    "pytz>=2026.4",  # DuckDB needs it to return TIMESTAMPTZ values; query_sql failed on any without it
 ]
 
 [project.optional-dependencies]

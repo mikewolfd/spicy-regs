@@ -490,7 +490,7 @@
       {
         "column_name": "comment",
         "column_type": "VARCHAR",
-        "description": "Full free-text body of the comment. The largest field in the dataset."
+        "description": "Full free-text body of the comment as typed into the comment form; filled for nearly every comment. Text of attached files is in `text_content`, which is filled only where an attachment was extracted. The largest field in the dataset."
       },
       {
         "column_name": "document_type",
@@ -2487,8 +2487,8 @@
   "lobbying_filings": {
     "table": "lobbying_filings",
     "label": "Lobbying disclosure filings",
-    "summary": "One row per federal lobbying-disclosure filing, ingested from the U.S. Senate Lobbying Disclosure Act (LDA) REST API (`lda.senate.gov`) by `build_lobbying_filings`. Registrants file quarterly reports naming the clients they lobby for, the money involved, the issues raised, and the government entities (agencies/chambers) lobbied — so this table links the comment campaigns in `comments`/`dockets` to the same organizations' *direct* agency lobbying. Primary / dedup key is `filing_uuid`. All columns are stored as VARCHAR; nested/array fields are JSON strings.",
-    "coverage": "True range: every filing of each filing year held, read whole from the LDA API, from 2010 to date; earlier years are added one year per dispatched run (owner decision 47).",
+    "summary": "One row per federal lobbying-disclosure filing, ingested from the U.S. Senate Lobbying Disclosure Act (LDA) REST API (`lda.gov`, formerly `lda.senate.gov`) by `build_lobbying_filings`. Registrants file quarterly reports naming the clients they lobby for, the money involved, the issues raised, and the government entities (agencies/chambers) lobbied — so this table links the comment campaigns in `comments`/`dockets` to the same organizations' *direct* agency lobbying. Primary / dedup key is `filing_uuid`. All columns are stored as VARCHAR; nested/array fields are JSON strings.",
+    "coverage": "True range: every filing of each filing year held, read whole from the LDA API, from the earliest filing year the backfill has reached to date; earlier years are added one year per dispatched run (owner decision 47). Query min(filing_year) for the current start.",
     "kind": "true_range",
     "measured_on": "2026-09-28",
     "data_quality": null,
@@ -2546,7 +2546,7 @@
       {
         "column_name": "expenses",
         "column_type": "VARCHAR",
-        "description": "Lobbying expenses reported by a self-filing organization for the period, in USD. Null for firms (who report `income`). An amended report (`filing_type` `1A`–`4A`) restates its quarter's amount, often unchanged, so summing over every filing counts that quarter twice; keep the latest filing per registrant, client and quarter."
+        "description": "Lobbying expenses reported by a self-filing organization for the period, in USD. Null for firms (who report `income`). An amended report (`filing_type` `1A`–`4A`) restates its quarter's amount, often unchanged, so summing over every filing counts that quarter twice; keep the latest filing per registrant, client and quarter. A self-filing organization's expenses already include what it pays outside lobbying firms, whose `income` for that client is reported separately; do not add the two."
       },
       {
         "column_name": "lobbying_activities_json",
@@ -2944,7 +2944,7 @@
     "coverage": "Sampled. The records of the selected collections in fec_collections, not complete FEC history. Contributions from individuals are mostly missing: only the 2025-2026 insertion and deletion files are loaded, not the main individual-contributions file of any cycle (gap FG04 in docs/fec-gaps.md). For a candidate's individual donors, use FEC.gov. Overlapping collections can repeat an observation.",
     "kind": "sampled",
     "measured_on": "2026-09-28",
-    "data_quality": "Memo lines (MEMO_CD 'X' in metadata_json) repeat money already reported on another line; leave them out before summing. Most rows of the 2025-2026 committee-to-committee file (collection bulk-2026-oth-base-file) are such memos: contributions from individuals received through joint fundraising committees (TRANSACTION_TP 15J). The bulk files carry no link from a memo to its transfer. Native fields retain their source meaning. Monetary values, amendment chains and record inclusion rules differ by family; generic record ingestion does not select a latest amendment or establish a safe sum. Unknown fields stay in native JSON. Original pinned bytes preserve numeric spelling where the provider exposes exact decimal values as strings.",
+    "data_quality": "Memo lines (MEMO_CD 'X' in metadata_json) repeat money already reported on another line; leave them out before summing. Most rows of the 2025-2026 committee-to-committee file (collection bulk-2026-oth-base-file) are such memos: contributions from individuals received through joint fundraising committees (TRANSACTION_TP 15J). Contributions from PACs routed through a joint fundraising committee are memos too (18J), already inside the committee's transfer lines (18G). The bulk files carry no link from a memo to its transfer. Native fields retain their source meaning. Monetary values, amendment chains and record inclusion rules differ by family; generic record ingestion does not select a latest amendment or establish a safe sum. Unknown fields stay in native JSON. Original pinned bytes preserve numeric spelling where the provider exposes exact decimal values as strings.",
     "columns": [
       {
         "column_name": "collection_id",
@@ -2969,7 +2969,7 @@
       {
         "column_name": "committee_id",
         "column_type": "VARCHAR",
-        "description": "Committee ID as the source reports it (bulk CMTE_ID or the API's committee_id). In transaction files this is the committee that filed the report, not necessarily the one that received the money: a PAC's contribution to a candidate is filed under the PAC's ID, with the recipient in metadata_json OTHER_ID and CAND_ID, and TRANSACTION_TP says which way the money moved. To find money a committee received from other committees, also search OTHER_ID. May join fec_committees.committee_id. Blanks remain blank; no identifier is inferred from a name or another entity's ID."
+        "description": "Committee ID as the source reports it (bulk CMTE_ID or the API's committee_id). In transaction files this is the committee that filed the report, not necessarily the one that received the money: a PAC's contribution to a candidate is filed under the PAC's ID, with the recipient in metadata_json OTHER_ID and CAND_ID, and TRANSACTION_TP says which way the money moved. To find money a committee received from other committees, also search OTHER_ID: in the 2025-2026 file a candidate committee's own filings list no direct PAC contributions, so they appear only under each PAC's committee_id, with the candidate in OTHER_ID and CAND_ID (TRANSACTION_TP 24K). May join fec_committees.committee_id. Blanks remain blank; no identifier is inferred from a name or another entity's ID."
       },
       {
         "column_name": "candidate_id",
@@ -3255,7 +3255,7 @@
     "table": "gao_reports",
     "label": "Government Accountability Office reports",
     "summary": "One row per U.S. Government Accountability Office (GAO) product, ingested from the public GAO reports RSS feed by `build_gao_reports`. The federal oversight layer over the rulemakings this dataset tracks — GAO's audits, evaluations, and recommendations on how agencies implement laws and rules. GAO's bulk/search surfaces are bot-blocked, so the RSS feed (a ~25-item recent-products window) is the only anonymous machine-readable source; the table is therefore an **append-only accumulator** that grows into a rolling history over successive daily runs. Deduped on `report_id`. All columns are stored as VARCHAR.",
-    "coverage": "Window. Reports the daily job has read from the publisher's recent-items feed since this table started on 2026-09-22 (its first read reached back to 2026-09-15), plus reports added one at a time by an explicit repair. The feed lists only about 25 recent items, so a report published while the job was not reading cannot be recovered from it. Not GAO's archive.",
+    "coverage": "Window. Reports the daily job has read from the publisher's recent-items feed since this table started on 2026-09-22 (its first read reached back to 2026-09-15), plus reports added one at a time by an explicit repair, plus the reports published 2026-07-13 through 2026-09-14, copied once on 2026-09-28 from the upstream spicy-regs publication because this fork's job was not yet reading the feed then (the generation records that copy as a parent). The feed lists only about 25 recent items, so a report published while no job was reading cannot be recovered from it. Not GAO's archive.",
     "kind": "window",
     "measured_on": "2026-09-28",
     "data_quality": null,
@@ -4206,7 +4206,7 @@
       {
         "column_name": "description",
         "column_type": "VARCHAR",
-        "description": "Proceeding title/subject (ECFS `description_display`, falling back to `description`), e.g. `Restoring Internet Freedom`. There is no program or topic field, and titles often leave the program out: Universal Service dockets include 13-184 (`Modernizing the E-rate Program for Schools and Libraries.`) and 02-60 (`In the Matter of Rural Health Care Support Mechanism`), neither of which says universal service. Search titles together with bureau_code (WC, or CC for older dockets) and known docket numbers."
+        "description": "Proceeding title/subject (ECFS `description_display`, falling back to `description`), e.g. `Restoring Internet Freedom`. There is no program or topic field, and titles often leave the program out: Universal Service dockets include 13-184 (`Modernizing the E-rate Program for Schools and Libraries.`) and 02-60 (`In the Matter of Rural Health Care Support Mechanism`), neither of which says universal service, and high-cost programs such as the Rural Digital Opportunity Fund (19-126) and the 5G Fund (20-32) use their own names. Search titles together with bureau_code (WC, or CC for older dockets) and known docket numbers, and find related dockets by the proceedings filings name alongside an anchor docket in fcc_filings.proceeding_names_json (for Universal Service, the umbrella docket 96-45 and 10-90). A title search gives a floor, not a complete list."
       },
       {
         "column_name": "bureau_code",
@@ -4880,7 +4880,7 @@
   "bill_sections": {
     "table": "bill_sections",
     "label": "Bill sections",
-    "summary": "One row per content-bearing node of one bill version, in document order. All columns are stored as VARCHAR.",
+    "summary": "One row per content-bearing node of one bill version, in document order. All columns are stored as VARCHAR. Published as one file per Congress; the server and the publication readers present them as one table, but a raw download holds one file for each Congress.",
     "coverage": "Sampled: the sections parsed from printings whose bodies the bill family acquired (source govinfo in bill_versions).",
     "kind": "sampled",
     "measured_on": "2026-09-28",
@@ -6130,7 +6130,7 @@
     "coverage": "Sampled, and accumulating. One row per member per roll call in `roll_call_votes`, so it inherits that table's both-chambers scope, per-run cap and skip-what-is-already-held behavior exactly.",
     "kind": "sampled",
     "measured_on": "2026-09-28",
-    "data_quality": null,
+    "data_quality": "House rows with `state` `XX` are the non-voting delegates and the Resident Commissioner, as the Clerk marks them. They vote only on Committee of the Whole amendments, so leave them out when ranking voting Representatives. A member who died before a term began can appear as Not Voting on its opening quorum call, as the Clerk's file lists them. One `bioguide_id` can carry more than one spelling of `member_name`; group by `bioguide_id`.",
     "columns": [
       {
         "column_name": "vote_id",

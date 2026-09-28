@@ -77,6 +77,8 @@ def test_describe_table_lists_the_joins_a_table_makes_and_receives(monkeypatch):
     assert [join["parent"] for join in joins["outgoing"]] == ["unified_agenda"]
     assert joins["outgoing"][0]["kind"] == "scope" and joins["outgoing"][0]["reason"]
     assert joins["baseline"]["receipts"]
+    # A public reply names no path on a maintainer's machine.
+    assert not [receipt for receipt in joins["baseline"]["receipts"] if receipt.startswith(("~", "/"))]
 
 
 def _tables(tmp_path, child_ids, parent_ids) -> dict[str, list[str]]:
