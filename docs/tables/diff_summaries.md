@@ -6,11 +6,12 @@
 
 One row per model-written summary of the change between two printings of a bill. All columns are stored as VARCHAR.
 
-**Coverage.** Sampled. The adoption run produced 0 rows in this output from the 118th Congress's HR and S BILLSTATUS archives, processing 16,213 bills in one pass. The pass used 16 requests (8 keyed, 8 keyless), with the printing cap fixed at four and model calls disabled. Model calls were capped at zero, so this run measures no summary yield. Receipt: `rollups-0-24-0-adoption-2026-09-20/`. Local output only; not uploaded. *(measured 2026-09-20)*
+**Coverage.** Sampled: written by a language model during bill-family runs; a run without model calls enabled cannot fill it. *(measured 2026-09-28)*
 
 - **Parquet file:** `diff_summaries.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
 - **Publication status:** Not established by this schema page or its measurement date.
+- **Row count:** Not stated here; the MCP `describe_table` reply gives the live count under `publication`.
 
 | Column | Type | Description |
 | --- | --- | --- |

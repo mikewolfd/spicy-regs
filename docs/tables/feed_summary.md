@@ -11,6 +11,7 @@ A pre-computed rollup with one row per docket, joining docket metadata to commen
 - **Parquet file:** `feed_summary.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
 - **Publication status:** Not established by this schema page or its measurement date.
+- **Row count:** Not stated here; the MCP `describe_table` reply gives the live count under `publication`.
 
 | Column | Type | Description |
 | --- | --- | --- |

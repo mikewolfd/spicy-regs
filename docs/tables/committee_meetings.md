@@ -6,7 +6,7 @@
 
 One row per scheduled committee meeting, as the Congress.gov committee-meeting list and detail routes state it, keyed `(congress, chamber, event_id)`. The detail carries the hearing transcript jackets (`hearing_transcripts` joins on `event_id`), the related bills, the witnesses and every document URL. All columns are stored as VARCHAR.
 
-**Coverage.** Sampled, and accumulating. Measured on one cold-start run (receipt `d1-measured-run-2026-09-19/`): the whole `committee-meeting/119` walk across the publisher's chamber values declared 2,754 and served 2,754 over 12 pages with no repeat, all retained locally; 993 details were read, 7 were refused and 1,754 rows were retained list-only, at 1,005 keyed requests in 412 seconds. Each run walks the current Congress's whole list, and the previous Congress's from the day before its newest held `updateDate` (or its oldest unread row), and reads the detail of every meeting the table does not yet hold, newest `updateDate` first, at most 1,000 a run. The previous Congress stays in scope because its meetings change when GovInfo prints their transcripts: 204 of the 118th's 3,326 in 2026 to September 26, and all seven hearing transcripts that named a meeting the table lacked (receipt `join-gaps-2026-09-26/f/`). Local output only; not uploaded. *(measured 2026-09-19)*
+**Coverage.** Sampled, and accumulating. Each run walks the current Congress's whole `committee-meeting` list, and the previous Congress's from the day before its newest held `updateDate` (or its oldest unread row), and reads the detail of every meeting the table does not yet hold, newest `updateDate` first, at most 1,000 a run; a meeting whose detail is unread or refused has its list fields only. The previous Congress stays in scope because its meetings change when GovInfo prints their transcripts: 204 of the 118th's 3,326 in 2026 to September 26, and all seven hearing transcripts that named a meeting the table lacked (receipt `join-gaps-2026-09-26/f/`). *(measured 2026-09-28)*
 
 **Data quality.** A row whose `committees_json` is NULL is list-only: its detail has not been read yet, and every detail-only column is NULL with it; a read detail states `[]` where it lists none. Event ids are keyed with their chamber because their uniqueness across chambers is unmeasured (spicy-docs' contract note); the 119th's House ids sit near 119,000 and its Senate ids near 338,000.
 The publisher's `NoChamber` value is stored as `nochamber`, matching its detail address and preserving the existing row identity. It is neither NULL nor an inferred `joint` chamber. The source reader accepts that address, so previously list-only rows can fill at an unchanged timestamp. Retained meeting `119/nochamber/338692` names the Helsinki Commission; the September 24 committee-meetings audit retains its list row and served detail.
@@ -14,6 +14,7 @@ The publisher's `NoChamber` value is stored as `nochamber`, matching its detail 
 - **Parquet file:** `committee_meetings.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
 - **Publication status:** Not established by this schema page or its measurement date.
+- **Row count:** Not stated here; the MCP `describe_table` reply gives the live count under `publication`.
 
 | Column | Type | Description |
 | --- | --- | --- |

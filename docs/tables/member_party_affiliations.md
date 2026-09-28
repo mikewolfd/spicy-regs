@@ -6,11 +6,12 @@
 
 One member, input digest, term index and affiliation index. Literal dates and their parsing states remain separate from any dated membership decision.
 
-**Coverage.** Sampled. The complete retained September 25 community crosswalk captures were replayed and published on September 27 as members generation 00cad6cf5255d605. All 59 source affiliation occurrences were reconciled, and exact public hashes and rows verified. Member and term identities and existing native values were preserved. This is the selected community crosswalk, not an official or newly acquired roster. Receipt: spicy-regs-t19-members-20260927/public-readback.json. *(measured 2026-09-27)*
+**Coverage.** Sampled. The complete retained September 25 community crosswalk captures, replayed and published on September 27; every source affiliation occurrence was reconciled. This is the selected community crosswalk, not an official or newly acquired roster. Receipt: spicy-regs-t19-members-20260927/public-readback.json. *(measured 2026-09-27)*
 
 - **Parquet file:** `member_party_affiliations.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
 - **Publication status:** Not established by this schema page or its measurement date.
+- **Row count:** Not stated here; the MCP `describe_table` reply gives the live count under `publication`.
 
 | Column | Type | Description |
 | --- | --- | --- |

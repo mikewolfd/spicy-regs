@@ -29,6 +29,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import sys
 from datetime import date
 from functools import lru_cache
@@ -87,6 +88,47 @@ def coverage_kind(coverage: str) -> str | None:
         if text.startswith(prefix):
             return kind
     return None
+
+
+#: What coverage prose may not state, each named by what it is. Coverage prose
+#: is pinned to no publication, so a count, snapshot id or pin written there
+#: goes stale at the next publish and nothing notices: the 2026-09-28 blind
+#: persona test found 13 of 56 stated row counts off by 1.5x to 30x, every
+#: rulemaking note naming a replaced snapshot, and 25 notes calling live tables
+#: unpublished. The live row count is describe_table's publication field, and a
+#: measurement tied to a pin belongs in the output ledger, which names its pin.
+COVERAGE_PROSE_REFUSALS: tuple[tuple[str, re.Pattern[str]], ...] = (
+    ("a snapshot id", re.compile(r"snapshot_[0-9a-f]{6,}")),
+    ("a digest or generation pin", re.compile(r"\b[0-9a-f]{16,}\b|\b[0-9a-f]{8,}…")),
+    ("a publication-status claim", re.compile(r"not uploaded|not yet published", re.IGNORECASE)),
+    ("a row count", re.compile(r"\d[\d,]*(?:\s+[A-Za-z-]+){0,2}\s+(?:rows|records)\b", re.IGNORECASE)),
+)
+
+#: Exact coverage phrases allowed past COVERAGE_PROSE_REFUSALS, by table, each
+#: with its reason. An exception whose phrase is no longer in the prose is an
+#: error, so a fixed note cannot leave a stale permission behind.
+COVERAGE_PROSE_EXCEPTIONS: dict[str, dict[str, str]] = {
+    # The comment-periods pass of the 2026-09-28 chaos test owns this entry and
+    # rewrites it; once it does, this exception fails check and must be deleted.
+    "comment_periods": {"`snapshot_91b19da7…` holds 281,635 periods.": "owned by the comment-periods pass"},
+}
+
+
+def coverage_prose_errors(table: str, coverage: str) -> list[str]:
+    """Refuse decaying facts in one table's coverage prose, less its declared exceptions."""
+    errors = []
+    text = " ".join(coverage.split())
+    for phrase in COVERAGE_PROSE_EXCEPTIONS.get(table, {}):
+        if phrase not in text:
+            errors.append(f"[{table}] coverage exception no longer matches its prose: {phrase!r}")
+        text = text.replace(phrase, " ")
+    for what, pattern in COVERAGE_PROSE_REFUSALS:
+        errors.extend(
+            f"[{table}] coverage states {what} ({match.group(0)!r}); the server states live counts and "
+            "pins, and the output ledger keeps pinned measurements"
+            for match in pattern.finditer(text)
+        )
+    return errors
 
 
 DEFAULT_R2_BASE_URL = "https://data.spicy-regs.dev"
@@ -862,6 +904,8 @@ def check_descriptions(
         errors.append(f"[{table}] table has a schema but no entry in descriptions.yaml")
     for table in sorted(desc_tables - schema_tables):
         errors.append(f"[{table}] described in descriptions.yaml but is not a known table")
+    for table in sorted(set(COVERAGE_PROSE_EXCEPTIONS) - set(TABLES)):
+        errors.append(f"[{table}] has a coverage exception but is not a known table")
 
     for table in sorted(schema_tables & desc_tables):
         schema_cols = [c for c, _ in schemas[table]]
@@ -872,6 +916,7 @@ def check_descriptions(
             errors.append(f"[{table}] missing a 'label' in descriptions.yaml")
         if not (entry.get("coverage") or "").strip():
             errors.append(f"[{table}] missing a 'coverage' statement in descriptions.yaml")
+        errors.extend(coverage_prose_errors(table, entry.get("coverage") or ""))
         measured_on = str(entry.get("measured_on") or "").strip()
         if not measured_on:
             errors.append(f"[{table}] missing 'measured_on' beside its coverage statement")
@@ -995,6 +1040,7 @@ def _render_table_page(
         f"- **Parquet file:** `{table}.parquet`{where}",
         f"- **MCP `query_sql` support:** {queryable}; requires an available artifact.",
         "- **Publication status:** Not established by this schema page or its measurement date.",
+        "- **Row count:** Not stated here; the MCP `describe_table` reply gives the live count under `publication`.",
     ]
     if pk:
         lines.append(f"- **Primary / dedup key:** `{pk}`")

@@ -2,20 +2,21 @@
 
 # `court_dockets`
 
-**Federal court dockets**
+**Court dockets of APA suits against agencies**
 
-One row per federal court docket challenging agency action under the Administrative Procedure Act, ingested from the CourtListener v4 search API (`courtlistener.com`, RECAP dockets with nature-of-suit 899) by `build_courtlistener`. When an agency finalizes a rule it is frequently sued; these are those suits — the litigation counterpart to the rulemakings in `dockets`/`documents`. There is no machine RIN/FR key on a court docket, so it links to the corpus by name and topic: the defendant agency appears in `case_name` and `parties_json` (joinable by name to `agency_stats` / the FR `agency_slugs`), and `cause` names the statute invoked. Primary / dedup key is `cl_docket_id`. All columns are stored as VARCHAR; array fields are JSON strings.
+One row per court docket of a suit challenging federal agency action under the Administrative Procedure Act (nature of suit 899), mostly in district courts, from CourtListener (`courtlistener.com`: its v4 search API and its bulk docket edition) by `build_courtlistener`. It is the litigation counterpart to the rulemakings in `dockets`/`documents`, not all federal litigation: petitions straight to a court of appeals, such as challenges to FCC orders under the Hobbs Act, are largely absent. For court decisions, including appeals and Supreme Court cases, search `court_opinion_clusters` by `case_name`. There is no RIN, Federal Register or agency identifier on a court docket: the defendant agency appears only as text in `case_name` and `parties_json`, so a name search finds candidates, not confirmed links, and `cause` names the statute invoked. Primary / dedup key is `cl_docket_id`. All columns are stored as VARCHAR; array fields are JSON strings.
 
-**Coverage.** True range with a density caveat. Dockets filed 1992-08-26 to 2026-09-25 across 101 courts, but 11,477 rows over that span are the nature-of-suit 899 selection, not the full docket record. 3,693 rows from the bulk edition had NULL party names on this date; each run re-reads a bounded slice of them. *(measured 2026-09-26)*
+**Coverage.** True range with a density caveat: dockets filed from 1992 on, but only the nature-of-suit 899 (Administrative Procedure Act) selection, not the full docket record. Party names of dockets from the bulk edition are read a bounded slice per run; until read, parties_json is NULL. *(measured 2026-09-28)*
 
 - **Parquet file:** `court_dockets.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
 - **Publication status:** Not established by this schema page or its measurement date.
+- **Row count:** Not stated here; the MCP `describe_table` reply gives the live count under `publication`.
 
 | Column | Type | Description |
 | --- | --- | --- |
 | `cl_docket_id` | `VARCHAR` | CourtListener docket id (e.g. `73613631`). Primary key / dedup key. Distinct from the regulations.gov `docket_id`. |
-| `case_name` | `VARCHAR` | Short case name (e.g. `HENNEPIN COUNTY, MINNESOTA v. U.S. DEPARTMENT OF HEALTH AND HUMAN SERVICES`). Names the defendant agency. |
+| `case_name` | `VARCHAR` | Short case name (e.g. `HENNEPIN COUNTY, MINNESOTA v. U.S. DEPARTMENT OF HEALTH AND HUMAN SERVICES`). Names the defendant agency as text, not as an identifier. For decisions in cases missing here, including appeals of agency orders, search `court_opinion_clusters.case_name`. |
 | `case_name_full` | `VARCHAR` | Full case caption when available; often blank. |
 | `court_id` | `VARCHAR` | CourtListener court identifier (e.g. `dcd` D.D.C., `cadc` D.C. Circuit, `akd` D. Alaska). |
 | `court` | `VARCHAR` | Human-readable court name (e.g. `District Court, District of Columbia`). |
@@ -24,7 +25,7 @@ One row per federal court docket challenging agency action under the Administrat
 | `date_filed` | `VARCHAR` | Date the case was filed (ISO 8601 string). Sort key and incremental watermark. |
 | `date_terminated` | `VARCHAR` | Date the case was terminated, if closed (ISO 8601 string). Null for pending cases. |
 | `date_argued` | `VARCHAR` | Date of oral argument, if any (ISO 8601 string). Often null. |
-| `nature_of_suit` | `VARCHAR` | Nature-of-suit label; scoped to `899 Other Statutes: Administrative Procedures Act/Review or Appeal of Agency Decision`. |
+| `nature_of_suit` | `VARCHAR` | Nature-of-suit label as CourtListener spells it. Every row came from the 899 (Administrative Procedure Act) selection, but the label varies: with or without the number (appellate dockets write 2899 or 3899), abbreviated as APA or Admin Proc Act, blank or NULL, and on a few rows another code. Filtering on one exact string misses most rows; you do not need this column to find APA suits. |
 | `cause` | `VARCHAR` | Statutory cause of action as recorded in PACER (e.g. `05:551 Administrative Procedure Act`). |
 | `jurisdiction_type` | `VARCHAR` | Basis of federal jurisdiction (e.g. `U.S. Government Defendant`). |
 | `jury_demand` | `VARCHAR` | Jury demand recorded on the docket (e.g. `None`). |

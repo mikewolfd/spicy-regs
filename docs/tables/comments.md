@@ -13,6 +13,7 @@ One row per public comment — the largest table (tens of millions of rows). On 
 - **Parquet file:** `comments.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
 - **Publication status:** Not established by this schema page or its measurement date.
+- **Row count:** Not stated here; the MCP `describe_table` reply gives the live count under `publication`.
 - **Primary / dedup key:** `comment_id`
 
 | Column | Type | Description |

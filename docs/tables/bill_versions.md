@@ -6,13 +6,14 @@
 
 One row per printing of a bill, per source that supplied it. The full text is deliberately not a column here: `bill_sections.body` carries it at the grain people query, and the body is re-fetchable by package id and digest. All columns are stored as VARCHAR.
 
-**Coverage.** Sampled. The adoption run produced 19,687 rows in this output from the 118th Congress's HR and S BILLSTATUS archives, processing 16,213 bills in one pass. The pass used 16 requests (8 keyed, 8 keyless), with the printing cap fixed at four and model calls disabled. Four rows have source=govinfo and 19,683 remain publisher-listed printings without acquired bodies. Receipt: `rollups-0-24-0-adoption-2026-09-20/`. Local output only; not uploaded. *(measured 2026-09-20)*
+**Coverage.** Sampled: bills the bill family has read from GovInfo BILLSTATUS, Congress by Congress from the 108th on; group by the Congress in bill_id to see which Congresses are filled. source is govinfo for a printing whose body was acquired; other rows are printings the publisher lists without an acquired body. *(measured 2026-09-28)*
 
 **Data quality.** A numbered reprint is its own printing since spicy-docs 0.37.0: the publisher types it exactly like the printing it follows, so its `version_code` is its own package suffix (`eas2`, `rfs2`) rather than the stage's slug. Generation `d380cdc0…` still keys two such printings under the stage's slug: 119-hr-6644's second Senate engrossed amendment (a congress row with `BILLS-119hr6644eas2`, beside a printing whose sections mix both documents) and 118-hr-7643's second House report. A rebuild of the bill retires the row and publishes each printing under its own code (receipt `repeated-printings-2026-09-26/`).
 
 - **Parquet file:** `bill_versions.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
 - **Publication status:** Not established by this schema page or its measurement date.
+- **Row count:** Not stated here; the MCP `describe_table` reply gives the live count under `publication`.
 
 | Column | Type | Description |
 | --- | --- | --- |

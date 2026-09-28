@@ -41,7 +41,31 @@ def evidence(p):
         AND r.source_record_id=c.source_record_id"""
 
 
+def collection_cycles(p):
+    """The cycle FEC files a collection under: the ``bulk-downloads/<even year>/`` directory of its captured URLs."""
+    return f"""WITH paths AS (
+        SELECT collection_id,source_family,profile,
+            list_distinct(coalesce(regexp_extract_all(requested_scope_json,
+                'bulk-downloads/((?:19|20)[0-9][0-9])/',1),[])) AS cycles
+        FROM fec_collections
+    )
+    SELECT collection_id,source_family,profile,
+        CASE WHEN len(cycles)=1 THEN cycles[1] END AS cycle,
+        CASE len(cycles) WHEN 0 THEN 'not_stated' WHEN 1 THEN 'bulk_directory' ELSE 'ambiguous' END AS cycle_status,
+        {pin(p, 'fec_collections')} AS source_publication_json,
+        'fec-collection-cycle/1' AS rule_version
+    FROM paths"""
+
+
 FEC_VIEWS = (
+    SQLView('fec_collection_cycles', {
+        'fec_collections': ('collection_id','source_family','profile','requested_scope_json'),
+    }, collection_cycles, 'The FEC election cycle each collection was filed under, from the publisher\'s own '
+       'bulk-downloads/<year>/ directory in its captured URLs: 2026 means the 2025-2026 cycle. Join collection_id '
+       'to fec_source_records to filter records by cycle. cycle is NULL (cycle_status not_stated) for API, legal, '
+       'data-dictionary and other files outside a year directory, and for a collection whose captures span two '
+       'cycles (ambiguous); no cycle is read from a file name or a query parameter.',
+       ('collection_id',), rule_version='fec-collection-cycle/1'),
     SQLView('fec_relationship_evidence', {
         'fec_relationships': ('source_locator_json','source_sha256','source_fields_json','relationship_type'),
         'fec_source_records': ('collection_id','source_record_id','source_sha256'),

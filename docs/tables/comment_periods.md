@@ -11,6 +11,7 @@ One row per continuous public-comment interval, reopenings included: overlapping
 - **Parquet file:** `comment_periods.parquet`, in the snapshot that `materialized/rulemaking/latest.json` names
 - **MCP `query_sql` support:** Configured; requires an available artifact.
 - **Publication status:** Not established by this schema page or its measurement date.
+- **Row count:** Not stated here; the MCP `describe_table` reply gives the live count under `publication`.
 
 | Column | Type | Description |
 | --- | --- | --- |

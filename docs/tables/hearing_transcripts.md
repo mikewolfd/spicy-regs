@@ -6,13 +6,14 @@
 
 One row per captured GovInfo hearing transcript. bill_id is always NULL: a hearing can concern several bills, represented in hearing_bill_links. All columns are stored as VARCHAR.
 
-**Coverage.** Sampled. The 2026-09-21 mikewolfd/spicy-regs fork delivery rebuilt and published all 13 selected hearing packages within the five-table report family. All 13 exact hearing-detail requests were accepted and their native event identifiers checked. One body changed bytes from its prior pin while its normalized text digest stayed identical; the fresh capture remains distinct. These are package/body metadata rows, not speaker turns or complete hearing history. No upstream/default publication is asserted. Receipts: fork-execution-2026-09-21/report-family/rebuild-audit.json, publication-report-family.json and report-family-mcp-audit/. *(measured 2026-09-21)*
+**Coverage.** Sampled. Selected hearing packages from GovInfo, each with its native event identifiers checked: package and body metadata, not speaker turns or complete hearing history. *(measured 2026-09-28)*
 
 **Data quality.** Cover bills come from the package's MODS and cost no extra requests. BODY mentions do not become hearing links. event_id comes from a verified Congress.gov hearing detail; NULL can mean no meeting or a refused detail. committee_report_reads distinguishes a completed read from a refused one. body_completeness says what the read text states about itself: a publisher_placeholder body is the publisher's notice that the document is only in the PDF. When the package offers that PDF it is read instead (pdf_extracted, with text_derivation naming the extraction); when it offers none, the notice is published as it stands. NULL on rows not re-read since the column was added.
 
 - **Parquet file:** `hearing_transcripts.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
 - **Publication status:** Not established by this schema page or its measurement date.
+- **Row count:** Not stated here; the MCP `describe_table` reply gives the live count under `publication`.
 
 | Column | Type | Description |
 | --- | --- | --- |

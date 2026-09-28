@@ -6,11 +6,12 @@
 
 One row per staged document of a docketed proceeding: the events each `rulemaking_lifecycles` row is paired from. A Regulations.gov copy of a Register document is that document, dated by the Register, and an Agenda entry completed as withdrawn adds its dated withdrawal. Keyed (`proceeding_id`, `document_id`); `dated_by` says which kind of id `document_id` is. Joins `rulemaking_lifecycles` on `proceeding_id`. Built by `build_lifecycles`; `event_date` is DATE.
 
-**Coverage.** Derived, and bounded by its inputs: the stage events of every docketed proceeding, one per document, less those undated or dated after the run's day. `snapshot_91b19da7…` holds 135,362 events. *(measured 2026-09-27)*
+**Coverage.** Derived, and bounded by its inputs: the stage events of every docketed proceeding, one per document, less those undated or dated after the run's day. *(measured 2026-09-28)*
 
 - **Parquet file:** `lifecycle_events.parquet`, in the snapshot that `materialized/rulemaking/latest.json` names
 - **MCP `query_sql` support:** Configured; requires an available artifact.
 - **Publication status:** Not established by this schema page or its measurement date.
+- **Row count:** Not stated here; the MCP `describe_table` reply gives the live count under `publication`.
 
 | Column | Type | Description |
 | --- | --- | --- |

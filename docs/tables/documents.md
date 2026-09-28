@@ -6,13 +6,14 @@
 
 One row per document posted to a docket — proposed rules, final rules, notices, supporting analyses, and public-submission stubs. Joins to `dockets` on `docket_id`. Two payload fields are not carried: `comment` (the inline submission body) and `restrictReasonType` (why a document is withheld). Read those from the acquisition source, the raw Mirrulations payload or spicy-docs' source-native release, not from this table.
 
-**Coverage.** Sampled repair with retained prior rows. On 2026-09-21, the mikewolfd/spicy-regs fork published and verified 2,001,531 rows. All 335 selected retained document releases supplied 1,943,108 observations, resolving by source recency to 1,943,106 identities; merging preserved 846 newer prior rows and 58,425 unrelated rows. This is a legacy/base Parquet publication outside the managed generation index, not a fresh whole-source census or upstream/default publication. This repairs metadata and references; all body-text, extraction-status and PDF-extraction-evidence values remain NULL. It does not include a full comments corpus. Receipts: fork-execution-2026-09-21/publication-documents.json and fork-base-repair-2026-09-21/repair-audit.json. *(measured 2026-09-21)*
+**Coverage.** Sampled repair with retained prior rows. On 2026-09-21 the fork merged every selected retained document release into the prior table, resolving each document to its most recent source record and keeping newer and unrelated rows; the daily regulations ETL adds to it. It is not a fresh regulations.gov census. The repair covered metadata and references; body-text, extraction-status and PDF-extraction-evidence values remain NULL. It does not include a full comments corpus. Receipts: fork-execution-2026-09-21/publication-documents.json and fork-base-repair-2026-09-21/repair-audit.json. *(measured 2026-09-28)*
 
 **Data quality.** The 2026-09-21 fork date check across all 2,001,531 rows found 52,699 posted_date values before 1990, including eight in year 0000; one value was in the future, 2,020 were missing and no other values were uncastable. Source date values remain literal in this base table; downstream calendar filters are separate. Receipt: fork-execution-2026-09-21/document-derivatives/audit.json. In the 2026-09-21 fork consumer audit, 1,854,836 documents resolve to published dockets; 466 preserve unmatched literal links across 137 docket IDs, and 146,229 have NULL links. The 348 selected-source unmatched links and 145,907 selected-source NULL links agree with native inputs; the remaining 118 unmatched and 322 NULL rows are outside that replay. Missing joins are not fabricated or treated as failed repairs. Receipt: fork-execution-2026-09-21/documents-mcp-audit/.
 
 - **Parquet file:** `documents.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
 - **Publication status:** Not established by this schema page or its measurement date.
+- **Row count:** Not stated here; the MCP `describe_table` reply gives the live count under `publication`.
 - **Primary / dedup key:** `document_id`
 
 | Column | Type | Description |

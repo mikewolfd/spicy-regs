@@ -4,25 +4,26 @@
 
 **FCC proceedings**
 
-One row per FCC proceeding (the FCC's docket equivalent, e.g. `17-108`), ingested from the FCC ECFS public API (`/proceedings`) by `build_fcc_proceedings`. The FCC does not participate in regulations.gov — its rulemaking dockets and public comments live in ECFS — so this table extends the dataset's docket universe to the FCC. Requires an api.data.gov key (`DATA_GOV_API_KEY`). Walked whole every run, so later closings and status changes are current. Each creation-date window is pooled over whole walks by document, less its filing-activity counters, until one walk is clean or the pool holds exactly the count ECFS aggregates for it. One row per docket `name`: ECFS holds more than one document for a few dockets (seven on 2026-09-23, three of them re-created 2026-09-21), and the row is the original docket, then the one ECFS edited last. A document with no docket name is left out (one, a 2017 stub). Proceedings with no created date are unreachable through the API's date-range queries and are not included (legacy shells with no filing activity). All columns are stored as VARCHAR.
+One row per FCC proceeding (the FCC's docket equivalent, e.g. `17-108`), ingested from the FCC ECFS public API (`/proceedings`) by `build_fcc_proceedings`. The FCC does not participate in regulations.gov — its rulemaking dockets and public comments live in ECFS — so this table extends the dataset's docket universe to the FCC. Requires an api.data.gov key (`DATA_GOV_API_KEY`). Walked whole every run, so later closings and status changes are current. Each creation-date window is pooled over whole walks by document, less its filing-activity counters, until one walk is clean or the pool holds exactly the count ECFS aggregates for it. One row per docket `name`: ECFS holds more than one document for a few dockets (seven on 2026-09-23, three of them re-created 2026-09-21), and the row is the original docket, then the one ECFS edited last. A document with no docket name is left out (one, a 2017 stub). Proceedings with no created date are unreachable through the API's date-range queries and are not included (legacy shells with no filing activity). There is no program or topic field, so a title search misses proceedings (see `description`), and open proceedings carry placeholder close dates (see `date_closed`). All columns are stored as VARCHAR.
 
-**Coverage.** True range. 21,683 docket names from 21,691 ECFS documents, created 1991-10-22 to 2026-09-22; single-document names matched the raw pages cell for cell. *(measured 2026-09-23)*
+**Coverage.** True range: every proceeding ECFS dates, created from 1991 on, re-read whole each run so later closings and status changes are current. A proceeding with no created date is left out, because the API's date-range queries cannot reach it. *(measured 2026-09-28)*
 
 - **Parquet file:** `fcc_proceedings.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
 - **Publication status:** Not established by this schema page or its measurement date.
+- **Row count:** Not stated here; the MCP `describe_table` reply gives the live count under `publication`.
 
 | Column | Type | Description |
 | --- | --- | --- |
 | `name` | `VARCHAR` | Proceeding (docket) number, e.g. `17-108` or `23-320`. Primary key / dedup key, and the join key to `fcc_filings.proceeding_names_json`. |
 | `id_proceeding` | `VARCHAR` | ECFS internal numeric id for the proceeding. |
-| `description` | `VARCHAR` | Proceeding title/subject (ECFS `description_display`, falling back to `description`), e.g. `Restoring Internet Freedom`. |
+| `description` | `VARCHAR` | Proceeding title/subject (ECFS `description_display`, falling back to `description`), e.g. `Restoring Internet Freedom`. There is no program or topic field, and titles often leave the program out: Universal Service dockets include 13-184 (`Modernizing the E-rate Program for Schools and Libraries.`) and 02-60 (`In the Matter of Rural Health Care Support Mechanism`), neither of which says universal service. Search titles together with bureau_code (WC, or CC for older dockets) and known docket numbers. |
 | `bureau_code` | `VARCHAR` | Code of the FCC bureau that owns the proceeding (e.g. `WC`). |
 | `bureau_name` | `VARCHAR` | Name of the FCC bureau that owns the proceeding (e.g. `Wireline Competition Bureau`). |
 | `rulemaking_or_docket` | `VARCHAR` | ECFS `flag_rulemaking_or_docket`: `R` for rulemakings (RM- numbers), `D` for dockets. |
-| `filing_status` | `VARCHAR` | ECFS filing-window status for the proceeding (e.g. `OPENALL`). |
+| `filing_status` | `VARCHAR` | ECFS filing-window status for the proceeding (e.g. `OPENALL`): how filings are accepted, not whether the proceeding is open. Many closed proceedings still read `OPENALL`; use date_closed for open or closed. |
 | `date_created` | `VARCHAR` | Timestamp the proceeding was created in ECFS (ISO 8601 string). Sort key. |
-| `date_closed` | `VARCHAR` | Timestamp the proceeding was closed, if it has been (open proceedings carry null or a far-future sentinel like `2099-12-31`). |
+| `date_closed` | `VARCHAR` | When ECFS closed the proceeding. An open proceeding has no real close date: ECFS leaves it null or puts a placeholder far in the future, and both `2099-12-31T23:59:59.999Z` and `2100-01-31T05:00:00.000Z` occur. Treat a proceeding as open when date_closed is null or later than today. |
 | `comment_start_date` | `VARCHAR` | Start of the initial comment window, when ECFS records one. Often null. |
 | `comment_end_date` | `VARCHAR` | End of the initial comment window, when ECFS records one. Often null. |
 | `reply_comment_start_date` | `VARCHAR` | Start of the reply-comment window, when ECFS records one. Often null. |

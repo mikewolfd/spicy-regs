@@ -6,13 +6,14 @@
 
 One row per dated Federal Register record, keyed by (`document_number`, `publication_date`), ingested from the federalregister.gov REST API by `build_federal_register`. The authoritative rule-publication record — proposed rules, final rules, and notices — complementary to the regulations.gov `dockets`/`documents` view. `regulation_id_numbers_json` (RIN) and `cfr_references_json` are the join keys to the Unified Agenda and the CFR. All columns are stored as VARCHAR; array-valued fields are JSON.
 
-**Coverage.** True range. 1,009,005 dated records published 1994-01-03 to 2026-09-22, the whole span the API serves. Every month's row count equals the publisher's monthly facet, and 74 whole days (8,683 documents) match the API in identity and every cell. *(measured 2026-09-23)*
+**Coverage.** True range: dated records published from 1994-01-03 on, the whole span the API serves. On 2026-09-23 every month's row count equalled the publisher's monthly facet, and 74 whole days (8,683 documents) matched the API in identity and every cell. *(measured 2026-09-23)*
 
 **Data quality.** Document numbers are not globally unique: `00-111` names different records on 2000-01-14 and 2000-01-18. Current merging preserves both dates and replaces only the same dated record on a later successful fetch. This code correction does not restore historical records already lost from published files; those require a pinned historical replay and publication. A number-only source reference remains ambiguous when its input generation supplies multiple dated candidates.
 
 - **Parquet file:** `federal_register.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
 - **Publication status:** Not established by this schema page or its measurement date.
+- **Row count:** Not stated here; the MCP `describe_table` reply gives the live count under `publication`.
 
 | Column | Type | Description |
 | --- | --- | --- |

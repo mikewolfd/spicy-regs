@@ -6,11 +6,12 @@
 
 One row per change detected between two runs of the bill family. Two instants per row: `occurred_at` is the publisher's, `detected_at` is the run's. All columns are stored as VARCHAR.
 
-**Coverage.** Sampled. The adoption run produced 35,900 rows in this output from the 118th Congress's HR and S BILLSTATUS archives, processing 16,213 bills in one pass. The pass used 16 requests (8 keyed, 8 keyless), with the printing cap fixed at four and model calls disabled. These compare the cold-start snapshot with this run only, not the historical sequence of actions. Receipt: `rollups-0-24-0-adoption-2026-09-20/`. Local output only; not uploaded. *(measured 2026-09-20)*
+**Coverage.** Sampled: bills the bill family has read from GovInfo BILLSTATUS, Congress by Congress from the 108th on; group by the Congress in bill_id to see which Congresses are filled. Each event compares a bill between two runs of the bill family, not the historical sequence of its actions. *(measured 2026-09-28)*
 
 - **Parquet file:** `public_activity_events.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
 - **Publication status:** Not established by this schema page or its measurement date.
+- **Row count:** Not stated here; the MCP `describe_table` reply gives the live count under `publication`.
 
 | Column | Type | Description |
 | --- | --- | --- |

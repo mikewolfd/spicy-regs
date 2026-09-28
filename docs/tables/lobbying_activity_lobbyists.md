@@ -6,11 +6,12 @@
 
 One row per lobbyist an LDA filing names on one of its activities, with the lobbyist's LDA id and name parts, any covered official position they held, and whether the filing lists them as new. Keyed `(filing_uuid, activity_index, lobbyist_index)`, positions in the filing's own lists. Joins to `lobbying_activities` on `(filing_uuid, activity_index)`. All columns are stored as VARCHAR.
 
-**Coverage.** Window. Rows exist for the filings read since this table was added (2026-09-26); the filing-year backfill of `lobbying_filings` fills history. *(measured 2026-09-26)*
+**Coverage.** True range, the same filings as `lobbying_filings`: one row per lobbyist named on each activity. An activity that names no lobbyist has no rows here. *(measured 2026-09-28)*
 
 - **Parquet file:** `lobbying_activity_lobbyists.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
 - **Publication status:** Not established by this schema page or its measurement date.
+- **Row count:** Not stated here; the MCP `describe_table` reply gives the live count under `publication`.
 
 | Column | Type | Description |
 | --- | --- | --- |

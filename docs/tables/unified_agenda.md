@@ -6,11 +6,12 @@
 
 One row per Regulation Identifier Number (RIN) per agenda edition, ingested from the OIRA/OMB Unified Agenda published at reginfo.gov by `build_unified_agenda`. A Tier-1 rulemaking-lifecycle source: the upstream, forward-looking catalog of rulemakings agencies *plan* to pursue, keyed by the same `rin` that appears in `federal_register` (`regulation_id_numbers_json`). Primary / dedup key is (`rin`, `agenda_edition`). All columns are stored as VARCHAR; array-valued fields are JSON strings.
 
-**Coverage.** Window. The fork serves the complete retained 202510 edition. The full source XML and every mapped field passed an independent comparison; public bytes and both MCP read paths match the qualified generation. This is one semiannual edition, with no latest-edition or history claim. See `unified-agenda-qualification/` in the fork execution receipts. *(measured 2026-09-22)*
+**Coverage.** True range: every semiannual Unified Agenda edition reginfo.gov serves as readable XML, from 199510 through the latest; agenda_edition names each. No edition is held for 2004 or for spring 2012. A rule has one row per edition that lists it, so count distinct rin, not rows, for a number of rules. *(measured 2026-09-28)*
 
 - **Parquet file:** `unified_agenda.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
 - **Publication status:** Not established by this schema page or its measurement date.
+- **Row count:** Not stated here; the MCP `describe_table` reply gives the live count under `publication`.
 
 | Column | Type | Description |
 | --- | --- | --- |
@@ -22,7 +23,7 @@ One row per Regulation Identifier Number (RIN) per agenda edition, ingested from
 | `rin_status` | `VARCHAR` | Status of the RIN in this edition (e.g. `Active`, `Completed`, `Long-Term`). |
 | `rule_stage` | `VARCHAR` | Stage of the rulemaking in this edition (e.g. `Prerule`, `Proposed Rule`, `Final Rule`). |
 | `priority_category` | `VARCHAR` | OIRA priority classification (e.g. `Economically Significant`, `Other Significant`, `Substantive, Nonsignificant`). |
-| `agenda_edition` | `VARCHAR` | Semiannual agenda edition the row was published in, as `YYYYMM` (MM 04=Spring, 10=Fall). Half of the primary/dedup key. |
+| `agenda_edition` | `VARCHAR` | Semiannual agenda edition the row was published in, as `YYYYMM` (MM 04=Spring, 10=Fall). Half of the primary/dedup key. Every readable edition since 199510 is held, so filter to one edition, or count distinct `rin`, before counting rules. |
 | `major` | `VARCHAR` | Whether the action is a major rule, as reported by the agenda (e.g. `Yes`/`No`). Often null. |
 | `publication_id` | `VARCHAR` | reginfo.gov publication identifier for this agenda entry, when present. |
 | `timetable_json` | `VARCHAR` | JSON array of planned and actual milestone actions with literal source dates and Federal Register citations. A date with day 00 has month precision; labels such as To Be Determined remain unchanged. |

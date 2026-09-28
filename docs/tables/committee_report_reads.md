@@ -6,11 +6,12 @@
 
 One row per package observed or inherited from this rollup's prior tables. Pending reads precede discovery under the declared body cap.
 
-**Coverage.** Not a range. The 2026-09-21 mikewolfd/spicy-regs fork delivery published all 118 selected package checkpoints as complete: 105 reports and 13 hearings, with no selected pending or refused reads. Current rule versions and exact parent coverage were checked through actual MCP reads of both the verified download and public fork. Complete includes hearings with zero cover links; it does not assert a positive relationship or complete source history. No upstream/default publication is asserted. Receipts: fork-execution-2026-09-21/report-family/rebuild-audit.json, publication-report-family.json and report-family-mcp-audit/. *(measured 2026-09-21)*
+**Coverage.** Not a range. One checkpoint per selected report or hearing package read, with its outcome. Complete includes hearings with zero cover links; it does not assert a positive relationship or complete source history. *(measured 2026-09-28)*
 
 - **Parquet file:** `committee_report_reads.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
 - **Publication status:** Not established by this schema page or its measurement date.
+- **Row count:** Not stated here; the MCP `describe_table` reply gives the live count under `publication`.
 
 | Column | Type | Description |
 | --- | --- | --- |

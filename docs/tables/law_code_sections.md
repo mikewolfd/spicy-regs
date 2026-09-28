@@ -6,13 +6,14 @@
 
 One row per line of an OLRC per-Congress classification table: a U.S. Code place one public law section touched, with the Statutes at Large page and the publisher's action word. All columns are stored as VARCHAR.
 
-**Coverage.** Sampled. Measured on the same run (receipt `d1-measured-run-2026-09-19/`): the OLRC classification index linked both of the 119th's session tables, and reading each whole produced 3,632 rows — 3,049 from the 1st session's table and 583 from the 2nd's. The index links the current Congress's session tables only; each linked public-law-order table for a scoped Congress is read whole every run and replaces that session's rows. *(measured 2026-09-19)*
+**Coverage.** Sampled. Every row of each public-law-order table the OLRC classification index links for a scoped Congress, read whole every run and replacing that session's rows. The index links the current Congress's session tables only. *(measured 2026-09-19)*
 
 **Data quality.** A row is its position on the page (`seq`), because one line can repeat; a page read this run replaces every prior row for its Congress and session, so a line the publisher removed does not linger under a position it no longer holds. Only the public-law order is read: the code-order twin holds the same lines under positions that would collide with these. A Congress the index does not link — every Congress but the current one — gets no rows here; `table3_records` is the historical view. `action` is the page's column 3 verbatim, NULL where the page left it blank, which its legend reads as amended. `usc_section_key` is `usc_section` folded for joins (trimmed, lower-cased, every dash spelling an ASCII hyphen), because case carries no identity in the Code and a join on the printed letter misses the upper-case spellings (decision 30, `docs/research/fork-delivery-decisions-2026-09-22.md`); a session's next read replaces its rows, which fills the key for rows published before the column existed. All columns are stored as VARCHAR.
 
 - **Parquet file:** `law_code_sections.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
 - **Publication status:** Not established by this schema page or its measurement date.
+- **Row count:** Not stated here; the MCP `describe_table` reply gives the live count under `publication`.
 
 | Column | Type | Description |
 | --- | --- | --- |

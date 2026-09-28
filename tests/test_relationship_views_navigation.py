@@ -117,6 +117,33 @@ def test_fec_companion_count_digest_and_explicit_empty_observation():
     assert con.execute("SELECT target_status FROM fec_relationship_evidence WHERE collection_id='a'").fetchone()[0] == 'ambiguous'
 
 
+def test_fec_collection_cycle_comes_only_from_the_publishers_bulk_directory():
+    """FEC files each two-year cycle under bulk-downloads/<even year>/; nothing else names a cycle here."""
+    def scope(*urls):
+        return json.dumps({'captures': [{'requestUrl': url} for url in urls]})
+    bulk = 'https://cg.example.test/bulk-downloads'
+    con: Any = duckdb.connect()
+    table(con,'fec_collections',['collection_id','source_family','profile','requested_scope_json'],[
+        ('bulk-2026-oth-base-file','fec_intercommittee','positional',
+         json.dumps({'capture': {'requestUrl': f'{bulk}/2026/oth26.zip'}})),
+        ('bulk-pas224-zip','fec_intercommittee','positional',scope(f'{bulk}/2024/pas224.zip')),
+        ('bulk-pas2_header_file-csv','fec_intercommittee','positional',scope(f'{bulk}/data_dictionaries/pas2.csv')),
+        ('bulk-leadership2024-csv','fec_leadership','positional',scope(f'{bulk}/data.fec.gov/leadership2024.csv')),
+        ('committee-census','fec_committees','committee',scope('https://api.open.fec.gov/v1/committees/?cycle=2024')),
+        ('two-cycles','fec_candidates','bulk',scope(f'{bulk}/2024/cn24.zip',f'{bulk}/2026/cn26.zip')),
+        ('no-scope','fec_candidates','candidate',None),
+    ])
+    install_relationship_views(con,['fec_collections'])
+    rows = con.execute('SELECT collection_id,cycle,cycle_status FROM fec_collection_cycles ORDER BY collection_id').fetchall()
+    assert rows == [('bulk-2026-oth-base-file','2026','bulk_directory'),
+                    ('bulk-leadership2024-csv',None,'not_stated'),
+                    ('bulk-pas224-zip','2024','bulk_directory'),
+                    ('bulk-pas2_header_file-csv',None,'not_stated'),
+                    ('committee-census',None,'not_stated'),
+                    ('no-scope',None,'not_stated'),
+                    ('two-cycles',None,'ambiguous')]
+
+
 def test_offered_urls_and_native_topic_namespaces():
     con: Any = duckdb.connect()
     table(con,'documents',['document_id','attachments_json'],[

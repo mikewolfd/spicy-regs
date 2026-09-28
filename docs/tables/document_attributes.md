@@ -11,6 +11,7 @@ One row per Regulations.gov document, keyed by `document_id`, with the attribute
 - **Parquet file:** `document_attributes.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
 - **Publication status:** Not established by this schema page or its measurement date.
+- **Row count:** Not stated here; the MCP `describe_table` reply gives the live count under `publication`.
 
 | Column | Type | Description |
 | --- | --- | --- |

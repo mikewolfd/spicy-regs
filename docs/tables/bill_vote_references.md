@@ -6,13 +6,14 @@
 
 One row per recorded vote on one bill action: which roll call the bill's own actions say settled it. Read by the `roll-call-votes` rollup to fill `roll_call_votes.bill_id` and its match columns. All columns are stored as VARCHAR.
 
-**Coverage.** Sampled. The adoption run produced 881 rows in this output from the 118th Congress's HR and S BILLSTATUS archives, processing 16,213 bills in one pass. The pass used 16 requests (8 keyed, 8 keyless), with the printing cap fixed at four and model calls disabled. Receipt: `rollups-0-24-0-adoption-2026-09-20/`. Local output only; not uploaded. *(measured 2026-09-20)*
+**Coverage.** Sampled: the roll calls named in the actions of the bills the bill family has read, from the 108th Congress on. *(measured 2026-09-28)*
 
 **Data quality.** Every row is a publisher statement copied without interpretation: the six fields a `recordedVotes` entry carries, plus the position of the action it sat on. An entry missing any of the six is refused and counted in the run log rather than published with a hole in it. `full_action_name` is a seventh field the BILLSTATUS user guide documents that the publisher was not sending on any of the 58 entries measured; it is carried because the publisher may resume sending it. Both chambers appear here — 6 of the 34 measured roll calls were Senate. `roll_call_votes` acquired House rows only when this was measured; it hosts Senate roll calls too since the LIS menu route landed (2026-09-21), so a Senate row here links a vote this pipeline hosts. All columns are stored as VARCHAR.
 
 - **Parquet file:** `bill_vote_references.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
 - **Publication status:** Not established by this schema page or its measurement date.
+- **Row count:** Not stated here; the MCP `describe_table` reply gives the live count under `publication`.
 
 | Column | Type | Description |
 | --- | --- | --- |
