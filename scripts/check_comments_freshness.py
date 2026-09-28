@@ -13,6 +13,7 @@ from urllib.parse import quote
 import duckdb
 
 from spicy_regs.comments_health import check_comments, check_retained_ids
+from spicy_regs.duckdb_settings import load_public_http
 from spicy_regs.public_url import resolve_r2_base_url
 from spicy_regs.schemas.regulations import RECORD_TYPES
 from spicy_regs.sources import iceberg
@@ -35,6 +36,9 @@ def main() -> int:
         con = None
         try:
             con = iceberg._connect() if surface == "catalog" else duckdb.connect()
+            # Both surfaces read the public index (and the public surface the 4 GB comments.parquet) over r2.dev,
+            # which answers 429 under load: ETL 36389677283's verify step failed on one.
+            load_public_http(con)
             con.execute("SET memory_limit='4GB'; SET threads=2; SET preserve_insertion_order=false")
             if surface == "catalog":
                 if iceberg.dedupe_recovery_pending(con, RECORD_TYPES["comments"]):
