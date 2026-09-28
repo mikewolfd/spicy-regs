@@ -922,12 +922,13 @@ tables:
     label: "Lobbying disclosure filings"
     coverage: >-
       True range: every filing of each filing year held, read whole from the LDA
-      API, from 2010 to date; earlier years are added one year per dispatched
-      run (owner decision 47).
+      API, from the earliest filing year the backfill has reached to date;
+      earlier years are added one year per dispatched run (owner decision 47).
+      Query min(filing_year) for the current start.
     measured_on: "2026-09-28"
     summary: >-
       One row per federal lobbying-disclosure filing, ingested from the U.S.
-      Senate Lobbying Disclosure Act (LDA) REST API (`lda.senate.gov`) by
+      Senate Lobbying Disclosure Act (LDA) REST API (`lda.gov`, formerly `lda.senate.gov`) by
       `build_lobbying_filings`. Registrants file quarterly reports naming the
       clients they lobby for, the money involved, the issues raised, and the
       government entities (agencies/chambers) lobbied — so this table links the
@@ -945,7 +946,7 @@ tables:
       client_name: "Name of the client the lobbying was performed for. Joins by name to `organizations`/comment filers."
       client_id: "LDA client id."
       income: "Lobbying income reported by a lobbying firm for the period, in USD. Null for self-filers (who report `expenses`). An amended report (`filing_type` `1A`–`4A`) restates its quarter's amount, often unchanged, so summing over every filing counts that quarter twice; keep the latest filing per registrant, client and quarter."
-      expenses: "Lobbying expenses reported by a self-filing organization for the period, in USD. Null for firms (who report `income`). An amended report (`filing_type` `1A`–`4A`) restates its quarter's amount, often unchanged, so summing over every filing counts that quarter twice; keep the latest filing per registrant, client and quarter."
+      expenses: "Lobbying expenses reported by a self-filing organization for the period, in USD. Null for firms (who report `income`). An amended report (`filing_type` `1A`–`4A`) restates its quarter's amount, often unchanged, so summing over every filing counts that quarter twice; keep the latest filing per registrant, client and quarter. A self-filing organization's expenses already include what it pays outside lobbying firms, whose `income` for that client is reported separately; do not add the two."
       lobbying_activities_json: "JSON array of lobbying activities, each `{general_issue_code, general_issue_code_display, description}` — the issue areas lobbied and their free-text descriptions."
       government_entities_json: "JSON array of the distinct government entities lobbied (`{id, name}`) — the agencies and chambers (e.g. `HOUSE OF REPRESENTATIVES`, `SENATE`) named across the filing's activities."
       url: "URL of the filing's printable document page on lda.senate.gov (`filing_document_url`)."
@@ -1111,8 +1112,10 @@ tables:
       another line; leave them out before summing. Most rows of the 2025-2026
       committee-to-committee file (collection bulk-2026-oth-base-file) are such
       memos: contributions from individuals received through joint fundraising
-      committees (TRANSACTION_TP 15J). The bulk files carry no link from a memo
-      to its transfer. Native fields retain their source meaning. Monetary
+      committees (TRANSACTION_TP 15J). Contributions from PACs routed through a
+      joint fundraising committee are memos too (18J), already inside the
+      committee's transfer lines (18G). The bulk files carry no link from a
+      memo to its transfer. Native fields retain their source meaning. Monetary
       values, amendment chains and record inclusion rules differ by family;
       generic record ingestion does not select a latest amendment or establish
       a safe sum. Unknown fields stay in native JSON. Original pinned bytes
@@ -1135,7 +1138,7 @@ tables:
       source_family: "Caller-selected official FEC source-family identifier, checked against the inventory. Joins fec_source_catalog.source_family; this classification is not independently inferred from source content. fec_receipts holds only the 2025-2026 insertion and deletion files of individual contributions, not the main file of any cycle."
       profile: "Provider reader profile used to interpret the verified input."
       source_record_id: "Provider source-record identity, native API identity, bulk file key or byte-evidenced positional observation ID, scoped to collection_id."
-      committee_id: "Committee ID as the source reports it (bulk CMTE_ID or the API's committee_id). In transaction files this is the committee that filed the report, not necessarily the one that received the money: a PAC's contribution to a candidate is filed under the PAC's ID, with the recipient in metadata_json OTHER_ID and CAND_ID, and TRANSACTION_TP says which way the money moved. To find money a committee received from other committees, also search OTHER_ID. May join fec_committees.committee_id. Blanks remain blank; no identifier is inferred from a name or another entity's ID."
+      committee_id: "Committee ID as the source reports it (bulk CMTE_ID or the API's committee_id). In transaction files this is the committee that filed the report, not necessarily the one that received the money: a PAC's contribution to a candidate is filed under the PAC's ID, with the recipient in metadata_json OTHER_ID and CAND_ID, and TRANSACTION_TP says which way the money moved. To find money a committee received from other committees, also search OTHER_ID: in the 2025-2026 file a candidate committee's own filings list no direct PAC contributions, so they appear only under each PAC's committee_id, with the candidate in OTHER_ID and CAND_ID (TRANSACTION_TP 24K). May join fec_committees.committee_id. Blanks remain blank; no identifier is inferred from a name or another entity's ID."
       candidate_id: "Literal candidate identifier reported by API metadata or a verified named bulk field such as CAND_ID. Blanks and aggregate codes remain literal; an ID-shaped aggregate value does not establish a person. Names are not converted to identifiers."
       filing_id: "Source-reported sub_id of a filing metadata row when present; not an inferred original-file number. Amendment/current-record meaning remains in native metadata."
       legal_doc_id: "Source-reported legal document identifier when present, retained in its original source scope."
