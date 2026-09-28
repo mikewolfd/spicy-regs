@@ -318,7 +318,7 @@
       {
         "column_name": "attachments_json",
         "column_type": "VARCHAR",
-        "description": "JSON array of any files attached to the comment: `[{title, formats:[{url, format, size}]}]`. Null when there are no attachments."
+        "description": "JSON array of any files attached to the comment: `[{title, formats:[{url, format, size}]}]`, from the object's `included` attachments. NULL when the comment lists none, and also where the row predates reading them: the extract gained this column on 2026-03-15 and rows ingested earlier kept NULL, since the ETL rewrites a row only when its modify_date moves (about 2.3M such rows, estimated 2026-09-28 in mirrulations-field-census-2026-09-28/attachments_weighted.json, every posted year from 1996; cause proven in comments-full-reread-2026-09-28/attachments-root-cause/). The comment re-read fills them; until then NULL does not mean no attachments."
       },
       {
         "column_name": "text_content",
