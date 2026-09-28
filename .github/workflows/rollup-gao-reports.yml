@@ -15,6 +15,11 @@ on:
         required: false
         default: false
         type: boolean
+      govinfo_mods:
+        description: "Also read the next 6,500 GovInfo rows' MODS (about 40 minutes); two runs read them all"
+        required: false
+        default: false
+        type: boolean
 jobs:
   run:
     uses: ./.github/workflows/_rollup.yml
@@ -23,3 +28,5 @@ jobs:
       command: run-rollup-gao-reports
       skip_upload: ${{ github.event_name == 'workflow_dispatch' && inputs.skip_upload || false }}
       gao_govinfo_history: ${{ github.event_name == 'workflow_dispatch' && inputs.govinfo_history || false }}
+      gao_govinfo_mods: ${{ github.event_name == 'workflow_dispatch' && inputs.govinfo_mods || false }}
+      timeout_minutes: ${{ github.event_name == 'workflow_dispatch' && inputs.govinfo_mods && 90 || 30 }}

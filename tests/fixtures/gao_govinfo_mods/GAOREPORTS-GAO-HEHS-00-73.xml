@@ -1,0 +1,77 @@
+<mods xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://www.loc.gov/mods/v3" version="3.3" xsi:schemaLocation="http://www.loc.gov/mods/v3 http://www.loc.gov/standards/mods/v3/mods-3-3.xsd" ID="P0b002ee180383320">
+<name type="corporate">
+ <namePart>United States Government Publishing Office</namePart>
+ <role>
+  <roleTerm authority="marcrelator" type="text">publisher</roleTerm>
+  <roleTerm authority="marcrelator" type="code">pbl</roleTerm>
+</role>
+ <role>
+  <roleTerm authority="marcrelator" type="text">distributor</roleTerm>
+  <roleTerm authority="marcrelator" type="code">dst</roleTerm>
+</role>
+</name>
+<name type="corporate">
+ <namePart>United States</namePart>
+ <namePart>Government Accountability Office</namePart>
+ <role>
+  <roleTerm authority="marcrelator" type="text">author</roleTerm>
+  <roleTerm authority="marcrelator" type="code">aut</roleTerm>
+</role>
+ <description>Government Organization</description>
+</name>
+<typeOfResource>text</typeOfResource>
+<genre authority="marcgt">government publication</genre>
+<language>
+ <languageTerm type="code" authority="iso639-2b">eng</languageTerm>
+</language>
+<extension>
+ <collectionCode>GAOREPORTS</collectionCode>
+ <category>Legislative Agency Publications</category>
+ <branch>legislative</branch>
+ <dateIngested>2010-08-12</dateIngested>
+</extension>
+<originInfo>
+ <publisher>U.S. Government Publishing Office</publisher>
+ <dateIssued encoding="w3cdtf">2000-03-31</dateIssued>
+ <issuance>monographic</issuance>
+</originInfo>
+<physicalDescription>
+ <note type="source content type">deposited</note>
+ <digitalOrigin>born digital</digitalOrigin>
+ <extent>16 p.</extent>
+</physicalDescription>
+<identifier type="uri">https://www.govinfo.gov/app/details/GAOREPORTS-GAO-HEHS-00-73</identifier>
+<identifier type="local">P0b002ee180383320</identifier>
+<recordInfo>
+ <recordContentSource authority="marcorg">DGPO</recordContentSource>
+ <recordCreationDate encoding="w3cdtf">2010-08-12</recordCreationDate>
+ <recordChangeDate encoding="w3cdtf">2016-06-30</recordChangeDate>
+ <recordIdentifier source="DGPO">GAOREPORTS-GAO-HEHS-00-73</recordIdentifier>
+ <recordOrigin>machine generated</recordOrigin>
+ <languageOfCataloging>
+  <languageTerm type="code" authority="iso639-2b">eng</languageTerm>
+</languageOfCataloging>
+</recordInfo>
+<accessCondition type="GPO scope determination">fdlp</accessCondition>
+<extension>
+ <docClass>REPORT</docClass>
+ <accessId>GAOREPORTS-GAO-HEHS-00-73</accessId>
+ <reportNumber>GAO/HEHS-00-73</reportNumber>
+ <type>Other Written Product</type>
+</extension>
+<titleInfo>
+ <title>GAO Report from GAO/HEHS-00-73</title>
+</titleInfo>
+<location>
+ <url displayLabel="PDF rendition" access="raw object">https://www.govinfo.gov/content/pkg/GAOREPORTS-GAO-HEHS-00-73/pdf/GAOREPORTS-GAO-HEHS-00-73.pdf</url>
+</location>
+<identifier type="preferred citation">GAO/HEHS-00-73</identifier>
+<location>
+ <url displayLabel="Content Detail" access="object in context">https://www.govinfo.gov/app/details/GAOREPORTS-GAO-HEHS-00-73</url>
+</location>
+<note>Other Written Product</note>
+<extension>
+ <searchTitle>GAO/HEHS-00-73; GAO Report from GAO/HEHS-00-73;
+            </searchTitle>
+</extension>
+</mods>
