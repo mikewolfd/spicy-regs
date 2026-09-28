@@ -17,7 +17,7 @@ from .fec import FEC_VIEWS
 from .fcc_native import FCC_NATIVE_VIEWS
 from .lifecycle_dates import LIFECYCLE_DATE_VIEWS
 from .identity_candidates import IDENTITY_VIEWS
-from .sql_views import column_metadata, install_sql_views
+from .sql_views import annotate_views, install_sql_views, view_columns
 from .comments import install_comment_references
 from .congress import CONGRESS_RELATIONSHIPS
 from .core import ArrayRelationship, install_arrays
@@ -48,8 +48,8 @@ def install_relationship_views(
     results = install_arrays(connection, available, RELATIONSHIP_VIEWS, publication)
     results.update(install_comment_references(connection, available, publication))
     results.update(install_sql_views(connection, available, SQL_RELATIONSHIP_VIEWS, publication))
-    column_metadata(connection, results)
+    annotate_views(results)
     return results
 
 
-__all__ = ["ArrayRelationship", "RELATIONSHIP_VIEWS", "install_relationship_views"]
+__all__ = ["ArrayRelationship", "RELATIONSHIP_VIEWS", "install_relationship_views", "view_columns"]

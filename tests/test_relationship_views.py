@@ -166,6 +166,17 @@ def test_comment_reference_namespaces_and_legacy_states():
                       'empty': 'empty_string', 'legacy': 'unread', 'malformed': 'malformed_json'}
 
 
+def test_comment_reference_views_scan_comments_once():
+    """Three reference fields come from one comments scan joined to the field list."""
+    con: Any = duckdb.connect()
+    fixture(con, 'comments', ['comment_id', 'docket_id', 'comment_on_document_id', 'comment_on_object_id',
+                              'original_document_id', 'comment_reference_values_json'], [('c', None, None, None, None, '{}')])
+    install_relationship_views(con, ['comments'])
+    for view in ('comment_reference_field_states', 'comment_native_references', 'comment_document_references_pairs'):
+        plan = con.execute(f'EXPLAIN SELECT count(*) FROM {view}').fetchall()[0][1]
+        assert plan.count('SEQ_SCAN') + plan.count('TABLE_SCAN') == 1, plan
+
+
 def test_installed_views_visible_to_request_cursor():
     con: Any = duckdb.connect()
     fixture(con, 'fcc_filings', ['id_submission', 'proceeding_names_json'], [('a', '["26-189"]')])

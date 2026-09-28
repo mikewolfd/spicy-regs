@@ -900,15 +900,18 @@ def _register_tools(mcp: FastMCP) -> None:
         relationships = _connection_relationships(cursor)
         if table not in TABLES and table not in status["tables"] and table not in relationships:
             raise ValueError(f"Unknown table '{table}'; use list_sources to discover table names")
-        entry: dict[str, Any]
-        if table in relationships:
-            entry = {"table": table, "columns": [], **relationships[table]["metadata"]}
-        else:
-            entry = _table_metadata().get(table, {"table": table, "columns": []})
-        declared = {column["column_name"]: column for column in entry["columns"]}
         with _statement_timeout(cursor):
             available = table in status["tables"]
             rows = cursor.execute(f'DESCRIBE "{table}"').fetchall() if available else []
+        entry: dict[str, Any]
+        if table in relationships:
+            from spicy_regs.relationship_views import view_columns
+
+            # A derived view declares its bound schema; it is described here, not at connection build.
+            entry = {"table": table, **relationships[table]["metadata"], "columns": view_columns(rows)}
+        else:
+            entry = _table_metadata().get(table, {"table": table, "columns": []})
+        declared = {column["column_name"]: column for column in entry["columns"]}
         actual = {row[0]: row[1] for row in rows}
         scope, qualified = _qualification(cursor, [table], statements=True)
         differences = (

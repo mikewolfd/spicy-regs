@@ -102,12 +102,23 @@ receipts are `catalog-merge-probe.json`, `catalog-replace-probe.json` and
 `catalog-concurrency-probe.json` under `spicy-regs-join-implementation-20260927/`.
 The two-connection probe also refused intervening updates, unexpected inserts
 and a concurrent commit after the prior-row check. Matching priors permitted
-an intended NULL write. All scratch tables were removed.
+an intended NULL write. All scratch tables were removed. The integration
+workflow now repeats that probe on a throwaway table
+(`scripts/probe_catalog_replace.py`).
 
-Run it outside the ETL's schedule. The repair does not hold the
-`comments-catalog-write` lock; snapshot checks refuse a detected intervening
-writer, while catalog transaction conflicts must also succeed before commit.
-Reading the priors scans the unpartitioned table once.
+A local repair does not hold the `comments-catalog-write` concurrency group.
+Any catalog write it makes, rows or schema (the nullable-column `ALTER`s
+included), changes the snapshot identity the mirror export pins. An ETL or
+mirror run exporting at that moment then refuses with "Catalog changed during
+export" and publishes nothing (ETL run 36351853866 refused this way on
+2026-09-27). Run repairs and schema migrations only when no ETL or
+mirror run holds `comments-catalog-write`: check the Actions queue for
+`ETL (new pipeline)`, `Publish comments mirror`, the dedupe and the backfill
+workflows first. A write without `SPICY_REGS_CATALOG_LOCK` logs a warning
+naming this risk; the workflows in the group set that variable. The repair's
+own snapshot checks refuse a writer it detects, and the catalog transaction
+must also commit without conflict. Reading the priors scans the unpartitioned
+table once.
 
 The per-agency mirror and `comments.parquet` are not touched. The normal mirror
 job publishes the corrected rows from the next catalog snapshot.

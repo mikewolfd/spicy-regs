@@ -30,6 +30,7 @@ Credentials are read from the environment, alongside the existing ``R2_*`` vars:
 
 import json
 import time
+from collections.abc import Mapping
 from dataclasses import dataclass
 from os import getenv
 from pathlib import Path
@@ -109,6 +110,29 @@ def _connect():
     return con
 
 
+CATALOG_LOCK_ENV = "SPICY_REGS_CATALOG_LOCK"
+_warned_unlocked: set[str] = set()
+
+
+def _warn_unlocked_write(record_type: RecordType, operation: str) -> None:
+    """Warn once per table when this process writes the catalog without the workflow lock.
+
+    Workflows in the ``comments-catalog-write`` concurrency group set
+    ``SPICY_REGS_CATALOG_LOCK``. Any other write (rows or schema) can land
+    while the ETL or mirror job exports, and that export then refuses with
+    "Catalog changed during export" (ETL 36351853866). The write proceeds.
+    """
+    if getenv(CATALOG_LOCK_ENV) or record_type.name in _warned_unlocked:
+        return
+    _warned_unlocked.add(record_type.name)
+    logger.warning(
+        "{}: writing catalog table {} without {} (the comments-catalog-write group). A concurrent ETL or "
+        "mirror export will refuse with 'Catalog changed during export'. Run catalog repairs and migrations "
+        "only when no ETL or mirror run holds comments-catalog-write.",
+        operation, record_type.name, CATALOG_LOCK_ENV,
+    )
+
+
 def _qualified(record_type: RecordType) -> str:
     """Fully-qualified catalog table identifier: ``alias."namespace"."name"``."""
     return f'{_schema_ref()}."{record_type.name}"'
@@ -170,6 +194,7 @@ def _connect_for_table(record_type: RecordType):
     Reopen after each migration, then verify that field before adding another.
     A failed reopen leaves completed DDL for the next run.
     """
+    _warn_unlocked_write(record_type, "prepare for write")
     con = _connect()
     try:
         if dedupe_recovery_pending(con, record_type):
@@ -204,54 +229,87 @@ def _staging_files(staging_dir: Path, record_type: RecordType) -> list[Path]:
     return sorted(staging_type_dir.glob("*.parquet"))
 
 
-def replace_rows(con, record_type: RecordType, source: str, *, expected_prior: str | None = None) -> None:
+def _scope_predicate(record_type: RecordType, scope: Mapping[str, str] | None, alias: str = "") -> str:
+    """Render column-equals-literal constraints as a trusted SQL predicate (``TRUE`` when unscoped)."""
+    if not scope:
+        return "TRUE"
+    unknown = sorted(set(scope) - set(record_type.schema))
+    if unknown:
+        raise ValueError(f"Catalog replacement scope names unknown columns: {', '.join(unknown)}")
+    return " AND ".join(f"{alias}\"{column}\" = '{_sql_str(value)}'" for column, value in scope.items())
+
+
+def replace_rows(
+    con, record_type: RecordType, source: str, *, expected_prior: str | None = None,
+    scope: Mapping[str, str] | None = None,
+) -> None:
     """Atomically replace selected unique keys, validating values before commit.
 
     ``source`` must be a self-contained temp table, never a projection over the
     live table (see :func:`upsert_comment_text`). Shared by the ETL upsert
-    (:func:`_merge`) and the comment source repair. Read-modify-write callers
-    pass a self-contained ``expected_prior``; its rows and absences must still
-    match inside the write transaction. Direct replacements may omit it.
+    (:func:`_merge`), the text fills and the comment source repair.
+    Read-modify-write callers pass a self-contained ``expected_prior``; its rows
+    and absences must still match inside the write transaction. Direct
+    replacements may omit it.
+
+    ``scope`` (column → value, e.g. one ``agency_code``) restricts every catalog
+    read and the MERGE match to rows with those values; every source row must
+    carry them. A same-key row outside the scope is neither read nor replaced.
+
+    Inside the transaction the target rows for the source keys are copied once;
+    the prior and duplicate checks read that copy. Only the MERGE and its
+    readback read the catalog table again, so an unscoped call scans it three
+    times, not four.
     """
     key = record_type.dedup_key
     tbl = _qualified(record_type)
     col_list = ", ".join(f'"{c}"' for c in record_type.schema)
-    count, distinct, missing = con.execute(f'''
-        SELECT count(*),count(DISTINCT "{key}"),count(*) FILTER (WHERE "{key}" IS NULL OR trim("{key}")='')
+    in_scope = _scope_predicate(record_type, scope)
+    target_in_scope = _scope_predicate(record_type, scope, "t.")
+    count, distinct, missing, outside = con.execute(f'''
+        SELECT count(*),count(DISTINCT "{key}"),count(*) FILTER (WHERE "{key}" IS NULL OR trim("{key}")=''),
+               count(*) FILTER (WHERE ({in_scope}) IS NOT TRUE)
         FROM {source}
     ''').fetchone()
     if missing or count != distinct:
         raise ValueError("Catalog replacements require distinct, nonblank source identities")
+    if outside:
+        raise ValueError("Catalog replacement source rows fall outside the requested scope")
     if not count:
         return
+    _warn_unlocked_write(record_type, "replace rows")
+    target = f"_replace_target_{record_type.name}"
     con.execute("BEGIN")
     try:
+        # One catalog read inside the write transaction; the checks below use
+        # this copy. The temp catalog is exempt from DuckDB's one-database-per-
+        # transaction write rule, and ROLLBACK discards it with the write.
+        con.execute(f'CREATE OR REPLACE TEMP TABLE {target} AS SELECT {col_list} FROM {tbl} '
+                    f'WHERE "{key}" IN (SELECT "{key}" FROM {source}) AND {in_scope}')
         if expected_prior is not None:
             # Compare the prepared preimage inside this write transaction, including
             # expected absence. A newly inserted, deleted or changed row must not be
             # overwritten by a winner selected before the transaction began.
-            scoped = f'SELECT {col_list} FROM {{table}} WHERE "{key}" IN (SELECT "{key}" FROM {source})'
-            actual = scoped.format(table=tbl)
-            expected = scoped.format(table=expected_prior)
+            actual = f"SELECT {col_list} FROM {target}"
+            expected = (f'SELECT {col_list} FROM {expected_prior} '
+                        f'WHERE "{key}" IN (SELECT "{key}" FROM {source}) AND {in_scope}')
             changed = con.execute(f"SELECT 1 FROM (({actual} EXCEPT ALL {expected}) "
                                   f"UNION ALL ({expected} EXCEPT ALL {actual})) LIMIT 1").fetchone()
             if changed:
                 raise RuntimeError("Catalog replacement prior changed after preparation; rerun the operation")
-        duplicate = con.execute(f'''
-            SELECT t."{key}" FROM {tbl} t JOIN {source} s ON t."{key}"=s."{key}"
-            GROUP BY t."{key}" HAVING count(*)<>1 LIMIT 1
-        ''').fetchone()
+        duplicate = con.execute(f'SELECT "{key}" FROM {target} GROUP BY "{key}" HAVING count(*)<>1 LIMIT 1').fetchone()
         if duplicate:
             raise ValueError("Catalog replacement found duplicate prior identities; reconcile them before writing")
         assignments = ", ".join(f'"{c}"=s."{c}"' for c in record_type.schema)
         values = ", ".join(f's."{c}"' for c in record_type.schema)
-        con.execute(f'''MERGE INTO {tbl} t USING {source} s ON t."{key}"=s."{key}"
+        con.execute(f'''MERGE INTO {tbl} t USING {source} s ON t."{key}"=s."{key}" AND {target_in_scope}
             WHEN MATCHED THEN UPDATE SET {assignments}
             WHEN NOT MATCHED THEN INSERT ({col_list}) VALUES ({values})''')
         same = " AND ".join(f't."{c}" IS NOT DISTINCT FROM s."{c}"' for c in record_type.schema)
         found, matching = con.execute(f'''
             SELECT count(*),count(*) FILTER (WHERE {same})
             FROM {tbl} t JOIN {source} s ON t."{key}"=s."{key}"
+            WHERE {target_in_scope}
         ''').fetchone()
         if found != count or matching != count:
             raise RuntimeError("Catalog replacement did not preserve one exact row per source identity")
@@ -259,11 +317,14 @@ def replace_rows(con, record_type: RecordType, source: str, *, expected_prior: s
     except Exception:
         try:
             con.execute("ROLLBACK")
+            # ROLLBACK normally discards the copy; drop any survivor explicitly.
+            con.execute(f"DROP TABLE IF EXISTS {target}")
         except Exception:
             # Failed COMMIT can already abort the transaction. Preserve the
             # original write/conflict error rather than the cleanup failure.
             pass
         raise
+    con.execute(f"DROP TABLE IF EXISTS {target}")
 
 
 def _merge(con, staging_files: list[Path], record_type: RecordType) -> int:
@@ -279,10 +340,17 @@ def _merge(con, staging_files: list[Path], record_type: RecordType) -> int:
     drop the rows it isn't re-inserting. ``modify_date`` is an ISO-8601 string,
     so the lexical ``>`` comparison orders chronologically.
 
-    Older DELETE/INSERT writes could leave physical duplicates. MERGE support
-    requires DuckDB >=1.5.3; this path refuses affected prior duplicates rather
-    than guessing which historical row to keep. Existing duplicates remain the
-    responsibility of the explicitly invoked reconciliation path.
+    Older DELETE/INSERT writes could leave physical duplicates: on the R2 Data
+    Catalog a DELETE did not reliably remove the prior row (f70e2e1, 903f28a).
+    MERGE support requires DuckDB >=1.5.3; this path refuses affected prior
+    duplicates rather than guessing which historical row to keep. Existing
+    duplicates remain the responsibility of the explicitly invoked
+    reconciliation path. The in-memory tests cannot exercise the Iceberg engine;
+    ``scripts/probe_catalog_replace.py`` runs this write path against a
+    throwaway catalog table in the integration workflow.
+
+    Table reads per call: the prior below (outside the transaction), then the
+    in-transaction copy, the MERGE and its readback in :func:`replace_rows`.
     """
     cols = list(record_type.schema)
     key = record_type.dedup_key
@@ -424,6 +492,7 @@ def seed_comments_from_parquet(
     cleanly. The connection + any S3 secret are set up by the caller
     so this stays testable against a local catalog and local files.
     """
+    _warn_unlocked_write(record_type, "seed")
     columns = list(record_type.schema)
     esc = _sql_str(source_glob)
     if replace and agency is None:
@@ -507,6 +576,7 @@ def backfill_missing_from_parquet(con, source_uri: str, record_type: RecordType)
     nothing. The source is de-duplicated on its own key (latest ``modify_date``
     wins) so a snapshot with repeats can't fan out into duplicate rows.
     """
+    _warn_unlocked_write(record_type, "backfill missing rows")
     key = record_type.dedup_key
     columns = list(record_type.schema)
     esc = _sql_str(source_uri)
@@ -553,13 +623,16 @@ def upsert_comment_text(con, record_type: RecordType, agency: str, updates: "pl.
     and optionally ``_new_pdf_results`` (both fill paths supply it: PDF attempts,
     or the derived-text provenance). Every row whose ``comment_id`` matches
     the agency's rows gets ``text_content`` / ``text_extraction_status`` refreshed
-    (``COALESCE`` keeps the existing value when the incoming column is NULL). The
-    upsert is scoped to a single ``agency_code`` so it never touches the whole
-    tens-of-millions-row table, using the checked atomic replacement
-    (see :func:`_merge`). No-ops on an empty
-    frame; the caller is expected to have handled that case already.
+    (``COALESCE`` keeps the existing value when the incoming column is NULL). It
+    uses the checked atomic replacement (:func:`replace_rows`) with an
+    ``agency_code`` scope: the prior read, the in-transaction copy, the MERGE
+    match and the readback all carry the agency predicate, so Iceberg can skip
+    files whose ``agency_code`` bounds exclude it instead of reading the whole
+    tens-of-millions-row table for each agency. A same ``comment_id`` under
+    another agency is neither read nor replaced. No-ops on an empty frame; the
+    caller is expected to have handled that case already.
 
-    CRITICAL — self-contained temp table: the INSERT reads from an independent
+    CRITICAL — self-contained temp table: the MERGE reads from an independent
     ``_uct_replacement`` temp table (a full snapshot of the affected rows with the
     requested columns overridden in place), **never** from a projection over the live
     catalog table. An earlier version projected the overrides straight off
@@ -612,7 +685,7 @@ def upsert_comment_text(con, record_type: RecordType, agency: str, updates: "pl.
         WHERE r.comment_id = u.comment_id;
         """
     )
-    replace_rows(con, record_type, "_uct_replacement", expected_prior="_uct_prior")
+    replace_rows(con, record_type, "_uct_replacement", expected_prior="_uct_prior", scope={"agency_code": agency})
     con.execute("DROP TABLE IF EXISTS _uct_updates;")
     con.execute("DROP TABLE IF EXISTS _uct_replacement;")
     con.execute("DROP TABLE IF EXISTS _uct_prior;")
@@ -702,6 +775,9 @@ def export_public_comments(
                 raise ValueError("Unsupported missing comment snapshot columns: " + ", ".join(sorted(unsupported)))
             # Schema-only DDL does not advance the data snapshot. Its older
             # schema cannot name newly added nullable fields; keep them unread.
+            # The record type's order is the mirror's column contract (spicy-docs
+            # 0.50.0 COMMENT: reference fields after docket_id), not the catalog's
+            # physical order, where ALTER ADD COLUMN appends them.
             columns = list(record_type.schema)
             projection = ", ".join(
                 f'NULL::VARCHAR AS "{column}"' if column in missing else f'"{column}"'
@@ -791,6 +867,7 @@ def dedupe_table(con, record_type: RecordType) -> tuple[int, int]:
     Returns ``(rows_before, rows_after)``; ``rows_after`` equals the number of
     distinct keys when the rebuild succeeds.
     """
+    _warn_unlocked_write(record_type, "dedupe")
     key = record_type.dedup_key
     name = record_type.name
     tbl = _qualified(record_type)

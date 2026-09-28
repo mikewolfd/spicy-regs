@@ -457,3 +457,104 @@ The selected original join-delivery acceptance is complete; see the [execution l
 - Application `3e423cd` is deployed as Worker `ece7e6c7-4f1f-4e36-a2af-f017d7c175ec`; 22 bounded final public checks passed. SpicyDocs 0.50.0 is vendored from reproducible source build `8844068`. Hosted implementation CI passed in both repositories.
 
 The execution ledger preserves previous failed and superseded attempts. Wider source backfill, arbitrary-date agency identity and unsupported Senate payment layouts remain expansion work, not accepted source facts.
+
+## Out-of-band publications from `codex/mcp-research-chaos` (2026-09-27)
+
+Four publications on 2026-09-27 ran from a local checkout, not from a
+GitHub workflow. Each record below is taken from the retained receipts and
+the Codex session transcripts under `~/.codex/sessions/2026/09/27/`.
+
+All four share one publisher,
+`~/.codex/artifacts/spicy-regs-join-implementation-20260927/publish_reviewed.py`,
+which is not in this repository. It loads R2 credentials from the checkout's
+`.env` and refuses if the family moved since the candidate's read snapshot.
+It then calls this repository's `publication.publish_generation` (index
+compare-and-swap and table-set guards) and reads the objects back publicly.
+Cloudflare purge was skipped each time because no token was set.
+
+None of the four candidates was built from a committed revision. Each
+generation's `producer.implementationId` matches no commit from `8082191` to
+`8350352`; the transcripts show in-place source patches before each build. The
+commits below are the nearest ones, inferred from timing. They are not the
+exact producing code.
+
+**`native-legal-references` `53755e3e…`** (tables `native_legal_references`,
+`native_legal_reference_reads`)
+
+- Published 22:19:00Z with `uv run --frozen python …/publish_reviewed.py
+  <receipts>/native-legal-full-2026-09-27/candidate-resolved/generations/53755e3e…
+  <receipts>/native-legal-full-2026-09-27/publication
+  <receipts>/native-legal-full-2026-09-27/candidate-resolved/source-evidence/72d568a3025147cfb49bc1671647b0f5/artifact`.
+  Here `<receipts>` is `~/Work/corpora/supply-2026-09-02/receipts`.
+- Built by an ad hoc `resolve.py` calling
+  `NativeLegalReferencesRollup(manifest=selection-with-targets.json, skip_upload=True).run()`.
+  The manifest points at retained local XML and Parquet.
+- Checkout was `38379e7` plus edits later committed as `5afd01f`; spicy-docs 0.48.0.
+- Receipt: `<receipts>/native-legal-full-2026-09-27/publication/publication-receipt.json`.
+- Owner from now on: a new `rollup-native-legal-references.yml`. `_rollup.yml`
+  passes `--manifest` only to `build-fec-observations`, and the retained inputs
+  must be fetched by digest rather than read from a local path.
+
+**`court-opinion-pdf-extractions` `6d1e4e65…`** (table
+`court_opinion_pdf_extractions`, parent court-opinions `f7cc67cc…`)
+
+- Published 22:23:10Z with `publish_reviewed.py
+  ~/.codex/artifacts/spicy-regs-court-cohort-20260927/body-candidate-final/generation
+  …/court-cohort-20260927/publication
+  …/body-candidate-final/source-evidence/ccaa06b12b4b4ea9bb99403d1062aaa3/artifact`.
+- Built by `uv run --frozen --no-sync python …/court-cohort-20260927/prepare_bodies.py`.
+  It calls `prepare_captured_opinions` on bodies captured by the ad hoc `bodies.py`.
+- Checkout was `38379e7` with in-place edits to `build_court_pdf_extractions.py`;
+  spicy-docs 0.48.0.
+- Receipt: `~/.codex/artifacts/spicy-regs-court-cohort-20260927/publication/publication-receipt.json`.
+- Owner from now on: a new workflow, plus a command-line entry for capture
+  and seal. No command publishes this family, and `rollup-court-citations.yml`
+  is the unrelated bulk CourtListener family.
+
+**Held citations into `print-citations` `c8e49dbb…`** (table
+`document_citations`; parents `026be1bc…` and `6d1e4e65…`)
+
+- Published 22:28:41Z with `publish_reviewed.py
+  ~/.codex/artifacts/spicy-regs-court-citations-20260927/candidate-qualified/generations/c8e49dbb…
+  …/court-citations-20260927/publication
+  …/candidate-qualified/source-evidence/76dc480249f646609dea4022e6d3568f/artifact`.
+- Built by `R2_PUBLIC_URL=<fork public URL> uv run --frozen --no-sync python -m
+  spicy_regs.pipelines.rollups.held_citations --selection
+  ~/.codex/artifacts/spicy-regs-court-citations-20260927/selection.json
+  --output-dir …/candidate-qualified --skip-upload`, after in-place edits to
+  `citation_sources.py` and `held_citations.py`.
+- Two earlier local publishes to this family are superseded:
+  - `a9fa600c…` at 21:42Z, from `spicy-regs-held-citations-20260927`;
+  - `026be1bc…` at 22:19:48Z, from `communication-held-citations-2026-09-27`.
+    Its first attempt failed with HTTP 429.
+- Checkout was `38379e7` plus edits committed as `5afd01f` 39 s after the
+  publish; spicy-docs 0.48.1.
+- Receipt: `~/.codex/artifacts/spicy-regs-court-citations-20260927/publication/publication-receipt.json`.
+- Owner from now on: a selection input on `rollup-print-citations.yml`, or a
+  thin caller in its concurrency group. Both write the same family, so they
+  must not run concurrently.
+
+**`documents` `b4f1d751…` and the `documents.parquet` working copy**
+
+- Published 23:34:26Z with `uv run --frozen --no-sync python
+  ~/.codex/artifacts/spicy-regs-t16-public-preparation-20260927/publish_after_refresh.py --execute`.
+  The script:
+  - asserts that hosted run 36356400996 succeeded and that the prior pin was `7d744518…`;
+  - replaces the bare `documents.parquet` with a conditional `put_object`
+    (`IfMatch` ETag `66b9d69d…-10`; new ETag `d44c8714…`, sha256 `11170e62…`);
+  - calls `publish_reviewed.py` for the managed generation.
+- The candidate was sealed by `build_generation` at `1a020c9` with edits
+  (spicy-docs 0.50.0), and published with the checkout at `3e423cd`.
+- Dependent families were then republished locally with `--no-skip-upload` by
+  `refresh.py`: `agency-stats`, `agency-monthly-volume`, `feed-summary`,
+  `discovery-signals` and `materialize-rulemaking`.
+- Receipts: `publication/preflight.json`, `publication/working-copy-write.json`
+  and `publication/managed/publication-receipt.json` under
+  `~/.codex/artifacts/spicy-regs-t16-public-preparation-20260927/`.
+- Owner from now on:
+  - The managed generation and its dependents belong to `_regulations-refresh.yml`
+    (its `base-families` job runs `run-rollup-documents`) and the dependent rollup
+    and `materialize-rulemaking.yml` workflows.
+  - The source-qualified working-copy repair has no owner. The ETL also writes
+    `documents.parquet`, so a repair workflow must share the ETL's
+    `comments-catalog-write` group.

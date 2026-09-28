@@ -36,9 +36,9 @@ on:
 
 concurrency:
   # Writers share one group with the ETL and the dedupe/backfill workflows: every
-  # writer to the catalog must be serialized, since the upsert is DELETE+INSERT
-  # (DuckDB's Iceberg engine has no MERGE INTO) and is not safe under concurrent
-  # writers. cancel-in-progress:false so a write queues behind an in-flight ETL
+  # writer to the catalog must be serialized: a concurrent write makes the ETL's
+  # checked MERGE or its mirror export refuse. cancel-in-progress:false so a
+  # write queues behind an in-flight ETL
   # run instead of cancelling it mid-write.
   #
   # A dry run is exempt: it only counts rows and writes nothing, so holding it on
@@ -50,6 +50,11 @@ concurrency:
   group: ${{ inputs.dry_run == true && format('seed-dockets-dry-{0}', github.run_id) || 'comments-catalog-write' }}
   cancel-in-progress: false
   queue: max
+
+env:
+  # Read by spicy_regs.sources.iceberg: this run holds comments-catalog-write,
+  # so its catalog writes do not log the unlocked-write warning.
+  SPICY_REGS_CATALOG_LOCK: ${{ inputs.dry_run != true && 'comments-catalog-write' || '' }}
 
 jobs:
   seed:

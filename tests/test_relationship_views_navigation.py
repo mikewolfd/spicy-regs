@@ -7,7 +7,7 @@ from typing import Any
 
 import duckdb
 
-from spicy_regs.relationship_views import RELATIONSHIP_VIEWS, SQL_RELATIONSHIP_VIEWS, install_relationship_views
+from spicy_regs.relationship_views import RELATIONSHIP_VIEWS, SQL_RELATIONSHIP_VIEWS, install_relationship_views, view_columns
 
 
 def table(con, name, fields, records):
@@ -29,7 +29,7 @@ def test_all_navigation_definitions_bind_and_report_actual_schemas():
     result = install_relationship_views(con,schema)
     for spec in SQL_RELATIONSHIP_VIEWS:
         assert result[spec.name]['status'] == 'available', result[spec.name]
-        assert result[spec.name]['metadata']['columns']
+        assert view_columns(con.execute(f'DESCRIBE {spec.name}').fetchall())
         assert con.cursor().execute(f'SELECT * FROM {spec.name} LIMIT 0').fetchall() == []
 
 
