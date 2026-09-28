@@ -950,6 +950,40 @@ def test_a_capped_run_records_the_reader_of_each_bill_it_read(tmp_path, scoped, 
     assert status_reads == ["119-hr-6029"], "the bill the capped run read is not read again"
 
 
+def test_a_member_shaped_without_a_bill_row_records_no_reader(tmp_path, scoped, status_reads, monkeypatch):
+    """A reader is recorded only where the shaper produced the bill's row; the member without one is read again."""
+    held, _, _ = run(tmp_path / "held", bulk=TwoBills())
+    forget_readers(held)
+    shape = build.build_family
+
+    def no_row_for_the_copy(capture, **kwargs):
+        tables = shape(capture, **kwargs)
+        return replace(tables, bills=()) if capture.status.identity.number == 6029 else tables
+
+    monkeypatch.setattr(build, "build_family", no_row_for_the_copy)
+    status_reads.clear()
+    first, _, _ = run(tmp_path / "first", prior=tmp_path / "held", bulk=TwoBills())
+    assert status_reads == ["119-hr-6028", "119-hr-6029"], "both members are shaped"
+    assert readers(first) == {"119-hr-6028": build.status_reader()}, "only the one with a bill row is recorded"
+    monkeypatch.setattr(build, "build_family", shape)
+    status_reads.clear()
+    _, bulk, _ = run(tmp_path / "second", prior=tmp_path / "first", bulk=TwoBills())
+    assert bulk.zip_downloads == [(119, "hr")], "the member without a row left its folder incomplete"
+    assert status_reads == ["119-hr-6029"], "and it alone is read again"
+
+
+def test_a_run_over_another_congress_keeps_the_119th_reader_record(tmp_path, scoped, status_reads, monkeypatch):
+    first, _, _ = run(tmp_path / "first")
+    monkeypatch.setenv("BILL_FAMILY_CONGRESSES", "118")
+    status_reads.clear()
+    second, bulk, _ = run(tmp_path / "second", prior=tmp_path / "first")
+    assert bulk.zip_downloads == [(118, "hr")] and status_reads == [], "the 118th's folder holds no bill here"
+    assert readers(second) == readers(first) == {"119-hr-6028": build.status_reader()}
+    monkeypatch.setenv("BILL_FAMILY_CONGRESSES", "119")
+    _, bulk, _ = run(tmp_path / "third", prior=tmp_path / "second")
+    assert bulk.zip_downloads == [] and status_reads == [], "so the 119th's next run still skips its bill"
+
+
 def test_the_reader_record_is_number_runs_that_read_back_every_bill(tmp_path):
     held = {f"119-hr-{n}": "a" for n in (1, 2, 3, 5)} | {"119-s-7": "b", "118-hr-2": "a"}
     encoded = build._readers_metadata(held | {"119-hr-x": "a"})
