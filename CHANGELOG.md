@@ -20,6 +20,19 @@ Entries link to the pull request that introduced the change.
   114th–118th were due for a full re-read anyway, because their rows lack the
   CBO and cosponsor outcomes.
 
+- **SpicyDocs 0.50.1.** `house_communications` derives all four RIN columns of
+  every read row from its retained `report_nature` on each run, not only
+  `rin_occurrences_json`, so a row no run re-reads moves with the reader too.
+  Replayed over the published table (5,006 rows): 2,040 rows' `rin_rule`
+  becomes `report_nature_rin_label/2`, 2 go from `unmatched` to it, and 3 go to
+  `unmatched`. Those 3 are the NOAA RINs read cut short (119-EC-1226, 1544 and
+  1649), whose `rin` and `rin_matched_text` become NULL. 119-EC-602 and 1209
+  gain `2120-AA64`. 1,559 rows' `rin_occurrences_json` is respelled compact
+  and key-sorted, as the shaper spells it, with the same value. On each bill's
+  re-read, `bill_cosponsors.source_xml` loses the whitespace after `</item>`,
+  and each of the 108th–111th's 4,762 `cbo_cost_estimates` rows gains its http
+  twin as a restatement (`stated_count` 2).
+
 - **`proceedings.agency_code` follows RefSpec's agency registry for docket-less
   proceedings** (proceedings v11, RefSpec 0.1.0.dev21's registry view, batch
   1). A Register agency bridged to an organization a Regulations.gov code

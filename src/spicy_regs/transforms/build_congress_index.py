@@ -22,7 +22,11 @@ from typing import TYPE_CHECKING, Any
 
 import httpx
 from loguru import logger
-from spicy_docs.interpretation.communication_rin import rin_from_report_nature, rin_occurrences_from_report_nature
+from spicy_docs.interpretation.communication_rin import (
+    RinFinding,
+    rin_from_report_nature,
+    rin_occurrences_from_report_nature,
+)
 from spicy_docs.reading.paged_json import PagedJsonSourceError
 from spicy_docs.schemas import TABLE_CONTRACTS
 from spicy_docs.schemas.congress_index_tables import (
@@ -33,7 +37,7 @@ from spicy_docs.schemas.congress_index_tables import (
     shape_record_communication,
     shape_treaty,
 )
-from spicy_docs.schemas.tables import Row, TableContractError
+from spicy_docs.schemas.tables import Row, TableContractError, json_column, text
 from spicy_docs.sources.congress.listing import (
     LIST_ROUTES,
     MAX_LIMIT,
@@ -113,32 +117,55 @@ def _record_units(congresses: Sequence[int], _windows: Mapping[int, str]) -> Seq
     ]
 
 
+def _rin_reads(report_nature: str | None) -> tuple[RinFinding, list[dict[str, Any]]]:
+    """A report nature's scalar RIN finding and its occurrences, the shared reader run once for both."""
+    occurrences = rin_occurrences_from_report_nature(report_nature)
+    return rin_from_report_nature(report_nature, occurrences=occurrences), [asdict(item) for item in occurrences]
+
+
 def _shape_communication(listed: Mapping[str, Any], detail: Mapping[str, Any] | None) -> Row:
-    rin = None if detail is None else rin_from_report_nature(detail.get("reportNature"))
-    occurrences = None if detail is None else [asdict(item) for item in rin_occurrences_from_report_nature(detail.get("reportNature"))]
+    rin, occurrences = (None, None) if detail is None else _rin_reads(detail.get("reportNature"))
     return shape_house_communication(listed, detail, rin=rin, rin_occurrences=occurrences)
 
 
 def _shape_record_communication(entry: Any, *, congress: int, record_date: str) -> Row:
     """Interpret a retained Record field before passing facts to its shaper."""
-    return shape_record_communication(entry, congress=congress, record_date=record_date,
-        rin=rin_from_report_nature(entry.report_nature),
-        rin_occurrences=[asdict(item) for item in rin_occurrences_from_report_nature(entry.report_nature)])
+    rin, occurrences = _rin_reads(entry.report_nature)
+    return shape_record_communication(
+        entry, congress=congress, record_date=record_date, rin=rin, rin_occurrences=occurrences
+    )
 
 
-def _repair_rin_occurrences(table: Any) -> Any:
-    """Upgrade unchanged held rows using retained fields, without origin reads."""
+#: The columns both communication shapers derive from ``report_nature``.
+RIN_COLUMNS = ("rin", "rin_occurrences_json", "rin_rule", "rin_matched_text")
+
+
+def _repair_rin(table: Any) -> Any:
+    """Re-derive every read row's RIN columns from its retained ``report_nature``, without origin reads.
+
+    A row the run does not re-read keeps what an earlier SpicyDocs derived, so all four are derived again here, as
+    the shapers spell them, from the one field: 0.50.1 renamed the rule and corrected five RINs (three NOAA RINs
+    read cut short, 119-EC-1226, 1544 and 1649), and ``unmatched`` names no version, so no row can be left as read.
+    A row with no read detail (``committees_json`` NULL) keeps its NULLs.
+    """
     import pyarrow as pa
 
-    index = table.schema.get_field_index("rin_occurrences_json")
-    values = table.column(index).to_pylist() if index >= 0 else [None] * len(table)
+    columns = {
+        name: table[name].to_pylist() if name in table.column_names else [None] * len(table) for name in RIN_COLUMNS
+    }
     fields = table["report_nature"].to_pylist()
     markers = table["committees_json"].to_pylist()
-    for position, (value, field, marker) in enumerate(zip(values, fields, markers, strict=True)):
-        if value is None and marker is not None:
-            values[position] = json.dumps([asdict(item) for item in rin_occurrences_from_report_nature(field)])
-    column = pa.array(values, type=pa.string())
-    return table.set_column(index, "rin_occurrences_json", column) if index >= 0 else table.append_column("rin_occurrences_json", column)
+    for position, (field, marker) in enumerate(zip(fields, markers, strict=True)):
+        if marker is None:
+            continue
+        rin, occurrences = _rin_reads(field)
+        derived = (text(rin.rin), json_column(occurrences), text(rin.rule), text(rin.matched_text))
+        for name, value in zip(RIN_COLUMNS, derived, strict=True):
+            columns[name][position] = value
+    for name, values in columns.items():
+        column, index = pa.array(values, type=pa.string()), table.schema.get_field_index(name)
+        table = table.set_column(index, name, column) if index >= 0 else table.append_column(name, column)
+    return table
 
 
 def _communication_query(row: Row) -> Mapping[str, Any]:
@@ -495,7 +522,7 @@ def build_index_table(
         import pyarrow.parquet as pq
         from spicy_docs.schemas.congress_index_tables import COMMUNICATION_SOURCE_ROUTES
 
-        table = _repair_rin_occurrences(pq.read_table(output))
+        table = _repair_rin(pq.read_table(output))
         index = table.schema.get_field_index("source_route")
         table = table.set_column(
             index, "source_route", pc.fill_null(table["source_route"], COMMUNICATION_SOURCE_ROUTES[0])

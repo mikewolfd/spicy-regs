@@ -142,7 +142,7 @@ def test_the_rin_is_read_at_shape_time_from_the_detail_only(tmp_path):
     assert (rulemaking["is_rulemaking"], rulemaking["rin"], rulemaking["rin_rule"]) == (
         "true",
         "3133-AF97",
-        "report_nature_rin_label",
+        "report_nature_rin_label/2",
     )
     assert rulemaking["rin_matched_text"] == "RIN: 3133-AF97"
     assert rulemaking["matching_requirement_number"] == "8070"

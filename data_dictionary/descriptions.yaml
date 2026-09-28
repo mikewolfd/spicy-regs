@@ -2783,8 +2783,11 @@ tables:
       column is NULL with it, including the scalar and occurrence RIN columns, because the rule
       was not run. A row whose detail was read states `[]` where the detail lists
       none. The RIN is an interpretation: `rin_rule` names the rule that fired
-      (`report_nature_rin_label`) or `unmatched`, and `rin_matched_text` is the
-      exact text, so a false positive is readable from the row. The publisher
+      (`report_nature_rin_label/2`) or `unmatched`, and `rin_matched_text` is the
+      exact text, so a false positive is readable from the row. Every run derives
+      the four RIN columns of each read row again from its retained
+      `report_nature`, re-read or not, so no row keeps an earlier SpicyDocs'
+      scalar or rule name. The publisher
       repeats a record across a page boundary (15 of 4,975 on the 119th); the
       table holds each identity once. The shared pooled list reader must
       settle each query by distinct identity before any output is replaced.

@@ -5,14 +5,15 @@ The optional `source-readers` extra enables the same readers for package install
 its wheels must be supplied explicitly until they are published in a registry.
 Base CLI and MCP installs do not require them.
 
-- `spicy_docs-0.50.0`: built from SpicyDocs `8844068b355c41cd5ab7e7310cc5ba51798f741a`
-  (head of spicy-docs PR #4), September 27, 2026: **1,692,745 bytes**, SHA-256
-  `c739bc6f6bd488ca2afcb37d1bbcff57f14c0abe051638d4679ed17abf9eb64b`, identical across two builds
-  with `SOURCE_DATE_EPOCH=1790553600`; a review rebuild from `git archive 8844068` reproduced the
-  same bytes. It is 0.47.0 (`f549c16`: `bill_sections.congress`, the partition column the bill
-  family splits `bill_sections` by) merged with the join lane's readers: dated bill cosponsors,
-  member party intervals, native relationship occurrences, Senate payment candidates and GAO
-  product metadata. Vendored adoption only; no package-registry upload is asserted.
+- `spicy_docs-0.50.1`: released from SpicyDocs `main` at `211bc6a`, September 28, 2026:
+  **1,697,132 bytes**, SHA-256 `08a0afaad2af914fc6acbd222e01e336414936b4076064dda4842b4e05882538`,
+  byte-identical across two builds (rechecked on adoption). It is 0.50.0 plus the fixes of the
+  PR #4 review and of its own review (its `docs/decisions.md` 0.50.1 entry): the scalar RIN is
+  the first labelled occurrence of the list (`report_nature_rin_label/2`), CBO urls on http fold
+  with their https twin, `BillCosponsor.source_xml` stops at `</item>`, the GAO product page
+  needs exactly one Full Report link, and `schemas` is a stdlib-only leaf again. The 0.50.0 wheel
+  (`8844068`, `c739bc6f`) and its record are at `793efab`. Vendored adoption only; no
+  package-registry upload is asserted.
 
 - `rulespec_artifacts-1.1.2`: exact dependency of SpicyDocs 0.39.2, built from Rulespec
   `23d5f2d98973b2a7f1bf7ce4c9c7a786a4f369ab` (`packages/rulespec-artifacts` of a whole-repo

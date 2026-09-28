@@ -7003,17 +7003,17 @@
       {
         "column_name": "estimate_index",
         "column_type": "VARCHAR",
-        "description": "Zero-based position, in the publisher's own list, of the first item naming this publication.  Document order is kept because the publisher's order is a fact and nothing here re-sorts it."
+        "description": "Zero-based position, in the publisher's own list, of the item this row states: the first one naming this publication on https, else the first one naming it.  Document order is kept because the publisher's order is a fact and nothing here re-sorts it."
       },
       {
         "column_name": "stated_count",
         "column_type": "VARCHAR",
-        "description": "How many items in this bill's list name this publication.  Usually 1; the publisher states one twice on 37 of 1,468 measured rows, which is one estimate stated twice and not two estimates."
+        "description": "How many items in this bill's list name this publication, which is one estimate stated that many times and not that many estimates.  Usually 1 from the 112th on: the 118th states one twice on 37 of 1,468 measured rows.  The 108th-111th state every estimate twice, once on http and once on https."
       },
       {
         "column_name": "restatements_json",
         "column_type": "VARCHAR",
-        "description": "Every later item naming this publication whose fields differ from the first, as a JSON array of objects carrying `estimate_index` and only the differing fields; `[]` when they agree or there is no later item.  Measured 2026-09-20: 9 of the 37 restated rows differ, every one in `title` alone -- CBO re-spelling the bill's title ('Human rights' to 'Human Rights', one double-escaped ampersand).  The column exists so folding onto the identity drops nothing."
+        "description": "Every other item naming this publication whose fields differ from the row's, in list order, as a JSON array of objects carrying `estimate_index` and only the differing fields; `[]` when they agree or there is no other item.  In the 118th (measured 2026-09-20) 9 of the 37 restated rows differ, every one in `title` alone -- CBO re-spelling the bill's title ('Human rights' to 'Human Rights', one double-escaped ampersand).  In the 108th-111th every row carries its http twin, which differs in `url` and, on all but 11 of 4,762, in `description`, which it wraps in a p element.  The column exists so folding onto the identity drops nothing."
       },
       {
         "column_name": "report_citation_count",
@@ -8238,7 +8238,7 @@
     "coverage": "Sampled. The pinned 5,006-row fork selection was republished on September 27 as generation 94d28167db0a56a3, preserving all existing rows and columns. All 5,006 retained details were interpreted with the shared RIN reader: 2,076 occurrences across 2,046 rows. Every span and field digest was checked, and exact public bytes and counts verified. Source qualification is inherited from the prior generation; no new source requests were made. Receipt: spicy-regs-t18-refresh-20260927/.",
     "kind": "sampled",
     "measured_on": "2026-09-27",
-    "data_quality": "A row whose `committees_json` is NULL is list-only: its detail has not been read yet (not reached under the cap, or refused), and every detail-only column is NULL with it, including the scalar and occurrence RIN columns, because the rule was not run. A row whose detail was read states `[]` where the detail lists none. The RIN is an interpretation: `rin_rule` names the rule that fired (`report_nature_rin_label`) or `unmatched`, and `rin_matched_text` is the exact text, so a false positive is readable from the row. The publisher repeats a record across a page boundary (15 of 4,975 on the 119th); the table holds each identity once. The shared pooled list reader must settle each query by distinct identity before any output is replaced. Every existing publisher row receives source_route=congress-gov-detail. The four Record evidence columns remain NULL until the separate Record backfill, about 11,000 GovInfo requests, is acquired in the next rollup. In that future reconstruction submitting_official and submitting_agency must both remain NULL: held-out precision was 85.3% and 88.4%, below the declared 90% gate. The original sentence stays in record_entry_text.",
+    "data_quality": "A row whose `committees_json` is NULL is list-only: its detail has not been read yet (not reached under the cap, or refused), and every detail-only column is NULL with it, including the scalar and occurrence RIN columns, because the rule was not run. A row whose detail was read states `[]` where the detail lists none. The RIN is an interpretation: `rin_rule` names the rule that fired (`report_nature_rin_label/2`) or `unmatched`, and `rin_matched_text` is the exact text, so a false positive is readable from the row. Every run derives the four RIN columns of each read row again from its retained `report_nature`, re-read or not, so no row keeps an earlier SpicyDocs' scalar or rule name. The publisher repeats a record across a page boundary (15 of 4,975 on the 119th); the table holds each identity once. The shared pooled list reader must settle each query by distinct identity before any output is replaced. Every existing publisher row receives source_route=congress-gov-detail. The four Record evidence columns remain NULL until the separate Record backfill, about 11,000 GovInfo requests, is acquired in the next rollup. In that future reconstruction submitting_official and submitting_agency must both remain NULL: held-out precision was 85.3% and 88.4%, below the declared 90% gate. The original sentence stays in record_entry_text.",
     "columns": [
       {
         "column_name": "communication_id",
@@ -8353,7 +8353,7 @@
       {
         "column_name": "rin",
         "column_type": "VARCHAR",
-        "description": "The Regulation Identifier Number read from report_nature, where the rule found one."
+        "description": "The Regulation Identifier Number read from report_nature, where the rule found one: the first occurrence in rin_occurrences_json that a RIN label directly precedes, as its published key."
       },
       {
         "column_name": "rin_occurrences_json",
@@ -8363,12 +8363,12 @@
       {
         "column_name": "rin_rule",
         "column_type": "VARCHAR",
-        "description": "Which RIN rule fired (`report_nature_rin_label`), or `unmatched`; NULL where the rule was not run."
+        "description": "Which RIN rule fired (`report_nature_rin_label/2`), or `unmatched`; NULL where the rule was not run. Rows read before 0.50.1 name `report_nature_rin_label`, the older pattern."
       },
       {
         "column_name": "rin_matched_text",
         "column_type": "VARCHAR",
-        "description": "The exact text the RIN rule matched, so a false positive is readable from the row."
+        "description": "The exact text the RIN rule matched, the label and the RIN as printed, so a false positive is readable from the row."
       },
       {
         "column_name": "update_date",
