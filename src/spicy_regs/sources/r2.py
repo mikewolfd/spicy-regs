@@ -195,6 +195,18 @@ def dataset_files(output_dir: Path, data_types: list[str]) -> list[Path]:
     return [pf for data_type in data_types if (pf := output_dir / f"{data_type}.parquet").exists()]
 
 
+def require_credentials(action: str) -> None:
+    """Refuse ``action`` without R2 write credentials.
+
+    A caller that reaches an uploader means to publish: its dry run is its own
+    ``skip_upload``, never a missing secret. Skipping here instead let the
+    fork's GAO rollup run green every day from 2026-09-05 to 09-21 with empty
+    secrets, each run logging "Skipping upload" and publishing nothing.
+    """
+    if not getenv("R2_ACCESS_KEY_ID"):
+        raise RuntimeError(f"{action} requires R2 credentials (R2_ACCESS_KEY_ID); skip the upload for a dry run")
+
+
 def preflight_uploads(output_dir: Path, files: list[Path]) -> None:
     """HEAD every planned object and run its size guard before the first byte lands.
 
@@ -203,7 +215,7 @@ def preflight_uploads(output_dir: Path, files: list[Path]) -> None:
     the whole set first makes that refusal stop the publication before it starts.
     Each file is keyed by its path relative to ``output_dir``, the derivation
     :func:`upload_comment_partitions` publishes under. Without R2 credentials
-    this is a no-op, like :func:`upload_file`.
+    this refuses, like :func:`upload_file`.
 
     A transfer can still fail after a clean preflight, so callers must leave the
     manifest unpublished until every data upload succeeds.
@@ -213,8 +225,7 @@ def preflight_uploads(output_dir: Path, files: list[Path]) -> None:
     upload-time check stays because it is every caller's own shrink guard,
     not just this preflight's.
     """
-    if not getenv("R2_ACCESS_KEY_ID"):
-        return
+    require_credentials("Publication preflight")
 
     bucket = getenv("R2_BUCKET_NAME", "spicy-regs")
     client = get_r2_client()
@@ -245,10 +256,7 @@ def upload_file(local_path: Path, remote_key: str | None = None, *, cache_contro
     produced a near-empty local file cannot wipe production.
     """
     bucket = getenv("R2_BUCKET_NAME", "spicy-regs")
-
-    if not getenv("R2_ACCESS_KEY_ID"):
-        logger.warning("Skipping upload (R2 credentials not configured): {}", local_path.name)
-        return
+    require_credentials(f"Uploading {local_path.name}")
 
     if remote_key is None:
         remote_key = local_path.name

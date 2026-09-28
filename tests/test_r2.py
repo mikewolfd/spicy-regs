@@ -36,6 +36,7 @@ def test_upload_dataset_uploads_only_existing_base_files(tmp_path: Path, monkeyp
     # comments.parquet intentionally absent — it's published as partitions.
 
     uploaded: list[Path] = []
+    monkeypatch.setattr(r2, "preflight_uploads", lambda output_dir, files: None)
     monkeypatch.setattr(r2, "upload_file", lambda p, remote_key=None: uploaded.append(p))
 
     r2.upload_dataset(tmp_path, ["dockets", "documents", "comments"])
@@ -139,6 +140,7 @@ def test_upload_dataset_raises_when_an_upload_fails(tmp_path: Path, monkeypatch:
         if path.name == "dockets.parquet":
             raise RuntimeError("Refusing to upload dockets.parquet: would shrink remote")
 
+    monkeypatch.setattr(r2, "preflight_uploads", lambda output_dir, files: None)
     monkeypatch.setattr(r2, "upload_file", fake_upload)
 
     with pytest.raises(RuntimeError, match="dockets.parquet"):
@@ -183,6 +185,7 @@ def test_upload_dataset_reports_every_failure(tmp_path: Path, monkeypatch: pytes
     def fake_upload(path: Path, remote_key: str | None = None) -> None:
         raise RuntimeError(f"boom: {path.name}")
 
+    monkeypatch.setattr(r2, "preflight_uploads", lambda output_dir, files: None)
     monkeypatch.setattr(r2, "upload_file", fake_upload)
 
     with pytest.raises(RuntimeError) as excinfo:
@@ -247,3 +250,21 @@ def test_receipt_and_object_version_only_treat_absence_as_optional(monkeypatch, 
         else:
             with pytest.raises(ClientError):
                 read("comments-publication.json")
+
+
+def test_a_publish_without_credentials_fails_instead_of_skipping(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A caller that reaches the uploader meant to publish; its dry run is its own ``skip_upload``.
+
+    The fork's GAO rollup ran green every day from 2026-09-05 to 09-21 with empty
+    secrets, each run logging "Skipping upload" and publishing nothing.
+    """
+    for name in ("R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setattr(r2, "get_r2_client", lambda: pytest.fail("no client without credentials"))
+    table = tmp_path / "gao_reports.parquet"
+    table.write_bytes(b"x")
+
+    with pytest.raises(RuntimeError, match="R2 credentials"):
+        r2.upload_file(table)
+    with pytest.raises(RuntimeError, match="R2 credentials"):
+        r2.preflight_uploads(tmp_path, [table])

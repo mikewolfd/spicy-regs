@@ -217,8 +217,9 @@ class RollupPipeline(Pipeline):
         if self.skip_upload:
             logger.info("Verified local generation {}; upload skipped", destination)
         else:
-            if not getenv("R2_ACCESS_KEY_ID") or not public_url:
-                raise RuntimeError("Generation publication requires R2 credentials and R2_PUBLIC_URL")
+            r2.require_credentials("Generation publication")
+            if not public_url:
+                raise RuntimeError("Generation publication requires R2_PUBLIC_URL")
             publication.publish_generation(
                 destination, client=r2.get_r2_client(),
                 bucket=getenv("R2_BUCKET_NAME", "spicy-regs"), prior_index=prior_index,
