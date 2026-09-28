@@ -146,8 +146,8 @@ def catalog(tmp_path, monkeypatch):
 
     real_replace = iceberg.replace_rows
 
-    def replace(con, record_type, source):
-        real_replace(con, record_type, source)
+    def replace(con, record_type, source, **kwargs):
+        real_replace(con, record_type, source, **kwargs)
         state["snapshot"] += 1
 
     monkeypatch.setattr(iceberg, "_connect", connect)
@@ -214,6 +214,26 @@ def test_comment_apply_corrects_at_an_equal_timestamp_and_keeps_enrichment(tmp_p
     assert receipt(tmp_path)["rows"] == [] and receipt(tmp_path)["applied_snapshot"] is None
 
 
+def test_comment_legacy_schema_is_reviewable_but_apply_requires_migration(tmp_path, catalog):
+    catalog.seed([comment_prior()])
+    with iceberg._connect() as con:
+        for column in iceberg._COMMENT_REFERENCE_COLUMNS:
+            con.execute(f'ALTER TABLE {iceberg._qualified(COMMENT)} DROP COLUMN "{column}"')
+    before = catalog.rows()
+    repair_records([raw(COMMENT_ID)], table="comments", output_dir=tmp_path)
+    assert receipt(tmp_path)["schema_migration_required"] == sorted(iceberg._COMMENT_REFERENCE_COLUMNS)
+    assert receipt(tmp_path)["rows"][0]["comment_reference_values_json"] is not None
+    assert catalog.rows() == before
+    with pytest.raises(ValueError, match="Migrate the comments schema"):
+        repair_records([raw(COMMENT_ID)], table="comments", output_dir=tmp_path, apply=True, expected_snapshot=1)
+    assert catalog.rows() == before
+    with iceberg._connect_for_table(COMMENT):
+        pass
+    repair_records([raw(COMMENT_ID)], table="comments", output_dir=tmp_path, apply=True)
+    assert receipt(tmp_path)["schema_migration_required"] == []
+    assert catalog.rows()[0]["comment_reference_values_json"] is not None
+
+
 def test_comment_repair_keeps_a_newer_prior(tmp_path, catalog):
     catalog.seed([comment_prior(modify_date="2026-09-21T00:00:00Z")])
     before = catalog.rows()
@@ -239,7 +259,7 @@ def test_comment_apply_fails_loudly_when_the_delete_leaves_the_prior_row(tmp_pat
     """The catalog's DELETE has left rows behind before; the repair checks its own write."""
     catalog.seed([comment_prior()])
     columns = ", ".join(f'"{c}"' for c in COMMENT.schema)
-    monkeypatch.setattr(iceberg, "replace_rows", lambda con, rt, source: con.execute(
+    monkeypatch.setattr(iceberg, "replace_rows", lambda con, rt, source, **kwargs: con.execute(
         f"INSERT INTO {iceberg._qualified(rt)} ({columns}) SELECT {columns} FROM {source}"))
     with pytest.raises(RuntimeError, match="DELETE left rows behind"):
         repair_records([raw(COMMENT_ID)], table="comments", output_dir=tmp_path, apply=True)
@@ -295,3 +315,77 @@ def test_correction_takes_the_text_columns_together(fresh_text, expected):
     )
     row = con.execute(query).fetchone()
     assert row is not None and row[2:] == expected
+
+
+def test_comment_migrated_write_schema_with_older_snapshot_applies(tmp_path, catalog, monkeypatch):
+    # A genuine nullable-column migration leaves new fields NULL. Non-NULL
+    # current values absent from the historical snapshot are an intervening edit.
+    catalog.seed([{**comment_prior(), **dict.fromkeys(iceberg._COMMENT_REFERENCE_COLUMNS)}])
+    historical_columns = [c for c in COMMENT.schema if c not in iceberg._COMMENT_REFERENCE_COLUMNS]
+    projection = ", ".join(f'"{c}"' for c in historical_columns)
+    monkeypatch.setattr(iceberg, "_snapshot_query", lambda rt, snapshot: f"SELECT {projection} FROM {iceberg._qualified(rt)}")
+    repair_records([raw(COMMENT_ID)], table="comments", output_dir=tmp_path)
+    preview = receipt(tmp_path)
+    assert preview["schema_migration_required"] == []
+    assert preview["snapshot_columns_null_filled"] == sorted(iceberg._COMMENT_REFERENCE_COLUMNS)
+    assert preview["changes"][0]["cells"]["comment_reference_values_json"]["before"] is None
+    repair_records([raw(COMMENT_ID)], table="comments", output_dir=tmp_path, apply=True, expected_snapshot=1)
+    assert receipt(tmp_path)["applied_snapshot"]["snapshot_id"] == 2
+    assert catalog.rows()[0]["comment_reference_values_json"] is not None
+
+
+def test_comment_repair_refuses_wrong_current_reference_type(tmp_path, catalog):
+    catalog.seed([comment_prior(comment_on_document_id=None)])
+    with iceberg._connect() as con:
+        con.execute(f'ALTER TABLE {iceberg._qualified(COMMENT)} ALTER COLUMN comment_on_document_id TYPE INTEGER')
+    before = catalog.rows()
+    with pytest.raises(ValueError, match="must be VARCHAR"):
+        repair_records([raw(COMMENT_ID)], table="comments", output_dir=tmp_path, apply=True)
+    assert catalog.rows() == before
+
+
+def test_comment_repair_refuses_write_after_snapshot_check(tmp_path, catalog, monkeypatch):
+    catalog.seed([comment_prior()])
+    original = iceberg.replace_rows
+
+    def intervening_write(con, record_type, source, **kwargs):
+        con.execute(f"UPDATE {iceberg._qualified(record_type)} SET title='concurrent-source'")
+        original(con, record_type, source, **kwargs)
+
+    monkeypatch.setattr(iceberg, 'replace_rows', intervening_write)
+    with pytest.raises(RuntimeError, match='prior changed'):
+        repair_records([raw(COMMENT_ID)], table='comments', output_dir=tmp_path, apply=True)
+    assert catalog.rows()[0]['title'] == 'concurrent-source'
+    assert receipt(tmp_path)['applied_snapshot'] is None
+
+
+def test_explicit_attachment_relationship_repair_clears_and_preserves_enrichment(tmp_path):
+    from spicy_docs.sources.regulations_gov.api import document_attachments_url, read_attachment_relationship
+    from spicy_docs.transport.captured import CapturedBodyResponse
+
+    value = raw()
+    identity = value['data']['id']
+    expected = shaped(value)
+    write(tmp_path / 'documents.parquet', [{**expected, 'attachment_records_json': '[{"id":"old"}]',
+                                          'text_content': 'retained text'}])
+    url = document_attachments_url(identity)
+    capture = CapturedBodyResponse(requested_url=url, resolved_url=url, status_code=200,
+                                   content_type='application/json', body=b'{"data":[]}',
+                                   observed_at='2026-09-27T00:00:00Z')
+    relationship = read_attachment_relationship(capture, identity=identity)
+    result = repair_records([value], table='documents', output_dir=tmp_path,
+                            attachment_relationships={identity: relationship},
+                            source_pins={'test': 'constructed complete-empty relationship control'})
+    rows = pq.read_table(tmp_path / 'documents.parquet').to_pylist()
+    assert len(rows) == 1
+    assert rows[0]['attachment_records_json'] == '[]'
+    assert rows[0]['text_content'] == 'retained text'
+    assert result['attachment_relationships_read'] == 1
+    before = (tmp_path / 'documents.parquet').read_bytes()
+    with pytest.raises(ValueError, match='unread'):
+        repair_records([value], table='documents', output_dir=tmp_path,
+                       attachment_relationships={}, source_pins={'test': 'missing control'})
+    assert (tmp_path / 'documents.parquet').read_bytes() == before
+    with pytest.raises(ValueError, match='retained source pins'):
+        repair_records([value], table='documents', output_dir=tmp_path, attachment_relationships={identity: relationship})
+    assert (tmp_path / 'documents.parquet').read_bytes() == before

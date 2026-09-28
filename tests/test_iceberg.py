@@ -142,30 +142,41 @@ def test_merge_keeps_existing_when_incoming_is_older(tmp_path, local_catalog) ->
     assert title == "Newer"
 
 
-def test_merge_upserts_without_merge_into(tmp_path) -> None:
-    """Keep the tested DELETE + INSERT sequence; other tests prove row semantics."""
-    _write_staging(tmp_path / "s", "EPA", [_docket("EPA-1", "EPA", "T", "2025-01-01")])
-    files = iceberg._staging_files(tmp_path / "s", DOCKET)
+def test_replacement_failure_after_write_rolls_back(local_catalog) -> None:
+    """A write or readback failure cannot leave a partially replaced catalog."""
+    con = local_catalog
+    iceberg._ensure_table(con, DOCKET)
+    table = iceberg._qualified(DOCKET)
+    con.execute(f"INSERT INTO {table} (docket_id,title) VALUES ('D','old')")
+    con.execute(f"CREATE TEMP TABLE fresh AS SELECT * REPLACE ('new' AS title) FROM {table}")
 
-    executed: list[str] = []
-
-    class _RecordingCon:
+    class FailingCon:
         def execute(self, sql, *args, **kwargs):
-            executed.append(sql)
-            return self
+            result = con.execute(sql, *args, **kwargs)
+            if sql.startswith("MERGE INTO"):
+                raise RuntimeError("readback failure after merge")
+            return result
 
-        def fetchall(self):
-            return []
+    with pytest.raises(RuntimeError, match="readback failure"):
+        iceberg.replace_rows(FailingCon(), DOCKET, "fresh")
+    assert con.execute(f"SELECT docket_id,title FROM {table}").fetchall() == [('D', 'old')]
+    iceberg.replace_rows(con, DOCKET, "fresh")
+    assert con.execute(f"SELECT docket_id,title FROM {table}").fetchall() == [('D', 'new')]
 
-        def fetchone(self):
-            return [1]
 
-    iceberg._merge(_RecordingCon(), files, DOCKET)
-
-    sql = " ".join(executed).upper()
-    assert "MERGE INTO" not in sql, "preserve the tested DELETE + INSERT sequence"
-    assert "DELETE FROM" in sql
-    assert "INSERT INTO" in sql
+@pytest.mark.parametrize("side", ["source", "prior"])
+def test_replacement_refuses_duplicate_identities_before_writing(local_catalog, side) -> None:
+    con = local_catalog
+    iceberg._ensure_table(con, DOCKET)
+    table = iceberg._qualified(DOCKET)
+    con.execute(f"INSERT INTO {table} (docket_id,title) VALUES ('D','old')")
+    con.execute(f"CREATE TEMP TABLE fresh AS SELECT * REPLACE ('new' AS title) FROM {table}")
+    duplicate_table = "fresh" if side == "source" else table
+    con.execute(f"INSERT INTO {duplicate_table} SELECT * FROM {duplicate_table}")
+    before = con.execute(f"SELECT * FROM {table}").fetchall()
+    with pytest.raises(ValueError, match="identities"):
+        iceberg.replace_rows(con, DOCKET, "fresh")
+    assert con.execute(f"SELECT * FROM {table}").fetchall() == before
 
 
 def test_export_parquet_matches_published_shape(tmp_path, local_catalog) -> None:
@@ -941,3 +952,118 @@ def test_dedupe_swap_leaves_the_journal_to_resume_when_retries_run_out(tmp_path,
     assert iceberg.dedupe_recovery_pending(con, COMMENT)
     assert iceberg.dedupe_table(con, COMMENT) == (4, 2)
     assert not iceberg.dedupe_recovery_pending(con, COMMENT)
+
+
+def test_export_migrated_comments_fills_old_snapshot_fields_with_null(tmp_path, local_catalog, monkeypatch):
+    con = local_catalog
+    iceberg._ensure_table(con, COMMENT)
+    staging = tmp_path / "staging"
+    _write_comment_staging(staging, "EPA", [_comment("c1", "EPA-1", "EPA", "2025-01-15T00:00:00Z")])
+    iceberg._merge(con, iceberg._staging_files(staging, COMMENT), COMMENT)
+    old_columns = [c for c in COMMENT.schema if c not in iceberg._COMMENT_REFERENCE_COLUMNS]
+    projection = ", ".join(f'"{c}"' for c in old_columns)
+    monkeypatch.setattr(iceberg, "_connect", lambda: con)
+    monkeypatch.setattr(iceberg, "_read_snapshot", lambda *_: iceberg.CatalogSnapshot("local", 1, 4))
+    monkeypatch.setattr(iceberg, "_snapshot_query", lambda rt, snap: f"SELECT {projection} FROM {iceberg._qualified(rt)}")
+    result = iceberg.export_public_comments(tmp_path / "out", COMMENT)
+    rows = pl.read_parquet(result["comments"])
+    assert rows.height == 1
+    for column in iceberg._COMMENT_REFERENCE_COLUMNS:
+        assert rows[column].to_list() == [None]
+
+
+@pytest.mark.parametrize('prior_exists', [False, True])
+def test_merge_refuses_intervening_insert_or_update(tmp_path, local_catalog, monkeypatch, prior_exists):
+    con = local_catalog
+    iceberg._ensure_table(con, DOCKET)
+    table = iceberg._qualified(DOCKET)
+    if prior_exists:
+        con.execute(f"INSERT INTO {table} (docket_id,title,modify_date) VALUES ('D','old','2025-01-01')")
+    staging = tmp_path / 'staging'
+    _write_staging(staging, 'EPA', [_docket('D','EPA','prepared','2025-02-01')])
+    real_replace = iceberg.replace_rows
+
+    def intervening_write(connection, record_type, source, **kwargs):
+        if prior_exists:
+            connection.execute(f"UPDATE {table} SET title='concurrent',modify_date='2026-01-01' WHERE docket_id='D'")
+        else:
+            connection.execute(f"INSERT INTO {table} (docket_id,title,modify_date) VALUES ('D','concurrent','2026-01-01')")
+        real_replace(connection, record_type, source, **kwargs)
+
+    monkeypatch.setattr(iceberg, 'replace_rows', intervening_write)
+    with pytest.raises(RuntimeError, match='prior changed'):
+        iceberg._merge(con, iceberg._staging_files(staging, DOCKET), DOCKET)
+    assert con.execute(f'SELECT title,modify_date FROM {table}').fetchall() == [('concurrent','2026-01-01')]
+    # Refusal leaves no open failed transaction.
+    con.execute('BEGIN')
+    con.execute('ROLLBACK')
+
+
+def test_text_fill_refuses_intervening_unrelated_cell_change(tmp_path, local_catalog, monkeypatch):
+    con = local_catalog
+    iceberg._ensure_table(con, COMMENT)
+    table = iceberg._qualified(COMMENT)
+    con.execute(f"INSERT INTO {table} (comment_id,agency_code,docket_id) VALUES ('c1','EPA','old')")
+    real_replace = iceberg.replace_rows
+
+    def intervening_write(connection, record_type, source, **kwargs):
+        connection.execute(f"UPDATE {table} SET docket_id='newer-source' WHERE comment_id='c1'")
+        real_replace(connection, record_type, source, **kwargs)
+
+    monkeypatch.setattr(iceberg, 'replace_rows', intervening_write)
+    updates = pl.DataFrame({'comment_id':['c1'], '_new_text':['filled'], '_new_status':['ok']})
+    with pytest.raises(RuntimeError, match='prior changed'):
+        iceberg.upsert_comment_text(con, COMMENT, 'EPA', updates)
+    assert con.execute(f'SELECT docket_id,text_content FROM {table}').fetchall() == [('newer-source',None)]
+
+
+def test_replace_preserves_commit_error_when_transaction_already_aborted(local_catalog):
+    con = local_catalog
+    iceberg._ensure_table(con, DOCKET)
+    table = iceberg._qualified(DOCKET)
+    con.execute(f"INSERT INTO {table} (docket_id,title) VALUES ('D','prior')")
+    con.execute(f'CREATE TEMP TABLE replacement AS SELECT * FROM {table}')
+    con.execute("UPDATE replacement SET title='replacement'")
+    conflict = duckdb.TransactionException('simulated concurrent catalog commit conflict')
+
+    class AbortedCommit:
+        rollback_attempts = 0
+
+        def execute(self, sql):
+            if sql == 'COMMIT':
+                con.execute('ROLLBACK')
+                raise conflict
+            if sql == 'ROLLBACK':
+                self.rollback_attempts += 1
+            return con.execute(sql)
+
+    connection = AbortedCommit()
+    with pytest.raises(duckdb.TransactionException, match='concurrent catalog commit conflict') as raised:
+        iceberg.replace_rows(connection, DOCKET, 'replacement')
+    assert raised.value is conflict
+    assert connection.rollback_attempts == 1
+    assert con.execute(f'SELECT title FROM {table}').fetchall() == [('prior',)]
+    con.execute('BEGIN')
+    con.execute('ROLLBACK')
+
+
+def test_document_attachment_nullable_migration_preserves_legacy_rows(local_catalog):
+    from spicy_regs.schemas import RECORD_TYPES
+
+    con = local_catalog
+    record = RECORD_TYPES['documents']
+    table = iceberg._qualified(record)
+    con.execute(f'CREATE SCHEMA IF NOT EXISTS {iceberg._schema_ref()}')
+    con.execute(f'CREATE TABLE {table} (document_id VARCHAR, pdf_extraction_results_json VARCHAR)')
+    con.execute(f"INSERT INTO {table} VALUES ('held', 'prior diagnostics')")
+    assert iceberg._ensure_nullable_column(con, record) == 'attachment_records_json'
+    assert con.execute(f'SELECT * FROM {table}').fetchall() == [('held', 'prior diagnostics', None)]
+    assert iceberg._ensure_nullable_column(con, record) is None
+
+
+def test_document_attachment_migration_refuses_wrong_existing_type(local_catalog):
+    from spicy_regs.schemas import RECORD_TYPES
+
+    record = RECORD_TYPES['documents']
+    with pytest.raises(ValueError, match='attachment_records_json must be VARCHAR'):
+        iceberg._ensure_nullable_column(local_catalog, record, existing={'attachment_records_json': 'INTEGER'})

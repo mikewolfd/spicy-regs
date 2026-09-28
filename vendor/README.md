@@ -5,13 +5,14 @@ The optional `source-readers` extra enables the same readers for package install
 its wheels must be supplied explicitly until they are published in a registry.
 Base CLI and MCP installs do not require them.
 
-- `spicy_docs-0.47.0`: released by the bills lane from SpicyDocs `main` at `f549c16`, September 27,
-  2026: **1,677,512 bytes**, SHA-256
-  `ff3d9bb0ada5e38df4224533b6f41a3c989b25fd4ce7f3a161d9d054150346c5`, byte-identical across two builds.
-  It is 0.46.0 (typed contracts, decision 41, the Mirrulations write-time tie-break, `at-joined/1`) plus
-  `bill_sections.congress`: the partition column the bill family splits `bill_sections` by, derived from
-  the `bill_id` prefix by `schemas.tables.bill_congress`. Earlier builds and their records are in this
-  file's history.
+- `spicy_docs-0.50.0`: built from SpicyDocs `8844068b355c41cd5ab7e7310cc5ba51798f741a`
+  (head of spicy-docs PR #4), September 27, 2026: **1,692,745 bytes**, SHA-256
+  `c739bc6f6bd488ca2afcb37d1bbcff57f14c0abe051638d4679ed17abf9eb64b`, identical across two builds
+  with `SOURCE_DATE_EPOCH=1790553600`; a review rebuild from `git archive 8844068` reproduced the
+  same bytes. It is 0.47.0 (`f549c16`: `bill_sections.congress`, the partition column the bill
+  family splits `bill_sections` by) merged with the join lane's readers: dated bill cosponsors,
+  member party intervals, native relationship occurrences, Senate payment candidates and GAO
+  product metadata. Vendored adoption only; no package-registry upload is asserted.
 
 - `rulespec_artifacts-1.1.2`: exact dependency of SpicyDocs 0.39.2, built from Rulespec
   `23d5f2d98973b2a7f1bf7ce4c9c7a786a4f369ab` (`packages/rulespec-artifacts` of a whole-repo
@@ -22,7 +23,11 @@ Base CLI and MCP installs do not require them.
   version. The same method reproduces the 1.1.1 wheel (99,315 bytes, `63ad763f…c8c8`) byte
   for byte; 1.1.1's record is at `13f3831`.
 
-- Earlier wheels (SpicyDocs 0.25.0–0.33.2, Rulespec Artifacts 1.0.14 and 1.1.0) were
+- The unreferenced SpicyDocs 0.47.0, 0.48.0, 0.48.1 and 0.49.0 wheels were removed on
+  September 27, 2026; restore one with `git show 8350352:vendor/<wheel> > vendor/<wheel>`.
+  This file at `8350352` holds the 0.46.0, 0.47.0 (`f549c16`, `ff3d9bb0`) and 0.48.0 records;
+  0.48.1 and 0.49.0 were vendored without one. Earlier wheels (SpicyDocs
+  0.25.0–0.33.2, Rulespec Artifacts 1.0.14 and 1.1.0) were
   removed on September 25, 2026. Their build records are in this file at `e4840d9`; restore a
   wheel with `git show e4840d9:vendor/<wheel> > vendor/<wheel>`. Two were kept for replay:
   the published comment release under acquisition policy 1.2 (the six-agency cohort)

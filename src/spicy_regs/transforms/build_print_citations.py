@@ -706,7 +706,11 @@ def build_print_citations(
             citation_rows,
             download_prior=download_prior,
             prior_present=have_prior[CITATIONS],
-            replace_parents=(("document_key", "text_sha256"), evaluated[CRPT] | evaluated[BUDGET]),
+            replace_parents=(
+                ("document_kind", "document_key", "text_sha256"),
+                {(GOVINFO_PACKAGE, *key) for key in evaluated[CRPT]}
+                | {(BUDGET_VOLUME, *key) for key in evaluated[BUDGET]},
+            ),
             parquet_metadata=metadata[CITATIONS],
         ),
     )

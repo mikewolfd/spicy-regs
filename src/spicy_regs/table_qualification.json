@@ -150,12 +150,12 @@
       "audits": [
         {
           "disposition": "qualified",
-          "pin": "acc047d1",
+          "pin": "b443a813",
           "pin_kind": "artifact",
-          "date": "2026-09-26"
+          "date": "2026-09-27"
         }
       ],
-      "statement": "qualified at `acc047d1…` (2026-09-26): all 899,630 rows equal the multiset expansion of Federal Register `40dfab8e…` (DuckDB two-way EXCEPT ALL and a Python multiset). The 110 additions are exactly the new documents' links. Receipt: `drift-qualification-2026-09-26/regulatory/`."
+      "statement": "qualified at `b443a813…` (2026-09-27): all 899,630 rows and every legacy column equal prior `58baa81c…` as full multisets. The source is frozen Federal Register `30a081f4…`; every array ordinal points to its exact literal. New candidate arrays hold 246,317 interpretations across 243,615 occurrences; 656,015 have no supported interpretation, not an absent-docket claim. The owner normalizer supplies the candidates and implementation digest. Full public byte readback passed. Receipt: `spicy-regs-fr-links-candidate-20260927/validation.json` and `publication/publication-receipt.json` under the September 27 implementation artifact roots."
     },
     {
       "task": "T11",
@@ -239,19 +239,13 @@
       ],
       "audits": [
         {
-          "disposition": "PARTIAL",
-          "pin": "6bdd9eef",
-          "pin_kind": "artifact",
-          "date": "2026-09-26"
-        },
-        {
           "disposition": "qualified",
-          "pin": "18c85718",
+          "pin": "9c87b600",
           "pin_kind": "artifact",
-          "date": "2026-09-25"
+          "date": "2026-09-27"
         }
       ],
-      "statement": "current `6bdd9eef…` is PARTIAL (2026-09-26): 5,705 filings, retaining every prior row unchanged and adding 214. All 214 additions match native fields, and all 1,450 rows in the run's window match a fresh read. Run 36175655150 (`a89476e`, spicy-docs 0.32.1) predates both evidence retention and the 0.34.0 delegation, so no run-time evidence exists. Of 71 later-seen window filings, 69 were disseminated after the run and 2 were absent from a pre-run read. Earlier window qualified at `18c85718…` (2026-09-25). Receipt: `drift-qualification-2026-09-26/external/`."
+      "statement": "qualified at `9c87b600…` (2026-09-27): all 5,780 held rows replay against native source records; exactly one source-grounded proceeding-name correction, all other prior cells preserved. Native arrays retain occurrences, missing IDs and roles. Three selected offered PDFs have retained bytes and extraction diagnostics; other body coverage remains unread. All public bytes match. Receipt: `spicy-regs-fcc-complete-20260927/receipt-final.json` and `publication/publication-receipt.json`."
     },
     {
       "task": "T14",
@@ -367,12 +361,12 @@
       "audits": [
         {
           "disposition": "qualified",
-          "pin": "d87cf97b",
+          "pin": "566318c5",
           "pin_kind": "artifact",
-          "date": "2026-09-25"
+          "date": "2026-09-27"
         }
       ],
-      "statement": "qualified at `d87cf97b…` (2026-09-25): 42 reports. All 11 additions and two abstract changes match native RSS; the other 29 rows are unchanged. `report_type=Report` is an explicit default, not a native feed value. This qualifies the bounded feed population; broader history and routine retained source inputs remain open. Receipt: `parallel-rollup-audit-2026-09-25/` (workstream details in the [audit report](parallel-rollup-audit-2026-09-25.md))."
+      "statement": "qualified at `566318c5…` (2026-09-27) for the bounded addition: all 42 prior rows/cells from `d2261139…` preserved, with one source-identified GAO-17-317 record added. Its title and 2017-02-15 date come from the qualified GAO product page; unknown tags/type/abstract remain NULL. Source page and retained PDF are in generation evidence; the metadata table has no body-text column. Citation re-resolution finds this target. Full public byte readback passed; broader history remains open. Receipt: `spicy-regs-t24-gao-candidate-20260927/replay-0.48/receipt.json` and `publication/publication-receipt.json`."
     },
     {
       "task": "T12",
@@ -452,6 +446,7 @@
         "congress_bills",
         "bill_actions",
         "bill_committees",
+        "bill_cosponsors",
         "bill_publisher_summaries",
         "bill_versions",
         "bill_sections",
@@ -470,13 +465,19 @@
       ],
       "audits": [
         {
+          "disposition": "PARTIAL",
+          "pin": "40130217",
+          "pin_kind": "artifact",
+          "date": "2026-09-27"
+        },
+        {
           "disposition": "qualified",
           "pin": "6849376e",
           "pin_kind": "artifact",
           "date": "2026-09-26"
         }
       ],
-      "statement": "qualified at `6849376e…` (2026-09-26): the BILLS bulk text backfill (9 runs, 113th–119th, SpicyDocs 0.41.0, receipt `bill-family-bulk-2026-09-26/final/`) extends the family audited at `9f861d50…`. 133,862 printings gained a body: 137,410 of the 137,641 listed in the 113th–119th have one (99.8%), and the rest are not XML or were refused, each recorded. `bill_sections` holds 2,659,863 rows, and every printing's stated section count matches them. 140 bulk-read printings, 20 per Congress, fetched one by one from GovInfo's per-package links, equal their recorded bytes. Against `9f861d50…`, no table loses an identity except `bill_versions`. Its 136,743 removals are all listing-only placeholders whose version now has its body. Two public-law placeholders (113-hr-1067, 113-hr-1068) remain beside their bodies, a known defect. Keyless tables differ only in re-observation times, and the generation audit finds 0 failures. At `9f861d50…`: the status-only backfill (10 runs, 108th–117th, `max_version_fetches=0`, receipt `congress-bills-backfill-2026-09-26/`) extends the family audited at `8ab2a2cf…`, described below. Across the chain, no version, section, diff, committee or action row of `8ab2a2cf…` is lost. It adds 1,298 bills, 763,098 actions, 180,077 metadata-only printings and a one-off 314,496 public-activity events, and every step's audit is clean (the last: 0 findings). Earlier printings of the 108th–117th are metadata only, with no sections or diffs, until their bodies are fetched. At `8ab2a2cf…`: SpicyDocs 0.37.0/0.38.0 (runs 36227172365 for the 119th and 36230043425 for the 118th, capped at 10 printing fetches) repair every defect the drift audit and its re-audits found. No pair runs backward; a dateless enrolled printing follows its dated predecessors. `bill_sections` is keyed on `seq` with no duplicate, and 119-hr-5334 enrolled, 119-hr-9022 reported and 119-hr-4060 introduced publish every section. A numbered reprint keeps its own code: 119-hr-6644's `eas` (198 sections) and `eas2` (276) are separate and chain placed-on-calendar → eas → engrossed-amendment-house → eas2 → enrolled, matching independent native parses of both documents; 118-hr-7643's `rh2` is separate, and no row keys a reprint's package under another code. Every diff item resolves to a published section. Each generation's removals are accounted for (32 stale pairs, then 119-hr-6644's 78 misfiled sections, stale row and 2 pairs; keyless tables differ only in re-observation times). The generation audit finds 0 failures, with evidence `18ea08d4…` admitted and bound. Limits: the four model outputs stay uncomputed, and historical bodies before the current Congress are only partly captured. Receipts: `bill-family-d380cdc0-2026-09-26/`, `bill-family-rerun-2026-09-26/`, `bill-family-8ab2a2cf-2026-09-26/`, `repeated-printings-2026-09-26/`."
+      "statement": "current `40130217…` is PARTIAL (2026-09-27): 146,248 cosponsor occurrences including 67 withdrawals replay exactly from retained 119th House/Senate source observations matching held bill editions. All 421,465 bill identities and prior native cells preserved; 17 other members byte-identical. 405,325 bills remain unread for cosponsor fields, and 19 mismatched editions were skipped. Public hashes verified. Receipt: `legislative-joins-2026-09-27/`. Predecessor qualification history: qualified at `6849376e…` (2026-09-26): the BILLS bulk text backfill (9 runs, 113th–119th, SpicyDocs 0.41.0, receipt `bill-family-bulk-2026-09-26/final/`) extends the family audited at `9f861d50…`. 133,862 printings gained a body: 137,410 of the 137,641 listed in the 113th–119th have one (99.8%), and the rest are not XML or were refused, each recorded. `bill_sections` holds 2,659,863 rows, and every printing's stated section count matches them. 140 bulk-read printings, 20 per Congress, fetched one by one from GovInfo's per-package links, equal their recorded bytes. Against `9f861d50…`, no table loses an identity except `bill_versions`. Its 136,743 removals are all listing-only placeholders whose version now has its body. Two public-law placeholders (113-hr-1067, 113-hr-1068) remain beside their bodies, a known defect. Keyless tables differ only in re-observation times, and the generation audit finds 0 failures. At `9f861d50…`: the status-only backfill (10 runs, 108th–117th, `max_version_fetches=0`, receipt `congress-bills-backfill-2026-09-26/`) extends the family audited at `8ab2a2cf…`, described below. Across the chain, no version, section, diff, committee or action row of `8ab2a2cf…` is lost. It adds 1,298 bills, 763,098 actions, 180,077 metadata-only printings and a one-off 314,496 public-activity events, and every step's audit is clean (the last: 0 findings). Earlier printings of the 108th–117th are metadata only, with no sections or diffs, until their bodies are fetched. At `8ab2a2cf…`: SpicyDocs 0.37.0/0.38.0 (runs 36227172365 for the 119th and 36230043425 for the 118th, capped at 10 printing fetches) repair every defect the drift audit and its re-audits found. No pair runs backward; a dateless enrolled printing follows its dated predecessors. `bill_sections` is keyed on `seq` with no duplicate, and 119-hr-5334 enrolled, 119-hr-9022 reported and 119-hr-4060 introduced publish every section. A numbered reprint keeps its own code: 119-hr-6644's `eas` (198 sections) and `eas2` (276) are separate and chain placed-on-calendar → eas → engrossed-amendment-house → eas2 → enrolled, matching independent native parses of both documents; 118-hr-7643's `rh2` is separate, and no row keys a reprint's package under another code. Every diff item resolves to a published section. Each generation's removals are accounted for (32 stale pairs, then 119-hr-6644's 78 misfiled sections, stale row and 2 pairs; keyless tables differ only in re-observation times). The generation audit finds 0 failures, with evidence `18ea08d4…` admitted and bound. Limits: the four model outputs stay uncomputed, and historical bodies before the current Congress are only partly captured. Receipts: `bill-family-d380cdc0-2026-09-26/`, `bill-family-rerun-2026-09-26/`, `bill-family-8ab2a2cf-2026-09-26/`, `repeated-printings-2026-09-26/`."
     },
     {
       "task": "T08",
@@ -551,9 +552,30 @@
           "pin": "47ac33e4",
           "pin_kind": "artifact",
           "date": "2026-09-25"
+        },
+        {
+          "disposition": "qualified",
+          "pin": "00cad6cf",
+          "pin_kind": "artifact",
+          "date": "2026-09-27"
         }
       ],
-      "statement": "qualified at `47ac33e4…` (2026-09-25): 12,770 members and 45,535 terms. Only capture times change; all 581,370 substantive cells match native JSON, and retained captures bind the frozen run. The community crosswalk retains its Ed Case special-election-term and party-history limits. Three newly present native website URLs are omitted by the current table design; official-roster completeness is not established. Receipt: `parallel-rollup-audit-2026-09-25/` (workstream details in the [audit report](parallel-rollup-audit-2026-09-25.md))."
+      "statement": "qualified at `47ac33e4…` (2026-09-25): 12,770 members and 45,535 terms. Only capture times change; all 581,370 substantive cells match native JSON, and retained captures bind the frozen run. The community crosswalk retains its Ed Case special-election-term and party-history limits. Three newly present native website URLs are omitted by the current table design; official-roster completeness is not established. Receipt: `parallel-rollup-audit-2026-09-25/` (workstream details in the [audit report](parallel-rollup-audit-2026-09-25.md)). qualified at `00cad6cf…` (2026-09-27): the complete retained September 25 community crosswalk replays with no removed member/term identities and no changed shared native values. The same generation adds 59 separately keyed affiliation occurrences, each reconciled to its source path, object and digest. All three public table hashes and row counts match. Receipt: `spicy-regs-t19-members-20260927/`."
+    },
+    {
+      "task": "T08",
+      "tables": [
+        "member_party_affiliations"
+      ],
+      "audits": [
+        {
+          "disposition": "qualified",
+          "pin": "00cad6cf",
+          "pin_kind": "artifact",
+          "date": "2026-09-27"
+        }
+      ],
+      "statement": "qualified at `00cad6cf…` (2026-09-27): 59 source occurrences from the complete retained September 25 community crosswalk captures. Native objects, source paths, input digests and all fields reconcile; exact public hash and row count match. These are source assertions; interval overlaps and gaps are retained, and historical vote-date matching remains a separate interpretation. Receipt: `spicy-regs-t19-members-20260927/`."
     },
     {
       "task": "T10",
@@ -641,12 +663,12 @@
       "audits": [
         {
           "disposition": "PARTIAL",
-          "pin": "8f2502b6",
+          "pin": "c8e49dbb",
           "pin_kind": "artifact",
-          "date": "2026-09-26"
+          "date": "2026-09-27"
         }
       ],
-      "statement": "current `8f2502b6…` is PARTIAL (2026-09-26): runs 36226295627 and 36227170848 re-read all 68 held parents under SpicyDocs 0.38.0 (bill_number 004, committee_name 002). The audited defects are repaired: every Senate report keys its bills in the Congress it covers, eight filed in the 118th covering the 117th and six filed in the 119th covering the 118th; Senate reports carry 1,904 Senate committee codes; `CLAUSE S 2(N)` and `S. Con. Res. 2022` are no longer bills; 116-hr-5119 and -5919 now resolve. Against the prior `ae51fc90…`, every removed row is accounted for: 12,684 rows changed only their rule versions, 3,148 re-keyed their target at the same span, and the 3 citations and 4 actions of the refused misreads dropped. The generation audit finds 0 failures, with evidence `54cb6f5f…` admitted and bound. Residuals keep it partial: 117-hr-1132 in 117hrpt705's `Prior Congresses` paragraph still joins the wrong bill, and 31 citations that state their own Congress inline (`H.R. 6752, 115th Cong.`) take the report's. Eight House codes in Senate reports are one correct `House Committee on Transportation` and 7 bare names only the House roster holds, a documented limit. bill_committee_actions → congress_bills misses 17 of 2,956 bills. Receipts: `print-citations-rerun-2026-09-26/`, `print-citations-8f2502b6-defect-check.txt`, `rerun-removals-2026-09-26.txt`."
+      "statement": "current `c8e49dbb…` is PARTIAL (2026-09-27): preserves all 52,716 rows at a9fa600c and all sibling table bytes, adds 12 exact communication-field findings then 18 exact derived court-PDF findings. All 52,746 rows retain current parent text digests. Court source-specific rules exclude generic docket numbers after a native proclamation false positive; one body rereads successfully with zero findings. Prior print precision/recall limitations remain explicit. Public byte readback passed. Receipts: `communication-held-citations-2026-09-27/` and `spicy-regs-court-citations-20260927/`."
     },
     {
       "task": "T08",
@@ -735,9 +757,15 @@
           "pin": "fa33e547",
           "pin_kind": "artifact",
           "date": "2026-09-26"
+        },
+        {
+          "disposition": "qualified",
+          "pin": "94d28167",
+          "pin_kind": "artifact",
+          "date": "2026-09-27"
         }
       ],
-      "statement": "qualified at `fa33e547…` (2026-09-26): 5,006 rows, 0 list-only. R8 is clean on it and on each generation of the 09-26 evidence drain (`bc3715f0…` → `fa33e547…`, runs 36243144053–36248685095 at `a663f38`): evidence admitted and bound, 0 failures. The journaled unverified remainder falls from 4,006 to 0. List membership (5,006 = the declared count of its 43 retained pages) and all 40,048 list cells replay. Every row's detail replays cell for cell from the one retained response that read it, through an independent raw-JSON parser: 170,204 cells, 0 mismatches. Against `257e889a…` only the six formerly list-only rows changed; all 5,000 re-read details came back identical. RIN limit: the rule misses 14 report natures whose RIN is malformed (11) or labelled `RINs:`/\"Regulation Identification Number\" (3), and keeps only the first RIN on the 6 rows that state several. Receipt: `amend-hc-qualification-2026-09-26/house-communications/final/`."
+      "statement": "qualified at `fa33e547…` (2026-09-26): 5,006 rows, 0 list-only. R8 is clean on it and on each generation of the 09-26 evidence drain (`bc3715f0…` → `fa33e547…`, runs 36243144053–36248685095 at `a663f38`): evidence admitted and bound, 0 failures. The journaled unverified remainder falls from 4,006 to 0. List membership (5,006 = the declared count of its 43 retained pages) and all 40,048 list cells replay. Every row's detail replays cell for cell from the one retained response that read it, through an independent raw-JSON parser: 170,204 cells, 0 mismatches. Against `257e889a…` only the six formerly list-only rows changed; all 5,000 re-read details came back identical. RIN limit: the rule misses 14 report natures whose RIN is malformed (11) or labelled `RINs:`/\"Regulation Identification Number\" (3), and keeps only the first RIN on the 6 rows that state several. Receipt: `amend-hc-qualification-2026-09-26/house-communications/final/`. qualified at `94d28167…` (2026-09-27): all 5,006 rows and 32 prior columns are unchanged; the shared reader emits 2,076 separately located RIN occurrences on 2,046 rows. Every span and field digest is verified, with exact public byte/count readback. Prior source fidelity is inherited; this is a retained-field interpretation refresh with zero origin requests. Malformed/context coverage remains bounded by that reader. Receipt: `spicy-regs-t18-refresh-20260927/`."
     },
     {
       "task": "T08",
@@ -884,6 +912,37 @@
         }
       ],
       "statement": "qualified at `snapshot_f31a4045…` (2026-09-27): run `rulemaking-20260927T074229Z` on newer dockets (`5805cb81…`) and documents (`c2c345d5…`), its other three inputs unchanged. A replay at `3bc0a97` from the manifest's own inputs and prior (`snapshot_91b19da7…`) reproduces all 8 outputs byte for byte, and every table's row count equals `snapshot_91b19da7…`'s. Receipt: `rulemaking-f31a4045-2026-09-27/`. Before it, at `snapshot_91b19da7…` (2026-09-27): the lifecycle stages are live (decisions 54–55, 54a–54c, 56c; spicy-regs `3bc0a97`), run 36300108462, on the same five inputs as `snapshot_9b2c770e…`. A replay at `3bc0a97` from the manifest's own inputs and prior reproduces all 8 outputs byte for byte, and ignoring run_id, asserted_at and supersedes_id the three lifecycle tables and proceedings equal the independently reviewed replay `L3`. 75,270 lifecycles (25,861 finalized, 28,387 final without a proposal, 10,186 no anchor, 8,723 open, 1,252 companion, 721 withdrawn, 140 upload pairs), 135,362 lifecycle events and 344 agency cells (172 suppressed under 30 rules). Time to final by Aalen-Johansen with withdrawal competing: median 259 days [252, 264], routine 126, non-routine 632; all 172 unsuppressed cells equal R's multi-state survfit. Actors: rulemaking-lifecycles v1, lifecycle-events v1, agency-lifecycle-stats v1. Receipts: `rulemaking-91b19da7-2026-09-27/`, `lifecycles-2026-09-26/` (reviews in `review-lc/`). Before it, at `snapshot_9b2c770e…` (2026-09-27): proceedings v12 is live (decisions 56, 56a, 56b, 58–61, 59a, 60a and 61b; spicy-regs `4fea1ff`, `bb81547`), run 36292360437. A replay at `bb81547`, on the five sources the manifest names by digest and the prior `snapshot_7eafd657…`, reproduces all 5 outputs byte for byte. Ignoring run_id, asserted_at and supersedes_id, every row equals the independently reviewed replay `BEC5` on 7eafd657's inputs; fr-docket-links `0ff4783d…` is the only new input and changes no row. It holds 172,742 proceedings (75,270 docketed; 89,662 of 97,472 docket-less carry an agency code), 617,135 rule targets, 52,092 agenda items, 148,011 agenda links and 281,635 comment periods. 28,365 Register documents join their copy's docket and 4,090 attach by specific RIN. Actors: rule-targets v7, proceedings v10, agenda v6 and comment-periods v10. Known limit: an agency's umbrella RIN held through one copy draws in unrelated rules (12 target and RIN pairs, 148 documents; MSHA 1219-AA98). Receipts: `rulemaking-9b2c770e-2026-09-27/`, `proceedings-v12-2026-09-26/` (review in `review-2b/`). Before it, at `snapshot_7eafd657…` (2026-09-26): proceedings v11 is live (catch-all FR feed dockets take no action evidence; a feed docket forms a proceeding only on its own RIN). A replay at the building commit `3d4a696`, on the five sources the manifest names by digest and the prior `snapshot_911969b4…`, reproduces all 5 outputs byte for byte. Ignoring run_id, asserted_at and actor_id, the outputs equal the v11 replay measured on the frozen R5 inputs, except one `supersedes_id` that depends on the prior. So federal-register `4a40a635…` (B2's new `topics_json`) and the rebuilt fr-docket-links change no row. It holds 267,965 proceedings (194 feed shells gone; 7 feed dockets keep their own-RIN proceeding), 618,829 rule targets, 52,092 agenda items, 155,147 agenda links and 286,065 comment periods. Actors: rule-targets v6, proceedings v9, agenda v5 and comment-periods v9. Receipts: `rulemaking-7eafd657-2026-09-26/`, `frdoc-catchalls-2026-09-26/`. At `snapshot_911969b4…`: every public digest matches its manifest, and every input digest matches a published parent admitted against its own pin: dockets `e601dbf6…`, documents `7c98ef8c…`, federal-register `40dfab8e…`, fr-docket-links `acc047d1…` and unified-agenda `649cfd28…`. Actors are rule-targets v5, proceedings v8, comment-periods v8 and agenda v4, and no reference dangles. With SpicyDocs 0.38.0's docket reader, an independent SQL rebuild of decisions 32–33 reproduces all 268,159 proceedings exactly. Every difference from a relaxed scan traces to 105 reader-disagreement pairs: former identifiers, fused or broken labels, and the 10 values the D1 receipt leaves unread. FAR-2018-0003 and DHS-2004-0009 now hold their action notices, and FDA-1999-F-0118 is restored under its original id. Its notice 99-20888 names only `99F-0001`, so it stays FR-only, as decision 33 reads. From `snapshot_837754c3…`, 191,842 proceedings retired as no-action shells, 3,189 merged and 31 split, with the rest retained and none unexplained. No link pair is lost except one former identifier the D1 ruling fences. No predecessor list names a live sibling, and all 178 links trace. Limits: the 3,010 lineage links erased at `snapshot_47cca15e…` stay unrestored by owner decision; 572 citation-only action dockets do not absorb the notices they cite. Receipt: `r5-reaudit-2026-09-26/`."
+    },
+    {
+      "task": "T12/T13",
+      "tables": [
+        "native_legal_references",
+        "native_legal_reference_reads"
+      ],
+      "audits": [
+        {
+          "disposition": "qualified",
+          "pin": "53755e3e",
+          "pin_kind": "artifact",
+          "date": "2026-09-27"
+        }
+      ],
+      "statement": "qualified at `53755e3e…` (2026-09-27): complete retained eCFR Title 1 requested-as-of 2026-08-10 and USC Title 1 release 119-103 produce 881 exact observations and two complete selected-shape reads. Enclosing publisher bytes and receipts verified. Selected targets resolve 19 occurrences; missing, unsupported and unqueried targets remain explicit. Classification matches do not prove full Code text/current effect. Public bytes verified. Receipt: `native-legal-full-2026-09-27/resolved-verification.json`."
+    },
+    {
+      "task": "T15/T24",
+      "tables": [
+        "court_opinion_pdf_extractions"
+      ],
+      "audits": [
+        {
+          "disposition": "qualified",
+          "pin": "6d1e4e65",
+          "pin_kind": "artifact",
+          "date": "2026-09-27"
+        }
+      ],
+      "statement": "qualified at `6d1e4e65…` (2026-09-27): three literally offered PDFs match the selected native opinion SHA-1 fingerprints and retain SHA-256, redirects, acquisition times, extraction outcomes/version and derived text. Their parent opinion generation is explicit; these are not native CSV text fields or complete court body coverage. All public bytes verified. Receipt: `spicy-regs-court-cohort-20260927/publication/publication-receipt.json`."
     }
   ]
 }

@@ -328,8 +328,26 @@ and an inline `columns:` together is refused at load.
 
 ## Use it from an AI assistant
 
-A read-only MCP server exposes SQL over the corpus with three tools:
-`list_sources()`, `describe_table(table)`, and `query_sql(sql)`.
+The read-only MCP server provides `list_sources()`, `describe_table(table)`,
+`query_sql(sql)`, `resolve_document_citations(...)`, and
+`lookup_agency(namespace, identifier, on_date=None)`.
+
+`lookup_agency` uses the pinned reviewed RefSpec mapping. Its exact namespaces
+are `regulations.gov:agency` (for example, `OPM`) and
+`federal_register_agency` (for example, `406`). It returns mapping evidence,
+digests and documented abstentions without opening corpus tables. Labels do not
+match identifiers, parent agencies are separate relationships, and an `on_date`
+request remains `temporal_scope_unqualified` for an otherwise mapped agency.
+REF-072 bridge and succession evidence is returned separately from REF-038
+identity candidates. The owner's current-lineage policy ignores dates, so it does
+not establish identity on a requested historical date or money attribution.
+
+Document content renditions and separate attachments retain different roles.
+`document_attachment_records_*` and `document_attachment_renditions` require
+`attachment_records_json`, which comes from an explicitly read attachment
+relationship. Older published document schemas report these views as unsupported.
+In newly shaped rows, NULL means unread; `[]` means a validated complete empty
+response. Restricted attachment records remain visible even without a file URL.
 
 `list_sources` returns queryable tables in `tables`, all supported names in
 `declared_tables`, and missing views in `unavailable_tables`. Availability

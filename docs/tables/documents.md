@@ -27,7 +27,8 @@ One row per document posted to a docket — proposed rules, final rules, notices
 | `comment_start_date` | `VARCHAR` | Start of the public comment period this document opens, if any. Often null. |
 | `comment_end_date` | `VARCHAR` | End (deadline) of the public comment period, if any. Often null. |
 | `file_url` | `VARCHAR` | URL of the document's primary downloadable rendition. Retained for backward compatibility; see `attachments_json` for the full list. Often null. |
-| `attachments_json` | `VARCHAR` | JSON array of every downloadable rendition: `[{url, format, size}]`. Null when the document has no files. |
+| `attachments_json` | `VARCHAR` | JSON array of the main document's fileFormats renditions: `[{url, format, size}]`. This compatibility field does not contain separately listed attachment resources. Null when no main renditions were retained. |
+| `attachment_records_json` | `VARCHAR` | Literal records from an explicitly read document attachment relationship, preserving attachment IDs, restrictions and alternative file formats. Null means the relationship was not read; an empty array means a validated complete read returned no attachments. A main document response alone cannot establish attachment absence. |
 | `fr_doc_num` | `VARCHAR` | Federal Register document number, when the document was published in the FR. Often null. |
 | `withdrawn` | `VARCHAR` | Whether the document was withdrawn, as the string `"true"`/`"false"`. Often null. |
 | `reason_withdrawn` | `VARCHAR` | Agency-supplied reason for withdrawal, when withdrawn. Often null. |

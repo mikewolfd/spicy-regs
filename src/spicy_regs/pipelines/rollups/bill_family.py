@@ -1,4 +1,4 @@
-"""Rollup pipeline: the thirteen bill-family tables from one acquisition pass.
+"""Rollup pipeline: the bill-family tables (``FAMILY_TABLES`` and activity events) from one acquisition pass.
 
 Like the other ingesting rollups it reads no base table from R2, so ``inputs``
 is empty and the incremental merge with each prior published table happens
@@ -6,8 +6,8 @@ inside the transform. ``bill_sections`` is published one file per Congress
 (``partitioned``, from the transform's ``PARTITIONED``), so a nightly rewrites
 the sitting Congress's file and publication copies the rest. It declares ``outputs`` rather than ``output`` because one
 expensive pass — the BILLSTATUS archives, the GovInfo printings and the model
-calls — fills all thirteen; thirteen rollups would repeat that pass thirteen
-times. Four further outputs ride along, all published because something reads
+calls — fills them all; one rollup per table would repeat that pass once per
+table. Four further outputs ride along, all published because something reads
 them back from R2: ``bill_family_archives`` is this rollup's own processing
 state, the BILLSTATUS folder-listing entry retained so the next run can prove a
 zip unchanged without downloading it; ``bill_vote_references`` is the roll
@@ -66,6 +66,10 @@ class BillFamilyRollup(RollupPipeline):
     )
 
     retain_source_evidence: ClassVar[bool] = True
+    #: The explicit migration onto a prior without ``bill_cosponsors`` (the 18-table generation
+    #: ``72899ab3``, should the pointer be rolled back to it). Inert once the table is published,
+    #: since publication checks a union; remove it after the first publish from main.
+    added_tables: ClassVar[tuple[str, ...]] = ("bill_cosponsors.parquet",)
     partitioned: ClassVar[Mapping[str, tuple[str, ...]]] = {
         f"{name}.parquet": (partitioning.column,) for name, partitioning in PARTITIONED.items()
     }

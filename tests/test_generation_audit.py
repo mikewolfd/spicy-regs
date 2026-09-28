@@ -471,4 +471,4 @@ def test_declared_identity_comes_from_the_contract_then_the_dictionary():
     assert (declared["dockets"].identity, declared["dockets"].identity_source) == (("docket_id",), "spicy-docs contract")
     assert (declared["fec_committees"].identity, declared["fec_committees"].identity_source) == (
         ("committee_id",), "data dictionary")
-    assert declared["feed_summary"].identity == ()
+    assert declared["feed_summary"].identity == ("docket_id",)

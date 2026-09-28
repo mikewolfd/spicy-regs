@@ -33,10 +33,11 @@ COPY src ./src
 RUN pip install --no-deps .
 # Fail the build, not the first request, when a module the server imports at
 # request time needs a package this image does not install.
-RUN python -c "import spicy_regs.mcp_server, spicy_regs.sources.publication, spicy_regs.local_data"
+RUN python -c "import spicy_regs.mcp_server, spicy_regs.sources.publication, spicy_regs.local_data; import spicy_regs.relationship_views, spicy_regs.citation_resolution, spicy_regs.acquisition_queue; from spicy_regs.vocabulary_mapping import lookup_agency; assert lookup_agency('regulations.gov:agency', 'OPM')['status'] == 'reviewed_mapping'"
 
 # The platform sends traffic to $PORT (default 8080). build_app() mounts the MCP
 # endpoint at /mcp; --factory because build_app is a callable returning the app.
 ENV PORT=8080
 EXPOSE 8080
-CMD ["sh", "-c", "uvicorn spicy_regs.mcp_server:build_app --factory --host 0.0.0.0 --port ${PORT}"]
+# Forward rollout stop signals to the server instead of leaving a shell as PID 1.
+CMD ["sh", "-c", "exec uvicorn spicy_regs.mcp_server:build_app --factory --host 0.0.0.0 --port ${PORT}"]

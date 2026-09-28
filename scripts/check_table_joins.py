@@ -28,7 +28,7 @@ from spicy_regs.duckdb_settings import load_public_http
 from spicy_regs.sources import publication
 
 EXIT_UNREACHABLE = 3
-FAILING = ("BELOW", "UNBASELINED", "EMPTIED")
+FAILING = ("BELOW", "UNBASELINED", "EMPTIED", "MULTIPLICITY")
 
 
 def table_urls(base_url: str) -> Callable[[str], list[str]]:
@@ -51,22 +51,47 @@ def _quote(name: str) -> str:
 
 
 def measure(con: duckdb.DuckDBPyConnection, join: table_joins.Join, url_of: Callable[[str], list[str]]) -> dict:
-    """Distinct non-null child keys, how many the parent lacks, a few examples, and the verdict, in one pass."""
+    """Measure full selected inputs, preserving parent multiplicity and raw-row amplification."""
     child = [_quote(column) for column in join.child_columns]
     parent = [_quote(column) for column in join.parent_columns]
+    child_urls, parent_urls = url_of(join.measured_via or join.child), url_of(join.parent)
     keys_sql = ", ".join(f"c{i}" for i in range(len(child)))
     on = " AND ".join(f"c.c{i} = p.p{i}" for i in range(len(child)))
-    keys, missing, examples = con.execute(f"""
-        WITH c AS (SELECT DISTINCT {', '.join(f'{col} AS c{i}' for i, col in enumerate(child))}
-                   FROM {publication.parquet_scan(url_of(join.measured_via or join.child))}
-                   WHERE {' AND '.join(f'{col} IS NOT NULL' for col in child)}),
-             p AS (SELECT DISTINCT {', '.join(f'{col} AS p{i}' for i, col in enumerate(parent))}, true AS present
-                   FROM {publication.parquet_scan(url_of(join.parent))}),
-             j AS (SELECT {keys_sql}, p.present IS NULL AS missing FROM c LEFT JOIN p ON {on})
-        SELECT count(*), count(*) FILTER (WHERE missing),
-               (list(concat_ws('|', {keys_sql})) FILTER (WHERE missing))[1:3]
-        FROM j""").fetchall()[0]
-    return verdict(join, keys, missing, examples or [])
+    sql = f"""
+        WITH child_input AS (SELECT {', '.join(child)} FROM {publication.parquet_scan(child_urls)}),
+             parent_input AS (SELECT {', '.join(parent)} FROM {publication.parquet_scan(parent_urls)}),
+             c AS (SELECT {', '.join(f'{col} AS c{i}' for i, col in enumerate(child))}, count(*) AS child_rows
+                   FROM child_input WHERE {' AND '.join(f'{col} IS NOT NULL' for col in child)}
+                   GROUP BY ALL),
+             p AS (SELECT {', '.join(f'{col} AS p{i}' for i, col in enumerate(parent))}, count(*) AS parent_rows
+                   FROM parent_input WHERE {' AND '.join(f'{col} IS NOT NULL' for col in parent)}
+                   GROUP BY ALL),
+             j AS (SELECT {keys_sql}, child_rows, coalesce(parent_rows, 0) AS parent_rows
+                   FROM c LEFT JOIN p ON {on})
+        SELECT count(*) AS keys, count(*) FILTER (WHERE parent_rows=0) AS missing,
+               (list(concat_ws('|', {keys_sql}) ORDER BY {keys_sql}) FILTER (WHERE parent_rows=0))[1:3] AS examples,
+               (SELECT count(*) FROM child_input) AS child_input_rows,
+               coalesce(sum(child_rows),0) AS child_nonnull_rows,
+               (SELECT count(*) FROM parent_input) AS parent_input_rows,
+               (SELECT count(*) FROM p) AS parent_distinct_keys,
+               (SELECT count(*) FROM p WHERE parent_rows>1) AS parent_duplicate_keys,
+               coalesce((SELECT max(parent_rows) FROM p),0) AS max_parent_multiplicity,
+               coalesce(max(parent_rows),0) AS max_matched_parent_multiplicity,
+               coalesce(sum(child_rows*parent_rows),0) AS inner_join_rows,
+               coalesce(sum(child_rows*greatest(parent_rows,1)),0) AS left_join_nonnull_rows
+        FROM j"""
+    row = con.execute(sql).fetchone()
+    assert row is not None
+    result = verdict(join, row[0], row[1], row[2] or [])
+    names = ("child_input_rows", "child_nonnull_rows", "parent_input_rows", "parent_distinct_keys",
+             "parent_duplicate_keys", "max_parent_multiplicity", "max_matched_parent_multiplicity",
+             "inner_join_rows", "left_join_nonnull_rows")
+    result.update(zip(names, row[3:]))
+    result.update({"scope": "full_selected_inputs", "child_urls": child_urls, "parent_urls": parent_urls,
+                   "sql": sql, "expected_cardinality": join.expected_cardinality})
+    if join.expected_cardinality == "one" and result["max_parent_multiplicity"] > 1:
+        result["status"] = "MULTIPLICITY"
+    return result
 
 
 def verdict(join: table_joins.Join, keys: int, missing: int, examples: Sequence[str] = ()) -> dict:
@@ -104,6 +129,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--ledger", type=Path, default=output_ledger.LEDGER)
     parser.add_argument("--index-url", help="Public base URL to check instead of the ledger's stated destination")
     parser.add_argument("--receipt", type=Path, help="Write every measurement to this JSON file")
+    parser.add_argument("--aggregate", action="append", help="Run this named aggregate check instead of join checks; repeatable")
+    parser.add_argument("--timeout-seconds", type=float, default=90, help="Aggregate query timeout, at most 90 seconds")
     args = parser.parse_args(argv)
     if args.index_url:
         base, source = args.index_url.rstrip("/"), "an explicit --index-url, not the ledger's destination"
@@ -114,6 +141,21 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"Cannot name the publisher to check: {exc}", file=sys.stderr)
             return 2
         source = "the ledger's stated destination"
+    if args.aggregate:
+        from spicy_regs.aggregate_checks import check_public
+        try:
+            with connect() as con:
+                receipt = check_public(con, base, args.aggregate, timeout_seconds=args.timeout_seconds)
+        except (httpx.HTTPError, duckdb.Error, publication.PublicationError, ValueError) as exc:
+            print(f"Aggregate selection failed: {exc}", file=sys.stderr)
+            return EXIT_UNREACHABLE
+        if args.receipt:
+            args.receipt.write_text(json.dumps(receipt, indent=2) + "\n")
+        for result in receipt["results"]:
+            print(f"{result['status']:<14} {result['check']}: {result['reason']}")
+        if any(r["status"] == "MISMATCH" for r in receipt["results"]):
+            return 1
+        return 0 if all(r["status"] in ("OK", "EMPTY") for r in receipt["results"]) else EXIT_UNREACHABLE
     print(f"Declared joins against {base} ({source}); baseline {table_joins.BASELINE_DATE}")
     try:
         results = check(connect(), table_joins.JOINS, table_urls(base))

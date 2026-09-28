@@ -7,7 +7,7 @@ Postgres) has to be stood up.
 
 DuckDB's ``iceberg`` and ``httpfs`` extensions provide catalog access. Version
 1.5.3 or later supports the nullable-column addition used by PDF diagnostics.
-The current upsert implementation uses DELETE + INSERT, keeping the row with
+The current upsert implementation uses a checked atomic MERGE, keeping the row with
 the most recent ``modify_date`` for each primary key.
 
 This module is the "Iceberg load" stage only, mirroring the thin-wrapper style
@@ -114,50 +114,61 @@ def _qualified(record_type: RecordType) -> str:
     return f'{_schema_ref()}."{record_type.name}"'
 
 
-def _ensure_table(con, record_type: RecordType) -> bool:
+def _ensure_table(con, record_type: RecordType) -> str | None:
     """Create the namespace + table (all columns VARCHAR) if they don't exist.
 
     The schema mirrors the published Parquet: every column is a UTF-8 string
     (see :mod:`spicy_regs.schemas.regulations`), so a flat ``VARCHAR`` table is
-    a faithful representation and keeps upserts/export type-safe. Returns whether
-    the PDF diagnostic column was added to an existing table. Iceberg callers
-    must reopen after that change; :func:`_connect_for_table` handles this.
+    a faithful representation and keeps upserts/export type-safe. Returns the
+    nullable column added to an existing table, if any. Iceberg callers must
+    reopen after each change; :func:`_connect_for_table` handles this.
     """
     columns = ", ".join(f'"{col}" VARCHAR' for col in record_type.schema)
     con.execute(f"CREATE SCHEMA IF NOT EXISTS {_schema_ref()};")
     con.execute(f"CREATE TABLE IF NOT EXISTS {_qualified(record_type)} ({columns});")
-    return _ensure_pdf_results_column(con, record_type)
+    return _ensure_nullable_column(con, record_type)
 
 
 _PDF_RESULTS_COLUMN = "pdf_extraction_results_json"
+_COMMENT_REFERENCE_COLUMNS = (
+    "comment_on_document_id", "comment_on_object_id", "original_document_id", "comment_reference_values_json",
+)
 
 
-def _pdf_results_column_type(con, record_type: RecordType) -> str | None:
-    existing = {row[0]: row[1] for row in con.execute(f"DESCRIBE {_qualified(record_type)}").fetchall()}
-    return existing.get(_PDF_RESULTS_COLUMN)
+def _column_types(con, record_type: RecordType) -> dict[str, str]:
+    return {row[0]: row[1] for row in con.execute(f"DESCRIBE {_qualified(record_type)}").fetchall()}
 
 
-def _ensure_pdf_results_column(con, record_type: RecordType) -> bool:
-    """Add the one nullable PDF-attempt field to current document/comment tables."""
-    column = _PDF_RESULTS_COLUMN
-    if record_type.name not in ("documents", "comments") or column not in record_type.schema:
-        return False
+def _ensure_nullable_column(con, record_type: RecordType, *, existing: dict[str, str] | None = None) -> str | None:
+    """Add one explicitly supported nullable field; never invent source values.
+
+    A migration uses one ALTER per connection because Iceberg can cache the old
+    schema. Validate all existing migration fields before changing any of them.
+    """
+    if record_type.name not in ("documents", "comments"):
+        return None
+    columns = (_PDF_RESULTS_COLUMN,) + (
+        _COMMENT_REFERENCE_COLUMNS if record_type.name == "comments" else ("attachment_records_json",)
+    )
+    columns = tuple(column for column in columns if column in record_type.schema)
     table = _qualified(record_type)
-    existing_type = _pdf_results_column_type(con, record_type)
-    if existing_type is None:
-        con.execute(f'ALTER TABLE {table} ADD COLUMN "{column}" VARCHAR;')
-        return True
-    if existing_type != "VARCHAR":
-        raise ValueError(f"{table}.{column} must be VARCHAR, found {existing_type}")
-    return False
+    existing = _column_types(con, record_type) if existing is None else existing
+    for column in columns:
+        if column in existing and existing[column] != "VARCHAR":
+            raise ValueError(f"{table}.{column} must be VARCHAR, found {existing[column]}")
+    for column in columns:
+        if column not in existing:
+            con.execute(f'ALTER TABLE {table} ADD COLUMN "{column}" VARCHAR;')
+            return column
+    return None
 
 
 def _connect_for_table(record_type: RecordType):
     """Prepare the table and return a connection with its current schema.
 
     DuckDB's Iceberg catalog caches the pre-ALTER schema on the connection.
-    Reopen only after this migration, then verify the field without issuing
-    another ALTER. A failed reopen leaves the completed DDL for the next run.
+    Reopen after each migration, then verify that field before adding another.
+    A failed reopen leaves completed DDL for the next run.
     """
     con = _connect()
     try:
@@ -167,16 +178,18 @@ def _connect_for_table(record_type: RecordType):
     except Exception:
         con.close()
         raise
-    if changed:
+    while changed is not None:
         con.close()
         con = _connect()
         try:
-            existing_type = _pdf_results_column_type(con, record_type)
+            existing = _column_types(con, record_type)
+            existing_type = existing.get(changed)
             if existing_type != "VARCHAR":
                 raise ValueError(
-                    f"{_qualified(record_type)}.{_PDF_RESULTS_COLUMN} must be VARCHAR after migration, "
+                    f"{_qualified(record_type)}.{changed} must be VARCHAR after migration, "
                     f"found {existing_type or 'missing'}"
                 )
+            changed = _ensure_nullable_column(con, record_type, existing=existing)
         except Exception:
             con.close()
             raise
@@ -191,24 +204,72 @@ def _staging_files(staging_dir: Path, record_type: RecordType) -> list[Path]:
     return sorted(staging_type_dir.glob("*.parquet"))
 
 
-def replace_rows(con, record_type: RecordType, source: str) -> None:
-    """Replace every catalog row whose key is in ``source`` with ``source``'s row: DELETE by key, then INSERT.
+def replace_rows(con, record_type: RecordType, source: str, *, expected_prior: str | None = None) -> None:
+    """Atomically replace selected unique keys, validating values before commit.
 
     ``source`` must be a self-contained temp table, never a projection over the
     live table (see :func:`upsert_comment_text`). Shared by the ETL upsert
-    (:func:`_merge`) and the comment source repair.
+    (:func:`_merge`) and the comment source repair. Read-modify-write callers
+    pass a self-contained ``expected_prior``; its rows and absences must still
+    match inside the write transaction. Direct replacements may omit it.
     """
     key = record_type.dedup_key
     tbl = _qualified(record_type)
     col_list = ", ".join(f'"{c}"' for c in record_type.schema)
-    con.execute(f'DELETE FROM {tbl} WHERE "{key}" IN (SELECT "{key}" FROM {source});')
-    con.execute(f"INSERT INTO {tbl} ({col_list}) SELECT {col_list} FROM {source};")
+    count, distinct, missing = con.execute(f'''
+        SELECT count(*),count(DISTINCT "{key}"),count(*) FILTER (WHERE "{key}" IS NULL OR trim("{key}")='')
+        FROM {source}
+    ''').fetchone()
+    if missing or count != distinct:
+        raise ValueError("Catalog replacements require distinct, nonblank source identities")
+    if not count:
+        return
+    con.execute("BEGIN")
+    try:
+        if expected_prior is not None:
+            # Compare the prepared preimage inside this write transaction, including
+            # expected absence. A newly inserted, deleted or changed row must not be
+            # overwritten by a winner selected before the transaction began.
+            scoped = f'SELECT {col_list} FROM {{table}} WHERE "{key}" IN (SELECT "{key}" FROM {source})'
+            actual = scoped.format(table=tbl)
+            expected = scoped.format(table=expected_prior)
+            changed = con.execute(f"SELECT 1 FROM (({actual} EXCEPT ALL {expected}) "
+                                  f"UNION ALL ({expected} EXCEPT ALL {actual})) LIMIT 1").fetchone()
+            if changed:
+                raise RuntimeError("Catalog replacement prior changed after preparation; rerun the operation")
+        duplicate = con.execute(f'''
+            SELECT t."{key}" FROM {tbl} t JOIN {source} s ON t."{key}"=s."{key}"
+            GROUP BY t."{key}" HAVING count(*)<>1 LIMIT 1
+        ''').fetchone()
+        if duplicate:
+            raise ValueError("Catalog replacement found duplicate prior identities; reconcile them before writing")
+        assignments = ", ".join(f'"{c}"=s."{c}"' for c in record_type.schema)
+        values = ", ".join(f's."{c}"' for c in record_type.schema)
+        con.execute(f'''MERGE INTO {tbl} t USING {source} s ON t."{key}"=s."{key}"
+            WHEN MATCHED THEN UPDATE SET {assignments}
+            WHEN NOT MATCHED THEN INSERT ({col_list}) VALUES ({values})''')
+        same = " AND ".join(f't."{c}" IS NOT DISTINCT FROM s."{c}"' for c in record_type.schema)
+        found, matching = con.execute(f'''
+            SELECT count(*),count(*) FILTER (WHERE {same})
+            FROM {tbl} t JOIN {source} s ON t."{key}"=s."{key}"
+        ''').fetchone()
+        if found != count or matching != count:
+            raise RuntimeError("Catalog replacement did not preserve one exact row per source identity")
+        con.execute("COMMIT")
+    except Exception:
+        try:
+            con.execute("ROLLBACK")
+        except Exception:
+            # Failed COMMIT can already abort the transaction. Preserve the
+            # original write/conflict error rather than the cleanup failure.
+            pass
+        raise
 
 
 def _merge(con, staging_files: list[Path], record_type: RecordType) -> int:
     """Row-level upsert of the staged rows into the Iceberg table.
 
-    Uses the tested ``DELETE`` + ``INSERT`` sequence (:func:`replace_rows`).
+    Uses a single MERGE with transactional readback (:func:`replace_rows`).
 
     Mirrors the dedup semantics of ``transforms.merge_staging_files``: collapse
     the staging rows to one per key (latest ``modify_date`` wins), keep only the
@@ -218,17 +279,10 @@ def _merge(con, staging_files: list[Path], record_type: RecordType) -> int:
     drop the rows it isn't re-inserting. ``modify_date`` is an ISO-8601 string,
     so the lexical ``>`` comparison orders chronologically.
 
-    CAVEAT — the ``DELETE`` does not reliably remove prior rows on the R2 Data
-    Catalog (the same limitation that made the one-time seed duplicate rows and
-    that :func:`dedupe_table` works around by never deleting). So a key that is
-    *re-merged* — an existing comment whose ``modify_date`` advanced, or a key the
-    redundant daily sweep re-stages — can be left behind next to its replacement,
-    growing physical duplicate ``comment_id`` rows over time. Brand-new keys are
-    unaffected (nothing to delete). This is why the read surface dedups on read
-    (``mcp_server`` wraps the ``comments`` view in a per-``comment_id`` QUALIFY)
-    and physical duplicates are reclaimed out-of-band by ``dedupe_table``; a
-    delete-free incremental upsert is not possible here because the only reliable
-    removal primitive on this catalog is a whole-table ``DROP`` + rebuild.
+    Older DELETE/INSERT writes could leave physical duplicates. MERGE support
+    requires DuckDB >=1.5.3; this path refuses affected prior duplicates rather
+    than guessing which historical row to keep. Existing duplicates remain the
+    responsibility of the explicitly invoked reconciliation path.
     """
     cols = list(record_type.schema)
     key = record_type.dedup_key
@@ -237,6 +291,7 @@ def _merge(con, staging_files: list[Path], record_type: RecordType) -> int:
     # connection can't collide.
     staged = f"_staged_{record_type.name}"
     winners = f"_winners_{record_type.name}"
+    prior = f"_prior_{record_type.name}"
 
     files_sql = ", ".join(f"'{_sql_str(str(p))}'" for p in staging_files)
     col_select = ", ".join(f'CAST("{c}" AS VARCHAR) AS "{c}"' for c in cols)
@@ -253,6 +308,8 @@ def _merge(con, staging_files: list[Path], record_type: RecordType) -> int:
         ) = 1;
         """
     )
+    con.execute(f'CREATE OR REPLACE TEMP TABLE {prior} AS SELECT * FROM {tbl} '
+                f'WHERE "{key}" IN (SELECT "{key}" FROM {staged})')
     # 2. Keep only rows that should win over the table: a new key, or one whose
     #    incoming modify_date is strictly newer (matching the old MERGE guard).
     con.execute(
@@ -260,7 +317,7 @@ def _merge(con, staging_files: list[Path], record_type: RecordType) -> int:
         CREATE OR REPLACE TEMP TABLE {winners} AS
         SELECT s.*
         FROM {staged} s
-        LEFT JOIN {tbl} t ON t."{key}" = s."{key}"
+        LEFT JOIN {prior} t ON t."{key}" = s."{key}"
         WHERE t."{key}" IS NULL
            OR t.modify_date IS NULL
            OR s.modify_date > t.modify_date;
@@ -270,11 +327,12 @@ def _merge(con, staging_files: list[Path], record_type: RecordType) -> int:
     try:
         # Avoid empty catalog commits: the snapshot is also the mirror's input identity.
         if changed:
-            replace_rows(con, record_type, winners)
+            replace_rows(con, record_type, winners, expected_prior=prior)
         return changed
     finally:
         con.execute(f"DROP TABLE IF EXISTS {staged};")
         con.execute(f"DROP TABLE IF EXISTS {winners};")
+        con.execute(f"DROP TABLE IF EXISTS {prior};")
 
 
 def _export_parquet(con, record_type: RecordType, output_dir: Path) -> Path:
@@ -291,10 +349,11 @@ def _export_parquet(con, record_type: RecordType, output_dir: Path) -> Path:
 
     sort_cols = [c for c in ("agency_code", "modify_date") if c in record_type.schema]
     order_by = f"ORDER BY {', '.join(sort_cols)}" if sort_cols else ""
+    columns = ", ".join(f'"{column}"' for column in record_type.schema)
 
     con.execute(
         f"""
-        COPY (SELECT * FROM {_qualified(record_type)} {order_by})
+        COPY (SELECT {columns} FROM {_qualified(record_type)} {order_by})
         TO '{_sql_str(str(out_file))}'
         (FORMAT PARQUET, COMPRESSION ZSTD, ROW_GROUP_SIZE 100000);
         """
@@ -496,7 +555,7 @@ def upsert_comment_text(con, record_type: RecordType, agency: str, updates: "pl.
     the agency's rows gets ``text_content`` / ``text_extraction_status`` refreshed
     (``COALESCE`` keeps the existing value when the incoming column is NULL). The
     upsert is scoped to a single ``agency_code`` so it never touches the whole
-    tens-of-millions-row table, using the existing DELETE+INSERT sequence
+    tens-of-millions-row table, using the checked atomic replacement
     (see :func:`_merge`). No-ops on an empty
     frame; the caller is expected to have handled that case already.
 
@@ -538,11 +597,12 @@ def upsert_comment_text(con, record_type: RecordType, agency: str, updates: "pl.
 
     con.execute(
         f"""
-        CREATE OR REPLACE TEMP TABLE _uct_replacement AS
+        CREATE OR REPLACE TEMP TABLE _uct_prior AS
         SELECT {col_list} FROM {tbl}
         WHERE agency_code = '{ag}' AND comment_id IN (SELECT comment_id FROM _uct_updates);
         """
     )
+    con.execute("CREATE OR REPLACE TEMP TABLE _uct_replacement AS SELECT * FROM _uct_prior")
     con.execute(
         f"""
         UPDATE _uct_replacement AS r
@@ -552,12 +612,10 @@ def upsert_comment_text(con, record_type: RecordType, agency: str, updates: "pl.
         WHERE r.comment_id = u.comment_id;
         """
     )
-    con.execute(
-        f"DELETE FROM {tbl} WHERE agency_code = '{ag}' AND comment_id IN (SELECT comment_id FROM _uct_replacement);"
-    )
-    con.execute(f"INSERT INTO {tbl} ({col_list}) SELECT {col_list} FROM _uct_replacement;")
+    replace_rows(con, record_type, "_uct_replacement", expected_prior="_uct_prior")
     con.execute("DROP TABLE IF EXISTS _uct_updates;")
     con.execute("DROP TABLE IF EXISTS _uct_replacement;")
+    con.execute("DROP TABLE IF EXISTS _uct_prior;")
 
 
 def merge_comments(staging_dir: Path, record_type: RecordType) -> int:
@@ -637,7 +695,19 @@ def export_public_comments(
                 raise RuntimeError("Catalog snapshot changed before export; retry")
             resources.configure(con, work_dir / "spill")
             source = _snapshot_query(record_type, current)
-            columns = con.sql(source).columns
+            snapshot_columns = set(con.sql(source).columns)
+            missing = set(record_type.schema) - snapshot_columns
+            unsupported = missing - set(_COMMENT_REFERENCE_COLUMNS)
+            if unsupported:
+                raise ValueError("Unsupported missing comment snapshot columns: " + ", ".join(sorted(unsupported)))
+            # Schema-only DDL does not advance the data snapshot. Its older
+            # schema cannot name newly added nullable fields; keep them unread.
+            columns = list(record_type.schema)
+            projection = ", ".join(
+                f'NULL::VARCHAR AS "{column}"' if column in missing else f'"{column}"'
+                for column in columns
+            )
+            source = f"SELECT {projection} FROM ({source})"
             stage_comment_agencies(con, source, work_dir / "staging", resources=resources)
         finally:
             con.close()

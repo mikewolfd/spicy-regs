@@ -85,8 +85,9 @@ gh secret set R2_CATALOG_TOKEN --repo mikewolfd/spicy-regs
 ```
 
 `R2_CATALOG_NAMESPACE` is optional; it defaults to `default`. Add the same
-values to the local `.env`. The MCP Worker's catalog variables are a separate
-step in fork setup.
+values to the local `.env` for ingestion. The public MCP Worker serves the
+published Parquet mirror; keep its catalog URI and warehouse empty. See the
+[MCP catalog decision](research/mcp-chaos-2026-09-27.md#iceberg-decision).
 
 ## 2. Load the published Parquet into the catalog
 

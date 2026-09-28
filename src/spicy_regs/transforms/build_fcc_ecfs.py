@@ -27,6 +27,7 @@ publishes only after the source iterator and merge finish successfully.
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 from collections.abc import Generator, Hashable, Iterable, Iterator, Mapping
 from contextlib import closing
@@ -96,6 +97,9 @@ FILING_COLUMNS = (
     "total_page_count",
     "documents_json",
     "filing_url",
+    "native_fields_json",
+    "native_fields_sha256",
+    "pdf_extraction_results_json",
 )
 _FILING_SCHEMA = pa.schema([(c, pa.string()) for c in FILING_COLUMNS])
 
@@ -110,7 +114,7 @@ def _s(value: object) -> str | None:
 def _names(entries: list | None) -> list[str]:
     """Extract the ``name`` of each dict in an API list field, dropping empties."""
     out: list[str] = []
-    for entry in entries or []:
+    for entry in entries if isinstance(entries, list) else []:
         if isinstance(entry, dict):
             name = entry.get("name")
             if isinstance(name, str) and name:
@@ -149,6 +153,10 @@ def _shape_proceeding(raw: dict) -> dict:
 
 def _shape_filing(raw: dict) -> dict:
     """Map one raw ECFS filing onto the published column shape."""
+    native_fields = json.dumps(
+        {key: raw[key] for key in ("proceedings", "filers", "authors", "lawfirms", "bureaus", "documents") if key in raw},
+        sort_keys=True, separators=(",", ":"), ensure_ascii=False,
+    )
     id_submission = _s(raw.get("id_submission"))
     submissiontype = _dict_field(raw, "submissiontype")
     filingstatus = _dict_field(raw, "filingstatus")
@@ -157,6 +165,10 @@ def _shape_filing(raw: dict) -> dict:
     documents = raw_documents if isinstance(raw_documents, list) else []
     return {
         "id_submission": id_submission,
+        "pdf_extraction_results_json": None,
+        "native_fields_json": native_fields,
+        # Identity of the retained selected-field serialization, NOT an HTTP capture digest.
+        "native_fields_sha256": "sha256:" + hashlib.sha256(native_fields.encode()).hexdigest(),
         "proceeding_names_json": json.dumps(_names(raw.get("proceedings"))),
         "submission_type": submissiontype.get("description"),
         "express_comment": _s(raw.get("express_comment")),
@@ -423,6 +435,8 @@ def _merge_incremental(
     out_file = output_dir / output
     new_file = output_dir / f"{scratch_prefix}_new.parquet"
     staged = output_dir / f".{output}.partial"
+    enriched_new = output_dir / f".{output}.diagnostics.parquet"
+    aligned_prior = output_dir / f".{output}.aligned-prior.parquet"
     try:
         write_rows(rows, new_file, schema)
         logger.info("FCC {}: staged {:,} fresh rows", output, pq.ParquetFile(new_file).metadata.num_rows)
@@ -435,13 +449,38 @@ def _merge_incremental(
             con.execute("SET preserve_insertion_order=false")
             con.execute("SET threads=2")
             con.execute("SET temp_directory=?", [str(spill_dir)])
+            selected_prior = prior_file if have_prior else None
+            if selected_prior is not None:
+                held = set(pq.read_schema(selected_prior).names)
+                if any(column not in held for column in columns):
+                    projection = ", ".join(
+                        f'"{column}"' if column in held else f'NULL::VARCHAR AS "{column}"' for column in columns
+                    )
+                    prior_path = str(selected_prior).replace("'", "''")
+                    con.execute(f"COPY (SELECT {projection} FROM read_parquet('{prior_path}')) TO ? (FORMAT PARQUET)",
+                                [str(aligned_prior)])
+                    selected_prior = aligned_prior
+            selected_new = new_file
+            if selected_prior is not None and "pdf_extraction_results_json" in columns:
+                # A declaration change invalidates earlier URL/body association. Same declarations
+                # retain their diagnostic observations even when the native page is refreshed.
+                new_path = str(new_file).replace("'", "''")
+                prior_path = str(selected_prior).replace("'", "''")
+                con.execute(
+                    f"COPY (SELECT n.* REPLACE (coalesce(n.pdf_extraction_results_json, "
+                    "CASE WHEN n.documents_json IS NOT DISTINCT FROM p.documents_json "
+                    "THEN p.pdf_extraction_results_json::VARCHAR END) AS pdf_extraction_results_json) "
+                    f"FROM read_parquet('{new_path}') n LEFT JOIN read_parquet('{prior_path}') p "
+                    "ON n.id_submission=p.id_submission) TO ? (FORMAT PARQUET)", [str(enriched_new)]
+                )
+                selected_new = enriched_new
             merge_local_prior(
                 con,
                 columns=columns,
                 identity=key,
                 order_by=f"{order_by} DESC, {key}",
-                prior_file=prior_file if have_prior else None,
-                new_file=new_file,
+                prior_file=selected_prior,
+                new_file=selected_new,
                 out_file=staged,
             )
         finally:
@@ -450,6 +489,8 @@ def _merge_incremental(
     finally:
         new_file.unlink(missing_ok=True)
         staged.unlink(missing_ok=True)
+        aligned_prior.unlink(missing_ok=True)
+        enriched_new.unlink(missing_ok=True)
 
     prior_file.unlink(missing_ok=True)
     return out_file

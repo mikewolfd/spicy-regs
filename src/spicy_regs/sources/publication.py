@@ -292,7 +292,37 @@ def load_rulemaking_snapshot(base_url: str) -> dict | None:
                 raise ValueError(f"public artifact {key!r} is not its snapshot's member")
     except (ValueError, TypeError, KeyError, AttributeError) as exc:
         raise PublicationError("Invalid rulemaking snapshot") from exc
-    return {"snapshot_id": snapshot_id, "manifest_key": f"{prefix}/manifest.json", "tables": tables}
+    return {"snapshot_id": snapshot_id, "manifest_key": f"{prefix}/manifest.json", "tables": tables,
+            "manifest": manifest}
+
+
+def load_comments_publication(base_url: str) -> dict | None:
+    """Read the catalog export receipt; fixed member URLs still require version checks.
+
+    This receipt is written only after both public comment files and all agency
+    partitions have passed readback. It identifies one catalog snapshot, not an
+    immutable generation URL. Readers must check member ETags around their read.
+    """
+    raw = _bounded_get(f"{base_url.rstrip('/')}/comments-publication.json", allow_missing=True,
+                       headers={"Cache-Control": "no-cache"})
+    if raw is None:
+        return None
+    try:
+        receipt = json.loads(raw, object_pairs_hook=_pairs)
+        source = receipt["source"]
+        if receipt["format_version"] != 1 or not source["table_uuid"]:
+            raise ValueError("unknown receipt format or table identity")
+        if any(type(source[key]) is not int or source[key] < 0 for key in ("snapshot_id", "schema_id")):
+            raise ValueError("invalid catalog version")
+        for key in ("comments.parquet", "comments_index.parquet"):
+            record = receipt["files"][key]
+            if not re.fullmatch(r"[0-9a-f]{64}", record["sha256"]) or not record["etag"]:
+                raise ValueError("invalid public file identity")
+            if any(type(record[name]) is not int or record[name] < 0 for name in ("rows", "bytes")):
+                raise ValueError("invalid public file size")
+    except (ValueError, TypeError, KeyError, AttributeError) as exc:
+        raise PublicationError("Invalid comments publication receipt") from exc
+    return {"receipt_sha256": "sha256:" + hashlib.sha256(raw).hexdigest(), "receipt": receipt}
 
 
 def published_urls(base_url: str) -> dict[str, list[str]]:

@@ -21,6 +21,8 @@ from cyclopts import App
 from rulespec_artifacts import ArtifactPin, LocalMemberSource
 from spicy_docs.schemas.regulations import RECORD_TYPES as SOURCE_TYPES
 from spicy_docs.source_native import SourceNativeReleaseReader
+from spicy_docs.sources.regulations_gov.api import AttachmentRelationship
+from spicy_docs.sources.regulations_gov.attachment_records import attachment_records_json
 from spicy_docs.sources.regulations_gov.profile import (
     REGULATIONS_GOV_COMMENT_PROFILE,
     REGULATIONS_GOV_DOCKET_PROFILE,
@@ -52,6 +54,7 @@ def repair_records(
     apply: bool = False,
     expected_snapshot: int | None = None,
     source_pins: Mapping | None = None,
+    attachment_relationships: Mapping[str, AttachmentRelationship] | None = None,
 ) -> dict:
     """Stage a complete explicit reread before correcting output rows.
 
@@ -62,10 +65,20 @@ def repair_records(
     enrichment columns. Unrelated rows and newer source observations survive.
     Missing source fields are genuine NULL values, not requests to retain stale
     mapped facts. An exception during input consumption prevents every merge.
-    Comments go to the catalog (see :func:`_repair_comments`); ``apply``,
-    ``expected_snapshot`` and ``source_pins`` (recorded in the receipt) apply
-    to them only.
+    Explicit ``attachment_relationships`` must cover exactly the selected documents;
+    ``source_pins`` retains the caller's edition association. The owner checks each
+    captured relationship identity and completeness; this API does not infer that
+    a current relationship belongs to a historical public document edition.
+    Comments go to the catalog (see :func:`_repair_comments`); ``apply`` and
+    ``expected_snapshot`` apply to comments only. ``source_pins`` retains
+    provenance in the receipt for all explicit repairs.
     """
+    if attachment_relationships is not None:
+        if table != "documents":
+            raise ValueError("attachment relationships apply only to documents")
+        if not source_pins:
+            raise ValueError("attachment relationships require retained source pins and edition association")
+    remaining_relationships = set(attachment_relationships or {})
     if table not in PROFILES:
         raise ValueError(f"unsupported regulatory source table: {table}")
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -80,12 +93,19 @@ def repair_records(
             identity = row.get(host.dedup_key)
             if not isinstance(identity, str) or not identity.strip():
                 raise ValueError(f"source correction requires a nonblank {host.dedup_key}")
+            if attachment_relationships is not None:
+                if identity not in attachment_relationships:
+                    raise ValueError(f"attachment relationship unread for selected document {identity}")
+                row["attachment_records_json"] = attachment_records_json(dict(raw), attachment_relationships[identity])
+                remaining_relationships.discard(identity)
             batch.append({column: row.get(column) for column in host.schema})
             count += 1
             if len(batch) == 1000:
                 write_staging(str(count), table, batch, staging, host.schema)
                 batch.clear()
         write_staging(str(count), table, batch, staging, host.schema)
+        if remaining_relationships:
+            raise ValueError("attachment relationships contain unselected document identities")
 
         if table == "comments":
             receipt = _repair_comments(staging, output_dir, count=count, apply=apply,
@@ -118,6 +138,8 @@ def repair_records(
         "spicy_docs_version": version("spicy-docs"),
         "scope": "explicit retained input into local Parquet; no acquisition, Iceberg update or publication",
         "acquisition_manifest_changed": False,
+        "source_pins": dict(source_pins or {}),
+        "attachment_relationships_read": len(attachment_relationships) if attachment_relationships is not None else None,
     }
 
 
@@ -147,10 +169,27 @@ def _repair_comments(
         snapshot = iceberg._read_snapshot(con, record_type)
         if expected_snapshot is not None and snapshot.snapshot_id != expected_snapshot:
             raise RuntimeError(f"catalog is at snapshot {snapshot.snapshot_id}, not the reviewed {expected_snapshot}")
+        current_columns = iceberg._column_types(con, record_type)
+        missing_write_columns = set(columns) - current_columns.keys()
+        for column in iceberg._COMMENT_REFERENCE_COLUMNS:
+            if column in current_columns and current_columns[column] != "VARCHAR":
+                raise ValueError(f"comments.{column} must be VARCHAR, found {current_columns[column]}")
+        prior_sql = iceberg._snapshot_query(record_type, snapshot)
+        prior_columns = {row[0] for row in con.execute(f"DESCRIBE ({prior_sql})").fetchall()}
+        missing_columns = set(columns) - prior_columns
+        unsupported_missing = (missing_columns | missing_write_columns) - set(iceberg._COMMENT_REFERENCE_COLUMNS)
+        if unsupported_missing:
+            raise ValueError("Unsupported missing comment columns: " + ", ".join(sorted(unsupported_missing)))
+        # A dry run must not migrate the catalog. Nullable fields absent from
+        # the reviewed snapshot represent unread source values, never empty lists.
+        prior_project = ", ".join(
+            f'NULL::VARCHAR AS "{column}"' if column in missing_columns
+            else f'CAST("{column}" AS VARCHAR) AS "{column}"' for column in columns
+        )
         con.execute(f"CREATE TEMP TABLE _repair_fresh AS SELECT {project} FROM read_parquet([{files}], union_by_name=true)")
         con.execute(f"""
             CREATE TEMP TABLE _repair_prior AS
-            SELECT {project} FROM ({iceberg._snapshot_query(record_type, snapshot)})
+            SELECT {prior_project} FROM ({prior_sql})
             WHERE "{key}" IN (SELECT "{key}" FROM _repair_fresh)
         """)
         corrected = correction_query(con, fresh_sql="SELECT * FROM _repair_fresh",
@@ -170,6 +209,8 @@ def _repair_comments(
             "mode": "apply" if apply else "dry-run",
             "source": dict(source_pins) if source_pins is not None else None,
             "catalog_snapshot": asdict(snapshot),
+            "schema_migration_required": sorted(missing_write_columns),
+            "snapshot_columns_null_filled": sorted(missing_columns),
             "identities": [row[0] for row in con.execute(f'SELECT "{key}" FROM _repair_fresh ORDER BY 1').fetchall()],
             "missing_identities": [row[0] for row in con.execute(f"""
                 SELECT "{key}" FROM _repair_fresh EXCEPT SELECT "{key}" FROM _repair_prior ORDER BY 1
@@ -186,6 +227,11 @@ def _repair_comments(
         path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n")
         if not apply:
             return receipt
+        if missing_write_columns:
+            raise ValueError(
+                "Migrate the comments schema through the catalog ingestion/export path, "
+                "then rerun the repair against its current write schema; missing: " + ", ".join(sorted(missing_write_columns))
+            )
         if receipt["missing_identities"]:
             raise ValueError(
                 f"comment repair corrects existing rows; {len(receipt['missing_identities'])} staged "
@@ -194,7 +240,7 @@ def _repair_comments(
         if iceberg._read_snapshot(con, record_type) != snapshot:
             raise RuntimeError("the comments catalog moved since the repair read it; rerun the repair")
         if rows:
-            iceberg.replace_rows(con, record_type, "_repair_write")
+            iceberg.replace_rows(con, record_type, "_repair_write", expected_prior="_repair_prior")
             same = " AND ".join(f't."{column}" IS NOT DISTINCT FROM w."{column}"' for column in columns)
             found, matching = con.execute(f"""
                 SELECT count(*), count(*) FILTER (WHERE {same})

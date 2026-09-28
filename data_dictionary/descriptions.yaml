@@ -100,7 +100,8 @@ tables:
       comment_start_date: "Start of the public comment period this document opens, if any. Often null."
       comment_end_date: "End (deadline) of the public comment period, if any. Often null."
       file_url: "URL of the document's primary downloadable rendition. Retained for backward compatibility; see `attachments_json` for the full list. Often null."
-      attachments_json: "JSON array of every downloadable rendition: `[{url, format, size}]`. Null when the document has no files."
+      attachments_json: "JSON array of the main document's fileFormats renditions: `[{url, format, size}]`. This compatibility field does not contain separately listed attachment resources. Null when no main renditions were retained."
+      attachment_records_json: "Literal records from an explicitly read document attachment relationship, preserving attachment IDs, restrictions and alternative file formats. Null means the relationship was not read; an empty array means a validated complete read returned no attachments. A main document response alone cannot establish attachment absence."
       fr_doc_num: "Federal Register document number, when the document was published in the FR. Often null."
       withdrawn: 'Whether the document was withdrawn, as the string `"true"`/`"false"`. Often null.'
       reason_withdrawn: "Agency-supplied reason for withdrawal, when withdrawn. Often null."
@@ -130,6 +131,10 @@ tables:
       `dockets` on `docket_id` when the source supplies that relationship.
       Comments with a null docket remain in the table and agency totals.
     columns:
+      comment_on_document_id: "Literal Regulations.gov commentOnDocumentId: the named parent document, independently nullable from docket_id. No identifier-prefix inference."
+      comment_on_object_id: "Literal commentOn in the native object-ID namespace; not interchangeable with a public document key."
+      original_document_id: "Literal originalDocumentId, retained as an unresolved legacy source reference."
+      comment_reference_values_json: "JSON map containing only present source parent-reference fields, preserving null and empty values. {} means the source was read and fields were absent; SQL NULL means legacy or unread."
       comment_id: "Unique comment identifier. Primary key / dedup key."
       docket_id: "Source-supplied docket identifier for joining to `dockets.docket_id`. Null when the source does not identify a docket; mirror directory names and comment ID prefixes do not fill this field."
       agency_code: "Receiving agency's short code."
@@ -149,6 +154,7 @@ tables:
       pdf_extraction_results_json: "Provenance of `text_content`. For `derived` rows, a JSON object `{comment_id, tool, available_tools, attachments:[{attachment, tool, key, size, etag, sha256}], only_in_other_tools}`: the primary tool (the first of `pypdf`, `pdfminer` with an object for the comment), every tool with an object for it, each attachment's tool, S3 key, listed size and ETag and the SHA-256 of the bytes read (null when the text was kept without re-reading them), and the attachment numbers taken from a tool other than the primary because the primary has no object for them (decision 41); those are in the text. A primary object that exists is kept even when blank. About 125 bytes plus 330 per attachment (31 KB at 92 attachments, the published maximum). Otherwise an ordered JSON array from the latest PDF attempt: `{url, source_sha256, status, page_count, error}` per distinct selected URL; SHA-256 identifies observed bytes, and no-bytes fetch failures have null digest/page count and a generic error. Null when neither is recorded."
 
   comments_index:
+    identity_columns: [agency_code, docket_id, year, month]
     label: "Public comment counts"
     coverage: >-
       Derived. Counts over `comments` by agency, docket and posting month; it
@@ -168,6 +174,7 @@ tables:
       row_count: "Number of comments in the group."
 
   feed_summary:
+    identity_columns: [docket_id]
     label: "Docket summaries"
     coverage: >-
       Derived. One row per docket over `dockets`, `documents` and
@@ -190,6 +197,7 @@ tables:
       date_created: "Earliest document `posted_date` on the docket, used as a creation date. Null when unknown."
 
   agency_stats:
+    identity_columns: [agency_code]
     label: "Agency totals"
     coverage: >-
       Derived. Totals over `dockets`, `documents` and `comments`; it covers
@@ -206,6 +214,7 @@ tables:
       comment_count: "Total comments received by the agency, summed from `comments_index`."
 
   agency_monthly_volume:
+    identity_columns: [agency_code, year, month, document_type]
     label: "Agency monthly volume"
     coverage: >-
       Derived. On 2026-09-21, the mikewolfd/spicy-regs fork published 77,934 groups
@@ -230,12 +239,14 @@ tables:
       document_count: "Number of documents the agency posted of that type in that month."
 
   fr_docket_links:
+    grain: "One source docket-array occurrence per dated Federal Register record; docket_source_ordinal retains the original zero-based array position in rebuilt outputs. Older publications lack that column."
     label: "Federal Register to docket links"
     coverage: >-
       Derived, and bounded by its inputs. 899,227 links from 603,693 dated
       Federal Register records to 612,091 docket ids, published 1994-01-03 to
       2026-09-22 — the `federal_register` table's own range. The table equals
-      a separate re-derivation from that parent row for row.
+      a separate re-derivation from that parent row for row. This dated measurement
+      predates the ordinal and normalization columns; those require rebuilding.
     measured_on: "2026-09-23"
     summary: >-
       The Federal Register ↔ docket bridge: each `federal_register` row's
@@ -247,7 +258,10 @@ tables:
       regulations.gov to the Federal Register using the Federal Register's own
       stated docket links. Built by `build_fr_docket_links`.
     columns:
-      docket_id: "One docket ID extracted from the FR document's `docket_ids_json` array."
+      docket_id: "One literal docket ID extracted from the FR document's `docket_ids_json` array."
+      docket_source_ordinal: "Zero-based position in the original docket array, before null/blank elements are filtered. Present only after rebuilding. Required with document_number and publication_date to identify an occurrence."
+      normalized_docket_candidates_json: "Owner-normalizer candidate interpretations of the literal docket value; an empty array means no supported interpretation, not absence of a docket."
+      docket_normalization_rule: "Digest-pinned owner identifier-normalization rule used to produce candidates."
       document_number: "Literal Federal Register document number. Join to `federal_register` on both this value and `publication_date`; a number can name distinct dated records."
       title: "FR document title."
       abstract: "FR document abstract."
@@ -265,6 +279,7 @@ tables:
       executive_order_number: "Executive order number, for presidential documents."
 
   discovery_signals:
+    identity_columns: [agency_code]
     label: "Agency activity spikes"
     coverage: >-
       Not a range. On 2026-09-21, the mikewolfd/spicy-regs fork published eight agency
@@ -293,6 +308,7 @@ tables:
       ratio: "`recent_30d` divided by `baseline` — the spike multiple."
 
   cfr_sections:
+    identity_columns: [package_id, granule_id]
     label: "Code of Federal Regulations sections"
     coverage: >-
       Window. Annual-edition metadata from the 2025 and 2026 editions, not full
@@ -460,6 +476,7 @@ tables:
       carrier: "Source reader that answered: govinfo-billstatus from the 108th Congress on, congress-api below it or where the BILLSTATUS file was refused."
       enriched_at: "UTC timestamp when this retained answer was shaped, not the publisher's modification date."
   unified_agenda:
+    identity_columns: [rin, agenda_edition]
     label: "Planned agency actions"
     coverage: >-
       Window. The fork serves the complete retained 202510 edition. The full
@@ -830,6 +847,7 @@ tables:
       input generation supplies multiple dated candidates.
     columns_from: spicy_docs
   sam_entities:
+    identity_columns: [uei, entity_eft_indicator]
     label: "Federal entity registry"
     coverage: >-
       Window, complete for the years read. Every public active registration
@@ -885,6 +903,7 @@ tables:
       purpose_of_registration_desc: "Purpose-of-registration description (e.g. `Federal Assistance Awards`, `All Awards`)."
       entity_url: "Entity's self-reported website URL (`coreData.entityInformation.entityURL`). Often null."
   lobbying_filings:
+    identity_columns: [filing_uuid]
     label: "Lobbying disclosure filings"
     coverage: >-
       True range with a density caveat. Filing years span 2000 to 2026, but
@@ -917,6 +936,7 @@ tables:
       government_entities_json: "JSON array of the distinct government entities lobbied (`{id, name}`) — the agencies and chambers (e.g. `HOUSE OF REPRESENTATIVES`, `SENATE`) named across the filing's activities."
       url: "URL of the filing's printable document page on lda.senate.gov (`filing_document_url`)."
   lobbying_activities:
+    identity_columns: [filing_uuid, activity_index]
     label: "Lobbying activities"
     coverage: >-
       Window. Rows exist for the filings read since this table was added
@@ -940,6 +960,7 @@ tables:
       foreign_entity_issues: "The registrant's statement of any foreign entity's interest in the issue; often null."
       government_entities_json: "JSON array of the government entities contacted for this activity, `{id, name}` objects (e.g. `SENATE`)."
   lobbying_activity_lobbyists:
+    identity_columns: [filing_uuid, activity_index, lobbyist_index]
     label: "Lobbyists named on lobbying activities"
     coverage: >-
       Window. Rows exist for the filings read since this table was added
@@ -1114,6 +1135,7 @@ tables:
       embedded_bodies_json: "JSON representation of provider-embedded body values, retaining their supplied scope."
       source_record_json: "Complete provider source-record serialization, preserving identity, native metadata, assets, bodies and evidence."
   fec_relationships:
+    identity_columns: [source_sha256, source_locator_json, relationship_type]
     label: "Source-reported FEC relationship observations"
     grain: "One reported relationship or explicit absence state at one source location."
     coverage: >-
@@ -1210,6 +1232,7 @@ tables:
       first_comment_date: "Earliest `posted_date` across this organization's comments (ISO 8601 string)."
       last_comment_date: "Latest `posted_date` across this organization's comments (ISO 8601 string)."
   gao_reports:
+    identity_columns: [report_id]
     label: "Government Accountability Office reports"
     coverage: >-
       Window. 105 reports published 2026-07-13 to 2026-09-04, a
@@ -1236,6 +1259,7 @@ tables:
       topics_json: "Reserved JSON array of topics/subjects. The RSS feed carries no structured topic tags, so this is `[]` pending a future enrichment source."
       url: "Canonical gao.gov URL for the product."
   crs_reports:
+    identity_columns: [report_id]
     label: "Congressional Research Service reports"
     coverage: >-
       True range. 14,137 reports published 1993-10-22 to 2026-09-22, running
@@ -1265,6 +1289,7 @@ tables:
       version: "Version number of the report as returned by the list endpoint."
       url: "Congress.gov API URL for the report's detail resource."
   court_dockets:
+    identity_columns: [cl_docket_id]
     label: "Federal court dockets"
     coverage: >-
       True range with a density caveat. Dockets filed 1992-08-26 to
@@ -1570,6 +1595,7 @@ tables:
       date_modified: "Timestamp the publisher last modified the opinion record."
       dump_date: "The CourtListener bulk export the row was copied from (ISO date)."
   usaspending_recipients:
+    identity_columns: [recipient_id]
     label: "Federal award recipients"
     coverage: >-
       Not a range. Accumulated recipients from bounded top-N walks ranked by trailing-12-month
@@ -1605,6 +1631,7 @@ tables:
       observed_at: "When the ranking response page this row was read from was captured (UTC, ISO 8601). NULL on a row carried from before per-row capture evidence, whose read time was not retained; a carried row never takes a later run's time."
       source_capture_sha256: "SHA-256 of the retained ranking response page this row was read from, so its values trace to one captured response. NULL exactly when `observed_at` is NULL."
   fcc_proceedings:
+    identity_columns: [name]
     label: "FCC proceedings"
     coverage: >-
       True range. 21,683 docket names from 21,691 ECFS documents, created
@@ -1644,13 +1671,16 @@ tables:
       reply_comment_end_date: "End of the reply-comment window, when ECFS records one. Often null."
       filed_by: "ECFS account that created the proceeding. An internal FCC username; occasionally useful for spotting bureau conventions."
   fcc_filings:
+    identity_columns: [id_submission]
     label: "FCC filings"
     coverage: >-
-      Window. 5,137 filings received 2026-08-24 to 2026-09-22, the bounded
-      first run; every id and cell matched the raw pages. The rollup merges
-      incrementally, so this is the history accumulated so far and not the
-      ECFS archive.
-    measured_on: "2026-09-23"
+      Window. All 5,780 held filings were replayed against retained or reacquired native
+      source records on 2026-09-27 and published as generation 9c87b600aa7b5847.
+      One proceeding-number cell was explicitly corrected from the native source;
+      every other prior cell was preserved. Three selected offered PDFs have retained
+      extraction diagnostics. This qualifies the held population, not the ECFS archive
+      or complete attachment text. Receipt: spicy-regs-fcc-complete-20260927/receipt-final.json.
+    measured_on: "2026-09-27"
     summary: >-
       One row per FCC ECFS filing — the FCC's comment equivalent: comments,
       reply comments, ex-parte notices, letters, and other submissions —
@@ -1682,6 +1712,9 @@ tables:
       total_page_count: "Total page count across the filing's attached documents, as a numeric string."
       documents_json: "JSON array of attached documents as `{filename, src}` objects, where `src` is the fcc.gov download URL."
       filing_url: "Canonical fcc.gov URL for the filing (`https://www.fcc.gov/ecfs/filing/<id_submission>`)."
+      native_fields_json: "Selected named native ECFS fields retained as JSON, preserving absent keys, nulls, empty arrays, objects and roles. SQL null in older output means unread legacy data; rebuilding is required. Not the complete API response."
+      native_fields_sha256: "SHA-256 of the exact native_fields_json string; identifies retained field bytes, not the complete API response."
+      pdf_extraction_results_json: "Outcomes for selected offered attachment URLs, retaining source SHA-256, page count and extraction status. Null when no attempt is retained. These selected attempts do not establish complete filing text coverage."
 
   # ---------------------------------------------------------------------------
   # Tables hosted from spicy-docs' table contracts.
@@ -2191,6 +2224,7 @@ tables:
     columns_from: spicy_docs
 
   member_vote_terms:
+    identity_columns: [vote_id, member_key]
     label: "Member vote terms"
     coverage: >-
       Derived, and bounded by its inputs: one row for every `member_votes`
@@ -2326,6 +2360,7 @@ tables:
     columns_from: spicy_docs
 
   bill_family_archives:
+    identity_columns: [congress, bill_type]
     label: "Bill-family archive listings"
     coverage: >-
       Not a range. The adoption run produced 2 rows in this output from the
@@ -2362,6 +2397,7 @@ tables:
       observed_at: "When this run captured the listing the entry was read from."
 
   bill_vote_references:
+    identity_columns: [bill_id, chamber, congress, session, roll_number, action_index]
     label: "Bill vote references"
     coverage: >-
       Sampled. The adoption run produced 881 rows in this output from the
@@ -2399,6 +2435,7 @@ tables:
       full_action_name: "The guide's seventh field, absent on every entry measured; NULL where the publisher sends none."
       observed_at: "When the bill-family run that read this entry captured the BILLSTATUS document."
   bill_family_backfills:
+    identity_columns: [congress, bill_type, number]
     label: "Bill-family backfill state"
     coverage: >-
       Not a range. The adoption run produced 0 rows in this output from the
@@ -2436,6 +2473,7 @@ tables:
       observed_at: "When the detail request that filled the bill was captured, or when the refusal was recorded."
 
   bill_family_backfill_walks:
+    identity_columns: [congress, bill_type]
     label: "Bill-family backfill walks"
     coverage: >-
       Not a range. The adoption run produced 0 rows in this output from the
@@ -2720,14 +2758,13 @@ tables:
   house_communications:
     label: "House executive communications"
     coverage: >-
-      Sampled, accumulating. The adoption run used 30 keyed requests: 20 list
-      pages and 10 details under the declared detail cap. The list declared and
-      served 4,975 records, with 9 repeats and 4,966 distinct identities; merging
-      its own 4,963-row prior retained 4,969 rows. All 4,969 now state the publisher
-      source_route, 1,010 have details and 3,959 remain list-only. No Record
-      backfill request was made and every Record evidence column remains NULL.
-      Receipt: `rollups-0-24-0-adoption-2026-09-20/`. Local output only; not uploaded.
-    measured_on: "2026-09-20"
+      Sampled. The pinned 5,006-row fork selection was republished on September 27 as
+      generation 94d28167db0a56a3, preserving all existing rows and columns. All 5,006
+      retained details were interpreted with the shared RIN reader: 2,076 occurrences
+      across 2,046 rows. Every span and field digest was checked, and exact public bytes
+      and counts verified. Source qualification is inherited from the prior generation;
+      no new source requests were made. Receipt: spicy-regs-t18-refresh-20260927/.
+    measured_on: "2026-09-27"
     summary: >-
       One row per House executive communication, as the Congress.gov
       house-communication list and detail routes state it, keyed on the
@@ -2740,7 +2777,7 @@ tables:
     data_quality: >-
       A row whose `committees_json` is NULL is list-only: its detail has not been
       read yet (not reached under the cap, or refused), and every detail-only
-      column is NULL with it, including the three RIN columns, because the rule
+      column is NULL with it, including the scalar and occurrence RIN columns, because the rule
       was not run. A row whose detail was read states `[]` where the detail lists
       none. The RIN is an interpretation: `rin_rule` names the rule that fired
       (`report_nature_rin_label`) or `unmatched`, and `rin_matched_text` is the
@@ -3219,7 +3256,38 @@ tables:
       rows until a successful read can establish the current relationships.
     columns_from: spicy_docs
 
+  bill_cosponsors:
+    measured_on: "2026-09-27"
+    label: "Bill cosponsor source occurrences"
+    coverage: >-
+      Sampled. Retained Congress 119 House and Senate BILLSTATUS archives were replayed
+      on 2026-09-27 for source observations matching the held bill edition, publishing
+      146,248 source occurrences, including 67 positive withdrawal dates. Every native field
+      reconciles; bills outside the selected replay remain unread. Receipt:
+      legislative-joins-2026-09-27/t05-candidate.json.
+    summary: >-
+      One cosponsor occurrence in one retained BILLSTATUS observation, keyed by the bill, the
+      input digest and the list ordinal. A member listed twice keeps two rows; a successfully
+      read absent or empty list replaces the bill's prior rows.
+    columns_from: spicy_docs
+
+  member_party_affiliations:
+    measured_on: "2026-09-27"
+    label: "Member party affiliation source intervals"
+    coverage: >-
+      Sampled. The complete retained September 25 community crosswalk captures were replayed
+      and published on September 27 as members generation 00cad6cf5255d605. All 59 source
+      affiliation occurrences were reconciled, and exact public hashes and rows verified.
+      Member and term identities and existing native values were preserved. This is the
+      selected community crosswalk, not an official or newly acquired roster. Receipt:
+      spicy-regs-t19-members-20260927/public-readback.json.
+    summary: >-
+      One member, input digest, term index and affiliation index. Literal dates and their
+      parsing states remain separate from any dated membership decision.
+    columns_from: spicy_docs
+
   committee_report_reads:
+    identity_columns: [package_id]
     measured_on: "2026-09-21"
     label: "Committee-report acquisition checkpoints"
     coverage: >-
@@ -3240,3 +3308,101 @@ tables:
       outcome: "pending, refused, refused_final, detail_refused or complete. complete permits an unchanged skip; so does refused_final, a refusal every run would repeat (a body past the byte bound, parts past the request budget, no rendition taken) until the package's last_modified or the rule moves. A body past the bound rests on the size its response stated (rule_version ends refused-under=size=<bytes>) and is read again only when the bound grows past that size; any other rests on the bounds rule_version names. refused and detail_refused are read again every run."
       rule_version: "The rules a package was read under: for a report, the installed SpicyDocs code digest (not its release string), the CBO and section readers and this repository's part and body rules; for a hearing, the hearing-link rule and the body rule. A changed token forces another read."
       observed_at: "UTC time this rollup recorded the checkpoint."
+
+  native_legal_references:
+    measured_on: "2026-09-27"
+    label: "Native legal-reference observations"
+    identity_columns: [scope_id, input_sha256, occurrence_index]
+    grain: "One source scanner observation per pinned XML input; multiple interpreted targets remain nested candidates."
+    coverage: >-
+      Sampled. Generation 53755e3e0076dfa5 publishes 881 observations from complete retained
+      eCFR Title 1 requested as of 2026-08-10 and USC Title 1 release 119-103. Exact enclosing
+      input bytes and source receipts qualify both selections. Selected public target
+      tables resolve 19 occurrences; missing, unsupported and unqueried targets remain
+      explicit. Receipt: native-legal-full-2026-09-27/resolved-verification.json.
+    summary: >-
+      Selected eCFR AUTH/SOURCE notes and U.S. Code href/source-credit observations,
+      retaining source XML paths and digests. Complete reads replace the selected
+      source/edition scope, including successful empty corrections. Candidate target
+      matches concern held classification rows, not independently acquired legal text.
+      Unparsed prose and unsupported forms remain visible; no universal extraction or
+      historical completeness is implied.
+    columns:
+      scope_id: "Stable hash of source family, source record key and explicit edition; correction replacement scope."
+      source_family: "Source scanner family: ecfr or uscode."
+      source_record_key: "Caller-selected source record identity, retained literally."
+      edition: "Explicit selected edition, or null when the evidence does not establish one."
+      input_sha256: "SHA-256 digest of the exact retained source XML bytes."
+      source_locator: "Manifest source locator retained literally; not proof of acquisition time or edition."
+      occurrence_index: "Scanner observation index within this source input, stored as text."
+      source_path: "Source scanner XML path locating this observation."
+      element_tag: "Literal XML element tag, including namespace where present."
+      attributes_json: "Source element attributes serialized as JSON."
+      ancestors_json: "Scanner-retained XML ancestor context serialized as JSON."
+      observation_kind: "Native reference shape reported by the owner scanner."
+      href: "Literal native href, when the observation supplies one."
+      text: "Complete scanner-retained text for this observation; interpretation may cover only part."
+      text_runs_json: "Source text runs and context retained by the scanner."
+      cfr_title: "Source-derived CFR title context, when present; not an inferred target title."
+      cfr_part: "Source-derived CFR part context, when present; part-only targets remain part-only."
+      interpretation_status: "Whether the selected native shape is supported or only partially interpreted; does not assert exhaustive extraction."
+      target_candidates_json: "Interpreted typed targets and optional pinned held-table resolution outcomes; preserves multiple candidates without multiplying observations."
+      rule_version: "Application scanner and interpretation rule version."
+
+  court_opinion_pdf_extractions:
+    measured_on: "2026-09-27"
+    label: "Selected court opinion PDF text"
+    identity_columns: [opinion_id, source_sha256]
+    grain: "One retained PDF extraction per opinion and exact observed body."
+    coverage: >-
+      Sampled. Three selected publisher PDFs were acquired on 2026-09-27. Each exact
+      body matches its held CourtListener SHA-1 and has its own SHA-256 and extraction
+      outcome. This is derived PDF text, separate from CourtListener native text fields
+      and from the complete opinion index. Receipt: spicy-regs-court-cohort-20260927/bodies-receipt.json.
+    summary: >-
+      Text from literally offered PDF URLs, tied to the selected opinion generation,
+      native body fingerprint, capture evidence and extractor version. A native digest
+      mismatch records a refusal without supplying text. Join opinion_id to court_opinions
+      and cluster_id to court_opinion_clusters; this table does not infer case-name identity.
+    columns:
+      opinion_id: "Native CourtListener opinion ID selected for acquisition."
+      cluster_id: "Native opinion cluster ID from that same held opinion row."
+      source_url: "Literal download_url offered by the selected opinion."
+      resolved_url: "Final response URL observed by the provider."
+      source_sha256: "SHA-256 of complete captured PDF bytes."
+      native_sha1: "Body SHA-1 asserted by the selected native opinion row."
+      actual_sha1: "SHA-1 independently computed over captured bytes."
+      sha1_matches: "Whether the captured bytes match the native fingerprint, stored as text."
+      text_content: "Derived PDF text when fingerprint and extraction checks succeed; null after a refusal."
+      pdf_extraction_results_json: "URL, body SHA-256, status, page count and error for the selected attempt."
+      observed_at: "Provider capture observation time."
+      extractor: "Application extraction implementation identity."
+      extractor_version: "Installed pypdf distribution version."
+      parent_opinion_publication_json: "Exact selected opinion family and its member metadata."
+
+  native_legal_reference_reads:
+    measured_on: "2026-09-27"
+    label: "Native legal-reference selected-input reads"
+    identity_columns: [scope_id]
+    grain: "One current complete selected-shape read per source/edition scope."
+    coverage: "Sampled. Explicit retained-input manifests only; not a source-wide acquisition or completeness ledger."
+    summary: >-
+      Records successful bounded source reads even when they produce no observations.
+      Failed or incomplete inputs cannot replace prior output. Existing generation and
+      source-evidence artifacts retain earlier captures; the current row represents the
+      latest complete selected-shape read for its scope. Unsupported XML forms and
+      unknown editions remain explicit.
+    columns:
+      scope_id: "Stable source family/record/edition correction scope shared with native_legal_references."
+      source_family: "Source scanner family: ecfr or uscode."
+      source_record_key: "Caller-selected source record identity, retained literally."
+      edition: "Explicit selected edition, or null when unknown."
+      input_sha256: "SHA-256 digest of exact retained XML bytes."
+      source_locator: "Literal manifest source locator, without implied acquisition date."
+      source_bytes: "Observed retained input byte length, stored as text."
+      occurrence_count: "Number of native scanner observations produced by this read, including zero."
+      read_status: "complete_selected_shapes means the selected scanner finished; it does not mean every legal-reference form is supported."
+      selected_shapes_json: "Explicit native XML forms selected for this read."
+      unsupported_shapes_json: "Known excluded forms; not a claim to enumerate every possible source shape."
+      manifest_sha256: "SHA-256 digest of the retained manifest binding the input selection and optional target pins."
+      rule_version: "Application scanner and interpretation rule version."

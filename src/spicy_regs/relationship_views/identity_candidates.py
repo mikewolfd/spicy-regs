@@ -1,0 +1,39 @@
+"""Expose existing name matches as pending candidates, never accepted identity."""
+
+from .core import literal
+from .sql_views import SQLView, pin
+
+SOURCE = 'org_committee_links'
+FIELDS = ('organization','organization_norm','organization_core','name_source','committee_id','committee_name',
+          'match_method','confidence','committee_match_count','first_comment_date','last_comment_date')
+
+
+def candidates(p):
+    selected = p.get(SOURCE)
+    pinned = isinstance(selected, dict) and bool(selected.get('artifact_digest') or selected.get('sha256'))
+    identity = f"""'org_candidate_' || sha256(to_json(struct_pack(
+        source_publication:=CAST({pin(p, SOURCE)} AS JSON), organization:=organization,
+        name_source:=name_source, committee_id:=committee_id)))""" if pinned else 'NULL::VARCHAR'
+    return f"""SELECT *, {identity} AS candidate_id,
+        {literal('publication_scoped' if pinned else 'unversioned_source')} AS candidate_id_status,
+        organization AS observed_name, 'fec_committee' AS target_namespace,
+        committee_id AS candidate_target_id, 'pending' AS decision, 'unknown' AS acting_role,
+        to_json(struct_pack(match_method:=match_method,confidence:=confidence,
+            organization_norm:=organization_norm,organization_core:=organization_core,
+            committee_name:=committee_name))::VARCHAR AS matcher_evidence_json,
+        to_json(struct_pack(committee_match_count:=committee_match_count,
+            multiple_name_matches:=TRY_CAST(committee_match_count AS BIGINT)>1))::VARCHAR AS competing_candidates_json,
+        NULL::VARCHAR AS accepted_identity_evidence, NULL::VARCHAR AS decision_at,
+        {pin(p, SOURCE)} AS source_publication_json,
+        'existing-name-candidates-v1' AS rule_version
+        FROM org_committee_links"""
+
+
+IDENTITY_VIEWS = (
+    SQLView('org_identity_candidates', {SOURCE: FIELDS}, candidates,
+            'Existing organization-name matches are pending candidates. Matching names, confidence labels and '
+            'multiple alternatives are recorded features, not adjudicated positive/conflicting identity evidence. '
+            'Original comment date bounds are not validity dates. No common person/organization, affiliate network '
+            'or funds attribution is established. Candidate IDs require a pinned source publication; no qualified '
+            'acceptance, rejection or revocation workflow is implemented by this view.', ('candidate_id',)),
+)

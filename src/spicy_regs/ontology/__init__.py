@@ -11,7 +11,16 @@ from spicy_regs.ontology.citations import (
     normalize_regsgov_identifier,
     parse_cfr_citation,
 )
-from spicy_regs.ontology.common import ATTESTATION_COLUMNS, RunContext, stable_id
+
+
+def __getattr__(name: str):
+    # Serving needs the lightweight agency reader, not the optional table writers.
+    if name in {"ATTESTATION_COLUMNS", "RunContext", "stable_id"}:
+        from spicy_regs.ontology import common
+
+        return getattr(common, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 
 __all__ = [
     "ATTESTATION_COLUMNS",

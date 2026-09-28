@@ -1,4 +1,201 @@
 {
+  "native_legal_references": {
+    "table": "native_legal_references",
+    "label": "Native legal-reference observations",
+    "summary": "Selected eCFR AUTH/SOURCE notes and U.S. Code href/source-credit observations, retaining source XML paths and digests. Complete reads replace the selected source/edition scope, including successful empty corrections. Candidate target matches concern held classification rows, not independently acquired legal text. Unparsed prose and unsupported forms remain visible; no universal extraction or historical completeness is implied.",
+    "coverage": "Sampled. Generation 53755e3e0076dfa5 publishes 881 observations from complete retained eCFR Title 1 requested as of 2026-08-10 and USC Title 1 release 119-103. Exact enclosing input bytes and source receipts qualify both selections. Selected public target tables resolve 19 occurrences; missing, unsupported and unqueried targets remain explicit. Receipt: native-legal-full-2026-09-27/resolved-verification.json.",
+    "kind": "sampled",
+    "measured_on": "2026-09-27",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "scope_id",
+        "column_type": "VARCHAR",
+        "description": "Stable hash of source family, source record key and explicit edition; correction replacement scope."
+      },
+      {
+        "column_name": "source_family",
+        "column_type": "VARCHAR",
+        "description": "Source scanner family: ecfr or uscode."
+      },
+      {
+        "column_name": "source_record_key",
+        "column_type": "VARCHAR",
+        "description": "Caller-selected source record identity, retained literally."
+      },
+      {
+        "column_name": "edition",
+        "column_type": "VARCHAR",
+        "description": "Explicit selected edition, or null when the evidence does not establish one."
+      },
+      {
+        "column_name": "input_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 digest of the exact retained source XML bytes."
+      },
+      {
+        "column_name": "source_locator",
+        "column_type": "VARCHAR",
+        "description": "Manifest source locator retained literally; not proof of acquisition time or edition."
+      },
+      {
+        "column_name": "occurrence_index",
+        "column_type": "VARCHAR",
+        "description": "Scanner observation index within this source input, stored as text."
+      },
+      {
+        "column_name": "source_path",
+        "column_type": "VARCHAR",
+        "description": "Source scanner XML path locating this observation."
+      },
+      {
+        "column_name": "element_tag",
+        "column_type": "VARCHAR",
+        "description": "Literal XML element tag, including namespace where present."
+      },
+      {
+        "column_name": "attributes_json",
+        "column_type": "VARCHAR",
+        "description": "Source element attributes serialized as JSON."
+      },
+      {
+        "column_name": "ancestors_json",
+        "column_type": "VARCHAR",
+        "description": "Scanner-retained XML ancestor context serialized as JSON."
+      },
+      {
+        "column_name": "observation_kind",
+        "column_type": "VARCHAR",
+        "description": "Native reference shape reported by the owner scanner."
+      },
+      {
+        "column_name": "href",
+        "column_type": "VARCHAR",
+        "description": "Literal native href, when the observation supplies one."
+      },
+      {
+        "column_name": "text",
+        "column_type": "VARCHAR",
+        "description": "Complete scanner-retained text for this observation; interpretation may cover only part."
+      },
+      {
+        "column_name": "text_runs_json",
+        "column_type": "VARCHAR",
+        "description": "Source text runs and context retained by the scanner."
+      },
+      {
+        "column_name": "cfr_title",
+        "column_type": "VARCHAR",
+        "description": "Source-derived CFR title context, when present; not an inferred target title."
+      },
+      {
+        "column_name": "cfr_part",
+        "column_type": "VARCHAR",
+        "description": "Source-derived CFR part context, when present; part-only targets remain part-only."
+      },
+      {
+        "column_name": "interpretation_status",
+        "column_type": "VARCHAR",
+        "description": "Whether the selected native shape is supported or only partially interpreted; does not assert exhaustive extraction."
+      },
+      {
+        "column_name": "target_candidates_json",
+        "column_type": "VARCHAR",
+        "description": "Interpreted typed targets and optional pinned held-table resolution outcomes; preserves multiple candidates without multiplying observations."
+      },
+      {
+        "column_name": "rule_version",
+        "column_type": "VARCHAR",
+        "description": "Application scanner and interpretation rule version."
+      }
+    ],
+    "grain": "One source scanner observation per pinned XML input; multiple interpreted targets remain nested candidates.",
+    "identity_columns": [
+      "scope_id",
+      "input_sha256",
+      "occurrence_index"
+    ]
+  },
+  "native_legal_reference_reads": {
+    "table": "native_legal_reference_reads",
+    "label": "Native legal-reference selected-input reads",
+    "summary": "Records successful bounded source reads even when they produce no observations. Failed or incomplete inputs cannot replace prior output. Existing generation and source-evidence artifacts retain earlier captures; the current row represents the latest complete selected-shape read for its scope. Unsupported XML forms and unknown editions remain explicit.",
+    "coverage": "Sampled. Explicit retained-input manifests only; not a source-wide acquisition or completeness ledger.",
+    "kind": "sampled",
+    "measured_on": "2026-09-27",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "scope_id",
+        "column_type": "VARCHAR",
+        "description": "Stable source family/record/edition correction scope shared with native_legal_references."
+      },
+      {
+        "column_name": "source_family",
+        "column_type": "VARCHAR",
+        "description": "Source scanner family: ecfr or uscode."
+      },
+      {
+        "column_name": "source_record_key",
+        "column_type": "VARCHAR",
+        "description": "Caller-selected source record identity, retained literally."
+      },
+      {
+        "column_name": "edition",
+        "column_type": "VARCHAR",
+        "description": "Explicit selected edition, or null when unknown."
+      },
+      {
+        "column_name": "input_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 digest of exact retained XML bytes."
+      },
+      {
+        "column_name": "source_locator",
+        "column_type": "VARCHAR",
+        "description": "Literal manifest source locator, without implied acquisition date."
+      },
+      {
+        "column_name": "source_bytes",
+        "column_type": "VARCHAR",
+        "description": "Observed retained input byte length, stored as text."
+      },
+      {
+        "column_name": "occurrence_count",
+        "column_type": "VARCHAR",
+        "description": "Number of native scanner observations produced by this read, including zero."
+      },
+      {
+        "column_name": "read_status",
+        "column_type": "VARCHAR",
+        "description": "complete_selected_shapes means the selected scanner finished; it does not mean every legal-reference form is supported."
+      },
+      {
+        "column_name": "selected_shapes_json",
+        "column_type": "VARCHAR",
+        "description": "Explicit native XML forms selected for this read."
+      },
+      {
+        "column_name": "unsupported_shapes_json",
+        "column_type": "VARCHAR",
+        "description": "Known excluded forms; not a claim to enumerate every possible source shape."
+      },
+      {
+        "column_name": "manifest_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 digest of the retained manifest binding the input selection and optional target pins."
+      },
+      {
+        "column_name": "rule_version",
+        "column_type": "VARCHAR",
+        "description": "Application scanner and interpretation rule version."
+      }
+    ],
+    "grain": "One current complete selected-shape read per source/edition scope.",
+    "identity_columns": [
+      "scope_id"
+    ]
+  },
   "dockets": {
     "table": "dockets",
     "label": "Rulemaking dockets",
@@ -47,6 +244,41 @@
     "grain": null,
     "identity_columns": [
       "docket_id"
+    ],
+    "aggregate_checks": [
+      {
+        "name": "agency-docket",
+        "role": "input",
+        "grain": [
+          "agency_code"
+        ],
+        "population": "All held rows with non-NULL agency; zero-valued agency cells may originate in another input.",
+        "selection_policy": "Matching declared input bytes or one materialized/catalog export snapshot; fixed comment URLs require unchanged ETags around the read. Each check selects its own pins.",
+        "command": "uv run --frozen python scripts/check_table_joins.py --aggregate agency-docket",
+        "status": "available_check_not_a_live_measurement"
+      },
+      {
+        "name": "feed-dockets",
+        "role": "input",
+        "grain": [
+          "docket_id"
+        ],
+        "population": "One feed row per held docket row, including NULL docket identities.",
+        "selection_policy": "Matching declared input bytes or one materialized/catalog export snapshot; fixed comment URLs require unchanged ETags around the read. Each check selects its own pins.",
+        "command": "uv run --frozen python scripts/check_table_joins.py --aggregate feed-dockets",
+        "status": "available_check_not_a_live_measurement"
+      },
+      {
+        "name": "feed-comments",
+        "role": "input",
+        "grain": [
+          "docket_id"
+        ],
+        "population": "Comments on held docket rows only; SQL NULL dockets do not match; repeated dockets multiply as builder does.",
+        "selection_policy": "Matching declared input bytes or one materialized/catalog export snapshot; fixed comment URLs require unchanged ETags around the read. Each check selects its own pins.",
+        "command": "uv run --frozen python scripts/check_table_joins.py --aggregate feed-comments",
+        "status": "available_check_not_a_live_measurement"
+      }
     ]
   },
   "documents": {
@@ -111,7 +343,12 @@
       {
         "column_name": "attachments_json",
         "column_type": "VARCHAR",
-        "description": "JSON array of every downloadable rendition: `[{url, format, size}]`. Null when the document has no files."
+        "description": "JSON array of the main document's fileFormats renditions: `[{url, format, size}]`. This compatibility field does not contain separately listed attachment resources. Null when no main renditions were retained."
+      },
+      {
+        "column_name": "attachment_records_json",
+        "column_type": "VARCHAR",
+        "description": "Literal records from an explicitly read document attachment relationship, preserving attachment IDs, restrictions and alternative file formats. Null means the relationship was not read; an empty array means a validated complete read returned no attachments. A main document response alone cannot establish attachment absence."
       },
       {
         "column_name": "fr_doc_num",
@@ -152,6 +389,33 @@
     "grain": null,
     "identity_columns": [
       "document_id"
+    ],
+    "aggregate_checks": [
+      {
+        "name": "agency-document",
+        "role": "input",
+        "grain": [
+          "agency_code"
+        ],
+        "population": "All held rows with non-NULL agency; zero-valued agency cells may originate in another input.",
+        "selection_policy": "Matching declared input bytes or one materialized/catalog export snapshot; fixed comment URLs require unchanged ETags around the read. Each check selects its own pins.",
+        "command": "uv run --frozen python scripts/check_table_joins.py --aggregate agency-document",
+        "status": "available_check_not_a_live_measurement"
+      },
+      {
+        "name": "monthly-documents",
+        "role": "input",
+        "grain": [
+          "agency_code",
+          "year",
+          "month",
+          "document_type"
+        ],
+        "population": "Usable posted dates only; NULL, unparseable and year-zero dates omitted; NULL agency/type retained.",
+        "selection_policy": "Matching declared input bytes or one materialized/catalog export snapshot; fixed comment URLs require unchanged ETags around the read. Each check selects its own pins.",
+        "command": "uv run --frozen python scripts/check_table_joins.py --aggregate monthly-documents",
+        "status": "available_check_not_a_live_measurement"
+      }
     ]
   },
   "comments": {
@@ -172,6 +436,26 @@
         "column_name": "docket_id",
         "column_type": "VARCHAR",
         "description": "Source-supplied docket identifier for joining to `dockets.docket_id`. Null when the source does not identify a docket; mirror directory names and comment ID prefixes do not fill this field."
+      },
+      {
+        "column_name": "comment_on_document_id",
+        "column_type": "VARCHAR",
+        "description": "Literal Regulations.gov commentOnDocumentId: the named parent document, independently nullable from docket_id. No identifier-prefix inference."
+      },
+      {
+        "column_name": "comment_on_object_id",
+        "column_type": "VARCHAR",
+        "description": "Literal commentOn in the native object-ID namespace; not interchangeable with a public document key."
+      },
+      {
+        "column_name": "original_document_id",
+        "column_type": "VARCHAR",
+        "description": "Literal originalDocumentId, retained as an unresolved legacy source reference."
+      },
+      {
+        "column_name": "comment_reference_values_json",
+        "column_type": "VARCHAR",
+        "description": "JSON map containing only present source parent-reference fields, preserving null and empty values. {} means the source was read and fields were absent; SQL NULL means legacy or unread."
       },
       {
         "column_name": "agency_code",
@@ -252,6 +536,22 @@
     "grain": null,
     "identity_columns": [
       "comment_id"
+    ],
+    "aggregate_checks": [
+      {
+        "name": "comments-index",
+        "role": "input",
+        "grain": [
+          "agency_code",
+          "docket_id",
+          "year",
+          "month"
+        ],
+        "population": "All held comment rows, including NULL cohort keys; strict timestamp conversion as index builder.",
+        "selection_policy": "Matching declared input bytes or one materialized/catalog export snapshot; fixed comment URLs require unchanged ETags around the read. Each check selects its own pins.",
+        "command": "uv run --frozen python scripts/check_table_joins.py --aggregate comments-index",
+        "status": "available_check_not_a_live_measurement"
+      }
     ]
   },
   "comments_index": {
@@ -290,7 +590,50 @@
       }
     ],
     "grain": null,
-    "identity_columns": []
+    "identity_columns": [
+      "agency_code",
+      "docket_id",
+      "year",
+      "month"
+    ],
+    "aggregate_checks": [
+      {
+        "name": "comments-index",
+        "role": "output",
+        "grain": [
+          "agency_code",
+          "docket_id",
+          "year",
+          "month"
+        ],
+        "population": "All held comment rows, including NULL cohort keys; strict timestamp conversion as index builder.",
+        "selection_policy": "Matching declared input bytes or one materialized/catalog export snapshot; fixed comment URLs require unchanged ETags around the read. Each check selects its own pins.",
+        "command": "uv run --frozen python scripts/check_table_joins.py --aggregate comments-index",
+        "status": "available_check_not_a_live_measurement"
+      },
+      {
+        "name": "agency-comment",
+        "role": "input",
+        "grain": [
+          "agency_code"
+        ],
+        "population": "All held rows with non-NULL agency; zero-valued agency cells may originate in another input.",
+        "selection_policy": "Matching declared input bytes or one materialized/catalog export snapshot; fixed comment URLs require unchanged ETags around the read. Each check selects its own pins.",
+        "command": "uv run --frozen python scripts/check_table_joins.py --aggregate agency-comment",
+        "status": "available_check_not_a_live_measurement"
+      },
+      {
+        "name": "feed-comments",
+        "role": "input",
+        "grain": [
+          "docket_id"
+        ],
+        "population": "Comments on held docket rows only; SQL NULL dockets do not match; repeated dockets multiply as builder does.",
+        "selection_policy": "Matching declared input bytes or one materialized/catalog export snapshot; fixed comment URLs require unchanged ETags around the read. Each check selects its own pins.",
+        "command": "uv run --frozen python scripts/check_table_joins.py --aggregate feed-comments",
+        "status": "available_check_not_a_live_measurement"
+      }
+    ]
   },
   "feed_summary": {
     "table": "feed_summary",
@@ -348,7 +691,33 @@
       }
     ],
     "grain": null,
-    "identity_columns": []
+    "identity_columns": [
+      "docket_id"
+    ],
+    "aggregate_checks": [
+      {
+        "name": "feed-dockets",
+        "role": "output",
+        "grain": [
+          "docket_id"
+        ],
+        "population": "One feed row per held docket row, including NULL docket identities.",
+        "selection_policy": "Matching declared input bytes or one materialized/catalog export snapshot; fixed comment URLs require unchanged ETags around the read. Each check selects its own pins.",
+        "command": "uv run --frozen python scripts/check_table_joins.py --aggregate feed-dockets",
+        "status": "available_check_not_a_live_measurement"
+      },
+      {
+        "name": "feed-comments",
+        "role": "output",
+        "grain": [
+          "docket_id"
+        ],
+        "population": "Comments on held docket rows only; SQL NULL dockets do not match; repeated dockets multiply as builder does.",
+        "selection_policy": "Matching declared input bytes or one materialized/catalog export snapshot; fixed comment URLs require unchanged ETags around the read. Each check selects its own pins.",
+        "command": "uv run --frozen python scripts/check_table_joins.py --aggregate feed-comments",
+        "status": "available_check_not_a_live_measurement"
+      }
+    ]
   },
   "agency_stats": {
     "table": "agency_stats",
@@ -381,7 +750,44 @@
       }
     ],
     "grain": null,
-    "identity_columns": []
+    "identity_columns": [
+      "agency_code"
+    ],
+    "aggregate_checks": [
+      {
+        "name": "agency-docket",
+        "role": "output",
+        "grain": [
+          "agency_code"
+        ],
+        "population": "All held rows with non-NULL agency; zero-valued agency cells may originate in another input.",
+        "selection_policy": "Matching declared input bytes or one materialized/catalog export snapshot; fixed comment URLs require unchanged ETags around the read. Each check selects its own pins.",
+        "command": "uv run --frozen python scripts/check_table_joins.py --aggregate agency-docket",
+        "status": "available_check_not_a_live_measurement"
+      },
+      {
+        "name": "agency-document",
+        "role": "output",
+        "grain": [
+          "agency_code"
+        ],
+        "population": "All held rows with non-NULL agency; zero-valued agency cells may originate in another input.",
+        "selection_policy": "Matching declared input bytes or one materialized/catalog export snapshot; fixed comment URLs require unchanged ETags around the read. Each check selects its own pins.",
+        "command": "uv run --frozen python scripts/check_table_joins.py --aggregate agency-document",
+        "status": "available_check_not_a_live_measurement"
+      },
+      {
+        "name": "agency-comment",
+        "role": "output",
+        "grain": [
+          "agency_code"
+        ],
+        "population": "All held rows with non-NULL agency; zero-valued agency cells may originate in another input.",
+        "selection_policy": "Matching declared input bytes or one materialized/catalog export snapshot; fixed comment URLs require unchanged ETags around the read. Each check selects its own pins.",
+        "command": "uv run --frozen python scripts/check_table_joins.py --aggregate agency-comment",
+        "status": "available_check_not_a_live_measurement"
+      }
+    ]
   },
   "agency_monthly_volume": {
     "table": "agency_monthly_volume",
@@ -419,13 +825,34 @@
       }
     ],
     "grain": null,
-    "identity_columns": []
+    "identity_columns": [
+      "agency_code",
+      "year",
+      "month",
+      "document_type"
+    ],
+    "aggregate_checks": [
+      {
+        "name": "monthly-documents",
+        "role": "output",
+        "grain": [
+          "agency_code",
+          "year",
+          "month",
+          "document_type"
+        ],
+        "population": "Usable posted dates only; NULL, unparseable and year-zero dates omitted; NULL agency/type retained.",
+        "selection_policy": "Matching declared input bytes or one materialized/catalog export snapshot; fixed comment URLs require unchanged ETags around the read. Each check selects its own pins.",
+        "command": "uv run --frozen python scripts/check_table_joins.py --aggregate monthly-documents",
+        "status": "available_check_not_a_live_measurement"
+      }
+    ]
   },
   "fr_docket_links": {
     "table": "fr_docket_links",
     "label": "Federal Register to docket links",
     "summary": "The Federal Register ↔ docket bridge: each `federal_register` row's `docket_ids_json` array exploded to one row per (docket_id, document_number, publication_date), carrying the FR display columns. Use this instead of an `ILIKE` scan over `federal_register.docket_ids_json` — it is sorted by `docket_id`, so `WHERE docket_id = ?` prunes row groups. This is the practical join from regulations.gov to the Federal Register using the Federal Register's own stated docket links. Built by `build_fr_docket_links`.",
-    "coverage": "Derived, and bounded by its inputs. 899,227 links from 603,693 dated Federal Register records to 612,091 docket ids, published 1994-01-03 to 2026-09-22 — the `federal_register` table's own range. The table equals a separate re-derivation from that parent row for row.",
+    "coverage": "Derived, and bounded by its inputs. 899,227 links from 603,693 dated Federal Register records to 612,091 docket ids, published 1994-01-03 to 2026-09-22 — the `federal_register` table's own range. The table equals a separate re-derivation from that parent row for row. This dated measurement predates the ordinal and normalization columns; those require rebuilding.",
     "kind": "derived",
     "measured_on": "2026-09-23",
     "data_quality": null,
@@ -433,7 +860,22 @@
       {
         "column_name": "docket_id",
         "column_type": "VARCHAR",
-        "description": "One docket ID extracted from the FR document's `docket_ids_json` array."
+        "description": "One literal docket ID extracted from the FR document's `docket_ids_json` array."
+      },
+      {
+        "column_name": "docket_source_ordinal",
+        "column_type": "BIGINT",
+        "description": "Zero-based position in the original docket array, before null/blank elements are filtered. Present only after rebuilding. Required with document_number and publication_date to identify an occurrence."
+      },
+      {
+        "column_name": "normalized_docket_candidates_json",
+        "column_type": "VARCHAR",
+        "description": "Owner-normalizer candidate interpretations of the literal docket value; an empty array means no supported interpretation, not absence of a docket."
+      },
+      {
+        "column_name": "docket_normalization_rule",
+        "column_type": "VARCHAR",
+        "description": "Digest-pinned owner identifier-normalization rule used to produce candidates."
       },
       {
         "column_name": "document_number",
@@ -511,7 +953,7 @@
         "description": "Executive order number, for presidential documents."
       }
     ],
-    "grain": null,
+    "grain": "One source docket-array occurrence per dated Federal Register record; docket_source_ordinal retains the original zero-based array position in rebuilt outputs. Older publications lack that column.",
     "identity_columns": []
   },
   "discovery_signals": {
@@ -545,7 +987,9 @@
       }
     ],
     "grain": null,
-    "identity_columns": []
+    "identity_columns": [
+      "agency_code"
+    ]
   },
   "cfr_sections": {
     "table": "cfr_sections",
@@ -613,7 +1057,10 @@
       }
     ],
     "grain": null,
-    "identity_columns": []
+    "identity_columns": [
+      "package_id",
+      "granule_id"
+    ]
   },
   "congress_bills": {
     "table": "congress_bills",
@@ -873,6 +1320,11 @@
         "column_name": "url_source",
         "column_type": "VARCHAR",
         "description": "Who stated url, and so which kind of URL it is: billstatus (the BILLSTATUS legislationUrl, the congress.gov page), congress_api (the Congress.gov detail record's legislationUrl, the same page), congress_api_list (the Congress.gov list route's url, the API resource), or inherited (this observation stated none and a host merge kept an earlier observation's value; its lineage is that earlier source, not a fresh read). NULL when url is NULL or the row predates this label."
+      },
+      {
+        "column_name": "cosponsors_outcome",
+        "column_type": "VARCHAR",
+        "description": "Source list state: absent, empty or populated; NULL means not read."
       }
     ],
     "grain": "One row per bill or resolution, as one BILLSTATUS document states it.",
@@ -1021,7 +1473,10 @@
       }
     ],
     "grain": null,
-    "identity_columns": []
+    "identity_columns": [
+      "rin",
+      "agenda_edition"
+    ]
   },
   "rule_targets": {
     "table": "rule_targets",
@@ -1654,6 +2109,21 @@
     "grain": "One lifecycle per docketed proceeding.",
     "identity_columns": [
       "proceeding_id"
+    ],
+    "aggregate_checks": [
+      {
+        "name": "lifecycle-outcomes",
+        "role": "input",
+        "grain": [
+          "agency_code",
+          "censor_date",
+          "outcome"
+        ],
+        "population": "All-stratum non-NULL outcomes only, plus global NULL-agency cell; separate routine strata are overlapping.",
+        "selection_policy": "Matching declared input bytes or one materialized/catalog export snapshot; fixed comment URLs require unchanged ETags around the read. Each check selects its own pins.",
+        "command": "uv run --frozen python scripts/check_table_joins.py --aggregate lifecycle-outcomes",
+        "status": "available_check_not_a_live_measurement"
+      }
     ]
   },
   "lifecycle_events": {
@@ -1871,6 +2341,21 @@
     "identity_columns": [
       "agency_code",
       "stratum"
+    ],
+    "aggregate_checks": [
+      {
+        "name": "lifecycle-outcomes",
+        "role": "output",
+        "grain": [
+          "agency_code",
+          "censor_date",
+          "outcome"
+        ],
+        "population": "All-stratum non-NULL outcomes only, plus global NULL-agency cell; separate routine strata are overlapping.",
+        "selection_policy": "Matching declared input bytes or one materialized/catalog export snapshot; fixed comment URLs require unchanged ETags around the read. Each check selects its own pins.",
+        "command": "uv run --frozen python scripts/check_table_joins.py --aggregate lifecycle-outcomes",
+        "status": "available_check_not_a_live_measurement"
+      }
     ]
   },
   "sam_entities": {
@@ -1979,7 +2464,10 @@
       }
     ],
     "grain": null,
-    "identity_columns": []
+    "identity_columns": [
+      "uei",
+      "entity_eft_indicator"
+    ]
   },
   "lobbying_filings": {
     "table": "lobbying_filings",
@@ -2062,7 +2550,9 @@
       }
     ],
     "grain": null,
-    "identity_columns": []
+    "identity_columns": [
+      "filing_uuid"
+    ]
   },
   "lobbying_activities": {
     "table": "lobbying_activities",
@@ -2110,7 +2600,10 @@
       }
     ],
     "grain": null,
-    "identity_columns": []
+    "identity_columns": [
+      "filing_uuid",
+      "activity_index"
+    ]
   },
   "lobbying_activity_lobbyists": {
     "table": "lobbying_activity_lobbyists",
@@ -2183,7 +2676,11 @@
       }
     ],
     "grain": null,
-    "identity_columns": []
+    "identity_columns": [
+      "filing_uuid",
+      "activity_index",
+      "lobbyist_index"
+    ]
   },
   "fec_committees": {
     "table": "fec_committees",
@@ -2622,7 +3119,11 @@
       }
     ],
     "grain": "One reported relationship or explicit absence state at one source location.",
-    "identity_columns": []
+    "identity_columns": [
+      "source_sha256",
+      "source_locator_json",
+      "relationship_type"
+    ]
   },
   "org_committee_links": {
     "table": "org_committee_links",
@@ -2786,7 +3287,9 @@
       }
     ],
     "grain": null,
-    "identity_columns": []
+    "identity_columns": [
+      "report_id"
+    ]
   },
   "crs_reports": {
     "table": "crs_reports",
@@ -2839,7 +3342,9 @@
       }
     ],
     "grain": null,
-    "identity_columns": []
+    "identity_columns": [
+      "report_id"
+    ]
   },
   "court_dockets": {
     "table": "court_dockets",
@@ -2967,7 +3472,9 @@
       }
     ],
     "grain": null,
-    "identity_columns": []
+    "identity_columns": [
+      "cl_docket_id"
+    ]
   },
   "court_docket_groups": {
     "table": "court_docket_groups",
@@ -3460,6 +3967,92 @@
       "opinion_id"
     ]
   },
+  "court_opinion_pdf_extractions": {
+    "table": "court_opinion_pdf_extractions",
+    "label": "Selected court opinion PDF text",
+    "summary": "Text from literally offered PDF URLs, tied to the selected opinion generation, native body fingerprint, capture evidence and extractor version. A native digest mismatch records a refusal without supplying text. Join opinion_id to court_opinions and cluster_id to court_opinion_clusters; this table does not infer case-name identity.",
+    "coverage": "Sampled. Three selected publisher PDFs were acquired on 2026-09-27. Each exact body matches its held CourtListener SHA-1 and has its own SHA-256 and extraction outcome. This is derived PDF text, separate from CourtListener native text fields and from the complete opinion index. Receipt: spicy-regs-court-cohort-20260927/bodies-receipt.json.",
+    "kind": "sampled",
+    "measured_on": "2026-09-27",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "opinion_id",
+        "column_type": "VARCHAR",
+        "description": "Native CourtListener opinion ID selected for acquisition."
+      },
+      {
+        "column_name": "cluster_id",
+        "column_type": "VARCHAR",
+        "description": "Native opinion cluster ID from that same held opinion row."
+      },
+      {
+        "column_name": "source_url",
+        "column_type": "VARCHAR",
+        "description": "Literal download_url offered by the selected opinion."
+      },
+      {
+        "column_name": "resolved_url",
+        "column_type": "VARCHAR",
+        "description": "Final response URL observed by the provider."
+      },
+      {
+        "column_name": "source_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of complete captured PDF bytes."
+      },
+      {
+        "column_name": "native_sha1",
+        "column_type": "VARCHAR",
+        "description": "Body SHA-1 asserted by the selected native opinion row."
+      },
+      {
+        "column_name": "actual_sha1",
+        "column_type": "VARCHAR",
+        "description": "SHA-1 independently computed over captured bytes."
+      },
+      {
+        "column_name": "sha1_matches",
+        "column_type": "VARCHAR",
+        "description": "Whether the captured bytes match the native fingerprint, stored as text."
+      },
+      {
+        "column_name": "text_content",
+        "column_type": "VARCHAR",
+        "description": "Derived PDF text when fingerprint and extraction checks succeed; null after a refusal."
+      },
+      {
+        "column_name": "pdf_extraction_results_json",
+        "column_type": "VARCHAR",
+        "description": "URL, body SHA-256, status, page count and error for the selected attempt."
+      },
+      {
+        "column_name": "observed_at",
+        "column_type": "VARCHAR",
+        "description": "Provider capture observation time."
+      },
+      {
+        "column_name": "extractor",
+        "column_type": "VARCHAR",
+        "description": "Application extraction implementation identity."
+      },
+      {
+        "column_name": "extractor_version",
+        "column_type": "VARCHAR",
+        "description": "Installed pypdf distribution version."
+      },
+      {
+        "column_name": "parent_opinion_publication_json",
+        "column_type": "VARCHAR",
+        "description": "Exact selected opinion family and its member metadata."
+      }
+    ],
+    "grain": "One retained PDF extraction per opinion and exact observed body.",
+    "identity_columns": [
+      "opinion_id",
+      "source_sha256"
+    ]
+  },
   "member_vote_terms": {
     "table": "member_vote_terms",
     "label": "Member vote terms",
@@ -3516,7 +4109,10 @@
       }
     ],
     "grain": null,
-    "identity_columns": []
+    "identity_columns": [
+      "vote_id",
+      "member_key"
+    ]
   },
   "usaspending_recipients": {
     "table": "usaspending_recipients",
@@ -3569,7 +4165,9 @@
       }
     ],
     "grain": null,
-    "identity_columns": []
+    "identity_columns": [
+      "recipient_id"
+    ]
   },
   "fcc_proceedings": {
     "table": "fcc_proceedings",
@@ -3652,15 +4250,17 @@
       }
     ],
     "grain": null,
-    "identity_columns": []
+    "identity_columns": [
+      "name"
+    ]
   },
   "fcc_filings": {
     "table": "fcc_filings",
     "label": "FCC filings",
     "summary": "One row per FCC ECFS filing — the FCC's comment equivalent: comments, reply comments, ex-parte notices, letters, and other submissions — ingested from the FCC ECFS public API (`/filings`) by `build_fcc_filings`. Requires an api.data.gov key (`DATA_GOV_API_KEY`). Incremental by `date_received`, deduped on `id_submission`; each window is pooled over whole walks until one is clean or the pool holds exactly the count ECFS aggregates for it. Because ECFS holds tens of millions of filings, a first run with no prior table is bounded to the trailing 30 days; deeper history is backfilled in slices via `FCC_SINCE` and/or scoped to specific proceedings via `FCC_PROCEEDINGS`. All columns are stored as VARCHAR, array fields serialized as JSON strings.",
-    "coverage": "Window. 5,137 filings received 2026-08-24 to 2026-09-22, the bounded first run; every id and cell matched the raw pages. The rollup merges incrementally, so this is the history accumulated so far and not the ECFS archive.",
+    "coverage": "Window. All 5,780 held filings were replayed against retained or reacquired native source records on 2026-09-27 and published as generation 9c87b600aa7b5847. One proceeding-number cell was explicitly corrected from the native source; every other prior cell was preserved. Three selected offered PDFs have retained extraction diagnostics. This qualifies the held population, not the ECFS archive or complete attachment text. Receipt: spicy-regs-fcc-complete-20260927/receipt-final.json.",
     "kind": "window",
-    "measured_on": "2026-09-23",
+    "measured_on": "2026-09-27",
     "data_quality": null,
     "columns": [
       {
@@ -3752,10 +4352,27 @@
         "column_name": "filing_url",
         "column_type": "VARCHAR",
         "description": "Canonical fcc.gov URL for the filing (`https://www.fcc.gov/ecfs/filing/<id_submission>`)."
+      },
+      {
+        "column_name": "native_fields_json",
+        "column_type": "VARCHAR",
+        "description": "Selected named native ECFS fields retained as JSON, preserving absent keys, nulls, empty arrays, objects and roles. SQL null in older output means unread legacy data; rebuilding is required. Not the complete API response."
+      },
+      {
+        "column_name": "native_fields_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of the exact native_fields_json string; identifies retained field bytes, not the complete API response."
+      },
+      {
+        "column_name": "pdf_extraction_results_json",
+        "column_type": "VARCHAR",
+        "description": "Outcomes for selected offered attachment URLs, retaining source SHA-256, page count and extraction status. Null when no attempt is retained. These selected attempts do not establish complete filing text coverage."
       }
     ],
     "grain": null,
-    "identity_columns": []
+    "identity_columns": [
+      "id_submission"
+    ]
   },
   "bill_actions": {
     "table": "bill_actions",
@@ -3907,6 +4524,98 @@
     "identity_columns": [
       "bill_id",
       "system_code"
+    ]
+  },
+  "bill_cosponsors": {
+    "table": "bill_cosponsors",
+    "label": "Bill cosponsor source occurrences",
+    "summary": "One cosponsor occurrence in one retained BILLSTATUS observation, keyed by the bill, the input digest and the list ordinal. A member listed twice keeps two rows; a successfully read absent or empty list replaces the bill's prior rows.",
+    "coverage": "Sampled. Retained Congress 119 House and Senate BILLSTATUS archives were replayed on 2026-09-27 for source observations matching the held bill edition, publishing 146,248 source occurrences, including 67 positive withdrawal dates. Every native field reconciles; bills outside the selected replay remain unread. Receipt: legislative-joins-2026-09-27/t05-candidate.json.",
+    "kind": "sampled",
+    "measured_on": "2026-09-27",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "bill_id",
+        "column_type": "VARCHAR",
+        "description": "The bill whose source lists the cosponsor."
+      },
+      {
+        "column_name": "input_sha256",
+        "column_type": "VARCHAR",
+        "description": "Digest of the complete input XML bytes, not the reserialized item."
+      },
+      {
+        "column_name": "cosponsor_index",
+        "column_type": "VARCHAR",
+        "description": "Zero-based position in the source cosponsors list, including repeated members."
+      },
+      {
+        "column_name": "bioguide_id",
+        "column_type": "VARCHAR",
+        "description": "Source member identifier; its presence does not prove target resolution."
+      },
+      {
+        "column_name": "full_name",
+        "column_type": "VARCHAR",
+        "description": "The source's fullName literal."
+      },
+      {
+        "column_name": "sponsorship_date",
+        "column_type": "VARCHAR",
+        "description": "Literal sponsorshipDate; absent is NULL and present empty is an empty string."
+      },
+      {
+        "column_name": "sponsorship_date_status",
+        "column_type": "VARCHAR",
+        "description": "Calendar spelling status: absent, empty, valid or invalid."
+      },
+      {
+        "column_name": "is_original_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal isOriginalCosponsor text, without Boolean coercion."
+      },
+      {
+        "column_name": "sponsorship_withdrawn_date",
+        "column_type": "VARCHAR",
+        "description": "Literal sponsorshipWithdrawnDate; retained BILLSTATUS source observations include positive dates."
+      },
+      {
+        "column_name": "sponsorship_withdrawn_date_status",
+        "column_type": "VARCHAR",
+        "description": "Calendar spelling status, not confirmation of a withdrawal event."
+      },
+      {
+        "column_name": "party",
+        "column_type": "VARCHAR",
+        "description": "Party as the cosponsor entry states it."
+      },
+      {
+        "column_name": "state",
+        "column_type": "VARCHAR",
+        "description": "State as the cosponsor entry states it."
+      },
+      {
+        "column_name": "district",
+        "column_type": "VARCHAR",
+        "description": "District as the cosponsor entry states it."
+      },
+      {
+        "column_name": "source_path",
+        "column_type": "VARCHAR",
+        "description": "XPath to the occurrence in the retained XML."
+      },
+      {
+        "column_name": "source_xml",
+        "column_type": "VARCHAR",
+        "description": "Reserialized source item preserving other fields; original bytes are pinned separately."
+      }
+    ],
+    "grain": "One cosponsor occurrence in one retained BILLSTATUS observation.",
+    "identity_columns": [
+      "bill_id",
+      "input_sha256",
+      "cosponsor_index"
     ]
   },
   "bill_publisher_summaries": {
@@ -5635,7 +6344,7 @@
       {
         "column_name": "term_party",
         "column_type": "VARCHAR",
-        "description": "Party for this term.  One value per term, not a history: a mid-term switch collapses."
+        "description": "The separate source term-level party assertion, not a dated history."
       },
       {
         "column_name": "term_district",
@@ -5646,12 +6355,100 @@
         "column_name": "observed_at",
         "column_type": "VARCHAR",
         "description": "The parent capture's instant, carried so a term list versions with the member row it came from."
+      },
+      {
+        "column_name": "party_affiliations_state",
+        "column_type": "VARCHAR",
+        "description": "Nested list state: unread, absent, null, empty or populated."
       }
     ],
     "grain": "One row per term a legislator served, in the crosswalk's own order.",
     "identity_columns": [
       "bioguide_id",
       "term_index"
+    ]
+  },
+  "member_party_affiliations": {
+    "table": "member_party_affiliations",
+    "label": "Member party affiliation source intervals",
+    "summary": "One member, input digest, term index and affiliation index. Literal dates and their parsing states remain separate from any dated membership decision.",
+    "coverage": "Sampled. The complete retained September 25 community crosswalk captures were replayed and published on September 27 as members generation 00cad6cf5255d605. All 59 source affiliation occurrences were reconciled, and exact public hashes and rows verified. Member and term identities and existing native values were preserved. This is the selected community crosswalk, not an official or newly acquired roster. Receipt: spicy-regs-t19-members-20260927/public-readback.json.",
+    "kind": "sampled",
+    "measured_on": "2026-09-27",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "bioguide_id",
+        "column_type": "VARCHAR",
+        "description": "The source's member identifier."
+      },
+      {
+        "column_name": "input_sha256",
+        "column_type": "VARCHAR",
+        "description": "Digest of the complete retained crosswalk JSON bytes."
+      },
+      {
+        "column_name": "term_index",
+        "column_type": "VARCHAR",
+        "description": "Zero-based source term position."
+      },
+      {
+        "column_name": "affiliation_index",
+        "column_type": "VARCHAR",
+        "description": "Zero-based affiliation position within the source term."
+      },
+      {
+        "column_name": "party",
+        "column_type": "VARCHAR",
+        "description": "Literal nested party; NULL is not filled from the term-level party."
+      },
+      {
+        "column_name": "affiliation_start",
+        "column_type": "VARCHAR",
+        "description": "Literal nested start date; interval boundary policy belongs to the consumer."
+      },
+      {
+        "column_name": "affiliation_end",
+        "column_type": "VARCHAR",
+        "description": "Literal nested end date; a missing end does not imply an open interval."
+      },
+      {
+        "column_name": "start_status",
+        "column_type": "VARCHAR",
+        "description": "Calendar spelling status: absent, empty, valid or invalid."
+      },
+      {
+        "column_name": "end_status",
+        "column_type": "VARCHAR",
+        "description": "Calendar spelling status: absent, empty, valid or invalid."
+      },
+      {
+        "column_name": "term_party",
+        "column_type": "VARCHAR",
+        "description": "The separate term-level party assertion, not a dated fallback."
+      },
+      {
+        "column_name": "source_path",
+        "column_type": "VARCHAR",
+        "description": "JSON pointer to the affiliation in the retained capture."
+      },
+      {
+        "column_name": "source_json",
+        "column_type": "VARCHAR",
+        "description": "Complete affiliation object, retaining absent, null and unknown fields."
+      },
+      {
+        "column_name": "observed_at",
+        "column_type": "VARCHAR",
+        "description": "Caller-supplied capture instant; not a source affiliation date."
+      }
+    ],
+    "grain": "One nested party affiliation in one retained community-crosswalk observation.",
+    "identity_columns": [
+      "bioguide_id",
+      "input_sha256",
+      "term_index",
+      "affiliation_index"
     ]
   },
   "committee_reports": {
@@ -7438,10 +8235,10 @@
     "table": "house_communications",
     "label": "House executive communications",
     "summary": "One row per House executive communication, as the Congress.gov house-communication list and detail routes state it, keyed on the publisher's own address. The regulatory bridge: `is_rulemaking`, the cited `legal_authority`, the committee referral, the matching House requirement and the RIN read from `report_nature`. Complete Federal Register joins unnest `regulation_id_numbers_json` and retain number plus publication date; the first-value scalar `federal_register.rin` omits other RINs. All columns are stored as VARCHAR.",
-    "coverage": "Sampled, accumulating. The adoption run used 30 keyed requests: 20 list pages and 10 details under the declared detail cap. The list declared and served 4,975 records, with 9 repeats and 4,966 distinct identities; merging its own 4,963-row prior retained 4,969 rows. All 4,969 now state the publisher source_route, 1,010 have details and 3,959 remain list-only. No Record backfill request was made and every Record evidence column remains NULL. Receipt: `rollups-0-24-0-adoption-2026-09-20/`. Local output only; not uploaded.",
+    "coverage": "Sampled. The pinned 5,006-row fork selection was republished on September 27 as generation 94d28167db0a56a3, preserving all existing rows and columns. All 5,006 retained details were interpreted with the shared RIN reader: 2,076 occurrences across 2,046 rows. Every span and field digest was checked, and exact public bytes and counts verified. Source qualification is inherited from the prior generation; no new source requests were made. Receipt: spicy-regs-t18-refresh-20260927/.",
     "kind": "sampled",
-    "measured_on": "2026-09-20",
-    "data_quality": "A row whose `committees_json` is NULL is list-only: its detail has not been read yet (not reached under the cap, or refused), and every detail-only column is NULL with it, including the three RIN columns, because the rule was not run. A row whose detail was read states `[]` where the detail lists none. The RIN is an interpretation: `rin_rule` names the rule that fired (`report_nature_rin_label`) or `unmatched`, and `rin_matched_text` is the exact text, so a false positive is readable from the row. The publisher repeats a record across a page boundary (15 of 4,975 on the 119th); the table holds each identity once. The shared pooled list reader must settle each query by distinct identity before any output is replaced. Every existing publisher row receives source_route=congress-gov-detail. The four Record evidence columns remain NULL until the separate Record backfill, about 11,000 GovInfo requests, is acquired in the next rollup. In that future reconstruction submitting_official and submitting_agency must both remain NULL: held-out precision was 85.3% and 88.4%, below the declared 90% gate. The original sentence stays in record_entry_text.",
+    "measured_on": "2026-09-27",
+    "data_quality": "A row whose `committees_json` is NULL is list-only: its detail has not been read yet (not reached under the cap, or refused), and every detail-only column is NULL with it, including the scalar and occurrence RIN columns, because the rule was not run. A row whose detail was read states `[]` where the detail lists none. The RIN is an interpretation: `rin_rule` names the rule that fired (`report_nature_rin_label`) or `unmatched`, and `rin_matched_text` is the exact text, so a false positive is readable from the row. The publisher repeats a record across a page boundary (15 of 4,975 on the 119th); the table holds each identity once. The shared pooled list reader must settle each query by distinct identity before any output is replaced. Every existing publisher row receives source_route=congress-gov-detail. The four Record evidence columns remain NULL until the separate Record backfill, about 11,000 GovInfo requests, is acquired in the next rollup. In that future reconstruction submitting_official and submitting_agency must both remain NULL: held-out precision was 85.3% and 88.4%, below the declared 90% gate. The original sentence stays in record_entry_text.",
     "columns": [
       {
         "column_name": "communication_id",
@@ -7557,6 +8354,11 @@
         "column_name": "rin",
         "column_type": "VARCHAR",
         "description": "The Regulation Identifier Number read from report_nature, where the rule found one."
+      },
+      {
+        "column_name": "rin_occurrences_json",
+        "column_type": "VARCHAR",
+        "description": "All interpreted RIN occurrences supplied by the consumer, with exact field spans and digest. NULL means unread; [] means the supplied field was read and contained no RIN."
       },
       {
         "column_name": "rin_rule",
@@ -8688,7 +9490,7 @@
       {
         "column_name": "target_rule",
         "column_type": "VARCHAR",
-        "description": "How the key was reached.  The rule's own name for every kind but `committee_name`, where it is the resolution route: `exact` and `roster_prefix` are lookups in the roster vocabulary, while `name_prefix` and `sibling_prefix` are inferences from the printed text of this one document.  A consumer wanting only roster lookups filters on this column rather than on `target_resolved`."
+        "description": "How the key was reached. Bill routes distinguish inline_congress, congress_subheading, document_fallback, unstated and document_fallback_refused after the bill_number: prefix. A document fallback is context supplied by the caller, not proof of historical applicability. Other kinds use the rule name except `committee_name`, where it is the resolution route: `exact` and `roster_prefix` are lookups in the roster vocabulary, while `name_prefix` and `sibling_prefix` are inferences from the printed text of this one document.  A consumer wanting only roster lookups filters on this column rather than on `target_resolved`."
       },
       {
         "column_name": "stated_by_index",
@@ -8723,6 +9525,7 @@
     ],
     "grain": "One row per occurrence of one cited key in one document's text: the key, the exact text that named it, and the character span it was read at.",
     "identity_columns": [
+      "document_kind",
       "document_key",
       "text_sha256",
       "cite_kind",
@@ -8976,7 +9779,10 @@
       }
     ],
     "grain": null,
-    "identity_columns": []
+    "identity_columns": [
+      "congress",
+      "bill_type"
+    ]
   },
   "bill_vote_references": {
     "table": "bill_vote_references",
@@ -9039,7 +9845,14 @@
       }
     ],
     "grain": null,
-    "identity_columns": []
+    "identity_columns": [
+      "bill_id",
+      "chamber",
+      "congress",
+      "session",
+      "roll_number",
+      "action_index"
+    ]
   },
   "bill_family_backfills": {
     "table": "bill_family_backfills",
@@ -9082,7 +9895,11 @@
       }
     ],
     "grain": null,
-    "identity_columns": []
+    "identity_columns": [
+      "congress",
+      "bill_type",
+      "number"
+    ]
   },
   "bill_family_backfill_walks": {
     "table": "bill_family_backfill_walks",
@@ -9145,7 +9962,10 @@
       }
     ],
     "grain": null,
-    "identity_columns": []
+    "identity_columns": [
+      "congress",
+      "bill_type"
+    ]
   },
   "committee_report_reads": {
     "table": "committee_report_reads",
@@ -9183,6 +10003,8 @@
       }
     ],
     "grain": null,
-    "identity_columns": []
+    "identity_columns": [
+      "package_id"
+    ]
   }
 }

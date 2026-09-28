@@ -183,7 +183,7 @@ def test_both_roster_originals_reach_member_and_term_outputs(tmp_path, monkeypat
         clock=lambda: NOW,
         transport=httpx.MockTransport(respond),
     ) as owner:
-        members, terms = build_members(tmp_path, acquirer=owner, evidence=evidence)
+        members, terms, affiliations = build_members(tmp_path, acquirer=owner, evidence=evidence)
     member_rows = pq.read_table(members).to_pylist()
     term_rows = pq.read_table(terms).to_pylist()
     assert {row["bioguide_id"] for row in member_rows} == {"A000001", "B000001"}
@@ -671,3 +671,27 @@ def test_shared_congress_factory_selects_observer_without_budget_change(tmp_path
     with listing_reader(KEY) as ordinary, listing_reader(KEY, evidence=evidence) as retained:
         assert isinstance(retained, RetainedCongressListingReader)
         assert retained.budget == ordinary.budget
+
+
+def test_affiliation_refresh_replaces_digest_history_and_clears_empty(tmp_path, monkeypatch):
+    monkeypatch.delenv("R2_PUBLIC_URL", raising=False)
+    record = json.loads(roster())[0]
+    record["terms"][0]["party_affiliations"] = [
+        {"party": "Democrat", "start": "2025-01-03", "end": "2025-04-01"},
+        {"party": "Republican", "start": "2025-03-01"},
+    ]
+    def run(records):
+        raw = json.dumps(records).encode()
+        with RetainedLegislatorsAcquirer(
+            evidence=CaptureEvidence(tmp_path / ("populated" if records[0]["terms"][0]["party_affiliations"] else "empty"), "members"),
+            budget=LegislatorsBudget(4, 1024 * 1024, 10.0, 0.0), clock=lambda: NOW,
+            transport=httpx.MockTransport(lambda request: httpx.Response(
+                200, stream=httpx.ByteStream(raw if "current" in request.url.path else b"[]"),
+                headers={"content-type": "application/json"})),
+        ) as owner:
+            return build_members(tmp_path, acquirer=owner)[2]
+    rows = pq.read_table(run([record])).to_pylist()
+    assert [row["party"] for row in rows] == ["Democrat", "Republican"]
+    assert rows[0]["affiliation_end"] > rows[1]["affiliation_start"]
+    record["terms"][0]["party_affiliations"] = []
+    assert pq.read_table(run([record])).num_rows == 0

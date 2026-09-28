@@ -14,7 +14,7 @@ from __future__ import annotations
 import json
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence, Set
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import date, timedelta
 from operator import itemgetter
 from pathlib import Path
@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING, Any
 
 import httpx
 from loguru import logger
-from spicy_docs.interpretation.communication_rin import rin_from_report_nature
+from spicy_docs.interpretation.communication_rin import rin_from_report_nature, rin_occurrences_from_report_nature
 from spicy_docs.reading.paged_json import PagedJsonSourceError
 from spicy_docs.schemas import TABLE_CONTRACTS
 from spicy_docs.schemas.congress_index_tables import (
@@ -30,6 +30,7 @@ from spicy_docs.schemas.congress_index_tables import (
     shape_house_communication,
     shape_nomination,
     shape_record_issue,
+    shape_record_communication,
     shape_treaty,
 )
 from spicy_docs.schemas.tables import Row, TableContractError
@@ -114,7 +115,30 @@ def _record_units(congresses: Sequence[int], _windows: Mapping[int, str]) -> Seq
 
 def _shape_communication(listed: Mapping[str, Any], detail: Mapping[str, Any] | None) -> Row:
     rin = None if detail is None else rin_from_report_nature(detail.get("reportNature"))
-    return shape_house_communication(listed, detail, rin=rin)
+    occurrences = None if detail is None else [asdict(item) for item in rin_occurrences_from_report_nature(detail.get("reportNature"))]
+    return shape_house_communication(listed, detail, rin=rin, rin_occurrences=occurrences)
+
+
+def _shape_record_communication(entry: Any, *, congress: int, record_date: str) -> Row:
+    """Interpret a retained Record field before passing facts to its shaper."""
+    return shape_record_communication(entry, congress=congress, record_date=record_date,
+        rin=rin_from_report_nature(entry.report_nature),
+        rin_occurrences=[asdict(item) for item in rin_occurrences_from_report_nature(entry.report_nature)])
+
+
+def _repair_rin_occurrences(table: Any) -> Any:
+    """Upgrade unchanged held rows using retained fields, without origin reads."""
+    import pyarrow as pa
+
+    index = table.schema.get_field_index("rin_occurrences_json")
+    values = table.column(index).to_pylist() if index >= 0 else [None] * len(table)
+    fields = table["report_nature"].to_pylist()
+    markers = table["committees_json"].to_pylist()
+    for position, (value, field, marker) in enumerate(zip(values, fields, markers, strict=True)):
+        if value is None and marker is not None:
+            values[position] = json.dumps([asdict(item) for item in rin_occurrences_from_report_nature(field)])
+    column = pa.array(values, type=pa.string())
+    return table.set_column(index, "rin_occurrences_json", column) if index >= 0 else table.append_column("rin_occurrences_json", column)
 
 
 def _communication_query(row: Row) -> Mapping[str, Any]:
@@ -471,7 +495,7 @@ def build_index_table(
         import pyarrow.parquet as pq
         from spicy_docs.schemas.congress_index_tables import COMMUNICATION_SOURCE_ROUTES
 
-        table = pq.read_table(output)
+        table = _repair_rin_occurrences(pq.read_table(output))
         index = table.schema.get_field_index("source_route")
         table = table.set_column(
             index, "source_route", pc.fill_null(table["source_route"], COMMUNICATION_SOURCE_ROUTES[0])

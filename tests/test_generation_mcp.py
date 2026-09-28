@@ -80,7 +80,7 @@ def connection_fixture(monkeypatch, index, locations, *, tables=("a", "b", "lega
     monkeypatch.setattr(mcp_server.duckdb, "connect", Connection)
     monkeypatch.setattr(pub, "load_index", lambda url: index)
     serve_documents(monkeypatch, documents or {})
-    monkeypatch.setattr(mcp_server, "_apply_security_settings", lambda con: None)
+    monkeypatch.setattr(mcp_server, "_apply_security_settings", lambda con, allowed_paths=None: None)
     monkeypatch.setattr(mcp_server, "TABLES", tables)
     return built
 
@@ -237,7 +237,9 @@ def test_rulemaking_views_read_the_pointers_snapshot_and_a_moved_pointer_at_the_
     assert second.inner.execute(query).fetchall() == [("EPA-B",)]
     assert first.inner.execute(query).fetchall() == [("EPA-A",)]  # a connection keeps the snapshot it pinned
     status = mcp_server._publication_status(second.cursor())
-    assert status["tables"] == list(dd.RULEMAKING_TABLES)
+    assert [name for name in status["tables"] if name in dd.RULEMAKING_TABLES] == list(dd.RULEMAKING_TABLES)
+    assert all(status["publication"][name]["status"] == "derived_view"
+               for name in status["tables"] if name not in dd.RULEMAKING_TABLES)
     assert status["publication"]["lifecycle_events"] == {
         "status": "rulemaking_snapshot",
         "snapshot_id": SNAPSHOT_B,
@@ -273,8 +275,8 @@ def test_each_rulemaking_view_describes_as_the_dictionary_declares(tmp_path, mon
             actual == declared[table] == [(c["column_name"], c["column_type"]) for c in described["declared_columns"]]
         )
         assert described["publication"]["status"] == "rulemaking_snapshot"
-    # Every helper of every call reads the connection's two pins; each was parsed once, the first time.
-    assert mcp_server._parsed_pin.cache_info().misses == 2
+    # Source selection, rulemaking selection and the relationship registry are each parsed once.
+    assert mcp_server._parsed_pin.cache_info().misses == 3
     typed = dict(declared["rulemaking_lifecycles"])
     assert (typed["proposal_date"], typed["duration_days"], typed["pre_2008_coverage"]) == (
         "DATE",

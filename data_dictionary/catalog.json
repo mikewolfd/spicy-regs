@@ -3,6 +3,61 @@
   "declares": "supported table schemas; publication and search availability are verified separately",
   "classes": [
     {
+      "table": "native_legal_references",
+      "label": "Native legal-reference observations",
+      "summary": "Selected eCFR AUTH/SOURCE notes and U.S. Code href/source-credit observations, retaining source XML paths and digests. Complete reads replace the selected source/edition scope, including successful empty corrections. Candidate target matches concern held classification rows, not independently acquired legal text. Unparsed prose and unsupported forms remain visible; no universal extraction or historical completeness is implied.",
+      "coverage": "Sampled. Generation 53755e3e0076dfa5 publishes 881 observations from complete retained eCFR Title 1 requested as of 2026-08-10 and USC Title 1 release 119-103. Exact enclosing input bytes and source receipts qualify both selections. Selected public target tables resolve 19 occurrences; missing, unsupported and unqueried targets remain explicit. Receipt: native-legal-full-2026-09-27/resolved-verification.json.",
+      "kind": "sampled",
+      "measured_on": "2026-09-27",
+      "data_quality": null,
+      "columns": [
+        "scope_id",
+        "source_family",
+        "source_record_key",
+        "edition",
+        "input_sha256",
+        "source_locator",
+        "occurrence_index",
+        "source_path",
+        "element_tag",
+        "attributes_json",
+        "ancestors_json",
+        "observation_kind",
+        "href",
+        "text",
+        "text_runs_json",
+        "cfr_title",
+        "cfr_part",
+        "interpretation_status",
+        "target_candidates_json",
+        "rule_version"
+      ]
+    },
+    {
+      "table": "native_legal_reference_reads",
+      "label": "Native legal-reference selected-input reads",
+      "summary": "Records successful bounded source reads even when they produce no observations. Failed or incomplete inputs cannot replace prior output. Existing generation and source-evidence artifacts retain earlier captures; the current row represents the latest complete selected-shape read for its scope. Unsupported XML forms and unknown editions remain explicit.",
+      "coverage": "Sampled. Explicit retained-input manifests only; not a source-wide acquisition or completeness ledger.",
+      "kind": "sampled",
+      "measured_on": "2026-09-27",
+      "data_quality": null,
+      "columns": [
+        "scope_id",
+        "source_family",
+        "source_record_key",
+        "edition",
+        "input_sha256",
+        "source_locator",
+        "source_bytes",
+        "occurrence_count",
+        "read_status",
+        "selected_shapes_json",
+        "unsupported_shapes_json",
+        "manifest_sha256",
+        "rule_version"
+      ]
+    },
+    {
       "table": "dockets",
       "label": "Rulemaking dockets",
       "summary": "One row per regulations.gov docket. A docket is the top-level folder a federal agency opens for a rulemaking or other action; it groups the documents the agency posts and the public comments it receives.",
@@ -40,6 +95,7 @@
         "comment_end_date",
         "file_url",
         "attachments_json",
+        "attachment_records_json",
         "fr_doc_num",
         "withdrawn",
         "reason_withdrawn",
@@ -60,6 +116,10 @@
       "columns": [
         "comment_id",
         "docket_id",
+        "comment_on_document_id",
+        "comment_on_object_id",
+        "original_document_id",
+        "comment_reference_values_json",
         "agency_code",
         "first_name",
         "last_name",
@@ -148,12 +208,15 @@
       "table": "fr_docket_links",
       "label": "Federal Register to docket links",
       "summary": "The Federal Register ↔ docket bridge: each `federal_register` row's `docket_ids_json` array exploded to one row per (docket_id, document_number, publication_date), carrying the FR display columns. Use this instead of an `ILIKE` scan over `federal_register.docket_ids_json` — it is sorted by `docket_id`, so `WHERE docket_id = ?` prunes row groups. This is the practical join from regulations.gov to the Federal Register using the Federal Register's own stated docket links. Built by `build_fr_docket_links`.",
-      "coverage": "Derived, and bounded by its inputs. 899,227 links from 603,693 dated Federal Register records to 612,091 docket ids, published 1994-01-03 to 2026-09-22 — the `federal_register` table's own range. The table equals a separate re-derivation from that parent row for row.",
+      "coverage": "Derived, and bounded by its inputs. 899,227 links from 603,693 dated Federal Register records to 612,091 docket ids, published 1994-01-03 to 2026-09-22 — the `federal_register` table's own range. The table equals a separate re-derivation from that parent row for row. This dated measurement predates the ordinal and normalization columns; those require rebuilding.",
       "kind": "derived",
       "measured_on": "2026-09-23",
       "data_quality": null,
       "columns": [
         "docket_id",
+        "docket_source_ordinal",
+        "normalized_docket_candidates_json",
+        "docket_normalization_rule",
         "document_number",
         "title",
         "abstract",
@@ -266,7 +329,8 @@
         "related_bills_json",
         "related_bill_count",
         "cbo_cost_estimates_outcome",
-        "url_source"
+        "url_source",
+        "cosponsors_outcome"
       ]
     },
     {
@@ -1020,6 +1084,31 @@
       ]
     },
     {
+      "table": "court_opinion_pdf_extractions",
+      "label": "Selected court opinion PDF text",
+      "summary": "Text from literally offered PDF URLs, tied to the selected opinion generation, native body fingerprint, capture evidence and extractor version. A native digest mismatch records a refusal without supplying text. Join opinion_id to court_opinions and cluster_id to court_opinion_clusters; this table does not infer case-name identity.",
+      "coverage": "Sampled. Three selected publisher PDFs were acquired on 2026-09-27. Each exact body matches its held CourtListener SHA-1 and has its own SHA-256 and extraction outcome. This is derived PDF text, separate from CourtListener native text fields and from the complete opinion index. Receipt: spicy-regs-court-cohort-20260927/bodies-receipt.json.",
+      "kind": "sampled",
+      "measured_on": "2026-09-27",
+      "data_quality": null,
+      "columns": [
+        "opinion_id",
+        "cluster_id",
+        "source_url",
+        "resolved_url",
+        "source_sha256",
+        "native_sha1",
+        "actual_sha1",
+        "sha1_matches",
+        "text_content",
+        "pdf_extraction_results_json",
+        "observed_at",
+        "extractor",
+        "extractor_version",
+        "parent_opinion_publication_json"
+      ]
+    },
+    {
       "table": "member_vote_terms",
       "label": "Member vote terms",
       "summary": "The term each member vote counts toward (delivery decision 2). A vote on `vote_day` counts toward the term with `term_start <= vote_day < term_end`, so the day one Congress ends and the next begins belongs to the new term. Only where that finds none is an inclusive end accepted, and only if exactly one term qualifies. The term type follows the chamber (`rep`, `sen`); a term with no end date never matches. Built by `build_member_vote_terms` from `member_votes`, `members` (a Senate row's LIS id resolves to its Bioguide id there) and `member_terms`. Join to `member_votes` on (`vote_id`, `member_key`) and to `member_terms` on (`bioguide_id`, `term_index`). All columns are stored as VARCHAR.",
@@ -1087,9 +1176,9 @@
       "table": "fcc_filings",
       "label": "FCC filings",
       "summary": "One row per FCC ECFS filing — the FCC's comment equivalent: comments, reply comments, ex-parte notices, letters, and other submissions — ingested from the FCC ECFS public API (`/filings`) by `build_fcc_filings`. Requires an api.data.gov key (`DATA_GOV_API_KEY`). Incremental by `date_received`, deduped on `id_submission`; each window is pooled over whole walks until one is clean or the pool holds exactly the count ECFS aggregates for it. Because ECFS holds tens of millions of filings, a first run with no prior table is bounded to the trailing 30 days; deeper history is backfilled in slices via `FCC_SINCE` and/or scoped to specific proceedings via `FCC_PROCEEDINGS`. All columns are stored as VARCHAR, array fields serialized as JSON strings.",
-      "coverage": "Window. 5,137 filings received 2026-08-24 to 2026-09-22, the bounded first run; every id and cell matched the raw pages. The rollup merges incrementally, so this is the history accumulated so far and not the ECFS archive.",
+      "coverage": "Window. All 5,780 held filings were replayed against retained or reacquired native source records on 2026-09-27 and published as generation 9c87b600aa7b5847. One proceeding-number cell was explicitly corrected from the native source; every other prior cell was preserved. Three selected offered PDFs have retained extraction diagnostics. This qualifies the held population, not the ECFS archive or complete attachment text. Receipt: spicy-regs-fcc-complete-20260927/receipt-final.json.",
       "kind": "window",
-      "measured_on": "2026-09-23",
+      "measured_on": "2026-09-27",
       "data_quality": null,
       "columns": [
         "id_submission",
@@ -1109,7 +1198,10 @@
         "text_data",
         "total_page_count",
         "documents_json",
-        "filing_url"
+        "filing_url",
+        "native_fields_json",
+        "native_fields_sha256",
+        "pdf_extraction_results_json"
       ]
     },
     {
@@ -1156,6 +1248,32 @@
         "snapshot_update_date",
         "referral_signal",
         "referral_rule"
+      ]
+    },
+    {
+      "table": "bill_cosponsors",
+      "label": "Bill cosponsor source occurrences",
+      "summary": "One cosponsor occurrence in one retained BILLSTATUS observation, keyed by the bill, the input digest and the list ordinal. A member listed twice keeps two rows; a successfully read absent or empty list replaces the bill's prior rows.",
+      "coverage": "Sampled. Retained Congress 119 House and Senate BILLSTATUS archives were replayed on 2026-09-27 for source observations matching the held bill edition, publishing 146,248 source occurrences, including 67 positive withdrawal dates. Every native field reconciles; bills outside the selected replay remain unread. Receipt: legislative-joins-2026-09-27/t05-candidate.json.",
+      "kind": "sampled",
+      "measured_on": "2026-09-27",
+      "data_quality": null,
+      "columns": [
+        "bill_id",
+        "input_sha256",
+        "cosponsor_index",
+        "bioguide_id",
+        "full_name",
+        "sponsorship_date",
+        "sponsorship_date_status",
+        "is_original_raw",
+        "sponsorship_withdrawn_date",
+        "sponsorship_withdrawn_date_status",
+        "party",
+        "state",
+        "district",
+        "source_path",
+        "source_xml"
       ]
     },
     {
@@ -1623,6 +1741,31 @@
         "term_state",
         "term_party",
         "term_district",
+        "observed_at",
+        "party_affiliations_state"
+      ]
+    },
+    {
+      "table": "member_party_affiliations",
+      "label": "Member party affiliation source intervals",
+      "summary": "One member, input digest, term index and affiliation index. Literal dates and their parsing states remain separate from any dated membership decision.",
+      "coverage": "Sampled. The complete retained September 25 community crosswalk captures were replayed and published on September 27 as members generation 00cad6cf5255d605. All 59 source affiliation occurrences were reconciled, and exact public hashes and rows verified. Member and term identities and existing native values were preserved. This is the selected community crosswalk, not an official or newly acquired roster. Receipt: spicy-regs-t19-members-20260927/public-readback.json.",
+      "kind": "sampled",
+      "measured_on": "2026-09-27",
+      "data_quality": null,
+      "columns": [
+        "bioguide_id",
+        "input_sha256",
+        "term_index",
+        "affiliation_index",
+        "party",
+        "affiliation_start",
+        "affiliation_end",
+        "start_status",
+        "end_status",
+        "term_party",
+        "source_path",
+        "source_json",
         "observed_at"
       ]
     },
@@ -2095,10 +2238,10 @@
       "table": "house_communications",
       "label": "House executive communications",
       "summary": "One row per House executive communication, as the Congress.gov house-communication list and detail routes state it, keyed on the publisher's own address. The regulatory bridge: `is_rulemaking`, the cited `legal_authority`, the committee referral, the matching House requirement and the RIN read from `report_nature`. Complete Federal Register joins unnest `regulation_id_numbers_json` and retain number plus publication date; the first-value scalar `federal_register.rin` omits other RINs. All columns are stored as VARCHAR.",
-      "coverage": "Sampled, accumulating. The adoption run used 30 keyed requests: 20 list pages and 10 details under the declared detail cap. The list declared and served 4,975 records, with 9 repeats and 4,966 distinct identities; merging its own 4,963-row prior retained 4,969 rows. All 4,969 now state the publisher source_route, 1,010 have details and 3,959 remain list-only. No Record backfill request was made and every Record evidence column remains NULL. Receipt: `rollups-0-24-0-adoption-2026-09-20/`. Local output only; not uploaded.",
+      "coverage": "Sampled. The pinned 5,006-row fork selection was republished on September 27 as generation 94d28167db0a56a3, preserving all existing rows and columns. All 5,006 retained details were interpreted with the shared RIN reader: 2,076 occurrences across 2,046 rows. Every span and field digest was checked, and exact public bytes and counts verified. Source qualification is inherited from the prior generation; no new source requests were made. Receipt: spicy-regs-t18-refresh-20260927/.",
       "kind": "sampled",
-      "measured_on": "2026-09-20",
-      "data_quality": "A row whose `committees_json` is NULL is list-only: its detail has not been read yet (not reached under the cap, or refused), and every detail-only column is NULL with it, including the three RIN columns, because the rule was not run. A row whose detail was read states `[]` where the detail lists none. The RIN is an interpretation: `rin_rule` names the rule that fired (`report_nature_rin_label`) or `unmatched`, and `rin_matched_text` is the exact text, so a false positive is readable from the row. The publisher repeats a record across a page boundary (15 of 4,975 on the 119th); the table holds each identity once. The shared pooled list reader must settle each query by distinct identity before any output is replaced. Every existing publisher row receives source_route=congress-gov-detail. The four Record evidence columns remain NULL until the separate Record backfill, about 11,000 GovInfo requests, is acquired in the next rollup. In that future reconstruction submitting_official and submitting_agency must both remain NULL: held-out precision was 85.3% and 88.4%, below the declared 90% gate. The original sentence stays in record_entry_text.",
+      "measured_on": "2026-09-27",
+      "data_quality": "A row whose `committees_json` is NULL is list-only: its detail has not been read yet (not reached under the cap, or refused), and every detail-only column is NULL with it, including the scalar and occurrence RIN columns, because the rule was not run. A row whose detail was read states `[]` where the detail lists none. The RIN is an interpretation: `rin_rule` names the rule that fired (`report_nature_rin_label`) or `unmatched`, and `rin_matched_text` is the exact text, so a false positive is readable from the row. The publisher repeats a record across a page boundary (15 of 4,975 on the 119th); the table holds each identity once. The shared pooled list reader must settle each query by distinct identity before any output is replaced. Every existing publisher row receives source_route=congress-gov-detail. The four Record evidence columns remain NULL until the separate Record backfill, about 11,000 GovInfo requests, is acquired in the next rollup. In that future reconstruction submitting_official and submitting_agency must both remain NULL: held-out precision was 85.3% and 88.4%, below the declared 90% gate. The original sentence stays in record_entry_text.",
       "columns": [
         "communication_id",
         "congress",
@@ -2123,6 +2266,7 @@
         "matching_requirement_count",
         "matching_requirements_json",
         "rin",
+        "rin_occurrences_json",
         "rin_rule",
         "rin_matched_text",
         "update_date",

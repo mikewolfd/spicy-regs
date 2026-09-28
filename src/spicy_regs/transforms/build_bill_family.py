@@ -161,11 +161,10 @@ ARCHIVE_IDENTITY: tuple[str, ...] = ("congress", "bill_type")
 
 # Qualifies the folder's status: every member parsed and every rebuilt bill
 # shaped. A source listing stamp alone never proves that this work completed.
-# v1 also required each bill's bodies and XML pairs, which are now the body
-# pass's by each printing's own state; a v1 list is read as v2, since it
-# states strictly more.
-ARCHIVE_COMPLETION_KEY = "spicy_regs.bill_family.completed_archive_scopes.v2"
-ARCHIVE_COMPLETION_KEYS_READ = (ARCHIVE_COMPLETION_KEY, "spicy_regs.bill_family.completed_archive_scopes.v1")
+# v3 requires the dated cosponsor reader. Earlier completion cannot qualify
+# this output, even when the publisher archive stamp is unchanged.
+ARCHIVE_COMPLETION_KEY = "spicy_regs.bill_family.completed_archive_scopes.v3"
+ARCHIVE_COMPLETION_KEYS_READ = (ARCHIVE_COMPLETION_KEY,)
 
 #: The roll calls each bill's own actions record, one row per ``recordedVotes``
 #: entry. Not a contract table — nothing in ``spicy_docs.schemas`` shapes it —
@@ -315,6 +314,7 @@ _SNAPSHOT_ARG = {
 FAMILY_TABLES: tuple[tuple[str, str], ...] = (
     ("congress_bills", "bills"),
     ("bill_actions", "bill_actions"),
+    ("bill_cosponsors", "bill_cosponsors"),
     ("bill_committees", "bill_committees"),
     ("bill_publisher_summaries", "bill_publisher_summaries"),
     ("bill_versions", "bill_versions"),
@@ -562,6 +562,7 @@ def _download_prior(output_dir: Path, download_prior: Callable[[str, Path], bool
             "section_diffs",
             "section_diff_items",
             "cbo_cost_estimates",
+            "bill_cosponsors",
             ARCHIVES_TABLE,
             BACKFILLS_TABLE,
             BACKFILL_WALKS_TABLE,
@@ -580,20 +581,27 @@ def _prior_index(paths: Mapping[str, Path | None], sections: Sequence[Path] | No
     version_counts: dict[str, int | None] = {}
     bills_path = paths.get("congress_bills")
     wants_versions = bills_path is not None and _has_columns(bills_path, ("bill_id", "version_count"))
+    # A publisher stamp qualifies a skip only for a row both the CBO reader and the cosponsor
+    # occurrence reader wrote, and only while both child tables are held: a row either reader
+    # did not write cannot be skipped, even when the publisher's stamp is unchanged.
     wants_text = (
         bills_path is not None
         and paths.get("cbo_cost_estimates") is not None
-        and _has_columns(bills_path, ("bill_id", "update_date_including_text", "cbo_cost_estimates_outcome"))
+        and paths.get("bill_cosponsors") is not None
+        and _has_columns(
+            bills_path, ("bill_id", "update_date_including_text", "cbo_cost_estimates_outcome", "cosponsors_outcome")
+        )
     )
     if wants_versions and wants_text:
         # One scan serves both lookups where the prior used two: the text-dates
         # subset is split out of the same rows instead of re-reading the file.
         rows = duckdb.sql(
-            f"SELECT bill_id, version_count, update_date_including_text, cbo_cost_estimates_outcome "
+            f"SELECT bill_id, version_count, update_date_including_text, "
+            f"cbo_cost_estimates_outcome IS NOT NULL AND cosponsors_outcome IS NOT NULL "
             f"FROM read_parquet('{bills_path}')"
         ).fetchall()
-        version_counts = {bill: _int_or_none(count) for bill, count, _text, _outcome in rows}
-        text_dates = {bill: text for bill, _count, text, outcome in rows if outcome is not None}
+        version_counts = {bill: _int_or_none(count) for bill, count, _text, _read in rows}
+        text_dates = {bill: text for bill, _count, text, read in rows if read}
     elif wants_versions:
         version_counts = {
             bill: _int_or_none(count)
@@ -603,7 +611,7 @@ def _prior_index(paths: Mapping[str, Path | None], sections: Sequence[Path] | No
         text_dates = dict(
             duckdb.sql(
                 f"SELECT bill_id, update_date_including_text FROM read_parquet('{bills_path}') "
-                "WHERE cbo_cost_estimates_outcome IS NOT NULL"
+                "WHERE cbo_cost_estimates_outcome IS NOT NULL AND cosponsors_outcome IS NOT NULL"
             ).fetchall()
         )
 
@@ -699,7 +707,7 @@ def _prior_index(paths: Mapping[str, Path | None], sections: Sequence[Path] | No
             ):
                 pairs.add((key[0], key[1], key[3]))
     logger.info(
-        "Bill family: prior holds {:,} bills and {:,} processed printings",
+        "Bill family: {:,} prior bills qualify for a stamp skip; {:,} processed printings",
         len(text_dates),
         sum(len(codes) for codes in printings.values()),
     )
@@ -1523,9 +1531,9 @@ def build_bill_family(
     download_members: Callable[[str, Path], Sequence[Path]] = download_prior_members,
     evidence: CaptureEvidence | None = None,
 ) -> tuple[Path, ...]:
-    """Build all eighteen bill-family outputs; returns one path per table, a directory for each ``PARTITIONED`` one.
+    """Build bill-family outputs, with a directory for each partitioned table.
 
-    ``download_prior`` fetches a single-file prior table and ``download_members`` every file of a ``PARTITIONED`` one.
+    ``download_prior`` fetches a single-file prior; ``download_members`` fetches every partitioned member.
     """
     if isinstance(max_version_fetches, bool) or not isinstance(max_version_fetches, int) or max_version_fetches < 0:
         raise ValueError("max_version_fetches must be a nonnegative integer; zero disables acquisition")
@@ -1896,9 +1904,22 @@ def build_bill_family(
     if body.unread:
         logger.info("Bill family: withdrawing {:,} body rows a refused read left without a tree", len(body.unread))
     version_identity = TABLE_CONTRACTS["bill_versions"].identity
+    # A bill whose cosponsor rows were refused keeps its prior rows. One set, so the
+    # scope below costs O(bills + refusals) rather than a refusal scan per bill.
+    refused_cosponsors = {ref.identity[0] for ref in folded.refusals if ref.table == "bill_cosponsors"}
     # Each scope names parents whose prior child rows this run replaces --
     # emptying them where the run publishes none.
     replaced: dict[str, ReplacementScope] = {
+        "bill_cosponsors": (
+            "bill_id",
+            {
+                identifier
+                for row in folded.bills
+                if (identifier := row["bill_id"]) is not None
+                and row.get("cosponsors_outcome") in {"absent", "empty", "populated"}
+                and identifier not in refused_cosponsors
+            },
+        ),
         "cbo_cost_estimates": (
             "bill_id",
             {

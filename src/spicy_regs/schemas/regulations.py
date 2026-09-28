@@ -33,6 +33,16 @@ def _extract_comment(d: dict) -> dict:
     return {
         "comment_id": d.get("data", {}).get("id"),
         "docket_id": (v.strip('"') if (v := attrs.get("docketId")) else v),
+        # These are distinct publisher identifier systems. A comment can name
+        # its parent document while its source docket remains explicitly NULL.
+        "comment_on_document_id": attrs.get("commentOnDocumentId"),
+        "comment_on_object_id": attrs.get("commentOn"),
+        "original_document_id": attrs.get("originalDocumentId"),
+        # An observed {} differs from NULL in a generation written before
+        # these fields were retained. Present null/empty values stay visible.
+        "comment_reference_values_json": json_dumps({
+            key: attrs[key] for key in ("commentOnDocumentId", "commentOn", "originalDocumentId") if key in attrs
+        }),
         "agency_code": attrs.get("agencyId"),
         "first_name": attrs.get("firstName"),
         "last_name": attrs.get("lastName"),
@@ -55,9 +65,14 @@ def _extract_comment(d: dict) -> dict:
     }
 
 
-def _extract_document(d: dict) -> dict:
+def _extract_document(d: dict, *, attachment_relationship=None) -> dict:
     """Map a regulations.gov document payload to a flat record, keeping every file rendition in attachments_json."""
     attrs = d.get("data", {}).get("attributes", {})
+    related = None
+    if attachment_relationship is not None:
+        from spicy_docs.sources.regulations_gov.attachment_records import attachment_records_json
+
+        related = attachment_records_json(d, attachment_relationship)
 
     # Each fileFormats entry is one downloadable rendition of the document
     # (e.g. content.pdf), carrying its own URL, format, and byte size. Keep the
@@ -80,6 +95,7 @@ def _extract_document(d: dict) -> dict:
         "comment_end_date": attrs.get("commentEndDate"),
         "file_url": attachments[0]["url"] if attachments else None,
         "attachments_json": json_dumps(attachments) if attachments else None,
+        "attachment_records_json": related,
         "fr_doc_num": attrs.get("frDocNum"),
         "withdrawn": attrs.get("withdrawn"),
         "reason_withdrawn": attrs.get("reasonWithdrawn"),
@@ -132,6 +148,7 @@ DOCUMENT = RecordType(
         "comment_end_date": pl.Utf8,
         "file_url": pl.Utf8,
         "attachments_json": pl.Utf8,
+        "attachment_records_json": pl.Utf8,
         "fr_doc_num": pl.Utf8,
         "withdrawn": pl.Utf8,
         "reason_withdrawn": pl.Utf8,
@@ -155,6 +172,10 @@ COMMENT = RecordType(
     schema={
         "comment_id": pl.Utf8,
         "docket_id": pl.Utf8,
+        "comment_on_document_id": pl.Utf8,
+        "comment_on_object_id": pl.Utf8,
+        "original_document_id": pl.Utf8,
+        "comment_reference_values_json": pl.Utf8,
         "agency_code": pl.Utf8,
         "first_name": pl.Utf8,
         "last_name": pl.Utf8,

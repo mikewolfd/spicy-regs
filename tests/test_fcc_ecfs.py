@@ -107,7 +107,7 @@ def test_shape_proceeding_handles_missing_fields():
 def test_shape_filing_produces_exact_schema():
     row = _shape_filing(_RAW_FILING)
     assert set(row) == set(FILING_COLUMNS)
-    assert len(FILING_COLUMNS) == 18
+    assert len(FILING_COLUMNS) == 21
 
 
 def test_shape_filing_maps_and_serializes_fields():

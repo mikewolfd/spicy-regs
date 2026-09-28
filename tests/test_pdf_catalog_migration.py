@@ -34,7 +34,8 @@ class CachedConnection:
 
     def fetchall(self):
         # ADD does not change this cached schema, matching the Iceberg finding.
-        return [(FIELD, self.field_type)] if self.field_type is not None else []
+        reference_fields = [(column, "VARCHAR") for column in (*iceberg._COMMENT_REFERENCE_COLUMNS, "attachment_records_json")]
+        return reference_fields + ([(FIELD, self.field_type)] if self.field_type is not None else [])
 
     def close(self):
         assert not self.closed

@@ -1,0 +1,62 @@
+[
+  {
+    "kind": "amendment",
+    "vote_id": "108-senate-2-172",
+    "requested_url": "https://www.senate.gov/legislative/LIS/roll_call_votes/vote1082/vote_108_2_00172.xml",
+    "sha256": "sha256:25230e6004239aa7fd24865ed17cd2b76ba30246b196a084e9c96e3dcc4909c7",
+    "byte_size": 24122,
+    "observed_at": "2026-09-27T22:13:17.570021Z",
+    "held_raw": "{\"number\":\"S.Amdt. 3609\",\"purpose\":\"To appropriate $70,000,000 for grants to States, local governments, and first responders to purchase or improve communication systems to allow for real-time interoperable communication between State and local first responders and to offset this appropriation with a corresponding reduction from the Human Resources Account of the Office of the Under Secretary of Management.\",\"to_amendment_number\":null,\"to_amendment_to_amendment_number\":null,\"to_document_number\":\"H.R. 4567\",\"to_document_short_title\":\"Department of Homeland Security Appropriations Act, 2005\"}",
+    "documents": [
+      {
+        "congress": null,
+        "type": null,
+        "number": null,
+        "name": null,
+        "title": null,
+        "short_title": null
+      }
+    ],
+    "amendments": [
+      {
+        "number": "S.Amdt. 3609",
+        "to_amendment_number": null,
+        "to_amendment_to_amendment_number": null,
+        "to_document_number": "H.R. 4567",
+        "to_document_short_title": "Department of Homeland Security Appropriations Act, 2005",
+        "purpose": "To appropriate $70,000,000 for grants to States, local governments, and first responders to purchase or improve communication systems to allow for real-time interoperable communication between State and local first responders and to offset this appropriation with a corresponding reduction from the Human Resources Account of the Office of the Under Secretary of Management."
+      }
+    ],
+    "status": "read"
+  },
+  {
+    "kind": "treaty",
+    "vote_id": "109-senate-1-244",
+    "requested_url": "https://www.senate.gov/legislative/LIS/roll_call_votes/vote1091/vote_109_1_00244.xml",
+    "sha256": "sha256:53916a5d1cdf333935b990ffb8bdfd7fbd04b249c5887eff2c919cb1eb21631e",
+    "byte_size": 23776,
+    "observed_at": "2026-09-27T22:13:18.135794Z",
+    "held_raw": "{\"congress\":109,\"name\":\"Treaty Doc. 108-6\",\"number\":\"108-6\",\"short_title\":null,\"title\":\"Protocol of Amendment to the International Convention on the Simplification and Harmonization of Customs Procedures done at Brussels on June 26, 1999\",\"type\":\"Treaty Doc.\"}",
+    "documents": [
+      {
+        "congress": 109,
+        "type": "Treaty Doc.",
+        "number": "108-6",
+        "name": "Treaty Doc. 108-6",
+        "title": "Protocol of Amendment to the International Convention on the Simplification and Harmonization of Customs Procedures done at Brussels on June 26, 1999",
+        "short_title": null
+      }
+    ],
+    "amendments": [
+      {
+        "number": null,
+        "to_amendment_number": null,
+        "to_amendment_to_amendment_number": null,
+        "to_document_number": null,
+        "to_document_short_title": null,
+        "purpose": "No Statement of Purpose on File."
+      }
+    ],
+    "status": "read"
+  }
+]
