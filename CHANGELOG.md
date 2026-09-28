@@ -60,6 +60,13 @@ Entries link to the pull request that introduced the change.
   ACL 2 and HHS to HHSIG 2. Docketed proceedings, and so lifecycles, do not
   change.
 
+- **A defunct agency's department is the one RefSpec's registry view states**
+  (view schema 1.1, RefSpec cd78e476; proceedings stay v11). The rule reads
+  each renamed or split agency's roster parent from the view's
+  `original_parents`, no longer from the `parent_id` its Register entry names.
+  On the live Register the two agree for all 9 such agencies, so no code moves:
+  none of 1,009,313 rows, and none of snapshot b22d81c4's proceedings replayed.
+
 - **`document_attributes` and `docket_attributes` break a `modifyDate` tie by
   SpicyDocs' write-time rule** (document policy 1.3, spicy-docs 0.45.1). Among
   a record's mirror copies tied at the newest `modifyDate`, the copy written

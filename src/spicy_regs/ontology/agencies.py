@@ -123,7 +123,7 @@ class _Projection(NamedTuple):
 
 
 def _build_projection(
-    rows: Iterable[Mapping[str, Any]], bridges: Iterable[Mapping[str, Any]], events: Iterable[Mapping[str, Any]]
+    rows: Iterable[Mapping[str, Any]], bridges: Iterable[Mapping[str, Any]], events: Sequence[Mapping[str, Any]]
 ) -> _Projection:
     """Reverse REF-038's rows, then follow the registry's bridges and each original's current successors.
 
@@ -132,19 +132,26 @@ def _build_projection(
     bridged codes included, but only when every current successor is coded: an uncoded
     successor is unknown, not absent, so the original then takes no code at all. An org resolves
     only where exactly one code selects it, so a split resolves only when all its successors
-    agree on one code. The view states no parent for an original, so its chain is left to the
-    FR row that names it.
+    agree on one code. An original takes the roster parent its event states in
+    ``original_parents``, None for a top-level agency, so every coded org's parent is stated;
+    a second source stating another parent for an org is refused.
     """
     codes: dict[str, set[str]] = defaultdict(set)
     parents: dict[str, str | None] = {}
+
+    def state_parent(org: str, parent: str | None, source: str) -> None:
+        if parents.setdefault(org, parent) != parent:
+            raise ValueError(f"{source} states another parent for {org}")
+
     for row in rows:
         codes[row["org"]].add(row["source_value"])
         parents[row["org"]] = row["parent_org"]
     for bridge in bridges:  # an FR subject, an eCFR or Federal Hierarchy object: no bridge reaches another
-        subject = bridge["subject"]
-        if parents.setdefault(subject, bridge["subject_parent"]) != bridge["subject_parent"]:
-            raise ValueError(f"bridge {bridge['candidate_id']} states another parent for {subject}")
-        codes[subject] |= codes.get(bridge["object"], set())
+        state_parent(bridge["subject"], bridge["subject_parent"], f"bridge {bridge['candidate_id']}")
+        codes[bridge["subject"]] |= codes.get(bridge["object"], set())
+    for row in events:
+        for original, parent in zip(row["originals"], row["original_parents"], strict=True):
+            state_parent(original, parent, f"event {row['event_id']}")
     unknown: set[str] = set()
     for original, successors in _current_successors(events).items():  # a current successor is no original
         found = [codes.get(successor, set()) for successor in successors]
@@ -197,19 +204,19 @@ def agency_code_for_fr_agencies(agencies: Sequence[dict[str, Any]]) -> str | Non
 
     Each entry's own code is ``fr_agency_code``'s. An org named alongside its descendant is dropped by the parent chain, however many levels
     apart (Transportation Department with FAA is FAA; Agriculture Department with GIPSA, its
-    grandchild, is GIPSA). The chain is REF-038's ``parent_org`` or a bridge's roster parent;
-    the view names no parent for a successor's original, so there it is the ``parent_id`` the
-    entry names (Health and Human Services with the Health Care Finance Administration is CMS).
-    Every agency on the document, resolved or not, must then be compatible with the chosen org
-    C: it is C or an ancestor of C by that chain, or its FR ``parent_id`` is C or an org whose
-    projection chain contains C — a department signing with one of its own unresolved bureaus
-    (Treasury with the Bureau of the Fiscal Service) is the department. Anything else is a
-    joint document and gives ``None`` (EPA with Interior's Bureau of Mines). Malformed entries
-    — a non-dict, a missing or non-integer ``id`` — are skipped.
+    grandchild, is GIPSA). The chain is the roster's, as the vendored files state it: REF-038's
+    ``parent_org``, a bridge's ``subject_parent`` or an event's ``original_parents`` (Health and
+    Human Services with the Health Care Finance Administration is CMS); a coded agency's entry
+    ``parent_id`` never moves it. Every agency on the document, resolved or not, must then be
+    compatible with the chosen org C: it is C or an ancestor of C by that chain, or its FR
+    ``parent_id`` is C or an org whose projection chain contains C — a department signing with
+    one of its own unresolved bureaus (Treasury with the Bureau of the Fiscal Service) is the
+    department. Anything else is a joint document and gives ``None`` (EPA with Interior's Bureau
+    of Mines). Malformed entries — a non-dict, a missing or non-integer ``id`` — are skipped.
     """
     projection = _projection()
+    ancestors_of = projection.ancestors_by_org  # it holds every coded org: each one's parent is stated
     code_by_org: dict[str, str] = {}
-    ancestors_of: dict[str, frozenset[str]] = {}
     named: list[tuple[int, int | None]] = []
     for entry in agencies:
         fr_id = entry.get("id") if isinstance(entry, dict) else None
@@ -219,13 +226,7 @@ def agency_code_for_fr_agencies(agencies: Sequence[dict[str, Any]]) -> str | Non
         parent_id = parent_id if isinstance(parent_id, int) and not isinstance(parent_id, bool) else None
         named.append((fr_id, parent_id))
         if (code := projection.code_by_fr_id.get(fr_id)) is not None:
-            org = f"{_FR_AGENCY}{fr_id}"
-            code_by_org[org] = code
-            chain = projection.ancestors_by_org.get(org)
-            if chain is None and parent_id is not None:  # a successor's original: its entry names the parent
-                parent = f"{_FR_AGENCY}{parent_id}"
-                chain = frozenset({parent, *projection.ancestors_by_org.get(parent, frozenset())})
-            ancestors_of[org] = chain or frozenset()
+            code_by_org[f"{_FR_AGENCY}{fr_id}"] = code
     specific = {
         org for org in code_by_org if not any(org in ancestors_of[other] for other in code_by_org if other != org)
     }
@@ -238,7 +239,7 @@ def agency_code_for_fr_agencies(agencies: Sequence[dict[str, Any]]) -> str | Non
         if f"{_FR_AGENCY}{fr_id}" in allowed:
             continue
         if parent_id is not None and (
-            parent_id == chosen_id or chosen in projection.ancestors_by_org.get(f"{_FR_AGENCY}{parent_id}", frozenset())
+            parent_id == chosen_id or chosen in ancestors_of.get(f"{_FR_AGENCY}{parent_id}", frozenset())
         ):
             continue
         return None
