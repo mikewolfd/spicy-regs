@@ -56,12 +56,14 @@ env:
   # A native crash (exit 139) prints every thread's Python stack instead of nothing
   # (run 36326715409 segfaulted in the R2 publish step and left no trace).
   PYTHONFAULTHANDLER: "1"
+  # Read by spicy_regs.sources.iceberg: this run holds comments-catalog-write,
+  # so its catalog writes do not log the unlocked-write warning.
+  SPICY_REGS_CATALOG_LOCK: comments-catalog-write
 
 concurrency:
   # Serialize every writer to the Iceberg `comments` table. The upsert is a
-  # DELETE + INSERT (DuckDB's Iceberg engine has no MERGE INTO), which is not
-  # safe under concurrent writers, so two overlapping runs can duplicate rows.
-  # This group also
+  # checked MERGE that refuses a prior changed under it, and any write (rows or
+  # schema) during the mirror export makes that export refuse. This group also
   # keeps two ETL runs (the redundant 06:25/18:25 sweeps, or a dispatch over a
   # scheduled run) — and the dedupe/backfill workflows, which share this group —
   # from ever writing the catalog at the same time. cancel-in-progress:false so a

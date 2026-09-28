@@ -27,6 +27,11 @@ concurrency:
   cancel-in-progress: false
   queue: max
 
+env:
+  # Read by spicy_regs.sources.iceberg: this run holds comments-catalog-write,
+  # so its catalog writes do not log the unlocked-write warning.
+  SPICY_REGS_CATALOG_LOCK: comments-catalog-write
+
 jobs:
   check:
     runs-on: ubuntu-latest

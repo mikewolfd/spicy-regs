@@ -6,6 +6,12 @@ on:
       skip_upload:
         type: boolean
         default: false
+env:
+  # Called only by workflows that hold comments-catalog-write.
+  # Read by spicy_regs.sources.iceberg: this run holds comments-catalog-write,
+  # so its catalog writes do not log the unlocked-write warning.
+  SPICY_REGS_CATALOG_LOCK: comments-catalog-write
+
 jobs:
   # Documents and comments can name a docket the Mirrulations mirror never
   # captured (165 on 2026-09-26). Ask the Regulations.gov API for each and merge

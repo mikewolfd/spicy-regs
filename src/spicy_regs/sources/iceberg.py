@@ -109,6 +109,29 @@ def _connect():
     return con
 
 
+CATALOG_LOCK_ENV = "SPICY_REGS_CATALOG_LOCK"
+_warned_unlocked: set[str] = set()
+
+
+def _warn_unlocked_write(record_type: RecordType, operation: str) -> None:
+    """Warn once per table when this process writes the catalog without the workflow lock.
+
+    Workflows in the ``comments-catalog-write`` concurrency group set
+    ``SPICY_REGS_CATALOG_LOCK``. Any other write (rows or schema) can land
+    while the ETL or mirror job exports, and that export then refuses with
+    "Catalog changed during export" (ETL 36351853866). The write proceeds.
+    """
+    if getenv(CATALOG_LOCK_ENV) or record_type.name in _warned_unlocked:
+        return
+    _warned_unlocked.add(record_type.name)
+    logger.warning(
+        "{}: writing catalog table {} without {} (the comments-catalog-write group). A concurrent ETL or "
+        "mirror export will refuse with 'Catalog changed during export'. Run catalog repairs and migrations "
+        "only when no ETL or mirror run holds comments-catalog-write.",
+        operation, record_type.name, CATALOG_LOCK_ENV,
+    )
+
+
 def _qualified(record_type: RecordType) -> str:
     """Fully-qualified catalog table identifier: ``alias."namespace"."name"``."""
     return f'{_schema_ref()}."{record_type.name}"'
@@ -170,6 +193,7 @@ def _connect_for_table(record_type: RecordType):
     Reopen after each migration, then verify that field before adding another.
     A failed reopen leaves completed DDL for the next run.
     """
+    _warn_unlocked_write(record_type, "prepare for write")
     con = _connect()
     try:
         if dedupe_recovery_pending(con, record_type):
@@ -224,6 +248,7 @@ def replace_rows(con, record_type: RecordType, source: str, *, expected_prior: s
         raise ValueError("Catalog replacements require distinct, nonblank source identities")
     if not count:
         return
+    _warn_unlocked_write(record_type, "replace rows")
     con.execute("BEGIN")
     try:
         if expected_prior is not None:
@@ -424,6 +449,7 @@ def seed_comments_from_parquet(
     cleanly. The connection + any S3 secret are set up by the caller
     so this stays testable against a local catalog and local files.
     """
+    _warn_unlocked_write(record_type, "seed")
     columns = list(record_type.schema)
     esc = _sql_str(source_glob)
     if replace and agency is None:
@@ -507,6 +533,7 @@ def backfill_missing_from_parquet(con, source_uri: str, record_type: RecordType)
     nothing. The source is de-duplicated on its own key (latest ``modify_date``
     wins) so a snapshot with repeats can't fan out into duplicate rows.
     """
+    _warn_unlocked_write(record_type, "backfill missing rows")
     key = record_type.dedup_key
     columns = list(record_type.schema)
     esc = _sql_str(source_uri)
@@ -791,6 +818,7 @@ def dedupe_table(con, record_type: RecordType) -> tuple[int, int]:
     Returns ``(rows_before, rows_after)``; ``rows_after`` equals the number of
     distinct keys when the rebuild succeeds.
     """
+    _warn_unlocked_write(record_type, "dedupe")
     key = record_type.dedup_key
     name = record_type.name
     tbl = _qualified(record_type)

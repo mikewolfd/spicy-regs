@@ -164,6 +164,30 @@ def test_replacement_failure_after_write_rolls_back(local_catalog) -> None:
     assert con.execute(f"SELECT docket_id,title FROM {table}").fetchall() == [('D', 'new')]
 
 
+def test_unlocked_catalog_write_warns_once(local_catalog, monkeypatch) -> None:
+    from loguru import logger
+
+    con = local_catalog
+    iceberg._ensure_table(con, DOCKET)
+    con.execute("CREATE TEMP TABLE fresh AS SELECT 'D' AS docket_id")
+    con.execute(f"CREATE TEMP TABLE fresh_full AS SELECT * FROM {iceberg._qualified(DOCKET)} UNION ALL "
+                "BY NAME SELECT * FROM fresh")
+    monkeypatch.setattr(iceberg, "_warned_unlocked", set())
+    messages: list[str] = []
+    sink = logger.add(messages.append, level="WARNING", format="{message}")
+    try:
+        monkeypatch.setenv(iceberg.CATALOG_LOCK_ENV, "comments-catalog-write")
+        iceberg.replace_rows(con, DOCKET, "fresh_full")
+        assert messages == []
+        monkeypatch.delenv(iceberg.CATALOG_LOCK_ENV)
+        iceberg.replace_rows(con, DOCKET, "fresh_full")
+        iceberg.replace_rows(con, DOCKET, "fresh_full")
+    finally:
+        logger.remove(sink)
+    assert len(messages) == 1
+    assert "Catalog changed during export" in messages[0] and "comments-catalog-write" in messages[0]
+
+
 @pytest.mark.parametrize("side", ["source", "prior"])
 def test_replacement_refuses_duplicate_identities_before_writing(local_catalog, side) -> None:
     con = local_catalog

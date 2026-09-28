@@ -45,11 +45,16 @@ on:
         type: string
 
 concurrency:
-  # Every catalog writer shares one group with the ETL (DELETE + INSERT is not
-  # safe under concurrent writers); a seed queues behind an in-flight run.
+  # Every catalog writer shares one group with the ETL (a concurrent write makes
+  # the ETL's checked MERGE or mirror export refuse); a seed queues behind an in-flight run.
   group: comments-catalog-write
   cancel-in-progress: false
   queue: max
+
+env:
+  # Read by spicy_regs.sources.iceberg: this run holds comments-catalog-write,
+  # so its catalog writes do not log the unlocked-write warning.
+  SPICY_REGS_CATALOG_LOCK: comments-catalog-write
 
 jobs:
   seed:
