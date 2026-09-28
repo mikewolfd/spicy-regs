@@ -20,7 +20,7 @@ One row per public comment — the largest table (tens of millions of rows). On 
 | --- | --- | --- |
 | `comment_id` 🔑 | `VARCHAR` | Unique comment identifier. Primary key / dedup key. |
 | `docket_id` | `VARCHAR` | Source-supplied docket identifier for joining to `dockets.docket_id`. Null when the source does not identify a docket; mirror directory names and comment ID prefixes do not fill this field. |
-| `comment_on_document_id` | `VARCHAR` | Literal Regulations.gov commentOnDocumentId: the named parent document, independently nullable from docket_id. No identifier-prefix inference. |
+| `comment_on_document_id` | `VARCHAR` | Literal Regulations.gov commentOnDocumentId: the named parent document, independently nullable from docket_id. No identifier-prefix inference. NULL where the row predates reading this field, which today is most rows, including every row of the largest agencies; NULL does not mean the comment names no document. |
 | `comment_on_object_id` | `VARCHAR` | Literal commentOn in the native object-ID namespace; not interchangeable with a public document key. |
 | `original_document_id` | `VARCHAR` | Literal originalDocumentId, retained as an unresolved legacy source reference. |
 | `comment_reference_values_json` | `VARCHAR` | JSON map containing only present source parent-reference fields, preserving null and empty values. {} means the source was read and fields were absent; SQL NULL means legacy or unread. |
@@ -28,7 +28,7 @@ One row per public comment — the largest table (tens of millions of rows). On 
 | `first_name` | `VARCHAR` | Commenter's first name, when provided. Often null. |
 | `last_name` | `VARCHAR` | Commenter's last name, when provided. Often null. |
 | `organization` | `VARCHAR` | Organization the commenter represents, when provided. Often null. |
-| `category` | `VARCHAR` | Submitter category as classified on regulations.gov. Often null. |
+| `category` | `VARCHAR` | Submitter category as classified on regulations.gov. Often null, and empty for whole agencies: EPA, for one, classifies submitters in regulations.gov's `subtype` (Company/Organization, Government, Mass Mail Campaign, …), which this table does not carry, nor the campaign count `duplicateComments`. |
 | `title` | `VARCHAR` | Comment title / subject line. |
 | `comment` | `VARCHAR` | Full free-text body of the comment as typed into the comment form; filled for nearly every comment. Text of attached files is in `text_content`, which is filled only where an attachment was extracted. The largest field in the dataset. |
 | `document_type` | `VARCHAR` | Document category for the comment record, typically `Public Submission`. |

@@ -136,7 +136,7 @@ tables:
       `dockets` on `docket_id` when the source supplies that relationship.
       Comments with a null docket remain in the table and agency totals.
     columns:
-      comment_on_document_id: "Literal Regulations.gov commentOnDocumentId: the named parent document, independently nullable from docket_id. No identifier-prefix inference."
+      comment_on_document_id: "Literal Regulations.gov commentOnDocumentId: the named parent document, independently nullable from docket_id. No identifier-prefix inference. NULL where the row predates reading this field, which today is most rows, including every row of the largest agencies; NULL does not mean the comment names no document."
       comment_on_object_id: "Literal commentOn in the native object-ID namespace; not interchangeable with a public document key."
       original_document_id: "Literal originalDocumentId, retained as an unresolved legacy source reference."
       comment_reference_values_json: "JSON map containing only present source parent-reference fields, preserving null and empty values. {} means the source was read and fields were absent; SQL NULL means legacy or unread."
@@ -146,7 +146,7 @@ tables:
       first_name: "Commenter's first name, when provided. Often null."
       last_name: "Commenter's last name, when provided. Often null."
       organization: "Organization the commenter represents, when provided. Often null."
-      category: "Submitter category as classified on regulations.gov. Often null."
+      category: "Submitter category as classified on regulations.gov. Often null, and empty for whole agencies: EPA, for one, classifies submitters in regulations.gov's `subtype` (Company/Organization, Government, Mass Mail Campaign, …), which this table does not carry, nor the campaign count `duplicateComments`."
       title: "Comment title / subject line."
       comment: "Full free-text body of the comment as typed into the comment form; filled for nearly every comment. Text of attached files is in `text_content`, which is filled only where an attachment was extracted. The largest field in the dataset."
       document_type: "Document category for the comment record, typically `Public Submission`."
@@ -176,7 +176,7 @@ tables:
       docket_id: "Source docket identifier, or NULL when the source gives none."
       year: "Year from `posted_date`. NULL when the source posted date is unknown."
       month: "Month (1–12) from `posted_date`. NULL together with year when the source posted date is unknown."
-      row_count: "Number of comments in the group."
+      row_count: "Number of posted comment records in the group. These are posted comment records, not comments received: an agency posts one record for a mass-mail campaign that can stand for thousands of submissions (EPA-HQ-OW-2022-0114 has 1,629 posted records for about 122,200 comments EPA received)."
 
   feed_summary:
     identity_columns: [docket_id]
@@ -197,7 +197,7 @@ tables:
       docket_type: "Docket category (from `dockets`)."
       modify_date: "Docket last-modified timestamp; the table is sorted by this descending."
       abstract: "Docket abstract (from `dockets`). Often null."
-      comment_count: "Total comments on the docket, summed from `comments_index`. 0 when none."
+      comment_count: "Posted comments on the docket, summed from `comments_index`. 0 when none. These are posted comment records, not comments received: an agency posts one record for a mass-mail campaign that can stand for thousands of submissions (EPA-HQ-OW-2022-0114 has 1,629 posted records for about 122,200 comments EPA received)."
       comment_end_date: "Latest comment-period end date across the docket's documents. Null when unknown."
       date_created: "Earliest document `posted_date` on the docket, used as a creation date. Null when unknown."
 
@@ -216,7 +216,7 @@ tables:
       agency_code: "Agency short code. One row per agency."
       docket_count: "Number of dockets posted by the agency."
       document_count: "Number of documents posted by the agency."
-      comment_count: "Total comments received by the agency, summed from `comments_index`."
+      comment_count: "Posted comments on the agency's dockets, summed from `comments_index`. These are posted comment records, not comments received: an agency posts one record for a mass-mail campaign that can stand for thousands of submissions (EPA-HQ-OW-2022-0114 has 1,629 posted records for about 122,200 comments EPA received)."
 
   agency_monthly_volume:
     identity_columns: [agency_code, year, month, document_type]

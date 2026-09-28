@@ -440,7 +440,7 @@
       {
         "column_name": "comment_on_document_id",
         "column_type": "VARCHAR",
-        "description": "Literal Regulations.gov commentOnDocumentId: the named parent document, independently nullable from docket_id. No identifier-prefix inference."
+        "description": "Literal Regulations.gov commentOnDocumentId: the named parent document, independently nullable from docket_id. No identifier-prefix inference. NULL where the row predates reading this field, which today is most rows, including every row of the largest agencies; NULL does not mean the comment names no document."
       },
       {
         "column_name": "comment_on_object_id",
@@ -480,7 +480,7 @@
       {
         "column_name": "category",
         "column_type": "VARCHAR",
-        "description": "Submitter category as classified on regulations.gov. Often null."
+        "description": "Submitter category as classified on regulations.gov. Often null, and empty for whole agencies: EPA, for one, classifies submitters in regulations.gov's `subtype` (Company/Organization, Government, Mass Mail Campaign, …), which this table does not carry, nor the campaign count `duplicateComments`."
       },
       {
         "column_name": "title",
@@ -586,7 +586,7 @@
       {
         "column_name": "row_count",
         "column_type": "BIGINT",
-        "description": "Number of comments in the group."
+        "description": "Number of posted comment records in the group. These are posted comment records, not comments received: an agency posts one record for a mass-mail campaign that can stand for thousands of submissions (EPA-HQ-OW-2022-0114 has 1,629 posted records for about 122,200 comments EPA received)."
       }
     ],
     "grain": null,
@@ -677,7 +677,7 @@
       {
         "column_name": "comment_count",
         "column_type": "BIGINT",
-        "description": "Total comments on the docket, summed from `comments_index`. 0 when none."
+        "description": "Posted comments on the docket, summed from `comments_index`. 0 when none. These are posted comment records, not comments received: an agency posts one record for a mass-mail campaign that can stand for thousands of submissions (EPA-HQ-OW-2022-0114 has 1,629 posted records for about 122,200 comments EPA received)."
       },
       {
         "column_name": "comment_end_date",
@@ -746,7 +746,7 @@
       {
         "column_name": "comment_count",
         "column_type": "BIGINT",
-        "description": "Total comments received by the agency, summed from `comments_index`."
+        "description": "Posted comments on the agency's dockets, summed from `comments_index`. These are posted comment records, not comments received: an agency posts one record for a mass-mail campaign that can stand for thousands of submissions (EPA-HQ-OW-2022-0114 has 1,629 posted records for about 122,200 comments EPA received)."
       }
     ],
     "grain": null,

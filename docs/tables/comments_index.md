@@ -19,4 +19,4 @@ A small row-count index over `comments`. Each row counts the comments of one age
 | `docket_id` | `VARCHAR` | Source docket identifier, or NULL when the source gives none. |
 | `year` | `BIGINT` | Year from `posted_date`. NULL when the source posted date is unknown. |
 | `month` | `BIGINT` | Month (1–12) from `posted_date`. NULL together with year when the source posted date is unknown. |
-| `row_count` | `BIGINT` | Number of comments in the group. |
+| `row_count` | `BIGINT` | Number of posted comment records in the group. These are posted comment records, not comments received: an agency posts one record for a mass-mail campaign that can stand for thousands of submissions (EPA-HQ-OW-2022-0114 has 1,629 posted records for about 122,200 comments EPA received). |

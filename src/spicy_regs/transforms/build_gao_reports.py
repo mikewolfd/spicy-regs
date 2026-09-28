@@ -71,10 +71,10 @@ SOURCE_FEED = "gao_rss"
 SOURCE_REPAIR = "gao_repair"
 SOURCE_UPSTREAM = "upstream_copy"
 
-#: The one-time copy of upstream's rows (owner decision 2026-09-28; branch
-#: gao-upstream-import, scripts/import_gao_upstream.py, 92786e7). Every copied
-#: report was published in this window, and the copied rows digest to the
-#: import's reviewed ``ROWS_SHA256``, by the import's own ``rows_digest``.
+#: The one-time copy of upstream's rows (owner decision 2026-09-28; commit
+#: 92786e7, published as generation e0b5049a, the script since deleted). Every
+#: copied report was published in this window, and the copied rows digest to the
+#: import's reviewed ``ROWS_SHA256`` under the import's row digest.
 UPSTREAM_COPY_WINDOW = ("2026-07-13", "2026-09-14")
 UPSTREAM_COPY_ROWS_SHA256 = "sha256:ec48702a097b6ede03c9b4e0100e8f619add6903813363b39af687e9368a7e0c"
 
