@@ -974,8 +974,9 @@ def _register_tools(mcp: MCPServer) -> None:
     def list_sources() -> dict[str, Any]:
         """List the queryable tables: each one's label and coverage kind, with derived views grouped.
 
-        coverage is the dictionary's kind: true_range, window, sampled or
-        derived; a window or a sample does not hold the source's full history.
+        coverage is the dictionary's kind: true_range, window, sampled,
+        not_a_range or derived; a window or a sample does not hold the
+        source's full history.
         A listed table loaded in this connection; that is not a data or
         freshness audit. Call describe_table before querying a table: it gives
         columns, coverage caveats, joins, the live data version and the output
