@@ -63,14 +63,22 @@ def merge_local_prior(
     ``derived`` maps an output column to a SQL expression over ``columns``,
     appended after them and recomputed from every merged row each run, so a
     prior row gains it and it never drifts from the columns it reads.
+
+    A column the prior lacks is selected as NULL, as :func:`merge_table` does,
+    so appending a column is a NULL backfill on the published rows, not a
+    migration.
     """
     keys = (identity,) if isinstance(identity, str) else tuple(identity)
     cols = ", ".join(f'"{c}"' for c in columns)
     new_path = str(new_file).replace("'", "''")
     if prior_file is not None and prior_file.exists():
         prior_path = str(prior_file).replace("'", "''")
+        held = set(pq.read_schema(prior_file).names)
+        if absent := [c for c in columns if c not in held]:
+            logger.info("Prior {} lacks {}; NULL-filling", prior_file.name, ", ".join(absent))
+        prior_cols = ", ".join(f'"{c}"' if c in held else f'NULL AS "{c}"' for c in columns)
         union = (
-            f"SELECT {cols}, 0 AS _src FROM read_parquet('{prior_path}') "
+            f"SELECT {prior_cols}, 0 AS _src FROM read_parquet('{prior_path}') "
             + (f"WHERE ({retire}) IS NOT TRUE " if retire else "")
             + f"UNION ALL BY NAME SELECT {cols}, 1 AS _src FROM read_parquet('{new_path}')"
         )

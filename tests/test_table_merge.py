@@ -783,3 +783,19 @@ def test_every_part_of_a_partition_is_checked_for_the_contracts_columns(tmp_path
         rows=[], partitioning=BY_CONGRESS, prior=prior)
     assert list(_members(out)) == ["congress=118/part-000000.parquet"]
     assert [(row["bill_id"], row["extra"]) for row in _split_rows(out)] == [("118-hr-1", "x"), ("118-hr-2", None)]
+
+
+def test_merge_local_prior_null_fills_a_column_the_prior_lacks(tmp_path):
+    """Appending a column is a NULL backfill on published rows, as merge_table makes it, not a binder error."""
+    import duckdb
+
+    from spicy_regs.transforms.table_merge import merge_local_prior
+
+    prior, new, out = tmp_path / "prior.parquet", tmp_path / "new.parquet", tmp_path / "out.parquet"
+    pq.write_table(pa.table({"id": ["a", "b"], "n": [1, 2]}), prior)
+    pq.write_table(pa.table({"id": ["b"], "n": [3], "added": ["x"]}), new)
+    merge_local_prior(duckdb.connect(), columns=("id", "n", "added"), identity="id", order_by="id",
+                      prior_file=prior, new_file=new, out_file=out)
+    table = pq.read_table(out)
+    assert table.schema.field("n").type == pa.int64()
+    assert table.to_pylist() == [{"id": "a", "n": 1, "added": None}, {"id": "b", "n": 3, "added": "x"}]
