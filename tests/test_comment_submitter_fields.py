@@ -128,3 +128,12 @@ def test_legacy_catalog_gains_both_columns_and_old_rows_read_as_unread(tmp_path,
         # ADD COLUMN appends, in migration order: the physical tail is the contract's tail.
         assert list(physical)[-2:] == list(added) and {c: physical[c] for c in added} == dict.fromkeys(added, "VARCHAR")
         assert con.execute(f"SELECT subtype, duplicate_comments FROM {iceberg._qualified(COMMENT)}").fetchall() == [(None, None)]
+
+
+def test_a_malformed_count_refuses_the_etl_extract_rather_than_being_coerced():
+    """SpicyDocs never coerces duplicateComments; the ETL's extract refuses, so no coerced row is staged."""
+    raw = _raw("CMS-2016-0123-0993")
+    for stated in ("5", True, 1.5, -1, 2**31):
+        raw["data"]["attributes"]["duplicateComments"] = stated
+        with pytest.raises(ValueError, match="duplicateComments"):
+            COMMENT.extract(raw)
