@@ -775,6 +775,9 @@ def export_public_comments(
                 raise ValueError("Unsupported missing comment snapshot columns: " + ", ".join(sorted(unsupported)))
             # Schema-only DDL does not advance the data snapshot. Its older
             # schema cannot name newly added nullable fields; keep them unread.
+            # The record type's order is the mirror's column contract (spicy-docs
+            # 0.50.0 COMMENT: reference fields after docket_id), not the catalog's
+            # physical order, where ALTER ADD COLUMN appends them.
             columns = list(record_type.schema)
             projection = ", ".join(
                 f'NULL::VARCHAR AS "{column}"' if column in missing else f'"{column}"'
