@@ -344,7 +344,7 @@ OWN_TABLES = {
 def test_every_family_table_is_published(family):
     expected = {contract for contract, _ in FAMILY_TABLES} | {"public_activity_events", *OWN_TABLES}
     assert set(family) == expected
-    assert "bill_cosponsors" in family
+    assert len(family) == 19
 
 
 def test_each_published_table_matches_its_contract_schema_or_its_own(family):
@@ -1942,9 +1942,22 @@ def test_the_billstatus_zip_the_family_builds_from_is_retained_whole(tmp_path, m
     assert _no_secret(evidence, "fixture-key-0123456789")
 
 
-def test_cosponsor_refresh_clears_prior_occurrences(tmp_path, scoped):
+def _with_cosponsor(bioguide_id: str = "A000001", stamp: str | None = None) -> bytes:
+    """The fixture status listing one cosponsor, optionally under another publisher stamp."""
     raw = (FIXTURES / "status-119hr6028.xml").read_bytes()
-    populated = raw.replace(b"</bill>", b"<cosponsors><item><bioguideId>A000001</bioguideId><sponsorshipDate>2025-01-03</sponsorshipDate></item></cosponsors></bill>")
+    if stamp is not None:
+        raw = re.sub(
+            rb"<updateDateIncludingText>[^<]*</updateDateIncludingText>",
+            f"<updateDateIncludingText>{stamp}</updateDateIncludingText>".encode(),
+            raw,
+            count=1,
+        )
+    item = f"<item><bioguideId>{bioguide_id}</bioguideId><sponsorshipDate>2025-01-03</sponsorshipDate></item>"
+    return raw.replace(b"</bill>", f"<cosponsors>{item}</cosponsors></bill>".encode())
+
+
+def test_cosponsor_refresh_clears_prior_occurrences(tmp_path, scoped):
+    populated = _with_cosponsor()
     first = _run(tmp_path / "first", StubBulkAcquirer(status=populated))
     assert len(pq.read_table(first["bill_cosponsors"])) == 1
     empty = re.sub(rb"<cosponsors>.*?</cosponsors>", b"<cosponsors/>", populated, flags=re.S)
@@ -1954,3 +1967,37 @@ def test_cosponsor_refresh_clears_prior_occurrences(tmp_path, scoped):
     pq.write_table(bills, first["congress_bills"])
     second = _run(tmp_path / "second", StubBulkAcquirer(status=empty), _priors(tmp_path / "first"))
     assert pq.read_table(second["bill_cosponsors"]).num_rows == 0
+
+
+def test_an_unchanged_stamp_on_a_qualified_prior_keeps_its_cosponsor_rows(tmp_path, scoped):
+    """The occurrence reader wrote the prior row, so an unchanged stamp skips the bill and its rows stand."""
+    first = _run(tmp_path / "first", StubBulkAcquirer(status=_with_cosponsor()))
+    held = pq.read_table(first["bill_cosponsors"]).to_pylist()
+    assert [row["bioguide_id"] for row in held] == ["A000001"]
+    # The folder's zip moved and now lists another cosponsor under the same publisher stamp: the
+    # zip is read, but the stamp skips the bill, so the listing change is not taken up.
+    bulk = StubBulkAcquirer(entry=lambda c, t: zip_entry(c, t, size=31_658_670), status=_with_cosponsor("B000002"))
+    second = _run(tmp_path / "second", bulk, _priors(tmp_path / "first"))
+    assert bulk.zip_downloads == [(119, "hr")]
+    assert pq.read_table(second["bill_cosponsors"]).to_pylist() == held
+
+
+def test_a_refused_cosponsor_read_keeps_the_prior_rows(tmp_path, scoped, monkeypatch):
+    """A re-read bill whose cosponsor rows the provider refused replaces nothing: its prior occurrences stand."""
+    first = _run(tmp_path / "first", StubBulkAcquirer(status=_with_cosponsor()))
+    held = pq.read_table(first["bill_cosponsors"]).to_pylist()
+    assert [row["bioguide_id"] for row in held] == ["A000001"]
+
+    def refuse(*_args, **_kwargs):
+        raise TypeError("stub: cosponsor shaper refused")
+
+    monkeypatch.setattr("spicy_docs.interpretation.bill_family.shape_bill_cosponsor", refuse)
+    # A moved zip and a new stamp re-read the bill; its status row carries a list outcome, but every
+    # cosponsor row is refused.
+    status = _with_cosponsor("B000002", stamp="2026-09-20T00:00:00Z")
+    bulk = StubBulkAcquirer(entry=lambda c, t: zip_entry(c, t, size=31_658_670), status=status)
+    second = _run(tmp_path / "second", bulk, _priors(tmp_path / "first"))
+    assert bulk.zip_downloads == [(119, "hr")]
+    [bill] = pq.read_table(second["congress_bills"]).to_pylist()
+    assert (bill["update_date_including_text"], bill["cosponsors_outcome"]) == ("2026-09-20T00:00:00Z", "populated")
+    assert pq.read_table(second["bill_cosponsors"]).to_pylist() == held
