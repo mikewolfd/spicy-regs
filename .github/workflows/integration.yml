@@ -37,3 +37,17 @@ jobs:
         # (which write to stderr) stream live into the Actions log, not just
         # on failure. -v prints each test id.
         run: uv run pytest -m integration -v -s
+
+      - name: Probe catalog MERGE and rollback on a throwaway table
+        # Unit tests run replace_rows on in-memory DuckDB, which accepts SQL the
+        # Iceberg engine has refused before (f70e2e1). This drives the real
+        # catalog on probe_catalog_replace_<run>, never comments, and drops it.
+        env:
+          R2_CATALOG_URI: ${{ secrets.R2_CATALOG_URI }}
+          R2_CATALOG_WAREHOUSE: ${{ secrets.R2_CATALOG_WAREHOUSE }}
+          R2_CATALOG_TOKEN: ${{ secrets.R2_CATALOG_TOKEN }}
+          R2_CATALOG_NAMESPACE: ${{ secrets.R2_CATALOG_NAMESPACE }}
+          # Pull requests from other repositories receive no secrets; every other
+          # run must reach the catalog rather than skip.
+          REQUIRE: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+        run: uv run python scripts/probe_catalog_replace.py $([ "$REQUIRE" = "true" ] && echo --require)

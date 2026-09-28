@@ -102,7 +102,9 @@ receipts are `catalog-merge-probe.json`, `catalog-replace-probe.json` and
 `catalog-concurrency-probe.json` under `spicy-regs-join-implementation-20260927/`.
 The two-connection probe also refused intervening updates, unexpected inserts
 and a concurrent commit after the prior-row check. Matching priors permitted
-an intended NULL write. All scratch tables were removed.
+an intended NULL write. All scratch tables were removed. The integration
+workflow now repeats that probe on a throwaway table
+(`scripts/probe_catalog_replace.py`).
 
 A local repair does not hold the `comments-catalog-write` concurrency group.
 Any catalog write it makes, rows or schema (the nullable-column `ALTER`s

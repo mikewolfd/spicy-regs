@@ -345,7 +345,9 @@ def _merge(con, staging_files: list[Path], record_type: RecordType) -> int:
     MERGE support requires DuckDB >=1.5.3; this path refuses affected prior
     duplicates rather than guessing which historical row to keep. Existing
     duplicates remain the responsibility of the explicitly invoked
-    reconciliation path.
+    reconciliation path. The in-memory tests cannot exercise the Iceberg engine;
+    ``scripts/probe_catalog_replace.py`` runs this write path against a
+    throwaway catalog table in the integration workflow.
 
     Table reads per call: the prior below (outside the transaction), then the
     in-transaction copy, the MERGE and its readback in :func:`replace_rows`.
