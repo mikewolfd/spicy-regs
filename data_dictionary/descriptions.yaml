@@ -367,7 +367,8 @@ tables:
       in that local output. An absent element does not mean CBO never scored a bill.
       The first ten columns were the archive-index writer's until plan A1
       retired it (decision 31); the bill family now writes every column. Its own prior is re-read once where the
-      CBO outcome is missing, even when the publisher stamp is unchanged.
+      CBO outcome is missing, or where a SpicyDocs other than the running one read it, even when the publisher
+      stamp is unchanged.
       Receipt: `rollups-0-24-0-adoption-2026-09-20/`. Local output only; not uploaded.
       Rows of the 108th-117th are still the retired list walk's, and it missed
       bills: against the BILLSTATUS listings they lack 1,299 (199 in the 117th),
@@ -2384,7 +2385,9 @@ tables:
       records what was read, never that the folder may be skipped. Printing
       bodies are read apart from status, by each printing's own state; the same
       metadata names the BILLS bulk printings a zip refused, with the zip entry
-      they were read at, so an unchanged zip is not read again for them. All
+      they were read at, so an unchanged zip is not read again for them. It
+      also records, per bill, the SpicyDocs code that last read its status: an
+      unchanged bill is skipped only while that code is the running one. All
       columns are stored as VARCHAR.
     columns:
       name: "The zip's own file name in the folder listing, as the publisher spells it."

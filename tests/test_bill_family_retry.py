@@ -829,3 +829,128 @@ def test_failed_or_unattempted_retry_preserves_retained_child_scopes(tmp_path, s
     assert read_output(second["bill_sections"]).to_pylist() == before_sections
     assert pq.read_table(second["section_diff_items"]).to_pylist() == before_items
     assert pq.read_table(second["section_diffs"]).num_rows == 0, "the comparison stays pending"
+
+
+# --------------------------------------------------------------------------- #
+# The status skip's reader: an unchanged stamp skips a bill only while the
+# SpicyDocs that read it is the one running (``STATUS_READERS_KEY``).
+# --------------------------------------------------------------------------- #
+@pytest.fixture
+def status_reads(monkeypatch):
+    """The bills whose status each run shapes, in order; a test clears it between runs."""
+    reads: list[str] = []
+    shape = build.build_family
+
+    def spy(capture, **kwargs):
+        reads.append(build.bill_key(capture.status.identity))
+        return shape(capture, **kwargs)
+
+    monkeypatch.setattr(build, "build_family", spy)
+    return reads
+
+
+def readers(paths):
+    return build._held_readers(paths[build.ARCHIVES_TABLE])
+
+
+def forget_readers(paths):
+    """The published state of every bill before the reader was recorded: stamps, outcomes and completion only."""
+    path = paths[build.ARCHIVES_TABLE]
+    table = pq.read_table(path)
+    kept = {k: v for k, v in (table.schema.metadata or {}).items() if k != build.STATUS_READERS_KEY.encode()}
+    assert len(kept) < len(table.schema.metadata or {}), "the run recorded a reader to forget"
+    pq.write_table(table.replace_schema_metadata(kept), path)
+
+
+class TwoBills(StubBulkAcquirer):
+    """119 HR 6028 and a renumbered copy, 119 HR 6029, in one folder; ``refuse`` has the reader refuse the copy."""
+
+    def __init__(self, *, refuse=False, **kwargs):
+        super().__init__(**kwargs)
+        self.refuse = refuse
+
+    def acquire(self, congress, bill_type, **kwargs):
+        result = super().acquire(congress, bill_type, **kwargs)
+        if (congress, bill_type) == (119, "hr") and result.archive is not None:
+            body = (FIXTURES / "status-119hr6028.xml").read_bytes().replace(b"6028", b"6029")
+            copy = _Member(parse_bill_status(body, identity=replace(IDENTITY, number=6029)))
+            if self.refuse:
+                copy.status = None
+            result.archive = _Archive([*result.archive.members, copy])
+            result.archive.refused_count = int(self.refuse)
+        return result
+
+
+def test_a_bill_read_by_the_running_spicy_docs_is_skipped(tmp_path, scoped, status_reads):
+    first, _, _ = run(tmp_path / "first")
+    assert readers(first) == {"119-hr-6028": build.spicy_docs_code()}
+    status_reads.clear()
+    moved = StubBulkAcquirer(entry=lambda c, t: zip_entry(c, t, size=31_658_670))
+    _, bulk, _ = run(tmp_path / "second", prior=tmp_path / "first", bulk=moved)
+    assert bulk.zip_downloads == [(119, "hr")], "the moved zip is read"
+    assert status_reads == [], "and its unchanged bill, read by this SpicyDocs, is not shaped again"
+
+
+def test_a_bill_another_spicy_docs_read_is_read_again(tmp_path, scoped, status_reads, monkeypatch):
+    run(tmp_path / "first")
+    status_reads.clear()
+    monkeypatch.setattr(build, "spicy_docs_code", lambda: "0" * 64)
+    second, bulk, body = run(tmp_path / "second", prior=tmp_path / "first")
+    assert bulk.zip_downloads == [(119, "hr")], "its folder is reopened although the zip has not moved"
+    assert status_reads == ["119-hr-6028"], "and the bill is shaped by the running SpicyDocs"
+    assert body.requested == [], "its held printings are not fetched again"
+    assert readers(second) == {"119-hr-6028": "0" * 64}
+
+
+def test_a_prior_with_no_recorded_reader_is_read_exactly_once(tmp_path, scoped, status_reads):
+    first, _, _ = run(tmp_path / "first")
+    forget_readers(first)
+    status_reads.clear()
+    second, bulk, _ = run(tmp_path / "second", prior=tmp_path / "first")
+    assert bulk.zip_downloads == [(119, "hr")] and status_reads == ["119-hr-6028"], "a completed folder reopens"
+    assert readers(second) == {"119-hr-6028": build.spicy_docs_code()}
+    status_reads.clear()
+    _, bulk, _ = run(tmp_path / "third", prior=tmp_path / "second")
+    assert bulk.zip_downloads == [] and status_reads == [], "once read and recorded, it skips"
+
+
+def test_the_record_survives_a_run_that_rewrites_only_a_sections_partition(tmp_path, scoped, status_reads):
+    first, _, _ = run(tmp_path / "first", budget=1)
+    status_reads.clear()
+    second, bulk, body = run(tmp_path / "second", prior=tmp_path / "first", budget=1)
+    assert bulk.zip_downloads == [] and status_reads == [], "no status is read"
+    assert body.requested == ["BILLS-119hr6028eh"], "the body pass reads the pending printing"
+    codes = [
+        {row["version_code"] for row in read_output(paths["bill_sections"]).to_pylist()} for paths in (first, second)
+    ]
+    assert codes == [{"introduced-in-house"}, {"introduced-in-house", "engrossed-in-house"}], "congress=119 rewritten"
+    assert readers(second) == readers(first) == {"119-hr-6028": build.spicy_docs_code()}
+    _, bulk, _ = run(tmp_path / "third", prior=tmp_path / "second", budget=0)
+    assert bulk.zip_downloads == [] and status_reads == []
+
+
+def test_a_capped_run_records_the_reader_of_each_bill_it_read(tmp_path, scoped, status_reads):
+    """The status pass has no per-bill cap; a run reaches part of a folder when the reader refuses a member.
+
+    The run is capped as well, at one printing fetch, and records every bill it shaped.
+    """
+    held, _, _ = run(tmp_path / "held", bulk=TwoBills())
+    forget_readers(held)
+    status_reads.clear()
+    first, _, body = run(tmp_path / "first", prior=tmp_path / "held", budget=1, bulk=TwoBills(refuse=True))
+    assert status_reads == ["119-hr-6028"] and len(body.requested) == 1
+    assert readers(first) == {"119-hr-6028": build.spicy_docs_code()}
+    status_reads.clear()
+    _, bulk, _ = run(tmp_path / "second", prior=tmp_path / "first", budget=1, bulk=TwoBills())
+    assert bulk.zip_downloads == [(119, "hr")], "the refused member left its folder incomplete"
+    assert status_reads == ["119-hr-6029"], "the bill the capped run read is not read again"
+
+
+def test_the_reader_record_is_number_runs_that_read_back_every_bill(tmp_path):
+    held = {f"119-hr-{n}": "a" for n in (1, 2, 3, 5)} | {"119-s-7": "b", "118-hr-2": "a"}
+    encoded = build._readers_metadata(held | {"119-hr-x": "a"})
+    assert json.loads(encoded) == {"a": {"118-hr": "2", "119-hr": "1-3,5"}, "b": {"119-s": "7"}}
+    path = tmp_path / "archives.parquet"
+    for stored, expected in ((encoded, held), ("{", {})):
+        pq.write_table(pa.table({"name": pa.array([], pa.string())}, metadata={build.STATUS_READERS_KEY: stored}), path)
+        assert build._held_readers(path) == expected

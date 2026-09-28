@@ -9,6 +9,17 @@ Entries link to the pull request that introduced the change.
 
 ### Changed
 
+- **The bill family skips an unchanged bill only when the running SpicyDocs
+  read it.** Each bill's status reader, the SpicyDocs package digest, is
+  recorded per bill in `bill_family_archives`' metadata. A SpicyDocs release
+  that changes what a bill's rows hold now reaches bills already read, and a
+  version-only release reads nothing again. Expected effect: every bill with no
+  recorded reader has its BILLSTATUS read once more on its Congress's next run,
+  and no printing is fetched again. The 119th nightly re-reads its 19,249
+  bills, and the 108th–113th re-read theirs on their next scoped run. The
+  114th–118th were due for a full re-read anyway, because their rows lack the
+  CBO and cosponsor outcomes.
+
 - **`proceedings.agency_code` follows RefSpec's agency registry for docket-less
   proceedings** (proceedings v11, RefSpec 0.1.0.dev21's registry view, batch
   1). A Register agency bridged to an organization a Regulations.gov code
