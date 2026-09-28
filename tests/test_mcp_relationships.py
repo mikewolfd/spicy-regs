@@ -32,6 +32,12 @@ def test_discovery_exposes_derived_dependencies_and_unsupported_old_schema(monke
         assert discovered["publication"][name]["input_publications"]["members"]["status"].endswith("unversioned")
         described = _tool_data(server, "describe_table", {"table": name})
         assert described["available"] and described["metadata"]["rule_version"]
+        # Columns are described on request, not at connection build.
+        assert "columns" not in mcp_server._connection_relationships(con.cursor())[name]["metadata"]
+        assert described["schema_matches_declared"] is True
+        ordinal = next(c for c in described["declared_columns"] if c["column_name"] == "source_ordinal")
+        assert ordinal["column_type"] == "BIGINT" and "Zero-based position" in ordinal["description"]
+        assert [c["column_name"] for c in described["columns"]] == [c["column_name"] for c in described["declared_columns"]]
         result = _tool_data(server, "query_sql", {"sql": f'SELECT * FROM "{name}" ORDER BY source_ordinal'})
         assert [r["source_ordinal"] for r in result["rows"]] == [0, 1]
         assert all(r["target_status"] == "not_checked" for r in result["rows"])

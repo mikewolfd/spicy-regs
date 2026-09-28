@@ -55,22 +55,39 @@ def install_sql_views(connection: Any, available_tables: Iterable[str], specs: I
     return result
 
 
-def column_metadata(connection: Any, views: dict[str, dict[str, Any]]) -> None:
-    """Attach actual bound schemas without evaluating rows."""
-    descriptions = {
-        'source_ordinal': 'Zero-based position in the held source array; repeated elements remain distinct.',
-        'source_pointer': 'Location in the retained source field; see source_field and the source key.',
-        'raw_value_json': 'The complete held element, including unsupported objects and nulls.',
-        'raw_field_value': 'Literal held field value; retained so malformed input remains inspectable.',
-        'target_key': 'Typed target reference; a key alone does not prove the target exists.',
-        'target_status': 'Lookup disposition: found, missing, ambiguous, unsupported or not_checked.',
-        'parsing_status': 'Source-value interpretation, separate from target existence.',
-        'source_publication_json': 'Host-selected publication metadata for this source; JSON null means unprovided.',
-        'target_publication_json': 'Host-selected target publication metadata; no atomic cross-table snapshot is implied.',
-        'rule_version': 'Version of this relationship-view rule.',
-        'target_count': 'Number of exact target rows under the complete key in this selected publication.',
-    }
-    for name, info in views.items():
+_COLUMN_DESCRIPTIONS = {
+    'source_ordinal': 'Zero-based position in the held source array; repeated elements remain distinct.',
+    'source_pointer': 'Location in the retained source field; see source_field and the source key.',
+    'raw_value_json': 'The complete held element, including unsupported objects and nulls.',
+    'raw_field_value': 'Literal held field value; retained so malformed input remains inspectable.',
+    'target_key': 'Typed target reference; a key alone does not prove the target exists.',
+    'target_status': 'Lookup disposition: found, missing, ambiguous, unsupported or not_checked.',
+    'parsing_status': 'Source-value interpretation, separate from target existence.',
+    'source_publication_json': 'Host-selected publication metadata for this source; JSON null means unprovided.',
+    'target_publication_json': 'Host-selected target publication metadata; no atomic cross-table snapshot is implied.',
+    'rule_version': 'Version of this relationship-view rule.',
+    'target_count': 'Number of exact target rows under the complete key in this selected publication.',
+}
+
+
+def view_columns(described: Iterable[tuple]) -> list[dict[str, str]]:
+    """Declare a bound view's columns from its ``DESCRIBE`` rows, with this registry's meanings.
+
+    Callers describe a view when asked (``describe_table``), not at
+    installation: binding each of the registry's views again over remote
+    Parquet doubled the serving connection's build time.
+    """
+    return [
+        {'column_name': row[0], 'column_type': row[1],
+         'description': _COLUMN_DESCRIPTIONS.get(row[0], row[0].replace('_', ' ').capitalize() +
+                                                 '; its meaning and source grain are described by this view.')}
+        for row in described
+    ]
+
+
+def annotate_views(views: dict[str, dict[str, Any]]) -> None:
+    """Attach the shared availability and coverage semantics without evaluating or rebinding views."""
+    for info in views.values():
         metadata = info['metadata']
         metadata['availability_basis'] = (
             'SQL bound against loaded schemas only; installation does not scan rows or verify source authority.'
@@ -87,11 +104,3 @@ def column_metadata(connection: Any, views: dict[str, dict[str, Any]]) -> None:
                            'Original absent/null states are known only where native field-state evidence was retained.',
             'publication_limit': 'A bound view is not a separately published or source-qualified artifact.',
         }
-        if info['status'] != 'available':
-            continue
-        info['metadata']['columns'] = [
-            {'column_name': row[0], 'column_type': row[1],
-             'description': descriptions.get(row[0], row[0].replace('_', ' ').capitalize() +
-                                              '; its meaning and source grain are described by this view.')}
-            for row in connection.execute(f'DESCRIBE {quoted(name)}').fetchall()
-        ]
