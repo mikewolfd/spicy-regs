@@ -180,8 +180,9 @@ live tables to each floor nightly in `check-rollup-freshness.yml`.
 
 ## Ledger qualification (`_qualification`)
 
-`list_sources` and `describe_table` report the output ledger's audit for each
-table beside its live pin. The ledger is Markdown under `docs/research/`, which
+`describe_table` reports the output ledger's audit for its table beside the
+live pin. (`list_sources` did too, for every table, until the response-size
+repair below.) The ledger is Markdown under `docs/research/`, which
 the image does not ship, so `spicy-regs-dict generate` bundles
 `table_qualification.json` (built by `spicy_regs.output_ledger`) and `check`
 refuses a stale copy. `_ledger` reads it once per process.
@@ -203,6 +204,29 @@ refuses a stale copy. `_ledger` reads it once per process.
 - **Closed vocabulary.** "Published at" is a publication statement, not an
   audit. A new or misspelled audit word fails the build instead of being read as
   either an audit or its absence; add it to `output_ledger` deliberately.
+
+## Response size: a reply carries what its caller asked about
+
+On 2026-09-28 a blind persona test (`docs/research/mcp-chaos-2026-09-28.md`)
+found the replies too large for the clients reading them. `list_sources`
+returned 163,699 characters: every table's publication pin, ledger audit and
+relationship-view metadata. Every `query_sql` returned about 54,000 characters,
+`SELECT 1` included, because it attached every table's pin
+(`connection_publication`). Claude Code spilled each reply to a single-line
+file its reader cannot page, so two of five personas never read a row.
+
+- **`list_sources`** lists each table's name, label and coverage kind, and
+  lists each relationship family's views once, under their shared summary. Pins,
+  audits and view dependencies live in `describe_table`.
+- **`query_sql`** returns the pins of the tables the statement names.
+  `_tables_named` walks DuckDB's unbound parse tree (`json_serialize_sql`).
+  `cursor.get_table_names` binds the query and expands each view to the tables
+  under it, which for these `read_parquet` views is none. CTE names in the
+  tree are dropped by intersecting with the published tables.
+- **`describe_table`** returns one column list. `declared_columns` repeated the
+  column names and descriptions that `columns` already carried, which was about
+  45% of the reply. DESCRIBE's null, key and default fields meant nothing for a
+  Parquet view.
 
 ## DNS rebinding protection is off in `build_app`
 

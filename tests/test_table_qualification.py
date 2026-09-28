@@ -118,8 +118,18 @@ def test_a_stale_record_fails_the_dictionary_check(tmp_path, monkeypatch, capsys
     assert "is stale" in dd.qualification_errors()[0]
 
 
+def _audit(server, table: str) -> dict:
+    """describe_table's audit for ``table``, without the ledger scope and statements every table shares."""
+    report = _tool_data(server, "describe_table", {"table": table})["qualification"]
+    shared = {"ledger", "ledger_destination", "basis", "ledger_tasks", "ledger_statements"}
+    return {key: value for key, value in report.items() if key not in shared}
+
+
 def test_live_and_ledger_pins_are_separate_fields_never_one_verified_flag(monkeypatch):
-    tables = _tool_data(_serve(monkeypatch, _index()), "list_sources", {})["qualification"]["tables"]
+    server = _serve(monkeypatch, _index())
+    tables = {
+        name: _audit(server, name) for name in ("laws", "fec_committees", "bill_subjects", "dockets", "discovery_signals")
+    }
     assert tables["laws"] == {
         "status": "recorded",
         "generation": "current generation audited",
@@ -144,7 +154,7 @@ def test_live_and_ledger_pins_are_separate_fields_never_one_verified_flag(monkey
 
 def test_a_drifted_table_reports_the_ledgers_latest_audit_not_its_last_phrase(monkeypatch):
     server = _serve(monkeypatch, _index(bill_subjects="750784bd"))
-    subjects = _tool_data(server, "list_sources", {})["qualification"]["tables"]["bill_subjects"]
+    subjects = _audit(server, "bill_subjects")
     assert subjects["generation"] == "newer generation, not yet audited"
     assert (subjects["ledger_pin"], subjects["ledger_date"], subjects["ledger_disposition"]) == (
         "1b067027",
@@ -191,11 +201,11 @@ def test_a_rulemaking_table_is_compared_with_the_snapshot_its_pointer_named(monk
     con.execute("CREATE TABLE _spicy_rulemaking (snapshot VARCHAR)")
     con.execute("INSERT INTO _spicy_rulemaking VALUES (?)", [json.dumps(pinned)])
     con.execute("CREATE TABLE rulemaking_lifecycles (id VARCHAR)")
-    listed = _tool_data(server, "list_sources", {})
-    report = listed["qualification"]["tables"]["rulemaking_lifecycles"]
+    described = _tool_data(server, "describe_table", {"table": "rulemaking_lifecycles"})
+    report = described["qualification"]
     assert (report["pin_kind"], report["live_pin"], report["ledger_pin"]) == ("snapshot", snapshot_id[:17], "snapshot_91b19da7")
     assert (report["generation"], report["ledger_disposition"]) == (generation, "qualified")
-    assert listed["publication"]["rulemaking_lifecycles"]["snapshot_id"] == snapshot_id
+    assert described["publication"]["snapshot_id"] == snapshot_id
 
 
 @pytest.mark.parametrize("reads", ["another publisher", "a local directory"])
@@ -205,12 +215,10 @@ def test_qualification_is_unknown_away_from_the_ledgers_publisher(monkeypatch, t
         monkeypatch.setattr(mcp_server, "R2_BASE_URL", "https://data.spicy-regs.dev")
     else:
         monkeypatch.setattr(mcp_server, "DATA_DIR", tmp_path)
-    listed = _tool_data(server, "list_sources", {})["qualification"]
     described = _tool_data(server, "describe_table", {"table": "committee_reports"})["qualification"]
-    for report in (listed, described):
-        assert report["status"] == "unknown_for_publisher"
-        assert DESTINATION in report["reason"]
-        assert not {"tables", "ledger_pin", "ledger_disposition", "generation"} & set(report)
+    assert described["status"] == "unknown_for_publisher"
+    assert DESTINATION in described["reason"]
+    assert not {"tables", "ledger_pin", "ledger_disposition", "generation"} & set(described)
 
 
 def test_the_bundled_record_is_read_once_per_process(monkeypatch):

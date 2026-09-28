@@ -75,3 +75,34 @@ def test_truncation_measures_an_omitted_row_not_just_reaching_the_cap(client, si
     assert data["rows"] == [{"i": i} for i in range(min(size, 2))]
     assert data["row_count_shown"] == min(size, 2)
     assert data["truncated"] is truncated
+
+
+@pytest.mark.parametrize(("sql", "named"), [
+    ("SELECT 1 AS x", set()),
+    ("SELECT filing_status FROM fcc_filings", {"fcc_filings"}),
+    ("WITH f AS (SELECT filing_status FROM fcc_filings) "
+     "SELECT f.filing_status, (SELECT count(*) FROM fcc_proceedings) AS n FROM f", {"fcc_filings", "fcc_proceedings"}),
+])
+def test_a_query_reports_the_version_of_only_the_tables_it_names(client, sql, named):
+    # Every table's version on every call made a one-row answer 54K characters on the deployed endpoint.
+    result = call(client, "query_sql", {"sql": sql})
+    assert result["isError"] is False
+    data = result["structuredContent"]
+    assert set(data["publication"]) == named
+    assert "connection_publication" not in data
+
+
+def test_a_misspelled_table_is_answered_with_close_names(client):
+    result = call(client, "describe_table", {"table": "fcc_filing"})
+    assert result["isError"] is True
+    assert "Close names: fcc_filings" in result["content"][0]["text"]
+
+
+def test_discovery_lists_tables_without_per_table_pins_or_audits(client):
+    # Pins and ledger audits for every table made list_sources 164K characters; describe_table carries them.
+    result = call(client, "list_sources", {})
+    assert result["isError"] is False
+    data = result["structuredContent"]
+    assert {entry["table"] for entry in data["tables"]} == {"fcc_filings", "fcc_proceedings"}
+    assert set(data["tables"][0]) == {"table", "label", "coverage"}
+    assert not {"publication", "qualification", "datasets", "declared_tables"} & set(data)

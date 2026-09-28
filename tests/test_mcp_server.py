@@ -90,10 +90,11 @@ def test_discovery_reports_actual_parquet_schema_and_dictionary_caveats(tmp_path
     server = mcp_server.build_server()
 
     sources = _tool_data(server, "list_sources", {})
-    assert sources["tables"] == ["org_committee_links"]
+    declared = mcp_server._table_metadata()["org_committee_links"]
+    assert sources["tables"] == [
+        {"table": "org_committee_links", "label": declared["label"], "coverage": declared["kind"]}
+    ]
     assert "fec_committees" in sources["unavailable_tables"]
-    assert "source_rows" not in sources["tables"]
-    assert sources["declared_tables"] == list(mcp_server.TABLES)
 
     result = _tool_data(server, "describe_table", {"table": "org_committee_links"})
     assert result["available"] is True
@@ -113,8 +114,9 @@ def test_discovery_reports_actual_parquet_schema_and_dictionary_caveats(tmp_path
 
     unavailable = _tool_data(server, "describe_table", {"table": "fec_committees"})
     assert unavailable["available"] is False
-    assert unavailable["columns"] == []
-    assert unavailable["declared_columns"][0]["column_name"] == "committee_id"
+    # An unavailable table still describes its declared columns, once.
+    assert unavailable["columns"][0]["column_name"] == "committee_id"
+    assert "declared_columns" not in unavailable
     assert unavailable["schema_matches_declared"] is None
     assert unavailable["schema_differences"] is None
 
@@ -185,12 +187,12 @@ def test_local_directory_runs_actual_connection_without_remote_fallback(tmp_path
     assert sources["source"] == "local"
     assert sources["base_path"] == str(tmp_path)
     assert "base_url" not in sources
-    assert sources["tables"] == ["fec_committees"]
-    assert sources["publication"]["fec_committees"] == {"status": "local_unversioned"}
+    assert [entry["table"] for entry in sources["tables"]] == ["fec_committees"]
     assert loaded == []
     described = _tool_data(server, "describe_table", {"table": "fec_committees"})
     assert described["available"] is True
     assert described["source"] == "local"
+    assert described["publication"] == {"status": "local_unversioned"}
     queried = _tool_data(server, "query_sql", {"sql": "SELECT committee_id FROM fec_committees"})
     assert queried["source"] == "local"
     assert queried["rows"] == [{"committee_id": "C00000001"}]

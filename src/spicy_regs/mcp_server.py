@@ -9,6 +9,7 @@ reading either the public R2 bucket or an explicitly configured local directory
 from __future__ import annotations
 
 import base64
+import difflib
 import json
 import logging
 import os
@@ -351,6 +352,29 @@ def _first_write_statement(cursor: duckdb.DuckDBPyConnection, sql: str) -> str |
         if name not in READ_ONLY_STATEMENT_TYPES:
             return name
     return None
+
+
+def _tables_named(cursor: duckdb.DuckDBPyConnection, sql: str) -> set[str]:
+    """Table names ``sql`` references, from DuckDB's parse tree; CTE names included, views not expanded.
+
+    ``cursor.get_table_names`` binds the query and expands each view to the
+    tables under it, which for these ``read_parquet`` views is none, so the
+    unbound tree from ``json_serialize_sql`` is walked instead. Callers
+    intersect the result with the published tables, which drops CTE names.
+    """
+    [(serialized,)] = cursor.execute("SELECT json_serialize_sql(?)", [sql]).fetchall()
+    tree = json.loads(serialized)
+    names: set[str] = set()
+    stack: list[Any] = [tree]
+    while stack:
+        node = stack.pop()
+        if isinstance(node, dict):
+            if node.get("type") == "BASE_TABLE":
+                names.add(node["table_name"])
+            stack.extend(node.values())
+        elif isinstance(node, list):
+            stack.extend(node)
+    return names
 
 
 def _apply_security_settings(con: duckdb.DuckDBPyConnection, allowed_paths: list[str] | None = None) -> None:
@@ -839,67 +863,59 @@ def _register_tools(mcp: FastMCP) -> None:
 
     @mcp.tool()
     def list_sources() -> dict[str, Any]:
-        """List available tables and distinguish declared outputs without a loaded view.
+        """List the queryable tables: each one's label and coverage kind, with derived views grouped.
 
-        Availability reflects the cached connection, rebuilt after its configured
-        lifetime. It establishes that a view loaded, not full row validation.
-        qualification compares each live pin with the output ledger's audited
-        pin and disposition, only for the ledger's publisher. Use
-        describe_table for meaning, coverage, schema differences and the
-        ledger's statement.
+        coverage is the dictionary's kind: true_range, window, sampled or
+        derived; a window or a sample does not hold the source's full history.
+        A listed table loaded in this connection; that is not a data or
+        freshness audit. Call describe_table before querying a table: it gives
+        columns, coverage caveats, joins, the live data version and the output
+        ledger's audit.
         """
         cursor = _get_connection().cursor()
         with _statement_timeout(cursor):
             available = _available_tables(cursor)
         metadata = _table_metadata()
         relationships = _connection_relationships(cursor)
-        scope, tables = _qualification(cursor, available, statements=False)
+        # A relationship family's occurrence, pair and field-state views share one summary; list it once.
+        views: dict[str, list[str]] = {}
+        for name, entry in relationships.items():
+            if name in available:
+                views.setdefault(entry["metadata"]["summary"], []).append(name)
         return {
             **_source_details(cursor),
-            "tables": available,
-            "declared_tables": list(TABLES),
-            "unavailable_tables": [name for name in TABLES if name not in available],
-            "relationship_views": {
-                name: {**entry, "metadata": {
-                    key: value for key, value in entry["metadata"].items()
-                    if key in {"label", "summary", "view_kind", "rule_version", "identity_columns"}
-                }} for name, entry in relationships.items()
-            },
-            "relationship_details": "Use describe_table for columns, source-field states, input pins and coverage semantics.",
-            "availability_basis": "Views loaded in the current connection; not a full data or freshness audit.",
-            "connection_ttl_seconds": _CONNECTION_TTL_SECONDS,
-            "publication": _publication_status(cursor)["publication"],
-            "qualification": scope if tables is None else {**scope, "status": "applies", "tables": tables},
-            "datasets": [
-                {
-                    "table": name,
-                    "label": metadata.get(name, relationships.get(name, {}).get("metadata", {})).get("label", name),
-                    "available": name in available,
-                    "kind": "derived_view" if name in relationships else "source_table",
-                }
-                for name in dict.fromkeys((*TABLES, *available, *relationships))
+            "tables": [
+                {"table": name, "label": metadata.get(name, {}).get("label"), "coverage": metadata.get(name, {}).get("kind")}
+                for name in available if name not in relationships
             ],
+            "relationship_views": [{"views": names, "summary": summary} for summary, names in views.items()],
+            "unavailable_tables": [name for name in (*TABLES, *relationships) if name not in available],
         }
 
     @mcp.tool()
     def describe_table(table: str) -> dict[str, Any]:
-        """Return actual columns, field meanings, row identity and coverage caveats.
+        """Return a table's columns with their meanings, row identity, coverage caveats and joins.
 
-        Declared columns and coverage metadata describe supported output; they
-        do not certify this connection's data population or freshness. An
-        unavailable declared table still returns its dictionary description.
-        qualification gives the live pin, the output ledger's audited pin, date
-        and disposition, whether they match, and the ledger's own statement, as
-        separate fields; it is reported only for the ledger's publisher. joins
-        lists the declared joins this table makes (outgoing) and receives
-        (incoming), each with its measured baseline and expected kind.
+        Coverage metadata describes supported output; it does not certify this
+        connection's data population or freshness. columns are the loaded
+        view's, each with its dictionary meaning; an unavailable declared table
+        returns its declared columns. schema_differences names any column or
+        type the view does not share with the dictionary. publication is the
+        live data version. qualification gives the live pin, the output
+        ledger's audited pin, date and disposition, whether they match, and
+        the ledger's own statement, as separate fields; it is reported only for
+        the ledger's publisher. joins lists the declared joins this table makes
+        (outgoing) and receives (incoming), each with its measured baseline.
         """
         cursor = _get_connection().cursor()
         with _statement_timeout(cursor):
             status = _publication_status(cursor)
         relationships = _connection_relationships(cursor)
         if table not in TABLES and table not in status["tables"] and table not in relationships:
-            raise ValueError(f"Unknown table '{table}'; use list_sources to discover table names")
+            known = list(dict.fromkeys((*TABLES, *status["tables"], *relationships)))
+            close = difflib.get_close_matches(table, known, n=5, cutoff=0.6)
+            hint = f" Close names: {', '.join(close)}." if close else ""
+            raise ValueError(f"Unknown table '{table}'.{hint} list_sources lists every table.")
         with _statement_timeout(cursor):
             available = table in status["tables"]
             rows = cursor.execute(f'DESCRIBE "{table}"').fetchall() if available else []
@@ -937,20 +953,12 @@ def _register_tools(mcp: FastMCP) -> None:
             "joins": _table_joins(table),
             "metadata": {key: value for key, value in entry.items() if key not in {"table", "columns"}},
             "metadata_basis": "Dictionary declarations and dated coverage notes; not live population measurements.",
-            "declared_columns": entry["columns"],
             "schema_matches_declared": not any(differences.values()) if differences is not None else None,
             "schema_differences": differences,
             "columns": [
-                {
-                    "column_name": row[0],
-                    "column_type": row[1],
-                    "null": row[2],
-                    "key": row[3],
-                    "default": row[4],
-                    "description": declared.get(row[0], {}).get("description"),
-                }
-                for row in rows
-            ],
+                {"column_name": name, "column_type": dtype, "description": declared.get(name, {}).get("description")}
+                for name, dtype in actual.items()
+            ] if available else entry["columns"],
         }
 
     @mcp.tool()
@@ -966,6 +974,7 @@ def _register_tools(mcp: FastMCP) -> None:
         table listed by list_sources. Always include a LIMIT in exploratory
         queries. truncated reports whether rows beyond max_rows were omitted.
         Selected columns must have unique names; alias shared names in joins.
+        publication gives the live data version of each table the query names.
         """
         cursor = _get_connection().cursor()
         write_statement = _first_write_statement(cursor, sql)
@@ -979,6 +988,8 @@ def _register_tools(mcp: FastMCP) -> None:
             if duplicates:
                 raise ValueError(f"Duplicate result column names: {duplicates}; use AS aliases to give each a unique name")
             rows = cursor.fetchmany(max_rows + 1)
+            publication = _publication_status(cursor)["publication"]
+            named = _tables_named(cursor, sql)
         result_rows = [{col: _jsonify(val) for col, val in zip(columns, row)} for row in rows[:max_rows]]
         return {
             **_source_details(cursor),
@@ -987,7 +998,7 @@ def _register_tools(mcp: FastMCP) -> None:
             "max_rows": max_rows,
             "truncated": len(rows) > max_rows,
             "rows": result_rows,
-            "connection_publication": _publication_status(cursor)["publication"],
+            "publication": {name: pin for name, pin in publication.items() if name in named},
         }
 
     @mcp.tool()
@@ -1072,7 +1083,10 @@ def _register_tools(mcp: FastMCP) -> None:
                 result, input_snapshots={document_kind: status["publication"].get(parent, {})},
                 intended_query="Resolve the cited target for this held document", max_items=max_occurrences,
             ),
-            "connection_publication": status["publication"],
+            # Each resolved target carries its own target_snapshot; this names the tables the lookup read.
+            "publication": {
+                name: pin for name, pin in status["publication"].items() if name in {"document_citations", parent}
+            },
         }
 
 

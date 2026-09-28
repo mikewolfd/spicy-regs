@@ -134,12 +134,12 @@ def test_admitted_table_without_dictionary_is_available_but_helpers_are_not(tmp_
     monkeypatch.setattr(mcp_server, "_get_connection", lambda: inner)
     server = mcp_server.build_server()
     result = _tool_data(server, "list_sources", {})
-    assert result["tables"] == ["extra"]
-    assert result["publication"]["extra"]["status"] == "managed_generation"
+    assert [entry["table"] for entry in result["tables"]] == ["extra"]
     described = _tool_data(server, "describe_table", {"table": "extra"})
+    assert described["publication"]["status"] == "managed_generation"
     assert described["available"] is True
     assert described["columns"][0]["column_name"] == "id"
-    assert described["declared_columns"] == []
+    assert described["columns"][0]["description"] is None
     assert described["schema_matches_declared"] is None
     inner.close()
 
@@ -271,9 +271,8 @@ def test_each_rulemaking_view_describes_as_the_dictionary_declares(tmp_path, mon
         described = _tool_data(server, "describe_table", {"table": table})
         assert described["schema_matches_declared"] is True, (table, described["schema_differences"])
         actual = [(column["column_name"], column["column_type"]) for column in described["columns"]]
-        assert (
-            actual == declared[table] == [(c["column_name"], c["column_type"]) for c in described["declared_columns"]]
-        )
+        assert actual == declared[table]
+        assert all(column["description"] for column in described["columns"]), table
         assert described["publication"]["status"] == "rulemaking_snapshot"
     # Source selection, rulemaking selection and the relationship registry are each parsed once.
     assert mcp_server._parsed_pin.cache_info().misses == 3

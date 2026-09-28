@@ -88,9 +88,9 @@ job fails, but the families still publish whatever it served.
   mismatches abort; only an index 404 permits legacy resolution.
 - MCP captures one index per cached connection, creates managed views at immutable
   URLs, checks their schemas, and refuses a connection if a managed member is
-  missing. `list_sources` distinguishes actual available tables from declarations
-  and labels managed generations versus legacy data. Query responses include the
-  connection's publication pins. The remote query reader relies on immutability;
+  missing. `list_sources` distinguishes actual available tables from declarations;
+  `describe_table` labels managed generations versus legacy data. Query responses
+  include the publication pin of each table the query names. The remote query reader relies on immutability;
   it does not rehash whole tables for each query.
 - The rulemaking dataset publishes under its own pointer,
   `materialized/rulemaking/latest.json`. Each MCP connection build reads it once
