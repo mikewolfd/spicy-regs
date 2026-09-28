@@ -164,6 +164,46 @@ def test_replacement_failure_after_write_rolls_back(local_catalog) -> None:
     assert con.execute(f"SELECT docket_id,title FROM {table}").fetchall() == [('D', 'new')]
 
 
+def test_replacement_reads_the_catalog_table_once_before_merging(local_catalog) -> None:
+    """The prior and duplicate checks read one in-transaction copy, not the live table."""
+    con = local_catalog
+    iceberg._ensure_table(con, DOCKET)
+    table = iceberg._qualified(DOCKET)
+    con.execute(f"INSERT INTO {table} (docket_id,title) VALUES ('D','old'),('E','other')")
+    con.execute(f"CREATE TEMP TABLE prior AS SELECT * FROM {table} WHERE docket_id='D'")
+    con.execute("CREATE TEMP TABLE fresh AS SELECT * REPLACE ('new' AS title) FROM prior")
+    statements: list[str] = []
+
+    class Recording:
+        def execute(self, sql, *args, **kwargs):
+            statements.append(sql)
+            return con.execute(sql, *args, **kwargs)
+
+    iceberg.replace_rows(Recording(), DOCKET, "fresh", expected_prior="prior")
+    begin, commit = statements.index("BEGIN"), statements.index("COMMIT")
+    reads = [sql.split()[0] for sql in statements[begin:commit] if table in sql]
+    assert reads == ["CREATE", "MERGE", "SELECT"]
+    assert con.execute(f"SELECT docket_id,title FROM {table} ORDER BY 1").fetchall() == [("D", "new"), ("E", "other")]
+    assert not con.execute("SELECT 1 FROM duckdb_tables() WHERE table_name LIKE '_replace_target%'").fetchall()
+
+
+def test_scoped_replacement_leaves_same_key_outside_scope(local_catalog) -> None:
+    con = local_catalog
+    iceberg._ensure_table(con, COMMENT)
+    table = iceberg._qualified(COMMENT)
+    con.execute(f"INSERT INTO {table} (comment_id,agency_code,text_content) VALUES ('c1','EPA',NULL),('c1','FAA','kept')")
+    con.execute(f"CREATE TEMP TABLE prior AS SELECT * FROM {table} WHERE agency_code='EPA'")
+    con.execute("CREATE TEMP TABLE fresh AS SELECT * REPLACE ('filled' AS text_content) FROM prior")
+    iceberg.replace_rows(con, COMMENT, "fresh", expected_prior="prior", scope={"agency_code": "EPA"})
+    assert con.execute(f"SELECT agency_code,text_content FROM {table} ORDER BY 1").fetchall() == [
+        ("EPA", "filled"), ("FAA", "kept"),
+    ]
+    with pytest.raises(ValueError, match="outside the requested scope"):
+        iceberg.replace_rows(con, COMMENT, "fresh", scope={"agency_code": "FAA"})
+    with pytest.raises(ValueError, match="unknown columns"):
+        iceberg.replace_rows(con, COMMENT, "fresh", scope={"agency": "EPA"})
+
+
 def test_unlocked_catalog_write_warns_once(local_catalog, monkeypatch) -> None:
     from loguru import logger
 
