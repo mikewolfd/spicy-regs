@@ -1869,56 +1869,56 @@
   "comment_periods": {
     "table": "comment_periods",
     "label": "Public comment periods",
-    "summary": "One row per continuous public-comment interval, reopenings included: overlapping or adjacent intervals from Regulations.gov documents and Register notices of the same dockets (else the same proceedings) merge into one, so an extension lengthens a period and a reopening starts a new one. A period keeps its docket anchors when its proceeding is unresolved. Keyed `comment_period_id`. Its proceedings, dockets and RINs are JSON lists, so it joins through them rather than by a column. Built by `build_comment_periods`; all columns are VARCHAR.",
-    "coverage": "Derived, and bounded by its inputs: `documents` with a comment end date and `federal_register` records with `comments_close_on`. `snapshot_91b19da7…` holds 281,635 periods.",
+    "summary": "One row per notice's public-comment period. A notice is a Register record with the Regulations.gov documents whose `fr_doc_num` names it, or a Regulations.gov document the Register does not hold. Periods merge only on an explicit link: a notice whose title extends or reopens a comment period, and that names an earlier notice still open when it opens (by the page that notice starts on, or as the one open notice sharing its RIN), lengthens that notice's period; one that opens after the period closed starts its own. A docket or proceeding anchors a period (`anchor_kind`) and never merges two, and a Federal Register feed docket (`AGENCY_FRDOC_0001` and the like) anchors nothing. Keyed `comment_period_id`. Its proceedings, dockets and RINs are JSON lists, so it joins through them rather than by a column. Built by `build_comment_periods`; all columns are VARCHAR.",
+    "coverage": "Derived, and bounded by its inputs: every `federal_register` record with a `comments_close_on` and every `documents` row with a comment end date lands in exactly one period, anchored or not. Left out are windows that close before they open and placeholder closes (see data quality). Live row counts come from `describe_table`.",
     "kind": "derived",
-    "measured_on": "2026-09-27",
-    "data_quality": null,
+    "measured_on": "2026-09-28",
+    "data_quality": "`close_date` is the latest close the period's own records state; `register_close_date` and `regulations_gov_close_date` keep each source's, and where they differ (Regulations.gov often holds a window open past the Register's date) the later one closes the period. A close on or after 2050-01-01 is a placeholder and states nothing: the inputs hold no close from 2033 to 2049, and every later one is a stand-in (Regulations.gov's 2099 and 2100 dates, FDA's 2050-02-21 open dockets, Register year typos such as 3008 for 2008). A record whose only close is a placeholder, or whose window closes before it opens, is in no period. The formal rulespec export is the anchored rows (`anchor_kind <> 'none'`), since rulespec's CommentPeriod needs a proceeding or docket anchor; no export exists yet. A Regulations.gov document is a notice's copy only when its `fr_doc_num` says so, so a copy that omits it stands as its own notice: on the 2026-09-28 inputs about 2,950 such documents share a docket, close day and opening (within three days) with a Register notice. An extension that names its notice by neither page nor RIN, or whose title says \"extension of time for comments\", stays its own period. A legacy Regulations.gov document whose posting date is decades early (see `documents`) opens its period that early.",
     "columns": [
       {
         "column_name": "comment_period_id",
         "column_type": "VARCHAR",
-        "description": "Stable id of the period (`comment_period_<24 hex>`), from its proceedings, dockets and open date."
+        "description": "Stable id of the period (`comment_period_<24 hex>`), from the records that open it."
       },
       {
         "column_name": "proceeding_ids_json",
         "column_type": "VARCHAR",
-        "description": "JSON array of the proceedings the period is open in; `[]` when none resolves (docket-only)."
+        "description": "JSON array of the proceedings its notices belong to; `[]` when none resolves."
       },
       {
         "column_name": "rins_json",
         "column_type": "VARCHAR",
-        "description": "JSON array of the RINs its documents and proceedings carry."
+        "description": "JSON array of the RINs its records state and its proceedings hold."
       },
       {
         "column_name": "docket_ids_json",
         "column_type": "VARCHAR",
-        "description": "JSON array of the Regulations.gov dockets the period is anchored to; `[]` for a Register notice naming none."
+        "description": "JSON array of the Regulations.gov dockets anchoring it: those its Register record names, else those of its copies, else a Regulations.gov notice's own; never a feed docket, and `[]` when none."
       },
       {
         "column_name": "open_date",
         "column_type": "VARCHAR",
-        "description": "Eastern day the period opens: a document's comment start (else its posting) or the notice's publication, `YYYY-MM-DD`."
+        "description": "Eastern day the period opens: the earliest opening among its records (a document's comment start, else its posting; a Register record's publication), `YYYY-MM-DD`."
       },
       {
         "column_name": "close_date",
         "column_type": "VARCHAR",
-        "description": "Eastern day the merged period closes, `YYYY-MM-DD`."
+        "description": "Eastern day the period closes: the latest non-placeholder close its records state, `YYYY-MM-DD`."
       },
       {
         "column_name": "source",
         "column_type": "VARCHAR",
-        "description": "The sources of its merged intervals, `+`-joined: `documents.comment_end_date` and `federal_register.comments_close_on`."
+        "description": "The sources of its records, `+`-joined: `documents.comment_end_date` and `federal_register.comments_close_on`."
       },
       {
         "column_name": "opened_by_artifact_ids_json",
         "column_type": "VARCHAR",
-        "description": "JSON array of public URLs of the documents whose interval opens the period on `open_date`."
+        "description": "JSON array of public URLs of the records whose window opens the period on `open_date`."
       },
       {
         "column_name": "evidence_ids_json",
         "column_type": "VARCHAR",
-        "description": "JSON array of every record merged into the period: Regulations.gov document ids and dated Register record ids."
+        "description": "JSON array of every record in the period, each in exactly one period: dated Register record ids (`number@date`) and Regulations.gov document ids."
       },
       {
         "column_name": "method",
@@ -1949,9 +1949,24 @@
         "column_name": "unresolved_fr_references_json",
         "column_type": "VARCHAR",
         "description": "JSON array of unresolved Register number references attached to its evidence."
+      },
+      {
+        "column_name": "anchor_kind",
+        "column_type": "VARCHAR",
+        "description": "What anchors the period: `docket` when a docket does, `proceeding` when only a proceeding does, `none` when neither; the rulespec export takes the anchored rows."
+      },
+      {
+        "column_name": "register_close_date",
+        "column_type": "VARCHAR",
+        "description": "Latest `comments_close_on` of its Register records, `YYYY-MM-DD`; NULL when the Register states none."
+      },
+      {
+        "column_name": "regulations_gov_close_date",
+        "column_type": "VARCHAR",
+        "description": "Latest comment end (Eastern day) of its Regulations.gov documents, `YYYY-MM-DD`; NULL when none states one."
       }
     ],
-    "grain": "One continuous public-comment interval of one set of dockets or proceedings.",
+    "grain": "One notice's comment period: a Register record with its Regulations.gov copies, or a Regulations.gov document the Register does not hold, lengthened by the extensions that name it.",
     "identity_columns": [
       "comment_period_id"
     ]
@@ -3240,7 +3255,7 @@
     "table": "gao_reports",
     "label": "Government Accountability Office reports",
     "summary": "One row per U.S. Government Accountability Office (GAO) product, ingested from the public GAO reports RSS feed by `build_gao_reports`. The federal oversight layer over the rulemakings this dataset tracks — GAO's audits, evaluations, and recommendations on how agencies implement laws and rules. GAO's bulk/search surfaces are bot-blocked, so the RSS feed (a ~25-item recent-products window) is the only anonymous machine-readable source; the table is therefore an **append-only accumulator** that grows into a rolling history over successive daily runs. Deduped on `report_id`. All columns are stored as VARCHAR.",
-    "coverage": "Window. Reports as the daily job has read them from the publisher's recent-items feed; an older report appears only when the feed lists it. Not GAO's archive.",
+    "coverage": "Window. Reports the daily job has read from the publisher's recent-items feed since this table started on 2026-09-22 (its first read reached back to 2026-09-15), plus reports added one at a time by an explicit repair. The feed lists only about 25 recent items, so a report published while the job was not reading cannot be recovered from it. Not GAO's archive.",
     "kind": "window",
     "measured_on": "2026-09-28",
     "data_quality": null,
@@ -3258,7 +3273,7 @@
       {
         "column_name": "report_type",
         "column_type": "VARCHAR",
-        "description": "GAO product type. The reports feed does not tag a finer type, so this defaults to `Report`."
+        "description": "GAO product type. The reports feed does not tag a finer type, so this defaults to `Report`; NULL on a report added by explicit repair."
       },
       {
         "column_name": "published_date",
@@ -3273,12 +3288,12 @@
       {
         "column_name": "agencies_json",
         "column_type": "VARCHAR",
-        "description": "Reserved JSON array of agencies the product covers. The RSS feed carries no structured agency tags, so this is `[]` pending a future enrichment source."
+        "description": "Reserved JSON array of agencies the product covers. The RSS feed carries no structured agency tags, so this is `[]` pending a future enrichment source; NULL on a report added by explicit repair."
       },
       {
         "column_name": "topics_json",
         "column_type": "VARCHAR",
-        "description": "Reserved JSON array of topics/subjects. The RSS feed carries no structured topic tags, so this is `[]` pending a future enrichment source."
+        "description": "Reserved JSON array of topics/subjects. The RSS feed carries no structured topic tags, so this is `[]` pending a future enrichment source; NULL on a report added by explicit repair."
       },
       {
         "column_name": "url",

@@ -6,7 +6,7 @@
 
 One row per U.S. Government Accountability Office (GAO) product, ingested from the public GAO reports RSS feed by `build_gao_reports`. The federal oversight layer over the rulemakings this dataset tracks — GAO's audits, evaluations, and recommendations on how agencies implement laws and rules. GAO's bulk/search surfaces are bot-blocked, so the RSS feed (a ~25-item recent-products window) is the only anonymous machine-readable source; the table is therefore an **append-only accumulator** that grows into a rolling history over successive daily runs. Deduped on `report_id`. All columns are stored as VARCHAR.
 
-**Coverage.** Window. Reports as the daily job has read them from the publisher's recent-items feed; an older report appears only when the feed lists it. Not GAO's archive. *(measured 2026-09-28)*
+**Coverage.** Window. Reports the daily job has read from the publisher's recent-items feed since this table started on 2026-09-22 (its first read reached back to 2026-09-15), plus reports added one at a time by an explicit repair. The feed lists only about 25 recent items, so a report published while the job was not reading cannot be recovered from it. Not GAO's archive. *(measured 2026-09-28)*
 
 - **Parquet file:** `gao_reports.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
@@ -17,9 +17,9 @@ One row per U.S. Government Accountability Office (GAO) product, ingested from t
 | --- | --- | --- |
 | `report_id` | `VARCHAR` | GAO product id parsed from the product URL (e.g. `gao-26-107974`), lowercased. Primary key / dedup key. |
 | `title` | `VARCHAR` | Product title as published in the feed. |
-| `report_type` | `VARCHAR` | GAO product type. The reports feed does not tag a finer type, so this defaults to `Report`. |
+| `report_type` | `VARCHAR` | GAO product type. The reports feed does not tag a finer type, so this defaults to `Report`; NULL on a report added by explicit repair. |
 | `published_date` | `VARCHAR` | Publication date parsed from the feed's `pubDate` to an ISO date string (e.g. `2026-07-17`). Sort key. |
 | `abstract` | `VARCHAR` | The product summary from the feed (GAO's `What GAO Found` / `Why GAO Did This Study` narrative). |
-| `agencies_json` | `VARCHAR` | Reserved JSON array of agencies the product covers. The RSS feed carries no structured agency tags, so this is `[]` pending a future enrichment source. |
-| `topics_json` | `VARCHAR` | Reserved JSON array of topics/subjects. The RSS feed carries no structured topic tags, so this is `[]` pending a future enrichment source. |
+| `agencies_json` | `VARCHAR` | Reserved JSON array of agencies the product covers. The RSS feed carries no structured agency tags, so this is `[]` pending a future enrichment source; NULL on a report added by explicit repair. |
+| `topics_json` | `VARCHAR` | Reserved JSON array of topics/subjects. The RSS feed carries no structured topic tags, so this is `[]` pending a future enrichment source; NULL on a report added by explicit repair. |
 | `url` | `VARCHAR` | Canonical gao.gov URL for the product. |

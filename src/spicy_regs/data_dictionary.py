@@ -107,11 +107,7 @@ COVERAGE_PROSE_REFUSALS: tuple[tuple[str, re.Pattern[str]], ...] = (
 #: Exact coverage phrases allowed past COVERAGE_PROSE_REFUSALS, by table, each
 #: with its reason. An exception whose phrase is no longer in the prose is an
 #: error, so a fixed note cannot leave a stale permission behind.
-COVERAGE_PROSE_EXCEPTIONS: dict[str, dict[str, str]] = {
-    # The comment-periods pass of the 2026-09-28 chaos test owns this entry and
-    # rewrites it; once it does, this exception fails check and must be deleted.
-    "comment_periods": {"`snapshot_91b19da7…` holds 281,635 periods.": "owned by the comment-periods pass"},
-}
+COVERAGE_PROSE_EXCEPTIONS: dict[str, dict[str, str]] = {}
 
 
 def coverage_prose_errors(table: str, coverage: str) -> list[str]:

@@ -67,6 +67,7 @@ def test_reference_proceeding_threads_rinless_docket_and_preserves_reopening(tmp
         (
             "document_id",
             "docket_id",
+            "fr_doc_num",
             "additional_rins",
             "document_type",
             "title",
@@ -79,6 +80,7 @@ def test_reference_proceeding_threads_rinless_docket_and_preserves_reopening(tmp
             {
                 "document_id": "D-PROPOSAL",
                 "docket_id": docket_id,
+                "fr_doc_num": "2021-24202",
                 "additional_rins": "[]",
                 "document_type": "Proposed Rule",
                 "title": "Standards proposal",
@@ -90,6 +92,7 @@ def test_reference_proceeding_threads_rinless_docket_and_preserves_reopening(tmp
             {
                 "document_id": "D-EXTENSION",
                 "docket_id": docket_id,
+                "fr_doc_num": "2021-27312",
                 "additional_rins": "[]",
                 "document_type": "Notice",
                 "title": "Comment period extension",
@@ -101,6 +104,7 @@ def test_reference_proceeding_threads_rinless_docket_and_preserves_reopening(tmp
             {
                 "document_id": "D-SUPPLEMENTAL",
                 "docket_id": docket_id,
+                "fr_doc_num": "2022-24675",
                 "additional_rins": f'["{rin}"]',
                 "document_type": "Proposed Rule",
                 "title": "Supplemental proposal",
@@ -112,6 +116,7 @@ def test_reference_proceeding_threads_rinless_docket_and_preserves_reopening(tmp
             {
                 "document_id": "D-FINAL",
                 "docket_id": docket_id,
+                "fr_doc_num": "2024-00366",
                 "additional_rins": f'["{rin}"]',
                 "document_type": "Rule",
                 "title": "Final standards",
@@ -249,7 +254,7 @@ def test_reference_proceeding_threads_rinless_docket_and_preserves_reopening(tmp
         periods[0]["opened_by_artifact_ids_json"]
     )
     assert all(row["method"] == "deterministic" for row in periods)
-    assert all(row["actor_id"] == "spicy-regs:comment-periods:v10" for row in periods)
+    assert all(row["actor_id"] == "spicy-regs:comment-periods:v11" for row in periods)
 
 
 def test_reused_rin_does_not_collapse_or_cross_assign_distinct_dockets(tmp_path):
@@ -275,6 +280,7 @@ def test_reused_rin_does_not_collapse_or_cross_assign_distinct_dockets(tmp_path)
         (
             "document_id",
             "docket_id",
+            "fr_doc_num",
             "additional_rins",
             "document_type",
             "title",
@@ -287,6 +293,7 @@ def test_reused_rin_does_not_collapse_or_cross_assign_distinct_dockets(tmp_path)
             {
                 "document_id": f"DOC-{index}",
                 "docket_id": docket,
+                "fr_doc_num": f"202{index + 4}-0000{index}",
                 "additional_rins": f'["{rin}"]',
                 "document_type": "Proposed Rule",
                 "title": f"Proposal {index}",
@@ -390,6 +397,7 @@ def test_untrusted_fr_administrative_labels_do_not_become_proceeding_dockets(tmp
         (
             "document_id",
             "docket_id",
+            "fr_doc_num",
             "additional_rins",
             "document_type",
             "title",
@@ -402,6 +410,7 @@ def test_untrusted_fr_administrative_labels_do_not_become_proceeding_dockets(tmp
             {
                 "document_id": f"{valid_docket}-0001",
                 "docket_id": valid_docket,
+                "fr_doc_num": "2026-00001",
                 "additional_rins": f'["{rin}"]',
                 "document_type": "Proposed Rule",
                 "title": "Valid proposal",
@@ -1869,6 +1878,10 @@ def test_a_catch_all_docket_takes_nothing_from_the_documents_it_posts(tmp_path):
         ("2105-AF30", dot_rule["proceeding_id"], "federal_register_rin"),
         ("3072-AC92", fmc["proceeding_id"], "docket_rin"),
     }
-    # The feed document's own comment period stays with its docket, under its own RIN.
-    (feed_period,) = [row for row in periods if "NOAA_FRDOC_0001" in json.loads(row["docket_ids_json"])]
-    assert (json.loads(feed_period["proceeding_ids_json"]), json.loads(feed_period["rins_json"])) == ([], ["0648-BG81"])
+    # A feed anchors no comment period (owner decision 2026-09-28): the feed's copy joins its notice's
+    # period, which the notice's own proceeding anchors, under the notice's RIN.
+    (notice_period,) = periods
+    assert json.loads(notice_period["evidence_ids_json"]) == ["2017-19662@2017-09-15", "NOAA_FRDOC_0001-4419"]
+    assert (notice_period["docket_ids_json"], notice_period["anchor_kind"]) == ("[]", "proceeding")
+    assert json.loads(notice_period["proceeding_ids_json"]) == [noaa_notice["proceeding_id"]]
+    assert json.loads(notice_period["rins_json"]) == ["0648-BG81"]

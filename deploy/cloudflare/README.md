@@ -81,7 +81,10 @@ of this public serving configuration.
 
 ## Tuning
 
-`instance_type`, `max_instances` (concurrency/scale), `sleepAfter` (idle → scale
-to zero), and `SPICY_REGS_MEMORY_LIMIT` (keep under the instance RAM so heavy
-queries spill to disk rather than being killed) are the knobs. Re-measure after
-changes.
+`instance_type`, `sleepAfter` (idle → scale to zero), `SPICY_REGS_MEMORY_LIMIT`
+(keep under the instance RAM so heavy queries spill to disk rather than being
+killed) and `SPICY_REGS_TOOL_CONCURRENCY` (tool calls run at once, on worker
+threads) are the knobs. `max_instances` is not a concurrency knob: the Worker
+calls `getContainer` without a name, so every request reaches one container.
+More instances would each run their own cold build against the bucket.
+Re-measure after changes.
