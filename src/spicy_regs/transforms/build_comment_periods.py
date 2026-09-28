@@ -63,7 +63,10 @@ OUTPUT = "comment_periods.parquet"
 # only with an extension that names it. Dockets and proceedings anchor a period (anchor_kind) and
 # never merge two; a feed docket anchors nothing; a notice with no anchor is kept; a placeholder
 # close states nothing; each source's own close is kept beside the period's.
-ACTOR_ID = "spicy-regs:comment-periods:v11"
+# v12 (one bump over published v11): a notice's Register record is evidence of its period even
+# when only its copies state a window (31,497 rows on snapshot_8758191f's inputs); ids and dates
+# are unchanged. Documents stating a close but no opening are counted as they are left out.
+ACTOR_ID = "spicy-regs:comment-periods:v12"
 
 COLUMNS = (
     "comment_period_id",
@@ -112,11 +115,13 @@ class _Window:
 class _Notice:
     """A Register record with its Regulations.gov copies, or a Regulations.gov document the Register does not hold.
 
-    ``rins`` are the ones its records state; ``extends`` and ``cites`` are what an extension
-    link reads: whether its title extends or reopens a comment period, and the Register pages
-    its abstract cites.
+    ``register_record`` is the Register record's dated id, which is listed in the period even
+    when only its copies state a window; ``rins`` are the ones its records state; ``extends``
+    and ``cites`` are what an extension link reads: whether its title extends or reopens a
+    comment period, and the Register pages its abstract cites.
     """
 
+    register_record: str | None
     windows: tuple[_Window, ...]
     docket_ids: tuple[str, ...]
     proceeding_ids: tuple[str, ...]
@@ -287,14 +292,23 @@ def build_comment_periods(
         """A source's stated window, or None when it states no usable one (counted by reason)."""
         open_date, close_date = eastern_day(start), eastern_day(end)
         evidence = str(evidence_id or "").strip()
-        if open_date is None or close_date is None or not evidence:
+        if not evidence:
             return None
-        reason = "placeholder" if close_date >= PLACEHOLDER_CLOSE else "inverted" if close_date < open_date else None
+        reason = (
+            "undated"
+            if open_date is None or close_date is None
+            else "placeholder"
+            if close_date >= PLACEHOLDER_CLOSE
+            else "inverted"
+            if close_date < open_date
+            else None
+        )
         if reason:
             skipped[f"{reason} {source}"] += 1
             if len(skipped_examples[reason]) < 5:
-                skipped_examples[reason].append(f"{evidence}: {open_date.isoformat()}..{close_date.isoformat()}")
+                skipped_examples[reason].append(f"{evidence}: {open_date or '?'}..{close_date or '?'}")
             return None
+        assert open_date is not None and close_date is not None
         return _Window(open_date, close_date, source, evidence)
 
     def stated_rins(value: object, table: str, row_id: object, column: str) -> set[str]:
@@ -352,6 +366,7 @@ def build_comment_periods(
         candidates = proceeding_ids_by_docket.get(anchor or "", set())
         ambiguous_document_notices += len(candidates) > 1
         notices[stated.evidence_id] = _Notice(
+            register_record=None,
             windows=(stated,),
             docket_ids=(anchor,) if anchor else (),
             proceeding_ids=tuple(candidates) if len(candidates) == 1 else (),
@@ -406,6 +421,7 @@ def build_comment_periods(
         ) | copy_rins_by_fr.get(identity, set())
         extends = extends_comment_period(row.get("title"))
         notices[identity] = _Notice(
+            register_record=identity,
             windows=windows,
             docket_ids=tuple(sorted(dockets)),
             proceeding_ids=tuple(sorted(proceeding_ids)),
@@ -464,8 +480,17 @@ def build_comment_periods(
         linked = [(window, notices[key]) for key in keys for window in notices[key].windows]
         periods = list(_periods(linked))
         reopened_notices += len(periods) > 1
+        # A Register record that states no window of its own (its copies do) is listed with its
+        # notice's first period, so every record of a notice sits in exactly one period.
+        listed = {window.evidence_id for window, _ in linked}
         for period in periods:
-            rows.append(_period_row(period, proceeding_by_id, json_stats) | provenance)
+            quiet = {
+                record
+                for _, notice in period
+                if (record := notice.register_record) is not None and record not in listed
+            }
+            listed |= quiet
+            rows.append(_period_row(period, quiet, proceeding_by_id, json_stats) | provenance)
     for row in rows:
         references = [
             reference
@@ -515,9 +540,16 @@ def build_comment_periods(
 
 
 def _period_row(
-    period: list[tuple[_Window, _Notice]], proceeding_by_id: dict[str, dict], json_stats: JsonReadStats
+    period: list[tuple[_Window, _Notice]],
+    quiet_records: set[str],
+    proceeding_by_id: dict[str, dict],
+    json_stats: JsonReadStats,
 ) -> dict:
-    """One period's row: its windows' span and evidence, and every anchor of the notices they state."""
+    """One period's row: its windows' span, every anchor of the notices they state, and every record.
+
+    ``quiet_records`` are the Register records of its notices that state no window of their own;
+    they are evidence of the period but open and close nothing, so its id and dates stand without them.
+    """
     windows = [window for window, _ in period]
     notices = list({id(notice): notice for _, notice in period}.values())
     open_date = min(window.start for window in windows)
@@ -546,7 +578,7 @@ def _period_row(
         "close_date": max(window.end for window in windows).isoformat(),
         "source": "+".join(sorted({window.source for window in windows})),
         "opened_by_artifact_ids_json": canonical_json(opened_by),
-        "evidence_ids_json": canonical_json(sorted(window.evidence_id for window in windows)),
+        "evidence_ids_json": canonical_json(sorted({window.evidence_id for window in windows} | quiet_records)),
         "anchor_kind": "docket" if dockets else "proceeding" if proceedings else "none",
         "register_close_date": latest(REGISTER),
         "regulations_gov_close_date": latest(REGULATIONS_GOV),
