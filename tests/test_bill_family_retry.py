@@ -833,7 +833,7 @@ def test_failed_or_unattempted_retry_preserves_retained_child_scopes(tmp_path, s
 
 # --------------------------------------------------------------------------- #
 # The status skip's reader: an unchanged stamp skips a bill only while the
-# SpicyDocs that read it is the one running (``STATUS_READERS_KEY``).
+# reader that read it, SpicyDocs' code under this rollup's rule, is the one running (``STATUS_READERS_KEY``).
 # --------------------------------------------------------------------------- #
 @pytest.fixture
 def status_reads(monkeypatch):
@@ -883,7 +883,7 @@ class TwoBills(StubBulkAcquirer):
 
 def test_a_bill_read_by_the_running_spicy_docs_is_skipped(tmp_path, scoped, status_reads):
     first, _, _ = run(tmp_path / "first")
-    assert readers(first) == {"119-hr-6028": build.spicy_docs_code()}
+    assert readers(first) == {"119-hr-6028": build.status_reader()}
     status_reads.clear()
     moved = StubBulkAcquirer(entry=lambda c, t: zip_entry(c, t, size=31_658_670))
     _, bulk, _ = run(tmp_path / "second", prior=tmp_path / "first", bulk=moved)
@@ -891,15 +891,19 @@ def test_a_bill_read_by_the_running_spicy_docs_is_skipped(tmp_path, scoped, stat
     assert status_reads == [], "and its unchanged bill, read by this SpicyDocs, is not shaped again"
 
 
-def test_a_bill_another_spicy_docs_read_is_read_again(tmp_path, scoped, status_reads, monkeypatch):
-    run(tmp_path / "first")
+@pytest.mark.parametrize(
+    ("moved", "value"), [("spicy_docs_code", lambda: "0" * 64), ("STATUS_READER_RULE", "status-v2")]
+)
+def test_a_bill_another_reader_read_is_read_again(tmp_path, scoped, status_reads, monkeypatch, moved, value):
+    """A new SpicyDocs code, or this rollup's bumped status rule, re-reads the bill."""
+    first, _, _ = run(tmp_path / "first")
     status_reads.clear()
-    monkeypatch.setattr(build, "spicy_docs_code", lambda: "0" * 64)
+    monkeypatch.setattr(build, moved, value)
     second, bulk, body = run(tmp_path / "second", prior=tmp_path / "first")
     assert bulk.zip_downloads == [(119, "hr")], "its folder is reopened although the zip has not moved"
-    assert status_reads == ["119-hr-6028"], "and the bill is shaped by the running SpicyDocs"
+    assert status_reads == ["119-hr-6028"], "and the bill is shaped by the running reader"
     assert body.requested == [], "its held printings are not fetched again"
-    assert readers(second) == {"119-hr-6028": "0" * 64}
+    assert readers(second) == {"119-hr-6028": build.status_reader()} != readers(first)
 
 
 def test_a_prior_with_no_recorded_reader_is_read_exactly_once(tmp_path, scoped, status_reads):
@@ -908,7 +912,7 @@ def test_a_prior_with_no_recorded_reader_is_read_exactly_once(tmp_path, scoped, 
     status_reads.clear()
     second, bulk, _ = run(tmp_path / "second", prior=tmp_path / "first")
     assert bulk.zip_downloads == [(119, "hr")] and status_reads == ["119-hr-6028"], "a completed folder reopens"
-    assert readers(second) == {"119-hr-6028": build.spicy_docs_code()}
+    assert readers(second) == {"119-hr-6028": build.status_reader()}
     status_reads.clear()
     _, bulk, _ = run(tmp_path / "third", prior=tmp_path / "second")
     assert bulk.zip_downloads == [] and status_reads == [], "once read and recorded, it skips"
@@ -924,7 +928,7 @@ def test_the_record_survives_a_run_that_rewrites_only_a_sections_partition(tmp_p
         {row["version_code"] for row in read_output(paths["bill_sections"]).to_pylist()} for paths in (first, second)
     ]
     assert codes == [{"introduced-in-house"}, {"introduced-in-house", "engrossed-in-house"}], "congress=119 rewritten"
-    assert readers(second) == readers(first) == {"119-hr-6028": build.spicy_docs_code()}
+    assert readers(second) == readers(first) == {"119-hr-6028": build.status_reader()}
     _, bulk, _ = run(tmp_path / "third", prior=tmp_path / "second", budget=0)
     assert bulk.zip_downloads == [] and status_reads == []
 
@@ -939,7 +943,7 @@ def test_a_capped_run_records_the_reader_of_each_bill_it_read(tmp_path, scoped, 
     status_reads.clear()
     first, _, body = run(tmp_path / "first", prior=tmp_path / "held", budget=1, bulk=TwoBills(refuse=True))
     assert status_reads == ["119-hr-6028"] and len(body.requested) == 1
-    assert readers(first) == {"119-hr-6028": build.spicy_docs_code()}
+    assert readers(first) == {"119-hr-6028": build.status_reader()}
     status_reads.clear()
     _, bulk, _ = run(tmp_path / "second", prior=tmp_path / "first", budget=1, bulk=TwoBills())
     assert bulk.zip_downloads == [(119, "hr")], "the refused member left its folder incomplete"
