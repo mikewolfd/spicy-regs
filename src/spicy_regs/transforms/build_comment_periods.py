@@ -1,4 +1,4 @@
-"""Transform: materialize continuous and reopened public-comment intervals.
+"""Transform: materialize one public-comment period per notice, lengthened only by an extension that names it.
 
 Reads the proceedings, dockets, documents, federal_register and fr_docket_links
 parquet inputs from ``output_dir`` and writes ``comment_periods.parquet``; a missing
@@ -8,7 +8,9 @@ input raises FileNotFoundError.
 from __future__ import annotations
 
 import json
+import re
 from collections import Counter, defaultdict
+from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import date, timedelta
 from pathlib import Path
@@ -17,7 +19,7 @@ from urllib.parse import quote
 import pyarrow.parquet as pq
 from loguru import logger
 
-from spicy_regs.ontology.citations import normalize_regsgov_identifier, normalize_rin
+from spicy_regs.ontology.citations import action_evidence_rin, normalize_regsgov_identifier, normalize_rin
 from spicy_regs.ontology.rins import proceeding_rins
 from spicy_regs.ontology.common import (
     ATTESTATION_COLUMNS,
@@ -33,6 +35,9 @@ from spicy_regs.ontology.common import (
 
 from spicy_regs.ontology.federal_register import (
     FederalRegisterIndex,
+    catch_all_docket,
+    copy_of,
+    extends_comment_period,
     record_url,
     references_json,
     resolved_id,
@@ -53,7 +58,12 @@ OUTPUT = "comment_periods.parquet"
 # removed proceedings re-key to what still anchors them or go when nothing does. A Register
 # document that joins a docketed proceeding (decision 56) re-keys or folds its periods there,
 # every evidence id kept.
-ACTOR_ID = "spicy-regs:comment-periods:v10"
+# v11: one period per notice (owner decisions 2026-09-28). A notice is a Register record with its
+# Regulations.gov copies, or a Regulations.gov document the Register does not hold; it merges
+# only with an extension that names it. Dockets and proceedings anchor a period (anchor_kind) and
+# never merge two; a feed docket anchors nothing; a notice with no anchor is kept; a placeholder
+# close states nothing; each source's own close is kept beside the period's.
+ACTOR_ID = "spicy-regs:comment-periods:v11"
 
 COLUMNS = (
     "comment_period_id",
@@ -67,19 +77,60 @@ COLUMNS = (
     "evidence_ids_json",
     *ATTESTATION_COLUMNS,
     "unresolved_fr_references_json",
+    "anchor_kind",
+    "register_close_date",
+    "regulations_gov_close_date",
 )
 
+REGISTER = "federal_register.comments_close_on"
+REGULATIONS_GOV = "documents.comment_end_date"
 
-@dataclass(frozen=True)
-class _Interval:
-    proceeding_ids: tuple[str, ...]
-    rins: tuple[str, ...]
-    docket_ids: tuple[str, ...]
+#: A close on or after this day is a placeholder, not a deadline. On the 2026-09-28 parents the
+#: latest real closes fall in 2032 (EPA and HHS dockets held open) and none in 2033-2049; from
+#: 2050 on every close is a stand-in: FDA's 2050-02-21 open dockets, Regulations.gov's 2099 and
+#: 2100 sentinels (46 documents with those three) and the Register's year typos, 3001-3008 for
+#: 2001-2008 (6 notices). The rule reads the close alone: a window measured from its open would
+#: also discard real 2006 closes of legacy documents posted "1982". Revisit it as real deadlines
+#: near 2050.
+PLACEHOLDER_CLOSE = date(2050, 1, 1)
+
+#: A Register citation in an abstract: volume, "FR", and the page a document starts on.
+_REGISTER_CITATION = re.compile(r"\b(\d{1,3})\s+FR\s+(\d{1,6})\b")
+
+
+@dataclass(frozen=True, slots=True)
+class _Window:
+    """One source record's statement of a notice's window."""
+
     start: date
     end: date
     source: str
     evidence_id: str
-    opened_by_artifact_id: str
+
+
+@dataclass(frozen=True, slots=True)
+class _Notice:
+    """A Register record with its Regulations.gov copies, or a Regulations.gov document the Register does not hold.
+
+    ``rins`` are the ones its records state; ``extends`` and ``cites`` are what an extension
+    link reads: whether its title extends or reopens a comment period, and the Register pages
+    its abstract cites.
+    """
+
+    windows: tuple[_Window, ...]
+    docket_ids: tuple[str, ...]
+    proceeding_ids: tuple[str, ...]
+    rins: tuple[str, ...]
+    extends: bool
+    cites: tuple[tuple[int, int], ...]
+
+    @property
+    def start(self) -> date:
+        return min(window.start for window in self.windows)
+
+    @property
+    def end(self) -> date:
+        return max(window.end for window in self.windows)
 
 
 def _artifact_url(source: str, identifier: object) -> str | None:
@@ -88,102 +139,62 @@ def _artifact_url(source: str, identifier: object) -> str | None:
     if not value:
         return None
     escaped = quote(value, safe="-._~")
-    if source == "documents.comment_end_date":
+    if source == REGULATIONS_GOV:
         return f"https://www.regulations.gov/document/{escaped}"
-    if source == "federal_register.comments_close_on":
+    if source == REGISTER:
         return record_url(value)
     return None
 
 
-def _merge_intervals(intervals: list[_Interval]) -> list[dict]:
-    """Coalesce extensions without losing joint or unresolved anchors.
+def _one(values: set[str]) -> str | None:
+    return next(iter(values)) if len(values) == 1 else None
 
-    Docket anchors are the grouping key when available because they remain
-    usable while Proceeding identity is unresolved. Proceeding anchors are
-    unioned only from uniquely resolved source assertions. A docket-less
-    interval falls back to its resolved Proceeding anchors.
+
+def _extended_notice(
+    key: str,
+    notice: _Notice,
+    notices: dict[str, _Notice],
+    by_rin: dict[str, list[str]],
+    cited_pages: dict[tuple[int, int], str],
+) -> tuple[str | None, str]:
+    """The earlier notice an extension names and whose window it adjoins, with how it names it.
+
+    An extension or reopening (:func:`extends_comment_period`) names a notice by citing the page
+    it starts on, or by sharing an action-evidence RIN with it alone among the notices open when
+    the extension opens. A citation and a RIN naming different notices name none. An extension
+    that opens after the notice closed is a reopening and starts its own period.
     """
-    grouped: dict[tuple[str, tuple[str, ...]], list[_Interval]] = defaultdict(list)
-    for interval in intervals:
-        anchor = ("dockets", interval.docket_ids) if interval.docket_ids else ("proceedings", interval.proceeding_ids)
-        if not interval.docket_ids and not interval.proceeding_ids:
-            anchor = ("artifact", (interval.opened_by_artifact_id,))
-        grouped[anchor].append(interval)
+    if not notice.extends:
+        return None, "not_an_extension"
+    start = notice.start
 
-    merged: list[dict] = []
-    for _, values in grouped.items():
-        values.sort(
-            key=lambda interval: (
-                interval.start,
-                interval.end,
-                interval.source,
-                interval.evidence_id,
-            )
-        )
-        current_start: date | None = None
-        current_end: date | None = None
-        proceeding_ids: set[str] = set()
-        rins: set[str] = set()
-        docket_ids: set[str] = set()
-        sources: set[str] = set()
-        evidence: set[str] = set()
-        opened_by: set[str] = set()
+    def adjoins(other_key: str) -> bool:
+        # A cited record that states no window is no notice, so nothing to extend.
+        other = notices.get(other_key)
+        return other is not None and other_key != key and other.start < start <= other.end + timedelta(days=1)
 
-        def flush() -> None:
-            if current_start is None or current_end is None:
-                return
-            sorted_proceedings = sorted(proceeding_ids)
-            sorted_dockets = sorted(docket_ids)
-            merged.append(
-                {
-                    "comment_period_id": stable_id(
-                        "comment_period",
-                        canonical_json(sorted_proceedings),
-                        canonical_json(sorted_dockets),
-                        current_start.isoformat(),
-                        *(() if sorted_proceedings or sorted_dockets else (canonical_json(sorted(opened_by)),)),
-                    ),
-                    "proceeding_ids_json": canonical_json(sorted_proceedings),
-                    "rins_json": canonical_json(sorted(rins)),
-                    "docket_ids_json": canonical_json(sorted_dockets),
-                    "open_date": current_start.isoformat(),
-                    "close_date": current_end.isoformat(),
-                    "source": "+".join(sorted(sources)),
-                    "opened_by_artifact_ids_json": canonical_json(sorted(opened_by)),
-                    "evidence_ids_json": canonical_json(sorted(evidence)),
-                }
-            )
+    cited = _one({target for page in notice.cites if (target := cited_pages.get(page)) and adjoins(target)})
+    shared = _one({other for rin in notice.rins if action_evidence_rin(rin) for other in by_rin[rin] if adjoins(other)})
+    if cited and shared and cited != shared:
+        return None, "conflict"
+    if cited:
+        return cited, "citation"
+    return (shared, "rin") if shared else (None, "unlinked")
 
-        def begin(interval: _Interval) -> None:
-            nonlocal current_start, current_end
-            nonlocal proceeding_ids, rins, docket_ids, sources, evidence, opened_by
-            current_start, current_end = interval.start, interval.end
-            proceeding_ids = set(interval.proceeding_ids)
-            rins = set(interval.rins)
-            docket_ids = set(interval.docket_ids)
-            sources = {interval.source}
-            evidence = {interval.evidence_id}
-            opened_by = {interval.opened_by_artifact_id}
 
-        for interval in values:
-            if current_start is None:
-                begin(interval)
-                continue
-            assert current_end is not None
-            if interval.start <= current_end + timedelta(days=1):
-                current_end = max(current_end, interval.end)
-                proceeding_ids.update(interval.proceeding_ids)
-                rins.update(interval.rins)
-                docket_ids.update(interval.docket_ids)
-                sources.add(interval.source)
-                evidence.add(interval.evidence_id)
-                if interval.start == current_start:
-                    opened_by.add(interval.opened_by_artifact_id)
-                continue
-            flush()
-            begin(interval)
-        flush()
-    return merged
+def _periods(windows: list[tuple[_Window, _Notice]]) -> Iterator[list[tuple[_Window, _Notice]]]:
+    """Linked windows that overlap or adjoin, one list per period; a gap starts the next (a reopening)."""
+    windows.sort(key=lambda pair: (pair[0].start, pair[0].end, pair[0].source, pair[0].evidence_id))
+    period: list[tuple[_Window, _Notice]] = []
+    end: date | None = None
+    for window, notice in windows:
+        if end is not None and window.start > end + timedelta(days=1):
+            yield period
+            period, end = [], None
+        period.append((window, notice))
+        end = window.end if end is None else max(end, window.end)
+    if period:
+        yield period
 
 
 def build_comment_periods(
@@ -193,7 +204,7 @@ def build_comment_periods(
     asserted_at: str | None = None,
     fr_index: FederalRegisterIndex | None = None,
 ) -> Path:
-    """Build comment periods, retaining docket-only and joint intervals.
+    """Build one period per notice and its named extensions, anchored or not.
 
     Every open and close date is :func:`eastern_day`. ``fr_index`` is the
     generation's shared index of ``federal_register.parquet``; it is built here
@@ -223,7 +234,6 @@ def build_comment_periods(
     unresolved_by_fr: dict[str, list[dict]] = defaultdict(list)
 
     proceeding_by_id: dict[str, dict] = {}
-    dockets_by_proceeding: dict[str, set[str]] = {}
     proceeding_ids_by_docket: dict[str, set[str]] = defaultdict(set)
     proceeding_ids_by_fr_document: dict[str, set[str]] = defaultdict(set)
     for row in iter_parquet_rows(
@@ -248,14 +258,9 @@ def build_comment_periods(
             row_id=proceeding_id,
             column="docket_ids_json",
         )
-        docket_set = (
-            set()
-            if dockets is None
-            else {normalized for docket in dockets if (normalized := normalize_regsgov_identifier(docket)) is not None}
-        )
-        dockets_by_proceeding[proceeding_id] = docket_set
-        for docket in docket_set:
-            proceeding_ids_by_docket[docket].add(proceeding_id)
+        for docket in dockets or ():
+            if (normalized := normalize_regsgov_identifier(docket)) is not None:
+                proceeding_ids_by_docket[normalized].add(proceeding_id)
         fr_documents, unresolved = fr_index.proceeding_ids(row, json_stats)
         for identity in fr_documents:
             proceeding_ids_by_fr_document[identity].add(proceeding_id)
@@ -263,68 +268,54 @@ def build_comment_periods(
             for candidate in reference["candidate_ids"]:
                 unresolved_by_fr[candidate].append(reference)
 
-    trusted_dockets = {
-        normalized
-        for row in iter_parquet_rows(required["dockets"], columns=("docket_id",))
-        if (normalized := normalize_regsgov_identifier(row.get("docket_id"))) is not None
-    }
+    trusted_dockets: set[str] = set()
+    feeds: set[str] = set()
+    for row in iter_parquet_rows(required["dockets"], columns=("docket_id", "title")):
+        if (normalized := normalize_regsgov_identifier(row.get("docket_id"))) is not None:
+            trusted_dockets.add(normalized)
+            if catch_all_docket(normalized, row.get("title")):
+                feeds.add(normalized)
 
-    intervals: list[_Interval] = []
-    inverted_by_source: Counter[str] = Counter()
-    inverted_examples: list[str] = []
-    ambiguous_document_intervals = 0
-    shared_fr_intervals = 0
-    unanchored_intervals = 0
+    def anchor_docket(docket: str | None) -> str | None:
+        """A docket that can anchor a period: any but a Federal Register feed (decision 32)."""
+        return None if docket is None or docket in feeds or catch_all_docket(docket) else docket
 
-    def add_interval(
-        *,
-        proceeding_ids: set[str],
-        docket_ids: set[str],
-        rins: set[str],
-        start: object,
-        end: object,
-        source: str,
-        evidence_id: object,
-        retain_unresolved: bool = False,
-    ) -> None:
-        nonlocal unanchored_intervals
+    skipped: Counter[str] = Counter()
+    skipped_examples: dict[str, list[str]] = defaultdict(list)
+
+    def window(start: object, end: object, source: str, evidence_id: object) -> _Window | None:
+        """A source's stated window, or None when it states no usable one (counted by reason)."""
         open_date, close_date = eastern_day(start), eastern_day(end)
         evidence = str(evidence_id or "").strip()
-        opened_by = _artifact_url(source, evidence)
-        if open_date is None or close_date is None or not evidence or opened_by is None:
-            return
-        if close_date < open_date:
-            inverted_by_source[source] += 1
-            if len(inverted_examples) < 5:
-                inverted_examples.append(f"{source} {evidence}: {open_date.isoformat()}..{close_date.isoformat()}")
-            return
-        if not proceeding_ids and not docket_ids and not retain_unresolved:
-            unanchored_intervals += 1
-            return
-        resolved_rins = set(rins)
-        resolved_rins.update(
-            rin
-            for proceeding_id in proceeding_ids
-            for rin in proceeding_rins(proceeding_by_id[proceeding_id], json_stats)
-        )
-        intervals.append(
-            _Interval(
-                proceeding_ids=tuple(sorted(proceeding_ids)),
-                rins=tuple(sorted(resolved_rins)),
-                docket_ids=tuple(sorted(docket_ids)),
-                start=open_date,
-                end=close_date,
-                source=source,
-                evidence_id=evidence,
-                opened_by_artifact_id=opened_by,
-            )
-        )
+        if open_date is None or close_date is None or not evidence:
+            return None
+        reason = "placeholder" if close_date >= PLACEHOLDER_CLOSE else "inverted" if close_date < open_date else None
+        if reason:
+            skipped[f"{reason} {source}"] += 1
+            if len(skipped_examples[reason]) < 5:
+                skipped_examples[reason].append(f"{evidence}: {open_date.isoformat()}..{close_date.isoformat()}")
+            return None
+        return _Window(open_date, close_date, source, evidence)
 
+    def stated_rins(value: object, table: str, row_id: object, column: str) -> set[str]:
+        raw = parse_json_list(value, stats=json_stats, table=table, row_id=row_id, column=column)
+        return {rin for item in raw or () if (rin := normalize_rin(item)) is not None}
+
+    # Regulations.gov documents. A copy of a Register record (its fr_doc_num resolves to one) is
+    # that notice's, whatever docket holds it; its ordinary docket anchors the notice when the
+    # Register names none (decision 56's B). Any other document with a window is its own notice.
+    notices: dict[str, _Notice] = {}
+    copy_dockets_by_fr: dict[str, set[str]] = defaultdict(set)
+    copy_windows_by_fr: dict[str, list[_Window]] = defaultdict(list)
+    copy_rins_by_fr: dict[str, set[str]] = defaultdict(set)
+    ambiguous_document_notices = 0
     for row in iter_parquet_rows(
         required["documents"],
         columns=(
             "document_id",
             "docket_id",
+            "fr_doc_num",
+            "title",
             "additional_rins",
             "posted_date",
             "comment_start_date",
@@ -332,38 +323,47 @@ def build_comment_periods(
         ),
     ):
         docket = normalize_regsgov_identifier(row.get("docket_id"))
-        if docket is None or not row.get("comment_end_date"):
+        anchor = anchor_docket(docket)
+        copy = copy_of(row, fr_index)
+        if copy is not None and anchor is not None:
+            copy_dockets_by_fr[copy].add(anchor)
+        if not row.get("comment_end_date"):
             continue
-        # The document endpoint is itself a source-of-record membership signal.
-        trusted_dockets.add(docket)
-        docket_targets = set(proceeding_ids_by_docket.get(docket, ()))
-        raw_rins = parse_json_list(
-            row.get("additional_rins"),
-            stats=json_stats,
-            table="documents",
-            row_id=row.get("document_id"),
-            column="additional_rins",
+        if docket is not None:
+            # The document endpoint is itself a source-of-record membership signal.
+            trusted_dockets.add(docket)
+        document_id = row.get("document_id")
+        rins = stated_rins(row.get("additional_rins"), "documents", document_id, "additional_rins")
+        stated = window(
+            row.get("comment_start_date") or row.get("posted_date"),
+            row.get("comment_end_date"),
+            REGULATIONS_GOV,
+            document_id,
         )
-        rins = set() if raw_rins is None else {rin for value in raw_rins if (rin := normalize_rin(value)) is not None}
+        if copy is not None:
+            copy_rins_by_fr[copy].update(rins)
+            if stated is not None:
+                copy_windows_by_fr[copy].append(stated)
+            continue
+        if stated is None:
+            continue
         # The source-backed docket is action identity. A RIN is retained as
         # interval metadata but never filters or selects a Proceeding.
-        candidates = docket_targets
-        proceeding_ids = candidates if len(candidates) == 1 else set()
-        if len(candidates) > 1:
-            ambiguous_document_intervals += 1
-        add_interval(
-            proceeding_ids=proceeding_ids,
-            docket_ids={docket},
-            rins=rins,
-            start=row.get("comment_start_date") or row.get("posted_date"),
-            end=row.get("comment_end_date"),
-            source="documents.comment_end_date",
-            evidence_id=row.get("document_id"),
+        candidates = proceeding_ids_by_docket.get(anchor or "", set())
+        ambiguous_document_notices += len(candidates) > 1
+        notices[stated.evidence_id] = _Notice(
+            windows=(stated,),
+            docket_ids=(anchor,) if anchor else (),
+            proceeding_ids=tuple(candidates) if len(candidates) == 1 else (),
+            rins=tuple(sorted(rins)),
+            extends=extends_comment_period(row.get("title")),
+            cites=(),
         )
 
+    # The dockets a Register record names; its label wins over its copies' dockets.
     linked_dockets_by_fr: dict[str, set[str]] = defaultdict(set)
     for docket, reference in fr_index.docket_links(required["fr_docket_links"]):
-        if docket not in trusted_dockets:
+        if docket not in trusted_dockets or anchor_docket(docket) is None:
             continue
         if identity := resolved_id(reference):
             linked_dockets_by_fr[identity].add(docket)
@@ -371,48 +371,102 @@ def build_comment_periods(
             for candidate in reference["candidate_ids"]:
                 unresolved_by_fr[candidate].append(reference)
 
+    shared_fr_notices = 0
     for row in iter_parquet_rows(
         required["federal_register"],
-        columns=("document_number", "publication_date", "comments_close_on", "regulation_id_numbers_json"),
+        columns=(
+            "document_number",
+            "publication_date",
+            "comments_close_on",
+            "regulation_id_numbers_json",
+            "title",
+            "abstract",
+        ),
     ):
-        if not row.get("comments_close_on") or not row.get("publication_date"):
-            continue
         document_number = str(row.get("document_number") or "")
         identity = fr_index.record_id(row)
-        raw_rins = parse_json_list(
-            row.get("regulation_id_numbers_json"),
-            stats=json_stats,
-            table="federal_register",
-            row_id=document_number,
-            column="regulation_id_numbers_json",
+        stated = (
+            window(row.get("publication_date"), row.get("comments_close_on"), REGISTER, identity)
+            if row.get("comments_close_on") and row.get("publication_date")
+            else None
         )
-        rins = set() if raw_rins is None else {rin for value in raw_rins if (rin := normalize_rin(value)) is not None}
-        dockets = set(linked_dockets_by_fr.get(identity, ()))
-        docket_targets: set[str] = set()
-        for docket in dockets:
-            docket_targets.update(proceeding_ids_by_docket.get(docket, ()))
-        artifact_targets = set(proceeding_ids_by_fr_document.get(identity, ()))
+        windows = ((stated,) if stated else ()) + tuple(copy_windows_by_fr.pop(identity, ()))
+        if not windows:
+            continue
+        dockets = linked_dockets_by_fr.get(identity) or copy_dockets_by_fr.get(identity) or set()
+        docket_targets = {proceeding for docket in dockets for proceeding in proceeding_ids_by_docket.get(docket, ())}
         # Direct artifact membership is strongest. Docket membership is the
         # fallback for older rows that predate the artifact projection. A notice that
         # is no action evidence attaches to every proceeding whose dockets it names
         # (decision 33), and its period opens in each of them, so it lists them all.
-        proceeding_ids = artifact_targets or docket_targets
-        if len(proceeding_ids) > 1:
-            shared_fr_intervals += 1
-        add_interval(
-            proceeding_ids=proceeding_ids,
-            docket_ids=dockets,
-            rins=rins,
-            start=row.get("publication_date"),
-            end=row.get("comments_close_on"),
-            source="federal_register.comments_close_on",
-            evidence_id=identity,
-            retain_unresolved=bool(unresolved_by_fr[identity]),
+        proceeding_ids = proceeding_ids_by_fr_document.get(identity) or docket_targets
+        shared_fr_notices += len(proceeding_ids) > 1
+        rins = stated_rins(
+            row.get("regulation_id_numbers_json"), "federal_register", document_number, "regulation_id_numbers_json"
+        ) | copy_rins_by_fr.get(identity, set())
+        extends = extends_comment_period(row.get("title"))
+        notices[identity] = _Notice(
+            windows=windows,
+            docket_ids=tuple(sorted(dockets)),
+            proceeding_ids=tuple(sorted(proceeding_ids)),
+            rins=tuple(sorted(rins)),
+            extends=extends,
+            cites=tuple(
+                (int(match.group(1)), int(match.group(2)))
+                for match in _REGISTER_CITATION.finditer(str(row.get("abstract") or ""))
+            )
+            if extends
+            else (),
         )
 
-    rows = _merge_intervals(intervals)
+    # The one Register record each cited page starts; a page two records start names neither.
+    wanted = {page for notice in notices.values() for page in notice.cites}
+    starting: dict[tuple[int, int], set[str]] = defaultdict(set)
+    if wanted:
+        for row in iter_parquet_rows(
+            required["federal_register"], columns=("document_number", "publication_date", "volume", "start_page")
+        ):
+            try:
+                page = (int(row["volume"]), int(row["start_page"]))
+            except (KeyError, TypeError, ValueError):
+                continue
+            if page in wanted:
+                starting[page].add(fr_index.record_id(row))
+    cited_pages = {page: identity for page, identities in starting.items() if (identity := _one(identities))}
+
+    by_rin: dict[str, list[str]] = defaultdict(list)
+    for key, notice in notices.items():
+        for rin in notice.rins:
+            if action_evidence_rin(rin):
+                by_rin[rin].append(key)
+    extended_by: dict[str, str] = {}
+    links: Counter[str] = Counter()
+    for key, notice in notices.items():
+        target, how = _extended_notice(key, notice, notices, by_rin, cited_pages)
+        if notice.extends:
+            links[how] += 1
+        if target is not None:
+            extended_by[key] = target
+
+    def root(key: str) -> str:
+        # Each link names a notice that opened earlier, so the chains end.
+        while key in extended_by:
+            key = extended_by[key]
+        return key
+
+    members: dict[str, list[str]] = defaultdict(list)
+    for key in notices:
+        members[root(key)].append(key)
+
+    rows: list[dict] = []
+    reopened_notices = 0
+    for keys in members.values():
+        linked = [(window, notices[key]) for key in keys for window in notices[key].windows]
+        periods = list(_periods(linked))
+        reopened_notices += len(periods) > 1
+        for period in periods:
+            rows.append(_period_row(period, proceeding_by_id, json_stats) | provenance)
     for row in rows:
-        row.update(provenance)
         references = [
             reference
             for evidence in json.loads(row["evidence_ids_json"])
@@ -424,40 +478,76 @@ def build_comment_periods(
             row["docket_ids_json"],
             row["proceeding_ids_json"],
             row["open_date"],
+            row["comment_period_id"],
         )
     )
     out_file = write_parquet_rows(output_dir / OUTPUT, columns=COLUMNS, rows=rows)
     json_stats.log("comment_periods")
-    if inverted_by_source:
+    for reason, examples in skipped_examples.items():
         logger.warning(
-            "comment_periods: skipped {:,} inverted source intervals ({}); examples: {}",
-            sum(inverted_by_source.values()),
-            ", ".join(f"{source}={count:,}" for source, count in sorted(inverted_by_source.items())),
-            "; ".join(inverted_examples),
+            "comment_periods: skipped {} source windows ({}); examples: {}",
+            reason,
+            ", ".join(
+                f"{key.split(' ', 1)[1]}={count:,}" for key, count in sorted(skipped.items()) if key.startswith(reason)
+            ),
+            "; ".join(examples),
         )
-    if shared_fr_intervals:
+    if shared_fr_notices:
         logger.info(
-            "comment_periods: {:,} FR intervals open in several proceedings and list each",
-            shared_fr_intervals,
+            "comment_periods: {:,} Register notices open in several proceedings and list each", shared_fr_notices
         )
-    if ambiguous_document_intervals:
-        logger.warning(
-            "comment_periods: retained {:,} ambiguous document intervals with docket-only anchors",
-            ambiguous_document_intervals,
+    if ambiguous_document_notices:
+        logger.info(
+            "comment_periods: {:,} Regulations.gov notices keep only their docket (its proceeding is ambiguous)",
+            ambiguous_document_notices,
         )
-    if unanchored_intervals:
-        logger.warning(
-            "comment_periods: skipped {:,} intervals with neither a resolved Proceeding nor a source-backed Docket",
-            unanchored_intervals,
-        )
-    anchor_counts = Counter((row["proceeding_ids_json"], row["docket_ids_json"]) for row in rows)
-    reopenings = sum(count - 1 for count in anchor_counts.values() if count > 1)
-    docket_only = sum(row["proceeding_ids_json"] == "[]" and row["docket_ids_json"] != "[]" for row in rows)
+    kinds = Counter(row["anchor_kind"] for row in rows)
     logger.info(
-        "Comment periods: {:,} rows ({:,} reopened; {:,} docket-only)",
+        "Comment periods: {:,} rows from {:,} notices ({}); extensions {}; {:,} linked groups reopen",
         len(rows),
-        reopenings,
-        docket_only,
+        len(notices),
+        ", ".join(f"{kind} {count:,}" for kind, count in sorted(kinds.items())),
+        ", ".join(f"{how} {count:,}" for how, count in sorted(links.items())),
+        reopened_notices,
     )
     assert pq.ParquetFile(out_file).schema_arrow.names == list(COLUMNS)
     return out_file
+
+
+def _period_row(
+    period: list[tuple[_Window, _Notice]], proceeding_by_id: dict[str, dict], json_stats: JsonReadStats
+) -> dict:
+    """One period's row: its windows' span and evidence, and every anchor of the notices they state."""
+    windows = [window for window, _ in period]
+    notices = list({id(notice): notice for _, notice in period}.values())
+    open_date = min(window.start for window in windows)
+    dockets = sorted({docket for notice in notices for docket in notice.docket_ids})
+    proceedings = sorted({proceeding for notice in notices for proceeding in notice.proceeding_ids})
+    rins = {rin for notice in notices for rin in notice.rins}
+    rins.update(rin for proceeding in proceedings for rin in proceeding_rins(proceeding_by_id[proceeding], json_stats))
+    opened_by = sorted(
+        {
+            url
+            for window in windows
+            if window.start == open_date and (url := _artifact_url(window.source, window.evidence_id))
+        }
+    )
+
+    def latest(source: str) -> str | None:
+        closes = [window.end for window in windows if window.source == source]
+        return max(closes).isoformat() if closes else None
+
+    return {
+        "comment_period_id": stable_id("comment_period", canonical_json(opened_by)),
+        "proceeding_ids_json": canonical_json(proceedings),
+        "rins_json": canonical_json(sorted(rins)),
+        "docket_ids_json": canonical_json(dockets),
+        "open_date": open_date.isoformat(),
+        "close_date": max(window.end for window in windows).isoformat(),
+        "source": "+".join(sorted({window.source for window in windows})),
+        "opened_by_artifact_ids_json": canonical_json(opened_by),
+        "evidence_ids_json": canonical_json(sorted(window.evidence_id for window in windows)),
+        "anchor_kind": "docket" if dockets else "proceeding" if proceedings else "none",
+        "register_close_date": latest(REGISTER),
+        "regulations_gov_close_date": latest(REGULATIONS_GOV),
+    }

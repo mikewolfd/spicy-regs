@@ -143,6 +143,18 @@ def is_correction(title: object) -> bool:
     )
 
 
+def extends_comment_period(title: object) -> bool:
+    """Whether a title says its document extends or reopens a comment period.
+
+    The lifecycle's ``comment_period`` form and the comment-period builder's extension links
+    read this one rule. It misses "Extension of Time for Comments" phrasings (72 Register
+    notices with a close date on the 2026-09-28 parents) and takes a few titles that only
+    mention both words; an extension link also needs the RIN or citation the builder checks.
+    """
+    text = str(title or "").casefold()
+    return "comment period" in text and ("exten" in text or "reopen" in text)
+
+
 def document_form(stage: str | None, title: object) -> str | None:
     """A staged document's form: its :func:`rule_stage` refined by its own title's markers (decision 55).
 
@@ -162,7 +174,7 @@ def document_form(stage: str | None, title: object) -> str | None:
         if "interim final" in text or "interim rule" in text:
             return "interim_final"
         return "direct_final" if "direct final" in text else "final"
-    if "comment period" in text and ("exten" in text or "reopen" in text):
+    if extends_comment_period(text):
         return "comment_period"
     if "advance notice of proposed rulemaking" in text or "anprm" in text:
         return "advance_proposed"

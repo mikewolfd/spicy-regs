@@ -29,7 +29,8 @@ class RulemakingDatasetPipeline(MaterializedDatasetPipeline):
     the four. These stages do: ``rule_targets`` is the docket ↔ CFR ↔ RIN
     spine; ``proceedings`` promotes each rulemaking to a first-class record with
     its actions; ``regulatory_agenda`` links agenda items to those actions;
-    ``comment_periods`` materializes every comment interval, reopenings included;
+    ``comment_periods`` gives every notice stating a comment close its period, a named
+    extension merged and a reopening apart;
     ``lifecycles`` pairs each docketed proceeding's proposal with its final from
     its cleaned events; and ``agency-lifecycle-stats`` estimates time to final.
 
@@ -94,6 +95,8 @@ class RulemakingDatasetPipeline(MaterializedDatasetPipeline):
                 "regulation_id_numbers_json",
                 "cfr_references_json",
                 "agencies_json",
+                "volume",
+                "start_page",
             ),
             "unified_agenda.parquet": (
                 "rin",

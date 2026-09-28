@@ -662,37 +662,67 @@ tables:
   comment_periods:
     label: "Public comment periods"
     coverage: >-
-      Derived, and bounded by its inputs: `documents` with a comment end date
-      and `federal_register` records with `comments_close_on`.
-      `snapshot_91b19da7…` holds 281,635 periods.
-    measured_on: "2026-09-27"
+      Derived, and bounded by its inputs: every `federal_register` record with
+      a `comments_close_on` and every `documents` row with a comment end date
+      lands in exactly one period, anchored or not. Left out are windows that
+      close before they open and placeholder closes (see data quality). Live
+      row counts come from `describe_table`.
+    measured_on: "2026-09-28"
     summary: >-
-      One row per continuous public-comment interval, reopenings included:
-      overlapping or adjacent intervals from Regulations.gov documents and
-      Register notices of the same dockets (else the same proceedings) merge
-      into one, so an extension lengthens a period and a reopening starts a
-      new one. A period keeps its docket anchors when its proceeding is
-      unresolved. Keyed `comment_period_id`. Its proceedings, dockets and RINs
-      are JSON lists, so it joins through them rather than by a column. Built
-      by `build_comment_periods`; all columns are VARCHAR.
-    grain: "One continuous public-comment interval of one set of dockets or proceedings."
+      One row per notice's public-comment period. A notice is a Register record
+      with the Regulations.gov documents whose `fr_doc_num` names it, or a
+      Regulations.gov document the Register does not hold. Periods merge only
+      on an explicit link: a notice whose title extends or reopens a comment
+      period, and that names an earlier notice still open when it opens (by the
+      page that notice starts on, or as the one open notice sharing its RIN),
+      lengthens that notice's period; one that opens after the period closed
+      starts its own. A docket or proceeding anchors a period (`anchor_kind`)
+      and never merges two, and a Federal Register feed docket
+      (`AGENCY_FRDOC_0001` and the like) anchors nothing. Keyed
+      `comment_period_id`. Its proceedings, dockets and RINs are JSON lists, so
+      it joins through them rather than by a column. Built by
+      `build_comment_periods`; all columns are VARCHAR.
+    grain: "One notice's comment period: a Register record with its Regulations.gov copies, or a Regulations.gov document the Register does not hold, lengthened by the extensions that name it."
+    data_quality: >-
+      `close_date` is the latest close the period's own records state;
+      `register_close_date` and `regulations_gov_close_date` keep each
+      source's, and where they differ (Regulations.gov often holds a window
+      open past the Register's date) the later one closes the period. A close
+      on or after 2050-01-01 is a placeholder and states nothing: the inputs
+      hold no close from 2033 to 2049, and every later one is a stand-in
+      (Regulations.gov's 2099 and 2100 dates, FDA's 2050-02-21 open dockets,
+      Register year typos such as 3008 for 2008). A record whose only close is
+      a placeholder, or whose window closes before it opens, is in no period.
+      The formal rulespec export is the anchored rows (`anchor_kind <>
+      'none'`), since rulespec's CommentPeriod needs a proceeding or docket
+      anchor; no export exists yet. A Regulations.gov document is a notice's
+      copy only when its `fr_doc_num` says so, so a copy that omits it stands
+      as its own notice: on the 2026-09-28 inputs about 2,950 such documents
+      share a docket, close day and opening (within three days) with a Register
+      notice. An extension that names its notice by neither page nor RIN, or
+      whose title says "extension of time for comments", stays its own period.
+      A legacy Regulations.gov document whose posting date is decades early
+      (see `documents`) opens its period that early.
     identity_columns: [comment_period_id]
     columns:
-      comment_period_id: "Stable id of the period (`comment_period_<24 hex>`), from its proceedings, dockets and open date."
-      proceeding_ids_json: "JSON array of the proceedings the period is open in; `[]` when none resolves (docket-only)."
-      rins_json: "JSON array of the RINs its documents and proceedings carry."
-      docket_ids_json: "JSON array of the Regulations.gov dockets the period is anchored to; `[]` for a Register notice naming none."
-      open_date: "Eastern day the period opens: a document's comment start (else its posting) or the notice's publication, `YYYY-MM-DD`."
-      close_date: "Eastern day the merged period closes, `YYYY-MM-DD`."
-      source: "The sources of its merged intervals, `+`-joined: `documents.comment_end_date` and `federal_register.comments_close_on`."
-      opened_by_artifact_ids_json: "JSON array of public URLs of the documents whose interval opens the period on `open_date`."
-      evidence_ids_json: "JSON array of every record merged into the period: Regulations.gov document ids and dated Register record ids."
+      comment_period_id: "Stable id of the period (`comment_period_<24 hex>`), from the records that open it."
+      proceeding_ids_json: "JSON array of the proceedings its notices belong to; `[]` when none resolves."
+      rins_json: "JSON array of the RINs its records state and its proceedings hold."
+      docket_ids_json: "JSON array of the Regulations.gov dockets anchoring it: those its Register record names, else those of its copies, else a Regulations.gov notice's own; never a feed docket, and `[]` when none."
+      open_date: "Eastern day the period opens: the earliest opening among its records (a document's comment start, else its posting; a Register record's publication), `YYYY-MM-DD`."
+      close_date: "Eastern day the period closes: the latest non-placeholder close its records state, `YYYY-MM-DD`."
+      source: "The sources of its records, `+`-joined: `documents.comment_end_date` and `federal_register.comments_close_on`."
+      opened_by_artifact_ids_json: "JSON array of public URLs of the records whose window opens the period on `open_date`."
+      evidence_ids_json: "JSON array of every record in the period, each in exactly one period: dated Register record ids (`number@date`) and Regulations.gov document ids."
       method: "How the row was asserted; `deterministic` (computed by rule) throughout."
       actor_id: "The builder that asserted the row, with its version (`spicy-regs:comment-periods:v<n>`), bumped when its published rows change."
       run_id: "The materialization run that built the snapshot (e.g. `rulemaking-20260927T062656Z`)."
       asserted_at: "When that run asserted the row, as a UTC ISO 8601 instant."
       supersedes_id: "Id of a prior row this one continues; always NULL here."
       unresolved_fr_references_json: "JSON array of unresolved Register number references attached to its evidence."
+      anchor_kind: "What anchors the period: `docket` when a docket does, `proceeding` when only a proceeding does, `none` when neither; the rulespec export takes the anchored rows."
+      register_close_date: "Latest `comments_close_on` of its Register records, `YYYY-MM-DD`; NULL when the Register states none."
+      regulations_gov_close_date: "Latest comment end (Eastern day) of its Regulations.gov documents, `YYYY-MM-DD`; NULL when none states one."
   rulemaking_lifecycles:
     label: "Rulemaking lifecycles"
     coverage: >-
