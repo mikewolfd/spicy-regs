@@ -368,7 +368,10 @@ def build_lobbying_filings(
     spill_dir = output_dir / ".duckdb_tmp"
     spill_dir.mkdir(exist_ok=True)
     con = duckdb.connect()
-    con.execute("SET memory_limit='4GB'")
+    # The prior grows with every backfilled year and the dedup window reads all of it: at 4GB the 2013 run
+    # (36356691399, 36362663551) ran out of memory in merge_local_prior. Hosted runners have 16 GB; leave room
+    # for Python and the OS, and let DuckDB spill the rest to temp_directory.
+    con.execute("SET memory_limit='12GB'")
     con.execute("SET preserve_insertion_order=false")
     con.execute("SET threads=2")
     con.execute(f"SET temp_directory='{spill_dir}'")
