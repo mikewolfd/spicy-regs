@@ -5,35 +5,14 @@ The optional `source-readers` extra enables the same readers for package install
 its wheels must be supplied explicitly until they are published in a registry.
 Base CLI and MCP installs do not require them.
 
-- `spicy_docs-0.48.0`: built from SpicyDocs `983463c9eca35fc93913fd798811e148b531516d`,
-  September 27, 2026: **1,690,539 bytes**, SHA-256
-  `ee138dd86e62c254058ce9fe5f2f159dc6aa7d82ccc4580ed47edf09d28fd7fb`, byte-identical
-  across two builds. Adds a bounded Senate payment candidate reader and qualified
-  GAO product-page metadata reader. Citation identities now include source kind.
-  Senate output remains partial candidates pending full payment reconciliation.
-  Provider and receiving gates are recorded in the join execution report.
-  Vendored adoption only; no package-registry upload is asserted.
-
-- Historical join-lane `spicy_docs-0.47.0` (superseded; not the retained 0.47 wheel): built from SpicyDocs `7440dd4a3c446962174b5c3048e313d34a3b287b`,
-  September 27, 2026: **1,685,325 bytes**, SHA-256
-  `3a614d4aa16b0416e58690e7659037fef3397d3d6ce7ca21c1cc0e2c8ab42d29`, byte-identical
-  across two builds. Preserves dated bill cosponsors, nested member party intervals,
-  native comment-parent references and all communication RIN occurrences. Adds native
-  legal-reference row helpers, explicit citation-context provenance and an opt-in
-  strict Congress policy. Senate payment review remains a qualification gate, not a
-  published payment parser. The source repository gate and receiving tests are recorded
-  in `docs/research/join-delivery-execution-2026-09-27.md`. Vendored adoption only;
-  no package-registry upload is asserted.
-
-- `spicy_docs-0.46.0`: released by spicy-stack-11 from SpicyDocs `main` at `f486e73`, September 27,
-  2026: **1,677,177 bytes**, SHA-256
-  `2af2dfff55f0e2801bdc2ac2d928cbbd4e63701afbd87b719dd597736ef0b799`, byte-identical across two builds
-  (rechecked on adoption). On top of 0.44.0 (typed table contracts and the attribute projections) it
-  describes the comment-window flags as version state, takes each derived-text attachment from the
-  best-ranked tool that has it (decision 41), breaks a Mirrulations tie by S3 write time (keyed reads
-  are `MirrulationsReader.iter_keyed_records()`; `iter_records()` stays bare), and declares the
-  `at-joined/1` key spelling on `bill_sections` and `fec_committee_history`. Earlier builds and their
-  records are in this file's history.
+- `spicy_docs-0.50.0`: built from SpicyDocs `8844068b355c41cd5ab7e7310cc5ba51798f741a`
+  (head of spicy-docs PR #4), September 27, 2026: **1,692,745 bytes**, SHA-256
+  `c739bc6f6bd488ca2afcb37d1bbcff57f14c0abe051638d4679ed17abf9eb64b`, identical across two builds
+  with `SOURCE_DATE_EPOCH=1790553600`; a review rebuild from `git archive 8844068` reproduced the
+  same bytes. It is 0.47.0 (`f549c16`: `bill_sections.congress`, the partition column the bill
+  family splits `bill_sections` by) merged with the join lane's readers: dated bill cosponsors,
+  member party intervals, native relationship occurrences, Senate payment candidates and GAO
+  product metadata. Vendored adoption only; no package-registry upload is asserted.
 
 - `rulespec_artifacts-1.1.2`: exact dependency of SpicyDocs 0.39.2, built from Rulespec
   `23d5f2d98973b2a7f1bf7ce4c9c7a786a4f369ab` (`packages/rulespec-artifacts` of a whole-repo
@@ -44,7 +23,11 @@ Base CLI and MCP installs do not require them.
   version. The same method reproduces the 1.1.1 wheel (99,315 bytes, `63ad763f…c8c8`) byte
   for byte; 1.1.1's record is at `13f3831`.
 
-- Earlier wheels (SpicyDocs 0.25.0–0.33.2, Rulespec Artifacts 1.0.14 and 1.1.0) were
+- The unreferenced SpicyDocs 0.47.0, 0.48.0, 0.48.1 and 0.49.0 wheels were removed on
+  September 27, 2026; restore one with `git show 8350352:vendor/<wheel> > vendor/<wheel>`.
+  This file at `8350352` holds the 0.46.0, 0.47.0 (`f549c16`, `ff3d9bb0`) and 0.48.0 records;
+  0.48.1 and 0.49.0 were vendored without one. Earlier wheels (SpicyDocs
+  0.25.0–0.33.2, Rulespec Artifacts 1.0.14 and 1.1.0) were
   removed on September 25, 2026. Their build records are in this file at `e4840d9`; restore a
   wheel with `git show e4840d9:vendor/<wheel> > vendor/<wheel>`. Two were kept for replay:
   the published comment release under acquisition policy 1.2 (the six-agency cohort)
@@ -107,17 +90,3 @@ CourtListener listing, pins and raw rows use the shared provider directly. Run
 for this receiving change. Before replacing the provider wheel, also run the
 BILLSTATUS, Unified Agenda and PDF reader tests (`test_bill_subjects.py`,
 `test_unified_agenda*.py`, `test_pdf_text*.py`).
-
-The retained `spicy_docs-0.47.0-py3-none-any.whl` is the upstream bills-lane build
-from `f549c16`, SHA-256 `ff3d9bb0ada5e38df4224533b6f41a3c989b25fd4ce7f3a161d9d054150346c5`.
-Its `bill_sections.congress` addition is retained through the merged provider release;
-this older wheel is not the active dependency. The two lanes previously used the same
-version for different builds; the historical join-lane receipt above does not describe
-this retained file. The active wheel is named by `pyproject.toml` and `uv.lock`.
-
-Active `spicy_docs-0.50.0` integrates both source lanes at `8844068b355c41cd5ab7e7310cc5ba51798f741a`.
-The wheel is 1,692,745 bytes, SHA-256
-`c739bc6f6bd488ca2afcb37d1bbcff57f14c0abe051638d4679ed17abf9eb64b`,
-identical across two builds with `SOURCE_DATE_EPOCH=1790553600`. It retains the
-0.49 attachment and Senate readers and adds the upstream `bill_sections.congress`
-column and owner derivation required by partitioned bill-family output.
