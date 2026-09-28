@@ -289,17 +289,6 @@ def write_command(
     print(json.dumps(write(workdir, batch_bytes=batch_bytes, by_file=by_file, clear_failure=clear_failure), indent=2))
 
 
-@app.command(name="rollback")
-def rollback_command(*, to_snapshot: int, expected_current: int) -> None:
-    """Move comments' main branch back to ``--to-snapshot``, if it is still at ``--expected-current`` (runbook)."""
-    from dotenv import load_dotenv
-
-    from spicy_regs.pipelines.comment_fields_write import rollback
-
-    load_dotenv()
-    print(json.dumps(rollback(to_snapshot, expected_current=expected_current), indent=2))
-
-
 @app.command(name="status")
 def status_command(*, workdir: Path) -> None:
     """Planned and read chunks and keys."""

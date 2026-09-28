@@ -259,8 +259,8 @@ def write(
     cleared = {tuple(line["files"]) for line in lines if line["state"] == "cleared"}
     if [line for line in failed if tuple(line["files"]) not in cleared]:
         if not clear_failure:
-            raise RuntimeError(f"a batch failed verification ({journal.name}); roll back to its snapshot_before "
-                               "(runbook), then rerun with --clear-failure")
+            raise RuntimeError(f"a batch failed verification ({journal.name}); if it committed, restore it by hand "
+                               "first (no undo is built yet, runbook), then rerun with --clear-failure")
         for line in failed:
             _append(journal, {"state": "cleared", "files": line["files"], "prepare_id": prepared["prepare_id"],
                               "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())})
@@ -351,7 +351,8 @@ def _write_batch(con, workdir, journal, prepared, table, files, expected, by_fil
         _append(journal, {"state": "failed", "files": files, "committed": True, "reason": problem,
                           "snapshot_before": current.__dict__, "snapshot_after": after,
                           "prepare_id": prepared["prepare_id"]})
-        raise FillVerificationError(f"batch committed but {problem}; roll back to {current.__dict__} (runbook)")
+        raise FillVerificationError(f"batch committed but {problem}; its prior snapshot is {current.__dict__} "
+                                    "and its pre-image is on disk (no undo is built yet, runbook)")
     _append(journal, {"state": "verified", "files": files, "planned": planned, "changed": changed,
                       "snapshot_before": current.__dict__, "snapshot_after": after,
                       "prepare_id": prepared["prepare_id"], "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())})
@@ -450,40 +451,10 @@ def _recover(con, journal: Path, pending: dict, prepared: dict, table: str, expe
         _append(journal, {"state": "failed", "files": pending["files"], "committed": True,
                           "reason": f"recovered commit: {mismatched}", "snapshot_before":
                           pending["snapshot_before"], "snapshot_after": current, "prepare_id": prepared["prepare_id"]})
-        raise FillVerificationError(f"a committed batch differs from its pre-image; roll back to "
-                                    f"{pending['snapshot_before']} (runbook)")
+        raise FillVerificationError(f"a committed batch differs from its pre-image; its prior snapshot is "
+                                    f"{pending['snapshot_before']} (no undo is built yet, runbook)")
     _append(journal, {"state": "verified", "files": pending["files"], "planned": planned, "changed": planned,
                       "snapshot_before": pending["snapshot_before"], "snapshot_after": after, "recovered": True,
                       "prepare_id": prepared["prepare_id"]})
     return after
 
-
-# --------------------------------------------------------------------------- #
-# Rollback: move the table's main ref back to a snapshot, through the Iceberg REST catalog.
-# --------------------------------------------------------------------------- #
-def rollback(to_snapshot_id: int, *, expected_current: int, uri: str | None = None, warehouse: str | None = None,
-             token: str | None = None, namespace: str | None = None, client=None) -> dict:
-    """Set ``comments``' main branch to ``to_snapshot_id``, refusing unless it is still at ``expected_current``.
-
-    One REST commit (``set-snapshot-ref`` with an ``assert-ref-snapshot-id`` requirement), so a writer that moved the
-    table in between makes it refuse. The rolled-back snapshots stay in the table's history.
-    """
-    import httpx
-
-    uri = (uri or getenv("R2_CATALOG_URI", "")).rstrip("/")
-    warehouse = warehouse or getenv("R2_CATALOG_WAREHOUSE", "")
-    token = token or getenv("R2_CATALOG_TOKEN", "")
-    namespace = namespace or iceberg._namespace()
-    http = client or httpx.Client(timeout=60, headers={"Authorization": f"Bearer {token}"})
-    config = http.get(f"{uri}/v1/config", params={"warehouse": warehouse}).raise_for_status().json()
-    prefix = (config.get("overrides") or {}).get("prefix") or (config.get("defaults") or {}).get("prefix")
-    base = f"{uri}/v1/{prefix}" if prefix else f"{uri}/v1"
-    body = {
-        "identifier": {"namespace": [namespace], "name": COMMENT.name},
-        "requirements": [{"type": "assert-ref-snapshot-id", "ref": "main", "snapshot-id": expected_current}],
-        "updates": [{"action": "set-snapshot-ref", "ref-name": "main", "type": "branch",
-                     "snapshot-id": to_snapshot_id}],
-    }
-    response = http.post(f"{base}/namespaces/{namespace}/tables/{COMMENT.name}", json=body)
-    response.raise_for_status()
-    return {"metadata_location": response.json().get("metadata-location"), "snapshot_id": to_snapshot_id}

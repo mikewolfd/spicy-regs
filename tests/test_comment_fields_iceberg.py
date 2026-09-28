@@ -11,7 +11,7 @@ import subprocess
 import time
 from contextlib import suppress
 from pathlib import Path
-from urllib.request import Request, urlopen
+from urllib.request import urlopen
 from uuid import uuid4
 
 import duckdb
@@ -187,22 +187,3 @@ def test_a_foreign_commit_mid_run_stops_it_and_preparing_again_finishes(tmp_path
         assert cfw.write(tmp_path, con=con)["rows_changed"] == 8
     assert rows(lake)["C-2-3"]["title"] == "t2"
 
-
-def test_a_committed_batch_rolls_back_to_its_snapshot_before(tmp_path, lake, rest_uri):
-    cfw.prepare(tmp_path)
-    with lake() as con:
-        cfw.write(tmp_path, con=con, batch_bytes=1)
-    last = journal(tmp_path)[-1]
-    request = Request(f"{rest_uri}/v1/oauth/tokens", method="POST", data=(
-        b"grant_type=client_credentials&client_id=admin&client_secret=password&scope=PRINCIPAL_ROLE:ALL"))
-    with urlopen(request, timeout=10) as response:
-        token = json.load(response)["access_token"]
-    cfw.rollback(last["snapshot_before"]["snapshot_id"], expected_current=last["snapshot_after"]["snapshot_id"],
-                 uri=rest_uri, warehouse="", token=token)
-    with lake() as con:
-        assert iceberg._read_snapshot(con, COMMENT).snapshot_id == last["snapshot_before"]["snapshot_id"]
-    restored = rows(lake)
-    assert sum(r["subtype"] is None for r in restored.values()) == 4  # the last batch's four rows are unfilled again
-    with pytest.raises(Exception, match="409|Conflict|failed"):  # a stale expectation refuses
-        cfw.rollback(last["snapshot_before"]["snapshot_id"], expected_current=last["snapshot_after"]["snapshot_id"],
-                     uri=rest_uri, warehouse="", token=token)

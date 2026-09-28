@@ -29,7 +29,6 @@ All run through `/opt/homebrew/bin/uv run --frozen fill-comment-fields …`.
 | Read | `read --workdir W --shard i --shards n` (`run_read.zsh` runs eight) | no |
 | Prepare | `prepare --workdir W [--docket D \| --agency A]` | reads one snapshot |
 | Write | `write --workdir W [--no-by-file]` | writes, under the lock |
-| Roll back a batch | `rollback --to-snapshot S --expected-current C` | one ref move, under the lock |
 
 **Plan** splits the ETL manifest's comment keys into 20,000-key chunks per
 agency. A plan is named by the manifest digest and the record shape, so a
@@ -100,14 +99,19 @@ Another commit between batches stops the run: an ETL write, a
 `dedupe`, or R2's compaction. Preparing again then finds only the cells still
 NULL.
 
-## Rolling back a batch
+## A committed bad batch has no undo yet
 
-`rollback --to-snapshot <snapshot_before> --expected-current <snapshot_after>`
-moves `comments`' main branch back through the Iceberg REST catalog. It is one
-commit, refused if the table moved since. The ids are in the batch's journal
-line. The rolled-back snapshots stay in the table history. The rehearsal on
-the local Iceberg fixture is
-`tests/test_comment_fields_iceberg.py::test_a_committed_batch_rolls_back_to_its_snapshot_before`.
+**Do not run `write` on the live catalog until an undo exists.** The first
+`rollback` (moving the table's main ref back) was removed: after it, DuckDB
+1.5.5 still read the newer snapshot and its next write failed with 409, so
+it would have broken every ETL run. The replacement, due next session, is a
+forward, checked commit from the batch's on-disk pre-image, written the way
+`replace_rows` writes, and rehearsed on the fixture with a normal DuckDB read
+and an ETL-shaped write afterwards.
+
+Until then, a batch journaled `failed` with `committed: true` keeps its
+pre-image under `fill/preimage/` and its prior snapshot in the journal line;
+stop and restore by hand.
 
 ## Cost
 
@@ -178,8 +182,8 @@ join the group, so it excludes both:
 5. Run `prepare`, review `prepare.json`, then `write`. Every batch also
    refuses if the snapshot moved, which catches a writer the steps above
    missed.
-6. If a batch is journaled `failed` with `committed: true`, roll it back
-   (above) before anything else.
+6. If a batch is journaled `failed` with `committed: true`, stop: there is no
+   undo yet (above).
 7. Re-enable compaction:
    `npx wrangler r2 bucket catalog compaction enable spicy-regs default comments --target-size 128 --token $R2_CATALOG_TOKEN`.
    Then re-enable the workflows. The next mirror publication carries the
