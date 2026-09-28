@@ -62,25 +62,93 @@ def parse_selections(values: list[dict]) -> tuple[Selection, ...]:
     return tuple(selections)
 
 
-def _read_field(cursor, selection: Selection, max_field_bytes: int) -> tuple[str | None, str]:
-    spec = TEXT_SOURCES[selection.kind]
-    where = " AND ".join(f'CAST("{key}" AS VARCHAR) = ?' for key in spec.keys)
-    rows = cursor.execute(
-        f'SELECT octet_length(encode("{spec.field}")), '
-        f'CASE WHEN octet_length(encode("{spec.field}")) <= ? THEN "{spec.field}" END '
-        f'FROM "{spec.table}" WHERE {where} LIMIT 2',
-        [max_field_bytes, *selection.keys],
-    ).fetchall()
-    if len(rows) != 1:
-        return None, "missing" if not rows else "ambiguous_source"
-    size, text = rows[0]
-    if size is None:
-        return None, "unread_null"
-    if size > max_field_bytes:
-        return None, "field_byte_cap"
-    if not isinstance(text, str):
-        return None, "unsupported_field"
-    return text, "complete_field"
+def _interruptible(cursor, sql: str, parameters: list) -> list[tuple]:
+    timer = Timer(90, cursor.interrupt)
+    timer.start()
+    try:
+        return cursor.execute(sql, parameters).fetchall()
+    finally:
+        timer.cancel()
+
+
+def _selected_rows(cursor, kind: str, selected: Sequence[tuple[int, Selection]], column_sql: str) -> list[tuple]:
+    """One scan of a kind's source table for every selection: (ordinal, column) per matching row.
+
+    The join casts each selected key to its column's native type, so the scan
+    filters the column itself; the literal comparison afterwards keeps the exact
+    spelling rule (a selected ``"007"`` never matches ``seq`` 7).
+    """
+    spec = TEXT_SOURCES[kind]
+    types = {row[0]: row[1] for row in cursor.execute(f'DESCRIBE "{spec.table}"').fetchall()}
+    names = ", ".join(f"k{i}" for i in range(len(spec.keys)))
+    values = ", ".join("(" + ", ".join(["?"] * (len(spec.keys) + 1)) + ")" for _ in selected)
+    joined = " AND ".join(f't."{c}" = TRY_CAST(s.k{i} AS {types[c]})' for i, c in enumerate(spec.keys))
+    exact = " AND ".join(f'CAST(t."{c}" AS VARCHAR) = s.k{i}' for i, c in enumerate(spec.keys))
+    return _interruptible(
+        cursor,
+        f'SELECT s.ordinal, {column_sql} FROM (VALUES {values}) AS s(ordinal, {names}) '
+        f'JOIN "{spec.table}" t ON {joined} WHERE {exact}',
+        [value for ordinal, selection in selected for value in (ordinal, *selection.keys)],
+    )
+
+
+def _read_fields(cursor, selections: Sequence[Selection], max_field_bytes: int) -> list[tuple[str | None, str, str | None]]:
+    """Read every selected field with two scans per source kind, in selection order.
+
+    Returns ``(text, status, error_type)`` per selection. Sizes are read first;
+    the run byte budget is then applied in selection order exactly as a
+    one-field-at-a-time read would, and only admitted fields' text is fetched,
+    so memory stays within ``MAX_TOTAL_FIELD_BYTES``. A read failure fails that
+    kind's selections.
+    """
+    by_kind: dict[str, list[tuple[int, Selection]]] = {}
+    for ordinal, selection in enumerate(selections):
+        by_kind.setdefault(selection.kind, []).append((ordinal, selection))
+    sizes: dict[int, list] = {ordinal: [] for ordinal in range(len(selections))}
+    failed: dict[str, str] = {}
+    for kind, selected in by_kind.items():
+        try:
+            for ordinal, size in _selected_rows(cursor, kind, selected,
+                                                f'octet_length(encode(t."{TEXT_SOURCES[kind].field}"))'):
+                sizes[ordinal].append(size)
+        except duckdb.Error as error:
+            failed[kind] = type(error).__name__
+    results: list[tuple[str | None, str, str | None]] = []
+    admitted: dict[str, list[tuple[int, Selection]]] = {}
+    bytes_read = 0
+    for ordinal, selection in enumerate(selections):
+        if bytes_read >= MAX_TOTAL_FIELD_BYTES:
+            results.append((None, "run_byte_cap", None))
+        elif selection.kind in failed:
+            results.append((None, "source_read_failure", failed[selection.kind]))
+        elif len(sizes[ordinal]) != 1:
+            results.append((None, "missing" if not sizes[ordinal] else "ambiguous_source", None))
+        elif sizes[ordinal][0] is None:
+            results.append((None, "unread_null", None))
+        elif sizes[ordinal][0] > min(max_field_bytes, MAX_TOTAL_FIELD_BYTES - bytes_read):
+            results.append((None, "field_byte_cap", None))
+        else:
+            bytes_read += sizes[ordinal][0]
+            admitted.setdefault(selection.kind, []).append((ordinal, selection))
+            results.append((None, "complete_field", None))
+    for kind, selected in admitted.items():
+        try:
+            texts = dict(_selected_rows(cursor, kind, selected, f't."{TEXT_SOURCES[kind].field}"'))
+        except duckdb.Error as error:
+            texts, error_type = {}, type(error).__name__
+        else:
+            error_type = None
+        for ordinal, _ in selected:
+            text = texts.get(ordinal)
+            if error_type is not None or ordinal not in texts:
+                results[ordinal] = (None, "source_read_failure", error_type or "SourceChangedDuringRead")
+            elif not isinstance(text, str):
+                results[ordinal] = (None, "unsupported_field", None)
+            elif len(text.encode()) != sizes[ordinal][0]:
+                results[ordinal] = (None, "source_read_failure", "SourceChangedDuringRead")
+            else:
+                results[ordinal] = (text, "complete_field", None)
+    return results
 
 
 def build_held_citations(
@@ -111,8 +179,8 @@ def build_held_citations(
     states = {(s.get("document_kind"), s.get("document_key"), s.get("text_sha256")): s
               for s in read_checkpoints(prior, NAMESPACE)}
     rows, replaced, receipts = [], set(), []
-    bytes_read = 0
-    for selection in selections:
+    reads = _read_fields(cursor, selections, max_field_bytes)
+    for selection, (text, status, error_type) in zip(selections, reads, strict=True):
         spec = TEXT_SOURCES[selection.kind]
         selected_kinds = tuple(kind for kind in kinds if kind not in spec.excluded_rules)
         if not selected_kinds:
@@ -124,22 +192,11 @@ def build_held_citations(
                    "source_table": spec.table, "source_field": spec.field,
                    "source_keys": dict(zip(spec.keys, selection.keys, strict=True)),
                    "input_pin": dict(input_pins[spec.table]), "processing_version": processing}
-        if bytes_read >= MAX_TOTAL_FIELD_BYTES:
-            text, status = None, "run_byte_cap"
-        else:
-            timer = Timer(90, cursor.interrupt)
-            timer.start()
-            try:
-                text, status = _read_field(cursor, selection, min(max_field_bytes, MAX_TOTAL_FIELD_BYTES - bytes_read))
-            except duckdb.Error as error:
-                text, status = None, "source_read_failure"
-                receipt["error_type"] = type(error).__name__
-            finally:
-                timer.cancel()
+        if error_type is not None:
+            receipt["error_type"] = error_type
         receipt["status"] = status
         if text is not None:
             encoded = text.encode()
-            bytes_read += len(encoded)
             text_sha = "sha256:" + hashlib.sha256(encoded).hexdigest()
             if evidence is not None:
                 evidence.store.put_blob(text_sha, len(encoded), [encoded])

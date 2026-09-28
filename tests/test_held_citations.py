@@ -146,3 +146,43 @@ def test_native_comment_negative_fields_remain_complete(tmp_path):
         path = run(con, tmp_path, [str(i) for i in range(len(bodies))])
         assert pq.read_table(path).num_rows == 0
         assert len(read_checkpoints(path, held.NAMESPACE)) == len(bodies)
+
+
+class _Recording:
+    """Cursor stand-in that records statements and forwards them."""
+
+    def __init__(self, con):
+        self.con, self.statements = con, []
+
+    def execute(self, sql, parameters=None):
+        self.statements.append(sql)
+        return self.con.execute(sql, parameters or [])
+
+    def interrupt(self):
+        self.con.interrupt()
+
+
+def test_selected_fields_read_with_two_scans_per_kind_on_native_key_types():
+    with duckdb.connect() as con:
+        con.execute("CREATE TABLE bill_sections(bill_id VARCHAR,version_code VARCHAR,source VARCHAR,seq INTEGER,body VARCHAR)")
+        con.executemany("INSERT INTO bill_sections VALUES ('B','ih','congress.gov',?,?)",
+                        [(n, f"section {n}") for n in range(1, 6)])
+        selections = [held.Selection("bill_section", ("B", "ih", "congress.gov", key)) for key in ("2", "02", "5", "9")]
+        cursor = _Recording(con)
+        reads = held._read_fields(cursor, selections, held.MAX_FIELD_BYTES)
+    assert [(text, status) for text, status, _ in reads] == [
+        ("section 2", "complete_field"), (None, "missing"), ("section 5", "complete_field"), (None, "missing"),
+    ]  # "02" keeps the literal-spelling rule even though it casts to 2
+    scans = [sql for sql in cursor.statements if "JOIN" in sql]
+    assert len(scans) == 2 and all('t."seq" = TRY_CAST' in sql and 'CAST(t."seq" AS VARCHAR) =' in sql for sql in scans)
+
+
+def test_run_byte_budget_applies_in_selection_order(monkeypatch):
+    monkeypatch.setattr(held, "MAX_TOTAL_FIELD_BYTES", 10)
+    with connection() as con:
+        con.executemany("INSERT INTO comments VALUES (?, ?)",
+                        [("a", "x" * 6), ("b", "y" * 6), ("c", "z" * 3), ("d", "w"), ("e", "v")])
+        reads = held._read_fields(con, [held.Selection("comment_inline", (k,)) for k in "abcde"], held.MAX_FIELD_BYTES)
+    assert [status for _, status, _ in reads] == [
+        "complete_field", "field_byte_cap", "complete_field", "complete_field", "run_byte_cap",
+    ]
