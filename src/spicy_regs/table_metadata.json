@@ -4206,7 +4206,7 @@
       {
         "column_name": "description",
         "column_type": "VARCHAR",
-        "description": "Proceeding title/subject (ECFS `description_display`, falling back to `description`), e.g. `Restoring Internet Freedom`. There is no program or topic field, and titles often leave the program out: Universal Service dockets include 13-184 (`Modernizing the E-rate Program for Schools and Libraries.`) and 02-60 (`In the Matter of Rural Health Care Support Mechanism`), neither of which says universal service. Search titles together with bureau_code (WC, or CC for older dockets) and known docket numbers."
+        "description": "Proceeding title/subject (ECFS `description_display`, falling back to `description`), e.g. `Restoring Internet Freedom`. There is no program or topic field, and titles often leave the program out: Universal Service dockets include 13-184 (`Modernizing the E-rate Program for Schools and Libraries.`) and 02-60 (`In the Matter of Rural Health Care Support Mechanism`), neither of which says universal service, and high-cost programs such as the Rural Digital Opportunity Fund (19-126) and the 5G Fund (20-32) use their own names. Search titles together with bureau_code (WC, or CC for older dockets) and known docket numbers, and find related dockets by the proceedings filings name alongside an anchor docket in fcc_filings.proceeding_names_json (for Universal Service, the umbrella docket 96-45 and 10-90). A title search gives a floor, not a complete list."
       },
       {
         "column_name": "bureau_code",
