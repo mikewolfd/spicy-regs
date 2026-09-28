@@ -590,6 +590,7 @@ def test_catalog_ingestion_defers_index_until_mirror(tmp_output, monkeypatch):
     monkeypatch.setattr(mirrulations, "s3_resource", lambda: _FakeS3Resource(store))
     monkeypatch.setattr(regulations.iceberg, "merge_comments", lambda sd, rt: 1)
     uploaded = []
+    monkeypatch.setattr(regulations.r2, "preflight_uploads", lambda output_dir, files: None)
     monkeypatch.setattr(regulations.r2, "upload_file", lambda path, remote_key=None: uploaded.append(path.name))
     RegulationsPipeline(allow_fresh_start=True, agency=AGENCY, output_dir=tmp_output,
                         only_comments=True, use_iceberg=True, enrich_text=False, skip_upload=False).run()

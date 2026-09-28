@@ -160,3 +160,22 @@ def test_docket_search_keeps_its_legacy_non_table_object(tmp_path, monkeypatch, 
     assert payload["count"] == 1
     assert uploaded == ([] if skip_upload else [(output, output.name)])
     assert not (tmp_path / "generations").exists()
+
+
+@pytest.mark.parametrize("rollup", ["generation", "legacy object"])
+def test_an_upload_run_without_credentials_fails_and_a_dry_run_still_builds(tmp_path, monkeypatch, rollup):
+    """Upload on with no secrets is a failed run, not a green one that published nothing; ``skip_upload`` still works."""
+    from spicy_regs.pipelines.rollups.docket_search import DocketSearchRollup
+
+    for name in ("R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_PUBLIC_URL"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setattr(upload_r2, "get_r2_client", lambda: pytest.fail("no client without credentials"))
+    pq.write_table(pa.table({
+        "docket_id": ["ACF-2015-0001"], "agency_code": ["ACF"], "title": ["t"], "docket_type": ["Rulemaking"],
+        "modify_date": ["2026-09-21"], "abstract": ["a"],
+    }), tmp_path / "dockets.parquet")
+    pipeline = _SingleOutputRollup if rollup == "generation" else DocketSearchRollup
+
+    with pytest.raises(RuntimeError, match="R2 credentials"):
+        pipeline(output_dir=tmp_path, skip_upload=False).run()
+    pipeline(output_dir=tmp_path, skip_upload=True).run()
