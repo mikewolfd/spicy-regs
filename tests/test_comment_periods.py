@@ -7,7 +7,9 @@ from collections import Counter
 
 import pyarrow.parquet as pq
 
-from spicy_regs.ontology.common import write_parquet_rows
+from loguru import logger
+
+from spicy_regs.ontology.common import canonical_json, stable_id, write_parquet_rows
 from spicy_regs.transforms.build_comment_periods import ACTOR_ID, build_comment_periods
 
 DOCKET_COLUMNS = ("docket_id", "title")
@@ -440,7 +442,7 @@ def test_each_register_record_and_document_sits_in_at_most_one_period(tmp_path):
     assert held and max(held.values()) == 1
     extended = _one_holding(periods, "2026-15000@2026-08-05")
     assert _holding(extended, "2026-18000@2026-09-02") and extended["close_date"] == "2026-10-05"
-    assert {p["actor_id"] for p in periods} == {ACTOR_ID} == {"spicy-regs:comment-periods:v11"}
+    assert {p["actor_id"] for p in periods} == {ACTOR_ID} == {"spicy-regs:comment-periods:v12"}
 
 
 def test_a_copy_reopened_after_the_register_window_closed_is_a_second_period(tmp_path):
@@ -460,3 +462,81 @@ def test_a_copy_reopened_after_the_register_window_closed_is_a_second_period(tmp
         ("2026-03-02", "2026-04-01", '["2026-05000@2026-03-02"]'),
         ("2026-05-01", "2026-05-31", '["NHTSA-2026-0100-0001"]'),
     ]
+
+
+def test_a_notices_register_record_is_listed_though_only_its_copy_states_a_window(tmp_path):
+    """FDA 2026-18349 states no close and 2026-18400 an unusable one; their copies' windows make the periods."""
+    periods = _build(
+        tmp_path,
+        dockets=[("FDA-2026-N-10232", "Guidance"), ("FDA-2026-N-10300", "Guidance")],
+        documents=[
+            _document(
+                "FDA-2026-N-10232-0001",
+                "FDA-2026-N-10232",
+                "2026-09-09",
+                "2026-10-10T03:59:59Z",
+                fr_doc_num="2026-18349",
+            ),
+            _document(
+                "FDA-2026-N-10300-0001",
+                "FDA-2026-N-10300",
+                "2026-09-10",
+                "2026-10-11T03:59:59Z",
+                fr_doc_num="2026-18400",
+            ),
+        ],
+        register=[
+            _notice("2026-18349", "2026-09-09", None, document_type="Notice"),
+            _notice("2026-18400", "2026-09-10", "2026-09-01", document_type="Notice"),
+        ],
+    )
+    guidance = _one_holding(periods, "FDA-2026-N-10232-0001")
+    assert json.loads(guidance["evidence_ids_json"]) == ["2026-18349@2026-09-09", "FDA-2026-N-10232-0001"]
+    assert guidance["source"] == "documents.comment_end_date"
+    opened_by = ["https://www.regulations.gov/document/FDA-2026-N-10232-0001"]
+    assert json.loads(guidance["opened_by_artifact_ids_json"]) == opened_by
+    assert guidance["comment_period_id"] == stable_id("comment_period", canonical_json(opened_by))
+    inverted = _one_holding(periods, "FDA-2026-N-10300-0001")
+    assert json.loads(inverted["evidence_ids_json"]) == ["2026-18400@2026-09-10", "FDA-2026-N-10300-0001"]
+
+
+def test_a_windowless_register_record_is_listed_once_when_its_copies_windows_split(tmp_path):
+    periods = _build(
+        tmp_path,
+        dockets=[("FAA-2026-0100", "One"), ("FAA-2026-0200", "Two")],
+        documents=[
+            _document(
+                "FAA-2026-0100-0001", "FAA-2026-0100", "2026-04-01", "2026-05-01T03:59:59Z", fr_doc_num="2026-05100"
+            ),
+            _document(
+                "FAA-2026-0200-0001", "FAA-2026-0200", "2026-06-01", "2026-07-01T03:59:59Z", fr_doc_num="2026-05100"
+            ),
+        ],
+        register=[_notice("2026-05100", "2026-04-01", None, document_type="Notice")],
+    )
+    assert sorted((p["open_date"], p["evidence_ids_json"]) for p in periods) == [
+        ("2026-04-01", '["2026-05100@2026-04-01","FAA-2026-0100-0001"]'),
+        ("2026-06-01", '["FAA-2026-0200-0001"]'),
+    ]
+
+
+def test_a_document_stating_a_close_but_no_opening_is_left_out_and_counted(tmp_path):
+    """114 legacy documents (closing 1973-2011) state a comment end but neither a start nor a posting date."""
+    messages: list[str] = []
+    sink = logger.add(messages.append, level="WARNING", format="{message}")
+    try:
+        periods = _build(
+            tmp_path,
+            dockets=[("EPA-HQ-OAR-2002-0011", "Legacy")],
+            documents=[
+                {
+                    "document_id": "EPA-HQ-OAR-2002-0011-0001",
+                    "docket_id": "EPA-HQ-OAR-2002-0011",
+                    "comment_end_date": "2002-08-13T03:59:59Z",
+                }
+            ],
+        )
+    finally:
+        logger.remove(sink)
+    assert periods == []
+    assert any("skipped undated source windows (documents.comment_end_date=1)" in m for m in messages)
