@@ -5,7 +5,7 @@
   "scripts": {
     "types": "wrangler types",
     "check": "wrangler types && tsc --noEmit && wrangler deploy --dry-run",
-    "deploy": "wrangler deploy",
+    "deploy": "wrangler deploy --tag \"$(git rev-parse --short HEAD)\" --message \"spicy-regs $(git rev-parse --short HEAD)$(git diff --quiet HEAD || echo ' +uncommitted')\"",
     "dev": "wrangler dev"
   },
   "dependencies": {
