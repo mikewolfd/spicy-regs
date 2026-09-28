@@ -4,9 +4,9 @@
 
 **Bill cosponsor source occurrences**
 
-One source-listed cosponsor per bill, exact input digest and list ordinal. Repeated assertions remain separate; absent or empty successfully read lists replace prior rows.
+One cosponsor occurrence in one retained BILLSTATUS observation, keyed by the bill, the input digest and the list ordinal. A member listed twice keeps two rows; a successfully read absent or empty list replaces the bill's prior rows.
 
-**Coverage.** Sampled. Retained Congress 119 House and Senate BILLSTATUS archives were replayed on 2026-09-27 for source observations matching the held bill edition. Published generation 401302170a911739 contains 146,248 source occurrences, including 67 positive withdrawal dates. Every native field reconciles; bills outside the selected replay remain unread. Receipt: legislative-joins-2026-09-27/t05-candidate.json. *(measured 2026-09-27)*
+**Coverage.** Sampled. Retained Congress 119 House and Senate BILLSTATUS archives were replayed on 2026-09-27 for source observations matching the held bill edition, publishing 146,248 source occurrences, including 67 positive withdrawal dates. Every native field reconciles; bills outside the selected replay remain unread. Receipt: legislative-joins-2026-09-27/t05-candidate.json. *(measured 2026-09-27)*
 
 - **Parquet file:** `bill_cosponsors.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.

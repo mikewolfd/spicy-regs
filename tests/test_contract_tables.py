@@ -32,7 +32,8 @@ CONTRACT_NAMES = sorted(TABLE_CONTRACTS)
 
 #: Adoption fixes the registry size as well as its named three-way partition.
 #: SpicyDocs 0.42.0 adds ``federal_register``, hosted by its own rollup; 0.43.0 adds ``fec_committee_history``;
-#: 0.44.0 adds the typed attributes; 0.47.0 adds bill cosponsors and member party intervals.
+#: 0.44.0 adds the typed attributes; 0.50.0 adds bill cosponsors and member party intervals
+#: (released 0.47.0, ``f549c16``, only adds ``bill_sections.congress``).
 ADOPTED_CONTRACT_COUNT = 48
 
 #: A contract here leaves the set when its owning rollup hosts it.
