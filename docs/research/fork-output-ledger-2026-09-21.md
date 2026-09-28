@@ -446,3 +446,14 @@ separate from the source-qualified pins in the output table.
 | --- | --- | --- | --- |
 | T12/T13 | `run-rollup-native-legal-references` | `native_legal_references.parquet`, `native_legal_reference_reads.parquet` | qualified at `53755e3e…` (2026-09-27): complete retained eCFR Title 1 requested-as-of 2026-08-10 and USC Title 1 release 119-103 produce 881 exact observations and two complete selected-shape reads. Enclosing publisher bytes and receipts verified. Selected targets resolve 19 occurrences; missing, unsupported and unqueried targets remain explicit. Classification matches do not prove full Code text/current effect. Public bytes verified. Receipt: `native-legal-full-2026-09-27/resolved-verification.json`. |
 | T15/T24 | `prepare_captured_opinions` | `court_opinion_pdf_extractions.parquet` | qualified at `6d1e4e65…` (2026-09-27): three literally offered PDFs match the selected native opinion SHA-1 fingerprints and retain SHA-256, redirects, acquisition times, extraction outcomes/version and derived text. Their parent opinion generation is explicit; these are not native CSV text fields or complete court body coverage. All public bytes verified. Receipt: `spicy-regs-court-cohort-20260927/publication/publication-receipt.json`. |
+
+## September 27 join-delivery completion
+
+The selected original join-delivery acceptance is complete; see the [execution ledger](join-delivery-execution-2026-09-27.md) for every task, exact pins and retained limitations. This is bounded source qualification, not full historical coverage.
+
+- Comments snapshot `50021510906269595` passed hosted publication, public and raw-catalog integrity, downstream refresh and public MCP readback. Native NULL dockets survive the three corrected ODNI rows.
+- Documents generation `b4f1d751…` adds explicitly read attachment relationships for three documents, preserving all prior IDs and legacy cells. Other attachment values stay unread NULL. Exact public bytes and dependent refreshes passed.
+- All eight aggregate comparisons passed after the final document refresh, with stable input versions and zero differing groups. The final rulemaking generation is `snapshot_6456464b417a4697a9d175faa8ce75de`.
+- Application `3e423cd` is deployed as Worker `ece7e6c7-4f1f-4e36-a2af-f017d7c175ec`; 22 bounded final public checks passed. SpicyDocs 0.50.0 is vendored from reproducible source build `8844068`. Hosted implementation CI passed in both repositories.
+
+The execution ledger preserves previous failed and superseded attempts. Wider source backfill, arbitrary-date agency identity and unsupported Senate payment layouts remain expansion work, not accepted source facts.
