@@ -27,11 +27,11 @@ AGENCY_PROJECTION_SHA256 = "c9ec0fde1bf5fda17402983880bc091e9caa417845178f232214
 AGENCY_PROJECTION_UNRESOLVED_SHA256 = "e32e814c3c7489d82df6dbdbc00fd6e16694628c08e7300a9473bcaa0659b065"
 VIEW_MANIFEST_SHA256 = "991acd29368b17fb66eea770f36c71385c5faee1a368008a4240281e4c8536d8"
 
-#: Pinned digests of the vendored agency registry view (RefSpec 0.1.0.dev21); the manifest's
-#: is the pin RefSpec's design note names. See ``reference/refspec/README.md``.
-AGENCY_REGISTRY_MANIFEST_SHA256 = "77b357cc06fe3e67bcacb0591833884087572727064f89643e10aa2a28ad6b87"
+#: Pinned digests of the vendored agency registry view (RefSpec cd78e476, schema 1.1); the
+#: manifest's is the pin RefSpec's build tool names. See ``reference/refspec/README.md``.
+AGENCY_REGISTRY_MANIFEST_SHA256 = "c7dc9310f9c11cd346245d7cf882f9eaf69b70b25f59841ae6004dca4944866e"
 AGENCY_REGISTRY_BRIDGES_SHA256 = "2e33905b475c6a1adf27960ecf170a1b4c82df2baf20ac13df9307bb687dd898"
-AGENCY_REGISTRY_EVENTS_SHA256 = "09e35a12adcb16581b131fcb187d4d2e07b8d005d431163431c303f1b6fecf2e"
+AGENCY_REGISTRY_EVENTS_SHA256 = "72f35636f9b5c93d708a364352122fb724e872f619a518c5e49ebb19518322b7"
 AGENCY_REGISTRY_NON_EMISSIONS_SHA256 = "da863e467f00f16a6b7a9ff1a3e1182fb8e7488f8b7d33f0d7f0c403a0663e24"
 
 #: The vendored projection table, and the registry view's directory (manifest plus ``tables/``).

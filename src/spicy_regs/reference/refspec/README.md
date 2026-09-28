@@ -55,28 +55,36 @@ owner's 26 decisions (decision record `docs/decisions.md#ref-072`):
 - 9 dated successions: 5 renames and 4 splits, one event row per result, 14 rows;
 - 4 recorded non-emissions, which add nothing.
 
-Vendored from RefSpec 0.1.0.dev21 (`41e2bf9d`), as built by
+Vendored from RefSpec `cd78e476` (view `schemaVersion` 1.1), as built by
 `uv run --frozen python tools/build_agency_registry_view.py --output <dir>` on
-RefSpec's own frozen lock (pyarrow 25.0.1). It was built twice, byte-identical.
-RefSpec's `verify_agency_registry_view()` accepts this copy against the manifest
-pin: it checks members, counts and bytes, then recomputes the logical digest from
-the rows.
+RefSpec's own frozen lock (pyarrow 25.0.1, as the manifest's `construction`
+names). It was built twice, byte-identical, and its manifest is the pin that
+tool names. To check a copy, run that tool with `--verify <dir>
+--expected-manifest-sha256 sha256:<pin>`: it checks members, schemas, counts and
+bytes against the manifest, recomputes the logical digest from the rows, and
+compares the view with the release it rebuilds from RefSpec's pinned rosters.
+
+Schema 1.1 adds `original_parents` to the events table: each original's roster
+parent, aligned with `originals`, null for a top-level organization. It replaced
+the dev21 (`41e2bf9d`) 1.0 copy (manifest `77b357cc…`, events `09e35a12…`,
+logical digest `9bc9eb03…`); the bridges and non-emissions kept their bytes, and
+the release's claims did not move.
 
 | File | Bytes | Rows | sha256 |
 | --- | ---: | ---: | --- |
-| `view-manifest.json` (the pin RefSpec's design note names) | 2,059 | | `77b357cc06fe3e67bcacb0591833884087572727064f89643e10aa2a28ad6b87` |
+| `view-manifest.json` (the pin RefSpec's build tool names) | 2,059 | | `c7dc9310f9c11cd346245d7cf882f9eaf69b70b25f59841ae6004dca4944866e` |
 | `tables/agency-registry-bridges.parquet` | 10,541 | 13 | `2e33905b475c6a1adf27960ecf170a1b4c82df2baf20ac13df9307bb687dd898` |
-| `tables/agency-registry-events.parquet` | 19,064 | 14 | `09e35a12adcb16581b131fcb187d4d2e07b8d005d431163431c303f1b6fecf2e` |
+| `tables/agency-registry-events.parquet` | 19,642 | 14 | `72f35636f9b5c93d708a364352122fb724e872f619a518c5e49ebb19518322b7` |
 | `tables/agency-registry-non-emissions.parquet` | 9,500 | 4 | `da863e467f00f16a6b7a9ff1a3e1182fb8e7488f8b7d33f0d7f0c403a0663e24` |
 
 Provenance, from `view-manifest.json`:
 
 - `digest` (logical content, the one compared across lock changes):
-  `sha256:9bc9eb0360d73c2815c2e1bfc2ed8953efbffa27a36052fdb389be137ecaff16`
+  `sha256:777c610051c9fdcbab8e9cdb7d382dce20c4565a484b241ed784247efefc46a4`
 - `release.candidatesDigest` (the candidates the owner decided on):
   `sha256:7fe88a9167a9363f5c2bfdcd3911953b7323abe1564d40586991c9612f95f4bc`
 - `release.sourceReleaseDigest`: `sha256:69001a4381ddf35cdba6d44fa52f579d7dfa07627c4c74da3dde2b0d8a39f8f0`
-- `canonicalPayloadDigest`: `sha256:a07e47940d1c430e165a458cb879fbae1f4b97716e157104240d55d70a9a2775`
+- `canonicalPayloadDigest`: `sha256:8d2c8505a7530031c9c042d79c5c2ffd00b468a5e0fe8cc533432e862f7ef6b2`
 
 `agency_code_for_fr_agencies` reads the bridges and events, but not the events'
 effective dates: every document takes today's lineage, whatever its own date. It
