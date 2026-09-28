@@ -138,6 +138,11 @@ on:
         required: false
         default: false
         type: boolean
+      gao_govinfo_mods:
+        description: "gao_reports: read the next batch of GovInfo history rows' MODS (abstract, topics, type, number)"
+        required: false
+        default: false
+        type: boolean
       lda_filing_year:
         description: 'Optional LDA filing year to read whole, instead of the posted-date window (history backfill)'
         required: false
@@ -269,6 +274,7 @@ jobs:
           LDA_FILING_YEAR: ${{ inputs.lda_filing_year }}
           FEC_COMMITTEES_FULL_WALK: ${{ inputs.fec_committees_full_walk }}
           GAO_GOVINFO_HISTORY: ${{ inputs.gao_govinfo_history }}
+          GAO_GOVINFO_MODS: ${{ inputs.gao_govinfo_mods }}
           FCC_PROCEEDINGS: ${{ inputs.fcc_proceedings }}
           # Only the court_dockets rollup gets the CourtListener token: its daily
           # delta is a few search pages, and keyless runs were timing out on 429s

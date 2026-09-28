@@ -1,0 +1,115 @@
+<mods xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://www.loc.gov/mods/v3" version="3.3" xsi:schemaLocation="http://www.loc.gov/mods/v3 http://www.loc.gov/standards/mods/v3/mods-3-3.xsd" ID="P0b002ee180397f47">
+<name type="corporate">
+ <namePart>United States Government Publishing Office</namePart>
+ <role>
+  <roleTerm authority="marcrelator" type="text">publisher</roleTerm>
+  <roleTerm authority="marcrelator" type="code">pbl</roleTerm>
+</role>
+ <role>
+  <roleTerm authority="marcrelator" type="text">distributor</roleTerm>
+  <roleTerm authority="marcrelator" type="code">dst</roleTerm>
+</role>
+</name>
+<name type="corporate">
+ <namePart>United States</namePart>
+ <namePart>Government Accountability Office</namePart>
+ <namePart>Resources, Community, and Economic Development Division</namePart>
+ <role>
+  <roleTerm authority="marcrelator" type="text">author</roleTerm>
+  <roleTerm authority="marcrelator" type="code">aut</roleTerm>
+</role>
+ <description>Government Organization</description>
+</name>
+<typeOfResource>text</typeOfResource>
+<genre authority="marcgt">government publication</genre>
+<language>
+ <languageTerm type="code" authority="iso639-2b">eng</languageTerm>
+</language>
+<extension>
+ <collectionCode>GAOREPORTS</collectionCode>
+ <category>Legislative Agency Publications</category>
+ <waisDatabaseName>gao</waisDatabaseName>
+ <branch>legislative</branch>
+ <dateIngested>2010-08-12</dateIngested>
+</extension>
+<originInfo>
+ <publisher>U.S. Government Printing Office</publisher>
+ <dateIssued encoding="w3cdtf">1994-02-09</dateIssued>
+ <issuance>monographic</issuance>
+</originInfo>
+<physicalDescription>
+ <note type="source content type">deposited</note>
+ <digitalOrigin>born digital</digitalOrigin>
+</physicalDescription>
+<classification authority="sudocs">GA 1.13:T-RCED-94-121</classification>
+<identifier type="uri">https://www.govinfo.gov/app/details/GAOREPORTS-T-RCED-94-121</identifier>
+<identifier type="local">P0b002ee180397f47</identifier>
+<identifier type="former package identifier">f:trc94121</identifier>
+<recordInfo>
+ <recordContentSource authority="marcorg">DGPO</recordContentSource>
+ <recordCreationDate encoding="w3cdtf">2010-08-12</recordCreationDate>
+ <recordChangeDate encoding="w3cdtf">2011-03-24</recordChangeDate>
+ <recordIdentifier source="DGPO">GAOREPORTS-T-RCED-94-121</recordIdentifier>
+ <recordOrigin>machine generated</recordOrigin>
+ <languageOfCataloging>
+  <languageTerm type="code" authority="iso639-2b">eng</languageTerm>
+</languageOfCataloging>
+</recordInfo>
+<accessCondition type="GPO scope determination">fdlp</accessCondition>
+<extension>
+ <docClass>REPORT</docClass>
+ <accessId>GAOREPORTS-T-RCED-94-121</accessId>
+ <reportNumber>T-RCED-94-121</reportNumber>
+ <subject>Housing programs</subject>
+ <subject>Centralization</subject>
+ <subject>Homeowners loans</subject>
+ <subject>Loan accounting systems</subject>
+ <subject>Loan repayments</subject>
+ <subject>Public administration</subject>
+ <subject>Federal agency reorganization</subject>
+ <subject>Competition</subject>
+ <subject>Government collections</subject>
+ <subject>Delinquent loans</subject>
+ <identifier>FmHA Strategic Business Plan</identifier>
+ <identifier>National Performance Review</identifier>
+ <type>Testimony</type>
+ <seriesAbbrev>RCED</seriesAbbrev>
+</extension>
+<titleInfo>
+ <title>U.S. Department of Agriculture: Centralized Servicing for FmHA Single-Family Housing Loans</title>
+</titleInfo>
+<abstract>Centralizing service for the Farmers Home Administration&apos;s (FmHA)
+single-family housing loans holds promise for improving service while
+cutting costs.  Although FmHA&apos;s attempts over the past 5-1/2 years to
+centralize servicing operations for direct housing loans have not been
+fruitful, the benefits of centralization outweigh any disadvantages and
+GAO supports moving ahead with this effort.  Centralizing loan servicing
+activities is consistent with the Agriculture Department&apos;s goal of
+reinventing itself.</abstract>
+<location>
+ <url displayLabel="HTML rendition" access="raw object">https://www.govinfo.gov/content/pkg/GAOREPORTS-T-RCED-94-121/html/GAOREPORTS-T-RCED-94-121.htm</url>
+</location>
+<identifier type="preferred citation">GAO/T-RCED-94-121</identifier>
+<location>
+ <url displayLabel="Content Detail" access="object in context">https://www.govinfo.gov/app/details/GAOREPORTS-T-RCED-94-121</url>
+</location>
+<note>Testimony</note>
+<extension>
+ <searchTitle>GAO/T-RCED-94-121; U.S. Department of Agriculture: Centralized Servicing for FmHA Single-Family Housing Loans;
+            </searchTitle>
+</extension>
+<subject>
+ <topic>Housing programs</topic>
+ <topic>Centralization</topic>
+ <topic>Homeowners loans</topic>
+ <topic>Loan accounting systems</topic>
+ <topic>Loan repayments</topic>
+ <topic>Public administration</topic>
+ <topic>Federal agency reorganization</topic>
+ <topic>Competition</topic>
+ <topic>Government collections</topic>
+ <topic>Delinquent loans</topic>
+ <topic>FmHA Strategic Business Plan</topic>
+ <topic>National Performance Review</topic>
+</subject>
+</mods>

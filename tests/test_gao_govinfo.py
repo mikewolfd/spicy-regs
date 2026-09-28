@@ -99,6 +99,8 @@ def test_rows_carry_source_and_the_listing_fields_and_leave_the_rest_null():
         "topics_json": None,
         "url": "https://www.govinfo.gov/app/details/GAOREPORTS-T-RCED-94-121",
         "source": "govinfo",
+        "product_type": None,
+        "report_number": None,
     }]
     assert counts == {"listed": 2, "decisions_left_out": 1, "rows": 1}
 

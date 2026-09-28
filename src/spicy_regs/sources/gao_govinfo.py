@@ -5,9 +5,10 @@ GovInfo's ``GAOREPORTS`` collection holds GAO products issued from 1989-11-15 to
 ``lastModified`` was 2025-03-07. SpicyDocs' discovery reader walks the collection
 route at its largest page size, 17 keyed requests for the whole listing, checking
 every page's count and each package id. Each listing row states the package id,
-``title``, ``dateIssued`` and ``docClass``, which is everything this table takes
-from GovInfo. Package summaries and MODS would add an abstract, subjects and a
-finer product type, at one keyed request per package, and are not read.
+``title``, ``dateIssued`` and ``docClass``, which is everything a history row
+starts with.
+A separate one-time pass reads each package's MODS
+(:mod:`spicy_regs.sources.gao_govinfo_mods`).
 
 Scope: a package is a report when GovInfo classes it ``REPORT`` and its number is
 not a B-file number. ``COMPTROLLERDECISION`` packages are bid-protest and
@@ -136,11 +137,22 @@ def report_rows(packages: Iterable[dict]) -> tuple[list[dict], Counter[str]]:
             "topics_json": None,
             "url": DETAILS_URL.format(package["packageId"]),
             "source": SOURCE,
+            "product_type": None,
+            "report_number": None,
         }
         for product_id, package in chosen.items()
     ]
     counts["rows"] = len(rows)
     return rows, counts
+
+
+def package_id_of(row: dict) -> str:
+    """The GovInfo package a history row was read from, stated by its ``url``."""
+    url = row.get("url") or ""
+    package_id = url.removeprefix(DETAILS_URL.format(""))
+    if row.get("source") != SOURCE or package_id == url or not package_id.startswith(PACKAGE_PREFIX):
+        raise GaoGovInfoError(f"{row.get('report_id')} is not a GovInfo history row")
+    return package_id
 
 
 def read_history(reader: PackageDiscoverySource) -> tuple[list[dict], Counter[str]]:
@@ -168,3 +180,4 @@ def discovery_reader(evidence: CaptureEvidence | None = None) -> Any:
     if evidence is not None:
         return RetainedGovInfoDiscoveryReader(budget=budget, api_key=api_key, evidence=evidence)
     return GovInfoDiscoveryReader(budget=budget, api_key=api_key)
+

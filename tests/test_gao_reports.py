@@ -6,7 +6,6 @@ from importlib import import_module
 
 import pyarrow as pa
 import pyarrow.parquet as pq
-import pytest
 
 from spicy_regs.transforms.build_gao_reports import (
     COLUMNS,
@@ -31,7 +30,7 @@ _RAW_ITEM = {
 def test_shape_produces_exact_schema():
     row = _shape(_RAW_ITEM)
     assert set(row) == set(COLUMNS)
-    assert len(COLUMNS) == 9
+    assert len(COLUMNS) == 11
     assert row["source"] == "gao_rss"
 
 
@@ -63,19 +62,16 @@ def test_published_date_parses_rfc822():
     assert _published_date(None) is None
 
 
-#: The published columns before ``source``: what the live prior holds until a run with this code publishes.
-_PRE_SOURCE = pa.schema([(c, pa.string()) for c in COLUMNS if c != "source"])
-
-
 def _feed_row(report_id: str) -> dict:
     return {"report_id": report_id, "title": f"Feed {report_id}", "report_type": "Report",
             "published_date": "2026-09-20", "abstract": "What GAO Found.", "agencies_json": "[]",
-            "topics_json": "[]", "url": f"https://www.gao.gov/products/{report_id}"}
+            "topics_json": "[]", "url": f"https://www.gao.gov/products/{report_id}", "source": "gao_rss",
+            "product_type": None, "report_number": None}
 
 
 def _repair_row(report_id: str) -> dict:
-    return {**dict.fromkeys(_PRE_SOURCE.names), "report_id": report_id, "title": f"Repaired {report_id}",
-            "published_date": "2008-07-11", "url": f"https://www.gao.gov/products/{report_id}"}
+    return {**dict.fromkeys(COLUMNS), "report_id": report_id, "title": f"Repaired {report_id}",
+            "published_date": "2008-07-11", "url": f"https://www.gao.gov/products/{report_id}", "source": "gao_repair"}
 
 
 def _run(tmp_path, monkeypatch, *, prior=None, feed=(), history=None):
@@ -100,38 +96,8 @@ def _run(tmp_path, monkeypatch, *, prior=None, feed=(), history=None):
     return {row["report_id"]: row for row in table.to_pylist()}
 
 
-def test_a_prior_without_source_is_labelled_by_the_shape_each_route_writes(tmp_path, monkeypatch):
-    prior = pa.Table.from_pylist([_feed_row("gao-26-1"), _repair_row("gao-17-317")], schema=_PRE_SOURCE)
-    rows = _run(tmp_path, monkeypatch, prior=prior, feed=["gao-26-2"])
-    assert {k: v["source"] for k, v in rows.items()} == {
-        "gao-26-1": "gao_rss", "gao-17-317": "gao_repair", "gao-26-2": "gao_rss"}
-    assert rows["gao-17-317"] == {**_repair_row("gao-17-317"), "source": "gao_repair"}
-
-
-def test_upstream_copied_rows_are_labelled_by_their_window_only_when_they_are_the_reviewed_rows(tmp_path, monkeypatch):
-    import hashlib
-    import json
-
-    copied = {**_feed_row("gao-26-107000"), "published_date": "2026-08-01"}
-    prior = pa.Table.from_pylist([_feed_row("gao-26-1"), copied], schema=_PRE_SOURCE)
-    with pytest.raises(ValueError, match="reviewed copied rows"):
-        _run(tmp_path, monkeypatch, prior=prior)
-    # The import's own digest, written out: one compact JSON array per row, in report_id order.
-    line = json.dumps([copied[c] for c in _PRE_SOURCE.names], ensure_ascii=False, separators=(",", ":"))
-    monkeypatch.setattr(module, "UPSTREAM_COPY_ROWS_SHA256", "sha256:" + hashlib.sha256(line.encode()).hexdigest())
-    rows = _run(tmp_path, monkeypatch, prior=prior)
-    assert {k: v["source"] for k, v in rows.items()} == {"gao-26-1": "gao_rss", "gao-26-107000": "upstream_copy"}
-
-
-def test_a_prior_row_neither_route_writes_refuses_rather_than_being_guessed(tmp_path, monkeypatch):
-    stranger = {**_feed_row("gao-26-9"), "agencies_json": '["EPA"]'}
-    prior = pa.Table.from_pylist([_feed_row("gao-26-1"), stranger], schema=_PRE_SOURCE)
-    with pytest.raises(ValueError, match="gao-26-9"):
-        _run(tmp_path, monkeypatch, prior=prior)
-
-
 def test_history_adds_govinfo_rows_and_never_replaces_another_route(tmp_path, monkeypatch):
-    prior = pa.Table.from_pylist([_feed_row("gao-26-1"), _repair_row("gao-08-919r")], schema=_PRE_SOURCE)
+    prior = pa.Table.from_pylist([_feed_row("gao-26-1"), _repair_row("gao-08-919r")], schema=module._SCHEMA)
     listing = [_package("GAOREPORTS-GAO-08-919R"), _package("GAOREPORTS-T-RCED-94-121"),
                _package("GAOREPORTS-GAO-26-2"), _package("GAOREPORTS-B-400379", "COMPTROLLERDECISION")]
     rows = _run(tmp_path, monkeypatch, prior=prior, feed=["gao-26-2"], history=listing)
@@ -141,23 +107,27 @@ def test_history_adds_govinfo_rows_and_never_replaces_another_route(tmp_path, mo
     assert rows["t-rced-94-121"]["report_type"] == "Testimony"
 
 
-def test_a_feed_run_carries_govinfo_rows_and_a_history_rerun_refreshes_them(tmp_path, monkeypatch):
+def test_a_feed_run_carries_govinfo_rows_and_a_history_rerun_leaves_held_rows_alone(tmp_path, monkeypatch):
     first = _run(tmp_path, monkeypatch, feed=["gao-26-1"], history=[_package("GAOREPORTS-T-RCED-94-121")])
     (tmp_path / "gao_reports.parquet").rename(tmp_path / "_gao_prior.parquet")
     carried = _run(tmp_path, monkeypatch, feed=["gao-26-2"])
     assert carried["t-rced-94-121"] == first["t-rced-94-121"]
     (tmp_path / "gao_reports.parquet").rename(tmp_path / "_gao_prior.parquet")
-    retitled = _run(tmp_path, monkeypatch, history=[_package("GAOREPORTS-T-RCED-94-121", title="Retitled")])
-    assert retitled["t-rced-94-121"]["title"] == "Retitled"
-    assert set(retitled) == {"gao-26-1", "gao-26-2", "t-rced-94-121"}
+    # A MODS read must survive a later history run, so a held id is never replaced.
+    rerun = _run(tmp_path, monkeypatch, history=[_package("GAOREPORTS-T-RCED-94-121", title="Retitled"),
+                                                  _package("GAOREPORTS-GAO-08-919R")])
+    assert rerun["t-rced-94-121"] == first["t-rced-94-121"]
+    assert set(rerun) == {"gao-26-1", "gao-26-2", "t-rced-94-121", "gao-08-919r"}
 
 
 def test_the_rollup_walks_govinfo_only_when_its_flag_says_so(tmp_path, monkeypatch):
     from spicy_regs.pipelines.rollups import gao_reports as rollup
 
     calls = []
-    monkeypatch.setattr(rollup, "build_gao_reports", lambda *_, **kwargs: calls.append(kwargs["govinfo_history"]))
-    for value in ("", "true"):
-        monkeypatch.setenv("GAO_GOVINFO_HISTORY", value)
+    monkeypatch.setattr(rollup, "build_gao_reports",
+                        lambda *_, **kwargs: calls.append((kwargs["govinfo_history"], kwargs["govinfo_mods"])))
+    for history, mods in (("", ""), ("true", ""), ("", "true")):
+        monkeypatch.setenv("GAO_GOVINFO_HISTORY", history)
+        monkeypatch.setenv("GAO_GOVINFO_MODS", mods)
         rollup.GaoReportsRollup(output_dir=tmp_path).build(tmp_path)
-    assert calls == [False, True]
+    assert calls == [(False, False), (True, False), (False, True)]

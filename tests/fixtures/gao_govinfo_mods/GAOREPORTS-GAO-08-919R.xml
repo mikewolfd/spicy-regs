@@ -1,0 +1,206 @@
+<mods xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://www.loc.gov/mods/v3" version="3.3" xsi:schemaLocation="http://www.loc.gov/mods/v3 http://www.loc.gov/standards/mods/v3/mods-3-3.xsd" ID="P0b002ee18038d372">
+<name type="corporate">
+ <namePart>United States Government Publishing Office</namePart>
+ <role>
+  <roleTerm authority="marcrelator" type="text">publisher</roleTerm>
+  <roleTerm authority="marcrelator" type="code">pbl</roleTerm>
+</role>
+ <role>
+  <roleTerm authority="marcrelator" type="text">distributor</roleTerm>
+  <roleTerm authority="marcrelator" type="code">dst</roleTerm>
+</role>
+</name>
+<name type="corporate">
+ <namePart>United States</namePart>
+ <namePart>Government Accountability Office</namePart>
+ <role>
+  <roleTerm authority="marcrelator" type="text">author</roleTerm>
+  <roleTerm authority="marcrelator" type="code">aut</roleTerm>
+</role>
+ <description>Government Organization</description>
+</name>
+<typeOfResource>text</typeOfResource>
+<genre authority="marcgt">government publication</genre>
+<language>
+ <languageTerm type="code" authority="iso639-2b">eng</languageTerm>
+</language>
+<extension>
+ <collectionCode>GAOREPORTS</collectionCode>
+ <category>Legislative Agency Publications</category>
+ <waisDatabaseName>gao</waisDatabaseName>
+ <branch>legislative</branch>
+ <dateIngested>2010-08-12</dateIngested>
+</extension>
+<originInfo>
+ <publisher>U.S. Government Printing Office</publisher>
+ <dateIssued encoding="w3cdtf">2008-07-11</dateIssued>
+ <issuance>monographic</issuance>
+</originInfo>
+<physicalDescription>
+ <note type="source content type">deposited</note>
+ <digitalOrigin>born digital</digitalOrigin>
+</physicalDescription>
+<classification authority="sudocs">GA 1.13:GAO-08-919R</classification>
+<identifier type="uri">https://www.govinfo.gov/app/details/GAOREPORTS-GAO-08-919R</identifier>
+<identifier type="local">P0b002ee18038d372</identifier>
+<identifier type="former package identifier">f:d08919r</identifier>
+<recordInfo>
+ <recordContentSource authority="marcorg">DGPO</recordContentSource>
+ <recordCreationDate encoding="w3cdtf">2010-08-12</recordCreationDate>
+ <recordChangeDate encoding="w3cdtf">2011-03-23</recordChangeDate>
+ <recordIdentifier source="DGPO">GAOREPORTS-GAO-08-919R</recordIdentifier>
+ <recordOrigin>machine generated</recordOrigin>
+ <languageOfCataloging>
+  <languageTerm type="code" authority="iso639-2b">eng</languageTerm>
+</languageOfCataloging>
+</recordInfo>
+<accessCondition type="GPO scope determination">fdlp</accessCondition>
+<extension>
+ <docClass>REPORT</docClass>
+ <accessId>GAOREPORTS-GAO-08-919R</accessId>
+ <reportNumber>GAO-08-919R</reportNumber>
+ <subject>Brokerage industry</subject>
+ <subject>Deductibles and Coinsurance</subject>
+ <subject>Federal property</subject>
+ <subject>Federal regulations</subject>
+ <subject>Financial management</subject>
+ <subject>Funds management</subject>
+ <subject>Insurance</subject>
+ <subject>Insurance companies</subject>
+ <subject>Insurance cost control</subject>
+ <subject>Insurance losses</subject>
+ <subject>Insurance premiums</subject>
+ <subject>Insurance regulation</subject>
+ <subject>Liability (legal)</subject>
+ <subject>Prices and pricing</subject>
+ <subject>Property</subject>
+ <subject>Property damages</subject>
+ <subject>Property losses</subject>
+ <subject>Reporting requirements</subject>
+ <subject>Terrorism</subject>
+ <subject>Cost estimates</subject>
+ <subject>Treasury Terrorism Risk Insurance</subject>
+ <subject>Program</subject>
+ <type>Correspondence</type>
+ <accountNo>A82808</accountNo>
+ <law congress="107" isPrivate="false" number="297"></law>
+ <law congress="109" isPrivate="false" number="144"></law>
+ <law congress="110" isPrivate="false" number="160"></law>
+ <statuteAtLarge volume="116">
+                      <pages pages="2322"></pages>
+                </statuteAtLarge>
+ <statuteAtLarge volume="119">
+                      <pages pages="2660"></pages>
+                </statuteAtLarge>
+ <statuteAtLarge volume="121">
+                      <pages pages="1839"></pages>
+                </statuteAtLarge>
+</extension>
+<titleInfo>
+ <title>Initial Results on Availability of Terrorism Insurance in Specific Geographic Markets</title>
+</titleInfo>
+<abstract>The terrorist attacks of September 11, 2001, on the World Trade
+Center in New York City and the Pentagon in Arlington, Virginia, 
+are estimated to have resulted in insured losses amounting to	 
+$32.5 billion. Subsequent to the attacks, insurers largely	 
+stopped offering terrorism insurance coverage to commercial	 
+property owners, which raised significant concerns about	 
+potential negative economic consequences. To help restore	 
+confidence and stability in property insurance markets, Congress 
+enacted and the President signed the Terrorism Risk Insurance Act
+of 2002 (TRIA). Under TRIA, the federal government assumed	 
+significant responsibility for the potential insured financial	 
+losses associated with future terrorist attacks. While TRIA,	 
+which was reauthorized in 2005 and again in 2007, has been	 
+credited with stabilizing markets for commercial property	 
+insurance, some building owners, Members of Congress, and other  
+industry participants remain concerned that there may still be	 
+gaps in coverage. In particular, they have expressed concerns	 
+about the ability of policyholders located in large urban areas  
+that are viewed as being at high risk of attack to obtain	 
+terrorism insurance coverage. Under the 2007 statute that	 
+reauthorized TRIA coverage, GAO was required to conduct a study  
+to determine if specific markets in the United States have any	 
+unique constraints on the amount of terrorism insurance available
+and to evaluate options to enhance coverage. This law required	 
+GAO to submit a report to the Committee on Banking, Housing, and 
+Urban Affairs of the Senate and the Committee on Financial	 
+Services of the House of Representatives no later than June 23,  
+2008. The purpose of this report is to document our compliance	 
+with this reporting requirement.</abstract>
+<location>
+ <url displayLabel="HTML rendition" access="raw object">https://www.govinfo.gov/content/pkg/GAOREPORTS-GAO-08-919R/html/GAOREPORTS-GAO-08-919R.htm</url>
+</location>
+<identifier type="preferred citation">GAO-08-919R</identifier>
+<location>
+ <url displayLabel="Content Detail" access="object in context">https://www.govinfo.gov/app/details/GAOREPORTS-GAO-08-919R</url>
+</location>
+<note>Correspondence</note>
+<extension>
+ <searchTitle>GAO-08-919R; Initial Results on Availability of Terrorism Insurance in Specific Geographic Markets;
+            </searchTitle>
+</extension>
+<subject>
+ <topic>Brokerage industry</topic>
+ <topic>Deductibles and Coinsurance</topic>
+ <topic>Federal property</topic>
+ <topic>Federal regulations</topic>
+ <topic>Financial management</topic>
+ <topic>Funds management</topic>
+ <topic>Insurance</topic>
+ <topic>Insurance companies</topic>
+ <topic>Insurance cost control</topic>
+ <topic>Insurance losses</topic>
+ <topic>Insurance premiums</topic>
+ <topic>Insurance regulation</topic>
+ <topic>Liability (legal)</topic>
+ <topic>Prices and pricing</topic>
+ <topic>Property</topic>
+ <topic>Property damages</topic>
+ <topic>Property losses</topic>
+ <topic>Reporting requirements</topic>
+ <topic>Terrorism</topic>
+ <topic>Cost estimates</topic>
+ <topic>Treasury Terrorism Risk Insurance</topic>
+ <topic>Program</topic>
+</subject>
+<relatedItem type="isReferencedBy">
+ <titleInfo>
+  <title>United States Statutes at Large</title>
+  <partNumber>Volume 116 Page 2322</partNumber>
+</titleInfo>
+ <identifier type="Statute citation">116 Stat. 2322</identifier>
+</relatedItem>
+<relatedItem type="isReferencedBy">
+ <titleInfo>
+  <title>United States Statutes at Large</title>
+  <partNumber>Volume 119 Page 2660</partNumber>
+</titleInfo>
+ <identifier type="Statute citation">119 Stat. 2660</identifier>
+</relatedItem>
+<relatedItem type="isReferencedBy">
+ <titleInfo>
+  <title>United States Statutes at Large</title>
+  <partNumber>Volume 121 Page 1839</partNumber>
+</titleInfo>
+ <identifier type="Statute citation">121 Stat. 1839</identifier>
+</relatedItem>
+<relatedItem type="isReferencedBy">
+ <titleInfo>
+  <title>United States Public Law 297 (107th Congress)</title>
+</titleInfo>
+ <identifier type="public law citation">Public Law 107-297</identifier>
+</relatedItem>
+<relatedItem type="isReferencedBy">
+ <titleInfo>
+  <title>United States Public Law 144 (109th Congress)</title>
+</titleInfo>
+ <identifier type="public law citation">Public Law 109-144</identifier>
+</relatedItem>
+<relatedItem type="isReferencedBy">
+ <titleInfo>
+  <title>United States Public Law 160 (110th Congress)</title>
+</titleInfo>
+ <identifier type="public law citation">Public Law 110-160</identifier>
+</relatedItem>
+</mods>
