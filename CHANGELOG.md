@@ -9,16 +9,28 @@ Entries link to the pull request that introduced the change.
 
 ### Changed
 
-- **The bill family skips an unchanged bill only when the running SpicyDocs
-  read it.** Each bill's status reader, the SpicyDocs package digest, is
-  recorded per bill in `bill_family_archives`' metadata. A SpicyDocs release
-  that changes what a bill's rows hold now reaches bills already read, and a
-  version-only release reads nothing again. Expected effect: every bill with no
-  recorded reader has its BILLSTATUS read once more on its Congress's next run,
-  and no printing is fetched again. The 119th nightly re-reads its 19,249
-  bills, and the 108th–113th re-read theirs on their next scoped run. The
-  114th–118th were due for a full re-read anyway, because their rows lack the
-  CBO and cosponsor outcomes.
+- **The bill family skips an unchanged bill only when the running reader read
+  it.** Each bill's status reader, this rollup's status rule (`status-v1`) and
+  the SpicyDocs package digest, is recorded per bill in
+  `bill_family_archives`' metadata. A SpicyDocs release that changes the code
+  re-reads every bill of a Congress on that Congress's next run, and a
+  version-only release re-reads none. Bumping `status-v1` does the same for a
+  change to spicy-regs' own status pass. A re-read does not replace every older
+  value. `congress_bills` merges column-wise, so a value the new reader leaves
+  NULL keeps the old one. A bill whose cosponsor rows are refused keeps its
+  prior rows, and CBO rows are replaced only on a listed outcome. Bills before
+  the 108th, filled from the API detail route, record no reader.
+
+  Expected effect: every bill with no recorded reader has its BILLSTATUS read
+  once more on its Congress's next run, and no printing is fetched again. Runs
+  36371298463 (the 113th, 10,637 bills) and 36375716128 (the 108th–112th,
+  63,747 bills) measured 4.2 to 7.8 ms a bill all in, or 2.5 to 6.4 ms after
+  the folder listings. The 119th nightly re-reads its 19,249 bills once, about
+  1 to 2 minutes more. A 113th–118th run re-reads about 90,000 bills in about
+  6 to 11 minutes of status pass. Only the 113th's 10,637 are extra because of
+  this change: the 114th–118th lack the CBO and cosponsor outcomes and were due
+  for a full re-read anyway. The 108th–112th's 63,747 re-read on their next
+  scoped run.
 
 - **SpicyDocs 0.50.1.** `house_communications` derives all four RIN columns of
   every read row from its retained `report_nature` on each run, not only
