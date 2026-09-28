@@ -47,7 +47,9 @@ def test_local_batch_exposes_selected_members_and_verified_pins(tmp_path, monkey
         assert pin["status"] == "managed_download"
         assert pin["artifact_digest"] == index["families"]["pair"]["artifactDigest"]
         assert "rehashed" in pin["verification"]
-        assert _tool_data(server, "describe_table", {"table": "dockets"})["publication"] == {"status": "local_unversioned"}
+        assert _tool_data(server, "describe_table", {"table": "dockets"})["publication"] == {
+            "status": "local_unversioned", "coverage": mcp_server._table_metadata()["dockets"]["kind"]
+        }
         rows = _tool_data(server, "query_sql", {"sql": "SELECT id FROM a"})
         assert rows["rows"] == [{"id": "old-a"}]
         # A query reports the version of each table it names, and only those.

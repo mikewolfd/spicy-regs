@@ -18,9 +18,10 @@ and why.
 
 ## What must never be deleted
 
-**The three `@mcp.tool()` docstrings are not documentation — do not delete them.**
-FastMCP reflects over `fn.__doc__` to build the tool descriptions sent to every
-client during `list_tools`. `describe_table`'s docstring is how a client learns
+**The tool docstrings are not documentation — do not delete them.**
+MCPServer reflects over `fn.__doc__` to build the tool descriptions sent to every
+client during `list_tools`; the `tool` wrapper in `_register_tools` copies each
+docstring and signature with `functools.wraps`. `describe_table`'s docstring is how a client learns
 which tables are valid; `query_sql`'s is how it learns the available views.
 Strip them and the server still runs, but every client goes blind. Verify with
 `asyncio.run(build_server().list_tools())`.
@@ -43,6 +44,18 @@ Strip them and the server still runs, but every client goes blind. Verify with
   any remote views: httpfs initializes the secret manager, after which DuckDB
   refuses even setting the same value again. The final restriction step checks
   the value before setting it. Load required extensions before restrictions.
+- Load httpfs through `load_public_http(con, INTERACTIVE_HTTP_RETRIES)` before
+  any view binds, so the build's own reads retry, and before the lock: DuckDB
+  refuses `SET` once `lock_configuration` is on. DuckDB 1.5.5 retries a 429 on
+  HEAD and GET, the first retry at once and then `wait * backoff**(k - 2)`
+  before retry k. Its defaults give up after 0.5 s; the interactive policy
+  allows 7 s of backoff per request, and the batch policy
+  (`PUBLIC_HTTP_RETRIES`) about four minutes. `tests/test_duckdb_settings.py`
+  measures the schedule against a local server.
+- A legacy table (one no pointer pins) is skipped only when its read answers
+  HTTP 404 (`duckdb.HTTPException.status_code`). Any other failure, a 429
+  included, refuses the build: skipping a throttled read served a connection
+  without the table.
 - Apply memory and spill-directory settings before disabling external access;
   DuckDB refuses changes to `temp_directory` after that boundary is locked.
   A configured spill directory is an engine resource, not an allowed SQL input.
@@ -57,6 +70,57 @@ Strip them and the server still runs, but every client goes blind. Verify with
   Worker. ETL ingestion and mirror publication continue to use Iceberg. See
   `docs/research/mcp-chaos-2026-09-27.md` for the catalog comparison and adoption
   criteria; enabling unrestricted reads to make a catalog query pass is not a fix.
+
+## Connection lifecycle (`_get_connection`, `_refreshed`)
+
+A build reads each published table's Parquet footer over HTTPS: 3 JSON GETs and
+461 Parquet requests (345 HEAD, 116 footer GETs) against r2.dev, 43 to 56 s, on
+2026-09-28. Each build is a new DuckDB instance, so nothing it cached survives
+into the next one.
+
+- **Polled, not rebuilt.** Past `SPICY_REGS_CONNECTION_TTL` (300 s), the first
+  caller re-reads the publication index and the rulemaking pointer and manifest
+  (3 GETs, 0.45 s) and compares them with the pins the connection holds
+  (`_pinned_publication`). The views name immutable URLs, so unchanged pointers
+  keep the connection; an idle TTL went from 464 requests to 3.
+- **Moved pointers rebuild** through `_build_connection(publication)`, which
+  pins exactly the pointers the poll read. The rebuild is a whole new instance:
+  the security settings lock `allowed_paths`, so a locked instance cannot admit a
+  new generation's URLs, and `CREATE OR REPLACE` of only the changed views is
+  not possible.
+- **Only the refreshing caller waits.** Other callers keep the current
+  connection while a rebuild runs (`_refreshing`). A failed refresh, such as a
+  429 on a pointer or a member, logs and keeps the current connection until the
+  next TTL. Only a cold start, with nothing to serve, raises.
+- **Local mode rebuilds at every refresh**: its `current` link and member
+  signatures are re-read at build.
+- **Legacy comments files stay mutable.** Their views read the object current at
+  each statement (the HEAD revalidates DuckDB's file cache), but the bound
+  schema lasts until the pointers move. Pinning a comments generation, or adding
+  `comments-publication.json` to the poll, would close that gap.
+
+## Concurrency: worker threads and a limiter
+
+FastMCP (mcp 1.x) ran a sync tool on the event loop, so the server executed one
+call at a time and a slow one, such as a 43 s build, stalled every request,
+`GET /` included. MCPServer (mcp 2.x) runs sync tools on worker threads, and
+`_register_tools` wraps each tool so that:
+
+- it runs through `anyio.to_thread.run_sync` with one `CapacityLimiter` of
+  `SPICY_REGS_TOOL_CONCURRENCY` tokens (default 2). A remote scan issues range
+  requests from every DuckDB thread; one persona query peaked at 72 requests/s
+  on four threads, and r2.dev throttles at hundreds per second across all the
+  bucket's readers. Raise the limit once the bucket has a custom domain.
+- each call takes its own `cursor()`, and the statement timer interrupts only
+  that cursor (`tests/test_mcp_concurrency.py`).
+- every failure is re-raised as a `ToolError`. MCPServer shows the client only a
+  `ToolError`'s text; any other exception reaches it as a bare "Error executing
+  tool". DuckDB's parser and binder messages and the read-only refusals are
+  what a caller corrects a query from.
+
+The Worker's `getContainer` has no instance name, so every request reaches one
+container whatever `max_instances` says. More instances would each build their
+own connection against the public bucket.
 
 ## The read-only statement guard
 
@@ -113,6 +177,9 @@ Keep the app timeout at or below the platform request timeout. In practice the
 binding limit is usually the *MCP client*, which typically gives up at 60–120s.
 The stdio entrypoint has no platform limit at all.
 
+Each tool call runs on its own worker thread and cursor, so the timer interrupts
+that cursor only, never a sibling call on the same connection.
+
 ## Iceberg and the comments mirror
 
 Iceberg remains the ingestion and update store for comments. The MCP reads its
@@ -142,10 +209,10 @@ pointer and the manifest it names once, beside the index, through
 loop then points each rulemaking view at its immutable snapshot key; there is no
 second view path.
 
-- **How often.** Once per connection build: the first tool call, then whenever
-  the cached connection is older than `SPICY_REGS_CONNECTION_TTL` (300 s by
-  default). A moved pointer is therefore served from the next rebuild, while
-  cursors on the old connection keep the snapshot they started with.
+- **How often.** At each connection build, and at each refresh past
+  `SPICY_REGS_CONNECTION_TTL` (see Connection lifecycle). A moved pointer is
+  therefore served from the next refresh, while cursors on the old connection
+  keep the snapshot they started with.
 - **Refused, not guessed.** As `pipelines.materialized` reads its prior
   generation, the pointer and manifest must be one readable format version, of
   this dataset, naming one snapshot, and every public artifact must sit at
@@ -218,11 +285,24 @@ file its reader cannot page, so two of five personas never read a row.
 - **`list_sources`** lists each table's name, label and coverage kind, and
   lists each relationship family's views once, under their shared summary. Pins,
   audits and view dependencies live in `describe_table`.
-- **`query_sql`** returns the pins of the tables the statement names.
-  `_tables_named` walks DuckDB's unbound parse tree (`json_serialize_sql`).
-  `cursor.get_table_names` binds the query and expands each view to the tables
-  under it, which for these `read_parquet` views is none. CTE names in the
-  tree are dropped by intersecting with the published tables.
+- **`query_sql`** echoes `sql` as its first key, so a reply read out of
+  context, such as a client's spill file, names the statement it answers. It
+  returns the pins of the tables the statement names. `_tables_named` walks
+  DuckDB's unbound parse tree (`json_serialize_sql`). `cursor.get_table_names`
+  binds the query and expands each view to the tables under it, which for these
+  `read_parquet` views is none. The walk follows SQL scope: an unqualified name
+  that a CTE in scope defines reads the CTE (a CTE body sees the CTEs before it,
+  and itself only when recursive), names compare case-insensitively, and other
+  schemas hold no published tables. Before this, a CTE named like a view pinned
+  the view, and `FCC_FILINGS` pinned nothing.
+- **Pins in replies state live facts** instead of prose counts that decay:
+  `rows` from the pinned index or snapshot manifest, a snapshot table's `run_id`
+  and `asserted_at`, and `coverage`, the dictionary's kind, which is the only
+  caveat a `query_sql` caller receives. `_reply_pins` adds them to
+  `describe_table` and `query_sql` only. Derived views embed
+  `_publication_status` pins in `source_publication_json`, and
+  `identity_candidates` hashes them into `candidate_id`, so those pins must not
+  change.
 - **`describe_table`** returns one column list. `declared_columns` repeated the
   column names and descriptions that `columns` already carried, which was about
   45% of the reply. DESCRIBE's null, key and default fields meant nothing for a
@@ -231,8 +311,8 @@ file its reader cannot page, so two of five personas never read a row.
 ## DNS rebinding protection is off in `build_app`
 
 Deliberate. The deployment is reached via `mcp.spicy-regs.dev` and per-deploy Cloud Run
-`*.run.app` hosts; FastMCP's default localhost-only allowlist would reject all
-of them with **421**. The server is public, stateless, and read-only, so
+`*.run.app` hosts; the SDK's default localhost-only allowlist would reject all
+of them with **421**. `build_app` passes the setting to `streamable_http_app`. The server is public, stateless, and read-only, so
 rebinding protection buys nothing.
 
 ## Other invariants

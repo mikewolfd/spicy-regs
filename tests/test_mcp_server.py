@@ -8,13 +8,14 @@ from __future__ import annotations
 
 import asyncio
 import json
+from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
 from uuid import UUID
 
 import duckdb
 import pytest
-from mcp.server.fastmcp.exceptions import ToolError
+from mcp.server.mcpserver.exceptions import ToolError
 
 from spicy_regs import mcp_server
 
@@ -55,9 +56,9 @@ def test_resolve_r2_base_url_strips_trailing_slash(monkeypatch):
     assert mcp_server._resolve_r2_base_url() == "https://example.com/bucket"
 
 
-def _tool_names(fastmcp) -> set[str]:
-    """The names of the tools registered on ``fastmcp``."""
-    tools = asyncio.run(fastmcp.list_tools())
+def _tool_names(server) -> set[str]:
+    """The names of the tools registered on ``server``."""
+    tools = asyncio.run(server.list_tools())
     return {t.name for t in tools}
 
 
@@ -67,12 +68,8 @@ def test_build_server_registers_expected_tools():
 
 
 def _tool_data(server, name, arguments):
-    """Call a tool and return its structured result; FastMCP may return content alone or ``(content, result)``."""
-    result = asyncio.run(server.call_tool(name, arguments))
-    # FastMCP versions can return content alone or (content, structured result).
-    if isinstance(result, tuple):
-        return result[1]
-    return json.loads(result[0].text)
+    """Call a tool and return its structured result."""
+    return asyncio.run(server.call_tool(name, arguments)).structured_content
 
 
 def test_discovery_reports_actual_parquet_schema_and_dictionary_caveats(tmp_path, monkeypatch):
@@ -192,7 +189,9 @@ def test_local_directory_runs_actual_connection_without_remote_fallback(tmp_path
     described = _tool_data(server, "describe_table", {"table": "fec_committees"})
     assert described["available"] is True
     assert described["source"] == "local"
-    assert described["publication"] == {"status": "local_unversioned"}
+    assert described["publication"] == {
+        "status": "local_unversioned", "coverage": mcp_server._table_metadata()["fec_committees"]["kind"]
+    }
     queried = _tool_data(server, "query_sql", {"sql": "SELECT committee_id FROM fec_committees"})
     assert queried["source"] == "local"
     assert queried["rows"] == [{"committee_id": "C00000001"}]
@@ -523,86 +522,158 @@ def _clear_connection_cache():
     mcp_server._reset_connection_cache()
 
 
-def _make_local_connection(monkeypatch, module) -> dict[str, int]:
-    """Force ``_build_connection`` to hand back a bare in-memory DuckDB.
+@dataclass
+class _Publisher:
+    """The live pointers a test serves, a failure to inject, and how often each seam ran."""
 
-    Keeps these tests hermetic: no httpfs, no R2, no catalog — just enough of a
-    connection to prove the caching, cursor-isolation, and TTL logic wrapping it.
-    Returns a ``{"n": build_count}`` dict so callers can assert how many times
-    the (patched) builder actually ran.
+    publication: object
+    fail: Exception | None = None
+    builds: int = 0
+    reads: int = 0
+
+
+def _make_local_connection(monkeypatch, module) -> _Publisher:
+    """Stand in a bare in-memory DuckDB for ``_build_connection`` and a settable publisher for the live pointers.
+
+    Keeps these tests hermetic: no httpfs, no R2. A build pins the pointers it is
+    given, as the real one does, so a refresh compares like with like. Set
+    ``publication`` to move the publisher, or to an exception to fail its read;
+    set ``fail`` to fail builds.
     """
-    build_count = {"n": 0}
+    state = _Publisher(module._Publication({"families": {}, "run": 1}, None))
 
-    def _fake_build() -> duckdb.DuckDBPyConnection:
-        build_count["n"] += 1
+    def read():
+        state.reads += 1
+        if isinstance(state.publication, Exception):
+            raise state.publication
+        return state.publication
+
+    def build(publication=None):
+        state.builds += 1
+        if state.fail is not None:
+            raise state.fail
         con = duckdb.connect()
         con.execute("CREATE TABLE agency_stats AS SELECT 1 AS docket_count")
+        con.execute("CREATE TABLE _spicy_publication (snapshot VARCHAR)")
+        con.execute("INSERT INTO _spicy_publication VALUES (?)", [json.dumps((publication or read()).index)])
         return con
 
-    monkeypatch.setattr(module, "_build_connection", _fake_build)
-    return build_count
+    monkeypatch.setattr(module, "_build_connection", build)
+    monkeypatch.setattr(module, "_read_publication", read)
+    return state
+
+
+def _moved(module):
+    """Pointers that differ from the fixture's first publication, as after a publisher's run."""
+    return module._Publication({"families": {}, "run": 2}, None)
 
 
 def test_get_connection_reuses_within_ttl(monkeypatch):
-    module = mcp_server
-    module._reset_connection_cache()
-    build_count = _make_local_connection(monkeypatch, module)
+    state = _make_local_connection(monkeypatch, mcp_server)
 
-    first = module._get_connection()
-    second = module._get_connection()
-
-    assert first is second
-    assert build_count["n"] == 1
-    module._reset_connection_cache()
+    assert mcp_server._get_connection() is mcp_server._get_connection()
+    assert (state.builds, state.reads) == (1, 1)
 
 
-def test_get_connection_rebuilds_past_ttl(monkeypatch):
-    module = mcp_server
-    module._reset_connection_cache()
-    build_count = _make_local_connection(monkeypatch, module)
-    # A zero TTL forces every call to treat the cache as expired.
-    monkeypatch.setattr(module, "_CONNECTION_TTL_SECONDS", 0.0)
+def test_an_unmoved_publication_keeps_the_connection_past_the_ttl(monkeypatch):
+    """A remote connection pins immutable URLs, so an expired one is polled, not rebuilt."""
+    state = _make_local_connection(monkeypatch, mcp_server)
+    first = mcp_server._get_connection()
+    monkeypatch.setattr(mcp_server, "_CONNECTION_TTL_SECONDS", 0.0)
 
-    module._get_connection()
-    module._get_connection()
+    assert mcp_server._get_connection() is first
+    assert (state.builds, state.reads) == (1, 2)
 
-    assert build_count["n"] == 2
-    module._reset_connection_cache()
+
+def test_a_moved_publication_rebuilds_past_the_ttl_from_the_pointers_it_read(monkeypatch):
+    state = _make_local_connection(monkeypatch, mcp_server)
+    first = mcp_server._get_connection()
+    monkeypatch.setattr(mcp_server, "_CONNECTION_TTL_SECONDS", 0.0)
+    state.publication = _moved(mcp_server)
+
+    second = mcp_server._get_connection()
+    assert second is not first
+    assert (state.builds, state.reads) == (2, 2)  # the build pins the pointers the poll read
+    assert mcp_server._pinned_publication(second) == state.publication
+
+
+@pytest.mark.parametrize("failing", ["pointer read", "build"])
+def test_a_failed_refresh_keeps_serving_the_pinned_connection(monkeypatch, failing):
+    """A 429 on a pointer or a member must not fail the call that happened to trigger the refresh."""
+    state = _make_local_connection(monkeypatch, mcp_server)
+    first = mcp_server._get_connection()
+    monkeypatch.setattr(mcp_server, "_CONNECTION_TTL_SECONDS", 0.0)
+    error = RuntimeError("HTTP 429 Too Many Requests")
+    if failing == "build":
+        state.publication, state.fail = _moved(mcp_server), error
+    else:
+        state.publication = error
+
+    assert mcp_server._get_connection() is first
+    assert first.execute("SELECT docket_count FROM agency_stats").fetchone() == (1,)
+    state.publication, state.fail = _moved(mcp_server), None
+    assert mcp_server._get_connection() is not first  # the next TTL tries again
+
+
+def test_a_cold_start_that_cannot_build_raises(monkeypatch):
+    state = _make_local_connection(monkeypatch, mcp_server)
+    state.fail = RuntimeError("Published generation member unavailable: dockets")
+
+    with pytest.raises(RuntimeError, match="member unavailable"):
+        mcp_server._get_connection()
+    state.fail = None
+    assert mcp_server._get_connection() is not None
+
+
+def test_other_callers_keep_the_connection_while_one_rebuilds(monkeypatch):
+    """A 43 s rebuild blocked every tool call behind the connection lock; now only its own caller waits."""
+    import threading
+
+    state = _make_local_connection(monkeypatch, mcp_server)
+    first = mcp_server._get_connection()
+    monkeypatch.setattr(mcp_server, "_CONNECTION_TTL_SECONDS", 0.0)
+    state.publication = _moved(mcp_server)
+    building, release = threading.Event(), threading.Event()
+    build = mcp_server._build_connection
+
+    def slow_build(publication=None):
+        building.set()
+        assert release.wait(10)
+        return build(publication)
+
+    monkeypatch.setattr(mcp_server, "_build_connection", slow_build)
+    refreshed = []
+    refresher = threading.Thread(target=lambda: refreshed.append(mcp_server._get_connection()))
+    refresher.start()
+    assert building.wait(10)
+    assert mcp_server._get_connection() is first  # served while the rebuild is in flight
+    release.set()
+    refresher.join(10)
+    assert refreshed and refreshed[0] is not first and mcp_server._get_connection() is refreshed[0]
 
 
 def test_cursor_from_cached_connection_survives_rebuild(monkeypatch):
-    """A cursor taken before a TTL rebuild must keep serving its query.
+    """A cursor taken before a rebuild keeps serving its query: the swap drops the module's reference, never closes."""
+    state = _make_local_connection(monkeypatch, mcp_server)
+    monkeypatch.setattr(mcp_server, "_CONNECTION_TTL_SECONDS", 0.0)
 
-    This is the safety property the rebuild relies on: swapping the cached
-    connection only drops the module's reference, so an in-flight request's
-    cursor (which still references the old connection) is never closed.
-    """
-    module = mcp_server
-    module._reset_connection_cache()
-    _make_local_connection(monkeypatch, module)
-    monkeypatch.setattr(module, "_CONNECTION_TTL_SECONDS", 0.0)
+    first = mcp_server._get_connection()
+    old_cursor = first.cursor()
+    state.publication = _moved(mcp_server)
+    assert mcp_server._get_connection() is not first
 
-    old_cursor = module._get_connection().cursor()
-    module._get_connection()  # TTL expired -> builds and caches a new connection
-
-    # The old cursor's parent is no longer referenced by the module, but the
-    # cursor holds it alive and still answers.
     assert old_cursor.execute("SELECT docket_count FROM agency_stats").fetchone() == (1,)
-    module._reset_connection_cache()
 
 
 def test_query_sql_reuses_one_connection_across_calls(monkeypatch):
-    """Two ``query_sql`` calls should build the backing connection once."""
-    module = mcp_server
-    module._reset_connection_cache()
-    build_count = _make_local_connection(monkeypatch, module)
-    server = module.build_server()
+    """Two ``query_sql`` calls build the backing connection once."""
+    state = _make_local_connection(monkeypatch, mcp_server)
+    server = mcp_server.build_server()
 
     for _ in range(2):
         asyncio.run(server.call_tool("query_sql", {"sql": "SELECT docket_count FROM agency_stats", "max_rows": 1}))
 
-    assert build_count["n"] == 1
-    module._reset_connection_cache()
+    assert state.builds == 1
 
 
 # --- memory-limit / spill env gating (Cloud Run) -----------------------------

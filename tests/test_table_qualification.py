@@ -197,7 +197,8 @@ def test_a_table_the_index_does_not_manage_cannot_be_compared(monkeypatch):
 def test_a_rulemaking_table_is_compared_with_the_snapshot_its_pointer_named(monkeypatch, snapshot_id, generation):
     server = _serve(monkeypatch, _index())
     con = mcp_server._get_connection()
-    pinned = {"snapshot_id": snapshot_id, "tables": {"rulemaking_lifecycles.parquet": {"sha256": "0" * 64}}}
+    pinned = {"snapshot_id": snapshot_id, "tables": {"rulemaking_lifecycles.parquet": {"sha256": "0" * 64, "rows": 0}},
+              "manifest": {"snapshot_id": snapshot_id}}  # the shape publication.load_rulemaking_snapshot pins
     con.execute("CREATE TABLE _spicy_rulemaking (snapshot VARCHAR)")
     con.execute("INSERT INTO _spicy_rulemaking VALUES (?)", [json.dumps(pinned)])
     con.execute("CREATE TABLE rulemaking_lifecycles (id VARCHAR)")

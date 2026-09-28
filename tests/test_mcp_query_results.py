@@ -80,6 +80,8 @@ def test_truncation_measures_an_omitted_row_not_just_reaching_the_cap(client, si
 @pytest.mark.parametrize(("sql", "named"), [
     ("SELECT 1 AS x", set()),
     ("SELECT filing_status FROM fcc_filings", {"fcc_filings"}),
+    ("SELECT filing_status FROM FCC_Filings", {"fcc_filings"}),
+    ("WITH fcc_filings AS (SELECT 'CTE' AS filing_status) SELECT filing_status FROM fcc_filings", set()),
     ("WITH f AS (SELECT filing_status FROM fcc_filings) "
      "SELECT f.filing_status, (SELECT count(*) FROM fcc_proceedings) AS n FROM f", {"fcc_filings", "fcc_proceedings"}),
 ])
@@ -106,3 +108,52 @@ def test_discovery_lists_tables_without_per_table_pins_or_audits(client):
     assert {entry["table"] for entry in data["tables"]} == {"fcc_filings", "fcc_proceedings"}
     assert set(data["tables"][0]) == {"table", "label", "coverage"}
     assert not {"publication", "qualification", "datasets", "declared_tables"} & set(data)
+
+
+def test_an_unparseable_statement_is_refused_with_the_parsers_message(client):
+    result = call(client, "query_sql", {"sql": "SELEC filing_status FROM fcc_filings"})
+    assert result["isError"] is True
+    assert 'syntax error at or near "SELEC"' in result["content"][0]["text"]
+
+
+def test_query_sql_reply_names_the_statement_it_answers(client):
+    """A reply read out of context (a client's spill file) must say which statement it answers.
+
+    describe_table echoes table and resolve_document_citations echoes its keys; query_sql echoed only max_rows,
+    so a reader handed another call's spilled reply saw foreign columns and could not tell whose they were.
+    """
+    for sql, max_rows in (("SELECT count(*) AS n FROM fcc_filings", 5), ("SELECT filing_status FROM fcc_proceedings", 25)):
+        reply = call(client, "query_sql", {"sql": sql, "max_rows": max_rows})["structuredContent"]
+        assert (reply["sql"], reply["max_rows"]) == (sql, max_rows)
+        assert next(iter(reply)) == "sql"  # first key: visible in the first bytes of a spilled single-line file
+
+
+@pytest.mark.parametrize(("sql", "named"), [
+    pytest.param("WITH fcc_filings AS (SELECT 9 AS x) SELECT x FROM fcc_filings", set(), id="a CTE shadows the view"),
+    pytest.param("WITH fcc_filings AS (SELECT * FROM fcc_filings) SELECT * FROM fcc_filings", {"fcc_filings"},
+                 id="a CTE body reads the view it shadows"),
+    pytest.param("WITH fcc_filings AS (SELECT 9 AS x), g AS (SELECT x FROM fcc_filings) SELECT x FROM g", set(),
+                 id="a later CTE sees an earlier one"),
+    pytest.param("WITH g AS (SELECT * FROM fcc_filings), fcc_filings AS (SELECT 9 AS x) SELECT * FROM g",
+                 {"fcc_filings"}, id="an earlier CTE does not see a later one"),
+    pytest.param("WITH RECURSIVE fcc_filings(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM fcc_filings WHERE n < 3) "
+                 "SELECT n FROM fcc_filings", set(), id="a recursive CTE reads itself"),
+    pytest.param("SELECT (WITH fcc_filings AS (SELECT 9 AS x) SELECT x FROM fcc_filings), "
+                 "(SELECT count(*) FROM fcc_filings)", {"fcc_filings"}, id="a CTE is scoped to its own subquery"),
+    pytest.param('SELECT * FROM "fcc_filings"', {"fcc_filings"}, id="quoted"),
+    pytest.param("SELECT * FROM FCC_Filings", {"fcc_filings"}, id="any case"),
+    pytest.param("SELECT * FROM main.fcc_filings", {"fcc_filings"}, id="schema qualified"),
+    pytest.param("SELECT * FROM memory.main.fcc_filings", {"fcc_filings"}, id="catalog qualified"),
+    pytest.param("WITH fcc_filings AS (SELECT 9 AS x) SELECT * FROM main.fcc_filings", {"fcc_filings"},
+                 id="a qualified name is never a CTE"),
+    pytest.param("SELECT * FROM information_schema.tables", set(), id="another schema"),
+    pytest.param("SELECT filing_status FROM fcc_filings UNION SELECT filing_status FROM fcc_proceedings",
+                 {"fcc_filings", "fcc_proceedings"}, id="union"),
+    pytest.param("SELECT * FROM read_parquet('https://example.test/fcc_filings.parquet')", set(),
+                 id="a direct file read names no published table"),
+    pytest.param("SELEC nonsense FROM fcc_filings", set(), id="unparseable"),
+])
+def test_tables_named_follows_sql_scope(sql, named):
+    """The pins a reply carries come from these names: a false one claims a read that never happened."""
+    with duckdb.connect() as con:
+        assert mcp_server._tables_named(con, sql) == named

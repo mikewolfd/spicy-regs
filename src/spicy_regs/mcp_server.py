@@ -10,13 +10,14 @@ from __future__ import annotations
 
 import base64
 import difflib
+import functools
 import json
 import logging
 import os
 import tempfile
 import threading
 from collections import Counter
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
@@ -24,11 +25,14 @@ from functools import lru_cache
 from importlib.resources import files
 from pathlib import Path
 from time import monotonic as _monotonic
-from typing import Annotated, Any
+from typing import Annotated, Any, NamedTuple
 from uuid import UUID
 
+import anyio
+import anyio.to_thread
 import duckdb
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver.exceptions import ToolError
 from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import Icon
 from pydantic import Field
@@ -36,7 +40,7 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 from spicy_regs._icon import ICON_DATA_URI
-from spicy_regs.duckdb_settings import memory_limit
+from spicy_regs.duckdb_settings import INTERACTIVE_HTTP_RETRIES, load_public_http, memory_limit
 from spicy_regs.public_url import resolve_r2_base_url
 
 TABLES = (
@@ -198,7 +202,7 @@ INSTRUCTIONS = (
     "Use resolve_document_citations for bounded target lookups; a normalized citation key alone does not prove existence."
 )
 
-ICONS = [Icon(src=ICON_DATA_URI, mimeType="image/png", sizes=["512x512"])]
+ICONS = [Icon(src=ICON_DATA_URI, mime_type="image/png", sizes=["512x512"])]
 
 
 def _resolve_r2_base_url() -> str:
@@ -276,8 +280,22 @@ def _resolve_temp_dir() -> str:
     return raw
 
 
+def _resolve_tool_concurrency() -> int:
+    """How many tool calls run at once, from SPICY_REGS_TOOL_CONCURRENCY (default 2); each has a thread and cursor.
+
+    A remote scan issues range requests from every DuckDB thread: one persona query peaked at 72 requests/s on
+    four threads (2026-09-28), and r2.dev throttles at hundreds per second across all of the bucket's readers.
+    Two calls stay near that single-query rate. Raise it once the bucket is served from a custom domain.
+    """
+    raw = os.environ.get("SPICY_REGS_TOOL_CONCURRENCY", "2").strip()
+    if not raw.isdecimal() or int(raw) < 1:
+        raise RuntimeError(f"SPICY_REGS_TOOL_CONCURRENCY must be a positive integer: {raw!r}")
+    return int(raw)
+
+
 MEMORY_LIMIT = _resolve_memory_limit()
 TEMP_DIR = _resolve_temp_dir()
+TOOL_CONCURRENCY = _resolve_tool_concurrency()
 
 
 def _resolve_catalog_config() -> dict[str, str] | None:
@@ -355,25 +373,37 @@ def _first_write_statement(cursor: duckdb.DuckDBPyConnection, sql: str) -> str |
 
 
 def _tables_named(cursor: duckdb.DuckDBPyConnection, sql: str) -> set[str]:
-    """Table names ``sql`` references, from DuckDB's parse tree; CTE names included, views not expanded.
+    """Lower-cased names of the tables ``sql`` reads, from DuckDB's parse tree; views are not expanded.
 
     ``cursor.get_table_names`` binds the query and expands each view to the
     tables under it, which for these ``read_parquet`` views is none, so the
-    unbound tree from ``json_serialize_sql`` is walked instead. Callers
-    intersect the result with the published tables, which drops CTE names.
+    unbound tree from ``json_serialize_sql`` is walked instead. An unqualified
+    name that a CTE in scope defines reads the CTE: a CTE body sees the CTEs
+    before it and, when recursive, itself. Other schemas are not tables of this
+    database; callers intersect the result with the published tables.
     """
     [(serialized,)] = cursor.execute("SELECT json_serialize_sql(?)", [sql]).fetchall()
-    tree = json.loads(serialized)
     names: set[str] = set()
-    stack: list[Any] = [tree]
+    stack: list[tuple[Any, frozenset[str]]] = [(json.loads(serialized), frozenset())]
     while stack:
-        node = stack.pop()
-        if isinstance(node, dict):
-            if node.get("type") == "BASE_TABLE":
-                names.add(node["table_name"])
-            stack.extend(node.values())
-        elif isinstance(node, list):
-            stack.extend(node)
+        node, ctes = stack.pop()
+        if isinstance(node, list):
+            stack.extend((item, ctes) for item in node)
+            continue
+        if not isinstance(node, dict):
+            continue
+        if node.get("type") == "BASE_TABLE":
+            name, schema = node["table_name"].lower(), node["schema_name"].lower()
+            if node["catalog_name"].lower() in ("", "memory") and (schema == "main" or (not schema and name not in ctes)):
+                names.add(name)
+            continue
+        if node.get("type") == "RECURSIVE_CTE_NODE":
+            ctes |= {node["cte_name"].lower()}
+        cte_map = node.get("cte_map")
+        for entry in cte_map["map"] if isinstance(cte_map, dict) else ():
+            stack.append((entry["value"], ctes))
+            ctes |= {entry["key"].lower()}
+        stack.extend((value, ctes) for key, value in node.items() if key != "cte_map")
     return names
 
 
@@ -393,22 +423,37 @@ def _apply_security_settings(con: duckdb.DuckDBPyConnection, allowed_paths: list
     con.execute("SET lock_configuration=true")
 
 
-def _build_connection() -> duckdb.DuckDBPyConnection:
+class _Publication(NamedTuple):
+    """The published pointers a remote connection pins: the publication index and the rulemaking snapshot."""
+
+    index: dict
+    rulemaking: dict | None
+
+
+def _read_publication() -> _Publication:
+    """The live pointers, read once each; the rulemaking snapshot is ``None`` while none is published."""
+    from spicy_regs.sources.publication import load_index, load_rulemaking_snapshot
+
+    return _Publication(load_index(R2_BASE_URL), load_rulemaking_snapshot(R2_BASE_URL))
+
+
+def _pinned_publication(con: duckdb.DuckDBPyConnection) -> _Publication:
+    """The pointers ``con`` pinned when it was built, as :func:`_read_publication` returned them."""
+    cursor = con.cursor()
+    return _Publication(_connection_index(cursor), _pinned_record(cursor, "_spicy_rulemaking"))
+
+
+def _build_connection(publication: _Publication | None = None) -> duckdb.DuckDBPyConnection:
     """Open a DuckDB connection with one view per available table, pinned to one publication snapshot.
 
-    A remote connection reads the publication index and the rulemaking pointer
-    once each; a rulemaking table's view reads the snapshot the pointer names.
-    Local managed bytes are rehashed before their views are created; a view
-    whose schema differs from its admitted generation, or a managed or snapshot
-    member that cannot be read, raises RuntimeError.
+    A remote connection pins ``publication``, read here when not given; a
+    rulemaking table's view reads the snapshot the pointer names. Local managed
+    bytes are rehashed before their views are created. A view whose schema
+    differs from its admitted generation, a managed or snapshot member that
+    cannot be read, or a legacy table that fails other than as absent (HTTP
+    404), raises RuntimeError.
     """
-    from spicy_regs.sources.publication import (
-        load_index,
-        load_rulemaking_snapshot,
-        parquet_scan,
-        table_descriptor,
-        table_members,
-    )
+    from spicy_regs.sources.publication import parquet_scan, table_descriptor, table_members
 
     if DATA_DIR is None and _resolve_catalog_config() is not None:
         raise RuntimeError(
@@ -422,14 +467,14 @@ def _build_connection() -> duckdb.DuckDBPyConnection:
 
         local = local_selection(DATA_DIR)
         signatures = verify_local_members(local)
-    publication_index = local.publication if local is not None else load_index(R2_BASE_URL)
-    rulemaking = None if local is not None else load_rulemaking_snapshot(R2_BASE_URL)
+        publication_index, rulemaking = local.publication, None
+    else:
+        publication_index, rulemaking = publication or _read_publication()
     con = duckdb.connect()
     con.execute("SET allow_persistent_secrets=false")
     con.execute(f"SET home_directory='{HOME_DIRECTORY.replace(chr(39), chr(39) * 2)}'")
     if DATA_DIR is None:
-        con.execute("INSTALL httpfs")
-        con.execute("LOAD httpfs")
+        load_public_http(con, INTERACTIVE_HTTP_RETRIES)
 
     allowed_paths: list[str] = []
     # Request cursors share regular in-memory tables, not connection-local
@@ -479,9 +524,14 @@ def _build_connection() -> duckdb.DuckDBPyConnection:
                     raise RuntimeError(f"Published schema differs from admitted generation: {name}")
             allowed_paths.extend(urls)
         except duckdb.Error as exc:
-            if published is not None or pinned is not None or (local is not None and local.is_download):
+            required = published is not None or pinned is not None or (local is not None and local.is_download)
+            # A remote legacy table is skipped only when it is absent; a throttled or failing read refuses the
+            # build, so a refresh keeps the connection it would replace instead of serving one without the table.
+            absent = local is not None or (isinstance(exc, duckdb.HTTPException) and exc.status_code == 404)
+            if required or not absent:
                 con.close()
-                raise RuntimeError(f"Published generation member unavailable: {name}") from exc
+                kind = "Published generation member" if required else "Legacy table"
+                raise RuntimeError(f"{kind} unavailable: {name}") from exc
             logger.warning("table %s not available at %s; skipping view: %s", name, urls, exc)
     _install_relationship_views(con)
     _apply_security_settings(con, allowed_paths)
@@ -605,58 +655,98 @@ def _publication_status(cursor: duckdb.DuckDBPyConnection) -> dict:
     }
 
 
-# Building a connection is the expensive part of a tool call — install httpfs +
-# iceberg, attach the R2 catalog over REST, and CREATE VIEW over every table in
-# ``TABLES`` (each reads a parquet footer over HTTPS), ~35s on a cold serverless
-# instance.
-# The query that follows is milliseconds. So we build once and reuse: Fluid
-# Compute keeps a warmed instance's module state across invocations, and the
-# stdio server is a single long-lived process, so a module-level connection
-# amortizes that cost across every request the instance serves.
+def _reply_pins(cursor: duckdb.DuckDBPyConnection, publication: dict[str, dict], names: list[str]) -> dict[str, dict]:
+    """Each named table's pin with the facts a reply states instead of prose that decays.
+
+    ``rows`` is the pinned index's or snapshot manifest's count, a snapshot
+    table adds its manifest's ``run_id`` and ``asserted_at``, and ``coverage`` is
+    the dictionary's coverage kind. They join the pin only here: derived views
+    embed :func:`_publication_status` pins in provenance columns and candidate
+    identities, which these facts must not move.
+    """
+    from spicy_regs.sources.publication import table_descriptor
+
+    index, rulemaking, relationships = (
+        _connection_index(cursor), _connection_rulemaking(cursor), _connection_relationships(cursor)
+    )
+    pins = {}
+    for name in names:
+        pin = dict(publication[name])
+        managed = pin["status"] in ("managed_generation", "managed_download")
+        if managed and (descriptor := table_descriptor(index, f"{name}.parquet")) is not None:
+            pin["rows"] = descriptor["rows"]
+        elif pin["status"] == "rulemaking_snapshot":
+            manifest = rulemaking["manifest"]
+            pin |= {"rows": rulemaking["tables"][f"{name}.parquet"]["rows"],
+                    "run_id": manifest.get("run_id"), "asserted_at": manifest.get("asserted_at")}
+        declared = _table_metadata().get(name) or relationships.get(name, {}).get("metadata", {})
+        pins[name] = {**pin, "coverage": declared.get("kind")}
+    return pins
+
+
+# One connection serves every tool call. Building it reads each published
+# table's Parquet footer over HTTPS (464 requests and 43 s against r2.dev on
+# 2026-09-28); a query on it takes milliseconds to seconds. Each call runs on its
+# own worker thread and its own ``cursor()``, DuckDB's way to run overlapping
+# statements on one connection, so the statement-timeout interrupt below hits
+# only that cursor.
 #
-# Concurrency: the cached connection is shared, but each request runs on its own
-# `con.cursor()` — DuckDB's supported way to run overlapping queries on one
-# connection — so the statement-timeout interrupt (below) hits only that cursor,
-# never a sibling request.
-#
-# Staleness: the publication index and the rulemaking pointer are each read
-# once per build, the views hold parquet footers at the immutable URLs they
-# name, and the catalog attach pins an Iceberg snapshot, all taken at build
-# time. The ETL republishes daily, so a connection older than the TTL is
-# rebuilt to pick up new data, a moved pointer included. On rebuild we
-# only drop the module reference to the old connection — never close it — so any
-# cursor still mid-query keeps working (a cursor outlives its parent losing its
-# last Python reference); the old connection is reclaimed once its cursors drain.
+# Refresh: the publication index and the rulemaking pointer name immutable URLs,
+# so a remote connection stays right until one of them moves. Past the TTL the
+# first caller re-reads both (three small GETs) and rebuilds only when they
+# moved; a local connection is rebuilt, since its ``current`` link and member
+# signatures are re-read at build. A rebuild is a new DuckDB instance: the
+# security settings lock the allowed URLs, so a locked instance cannot admit a
+# new generation's views. Other callers keep the current connection meanwhile,
+# and a failed refresh keeps it until the next TTL; only a cold start raises.
+# The old connection is dropped, never closed: a cursor still mid-query keeps it
+# alive until it drains.
 _CONNECTION_TTL_SECONDS = float(os.environ.get("SPICY_REGS_CONNECTION_TTL", "300"))
 _connection_lock = threading.Lock()
 _cached_connection: duckdb.DuckDBPyConnection | None = None
 _cached_connection_at = 0.0
+_refreshing = False
 
 
 def _get_connection() -> duckdb.DuckDBPyConnection:
-    """Return a shared, cached DuckDB connection, rebuilding past the TTL.
+    """Return the shared connection, building it on first use and refreshing it past the TTL (see above).
 
-    Callers must run their query on ``.cursor()`` of the returned connection,
-    not on the connection itself, so concurrent requests don't serialize and a
-    per-request timeout interrupt stays scoped to that request.
+    Callers run their statements on ``.cursor()`` of the returned connection, so
+    concurrent calls do not share a statement and a timeout interrupt stays
+    scoped to one call.
     """
-    global _cached_connection, _cached_connection_at
+    global _cached_connection, _cached_connection_at, _refreshing
     with _connection_lock:
-        age = _monotonic() - _cached_connection_at
-        if _cached_connection is None or age >= _CONNECTION_TTL_SECONDS:
-            # Drop (don't close) the previous connection: an in-flight cursor on
-            # another thread still references it and must survive this swap.
-            _cached_connection = _build_connection()
-            _cached_connection_at = _monotonic()
-        return _cached_connection
+        if _cached_connection is None:  # cold start: concurrent callers wait for this one build
+            _cached_connection, _cached_connection_at = _build_connection(), _monotonic()
+            return _cached_connection
+        if _refreshing or _monotonic() - _cached_connection_at < _CONNECTION_TTL_SECONDS:
+            return _cached_connection
+        current, _refreshing = _cached_connection, True
+    replacement = current
+    try:
+        replacement = _refreshed(current)
+    except Exception:
+        logger.exception("connection refresh failed; serving the pinned connection until the next TTL")
+    finally:
+        with _connection_lock:
+            _cached_connection, _cached_connection_at, _refreshing = replacement, _monotonic(), False
+    return replacement
+
+
+def _refreshed(current: duckdb.DuckDBPyConnection) -> duckdb.DuckDBPyConnection:
+    """``current`` while its remote pointers have not moved; otherwise a new connection."""
+    if DATA_DIR is not None:
+        return _build_connection()
+    publication = _read_publication()
+    return current if publication == _pinned_publication(current) else _build_connection(publication)
 
 
 def _reset_connection_cache() -> None:
     """Forget the cached connection so the next call rebuilds. For tests."""
-    global _cached_connection, _cached_connection_at
+    global _cached_connection, _cached_connection_at, _refreshing
     with _connection_lock:
-        _cached_connection = None
-        _cached_connection_at = 0.0
+        _cached_connection, _cached_connection_at, _refreshing = None, 0.0, False
 
 
 @contextmanager
@@ -839,8 +929,27 @@ def _available_tables(cursor: duckdb.DuckDBPyConnection) -> list[str]:
     ]
 
 
-def _register_tools(mcp: FastMCP) -> None:
-    @mcp.tool()
+def _register_tools(mcp: MCPServer) -> None:
+    limiter = anyio.CapacityLimiter(TOOL_CONCURRENCY)
+
+    def tool(fn: Callable[..., dict[str, Any]]) -> Callable[..., Any]:
+        """Register ``fn`` to run on a worker thread, at most TOOL_CONCURRENCY calls at once, off the event loop.
+
+        A failure reaches the caller with its text. MCPServer shows only a
+        ToolError's message, and DuckDB's errors and the read-only refusals are
+        what a caller needs to correct a query.
+        """
+
+        @functools.wraps(fn)
+        async def call(**arguments: Any) -> dict[str, Any]:
+            try:
+                return await anyio.to_thread.run_sync(functools.partial(fn, **arguments), limiter=limiter)
+            except Exception as exc:
+                raise ToolError(str(exc)) from exc
+
+        return mcp.tool()(call)
+
+    @tool
     def lookup_agency(
         namespace: Annotated[str, Field(min_length=1, max_length=256)],
         identifier: Annotated[str, Field(min_length=1, max_length=256)],
@@ -861,7 +970,7 @@ def _register_tools(mcp: FastMCP) -> None:
 
         return lookup(namespace, identifier, on_date=on_date)
 
-    @mcp.tool()
+    @tool
     def list_sources() -> dict[str, Any]:
         """List the queryable tables: each one's label and coverage kind, with derived views grouped.
 
@@ -892,7 +1001,7 @@ def _register_tools(mcp: FastMCP) -> None:
             "unavailable_tables": [name for name in (*TABLES, *relationships) if name not in available],
         }
 
-    @mcp.tool()
+    @tool
     def describe_table(table: str) -> dict[str, Any]:
         """Return a table's columns with their meanings, row identity, coverage caveats and joins.
 
@@ -901,11 +1010,13 @@ def _register_tools(mcp: FastMCP) -> None:
         view's, each with its dictionary meaning; an unavailable declared table
         returns its declared columns. schema_differences names any column or
         type the view does not share with the dictionary. publication is the
-        live data version. qualification gives the live pin, the output
-        ledger's audited pin, date and disposition, whether they match, and
-        the ledger's own statement, as separate fields; it is reported only for
-        the ledger's publisher. joins lists the declared joins this table makes
-        (outgoing) and receives (incoming), each with its measured baseline.
+        live data version with its pinned row count and coverage kind; prefer
+        its rows to a count stated in prose. qualification gives the live pin,
+        the output ledger's audited pin, date and disposition, whether they
+        match, and the ledger's own statement, as separate fields; it is
+        reported only for the ledger's publisher. joins lists the declared joins
+        this table makes (outgoing) and receives (incoming), each with its
+        measured baseline.
         """
         cursor = _get_connection().cursor()
         with _statement_timeout(cursor):
@@ -948,7 +1059,10 @@ def _register_tools(mcp: FastMCP) -> None:
             **_source_details(cursor),
             "available": available,
             **({"relationship": relationships[table]} if table in relationships else {}),
-            "publication": status["publication"].get(table, {"status": "unavailable"}),
+            "publication": (
+                _reply_pins(cursor, status["publication"], [table])[table]
+                if table in status["publication"] else {"status": "unavailable"}
+            ),
             "qualification": scope if qualified is None else {**scope, **qualified[table]},
             "joins": _table_joins(table),
             "metadata": {key: value for key, value in entry.items() if key not in {"table", "columns"}},
@@ -961,7 +1075,7 @@ def _register_tools(mcp: FastMCP) -> None:
             ] if available else entry["columns"],
         }
 
-    @mcp.tool()
+    @tool
     def query_sql(sql: str, max_rows: Annotated[int, Field(ge=1, le=500)] = 25) -> dict[str, Any]:
         """Run read-only SQL against configured Spicy Regs tables, returning up to max_rows rows.
 
@@ -974,7 +1088,10 @@ def _register_tools(mcp: FastMCP) -> None:
         table listed by list_sources. Always include a LIMIT in exploratory
         queries. truncated reports whether rows beyond max_rows were omitted.
         Selected columns must have unique names; alias shared names in joins.
-        publication gives the live data version of each table the query names.
+        sql echoes the statement this reply answers.
+        publication gives each table the query names: its live data version,
+        pinned row count and coverage kind (a window or sample is not the
+        source's full history).
         """
         cursor = _get_connection().cursor()
         write_statement = _first_write_statement(cursor, sql)
@@ -990,18 +1107,20 @@ def _register_tools(mcp: FastMCP) -> None:
             rows = cursor.fetchmany(max_rows + 1)
             publication = _publication_status(cursor)["publication"]
             named = _tables_named(cursor, sql)
+            pins = _reply_pins(cursor, publication, [name for name in publication if name in named])
         result_rows = [{col: _jsonify(val) for col, val in zip(columns, row)} for row in rows[:max_rows]]
         return {
+            "sql": sql,
             **_source_details(cursor),
             "columns": columns,
             "row_count_shown": len(result_rows),
             "max_rows": max_rows,
             "truncated": len(rows) > max_rows,
             "rows": result_rows,
-            "publication": {name: pin for name, pin in publication.items() if name in named},
+            "publication": pins,
         }
 
-    @mcp.tool()
+    @tool
     def resolve_document_citations(
         document_kind: str,
         document_key: str,
@@ -1090,9 +1209,9 @@ def _register_tools(mcp: FastMCP) -> None:
         }
 
 
-def build_server() -> FastMCP:
-    """Build the stdio FastMCP server with discovery, read-only queries and citation lookup."""
-    mcp = FastMCP("spicy-regs", instructions=INSTRUCTIONS, icons=ICONS)
+def build_server() -> MCPServer:
+    """Build the MCP server with discovery, read-only queries and citation lookup; stdio, or HTTP via build_app."""
+    mcp = MCPServer("spicy-regs", instructions=INSTRUCTIONS, icons=ICONS)
     _register_tools(mcp)
     return mcp
 
@@ -1119,7 +1238,7 @@ def _landing_icon() -> bytes:
     return base64.b64decode(ICON_DATA_URI.split(",", 1)[1])
 
 
-def _register_landing_page(mcp: FastMCP) -> None:
+def _register_landing_page(mcp: MCPServer) -> None:
     """Serve the human-facing setup page alongside the MCP endpoint.
 
     Vercel served this as a static file at the site root; when that deploy was
@@ -1147,17 +1266,13 @@ def _register_landing_page(mcp: FastMCP) -> None:
 
 def build_app():
     """Build the stateless streamable-HTTP ASGI app (tools plus the landing page)."""
-    mcp = FastMCP(
-        "spicy-regs",
-        instructions=INSTRUCTIONS,
-        icons=ICONS,
-        stateless_http=True,
+    mcp = build_server()
+    _register_landing_page(mcp)
+    return mcp.streamable_http_app(
         streamable_http_path="/mcp",
+        stateless_http=True,
         transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False),
     )
-    _register_tools(mcp)
-    _register_landing_page(mcp)
-    return mcp.streamable_http_app()
 
 
 def main() -> None:

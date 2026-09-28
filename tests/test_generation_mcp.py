@@ -2,6 +2,7 @@
 
 import json
 import re
+from pathlib import Path
 
 import duckdb
 import pyarrow as pa
@@ -39,12 +40,22 @@ def serve_documents(monkeypatch, documents: dict) -> list[str]:
     return reads
 
 
-def connection_fixture(monkeypatch, index, locations, *, tables=("a", "b", "legacy", "missing"), documents=None):
+def http_error(status: int) -> duckdb.HTTPException:
+    """The error httpfs raises when a read ends in HTTP ``status``."""
+    error = duckdb.HTTPException(f"HTTP Error: HTTP GET error (HTTP {status})")
+    error.status_code = status
+    return error
+
+
+def connection_fixture(monkeypatch, index, locations, *, tables=("a", "b", "legacy", "missing"), documents=None,
+                       statuses=None):
     """Patch DuckDB connections that rewrite captured R2 URLs to ``locations``, with the index, pointer and table scope.
 
-    Returns every connection built; each keeps the URLs its statements read. With no ``documents`` the rulemaking
-    pointer answers 404, as it does before the dataset's first publication.
+    Returns every connection built; each keeps the URLs its statements read. A key outside ``locations`` answers 404,
+    and a key in ``statuses`` answers that HTTP status. With no ``documents`` the rulemaking pointer answers 404, as it
+    does before the dataset's first publication.
     """
+    statuses = statuses or {}
     connect = duckdb.connect
     built = []
 
@@ -59,8 +70,8 @@ def connection_fixture(monkeypatch, index, locations, *, tables=("a", "b", "lega
             for url in re.findall("'(" + re.escape(mcp_server.R2_BASE_URL) + "/[^']+)'", sql):
                 self.seen.append(url)
                 key = url.removeprefix(mcp_server.R2_BASE_URL + "/")
-                if key not in locations:
-                    raise duckdb.IOException("missing object")
+                if key in statuses or key not in locations:
+                    raise http_error(statuses.get(key, 404))
                 sql = sql.replace(url, str(locations[key]))
             return self.inner.execute(sql, parameters) if parameters is not None else self.inner.execute(sql)
 
@@ -121,6 +132,38 @@ def test_missing_or_wrong_schema_managed_member_refuses_connection(tmp_path, mon
     assert [con.closed for con in built] == [True]
 
 
+def _pair_locations(tmp_path) -> tuple[dict, dict, Path]:
+    """A published two-table family, its object locations and the family's directory."""
+    directory, _ = build(tmp_path)
+    index = publish(Store(), directory)
+    return index, {pub.single_member(index, key).path: directory / key for key in ("a.parquet", "b.parquet")}, directory
+
+
+def test_a_throttled_legacy_table_refuses_the_build_where_an_absent_one_is_skipped(tmp_path, monkeypatch):
+    """A 429 skipped the view as if unpublished; a refresh would then have served a connection without the table."""
+    index, locations, _ = _pair_locations(tmp_path)
+    legacy = tmp_path / "legacy.parquet"
+    pq.write_table(pa.table({"id": ["legacy"]}), legacy)
+    locations["legacy.parquet"] = legacy
+    built = connection_fixture(monkeypatch, index, locations, statuses={"legacy.parquet": 429})
+    with pytest.raises(RuntimeError, match="Legacy table unavailable: legacy"):
+        mcp_server._build_connection()
+    assert [con.closed for con in built] == [True]
+
+
+def test_a_remote_build_sets_the_interactive_retries_before_it_locks(tmp_path, monkeypatch):
+    """DuckDB refuses settings once lock_configuration is on, so the retries must land first."""
+    from spicy_regs.duckdb_settings import INTERACTIVE_HTTP_RETRIES
+
+    index, locations, _ = _pair_locations(tmp_path)
+    connection_fixture(monkeypatch, index, locations, tables=("a", "b"))
+    order = []
+    monkeypatch.setattr(mcp_server, "load_public_http", lambda con, retries: order.append(("httpfs", retries)))
+    monkeypatch.setattr(mcp_server, "_apply_security_settings", lambda con, allowed_paths=None: order.append(("lock",)))
+    mcp_server._build_connection()
+    assert order == [("httpfs", INTERACTIVE_HTTP_RETRIES), ("lock",)]
+
+
 def test_admitted_table_without_dictionary_is_available_but_helpers_are_not(tmp_path, monkeypatch):
     from tests.test_mcp_server import _tool_data
 
@@ -160,8 +203,11 @@ WRITERS = {
 }
 
 
-def rulemaking_documents(snapshot_id: str, tables=tuple(WRITERS), **artifact) -> dict:
-    """The pointer and manifest the pipeline publishes for ``tables``, by URL; ``artifact`` overrides every record."""
+def rulemaking_documents(snapshot_id: str, tables=tuple(WRITERS), rows=None, **artifact) -> dict:
+    """The pointer and manifest the pipeline publishes for ``tables``, by URL; ``artifact`` overrides every record.
+
+    ``rows`` gives a table's recorded row count (default 1).
+    """
     prefix = f"materialized/rulemaking/snapshots/{snapshot_id}"
     pointer = {
         "format_version": 2,
@@ -174,13 +220,14 @@ def rulemaking_documents(snapshot_id: str, tables=tuple(WRITERS), **artifact) ->
             "remote_key": f"{prefix}/{table}.parquet",
             "sha256": "0" * 64,
             "bytes": 1,
-            "rows": 1,
+            "rows": (rows or {}).get(table, 1),
             "visibility": "public",
             **artifact,
         }
         for table in tables
     }
-    manifest = {"format_version": 2, "dataset": "rulemaking", "snapshot_id": snapshot_id, "artifacts": records}
+    manifest = {"format_version": 2, "dataset": "rulemaking", "snapshot_id": snapshot_id, "artifacts": records,
+                "run_id": f"run-{snapshot_id[-6:]}", "asserted_at": "2026-09-28T12:00:00Z"}
     base = mcp_server.R2_BASE_URL
     return {f"{base}/{pub.SNAPSHOT_POINTER}": pointer, f"{base}/{prefix}/manifest.json": manifest}
 
@@ -225,6 +272,11 @@ def test_rulemaking_views_read_the_pointers_snapshot_and_a_moved_pointer_at_the_
     prefix = f"{mcp_server.R2_BASE_URL}/materialized/rulemaking/snapshots"
     assert first.seen == [f"{prefix}/{SNAPSHOT_A}/{table}.parquet" for table in dd.RULEMAKING_TABLES]
 
+    monkeypatch.setattr(mcp_server, "_CONNECTION_TTL_SECONDS", 0.0)
+    assert mcp_server._get_connection() is first  # past the TTL an unmoved pointer is read, not rebuilt
+    assert (len(built), reads.count(pointer)) == (1, 2)
+    monkeypatch.setattr(mcp_server, "_CONNECTION_TTL_SECONDS", 300.0)
+
     documents.update(rulemaking_documents(SNAPSHOT_B))  # the publisher moves the pointer
     query = "SELECT docket_id FROM rule_targets"
     mcp_server._get_connection()
@@ -232,7 +284,7 @@ def test_rulemaking_views_read_the_pointers_snapshot_and_a_moved_pointer_at_the_
     monkeypatch.setattr(mcp_server, "_CONNECTION_TTL_SECONDS", 0.0)
     mcp_server._get_connection()
     [_, second] = built
-    assert reads.count(pointer) == 2
+    assert reads.count(pointer) == 3  # the rebuild pins the pointer its poll read
     assert second.seen == [f"{prefix}/{SNAPSHOT_B}/{table}.parquet" for table in dd.RULEMAKING_TABLES]
     assert second.inner.execute(query).fetchall() == [("EPA-B",)]
     assert first.inner.execute(query).fetchall() == [("EPA-A",)]  # a connection keeps the snapshot it pinned
@@ -393,6 +445,45 @@ def test_the_index_wins_over_the_snapshot_for_a_table_both_name(tmp_path, monkey
         [f"{base}/{pub.single_member(index, 'a.parquet').path}"],
         [f"{base}/{snapshot_key}"],
     )
+
+
+def test_a_reply_states_each_tables_pinned_rows_run_and_coverage(tmp_path, monkeypatch):
+    """Prose counts decay; a reply carries the pinned count, which must be the rows the Parquet actually holds."""
+    from tests.test_mcp_server import _tool_data
+
+    index, locations, directory = _pair_locations(tmp_path)
+    snapshot = write_rulemaking(tmp_path, SNAPSHOT_A, "EPA-A")
+    # As pipelines.materialized records each artifact: the written file's footer count.
+    recorded = {key.rsplit("/", 1)[-1][:-8]: pq.ParquetFile(path).metadata.num_rows for key, path in snapshot.items()}
+    documents = rulemaking_documents(SNAPSHOT_A, rows=recorded)
+    built = connection_fixture(monkeypatch, index, locations | snapshot, tables=("a", "b", *WRITERS),
+                               documents=documents)
+    mcp_server._build_connection()
+    [con] = built
+    monkeypatch.setattr(mcp_server, "_get_connection", lambda: con)
+    server = mcp_server.build_server()
+
+    def counted(path) -> int:
+        [(rows,)] = duckdb.execute("SELECT count(*) FROM read_parquet(?)", [str(path)]).fetchall()
+        return rows
+
+    target = snapshot[f"materialized/rulemaking/snapshots/{SNAPSHOT_A}/rule_targets.parquet"]
+    assert _tool_data(server, "describe_table", {"table": "a"})["publication"]["rows"] == counted(directory / "a.parquet")
+    reply = _tool_data(server, "query_sql", {"sql": "SELECT count(*) AS n FROM a, rule_targets"})["publication"]
+    assert {name: pin["rows"] for name, pin in reply.items()} == {
+        "a": counted(directory / "a.parquet"), "rule_targets": counted(target),
+    }
+    manifest = documents[f"{mcp_server.R2_BASE_URL}/materialized/rulemaking/snapshots/{SNAPSHOT_A}/manifest.json"]
+    assert (reply["rule_targets"]["run_id"], reply["rule_targets"]["asserted_at"]) == (
+        manifest["run_id"], manifest["asserted_at"]
+    )
+    assert "run_id" not in reply["a"]
+    # The dictionary's coverage kind is the one caveat a query_sql caller receives.
+    assert (reply["rule_targets"]["coverage"], reply["a"]["coverage"]) == (
+        mcp_server._table_metadata()["rule_targets"]["kind"], None
+    )
+    # The pins derived views embed are unchanged: their candidate identities hash them.
+    assert "rows" not in mcp_server._publication_status(con.cursor())["publication"]["a"]
 
 
 def test_dictionary_discovery_reads_the_rulemaking_tables_through_the_pointer(tmp_path, monkeypatch):

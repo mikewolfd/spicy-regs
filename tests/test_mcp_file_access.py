@@ -5,7 +5,7 @@ from pathlib import Path
 
 import duckdb
 import pytest
-from mcp.server.fastmcp.exceptions import ToolError
+from mcp.server.mcpserver.exceptions import ToolError
 
 from spicy_regs import mcp_server
 from tests.test_mcp_server import _tool_data

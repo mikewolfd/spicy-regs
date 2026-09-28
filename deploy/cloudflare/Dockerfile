@@ -2,11 +2,11 @@
 # Containers; also runs anywhere that serves an $PORT HTTP container).
 #
 # Runs the CANONICAL server (src/spicy_regs/mcp_server.py:build_app) directly —
-# not the Vercel copy. Importing mcp_server pulls only duckdb + mcp (verified),
-# never the ETL deps (boto3/polars/pyarrow), so we install the package with
-# --no-deps and add just the runtime trio, keeping the image small and cold
-# starts fast. This is why the container can be the single source of truth once
-# Vercel is retired.
+# not the Vercel copy. Importing mcp_server pulls only the runtime packages
+# below, never the ETL deps (boto3/polars/pyarrow), so we install the package
+# with --no-deps and add just those, keeping the image small and cold starts
+# fast. This is why the container can be the single source of truth once Vercel
+# is retired.
 FROM python:3.12-slim
 
 # duckdb needs no system libs; keep the image minimal. Unbuffered stdout so the
@@ -17,13 +17,14 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
-# Runtime deps only, pinned like pyproject.toml (the <2 mcp bound is
-# load-bearing — mcp 2.0 removed mcp.server.fastmcp). uvicorn serves the ASGI app.
-# loguru: the publication index reader the server imports to resolve fork
+# Runtime deps only. duckdb and mcp are pinned to uv.lock's versions: the
+# server's HTTP retry schedule was measured on duckdb 1.5.5, and mcp 2.x changes
+# how tool errors reach clients between minor releases. uvicorn serves the ASGI
+# app. loguru: the publication index reader the server imports to resolve fork
 # generations logs through it; without it every tool call failed (found by the
-# 2026-09-25 local smoke before the first fork deploy). The duckdb floor is the
-# package's own.
-RUN pip install "mcp>=1.27.1,<2" "duckdb>=1.5.3,<2" "uvicorn[standard]>=0.30" "loguru>=0.7"
+# 2026-09-25 local smoke before the first fork deploy). httpx: that reader's
+# client, which mcp 2 (on httpx2) no longer brings.
+RUN pip install "mcp==2.2.0" "duckdb==1.5.5" "uvicorn[standard]>=0.31.1" "loguru>=0.7" "httpx>=0.28.1,<1"
 
 # Install the package code without its declared (ETL) dependencies. mcp_server
 # imports only the local _icon module plus mcp/duckdb, so this is sufficient and
