@@ -34,30 +34,34 @@ def install_comment_references(
             f"{literal(json.dumps(pin, sort_keys=True))} AS source_publication_json, "
             f"'{RULE_VERSION}' AS rule_version, 'comments' AS source_table"
         )
-        # No cross join between references: each field is its own observation.
-        selections = []
-        for field, kind in (("commentOnDocumentId", "regulations_document"),
-                            ("commentOn", "regulations_object"),
-                            ("originalDocumentId", "regulations_original_document")):
-            raw = "TRY_CAST(comment_reference_values_json AS JSON)"
-            value = f"json_extract({raw}, '$.{field}')"
-            scalar = f"json_extract_string({raw}, '$.{field}')"
-            selections.append(f"""SELECT comment_id, docket_id, comment_reference_values_json AS raw_field_value,
-                '{field}' AS source_field, '/data/attributes/{field}' AS source_pointer,
+        # One scan of comments joined to the three field names: each field stays
+        # its own observation (no cross join between references), and a filter
+        # on source_field prunes the field list, not the table.
+        fields = ", ".join(f"('{field}', '{kind}')" for field, kind in (
+            ("commentOnDocumentId", "regulations_document"),
+            ("commentOn", "regulations_object"),
+            ("originalDocumentId", "regulations_original_document"),
+        ))
+        value = "json_extract(c.raw, '$.' || f.source_field)"
+        scalar = "json_extract_string(c.raw, '$.' || f.source_field)"
+        connection.execute(f"""CREATE OR REPLACE VIEW comment_reference_field_states AS
+            SELECT c.comment_id, c.docket_id, c.comment_reference_values_json AS raw_field_value,
+                f.source_field, '/data/attributes/' || f.source_field AS source_pointer,
                 0::BIGINT AS source_ordinal, CAST({value} AS VARCHAR) AS raw_value_json,
-                '{kind}' AS target_kind,
+                f.target_kind,
                 CASE WHEN json_type({value}) = 'VARCHAR' AND trim({scalar}) <> ''
                      THEN {scalar} ELSE NULL END AS target_key,
-                CASE WHEN comment_reference_values_json IS NULL THEN 'unread'
-                     WHEN {raw} IS NULL THEN 'malformed_json'
-                     WHEN json_type({raw}) <> 'OBJECT' THEN 'unsupported_shape'
-                     WHEN NOT json_exists({raw}, '$.{field}') THEN 'absent'
+                CASE WHEN c.comment_reference_values_json IS NULL THEN 'unread'
+                     WHEN c.raw IS NULL THEN 'malformed_json'
+                     WHEN json_type(c.raw) <> 'OBJECT' THEN 'unsupported_shape'
+                     WHEN NOT json_exists(c.raw, '$.' || f.source_field) THEN 'absent'
                      WHEN json_type({value}) = 'NULL' THEN 'null'
                      WHEN json_type({value}) <> 'VARCHAR' THEN 'unsupported_shape'
                      WHEN trim({scalar}) = '' THEN 'empty_string'
                      ELSE 'valid' END AS parsing_status, {provenance}
-                FROM comments""")
-        connection.execute("CREATE OR REPLACE VIEW comment_reference_field_states AS " + " UNION ALL ".join(selections))
+            FROM (SELECT comment_id, docket_id, comment_reference_values_json,
+                         TRY_CAST(comment_reference_values_json AS JSON) AS raw FROM comments) c
+            CROSS JOIN (VALUES {fields}) AS f(source_field, target_kind)""")
         connection.execute("""CREATE OR REPLACE VIEW comment_native_references AS
             SELECT *, CASE WHEN parsing_status = 'valid' AND target_kind = 'regulations_document'
                            THEN 'not_checked' ELSE 'unsupported' END AS target_status
