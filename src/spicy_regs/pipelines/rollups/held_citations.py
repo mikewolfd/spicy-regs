@@ -10,6 +10,7 @@ import duckdb
 from dotenv import load_dotenv
 
 from spicy_regs.citation_sources import TEXT_SOURCES
+from spicy_regs.duckdb_settings import load_public_http
 from spicy_regs.pipelines.rollups.base import RollupPipeline
 from spicy_regs.sources import publication, r2
 from spicy_regs.transforms.held_citations import build_held_citations, parse_selections
@@ -68,7 +69,7 @@ class HeldCitationsRollup(RollupPipeline):
             self.source_evidence.event("held-citation-selection", sha256=self.selection_sha256,
                                        sources=self.input_pins, selected_fields=len(self.selections))
         with duckdb.connect(config={"memory_limit": "1GB", "threads": 2}) as con:
-            con.execute("LOAD httpfs")
+            load_public_http(con)
             for table, url in self.source_members.items():
                 escaped = url.replace("'", "''")
                 con.execute(f'CREATE VIEW "{table}" AS SELECT * FROM read_parquet(\'{escaped}\')')
