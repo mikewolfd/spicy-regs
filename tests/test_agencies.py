@@ -34,7 +34,8 @@ HCFA_ID = 559  # Health Care Finance Administration, renamed CMS 2001-06-29 (par
 TREASURY_ID = 497  # Treasury Department
 IIO_ID = 259  # International Investment Office, renamed Investment Security Office (603) 2008-11-21
 FISCAL_SERVICE_ID = 196  # Bureau of the Fiscal Service, Treasury's child no code selects
-POSTAL_RATE_ID = 564  # Postal Rate Commission, redesignated Postal Regulatory Commission (409) 2006-12-20
+POSTAL_RATE_ID = 564  # Postal Rate Commission, redesignated Postal Regulatory Commission (409) 2006-12-20; top-level
+POSTAL_SERVICE_ID = 410  # Postal Service, which USPS selects
 JUSTICE_ID = 268  # Justice Department
 INS_ID = 232  # Immigration and Naturalization Service, split to USCIS, CBP and ICE 2003-03-01
 USIA_ID = 510  # United States Information Agency, split to State and the BBG 1999-10-01
@@ -56,9 +57,14 @@ REGISTRY_TABLES = {
 FR = "urn:ref:federal-register-agency:"
 
 
-def event(original: int, result: int) -> dict:
-    """One synthetic view event row, (event, result), in the view's shape."""
-    return {"originals": [f"{FR}{original}"], "result": f"{FR}{result}"}
+def event(original: int, result: int, parent: int | None = None) -> dict:
+    """One synthetic view event row, (event, result), in the view's shape; ``parent`` is the original's roster parent."""
+    return {
+        "event_id": f"event:fr{original}",
+        "originals": [f"{FR}{original}"],
+        "original_parents": [None if parent is None else f"{FR}{parent}"],
+        "result": f"{FR}{result}",
+    }
 
 
 def test_fr_agency_code_resolves_epa():
@@ -209,35 +215,60 @@ def test_a_bridge_subject_keeps_its_sealed_parent_whatever_its_entry_says():
     assert agencies.agency_code_for_fr_agencies(hhs_row) is None
 
 
-def test_an_originals_chain_from_its_entry_reaches_its_grandparents(monkeypatch):
-    # 900033 was renamed 900032. Its entry names 900031 as parent, whose stated parent is 900030.
+def test_an_original_takes_the_roster_parent_its_event_states():
+    # The view states HHS as HCFA's parent and Commerce as the Export Administration Bureau's:
+    # entries naming no parent_id still put each original under its department.
+    assert agencies._projection().ancestors_by_org[f"{FR}{HCFA_ID}"] == {f"{FR}{HHS_ID}"}
+    assert agencies.agency_code_for_fr_agencies([{"id": HHS_ID}, {"id": HCFA_ID}]) == "CMS"
+    assert agencies.agency_code_for_fr_agencies([{"id": COMMERCE_ID}, {"id": EXPORT_ADMIN_ID}]) == "BIS"
+
+
+def test_an_originals_stated_parent_reaches_its_grandparents(monkeypatch):
+    # 900033 was renamed 900032; its event states 900031 as its parent, whose stated parent is 900030.
     rows = [
         {"org": f"{FR}900030", "source_value": "GRAND", "parent_org": None},
         {"org": f"{FR}900031", "source_value": "MIDDLE", "parent_org": f"{FR}900030"},
         {"org": f"{FR}900032", "source_value": "SUCCESSOR", "parent_org": None},
     ]
-    projection = agencies._build_projection(rows, (), [event(900033, 900032)])
+    projection = agencies._build_projection(rows, (), [event(900033, 900032, parent=900031)])
     monkeypatch.setattr(agencies, "_projection", lambda: projection)
-    entries = [{"id": 900030}, {"id": 900033, "parent_id": 900031}]
-    assert agencies.agency_code_for_fr_agencies(entries) == "SUCCESSOR"
+    assert agencies.agency_code_for_fr_agencies([{"id": 900030}, {"id": 900033}]) == "SUCCESSOR"
 
 
-def test_an_original_without_a_parent_id_stands_apart_from_its_department(monkeypatch):
-    # With no parent_id, HCFA (CMS) and HHS are two unrelated coded agencies: a joint document.
-    entries = [{"id": HHS_ID, "name": "Health and Human Services Department"}, {"id": HCFA_ID}]
-    assert agencies.agency_code_for_fr_agencies(entries) is None
-    # The same answer as REF-038 alone, where HCFA was an unresolved agency with no parent_id.
-    ref038 = agencies._build_projection(agencies.projection_rows(), (), ())
-    monkeypatch.setattr(agencies, "_projection", lambda: ref038)
+def test_an_original_with_a_null_parent_is_top_level():
+    # The Postal Rate Commission (PRC) had no parent; a row naming the Postal Service as its
+    # parent names two top-level agencies, a joint document.
+    assert agencies._projection().ancestors_by_org[f"{FR}{POSTAL_RATE_ID}"] == frozenset()
+    entries = [{"id": POSTAL_SERVICE_ID}, {"id": POSTAL_RATE_ID, "parent_id": POSTAL_SERVICE_ID}]
     assert agencies.agency_code_for_fr_agencies(entries) is None
 
 
-def test_an_originals_differing_parent_id_is_taken_as_the_row_states():
-    # A row naming Commerce as HCFA's parent puts HCFA under Commerce, and so away from HHS.
+def test_an_originals_entry_parent_id_never_moves_it():
+    # A row naming Commerce as HCFA's parent leaves HCFA under HHS, where the view states it.
+    assert agencies.agency_code_for_fr_agencies([{"id": HHS_ID}, {"id": HCFA_ID, "parent_id": COMMERCE_ID}]) == "CMS"
     assert (
-        agencies.agency_code_for_fr_agencies([{"id": COMMERCE_ID}, {"id": HCFA_ID, "parent_id": COMMERCE_ID}]) == "CMS"
+        agencies.agency_code_for_fr_agencies([{"id": COMMERCE_ID}, {"id": HCFA_ID, "parent_id": COMMERCE_ID}]) is None
     )
-    assert agencies.agency_code_for_fr_agencies([{"id": HHS_ID}, {"id": HCFA_ID, "parent_id": COMMERCE_ID}]) is None
+
+
+@pytest.mark.parametrize(
+    "stated, events",
+    [
+        pytest.param(900002, [event(900001, 900009, parent=900003)], id="REF-038 and an event disagree"),
+        pytest.param(900002, [event(900001, 900009)], id="an event makes REF-038's child top-level"),
+        pytest.param(None, [event(900001, 900009, parent=900003)], id="an event parents REF-038's top-level org"),
+        pytest.param(None, [event(900005, 900009, parent=900003), event(900005, 900008)], id="two event rows disagree"),
+    ],
+)
+def test_an_event_stating_another_parent_is_refused(stated, events):
+    rows = [{"org": f"{FR}900001", "source_value": "ONE", "parent_org": None if stated is None else f"{FR}{stated}"}]
+    with pytest.raises(ValueError, match="another parent"):
+        agencies._build_projection(rows, (), events)
+
+
+def test_original_parents_not_aligned_with_originals_are_refused():
+    with pytest.raises(ValueError):
+        agencies._build_projection((), (), [{**event(900001, 900002), "original_parents": []}])
 
 
 def test_a_rename_reroutes_to_the_successors_code():
