@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-from spicy_regs.transforms.build_gao_reports import COLUMNS
+from spicy_regs.transforms.build_gao_reports import COLUMNS, SOURCE_REPAIR
 
 if TYPE_CHECKING:
     import httpx
@@ -75,6 +75,8 @@ def append_missing_target(prior: Path, output: Path, index: Any) -> dict:
     row = dict.fromkeys(table.column_names)
     row.update(report_id=index.product_id,title=index.title,url=index.product_url,
                published_date=getattr(index,'published_date',None))
+    if 'source' in row:
+        row['source']=SOURCE_REPAIR
     # An online report index supplies no day; a qualified product page may.
     # Neither supplies a report type, abstract or structured tags here.
     # Unknown remains NULL, rather than an invented date or known-empty list.

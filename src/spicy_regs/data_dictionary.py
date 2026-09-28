@@ -469,8 +469,9 @@ DERIVED_SCHEMAS: dict[str, list[tuple[str, str]]] = {
         ("first_comment_date", "VARCHAR"),
         ("last_comment_date", "VARCHAR"),
     ],
-    # Ingested from the GAO reports RSS feed (build_gao_reports); an append-only
-    # accumulator of recently published products. All columns are stored as
+    # Ingested from the GAO reports RSS feed (build_gao_reports), explicit
+    # repairs and GovInfo's closed GAOREPORTS collection; an append-only
+    # accumulator, `source` naming each row's route. All columns are stored as
     # VARCHAR. Keyed by report_id.
     "gao_reports": [
         ("report_id", "VARCHAR"),
@@ -481,6 +482,7 @@ DERIVED_SCHEMAS: dict[str, list[tuple[str, str]]] = {
         ("agencies_json", "VARCHAR"),
         ("topics_json", "VARCHAR"),
         ("url", "VARCHAR"),
+        ("source", "VARCHAR"),
     ],
     # Ingested from the Congress.gov v3 API (build_crs_reports); list-level
     # fields only, all stored as VARCHAR. Keyed by report_id.

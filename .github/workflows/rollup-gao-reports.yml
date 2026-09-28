@@ -10,6 +10,11 @@ on:
         required: false
         default: false
         type: boolean
+      govinfo_history:
+        description: "Also add GovInfo's closed GAOREPORTS listing (1989-2008 reports and testimony); one run is enough"
+        required: false
+        default: false
+        type: boolean
 jobs:
   run:
     uses: ./.github/workflows/_rollup.yml
@@ -17,3 +22,4 @@ jobs:
     with:
       command: run-rollup-gao-reports
       skip_upload: ${{ github.event_name == 'workflow_dispatch' && inputs.skip_upload || false }}
+      gao_govinfo_history: ${{ github.event_name == 'workflow_dispatch' && inputs.govinfo_history || false }}

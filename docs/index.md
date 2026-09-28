@@ -145,9 +145,9 @@ of `dockets`; they join to the corpus (and to each other) on a few shared keys:
 > across runs), `lobbying_filings` covers 2024-onward, `usaspending_recipients`
 > is the top ~100K recipients by award amount, `org_committee_links` is bounded
 > by the ~0.08% of comments that carry an `organization` value at all, and
-> `gao_reports` tracks GAO's
-> recent-items RSS window (it grows as the daily job runs). Each table page
-> notes its own scope.
+> `gao_reports` holds GovInfo's closed 1989–2008 GAO archive plus GAO's
+> recent-items RSS window (it grows as the daily job runs), with a gap between.
+> Each table page notes its own scope.
 
 ## How to query it
 
