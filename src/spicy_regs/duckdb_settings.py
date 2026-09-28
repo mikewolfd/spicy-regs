@@ -18,15 +18,21 @@ def memory_limit(raw: str, source: str) -> str:
 
 
 #: Patient retries for batch reads of the public r2.dev endpoint, which answers 429 under load
-#: (org-links failed the 2026-09-27 refresh on one). Up to about eight minutes of backoff per request,
-#: so interactive readers such as the MCP server keep DuckDB's defaults.
+#: (org-links failed the 2026-09-27 refresh on one). DuckDB 1.5.5 retries a 429 on HEAD and GET alike:
+#: the first retry is immediate, then it waits ``wait * backoff**(k - 2)`` before retry k, so this
+#: allows about four minutes (254 s) per request. DuckDB's defaults (3, 100 ms, 4) give up in 0.5 s.
 PUBLIC_HTTP_RETRIES = {"http_retries": 8, "http_retry_wait_ms": 2000, "http_retry_backoff": 2}
 
+#: Retries for the MCP server, whose callers wait on the reply: at most 7 s of backoff per request
+#: (0 + 1 + 2 + 4), enough for the seconds-long throttle windows r2.dev showed on 2026-09-28. Longer
+#: retries would only lengthen each stall against a throttled endpoint.
+INTERACTIVE_HTTP_RETRIES = {"http_retries": 4, "http_retry_wait_ms": 1000, "http_retry_backoff": 2}
 
-def load_public_http(con) -> None:
-    """Load httpfs on ``con`` with :data:`PUBLIC_HTTP_RETRIES`."""
+
+def load_public_http(con, retries: dict[str, int] = PUBLIC_HTTP_RETRIES) -> None:
+    """Load httpfs on ``con`` with ``retries``; set them before any ``lock_configuration``."""
     con.execute("INSTALL httpfs; LOAD httpfs")
-    for name, value in PUBLIC_HTTP_RETRIES.items():
+    for name, value in retries.items():
         con.execute(f"SET {name} = ?", [value])
 
 

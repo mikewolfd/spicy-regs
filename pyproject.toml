@@ -14,7 +14,7 @@ dependencies = [
     "pandas",
     "cyclopts",
     "loguru",
-    "mcp>=1.10.0,<2", # FastMCP imports use the 1.x API
+    "mcp>=2.2,<3", # MCPServer (mcp.server.mcpserver) runs sync tools on worker threads
     "pyyaml",  # data dictionary descriptions (src/spicy_regs/data_dictionary.py)
 ]
 

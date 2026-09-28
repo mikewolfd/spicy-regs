@@ -41,18 +41,19 @@ def test_local_batch_exposes_selected_members_and_verified_pins(tmp_path, monkey
     con, server = serve(monkeypatch, directory)
     try:
         sources = _tool_data(server, "list_sources", {})
-        assert sources["tables"] == ["a", "dockets"]
-        assert set(sources["publication"]) == {"a", "dockets"}
+        assert [entry["table"] for entry in sources["tables"]] == ["a", "dockets"]
         assert sources["selected_directory"] == str(batch)
-        pin = sources["publication"]["a"]
+        pin = _tool_data(server, "describe_table", {"table": "a"})["publication"]
         assert pin["status"] == "managed_download"
         assert pin["artifact_digest"] == index["families"]["pair"]["artifactDigest"]
         assert "rehashed" in pin["verification"]
-        assert sources["publication"]["dockets"] == {"status": "local_unversioned"}
+        assert _tool_data(server, "describe_table", {"table": "dockets"})["publication"] == {
+            "status": "local_unversioned", "coverage": mcp_server._table_metadata()["dockets"]["kind"]
+        }
         rows = _tool_data(server, "query_sql", {"sql": "SELECT id FROM a"})
         assert rows["rows"] == [{"id": "old-a"}]
-        assert rows["connection_publication"]["a"] == pin
-        assert _tool_data(server, "describe_table", {"table": "a"})["publication"] == pin
+        # A query reports the version of each table it names, and only those.
+        assert rows["publication"] == {"a": pin}
     finally:
         con.close()
 

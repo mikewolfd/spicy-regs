@@ -5,7 +5,7 @@ from pathlib import Path
 import shutil
 
 import pytest
-from mcp.server.fastmcp.exceptions import ToolError
+from mcp.server.mcpserver.exceptions import ToolError
 from spicy_regs import mcp_server, vocabulary_mapping
 from tests.test_mcp_server import _tool_data
 
@@ -14,8 +14,8 @@ def test_real_lookup_namespaces_and_temporal_abstention(monkeypatch):
     monkeypatch.setattr(mcp_server, "_get_connection", lambda: pytest.fail("Lookup opened source tables"))
     server = mcp_server.build_server()
     tool = next(t for t in asyncio.run(server.list_tools()) if t.name == "lookup_agency")
-    assert set(tool.inputSchema["required"]) == {"namespace", "identifier"}
-    assert tool.inputSchema["properties"]["identifier"]["maxLength"] == 256
+    assert set(tool.input_schema["required"]) == {"namespace", "identifier"}
+    assert tool.input_schema["properties"]["identifier"]["maxLength"] == 256
 
     def lookup(namespace, identifier, **kw):
         return _tool_data(server, "lookup_agency", {"namespace": namespace, "identifier": identifier, **kw})

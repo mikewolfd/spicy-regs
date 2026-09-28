@@ -349,18 +349,20 @@ relationship. Older published document schemas report these views as unsupported
 In newly shaped rows, NULL means unread; `[]` means a validated complete empty
 response. Restricted attachment records remain visible even without a file URL.
 
-`list_sources` returns queryable tables in `tables`, all supported names in
-`declared_tables`, and missing views in `unavailable_tables`. Availability
-reflects the current cached connection, which normally refreshes after five
-minutes; it does not certify population completeness or data freshness.
-`describe_table` returns the actual columns alongside dictionary field meanings,
-declared row identifiers, coverage and data-quality notes. `declared_columns`
-and `schema_differences` show when the loaded artifact differs from the supported
-schema. Unavailable tables still return their dictionary metadata with
-`available: false` and an empty actual `columns` list. Both tools return
-`qualification`: the live pin, the output ledger's audited pin, date and
-disposition word, and whether the two pins match, as separate fields;
-`describe_table` adds the ledger row's own statement. It is reported only when
+`list_sources` returns each queryable table in `tables` with its label and
+coverage kind (`true_range`, `window`, `sampled` or `derived`), the relationship
+views grouped under their shared summary, and declared names without a loaded
+view in `unavailable_tables`. Availability reflects the current cached
+connection, which normally refreshes after five minutes; it does not certify
+population completeness or data freshness. `describe_table` returns the loaded
+columns, each with its dictionary meaning, plus declared row identifiers,
+coverage and data-quality notes, joins and the live `publication` pin.
+`schema_differences` shows when the loaded artifact differs from the supported
+schema. Unavailable tables still return their dictionary metadata, declared
+columns included, with `available: false`. `query_sql` returns the `publication`
+pin of each table the query names. `describe_table` returns `qualification`: the
+live pin, the output ledger's audited pin, date and disposition word, whether
+the two pins match, and the ledger row's own statement, as separate fields. It is reported only when
 the server reads the publisher the ledger names, and is `unknown_for_publisher`
 otherwise. A disposition applies to its own pin and stated scope; it does not
 upgrade relationships that `data_quality` calls heuristic. Read the dated coverage

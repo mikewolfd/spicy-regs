@@ -19,25 +19,26 @@ def test_discovery_exposes_derived_dependencies_and_unsupported_old_schema(monke
         monkeypatch.setattr(mcp_server, "_get_connection", lambda: con)
         server = mcp_server.build_server()
         discovered = _tool_data(server, "list_sources", {})
-        member_views = {
-            name: value for name, value in discovered["relationship_views"].items()
-            if value["dependencies"] == ["members"]
-        }
-        assert member_views
-        available = [name for name, value in member_views.items() if value["status"] == "available"]
+        registry = mcp_server._connection_relationships(con.cursor())
+        member_views = [name for name, value in registry.items() if value["dependencies"] == ["members"]]
+        available = [name for name in member_views if registry[name]["status"] == "available"]
         assert available
         name = next(n for n in available if n.endswith("_occurrences"))
-        assert name in discovered["tables"]
-        assert discovered["publication"][name]["status"] == "derived_view"
-        assert discovered["publication"][name]["input_publications"]["members"]["status"].endswith("unversioned")
+        # A family's views share one summary and are listed together, once.
+        [group] = [group for group in discovered["relationship_views"] if name in group["views"]]
+        assert set(group["views"]) == set(available)
+        assert group["summary"] == registry[name]["metadata"]["summary"]
+        assert name not in [entry["table"] for entry in discovered["tables"]]
         described = _tool_data(server, "describe_table", {"table": name})
+        assert described["relationship"]["dependencies"] == ["members"]
+        assert described["publication"]["status"] == "derived_view"
+        assert described["publication"]["input_publications"]["members"]["status"].endswith("unversioned")
         assert described["available"] and described["metadata"]["rule_version"]
         # Columns are described on request, not at connection build.
-        assert "columns" not in mcp_server._connection_relationships(con.cursor())[name]["metadata"]
+        assert "columns" not in registry[name]["metadata"]
         assert described["schema_matches_declared"] is True
-        ordinal = next(c for c in described["declared_columns"] if c["column_name"] == "source_ordinal")
+        ordinal = next(c for c in described["columns"] if c["column_name"] == "source_ordinal")
         assert ordinal["column_type"] == "BIGINT" and "Zero-based position" in ordinal["description"]
-        assert [c["column_name"] for c in described["columns"]] == [c["column_name"] for c in described["declared_columns"]]
         result = _tool_data(server, "query_sql", {"sql": f'SELECT * FROM "{name}" ORDER BY source_ordinal'})
         assert [r["source_ordinal"] for r in result["rows"]] == [0, 1]
         assert all(r["target_status"] == "not_checked" for r in result["rows"])
