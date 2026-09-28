@@ -468,8 +468,6 @@ def merge_table(
     row instead of NULL: a split table's partition column, which every row of
     one partition holds by construction (:func:`merge_partitioned_table`).
     """
-    import duckdb
-
     out_file = output_dir / remote_key
     prior_file = prior_scratch_path(output_dir, name)
     new_file = output_dir / f"_{name}_new.parquet"
@@ -495,13 +493,7 @@ def merge_table(
     logger.info("{}: {:,} fresh rows this run", name, len(row_list))
 
     # 3. Merge prior + new, dedup on identity preferring the new row.
-    spill_dir = output_dir / ".duckdb_tmp"
-    spill_dir.mkdir(exist_ok=True)
-    con = duckdb.connect()
-    con.execute("SET memory_limit='4GB'")
-    con.execute("SET preserve_insertion_order=false")
-    con.execute("SET threads=2")
-    con.execute(f"SET temp_directory='{spill_dir}'")
+    con = _duckdb_session(output_dir)
 
     cols = ", ".join(columns)
     key_cols = ", ".join(identity)
@@ -702,13 +694,19 @@ STATUTES_JOIN_KEY = "bill_id"
 
 
 def _duckdb_session(output_dir: Path):
-    """A connection with the bounds every merge here runs under: 4 GB, two threads, spilling beside the outputs."""
+    """A connection with the bounds every merge here runs under: 12 GB, two threads, spilling beside the outputs.
+
+    The dedup window reads the whole prior, which grows with every backfilled Congress: at 4 GB the bill
+    family's section_diff_items merge (1.15M prior rows plus the 108th-112th backfill's first 34,723) ran out
+    of memory (run 36372044645), as lobbying's prior merge did before 43c1173. Hosted runners have 16 GB;
+    this leaves room for Python and the OS, and DuckDB spills the rest to ``temp_directory``.
+    """
     import duckdb
 
     spill_dir = output_dir / ".duckdb_tmp"
     spill_dir.mkdir(exist_ok=True)
     con = duckdb.connect()
-    con.execute("SET memory_limit='4GB'")
+    con.execute("SET memory_limit='12GB'")
     con.execute("SET preserve_insertion_order=false")
     con.execute("SET threads=2")
     con.execute(f"SET temp_directory='{spill_dir}'")
