@@ -1,4 +1,4 @@
-"""Rollup pipeline: gao_reports.parquet (GAO reports RSS ingest, plus GovInfo's GAO history on request).
+"""Rollup pipeline: gao_reports.parquet (GAO reports RSS ingest, plus GovInfo's and GAO's own listings on request).
 
 Unlike the derived rollups, this one *ingests* an external source rather than
 reading base tables from R2, so ``inputs`` is empty — the fetch + append-only
@@ -6,9 +6,11 @@ merge with the prior published table happens inside ``build_gao_reports``. The
 base class still handles the shrink-guarded R2 upload of the single output.
 ``GAO_GOVINFO_HISTORY=true`` adds the one walk of GovInfo's closed GAOREPORTS
 listing to a run; ``GAO_GOVINFO_MODS=true`` reads the next batch of those rows'
-MODS.
+MODS. ``GAO_LISTING_RUN=<directory>`` adds a finished SpicyDocs walk of GAO's Month
+in Review and Annual Index, made outside the rollup and read from disk.
 """
 
+import os
 from pathlib import Path
 from typing import ClassVar
 
@@ -31,6 +33,7 @@ class GaoReportsRollup(RollupPipeline):
             evidence=self.source_evidence,
             govinfo_history=flag_env("GAO_GOVINFO_HISTORY"),
             govinfo_mods=flag_env("GAO_GOVINFO_MODS"),
+            listing_run=Path(listing) if (listing := os.environ.get("GAO_LISTING_RUN", "").strip()) else None,
         )
 
 

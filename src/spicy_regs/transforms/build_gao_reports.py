@@ -1,12 +1,13 @@
-"""Transform: build ``gao_reports.parquet`` from the GAO reports RSS feed, and GovInfo's GAO history on request.
+"""Transform: build ``gao_reports.parquet`` from the GAO reports RSS feed, plus GovInfo's and GAO's own listings on request.
 
 Produces an 11-column all-VARCHAR schema keyed on ``report_id`` (e.g.
 ``gao-26-107974``) — the Government Accountability Office oversight layer over
 the rulemakings this dataset tracks. ``source`` names the route that supplied
 each row: ``gao_rss`` (this feed), ``gao_repair`` (an explicit repair,
 :mod:`spicy_regs.transforms.build_gao_target`), ``upstream_copy`` (the one-time
-copy of upstream's rows the fork never captured) or ``govinfo`` (GovInfo's closed
-GAOREPORTS collection, :mod:`spicy_regs.sources.gao_govinfo`).
+copy of upstream's rows the fork never captured), ``govinfo`` (GovInfo's closed
+GAOREPORTS collection, :mod:`spicy_regs.sources.gao_govinfo`) or ``gao_listing``
+(GAO's own Month in Review and Annual Index, :mod:`spicy_regs.sources.gao_listing`).
 
 **Incremental accumulator.** The GAO RSS feed is a recent-items window, not the
 full archive, and GAO's bulk/search surfaces are bot-blocked (see
@@ -31,6 +32,12 @@ later feed runs carry it forward in the prior.
 and ``report_number`` from it (:mod:`spicy_regs.sources.gao_govinfo_mods`).
 Each published run is durable progress, so a failed or capped run resumes at
 the next unread row. A package GovInfo serves no MODS for stays unread.
+
+**GAO's listing.** ``listing_run`` names a finished SpicyDocs walk of GAO's Month
+in Review and Annual Index pages; the walk itself runs outside the rollup. Its
+rows follow the GovInfo rule, one helper for both: they fill only product ids no
+row holds yet, this run's feed and GovInfo rows included, so a later walk adds
+new products and leaves held rows, a MODS read among them, alone.
 """
 
 from __future__ import annotations
@@ -49,7 +56,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 from loguru import logger
 
-from spicy_regs.sources import gao_govinfo, r2
+from spicy_regs.sources import gao_govinfo, gao_listing, r2
 from spicy_regs.sources.gao_reports import GaoReportsReader
 from spicy_regs.transforms.table_merge import merge_local_prior
 
@@ -128,6 +135,16 @@ def _shape(item: dict) -> dict:
     }
 
 
+def _fill_only(rows: list[dict], counts: Counter[str], *, prior_file: Path | None, held: set[str]) -> list[dict]:
+    """``rows`` for ids no row holds yet, this run's (``held``) or the prior's; counts the rest as ``already_held``."""
+    held = set(held)
+    if prior_file is not None:
+        held |= set(pq.read_table(prior_file, columns=["report_id"])["report_id"].to_pylist())
+    added = [row for row in rows if row["report_id"] not in held]
+    counts["already_held"] = len(rows) - len(added)
+    return added
+
+
 def _govinfo_additions(
     prior_file: Path | None,
     feed_ids: set[str],
@@ -136,15 +153,25 @@ def _govinfo_additions(
 ) -> list[dict]:
     """GovInfo rows for ids no row holds yet."""
     rows, counts = gao_govinfo.read_history(reader)
-    held = set(feed_ids)
-    if prior_file is not None:
-        held |= set(pq.read_table(prior_file, columns=["report_id"])["report_id"].to_pylist())
-    added = [row for row in rows if row["report_id"] not in held]
-    counts["already_held"] = len(rows) - len(added)
+    added = _fill_only(rows, counts, prior_file=prior_file, held=feed_ids)
     logger.info("GAO reports: GovInfo history {}", dict(counts))
     if evidence:
         evidence.event("govinfo-history", collection=gao_govinfo.COLLECTION, listed_since=gao_govinfo.LISTED_SINCE,
                        page_size=gao_govinfo.PAGE_SIZE, max_pages=gao_govinfo.MAX_PAGES, **counts)
+    return added
+
+
+def _listing_additions(
+    prior_file: Path | None, held: set[str], directory: Path, evidence: CaptureEvidence | None
+) -> list[dict]:
+    """GAO listing rows for ids no row holds yet; each page read is retained as evidence."""
+    rows, counts, run = gao_listing.read_listing(directory, evidence)
+    added = _fill_only(rows, counts, prior_file=prior_file, held=held)
+    logger.info("GAO reports: GAO listing {} (unfinished scopes left for a later run: {})", dict(counts),
+                list(run.incomplete_scopes))
+    if evidence:
+        evidence.event("gao-listing", scopes_read=list(run.complete_scopes),
+                       scopes_unfinished=list(run.incomplete_scopes), **counts)
     return added
 
 
@@ -192,12 +219,14 @@ def build_gao_reports(
     govinfo: gao_govinfo.PackageDiscoverySource | None = None,
     govinfo_mods: bool = False,
     mods: Any = None,
+    listing_run: Path | None = None,
 ) -> Path:
     """Build ``gao_reports.parquet`` (append-only merge with the prior table).
 
     ``govinfo_history`` also walks GovInfo's GAOREPORTS listing, through
     ``govinfo`` when a caller supplies the reader; ``govinfo_mods`` reads the
-    next batch of history rows' MODS, through ``mods`` when a caller supplies it.
+    next batch of history rows' MODS, through ``mods`` when a caller supplies it;
+    ``listing_run`` also reads a finished walk of GAO's own listing from that directory.
     """
     import duckdb
 
@@ -226,6 +255,9 @@ def build_gao_reports(
             mods = GaoModsAcquirer()
         with mods as acquirer:
             rows += _mods_reads(prior_file, acquirer, evidence)
+    if listing_run is not None:
+        held_now = {row["report_id"] for row in rows}
+        rows += _listing_additions(prior_file if have_prior else None, held_now, listing_run, evidence)
     new_file = output_dir / "_gao_new.parquet"
     table = pa.Table.from_pylist(rows, schema=_SCHEMA) if rows else _SCHEMA.empty_table()
     pq.write_table(table, new_file, compression="zstd")

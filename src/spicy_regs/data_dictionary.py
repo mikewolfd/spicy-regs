@@ -471,9 +471,9 @@ DERIVED_SCHEMAS: dict[str, list[tuple[str, str]]] = {
         ("last_comment_date", "VARCHAR"),
     ],
     # Ingested from the GAO reports RSS feed (build_gao_reports), explicit
-    # repairs and GovInfo's closed GAOREPORTS collection with its MODS; an
-    # append-only accumulator, `source` naming each row's route. All columns are stored as
-    # VARCHAR. Keyed by report_id.
+    # repairs, GovInfo's closed GAOREPORTS collection with its MODS, and GAO's
+    # own Month in Review listing; an append-only accumulator, `source` naming
+    # each row's route. All columns are stored as VARCHAR. Keyed by report_id.
     "gao_reports": [
         ("report_id", "VARCHAR"),
         ("title", "VARCHAR"),

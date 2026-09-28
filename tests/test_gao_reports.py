@@ -15,6 +15,8 @@ from spicy_regs.transforms.build_gao_reports import (
     build_gao_reports,
 )
 from tests.test_gao_govinfo import ListingReader, _package
+from tests.test_gao_listing import _product
+from tests.test_gao_listing import _run as _listing
 
 # ``spicy_regs.transforms`` re-exports the builder function under the module's name.
 module = import_module("spicy_regs.transforms.build_gao_reports")
@@ -74,8 +76,9 @@ def _repair_row(report_id: str) -> dict:
             "published_date": "2008-07-11", "url": f"https://www.gao.gov/products/{report_id}", "source": "gao_repair"}
 
 
-def _run(tmp_path, monkeypatch, *, prior=None, feed=(), history=None):
-    """One build over a local prior and a stubbed feed; ``history`` is the GovInfo listing, or None for no walk."""
+def _run(tmp_path, monkeypatch, *, prior=None, feed=(), history=None, listed=None, evidence=None):
+    """One build over a local prior and a stubbed feed; ``history`` is the GovInfo listing and ``listed`` GAO's own
+    listing's products, each None for no read."""
     if prior is not None:
         pq.write_table(prior, tmp_path / "_gao_prior.parquet")
 
@@ -87,10 +90,18 @@ def _run(tmp_path, monkeypatch, *, prior=None, feed=(), history=None):
             return iter({"title": f"Feed {i}", "link": f"https://www.gao.gov/products/{i}",
                          "description": "What GAO Found.", "pub_date": "Mon, 21 Sep 2026 10:00:00 -0400"} for i in feed)
 
+    def read_listing(directory, evidence):
+        assert directory == tmp_path / "walk"
+        run = _listing(*(listed or ()))
+        rows, counts = module.gao_listing.listing_rows(run)
+        return rows, counts, run
+
     monkeypatch.setattr(module, "GaoReportsReader", Feed)
     monkeypatch.setattr(module.r2, "download", lambda *_: False)
+    monkeypatch.setattr(module.gao_listing, "read_listing", read_listing)
     out = build_gao_reports(tmp_path, govinfo_history=history is not None,
-                            govinfo=ListingReader(history) if history is not None else None)
+                            govinfo=ListingReader(history) if history is not None else None,
+                            listing_run=tmp_path / "walk" if listed is not None else None, evidence=evidence)
     table = pq.read_table(out)
     assert table.column_names == list(COLUMNS)
     return {row["report_id"]: row for row in table.to_pylist()}
@@ -118,6 +129,58 @@ def test_a_feed_run_carries_govinfo_rows_and_a_history_rerun_leaves_held_rows_al
                                                   _package("GAOREPORTS-GAO-08-919R")])
     assert rerun["t-rced-94-121"] == first["t-rced-94-121"]
     assert set(rerun) == {"gao-26-1", "gao-26-2", "t-rced-94-121", "gao-08-919r"}
+
+
+def test_the_listing_fills_only_ids_no_row_holds_this_runs_govinfo_rows_included(tmp_path, monkeypatch):
+    prior = pa.Table.from_pylist([_feed_row("gao-26-1"), _repair_row("gao-17-317")], schema=module._SCHEMA)
+    listed = [_product("gao-26-1"), _product("gao-17-317"), _product("gao-26-2"), _product("gao-09-431t"),
+              _product("gao-08-919r")]
+    rows = _run(tmp_path, monkeypatch, prior=prior, feed=["gao-26-2"], listed=listed,
+                history=[_package("GAOREPORTS-GAO-08-919R")])
+    assert {k: v["source"] for k, v in rows.items()} == {
+        "gao-26-1": "gao_rss", "gao-17-317": "gao_repair", "gao-26-2": "gao_rss", "gao-08-919r": "govinfo",
+        "gao-09-431t": "gao_listing"}
+    assert rows["gao-17-317"]["title"] == "Repaired gao-17-317"
+    listed_row = rows["gao-09-431t"]
+    assert (listed_row["report_type"], listed_row["report_number"], listed_row["topics_json"]) == (
+        "Testimony", "GAO-09-431T", '["Education"]')
+
+
+def test_a_later_listing_read_adds_new_products_and_leaves_held_rows_alone(tmp_path, monkeypatch):
+    first = _run(tmp_path, monkeypatch, listed=[_product("gao-12-100")])
+    (tmp_path / "gao_reports.parquet").rename(tmp_path / "_gao_prior.parquet")
+    carried = _run(tmp_path, monkeypatch, feed=["gao-26-2"])
+    assert carried["gao-12-100"] == first["gao-12-100"]
+    (tmp_path / "gao_reports.parquet").rename(tmp_path / "_gao_prior.parquet")
+    again = _run(tmp_path, monkeypatch, listed=[_product("gao-12-100", title="Label: Retitled"), _product("gao-12-101")])
+    assert again["gao-12-100"] == first["gao-12-100"] and again["gao-12-101"]["source"] == "gao_listing"
+
+
+def test_a_listing_read_is_journaled_with_its_scopes_and_counts(tmp_path, monkeypatch):
+    class Evidence:
+        def __init__(self):
+            self.events = []
+
+        def event(self, name, **fields):
+            self.events.append((name, fields))
+
+    evidence = Evidence()
+    _run(tmp_path, monkeypatch, feed=["gao-26-1"], listed=[_product("gao-26-1"), _product("gao-12-100")],
+         evidence=evidence)
+    (name, fields), = evidence.events
+    assert name == "gao-listing" and fields["scopes_read"] == ["2026-08"] and fields["scopes_unfinished"] == []
+    assert fields["rows"] == 2 and fields["already_held"] == 1 and fields["complete_scopes"] == 1
+
+
+def test_the_rollup_reads_a_listing_walk_only_when_one_is_named(tmp_path, monkeypatch):
+    from spicy_regs.pipelines.rollups import gao_reports as rollup
+
+    calls = []
+    monkeypatch.setattr(rollup, "build_gao_reports", lambda *_, **kwargs: calls.append(kwargs["listing_run"]))
+    for value in ("", str(tmp_path / "walk")):
+        monkeypatch.setenv("GAO_LISTING_RUN", value)
+        rollup.GaoReportsRollup(output_dir=tmp_path).build(tmp_path)
+    assert calls == [None, tmp_path / "walk"]
 
 
 def test_the_rollup_walks_govinfo_only_when_its_flag_says_so(tmp_path, monkeypatch):
