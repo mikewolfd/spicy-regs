@@ -99,19 +99,43 @@ def test_retained_product_page_qualifies_exact_heading_and_explicit_day():
     meta=product_page_metadata(raw,PRODUCT)
     assert meta.title=='High-Risk Series: Progress on Many High-Risk Areas, While Substantial Efforts Needed on Others'
     assert meta.published_date=='2017-02-15'
+    assert meta.pdf_url=='https://files.gao.gov/assets/gao-17-317.pdf'
     with pytest.raises(ValueError,match='different product'):
         product_page_metadata(raw,'gao-17-999')
+
+
+def _page(body: bytes) -> bytes:
+    from spicy_docs.sources.gao.native import iter_gao_product_pages
+    from spicy_docs.sources.zyte import ZyteHttpResponse
+    url='https://www.gao.gov/products/'+PRODUCT
+    pages=list(iter_gao_product_pages(lambda _:ZyteHttpResponse(url,url,200,'text/html',body),
+                                     query_scope={'productIds':[PRODUCT]}))
+    return pages[0].response_bytes
+
+
+def test_a_page_without_exactly_one_full_report_link_is_refused():
+    """SpicyDocs 0.50.1 refuses such a page. The label ``gao-qualified-page-heading-publication-block/1`` stays:
+    a page it still reads yields the heading and day 0.50.0 read, and every retained page links one Full Report."""
+    from pathlib import Path
+    from zipfile import ZipFile
+    from spicy_docs.sources.gao.product_metadata import product_page_metadata
+    with ZipFile(Path(__file__).parent/'fixtures/gao_target/product-page.zip') as archive:
+        body=archive.read('product.html')
+    label=b'field__item">Full Report</div>'
+    assert body.count(label)==1
+    assert product_page_metadata(_page(body),PRODUCT).title
+    # None, then two: the Highlights PDF relabelled as a second Full Report.
+    for changed in (body.replace(label,b'field__item">Report</div>'),
+                    body.replace(b'field__item">Highlights Page</div>',label)):
+        assert changed!=body
+        with pytest.raises(ValueError,match='exactly one Full Report'):
+            product_page_metadata(_page(changed),PRODUCT)
 
 
 def test_month_only_heading_block_does_not_infer_day():
     from pathlib import Path
     from zipfile import ZipFile
-    from spicy_docs.sources.gao.native import iter_gao_product_pages
-    from spicy_docs.sources.zyte import ZyteHttpResponse
     from spicy_docs.sources.gao.product_metadata import product_page_metadata
     with ZipFile(Path(__file__).parent/'fixtures/gao_target/product-page.zip') as archive:
         body=archive.read('product.html').replace(b'Published: Feb 15, 2017.',b'Published: February 2017.')
-    url='https://www.gao.gov/products/'+PRODUCT
-    pages=list(iter_gao_product_pages(lambda _:ZyteHttpResponse(url,url,200,'text/html',body),
-                                     query_scope={'productIds':[PRODUCT]}))
-    assert product_page_metadata(pages[0].response_bytes,PRODUCT).published_date is None
+    assert product_page_metadata(_page(body),PRODUCT).published_date is None

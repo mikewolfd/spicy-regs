@@ -75,6 +75,7 @@ from spicy_docs.sources.congress.bulk_bills import BulkBillsAcquirer
 from spicy_docs.sources.govinfo.body_acquisition import GovInfoBodyAcquirer
 from spicy_docs.transport.credentials import CredentialRefusedError, scrub_credential
 
+from spicy_regs.generations import spicy_docs_code
 from spicy_regs.source_evidence import SourceEvidenceError
 from spicy_regs.sources import r2
 from spicy_regs.sources.congress_bills import (
@@ -165,6 +166,32 @@ ARCHIVE_IDENTITY: tuple[str, ...] = ("congress", "bill_type")
 # this output, even when the publisher archive stamp is unchanged.
 ARCHIVE_COMPLETION_KEY = "spicy_regs.bill_family.completed_archive_scopes.v3"
 ARCHIVE_COMPLETION_KEYS_READ = (ARCHIVE_COMPLETION_KEY,)
+
+#: Which reader read each bill's status, in the same metadata: ``{reader: {"119-hr": "1-7120,7122"}}``, each
+#: bill's number under the :func:`status_reader` of its last status read. A bill's rows are what that reader
+#: derived from its BILLSTATUS, so an unchanged publisher stamp skips a bill only while its recorded reader is
+#: the running one: a SpicyDocs release that changes the code re-reads every bill of a Congress on that
+#: Congress's next run, and a version-only release re-reads none. A re-read does not replace every older
+#: value: ``congress_bills`` merges column-wise, so a value the new reader leaves NULL keeps the old one; a bill
+#: whose cosponsor rows are refused keeps its prior rows, and CBO rows are replaced only on a listed outcome;
+#: and the pre-108th detail backfill records no reader. A bill with no reader recorded, every bill before this
+#: key, is read once. Per bill, not per folder, so a run that reaches part of a folder records what it read.
+#: Numbers are stored as runs: the 172,996 bills the BILLSTATUS reads published by 2026-09-28 fall in 126 runs
+#: over 96 folders, where one id each is ~2 MB. Here, not on ``congress_bills``: that table is SpicyDocs' public
+#: contract, the ``laws`` join rewrites it without metadata, and every query reads its footer; this one is the
+#: rollup's own resume state. The key's ``.v1`` is the record's format, not the reader.
+STATUS_READERS_KEY = "spicy_regs.bill_family.status_readers.v1"
+
+#: This rollup's own status-pass rule, in the recorded reader beside SpicyDocs' code as the committee-report and
+#: Table III readers carry theirs. Bump it when a change here alters what a status read publishes (the shaping
+#: around ``build_family``, the vote references, the listed printings), and every bill is read once more.
+STATUS_READER_RULE = "status-v1"
+
+
+def status_reader() -> str:
+    """The reader a bill's status is recorded under: :data:`STATUS_READER_RULE` and :func:`spicy_docs_code`."""
+    return f"{STATUS_READER_RULE};code={spicy_docs_code()}"
+
 
 #: The roll calls each bill's own actions record, one row per ``recordedVotes``
 #: entry. Not a contract table — nothing in ``spicy_docs.schemas`` shapes it —
@@ -540,6 +567,8 @@ class PriorIndex:
     #: ``(bill_id, version_code)`` listed under both sources: a ``congress``
     #: placeholder left beside the processed ``govinfo`` body that stands for it.
     shadowed: Collection[tuple[str, str]] = field(default_factory=frozenset)
+    #: The reader that last read each bill's status (``STATUS_READERS_KEY``).
+    status_readers: Mapping[str, str] = field(default_factory=dict)
 
     def held_codes(self, bill_id: str) -> set[str]:
         """The version codes this bill has a published processed body for."""
@@ -570,20 +599,28 @@ def _download_prior(output_dir: Path, download_prior: Callable[[str, Path], bool
     }
 
 
-def _prior_index(paths: Mapping[str, Path | None], sections: Sequence[Path] | None = None) -> PriorIndex:
+def _prior_index(
+    paths: Mapping[str, Path | None],
+    sections: Sequence[Path] | None = None,
+    *,
+    in_scope: Callable[[str], bool] = lambda _bill: True,
+) -> PriorIndex:
     """Read the skip lookups out of the prior tables without materialising them.
 
     ``sections`` are the prior ``bill_sections`` files: its members, or the one file it was before it was split.
+    ``in_scope`` names the bills this run's status pass reaches, for the log alone.
     """
     import duckdb
 
-    text_dates: dict[str, str | None] = {}
+    outcomes: dict[str, str | None] = {}
     version_counts: dict[str, int | None] = {}
     bills_path = paths.get("congress_bills")
     wants_versions = bills_path is not None and _has_columns(bills_path, ("bill_id", "version_count"))
     # A publisher stamp qualifies a skip only for a row both the CBO reader and the cosponsor
     # occurrence reader wrote, and only while both child tables are held: a row either reader
-    # did not write cannot be skipped, even when the publisher's stamp is unchanged.
+    # did not write cannot be skipped, even when the publisher's stamp is unchanged. Nor can a
+    # row another reader, or none recorded, wrote (``STATUS_READERS_KEY``).
+    readers, reader = _held_readers(paths.get(ARCHIVES_TABLE)), status_reader()
     wants_text = (
         bills_path is not None
         and paths.get("cbo_cost_estimates") is not None
@@ -601,18 +638,24 @@ def _prior_index(paths: Mapping[str, Path | None], sections: Sequence[Path] | No
             f"FROM read_parquet('{bills_path}')"
         ).fetchall()
         version_counts = {bill: _int_or_none(count) for bill, count, _text, _read in rows}
-        text_dates = {bill: text for bill, _count, text, read in rows if read}
+        outcomes = {bill: text for bill, _count, text, read in rows if read}
     elif wants_versions:
         version_counts = {
             bill: _int_or_none(count)
             for bill, count in duckdb.sql(f"SELECT bill_id, version_count FROM read_parquet('{bills_path}')").fetchall()
         }
     elif wants_text:
-        text_dates = dict(
+        outcomes = dict(
             duckdb.sql(
                 f"SELECT bill_id, update_date_including_text FROM read_parquet('{bills_path}') "
                 "WHERE cbo_cost_estimates_outcome IS NOT NULL AND cosponsors_outcome IS NOT NULL"
             ).fetchall()
+        )
+    text_dates = {bill: text for bill, text in outcomes.items() if readers.get(bill) == reader}
+    if stale := sum(1 for bill in outcomes if bill not in text_dates and in_scope(bill)):
+        logger.info(
+            "Bill family: {:,} prior bills in scope were read by another reader or by none recorded, so are read again",
+            stale,
         )
 
     printings: dict[str, set[str]] = {}
@@ -756,8 +799,53 @@ def _prior_index(paths: Mapping[str, Path | None], sections: Sequence[Path] | No
             )
         pending_bills.update(unqualified_urls)
     return PriorIndex(
-        text_dates, printings, xml_printings, pairs, pending_bills, published, miskeyed, body_bills, shadowed
+        text_dates, printings, xml_printings, pairs, pending_bills, published, miskeyed, body_bills, shadowed, readers
     )
+
+
+def _held_readers(path: Path | None) -> dict[str, str]:
+    """``bill_id`` -> the reader that last read its status, from the archives table's metadata.
+
+    An absent or unreadable record holds no reader, so every bill's status is read again: never a skip.
+    """
+    import pyarrow.parquet as pq
+
+    raw = None if path is None else (pq.read_schema(path).metadata or {}).get(STATUS_READERS_KEY.encode())
+    if not raw:
+        return {}
+    try:
+        return {
+            f"{folder}-{number}": reader
+            for reader, folders in json.loads(raw).items()
+            for folder, runs in folders.items()
+            for first, _, last in (run.partition("-") for run in runs.split(","))
+            for number in range(int(first), int(last or first) + 1)
+        }
+    except (ValueError, TypeError, AttributeError):
+        logger.warning("Bill family: the status reader record is unreadable; every bill's status is read again")
+        return {}
+
+
+def _readers_metadata(readers: Mapping[str, str]) -> str:
+    """The record :func:`_held_readers` reads: each reader's bill numbers by folder, as ``first-last`` runs."""
+    numbers: dict[str, dict[str, list[int]]] = {}
+    for bill, reader in readers.items():
+        folder, _, number = bill.rpartition("-")
+        if number.isdecimal():  # a BILLSTATUS identity's number always is; any other bill is read again
+            numbers.setdefault(reader, {}).setdefault(folder, []).append(int(number))
+    record: dict[str, dict[str, str]] = {}
+    for reader, folders in sorted(numbers.items()):
+        for folder, held in sorted(folders.items()):
+            runs: list[list[int]] = []
+            for number in sorted(held):
+                if runs and number == runs[-1][1] + 1:
+                    runs[-1][1] = number
+                else:
+                    runs.append([number, number])
+            record.setdefault(reader, {})[folder] = ",".join(
+                str(first) if first == last else f"{first}-{last}" for first, last in runs
+            )
+    return json.dumps(record, separators=(",", ":"))
 
 
 #: The reason a fresh row repeating a key is refused. The merge keeps one row
@@ -1623,7 +1711,9 @@ def build_bill_family(
     # 1. What the last run already published, so this one can skip it.
     prior_paths = _download_prior(output_dir, download_prior)
     split_priors = {name: published_members(output_dir, name, download_members) for name in PARTITIONED}
-    index = _prior_index(prior_paths, split_priors["bill_sections"])
+    index = _prior_index(
+        prior_paths, split_priors["bill_sections"], in_scope=lambda bill: _in_scope(bill, bulk_congresses, bill_types)
+    )
     held_archives = _held_archives(prior_paths.get(ARCHIVES_TABLE))
     # An unchanged archive still needs a read for a status row in doubt: one a
     # BILLSTATUS read wrote (it states a schema version) before this rollup
@@ -1663,6 +1753,8 @@ def build_bill_family(
     retired_versions: set[tuple[str, ...]] = set()
     archive_rows: list[dict] = []
     vote_rows: list[dict] = []
+    # Every bill's reader, carried forward, and this run's code for each status it shapes.
+    readers, reader = dict(index.status_readers), status_reader()
     bills = unchanged = skipped = archives_skipped = votes_refused = 0
     for congress in bulk_congresses:
         for bill_type in bill_types:
@@ -1725,7 +1817,9 @@ def build_bill_family(
                     for code, source, printing in index.miskeyed_rows.get(identifier, ())
                     if printing in codes
                 )
-                if not tables.bills:
+                if tables.bills:
+                    readers[identifier] = reader
+                else:
                     archive_complete = False
                 families.append(tables)
                 rows, refused = vote_reference_rows(member.status, observed_at=observed_at)
@@ -1983,6 +2077,7 @@ def build_bill_family(
             replace_parents=(ARCHIVE_IDENTITY, visited_archives),
             parquet_metadata={
                 ARCHIVE_COMPLETION_KEY: json.dumps(sorted(completed_archives)),
+                STATUS_READERS_KEY: _readers_metadata(readers),
                 TEXT_REFUSALS_KEY: refusal_metadata(body.refusals),
                 PACKAGE_REFUSALS_KEY: refusal_metadata(body.package_refusals),
             },

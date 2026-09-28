@@ -367,7 +367,8 @@ tables:
       in that local output. An absent element does not mean CBO never scored a bill.
       The first ten columns were the archive-index writer's until plan A1
       retired it (decision 31); the bill family now writes every column. Its own prior is re-read once where the
-      CBO outcome is missing, even when the publisher stamp is unchanged.
+      CBO outcome is missing, or where a reader other than the running one (SpicyDocs' code under this rollup's
+      status rule) read it, even when the publisher stamp is unchanged.
       Receipt: `rollups-0-24-0-adoption-2026-09-20/`. Local output only; not uploaded.
       Rows of the 108th-117th are still the retired list walk's, and it missed
       bills: against the BILLSTATUS listings they lack 1,299 (199 in the 117th),
@@ -2384,7 +2385,10 @@ tables:
       records what was read, never that the folder may be skipped. Printing
       bodies are read apart from status, by each printing's own state; the same
       metadata names the BILLS bulk printings a zip refused, with the zip entry
-      they were read at, so an unchanged zip is not read again for them. All
+      they were read at, so an unchanged zip is not read again for them. It
+      also records, per bill, the reader that last read its status (this
+      rollup's status rule and the SpicyDocs code): an unchanged bill is
+      skipped only while that reader is the running one. All
       columns are stored as VARCHAR.
     columns:
       name: "The zip's own file name in the folder listing, as the publisher spells it."
@@ -2780,8 +2784,13 @@ tables:
       column is NULL with it, including the scalar and occurrence RIN columns, because the rule
       was not run. A row whose detail was read states `[]` where the detail lists
       none. The RIN is an interpretation: `rin_rule` names the rule that fired
-      (`report_nature_rin_label`) or `unmatched`, and `rin_matched_text` is the
-      exact text, so a false positive is readable from the row. The publisher
+      (`report_nature_rin_label/2`) or `unmatched`, and `rin_matched_text` is the
+      exact text, so a false positive is readable from the row. Every run derives
+      the four RIN columns of each read row again from its retained
+      `report_nature`, re-read or not, so no row keeps an earlier SpicyDocs'
+      scalar or rule name. The rows the `rin_rule` column note says name
+      `report_nature_rin_label` last only until this table's first run under
+      SpicyDocs 0.50.1: after it, no row names the old rule. The publisher
       repeats a record across a page boundary (15 of 4,975 on the 119th); the
       table holds each identity once. The shared pooled list reader must
       settle each query by distinct identity before any output is replaced.

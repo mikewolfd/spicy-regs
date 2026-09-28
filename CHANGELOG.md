@@ -9,6 +9,42 @@ Entries link to the pull request that introduced the change.
 
 ### Changed
 
+- **The bill family skips an unchanged bill only when the running reader read
+  it.** Each bill's status reader, this rollup's status rule (`status-v1`) and
+  the SpicyDocs package digest, is recorded per bill in
+  `bill_family_archives`' metadata. A SpicyDocs release that changes the code
+  re-reads every bill of a Congress on that Congress's next run, and a
+  version-only release re-reads none. Bumping `status-v1` does the same for a
+  change to spicy-regs' own status pass. A re-read does not replace every older
+  value. `congress_bills` merges column-wise, so a value the new reader leaves
+  NULL keeps the old one. A bill whose cosponsor rows are refused keeps its
+  prior rows, and CBO rows are replaced only on a listed outcome. Bills before
+  the 108th, filled from the API detail route, record no reader.
+
+  Expected effect: every bill with no recorded reader has its BILLSTATUS read
+  once more on its Congress's next run, and no printing is fetched again. Runs
+  36371298463 (the 113th, 10,637 bills) and 36375716128 (the 108th–112th,
+  63,747 bills) measured 4.2 to 7.8 ms a bill all in, or 2.5 to 6.4 ms after
+  the folder listings. The 119th nightly re-reads its 19,249 bills once, about
+  1 to 2 minutes more. A 113th–118th run re-reads about 90,000 bills in about
+  6 to 11 minutes of status pass. Only the 113th's 10,637 are extra because of
+  this change: the 114th–118th lack the CBO and cosponsor outcomes and were due
+  for a full re-read anyway. The 108th–112th's 63,747 re-read on their next
+  scoped run.
+
+- **SpicyDocs 0.50.1.** `house_communications` derives all four RIN columns of
+  every read row from its retained `report_nature` on each run, not only
+  `rin_occurrences_json`, so a row no run re-reads moves with the reader too.
+  Replayed over the published table (5,006 rows): 2,040 rows' `rin_rule`
+  becomes `report_nature_rin_label/2`, 2 go from `unmatched` to it, and 3 go to
+  `unmatched`. Those 3 are the NOAA RINs read cut short (119-EC-1226, 1544 and
+  1649), whose `rin` and `rin_matched_text` become NULL. 119-EC-602 and 1209
+  gain `2120-AA64`. 1,559 rows' `rin_occurrences_json` is respelled compact
+  and key-sorted, as the shaper spells it, with the same value. On each bill's
+  re-read, `bill_cosponsors.source_xml` loses the whitespace after `</item>`,
+  and each of the 108th–111th's 4,762 `cbo_cost_estimates` rows gains its http
+  twin as a restatement (`stated_count` 2).
+
 - **`proceedings.agency_code` follows RefSpec's agency registry for docket-less
   proceedings** (proceedings v11, RefSpec 0.1.0.dev21's registry view, batch
   1). A Register agency bridged to an organization a Regulations.gov code

@@ -118,6 +118,9 @@ def prepare_target_generation(output_dir: Path, *, product_id: str, prior_file: 
         if retained_product_page is not None:
             if retained_index is not None:
                 raise ValueError('Select one retained metadata source')
+            # SpicyDocs 0.50.1 also refuses a page without exactly one Full Report link. The label stays /1: it names
+            # the heading and publication-block read, whose values are unchanged on every page still read, and all
+            # 47 product pages retained on 2026-08-22 link one Full Report (spicy-docs decisions, 0.50.1).
             index=product_page_metadata(retained_product_page,product_id)
             digest='sha256:'+hashlib.sha256(retained_product_page).hexdigest()
             evidence.store.put_blob(digest,len(retained_product_page),[retained_product_page])
