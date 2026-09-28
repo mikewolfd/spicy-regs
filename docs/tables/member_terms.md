@@ -6,11 +6,12 @@
 
 One row per term a legislator served, in the crosswalk's own order. All columns are stored as VARCHAR.
 
-**Coverage.** Sampled. The fork selection retains all 45,535 terms from the same complete September 22, 2026 UTC captures as `members`. All mapped values, parent joins and per-member term counts agree with the originals; earlier retained term identities survive. Source order defines term_index. The single party value per term does not reproduce the finer party_affiliations histories present in 29 native terms. Receipts: fork-execution-2026-09-21/members-qualification/. *(measured 2026-09-22)*
+**Coverage.** Sampled. The fork selection retains every term from the same complete September 22, 2026 UTC captures as `members`. All mapped values, parent joins and per-member term counts agree with the originals; earlier retained term identities survive. Source order defines term_index. The single party value per term does not reproduce the finer party_affiliations histories present in 29 native terms. Receipts: fork-execution-2026-09-21/members-qualification/. *(measured 2026-09-22)*
 
 - **Parquet file:** `member_terms.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
 - **Publication status:** Not established by this schema page or its measurement date.
+- **Row count:** Not stated here; the MCP `describe_table` reply gives the live count under `publication`.
 
 | Column | Type | Description |
 | --- | --- | --- |

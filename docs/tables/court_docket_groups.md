@@ -6,11 +6,12 @@
 
 Same-case record groups for the APA litigation dockets: which published docket rows are alternative records of one case, and which row is the group's parent. Join on cl_docket_id; the parent row carries parent_cl_docket_id equal to cl_docket_id. This is an inferred mapping, not publisher data; it is edition-scoped (2026-06-30) and does not cover dockets published after the edition until recomputed.
 
-**Coverage.** Not a range. A derived mapping over the published enriched `court_dockets` selection (11,459 rows): 403 same-case groups link 901 docket rows. The CourtListener bulk edition leaves its own parent_docket_id blank in every row, so the parent is inferred from the publisher's PACER mechanics (one main case created first, plus per-defendant sub-dockets — the documented doppeldocket problem, FLP wiki / GitHub issue #2185): group by (court_id, docket_number) with a single caption among published members, parent = lowest pacer_case_id in the group. confidence_tier separates tight-pacer doppeldockets from wide-spread refilings of one case. Groups with multiple captions (docket-number reuse) or no pacer ids stay ungrouped and have no row. *(measured 2026-09-22)*
+**Coverage.** Not a range. A derived mapping over the published `court_dockets` selection, computed from the 2026-06-30 bulk edition. The edition leaves its own parent_docket_id blank in every row, so the parent is inferred from the publisher's PACER mechanics (one main case created first, plus per-defendant sub-dockets: the documented doppeldocket problem, FLP wiki / GitHub issue #2185): group by (court_id, docket_number) with a single caption among published members, parent = lowest pacer_case_id in the group. confidence_tier separates tight-pacer doppeldockets from wide-spread refilings of one case. Groups with multiple captions (docket-number reuse) or no pacer ids stay ungrouped and have no row. *(measured 2026-09-22)*
 
 - **Parquet file:** `court_docket_groups.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
 - **Publication status:** Not established by this schema page or its measurement date.
+- **Row count:** Not stated here; the MCP `describe_table` reply gives the live count under `publication`.
 
 | Column | Type | Description |
 | --- | --- | --- |

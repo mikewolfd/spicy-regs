@@ -6,13 +6,14 @@
 
 One row per member per committee or subcommittee seat a chamber roster file lists today, from the House Clerk's MemberData.xml and the Senate's cvc_member_data.xml. All columns are stored as VARCHAR.
 
-**Coverage.** Sampled. Measured on the same run (receipt `d1-measured-run-2026-09-19/`): 2,966 seats from two keyless file captures — the House Clerk's file stating Congress 119 session 2 with 441 seats, 2 vacant, 2,516 assignments and 9 placeholders, and the Senate's with 100 senators over 450 seats. Today's seats: both chamber files are captured whole each run, for the current Congress only, and each capture replaces its chamber's rows for that Congress; an earlier Congress keeps its last capture. *(measured 2026-09-19)*
+**Coverage.** Sampled. Today's seats: the House Clerk's and the Senate's committee files are captured whole each run, for the current Congress only, and each capture replaces its chamber's rows for that Congress; an earlier Congress keeps its last capture. Vacant and placeholder seats appear as the Clerk's file states them. *(measured 2026-09-19)*
 
 **Data quality.** A row is a seat the file listed on its `file_date`: a seat the file no longer lists is gone on the next capture. The House file states its Congress and the reader proves it; the Senate file states none, so its rows carry the caller's Congress with `congress_basis` = `caller`. A House vacancy has no member and no row, and a seated member whose only assignment is the file's `<committee rank=""/>` placeholder has none either (nine placeholders on 2026-09-19). Only a file captured this run replaces its chamber's rows; a chamber whose file was not established keeps its prior rows. House `system_code` derives its prefix from the native committee type and parent context; `committee_code` preserves the literal source identifier. Join matching `system_code` values to `committees` and `bioguide_id` to `members`. Rows whose `system_code` matches no committee stay listed and are never matched by name (the Joint Economic Committee has three Congress.gov codes). On 2026-09-23 that is 28 rows: 25 House seats on the Clerk's four joint committees (`EC00`, `IT00`, `JL00`, `JP00`, typed `joint` in the Clerk file with no Congress.gov code), and three Senate seats on `JSIK00`, the 2024 inaugural committee, which Congress.gov does not list in any Congress. All columns are stored as VARCHAR.
 
 - **Parquet file:** `committee_assignments.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
 - **Publication status:** Not established by this schema page or its measurement date.
+- **Row count:** Not stated here; the MCP `describe_table` reply gives the live count under `publication`.
 
 | Column | Type | Description |
 | --- | --- | --- |

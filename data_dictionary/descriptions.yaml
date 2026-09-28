@@ -24,6 +24,13 @@
 # keyless run cannot fill them). For those five the date is the statement date,
 # as it was before.
 #
+# Coverage prose states the kind, the scope rule and the caveats, never a
+# whole-table row count, snapshot id, generation pin or publication status:
+# those change at every publish, and describe_table's publication field states
+# them live. `spicy-regs-dict check` refuses them (COVERAGE_PROSE_REFUSALS in
+# src/spicy_regs/data_dictionary.py). A dated measurement stays only where it
+# justifies a caveat, with its date.
+#
 # A run that only *exercises* a path is not the same as a run that measures
 # what the statement claims. Several statements below describe incremental
 # behavior — skipping a bill the publisher has not touched, a watermark window,
@@ -34,15 +41,14 @@ tables:
   dockets:
     label: "Rulemaking dockets"
     coverage: >-
-      Sampled repair with retained prior rows. On 2026-09-21, the mikewolfd/spicy-regs fork
-      published and verified 279,124 rows: 278,607 native records from all 335 selected
-      retained docket releases merged into the 279,085-row prior, preserving newer and
-      unrelated rows. This is a legacy/base Parquet publication outside the managed generation
-      index. It does not establish a fresh regulations.gov census or publication at the
-      upstream/default source. modify_date records source modification, not docket opening or
-      acquisition. Receipts: fork-execution-2026-09-21/publication-dockets.json and
+      Sampled repair with retained prior rows. On 2026-09-21 the fork merged
+      every selected retained docket release into the prior table, keeping newer
+      and unrelated rows; the daily regulations ETL adds to it. It is not a
+      fresh regulations.gov census. modify_date records source modification, not
+      docket opening or acquisition. Receipts:
+      fork-execution-2026-09-21/publication-dockets.json and
       fork-base-repair-2026-09-21/repair-audit.json.
-    measured_on: "2026-09-21"
+    measured_on: "2026-09-28"
     summary: >-
       One row per regulations.gov docket. A docket is the top-level folder a
       federal agency opens for a rulemaking or other action; it groups the
@@ -59,17 +65,16 @@ tables:
   documents:
     label: "Docket documents"
     coverage: >-
-      Sampled repair with retained prior rows. On 2026-09-21, the mikewolfd/spicy-regs fork
-      published and verified 2,001,531 rows. All 335 selected retained document releases
-      supplied 1,943,108 observations, resolving by source recency to 1,943,106 identities;
-      merging preserved 846 newer prior rows and 58,425 unrelated rows. This is a legacy/base
-      Parquet publication outside the managed generation index, not a fresh whole-source
-      census or upstream/default publication. This repairs metadata and references; all
-      body-text, extraction-status and PDF-extraction-evidence values remain NULL. It does
-      not include a full comments corpus.
-      Receipts: fork-execution-2026-09-21/publication-documents.json and
+      Sampled repair with retained prior rows. On 2026-09-21 the fork merged
+      every selected retained document release into the prior table, resolving
+      each document to its most recent source record and keeping newer and
+      unrelated rows; the daily regulations ETL adds to it. It is not a fresh
+      regulations.gov census. The repair covered metadata and references;
+      body-text, extraction-status and PDF-extraction-evidence values remain
+      NULL. It does not include a full comments corpus. Receipts:
+      fork-execution-2026-09-21/publication-documents.json and
       fork-base-repair-2026-09-21/repair-audit.json.
-    measured_on: "2026-09-21"
+    measured_on: "2026-09-28"
     data_quality: >-
       The 2026-09-21 fork date check across all 2,001,531 rows found 52,699 posted_date
       values before 1990, including eight in year 0000; one value was in the future,
@@ -217,13 +222,12 @@ tables:
     identity_columns: [agency_code, year, month, document_type]
     label: "Agency monthly volume"
     coverage: >-
-      Derived. On 2026-09-21, the mikewolfd/spicy-regs fork published 77,934 groups
-      counting 1,999,503 documents from its 2,001,531-row repaired parent. The file records
-      the exact parent digest and all 2,028 omitted dates: 2,020 NULL and eight year-zero
-      values, with no other uncastable dates. Other literal calendar dates remain, including
-      52,691 pre-1990 records and one future December 2026 record. Source values remain
-      unchanged. This is a qualified parent-derived selection, not a whole-source census.
-      Receipts: fork-execution-2026-09-21/document-derivatives/MANUAL-AUDIT.md and
+      Derived from `documents`: document counts by agency, month and document
+      type. A document whose posted date is NULL or the publisher's year zero is
+      left out, and the file records each omitted date; other literal dates stay
+      as the publisher wrote them, including documents dated before 1990 or in
+      the future. Source values are unchanged. Receipts:
+      fork-execution-2026-09-21/document-derivatives/MANUAL-AUDIT.md and
       publication-agency-monthly-volume.json.
     measured_on: "2026-09-21"
     summary: >-
@@ -242,11 +246,11 @@ tables:
     grain: "One source docket-array occurrence per dated Federal Register record; docket_source_ordinal retains the original zero-based array position in rebuilt outputs. Older publications lack that column."
     label: "Federal Register to docket links"
     coverage: >-
-      Derived, and bounded by its inputs. 899,227 links from 603,693 dated
-      Federal Register records to 612,091 docket ids, published 1994-01-03 to
-      2026-09-22 — the `federal_register` table's own range. The table equals
-      a separate re-derivation from that parent row for row. This dated measurement
-      predates the ordinal and normalization columns; those require rebuilding.
+      Derived, and bounded by its inputs: one link per docket id that a dated
+      Federal Register record names, over the `federal_register` table's own
+      date range. On 2026-09-23 the table equalled a separate re-derivation from
+      that parent row for row; that measurement predates the ordinal and
+      normalization columns, which require rebuilding.
     measured_on: "2026-09-23"
     summary: >-
       The Federal Register ↔ docket bridge: each `federal_register` row's
@@ -282,13 +286,11 @@ tables:
     identity_columns: [agency_code]
     label: "Agency activity spikes"
     coverage: >-
-      Not a range. On 2026-09-21, the mikewolfd/spicy-regs fork published eight agency
-      signals from its repaired documents parent, calculated at 2026-09-22
-      00:45:24.030240+00 in UTC. Parquet metadata retains that exact timestamp,
-      date policy and parent digest. All counts were independently reconstructed. Future dates
-      are excluded from recent activity. This is a dated snapshot, not a historical series
-      or a complete measure of agency activity. Receipt:
-      fork-execution-2026-09-21/discovery-utc/MANUAL-AUDIT.md.
+      Not a range. A dated snapshot recomputed from `documents` at each build;
+      the Parquet metadata records its calculation time in UTC, its date policy
+      and its parent digest. Future dates are excluded from recent activity.
+      This is not a historical series or a complete measure of agency activity.
+      Receipt: fork-execution-2026-09-21/discovery-utc/MANUAL-AUDIT.md.
     measured_on: "2026-09-21"
     data_quality: >-
       Activity windows use UTC instants and preserve explicit source offsets. Dates and
@@ -311,18 +313,13 @@ tables:
     identity_columns: [package_id, granule_id]
     label: "Code of Federal Regulations sections"
     coverage: >-
-      Window. Annual-edition metadata from the 2025 and 2026 editions, not full
-      publication history or body text. Measured on the section-ancestry
-      candidate built 2026-09-23 through this builder from the granules of live
-      generation 8fb97150 and the 262 retained annual volumes: 319,501 rows (the
-      six index-package rows dropped); part changed on 9,250 rows (Title 41 4,732,
-      Title 43 3,018, Title 14 volume 4 1,492, eight publisher typos and ranges)
-      with every other column byte-equal. Every compared Title 41, 43 and 14
-      section agrees with eCFR's 2025-01-01 structure. The candidate is not yet
-      published; until it is, the live generation keeps identifier-derived
-      parts. Receipts: fork-execution-2026-09-21/cfr-ancestry-fix-2026-09-23/
-      (candidate.json, validation.json).
-    measured_on: "2026-09-23"
+      Window. Annual-edition section metadata from the 2025 and 2026 editions,
+      not full publication history or body text. Each section's part comes from
+      its volume's PART heading; on 2026-09-23 every compared Title 41, 43 and
+      14 section agreed with eCFR's 2025-01-01 structure. Receipts:
+      fork-execution-2026-09-21/cfr-ancestry-fix-2026-09-23/ (candidate.json,
+      validation.json).
+    measured_on: "2026-09-28"
     summary: >-
       One row per GovInfo annual CFR granule, including sections, appendices,
       tables of contents and other structural units; metadata only, no
@@ -357,24 +354,18 @@ tables:
   congress_bills:
     label: "Congressional bills"
     coverage: >-
-      True range on the archive index, mixed on enrichment. The earlier D1 output
-      held 419,621 archive-index rows and enriched 18,956 bills of the 119th;
-      its measured latest-action range was 1799-12-16 through 2026-09-18.
-      The separate, bounded adoption validation covered only the 118th's HR and S
-      BILLSTATUS archives: 16,213 bills, at 16 requests (8 keyed, 8 keyless), with
-      four printing captures and no model calls. It recorded 1,368 populated CBO
-      outcomes and 14,845 requested-empty:absent outcomes, with zero NULL outcomes
-      in that local output. An absent element does not mean CBO never scored a bill.
-      The first ten columns were the archive-index writer's until plan A1
-      retired it (decision 31); the bill family now writes every column. Its own prior is re-read once where the
-      CBO outcome is missing, or where a reader other than the running one (SpicyDocs' code under this rollup's
-      status rule) read it, even when the publisher stamp is unchanged.
-      Receipt: `rollups-0-24-0-adoption-2026-09-20/`. Local output only; not uploaded.
-      Rows of the 108th-117th are still the retired list walk's, and it missed
-      bills: against the BILLSTATUS listings they lack 1,299 (199 in the 117th),
-      measured 2026-09-26 (receipt `join-gaps-2026-09-26/d/`). A bill-family run
-      scoped to those Congresses fills them.
-    measured_on: "2026-09-20"
+      True range on the archive index, mixed on enrichment. The archive index
+      lists bills back to the earliest Congresses (latest actions from
+      1799-12-16); the bill family fills every column from GovInfo BILLSTATUS
+      for the Congresses it has read, which begin at the 108th. On 2026-09-26
+      the 108th-117th rows, then written by a retired list walk, lacked 1,299
+      bills against the BILLSTATUS listings (199 in the 117th; receipt
+      `join-gaps-2026-09-26/d/`); bill-family runs scoped to those Congresses
+      fill them. An absent CBO element does not mean CBO never scored a bill.
+      The bill family re-reads its own prior once where the CBO outcome is
+      missing, or where a reader other than the running one read it, even when
+      the publisher stamp is unchanged.
+    measured_on: "2026-09-28"
     summary: >-
       One row per bill or resolution. `bill-family` writes this table, filling
       the full contract for the Congresses it is scoped to (the current Congress
@@ -480,12 +471,12 @@ tables:
     identity_columns: [rin, agenda_edition]
     label: "Planned agency actions"
     coverage: >-
-      Window. The fork serves the complete retained 202510 edition. The full
-      source XML and every mapped field passed an independent comparison;
-      public bytes and both MCP read paths match the qualified generation.
-      This is one semiannual edition, with no latest-edition or history claim.
-      See `unified-agenda-qualification/` in the fork execution receipts.
-    measured_on: "2026-09-22"
+      True range: every semiannual Unified Agenda edition reginfo.gov serves as
+      readable XML, from 199510 through the latest; agenda_edition names each.
+      No edition is held for 2004 or for spring 2012. A rule has one row per
+      edition that lists it, so count distinct rin, not rows, for a number of
+      rules.
+    measured_on: "2026-09-28"
     summary: >-
       One row per Regulation Identifier Number (RIN) per agenda edition, ingested
       from the OIRA/OMB Unified Agenda published at reginfo.gov by
@@ -504,7 +495,7 @@ tables:
       rin_status: "Status of the RIN in this edition (e.g. `Active`, `Completed`, `Long-Term`)."
       rule_stage: "Stage of the rulemaking in this edition (e.g. `Prerule`, `Proposed Rule`, `Final Rule`)."
       priority_category: "OIRA priority classification (e.g. `Economically Significant`, `Other Significant`, `Substantive, Nonsignificant`)."
-      agenda_edition: "Semiannual agenda edition the row was published in, as `YYYYMM` (MM 04=Spring, 10=Fall). Half of the primary/dedup key."
+      agenda_edition: "Semiannual agenda edition the row was published in, as `YYYYMM` (MM 04=Spring, 10=Fall). Half of the primary/dedup key. Every readable edition since 199510 is held, so filter to one edition, or count distinct `rin`, before counting rules."
       major: "Whether the action is a major rule, as reported by the agenda (e.g. `Yes`/`No`). Often null."
       publication_id: "reginfo.gov publication identifier for this agenda entry, when present."
       timetable_json: "JSON array of planned and actual milestone actions with literal source dates and Federal Register citations. A date with day 00 has month precision; labels such as To Be Determined remain unchanged."
@@ -520,10 +511,9 @@ tables:
     label: "Rule identity edges (docket, CFR, RIN)"
     coverage: >-
       Derived, and bounded by its inputs: `dockets`, `documents`,
-      `federal_register` and `fr_docket_links` as the snapshot's manifest pins
-      them. `snapshot_91b19da7…` holds 617,135 edges, and a replay from the
-      manifest's own inputs reproduces it byte for byte.
-    measured_on: "2026-09-27"
+      `federal_register` and `fr_docket_links` as the live snapshot's manifest
+      pins them.
+    measured_on: "2026-09-28"
     summary: >-
       The rule-identity spine: one row per observed edge between a
       Regulations.gov docket, a CFR part and a RIN, with the `source` class of
@@ -558,10 +548,9 @@ tables:
     coverage: >-
       Derived, and bounded by its inputs (`dockets`, `documents`,
       `federal_register`, `fr_docket_links` and `rule_targets`) and the prior
-      generation it continues ids from. `snapshot_91b19da7…` holds 172,742
-      proceedings: 75,270 docketed and 97,472 docket-less (single Register
-      documents).
-    measured_on: "2026-09-27"
+      snapshot it continues ids from. A proceeding is docketed, or docket-less
+      when it is a single Register document.
+    measured_on: "2026-09-28"
     summary: >-
       One row per rulemaking proceeding: the dockets that are one action, the
       Register documents that joined it, their stage events, RINs and CFR
@@ -599,9 +588,8 @@ tables:
     label: "Regulatory Agenda items"
     coverage: >-
       Derived, and bounded by its inputs: every RIN that `unified_agenda`,
-      `dockets`, `documents` or `federal_register` states. `snapshot_91b19da7…`
-      holds 52,092 items.
-    measured_on: "2026-09-27"
+      `dockets`, `documents` or `federal_register` states.
+    measured_on: "2026-09-28"
     summary: >-
       One row per Regulation Identifier Number: the durable Regulatory Agenda
       item a RIN identifies, with how many proceedings evidence links it to
@@ -632,8 +620,7 @@ tables:
     coverage: >-
       Derived, and bounded by its inputs: `dockets`, `documents` and
       `federal_register` records that state a RIN the proceeding holds.
-      `snapshot_91b19da7…` holds 148,011 links.
-    measured_on: "2026-09-27"
+    measured_on: "2026-09-28"
     summary: >-
       One row per piece of evidence that an agenda item tracks a proceeding: a
       docket, Regulations.gov document or Register document that directly
@@ -696,12 +683,9 @@ tables:
   rulemaking_lifecycles:
     label: "Rulemaking lifecycles"
     coverage: >-
-      Derived, and bounded by its inputs: every docketed proceeding, paired
-      from its cleaned `lifecycle_events`. `snapshot_91b19da7…` holds 75,270
-      lifecycles (25,861 finalized, 28,387 final without a proposal, 10,186
-      no anchor, 8,723 open, 1,252 companion, 721 withdrawn, 140 upload
-      pairs), censored at 2026-09-25.
-    measured_on: "2026-09-27"
+      Derived, and bounded by its inputs: every docketed proceeding, paired from
+      its cleaned `lifecycle_events` and censored at the day its inputs end.
+    measured_on: "2026-09-28"
     data_quality: >-
       A Regulations.gov document whose stated Register number resolves to no
       Register row is dated by its upload, which for a legacy document can be
@@ -752,9 +736,9 @@ tables:
     label: "Rulemaking lifecycle events"
     coverage: >-
       Derived, and bounded by its inputs: the stage events of every docketed
-      proceeding, one per document, less those undated or dated after the
-      run's day. `snapshot_91b19da7…` holds 135,362 events.
-    measured_on: "2026-09-27"
+      proceeding, one per document, less those undated or dated after the run's
+      day.
+    measured_on: "2026-09-28"
     summary: >-
       One row per staged document of a docketed proceeding: the events each
       `rulemaking_lifecycles` row is paired from. A Regulations.gov copy of a
@@ -784,9 +768,9 @@ tables:
   agency_lifecycle_stats:
     label: "Time to final rule by agency"
     coverage: >-
-      Derived from `rulemaking_lifecycles` with a survival outcome.
-      `snapshot_91b19da7…` holds 344 cells, 172 of them suppressed under 30
-      rules; every unsuppressed estimate equals R's multi-state `survfit`.
+      Derived from `rulemaking_lifecycles` with a survival outcome. A cell
+      covering fewer than 30 rules is suppressed. On 2026-09-27 every
+      unsuppressed estimate equalled R's multi-state `survfit`.
     measured_on: "2026-09-27"
     summary: >-
       The Aalen-Johansen cumulative incidence of a final rule, withdrawal
@@ -825,10 +809,10 @@ tables:
   federal_register:
     label: "Federal Register documents"
     coverage: >-
-      True range. 1,009,005 dated records published 1994-01-03 to 2026-09-22,
-      the whole span the API serves. Every month's row count equals the
-      publisher's monthly facet, and 74 whole days (8,683 documents) match
-      the API in identity and every cell.
+      True range: dated records published from 1994-01-03 on, the whole span the
+      API serves. On 2026-09-23 every month's row count equalled the publisher's
+      monthly facet, and 74 whole days (8,683 documents) matched the API in
+      identity and every cell.
     measured_on: "2026-09-23"
     summary: >-
       One row per dated Federal Register record, keyed by (`document_number`,
@@ -907,11 +891,10 @@ tables:
     identity_columns: [filing_uuid]
     label: "Lobbying disclosure filings"
     coverage: >-
-      True range with a density caveat. Filing years span 2000 to 2026, but
-      286,369 of 287,246 rows are 2023 or later; earlier years are a tail of
-      a few hundred rows each and should not be read as coverage of that
-      period.
-    measured_on: "2026-09-06"
+      True range: every filing of each filing year held, read whole from the LDA
+      API, from 2010 to date; earlier years are added one year per dispatched
+      run (owner decision 47).
+    measured_on: "2026-09-28"
     summary: >-
       One row per federal lobbying-disclosure filing, ingested from the U.S.
       Senate Lobbying Disclosure Act (LDA) REST API (`lda.senate.gov`) by
@@ -923,7 +906,7 @@ tables:
       are stored as VARCHAR; nested/array fields are JSON strings.
     columns:
       filing_uuid: "LDA filing UUID (e.g. `7866327b-c892-4430-b9f0-1f0f679c58c6`). Primary key / dedup key."
-      filing_type: "Filing type code (e.g. `RR` registration, `Q1`–`Q4` quarterly reports, amendments/terminations)."
+      filing_type: "Filing type code (e.g. `RR` registration, `Q1`–`Q4` quarterly reports, `1A`–`4A` amendments, terminations). An amendment is a separate filing that restates its quarter's report."
       filing_year: "Calendar year the filing reports on."
       filing_period: "Reporting period within the year (e.g. `first_quarter`, `year_end`)."
       dt_posted: "Timestamp the filing was posted to the LDA system (ISO 8601 string with timezone). Sort key."
@@ -931,8 +914,8 @@ tables:
       registrant_id: "LDA registrant id. Stable join key across a registrant's filings."
       client_name: "Name of the client the lobbying was performed for. Joins by name to `organizations`/comment filers."
       client_id: "LDA client id."
-      income: "Lobbying income reported by a lobbying firm for the period, in USD. Null for self-filers (who report `expenses`)."
-      expenses: "Lobbying expenses reported by a self-filing organization for the period, in USD. Null for firms (who report `income`)."
+      income: "Lobbying income reported by a lobbying firm for the period, in USD. Null for self-filers (who report `expenses`). An amended report (`filing_type` `1A`–`4A`) restates its quarter's amount, often unchanged, so summing over every filing counts that quarter twice; keep the latest filing per registrant, client and quarter."
+      expenses: "Lobbying expenses reported by a self-filing organization for the period, in USD. Null for firms (who report `income`). An amended report (`filing_type` `1A`–`4A`) restates its quarter's amount, often unchanged, so summing over every filing counts that quarter twice; keep the latest filing per registrant, client and quarter."
       lobbying_activities_json: "JSON array of lobbying activities, each `{general_issue_code, general_issue_code_display, description}` — the issue areas lobbied and their free-text descriptions."
       government_entities_json: "JSON array of the distinct government entities lobbied (`{id, name}`) — the agencies and chambers (e.g. `HOUSE OF REPRESENTATIVES`, `SENATE`) named across the filing's activities."
       url: "URL of the filing's printable document page on lda.senate.gov (`filing_document_url`)."
@@ -940,10 +923,10 @@ tables:
     identity_columns: [filing_uuid, activity_index]
     label: "Lobbying activities"
     coverage: >-
-      Window. Rows exist for the filings read since this table was added
-      (2026-09-26); the filing-year backfill of `lobbying_filings` (owner
-      decision 47) fills history, one year per run.
-    measured_on: "2026-09-26"
+      True range, the same filings as `lobbying_filings`: one row per lobbying
+      activity a filing reports. A filing that lists no activity has no rows
+      here.
+    measured_on: "2026-09-28"
     summary: >-
       One row per lobbying activity an LDA filing reports: the issue area, the
       registrant's description of what was lobbied, foreign-entity interests,
@@ -964,10 +947,10 @@ tables:
     identity_columns: [filing_uuid, activity_index, lobbyist_index]
     label: "Lobbyists named on lobbying activities"
     coverage: >-
-      Window. Rows exist for the filings read since this table was added
-      (2026-09-26); the filing-year backfill of `lobbying_filings` fills
-      history.
-    measured_on: "2026-09-26"
+      True range, the same filings as `lobbying_filings`: one row per lobbyist
+      named on each activity. An activity that names no lobbyist has no rows
+      here.
+    measured_on: "2026-09-28"
     summary: >-
       One row per lobbyist an LDA filing names on one of its activities, with
       the lobbyist's LDA id and name parts, any covered official position they
@@ -993,16 +976,11 @@ tables:
     grain: "One row per observed FEC committee identifier."
     identity_columns: [committee_id]
     coverage: >-
-      Not a range. On 2026-09-21, the mikewolfd/spicy-regs fork published and verified a
-      retained seed of 27,311 committee observations from a cycle=2024&cycle=2026 traversal
-      observed on 2026-09-12. This seed is not a fresh unfiltered census, committee history or
-      upstream/default publication. The current acquisition reader supports completed
-      traversals without cycle/status filters and preserves prior-only rows; that behavior is
-      distinct from this seed's measured scope. first_file_date and last_file_date describe
-      filing activity, not acquisition. Receipt:
-      fork-execution-2026-09-21/fec-publication-summary.json; direct fork MCP counts were
-      checked in remote-mcp-audit/.
-    measured_on: "2026-09-21"
+      Not a range. The OpenFEC committee registry: the whole registry is walked
+      every Sunday (decision 53) and committees that filed in the last week are
+      read daily; rows only an earlier walk saw are kept. first_file_date and
+      last_file_date describe filing activity, not acquisition.
+    measured_on: "2026-09-28"
     summary: >-
       One row per observed Federal Election Commission committee. The current
       reader acquires from the unfiltered OpenFEC `/v1/committees/` endpoint
@@ -1035,13 +1013,10 @@ tables:
     grain: "One row per official source family in the SpicyDocs FEC registry."
     identity_columns: [source_family]
     coverage: >-
-      Not a range. On 2026-09-21, the mikewolfd/spicy-regs fork published and verified 26
-      source-family entries from the packaged SpicyDocs official FEC registry. The catalog
-      itself is available in that fork; a listed route does not establish record acquisition,
-      downloaded document bodies, historical completeness or availability of every source
-      population. No upstream/default publication is asserted. Receipts:
-      fork-execution-2026-09-21/fec-publication-summary.json and remote-mcp-audit/.
-    measured_on: "2026-09-21"
+      Not a range. Every source family in the packaged SpicyDocs official FEC
+      registry, with its official access routes. A listed route does not mean
+      its records were acquired: fec_collections says what was.
+    measured_on: "2026-09-28"
     summary: >-
       Source discovery metadata from SpicyDocs' official FEC inventory. Join
       source_family to fec_collections and fec_source_records to inspect which
@@ -1064,14 +1039,12 @@ tables:
     grain: "One row per selected verified input collection."
     identity_columns: [collection_id]
     coverage: >-
-      Sampled. On 2026-09-21, the mikewolfd/spicy-regs fork published and verified 649
-      explicitly selected collection scopes, including empty results, alongside 13,717,161
-      source records and 183,390 relationship observations. Each row retains its requested
-      scope and outcome. This is a selected retained seed, not all official families or
-      complete FEC history; source authority and acquisition limits remain
-      collection-specific. No upstream/default publication is asserted. Receipts:
-      fork-execution-2026-09-21/fec-publication-summary.json and remote-mcp-audit/.
-    measured_on: "2026-09-21"
+      Sampled. One row per selected FEC file or API query, including empty
+      results, with its requested scope and outcome: a selected seed, not every
+      official family or complete FEC history. A collection with profile `bulk`
+      lists a zip's files, not their rows. The fec_collection_cycles view gives
+      each collection's election cycle.
+    measured_on: "2026-09-28"
     summary: >-
       Collection-level scope, counts and evidence for fec_source_records.
       Join collection_id to that table to distinguish observed records from
@@ -1096,33 +1069,43 @@ tables:
     grain: "One row per provider source record within a selected collection."
     identity_columns: [collection_id, source_record_id]
     coverage: >-
-      Sampled. On 2026-09-21, the mikewolfd/spicy-regs fork published and verified 13,717,161
-      provider records in 649 selected retained collections. Coverage comes from
-      fec_collections, not the presence of a catalog route. Overlapping collections may
-      intentionally repeat observations; native rows and file-level original metadata have
-      different grains. Retaining a bulk file inventory does not imply every member is
-      expanded into this table. This selected seed is not complete FEC history or
-      upstream/default publication. Receipts:
-      fork-execution-2026-09-21/fec-publication-summary.json and remote-mcp-audit/.
-    measured_on: "2026-09-21"
+      Sampled. The records of the selected collections in fec_collections, not
+      complete FEC history. Contributions from individuals are mostly missing:
+      only the 2025-2026 insertion and deletion files are loaded, not the main
+      individual-contributions file of any cycle (gap FG04 in docs/fec-gaps.md).
+      For a candidate's individual donors, use FEC.gov. Overlapping collections
+      can repeat an observation.
+    measured_on: "2026-09-28"
     data_quality: >-
-      Native fields retain their source meaning. Monetary values, amendment
-      chains and record inclusion rules differ by family; generic record
-      ingestion does not select a latest amendment or establish a safe sum.
-      Unknown fields stay in native JSON. Original pinned bytes preserve numeric
-      spelling where the provider exposes exact decimal values as strings.
+      Memo lines (MEMO_CD 'X' in metadata_json) repeat money already reported on
+      another line; leave them out before summing. Most rows of the 2025-2026
+      committee-to-committee file (collection bulk-2026-oth-base-file) are such
+      memos: contributions from individuals received through joint fundraising
+      committees (TRANSACTION_TP 15J). The bulk files carry no link from a memo
+      to its transfer. Native fields retain their source meaning. Monetary
+      values, amendment chains and record inclusion rules differ by family;
+      generic record ingestion does not select a latest amendment or establish
+      a safe sum. Unknown fields stay in native JSON. Original pinned bytes
+      preserve numeric spelling where the provider exposes exact decimal values
+      as strings.
     summary: >-
       Joinable metadata and retained source evidence across FEC families.
       collection_id joins fec_collections; source_family joins fec_source_catalog.
-      Native identifiers are lifted only when the provider reports them, and
-      committee_id can join fec_committees. metadata_json and source_record_json
-      preserve the complete provider record. Missing IDs remain missing.
+      Rows from different files and election cycles share this table, which has
+      no cycle column: join collection_id to the fec_collection_cycles view for
+      the cycle (2026 means 2025-2026) before comparing with a cycle's totals. A
+      transaction's type, direction, other party, amount and memo flag are fields
+      inside metadata_json (TRANSACTION_TP, OTHER_ID, CAND_ID, TRANSACTION_AMT,
+      MEMO_CD). Native identifiers are lifted only when the provider reports
+      them, and committee_id can join fec_committees. metadata_json and
+      source_record_json preserve the complete provider record. Missing IDs
+      remain missing.
     columns:
-      collection_id: "Selected collection label. Together with source_record_id identifies this record; joins fec_collections.collection_id."
-      source_family: "Caller-selected official FEC source-family identifier, checked against the inventory. Joins fec_source_catalog.source_family; this classification is not independently inferred from source content."
+      collection_id: "Selected collection label: the file or query the record came from. Together with source_record_id identifies this record; joins fec_collections.collection_id and, for the election cycle, fec_collection_cycles.collection_id."
+      source_family: "Caller-selected official FEC source-family identifier, checked against the inventory. Joins fec_source_catalog.source_family; this classification is not independently inferred from source content. fec_receipts holds only the 2025-2026 insertion and deletion files of individual contributions, not the main file of any cycle."
       profile: "Provider reader profile used to interpret the verified input."
       source_record_id: "Provider source-record identity, native API identity, bulk file key or byte-evidenced positional observation ID, scoped to collection_id."
-      committee_id: "Literal committee identifier reported by API metadata or a verified named bulk field such as CMTE_ID. May join fec_committees.committee_id. Blanks remain blank; no identifier is inferred from a name or another entity's ID."
+      committee_id: "Committee ID as the source reports it (bulk CMTE_ID or the API's committee_id). In transaction files this is the committee that filed the report, not necessarily the one that received the money: a PAC's contribution to a candidate is filed under the PAC's ID, with the recipient in metadata_json OTHER_ID and CAND_ID, and TRANSACTION_TP says which way the money moved. To find money a committee received from other committees, also search OTHER_ID. May join fec_committees.committee_id. Blanks remain blank; no identifier is inferred from a name or another entity's ID."
       candidate_id: "Literal candidate identifier reported by API metadata or a verified named bulk field such as CAND_ID. Blanks and aggregate codes remain literal; an ID-shaped aggregate value does not establish a person. Names are not converted to identifiers."
       filing_id: "Source-reported sub_id of a filing metadata row when present; not an inferred original-file number. Amendment/current-record meaning remains in native metadata."
       legal_doc_id: "Source-reported legal document identifier when present, retained in its original source scope."
@@ -1131,7 +1114,7 @@ tables:
       source_url: "Recorded source URL associated with the observation; this is evidence provenance, not a live availability check."
       observed_at: "Provider observation time when available, distinct from dates reported inside the source record."
       source_locator_json: "JSON source coordinates identifying the original response field, record, file or ZIP member and byte span when supplied. Optional field_mapping pins the selected source header or HTML field dictionary; complete dictionary cells appear in the parent collection's tableFieldDefinitions."
-      metadata_json: "Complete provider-native metadata, or literal positional values named by an explicitly selected verified source header or ordered HTML field dictionary. Header and blank rows retain positional metadata; source_record_json always retains the full native wrapper."
+      metadata_json: "Complete provider-native metadata, or literal positional values named by an explicitly selected verified source header or ordered HTML field dictionary. In transaction files, leave out memo lines (MEMO_CD 'X') before summing TRANSACTION_AMT: they repeat money reported on another line. Header and blank rows retain positional metadata; source_record_json always retains the full native wrapper."
       assets_json: "JSON representation of provider asset references and evidence; an asset reference alone does not establish that its body was downloaded."
       embedded_bodies_json: "JSON representation of provider-embedded body values, retaining their supplied scope."
       source_record_json: "Complete provider source-record serialization, preserving identity, native metadata, assets, bodies and evidence."
@@ -1140,12 +1123,10 @@ tables:
     label: "Source-reported FEC relationship observations"
     grain: "One reported relationship or explicit absence state at one source location."
     coverage: >-
-      Sampled. On 2026-09-21, the mikewolfd/spicy-regs fork published and verified 183,390
-      relationship observations mapped from supported selected committee, candidate, bulk and
-      original filing inputs. Missing, null, empty and reported-none states remain rows, so
-      this is not a count of positive relationships. The selected retained seed does not
-      establish complete family coverage, full FEC history, or upstream/default publication.
-      Receipts: fork-execution-2026-09-21/fec-publication-summary.json and remote-mcp-audit/.
+      Sampled. Relationships mapped from the selected committee, candidate, bulk
+      and original filing inputs. Missing, null, empty and reported-none states
+      remain rows, so this is not a count of positive relationships, and it is
+      not complete family coverage or full FEC history.
     measured_on: "2026-09-21"
     data_quality: >-
       Names never become IDs. Identifier shape checks do not verify the named
@@ -1236,10 +1217,10 @@ tables:
     identity_columns: [report_id]
     label: "Government Accountability Office reports"
     coverage: >-
-      Window. 105 reports published 2026-07-13 to 2026-09-04, a
-      fifty-three-day slice taken from the publisher's recent-items feed. It
-      grows as the daily job runs and is not GAO's archive.
-    measured_on: "2026-09-06"
+      Window. Reports as the daily job has read them from the publisher's
+      recent-items feed; an older report appears only when the feed lists it.
+      Not GAO's archive.
+    measured_on: "2026-09-28"
     summary: >-
       One row per U.S. Government Accountability Office (GAO) product, ingested
       from the public GAO reports RSS feed by `build_gao_reports`. The federal
@@ -1263,9 +1244,9 @@ tables:
     identity_columns: [report_id]
     label: "Congressional Research Service reports"
     coverage: >-
-      True range. 14,137 reports published 1993-10-22 to 2026-09-22, running
-      about 1,100 to 1,350 a year in recent years; every id and cell matched
-      the raw list pages but 15 `update_date` values the publisher re-stamped
+      True range: reports published from 1993-10-22 on, running about 1,100 to
+      1,350 a year in recent years. On 2026-09-23 every id and cell matched the
+      raw list pages but 15 `update_date` values the publisher re-stamped
       between two reads.
     measured_on: "2026-09-23"
     summary: >-
@@ -1291,29 +1272,31 @@ tables:
       url: "Congress.gov API URL for the report's detail resource."
   court_dockets:
     identity_columns: [cl_docket_id]
-    label: "Federal court dockets"
+    label: "Court dockets of APA suits against agencies"
     coverage: >-
-      True range with a density caveat. Dockets filed 1992-08-26 to
-      2026-09-25 across 101 courts, but 11,477 rows over that span are the
-      nature-of-suit 899 selection, not the full docket record. 3,693 rows
-      from the bulk edition had NULL party names on this date; each run
-      re-reads a bounded slice of them.
-    measured_on: "2026-09-26"
+      True range with a density caveat: dockets filed from 1992 on, but only the
+      nature-of-suit 899 (Administrative Procedure Act) selection, not the full
+      docket record. Party names of dockets from the bulk edition are read a
+      bounded slice per run; until read, parties_json is NULL.
+    measured_on: "2026-09-28"
     summary: >-
-      One row per federal court docket challenging agency action under the
-      Administrative Procedure Act, ingested from the CourtListener v4 search API
-      (`courtlistener.com`, RECAP dockets with nature-of-suit 899) by
-      `build_courtlistener`. When an agency finalizes a rule it is frequently
-      sued; these are those suits — the litigation counterpart to the rulemakings
-      in `dockets`/`documents`. There is no machine RIN/FR key on a court docket,
-      so it links to the corpus by name and topic: the defendant agency appears in
-      `case_name` and `parties_json` (joinable by name to `agency_stats` / the FR
-      `agency_slugs`), and `cause` names the statute invoked. Primary / dedup key
-      is `cl_docket_id`. All columns are stored as VARCHAR; array fields are JSON
-      strings.
+      One row per court docket of a suit challenging federal agency action under
+      the Administrative Procedure Act (nature of suit 899), mostly in district
+      courts, from CourtListener (`courtlistener.com`: its v4 search API and its
+      bulk docket edition) by `build_courtlistener`. It is the litigation
+      counterpart to the rulemakings in `dockets`/`documents`, not all federal
+      litigation: petitions straight to a court of appeals, such as challenges
+      to FCC orders under the Hobbs Act, are largely absent. For court
+      decisions, including appeals and Supreme Court cases, search
+      `court_opinion_clusters` by `case_name`. There is no RIN, Federal Register
+      or agency identifier on a court docket: the defendant agency appears only
+      as text in `case_name` and `parties_json`, so a name search finds
+      candidates, not confirmed links, and `cause` names the statute invoked.
+      Primary / dedup key is `cl_docket_id`. All columns are stored as VARCHAR;
+      array fields are JSON strings.
     columns:
       cl_docket_id: "CourtListener docket id (e.g. `73613631`). Primary key / dedup key. Distinct from the regulations.gov `docket_id`."
-      case_name: "Short case name (e.g. `HENNEPIN COUNTY, MINNESOTA v. U.S. DEPARTMENT OF HEALTH AND HUMAN SERVICES`). Names the defendant agency."
+      case_name: "Short case name (e.g. `HENNEPIN COUNTY, MINNESOTA v. U.S. DEPARTMENT OF HEALTH AND HUMAN SERVICES`). Names the defendant agency as text, not as an identifier. For decisions in cases missing here, including appeals of agency orders, search `court_opinion_clusters.case_name`."
       case_name_full: "Full case caption when available; often blank."
       court_id: "CourtListener court identifier (e.g. `dcd` D.D.C., `cadc` D.C. Circuit, `akd` D. Alaska)."
       court: "Human-readable court name (e.g. `District Court, District of Columbia`)."
@@ -1323,7 +1306,7 @@ tables:
       date_filed: "Date the case was filed (ISO 8601 string). Sort key and incremental watermark."
       date_terminated: "Date the case was terminated, if closed (ISO 8601 string). Null for pending cases."
       date_argued: "Date of oral argument, if any (ISO 8601 string). Often null."
-      nature_of_suit: "Nature-of-suit label; scoped to `899 Other Statutes: Administrative Procedures Act/Review or Appeal of Agency Decision`."
+      nature_of_suit: "Nature-of-suit label as CourtListener spells it. Every row came from the 899 (Administrative Procedure Act) selection, but the label varies: with or without the number (appellate dockets write 2899 or 3899), abbreviated as APA or Admin Proc Act, blank or NULL, and on a few rows another code. Filtering on one exact string misses most rows; you do not need this column to find APA suits."
       cause: "Statutory cause of action as recorded in PACER (e.g. `05:551 Administrative Procedure Act`)."
       jurisdiction_type: "Basis of federal jurisdiction (e.g. `U.S. Government Defendant`)."
       jury_demand: "Jury demand recorded on the docket (e.g. `None`)."
@@ -1340,17 +1323,16 @@ tables:
     grain: "One row per grouped court_dockets row; absent rows have no group."
     identity_columns: [cl_docket_id]
     coverage: >-
-      Not a range. A derived mapping over the published enriched `court_dockets`
-      selection (11,459 rows): 403 same-case groups link 901 docket rows.
-      The CourtListener bulk edition leaves its own parent_docket_id blank in
-      every row, so the parent is inferred from the publisher's PACER mechanics
-      (one main case created first, plus per-defendant sub-dockets — the
-      documented doppeldocket problem, FLP wiki / GitHub issue #2185): group by
-      (court_id, docket_number) with a single caption among published members,
-      parent = lowest pacer_case_id in the group. confidence_tier separates
-      tight-pacer doppeldockets from wide-spread refilings of one case. Groups
-      with multiple captions (docket-number reuse) or no pacer ids stay
-      ungrouped and have no row.
+      Not a range. A derived mapping over the published `court_dockets`
+      selection, computed from the 2026-06-30 bulk edition. The edition leaves
+      its own parent_docket_id blank in every row, so the parent is inferred
+      from the publisher's PACER mechanics (one main case created first, plus
+      per-defendant sub-dockets: the documented doppeldocket problem, FLP wiki /
+      GitHub issue #2185): group by (court_id, docket_number) with a single
+      caption among published members, parent = lowest pacer_case_id in the
+      group. confidence_tier separates tight-pacer doppeldockets from
+      wide-spread refilings of one case. Groups with multiple captions
+      (docket-number reuse) or no pacer ids stay ungrouped and have no row.
     measured_on: "2026-09-22"
     summary: >-
       Same-case record groups for the APA litigation dockets: which published
@@ -1371,21 +1353,14 @@ tables:
     grain: "One CourtListener decision cluster per cluster_id; multiple opinion bodies can belong to it."
     identity_columns: [cluster_id]
     coverage: >-
-      Not a range. The complete 2026-06-30 opinion-clusters export is qualified and published
-      on the fork: 10,070,727 unique clusters, with every mapped source field
-      checked against the original export. All three court fields agree with
-      the same-edition docket map and court reference data. All prior identities
-      and 36 existing fields are preserved.
-      Generation 7a2cbdb72ad6a7b9c79aa7f25dfa03c4ae3fe752cdb33900cb5d6b346d299b7c
-      passes full public-download verification and both MCP access modes,
-      including all fields of six native witnesses. This qualifies dated
-      decision metadata; opinion bodies, newer changes and broader historical
-      coverage remain separate. That generation holds no search rows. The
-      search catch-up adds every cluster whose id is above the export's highest,
-      whatever its filing date (13,518 on 2026-09-26); a correction to an
-      exported cluster arrives with the next export. See
-      docs/research/fork-output-ledger-2026-09-21.md and receipt
-      join-gaps-2026-09-26/i/.
+      Not a range. The complete 2026-06-30 CourtListener opinion-clusters
+      export, every mapped source field checked against the original export; the
+      court fields agree with the same-edition docket map and court reference
+      data. A search catch-up adds every cluster whose id is above the export's
+      highest, whatever its filing date; a correction to an exported cluster
+      arrives with the next export. Opinion bodies and broader historical
+      coverage are separate. See docs/research/fork-output-ledger-2026-09-21.md
+      and receipt join-gaps-2026-09-26/i/.
     measured_on: "2026-09-22"
     summary: >-
       Decision metadata from CourtListener opinion-clusters bulk data and
@@ -1450,16 +1425,12 @@ tables:
     grain: "One reporter citation of one CourtListener decision (cluster); a decision can have several."
     identity_columns: [citation_id]
     coverage: >-
-      Not a range. The complete 2026-06-30 CourtListener citations export, copied
-      field for field: 18,123,788 citations of 7,844,636 decisions, every
-      (cluster_id, volume, reporter, page) unique as the publisher's schema
-      requires, 456,590 of them in the U.S. Reports. All but 63 name a cluster
-      present in the published court_opinion_clusters edition: the publisher
-      cut this export at 19:14 UTC and the cluster export at 08:16, and the
-      clusters' catch-up adds 43 of the 63 (receipt join-gaps-2026-09-26/i/).
-      Published on the
-      fork as generation f1e2e523631ed4e291f85e4350c917bdabcb06bfa75ad47e12ac0e1d4c865415
-      (family court-citations) on 2026-09-22.
+      Not a range. The complete 2026-06-30 CourtListener citations export,
+      copied field for field: every (cluster_id, volume, reporter, page) unique
+      as the publisher's schema requires. The publisher cut this export hours
+      after the cluster export, so a few citations name a cluster
+      court_opinion_clusters lacks (63 on 2026-09-26, 43 of them added by the
+      clusters' catch-up; receipt join-gaps-2026-09-26/i/).
     measured_on: "2026-09-22"
     summary: >-
       Every reporter citation CourtListener records for a decision, such as
@@ -1491,13 +1462,10 @@ tables:
     identity_columns: [citing_opinion_id, cited_opinion_id]
     coverage: >-
       Not a range. The complete 2026-06-30 CourtListener citation-map export:
-      77,460,014 citing/cited opinion pairs, each pair unique as the publisher's
-      schema requires, and no NULL depth. Only the publisher's surrogate row id is
-      dropped. Through court_opinions of the same edition, all but 3,758 citing and
-      all but 1 cited opinion ids resolve, and the cited opinions belong to
-      4,509,544 distinct decisions. Published on the fork as generation
-      f1e2e523631ed4e291f85e4350c917bdabcb06bfa75ad47e12ac0e1d4c865415 (family
-      court-citations) on 2026-09-22.
+      citing/cited opinion pairs, each unique as the publisher's schema
+      requires, with no NULL depth. Only the publisher's surrogate row id is
+      dropped. Through court_opinions of the same edition, all but 3,758 citing
+      ids and one cited id resolved on 2026-09-22.
     measured_on: "2026-09-22"
     summary: >-
       Which court opinion cites which, and how often, as CourtListener's citator
@@ -1521,12 +1489,10 @@ tables:
     grain: "One parenthetical summary one opinion wrote about another."
     identity_columns: [parenthetical_id]
     coverage: >-
-      Not a range. The complete 2026-06-30 CourtListener parentheticals export:
-      6,408,887 parentheticals, none with empty text, 6,193 without a group.
-      Every described opinion id and all but 618 describing ids resolve through
-      court_opinions of the same edition. Published on the fork as generation
-      f1e2e523631ed4e291f85e4350c917bdabcb06bfa75ad47e12ac0e1d4c865415 (family
-      court-citations) on 2026-09-22.
+      Not a range. The complete 2026-06-30 CourtListener parentheticals export,
+      none with empty text; some have no group. Through court_opinions of the
+      same edition every described opinion id and all but 618 describing ids
+      resolved on 2026-09-22.
     measured_on: "2026-09-22"
     summary: >-
       Short summaries of a decision written by the courts that later cite it, the
@@ -1555,17 +1521,12 @@ tables:
     identity_columns: [opinion_id]
     coverage: >-
       Not a range. The complete 2026-06-30 CourtListener opinions export without
-      its eight text fields: 10,798,347 opinions, every opinion_id unique and every
-      cluster_id set, belonging to 10,069,107 decisions; all but 21 name a decision
-      present in the published court_opinion_clusters edition. Those 21 are RECAP
-      trial-court opinions created between the cluster export (08:16 UTC) and
-      this one (09:56), which opinion search does not index; they resolve with
-      the next export (receipt join-gaps-2026-09-26/i/). Decoded in
-      record-aligned pieces, each piece's row count held to the export's record
-      starts and its opening rows to the reference decoder. Published on the fork
-      as generation f7cc67cc03bf7ef1a7d976d6eb74bf2654f7212b66ad785c633331a4cf377d41
-      (family court-opinions) on 2026-09-22. Opinion text is not included: the
-      fork links out to CourtListener instead.
+      its eight text fields: every opinion_id unique and every cluster_id set.
+      All but 21 name a decision in court_opinion_clusters; those 21 are RECAP
+      trial-court opinions created between the two exports, which opinion search
+      does not index, and resolve with the next export (receipt
+      join-gaps-2026-09-26/i/). Opinion text is not included: the fork links out
+      to CourtListener instead.
     measured_on: "2026-09-22"
     summary: >-
       Every CourtListener opinion's decision, type and author, without its text.
@@ -1635,10 +1596,11 @@ tables:
     identity_columns: [name]
     label: "FCC proceedings"
     coverage: >-
-      True range. 21,683 docket names from 21,691 ECFS documents, created
-      1991-10-22 to 2026-09-22; single-document names matched the raw pages
-      cell for cell.
-    measured_on: "2026-09-23"
+      True range: every proceeding ECFS dates, created from 1991 on, re-read
+      whole each run so later closings and status changes are current. A
+      proceeding with no created date is left out, because the API's date-range
+      queries cannot reach it.
+    measured_on: "2026-09-28"
     summary: >-
       One row per FCC proceeding (the FCC's docket equivalent, e.g. `17-108`),
       ingested from the FCC ECFS public API (`/proceedings`) by
@@ -1655,17 +1617,20 @@ tables:
       ECFS edited last. A document with no docket name is left out (one, a
       2017 stub). Proceedings with no created date are unreachable through the
       API's date-range queries and are not included (legacy shells with no
-      filing activity). All columns are stored as VARCHAR.
+      filing activity). There is no program or topic field, so a title search
+      misses proceedings (see `description`), and open proceedings carry
+      placeholder close dates (see `date_closed`). All columns are stored as
+      VARCHAR.
     columns:
       name: "Proceeding (docket) number, e.g. `17-108` or `23-320`. Primary key / dedup key, and the join key to `fcc_filings.proceeding_names_json`."
       id_proceeding: "ECFS internal numeric id for the proceeding."
-      description: "Proceeding title/subject (ECFS `description_display`, falling back to `description`), e.g. `Restoring Internet Freedom`."
+      description: "Proceeding title/subject (ECFS `description_display`, falling back to `description`), e.g. `Restoring Internet Freedom`. There is no program or topic field, and titles often leave the program out: Universal Service dockets include 13-184 (`Modernizing the E-rate Program for Schools and Libraries.`) and 02-60 (`In the Matter of Rural Health Care Support Mechanism`), neither of which says universal service. Search titles together with bureau_code (WC, or CC for older dockets) and known docket numbers."
       bureau_code: "Code of the FCC bureau that owns the proceeding (e.g. `WC`)."
       bureau_name: "Name of the FCC bureau that owns the proceeding (e.g. `Wireline Competition Bureau`)."
       rulemaking_or_docket: "ECFS `flag_rulemaking_or_docket`: `R` for rulemakings (RM- numbers), `D` for dockets."
-      filing_status: "ECFS filing-window status for the proceeding (e.g. `OPENALL`)."
+      filing_status: "ECFS filing-window status for the proceeding (e.g. `OPENALL`): how filings are accepted, not whether the proceeding is open. Many closed proceedings still read `OPENALL`; use date_closed for open or closed."
       date_created: "Timestamp the proceeding was created in ECFS (ISO 8601 string). Sort key."
-      date_closed: "Timestamp the proceeding was closed, if it has been (open proceedings carry null or a far-future sentinel like `2099-12-31`)."
+      date_closed: "When ECFS closed the proceeding. An open proceeding has no real close date: ECFS leaves it null or puts a placeholder far in the future, and both `2099-12-31T23:59:59.999Z` and `2100-01-31T05:00:00.000Z` occur. Treat a proceeding as open when date_closed is null or later than today."
       comment_start_date: "Start of the initial comment window, when ECFS records one. Often null."
       comment_end_date: "End of the initial comment window, when ECFS records one. Often null."
       reply_comment_start_date: "Start of the reply-comment window, when ECFS records one. Often null."
@@ -1675,13 +1640,12 @@ tables:
     identity_columns: [id_submission]
     label: "FCC filings"
     coverage: >-
-      Window. All 5,780 held filings were replayed against retained or reacquired native
-      source records on 2026-09-27 and published as generation 9c87b600aa7b5847.
-      One proceeding-number cell was explicitly corrected from the native source;
-      every other prior cell was preserved. Three selected offered PDFs have retained
-      extraction diagnostics. This qualifies the held population, not the ECFS archive
-      or complete attachment text. Receipt: spicy-regs-fcc-complete-20260927/receipt-final.json.
-    measured_on: "2026-09-27"
+      Window, not the ECFS archive: filings ECFS received on or after
+      2026-08-24, when this table started, extended by a daily run. Earlier
+      filings are held only for proceedings backfilled on purpose, so a
+      proceeding's count here is not its ECFS total. Attachment text is
+      extracted for a few selected PDFs only.
+    measured_on: "2026-09-28"
     summary: >-
       One row per FCC ECFS filing — the FCC's comment equivalent: comments,
       reply comments, ex-parte notices, letters, and other submissions —
@@ -1736,11 +1700,8 @@ tables:
   fec_committee_history:
     label: "FEC committees by cycle"
     coverage: >-
-      True range. Every cycle from 1980 through the current one: each run
-      reads every cycle's bulk committee master whole and publishes every row.
-      The 24 source files fetched on 2026-09-27 held 298,395 rows naming
-      89,710 committees (receipt
-      `fork-execution-2026-09-21/committee-master-measure-2026-09-27/`). The
+      True range. Every cycle from 1980 through the current one: each run reads
+      every cycle's bulk committee master whole and publishes every row. The
       current cycle's file is republished daily, so its rows change.
     measured_on: "2026-09-27"
     summary: >-
@@ -1794,12 +1755,10 @@ tables:
   bill_actions:
     label: "Bill actions"
     coverage: >-
-      Sampled. The adoption run produced 75,239 rows in this output from the
-      118th Congress's HR and S BILLSTATUS archives, processing 16,213 bills in
-      one pass. The pass used 16 requests (8 keyed, 8 keyless), with the printing
-      cap fixed at four and model calls disabled.
-      Receipt: `rollups-0-24-0-adoption-2026-09-20/`. Local output only; not uploaded.
-    measured_on: "2026-09-20"
+      Sampled: bills the bill family has read from GovInfo BILLSTATUS, Congress
+      by Congress from the 108th on; group by the Congress in bill_id to see
+      which Congresses are filled.
+    measured_on: "2026-09-28"
     summary: >-
       One row per action entry in a bill's BILLSTATUS document, in publisher order.
       Each row also carries the stage the action text implies, with the rule and
@@ -1810,12 +1769,10 @@ tables:
   bill_committees:
     label: "Bill committee referrals"
     coverage: >-
-      Sampled. The adoption run produced 26,029 rows in this output from the
-      118th Congress's HR and S BILLSTATUS archives, processing 16,213 bills in
-      one pass. The pass used 16 requests (8 keyed, 8 keyless), with the printing
-      cap fixed at four and model calls disabled.
-      Receipt: `rollups-0-24-0-adoption-2026-09-20/`. Local output only; not uploaded.
-    measured_on: "2026-09-20"
+      Sampled: bills the bill family has read from GovInfo BILLSTATUS, Congress
+      by Congress from the 108th on; group by the Congress in bill_id to see
+      which Congresses are filled.
+    measured_on: "2026-09-28"
     summary: >-
       One row per committee or subcommittee a bill reached, as its BILLSTATUS
       document names it. `referral_signal` is set only for the six appropriations
@@ -1826,12 +1783,11 @@ tables:
   bill_publisher_summaries:
     label: "CRS bill summaries (publisher)"
     coverage: >-
-      Sampled. The adoption run produced 10,806 rows in this output from the
-      118th Congress's HR and S BILLSTATUS archives, processing 16,213 bills in
-      one pass. The pass used 16 requests (8 keyed, 8 keyless), with the printing
-      cap fixed at four and model calls disabled.
-      Receipt: `rollups-0-24-0-adoption-2026-09-20/`. Local output only; not uploaded.
-    measured_on: "2026-09-20"
+      Sampled: bills the bill family has read from GovInfo BILLSTATUS, Congress
+      by Congress from the 108th on; group by the Congress in bill_id to see
+      which Congresses are filled. A bill has rows only for the summaries the
+      publisher has written.
+    measured_on: "2026-09-28"
     summary: >-
       One row per CRS summary the publisher states on a bill, at the version and
       action it describes. `summary_html` is kept exactly as the publisher escaped
@@ -1841,13 +1797,12 @@ tables:
   bill_versions:
     label: "Bill printings"
     coverage: >-
-      Sampled. The adoption run produced 19,687 rows in this output from the
-      118th Congress's HR and S BILLSTATUS archives, processing 16,213 bills in
-      one pass. The pass used 16 requests (8 keyed, 8 keyless), with the printing
-      cap fixed at four and model calls disabled.
-      Four rows have source=govinfo and 19,683 remain publisher-listed printings without acquired bodies.
-      Receipt: `rollups-0-24-0-adoption-2026-09-20/`. Local output only; not uploaded.
-    measured_on: "2026-09-20"
+      Sampled: bills the bill family has read from GovInfo BILLSTATUS, Congress
+      by Congress from the 108th on; group by the Congress in bill_id to see
+      which Congresses are filled. source is govinfo for a printing whose body
+      was acquired; other rows are printings the publisher lists without an
+      acquired body.
+    measured_on: "2026-09-28"
     summary: >-
       One row per printing of a bill, per source that supplied it. The full text is
       deliberately not a column here: `bill_sections.body` carries it at the grain
@@ -1885,13 +1840,9 @@ tables:
       (receipt `bill-family-repair-scope-2026-09-26/`). All columns are stored
       as VARCHAR.
     coverage: >-
-      Sampled. The adoption run produced 66 rows in this output from the
-      118th Congress's HR and S BILLSTATUS archives, processing 16,213 bills in
-      one pass. The pass used 16 requests (8 keyed, 8 keyless), with the printing
-      cap fixed at four and model calls disabled.
-      Only four printings were acquired under the fixed cap; most source bodies remain unread.
-      Receipt: `rollups-0-24-0-adoption-2026-09-20/`. Local output only; not uploaded.
-    measured_on: "2026-09-20"
+      Sampled: the sections parsed from printings whose bodies the bill family
+      acquired (source govinfo in bill_versions).
+    measured_on: "2026-09-28"
     summary: >-
       One row per content-bearing node of one bill version, in document order. All
       columns are stored as VARCHAR.
@@ -1916,13 +1867,10 @@ tables:
       `bill-family-repair-scope-2026-09-26/`). All columns are stored as
       VARCHAR.
     coverage: >-
-      Sampled. The adoption run produced 0 rows in this output from the
-      118th Congress's HR and S BILLSTATUS archives, processing 16,213 bills in
-      one pass. The pass used 16 requests (8 keyed, 8 keyless), with the printing
-      cap fixed at four and model calls disabled.
-      No consecutive pair had both parsed bodies in the four-printing sample.
-      Receipt: `rollups-0-24-0-adoption-2026-09-20/`. Local output only; not uploaded.
-    measured_on: "2026-09-20"
+      Sampled: consecutive printings of a bill are compared only when both
+      bodies were acquired and parsed, from the Congresses the bill family has
+      read.
+    measured_on: "2026-09-28"
     summary: >-
       One row per compared pair of consecutive printings of one bill. `engine_name`,
       `engine_version` and `engine_revision` record which diff engine produced the
@@ -1932,13 +1880,9 @@ tables:
   section_diff_items:
     label: "Bill comparison items"
     coverage: >-
-      Sampled. The adoption run produced 0 rows in this output from the
-      118th Congress's HR and S BILLSTATUS archives, processing 16,213 bills in
-      one pass. The pass used 16 requests (8 keyed, 8 keyless), with the printing
-      cap fixed at four and model calls disabled.
-      No consecutive pair had both parsed bodies in the four-printing sample.
-      Receipt: `rollups-0-24-0-adoption-2026-09-20/`. Local output only; not uploaded.
-    measured_on: "2026-09-20"
+      Sampled: the settled correspondences within each comparison in
+      section_diffs, so it covers exactly what that table covers.
+    measured_on: "2026-09-28"
     summary: >-
       One row per settled correspondence in one version-pair comparison.
       `text_diff_json` is byte-capped, and `text_diff_truncated` says when the cap
@@ -1948,13 +1892,10 @@ tables:
   financial_changes:
     label: "Dollar-figure changes"
     coverage: >-
-      Sampled. The adoption run produced 0 rows in this output from the
-      118th Congress's HR and S BILLSTATUS archives, processing 16,213 bills in
-      one pass. The pass used 16 requests (8 keyed, 8 keyless), with the printing
-      cap fixed at four and model calls disabled.
-      No consecutive pair had both parsed bodies in the four-printing sample.
-      Receipt: `rollups-0-24-0-adoption-2026-09-20/`. Local output only; not uploaded.
-    measured_on: "2026-09-20"
+      Sampled: dollar figures that change between consecutive printings compared
+      in section_diffs; a pair is compared only when both bodies were acquired
+      and parsed.
+    measured_on: "2026-09-28"
     summary: >-
       One row per aligned pair of dollar figures in a section whose amounts changed.
       `pairing_claim` names how the two figures were aligned; it is word alignment,
@@ -1964,13 +1905,9 @@ tables:
   section_classifications:
     label: "Section classifications (model)"
     coverage: >-
-      Sampled. The adoption run produced 0 rows in this output from the
-      118th Congress's HR and S BILLSTATUS archives, processing 16,213 bills in
-      one pass. The pass used 16 requests (8 keyed, 8 keyless), with the printing
-      cap fixed at four and model calls disabled.
-      Model calls were capped at zero, so this run measures no classification yield.
-      Receipt: `rollups-0-24-0-adoption-2026-09-20/`. Local output only; not uploaded.
-    measured_on: "2026-09-20"
+      Sampled: written by a language model during bill-family runs; a run
+      without model calls enabled cannot fill it.
+    measured_on: "2026-09-28"
     summary: >-
       One row per label a model assigned to one section of one printing.
       `vocabulary_hash` is a digest over the sealed label list, so a vocabulary
@@ -1981,13 +1918,9 @@ tables:
   bill_summaries:
     label: "Bill summaries (model)"
     coverage: >-
-      Sampled. The adoption run produced 0 rows in this output from the
-      118th Congress's HR and S BILLSTATUS archives, processing 16,213 bills in
-      one pass. The pass used 16 requests (8 keyed, 8 keyless), with the printing
-      cap fixed at four and model calls disabled.
-      Model calls were capped at zero, so this run measures no summary yield.
-      Receipt: `rollups-0-24-0-adoption-2026-09-20/`. Local output only; not uploaded.
-    measured_on: "2026-09-20"
+      Sampled: written by a language model during bill-family runs; a run
+      without model calls enabled cannot fill it.
+    measured_on: "2026-09-28"
     summary: >-
       One row per plain-language summary of one printing of a bill. `frame` is
       stored because without it the summary is not reproducible from the row. All
@@ -1997,13 +1930,9 @@ tables:
   diff_summaries:
     label: "Change summaries (model)"
     coverage: >-
-      Sampled. The adoption run produced 0 rows in this output from the
-      118th Congress's HR and S BILLSTATUS archives, processing 16,213 bills in
-      one pass. The pass used 16 requests (8 keyed, 8 keyless), with the printing
-      cap fixed at four and model calls disabled.
-      Model calls were capped at zero, so this run measures no summary yield.
-      Receipt: `rollups-0-24-0-adoption-2026-09-20/`. Local output only; not uploaded.
-    measured_on: "2026-09-20"
+      Sampled: written by a language model during bill-family runs; a run
+      without model calls enabled cannot fill it.
+    measured_on: "2026-09-28"
     summary: >-
       One row per model-written summary of the change between two printings of a
       bill. All columns are stored as VARCHAR.
@@ -2012,13 +1941,11 @@ tables:
   public_activity_events:
     label: "Bill activity events"
     coverage: >-
-      Sampled. The adoption run produced 35,900 rows in this output from the
-      118th Congress's HR and S BILLSTATUS archives, processing 16,213 bills in
-      one pass. The pass used 16 requests (8 keyed, 8 keyless), with the printing
-      cap fixed at four and model calls disabled.
-      These compare the cold-start snapshot with this run only, not the historical sequence of actions.
-      Receipt: `rollups-0-24-0-adoption-2026-09-20/`. Local output only; not uploaded.
-    measured_on: "2026-09-20"
+      Sampled: bills the bill family has read from GovInfo BILLSTATUS, Congress
+      by Congress from the 108th on; group by the Congress in bill_id to see
+      which Congresses are filled. Each event compares a bill between two runs
+      of the bill family, not the historical sequence of its actions.
+    measured_on: "2026-09-28"
     summary: >-
       One row per change detected between two runs of the bill family. Two instants
       per row: `occurred_at` is the publisher's, `detected_at` is the run's. All
@@ -2043,12 +1970,12 @@ tables:
       Committee as sponsor and have no member sponsor to record. All columns
       are stored as VARCHAR.
     coverage: >-
-      Window: the 119th Congress, complete as of 2026-09-23: 7,095 amendments,
-      equal to the publisher's declared count, each with its detail record.
-      Every cell matches the retained list and detail responses (receipt
-      `amendment-details-2026-09-23/` in the fork execution receipts).
-      Scheduled runs walk an `updateDate` window from the table's watermark,
-      at most ninety days, and fetch detail for each amendment in it.
+      Window: the 119th Congress, each amendment with its detail record. On
+      2026-09-23 the table held every amendment the publisher declared, and
+      every cell matched the retained list and detail responses (receipt
+      `amendment-details-2026-09-23/` in the fork execution receipts). Scheduled
+      runs walk an `updateDate` window from the table's watermark, at most
+      ninety days, and fetch detail for each amendment in it.
     measured_on: "2026-09-23"
     summary: >-
       One row per amendment, from the Congress.gov amendment list and detail
@@ -2060,19 +1987,13 @@ tables:
   press_releases:
     label: "Appropriations press releases"
     coverage: >-
-      Window. The fork serves 28 releases from the complete House and Senate
-      Appropriations feed captures of September 19 and September 22 UTC: all
-      25 current items plus three retained items that rotated out. The original
-      window union passed every mapped-field comparison. A later scheduled
-      generation refreshed timestamps and inferred bill links. Its bounded
-      repair removes one false budget-year link and preserves four literal
-      bill citations plus every other public value; public bytes and both MCP
-      paths are checked separately. The newer capture metadata is not freshly
-      raw-qualified. This
-      covers the two captured feed windows, not all committees, earlier history
-      or release-page bodies. See `press-release-qualification/` and
-      `press-link-repair/` in the fork execution receipts.
-    measured_on: "2026-09-22"
+      Window. Releases from the House and Senate Appropriations committees'
+      feeds as captured since September 19, 2026, including items that later
+      rotated out of a feed; bill links are inferred from release text. Not all
+      committees, earlier history or release-page bodies. See
+      `press-release-qualification/` and `press-link-repair/` in the fork
+      execution receipts.
+    measured_on: "2026-09-28"
     summary: >-
       One row per item in one appropriations committee press-release feed capture.
       `bill_id` is an inferred candidate when a pattern matches a published bill
@@ -2108,40 +2029,21 @@ tables:
   roll_call_votes:
     label: "House and Senate roll-call votes"
     coverage: >-
-      Sampled, and accumulating. Measured on one cold-start run (receipt
-      `d1-measured-run-2026-09-19/`): the `house-vote` index listed 676 House
-      votes for the 119th, 577 of which the linkage rule could index, and all
-      577 were fetched from the Clerk under the 1,500-per-run cap with no
-      refusal — 4 keyed and 577 keyless requests in 310 seconds, 577 rows
-      produced locally from an empty prior. Local output only; not uploaded.
-      That measured run was House-only; the Senate LIS menu route landed
-      2026-09-21 (9c58095), so both chambers are now acquired and published,
-      bounded by the same per-run
-      cap on how many roll calls are fetched, newest first. A roll call
-      already published with a tally is not fetched again, so a steady-state
-      run is meant to read only new ones plus the newest few, which are
-      re-read in case the publisher corrected them. **The skip is design, not
-      measurement**: D1 was a cold start, so nothing was held and nothing was
-      skipped, and the saving described here has not been observed yet — the
-      second run is what measures it. Each chamber's own session index is its
-      population: the Senate LIS menu, and the House Clerk's EVS index pages
-      (spicy-docs `list_house_votes`); both hosts are keyless, so the rollup
-      uses no api.data.gov key. A set of roll calls reached from bills alone is
-      not an index of a session's roll calls and never establishes a complete
-      selection.
-      The scheduled scope is the sitting Congress; an earlier Congress is
-      backfilled by dispatching its number, read newest first under the same
-      cap, and once held is never re-read, because the overlap re-read
-      applies to a sitting Congress only. The Clerk and LIS files reach the
-      101st Congress; the bill family's references reach the 108th.
-      A House roll call that a bill's own action names can be published a cron
-      before the Clerk's index lists it, since the references are read
-      independently and the Clerk file is addressable from the roll-call key
-      alone; such a row carries the same tally and member positions as any
-      other, so this widens timeliness rather than the coverage claim. `vote_date` keeps the Clerk's own spelling
-      (`9-Sep-2025`), which does not sort as a date, so no range over it is
-      quoted here.
-    measured_on: "2026-09-19"
+      Sampled, and accumulating: both chambers' roll calls from each chamber's
+      own session index (the Senate LIS menu and the House Clerk's EVS index
+      pages, both keyless), newest first under a per-run cap. The scheduled
+      scope is the sitting Congress; an earlier Congress is backfilled by
+      dispatching its number under the same cap and, once held, is never
+      re-read. A roll call already published with a tally is not fetched again,
+      except the newest few of a sitting Congress, re-read in case the publisher
+      corrected them. The Clerk and LIS files reach the 101st Congress; the bill
+      family's references reach the 108th. A set of roll calls reached from
+      bills alone is not an index of a session's roll calls. A House roll call
+      that a bill's own action names can be published a cron before the Clerk's
+      index lists it, with the same tally and member positions. `vote_date`
+      keeps the Clerk's own spelling (`9-Sep-2025`), which does not sort as a
+      date, so no range over it is quoted here.
+    measured_on: "2026-09-28"
     summary: >-
       One row per roll call: the publisher's own tally, and the bill it refers to.
       The four tally columns are the publisher's own counts or they are NULL; they
@@ -2176,13 +2078,10 @@ tables:
   member_votes:
     label: "Member vote positions"
     coverage: >-
-      Sampled, and accumulating. Measured on the same cold-start run as
-      `roll_call_votes` (receipt `d1-measured-run-2026-09-19/`): 249,099
-      member positions across its 577 roll calls, an average of 432 a roll
-      call. One row per member per roll call in `roll_call_votes`, so it
-      inherits that table's both-chambers scope, per-run cap and
-      skip-what-is-already-held behavior exactly.
-    measured_on: "2026-09-19"
+      Sampled, and accumulating. One row per member per roll call in
+      `roll_call_votes`, so it inherits that table's both-chambers scope,
+      per-run cap and skip-what-is-already-held behavior exactly.
+    measured_on: "2026-09-28"
     summary: >-
       One row per member's position on one roll call. `position` keeps the
       publisher's own word (the Clerk spells both Aye/No and Yea/Nay) and
@@ -2194,11 +2093,11 @@ tables:
     label: "Legislators"
     coverage: >-
       Sampled. The fork selection covers both complete community crosswalk files
-      captured September 22, 2026 UTC: 12,770 current and historical legislators.
-      Every declared field was checked against the retained originals, and all
-      earlier retained identities and native values survive. The source supplies
-      1,738 distinct FEC candidate IDs and 328 LIS IDs across both files; absent
-      IDs remain absent. This qualifies the captured community files, not an
+      captured September 22, 2026 UTC: current and historical legislators. Every
+      declared field was checked against the retained originals, and all earlier
+      retained identities and native values survive. The source supplies 1,738
+      distinct FEC candidate IDs and 328 LIS IDs across both files; absent IDs
+      remain absent. This qualifies the captured community files, not an
       independently complete official roster. Receipts:
       fork-execution-2026-09-21/members-qualification/.
     measured_on: "2026-09-22"
@@ -2211,12 +2110,12 @@ tables:
   member_terms:
     label: "Legislator terms"
     coverage: >-
-      Sampled. The fork selection retains all 45,535 terms from the same complete
+      Sampled. The fork selection retains every term from the same complete
       September 22, 2026 UTC captures as `members`. All mapped values, parent
-      joins and per-member term counts agree with the originals; earlier retained
-      term identities survive. Source order defines term_index. The single party
-      value per term does not reproduce the finer party_affiliations histories
-      present in 29 native terms. Receipts:
+      joins and per-member term counts agree with the originals; earlier
+      retained term identities survive. Source order defines term_index. The
+      single party value per term does not reproduce the finer
+      party_affiliations histories present in 29 native terms. Receipts:
       fork-execution-2026-09-21/members-qualification/.
     measured_on: "2026-09-22"
     summary: >-
@@ -2228,11 +2127,10 @@ tables:
     identity_columns: [vote_id, member_key]
     label: "Member vote terms"
     coverage: >-
-      Derived, and bounded by its inputs: one row for every `member_votes`
-      row. On 2026-09-23, 382,136 rows from roll-call generation `3204b8fc…`
-      and members generation `017366cc…`: 382,118 matched a half-open term, 15
-      an inclusive end, and 3 stay unmatched. The exceptions equal those of an
-      independent replay row for row
+      Derived, and bounded by its inputs: one row for every `member_votes` row,
+      matched to the member's term on the vote date. On 2026-09-23 all but 18
+      votes matched a half-open term: 15 matched only an inclusive end date and
+      3 matched no term, exactly as an independent replay found
       (fork-execution-2026-09-21/votes-qualification/complete-member-join-replay.json).
     measured_on: "2026-09-23"
     summary: >-
@@ -2260,16 +2158,11 @@ tables:
   committee_reports:
     label: "Committee reports"
     coverage: >-
-      Sampled. The 2026-09-21 mikewolfd/spicy-regs fork delivery rebuilt and published all 105
-      selected report packages with 13 selected hearings as one five-table generation. All 118
-      package bodies and 13 hearing details were accepted; two exact retained package capture
-      sets were reused and 116 acquired fresh. Every selected report was reprocessed under
-      SpicyDocs 0.26.0; nine letter spans reproduced their retained text digests. This is a
-      mixed-Congress selection, not complete historical or constituent-granule coverage. No
-      upstream/default publication is asserted. Receipts:
-      fork-execution-2026-09-21/report-family/rebuild-audit.json,
-      publication-report-family.json and report-family-mcp-audit/.
-    measured_on: "2026-09-21"
+      Sampled. Selected committee report packages from GovInfo, a mixed-Congress
+      selection that grows as packages are added; not complete historical or
+      constituent-granule coverage. committee_report_reads records each package
+      read and its outcome.
+    measured_on: "2026-09-28"
     summary: >-
       One row per published part of a captured GovInfo committee report package,
       keyed `(package_id, part_id)`. `bill_id` is the measure the report accompanies,
@@ -2304,16 +2197,11 @@ tables:
   report_sections:
     label: "Committee report heading and text blocks"
     coverage: >-
-      Sampled. The 2026-09-21 mikewolfd/spicy-regs fork delivery rebuilt and published all
-      1,246 heading/text blocks from the 105 selected reports in one five-table generation.
-      Every report body text digest and section span was independently checked; all 12,460
-      prior non-agency section values remained unchanged. heading retains the source title
-      while agency_label and agency_key remain unresolved NULLs. All selected bodies were
-      HTML, so no page boundaries were inferred. This is the full selected repair, not
-      complete report history or upstream/default publication. Receipts:
-      fork-execution-2026-09-21/report-family/rebuild-audit.json,
-      publication-report-family.json and report-family-mcp-audit/.
-    measured_on: "2026-09-21"
+      Sampled. Heading/text blocks of the reports in committee_reports. heading
+      retains the source title while agency_label and agency_key remain
+      unresolved NULLs. HTML bodies carry no page boundaries, so none are
+      inferred.
+    measured_on: "2026-09-28"
     summary: >-
       One row per heading or unheaded text block in one part of a committee report,
       keyed `(package_id, part_id, seq)`. `heading` preserves the source title; agency
@@ -2334,15 +2222,10 @@ tables:
   hearing_transcripts:
     label: "Hearing transcripts"
     coverage: >-
-      Sampled. The 2026-09-21 mikewolfd/spicy-regs fork delivery rebuilt and published all 13
-      selected hearing packages within the five-table report family. All 13 exact
-      hearing-detail requests were accepted and their native event identifiers checked. One
-      body changed bytes from its prior pin while its normalized text digest stayed identical;
-      the fresh capture remains distinct. These are package/body metadata rows, not speaker
-      turns or complete hearing history. No upstream/default publication is asserted.
-      Receipts: fork-execution-2026-09-21/report-family/rebuild-audit.json,
-      publication-report-family.json and report-family-mcp-audit/.
-    measured_on: "2026-09-21"
+      Sampled. Selected hearing packages from GovInfo, each with its native
+      event identifiers checked: package and body metadata, not speaker turns or
+      complete hearing history.
+    measured_on: "2026-09-28"
     summary: >-
       One row per captured GovInfo hearing transcript. bill_id is always NULL:
       a hearing can concern several bills, represented in hearing_bill_links.
@@ -2364,13 +2247,11 @@ tables:
     identity_columns: [congress, bill_type]
     label: "Bill-family archive listings"
     coverage: >-
-      Not a range. The adoption run produced 2 rows in this output from the
-      118th Congress's HR and S BILLSTATUS archives, processing 16,213 bills in
-      one pass. The pass used 16 requests (8 keyed, 8 keyless), with the printing
-      cap fixed at four and model calls disabled.
-      Two folders were acquired from a cold start; this run does not measure archive resume.
-      Receipt: `rollups-0-24-0-adoption-2026-09-20/`. Local output only; not uploaded.
-    measured_on: "2026-09-20"
+      Not a range. The bill family's processing state: one row per GovInfo
+      BILLSTATUS folder (Congress and bill type) it has listed, which the next
+      run compares with the live listing to decide whether a zip needs
+      downloading.
+    measured_on: "2026-09-28"
     data_quality: >-
       Only the four fields the skip compares are retained — `name` and `link`,
       which must name the folder's own zip or the comparison is refused outright,
@@ -2404,12 +2285,9 @@ tables:
     identity_columns: [bill_id, chamber, congress, session, roll_number, action_index]
     label: "Bill vote references"
     coverage: >-
-      Sampled. The adoption run produced 881 rows in this output from the
-      118th Congress's HR and S BILLSTATUS archives, processing 16,213 bills in
-      one pass. The pass used 16 requests (8 keyed, 8 keyless), with the printing
-      cap fixed at four and model calls disabled.
-      Receipt: `rollups-0-24-0-adoption-2026-09-20/`. Local output only; not uploaded.
-    measured_on: "2026-09-20"
+      Sampled: the roll calls named in the actions of the bills the bill family
+      has read, from the 108th Congress on.
+    measured_on: "2026-09-28"
     data_quality: >-
       Every row is a publisher statement copied without interpretation: the six
       fields a `recordedVotes` entry carries, plus the position of the action it sat
@@ -2442,13 +2320,10 @@ tables:
     identity_columns: [congress, bill_type, number]
     label: "Bill-family backfill state"
     coverage: >-
-      Not a range. The adoption run produced 0 rows in this output from the
-      118th Congress's HR and S BILLSTATUS archives, processing 16,213 bills in
-      one pass. The pass used 16 requests (8 keyed, 8 keyless), with the printing
-      cap fixed at four and model calls disabled.
-      The pre-108th API backfill route was outside the declared scope.
-      Receipt: `rollups-0-24-0-adoption-2026-09-20/`. Local output only; not uploaded.
-    measured_on: "2026-09-20"
+      Not a range. The bill family's processing state for its pre-108th API
+      backfill, one row per attempted bill; rows appear only after a run that
+      reaches that backfill.
+    measured_on: "2026-09-28"
     data_quality: >-
       A row with `refusal` NULL is a success record — the bill's `congress_bills`
       row is published and the stamp is what the `bill/{congress}/{type}` list
@@ -2480,13 +2355,11 @@ tables:
     identity_columns: [congress, bill_type]
     label: "Bill-family backfill walks"
     coverage: >-
-      Not a range. The adoption run produced 0 rows in this output from the
-      118th Congress's HR and S BILLSTATUS archives, processing 16,213 bills in
-      one pass. The pass used 16 requests (8 keyed, 8 keyless), with the printing
-      cap fixed at four and model calls disabled.
-      The pre-108th API backfill route was outside the declared scope.
-      Receipt: `rollups-0-24-0-adoption-2026-09-20/`. Local output only; not uploaded.
-    measured_on: "2026-09-20"
+      Not a range. The bill family's processing state for its pre-108th API
+      backfill, one row per Congress and bill type walked, with the route's
+      declared total against what was reached; rows appear only after a run that
+      reaches that backfill.
+    measured_on: "2026-09-28"
     data_quality: >-
       `list_completed` is true only when the walk reached the route's terminal
       page with declared and observed counts agreeing (the reader refuses
@@ -2526,20 +2399,12 @@ tables:
   laws:
     label: "Enacted laws"
     coverage: >-
-      Sampled. Measured on one cold-start run (receipt
-      `d1-measured-run-2026-09-19/`): `law/119` declared 108 and served 108 on
-      one page for one keyed request, and all 108 became rows; the PLAW leg
-      spent 108 keyless requests under its 300-per-run cap and established 102
-      Statutes at Large citations. The Congress.gov law route for the scoped
-      Congresses (the current one by default) is walked whole each run and
-      every law it lists is a row; the PLAW USLM citation is added per law,
-      newest first, under the per-run cap. A steady-state run is meant to ask
-      only about laws whose list row moved or whose PLAW the bulk folder had
-      not yet served. **The skip is design, not measurement**: D1 was a cold
-      start, so nothing was held and nothing was skipped, and the saving
-      described here has not been observed yet — the second run is what
-      measures it.
-    measured_on: "2026-09-19"
+      Sampled. Every law the Congress.gov law route lists for the scoped
+      Congresses (the current one by default), walked whole each run; the PLAW
+      USLM citation is added per law, newest first, under a per-run cap. A
+      steady-state run is meant to ask only about laws whose list row moved or
+      whose PLAW the bulk folder had not yet served.
+    measured_on: "2026-09-28"
     data_quality: >-
       `statutes_at_large_cite` is set when `uslm_outcome` is `captured`; read
       every NULL through `uslm_outcome` and `uslm_reason`. `unavailable`
@@ -2578,13 +2443,10 @@ tables:
   law_code_sections:
     label: "Law classifications by Congress"
     coverage: >-
-      Sampled. Measured on the same run (receipt
-      `d1-measured-run-2026-09-19/`): the OLRC classification index linked
-      both of the 119th's session tables, and reading each whole produced
-      3,632 rows — 3,049 from the 1st session's table and 583 from the 2nd's.
-      The index links the current Congress's session tables only; each linked
-      public-law-order table for a scoped Congress is read whole every run and
-      replaces that session's rows.
+      Sampled. Every row of each public-law-order table the OLRC classification
+      index links for a scoped Congress, read whole every run and replacing that
+      session's rows. The index links the current Congress's session tables
+      only.
     measured_on: "2026-09-19"
     data_quality: >-
       A row is its position on the page (`seq`), because one line can repeat;
@@ -2611,15 +2473,12 @@ tables:
   table3_records:
     label: "Table III records"
     coverage: >-
-      Window, complete for the Congresses read: every public law of the 119th
-      Congress that Table III holds at release point 119-73, 40 acts and 2,983
-      rows, read from OLRC's Table III bulk file (receipt
-      `table3-bulk-2026-09-26/`). Each run fetches that one file
-      and derives every public law of each Congress the laws table holds, as
-      well as the scoped ones, so a Congress keeps its rows current after it
-      leaves the laws scope while Table III catches up. The file holds the
-      whole table back to 1789; other Congresses, private laws and pre-1957
-      session-law chapters are not derived.
+      Window, complete for the Congresses read: every public law Table III holds
+      for each Congress the laws table holds, plus the scoped ones, derived from
+      OLRC's Table III bulk file on each run, so a Congress keeps its rows
+      current after it leaves the laws scope while Table III catches up. The
+      file holds the whole table back to 1789; other Congresses, private laws
+      and pre-1957 session-law chapters are not derived.
     measured_on: "2026-09-26"
     data_quality: >-
       Table III holds an act only once OLRC has classified it, and lags
@@ -2682,19 +2541,14 @@ tables:
   committees:
     label: "Committees"
     coverage: >-
-      Sampled. Measured on one cold-start run (receipt
-      `d1-measured-run-2026-09-19/`): `committee/119` declared 238 and served
-      236, and all 236 rows had their detail folded on within the 300-per-run
-      cap — 237 keyed requests in 264 seconds. Since 2026-09-26 the
-      Congress.gov committee route is walked whole with no Congress: 818
-      records in four pages, every committee of every Congress the publisher
-      records (the 108th-119th lists hold 416 of them), because
-      `committee_meetings` keeps the previous Congress and `bill_committees`
-      reaches the 108th. The committee detail is folded onto each row under
-      that cap, newest `update_date` first; a committee whose detail was
-      captured is re-read only when its list row's `update_date` moves. Receipt
-      `committee-fixes-2026-09-26/3-rosters-118/`.
-    measured_on: "2026-09-19"
+      Sampled. Since 2026-09-26 the Congress.gov committee route is walked whole
+      with no Congress: every committee of every Congress the publisher records,
+      because `committee_meetings` keeps the previous Congress and
+      `bill_committees` reaches the 108th. The committee detail is folded onto
+      each row under a per-run cap, newest `update_date` first; a committee
+      whose detail was captured is re-read only when its list row's
+      `update_date` moves. Receipt `committee-fixes-2026-09-26/3-rosters-118/`.
+    measured_on: "2026-09-26"
     data_quality: >-
       The route over-declares: on 2026-09-19 `committee/119` declared 238 and
       served 236 on its one terminal page with no continuation. The reader's
@@ -2721,14 +2575,11 @@ tables:
   committee_assignments:
     label: "Committee assignments"
     coverage: >-
-      Sampled. Measured on the same run (receipt
-      `d1-measured-run-2026-09-19/`): 2,966 seats from two keyless file
-      captures — the House Clerk's file stating Congress 119 session 2 with
-      441 seats, 2 vacant, 2,516 assignments and 9 placeholders, and the
-      Senate's with 100 senators over 450 seats. Today's seats: both chamber
-      files are captured whole each run, for the current Congress only, and
-      each capture replaces its chamber's rows for that Congress; an earlier
-      Congress keeps its last capture.
+      Sampled. Today's seats: the House Clerk's and the Senate's committee files
+      are captured whole each run, for the current Congress only, and each
+      capture replaces its chamber's rows for that Congress; an earlier Congress
+      keeps its last capture. Vacant and placeholder seats appear as the Clerk's
+      file states them.
     measured_on: "2026-09-19"
     data_quality: >-
       A row is a seat the file listed on its `file_date`: a seat the file no
@@ -2762,12 +2613,10 @@ tables:
   house_communications:
     label: "House executive communications"
     coverage: >-
-      Sampled. The pinned 5,006-row fork selection was republished on September 27 as
-      generation 94d28167db0a56a3, preserving all existing rows and columns. All 5,006
-      retained details were interpreted with the shared RIN reader: 2,076 occurrences
-      across 2,046 rows. Every span and field digest was checked, and exact public bytes
-      and counts verified. Source qualification is inherited from the prior generation;
-      no new source requests were made. Receipt: spicy-regs-t18-refresh-20260927/.
+      Sampled. A pinned selection of House communications, republished on
+      2026-09-27 with every retained detail read by the shared RIN reader.
+      Source qualification is inherited from the earlier generation; no new
+      source requests were made. Receipt: spicy-regs-t18-refresh-20260927/.
     measured_on: "2026-09-27"
     summary: >-
       One row per House executive communication, as the Congress.gov
@@ -2805,21 +2654,16 @@ tables:
   committee_meetings:
     label: "Committee meetings"
     coverage: >-
-      Sampled, and accumulating. Measured on one cold-start run (receipt
-      `d1-measured-run-2026-09-19/`): the whole `committee-meeting/119` walk
-      across the publisher's chamber values declared 2,754 and served 2,754 over 12 pages
-      with no repeat, all retained locally; 993 details were read, 7 were refused and
-      1,754 rows were retained list-only, at 1,005 keyed requests in 412
-      seconds. Each run walks the current Congress's whole list, and the
-      previous Congress's from the day before its newest held `updateDate`
-      (or its oldest unread row), and reads the detail of every meeting the
-      table does not yet hold, newest `updateDate` first, at most 1,000 a run.
-      The previous Congress stays in scope because its meetings change when
-      GovInfo prints their transcripts: 204 of the 118th's 3,326 in 2026 to
-      September 26, and all seven hearing transcripts that named a meeting
-      the table lacked (receipt `join-gaps-2026-09-26/f/`). Local output only;
-      not uploaded.
-    measured_on: "2026-09-19"
+      Sampled, and accumulating. Each run walks the current Congress's whole
+      `committee-meeting` list, and the previous Congress's from the day before
+      its newest held `updateDate` (or its oldest unread row), and reads the
+      detail of every meeting the table does not yet hold, newest `updateDate`
+      first, at most 1,000 a run; a meeting whose detail is unread or refused
+      has its list fields only. The previous Congress stays in scope because its
+      meetings change when GovInfo prints their transcripts: 204 of the 118th's
+      3,326 in 2026 to September 26, and all seven hearing transcripts that
+      named a meeting the table lacked (receipt `join-gaps-2026-09-26/f/`).
+    measured_on: "2026-09-28"
     summary: >-
       One row per scheduled committee meeting, as the Congress.gov
       committee-meeting list and detail routes state it, keyed `(congress,
@@ -2846,15 +2690,11 @@ tables:
   record_issues:
     label: "Daily Congressional Record issues"
     coverage: >-
-      Sampled, and accumulating. Measured on one cold-start run (receipt
-      `d1-measured-run-2026-09-19/`): volumes 171 and 172 declared 219 and 144
-      and served exactly that, one page each and no repeat, and every one of
-      the 363 details was read inside the 1,000-per-run cap — 365 keyed
-      requests in 130 seconds, so this table reaches a complete state in a
-      single run at the 119th's size. Each run walks the whole
-      `daily-congressional-record/{volume}` list for each session volume of
-      the Congresses in scope and reads the detail of every issue the table
-      does not yet hold, newest `updateDate` first.
+      Sampled, and accumulating. Each run walks the whole
+      `daily-congressional-record/{volume}` list for each session volume of the
+      Congresses in scope and reads the detail of every issue the table does not
+      yet hold, newest `updateDate` first, up to 1,000 a run, so at the 119th's
+      size one run completes it.
     measured_on: "2026-09-19"
     summary: >-
       One row per daily Congressional Record issue, keyed `(volume, issue)`, the
@@ -2872,12 +2712,11 @@ tables:
   treaties:
     label: "Treaty documents"
     coverage: >-
-      Sampled. On 2026-09-21, the mikewolfd/spicy-regs fork published and verified two
-      unpartitioned 119th-Congress treaty document indices from the retained list and both
-      details. The source list's stated total of two agrees with that capture. This selected
-      seed does not include treaty bodies, action histories, older Congresses, suffixed parts
-      or interpreted legal/in-force effects. No upstream/default publication is asserted.
-      Receipts: fork-execution-2026-09-21/legislative-publication-summary.json,
+      Sampled. The 119th Congress's treaty documents from the retained list and
+      their details; on 2026-09-21 the list's stated total agreed with the
+      capture. Not treaty bodies, action histories, older Congresses, suffixed
+      parts or interpreted legal/in-force effects. Receipts:
+      fork-execution-2026-09-21/legislative-publication-summary.json,
       legislative-seeds/sealed-candidates.json and legislative-mcp-audit/.
     measured_on: "2026-09-21"
     summary: >-
@@ -2895,12 +2734,11 @@ tables:
   nominations:
     label: "Nominations"
     coverage: >-
-      Sampled. On 2026-09-21, the mikewolfd/spicy-regs fork published and verified 2,204
-      distinct observed 119th-Congress nomination-list identities. Nine retained pages contain
-      2,208 occurrences with four repeated identical records; that pagination total does not
-      prove a stable or complete 2,208-identity population. The selected seed has
-      latest-action fields, not nominee details, action histories, person entities or inferred
-      confirmation outcomes. No upstream/default publication is asserted. Receipts:
+      Sampled. Distinct 119th-Congress nomination-list identities from retained
+      list pages. The pages repeat some identical records, so a pagination total
+      does not prove a stable or complete population. Latest-action fields only:
+      not nominee details, action histories, person entities or inferred
+      confirmation outcomes. Receipts:
       fork-execution-2026-09-21/legislative-publication-summary.json,
       legislative-seeds/sealed-candidates.json and legislative-mcp-audit/.
     measured_on: "2026-09-21"
@@ -2921,13 +2759,10 @@ tables:
   house_activity_reports:
     label: "Committee activity reports (House and Senate)"
     coverage: >-
-      Sampled. The adoption walk from the 2023-01-01 issue floor read 2,256 CRPT
-      listing rows. The shared title rule accepted 41 of 74 titles naming activity;
-      all 41 matched this rollup's own prior and cost zero body requests. The
-      shared print-citations pass used 46 requests (38 keyed, 8 keyless), with a
-      40-package cap. Retained coverage is 41 reports, not an earlier-archive census.
-      Receipt: `rollups-0-24-0-adoption-2026-09-20/`. Local output only; not uploaded.
-    measured_on: "2026-09-20"
+      Sampled. House committee activity reports: CRPT packages from the
+      2023-01-01 issue floor whose titles name activity under the shared title
+      rule. Not an earlier-archive census.
+    measured_on: "2026-09-28"
     summary: >-
       One row per captured end-of-Congress committee activity report package,
       House or Senate (the table's name predates its Senate rows; the package
@@ -2999,15 +2834,11 @@ tables:
   budget_volumes:
     label: "President's budget volumes"
     coverage: >-
-      Sampled. The adoption walk served 40 BUDGET packages from the 2023-01-01
-      issue floor; all passed the thirteen-part provider grammar. It skipped 23
-      unchanged prior volumes and attempted the remaining 17 under the 40-package
-      cap: six added rows and 11 root-format answers added none. The result holds
-      29 volumes. The six bodies contained 565 pages, all read, and produced 143
-      citations. The shared pass used 46 requests (38 keyed, 8 keyless). TAB, DB,
-      CLIMATE and LRB have no root PDF; no granule route was attempted.
-      Receipt: `rollups-0-24-0-adoption-2026-09-20/`. Local output only; not uploaded.
-    measured_on: "2026-09-20"
+      Sampled. BUDGET packages from the 2023-01-01 issue floor whose root PDF
+      follows the provider's thirteen-part grammar, read under a per-run package
+      cap. TAB, DB, CLIMATE and LRB have no root PDF; no granule route is
+      attempted.
+    measured_on: "2026-09-28"
     summary: >-
       One row per published volume of the President's budget, with what its
       print adds to its own MODS index. Thirteen measured package parts are
@@ -3051,12 +2882,9 @@ tables:
   bill_committee_actions:
     label: "Committee-print bill actions"
     coverage: >-
-      Derived. The adoption run retained all 12,700 prior action rows and added
-      none: all 41 accepted activity reports were unchanged. This output shares
-      the print-citations pass's 46 requests, including 38 keyed, and package cap
-      40. It describes the matched activity reports, not all committee actions.
-      Receipt: `rollups-0-24-0-adoption-2026-09-20/`. Local output only; not uploaded.
-    measured_on: "2026-09-20"
+      Derived: the committee actions printed in the accepted House activity
+      reports (`house_activity_reports`), not all committee actions.
+    measured_on: "2026-09-28"
     summary: >-
       One row per action phrase a committee print states about one bill it
       names in the same sentence: the print's own phrasing, the sealed stage
@@ -3103,13 +2931,11 @@ tables:
   document_citations:
     label: "Document citation link table"
     coverage: >-
-      Derived. The adoption run added 143 citation rows from six newly admitted
-      budget bodies and retained 49,935 rows after merging its own prior. All 41
-      activity reports were unchanged. The print-citations pass used 46 requests,
-      38 keyed, under the 40-package cap; eleven budget root refusals produced no
-      citation rows. The two source families still have one writer.
-      Receipt: `rollups-0-24-0-adoption-2026-09-20/`. Local output only; not uploaded.
-    measured_on: "2026-09-20"
+      Derived: citations read from the bodies of the accepted House activity
+      reports and budget volumes; a budget root the reader refuses yields no
+      citations. Both source families have one writer, the print-citations
+      rollup.
+    measured_on: "2026-09-28"
     summary: >-
       One row per occurrence of one cited key in one document's text: the key,
       the exact characters that named it, and the character span it was read
@@ -3152,28 +2978,16 @@ tables:
   senate_expenditures:
     label: "Secretary of the Senate expenditure tables"
     coverage: >-
-      Sampled — the sample is a page window inside each file, and it was
-      measured on one cold-start run 2026-09-20 (receipt
-      `rollups-pdf-families-2026-09-20/`). The GovInfo `published` CDOC window
-      from the 2024-01-01 issue floor served **291 rows and matched 5**
-      Secretary-of-the-Senate reprints, and **all five were produced locally** — 3,272
-      ruled rows over ten granule files, zero refusals. It took two runs under
-      the same 4-package cap: the first read four packages (2,623 rows, 640
-      pages, 556 tables, 21 keyed requests) and the second read the fifth,
-      `GPO-CDOC-118sdoc11` (649 rows, 160 pages, 138 tables, 10 keyed
-      requests), having found the other four already in its local prior and fetched no
-      body for them. A package with nothing left to read costs its granule
-      list and not a cap slot, which is what makes a window larger than the cap
-      finish rather than stall. **Every count over this table is a floor on the
-      volume**: each
-      report runs 1,259 to 1,495 pages a file and only the first 80 of each are
-      read, so `pages_capped` is `true` on all 3,272 rows. Those 80 pages carry
-      the `A-` summary-of-transactions section and the start of the `B-`
-      detailed statement; the `C-` compensation-of-members and `D-`
-      mail-allocation sections the contents page names sit past page 2,000 and
-      are not reached. These were local outputs, not uploaded; the documented
-      public URL returned HTTP 404 in the 2026-09-21 publication audit.
-    measured_on: "2026-09-20"
+      Sampled: a page window inside each file. Secretary-of-the-Senate
+      expenditure reports reprinted as GovInfo CDOC packages from the 2024-01-01
+      issue floor, read under a per-run package cap. **Every count over this
+      table is a floor on the volume**: each report runs more than 1,200 pages
+      and only the first 80 of each are read, so `pages_capped` is true on every
+      row. Those pages carry the `A-` summary-of-transactions section and the
+      start of the `B-` detailed statement; the `C-` compensation-of-members and
+      `D-` mail-allocation sections sit past page 2,000 and are not reached
+      (measured 2026-09-20, receipt `rollups-pdf-families-2026-09-20/`).
+    measured_on: "2026-09-28"
     summary: >-
       One row per ruled row of one ruled table on one page of a Report of the
       Secretary of the Senate, with the cells exactly as the print states them
@@ -3209,17 +3023,13 @@ tables:
     columns_from: spicy_docs
 
   hearing_bill_links:
-    measured_on: "2026-09-21"
+    measured_on: "2026-09-28"
     label: "Hearing-to-bill links"
     coverage: >-
-      Sampled. The 2026-09-21 mikewolfd/spicy-regs fork delivery published a verified empty
-      table within the five-table report family: all 13 selected root-package CHRG MODS
-      records state zero COVER bill references. Complete read checkpoints distinguish this
-      result from unread or refused packages. This does not establish absence of bill
-      relationships in constituent records, agendas, bill actions or transcript text, and does
-      not measure recall. Agenda acquisition remains deferred. No upstream/default publication
-      is asserted. Receipts: fork-execution-2026-09-21/report-family/rebuild-audit.json,
-      publication-report-family.json and report-family-mcp-audit/.
+      Sampled. Bill references that the selected hearing packages' MODS records
+      state on their cover. It does not show bills named only in constituent
+      records, agendas, bill actions or transcript text, and does not measure
+      recall; agenda acquisition remains deferred.
     summary: >-
       One row per package, bill and link source, shaped by spicy-docs.
     data_quality: >-
@@ -3241,16 +3051,13 @@ tables:
     columns_from: spicy_docs
 
   cbo_cost_estimates:
-    measured_on: "2026-09-20"
+    measured_on: "2026-09-28"
     label: "CBO cost-estimate publication index"
     coverage: >-
-      Sampled. The one adoption bill-family run read the 118th's HR and S archives:
-      1,431 publication rows over 1,368 of 16,213 bills. The other 14,845 bills
-      state requested-empty:absent on congress_bills, with zero invented estimate
-      rows. The whole pass used 16 requests (8 keyed, 8 keyless) under four printing
-      captures; the estimate index itself cost no extra requests. No CBO.gov body
-      was requested. Other Congresses and bill types were outside this run's scope.
-      Receipt: `rollups-0-24-0-adoption-2026-09-20/`. Local output only; not uploaded.
+      Sampled: CBO estimates the publisher lists on the bills the bill family
+      has read, from the 108th Congress on; some Congresses are not yet read. An
+      absent estimate does not mean CBO never scored a bill. No CBO.gov body is
+      requested.
     summary: >-
       One row per bill and CBO publication, using build_bill_family's own
       cbo_cost_estimates output. All columns are stored as VARCHAR.
@@ -3266,14 +3073,13 @@ tables:
     columns_from: spicy_docs
 
   bill_cosponsors:
-    measured_on: "2026-09-27"
+    measured_on: "2026-09-28"
     label: "Bill cosponsor source occurrences"
     coverage: >-
-      Sampled. Retained Congress 119 House and Senate BILLSTATUS archives were replayed
-      on 2026-09-27 for source observations matching the held bill edition, publishing
-      146,248 source occurrences, including 67 positive withdrawal dates. Every native field
-      reconciles; bills outside the selected replay remain unread. Receipt:
-      legislative-joins-2026-09-27/t05-candidate.json.
+      Sampled: cosponsors from the BILLSTATUS archives replayed for the held
+      bill edition; some Congresses are not yet replayed, and a bill outside a
+      replay has no rows here. Every native field reconciles, including positive
+      withdrawal dates.
     summary: >-
       One cosponsor occurrence in one retained BILLSTATUS observation, keyed by the bill, the
       input digest and the list ordinal. A member listed twice keeps two rows; a successfully
@@ -3284,11 +3090,10 @@ tables:
     measured_on: "2026-09-27"
     label: "Member party affiliation source intervals"
     coverage: >-
-      Sampled. The complete retained September 25 community crosswalk captures were replayed
-      and published on September 27 as members generation 00cad6cf5255d605. All 59 source
-      affiliation occurrences were reconciled, and exact public hashes and rows verified.
-      Member and term identities and existing native values were preserved. This is the
-      selected community crosswalk, not an official or newly acquired roster. Receipt:
+      Sampled. The complete retained September 25 community crosswalk captures,
+      replayed and published on September 27; every source affiliation
+      occurrence was reconciled. This is the selected community crosswalk, not
+      an official or newly acquired roster. Receipt:
       spicy-regs-t19-members-20260927/public-readback.json.
     summary: >-
       One member, input digest, term index and affiliation index. Literal dates and their
@@ -3297,17 +3102,12 @@ tables:
 
   committee_report_reads:
     identity_columns: [package_id]
-    measured_on: "2026-09-21"
+    measured_on: "2026-09-28"
     label: "Committee-report acquisition checkpoints"
     coverage: >-
-      Not a range. The 2026-09-21 mikewolfd/spicy-regs fork delivery published all 118
-      selected package checkpoints as complete: 105 reports and 13 hearings, with no selected
-      pending or refused reads. Current rule versions and exact parent coverage were checked
-      through actual MCP reads of both the verified download and public fork. Complete
-      includes hearings with zero cover links; it does not assert a positive relationship or
-      complete source history. No upstream/default publication is asserted. Receipts:
-      fork-execution-2026-09-21/report-family/rebuild-audit.json,
-      publication-report-family.json and report-family-mcp-audit/.
+      Not a range. One checkpoint per selected report or hearing package read,
+      with its outcome. Complete includes hearings with zero cover links; it
+      does not assert a positive relationship or complete source history.
     summary: >-
       One row per package observed or inherited from this rollup's prior
       tables. Pending reads precede discovery under the declared body cap.
@@ -3324,11 +3124,11 @@ tables:
     identity_columns: [scope_id, input_sha256, occurrence_index]
     grain: "One source scanner observation per pinned XML input; multiple interpreted targets remain nested candidates."
     coverage: >-
-      Sampled. Generation 53755e3e0076dfa5 publishes 881 observations from complete retained
-      eCFR Title 1 requested as of 2026-08-10 and USC Title 1 release 119-103. Exact enclosing
-      input bytes and source receipts qualify both selections. Selected public target
-      tables resolve 19 occurrences; missing, unsupported and unqueried targets remain
-      explicit. Receipt: native-legal-full-2026-09-27/resolved-verification.json.
+      Sampled. Observations from the complete retained eCFR Title 1, requested
+      as of 2026-08-10, and USC Title 1 release 119-103. Selected public target
+      tables resolve some occurrences; missing, unsupported and unqueried
+      targets remain explicit. Receipt:
+      native-legal-full-2026-09-27/resolved-verification.json.
     summary: >-
       Selected eCFR AUTH/SOURCE notes and U.S. Code href/source-credit observations,
       retaining source XML paths and digests. Complete reads replace the selected
@@ -3364,10 +3164,11 @@ tables:
     identity_columns: [opinion_id, source_sha256]
     grain: "One retained PDF extraction per opinion and exact observed body."
     coverage: >-
-      Sampled. Three selected publisher PDFs were acquired on 2026-09-27. Each exact
-      body matches its held CourtListener SHA-1 and has its own SHA-256 and extraction
-      outcome. This is derived PDF text, separate from CourtListener native text fields
-      and from the complete opinion index. Receipt: spicy-regs-court-cohort-20260927/bodies-receipt.json.
+      Sampled. Selected publisher PDFs acquired on 2026-09-27. Each exact body
+      matches its held CourtListener SHA-1 and has its own SHA-256 and
+      extraction outcome. This is derived PDF text, separate from CourtListener
+      native text fields and from the complete opinion index. Receipt:
+      spicy-regs-court-cohort-20260927/bodies-receipt.json.
     summary: >-
       Text from literally offered PDF URLs, tied to the selected opinion generation,
       native body fingerprint, capture evidence and extractor version. A native digest

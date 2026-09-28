@@ -6,7 +6,7 @@
 
 One row per published volume of the President's budget, with what its print adds to its own MODS index. Thirteen measured package parts are accepted; only volumes offering a supported package-root body yield rows. All columns are stored as VARCHAR.
 
-**Coverage.** Sampled. The adoption walk served 40 BUDGET packages from the 2023-01-01 issue floor; all passed the thirteen-part provider grammar. It skipped 23 unchanged prior volumes and attempted the remaining 17 under the 40-package cap: six added rows and 11 root-format answers added none. The result holds 29 volumes. The six bodies contained 565 pages, all read, and produced 143 citations. The shared pass used 46 requests (38 keyed, 8 keyless). TAB, DB, CLIMATE and LRB have no root PDF; no granule route was attempted. Receipt: `rollups-0-24-0-adoption-2026-09-20/`. Local output only; not uploaded. *(measured 2026-09-20)*
+**Coverage.** Sampled. BUDGET packages from the 2023-01-01 issue floor whose root PDF follows the provider's thirteen-part grammar, read under a per-run package cap. TAB, DB, CLIMATE and LRB have no root PDF; no granule route is attempted. *(measured 2026-09-28)*
 
 **Data quality.** **The bill counts are congress-blind and are not join keys.** A BUDGET package states no Congress anywhere — not in its id, not in its summary — so the print can only spell `HR7806` where the MODS states `119-hr-7806`. `distinct_bills` and `distinct_bills_beyond_index_congress_blind` therefore reduce **both** sides to `{bill_type}-{number}` before comparing, which is why the column carries `congress_blind` in its name; neither can join `congress_bills.bill_id`, which needs the Congress this family never states. For the same reason the per-row `stated_by_index` on a `bill_number` citation of a budget volume is **NULL, not `false`**: the comparison was not possible, and answering `false` would report a comparison nobody made. Measured across the eight volumes spicy-docs sampled at full page depth, 6 of the 8 distinct printed bills are print-only. The family's real yield is laws: **504 of 518** distinct public laws the prints name are absent from their own MODS at full page depth, against 43 of 69 at a 60-page cap. `fiscal_year` is not the issue year — `BUDGET-2026-MSR` was issued 2025-09-05 — and is stated twice, by the package id and by the MODS, which spicy-docs asserts agree. `associated_bills_json` is published whole because it is the only statement of this edge that carries a Congress.
 
@@ -15,6 +15,7 @@ One row per published volume of the President's budget, with what its print adds
 - **Parquet file:** `budget_volumes.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
 - **Publication status:** Not established by this schema page or its measurement date.
+- **Row count:** Not stated here; the MCP `describe_table` reply gives the live count under `publication`.
 
 | Column | Type | Description |
 | --- | --- | --- |

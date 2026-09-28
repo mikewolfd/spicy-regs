@@ -6,11 +6,12 @@
 
 The term each member vote counts toward (delivery decision 2). A vote on `vote_day` counts toward the term with `term_start <= vote_day < term_end`, so the day one Congress ends and the next begins belongs to the new term. Only where that finds none is an inclusive end accepted, and only if exactly one term qualifies. The term type follows the chamber (`rep`, `sen`); a term with no end date never matches. Built by `build_member_vote_terms` from `member_votes`, `members` (a Senate row's LIS id resolves to its Bioguide id there) and `member_terms`. Join to `member_votes` on (`vote_id`, `member_key`) and to `member_terms` on (`bioguide_id`, `term_index`). All columns are stored as VARCHAR.
 
-**Coverage.** Derived, and bounded by its inputs: one row for every `member_votes` row. On 2026-09-23, 382,136 rows from roll-call generation `3204b8fc…` and members generation `017366cc…`: 382,118 matched a half-open term, 15 an inclusive end, and 3 stay unmatched. The exceptions equal those of an independent replay row for row (fork-execution-2026-09-21/votes-qualification/complete-member-join-replay.json). *(measured 2026-09-23)*
+**Coverage.** Derived, and bounded by its inputs: one row for every `member_votes` row, matched to the member's term on the vote date. On 2026-09-23 all but 18 votes matched a half-open term: 15 matched only an inclusive end date and 3 matched no term, exactly as an independent replay found (fork-execution-2026-09-21/votes-qualification/complete-member-join-replay.json). *(measured 2026-09-23)*
 
 - **Parquet file:** `member_vote_terms.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
 - **Publication status:** Not established by this schema page or its measurement date.
+- **Row count:** Not stated here; the MCP `describe_table` reply gives the live count under `publication`.
 
 | Column | Type | Description |
 | --- | --- | --- |

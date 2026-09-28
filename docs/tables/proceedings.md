@@ -6,11 +6,12 @@
 
 One row per rulemaking proceeding: the dockets that are one action, the Register documents that joined it, their stage events, RINs and CFR targets. A RIN names a Unified Agenda item, never a proceeding: it is carried as evidence and never groups dockets. A docket-less proceeding is one Register document. Keyed `proceeding_id`, which continues across generations when its dockets or Register documents overlap a prior one. Joined by `agenda_item_proceedings`, `comment_periods` and `rulemaking_lifecycles` on `proceeding_id`. Built by `build_proceedings`; all columns are VARCHAR, lists as JSON strings.
 
-**Coverage.** Derived, and bounded by its inputs (`dockets`, `documents`, `federal_register`, `fr_docket_links` and `rule_targets`) and the prior generation it continues ids from. `snapshot_91b19da7…` holds 172,742 proceedings: 75,270 docketed and 97,472 docket-less (single Register documents). *(measured 2026-09-27)*
+**Coverage.** Derived, and bounded by its inputs (`dockets`, `documents`, `federal_register`, `fr_docket_links` and `rule_targets`) and the prior snapshot it continues ids from. A proceeding is docketed, or docket-less when it is a single Register document. *(measured 2026-09-28)*
 
 - **Parquet file:** `proceedings.parquet`, in the snapshot that `materialized/rulemaking/latest.json` names
 - **MCP `query_sql` support:** Configured; requires an available artifact.
 - **Publication status:** Not established by this schema page or its measurement date.
+- **Row count:** Not stated here; the MCP `describe_table` reply gives the live count under `publication`.
 
 | Column | Type | Description |
 | --- | --- | --- |

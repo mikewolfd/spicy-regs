@@ -6,13 +6,14 @@
 
 One row per (Congress, bill type) the pre-BILLSTATUS backfill walked, recording the route's declared total against what the walk reached and filled. All columns are stored as VARCHAR.
 
-**Coverage.** Not a range. The adoption run produced 0 rows in this output from the 118th Congress's HR and S BILLSTATUS archives, processing 16,213 bills in one pass. The pass used 16 requests (8 keyed, 8 keyless), with the printing cap fixed at four and model calls disabled. The pre-108th API backfill route was outside the declared scope. Receipt: `rollups-0-24-0-adoption-2026-09-20/`. Local output only; not uploaded. *(measured 2026-09-20)*
+**Coverage.** Not a range. The bill family's processing state for its pre-108th API backfill, one row per Congress and bill type walked, with the route's declared total against what was reached; rows appear only after a run that reaches that backfill. *(measured 2026-09-28)*
 
 **Data quality.** `list_completed` is true only when the walk reached the route's terminal page with declared and observed counts agreeing (the reader refuses otherwise); a run that hit the per-run cap mid-unit records how far it got and `list_completed` false, and the next run walks the unit again, pages charged to the cap, because only a walk can reach the records it did not. An empty success is not absence: `declared_count` is the route's own declared total for that query on that day, recorded beside `records_walked` even when the walk stopped early, so a capped walk can never read as an empty unit; a declared 0 is the publisher's statement that the Congress has no bills of that type. The declared total counts list entries, and the route can list one bill twice across a page boundary (`repeated_count`); whether that repeat also displaced another bill off the walk is not knowable from one walk, and a settled unit is not walked again to find out. A settled unit's bills are likewise not re-checked for a moved stamp, and since plan A1 retired the archive-wide `congress-bills` list writer (decision 31) nothing else refreshes their ten-column prefix. All columns are stored as VARCHAR.
 
 - **Parquet file:** `bill_family_backfill_walks.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
 - **Publication status:** Not established by this schema page or its measurement date.
+- **Row count:** Not stated here; the MCP `describe_table` reply gives the live count under `publication`.
 
 | Column | Type | Description |
 | --- | --- | --- |

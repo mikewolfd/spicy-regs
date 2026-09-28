@@ -6,11 +6,12 @@
 
 One row per aligned pair of dollar figures in a section whose amounts changed. `pairing_claim` names how the two figures were aligned; it is word alignment, not a semantic match. All columns are stored as VARCHAR.
 
-**Coverage.** Sampled. The adoption run produced 0 rows in this output from the 118th Congress's HR and S BILLSTATUS archives, processing 16,213 bills in one pass. The pass used 16 requests (8 keyed, 8 keyless), with the printing cap fixed at four and model calls disabled. No consecutive pair had both parsed bodies in the four-printing sample. Receipt: `rollups-0-24-0-adoption-2026-09-20/`. Local output only; not uploaded. *(measured 2026-09-20)*
+**Coverage.** Sampled: dollar figures that change between consecutive printings compared in section_diffs; a pair is compared only when both bodies were acquired and parsed. *(measured 2026-09-28)*
 
 - **Parquet file:** `financial_changes.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
 - **Publication status:** Not established by this schema page or its measurement date.
+- **Row count:** Not stated here; the MCP `describe_table` reply gives the live count under `publication`.
 
 | Column | Type | Description |
 | --- | --- | --- |

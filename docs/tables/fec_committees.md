@@ -6,11 +6,12 @@
 
 One row per observed Federal Election Commission committee. The current reader acquires from the unfiltered OpenFEC `/v1/committees/` endpoint through SpicyDocs; the delivered seed's selected scope is stated above. SpicyRegs preserves the existing 16 fields and JSON arrays, merges complete fresh traversals with prior observations by committee_id, and lets a fresh whole row replace its prior row. Raw page captures and acquisition manifests remain in FEC_CAPTURE_DIR. This identity/reference table can join other records carrying an FEC committee identifier. All columns are VARCHAR; array-valued fields are JSON strings.
 
-**Coverage.** Not a range. On 2026-09-21, the mikewolfd/spicy-regs fork published and verified a retained seed of 27,311 committee observations from a cycle=2024&cycle=2026 traversal observed on 2026-09-12. This seed is not a fresh unfiltered census, committee history or upstream/default publication. The current acquisition reader supports completed traversals without cycle/status filters and preserves prior-only rows; that behavior is distinct from this seed's measured scope. first_file_date and last_file_date describe filing activity, not acquisition. Receipt: fork-execution-2026-09-21/fec-publication-summary.json; direct fork MCP counts were checked in remote-mcp-audit/. *(measured 2026-09-21)*
+**Coverage.** Not a range. The OpenFEC committee registry: the whole registry is walked every Sunday (decision 53) and committees that filed in the last week are read daily; rows only an earlier walk saw are kept. first_file_date and last_file_date describe filing activity, not acquisition. *(measured 2026-09-28)*
 
 - **Parquet file:** `fec_committees.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
 - **Publication status:** Not established by this schema page or its measurement date.
+- **Row count:** Not stated here; the MCP `describe_table` reply gives the live count under `publication`.
 
 | Column | Type | Description |
 | --- | --- | --- |

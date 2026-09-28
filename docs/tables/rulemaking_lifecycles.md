@@ -6,13 +6,14 @@
 
 One row per docketed proceeding (owner decisions 54-56c): its earliest proposal, the earliest final strictly after it, or what else its events make (`kind`), with survival columns (`outcome`, `duration_days`, `censor_date`) for time-to-final estimates, Unified Agenda status and routine-family strata. A docket-less proceeding is one Register document that cannot pair and is left out. Keyed `proceeding_id`; joins `proceedings` on it and is joined by `lifecycle_events`. Built by `build_lifecycles`; dates are DATE, counts INTEGER and flags BOOLEAN. Replaces the documents-based rollup withdrawn on 2026-09-23.
 
-**Coverage.** Derived, and bounded by its inputs: every docketed proceeding, paired from its cleaned `lifecycle_events`. `snapshot_91b19da7…` holds 75,270 lifecycles (25,861 finalized, 28,387 final without a proposal, 10,186 no anchor, 8,723 open, 1,252 companion, 721 withdrawn, 140 upload pairs), censored at 2026-09-25. *(measured 2026-09-27)*
+**Coverage.** Derived, and bounded by its inputs: every docketed proceeding, paired from its cleaned `lifecycle_events` and censored at the day its inputs end. *(measured 2026-09-28)*
 
 **Data quality.** A Regulations.gov document whose stated Register number resolves to no Register row is dated by its upload, which for a legacy document can be years after the rule: on snapshot_9b2c770e's inputs 262 lifecycles anchor on such a document, 74 of them upload pairs outside survival (docs/ontology.md).
 
 - **Parquet file:** `rulemaking_lifecycles.parquet`, in the snapshot that `materialized/rulemaking/latest.json` names
 - **MCP `query_sql` support:** Configured; requires an available artifact.
 - **Publication status:** Not established by this schema page or its measurement date.
+- **Row count:** Not stated here; the MCP `describe_table` reply gives the live count under `publication`.
 
 | Column | Type | Description |
 | --- | --- | --- |

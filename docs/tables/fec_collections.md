@@ -6,11 +6,12 @@
 
 Collection-level scope, counts and evidence for fec_source_records. Join collection_id to that table to distinguish observed records from empty results and uncollected populations. Join source_family to fec_source_catalog for the official access routes. Counts are stored as strings; cast explicitly for arithmetic.
 
-**Coverage.** Sampled. On 2026-09-21, the mikewolfd/spicy-regs fork published and verified 649 explicitly selected collection scopes, including empty results, alongside 13,717,161 source records and 183,390 relationship observations. Each row retains its requested scope and outcome. This is a selected retained seed, not all official families or complete FEC history; source authority and acquisition limits remain collection-specific. No upstream/default publication is asserted. Receipts: fork-execution-2026-09-21/fec-publication-summary.json and remote-mcp-audit/. *(measured 2026-09-21)*
+**Coverage.** Sampled. One row per selected FEC file or API query, including empty results, with its requested scope and outcome: a selected seed, not every official family or complete FEC history. A collection with profile `bulk` lists a zip's files, not their rows. The fec_collection_cycles view gives each collection's election cycle. *(measured 2026-09-28)*
 
 - **Parquet file:** `fec_collections.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
 - **Publication status:** Not established by this schema page or its measurement date.
+- **Row count:** Not stated here; the MCP `describe_table` reply gives the live count under `publication`.
 
 | Column | Type | Description |
 | --- | --- | --- |

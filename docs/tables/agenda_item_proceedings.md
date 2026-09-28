@@ -6,11 +6,12 @@
 
 One row per piece of evidence that an agenda item tracks a proceeding: a docket, Regulations.gov document or Register document that directly reports the RIN for that proceeding. Unified Agenda equality alone never links an action. Keyed `relationship_id`; joins `regulatory_agenda_items` on `agenda_item_id`, `proceedings` on `proceeding_id` and `unified_agenda` on `rin`. Built by `build_regulatory_agenda`; all columns are VARCHAR.
 
-**Coverage.** Derived, and bounded by its inputs: `dockets`, `documents` and `federal_register` records that state a RIN the proceeding holds. `snapshot_91b19da7…` holds 148,011 links. *(measured 2026-09-27)*
+**Coverage.** Derived, and bounded by its inputs: `dockets`, `documents` and `federal_register` records that state a RIN the proceeding holds. *(measured 2026-09-28)*
 
 - **Parquet file:** `agenda_item_proceedings.parquet`, in the snapshot that `materialized/rulemaking/latest.json` names
 - **MCP `query_sql` support:** Configured; requires an available artifact.
 - **Publication status:** Not established by this schema page or its measurement date.
+- **Row count:** Not stated here; the MCP `describe_table` reply gives the live count under `publication`.
 
 | Column | Type | Description |
 | --- | --- | --- |

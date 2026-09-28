@@ -176,6 +176,59 @@ def test_check_detects_an_empty_data_quality_note():
     assert any("empty 'data_quality'" in e for e in errors)
 
 
+@pytest.mark.parametrize(
+    ("prose", "refusal"),
+    [
+        ("Derived. `snapshot_91b19da7…` holds the periods.", "a snapshot id"),
+        ("Window. Published as generation 9c87b600aa7b5847.", "a digest or generation pin"),
+        ("Derived. Built from members generation `017366cc…`.", "a digest or generation pin"),
+        ("Sampled. Local output only; not uploaded.", "a publication-status claim"),
+        ("Window. The candidate is not yet published.", "a publication-status claim"),
+        ("Window. Measured 319,501 rows on the candidate.", "a row count"),
+        ("True range. 1,009,005 dated records published 1994 on.", "a row count"),
+        ("Sampled. 13,717,161 provider records in selected collections.", "a row count"),
+    ],
+)
+def test_coverage_prose_refuses_facts_that_decay_with_each_publication(prose, refusal):
+    """Counts, snapshots, pins and publication claims go stale at the next publish; the server states them live."""
+    errors = dd.coverage_prose_errors("gao_reports", prose)
+    assert len(errors) == 1 and refusal in errors[0], errors
+
+
+@pytest.mark.parametrize(
+    "prose",
+    [
+        "Window: filings ECFS received on or after 2026-08-24, extended by a daily run.",
+        "True range. Filing years 2010 to date, each read whole; spicy-regs `3bc0a97` built it.",
+        "Sampled. One row per retained collection; rows from different cycles share the table.",
+    ],
+)
+def test_coverage_prose_keeps_scope_dates_rules_and_commit_references(prose):
+    assert dd.coverage_prose_errors("gao_reports", prose) == []
+
+
+def test_a_coverage_exception_allows_exactly_its_phrase(monkeypatch):
+    monkeypatch.setitem(dd.COVERAGE_PROSE_EXCEPTIONS, "gao_reports", {"about 3,693 rows": "caveat size"})
+    assert dd.coverage_prose_errors("gao_reports", "Window. Names unread on about 3,693 rows.") == []
+    errors = dd.coverage_prose_errors("gao_reports", "Window. Names unread on about 3,693 rows; 43 rows held.")
+    assert len(errors) == 1 and "'43 rows'" in errors[0]
+
+
+def test_a_coverage_exception_that_no_longer_matches_is_an_error(monkeypatch):
+    """A rewritten note cannot leave a stale permission behind."""
+    monkeypatch.setitem(dd.COVERAGE_PROSE_EXCEPTIONS, "gao_reports", {"about 3,693 rows": "caveat size"})
+    errors = dd.coverage_prose_errors("gao_reports", "Window. Reports the feed has listed.")
+    assert errors and "no longer matches" in errors[0]
+
+
+def test_check_refuses_a_row_count_in_committed_style_prose():
+    descriptions = dd.load_descriptions()
+    broken = {t: dict(entry) for t, entry in descriptions.items()}
+    broken["gao_reports"]["coverage"] = "Window. 43 rows on the measurement date."
+    errors = dd.check_descriptions(dd.expected_schemas(), broken)
+    assert any("[gao_reports] coverage states a row count" in e for e in errors)
+
+
 def test_generated_page_carries_coverage_and_data_quality():
     page = (dd.DEFAULT_DOCS_TABLES_DIR / "documents.md").read_text()
     assert "**Coverage.**" in page

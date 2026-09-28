@@ -6,11 +6,12 @@
 
 One row per FEC committee per two-year cycle, as that cycle's bulk committee master states it: name, treasurer, address, designation, type, party, filing frequency, interest-group category, connected organization and linked candidate. Read by the `fec-committee-history` rollup through SpicyDocs' committee-master reader, which verifies each file by digest and checks the publisher's header. Codes stay literal. `fec_committees` is the current registry from the API; this is the history, keyed on (`committee_id`, `cycle`). All columns are stored as VARCHAR.
 
-**Coverage.** True range. Every cycle from 1980 through the current one: each run reads every cycle's bulk committee master whole and publishes every row. The 24 source files fetched on 2026-09-27 held 298,395 rows naming 89,710 committees (receipt `fork-execution-2026-09-21/committee-master-measure-2026-09-27/`). The current cycle's file is republished daily, so its rows change. *(measured 2026-09-27)*
+**Coverage.** True range. Every cycle from 1980 through the current one: each run reads every cycle's bulk committee master whole and publishes every row. The current cycle's file is republished daily, so its rows change. *(measured 2026-09-27)*
 
 - **Parquet file:** `fec_committee_history.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
 - **Publication status:** Not established by this schema page or its measurement date.
+- **Row count:** Not stated here; the MCP `describe_table` reply gives the live count under `publication`.
 
 | Column | Type | Description |
 | --- | --- | --- |

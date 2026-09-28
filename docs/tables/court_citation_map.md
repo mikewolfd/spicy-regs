@@ -6,13 +6,14 @@
 
 Which court opinion cites which, and how often, as CourtListener's citator resolved it. Both ids are opinion ids, not decision ids: join each to court_opinions.opinion_id, then court_opinions.cluster_id to court_opinion_clusters, to ask what cites a decision or which decisions are cited most. Rebuilt whole from each quarterly export. All columns are VARCHAR.
 
-**Coverage.** Not a range. The complete 2026-06-30 CourtListener citation-map export: 77,460,014 citing/cited opinion pairs, each pair unique as the publisher's schema requires, and no NULL depth. Only the publisher's surrogate row id is dropped. Through court_opinions of the same edition, all but 3,758 citing and all but 1 cited opinion ids resolve, and the cited opinions belong to 4,509,544 distinct decisions. Published on the fork as generation f1e2e523631ed4e291f85e4350c917bdabcb06bfa75ad47e12ac0e1d4c865415 (family court-citations) on 2026-09-22. *(measured 2026-09-22)*
+**Coverage.** Not a range. The complete 2026-06-30 CourtListener citation-map export: citing/cited opinion pairs, each unique as the publisher's schema requires, with no NULL depth. Only the publisher's surrogate row id is dropped. Through court_opinions of the same edition, all but 3,758 citing ids and one cited id resolved on 2026-09-22. *(measured 2026-09-22)*
 
 **Data quality.** The edges are the publisher's automated citation resolution, not a reviewed citator: citations it could not resolve are absent, and depth counts mentions, not treatment (followed, distinguished or overruled are not recorded). Several opinions of one decision each carry their own edges, so count distinct clusters, not rows, when ranking decisions.
 
 - **Parquet file:** `court_citation_map.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
 - **Publication status:** Not established by this schema page or its measurement date.
+- **Row count:** Not stated here; the MCP `describe_table` reply gives the live count under `publication`.
 
 | Column | Type | Description |
 | --- | --- | --- |

@@ -6,11 +6,12 @@
 
 One row per Regulation Identifier Number: the durable Regulatory Agenda item a RIN identifies, with how many proceedings evidence links it to and whether its scope is resolved. Keyed `agenda_item_id` (`urn:rkaf:us:rin:<rin>`), one per `rin`; joined by `agenda_item_proceedings` on `agenda_item_id`, and to `unified_agenda` on `rin`. Built by `build_regulatory_agenda`; all columns are VARCHAR.
 
-**Coverage.** Derived, and bounded by its inputs: every RIN that `unified_agenda`, `dockets`, `documents` or `federal_register` states. `snapshot_91b19da7…` holds 52,092 items. *(measured 2026-09-27)*
+**Coverage.** Derived, and bounded by its inputs: every RIN that `unified_agenda`, `dockets`, `documents` or `federal_register` states. *(measured 2026-09-28)*
 
 - **Parquet file:** `regulatory_agenda_items.parquet`, in the snapshot that `materialized/rulemaking/latest.json` names
 - **MCP `query_sql` support:** Configured; requires an available artifact.
 - **Publication status:** Not established by this schema page or its measurement date.
+- **Row count:** Not stated here; the MCP `describe_table` reply gives the live count under `publication`.
 
 | Column | Type | Description |
 | --- | --- | --- |

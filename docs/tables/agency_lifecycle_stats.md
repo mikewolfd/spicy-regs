@@ -6,11 +6,12 @@
 
 The Aalen-Johansen cumulative incidence of a final rule, withdrawal competing (decision 54a), per agency and for all agencies (`agency_code` NULL), overall, routine, non-routine and per routine family: the first day it reaches each quartile, NULL where it never does, with a 95% interval from the log-log band. A cell under 30 rules keeps its row, `suppressed`, with no estimates; the Parquet metadata states the estimator exactly. Keyed (`agency_code`, `stratum`). Built by `build_agency_lifecycle_stats`; counts and days are INTEGER.
 
-**Coverage.** Derived from `rulemaking_lifecycles` with a survival outcome. `snapshot_91b19da7…` holds 344 cells, 172 of them suppressed under 30 rules; every unsuppressed estimate equals R's multi-state `survfit`. *(measured 2026-09-27)*
+**Coverage.** Derived from `rulemaking_lifecycles` with a survival outcome. A cell covering fewer than 30 rules is suppressed. On 2026-09-27 every unsuppressed estimate equalled R's multi-state `survfit`. *(measured 2026-09-27)*
 
 - **Parquet file:** `agency_lifecycle_stats.parquet`, in the snapshot that `materialized/rulemaking/latest.json` names
 - **MCP `query_sql` support:** Configured; requires an available artifact.
 - **Publication status:** Not established by this schema page or its measurement date.
+- **Row count:** Not stated here; the MCP `describe_table` reply gives the live count under `publication`.
 
 | Column | Type | Description |
 | --- | --- | --- |

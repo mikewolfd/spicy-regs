@@ -6,13 +6,14 @@
 
 Every CourtListener opinion's decision, type and author, without its text. It is what connects court_citation_map and court_parentheticals, which name opinions, to court_opinion_clusters, which holds decisions: join opinion_id from either, then cluster_id to court_opinion_clusters.cluster_id. local_path and download_url locate the original document. Rebuilt whole from each quarterly export, locally rather than on a schedule, because the source export is 54.6 GB. All columns are VARCHAR.
 
-**Coverage.** Not a range. The complete 2026-06-30 CourtListener opinions export without its eight text fields: 10,798,347 opinions, every opinion_id unique and every cluster_id set, belonging to 10,069,107 decisions; all but 21 name a decision present in the published court_opinion_clusters edition. Those 21 are RECAP trial-court opinions created between the cluster export (08:16 UTC) and this one (09:56), which opinion search does not index; they resolve with the next export (receipt join-gaps-2026-09-26/i/). Decoded in record-aligned pieces, each piece's row count held to the export's record starts and its opening rows to the reference decoder. Published on the fork as generation f7cc67cc03bf7ef1a7d976d6eb74bf2654f7212b66ad785c633331a4cf377d41 (family court-opinions) on 2026-09-22. Opinion text is not included: the fork links out to CourtListener instead. *(measured 2026-09-22)*
+**Coverage.** Not a range. The complete 2026-06-30 CourtListener opinions export without its eight text fields: every opinion_id unique and every cluster_id set. All but 21 name a decision in court_opinion_clusters; those 21 are RECAP trial-court opinions created between the two exports, which opinion search does not index, and resolve with the next export (receipt join-gaps-2026-09-26/i/). Opinion text is not included: the fork links out to CourtListener instead. *(measured 2026-09-22)*
 
 **Data quality.** Author strings are the publisher's text and are not resolved to people; author_id is set only where the publisher linked a judge. opinion_type is the publisher's code, such as 010combined or 040dissent.
 
 - **Parquet file:** `court_opinions.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
 - **Publication status:** Not established by this schema page or its measurement date.
+- **Row count:** Not stated here; the MCP `describe_table` reply gives the live count under `publication`.
 
 | Column | Type | Description |
 | --- | --- | --- |

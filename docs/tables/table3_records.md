@@ -6,7 +6,7 @@
 
 One row per classification record of one public law in OLRC's Table III: which U.S. Code place each section of the law went to, as Table III's bulk file states it. All columns are stored as VARCHAR.
 
-**Coverage.** Window, complete for the Congresses read: every public law of the 119th Congress that Table III holds at release point 119-73, 40 acts and 2,983 rows, read from OLRC's Table III bulk file (receipt `table3-bulk-2026-09-26/`). Each run fetches that one file and derives every public law of each Congress the laws table holds, as well as the scoped ones, so a Congress keeps its rows current after it leaves the laws scope while Table III catches up. The file holds the whole table back to 1789; other Congresses, private laws and pre-1957 session-law chapters are not derived. *(measured 2026-09-26)*
+**Coverage.** Window, complete for the Congresses read: every public law Table III holds for each Congress the laws table holds, plus the scoped ones, derived from OLRC's Table III bulk file on each run, so a Congress keeps its rows current after it leaves the laws scope while Table III catches up. The file holds the whole table back to 1789; other Congresses, private laws and pre-1957 session-law chapters are not derived. *(measured 2026-09-26)*
 
 **Data quality.** Table III holds an act only once OLRC has classified it, and lags enactment: on 2026-09-26 it was current through 119-73, a law of 2026-01-23, while the law route reached 119-111. `release_point` says how current the file was.
 Since 2026-09-26 the rows come from the bulk file (`fulldump@<release point>.xml`) instead of one page per act. The file splits an act's records about ten to an `<act>` fragment. An act's rows are its fragments' records in the file's order, and `seq` is a record's position in its act, as on the page; the file's own `sequence` attribute repeats within 70 acts, so it is not used. Each fragment states its own Congress, date and Statutes volume, and a record carries its fragment's volume where it states a page. Replayed against the 2,981 rows the pages had published, every row keeps its position, act section, Statutes page and volume, Code title and section, status and release point. The file also holds 119-30 and 119-53, whose pages the page walk never reached. Four act-level columns now carry the file's spelling instead of the page's: `stated_key` `119-37` (page `119–37`), `congress` `119` (`119th Cong.`), `act_date` `2025-11-12` (`Nov. 12, 2025`) and `statutes_at_large_volume` `139` (`139 Stat.`).
@@ -16,6 +16,7 @@ Table III only grows: across the eight consecutive releases from 116-150 (2020-0
 - **Parquet file:** `table3_records.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
 - **Publication status:** Not established by this schema page or its measurement date.
+- **Row count:** Not stated here; the MCP `describe_table` reply gives the live count under `publication`.
 
 | Column | Type | Description |
 | --- | --- | --- |
