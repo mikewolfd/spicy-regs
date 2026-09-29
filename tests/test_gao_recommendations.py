@@ -19,7 +19,6 @@ from spicy_docs.schemas.gao_recommendation_tables import GAO_RECOMMENDATIONS
 from spicy_docs.sources.gao.recommendations import (
     EXPORT_URL,
     GaoRecommendationsSourceError,
-    parse_recommendations_export,
 )
 
 from spicy_regs.transforms import build_gao_recommendations as build
@@ -40,16 +39,14 @@ PHONES = set(STATED)
 
 def _without(positions: set[int], body: bytes = EXCERPT) -> bytes:
     """The export less the data records at ``positions``, every other byte kept (the last record has no terminator)."""
-    from spicy_regs.transforms.build_gao_recommendations import _FIELD
-
-    records, start, position = [], 0, 0
-    while position < len(body):
-        match = _FIELD.match(body, position)
-        assert match is not None
-        position = match.end()
-        if match.group(2) != b",":
-            records.append(body[start:position])
-            start = position
+    records, start, quoted = [], 0, False
+    for index, byte in enumerate(body):
+        if byte == ord('"'):
+            quoted = not quoted
+        elif byte == ord("\n") and not quoted:
+            records.append(body[start : index + 1])
+            start = index + 1
+    records.append(body[start:])
     head, data = records[:6], records[6:]
     kept = [record for index, record in enumerate(data) if index not in positions]
     kept[-1] = kept[-1].rstrip(b"\n")
@@ -99,7 +96,9 @@ def test_a_first_run_publishes_every_listed_recommendation_open(tmp_path):
     table = pq.read_table(out)
     assert tuple(table.column_names) == GAO_RECOMMENDATIONS.columns
     rows = table.to_pylist()
-    assert len(rows) == 26 and len({row["recommendation_id"] for row in rows}) == 26
+    assert len(rows) == 35 and len({row["recommendation_id"] for row in rows}) == 35
+    numbered = [row for row in rows if row["recommendation_number"] is not None]
+    assert len(numbered) == 33 and {row["recommendation_kind"] for row in numbered} == {"recommendation", "matter"}
     assert {(row["first_seen"], row["last_seen"], row["listed_open"]) for row in rows} == {
         ("2026-09-28", "2026-09-28", "true")
     }
@@ -142,22 +141,24 @@ def test_the_status_as_last_listed_replaces_the_prior_status(tmp_path):
 
 
 def test_an_export_that_would_retire_more_than_half_the_open_rows_is_refused(tmp_path):
-    """14 of 26 dropped is more than half: refused, and the published table is left as it was."""
+    """18 of 35 dropped is more than half: refused, and the published table is left as it was."""
     first = _run(tmp_path / "first")
-    with pytest.raises(build.GaoRecommendationsFoldError, match="lists 12 of the 26"):
-        _run(tmp_path / "second", _without(set(range(14)), EXCERPT.replace(STAMP, NEXT_DAY)), prior=first)
+    with pytest.raises(build.GaoRecommendationsFoldError, match="lists 17 of the 35"):
+        _run(tmp_path / "second", _without(set(range(18)), EXCERPT.replace(STAMP, NEXT_DAY)), prior=first)
     assert not (tmp_path / "second" / build.OUTPUT).exists()
 
 
-def test_exactly_half_still_listed_passes_the_guard(tmp_path):
+def test_just_over_half_still_listed_passes_the_guard(tmp_path):
     first = _run(tmp_path / "first")
-    out = _run(tmp_path / "second", _without(set(range(13)), EXCERPT.replace(STAMP, NEXT_DAY)), prior=first)
-    assert sum(row["listed_open"] == "false" for row in _rows(out).values()) == 13
+    out = _run(tmp_path / "second", _without(set(range(17)), EXCERPT.replace(STAMP, NEXT_DAY)), prior=first)
+    assert sum(row["listed_open"] == "false" for row in _rows(out).values()) == 17
 
 
 def test_the_guard_counts_only_rows_the_prior_lists_open():
     open_row = {**dict.fromkeys(GAO_RECOMMENDATIONS.columns), "recommendation_id": "a", "listed_open": "true"}
     closed = [{**open_row, "recommendation_id": f"c{n}", "listed_open": "false"} for n in range(9)]
+    other = {**open_row, "recommendation_id": "b"}
+    assert build.fold([open_row, other], [open_row])[1]["retired"] == 1, "exactly half still listed passes"
     rows, retirement = build.fold([open_row, *closed], [open_row])
     assert len(rows) == 10 and retirement == {"open_before": 1, "still_listed": 1, "retired": 0, "mass_close_reason": None}
     with pytest.raises(build.GaoRecommendationsFoldError):
@@ -178,16 +179,16 @@ def test_a_stated_reason_lets_a_mass_close_through_and_the_evidence_keeps_it(tmp
     out = build.build_gao_recommendations(
         tmp_path / "second",
         evidence=evidence,
-        transport=Export(_without(set(range(14)), EXCERPT.replace(STAMP, NEXT_DAY))),
+        transport=Export(_without(set(range(18)), EXCERPT.replace(STAMP, NEXT_DAY))),
         download_prior=_prior(first),
         allow_mass_close_reason=REASON,
     )
-    assert sum(row["listed_open"] == "false" for row in _rows(out).values()) == 14
+    assert sum(row["listed_open"] == "false" for row in _rows(out).values()) == 18
     evidence.finish()
     journal = [json.loads(line) for line in (evidence.artifact_dir / "journal.jsonl").read_text().splitlines()]
     (allowed,) = [event for event in journal if event["event"] == "mass-close-allowed"]
     assert allowed["reason"] == REASON and allowed["mass_close_reason"] == REASON
-    assert (allowed["retired"], allowed["open_before"], allowed["still_listed"]) == (14, 26, 12)
+    assert (allowed["retired"], allowed["open_before"], allowed["still_listed"]) == (18, 35, 17)
     assert evidence.artifact is not None and (evidence.artifact_dir / "journal.jsonl") in evidence.artifact_dir.iterdir()
 
 
@@ -227,24 +228,14 @@ def test_the_rollup_reads_the_reason_from_the_dispatch_and_a_schedule_never_sets
     assert "GAO_ALLOW_MASS_CLOSE_REASON: ${{ inputs.gao_allow_mass_close_reason }}" in (workflows / "_rollup.yml").read_text()
 
 
-def test_the_redacted_export_empties_only_the_phone_fields():
-    redacted, emptied = build.redact_director_phone(EXCERPT)
-    assert emptied == len(STATED) == 10 and not any(phone.encode() in redacted for phone in PHONES)
-    before, after = _records(EXCERPT), _records(redacted)
-    assert after[:6] == before[:6]
-    assert [row[:4] + row[5:] for row in after[6:]] == [row[:4] + row[5:] for row in before[6:]]
-    assert all(row[4] == "" for row in after[6:])
-    # Each value goes, with the quotes GAO put round it where it did (not round an unspaced one, such as ``(202)512-7952``).
-    quoted = [f',"{phone}",'.encode() in EXCERPT for phone in STATED]
-    assert quoted.count(False) == 1
-    assert len(EXCERPT) - len(redacted) == sum(len(phone.encode()) + 2 * q for phone, q in zip(STATED, quoted))
-    assert parse_recommendations_export(redacted) == parse_recommendations_export(EXCERPT)
+def test_the_evidence_copy_is_spicy_docs_redaction_of_the_export(tmp_path, monkeypatch):
+    """The one redactor lives beside the reader's header; the retained copy is its output, byte for byte."""
+    from spicy_docs.sources.gao.recommendations import redact_director_phone
 
-
-@pytest.mark.parametrize("body", [b"not,a\n\"csv", EXCERPT.replace(b'"Director Phone"', b'"Director Contact"')])
-def test_bytes_whose_phone_column_cannot_be_found_are_not_redacted(body):
-    with pytest.raises(ValueError, match="nothing can be retained"):
-        build.redact_director_phone(body)
+    _rollup(tmp_path, monkeypatch, EXCERPT).run()
+    redacted, emptied = redact_director_phone(EXCERPT)
+    blobs = [path.read_bytes() for path in (tmp_path / "source-evidence").rglob("sha256/*") if path.is_file()]
+    assert redacted in blobs and EXCERPT not in blobs and emptied == len(STATED) == 14
 
 
 def _published_text(root: Path) -> list[tuple[Path, str]]:
@@ -270,7 +261,7 @@ def test_the_phone_check_finds_a_phone_where_one_is(tmp_path):
     pq.write_table(pa.table({"phone": sorted(PHONES)}), tmp_path / "raw.parquet", compression="zstd")
     found = {path for path, _ in _phones_in(tmp_path)}
     assert found == {"raw.csv", "raw.parquet"}
-    assert len(PHONES) == 7
+    assert len(PHONES) == 8
 
 
 def _rollup(tmp_path, monkeypatch, body: bytes):

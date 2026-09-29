@@ -1882,11 +1882,15 @@ tables:
       filed under. Read once a day through Zyte by the `gao-recommendations`
       rollup and SpicyDocs' export reader, which refuses a changed header, and
       kept as an **accumulator**: a recommendation that leaves the export is
-      marked, never deleted. GAO states no recommendation id, so
-      `recommendation_id` digests the publication number, agency and text; a
-      reworded recommendation becomes a new row. `report_id` joins
-      `gao_reports`. The director's phone GAO lists is deliberately not
-      published. All columns are stored as VARCHAR.
+      marked, never deleted. GAO numbers each recommendation within its
+      product and states the number at the end of the text, so
+      `recommendation_id` is keyed on that number (with the publication, kind
+      and agency) and, where no number is stated, on the text; the number is
+      its own column. `listed_open` false means only that the latest export
+      does not list it: usually a closure, but an edit to its number, text or
+      agency reads the same. `report_id` joins `gao_reports`. The director's
+      phone GAO lists is deliberately not published, and the retained source
+      evidence has it emptied. All columns are stored as VARCHAR.
     columns_from: spicy_docs
 
   document_attributes:

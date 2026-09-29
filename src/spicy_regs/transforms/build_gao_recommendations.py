@@ -7,13 +7,15 @@ prior row the export no longer lists stays, with ``listed_open = false`` and the
 deleted, so the table only grows, and the R2 shrink guard cannot see a bad export. :func:`fold` therefore refuses a run
 that would retire more than half the rows the prior lists open, the shrink guard's own ratio.
 
-**The key is the contract's.** The fold reads ``recommendation_id`` through ``GAO_RECOMMENDATIONS.key`` and never
-computes it, so a change of key is a change to SpicyDocs' ``gao_recommendation_id`` alone. Every prior row then
-carries the old spelling, which the guard refuses as a mass retirement until the prior is re-keyed explicitly.
+**The key is the contract's,** rule ``gao-recommendation-key/1``: the number GAO states at the end of the text, with
+the publication, kind and agency, and the text only where no number is stated. The fold reads ``recommendation_id``
+through ``GAO_RECOMMENDATIONS.key`` and never computes it, so a new rule is a change to SpicyDocs'
+``gao_recommendation_id`` alone. Every prior row then carries the old key, which the guard refuses as a mass
+retirement until the prior is re-keyed explicitly.
 
 **No director phone is published** (owner decision, 2026-09-28: the director's name only). The table has no phone
 column, and the source evidence, which lives in the public bucket, retains the export with that column emptied
-(:func:`redact_director_phone`), every other byte kept, beside the raw file's SHA-256 and size. The raw bytes are
+(SpicyDocs' ``redact_director_phone``), every other byte kept, beside the raw file's SHA-256 and size. The raw bytes are
 held in memory only: never written under the output directory, whose failures CI uploads, and never retained, a
 refused export included.
 
@@ -23,7 +25,6 @@ One Zyte request a run: ``www.gao.gov`` refuses plain clients. ``ZYTE_TOKEN`` is
 from __future__ import annotations
 
 import dataclasses
-import re
 from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -45,56 +46,21 @@ if TYPE_CHECKING:
 TABLE = "gao_recommendations"
 OUTPUT = f"{TABLE}.parquet"
 STAGE = "gao-recommendations-export"
-PHONE_COLUMN = "Director Phone"
 #: The R2 shrink guard's default ratio (``sources/r2.py``): at least half the rows the prior lists open must stay listed.
 MIN_STILL_LISTED = 0.5
-#: One field and what ends it: a quoted field (with anything GAO leaves after its closing quote, as the preamble's
-#: ``"Source: ..." ,`` does), or an unquoted one; then a comma, a line end, or the end of the export.
-_FIELD = re.compile(rb'("(?:[^"]|"")*"[^,\r\n"]*|[^,\r\n"]*)(,|\r?\n|\Z)')
 
 
 class GaoRecommendationsFoldError(RuntimeError):
     """The export would retire more of the open rows than a real day's closures can."""
 
 
-def redact_director_phone(body: bytes) -> tuple[bytes, int]:
-    """``body`` with every Director Phone field emptied and every other byte kept, and how many held a value.
-
-    The header is the first record naming the column; the preamble before it is kept whole. An emptied field is
-    spelled as GAO spells an empty one, with nothing between its commas. Refuses bytes that are not CSV or name no
-    such column, since then no field can be proved to be the phone.
-    """
-    pieces: list[bytes] = []
-    kept_from, position, column, index, blanked = 0, 0, None, 0, 0
-    header: list[bytes] = []
-    while position < len(body):
-        match = _FIELD.match(body, position)
-        if match is None:
-            raise ValueError(f"GAO export is not CSV at byte {position}; nothing can be retained")
-        field, separator = match.group(1), match.group(2)
-        if column is None:
-            header.append(field.strip(b'"'))
-        elif index == column and field:
-            pieces.append(body[kept_from : match.start(1)])
-            kept_from = match.end(1)
-            blanked += field not in (b"", b'""')
-        index += 1
-        if separator != b",":
-            if column is None and PHONE_COLUMN.encode() in header:
-                column = header.index(PHONE_COLUMN.encode())
-            header, index = [], 0
-        position = match.end()
-    if column is None:
-        raise ValueError(f"GAO export names no {PHONE_COLUMN!r} column; nothing can be retained")
-    pieces.append(body[kept_from:])
-    return b"".join(pieces), blanked
-
-
 def _retain_redacted(evidence: CaptureEvidence, capture: CapturedBodyResponse, *, stage: str) -> None:
     """Retain ``capture`` with its phone column emptied, bound to the raw bytes' digest and size by a journal event."""
+    from spicy_docs.sources.gao.recommendations import GaoRecommendationsSourceError, redact_director_phone
+
     try:
         redacted, blanked = redact_director_phone(capture.body)
-    except ValueError as error:
+    except GaoRecommendationsSourceError as error:
         evidence.event("unretained", stage=stage, reason=str(error), sha256=capture.sha256, byte_size=capture.byte_size)
         return
     kept = dataclasses.replace(capture, body=redacted)
@@ -102,7 +68,7 @@ def _retain_redacted(evidence: CaptureEvidence, capture: CapturedBodyResponse, *
     evidence.event(
         "redacted",
         stage=stage,
-        column=PHONE_COLUMN,
+        column="Director Phone",
         fields_emptied=blanked,
         original_sha256=capture.sha256,
         original_byte_size=capture.byte_size,
@@ -213,7 +179,7 @@ def build_gao_recommendations(
 
     output_dir.mkdir(parents=True, exist_ok=True)
     if evidence is not None:
-        evidence.event("selection", stage=STAGE, requests=1, retained=f"export with {PHONE_COLUMN!r} emptied")
+        evidence.event("selection", stage=STAGE, requests=1, retained="export with its Director Phone column emptied")
     try:
         export, capture = _acquire(transport, evidence)
     except Exception as error:
