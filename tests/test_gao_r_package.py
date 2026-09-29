@@ -39,14 +39,21 @@ def _shaped(record: dict) -> dict:
 
 def test_a_package_row_is_keyed_on_its_page_and_states_nothing_it_leaves_empty():
     row = _shaped(_record("https://www.gao.gov/products/14508%2C-14803", "A-14508,A-14803",
-                                summary="A summary.", topics="Human Capital",
-                                agencies_affected="Department of Labor; Architect of the Capitol"))
+                          summary="A summary.", topics="Human Capital",
+                          agencies_affected="Department of Labor; Architect of the Capitol",
+                          requester_members="Charles H. Percy (Senate); Ernest F . Hollings (Senate)",
+                          requester_committees=None, n_recommendations=2, n_matters=0, page_count=19,
+                          subject_terms="Cost control; Financial management"))
     assert row == {
         "report_id": "14508,-14803", "title": "Title A-14508,A-14803", "report_type": "Report",
         "published_date": "1984-01-04", "abstract": "A summary.",
         "agencies_json": json.dumps(["Department of Labor", "Architect of the Capitol"]),
         "topics_json": '["Human Capital"]', "url": "https://www.gao.gov/products/14508%2C-14803",
         "source": "gao_r_package", "product_type": None, "report_number": "A-14508,A-14803",
+        "requester_type": "congressional_request", "requester_committees_json": None,
+        "requester_members_json": '["Charles H. Percy (Senate)", "Ernest F . Hollings (Senate)"]',
+        "recommendation_count": 2, "matters_for_congress_count": 0, "page_count": 19,
+        "subject_terms_json": '["Cost control", "Financial management"]',
     }
     empty = _shaped(_record("https://www.gao.gov/products/t-ggd-99-93", "T-GGD-99-93", released=""))
     assert (empty["abstract"], empty["topics_json"], empty["agencies_json"]) == (None, None, None)
@@ -77,12 +84,26 @@ def test_only_the_reviewed_conversion_is_read(tmp_path):
         package.read_package(other)
 
 
-def _prior(tmp_path) -> Path:
+def _prior(tmp_path, *, columns: int | None = None) -> Path:
+    """A live table holding one listing row; ``columns`` keeps only the first N, as a table published before these."""
     listed = {**_feed_row("gao-16-75sp"), "abstract": None, "source": "gao_listing", "product_type": None,
               "report_number": "GAO-16-75SP"}
+    table = pa.Table.from_pylist([listed], schema=module._SCHEMA)
     path = tmp_path / "prior.parquet"
-    pq.write_table(pa.Table.from_pylist([listed], schema=module._SCHEMA), path)
+    pq.write_table(table.select(list(module.COLUMNS[:columns])) if columns else table, path)
     return path
+
+
+def test_a_live_table_without_the_package_columns_gains_them_and_changes_no_cell(tmp_path):
+    """The 11-column live table: the copy appends the new columns, NULL on held rows unless the package fills them."""
+    records = [_record("https://www.gao.gov/products/gao-16-75sp", "GAO-16-75SP", page_count=7),
+               _record("https://www.gao.gov/products/24669", "A-24669")]
+    out = tmp_path / "out.parquet"
+    added = [_shaped(records[1])]
+    importer.import_package_rows(_prior(tmp_path, columns=11), records, out, rows_sha256=importer.rows_digest(added))
+    assert pq.read_schema(out).names == list(module.COLUMNS)
+    rows = {r["report_id"]: r for r in pq.read_table(out).to_pylist()}
+    assert (rows["gao-16-75sp"]["page_count"], rows["gao-16-75sp"]["title"]) == (7, "Feed gao-16-75sp")
 
 
 def test_the_copy_adds_only_what_no_row_holds_and_changes_no_held_cell(tmp_path):
@@ -94,17 +115,19 @@ def test_the_copy_adds_only_what_no_row_holds_and_changes_no_held_cell(tmp_path)
     ]
     added = [_shaped(records[2])]
     out = tmp_path / "out.parquet"
-    report = importer.import_package_rows(_prior(tmp_path), records, out, rows_sha256=importer.rows_digest(added))
+    report = importer.import_package_rows(_prior(tmp_path), records, out, rows_sha256=importer.rows_digest(added),
+                                          fill_nulls=False)
     rows = {row["report_id"]: row for row in pq.read_table(out).to_pylist()}
     assert set(rows) == {"gao-16-75sp", "24669"} and rows["gao-16-75sp"]["abstract"] is None
     assert (report["added"], report["held"], report["held_as_twin"], report["legal_decisions_left_out"]) == (1, 2, 1, 1)
-    assert report["null_fills_available"] == {"gao_listing.abstract": 1} and not report["null_fills_applied"]
+    assert report["null_fills_available"] == {"gao_listing.abstract": 1, "gao_listing.requester_type": 1}
 
     filled = tmp_path / "filled.parquet"
     importer.import_package_rows(_prior(tmp_path), records, filled, rows_sha256=importer.rows_digest(added),
                                  fill_nulls=True)
     row = {r["report_id"]: r for r in pq.read_table(filled).to_pylist()}["gao-16-75sp"]
     assert (row["abstract"], row["title"], row["source"]) == ("Package summary.", "Feed gao-16-75sp", "gao_listing")
+    assert (row["requester_type"], row["report_number"]) == ("congressional_request", "GAO-16-75SP")
 
 
 def test_any_other_set_of_additions_refuses(tmp_path):

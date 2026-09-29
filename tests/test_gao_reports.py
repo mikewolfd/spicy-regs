@@ -32,7 +32,7 @@ _RAW_ITEM = {
 def test_shape_produces_exact_schema():
     row = _shape(_RAW_ITEM)
     assert set(row) == set(COLUMNS)
-    assert len(COLUMNS) == 11
+    assert len(COLUMNS) == 18
     assert row["source"] == "gao_rss"
 
 
@@ -172,7 +172,7 @@ def test_a_feed_read_of_a_held_product_fills_cells_and_never_empties_one(tmp_pat
     prior = pa.Table.from_pylist([listed, fed], schema=module._SCHEMA)
     rows = _run(tmp_path, monkeypatch, prior=prior, feed=["gao-26-5", "gao-26-6"])
     # A listing row keeps everything it states; the feed fills only its NULL abstract.
-    assert rows["gao-26-5"] == {**listed, "abstract": "What GAO Found."}
+    assert rows["gao-26-5"] == {**dict.fromkeys(COLUMNS), **listed, "abstract": "What GAO Found."}
     # The feed refreshes its own row's title and date, and keeps the number the listing filled.
     assert rows["gao-26-6"]["title"] == "Feed gao-26-6" and rows["gao-26-6"]["published_date"] == "2026-09-21"
     assert (rows["gao-26-6"]["report_number"], rows["gao-26-6"]["source"]) == ("GAO-26-6", "gao_rss")

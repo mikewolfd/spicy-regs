@@ -489,6 +489,13 @@ DERIVED_SCHEMAS: dict[str, list[tuple[str, str]]] = {
         ("source", "VARCHAR"),
         ("product_type", "VARCHAR"),
         ("report_number", "VARCHAR"),
+        ("requester_type", "VARCHAR"),
+        ("requester_committees_json", "VARCHAR"),
+        ("requester_members_json", "VARCHAR"),
+        ("recommendation_count", "BIGINT"),
+        ("matters_for_congress_count", "BIGINT"),
+        ("page_count", "BIGINT"),
+        ("subject_terms_json", "VARCHAR"),
     ],
     # GAO's legal decisions from its own Month in Review listing (build_gao_reports),
     # one row per decision page; all VARCHAR. Keyed by (decision_number, url).

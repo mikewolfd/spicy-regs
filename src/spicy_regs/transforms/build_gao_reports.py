@@ -72,7 +72,7 @@ from spicy_regs.transforms.table_merge import merge_local_prior
 
 OUTPUT = "gao_reports.parquet"
 
-# The published schema: 11 columns, all VARCHAR, in a fixed order. ``report_id``
+# The published schema: 18 columns in a fixed order, the three counts BIGINT and the rest VARCHAR. ``report_id``
 # is the primary / dedup key.
 COLUMNS = (
     "report_id",
@@ -86,8 +86,19 @@ COLUMNS = (
     "source",
     "product_type",
     "report_number",
+    # From the CetiAlphaFive/gao R package (2026-09-29), for the reports it lists; a later GAO product-page reader
+    # fills new reports. NULL where no route states them.
+    "requester_type",
+    "requester_committees_json",
+    "requester_members_json",
+    "recommendation_count",
+    "matters_for_congress_count",
+    "page_count",
+    "subject_terms_json",
 )
-_SCHEMA = pa.schema([(c, pa.string()) for c in COLUMNS])
+#: The counts are whole numbers; every other column is VARCHAR.
+COUNT_COLUMNS = ("recommendation_count", "matters_for_congress_count", "page_count")
+_SCHEMA = pa.schema([(c, pa.int64() if c in COUNT_COLUMNS else pa.string()) for c in COLUMNS])
 
 #: GAO's legal decisions from its own listing: all VARCHAR, keyed on the number as GAO spells it and the page.
 DECISIONS_OUTPUT = "gao_decisions.parquet"
@@ -165,8 +176,7 @@ def _shape(item: dict) -> dict:
         "topics_json": "[]",
         "url": item.get("link"),
         "source": SOURCE_FEED,
-        "product_type": None,
-        "report_number": None,
+        **dict.fromkeys(COLUMNS[COLUMNS.index("product_type"):]),
     }
 
 
@@ -188,8 +198,11 @@ def _over_lowest(prior_file: Path | None, rows: list[dict]) -> tuple[list[dict],
     ids = {row["report_id"] for row in rows}
     lowest = {row["report_id"]: row for row in pq.read_table(prior_file).to_pylist()
               if row["report_id"] in ids and row["source"] == _LOWEST}
-    merged = [{column: (value if value is not None else lowest[row["report_id"]][column])
-               for column, value in row.items()} if row["report_id"] in lowest else row for row in rows]
+    merged = [
+        {column: row.get(column) if row.get(column) is not None else lowest[row["report_id"]].get(column)
+         for column in COLUMNS} if row["report_id"] in lowest else row
+        for row in rows
+    ]
     return merged, sum(row["report_id"] in lowest for row in rows)
 
 

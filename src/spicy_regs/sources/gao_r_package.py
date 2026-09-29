@@ -15,6 +15,9 @@ What the copy takes, and why:
 - ``title``, the release date (else the issue date), ``summary`` as ``abstract``, the one GAO topic as ``topics_json``
   and ``agencies_affected`` as ``agencies_json``. The package states no product type. An empty string or R's ``NA``
   is unstated, never a value.
+- Its further fields become their own columns: ``requester_type``; the requesting committees and members and the
+  subject terms, each a JSON array split on ``;`` and kept as extracted (member names carry the package's OCR
+  errors); and the recommendation, matters-for-Congress and page counts.
 
 The ``.rds`` was converted once to Parquet outside this project (``~/Work/corpora/gao-r-package-2026-09-29/``,
 ``convert.py`` and ``receipt.json``: 56,557 rows and 17 columns before and after, every non-null count and every value
@@ -74,6 +77,15 @@ def page_id(url: str) -> str:
     return unquote(match[1]).lower()
 
 
+def _count(value: object) -> int | None:
+    """A whole count as the package states it, or None for R's ``NA``; anything else refuses."""
+    if value is None or (isinstance(value, float) and math.isnan(value)):
+        return None
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or value != int(value):
+        raise GaoRPackageError(f"Package count is not a whole number: {value!r}")
+    return int(value)
+
+
 def _list_json(value: str | None) -> str | None:
     return None if value is None else json.dumps([part.strip() for part in value.split(";") if part.strip()])
 
@@ -99,6 +111,13 @@ def shape(record: Mapping[str, Any]) -> dict | None:
         "source": SOURCE,
         "product_type": None,
         "report_number": number,
+        "requester_type": _stated(record.get("requester_type")),
+        "requester_committees_json": _list_json(_stated(record.get("requester_committees"))),
+        "requester_members_json": _list_json(_stated(record.get("requester_members"))),
+        "recommendation_count": _count(record.get("n_recommendations")),
+        "matters_for_congress_count": _count(record.get("n_matters")),
+        "page_count": _count(record.get("page_count")),
+        "subject_terms_json": _list_json(_stated(record.get("subject_terms"))),
     }
 
 

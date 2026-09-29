@@ -10,8 +10,8 @@ project, to Parquet, and ``receipt.json`` shows the conversion lost nothing. Bot
 are retained as evidence, and each is checked against its pinned digest. Nothing here needs ``pyreadr``.
 
 It is the lowest-precedence route (:mod:`spicy_regs.sources.gao_r_package`): it adds only reports no row holds, and
-changes no cell of a held row. ``FILL_NULLS`` would also fill a held row's NULL cells; it is off until the owner
-decides, and the report counts what it would fill either way. The copy refuses unless the added rows are exactly the
+changes no cell of a held row that holds a value. It fills a held row's NULL cells (``FILL_NULLS``, owner decision
+2026-09-29), and the report counts every fill by route and column. The copy refuses unless the added rows are exactly the
 reviewed ones.
 
     uv run --frozen python scripts/import_gao_r_package.py                    # dry run: verified local generation
@@ -47,10 +47,15 @@ RULE = "gao-r-package-copy/1"
 #: :func:`rows_digest` of the reviewed additions: 26,871 reports, measured on 2026-09-29 against the Track B build
 #: (live ``ac08f37f`` plus GAO's listing, 26,183 rows). Any other set refuses; re-review it before a copy onto
 #: another table.
-ROWS_SHA256 = "sha256:35833e3d6ec5edb265caea8bc673056dd09f8f7d0121e74c113c0f2eb4530c80"
-#: Fill a held row's NULL cells from the package too. Off until the owner decides on the counts it reports.
-FILL_NULLS = False
-FILL_COLUMNS = ("title", "published_date", "abstract", "agencies_json", "topics_json", "report_number")
+ROWS_SHA256 = "sha256:94ad333b3ad52b69678e070f56f939d2fb78007381133dfe0c1297ccd37d309f"
+#: Fill a held row's NULL cells from the package too, never changing a value (owner decision 2026-09-29).
+FILL_NULLS = True
+#: Every column the package states; a held row's other cells are never touched.
+FILL_COLUMNS = (
+    "title", "published_date", "abstract", "agencies_json", "topics_json", "report_number", "requester_type",
+    "requester_committees_json", "requester_members_json", "recommendation_count", "matters_for_congress_count",
+    "page_count", "subject_terms_json",
+)
 LIMITS = (
     "Copied once from the CetiAlphaFive/gao R package (GPL-3.0-or-later, Jack T. Rametta), not captured from GAO by "
     "this fork; no GAO response for these rows is retained. Legal decisions are left out. Held rows keep every cell."
@@ -71,17 +76,19 @@ def rows_digest(rows: Iterable[Mapping[str, Any]]) -> str:
 
 
 def import_package_rows(
-    prior: Path, records: Iterable[Mapping[str, Any]], output: Path, *, rows_sha256: str, fill_nulls: bool = False
+    prior: Path, records: Iterable[Mapping[str, Any]], output: Path, *, rows_sha256: str, fill_nulls: bool = FILL_NULLS
 ) -> dict[str, Any]:
     """The live table plus the package's reports it lacks; a held row's cells never change, NULLs only if asked."""
     schema = pq.read_schema(prior)
-    if [(f.name, f.type) for f in schema] != [(f.name, f.type) for f in reports._SCHEMA]:
-        raise ImportRefused(f"The live table's schema differs from gao_reports: {schema.names}")
-    held = {row["report_id"]: row for row in pq.read_table(prior).to_pylist()}
+    wanted = {f.name: f.type for f in reports._SCHEMA}
+    if any(wanted.get(f.name) != f.type for f in schema) or schema.names != list(reports.COLUMNS)[: len(schema)]:
+        raise ImportRefused(f"The live table's columns are not a prefix of gao_reports': {schema.names}")
+    # A live table written before the package's columns lacks them: they are NULL there, a backfill.
+    held = {row["report_id"]: {**dict.fromkeys(reports.COLUMNS), **row} for row in pq.read_table(prior).to_pylist()}
     rows, counts = package.package_rows(records)
     added: list[dict] = []
     filled: dict[str, dict] = {}
-    would_fill: Counter[str] = Counter()
+    would_fill: set[tuple[str, str]] = set()
     for row in rows:
         at = package.held_as(row, held)
         if at is None:
@@ -89,9 +96,10 @@ def import_package_rows(
             continue
         counts["held"] += 1
         counts["held_as_twin"] += at != row["report_id"]
+        # A -N twin and its base page are one held row: each NULL cell fills once, from the first page listed.
         for column in FILL_COLUMNS:
-            if held[at][column] is None and row[column] is not None:
-                would_fill[f"{held[at]['source']}.{column}"] += 1
+            if held[at][column] is None and row[column] is not None and (at, column) not in would_fill:
+                would_fill.add((at, column))
                 if fill_nulls:
                     filled.setdefault(at, dict(held[at]))[column] = row[column]
     if (digest := rows_digest(added)) != rows_sha256:
@@ -109,13 +117,14 @@ def import_package_rows(
     if len(after) != len(held) + len(added):
         raise ImportRefused(f"The union holds {len(after)} rows, not {len(held)} + {len(added)}")
     if changed := [key for key, row in held.items()
-                   if any(row[c] is not None and after[key][c] != row[c] for c in reports.COLUMNS)]:
+                   if any(row[c] is not None and after[key].get(c) != row[c] for c in reports.COLUMNS)]:
         raise ImportRefused(f"{len(changed)} held row(s) would change a stated cell: {changed[:5]}")
     decades = Counter((row["published_date"] or "????")[:3] + "0s" for row in added)
     return {
         **counts, "added": len(added), "prior_rows": len(held), "candidate_rows": len(after),
         "added_by_decade": dict(sorted(decades.items())), "added_rows_sha256": digest,
-        "null_fills_available": dict(sorted(would_fill.items())), "null_fills_applied": fill_nulls,
+        "null_fills_available": dict(sorted(Counter(f"{held[at]['source']}.{column}" for at, column in would_fill).items())),
+        "null_fills_applied": fill_nulls,
     }
 
 
