@@ -4,6 +4,17 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
+import polars as pl
+
+#: Polars dtype -> the DuckDB type a published Parquet column of that dtype describes as.
+SQL_TYPES: tuple[tuple[Any, str], ...] = (
+    (pl.Utf8, "VARCHAR"),
+    (pl.Int64, "BIGINT"),
+    (pl.Int32, "INTEGER"),
+    (pl.Float64, "DOUBLE"),
+    (pl.Boolean, "BOOLEAN"),
+)
+
 
 @dataclass(frozen=True)
 class RecordType:
@@ -37,3 +48,11 @@ class RecordType:
             raise ValueError(
                 f"RecordType {self.name!r}: schema must include 'modify_date'"
             )
+
+    def sql_type(self, column: str) -> str:
+        """The DuckDB type ``column`` is published as, from its schema dtype."""
+        dtype = self.schema[column]
+        for candidate, label in SQL_TYPES:
+            if dtype == candidate:
+                return label
+        raise KeyError(f"{self.name}.{column}: no published SQL type for {dtype}")

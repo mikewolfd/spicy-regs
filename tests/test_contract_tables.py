@@ -141,9 +141,8 @@ def test_every_hosted_table_is_registered_everywhere():
 
 #: Columns a record type's contract appends that this host does not write yet, by table, in contract order. SpicyDocs
 #: 0.52.0 appends ``comments.subtype`` and ``comments.duplicate_comments`` (its "Comments carry the agency's submitter
-#: class and campaign count"); the host columns, the catalog migration and the fill are the comments-fields branch's,
-#: which empties this entry when it adds them.
-PENDING_RECORD_COLUMNS: dict[str, tuple[str, ...]] = {"comments": ("subtype", "duplicate_comments")}
+#: class and campaign count"); this branch writes them for real, so no contract column is pending.
+PENDING_RECORD_COLUMNS: dict[str, tuple[str, ...]] = {}
 
 
 @pytest.mark.parametrize("name", sorted(RECORD_TYPE_CONTRACTS))

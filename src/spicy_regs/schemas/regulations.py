@@ -14,55 +14,18 @@ from spicy_regs.schemas.base import RecordType
 
 
 def _extract_comment(d: dict) -> dict:
-    """Map a regulations.gov comment payload (with its included attachments) to a flat comment record."""
-    attrs = d.get("data", {}).get("attributes", {})
+    """SpicyDocs' comment extract, which the source repair also reads through, plus the host's PDF results column,
+    in the published column order.
 
-    # Build compact attachments JSON from the included array
-    attachments = []
-    for inc in d.get("included", []):
-        if inc.get("type") == "attachments":
-            inc_attrs = inc.get("attributes", {})
-            formats = [
-                {"url": f["fileUrl"], "format": f.get("format"), "size": f.get("size")}
-                for f in inc_attrs.get("fileFormats") or []
-                if f.get("fileUrl")
-            ]
-            if formats:
-                attachments.append({"title": inc_attrs.get("title", ""), "formats": formats})
+    One extract means a repair never clears a field the ETL filled. The text columns are left None and filled
+    downstream: the run-pipeline ETL fills them inline from Mirrulations' pre-extracted text
+    (transforms.EnrichCommentText), with the PDF text-extraction step (spicy_regs.enrich_pdf) as the backfill for
+    attachments not yet extracted upstream. Imported here, not at module level: base CLI and MCP installs lack it.
+    """
+    from spicy_docs.schemas.regulations import COMMENT as SOURCE_COMMENT
 
-    return {
-        "comment_id": d.get("data", {}).get("id"),
-        "docket_id": (v.strip('"') if (v := attrs.get("docketId")) else v),
-        # These are distinct publisher identifier systems. A comment can name
-        # its parent document while its source docket remains explicitly NULL.
-        "comment_on_document_id": attrs.get("commentOnDocumentId"),
-        "comment_on_object_id": attrs.get("commentOn"),
-        "original_document_id": attrs.get("originalDocumentId"),
-        # An observed {} differs from NULL in a generation written before
-        # these fields were retained. Present null/empty values stay visible.
-        "comment_reference_values_json": json_dumps({
-            key: attrs[key] for key in ("commentOnDocumentId", "commentOn", "originalDocumentId") if key in attrs
-        }),
-        "agency_code": attrs.get("agencyId"),
-        "first_name": attrs.get("firstName"),
-        "last_name": attrs.get("lastName"),
-        "organization": attrs.get("organization"),
-        "category": attrs.get("category"),
-        "title": attrs.get("title"),
-        "comment": attrs.get("comment"),
-        "document_type": attrs.get("documentType"),
-        "posted_date": attrs.get("postedDate"),
-        "modify_date": attrs.get("modifyDate"),
-        "receive_date": attrs.get("receiveDate"),
-        "attachments_json": json_dumps(attachments) if attachments else None,
-        # Left None here; filled downstream. The run-pipeline ETL fills it inline
-        # from Mirrulations' pre-extracted text (transforms.EnrichCommentText),
-        # with the PDF text-extraction step (spicy_regs.enrich_pdf) as
-        # the backfill for attachments not yet extracted upstream.
-        "text_content": None,
-        "text_extraction_status": None,
-        "pdf_extraction_results_json": None,
-    }
+    row = {**SOURCE_COMMENT.extract(d), "pdf_extraction_results_json": None}
+    return {column: row[column] for column in COMMENT.schema}
 
 
 def _extract_document(d: dict, *, attachment_relationship=None) -> dict:
@@ -195,6 +158,10 @@ COMMENT = RecordType(
         "text_content": pl.Utf8,
         "text_extraction_status": pl.Utf8,
         "pdf_extraction_results_json": pl.Utf8,
+        # Appended, as the contract appends them and the catalog's ADD COLUMN does: the agency's submitter class and
+        # campaign count, as stated (NULL unread, 0 a stated zero).
+        "subtype": pl.Utf8,
+        "duplicate_comments": pl.Int32,
     },
     dedup_key="comment_id",
     extract=_extract_comment,

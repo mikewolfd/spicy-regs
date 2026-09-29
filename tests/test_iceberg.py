@@ -1024,7 +1024,7 @@ def test_export_migrated_comments_fills_old_snapshot_fields_with_null(tmp_path, 
     staging = tmp_path / "staging"
     _write_comment_staging(staging, "EPA", [_comment("c1", "EPA-1", "EPA", "2025-01-15T00:00:00Z")])
     iceberg._merge(con, iceberg._staging_files(staging, COMMENT), COMMENT)
-    old_columns = [c for c in COMMENT.schema if c not in iceberg._COMMENT_REFERENCE_COLUMNS]
+    old_columns = [c for c in COMMENT.schema if c not in iceberg._COMMENT_ADDED_COLUMNS]
     projection = ", ".join(f'"{c}"' for c in old_columns)
     monkeypatch.setattr(iceberg, "_connect", lambda: con)
     monkeypatch.setattr(iceberg, "_read_snapshot", lambda *_: iceberg.CatalogSnapshot("local", 1, 4))
@@ -1036,7 +1036,7 @@ def test_export_migrated_comments_fills_old_snapshot_fields_with_null(tmp_path, 
     assert rows.columns == list(COMMENT.schema)
     partition = next((tmp_path / "out").rglob("agency_code=EPA/part-0.parquet"))
     assert pl.read_parquet(partition).columns == [c for c in COMMENT.schema if c != "agency_code"]
-    for column in iceberg._COMMENT_REFERENCE_COLUMNS:
+    for column in iceberg._COMMENT_ADDED_COLUMNS:
         assert rows[column].to_list() == [None]
 
 

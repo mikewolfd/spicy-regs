@@ -58,12 +58,12 @@ def test_legacy_catalog_adds_nullable_fields_and_preserves_old_rows(tmp_path, mo
     monkeypatch.setenv("R2_CATALOG_NAMESPACE", "default")
     with connect() as con:
         con.execute(f"CREATE SCHEMA {iceberg._schema_ref()}")
-        columns = [column for column in COMMENT.schema if column not in iceberg._COMMENT_REFERENCE_COLUMNS]
+        columns = [column for column in COMMENT.schema if column not in iceberg._COMMENT_ADDED_COLUMNS]
         con.execute(f'CREATE TABLE {iceberg._qualified(COMMENT)} (' + ', '.join(f'"{c}" VARCHAR' for c in columns) + ')')
         con.execute(f"INSERT INTO {iceberg._qualified(COMMENT)} (comment_id, docket_id) VALUES ('prior', NULL)")
     with iceberg._connect_for_table(COMMENT) as con:
-        fields = ', '.join(iceberg._COMMENT_REFERENCE_COLUMNS)
-        assert con.execute(f"SELECT {fields} FROM {iceberg._qualified(COMMENT)}").fetchall() == [(None,) * 4]
+        fields = ', '.join(iceberg._COMMENT_ADDED_COLUMNS)
+        assert con.execute(f"SELECT {fields} FROM {iceberg._qualified(COMMENT)}").fetchall() == [(None,) * len(iceberg._COMMENT_ADDED_COLUMNS)]
         output = iceberg._export_parquet(con, COMMENT, tmp_path / "output")
         assert con.read_parquet(output).columns == list(COMMENT.schema)
         assert con.read_parquet(output).project("comment_reference_values_json").fetchall() == [(None,)]

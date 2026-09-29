@@ -37,7 +37,6 @@ import tempfile
 from pathlib import Path
 
 import duckdb
-import polars as pl
 from dotenv import load_dotenv
 
 from spicy_regs import output_ledger, table_joins
@@ -639,24 +638,6 @@ DERIVED_SCHEMAS: dict[str, list[tuple[str, str]]] = {
     ],
 }
 
-# Polars dtype -> DuckDB type label, so core-table types line up with what a
-# DESCRIBE of the published parquet shows.
-_POLARS_TYPE_LABELS: list[tuple[object, str]] = [
-    (pl.Utf8, "VARCHAR"),
-    (pl.Int64, "BIGINT"),
-    (pl.Int32, "INTEGER"),
-    (pl.Float64, "DOUBLE"),
-    (pl.Boolean, "BOOLEAN"),
-]
-
-
-def _polars_type_label(dtype: object) -> str:
-    for candidate, label in _POLARS_TYPE_LABELS:
-        if dtype == candidate:
-            return label
-    return str(dtype)
-
-
 @lru_cache(maxsize=1)
 def _contracts() -> dict:
     """``TABLE_CONTRACTS`` from the installed spicy-docs wheel.
@@ -766,7 +747,7 @@ def expected_schemas() -> dict[str, list[tuple[str, str]]]:
             schemas[name] = list(from_contracts[name])
         elif name in RECORD_TYPES:
             rt = RECORD_TYPES[name]
-            schemas[name] = [(col, _polars_type_label(dt)) for col, dt in rt.schema.items()]
+            schemas[name] = [(col, rt.sql_type(col)) for col in rt.schema]
         elif name in DERIVED_SCHEMAS:
             schemas[name] = list(DERIVED_SCHEMAS[name])
         else:  # pragma: no cover - guards against TABLES/registry drift
