@@ -148,6 +148,27 @@ def test_a_stated_bioguide_id_stands_before_the_lis_crosswalk(tmp_path):
     }
 
 
+def test_a_name_keyed_row_before_2003_is_no_person_and_takes_no_term(tmp_path):
+    """A `name:` key identifies the row within its roll call, never a person (spicy-docs 0.52.0, owner decision).
+
+    The Clerk's files of 1990-2002 name members by label only, so the row states no bioguide id. It stays
+    ``unresolved_member`` with no term even where a member of that name served on the day, and its key is never
+    read as a bioguide id; the capital-month spelling of 1991 reads as its day.
+    """
+    rows = _build(
+        tmp_path,
+        [
+            _vote("102-house-1-1", "name:Abercrombie", "house", "3-JAN-1991"),
+            _vote("102-house-1-1", "A000014", "house", "3-JAN-1991", bioguide="A000014"),
+        ],
+        [_term("A000014", "3", "rep", "1991-01-03", "1993-01-03")],
+    )
+    assert {key[1]: (r["bioguide_id"], r["vote_day"], r["term_match"], r["term_index"]) for key, r in rows.items()} == {
+        "name:Abercrombie": (None, "1991-01-03", "unresolved_member", None),
+        "A000014": ("A000014", "1991-01-03", "half_open", "3"),
+    }
+
+
 def test_rows_stream_out_in_input_order_and_whole_row_groups(tmp_path, monkeypatch):
     """The streamed writer cuts row groups where ``pq.write_table`` would and keeps ``member_votes``' order."""
     # The package re-exports the function under the module's name, so reach the module itself.

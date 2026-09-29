@@ -40,6 +40,7 @@ from spicy_regs.pipelines.rollups.committee_rosters import CommitteeRostersRollu
 from spicy_regs.pipelines.rollups.fec_committee_history import FecCommitteeHistoryRollup
 from spicy_regs.pipelines.rollups.federal_register import FederalRegisterRollup
 from spicy_regs.pipelines.rollups.laws import LawsRollup
+from spicy_regs.pipelines.rollups.native_legal_references import NativeLegalReferencesRollup
 from spicy_regs.transforms.build_bill_family import (
     ARCHIVE_COLUMNS,
     ARCHIVES_TABLE,
@@ -97,12 +98,16 @@ HOSTED_ROLLUPS = (
     FecCommitteeHistoryRollup,
 )
 
+#: Rollups that host contracts but run on demand over an explicit retained-input manifest, so they have no schedule
+#: or workflow: SpicyDocs 0.52.0's native legal-reference tables.
+MANIFEST_ROLLUPS = (NativeLegalReferencesRollup,)
+
 
 def _declared_keys(rollup) -> tuple[str, ...]:
     return rollup.outputs or (rollup.output,)
 
 
-@pytest.mark.parametrize("rollup", HOSTED_ROLLUPS, ids=lambda r: r.name)
+@pytest.mark.parametrize("rollup", HOSTED_ROLLUPS + MANIFEST_ROLLUPS, ids=lambda r: r.name)
 def test_every_output_is_a_published_table(rollup):
     for key in _declared_keys(rollup):
         assert key.endswith(".parquet")
@@ -229,7 +234,7 @@ def test_every_hosted_table_has_exactly_one_writer():
     URLs with API resource URLs.
     """
     written: dict[str, list[str]] = {}
-    for rollup in HOSTED_ROLLUPS:
+    for rollup in HOSTED_ROLLUPS + MANIFEST_ROLLUPS:
         for key in _declared_keys(rollup):
             written.setdefault(key.removesuffix(".parquet"), []).append(rollup.name)
 

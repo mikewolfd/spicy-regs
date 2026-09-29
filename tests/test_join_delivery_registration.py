@@ -7,16 +7,16 @@ from spicy_regs.data_dictionary import MCP_QUERYABLE, expected_schemas
 from spicy_regs.relationship_views import SQL_RELATIONSHIP_VIEWS, install_relationship_views
 from spicy_regs.relationship_views.fcc_native import FCC_NATIVE_VIEWS
 from spicy_regs.relationship_views.lifecycle_dates import LIFECYCLE_DATE_VIEWS
-from spicy_regs.transforms.native_legal_references import SCHEMAS
+from spicy_regs.transforms.native_legal_references import CONTRACTS
 from spicy_regs.transforms.build_fcc_ecfs import FILING_COLUMNS
 import duckdb
 
 
 def test_native_and_fcc_schemas_follow_builders():
     schemas = expected_schemas()
-    for table, columns in SCHEMAS.items():
-        assert schemas[table] == [(column, "VARCHAR") for column in columns]
-        assert table in MCP_QUERYABLE
+    for contract in CONTRACTS:
+        assert schemas[contract.name] == [(column, "VARCHAR") for column in contract.columns]
+        assert contract.name in MCP_QUERYABLE
     assert schemas["fcc_filings"] == [(column, "VARCHAR") for column in FILING_COLUMNS]
     assert ("docket_source_ordinal", "BIGINT") in schemas["fr_docket_links"]
 

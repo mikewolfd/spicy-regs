@@ -46,3 +46,14 @@ against each chamber's own printed spelling rather than a stub's.
 | --- | --- | --- | --- |
 | `clerk-roll240.xml` | `clerk.house.gov/evs/2025/roll240.xml` | `8-Sep-2025` | `0297b0c76d3c14452a91daf9828943e5669c00dcc408c07bc80870b9d8223542` |
 | `senate-vote-119-1-00001.xml` | `www.senate.gov/legislative/LIS/roll_call_votes/vote1191/vote_119_1_00001.xml` | `January 9, 2025,  02:54 PM` | `9d71d78a54c83522babd743209ca4a1a27baa2df122d6830c50ec2aa512ea17e` |
+| `clerk-roll001-1991.xml` | `clerk.house.gov/evs/1991/roll001.xml` | `3-Jan-1991` | `739d5d60f9ac7a83196d200b5e2ddd33a5a4a4d7666fc1411ff09bec7e2f20a9` |
+| `clerk-roll300-2015.xml` | `clerk.house.gov/evs/2015/roll300.xml` | `4-Jun-2015` | `ba44f7befa0c90d61794aa9ca62a7a16c506b902468bb879067f28fa86563797` |
+
+The last two were fetched keyless on 2026-09-28 into the Clerk archive survey
+(`~/Work/corpora/fork-execution-2026-09-21/cbo-112-113/clerk-all/`, whose
+`receipt.jsonl` records the same digests) and copied unmodified. 102-1-1, a
+quorum call of 1991, is a file before 2003: it names no legislator by bioguide
+`name-id`, so its 427 members key on `name:` with a NULL `bioguide_id`.
+114-1-300 is one of the five votes the House vacated by unanimous consent
+before any position was recorded: it lists no member, totals zero, files its
+body under `<committee>` and says so in `<vote-desc>`.

@@ -16,8 +16,21 @@ Senate selection.
 
 A held row is relinked from its own columns, never refetched: ``legis_num`` for
 the House, ``documents_json``/``amendments_json`` for the Senate. A House row
-published before ``legis_num`` existed is not held until it carries one, so
-each is read again once.
+published before ``legis_num`` or ``clerk_body_element`` existed is not held
+until it carries both, so each is read again once and gains the file's voting
+body element and ``vote_desc`` with them.
+
+House files before 2003 (the 101st-107th Congresses) name no legislator by
+bioguide id; spicy-docs reads them with ``name:`` member keys and NULL
+``bioguide_id``, a key that identifies the row within its roll call and never a
+person (``member_vote_terms`` leaves such a row ``unresolved_member``). A vote
+the House vacated before recording a position publishes its row with
+``member_vote_count`` 0 and no member rows. The Clerk's archive begins in
+1990, so the 101st Congress's first session has no House index and is not
+asked for (:data:`CLERK_FIRST_YEAR`). ``ROLL_CALL_CHAMBERS`` narrows a dispatch
+to one chamber, and ``ROLL_CALL_MAX_VOTES`` sets its per-run cap
+(:func:`max_votes_from_env`), so the 101st-107th House backfill is a bounded,
+resumable dispatch: newest first, each held roll call never fetched again.
 
 Congress.gov's ``house-vote`` listing was retired as a second linkage source
 (2026-09-26): over the 115th-119th it listed exactly the Clerk index's 5,079
@@ -42,6 +55,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from collections import Counter, defaultdict
 from collections.abc import Callable, Collection, Mapping, Sequence
 from pathlib import Path
@@ -71,7 +85,12 @@ from spicy_docs.sources.congress.votes import (
 
 from spicy_regs.sources import r2
 from spicy_regs.transforms.build_bill_family import VOTE_REFERENCES_TABLE
-from spicy_regs.transforms.congress_scope import congresses_from_env, default_congresses, sessions_of
+from spicy_regs.transforms.congress_scope import (
+    FIRST_CONGRESS_YEAR,
+    congresses_from_env,
+    default_congresses,
+    sessions_of,
+)
 from spicy_regs.transforms.table_merge import merge_contract_table, published_table
 
 if TYPE_CHECKING:
@@ -102,6 +121,20 @@ VOTE_BUDGET = VoteBudget(
 #: Bound per-run source requests; larger selections resume from prior outputs.
 MAX_VOTES_PER_RUN = 1_500
 
+#: The largest cap a dispatch may set (``ROLL_CALL_MAX_VOTES``). At the two-a-second pacing a roll call costs about
+#: half a second, so 4,000 is about 35 minutes of fetching inside the workflow's 60-minute job.
+MAX_VOTES_CEILING = 4_000
+
+#: The first calendar year the Clerk's EVS archive serves: ``evs/1989/index.asp`` answers 404 and 1990's index
+#: lists 536 roll calls, and every session index of 1990-2002 reads through spicy-docs' index reader and lists
+#: exactly the roll files the archive serves, 7,327 in all (measured 2026-09-29, receipt
+#: ``fork-execution-2026-09-21/regs-adopt-052/votes/verify-indexes.json``). A House session before it has no index,
+#: so it is skipped rather than asked for, which would refuse the run.
+CLERK_FIRST_YEAR = 1990
+
+#: Both chambers this rollup reads, in the order it lists them; ``ROLL_CALL_CHAMBERS`` may name either alone.
+CHAMBERS: tuple[str, ...] = ("house", "senate")
+
 #: The newest roll calls of a sitting Congress are re-read every run even when
 #: already published, because the contract carries no publisher ``updateDate``
 #: to compare and a late correction would otherwise never be picked up. A
@@ -124,6 +157,34 @@ IDENTITY_COLUMNS = ("congress", "chamber", "session", "roll_number")
 STATEMENT_COLUMNS = ("source_url", "legis_num", "documents_json", "amendments_json")
 #: The bill family's reference: the bill's own action names the roll call.
 RECORDED_RULE = "bill_action_recorded_vote"
+
+
+def chambers_from_env(var: str = "ROLL_CALL_CHAMBERS") -> tuple[str, ...]:
+    """The chambers a run reads, from a comma-separated env var; blank reads both.
+
+    A name outside :data:`CHAMBERS` refuses rather than reading nothing, which would publish as a quiet night.
+    """
+    raw = os.environ.get(var, "").strip().lower()
+    named = {part.strip() for part in raw.split(",") if part.strip()}
+    if unknown := named - set(CHAMBERS):
+        raise ValueError(f"{var} names {sorted(unknown)}; it takes {', '.join(CHAMBERS)}")
+    return tuple(chamber for chamber in CHAMBERS if not named or chamber in named)
+
+
+def max_votes_from_env(var: str = "ROLL_CALL_MAX_VOTES") -> int:
+    """The per-run cap, from an env var; blank is :data:`MAX_VOTES_PER_RUN`, and more than the ceiling refuses."""
+    raw = os.environ.get(var, "").strip()
+    if not raw:
+        return MAX_VOTES_PER_RUN
+    if not raw.isascii() or not raw.isdecimal() or not 1 <= int(raw) <= MAX_VOTES_CEILING:
+        raise ValueError(f"{var} must be a whole number from 1 to {MAX_VOTES_CEILING:,}, got {raw!r}")
+    return int(raw)
+
+
+def house_sessions(congress: int) -> tuple[int, ...]:
+    """The sessions of ``congress`` that have begun and that the Clerk's archive serves (:data:`CLERK_FIRST_YEAR`)."""
+    first_year = FIRST_CONGRESS_YEAR + 2 * (congress - 1)
+    return tuple(session for session in sessions_of(congress) if first_year + session - 1 >= CLERK_FIRST_YEAR)
 
 
 def _bill_identity(bill_id: str) -> BillIdentity:
@@ -229,8 +290,11 @@ def _held_votes(prior_file: Path) -> set[tuple[str, ...]]:
     Legacy rows have no tally kind and keep the existing non-NULL yea rule.
     Candidate elections have no yea/nay total; their explicit kind, native
     count map and reconciled member count distinguish capture from linkage.
-    A House row without ``legis_num`` (published before the column) is not
-    held: its file is read once more so its own statement can link it.
+    A House row without ``legis_num`` or ``clerk_body_element`` (published
+    before either column) is not held: its file is read once more so its own
+    statement can link it and its voting body element and ``vote_desc`` fill.
+    Every captured Clerk file states one body element (spicy-docs refuses a
+    file naming neither), so a re-read row is held from then on.
     """
     if not prior_file.exists():
         return set()
@@ -279,7 +343,9 @@ def _held_votes(prior_file: Path) -> set[tuple[str, ...]]:
             and sum(tallies.values()) == member_count
         ):
             held.add(tuple(str(part) for part in parts))
-    unstated = relation.filter("chamber = 'house'" + (" AND legis_num IS NULL" if "legis_num" in columns else ""))
+    missing = [f"{column} IS NULL" for column in ("legis_num", "clerk_body_element") if column in columns]
+    stated = len(missing) == 2  # a prior predating either column holds no House row
+    unstated = relation.filter("chamber = 'house'" + (f" AND ({' OR '.join(missing)})" if stated else ""))
     held -= {tuple(str(part) for part in row) for row in unstated.project(", ".join(IDENTITY_COLUMNS)).fetchall()}
     return held
 
@@ -461,13 +527,17 @@ def build_roll_call_votes(
     download_prior: Callable[[str, Path], bool] = r2.download,
     evidence: CaptureEvidence | None = None,
     open_congresses: Collection[int] | None = None,
+    chambers: Sequence[str] | None = None,
 ) -> tuple[Path, Path]:
-    """Build both chambers; optional bill links never restrict native selection.
+    """Build the chambers in scope; optional bill links never restrict native selection.
 
     Index and menu failures propagate before either output is written.
     Unseen votes take priority over correction refreshes, with overlap per
     chamber for ``open_congresses`` only (default: ``default_congresses()``,
     the sitting Congress and, just after a boundary, the outgoing one).
+    ``chambers`` defaults to :func:`chambers_from_env`; a Congress in scope
+    whose House sessions all precede the Clerk's archive refuses while the
+    House is in scope.
     """
     acquirer = acquirer or VoteAcquirer(
         budget=VOTE_BUDGET,
@@ -476,6 +546,16 @@ def build_roll_call_votes(
 
     # 1. Population from each chamber's own session index.
     congresses = congresses_from_env()
+    chambers = chambers_from_env() if chambers is None else tuple(chambers)
+    if unknown := set(chambers) - set(CHAMBERS):
+        raise ValueError(f"chambers names {sorted(unknown)}; it takes {', '.join(CHAMBERS)}")
+    if "house" in chambers and (unserved := [congress for congress in congresses if not house_sessions(congress)]):
+        raise ValueError(
+            f"BILL_FAMILY_CONGRESSES names {unserved}: the Clerk's archive begins in {CLERK_FIRST_YEAR}, so no House "
+            "session of those Congresses can be read, and an empty read would publish as absence"
+        )
+    if evidence is not None:
+        evidence.event("vote-selection", congresses=list(congresses), chambers=list(chambers), max_votes=max_votes)
     listed_keys: set[VoteKey] = set()
     withheld: list[tuple[VoteKey, str]] = []
     for congress in congresses:
@@ -484,8 +564,11 @@ def build_roll_call_votes(
             # The owner reader proves each index's identity and refuses an
             # empty, failed or gapped one; a refusal cannot establish a
             # zero-vote session.
-            index = acquirer.list_house_votes(congress, session).index
-            listed_keys.update(locator_from_index_entry(index, entry).as_vote_key() for entry in index.votes)
+            if "house" in chambers and session in house_sessions(congress):
+                index = acquirer.list_house_votes(congress, session).index
+                listed_keys.update(locator_from_index_entry(index, entry).as_vote_key() for entry in index.votes)
+            if "senate" not in chambers:
+                continue
             menu = acquirer.list_senate_votes(congress, session).menu
             for entry in menu.votes:
                 key = locator_from_menu_entry(menu, entry).as_vote_key()
@@ -530,7 +613,7 @@ def build_roll_call_votes(
     # House action references can precede the Clerk's index. Senate scope
     # comes from its own menu, never from a bill-only sample.
     ordered = sorted(
-        listed_keys | {key for key in recorded_by_vote if key.chamber == "house"},
+        listed_keys | {key for key in recorded_by_vote if key.chamber == "house" and "house" in chambers},
         key=lambda k: (k.congress, k.session, k.roll_number, k.chamber),
         reverse=True,
     )

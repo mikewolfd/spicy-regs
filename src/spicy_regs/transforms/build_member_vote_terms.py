@@ -14,10 +14,13 @@ recorded term, which stay ``unmatched``. Inclusive ends alone would have made 1,
 
 The day is spicy-docs' ``vote_day`` over ``member_votes.vote_date``, the chamber's printed
 Eastern date; a spelling it cannot read refuses the build, and a vote whose file prints no date is
-``undated`` with no term rather than matched against a guessed day. A House row carries its
-Bioguide id; a Senate row carries only a LIS id, which spicy-docs' ``match_member`` resolves
-through ``members``. Every vote row appears exactly once, matched or not, in ``member_votes``'
-order.
+``undated`` with no term rather than matched against a guessed day. A House row from 2003 on
+carries its Bioguide id; a Senate row carries only a LIS id, which spicy-docs' ``match_member``
+resolves through ``members``. A House row of 1990-2002 states neither: its ``name:`` key
+identifies the row within its roll call, never a person, so it is ``unresolved_member`` and no
+name is matched here (a person crosswalk would add party, state and the vote day against service
+dates; spicy-docs 0.52.0). Every vote row appears exactly once, matched or not, in
+``member_votes``' order.
 
 One DuckDB pass, streamed to Parquet in the same row groups: the day and the member are decided
 once per distinct printed date and per distinct id pair in Python, and joined back. The per-row

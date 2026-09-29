@@ -302,6 +302,9 @@ JOINS: tuple[Join, ...] = (
     _join("lobbying_activities", "filing_uuid", "lobbying_filings", "filing_uuid", 247, 0),
     _join("lobbying_activity_lobbyists", ("filing_uuid", "activity_index"),
           "lobbying_activities", ("filing_uuid", "activity_index"), 522, 0),
+    # Native legal references: each observation names the complete read of its input (spicy-docs 0.52.0's
+    # contract reference). Measured 2026-09-28 on native-legal-references 53755e3e…: both scopes resolve.
+    _join("native_legal_references", "scope_id", "native_legal_reference_reads", "scope_id", 2, 0),
 )
 
 

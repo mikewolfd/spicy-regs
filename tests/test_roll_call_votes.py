@@ -120,9 +120,13 @@ class _Tallied:
         self.result = "Passed"
         self.tallies = {"yea-total": 220, "nay-total": 210}
         self.member_votes = ()
-        # The real reader's Clerk shape: a captured House file keeps its legis-num (here none).
+        # The real reader's Clerk shape: a captured House file keeps its legis-num (here none), its vote-desc
+        # (here none) and the element naming its voting body (here <chamber>).
         self.publisher = "clerk" if locator.chamber == "house" else "senate-lis"
         self.legis_num = None
+        self.vote_desc = None
+        self.chamber_raw = "U.S. House of Representatives" if locator.chamber == "house" else None
+        self.committee_raw = None
 
     @property
     def day(self):
@@ -966,7 +970,7 @@ def test_a_prior_published_before_vote_day_is_backfilled_without_a_refetch(tmp_p
 
 def test_the_copied_publisher_bodies_match_the_digests_their_readme_records():
     readme = (FIXTURES / "README.md").read_text().splitlines()
-    for path, _ in REAL_BODIES.values():
+    for path in (*(path for path, _ in REAL_BODIES.values()), PRE_2003, VACATED):
         [row] = [line for line in readme if line.startswith(f"| `{path.name}` |")]
         assert re.findall(r"`([0-9a-f]{64})`", row) == [hashlib.sha256(path.read_bytes()).hexdigest()], path.name
 
@@ -987,6 +991,7 @@ def test_a_prior_that_has_vote_day_fills_only_its_nulls_and_is_not_rewritten_whe
             "vote_date": vote_date,
             "vote_day": day,
             "legis_num": "QUORUM" if yea else None,
+            "clerk_body_element": "chamber" if yea else None,
         }
 
     prior = tmp_path / "prior.parquet"
@@ -1127,3 +1132,199 @@ def test_a_vote_the_senate_menu_withholds_is_journaled_and_never_read(tmp_path, 
     [event] = _events(evidence, "vote-withheld")
     assert (event["chamber"], event["roll_number"]) == ("senate", 3)
     assert event["statement"] == "Vote data is unavailable due to secret session."
+
+
+# --------------------------------------------------------------------------- #
+# SpicyDocs 0.52.0: the Clerk's voting-body element and vote-desc, files before
+# 2003, the vacated votes, and the dispatch scope of the pre-2003 backfill.
+# --------------------------------------------------------------------------- #
+#: Real Clerk bodies from the archive survey (README beside them): 102-1-1, a 1991 quorum call naming members by
+#: name only, and 114-1-300, vacated by unanimous consent before any position was recorded.
+PRE_2003 = FIXTURES / "clerk-roll001-1991.xml"
+VACATED = FIXTURES / "clerk-roll300-2015.xml"
+
+
+class ArchiveAcquirer(StubVoteAcquirer):
+    """The Clerk's archive as the real reader sees it: a session index before 1990 is absent, and each file is real.
+
+    ``bodies`` maps ``(congress, session, roll)`` to a retained body; any other roll is a stub vote. The index lists
+    ``house_rolls`` in every session asked about, since a backfill scope names both sessions.
+    """
+
+    def __init__(self, bodies=None, **kwargs):
+        super().__init__(**kwargs)
+        self.bodies = bodies or {}
+        self.indexes: list[tuple[int, int]] = []
+        #: Each file fetched, by ``(congress, session, roll)``: a backfill spans Congresses and sessions.
+        self.fetched: list[tuple[int, int, int]] = []
+
+    def list_house_votes(self, congress, session):
+        year = 1789 + 2 * (congress - 1) + session - 1
+        if year < 1990:
+            raise VoteSourceError(f"clerk.house.gov/evs/{year}/index.asp answered 404")
+        self.indexes.append((congress, session))
+        entries = tuple(ClerkVoteIndexEntry(n, "3-Jan", None, None, None, None) for n in sorted(self.house_rolls, reverse=True))
+        return SimpleNamespace(index=ClerkVoteIndex(congress, session, year, entries))
+
+    def list_senate_votes(self, congress, session):
+        raise AssertionError("a House-only scope never lists the Senate")
+
+    def acquire(self, locator, *, crosswalk=None):
+        self.fetched.append((locator.congress, locator.session, locator.roll_number))
+        body = self.bodies.get((locator.congress, locator.session, locator.roll_number))
+        return _Acquisition(_Tallied(locator) if body is None else parse_clerk_vote(body.read_bytes(), locator))
+
+
+def _carried(run: Path):
+    """A ``download_prior`` serving what ``run`` published, as the next run's prior."""
+    import shutil
+
+    def download(remote: str, local: Path) -> bool:
+        source = run / remote
+        if not source.exists():
+            return False
+        shutil.copyfile(source, local)
+        return True
+
+    return download
+
+
+def _house_run(output_dir, acquirer, download_prior=_no_prior, **kwargs):
+    paths = build_roll_call_votes(
+        output_dir, acquirer=acquirer, download_prior=download_prior, chambers=("house",), open_congresses=(119,),
+        **kwargs,
+    )
+    return pq.read_table(paths[0]).to_pylist(), pq.read_table(paths[1]).to_pylist()
+
+
+def test_a_vote_vacated_before_any_position_publishes_its_row_without_members_and_is_held(tmp_path, monkeypatch):
+    """114-1-300: zero tallies, no member rows, the Clerk's own words in vote_desc; the next run does not fetch it."""
+    monkeypatch.setenv("BILL_FAMILY_CONGRESSES", "114")
+    first = tmp_path / "first"
+    first.mkdir()
+    acquirer = ArchiveAcquirer({(114, 1, 300): VACATED}, house_rolls=(300,))
+    votes, members = _house_run(first, acquirer)
+    [row] = [vote for vote in votes if vote["vote_id"] == "114-house-1-300"]
+    assert (row["member_vote_count"], row["yea"], row["nay"], row["present"], row["not_voting"]) == ("0",) * 5
+    assert row["vote_desc"] == "This vote was vacated by unanimous consent on 4-Jun-2015."
+    assert (row["clerk_body_element"], row["vote_day"]) == ("committee", "2015-06-04")
+    assert [member for member in members if member["vote_id"] == "114-house-1-300"] == []
+
+    second = tmp_path / "second"
+    second.mkdir()
+    resumed = ArchiveAcquirer({(114, 1, 300): VACATED}, house_rolls=(300,))
+    assert _house_run(second, resumed, _carried(first)) == (votes, members)
+    assert resumed.fetched == []
+
+
+def test_a_file_before_2003_publishes_name_keyed_members_without_bioguide_ids(tmp_path, monkeypatch):
+    """102-1-1 names its 427 members by the Clerk's label only; each row keys `name:` with NULL bioguide_id."""
+    monkeypatch.setenv("BILL_FAMILY_CONGRESSES", "102")
+    acquirer = ArchiveAcquirer({(102, 1, 1): PRE_2003}, house_rolls=(1,))
+    votes, members = _house_run(tmp_path, acquirer)
+    assert acquirer.indexes == [(102, 1), (102, 2)]
+    [row] = [vote for vote in votes if vote["session"] == "1"]
+    assert (row["member_vote_count"], row["present"], row["clerk_body_element"], row["vote_desc"], row["vote_day"]) == (
+        "427", "427", "chamber", "", "1991-01-03",
+    )
+    session_one = [member for member in members if member["session"] == "1"]
+    assert len(session_one) == 427
+    assert all(member["member_key"] == "name:" + member["member_name"] for member in session_one)
+    assert {member["bioguide_id"] for member in session_one} == {None}
+    assert session_one[0]["member_key"] == "name:Abercrombie" and session_one[0]["state"] == "HI"
+
+
+def test_the_backfill_skips_the_session_before_the_clerks_archive_and_refuses_a_scope_it_cannot_read(
+    tmp_path, monkeypatch
+):
+    """The archive begins in 1990: the 101st's first session is never asked for, and a House scope of the 100th refuses."""
+    monkeypatch.setenv("BILL_FAMILY_CONGRESSES", "101")
+    acquirer = ArchiveAcquirer(house_rolls=(1, 2))
+    votes, _ = _house_run(tmp_path, acquirer)
+    assert acquirer.indexes == [(101, 2)]
+    assert sorted(row["vote_id"] for row in votes) == ["101-house-2-1", "101-house-2-2"]
+
+    monkeypatch.setenv("BILL_FAMILY_CONGRESSES", "100,101")
+    refused = ArchiveAcquirer(house_rolls=(1,))
+    with pytest.raises(ValueError, match=r"names \[100\].*begins in 1990"):
+        _house_run(tmp_path / "refused", refused)
+    assert refused.indexes == [] and refused.fetched == []
+
+
+def test_the_pre_2003_backfill_resumes_under_its_cap_and_ends_fetching_nothing(tmp_path, monkeypatch):
+    """A House-only dispatch of closed Congresses: newest first under the cap, each held roll call never read again."""
+    monkeypatch.setenv("BILL_FAMILY_CONGRESSES", "106,107")
+    requested, previous = [], None
+    for attempt in range(4):
+        run = tmp_path / str(attempt)
+        run.mkdir()
+        acquirer = ArchiveAcquirer(house_rolls=(1, 2, 3))
+        _house_run(run, acquirer, _no_prior if previous is None else _carried(previous), max_votes=5)
+        requested.append(acquirer.fetched)
+        previous = run
+    assert [len(batch) for batch in requested] == [5, 5, 2, 0]
+    fetched = [key for batch in requested for key in batch]
+    assert len(fetched) == len(set(fetched)) == 12
+    assert requested[0][0] == (107, 2, 3), "newest first"
+
+
+def test_a_house_row_published_before_clerk_body_element_is_read_once_more_then_held(tmp_path, scoped):
+    """Every live House row predates the element; its file is read once, and the re-read row is held from then on."""
+    legacy = {**_held_row(240), "clerk_body_element": None, "vote_desc": None}
+    first = tmp_path / "first"
+    first.mkdir()
+    acquirer = RealBodyAcquirer(house_rolls=(240,))
+    rows = _real_run(first, _published({"roll_call_votes": [legacy], "member_votes": []}), acquirer=acquirer, overlap=0)
+    assert acquirer.requested == [("house", 240)]
+    assert rows["119-house-1-240"]["clerk_body_element"] == "chamber"
+    assert rows["119-house-1-240"]["vote_desc"] is not None
+
+    second = tmp_path / "second"
+    second.mkdir()
+    resumed = RealBodyAcquirer(house_rolls=(240,))
+    assert _real_run(second, _carried(first), acquirer=resumed, overlap=0) == rows
+    assert resumed.requested == []
+
+
+def test_a_dispatch_names_its_chambers_and_cap_and_refuses_anything_else(monkeypatch):
+    from spicy_regs.pipelines.rollups import roll_call_votes as rollup
+    from spicy_regs.transforms.build_roll_call_votes import (
+        MAX_VOTES_CEILING,
+        MAX_VOTES_PER_RUN,
+        chambers_from_env,
+        max_votes_from_env,
+    )
+
+    assert (chambers_from_env(), max_votes_from_env()) == (("house", "senate"), MAX_VOTES_PER_RUN)
+    monkeypatch.setenv("ROLL_CALL_CHAMBERS", " House ")
+    monkeypatch.setenv("ROLL_CALL_MAX_VOTES", str(MAX_VOTES_CEILING))
+    assert (chambers_from_env(), max_votes_from_env()) == (("house",), MAX_VOTES_CEILING)
+    for bad in ("0", str(MAX_VOTES_CEILING + 1), "1e3", "-5"):
+        monkeypatch.setenv("ROLL_CALL_MAX_VOTES", bad)
+        with pytest.raises(ValueError, match="ROLL_CALL_MAX_VOTES"):
+            max_votes_from_env()
+    monkeypatch.setenv("ROLL_CALL_CHAMBERS", "house,joint")
+    with pytest.raises(ValueError, match="joint"):
+        chambers_from_env()
+
+    # The rollup hands the dispatch's cap to the transform.
+    monkeypatch.setenv("ROLL_CALL_MAX_VOTES", "7")
+    seen = {}
+    monkeypatch.setattr(rollup, "build_roll_call_votes", lambda output_dir, **kwargs: seen.update(kwargs) or ())
+    rollup.RollCallVotesRollup().build(Path("unused"))
+    assert seen["max_votes"] == 7
+
+
+def test_the_dispatch_inputs_reach_the_rollup_through_the_shared_workflow():
+    import yaml
+
+    root = Path(__file__).resolve().parents[1] / ".github/workflows"
+    dispatch = yaml.safe_load((root / "rollup-roll-call-votes.yml").read_text())
+    passed = dispatch["jobs"]["run"]["with"]
+    assert passed["roll_call_chambers"] == "${{ inputs.chambers || '' }}"
+    assert passed["roll_call_max_votes"] == "${{ inputs.max_votes || '' }}"
+    assert {"chambers", "max_votes"} <= set(dispatch[True]["workflow_dispatch"]["inputs"])
+    shared = yaml.safe_load((root / "_rollup.yml").read_text())
+    [step] = [step for step in shared["jobs"]["rollup"]["steps"] if step.get("name") == "Run rollup"]
+    assert step["env"]["ROLL_CALL_CHAMBERS"] == "${{ inputs.roll_call_chambers }}"
+    assert step["env"]["ROLL_CALL_MAX_VOTES"] == "${{ inputs.roll_call_max_votes }}"

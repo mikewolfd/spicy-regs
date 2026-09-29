@@ -191,6 +191,9 @@ CONTRACT_TABLES: tuple[str, ...] = (
     "bill_committee_actions",
     "document_citations",
     "senate_expenditures",
+    # The native legal-reference tables (spicy-docs 0.52.0), their columns, identities and reading the wheel's.
+    "native_legal_references",
+    "native_legal_reference_reads",
 )
 
 
@@ -212,8 +215,6 @@ RULEMAKING_TABLES: tuple[str, ...] = (
 # Display order for the dictionary. The first three are the core record types;
 # the rest are derived rollups. This is the full public R2 surface.
 TABLES: tuple[str, ...] = (
-    "native_legal_references",
-    "native_legal_reference_reads",
     "dockets",
     "documents",
     "comments",
@@ -726,10 +727,7 @@ def expected_schemas() -> dict[str, list[tuple[str, str]]]:
         LOBBYIST_COLUMNS as LOBBYING_LOBBYIST_COLUMNS,
     )
 
-    from spicy_regs.transforms.native_legal_references import SCHEMAS as NATIVE_LEGAL_SCHEMAS
-
     builder_columns = {
-        **NATIVE_LEGAL_SCHEMAS,
         "fec_source_catalog": FEC_CATALOG_COLUMNS,
         "fec_collections": COLLECTION_COLUMNS,
         "fec_source_records": RECORD_COLUMNS,

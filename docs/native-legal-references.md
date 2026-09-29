@@ -12,8 +12,28 @@ uv run --frozen --no-sync python -m spicy_regs.pipelines.rollups.native_legal_re
 ```
 
 The default is a local candidate. Upload requires the ordinary explicit rollup
-option and central dictionary/CLI registration; a successful build does not
-claim publication or complete edition coverage.
+option; a successful build does not claim publication or complete edition
+coverage.
+
+## Who owns what
+
+Since SpicyDocs 0.52.0 both tables are SpicyDocs table contracts
+(`schemas.native_reference_rows`): their columns, identities and prose, the
+row shapers, and the reading of each observation
+(`interpretation.native_legal_references`, which types an exact native href
+and reads a note's text with the shared citation rules). Its
+`docs/decisions.md` entry "The native legal-reference tables have contracts"
+states the reading, the measurements and what an importer changes. Both tables
+name that rule, `native-legal-reference/003`; rows this repository read before
+the reading moved name `/002`.
+
+This repository keeps the manifest, the input pins, the source evidence, the
+qualification of complete inputs, the scan loop and the target lookup. The
+reading receives the lookup as `resolve`: one call for the whole run to
+`citation_resolution.resolve_citations` over the target tables the manifest
+pins, so each distinct typed key is read once, and the run's lookup coverage
+is journalled as `native-reference-resolution`. Both tables merge through
+their contracts, replacing each scope a complete read covers.
 
 ## Input selection and evidence
 
@@ -40,24 +60,16 @@ A parsing, pin or size failure aborts before replacing output tables.
 ## Rows and corrections
 
 One occurrence row represents one scanner observation, identified by source
-scope, input digest and ordinal. Scope hashes source family, record key and
-explicit edition; XML path, tag, attributes and ancestors retain source
-location. CFR `AUTH` and `SOURCE`, USC hrefs and source credits keep distinct
-roles. Interpreted candidates are nested JSON, so several typed references
-inside one note do not multiply or erase the native observation.
-
-Exact native USC section hrefs can supply section keys. Fragments, subsection
-paths, unknown namespaces and unsupported href forms remain literal rows.
-Notes/source credits use only the existing provider's selected legal citation
-rules; their findings are labeled partial, with exact text spans, digest and
-rule. Unmatched text remains in the complete note. CFR part-only findings stay
-`cfr_part` and unsupported for section lookup. Executive orders and historical
-compilation shapes are not silently converted into supported targets.
+scope, input digest and ordinal (`at-joined/1`); several typed references in
+one note stay nested candidates of that row. What each observation reads as,
+and what stays literal (fragments, subsection paths, unknown namespaces,
+part-only CFR findings, `PARAUTH`/`SECAUTH`), is the SpicyDocs reading's and is
+described with the contracts' column prose in the data dictionary.
 
 The read table records `complete_selected_shapes`, including successful zero
 results. This means the selected owner scanner completed, not that every legal
-reference was understood. CFR `PARAUTH`/`SECAUTH` remain explicitly unsupported.
-No current acquisition or global title/edition completeness is inferred.
+reference was understood. No current acquisition or global title/edition
+completeness is inferred.
 
 After every selected source finishes, replacement retires older occurrences
 only in those exact source/edition scopes. Successful empty reads clear that
@@ -124,3 +136,15 @@ and Statutes at Large pages yield typed candidates. The complete Title 1 ZIP
 provides the positive evidence. Subsection tails, fragments, ranges, historical
 act locators and unfamiliar namespaces remain unsupported, with the original
 href preserved. Matching a held target still does not establish legal effect.
+
+### The first build under `native-legal-reference/003`
+
+Rebuilt on 2026-09-28 through this repository's adopted code from the retained
+manifest the published `manifest_sha256` names, with no prior, and compared
+with the live generation column by column: every row of both tables moves its
+`rule_version` from `/002` to `/003`; 14 U.S. Code source credits'
+`target_candidates_json` are re-spelled by `json_column` (an en dash escaped,
+the same JSON); 51 text candidates in 31 eCFR notes name citation rules `004`
+where the published rows name `003`; nothing else differs, and the lookup
+resolves the same 19 occurrences. The republish is the publication lane's.
+Receipt: `~/Work/corpora/fork-execution-2026-09-21/regs-adopt-052/native/rebuild-compare.json`.

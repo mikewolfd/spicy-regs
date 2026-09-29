@@ -93,6 +93,16 @@ on:
         required: false
         default: ''
         type: string
+      roll_call_chambers:
+        description: 'Optional comma-separated chambers the roll-call rollup reads (house, senate); blank reads both'
+        required: false
+        default: ''
+        type: string
+      roll_call_max_votes:
+        description: 'Optional roll-call fetch cap for one run, 1 to 4000; blank uses 1500'
+        required: false
+        default: ''
+        type: string
       bill_subjects_max:
         description: 'Optional cap on Congress.gov bills the bill-subjects rollup asks (blank uses its default)'
         required: false
@@ -258,6 +268,8 @@ jobs:
           BILL_FAMILY_CONGRESSES: ${{ inputs.bill_family_congresses }}
           BILL_FAMILY_BILL_TYPES: ${{ inputs.bill_family_bill_types }}
           BILL_FAMILY_MAX_VERSION_FETCHES: ${{ inputs.bill_family_max_version_fetches }}
+          ROLL_CALL_CHAMBERS: ${{ inputs.roll_call_chambers }}
+          ROLL_CALL_MAX_VOTES: ${{ inputs.roll_call_max_votes }}
           BILL_SUBJECTS_MAX: ${{ inputs.bill_subjects_max }}
           # Gemini API key for the bill-family rollup's model-backed tables
           # (section_classifications, bill_summaries, diff_summaries —

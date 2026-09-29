@@ -10,7 +10,17 @@ on:
         default: false
         type: boolean
       congresses:
-        description: 'Comma-separated Congress numbers (e.g. 118,119); blank uses the current Congress'
+        description: 'Comma-separated Congress numbers (e.g. 118,119; 101-107 for the pre-2003 House backfill); blank uses the current Congress'
+        required: false
+        default: ''
+        type: string
+      chambers:
+        description: 'Comma-separated chambers (house, senate); blank reads both. The pre-2003 backfill is house'
+        required: false
+        default: ''
+        type: string
+      max_votes:
+        description: 'Roll calls fetched this run, 1 to 4000 (newest unheld first; the next run resumes); blank uses 1500'
         required: false
         default: ''
         type: string
@@ -29,6 +39,11 @@ jobs:
       command: run-rollup-roll-call-votes
       skip_upload: ${{ github.event_name == 'workflow_dispatch' && inputs.skip_upload || false }}
       bill_family_congresses: ${{ inputs.congresses || '' }}
-      # MAX_VOTES_PER_RUN (1,500) at ~2 roll calls/second is ~13 minutes; the
-      # headroom covers a full-Congress first pass.
+      roll_call_chambers: ${{ inputs.chambers || '' }}
+      roll_call_max_votes: ${{ inputs.max_votes || '' }}
+      # MAX_VOTES_PER_RUN (1,500) at ~2 roll calls/second is ~13 minutes, and the
+      # 4,000 ceiling ~35; the headroom covers a full-Congress first pass.
+      # The 101st-107th House backfill (7,327 Clerk files of 1990-2002) is
+      # congresses=101,102,103,104,105,106,107, chambers=house, max_votes=4000,
+      # dispatched until a run fetches nothing: two runs at 4,000, five at 1,500.
       timeout_minutes: 60

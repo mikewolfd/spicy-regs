@@ -74,7 +74,7 @@ def test_complete_ecfr_identity_and_receipt_mutations():
 def test_complete_native_exact_href_shapes_and_abstentions():
     from collections import Counter
     from xml.etree import ElementTree as ET
-    from spicy_regs.transforms.native_legal_references import _interpret
+    from spicy_docs.interpretation.native_legal_references import NATIVE_HREF_RULE, interpret_native_reference
 
     title = read_title_archive(
         (FIXTURES / "title01-119-103.zip").read_bytes(),
@@ -93,13 +93,13 @@ def test_complete_native_exact_href_shapes_and_abstentions():
             "element_tag": element.tag,
             "href": element.attrib["href"],
         }
-        status, serialized = _interpret(row)
+        reading = interpret_native_reference(row)
+        status, candidates = reading.status, list(reading.candidates)
         counts[status] += 1
-        candidates = json.loads(serialized)
         if status != "unsupported_href":
             assert len(candidates) == 1
             assert candidates[0]["matched_text"] == element.attrib["href"]
-            assert candidates[0]["derivation_rule"] == "native-legal-exact-href/002"
+            assert candidates[0]["derivation_rule"] == NATIVE_HREF_RULE == "native-legal-exact-href/002"
         if element.attrib["href"] == "/us/pl/117/228":
             assert candidates[0]["target_key"] == "117-public-228"
         if element.attrib["href"] == "/us/stat/61/633":

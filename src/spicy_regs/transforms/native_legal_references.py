@@ -1,73 +1,43 @@
 """Read bounded pinned XML selections into source occurrences and complete-read scopes.
 
-Scanners own XML reading. One row remains one scanner observation; optional
-interpretation/lookup results are nested candidates, never multiplied rows.
-Every requested source must finish before outputs are replaced. Retained bytes
-and manifest enter the existing CaptureEvidence artifact, not a second journal.
+spicy-docs owns the two tables' contracts, the row shaping and the reading of
+each observation (``interpretation.native_legal_references``); this host owns
+the manifest, the pins, the evidence, the qualification, the scan loop and the
+target lookup the reading is given. One row remains one scanner observation;
+lookup results are nested candidates, never multiplied rows. Every requested
+source must finish before outputs are replaced. Retained bytes and manifest
+enter the existing CaptureEvidence artifact, not a second journal.
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
-import re
 import shutil
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from spicy_docs.interpretation.citations import find_citations
-from spicy_docs.schemas.native_reference_rows import shape_ecfr_note, shape_uscode_reference, shape_uscode_source_credit
-from spicy_docs.schemas.tables import usc_section_key
+from spicy_docs.interpretation.native_legal_references import interpret_native_references
+from spicy_docs.schemas.native_reference_rows import (
+    NATIVE_LEGAL_REFERENCE_READS,
+    NATIVE_LEGAL_REFERENCES,
+    native_reference_scope_id,
+    shape_ecfr_note,
+    shape_native_reference_read,
+    shape_uscode_reference,
+    shape_uscode_source_credit,
+)
 from spicy_docs.sources.cfr.authority import scan_ecfr_authority_notes
 from spicy_docs.sources.uscode.references import scan_uscode_references
 
 from spicy_regs.citation_resolution import ROUTES, resolve_citations
 from spicy_regs.source_evidence import CaptureEvidence
-from spicy_regs.transforms.table_merge import merge_table, prior_scratch_path
+from spicy_regs.transforms.table_merge import merge_contract_table, prior_scratch_path
 
-RULE = "native-legal-reference/002"
-REFERENCE_COLUMNS = (
-    "scope_id",
-    "source_family",
-    "source_record_key",
-    "edition",
-    "input_sha256",
-    "source_locator",
-    "occurrence_index",
-    "source_path",
-    "element_tag",
-    "attributes_json",
-    "ancestors_json",
-    "observation_kind",
-    "href",
-    "text",
-    "text_runs_json",
-    "cfr_title",
-    "cfr_part",
-    "interpretation_status",
-    "target_candidates_json",
-    "rule_version",
-)
-READ_COLUMNS = (
-    "scope_id",
-    "source_family",
-    "source_record_key",
-    "edition",
-    "input_sha256",
-    "source_locator",
-    "source_bytes",
-    "occurrence_count",
-    "read_status",
-    "selected_shapes_json",
-    "unsupported_shapes_json",
-    "manifest_sha256",
-    "rule_version",
-)
-SCHEMAS = {"native_legal_references": REFERENCE_COLUMNS, "native_legal_reference_reads": READ_COLUMNS}
-OUTPUTS = tuple(name + ".parquet" for name in SCHEMAS)
-KINDS = ("usc_section", "cfr_section", "public_law", "statutes_at_large", "federal_register_cite")
-_HREF = re.compile(r"/us/usc/t([1-9][0-9]*[aA]?)/s([0-9]+[A-Za-z0-9–—-]*)")
+#: The two tables, as spicy-docs contracts them: columns, identities and the rule their rows name.
+CONTRACTS = (NATIVE_LEGAL_REFERENCES, NATIVE_LEGAL_REFERENCE_READS)
+OUTPUTS = tuple(contract.name + ".parquet" for contract in CONTRACTS)
 
 
 def _json(value: Any) -> str:
@@ -94,72 +64,6 @@ def _retain(evidence: CaptureEvidence, body: bytes, **fields: Any) -> None:
     # store and journal with an honest event kind; artifact admission verifies bytes.
     evidence.store.put_blob(_digest(body), len(body), [body])
     evidence.event("retained-input", sha256=_digest(body), byte_size=len(body), **fields)
-
-
-def _interpret(row: dict) -> tuple[str, str]:
-    key = row["scope_id"] + ":" + row["occurrence_index"]
-    common = {"document_kind": row["source_family"], "document_key": key, "source_record_key": row["source_record_key"]}
-    candidates = []
-    if row["observation_kind"] == "native_reference":
-        href = row.get("href")
-        match = _HREF.fullmatch(href or "")
-        statute = re.fullmatch(r"/us/stat/([1-9][0-9]*[A-Za-z]?)/([1-9][0-9]*)", href or "")
-        law = re.fullmatch(r"/us/pl/([1-9][0-9]*)/([1-9][0-9]*)", href or "")
-        allowed_tag = row["element_tag"] in {
-            "ref",
-            "{http://xml.house.gov/schemas/uslm/1.0}ref",
-            "{http://www.w3.org/1999/xhtml}a",
-        }
-        # Never shorten a subsection, fragment, range or historical act locator.
-        if not allowed_tag or not (match or statute or law):
-            return "unsupported_href", _json([])
-        if match:
-            kind, target = "usc_section", match[1].upper() + "-" + str(usc_section_key(match[2]))
-            status = "native_section_href"
-        elif statute:
-            kind, target = "statutes_at_large", statute[1].upper() + "-" + statute[2]
-            status = "native_statute_href"
-        else:
-            assert law is not None
-            if int(law[1]) < 57:
-                return "unsupported_href", _json([])
-            kind, target = "public_law", law[1] + "-public-" + law[2]
-            status = "native_public_law_href"
-        candidates.append(
-            {
-                **common,
-                "occurrence_key": key + ":href",
-                "cite_kind": kind,
-                "target_key": target,
-                "matched_text": href,
-                "target_resolved": True,
-                "derivation_rule": "native-legal-exact-href/002",
-            }
-        )
-    else:
-        text = row.get("text") or ""
-        for index, finding in enumerate(find_citations(text, kinds=KINDS)):
-            candidates.append(
-                {
-                    **common,
-                    "occurrence_key": key + ":" + str(index),
-                    "cite_kind": (
-                        "cfr_part"
-                        if finding.kind == "cfr_section" and re.fullmatch(r"[0-9]+-[0-9]+", finding.target_key)
-                        else finding.kind
-                    ),
-                    "target_key": finding.target_key,
-                    "target_resolved": finding.target_resolved,
-                    "matched_text": finding.matched_text,
-                    "span_start": finding.span_start,
-                    "span_end": finding.span_end,
-                    "text_sha256": _digest(text.encode()),
-                    "derivation_rule": finding.target_rule,
-                    "derivation_version": finding.rule_version,
-                }
-            )
-        status = "partial_text_findings" if candidates else "no_qualified_text_findings"
-    return status, _json(candidates)
 
 
 def build_native_legal_references(
@@ -213,7 +117,7 @@ def build_native_legal_references(
                 raise ValueError("edition must be a nonblank literal or explicit null")
             if not isinstance(spec["source_locator"], str) or not spec["source_locator"]:
                 raise ValueError("source locator required")
-            scope = _digest(_json([family, record, edition]).encode())
+            scope = native_reference_scope_id(family, record, edition)
             if scope in scopes:
                 raise ValueError("repeated source/edition scope in one manifest")
             scopes.add(scope)
@@ -276,62 +180,42 @@ def build_native_legal_references(
             except Exception as error:
                 evidence.refusal(error, stage="native-legal-reference:" + scope)
                 raise
-            for row in fresh:
-                row.update(scope_id=scope, source_family=family, rule_version=RULE)
-                row["interpretation_status"], row["target_candidates_json"] = _interpret(row)
             rows.extend(fresh)
             reads.append(
-                {
+                shape_native_reference_read(
+                    source_family=family,
+                    source_bytes=len(body),
+                    occurrence_count=len(fresh),
+                    manifest_sha256=_digest(raw),
                     **context,
-                    "scope_id": scope,
-                    "source_family": family,
-                    "source_bytes": str(len(body)),
-                    "occurrence_count": str(len(fresh)),
-                    "read_status": "complete_selected_shapes",
-                    "selected_shapes_json": _json(["AUTH", "SOURCE"] if family == "ecfr" else ["href", "sourceCredit"]),
-                    "unsupported_shapes_json": _json(["PARAUTH", "SECAUTH"] if family == "ecfr" else []),
-                    "manifest_sha256": _digest(raw),
-                    "rule_version": RULE,
-                }
+                )
             )
             evidence.event("native-reference-read", **reads[-1])
-        # Resolve each distinct typed key once per selected target snapshot.
-        candidates = [candidate for row in rows for candidate in json.loads(row["target_candidates_json"])]
-        source_digests = {
-            (row["source_family"], row["scope_id"] + ":" + row["occurrence_index"]): _digest(
-                (row.get("text") or "").encode()
-            )
-            for row in rows
-        }
-        resolved = resolve_citations(cursor, candidates, snapshots, source_digests=source_digests)
-        by_occurrence = {}
-        for candidate in resolved["occurrences"]:
-            by_occurrence.setdefault(candidate["document_key"], []).append(candidate)
-        for row in rows:
-            row["target_candidates_json"] = _json(
-                by_occurrence.get(row["scope_id"] + ":" + row["occurrence_index"], [])
-            )
-        evidence.event("native-reference-resolution", **resolved["coverage"])
+        # spicy-docs reads every observation; the lookup is this repository's, over the target tables the manifest
+        # pinned, called once for the run so each distinct typed key is read once.
+        coverage: dict[str, Any] = {}
+
+        def lookup(candidates: list[dict[str, Any]], texts: dict[tuple[str, str], str]) -> list[dict[str, Any]]:
+            resolved = resolve_citations(cursor, candidates, snapshots, source_digests=texts)
+            coverage.update(resolved["coverage"])
+            return resolved["occurrences"]
+
+        rows = interpret_native_references(rows, resolve=lookup)
+        evidence.event("native-reference-resolution", **coverage)
     output_dir.mkdir(parents=True, exist_ok=True)
     # Local replay uses its last complete output as prior; isolated rollup builds
     # instead obtain the selected published generation through download_prior.
-    for name in SCHEMAS:
-        local_prior = output_dir / (name + ".parquet")
+    for contract in CONTRACTS:
+        local_prior = output_dir / (contract.name + ".parquet")
         if local_prior.exists():
-            shutil.copyfile(local_prior, prior_scratch_path(output_dir, name))
+            shutil.copyfile(local_prior, prior_scratch_path(output_dir, contract.name))
     return tuple(
-        merge_table(
+        merge_contract_table(
             output_dir,
-            name=name,
-            columns=columns,
-            identity=("scope_id", "input_sha256", "occurrence_index")
-            if name == "native_legal_references"
-            else ("scope_id",),
-            version_column=None,
-            rows=rows if name == "native_legal_references" else reads,
-            remote_key=name + ".parquet",
+            contract.name,
+            rows if contract is NATIVE_LEGAL_REFERENCES else reads,
             download_prior=download_prior,
             replace_parents=("scope_id", scopes),
         )
-        for name, columns in SCHEMAS.items()
+        for contract in CONTRACTS
     )

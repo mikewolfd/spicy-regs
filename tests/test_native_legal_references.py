@@ -11,7 +11,7 @@ import pytest
 
 from spicy_regs.generations import build_generation, verify_generation
 from spicy_regs.source_evidence import CaptureEvidence, verify_evidence
-from spicy_regs.transforms.native_legal_references import OUTPUTS, SCHEMAS, build_native_legal_references
+from spicy_regs.transforms.native_legal_references import CONTRACTS, OUTPUTS, build_native_legal_references
 
 FIXTURES = Path(__file__).parent / "fixtures/native_legal_references"
 
@@ -54,7 +54,7 @@ def test_retained_native_occurrences_and_generation(tmp_path):
         family="native-legal-references",
         files=files,
         expected_keys=OUTPUTS,
-        schemas={name: [(c, "VARCHAR") for c in cols] for name, cols in SCHEMAS.items()},
+        schemas={contract.name: [(c, "VARCHAR") for c in contract.columns] for contract in CONTRACTS},
         inputs=evidence.inputs(),
     )
     verify_generation(tmp_path / "candidate", expected_pin=artifact.pin)
@@ -187,3 +187,27 @@ def test_repeated_local_replay_uses_latest_outputs_as_prior(tmp_path):
     files, _ = run(empty, tmp_path / "output")
     assert pq.read_table(files[0]).num_rows == 2
     assert pq.read_table(files[1]).num_rows == 2
+
+
+def test_rows_are_spicy_docs_rows_under_its_rule_and_spelling(tmp_path):
+    """The shapers key each row, the reading completes it under ``/003``, and ``json_column`` spells its candidates.
+
+    A source credit citing ``Pub. L. 104–199`` keeps the en dash in the JSON it decodes to, spelled ``\\u2013``: the
+    host no longer re-serializes the candidates (its own spelling kept non-ASCII literal, the 14 live values 0.52.0
+    re-spelled). Every row and the read name ``NATIVE_LEGAL_REFERENCE_RULE``, and share the shapers' scope.
+    """
+    from spicy_docs.schemas.native_reference_rows import NATIVE_LEGAL_REFERENCE_RULE, native_reference_scope_id
+
+    body = (
+        '<section><ref href="/us/usc/t5/s401"/>'
+        "<sourceCredit>(Pub. L. 104–199, § 3, Sept. 21, 1996, 110 Stat. 2419.)</sourceCredit></section>"
+    ).encode()
+    files, _ = run(manifest_for(tmp_path, body), tmp_path / "output")
+    rows = sorted(pq.read_table(files[0]).to_pylist(), key=lambda r: int(r["occurrence_index"]))
+    [read] = pq.read_table(files[1]).to_pylist()
+    scope = native_reference_scope_id("uscode", "/us/usc/t5/s423", None)
+    assert {r["rule_version"] for r in rows} == {read["rule_version"]} == {NATIVE_LEGAL_REFERENCE_RULE}
+    assert {r["scope_id"] for r in rows} == {read["scope_id"]} == {scope}
+    credit = next(r for r in rows if r["observation_kind"] == "source_credit")
+    assert credit["target_candidates_json"].isascii() and "\\u2013" in credit["target_candidates_json"]
+    assert any("104–199" in c["matched_text"] for c in json.loads(credit["target_candidates_json"]))
