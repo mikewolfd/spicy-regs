@@ -5,8 +5,8 @@ ingested before a field was retained keep it NULL: the four comment-reference co
 ``duplicate_comments`` (``iceberg._COMMENT_ADDED_COLUMNS``), and ``attachments_json`` wherever the row's first read
 lacked the attachments. One pass keeps, per object: its key and the GET's ETag and size; the whole thin-table row
 through ``COMMENT.extract`` (one spelling), with the body as its SHA-256 and length; and every other stated attribute
-as compact JSON (``attributes_json``: the keys the extract does not map, non-null only), which ``comment_attributes``
-is built from.
+as compact JSON (``attributes_json``: the keys the extract does not map, non-null only), which the later ``comment_attributes``
+table is built from.
 
 Two phases, so the long read holds no lock and the catalog write holds it briefly:
 
@@ -36,11 +36,9 @@ import polars as pl
 from cyclopts import App
 from loguru import logger
 
+from spicy_regs.pipelines.comment_fields_write import BATCH_BYTES, prepare, write
 from spicy_regs.schemas import COMMENT
-from spicy_regs.sources import iceberg
 
-#: The columns a fill writes: the nullable columns added after the catalog table was created, and attachments_json.
-FILL_COLUMNS = (*iceberg._COMMENT_ADDED_COLUMNS, "attachments_json")
 #: Keys per chunk: the resume unit, about 17 s of reads at the measured rate.
 CHUNK_KEYS = 20_000
 #: The part record's shape; a plan carries it, so a new shape is a new plan.
@@ -186,11 +184,16 @@ def read(
             resource, mirrulations.BUCKET, mirrulations.PREFIX, agency, source,
             key_lister=lambda keys=keys: keys, download_workers=workers,
         )
-        rows = [part_row(keyed) for keyed in reader.iter_keyed_records()]
+        rows, refused = [], []
+        for keyed in reader.iter_keyed_records():
+            try:
+                rows.append(part_row(keyed))
+            except ValueError as error:  # the extract refuses a malformed value rather than coercing it
+                refused.append({"key": keyed.key, "status": "refused", "reason": str(error)[:300]})
         transport = [o for o in reader.unresolved if o.status == mirrulations.STATUS_TRANSPORT]
         record = {"plan": plan_id, "agency": agency, "chunk": chunk, "keys": len(keys), "rows": len(rows),
                   "seconds": round(time.monotonic() - begun, 2),
-                  "unresolved": [{"key": o.key, "status": o.status} for o in reader.unresolved]}
+                  "unresolved": [{"key": o.key, "status": o.status} for o in reader.unresolved] + refused}
         if transport:
             # Unwritten, so the next run reads the whole chunk again; nothing it holds is lost or doubled.
             totals["deferred_chunks"] += 1
@@ -205,7 +208,7 @@ def read(
         totals["chunks"] += 1
         totals["keys"] += len(keys)
         totals["rows"] += len(rows)
-        totals["unresolved"] += len(reader.unresolved)
+        totals["unresolved"] += len(reader.unresolved) + len(refused)
         elapsed = time.monotonic() - started
         progress.write_text(json.dumps({**totals, "seconds": round(elapsed, 1),
                                         "keys_per_second": round(totals["keys"] / elapsed, 1) if elapsed else None,
@@ -236,219 +239,6 @@ def status(workdir: Path) -> dict:
             "read_chunks": len(done), "read_keys": read_keys}
 
 
-
-# --------------------------------------------------------------------------- #
-# Write phase: fill only what the catalog holds as NULL, for the version the read saw.
-# --------------------------------------------------------------------------- #
-
-#: The Iceberg scan's virtual column naming each row's data file; batches are whole files (see :func:`write`).
-FILE_COLUMN = "filename"
-#: Rows per batch when files are packed together; a file larger than this is still one batch.
-BATCH_ROWS = 1_500_000
-
-
-def _fill_dir(workdir: Path) -> Path:
-    return workdir / "fill"
-
-
-def _catalog_value(column: str) -> str:
-    """A part value spelled as the catalog stores it: every catalog column is VARCHAR."""
-    return f'CAST(s."{column}" AS VARCHAR)'
-
-
-def prepare(workdir: Path, *, scope: dict[str, str] | None = None, con=None) -> dict:
-    """Compute the fill at the catalog's current snapshot; write ``fill/fill.parquet`` and a counts-only receipt.
-
-    One narrow scan reads each catalog row's key, ``agency_code``, ``docket_id``, ``modify_date``, fill columns and
-    data file. A read row fills a catalog row only at the same ``comment_id`` and ``modify_date`` (a copy of another
-    version is skipped and counted), only into a column the catalog holds as NULL, and never when the copies read for
-    that version disagree (listed in ``fill/conflicts.parquet``). ``scope`` (column → value, e.g. a docket) narrows a
-    pilot. Touches no catalog row and needs no lock; :func:`write` re-checks every condition inside its transactions.
-    """
-    own = con is None
-    con = con or iceberg._connect()
-    out = _fill_dir(workdir)
-    out.mkdir(parents=True, exist_ok=True)
-    try:
-        snapshot = iceberg._read_snapshot(con, COMMENT)
-        where = " AND ".join(f'"{column}" = {_sql(value)}' for column, value in (scope or {}).items()) or "TRUE"
-        fill = ", ".join(f'"{column}"' for column in FILL_COLUMNS)
-        source = iceberg._snapshot_query(COMMENT, snapshot).replace("SELECT *", f"SELECT *, {FILE_COLUMN} AS _file", 1)
-        con.execute(f"""CREATE OR REPLACE TEMP TABLE _cat AS SELECT comment_id, agency_code, docket_id, modify_date,
-                        {fill}, _file FROM ({source}) WHERE {where}""")
-        duplicated = con.execute("SELECT count(*) FROM (SELECT comment_id FROM _cat GROUP BY 1 HAVING count(*) > 1)"
-                                 ).fetchone()[0]
-        if duplicated:
-            raise RuntimeError(f"{duplicated} comment ids appear more than once in the catalog; run the dedupe first")
-        parts = f"read_parquet({_sql(workdir / 'parts' / '*' / '*.parquet')}, hive_partitioning=false)"
-        values = ", ".join(f'{_catalog_value(c)} AS "{c}"' for c in FILL_COLUMNS)
-        con.execute(f"""CREATE OR REPLACE TEMP TABLE _read AS SELECT s.key, s.comment_id, s.modify_date, {values}
-                        FROM {parts} s SEMI JOIN _cat USING (comment_id)""")
-        # Copies of one version that disagree on a fill value fill nothing for that version.
-        packed = "{" + ", ".join(f"'{column}': \"{column}\"" for column in FILL_COLUMNS) + "}"
-        con.execute(f"""CREATE OR REPLACE TEMP TABLE _versions AS
-            SELECT comment_id, modify_date, count(DISTINCT {packed}) AS spellings, list(key ORDER BY key) AS keys,
-                   any_value({packed}) AS v
-            FROM _read GROUP BY comment_id, modify_date""")
-        con.execute(f"""COPY (SELECT comment_id, modify_date, keys FROM _versions WHERE spellings > 1 ORDER BY 1)
-                        TO {_sql(out / 'conflicts.parquet')} (FORMAT PARQUET)""")
-        need = " OR ".join(f'(c."{col}" IS NULL AND v.v."{col}" IS NOT NULL)' for col in FILL_COLUMNS)
-        filled = ", ".join(f'COALESCE(c."{col}", v.v."{col}") AS "{col}"' for col in FILL_COLUMNS)
-        con.execute(f"""COPY (
-            SELECT c.comment_id, c.agency_code, c.docket_id, c.modify_date, c._file, {filled}
-            FROM _cat c JOIN _versions v ON v.comment_id = c.comment_id AND v.modify_date IS NOT DISTINCT FROM c.modify_date
-            WHERE v.spellings = 1 AND ({need})
-            ORDER BY c._file, c.comment_id
-        ) TO {_sql(out / 'fill.parquet')} (FORMAT PARQUET, COMPRESSION ZSTD)""")
-        counts = con.execute("""
-            SELECT count(*) AS catalog_rows,
-                   count(*) FILTER (WHERE NOT EXISTS (SELECT 1 FROM _read r WHERE r.comment_id = c.comment_id)) AS unread,
-                   count(*) FILTER (WHERE EXISTS (SELECT 1 FROM _read r WHERE r.comment_id = c.comment_id)
-                                    AND NOT EXISTS (SELECT 1 FROM _versions v WHERE v.comment_id = c.comment_id
-                                                    AND v.modify_date IS NOT DISTINCT FROM c.modify_date)) AS other_version_only,
-                   count(*) FILTER (WHERE EXISTS (SELECT 1 FROM _versions v WHERE v.comment_id = c.comment_id
-                                    AND v.modify_date IS NOT DISTINCT FROM c.modify_date AND v.spellings > 1)) AS conflicted
-            FROM _cat c""").fetchall()[0]
-        to_fill, files = con.execute(f"SELECT count(*), count(DISTINCT _file) FROM read_parquet({_sql(out / 'fill.parquet')})"
-                                     ).fetchall()[0]
-        per_column = con.execute(f"""SELECT {', '.join(f'count(*) FILTER (WHERE c."{col}" IS NULL AND f."{col}" IS NOT NULL)'
-                                                       for col in FILL_COLUMNS)}
-            FROM read_parquet({_sql(out / 'fill.parquet')}) f JOIN _cat c USING (comment_id)""").fetchall()[0]
-    finally:
-        if own:
-            con.close()
-    receipt = {"snapshot": snapshot.__dict__, "scope": scope or {},
-               **dict(zip(("catalog_rows", "unread", "other_version_only", "conflicted"), counts)),
-               "rows_to_fill": to_fill, "files": files, "cells_by_column": dict(zip(FILL_COLUMNS, per_column)),
-               "prepared_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
-    (out / "prepare.json").write_text(json.dumps(receipt, indent=2) + "\n")
-    return receipt
-
-
-def _batches(fill: Path, batch_rows: int, *, by_file: bool) -> list[list[str]]:
-    """Whole data files packed up to ``batch_rows``; or, for a small scoped pilot, one batch of everything."""
-    with duckdb.connect() as con:
-        files = con.execute(f"SELECT _file, count(*) FROM read_parquet({_sql(fill)}) GROUP BY 1 ORDER BY 1").fetchall()
-    if not by_file:
-        return [[file for file, _ in files]] if files else []
-    batches: list[list[str]] = []
-    size = 0
-    for file, rows in files:
-        if not batches or size + rows > batch_rows:
-            batches.append([])
-            size = 0
-        batches[-1].append(file)
-        size += rows
-    return batches
-
-
-def write(workdir: Path, *, batch_rows: int = BATCH_ROWS, by_file: bool = True, con=None) -> dict:
-    """Apply ``fill/fill.parquet`` under the catalog lock, one data-file batch per transaction; verified and resumable.
-
-    Big O: the table is unpartitioned and its files mix agencies, and a MERGE rewrites each matched row whole
-    (merge-on-read), so its scan fetches every column of every row group holding a matched row. A batch of whole
-    data files, matched on ``filename`` as well as the key, touches only its own files, so each file is read a fixed
-    number of times over the run (once to capture its batch rows, once by the MERGE, and the new rows once to verify):
-    O(table). An agency per batch would read every row group once per agency it holds: O(agencies x table).
-
-    Each batch, in one transaction: refuse unless the catalog is at the snapshot this fill last saw (no other writer);
-    capture the batch rows; MERGE, updating a row only where its ``comment_id``, ``modify_date`` and data file match
-    and a fill column is NULL, to ``COALESCE(catalog, read)``; check the count. After commit, the new rows must equal
-    the captured rows with the fill applied, every column compared. A journal line per batch makes a rerun skip
-    verified batches; an unverified committed batch MERGEs nothing again (its NULLs are filled) and is re-verified.
-    """
-    from os import getenv
-
-    if not getenv(iceberg.CATALOG_LOCK_ENV):
-        raise RuntimeError(f"write holds the comments catalog: set {iceberg.CATALOG_LOCK_ENV} only while holding the "
-                           "lock (docs/comment-fields-fill.md)")
-    out = _fill_dir(workdir)
-    fill = out / "fill.parquet"
-    prepared = json.loads((out / "prepare.json").read_text())
-    journal = out / "write-journal.jsonl"
-    done = {tuple(line["files"]) for line in map(json.loads, journal.read_text().splitlines()) if line.get("verified")
-            } if journal.exists() else set()
-    lines = [json.loads(line) for line in journal.read_text().splitlines()] if journal.exists() else []
-    expected = lines[-1]["snapshot_after"] if lines else prepared["snapshot"]
-    own = con is None
-    con = con or iceberg._connect_for_table(COMMENT)
-    table = iceberg._qualified(COMMENT)
-    columns = list(COMMENT.schema)
-    col_list = ", ".join(f'"{c}"' for c in columns)
-    sets = ", ".join(f'"{c}" = COALESCE(t."{c}", s."{c}")' for c in FILL_COLUMNS)
-    need = " OR ".join(f'(t."{c}" IS NULL AND s."{c}" IS NOT NULL)' for c in FILL_COLUMNS)
-    totals = {"batches": 0, "rows_changed": 0, "skipped_verified": 0}
-    try:
-        for files in _batches(fill, batch_rows, by_file=by_file):
-            if tuple(files) in done:
-                totals["skipped_verified"] += 1
-                continue
-            current = iceberg._read_snapshot(con, COMMENT)
-            if current.__dict__ != expected:
-                raise RuntimeError(f"the comments catalog moved from {expected} to {current.__dict__}: another writer; "
-                                   "stop and prepare again under the lock")
-            file_list = ", ".join(map(_sql, files))
-            con.execute(f"""CREATE OR REPLACE TEMP TABLE _batch AS SELECT * EXCLUDE (agency_code, docket_id)
-                            FROM read_parquet({_sql(fill)}) WHERE _file IN ({file_list})""")
-            on_file = f" AND t.{FILE_COLUMN} = s._file" if by_file else ""
-            in_files = f"{FILE_COLUMN} IN ({file_list}) AND " if by_file else ""
-            con.execute(f"""CREATE OR REPLACE TEMP TABLE _prior AS SELECT {col_list} FROM {table}
-                            WHERE {in_files}comment_id IN (SELECT comment_id FROM _batch)""")
-            planned = con.execute("SELECT count(*) FROM _batch").fetchone()[0]
-            con.execute("BEGIN")
-            try:
-                changed = con.execute(f"""MERGE INTO {table} t USING _batch s
-                    ON t.comment_id = s.comment_id AND t.modify_date IS NOT DISTINCT FROM s.modify_date{on_file}
-                    WHEN MATCHED AND ({need}) THEN UPDATE SET {sets}""").fetchone()[0]
-                if changed > planned:
-                    raise RuntimeError(f"MERGE changed {changed} rows for {planned} planned")
-                con.execute("COMMIT")
-            except Exception:
-                con.execute("ROLLBACK")
-                raise
-            after = iceberg._read_snapshot(con, COMMENT) if changed else current
-            verified = _verify(con, table, columns, _added_files(con, after) if changed else [])
-            record = {"files": files, "planned": planned, "changed": changed, "snapshot_before": current.__dict__,
-                      "snapshot_after": after.__dict__, "verified": verified,
-                      "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
-            with journal.open("a", encoding="utf-8") as handle:
-                handle.write(json.dumps(record) + "\n")
-            if not verified:
-                raise RuntimeError(f"batch {files[:1]}...: the written rows differ from the captured rows with the fill "
-                                   f"applied; the prior snapshot is {current.__dict__}")
-            expected = after.__dict__
-            totals["batches"] += 1
-            totals["rows_changed"] += changed
-    finally:
-        if own:
-            con.close()
-    return totals
-
-
-def _added_files(con, snapshot) -> list[str] | None:
-    """The data files ``snapshot`` added, to verify by reading only them; None where the catalog cannot say."""
-    try:
-        rows = con.execute(f"""SELECT file_path FROM iceberg_metadata('{iceberg._CATALOG_ALIAS}.{iceberg._namespace()}.comments')
-            WHERE status = 'ADDED' AND content = 'EXISTING' AND manifest_sequence_number =
-                  (SELECT max(manifest_sequence_number) FROM iceberg_metadata('{iceberg._CATALOG_ALIAS}.{iceberg._namespace()}.comments'))
-        """).fetchall()
-    except duckdb.Error:
-        return None
-    return [row[0] for row in rows]
-
-
-def _verify(con, table: str, columns: list[str], added: list[str] | None) -> bool:
-    """Every batch row now reads as its captured row with the fill applied, compared on every column."""
-    expected = ", ".join(
-        f'COALESCE(p."{c}", b."{c}") AS "{c}"' if c in FILL_COLUMNS else f'p."{c}"' for c in columns)
-    within = f"{FILE_COLUMN} IN ({', '.join(map(_sql, added))})" if added else "TRUE"
-    mismatched = con.execute(f"""
-        WITH want AS (SELECT {expected} FROM _prior p JOIN _batch b USING (comment_id)),
-             got AS (SELECT {', '.join(f'"{c}"' for c in columns)} FROM {table}
-                     WHERE {within} AND comment_id IN (SELECT comment_id FROM _batch))
-        SELECT count(*) FROM ((SELECT * FROM want EXCEPT ALL SELECT * FROM got)
-                              UNION ALL (SELECT * FROM got EXCEPT ALL SELECT * FROM want))""").fetchone()[0]
-    return mismatched == 0
 
 app = App(name="fill-comment-fields", help=__doc__)
 
@@ -489,12 +279,25 @@ def prepare_command(*, workdir: Path, docket: str | None = None, agency: str | N
 
 
 @app.command(name="write")
-def write_command(*, workdir: Path, batch_rows: int = BATCH_ROWS, by_file: bool = True) -> None:
-    """Apply the prepared fill under the catalog lock; ``--no-by-file`` for a small scoped pilot."""
+def write_command(
+    *, workdir: Path, batch_bytes: int = BATCH_BYTES, by_file: bool = True, clear_failure: bool = False,
+) -> None:
+    """Apply the prepared fill under the catalog lock; ``--no-by-file`` for a scoped pilot."""
     from dotenv import load_dotenv
 
     load_dotenv()
-    print(json.dumps(write(workdir, batch_rows=batch_rows, by_file=by_file), indent=2))
+    print(json.dumps(write(workdir, batch_bytes=batch_bytes, by_file=by_file, clear_failure=clear_failure), indent=2))
+
+
+@app.command(name="rollback")
+def rollback_command(*, to_snapshot: int, expected_current: int) -> None:
+    """Move comments' main branch back to ``--to-snapshot``, if it is still at ``--expected-current`` (runbook)."""
+    from dotenv import load_dotenv
+
+    from spicy_regs.pipelines.comment_fields_write import rollback
+
+    load_dotenv()
+    print(json.dumps(rollback(to_snapshot, expected_current=expected_current), indent=2))
 
 
 @app.command(name="status")
