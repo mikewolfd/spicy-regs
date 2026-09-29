@@ -48,8 +48,8 @@ ROOT = Path(__file__).resolve().parents[1]
 DOMAIN_DIR = ROOT / DEFAULT_SOURCE_DOMAIN_DIR
 TOOL = ROOT / "scripts" / "check_source_domain_drift.py"
 
-#: The host this fork's workflows publish to (``R2_PUBLIC_URL`` in the fork's
-#: secrets); the snapshot records its URLs, resolved through the publication index.
+#: The host the dated snapshot recorded its URLs under, resolved through the publication
+#: index: the bucket's r2.dev host, which stays enabled beside the data.spicygov.ai domain.
 FORK_PUBLIC_URL = "https://pub-72e95c0c20a84508b42b03a6ff6d55f8.r2.dev"
 
 #: The live publication index is a network fetch, so a fragment of it is checked
