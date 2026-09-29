@@ -25,6 +25,11 @@ def flag_env(name: str) -> bool:
     return raw == "true"
 
 
+def text_env(name: str) -> str | None:
+    """A free-text env var with its outer whitespace removed, or None when unset or blank."""
+    return os.environ.get(name, "").strip() or None
+
+
 def int_env(name: str) -> int | None:
     """An integer env var, or None when unset; anything else raises ValueError naming it."""
     raw = os.environ.get(name, "").strip()

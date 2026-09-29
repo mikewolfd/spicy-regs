@@ -281,10 +281,14 @@ JOINS: tuple[Join, ...] = (
     _join("fec_source_records", "collection_id", "fec_collections", "collection_id", 647, 0),
     # GAO.
     _join("gao_recommendations", "report_id", "gao_reports", "report_id", 0, 0, "empty",
-          "New output, not yet published. Built offline from GAO's export of 2026-09-28 against gao_reports "
-          "ac08f37f, 89 of 1,802 publications resolved: gao_reports holds GovInfo's 1989-2008 history and the "
-          "feed's weeks, and no product of 2009-2025. Receipt "
-          "supply-2026-09-02/receipts/gao-recommendations-20260928/offline-measure-2026-09-28.json."),
+          "New output, not yet published. Built offline from GAO's export of 2026-09-28: against the live "
+          "gao_reports ac08f37f (GovInfo's 1989-2008 history and the feed's weeks) 89 of 1,802 publications "
+          "resolved; against the offline build with GAO's 2009-2026 listing (Track B, 26,183 rows, 13,437 "
+          "listed; af306786…) 1,798 publications and 5,374 of 5,379 rows. The 4 orphans are plain numbers "
+          "absent from that build under any spelling: gao-02-817, gao-08-956 and gao-09-133 (issued between "
+          "GovInfo's last package and the listing's first year) and gao-21-265. Receipts "
+          "supply-2026-09-02/receipts/gao-recommendations-20260928/offline-build/join-track-b-2026-09-28.json "
+          "and offline-measure-2026-09-28.json."),
     # Courts.
     _join("court_opinions", "cluster_id", "court_opinion_clusters", "cluster_id", 10_069_107, 21, "scope",
           "The publisher cuts each export at a different hour, clusters first (2026-06-30: 08:16 UTC, opinions "

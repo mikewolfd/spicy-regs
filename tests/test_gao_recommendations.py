@@ -158,10 +158,73 @@ def test_exactly_half_still_listed_passes_the_guard(tmp_path):
 def test_the_guard_counts_only_rows_the_prior_lists_open():
     open_row = {**dict.fromkeys(GAO_RECOMMENDATIONS.columns), "recommendation_id": "a", "listed_open": "true"}
     closed = [{**open_row, "recommendation_id": f"c{n}", "listed_open": "false"} for n in range(9)]
-    assert len(build.fold([open_row, *closed], [open_row])) == 10
+    rows, retirement = build.fold([open_row, *closed], [open_row])
+    assert len(rows) == 10 and retirement == {"open_before": 1, "still_listed": 1, "retired": 0, "mass_close_reason": None}
     with pytest.raises(build.GaoRecommendationsFoldError):
         build.fold([open_row, *closed], [])
-    assert build.fold([], []) == [] and build.fold(closed, []) == [{**row, "listed_open": "false"} for row in closed]
+    assert build.fold([], []) == ([], {"open_before": 0, "still_listed": 0, "retired": 0, "mass_close_reason": None})
+    assert build.fold(closed, [])[0] == [{**row, "listed_open": "false"} for row in closed]
+
+
+REASON = "GAO closed its 2019 audit series in one batch (dispatch by the owner)"
+
+
+def test_a_stated_reason_lets_a_mass_close_through_and_the_evidence_keeps_it(tmp_path):
+    """Refused without a reason (above); with one the run proceeds, and the journal names it and what it retired."""
+    from spicy_regs.source_evidence import CaptureEvidence
+
+    first = _run(tmp_path / "first")
+    evidence = CaptureEvidence(tmp_path / "second", "gao-recommendations")
+    out = build.build_gao_recommendations(
+        tmp_path / "second",
+        evidence=evidence,
+        transport=Export(_without(set(range(14)), EXCERPT.replace(STAMP, NEXT_DAY))),
+        download_prior=_prior(first),
+        allow_mass_close_reason=REASON,
+    )
+    assert sum(row["listed_open"] == "false" for row in _rows(out).values()) == 14
+    evidence.finish()
+    journal = [json.loads(line) for line in (evidence.artifact_dir / "journal.jsonl").read_text().splitlines()]
+    (allowed,) = [event for event in journal if event["event"] == "mass-close-allowed"]
+    assert allowed["reason"] == REASON and allowed["mass_close_reason"] == REASON
+    assert (allowed["retired"], allowed["open_before"], allowed["still_listed"]) == (14, 26, 12)
+    assert evidence.artifact is not None and (evidence.artifact_dir / "journal.jsonl") in evidence.artifact_dir.iterdir()
+
+
+def test_a_reason_is_journaled_only_when_the_guard_would_have_refused(tmp_path):
+    from spicy_regs.source_evidence import CaptureEvidence
+
+    first = _run(tmp_path / "first")
+    evidence = CaptureEvidence(tmp_path / "second", "gao-recommendations")
+    build.build_gao_recommendations(
+        tmp_path / "second",
+        evidence=evidence,
+        transport=Export(_without({0}, EXCERPT.replace(STAMP, NEXT_DAY))),
+        download_prior=_prior(first),
+        allow_mass_close_reason=REASON,
+    )
+    events = [json.loads(line) for line in (evidence.artifact_dir / "journal.jsonl").read_text().splitlines()]
+    assert [event["retired"] for event in events if event["event"] == "fold"] == [1]
+    assert not [event for event in events if event["event"] == "mass-close-allowed"]
+
+
+def test_the_rollup_reads_the_reason_from_the_dispatch_and_a_schedule_never_sets_it(tmp_path, monkeypatch):
+    import yaml
+
+    from spicy_regs.pipelines.rollups import gao_recommendations as rollup
+
+    seen = []
+    monkeypatch.setattr(rollup, "build_gao_recommendations", lambda _dir, **kwargs: seen.append(kwargs))
+    monkeypatch.setenv("GAO_ALLOW_MASS_CLOSE_REASON", f"  {REASON}  ")
+    rollup.GaoRecommendationsRollup().build(tmp_path)
+    monkeypatch.setenv("GAO_ALLOW_MASS_CLOSE_REASON", " ")
+    rollup.GaoRecommendationsRollup().build(tmp_path)
+    assert [kwargs["allow_mass_close_reason"] for kwargs in seen] == [REASON, None]
+    workflows = Path(__file__).resolve().parents[1] / ".github" / "workflows"
+    caller = yaml.safe_load((workflows / "rollup-gao-recommendations.yml").read_text())
+    passed = caller["jobs"]["run"]["with"]["gao_allow_mass_close_reason"]
+    assert passed == "${{ github.event_name == 'workflow_dispatch' && inputs.allow_mass_close_reason || '' }}"
+    assert "GAO_ALLOW_MASS_CLOSE_REASON: ${{ inputs.gao_allow_mass_close_reason }}" in (workflows / "_rollup.yml").read_text()
 
 
 def test_the_redacted_export_empties_only_the_phone_fields():

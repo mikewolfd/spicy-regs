@@ -155,12 +155,18 @@ def _acquire(
             )
 
 
-def fold(prior: Iterable[Mapping[str, str | None]], fresh: Iterable[Mapping[str, str | None]]) -> list[dict]:
+def fold(
+    prior: Iterable[Mapping[str, str | None]],
+    fresh: Iterable[Mapping[str, str | None]],
+    *,
+    allow_mass_close_reason: str | None = None,
+) -> tuple[list[dict], dict]:
     """The accumulated table: every ``fresh`` row keeping its prior ``first_seen``, then every prior row it no longer
-    lists, with ``listed_open = false``.
+    lists, with ``listed_open = false``; and what the run retires.
 
-    Refuses when the prior's open rows the export still lists fall below :data:`MIN_STILL_LISTED` of them. A prior
-    with no open row, including none at all, refuses nothing.
+    Refuses when the prior's open rows the export still lists fall below :data:`MIN_STILL_LISTED` of them, unless
+    ``allow_mass_close_reason`` states why a real mass closure is expected; the retirement then names that reason.
+    A prior with no open row, including none at all, refuses nothing.
     """
     from spicy_docs.schemas.gao_recommendation_tables import GAO_RECOMMENDATIONS
 
@@ -169,16 +175,24 @@ def fold(prior: Iterable[Mapping[str, str | None]], fresh: Iterable[Mapping[str,
     listed = {GAO_RECOMMENDATIONS.key(row) for row in rows}
     open_before = [key for key, row in held.items() if row.get("listed_open") == "true"]
     still = sum(key in listed for key in open_before)
-    if open_before and still < MIN_STILL_LISTED * len(open_before):
+    tripped = bool(open_before) and still < MIN_STILL_LISTED * len(open_before)
+    retirement = {
+        "open_before": len(open_before),
+        "still_listed": still,
+        "retired": len(open_before) - still,
+        "mass_close_reason": allow_mass_close_reason if tripped else None,
+    }
+    if tripped and not allow_mass_close_reason:
         raise GaoRecommendationsFoldError(
             f"GAO's export lists {still:,} of the {len(open_before):,} recommendations the prior table lists open; "
-            f"retiring the rest needs at least {MIN_STILL_LISTED:.0%} still listed, so this export is refused"
+            f"retiring the rest needs at least {MIN_STILL_LISTED:.0%} still listed, so this export is refused "
+            "(a dispatched run can state allow_mass_close_reason)"
         )
     for row in rows:
         before = held.pop(GAO_RECOMMENDATIONS.key(row), None)
         if before is not None and before.get("first_seen"):
             row["first_seen"] = before["first_seen"]
-    return rows + [{**row, "listed_open": "false"} for row in held.values()]
+    return rows + [{**row, "listed_open": "false"} for row in held.values()], retirement
 
 
 def build_gao_recommendations(
@@ -187,8 +201,13 @@ def build_gao_recommendations(
     evidence: CaptureEvidence | None = None,
     transport: httpx.BaseTransport | None = None,
     download_prior: Callable[[str, Path], bool] = r2.download,
+    allow_mass_close_reason: str | None = None,
 ) -> Path:
-    """Read today's export, fold it into the prior published table, and write the whole table."""
+    """Read today's export, fold it into the prior published table, and write the whole table.
+
+    ``allow_mass_close_reason`` lets a dispatched run past :func:`fold`'s guard; the reason and the rows it retired
+    are journaled. A scheduled run never states one.
+    """
     from spicy_docs.schemas.gao_recommendation_tables import shape_gao_recommendation
     from spicy_docs.transport.captured import attached_capture
 
@@ -213,13 +232,19 @@ def build_gao_recommendations(
     ]
     prior_file = published_table(output_dir, TABLE, download_prior)
     prior = pq.read_table(prior_file).to_pylist() if prior_file is not None else []
-    rows = fold(prior, fresh)
+    rows, retirement = fold(prior, fresh, allow_mass_close_reason=allow_mass_close_reason)
     listed = sum(row["listed_open"] == "true" for row in rows)
     counts = {"listed": listed, "not_listed": len(rows) - listed, "new": len(rows) - len(prior)}
     logger.info("GAO recommendations: export of {} lists {:,}; table {:,} ({})", export.status_as_of, len(fresh),
                 len(rows), dict(counts))
+    if (reason := retirement["mass_close_reason"]) is not None:
+        logger.warning("GAO recommendations: guard overridden ({!r}); {:,} of {:,} open rows retired", reason,
+                       retirement["retired"], retirement["open_before"])
     if evidence is not None:
-        evidence.event("fold", stage=STAGE, status_as_of=export.status_as_of, prior_rows=len(prior), **counts)
+        evidence.event("fold", stage=STAGE, status_as_of=export.status_as_of, prior_rows=len(prior), **counts,
+                       retired=retirement["retired"])
+        if reason is not None:
+            evidence.event("mass-close-allowed", stage=STAGE, reason=reason, **retirement)
     return merge_contract_table(
         output_dir, TABLE, rows, download_prior=download_prior, prior_present=prior_file is not None
     )

@@ -2,11 +2,13 @@
 
 An ingesting rollup: ``inputs`` is empty, and ``build_gao_recommendations`` reads the export through Zyte, folds it
 into the prior published table and retains the export, its director phones emptied, as source evidence.
+``GAO_ALLOW_MASS_CLOSE_REASON``, which only a dispatched run sets, lets the fold past its guard, stating why.
 """
 
 from pathlib import Path
 from typing import ClassVar
 
+from spicy_regs.env_values import text_env
 from spicy_regs.pipelines.rollups.base import RollupPipeline, make_rollup_app
 from spicy_regs.transforms.build_gao_recommendations import OUTPUT, build_gao_recommendations
 
@@ -20,7 +22,11 @@ class GaoRecommendationsRollup(RollupPipeline):
     output: ClassVar[str] = OUTPUT
 
     def build(self, output_dir: Path) -> Path:
-        return build_gao_recommendations(output_dir, evidence=self.source_evidence)
+        return build_gao_recommendations(
+            output_dir,
+            evidence=self.source_evidence,
+            allow_mass_close_reason=text_env("GAO_ALLOW_MASS_CLOSE_REASON"),
+        )
 
 
 app = make_rollup_app(GaoRecommendationsRollup)
