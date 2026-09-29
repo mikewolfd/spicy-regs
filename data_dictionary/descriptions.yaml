@@ -1041,10 +1041,14 @@ tables:
       fresh traversals with prior observations by committee_id, and lets a fresh
       whole row replace its prior row. Raw page captures and acquisition
       manifests remain in FEC_CAPTURE_DIR. This identity/reference table can
-      join other records carrying an FEC committee identifier. All columns are
-      VARCHAR; array-valued fields are JSON strings.
+      join other records carrying an FEC committee identifier. The company,
+      union or association behind a PAC (FEC's connected organization) is not a
+      column here: join `fec_committee_history` on committee_id and read
+      `connected_organization_name`, one value per two-year cycle as that
+      cycle's committee master states it (take the latest cycle for the current
+      sponsor). All columns are VARCHAR; array-valued fields are JSON strings.
     columns:
-      committee_id: "OpenFEC committee identifier (e.g. `C00684373`). Primary key / dedup key."
+      committee_id: "OpenFEC committee identifier (e.g. `C00684373`). Primary key / dedup key. Joins `fec_committee_history.committee_id` for per-cycle names and the connected organization."
       name: "Committee name as registered with the FEC."
       committee_type: "Single-letter committee type code (e.g. `P` presidential, `H` House, `S` Senate, `N`/`Q`/`O` PAC variants)."
       committee_type_full: "Human-readable committee type (e.g. `Presidential`, `PAC - Qualified`)."
