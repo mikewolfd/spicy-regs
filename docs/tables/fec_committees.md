@@ -4,7 +4,7 @@
 
 **Political committees**
 
-One row per observed Federal Election Commission committee. The current reader acquires from the unfiltered OpenFEC `/v1/committees/` endpoint through SpicyDocs; the delivered seed's selected scope is stated above. SpicyRegs preserves the existing 16 fields and JSON arrays, merges complete fresh traversals with prior observations by committee_id, and lets a fresh whole row replace its prior row. Raw page captures and acquisition manifests remain in FEC_CAPTURE_DIR. This identity/reference table can join other records carrying an FEC committee identifier. All columns are VARCHAR; array-valued fields are JSON strings.
+One row per observed Federal Election Commission committee. The current reader acquires from the unfiltered OpenFEC `/v1/committees/` endpoint through SpicyDocs; the delivered seed's selected scope is stated above. SpicyRegs preserves the existing 16 fields and JSON arrays, merges complete fresh traversals with prior observations by committee_id, and lets a fresh whole row replace its prior row. Raw page captures and acquisition manifests remain in FEC_CAPTURE_DIR. This identity/reference table can join other records carrying an FEC committee identifier. The company, union or association behind a PAC (FEC's connected organization) is not a column here: join `fec_committee_history` on committee_id and read `connected_organization_name`, one value per two-year cycle as that cycle's committee master states it (take the latest cycle for the current sponsor). All columns are VARCHAR; array-valued fields are JSON strings.
 
 **Coverage.** Not a range. The OpenFEC committee registry: the whole registry is walked every Sunday (decision 53) and committees that filed in the last week are read daily; rows only an earlier walk saw are kept. first_file_date and last_file_date describe filing activity, not acquisition. *(measured 2026-09-28)*
 
@@ -15,7 +15,7 @@ One row per observed Federal Election Commission committee. The current reader a
 
 | Column | Type | Description |
 | --- | --- | --- |
-| `committee_id` | `VARCHAR` | OpenFEC committee identifier (e.g. `C00684373`). Primary key / dedup key. |
+| `committee_id` | `VARCHAR` | OpenFEC committee identifier (e.g. `C00684373`). Primary key / dedup key. Joins `fec_committee_history.committee_id` for per-cycle names and the connected organization. |
 | `name` | `VARCHAR` | Committee name as registered with the FEC. |
 | `committee_type` | `VARCHAR` | Single-letter committee type code (e.g. `P` presidential, `H` House, `S` Senate, `N`/`Q`/`O` PAC variants). |
 | `committee_type_full` | `VARCHAR` | Human-readable committee type (e.g. `Presidential`, `PAC - Qualified`). |
