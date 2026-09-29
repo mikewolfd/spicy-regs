@@ -106,8 +106,6 @@ def test_ingested_values_reach_the_mirror_typed_with_null_and_zero_distinct(tmp_
         published = {row[0]: row[1:] for row in con.execute(
             f"SELECT comment_id, subtype, duplicate_comments FROM '{result['comments']}'").fetchall()}
     assert published == {**STATED, "CMS-2016-0123-9999": (None, None)}
-    partition = next((tmp_path / "out").rglob("agency_code=EPA/part-0.parquet"))
-    assert pl.read_parquet(partition).schema["duplicate_comments"] == pl.Int32
 
 
 def test_legacy_catalog_gains_both_columns_and_old_rows_read_as_unread(tmp_path, catalog, monkeypatch):
@@ -124,7 +122,6 @@ def test_legacy_catalog_gains_both_columns_and_old_rows_read_as_unread(tmp_path,
     early = iceberg.export_public_comments(tmp_path / "early", COMMENT)
     assert pl.read_parquet(early["comments"]).columns == list(TABLE_CONTRACTS["comments"].columns)
     assert pl.read_parquet(early["comments"]).select(added).to_dicts() == [dict.fromkeys(added)]
-    assert pl.read_parquet(early["comments"]).schema["duplicate_comments"] == pl.Int32
 
     with iceberg._connect_for_table(COMMENT) as con:
         physical = iceberg._column_types(con, COMMENT)

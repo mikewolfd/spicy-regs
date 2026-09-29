@@ -1,4 +1,4 @@
-"""Mirror retry/no-op behavior and the agency-first physical layout."""
+"""Mirror retry/no-op behavior, the agency-first physical layout, and the published members' one typed footer."""
 
 from dataclasses import asdict, replace
 import hashlib
@@ -14,6 +14,7 @@ from spicy_regs.pipelines import comments_mirror as mirror
 from spicy_regs.schemas import COMMENT
 from spicy_regs.sources import iceberg
 from spicy_regs.transforms.partition_comments import assemble_comments, sort_comment_agencies, stage_comment_agencies
+from spicy_regs.transforms.write_staging import write_staging
 
 
 def build(con, root, resources):
@@ -206,3 +207,122 @@ def test_agency_move_clears_old_url_and_keeps_a_valid_receipt(publication):
     assert state["receipt"]["files"][old]["rows"] == 0
     assert state["receipt"]["files"][new]["rows"] == 1
     assert not mirror.publish_comments_mirror(root)
+
+
+_EXPORT = iceberg.export_public_comments  # the publication fixture fakes it; the member tests below run the real one
+_SUBMITTER = ("subtype", "duplicate_comments")
+
+
+def _comment(comment_id, agency, subtype, count):
+    row = dict.fromkeys(COMMENT.schema)
+    row.update(comment_id=comment_id, agency_code=agency, docket_id=f"{agency}-2025-1", posted_date="2025-01-15T00:00:00Z",
+               modify_date="2025-01-15T00:00:00Z", subtype=subtype, duplicate_comments=count)
+    return row
+
+
+def _footer(path) -> dict[str, tuple[str, str, str]]:
+    """Each column's Arrow type, Parquet physical type and DuckDB type (DocSpec's lens), in footer order."""
+    parquet = pq.ParquetFile(path)
+    leaves = [parquet.metadata.schema.column(i) for i in range(parquet.metadata.num_columns)]
+    with duckdb.connect() as con:
+        bound = con.execute("SELECT name, duckdb_type FROM parquet_schema(?) ORDER BY column_id", [str(path)]).fetchall()[1:]
+    arrow = parquet.schema_arrow
+    assert arrow.names == [leaf.name for leaf in leaves] == [name for name, _ in bound]
+    return {field.name: (str(field.type), leaf.physical_type, kind)
+            for field, leaf, (_, kind) in zip(arrow, leaves, bound, strict=True)}
+
+
+@pytest.fixture(params=["current", "legacy"])
+def published(request, publication, monkeypatch):
+    """Publish a pinned snapshot through the real export: EPA states both fields (a 0 among them), CMS neither,
+    DOT's last rows are gone so its fixed URL is cleared, and a write lands after the pin. A legacy snapshot
+    predates both fields."""
+    state, root = publication
+    catalog = root / "catalog"
+
+    def connect():
+        con = duckdb.connect()
+        con.execute(f"ATTACH '{catalog / 'catalog.duckdb'}' AS {iceberg._CATALOG_ALIAS}")
+        return con
+
+    monkeypatch.setattr(iceberg, "_connect", connect)
+    rows = {"EPA": [_comment("EPA-1", "EPA", "Mass Mail Campaign", 15851), _comment("EPA-2", "EPA", "Public Comment", 0)],
+            "CMS": [_comment("CMS-1", "CMS", None, None), _comment("CMS-2", "CMS", None, None)]}
+    for agency, agency_rows in rows.items():
+        write_staging(agency, COMMENT.name, agency_rows, catalog / "staging", COMMENT.schema)
+    iceberg.merge_comments(catalog / "staging", COMMENT)
+    live = iceberg._qualified(COMMENT)
+    projection = ", ".join(f'"{c}"' for c in COMMENT.schema if request.param == "current" or c not in _SUBMITTER)
+    with connect() as con:
+        # The pinned version's stand-in; the live table then moves past it.
+        con.execute(f"CREATE TABLE {iceberg._CATALOG_ALIAS}.pinned_{state['snapshot'].snapshot_id} AS "
+                    f"SELECT {projection} FROM {live}")
+        con.execute(f"INSERT INTO {live} (comment_id, agency_code, docket_id, posted_date) "
+                    "VALUES ('late', 'EPA', 'EPA-2025-1', '2025-01-16T00:00:00Z')")
+    scans = []
+
+    def snapshot_query(rt, snapshot):
+        scans.append(snapshot)
+        return f"SELECT * FROM {iceberg._CATALOG_ALIAS}.pinned_{snapshot.snapshot_id}"
+
+    monkeypatch.setattr(iceberg, "_read_snapshot", lambda con, rt: state["snapshot"])
+    monkeypatch.setattr(iceberg, "_snapshot_query", snapshot_query)
+    monkeypatch.setattr(iceberg, "export_public_comments", _EXPORT)
+    monkeypatch.setattr(mirror, "validate_export", lambda *a, **kw: mirror.PublicPredecessor("prior", frozenset({"EPA", "DOT"})))
+    assert mirror.publish_comments_mirror(root, resources=ExportResources("64MB", 1))
+    return request.param, state, root, scans
+
+
+def test_duplicate_comments_is_int32_in_every_published_member(published):
+    """spicy-docs 0.52.0 types it INTEGER; DocSpec refuses a BIGINT footer."""
+    _, state, root, _ = published
+    tables = [key for key in state["receipt"]["files"] if key != "comments_index.parquet"]
+    assert len(tables) == 4
+    for key in tables:
+        assert _footer(root / key)["duplicate_comments"] == ("int32", "INT32", "INTEGER"), key
+
+
+def test_submitter_fields_are_typed_where_every_value_is_null(published):
+    """An untyped NULL column is refused: an agency (or a snapshot) that states neither field still writes them typed."""
+    shape, state, root, _ = published
+    stated = shape == "current"
+    flat = {row["comment_id"]: (row["subtype"], row["duplicate_comments"]) for row in pq.read_table(root / "comments.parquet").to_pylist()}
+    assert flat == {"EPA-1": ("Mass Mail Campaign", 15851) if stated else (None, None),
+                    "EPA-2": ("Public Comment", 0) if stated else (None, None),
+                    "CMS-1": (None, None), "CMS-2": (None, None)}
+    for agency in ("CMS", "DOT") if stated else ("CMS", "DOT", "EPA"):
+        path = root / f"comments/agency/agency_code={agency}/part-0.parquet"
+        assert all(value is None for row in pq.read_table(path, columns=list(_SUBMITTER)).to_pylist() for value in row.values())
+        footer = _footer(path)
+        assert footer["subtype"] == ("string", "BYTE_ARRAY", "VARCHAR"), agency
+        assert footer["duplicate_comments"] == ("int32", "INT32", "INTEGER"), agency
+
+
+def test_every_member_is_republished_together_from_the_pinned_snapshot(published):
+    """DocSpec refuses a member set whose footers disagree; the index must count the members' own snapshot."""
+    _, state, root, scans = published
+    receipt = state["receipt"]
+    assert scans == [state["snapshot"]] and receipt["source"] == asdict(state["snapshot"])
+    agencies = {code: f"comments/agency/agency_code={code}/part-0.parquet" for code in ("CMS", "DOT", "EPA")}
+    assert receipt["files"].keys() == {"comments.parquet", "comments_index.parquet", *agencies.values()}
+    flat = _footer(root / "comments.parquet")
+    assert list(flat) == list(COMMENT.schema)
+    del flat["agency_code"]  # the partition key, carried by each agency file's path
+    for key in agencies.values():
+        assert list(_footer(root / key).items()) == list(flat.items()), key
+    # Every member counts the pinned rows; none sees the write that landed after the pin.
+    with duckdb.connect() as con:
+        index = dict(con.execute("SELECT agency_code, sum(row_count)::INTEGER FROM read_parquet(?) GROUP BY 1",
+                                 [str(root / "comments_index.parquet")]).fetchall())
+    assert index == {"CMS": 2, "EPA": 2}
+    assert {code: receipt["files"][key]["rows"] for code, key in agencies.items()} == {**index, "DOT": 0}
+    assert receipt["files"]["comments.parquet"]["rows"] == sum(index.values())
+
+
+def test_export_refuses_a_catalog_moved_from_the_pinned_snapshot(tmp_path, monkeypatch):
+    monkeypatch.setattr(iceberg, "_connect", duckdb.connect)
+    monkeypatch.setattr(iceberg, "_read_snapshot", lambda con, rt: iceberg.CatalogSnapshot("table-uuid", 42, 0))
+    monkeypatch.setattr(iceberg, "_snapshot_query", lambda *a: pytest.fail("scanned a snapshot other than the pinned one"))
+    with pytest.raises(RuntimeError, match="changed before export"):
+        iceberg.export_public_comments(tmp_path, COMMENT, snapshot=iceberg.CatalogSnapshot("table-uuid", 41, 0))
+    assert not list(tmp_path.rglob("*.parquet"))
