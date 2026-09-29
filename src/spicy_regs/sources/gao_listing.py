@@ -1,21 +1,28 @@
-"""GAO's reports and testimony from 2009 on, read from GAO's own Month in Review and Annual Index listing.
+"""GAO's reports, testimony and legal decisions from 2009 on, read from GAO's own Month in Review and Annual Index.
 
 GAO lists every product it issued, by month and by year, at ``www.gao.gov/reports-testimonies/month-in-review``.
-SpicyDocs walks those pages through Zyte (``spicy_docs.sources.gao.month_in_review``). It makes one request every 420
-seconds, the site's ``Crawl-delay``, under a hard budget, keeps each page's bytes and resumes from its own receipts.
-A full walk takes days, so it runs outside the rollup. The rollup reads a finished walk's directory: SpicyDocs
-re-checks every page against its receipt and re-parses it, and each page read is retained as this run's evidence.
-Only years and months whose every page was read count; the rest wait for a later run.
+SpicyDocs walks those pages through Zyte (``spicy_docs.sources.gao.month_in_review``), keeping each page's bytes and
+resuming from its own receipts. The walk runs outside the rollup: the backfill of 2009-2025 and January-August 2026
+took about 80 minutes with three workers on 2026-09-28, while the library default, one request every 420 seconds
+(the site's crawl delay), would take days. The rollup reads a finished walk's directory. SpicyDocs re-checks every
+page against its receipt and re-parses it, and each page read is retained as this run's evidence. Only years and
+months whose every page was read count; the rest wait for a later run.
 
-A listed product states its product number, GAO's title as ``label: heading``, the topic headings it sits under,
-and its "Published" and "Publicly Released" dates. The row keys on the product id the listing links, gao.gov's
-own, lowercased, like every other route's rows, and keeps the product number as the page prints it
-(``GAO-26-108426``) as ``report_number``, the form users search for. It takes the title, and the public-release date, the date the feed
-and upstream's rows carry (equal on all 33 August 2026 products both held). ``topics_json`` holds the topic headings
-in listed order, and the type comes from the number, as :func:`gao_govinfo.report_type` rules. B-numbered legal
-decisions are listed too; like GovInfo's Comptroller General decisions, they are outside this table. So is every
-entry numbered neither ``GAO-`` nor ``B-``: a Contract Appeals Board docket (``2020-02``), a ``P`` number, or a page
-with no number at all (an Antideficiency Act report), which SpicyDocs keeps apart as ``others``.
+SpicyDocs classes an entry by its number, with the owner's one exception:
+- ``GAO-`` is a product, and every Federal Agency Major Rule Report is a product too. Those were GAO-numbered to
+  February 2017 and B-numbered from April 2017, so ``gao_reports`` holds every major-rule report from 2009 on.
+  GovInfo's history holds none for 1996-2008, since its B-numbered packages are left out.
+- ``B-`` is a legal decision; those become ``gao_decisions`` rows.
+- Any other number, a Contract Appeals Board docket (``2020-02``) or a ``P`` number, is one of the "others". The
+  numbered others are Contract Appeals Board decisions, listed as Other Decisions, so they are decisions too; the
+  others with no number at all (an Antideficiency Act compilation, forum materials) are left out and counted.
+
+A product row keys on the page the listing links, gao.gov's own product id, lowercased, like every other route's
+rows. It takes the title (``label: heading``, the feed's own titles), the public-release date (equal to the feed's
+and upstream's on all 33 August 2026 products both held), the topic headings in listed order as ``topics_json``, a
+type from the number as :func:`gao_govinfo.report_type` rules, and the product number as the page prints it
+(``GAO-26-108426``, ``B-331093``) as ``report_number``. A decision row keys on its number as GAO spells it and its
+page.
 """
 
 from __future__ import annotations
@@ -25,6 +32,7 @@ from collections import Counter
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any, Protocol
+from urllib.parse import unquote
 
 from spicy_regs.sources.gao_govinfo import report_type
 
@@ -47,6 +55,7 @@ FINER_PRODUCT_TYPES = frozenset(
     }
 )
 PRODUCT_URL = "https://www.gao.gov/products/{}"
+SITE = "https://www.gao.gov"
 #: A walk directory as ``python -m spicy_docs.sources.gao.month_in_review walk`` writes it.
 RECEIPTS = "receipts.jsonl"
 BLOBS = "blobs"
@@ -101,6 +110,38 @@ def listing_rows(run: ListingRun) -> tuple[list[dict], Counter[str]]:
         decisions_left_out=len(run.decisions),
         others_left_out=len(run.others),
         rows=len(rows),
+    )
+    return rows, counts
+
+
+def decision_rows(run: ListingRun) -> tuple[list[dict], Counter[str]]:
+    """One row per listed decision: every B-numbered decision and every numbered other, each with its listing page.
+
+    ``listing_page`` is the first retained walk page that listed the decision, the evidence a reader can open.
+    """
+    first_page: dict[str, str] = {}
+    for retained in run.pages:
+        for entry in retained.page.entries:
+            first_page.setdefault(unquote(entry.link), retained.capture.requested_url)
+    # A numbered other (a Contract Appeals Board docket) states no B-number, so its list is empty.
+    decided = [(item, list(item.decision_numbers)) for item in run.decisions]
+    decided += [(other, []) for other in run.others if other.product_number is not None]
+    rows = [
+        {
+            "decision_number": item.product_number,
+            "b_numbers_json": json.dumps(b_numbers, ensure_ascii=False),
+            "decision_type": item.label,
+            "title": item.heading,
+            "decision_date": item.released or item.published,
+            "topics_json": json.dumps(list(item.topics), ensure_ascii=False),
+            "url": SITE + item.link,
+            "listing_page": first_page.get(unquote(item.link)),
+            "source": SOURCE,
+        }
+        for item, b_numbers in decided
+    ]
+    counts: Counter[str] = Counter(
+        decision_rows=len(rows), unnumbered_left_out=sum(other.product_number is None for other in run.others)
     )
     return rows, counts
 

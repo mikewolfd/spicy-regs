@@ -817,7 +817,7 @@
       "table": "gao_reports",
       "label": "Government Accountability Office reports",
       "summary": "One row per U.S. Government Accountability Office (GAO) report or testimony, keyed by GAO's own product id. The federal oversight layer over the rulemakings this dataset tracks — GAO's audits, evaluations, and recommendations on how agencies implement laws and rules. `source` names the route of each row: the public GAO reports RSS feed, read daily by `build_gao_reports` (a ~25-item recent-products window, the only anonymous machine-readable listing of new products, so the table is an **append-only accumulator**); a one-time copy of upstream's rows for the weeks before the fork read the feed; explicit single-report repairs; and GovInfo's GAOREPORTS listing, a closed collection read once, each row then filled from its package's MODS; and GAO's own Month in Review and Annual Index, read from a walk made outside the daily job. Deduped on `report_id`; a GovInfo or listing row never replaces a row already held. All columns are stored as VARCHAR.",
-      "coverage": "True range on GovInfo's archive and a window on recent products, with a gap between. The `govinfo` rows are every report and testimony in GovInfo's closed GAOREPORTS collection, issued from 1989-11-15 to 2008-09-18, less its Comptroller General decisions; GovInfo adds nothing later, and one history run adds them. Their abstract, topics, product type and report number come from each package's MODS, read in batches; a `govinfo` row whose `report_number` is NULL has not been read yet, or GovInfo serves no MODS for it. The `gao_rss` rows are what the daily job has read from GAO's recent-items feed since 2026-09-22 (its first read reached back to 2026-09-15); the feed lists only about 25 items, so a product published while the job was not reading is lost to it. The `upstream_copy` rows are the reports published from 2026-07-13 to 2026-09-14, copied once from upstream spicy-regs' own feed accumulator. The `gao_repair` rows were added one at a time by an explicit repair. The `gao_listing` rows are the products GAO's own Month in Review and Annual Index list for each year or month a finished walk of those pages read, from 2009 on; a year or month the walk has not finished adds nothing. Only GAO-numbered products are taken: B-numbered legal decisions, Contract Appeals Board dockets and entries GAO gives no product number are left out. Products issued from late 2008 to mid-2026 are absent unless a repair or that listing added them.",
+      "coverage": "True range on GovInfo's archive and a window on recent products, with a gap between. The `govinfo` rows are every report and testimony in GovInfo's closed GAOREPORTS collection, issued from 1989-11-15 to 2008-09-18, less its Comptroller General decisions; GovInfo adds nothing later, and one history run adds them. Their abstract, topics, product type and report number come from each package's MODS, read in batches; a `govinfo` row whose `report_number` is NULL has not been read yet, or GovInfo serves no MODS for it. The `gao_rss` rows are what the daily job has read from GAO's recent-items feed since 2026-09-22 (its first read reached back to 2026-09-15); the feed lists only about 25 items, so a product published while the job was not reading is lost to it. The `upstream_copy` rows are the reports published from 2026-07-13 to 2026-09-14, copied once from upstream spicy-regs' own feed accumulator. The `gao_repair` rows were added one at a time by an explicit repair. The `gao_listing` rows are the products GAO's own Month in Review and Annual Index list for each year or month a finished walk of those pages read, from 2009 on; a year or month the walk has not finished adds nothing. They are the GAO-numbered products and every Federal Agency Major Rule Report, which GAO numbered GAO- to February 2017 and B- from April 2017, keyed on its page. So every major-rule report from 2009 on is here, and none from 1996 to 2008: GovInfo's history leaves out B-numbered packages. B-numbered legal decisions and Contract Appeals Board dockets are in `gao_decisions`; entries GAO gives no number are left out. Products issued from late 2008 to mid-2026 are absent unless a repair or that listing added them.",
       "kind": "true_range",
       "measured_on": "2026-09-28",
       "data_quality": null,
@@ -833,6 +833,26 @@
         "source",
         "product_type",
         "report_number"
+      ]
+    },
+    {
+      "table": "gao_decisions",
+      "label": "Government Accountability Office legal decisions",
+      "summary": "One row per GAO legal decision page, read from GAO's own listing of what it issued by month and year. A decision is keyed on its number as GAO spells it and its page: one teaser can name several B-numbers (`B-423916.2,B-423916.3`), and one B-number can have two pages released months apart (`b-331093` and `b-331093-0`). `listing_page` names the retained listing page that listed it, which the run keeps as evidence. A later walk refreshes the rows it lists; a run without one carries the table forward. All columns are stored as VARCHAR.",
+      "coverage": "True range from 2009 on: every legal decision GAO's own Month in Review and Annual Index list for each year or month a finished walk of those pages read: the B-numbered decisions (bid protests, appropriations law, vacancies letters, other decisions) and the Contract Appeals Board decisions GAO numbers as dockets (`2020-02`) or `P` numbers. Federal Agency Major Rule Reports, B-numbered from April 2017, are in `gao_reports`, not here. Entries GAO gives no number are left out. A year or month the walk has not finished adds nothing.",
+      "kind": "true_range",
+      "measured_on": "2026-09-28",
+      "data_quality": null,
+      "columns": [
+        "decision_number",
+        "b_numbers_json",
+        "decision_type",
+        "title",
+        "decision_date",
+        "topics_json",
+        "url",
+        "listing_page",
+        "source"
       ]
     },
     {

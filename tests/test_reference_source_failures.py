@@ -450,6 +450,10 @@ def test_empty_success_keeps_prior_rows_or_builds_zero(monkeypatch, tmp_path, ki
         monkeypatch.setattr(module, reader_name, lambda **_: source)
     monkeypatch.setattr(module.r2, "download", lambda *_: False)
     out = getattr(module, builder_name)(tmp_path)
+    if isinstance(out, tuple):
+        # gao-reports also writes gao_decisions, which an empty feed leaves empty.
+        out, *others = out
+        assert all(pq.read_table(other).num_rows == 0 for other in others)
     assert out.name == output_name
     result = pq.read_table(out)
     assert result.to_pylist() == expected

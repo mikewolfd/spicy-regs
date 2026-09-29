@@ -37,7 +37,10 @@ the next unread row. A package GovInfo serves no MODS for stays unread.
 in Review and Annual Index pages; the walk itself runs outside the rollup. Its
 rows follow the GovInfo rule, one helper for both: they fill only product ids no
 row holds yet, this run's feed and GovInfo rows included, so a later walk adds
-new products and leaves held rows, a MODS read among them, alone.
+new products and leaves held rows, a MODS read among them, alone. On a row it
+holds, the listing fills only a NULL ``report_number``, never a stated one. Its
+legal decisions go to ``gao_decisions`` (:data:`DECISIONS_OUTPUT`), which a run
+without a walk carries forward unchanged.
 """
 
 from __future__ import annotations
@@ -78,6 +81,21 @@ COLUMNS = (
     "report_number",
 )
 _SCHEMA = pa.schema([(c, pa.string()) for c in COLUMNS])
+
+#: GAO's legal decisions from its own listing: all VARCHAR, keyed on the number as GAO spells it and the page.
+DECISIONS_OUTPUT = "gao_decisions.parquet"
+DECISION_COLUMNS = (
+    "decision_number",
+    "b_numbers_json",
+    "decision_type",
+    "title",
+    "decision_date",
+    "topics_json",
+    "url",
+    "listing_page",
+    "source",
+)
+_DECISION_SCHEMA = pa.schema([(c, pa.string()) for c in DECISION_COLUMNS])
 
 # GAO's reports RSS feed carries published products (reports & testimonies).
 # The feed does not tag a finer product type, so we default to this label.
@@ -161,18 +179,34 @@ def _govinfo_additions(
     return added
 
 
-def _listing_additions(
-    prior_file: Path | None, held: set[str], directory: Path, evidence: CaptureEvidence | None
-) -> list[dict]:
-    """GAO listing rows for ids no row holds yet; each page read is retained as evidence."""
+def _listing_rows(
+    prior_file: Path | None, rows_now: list[dict], directory: Path, evidence: CaptureEvidence | None
+) -> tuple[list[dict], list[dict]]:
+    """The listing's product rows for ids no row holds yet, held rows whose NULL ``report_number`` it fills, and its
+    decisions. ``rows_now`` (this run's rows) is filled in place; each page read is retained as evidence.
+    """
     rows, counts, run = gao_listing.read_listing(directory, evidence)
-    added = _fill_only(rows, counts, prior_file=prior_file, held=held)
+    added = _fill_only(rows, counts, prior_file=prior_file, held={row["report_id"] for row in rows_now})
+    numbers = {row["report_id"]: row["report_number"] for row in rows if row["report_number"] is not None}
+    for row in rows_now:
+        if row.get("report_number") is None and row["report_id"] in numbers:
+            row["report_number"] = numbers[row["report_id"]]
+            counts["report_number_filled"] += 1
+    filled = []
+    if prior_file is not None:
+        now = {row["report_id"] for row in rows_now}
+        for row in pq.read_table(prior_file).to_pylist():
+            if row["report_id"] in numbers and row["report_id"] not in now and row.get("report_number") is None:
+                filled.append({**row, "report_number": numbers[row["report_id"]]})
+        counts["report_number_filled"] += len(filled)
+    decisions, decision_counts = gao_listing.decision_rows(run)
+    counts.update(decision_counts)
     logger.info("GAO reports: GAO listing {} (unfinished scopes left for a later run: {})", dict(counts),
                 list(run.incomplete_scopes))
     if evidence:
         evidence.event("gao-listing", scopes_read=list(run.complete_scopes),
                        scopes_unfinished=list(run.incomplete_scopes), **counts)
-    return added
+    return added + filled, decisions
 
 
 def _mods_reads(prior_file: Path, acquirer: Any, evidence: CaptureEvidence | None) -> list[dict]:
@@ -220,13 +254,14 @@ def build_gao_reports(
     govinfo_mods: bool = False,
     mods: Any = None,
     listing_run: Path | None = None,
-) -> Path:
+) -> tuple[Path, Path]:
     """Build ``gao_reports.parquet`` (append-only merge with the prior table).
 
     ``govinfo_history`` also walks GovInfo's GAOREPORTS listing, through
     ``govinfo`` when a caller supplies the reader; ``govinfo_mods`` reads the
     next batch of history rows' MODS, through ``mods`` when a caller supplies it;
     ``listing_run`` also reads a finished walk of GAO's own listing from that directory.
+    Returns ``gao_reports.parquet`` and ``gao_decisions.parquet``.
     """
     import duckdb
 
@@ -255,9 +290,10 @@ def build_gao_reports(
             mods = GaoModsAcquirer()
         with mods as acquirer:
             rows += _mods_reads(prior_file, acquirer, evidence)
+    decisions: list[dict] = []
     if listing_run is not None:
-        held_now = {row["report_id"] for row in rows}
-        rows += _listing_additions(prior_file if have_prior else None, held_now, listing_run, evidence)
+        listed, decisions = _listing_rows(prior_file if have_prior else None, rows, listing_run, evidence)
+        rows += listed
     new_file = output_dir / "_gao_new.parquet"
     table = pa.Table.from_pylist(rows, schema=_SCHEMA) if rows else _SCHEMA.empty_table()
     pq.write_table(table, new_file, compression="zstd")
@@ -282,4 +318,32 @@ def build_gao_reports(
 
     total = pq.ParquetFile(out_file).metadata.num_rows
     logger.info("GAO reports: {:,} rows", total)
+    return out_file, _build_decisions(output_dir, decisions)
+
+
+def _build_decisions(output_dir: Path, decisions: list[dict]) -> Path:
+    """``gao_decisions.parquet``: the prior table, with this run's listed decisions over it on the same number and page."""
+    import duckdb
+
+    out_file = output_dir / DECISIONS_OUTPUT
+    prior_file = output_dir / "_gao_decisions_prior.parquet"
+    new_file = output_dir / "_gao_decisions_new.parquet"
+    have_prior = prior_file.exists() or r2.download(DECISIONS_OUTPUT, prior_file)
+    table = pa.Table.from_pylist(decisions, schema=_DECISION_SCHEMA) if decisions else _DECISION_SCHEMA.empty_table()
+    pq.write_table(table, new_file, compression="zstd")
+    con = duckdb.connect()
+    con.execute("SET preserve_insertion_order=false")
+    merge_local_prior(
+        con,
+        columns=DECISION_COLUMNS,
+        identity=("decision_number", "url"),
+        order_by="decision_date DESC, decision_number, url",
+        prior_file=prior_file if have_prior else None,
+        new_file=new_file,
+        out_file=out_file,
+    )
+    con.close()
+    for scratch in (prior_file, new_file):
+        scratch.unlink(missing_ok=True)
+    logger.info("GAO decisions: {:,} rows", pq.ParquetFile(out_file).metadata.num_rows)
     return out_file

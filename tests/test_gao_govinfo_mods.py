@@ -123,7 +123,7 @@ def _build(tmp_path, monkeypatch, prior_rows, mods):
             return iter(())
 
     monkeypatch.setattr(module, "GaoReportsReader", NoFeed)
-    out = module.build_gao_reports(tmp_path, govinfo_mods=True, mods=mods)
+    out, _ = module.build_gao_reports(tmp_path, govinfo_mods=True, mods=mods)
     rows = {row["report_id"]: row for row in pq.read_table(out).to_pylist()}
     out.rename(tmp_path / "_gao_prior.parquet")
     return rows
@@ -174,7 +174,7 @@ def test_the_published_nine_column_prior_gains_the_mods_columns(tmp_path, monkey
             return iter(())
 
     monkeypatch.setattr(module, "GaoReportsReader", NoFeed)
-    out = module.build_gao_reports(tmp_path, govinfo_mods=True, mods=FixtureMods())
+    out, _ = module.build_gao_reports(tmp_path, govinfo_mods=True, mods=FixtureMods())
     (read,) = pq.read_table(out).to_pylist()
     assert pq.read_schema(out).names == list(module.COLUMNS)
     assert (read["report_number"], read["product_type"]) == ("GAO-08-919R", "Correspondence")
