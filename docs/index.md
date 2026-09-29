@@ -101,6 +101,7 @@ all rollups and distinguish usable inputs from incomplete or defective outputs.
 | [`usaspending_recipients`](tables/usaspending_recipients.md) | one row per federal-award recipient | `recipient_id` |
 | [`court_dockets`](tables/court_dockets.md) | one row per federal-court docket | `cl_docket_id` |
 | [`gao_reports`](tables/gao_reports.md) | one row per GAO report | `report_id` |
+| [`gao_recommendations`](tables/gao_recommendations.md) | one row per GAO recommendation per agency, kept once it closes | `recommendation_id` |
 | [`crs_reports`](tables/crs_reports.md) | one row per CRS report | `report_id` |
 
 ## How the tables relate

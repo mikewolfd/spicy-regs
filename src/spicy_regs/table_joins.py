@@ -279,6 +279,12 @@ JOINS: tuple[Join, ...] = (
           "2000-2020 (15 in 2014), that the API does not serve (C00428599 and C00317453 answer an empty result). "
           "Every registry committee appears in the history. Receipt join-map-2026-09-26/fec-committee-history-first-run.json."),
     _join("fec_source_records", "collection_id", "fec_collections", "collection_id", 647, 0),
+    # GAO.
+    _join("gao_recommendations", "report_id", "gao_reports", "report_id", 0, 0, "empty",
+          "New output, not yet published. Built offline from GAO's export of 2026-09-28 against gao_reports "
+          "ac08f37f, 89 of 1,802 publications resolved: gao_reports holds GovInfo's 1989-2008 history and the "
+          "feed's weeks, and no product of 2009-2025. Receipt "
+          "supply-2026-09-02/receipts/gao-recommendations-20260928/offline-measure-2026-09-28.json."),
     # Courts.
     _join("court_opinions", "cluster_id", "court_opinion_clusters", "cluster_id", 10_069_107, 21, "scope",
           "The publisher cuts each export at a different hour, clusters first (2026-06-30: 08:16 UTC, opinions "

@@ -1861,6 +1861,34 @@ tables:
       (`committee_id`, `cycle`). All columns are stored as VARCHAR.
     columns_from: spicy_docs
 
+  gao_recommendations:
+    label: "GAO recommendations"
+    coverage: >-
+      Window. The recommendations open on any day this table has read, from
+      the first daily read on. Each run reads GAO's open-recommendations export whole, which
+      lists every recommendation GAO still counts open; the export of
+      2026-09-28 reached back to products issued in 2001. A recommendation
+      closed before the first read never appears. One closed later stays, with
+      `listed_open` false and the `last_seen` date of the last export that
+      listed it; GAO's closing status is not in the export, so why it left is
+      unknown here. `first_seen` is when this table first saw a recommendation
+      open, not when GAO made it.
+    measured_on: "2026-09-28"
+    summary: >-
+      One row per recommendation per agency that GAO's recommendations
+      database has listed as open: the publication it comes from, the agency it
+      is made to, its text, GAO's status and priority designation as last
+      listed, GAO's comments on the agency's progress, and the topic it is
+      filed under. Read once a day through Zyte by the `gao-recommendations`
+      rollup and SpicyDocs' export reader, which refuses a changed header, and
+      kept as an **accumulator**: a recommendation that leaves the export is
+      marked, never deleted. GAO states no recommendation id, so
+      `recommendation_id` digests the publication number, agency and text; a
+      reworded recommendation becomes a new row. `report_id` joins
+      `gao_reports`. The director's phone GAO lists is deliberately not
+      published. All columns are stored as VARCHAR.
+    columns_from: spicy_docs
+
   document_attributes:
     label: "Regulations.gov document attributes"
     coverage: >-

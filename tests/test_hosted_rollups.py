@@ -39,6 +39,7 @@ from spicy_regs.pipelines.rollups.senate_expenditures import SenateExpendituresR
 from spicy_regs.pipelines.rollups.committee_rosters import CommitteeRostersRollup
 from spicy_regs.pipelines.rollups.fec_committee_history import FecCommitteeHistoryRollup
 from spicy_regs.pipelines.rollups.federal_register import FederalRegisterRollup
+from spicy_regs.pipelines.rollups.gao_recommendations import GaoRecommendationsRollup
 from spicy_regs.pipelines.rollups.laws import LawsRollup
 from spicy_regs.pipelines.rollups.native_legal_references import NativeLegalReferencesRollup
 from spicy_regs.transforms.build_bill_family import (
@@ -96,6 +97,8 @@ HOSTED_ROLLUPS = (
     FederalRegisterRollup,
     # SpicyDocs 0.43.0's fec_committee_history contract (decision 53).
     FecCommitteeHistoryRollup,
+    # SpicyDocs 0.53.0's gao_recommendations contract, accumulated daily.
+    GaoRecommendationsRollup,
 )
 
 #: Rollups that host contracts but run on demand over an explicit retained-input manifest, so they have no schedule

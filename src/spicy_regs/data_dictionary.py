@@ -195,6 +195,8 @@ CONTRACT_TABLES: tuple[str, ...] = (
     # The native legal-reference tables (spicy-docs 0.52.0), their columns, identities and reading the wheel's.
     "native_legal_references",
     "native_legal_reference_reads",
+    # GAO's open-recommendations export, accumulated daily (spicy-docs 0.53.0).
+    "gao_recommendations",
 )
 
 

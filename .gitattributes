@@ -5,3 +5,4 @@ tests/fixtures/congress_votes/*.xml -text -whitespace
 tests/fixtures/govinfo_bills/*.xml -text -whitespace
 # RefSpec's vendored bytes (REF-038 and the agency registry view) are pinned by sha256; no line-ending translation.
 src/spicy_regs/reference/refspec/** -text
+tests/fixtures/gao_recommendations/*.csv -text

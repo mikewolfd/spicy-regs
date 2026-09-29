@@ -84,6 +84,7 @@ TABLES = (
     "org_committee_links",
     "gao_reports",
     "gao_decisions",
+    "gao_recommendations",
     "crs_reports",
     "court_dockets",
     "court_docket_groups",

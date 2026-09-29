@@ -1490,6 +1490,24 @@
       "measurement": null
     },
     {
+      "child": "gao_recommendations",
+      "child_columns": [
+        "report_id"
+      ],
+      "parent": "gao_reports",
+      "parent_columns": [
+        "report_id"
+      ],
+      "kind": "empty",
+      "reason": "New output, not yet published. Built offline from GAO's export of 2026-09-28 against gao_reports ac08f37f, 89 of 1,802 publications resolved: gao_reports holds GovInfo's 1989-2008 history and the feed's weeks, and no product of 2009-2025. Receipt supply-2026-09-02/receipts/gao-recommendations-20260928/offline-measure-2026-09-28.json.",
+      "measured_via": null,
+      "baseline_keys": 0,
+      "baseline_missing": 0,
+      "floor_pct": null,
+      "expected_cardinality": "unspecified",
+      "measurement": null
+    },
+    {
       "child": "court_opinions",
       "child_columns": [
         "cluster_id"
@@ -2365,6 +2383,17 @@
         "parent_table": "fec_collections",
         "parent_columns": [
           "collection_id"
+        ]
+      }
+    ],
+    "gao_recommendations": [
+      {
+        "child_columns": [
+          "report_id"
+        ],
+        "parent_table": "gao_reports",
+        "parent_columns": [
+          "report_id"
         ]
       }
     ],
