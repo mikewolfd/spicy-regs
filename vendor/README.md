@@ -5,15 +5,19 @@ The optional `source-readers` extra enables the same readers for package install
 its wheels must be supplied explicitly until they are published in a registry.
 Base CLI and MCP installs do not require them.
 
-- `spicy_docs-0.50.1`: released from SpicyDocs `main` at `211bc6a`, September 28, 2026:
-  **1,697,132 bytes**, SHA-256 `08a0afaad2af914fc6acbd222e01e336414936b4076064dda4842b4e05882538`,
-  byte-identical across two builds (rechecked on adoption). It is 0.50.0 plus the fixes of the
-  PR #4 review and of its own review (its `docs/decisions.md` 0.50.1 entry): the scalar RIN is
-  the first labelled occurrence of the list (`report_nature_rin_label/2`), CBO urls on http fold
-  with their https twin, `BillCosponsor.source_xml` stops at `</item>`, the GAO product page
-  needs exactly one Full Report link, and `schemas` is a stdlib-only leaf again. The 0.50.0 wheel
-  (`8844068`, `c739bc6f`) and its record are at `793efab`. Vendored adoption only; no
-  package-registry upload is asserted.
+- `spicy_docs-0.52.0`: released from SpicyDocs `main` at `b08ac1b`, September 28, 2026:
+  **1,757,380 bytes**, SHA-256 `374b8c208018d1964007b9e78c4c9ab6beedaafab2cca96fb93a4acbc2b26684`,
+  byte-identical across the release's two builds and rechecked against its `SHA256SUMS` on
+  adoption. It adopts 0.51.0 (never vendored here) with it: 0.51.0 reads bill stage in
+  publisher order and adds two citation spellings and the administration-policy and
+  Inspector General readers; 0.52.0 reads CBO's feed for every Congress, puts the native
+  legal-reference tables under contract, spells every digest `sha256:`, reads the Clerk's
+  archive whole, keys a Record issue on its first book's stem, and adds the comment fields and
+  GAO's listing (its `docs/decisions.md` 0.51.0 and 0.52.0 entries). The extras used here are
+  unchanged. Its two new extras are not installed, since no spicy-regs table reads through
+  them yet: `record-speeches` (the pinned congressionalrecord fork) and `yaml` (the
+  administration-policy reader's loader). The 0.50.1 wheel (`211bc6a`, `08a0afaa`) and its
+  record are at `16b0683`. Vendored adoption only; no package-registry upload is asserted.
 
 - `rulespec_artifacts-1.1.2`: exact dependency of SpicyDocs 0.39.2, built from Rulespec
   `23d5f2d98973b2a7f1bf7ce4c9c7a786a4f369ab` (`packages/rulespec-artifacts` of a whole-repo
