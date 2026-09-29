@@ -33,6 +33,13 @@ and ``report_number`` from it (:mod:`spicy_regs.sources.gao_govinfo_mods`).
 Each published run is durable progress, so a failed or capped run resumes at
 the next unread row. A package GovInfo serves no MODS for stays unread.
 
+**Held rows are merged cell by cell.** A feed item for a product already held
+never replaces its row: it sets the cells it states (title, date, abstract,
+url) on its own and upstream-copied rows, fills only NULL cells on rows another
+route supplied, and never empties a cell or fills one with its placeholders.
+The row keeps its ``source``. So a listing-held product the feed re-reads keeps
+its report number, topics and product type.
+
 **GAO's listing.** ``listing_run`` names a finished SpicyDocs walk of GAO's Month
 in Review and Annual Index pages; the walk itself runs outside the rollup. Its
 rows follow the GovInfo rule, one helper for both: they fill only product ids no
@@ -103,6 +110,13 @@ _DEFAULT_REPORT_TYPE = "Report"
 
 SOURCE_FEED = "gao_rss"
 SOURCE_REPAIR = "gao_repair"
+SOURCE_UPSTREAM = "upstream_copy"
+
+#: The cells a feed item states. Its report_type, agencies_json and topics_json are placeholders (``Report``,
+#: ``[]``), and it states no product type or number.
+_FEED_STATED = ("title", "published_date", "abstract", "url")
+#: Routes whose stated cells a later feed read refreshes: the feed's own rows, and upstream's copies of its feed.
+_FEED_REFRESHES = frozenset({SOURCE_FEED, SOURCE_UPSTREAM})
 
 #: MODS reads per run: at the three-a-second pace, about 37 minutes, so two
 #: runs read the whole history and a failed run loses at most one batch.
@@ -161,6 +175,34 @@ def _fill_only(rows: list[dict], counts: Counter[str], *, prior_file: Path | Non
     added = [row for row in rows if row["report_id"] not in held]
     counts["already_held"] = len(rows) - len(added)
     return added
+
+
+def _feed_over_held(prior_file: Path | None, rows: list[dict]) -> tuple[list[dict], Counter[str]]:
+    """Feed rows, each merged cell by cell over the row already held for its product, if any.
+
+    A held row keeps every cell and its ``source``. The feed sets the cells it states: all of them on its own or an
+    upstream-copied row, only the NULL ones on a row another route supplied (the listing, GovInfo, a repair).
+    It never empties a cell, and never fills one with its placeholders.
+    """
+    counts: Counter[str] = Counter()
+    if prior_file is None or not rows:
+        return rows, counts
+    ids = {row["report_id"] for row in rows}
+    held = {row["report_id"]: row for row in pq.read_table(prior_file).to_pylist() if row["report_id"] in ids}
+    merged = []
+    for row in rows:
+        old = held.get(row["report_id"])
+        if old is None:
+            merged.append(row)
+            continue
+        counts["held"] += 1
+        new = dict(old)
+        for column in _FEED_STATED:
+            if row[column] is not None and (old[column] is None or old["source"] in _FEED_REFRESHES):
+                counts[f"set_{column}"] += new[column] != row[column]
+                new[column] = row[column]
+        merged.append(new)
+    return merged, counts
 
 
 def _govinfo_additions(
@@ -277,8 +319,8 @@ def build_gao_reports(
 
     # 2. Fetch + shape the current feed window (and GovInfo's history when asked) into a "new rows" parquet.
     reader = GaoReportsReader(max_records=max_records, evidence=evidence)
-    rows = [_shape(item) for item in reader.iter_records()]
-    logger.info("GAO reports: fetched {:,} items this run", len(rows))
+    rows, feed_counts = _feed_over_held(prior_file if have_prior else None, [_shape(item) for item in reader.iter_records()])
+    logger.info("GAO reports: fetched {:,} items this run {}", len(rows), dict(feed_counts))
     if govinfo_history:
         feed_ids = {row["report_id"] for row in rows}
         with nullcontext(govinfo) if govinfo is not None else gao_govinfo.discovery_reader(evidence) as source:

@@ -1311,7 +1311,12 @@ tables:
       filled from its package's MODS; and GAO's own Month in Review and Annual
       Index, read from a walk made outside the daily job. Deduped on
       `report_id`; a GovInfo or listing row never replaces a row already held.
-      All columns are stored as VARCHAR.
+      A later read of a held product merges cell by cell and never empties a
+      cell. The listing fills only a NULL `report_number`. The daily feed sets
+      title, date, abstract and url on its own and upstream-copied rows, and
+      only fills NULLs of those on rows another route supplied; its placeholder
+      type and tag lists fill nothing. A row keeps the `source` that first
+      supplied it. All columns are stored as VARCHAR.
     columns:
       report_id: "GAO product id as gao.gov's product URL spells it (e.g. `gao-26-107974`, `t-rced-94-121`), lowercased. Primary key / dedup key. A GovInfo package id maps to that spelling (`GAOREPORTS-GAO-HEHS-00-73` is `hehs-00-73`, `GAOREPORTS-RCED-AIMD-94-221FS` is `rcedaimd-94-221fs`); a few keep GovInfo's spelling where the package id cannot recover gao.gov's."
       title: "Product title as the route states it; on a listing row, the teaser's label and heading joined as `label: heading`, which is how the feed titles the same products. A few GovInfo titles are GovInfo's placeholder `GAO Report from` and the number."

@@ -164,6 +164,20 @@ def test_the_listing_fills_a_held_rows_null_report_number_and_never_replaces_one
     assert rows["gao-17-317"] == {**_repair_row("gao-17-317"), "report_number": "GAO-17-317"}
 
 
+def test_a_feed_read_of_a_held_product_fills_cells_and_never_empties_one(tmp_path, monkeypatch):
+    listed = {**_feed_row("gao-26-5"), "title": "Label: Listed", "report_type": "Testimony", "abstract": None,
+              "agencies_json": None, "topics_json": '["Education"]', "source": "gao_listing",
+              "product_type": "Correspondence", "report_number": "GAO-26-5"}
+    fed = {**_feed_row("gao-26-6"), "title": "Old feed title", "report_number": "GAO-26-6"}
+    prior = pa.Table.from_pylist([listed, fed], schema=module._SCHEMA)
+    rows = _run(tmp_path, monkeypatch, prior=prior, feed=["gao-26-5", "gao-26-6"])
+    # A listing row keeps everything it states; the feed fills only its NULL abstract.
+    assert rows["gao-26-5"] == {**listed, "abstract": "What GAO Found."}
+    # The feed refreshes its own row's title and date, and keeps the number the listing filled.
+    assert rows["gao-26-6"]["title"] == "Feed gao-26-6" and rows["gao-26-6"]["published_date"] == "2026-09-21"
+    assert (rows["gao-26-6"]["report_number"], rows["gao-26-6"]["source"]) == ("GAO-26-6", "gao_rss")
+
+
 def test_the_listing_writes_gao_decisions_and_a_run_without_it_carries_them(tmp_path, monkeypatch):
     from tests.test_gao_listing import _decision
 
