@@ -25,7 +25,9 @@ projects' logins unchanged. Account IDs are identifiers, not API credentials.
 ## Storage and GitHub Actions
 
 The `spicy-regs` data bucket is provisioned in this account. Its initial public
-URL is `https://pub-72e95c0c20a84508b42b03a6ff6d55f8.r2.dev`.
+URL is `https://pub-72e95c0c20a84508b42b03a6ff6d55f8.r2.dev`, kept enabled. Production reads use the custom domain
+`https://data.spicygov.ai` (attached 2026-09-29, zone `spicygov.ai`, no edge caching of Parquet: `.parquet` is not a cached
+extension and mutable keys carry `no-cache, must-revalidate`; don't enable "Cache Everything" on the zone).
 Browser reads allow `GET` and `HEAD` from any origin, including byte-range reads;
 the applied settings are in `cloudflare/r2-cors.json`. Use a custom domain for production traffic
 because the development hostname is rate limited. See Cloudflare's
@@ -38,7 +40,7 @@ The existing workflows read the following **repository secrets** from
 | --- | --- |
 | `R2_ENDPOINT` | `https://174055408ff1560e60601c4d12c561c4.r2.cloudflarestorage.com` |
 | `R2_BUCKET_NAME` | `spicy-regs` |
-| `R2_PUBLIC_URL` | `https://pub-72e95c0c20a84508b42b03a6ff6d55f8.r2.dev` |
+| `R2_PUBLIC_URL` | `https://data.spicygov.ai` |
 | `R2_ACCESS_KEY_ID` | S3 access key scoped to the data bucket |
 | `R2_SECRET_ACCESS_KEY` | Matching S3 secret, supplied through a secure prompt |
 
@@ -88,7 +90,8 @@ these settings and the optional secret to its Python container.
 Run `npm run check` before deployment. This generates types, checks TypeScript,
 and builds the container locally. It does not deploy it or populate the bucket.
 
-The fork's server is live at `https://spicy-regs-mcp.mdeeb.workers.dev/mcp`
+The fork's server is live at `https://mcp.spicygov.ai/mcp` (custom domain since 2026-09-29) and
+`https://spicy-regs-mcp.mdeeb.workers.dev/mcp`
 (first deployed 2026-09-25 from `f2df979`, redeployed 2026-09-27 from `2963d77` as version
 `925124f0…`; the first deploy came after Containers was enabled on the account; the first attempt uploaded only the Worker because the Containers API
 answered 401). A remote MCP client adds that URL as a connector. The same smoke

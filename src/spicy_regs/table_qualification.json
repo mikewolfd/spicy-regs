@@ -2,7 +2,7 @@
   "format": "spicy-regs-table-qualification",
   "version": 1,
   "ledger": "docs/research/fork-output-ledger-2026-09-21.md",
-  "destination": "https://pub-72e95c0c20a84508b42b03a6ff6d55f8.r2.dev",
+  "destination": "https://data.spicygov.ai",
   "rows": [
     {
       "task": "T13",
