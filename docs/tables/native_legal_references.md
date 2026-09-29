@@ -4,9 +4,9 @@
 
 **Native legal-reference observations**
 
-Selected eCFR AUTH/SOURCE notes and U.S. Code href/source-credit observations, retaining source XML paths and digests. Complete reads replace the selected source/edition scope, including successful empty corrections. Candidate target matches concern held classification rows, not independently acquired legal text. Unparsed prose and unsupported forms remain visible; no universal extraction or historical completeness is implied.
+Selected eCFR AUTH/SOURCE notes and U.S. Code href/source-credit observations, retaining source XML paths and digests. spicy-docs shapes each row and reads the targets it names; this repository pins the inputs and looks each typed target up in the target tables its manifest selects. Complete reads replace the selected source/edition scope, including successful empty corrections. Candidate target matches concern held classification rows, not independently acquired legal text. Unparsed prose and unsupported forms remain visible; no universal extraction or historical completeness is implied.
 
-**Coverage.** Sampled. Observations from the complete retained eCFR Title 1, requested as of 2026-08-10, and USC Title 1 release 119-103. Selected public target tables resolve some occurrences; missing, unsupported and unqueried targets remain explicit. Receipt: native-legal-full-2026-09-27/resolved-verification.json. *(measured 2026-09-27)*
+**Coverage.** Sampled. Observations from the complete retained eCFR Title 1, requested as of 2026-08-10, and USC Title 1 release 119-103. Selected public target tables resolve some occurrences; missing, unsupported and unqueried targets remain explicit. Rows read before spicy-docs 0.52.0 name native-legal-reference/002, the reading this repository ran; the next build names /003, which re-spells target_candidates_json that held a non-ASCII character and re-versions the text candidates citation rules 004 read, and moves no other value. Receipt: native-legal-full-2026-09-27/resolved-verification.json. *(measured 2026-09-27)*
 
 - **Parquet file:** `native_legal_references.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
@@ -15,23 +15,23 @@ Selected eCFR AUTH/SOURCE notes and U.S. Code href/source-credit observations, r
 
 | Column | Type | Description |
 | --- | --- | --- |
-| `scope_id` | `VARCHAR` | Stable hash of source family, source record key and explicit edition; correction replacement scope. |
-| `source_family` | `VARCHAR` | Source scanner family: ecfr or uscode. |
-| `source_record_key` | `VARCHAR` | Caller-selected source record identity, retained literally. |
-| `edition` | `VARCHAR` | Explicit selected edition, or null when the evidence does not establish one. |
-| `input_sha256` | `VARCHAR` | SHA-256 digest of the exact retained source XML bytes. |
-| `source_locator` | `VARCHAR` | Manifest source locator retained literally; not proof of acquisition time or edition. |
-| `occurrence_index` | `VARCHAR` | Scanner observation index within this source input, stored as text. |
-| `source_path` | `VARCHAR` | Source scanner XML path locating this observation. |
-| `element_tag` | `VARCHAR` | Literal XML element tag, including namespace where present. |
-| `attributes_json` | `VARCHAR` | Source element attributes serialized as JSON. |
-| `ancestors_json` | `VARCHAR` | Scanner-retained XML ancestor context serialized as JSON. |
-| `observation_kind` | `VARCHAR` | Native reference shape reported by the owner scanner. |
-| `href` | `VARCHAR` | Literal native href, when the observation supplies one. |
-| `text` | `VARCHAR` | Complete scanner-retained text for this observation; interpretation may cover only part. |
-| `text_runs_json` | `VARCHAR` | Source text runs and context retained by the scanner. |
-| `cfr_title` | `VARCHAR` | Source-derived CFR title context, when present; not an inferred target title. |
-| `cfr_part` | `VARCHAR` | Source-derived CFR part context, when present; part-only targets remain part-only. |
-| `interpretation_status` | `VARCHAR` | Whether the selected native shape is supported or only partially interpreted; does not assert exhaustive extraction. |
-| `target_candidates_json` | `VARCHAR` | Interpreted typed targets and optional pinned held-table resolution outcomes; preserves multiple candidates without multiplying observations. |
-| `rule_version` | `VARCHAR` | Application scanner and interpretation rule version. |
+| `scope_id` | `VARCHAR` | The input's replacement scope, `native_reference_scope_id` over source_family, source_record_key and edition; a complete read replaces every row of its scope, and a successful empty read clears it. |
+| `source_family` | `VARCHAR` | The scanner family that read the input: `uscode` or `ecfr`, fixed by the shaper. |
+| `source_record_key` | `VARCHAR` | The caller's record identity for the input, retained literally. |
+| `edition` | `VARCHAR` | The edition or request date the caller's checked capture metadata states, literally; NULL when it states none, never read from a filename. |
+| `input_sha256` | `VARCHAR` | `sha256:` digest of the exact retained XML bytes the scanner read. |
+| `source_locator` | `VARCHAR` | Where the caller retained the input from, literally; not proof of acquisition time or edition. |
+| `occurrence_index` | `VARCHAR` | The observation's zero-based position among the input's observations, both kinds counted together in the order the scanner reported them, as decimal text. |
+| `source_path` | `VARCHAR` | The observed element's positional XPath in the input (`/*[1]/*[2]`), never a byte offset. |
+| `element_tag` | `VARCHAR` | The observed element's tag, its namespace expanded (`{http://xml.house.gov/schemas/uslm/1.0}ref`) where the input declares one. |
+| `attributes_json` | `VARCHAR` | Every attribute of the observed element, as a JSON object keyed by expanded name. |
+| `ancestors_json` | `VARCHAR` | The observed element's ancestors from the root to its parent, each a JSON object of its attributes, positional XPath and tag. |
+| `observation_kind` | `VARCHAR` | `native_reference` or `source_credit` for a U.S. Code observation, `authority` (AUTH) or `source_note` (SOURCE) for an eCFR note. |
+| `href` | `VARCHAR` | The element's href exactly as stated, an empty string when stated empty; NULL when absent, and on every source credit and note. |
+| `text` | `VARCHAR` | The complete decoded text of a source credit or note, whitespace kept; NULL on a native reference. |
+| `text_runs_json` | `VARCHAR` | An eCFR note's text split at element boundaries, as a JSON array whose strings join to text; NULL on U.S. Code rows. |
+| `cfr_title` | `VARCHAR` | The CFR title the caller's checked capture metadata states, on an eCFR note; NULL when it states none, never inferred from a fragment. |
+| `cfr_part` | `VARCHAR` | The `N` of the nearest enclosing DIV5 part on an eCFR note; NULL when no part encloses it, and on U.S. Code rows. |
+| `interpretation_status` | `VARCHAR` | How the reading under rule_version read this observation: `native_section_href`, `native_statute_href`, `native_public_law_href` or `unsupported_href` for an href, `partial_text_findings` or `no_qualified_text_findings` for text; it does not claim exhaustive extraction. |
+| `target_candidates_json` | `VARCHAR` | The typed targets the reading found, as a JSON array in reading order, each with the outcome of the host's lookup in the target tables it selected; several targets in one note stay one row, and an unsupported href has none. |
+| `rule_version` | `VARCHAR` | `native-legal-reference/003` (`NATIVE_LEGAL_REFERENCE_RULE`): the scanners' selected shapes and the reading this row was produced under, comparable for equality only. |

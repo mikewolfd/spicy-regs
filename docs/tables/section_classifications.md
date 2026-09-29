@@ -25,7 +25,7 @@ One row per label a model assigned to one section of one printing. `vocabulary_h
 | `confidence` | `VARCHAR` | The model's own confidence, checked to be between 0 and 1 before it was stored. |
 | `model` | `VARCHAR` | The model id the call was made against. |
 | `prompt_version` | `VARCHAR` | The prompt version the label was produced under. |
-| `prompt_hash` | `VARCHAR` | Digest of the exact prompt sent, so a prompt edit is visible per row. |
+| `prompt_hash` | `VARCHAR` | Digest of the exact prompt sent, spelled sha256: plus the hex digest, so a prompt edit is visible per row. |
 | `batch_index` | `VARCHAR` | Which batch of the run this section belonged to. |
 | `requested_at` | `VARCHAR` | When the call was made. |
 | `completed_at` | `VARCHAR` | When the answer came back; the merge prefers the larger value. |

@@ -4,11 +4,11 @@
 
 **Daily Congressional Record issues**
 
-One row per daily Congressional Record issue, keyed `(volume, issue)`, the publisher's own identity. The detail's section names give `chambers`, the legislative-day calendar (which chambers sat), and the whole-issue link's stem gives the GovInfo CREC `package_id`. The volume is the year minus 1854 (volume 172 is 2026). All columns are stored as VARCHAR.
+One row per daily Congressional Record issue, keyed `(volume, issue)`, the publisher's own identity. The detail's section names give `chambers`, the legislative-day calendar (which chambers sat), and the stem of the whole-issue link for part 1 gives the GovInfo CREC `package_id` (`entire_issue_url_stem/2`). The volume is the year minus 1854 (volume 172 is 2026). All columns are stored as VARCHAR.
 
-**Coverage.** Sampled, and accumulating. Each run walks the whole `daily-congressional-record/{volume}` list for each session volume of the Congresses in scope and reads the detail of every issue the table does not yet hold, newest `updateDate` first, up to 1,000 a run, so at the 119th's size one run completes it. *(measured 2026-09-19)*
+**Coverage.** Sampled, and accumulating. Each run walks the whole `daily-congressional-record/{volume}` list for each session volume of the Congresses in scope and reads the detail of every issue the table does not yet hold, newest `updateDate` first, up to 1,000 a run, so at the 119th's size one run completes it. *(measured 2026-09-29)*
 
-**Data quality.** A row whose `sections_json` is NULL is list-only: its detail has not been read yet, so `chambers`, `package_id` and every other detail-only column are NULL with it. A read detail with no chamber section (a Daily Digest only) states an empty `chambers`, distinct from NULL.
+**Data quality.** A row whose `sections_json` is NULL is list-only: its detail has not been read yet, so `chambers`, `package_id` and every other detail-only column are NULL with it. A read detail with no chamber section (a Daily Digest only) states an empty `chambers`, distinct from NULL. The rule before 2026-09-29 read the first whole-issue link listed, and an issue printed in several books lists a later book's `-bk{N}` link first on 7 of 368 held rows, which GovInfo holds no package under; a one-time rebuild re-reads every held row's own `entire_issue_json` under the new rule.
 
 - **Parquet file:** `record_issues.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
@@ -28,8 +28,8 @@ One row per daily Congressional Record issue, keyed `(volume, issue)`, the publi
 | `section_names` | `VARCHAR` | Every section name the detail lists, unit-separator joined, in publisher order. |
 | `sections_json` | `VARCHAR` | Every section the detail lists, as a JSON array of the publisher's objects. |
 | `entire_issue_json` | `VARCHAR` | Every whole-issue rendition the detail lists, as a JSON array of the publisher's objects. |
-| `package_id` | `VARCHAR` | The GovInfo CREC package id read from the first whole-issue link's file stem. |
-| `package_id_rule` | `VARCHAR` | How package_id was derived: `entire_issue_url_stem`. |
+| `package_id` | `VARCHAR` | The GovInfo CREC package id read from the file stem of the whole-issue link for part 1. NULL where the detail lists no part 1, or part 1 links under two stems. |
+| `package_id_rule` | `VARCHAR` | How package_id was derived: `entire_issue_url_stem/2`. |
 | `article_count` | `VARCHAR` | How many articles the detail says the issue has. |
 | `articles_url` | `VARCHAR` | The publisher's URL for the issue's article list. |
 | `update_date` | `VARCHAR` | The publisher's updateDate; the merge prefers the larger value. |

@@ -27,7 +27,7 @@ One row per model-written summary of the change between two printings of a bill.
 | `dollar_changes_json` | `VARCHAR` | Notable dollar-amount changes in prose, as a JSON array. |
 | `model` | `VARCHAR` | The model id the call was made against. |
 | `prompt_version` | `VARCHAR` | The prompt version this summary was produced under. |
-| `content_hash` | `VARCHAR` | Digest of the diff text the summary was written from. |
+| `content_hash` | `VARCHAR` | Digest of the diff text the summary was written from, spelled sha256: plus the hex digest. |
 | `input_tokens` | `VARCHAR` | Input tokens the provider reported. |
 | `output_tokens` | `VARCHAR` | Output tokens the provider reported. |
 | `requested_at` | `VARCHAR` | When the call was made. |

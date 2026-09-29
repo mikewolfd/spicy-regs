@@ -33,8 +33,9 @@ CONTRACT_NAMES = sorted(TABLE_CONTRACTS)
 #: Adoption fixes the registry size as well as its named three-way partition.
 #: SpicyDocs 0.42.0 adds ``federal_register``, hosted by its own rollup; 0.43.0 adds ``fec_committee_history``;
 #: 0.44.0 adds the typed attributes; 0.50.0 adds bill cosponsors and member party intervals
-#: (released 0.47.0, ``f549c16``, only adds ``bill_sections.congress``).
-ADOPTED_CONTRACT_COUNT = 48
+#: (released 0.47.0, ``f549c16``, only adds ``bill_sections.congress``); 0.52.0 adds the two native legal-reference
+#: tables, hosted by their own rollup.
+ADOPTED_CONTRACT_COUNT = 50
 
 #: A contract here leaves the set when its owning rollup hosts it.
 UNHOSTED_CONTRACTS = frozenset()
@@ -138,11 +139,23 @@ def test_every_hosted_table_is_registered_everywhere():
     assert hosted <= set(dd.load_descriptions())
 
 
+#: Columns a record type's contract appends that this host does not write yet, by table, in contract order. SpicyDocs
+#: 0.52.0 appends ``comments.subtype`` and ``comments.duplicate_comments`` (its "Comments carry the agency's submitter
+#: class and campaign count"); the host columns, the catalog migration and the fill are the comments-fields branch's,
+#: which empties this entry when it adds them.
+PENDING_RECORD_COLUMNS: dict[str, tuple[str, ...]] = {"comments": ("subtype", "duplicate_comments")}
+
+
 @pytest.mark.parametrize("name", sorted(RECORD_TYPE_CONTRACTS))
 def test_record_type_declares_the_same_table_as_its_contract(name):
-    """A record type and the wheel's contract for it name the same columns, in order, and the same identity."""
+    """A record type and the wheel's contract for it name the same columns, in order, and the same identity.
+
+    A pending column is one the contract appends last, never one the record type skips mid-table.
+    """
     contract, record_type = TABLE_CONTRACTS[name], RECORD_TYPES[name]
-    assert tuple(record_type.schema) == contract.columns
+    pending = PENDING_RECORD_COLUMNS.get(name, ())
+    assert contract.columns[len(contract.columns) - len(pending):] == pending
+    assert tuple(record_type.schema) == contract.columns[: len(contract.columns) - len(pending)]
     assert (record_type.dedup_key,) == contract.identity
 
 

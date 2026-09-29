@@ -9,6 +9,84 @@ Entries link to the pull request that introduced the change.
 
 ### Changed
 
+- **SpicyDocs 0.52.0, adopting 0.51.0 with it** (main `b08ac1b`, wheel
+  `374b8c20`). What each release entry asks of an importer, and what moves:
+
+  - **Stages.** `congress_bills.stage` and `bill_actions.stage` read a bill's
+    actions in publisher order, with `failed` and `vetoed` stages and a
+    "Became law" label. Replayed on the live generation of 2026-09-29, 154,374
+    of the 172,991 stages with actions move once each bill's Congress is
+    re-read (92,981 `introduced` to `committee`, 49,264 `other_chamber` to
+    `committee`, 5,682 `committee` to `other_chamber`). None emits a
+    `stage_changed` event: a prior stage is re-derived from the bill's
+    published actions under the running rule before events compare (owner,
+    2026-09-28), so only a bill whose actions moved emits one.
+  - **CBO for every Congress.** Each run reads CBO's keyless feed once for
+    every Congress it is scoped to and merges its rows (`source` `cbo_feed`)
+    with the BILLSTATUS rows, BILLSTATUS keeping every identity both state,
+    against this run's rows and the prior ones. `title_bill_id`, `found_by`
+    and `title_bill_id_rule` are appended. The published `laws` table names
+    a law's bill for a title led by a law. Through this host's code, over
+    the retained 108th-119th feeds and zips with the live table as prior
+    (bill-family `a42bd610`, 12,740 rows), the merge adds 2,043 rows (913
+    and 1,101 in the 112th and 113th, 29 elsewhere) and changes or drops no
+    BILLSTATUS row. spicy-docs' receipt counts 2,048: the other five are two
+    feed items titled by a 110th or 112th law, which `laws` (the 119th only,
+    today) cannot name a bill for, and three 119th estimates the live
+    BILLSTATUS record now lists itself.
+  - **Votes.** `roll_call_votes` appends `clerk_body_element` and `vote_desc`.
+    The 101st-107th House backfill (7,327 Clerk files, 1990-2002) is a
+    dispatch of `rollup-roll-call-votes` with `chambers=house` and a per-run
+    `max_votes` cap: replayed over the retained archive it adds 7,327 roll
+    calls and 3,175,523 `name:`-keyed member rows with NULL `bioguide_id`. A
+    `name:` key identifies a row within its vote, not a person, and
+    `member_vote_terms` leaves it unresolved. The five votes vacated before
+    any position was recorded publish a row with no member rows.
+  - **Digests.** Every published digest is spelled `sha256:`, and spicy-docs
+    compares them strictly. `enrich_pdf` writes each attempt's
+    `source_sha256` prefixed, and a derived attachment's `sha256` arrives
+    prefixed. The prior bare values are re-spelled once
+    (`prior_repairs`, below); a bill-family run refuses a bare
+    `bill_summaries.content_hash` rather than compare it.
+  - **Native legal references.** The two tables are spicy-docs contracts:
+    its shapers and its reading of each observation, with this repository's
+    target lookup passed in as `resolve`. The first republish moves every
+    row's `rule_version` to `native-legal-reference/003`, re-spells 14
+    `target_candidates_json` values and re-versions 51 candidates in 31 rows,
+    and nothing else (rebuilt from the retained manifest and compared).
+  - **The Record.** `record_issues.package_id` is the part-1 whole-issue
+    link's stem (`entire_issue_url_stem/2`); a one-time rebuild moves the 7
+    `-bk{N}` ids of 368 held rows to the packages GovInfo holds.
+  - **Comments.** The contract appends `subtype` and `duplicate_comments`.
+    This host does not write them yet: `tests/test_contract_tables.py` names
+    them as pending (`PENDING_RECORD_COLUMNS`), and the comments-fields branch
+    adds the host columns and empties that entry.
+
+- **A bill-family status read that settles nothing is recorded, not repeated
+  every run.** A document the reader refuses, a bill whose rows leave its
+  status in doubt, and a bill its folder's zip no longer holds are recorded
+  with the zip and the reader (`bill_family_archives` metadata,
+  `status_refusals.v1`), and the folder completes (`completed_archive_scopes.v4`,
+  which reads v3 too). None reopens its folder until the zip moves or another
+  reader runs. On the live generation of 2026-09-29, 26 bills of the
+  108th-111th and 117th reopened ten folders on every run that scoped them.
+  A pre-108th bill filled from the detail route records its reader too, and
+  one another reader filled is re-read once, within the run's fetch cap; a
+  detail refused after it was shaped waits for its list stamp or reader to
+  move instead of costing a request every run.
+
+- **One-time repairs for the adoption** (`python -m
+  spicy_regs.pipelines.prior_repairs`), each a partial writer of its family,
+  idempotent, with a `--dry-run` that writes nothing and a `restore` rollback.
+  Dry runs against the live generations of 2026-09-29:
+  `respell-bill-family-digests` 0 (no model rows are published);
+  `respell-document-digests` 0; `respell-comment-digests` 366,541 digests in
+  330,236 comments of 140 agencies, through the catalog (workflow
+  `respell-comment-digests`); `backfill-found-by` 12,740 rows;
+  `rebuild-record-issues` 7 package ids and 368 rules; `stage-suppression`
+  154,374 stages, no events. A partial writer now carries a split sibling
+  (`bill_sections`) member for member, so the bill family takes one.
+
 - **The bill family skips an unchanged bill only when the running reader read
   it.** Each bill's status reader, this rollup's status rule (`status-v1`) and
   the SpicyDocs package digest, is recorded per bill in

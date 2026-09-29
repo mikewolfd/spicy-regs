@@ -364,8 +364,12 @@ tables:
       fill them. An absent CBO element does not mean CBO never scored a bill.
       The bill family re-reads its own prior once where the CBO outcome is
       missing, or where a reader other than the running one read it, even when
-      the publisher stamp is unchanged.
-    measured_on: "2026-09-28"
+      the publisher stamp is unchanged; a bill of the 82nd-107th filled from the
+      detail route is re-read the same way, within the run's fetch cap. A bill
+      the running reader found refused in, or dropped from, its folder's
+      unchanged zip is not read again until the zip moves or another reader
+      runs.
+    measured_on: "2026-09-29"
     summary: >-
       One row per bill or resolution. `bill-family` writes this table, filling
       the full contract for the Congresses it is scoped to (the current Congress
@@ -428,6 +432,13 @@ tables:
       later than BILLSTATUS's therefore keep that date-only value after the
       re-read, and until BILLSTATUS catches up they read `url_source`
       `billstatus` beside an `update_date` no BILLSTATUS document stated.
+      `stage` reads a bill's actions in the publisher's order under spicy-docs
+      0.51.0, which moved 154,374 of the 172,991 stages with actions in its
+      replay of the live generation (reproduced on 2026-09-29); a row keeps the
+      earlier rule's stage until its Congress is re-read. The 26 BILLSTATUS
+      bills of the 108th-111th and 117th that stayed in doubt after every read
+      on 2026-09-29 list a printing twice or without a type, so their
+      `version_count` exceeds their `bill_versions` rows.
     columns_from: spicy_docs
 
   bill_subjects:
@@ -2009,11 +2020,20 @@ tables:
       by Congress from the 108th on; group by the Congress in bill_id to see
       which Congresses are filled. Each event compares a bill between two runs
       of the bill family, not the historical sequence of its actions.
-    measured_on: "2026-09-28"
+    measured_on: "2026-09-29"
     summary: >-
       One row per change detected between two runs of the bill family. Two instants
       per row: `occurred_at` is the publisher's, `detected_at` is the run's. All
       columns are stored as VARCHAR.
+    data_quality: >-
+      A `stage_changed` event compares a bill's actions, not its published
+      stage: the prior stage is re-derived from the bill's published actions
+      under the running stage rule, so a rule change is not an event. spicy-docs
+      0.51.0 moves 154,374 of the 172,991 stages with actions (its replay,
+      reproduced on the live generation of 2026-09-29), none of which emits
+      one. An event's `from` is therefore the stage the running rule reads from
+      the prior actions, which can differ from the stage the prior row
+      published.
     columns_from: spicy_docs
 
   amendments:
@@ -2100,14 +2120,22 @@ tables:
       dispatching its number under the same cap and, once held, is never
       re-read. A roll call already published with a tally is not fetched again,
       except the newest few of a sitting Congress, re-read in case the publisher
-      corrected them. The Clerk and LIS files reach the 101st Congress; the bill
-      family's references reach the 108th. A set of roll calls reached from
-      bills alone is not an index of a session's roll calls. A House roll call
-      that a bill's own action names can be published a cron before the Clerk's
-      index lists it, with the same tally and member positions. `vote_date`
-      keeps the Clerk's own spelling (`9-Sep-2025`), which does not sort as a
-      date, so no range over it is quoted here.
-    measured_on: "2026-09-28"
+      corrected them. The Clerk and LIS files reach the 101st Congress (the
+      Clerk's archive begins in 1990, the 101st's second session); the bill
+      family's references reach the 108th. The House files of 1990-2002, the
+      101st-107th Congresses, 7,327 roll calls, are a House-only dispatch
+      (`congresses` 101-107, `chambers` house, `max_votes` up to 4,000), run
+      until a run fetches nothing: two runs at 4,000, five at the default
+      1,500. Replayed over the
+      retained Clerk archive through this rollup, they add 7,327 roll calls and
+      3,175,523 member positions, refuse none, and change no published row.
+      A set of roll calls reached from bills alone is not an index of a
+      session's roll calls. A House roll call that a bill's own action names
+      can be published a cron before the Clerk's index lists it, with the same
+      tally and member positions. `vote_date` keeps the Clerk's own spelling
+      (`9-Sep-2025`, and `3-JAN-1991` on eight files of 1991-2001), which does
+      not sort as a date, so no range over it is quoted here.
+    measured_on: "2026-09-29"
     summary: >-
       One row per roll call: the publisher's own tally, and the bill it refers to.
       The four tally columns are the publisher's own counts or they are NULL; they
@@ -2128,9 +2156,19 @@ tables:
       six others are those Senate passages. `conflict_count` is per roll call,
       not per run: it counts the later references, the file's included, that
       named a different bill for *this* roll call, and they are kept rather than
-      dropped. A held row is relinked from its own columns without a fetch; a
-      House row published before `legis_num` existed is read again once to gain
-      it. The contract's `house_vote_legislation` rule (Congress.gov's
+      dropped. Before 2003 only the file's `legis_num` links: it links 6,614
+      of the 7,327 files of 1990-2002 to 2,842 bills, 26 of which have no
+      `congress_bills` row yet. A held row is relinked from its own columns
+      without a fetch; a House row published before `legis_num` or
+      `clerk_body_element` existed is read again once to gain both, with
+      `vote_desc`. Replayed over the retained files of the 108th-118th, that
+      read fills the element on all 14,503 published House rows (3,742
+      `committee`) and `vote_desc` on 9,191, and changes no other column and
+      no member row; it also publishes the five votes the House vacated before
+      recording a position, which have zero tallies, `member_vote_count` 0 and
+      no `member_votes` rows. The Clerk's 2003 Speaker election (108-1-2),
+      whose candidate totals contradict its members' choices, still refuses.
+      The contract's `house_vote_legislation` rule (Congress.gov's
       `house-vote` listing) is no longer produced and no published row carries
       it: it was retired with the api.data.gov key it needed (2026-09-26). Each run fills a NULL `vote_day` on
       every held (completely captured) roll call from its own `vote_date` before
@@ -2153,11 +2191,17 @@ tables:
       answerable. All columns are stored as VARCHAR.
     data_quality: >-
       House rows with `state` `XX` are the non-voting delegates and the Resident
-      Commissioner, as the Clerk marks them. They vote only on Committee of the
-      Whole amendments, so leave them out when ranking voting Representatives. A
-      member who died before a term began can appear as Not Voting on its opening
-      quorum call, as the Clerk's file lists them. One `bioguide_id` can carry
-      more than one spelling of `member_name`; group by `bioguide_id`.
+      Commissioner, as the Clerk marks them. The Clerk marks them only on
+      amendment votes and motions in committee, so leave them out when ranking
+      voting Representatives. A member who died before a term began can appear
+      as Not Voting on its opening quorum call, as the Clerk's file lists them.
+      One `bioguide_id` can carry more than one spelling of `member_name`; group
+      by `bioguide_id`. The Clerk's files of 1990-2002 (the 101st-107th
+      Congresses) name no member by bioguide id: their rows key `name:` plus the
+      Clerk's label (`name:Jones (NC)`) with `bioguide_id` NULL, and that key
+      identifies the row within its roll call, not a person, since at least 21
+      labels of those years name two different members. `member_vote_terms`
+      leaves such a row `unresolved_member`; no name is matched to a member.
     columns_from: spicy_docs
 
   members:
@@ -2219,7 +2263,7 @@ tables:
       vote_id: "The roll call, as in `member_votes`."
       member_key: "The member's key within the roll call, as in `member_votes`."
       chamber: "`house` or `senate`."
-      bioguide_id: "The member's Bioguide id: native for the House, resolved from the LIS id through `members` for the Senate. NULL when the LIS id resolves to no member."
+      bioguide_id: "The member's Bioguide id: native for the House, resolved from the LIS id through `members` for the Senate. NULL when the LIS id resolves to no member, and on a House row of 1990-2002, whose `name:` key states none and is never read as a person."
       vote_day: "The vote's day (YYYY-MM-DD) as the chamber printed it in Eastern time, read from `member_votes.vote_date` by the same rule as `roll_call_votes.vote_day`; NULL when the file prints no date."
       term_match: "`half_open` (one term with start <= day < end), `inclusive_end` (none half-open, exactly one with the end day included), `ambiguous` (more than one term either way), `unmatched` (none), `unresolved_member`, or `undated` (the file prints no date, so no term is chosen). `undated` wins over `unresolved_member`; such a row still carries `bioguide_id` wherever the member resolves."
       term_index: "The matched term's `term_index` in `member_terms`; NULL unless matched."
@@ -2340,8 +2384,12 @@ tables:
       they were read at, so an unchanged zip is not read again for them. It
       also records, per bill, the reader that last read its status (this
       rollup's status rule and the SpicyDocs code): an unchanged bill is
-      skipped only while that reader is the running one. All
-      columns are stored as VARCHAR.
+      skipped only while that reader is the running one. And it records each
+      status read that settled nothing, with the zip it read and its reader: a
+      document the reader refused, a bill whose rows leave its status in doubt,
+      and a bill its folder's zip no longer holds; none of them reopens its
+      folder until the zip moves or another reader runs. A folder with such a
+      record is complete. All columns are stored as VARCHAR.
     columns:
       name: "The zip's own file name in the folder listing, as the publisher spells it."
       link: "The publisher's path to that zip; it must rebuild this folder's own locator or the skip is refused."
@@ -2766,18 +2814,23 @@ tables:
       Congresses in scope and reads the detail of every issue the table does not
       yet hold, newest `updateDate` first, up to 1,000 a run, so at the 119th's
       size one run completes it.
-    measured_on: "2026-09-19"
+    measured_on: "2026-09-29"
     summary: >-
       One row per daily Congressional Record issue, keyed `(volume, issue)`, the
       publisher's own identity. The detail's section names give `chambers`, the
-      legislative-day calendar (which chambers sat), and the whole-issue link's
-      stem gives the GovInfo CREC `package_id`. The volume is the year minus
-      1854 (volume 172 is 2026). All columns are stored as VARCHAR.
+      legislative-day calendar (which chambers sat), and the stem of the
+      whole-issue link for part 1 gives the GovInfo CREC `package_id`
+      (`entire_issue_url_stem/2`). The volume is the year minus 1854 (volume
+      172 is 2026). All columns are stored as VARCHAR.
     data_quality: >-
       A row whose `sections_json` is NULL is list-only: its detail has not been
       read yet, so `chambers`, `package_id` and every other detail-only column
       are NULL with it. A read detail with no chamber section (a Daily Digest
-      only) states an empty `chambers`, distinct from NULL.
+      only) states an empty `chambers`, distinct from NULL. The rule before
+      2026-09-29 read the first whole-issue link listed, and an issue printed in
+      several books lists a later book's `-bk{N}` link first on 7 of 368 held
+      rows, which GovInfo holds no package under; a one-time rebuild re-reads
+      every held row's own `entire_issue_json` under the new rule.
     columns_from: spicy_docs
 
   treaties:
@@ -2985,7 +3038,13 @@ tables:
       rows is counting a floor. `sealed_stage` is **NULL on 1,670 of 4,456
       rows** and that is a finding rather than a gap: a rung is never invented,
       so `passed the House` stays NULL rather than widening the sealed
-      `passed house` matcher. `billstatus_action_code` is NULL on 280 rows
+      `passed house` matcher. spicy-docs 0.51.0 reads these phrases through its
+      new stage rules on the next print-citations build: over the 12,695 live
+      rows of 2026-09-29, 2,058 `referred` rows move from `other_chamber` to
+      `committee`, and 476 rows staged `law` by a phrase that merely contains
+      "public law" become NULL, since the became-law matcher must now start
+      the phrase (5,245 NULL become 5,721; spicy-docs' own `sealed_stage` over
+      each row's `matched_text`). `billstatus_action_code` is NULL on 280 rows
       whose phrasing has no known code at all (`vetoed`, `not_considered`,
       `declined_markup`, `favorably_forwarded`, `included_in`), and a further
       639 rows are coded through codes the publisher's own retained guide
@@ -3122,25 +3181,48 @@ tables:
     columns_from: spicy_docs
 
   cbo_cost_estimates:
-    measured_on: "2026-09-28"
+    measured_on: "2026-09-29"
     label: "CBO cost-estimate publication index"
     coverage: >-
-      Sampled: CBO estimates the publisher lists on the bills the bill family
-      has read, from the 108th Congress on; some Congresses are not yet read. An
-      absent estimate does not mean CBO never scored a bill. No CBO.gov body is
-      requested.
+      Sampled: the estimates CBO lists for the bills the bill family has read,
+      from the 108th Congress on, from two routes merged: each bill's
+      BILLSTATUS record (`source` `billstatus_bulk`) and CBO's own
+      per-Congress feed (`cbo_feed`), read once by every run for each Congress
+      it is scoped to. BILLSTATUS states no estimate for the 112th and 113th,
+      so theirs come from the feed alone; elsewhere the feed adds only what no
+      BILLSTATUS record lists, such as the Recovery Act, H.R. 3200 and the ACA.
+      A Congress no scoped run has read the feed of yet holds its BILLSTATUS
+      estimates only. An absent estimate does not mean CBO never scored a bill.
+      No CBO.gov body is requested.
     summary: >-
       One row per bill and CBO publication, using build_bill_family's own
-      cbo_cost_estimates output. All columns are stored as VARCHAR.
+      cbo_cost_estimates output and spicy-docs' feed builder, merged by
+      `merge_cbo_cost_estimates`: where both routes state one bill and
+      publication, the BILLSTATUS row stands. One publication can stand under
+      two bills, and both rows publish. All columns are stored as VARCHAR.
     data_quality: >-
       The bill's cbo_cost_estimates_outcome distinguishes an absent or empty
       element, an unexpected shape, and populated estimates. An empty index
       does not establish that CBO never scored the bill. Report citations are
       the bill's list, not proof that each publication is reprinted in each
-      report; the report's recital gate is evaluated separately.
-      A successfully evaluated bill replaces its prior estimate rows, including
-      when the list is absent or empty. An unexpected list shape retains prior
-      rows until a successful read can establish the current relationships.
+      report; the report's recital gate is evaluated separately. A feed row
+      carries its bill's own BILLSTATUS report citations, read by the same run
+      or carried from the bill's published rows, and NULL where neither names
+      them. A successfully evaluated bill replaces its prior BILLSTATUS rows,
+      including when the list is absent or empty; an unexpected list shape
+      retains prior rows until a successful read can establish the current
+      relationships. A feed read replaces its Congress's prior feed rows, so
+      an item CBO withdraws or re-files leaves, and a feed that cannot be read
+      keeps them. `found_by` says how each row names its bill; the rows
+      published before it take `billstatus` in a one-time backfill.
+      `title_bill_id` is the bill the estimate's title leads with: where it
+      differs from `bill_id` (7 of the 12,732 BILLSTATUS rows on 2026-09-29),
+      `bill_id` is a numbering error as published and `title_bill_id` the bill
+      scored. A title leading with a public law reads through the published
+      `laws` table, which held the 119th Congress alone on 2026-09-29, so such
+      a title of an earlier Congress leaves `title_bill_id` NULL and a blank
+      feed item titled by an earlier law has no row (110th P.L. 110-50 and
+      112th P.L. 112-8).
     columns_from: spicy_docs
 
   bill_cosponsors:
@@ -3192,42 +3274,26 @@ tables:
   native_legal_references:
     measured_on: "2026-09-27"
     label: "Native legal-reference observations"
-    identity_columns: [scope_id, input_sha256, occurrence_index]
-    grain: "One source scanner observation per pinned XML input; multiple interpreted targets remain nested candidates."
     coverage: >-
       Sampled. Observations from the complete retained eCFR Title 1, requested
       as of 2026-08-10, and USC Title 1 release 119-103. Selected public target
       tables resolve some occurrences; missing, unsupported and unqueried
-      targets remain explicit. Receipt:
+      targets remain explicit. Rows read before spicy-docs 0.52.0 name
+      native-legal-reference/002, the reading this repository ran; the next
+      build names /003, which re-spells target_candidates_json that held a
+      non-ASCII character and re-versions the text candidates citation rules
+      004 read, and moves no other value. Receipt:
       native-legal-full-2026-09-27/resolved-verification.json.
     summary: >-
       Selected eCFR AUTH/SOURCE notes and U.S. Code href/source-credit observations,
-      retaining source XML paths and digests. Complete reads replace the selected
+      retaining source XML paths and digests. spicy-docs shapes each row and reads the
+      targets it names; this repository pins the inputs and looks each typed target up
+      in the target tables its manifest selects. Complete reads replace the selected
       source/edition scope, including successful empty corrections. Candidate target
       matches concern held classification rows, not independently acquired legal text.
       Unparsed prose and unsupported forms remain visible; no universal extraction or
       historical completeness is implied.
-    columns:
-      scope_id: "Stable hash of source family, source record key and explicit edition; correction replacement scope."
-      source_family: "Source scanner family: ecfr or uscode."
-      source_record_key: "Caller-selected source record identity, retained literally."
-      edition: "Explicit selected edition, or null when the evidence does not establish one."
-      input_sha256: "SHA-256 digest of the exact retained source XML bytes."
-      source_locator: "Manifest source locator retained literally; not proof of acquisition time or edition."
-      occurrence_index: "Scanner observation index within this source input, stored as text."
-      source_path: "Source scanner XML path locating this observation."
-      element_tag: "Literal XML element tag, including namespace where present."
-      attributes_json: "Source element attributes serialized as JSON."
-      ancestors_json: "Scanner-retained XML ancestor context serialized as JSON."
-      observation_kind: "Native reference shape reported by the owner scanner."
-      href: "Literal native href, when the observation supplies one."
-      text: "Complete scanner-retained text for this observation; interpretation may cover only part."
-      text_runs_json: "Source text runs and context retained by the scanner."
-      cfr_title: "Source-derived CFR title context, when present; not an inferred target title."
-      cfr_part: "Source-derived CFR part context, when present; part-only targets remain part-only."
-      interpretation_status: "Whether the selected native shape is supported or only partially interpreted; does not assert exhaustive extraction."
-      target_candidates_json: "Interpreted typed targets and optional pinned held-table resolution outcomes; preserves multiple candidates without multiplying observations."
-      rule_version: "Application scanner and interpretation rule version."
+    columns_from: spicy_docs
 
   court_opinion_pdf_extractions:
     measured_on: "2026-09-27"
@@ -3264,26 +3330,12 @@ tables:
   native_legal_reference_reads:
     measured_on: "2026-09-27"
     label: "Native legal-reference selected-input reads"
-    identity_columns: [scope_id]
-    grain: "One current complete selected-shape read per source/edition scope."
     coverage: "Sampled. Explicit retained-input manifests only; not a source-wide acquisition or completeness ledger."
     summary: >-
       Records successful bounded source reads even when they produce no observations.
       Failed or incomplete inputs cannot replace prior output. Existing generation and
       source-evidence artifacts retain earlier captures; the current row represents the
       latest complete selected-shape read for its scope. Unsupported XML forms and
-      unknown editions remain explicit.
-    columns:
-      scope_id: "Stable source family/record/edition correction scope shared with native_legal_references."
-      source_family: "Source scanner family: ecfr or uscode."
-      source_record_key: "Caller-selected source record identity, retained literally."
-      edition: "Explicit selected edition, or null when unknown."
-      input_sha256: "SHA-256 digest of exact retained XML bytes."
-      source_locator: "Literal manifest source locator, without implied acquisition date."
-      source_bytes: "Observed retained input byte length, stored as text."
-      occurrence_count: "Number of native scanner observations produced by this read, including zero."
-      read_status: "complete_selected_shapes means the selected scanner finished; it does not mean every legal-reference form is supported."
-      selected_shapes_json: "Explicit native XML forms selected for this read."
-      unsupported_shapes_json: "Known excluded forms; not a claim to enumerate every possible source shape."
-      manifest_sha256: "SHA-256 digest of the retained manifest binding the input selection and optional target pins."
-      rule_version: "Application scanner and interpretation rule version."
+      unknown editions remain explicit. spicy-docs shapes the row from the read this
+      repository ran.
+    columns_from: spicy_docs

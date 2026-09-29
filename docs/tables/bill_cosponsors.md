@@ -29,4 +29,4 @@ One cosponsor occurrence in one retained BILLSTATUS observation, keyed by the bi
 | `state` | `VARCHAR` | State as the cosponsor entry states it. |
 | `district` | `VARCHAR` | District as the cosponsor entry states it. |
 | `source_path` | `VARCHAR` | XPath to the occurrence in the retained XML. |
-| `source_xml` | `VARCHAR` | Reserialized source item preserving other fields; original bytes are pinned separately. |
+| `source_xml` | `VARCHAR` | The cosponsor item's markup exactly as the publisher wrote it, from <item> through </item>, cut from the input bytes input_sha256 pins; it keeps every field, including those no column reads. |

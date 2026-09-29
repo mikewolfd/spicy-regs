@@ -23,7 +23,7 @@ One row per plain-language summary of one printing of a bill. `frame` is stored 
 | `top_provisions_json` | `VARCHAR` | Up to three notable provisions, as a JSON array in the model's order. |
 | `model` | `VARCHAR` | The model id the call was made against. |
 | `prompt_version` | `VARCHAR` | The prompt version this summary was produced under. |
-| `content_hash` | `VARCHAR` | Digest of the version text the summary was written from; what a cached summary is keyed on. |
+| `content_hash` | `VARCHAR` | Digest of the version text the summary was written from, spelled sha256: plus the hex digest; what a cached summary is keyed on. |
 | `input_tokens` | `VARCHAR` | Input tokens the provider reported, where it reported any. |
 | `output_tokens` | `VARCHAR` | Output tokens the provider reported. |
 | `requested_at` | `VARCHAR` | When the call was made. |

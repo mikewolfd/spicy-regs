@@ -26,6 +26,6 @@ One row per action entry in a bill's BILLSTATUS document, in publisher order. Ea
 | `source_system_name` | `VARCHAR` | Name of the system that reported the action. |
 | `recorded_vote_count` | `VARCHAR` | How many recordedVote entries this action carries. |
 | `is_latest_action` | `VARCHAR` | True on the one actions[] entry the publisher's separate latestAction element names. |
-| `stage` | `VARCHAR` | Stage this one action's text classifies as, which makes the bill's stage auditable action by action. |
+| `stage` | `VARCHAR` | Stage this one action's qualified code and text classify as, including failed/vetoed outcomes. |
 | `stage_rule` | `VARCHAR` | Which stage rule fired on this action, or NULL when none did. |
-| `stage_matcher` | `VARCHAR` | The exact matcher string within that rule that matched this action's text. |
+| `stage_matcher` | `VARCHAR` | The matched text pattern, publisher code or vote-result reading used by the named rule. |

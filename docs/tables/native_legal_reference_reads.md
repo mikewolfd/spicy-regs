@@ -4,7 +4,7 @@
 
 **Native legal-reference selected-input reads**
 
-Records successful bounded source reads even when they produce no observations. Failed or incomplete inputs cannot replace prior output. Existing generation and source-evidence artifacts retain earlier captures; the current row represents the latest complete selected-shape read for its scope. Unsupported XML forms and unknown editions remain explicit.
+Records successful bounded source reads even when they produce no observations. Failed or incomplete inputs cannot replace prior output. Existing generation and source-evidence artifacts retain earlier captures; the current row represents the latest complete selected-shape read for its scope. Unsupported XML forms and unknown editions remain explicit. spicy-docs shapes the row from the read this repository ran.
 
 **Coverage.** Sampled. Explicit retained-input manifests only; not a source-wide acquisition or completeness ledger. *(measured 2026-09-27)*
 
@@ -15,16 +15,16 @@ Records successful bounded source reads even when they produce no observations. 
 
 | Column | Type | Description |
 | --- | --- | --- |
-| `scope_id` | `VARCHAR` | Stable source family/record/edition correction scope shared with native_legal_references. |
-| `source_family` | `VARCHAR` | Source scanner family: ecfr or uscode. |
-| `source_record_key` | `VARCHAR` | Caller-selected source record identity, retained literally. |
-| `edition` | `VARCHAR` | Explicit selected edition, or null when unknown. |
-| `input_sha256` | `VARCHAR` | SHA-256 digest of exact retained XML bytes. |
-| `source_locator` | `VARCHAR` | Literal manifest source locator, without implied acquisition date. |
-| `source_bytes` | `VARCHAR` | Observed retained input byte length, stored as text. |
-| `occurrence_count` | `VARCHAR` | Number of native scanner observations produced by this read, including zero. |
-| `read_status` | `VARCHAR` | complete_selected_shapes means the selected scanner finished; it does not mean every legal-reference form is supported. |
-| `selected_shapes_json` | `VARCHAR` | Explicit native XML forms selected for this read. |
-| `unsupported_shapes_json` | `VARCHAR` | Known excluded forms; not a claim to enumerate every possible source shape. |
-| `manifest_sha256` | `VARCHAR` | SHA-256 digest of the retained manifest binding the input selection and optional target pins. |
-| `rule_version` | `VARCHAR` | Application scanner and interpretation rule version. |
+| `scope_id` | `VARCHAR` | The scope this read replaced, spelled as `native_reference_scope_id` spells it; a complete read supersedes the scope's earlier read and every observation row it produced. |
+| `source_family` | `VARCHAR` | The scanner family that read the input: `uscode` or `ecfr`. |
+| `source_record_key` | `VARCHAR` | The caller's record identity for the input, retained literally. |
+| `edition` | `VARCHAR` | The edition or request date the caller's checked capture metadata states, literally; NULL when it states none, never read from a filename. |
+| `input_sha256` | `VARCHAR` | `sha256:` digest of the exact XML bytes this read took. |
+| `source_locator` | `VARCHAR` | Where the caller retained the input from, literally; not proof of acquisition time or edition. |
+| `source_bytes` | `VARCHAR` | The input's length in bytes, as decimal text. |
+| `occurrence_count` | `VARCHAR` | How many observation rows this read produced, as decimal text, zero included. |
+| `read_status` | `VARCHAR` | `complete_selected_shapes`: the scanner finished the whole input for the selected shapes, which does not mean every legal-reference form in it was read. |
+| `selected_shapes_json` | `VARCHAR` | The source shapes this read selected, as a JSON array: `AUTH` and `SOURCE` for eCFR, `href` and `sourceCredit` for the U.S. Code. |
+| `unsupported_shapes_json` | `VARCHAR` | The shapes this read knowingly left out, as a JSON array (`PARAUTH` and `SECAUTH` for eCFR); not a list of every form the scanner cannot read. |
+| `manifest_sha256` | `VARCHAR` | `sha256:` digest of the selection manifest that named this input and any target pins. |
+| `rule_version` | `VARCHAR` | `native-legal-reference/003` (`NATIVE_LEGAL_REFERENCE_RULE`): the rule this read ran under, the same as its observation rows'; comparable for equality only. |
