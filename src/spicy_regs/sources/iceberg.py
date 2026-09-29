@@ -154,8 +154,10 @@ def _ensure_table(con, record_type: RecordType) -> str | None:
 
 
 _PDF_RESULTS_COLUMN = "pdf_extraction_results_json"
-_COMMENT_REFERENCE_COLUMNS = (
+#: Nullable comment fields added after the catalog table was created; a row written before reads them as NULL (unread).
+_COMMENT_ADDED_COLUMNS = (
     "comment_on_document_id", "comment_on_object_id", "original_document_id", "comment_reference_values_json",
+    "subtype", "duplicate_comments",
 )
 
 
@@ -172,7 +174,7 @@ def _ensure_nullable_column(con, record_type: RecordType, *, existing: dict[str,
     if record_type.name not in ("documents", "comments"):
         return None
     columns = (_PDF_RESULTS_COLUMN,) + (
-        _COMMENT_REFERENCE_COLUMNS if record_type.name == "comments" else ("attachment_records_json",)
+        _COMMENT_ADDED_COLUMNS if record_type.name == "comments" else ("attachment_records_json",)
     )
     columns = tuple(column for column in columns if column in record_type.schema)
     table = _qualified(record_type)
@@ -403,6 +405,21 @@ def _merge(con, staging_files: list[Path], record_type: RecordType) -> int:
         con.execute(f"DROP TABLE IF EXISTS {prior};")
 
 
+def _published_projection(record_type: RecordType, missing: frozenset[str] = frozenset()) -> str:
+    """The published columns in the record type's order and types; a field in ``missing`` is NULL of its type.
+
+    The catalog stores every column as VARCHAR, so a typed column (``comments.duplicate_comments``, INTEGER) is cast
+    back on the way out. The cast is strict: a stored value that is not one refuses the export.
+    """
+    def column(name: str) -> str:
+        sql_type = record_type.sql_type(name)
+        if name in missing:
+            return f'NULL::{sql_type} AS "{name}"'
+        return f'"{name}"' if sql_type == "VARCHAR" else f'CAST("{name}" AS {sql_type}) AS "{name}"'
+
+    return ", ".join(column(name) for name in record_type.schema)
+
+
 def _export_parquet(con, record_type: RecordType, output_dir: Path) -> Path:
     """Write the full table back out as the public ``{name}.parquet`` snapshot.
 
@@ -417,7 +434,7 @@ def _export_parquet(con, record_type: RecordType, output_dir: Path) -> Path:
 
     sort_cols = [c for c in ("agency_code", "modify_date") if c in record_type.schema]
     order_by = f"ORDER BY {', '.join(sort_cols)}" if sort_cols else ""
-    columns = ", ".join(f'"{column}"' for column in record_type.schema)
+    columns = _published_projection(record_type)
 
     con.execute(
         f"""
@@ -770,7 +787,7 @@ def export_public_comments(
             source = _snapshot_query(record_type, current)
             snapshot_columns = set(con.sql(source).columns)
             missing = set(record_type.schema) - snapshot_columns
-            unsupported = missing - set(_COMMENT_REFERENCE_COLUMNS)
+            unsupported = missing - set(_COMMENT_ADDED_COLUMNS)
             if unsupported:
                 raise ValueError("Unsupported missing comment snapshot columns: " + ", ".join(sorted(unsupported)))
             # Schema-only DDL does not advance the data snapshot. Its older
@@ -779,11 +796,7 @@ def export_public_comments(
             # 0.50.0 COMMENT: reference fields after docket_id), not the catalog's
             # physical order, where ALTER ADD COLUMN appends them.
             columns = list(record_type.schema)
-            projection = ", ".join(
-                f'NULL::VARCHAR AS "{column}"' if column in missing else f'"{column}"'
-                for column in columns
-            )
-            source = f"SELECT {projection} FROM ({source})"
+            source = f"SELECT {_published_projection(record_type, frozenset(missing))} FROM ({source})"
             stage_comment_agencies(con, source, work_dir / "staging", resources=resources)
         finally:
             con.close()

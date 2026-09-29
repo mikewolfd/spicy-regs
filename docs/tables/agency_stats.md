@@ -18,4 +18,4 @@ A per-agency dimension table — one row per agency with docket, document, and c
 | `agency_code` | `VARCHAR` | Agency short code. One row per agency. |
 | `docket_count` | `BIGINT` | Number of dockets posted by the agency. |
 | `document_count` | `BIGINT` | Number of documents posted by the agency. |
-| `comment_count` | `BIGINT` | Posted comments on the agency's dockets, summed from `comments_index`. These are posted comment records, not comments received: an agency posts one record for a mass-mail campaign that can stand for thousands of submissions (EPA-HQ-OW-2022-0114 has 1,629 posted records for about 122,200 comments EPA received). |
+| `comment_count` | `BIGINT` | Posted comments on the agency's dockets, summed from `comments_index`. These are posted comment records, not comments received: an agency posts one record for a mass-mail campaign that can stand for thousands of submissions (EPA-HQ-OW-2022-0114 has 1,629 posted records for about 122,200 comments EPA received). To estimate submissions received, sum `comments.duplicate_comments` as its description says; this table does not carry it. |

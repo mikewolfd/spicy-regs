@@ -21,6 +21,6 @@ A pre-computed rollup with one row per docket, joining docket metadata to commen
 | `docket_type` | `VARCHAR` | Docket category (from `dockets`). |
 | `modify_date` | `VARCHAR` | Docket last-modified timestamp; the table is sorted by this descending. |
 | `abstract` | `VARCHAR` | Docket abstract (from `dockets`). Often null. |
-| `comment_count` | `BIGINT` | Posted comments on the docket, summed from `comments_index`. 0 when none. These are posted comment records, not comments received: an agency posts one record for a mass-mail campaign that can stand for thousands of submissions (EPA-HQ-OW-2022-0114 has 1,629 posted records for about 122,200 comments EPA received). |
+| `comment_count` | `BIGINT` | Posted comments on the docket, summed from `comments_index`. 0 when none. These are posted comment records, not comments received: an agency posts one record for a mass-mail campaign that can stand for thousands of submissions (EPA-HQ-OW-2022-0114 has 1,629 posted records for about 122,200 comments EPA received). To estimate submissions received, sum `comments.duplicate_comments` as its description says; this table does not carry it. |
 | `comment_end_date` | `VARCHAR` | Latest comment-period end date across the docket's documents. Null when unknown. |
 | `date_created` | `VARCHAR` | Earliest document `posted_date` on the docket, used as a creation date. Null when unknown. |

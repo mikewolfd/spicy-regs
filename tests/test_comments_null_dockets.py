@@ -55,9 +55,12 @@ def test_reviewed_comments_survive_ingestion_and_public_mirror(tmp_path, monkeyp
         assert set(pl.read_parquet(output / "manifest.parquet")["key"]) == set(store)
         assert not (output / "comments_index.parquet").exists()
 
+    by_id = sorted(expected, key=lambda row: row["comment_id"])
     with connect(COMMENT) as con:
         got = con.execute(f"SELECT * FROM {iceberg._qualified(COMMENT)}").pl()
-        assert got.sort("comment_id").to_dicts() == sorted(expected, key=lambda row: row["comment_id"])
+        # The catalog stores every column as VARCHAR, a stated count as its decimal text.
+        stored = [{k: str(v) if type(v) is int else v for k, v in row.items()} for row in by_id]
+        assert got.sort("comment_id").to_dicts() == stored
     monkeypatch.setattr(iceberg, "_connect", lambda: connect(COMMENT))
     monkeypatch.setattr(iceberg, "_read_snapshot", lambda *a: iceberg.CatalogSnapshot("local", 1, 0))
     monkeypatch.setattr(iceberg, "_snapshot_query", lambda rt, _: f"SELECT * FROM {iceberg._qualified(rt)}")
@@ -72,7 +75,8 @@ def test_reviewed_comments_survive_ingestion_and_public_mirror(tmp_path, monkeyp
         mirrored = f"SELECT * FROM read_parquet('{directory}/agency_code=*/part-0.parquet', hive_partitioning=true)"
         index_sql = f"SELECT * FROM read_parquet('{output / 'comments_index.parquet'}')"
         assert check_comments(con, mirrored, index_sql) == []
-        assert con.execute(mirrored).pl().select(got.columns).sort("comment_id").to_dicts() == got.sort("comment_id").to_dicts()
+        # The mirror publishes the extract's values, the count typed again.
+        assert con.execute(mirrored).pl().select(got.columns).sort("comment_id").to_dicts() == by_id
 
     # An agency with no docket records still gets its comments counted. A
     # docket-only feed cannot manufacture docket rows for these comments.

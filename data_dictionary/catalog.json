@@ -79,7 +79,9 @@
         "attachments_json",
         "text_content",
         "text_extraction_status",
-        "pdf_extraction_results_json"
+        "pdf_extraction_results_json",
+        "subtype",
+        "duplicate_comments"
       ]
     },
     {

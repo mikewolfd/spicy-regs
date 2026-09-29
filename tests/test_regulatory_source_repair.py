@@ -31,7 +31,9 @@ def write(path, rows, table="documents"):
 
 
 def shaped(value, table="documents"):
-    return {k: (str(v).lower() if isinstance(v, bool) else v) for k, v in RECORD_TYPES[table].extract(value).items()}
+    """The extract as the VARCHAR stores hold it: a boolean as `true`/`false`, an integer as its decimal text."""
+    return {k: (str(v).lower() if isinstance(v, bool) else str(v) if isinstance(v, int) else v)
+            for k, v in RECORD_TYPES[table].extract(value).items()}
 
 
 @pytest.fixture(autouse=True)
@@ -217,11 +219,11 @@ def test_comment_apply_corrects_at_an_equal_timestamp_and_keeps_enrichment(tmp_p
 def test_comment_legacy_schema_is_reviewable_but_apply_requires_migration(tmp_path, catalog):
     catalog.seed([comment_prior()])
     with iceberg._connect() as con:
-        for column in iceberg._COMMENT_REFERENCE_COLUMNS:
+        for column in iceberg._COMMENT_ADDED_COLUMNS:
             con.execute(f'ALTER TABLE {iceberg._qualified(COMMENT)} DROP COLUMN "{column}"')
     before = catalog.rows()
     repair_records([raw(COMMENT_ID)], table="comments", output_dir=tmp_path)
-    assert receipt(tmp_path)["schema_migration_required"] == sorted(iceberg._COMMENT_REFERENCE_COLUMNS)
+    assert receipt(tmp_path)["schema_migration_required"] == sorted(iceberg._COMMENT_ADDED_COLUMNS)
     assert receipt(tmp_path)["rows"][0]["comment_reference_values_json"] is not None
     assert catalog.rows() == before
     with pytest.raises(ValueError, match="Migrate the comments schema"):
@@ -320,14 +322,14 @@ def test_correction_takes_the_text_columns_together(fresh_text, expected):
 def test_comment_migrated_write_schema_with_older_snapshot_applies(tmp_path, catalog, monkeypatch):
     # A genuine nullable-column migration leaves new fields NULL. Non-NULL
     # current values absent from the historical snapshot are an intervening edit.
-    catalog.seed([{**comment_prior(), **dict.fromkeys(iceberg._COMMENT_REFERENCE_COLUMNS)}])
-    historical_columns = [c for c in COMMENT.schema if c not in iceberg._COMMENT_REFERENCE_COLUMNS]
+    catalog.seed([{**comment_prior(), **dict.fromkeys(iceberg._COMMENT_ADDED_COLUMNS)}])
+    historical_columns = [c for c in COMMENT.schema if c not in iceberg._COMMENT_ADDED_COLUMNS]
     projection = ", ".join(f'"{c}"' for c in historical_columns)
     monkeypatch.setattr(iceberg, "_snapshot_query", lambda rt, snapshot: f"SELECT {projection} FROM {iceberg._qualified(rt)}")
     repair_records([raw(COMMENT_ID)], table="comments", output_dir=tmp_path)
     preview = receipt(tmp_path)
     assert preview["schema_migration_required"] == []
-    assert preview["snapshot_columns_null_filled"] == sorted(iceberg._COMMENT_REFERENCE_COLUMNS)
+    assert preview["snapshot_columns_null_filled"] == sorted(iceberg._COMMENT_ADDED_COLUMNS)
     assert preview["changes"][0]["cells"]["comment_reference_values_json"]["before"] is None
     repair_records([raw(COMMENT_ID)], table="comments", output_dir=tmp_path, apply=True, expected_snapshot=1)
     assert receipt(tmp_path)["applied_snapshot"]["snapshot_id"] == 2
