@@ -38,8 +38,10 @@ def catalog(tmp_path, monkeypatch):
     monkeypatch.setattr(iceberg, "_read_snapshot", snapshot)
     monkeypatch.setattr(iceberg, "_snapshot_query", lambda rt, _: f"SELECT * FROM {iceberg._qualified(rt)}")
     monkeypatch.setattr(cfw, "FILE_COLUMN", "agency_code")
-    monkeypatch.setattr(cfw, "data_files", lambda con: {r[0]: 1000 for r in con.execute(
-        f"SELECT DISTINCT agency_code FROM {iceberg._qualified(COMMENT)}").fetchall()})
+    files = lambda con: {r[0] for r in con.execute(  # noqa: E731
+        f"SELECT DISTINCT agency_code FROM {iceberg._qualified(COMMENT)}").fetchall()}
+    monkeypatch.setattr(cfw, "live_files", files)
+    monkeypatch.setattr(cfw, "data_files", lambda con: dict.fromkeys(files(con), 1000))
     monkeypatch.setattr(cfw, "commit_record", lambda con, parent_id: None)  # plain DuckDB records no commits
     monkeypatch.setenv("R2_CATALOG_NAMESPACE", "default")
     monkeypatch.setenv(iceberg.CATALOG_LOCK_ENV, "test")
@@ -328,3 +330,253 @@ def test_batches_pack_whole_files_by_bytes():
     files = {"f1": {"rows": 3, "bytes": 300}, "f2": {"rows": 1, "bytes": 100}, "f3": {"rows": 5, "bytes": 900}}
     assert cfw.batches(files, 400, by_file=True) == [["f1", "f2"], ["f3"]]
     assert cfw.batches(files, 400, by_file=False) == [["f1", "f2", "f3"]]
+
+
+# --------------------------------------------------------------------------- #
+# Round 2: damage outside the batch's rows, the commit after COMMIT, one journal per prepare, the undo
+# --------------------------------------------------------------------------- #
+def _before_merge(statement: str):
+    """Run ``statement`` in the batch's transaction just before its MERGE; the MERGE's count is still the one read."""
+    return lambda sql: f"{statement}; {sql}" if _merge(sql) else sql
+
+
+def _table() -> str:
+    return iceberg._qualified(COMMENT)
+
+
+def test_a_transaction_that_also_deletes_an_unread_row_in_the_batch_file_is_rolled_back(tmp_path, catalog):
+    """The review's scenario Z: B shares A's file but needs nothing; only the row count sees it go."""
+    seed(catalog, [row("A"), row("B")])
+    reads(tmp_path, [{"key": "a", "comment_id": "A", "subtype": "S"}])
+    cfw.prepare(tmp_path)
+    with catalog() as con, pytest.raises(cfw.FillVerificationError, match="held"):
+        cfw.write(tmp_path, con=Proxy(con, rewrite=_before_merge(f"DELETE FROM {_table()} WHERE comment_id = 'B'")))
+    assert set(table(catalog)) == {"A", "B"} and table(catalog)["A"]["subtype"] is None
+
+
+def test_a_transaction_that_deletes_a_row_in_another_file_is_rolled_back(tmp_path, catalog):
+    seed(catalog, [row("A"), row("C", agency="CMS")])
+    reads(tmp_path, [{"key": "a", "comment_id": "A", "subtype": "S"}])
+    cfw.prepare(tmp_path)
+    with catalog() as con, pytest.raises(cfw.FillVerificationError, match="held"):
+        cfw.write(tmp_path, con=Proxy(con, rewrite=_before_merge(f"DELETE FROM {_table()} WHERE comment_id = 'C'")))
+    assert set(table(catalog)) == {"A", "C"}
+
+
+def test_a_row_the_transaction_moves_to_a_new_file_outside_the_batch_is_rolled_back(tmp_path, catalog):
+    """C keeps its values and the row count holds (a moved row); only the new files' contents show it."""
+    seed(catalog, [row("A"), row("C", agency="CMS")])
+    reads(tmp_path, [{"key": "a", "comment_id": "A", "subtype": "S"}])
+    cfw.prepare(tmp_path)
+    move = _before_merge(f"UPDATE {_table()} SET agency_code = 'NEW' WHERE comment_id = 'C'")
+    with catalog() as con, pytest.raises(cfw.FillVerificationError, match="outside the batch"):
+        cfw.write(tmp_path, con=Proxy(con, rewrite=move))
+    assert table(catalog)["C"]["agency_code"] == "CMS"
+
+
+def _recorded(summary: dict):
+    """A ``commit_record`` stand-in: the one child of the checked snapshot is the catalog's current snapshot."""
+
+    def record(con, parent_id):
+        current = iceberg._read_snapshot(con, COMMENT)
+        return {"table_uuid": current.table_uuid, "snapshot_id": current.snapshot_id, "schema_id": current.schema_id,
+                "summary": summary}
+
+    return record
+
+
+@pytest.mark.parametrize(("record", "problem"), [
+    (_recorded({"added-records": "1", "added-position-deletes": "1"}), None),
+    (_recorded({"added-records": "2", "added-position-deletes": "2"}), "added 2 records"),
+    (_recorded({"added-records": "1", "added-position-deletes": "0"}), "0 position deletes"),
+    (None, "no single commit"),
+])
+def test_the_commit_must_be_the_one_child_of_the_checked_snapshot_adding_exactly_the_batch(
+    tmp_path, catalog, monkeypatch, record, problem,
+):
+    seed(catalog, [row("A")])
+    reads(tmp_path, [{"key": "a", "comment_id": "A", "subtype": "S"}])
+    cfw.prepare(tmp_path)
+    monkeypatch.setattr(cfw, "commit_record", record or (lambda con, parent_id: None))
+    monkeypatch.setattr(cfw, "_records_commits", lambda con: True)
+    if problem is None:
+        with catalog() as con:
+            assert cfw.write(tmp_path, con=con)["rows_changed"] == 1
+        assert journal(tmp_path)[-1]["state"] == "verified"
+        return
+    with catalog() as con, pytest.raises(cfw.FillVerificationError, match=problem):
+        cfw.write(tmp_path, con=con)
+    assert journal(tmp_path)[-1] | {"reason": None} == journal(tmp_path)[-1] | {
+        "state": "failed", "committed": True, "reason": None}
+
+
+def test_a_committed_failure_blocks_every_prepare_and_write_until_it_is_undone(tmp_path, catalog, monkeypatch):
+    seed(catalog, [row("A"), row("B", agency="CMS")])
+    reads(tmp_path, [{"key": "a", "comment_id": "A", "subtype": "S"}])
+    reads(tmp_path, [{"key": "b", "comment_id": "B", "subtype": "S"}], agency="CMS")
+    cfw.prepare(tmp_path)
+    monkeypatch.setattr(cfw, "commit_record", _recorded({"added-records": "9", "added-position-deletes": "9"}))
+    with catalog() as con, pytest.raises(cfw.FillVerificationError):
+        cfw.write(tmp_path, con=con, batch_bytes=1000)  # CMS first: it commits, then fails the post-commit check
+    monkeypatch.setattr(cfw, "commit_record", lambda con, parent_id: None)
+    with pytest.raises(RuntimeError, match="undo"):
+        cfw.prepare(tmp_path)  # a fresh prepare no longer escapes it
+    with catalog() as con, pytest.raises(RuntimeError, match="undo"):
+        cfw.write(tmp_path, con=con)
+    (failed,) = [line for line in journal(tmp_path) if line["state"] == "failed"]
+    with catalog() as con:
+        cfw.undo(tmp_path, failed["batch"], expected_snapshot=iceberg._read_snapshot(con, COMMENT).snapshot_id,
+                 con=con)
+    assert (table(catalog)["B"]["subtype"], table(catalog)["A"]["subtype"]) == (None, None)
+    _, written = fill(tmp_path, catalog)
+    assert written["rows_changed"] == 2
+
+
+def test_write_refuses_a_committed_failure_whose_journal_arrived_after_its_prepare(tmp_path, catalog, monkeypatch):
+    """Another prepare's failure, pulled in late (a runner's journals, a copied workdir), still stops the write."""
+    first, second = tmp_path / "first", tmp_path / "second"
+    seed(catalog, [row("A"), row("B", agency="CMS")])
+    reads(first, [{"key": "a", "comment_id": "A", "subtype": "S"}])
+    reads(second, [{"key": "b", "comment_id": "B", "subtype": "S"}], agency="CMS")
+    cfw.prepare(second)
+    cfw.prepare(first)
+    monkeypatch.setattr(cfw, "commit_record", _recorded({"added-records": "9", "added-position-deletes": "9"}))
+    with catalog() as con, pytest.raises(cfw.FillVerificationError):
+        cfw.write(first, con=con)
+    monkeypatch.setattr(cfw, "commit_record", lambda con, parent_id: None)
+    for path in (first / "fill").glob("write-journal-*.jsonl"):
+        (second / "fill" / path.name).write_bytes(path.read_bytes())
+    with catalog() as con, pytest.raises(RuntimeError, match="undo"):
+        cfw.write(second, con=con)
+    assert table(catalog)["B"]["subtype"] is None
+
+
+def test_a_fresh_prepare_never_reuses_an_earlier_journal(tmp_path, catalog):
+    seed(catalog, [row("A")])
+    reads(tmp_path, [{"key": "a", "comment_id": "A", "subtype": "S"}])
+    first, second = cfw.prepare(tmp_path), cfw.prepare(tmp_path)
+    assert first["fill_sha256"] == second["fill_sha256"] and first["prepare_id"] != second["prepare_id"]
+
+
+def test_prepare_refuses_a_file_whose_size_it_cannot_read(tmp_path, catalog, monkeypatch):
+    seed(catalog, [row("A")])
+    reads(tmp_path, [{"key": "a", "comment_id": "A", "subtype": "S"}])
+    monkeypatch.setattr(cfw, "data_files", lambda con: {})
+    with pytest.raises(RuntimeError, match="size"):
+        cfw.prepare(tmp_path)
+
+
+def test_prepare_reads_the_staged_fill_input_as_it_reads_the_parts(tmp_path, catalog):
+    seed(catalog, [row("A"), row("B")])
+    reads(tmp_path, [{"key": "a", "comment_id": "A", "subtype": "S", "duplicate_comments": 0},
+                     {"key": "b", "comment_id": "B", "attachments_json": "[1]"}])
+    from_parts = cfw.prepare(tmp_path)
+    staged = tmp_path / "reads.parquet"
+    pl.read_parquet(tmp_path / "parts" / "*" / "*.parquet").select(cfw.READ_COLUMNS).write_parquet(staged)
+    assert cfw.prepare(tmp_path, reads=staged)["fill_sha256"] == from_parts["fill_sha256"]
+
+
+def _filled(tmp_path, catalog) -> dict:
+    seed(catalog, [row("A"), row("B", agency="CMS")])
+    reads(tmp_path, [{"key": "a", "comment_id": "A", "subtype": "S", "duplicate_comments": 3}])
+    reads(tmp_path, [{"key": "b", "comment_id": "B", "subtype": "S"}], agency="CMS")
+    before = table(catalog)
+    fill(tmp_path, catalog, batch_bytes=1000)
+    (epa,) = [line for line in journal(tmp_path) if line["state"] == "verified" and line["files"] == ["EPA"]]
+    return {"before": before, "batch": epa["batch"]}
+
+
+def _current(catalog) -> int:
+    with catalog() as con:
+        return iceberg._read_snapshot(con, COMMENT).snapshot_id
+
+
+def test_undo_restores_a_committed_batch_from_its_preimage_as_a_new_commit(tmp_path, catalog):
+    filled = _filled(tmp_path, catalog)
+    expected = _current(catalog)
+    with catalog() as con:
+        undone = cfw.undo(tmp_path, filled["batch"], expected_snapshot=expected, con=con)
+    assert table(catalog)["A"] == filled["before"]["A"] and table(catalog)["B"]["subtype"] == "S"
+    assert undone["rows_restored"] == 1 and journal(tmp_path)[-1]["state"] == "undone"
+    expected = _current(catalog)
+    with catalog() as con, pytest.raises(RuntimeError, match="already undone"):
+        cfw.undo(tmp_path, filled["batch"], expected_snapshot=expected, con=con)
+
+
+def test_undo_needs_the_snapshot_the_operator_reviewed(tmp_path, catalog):
+    filled = _filled(tmp_path, catalog)
+    with catalog() as con, pytest.raises(RuntimeError, match="expected"):
+        cfw.undo(tmp_path, filled["batch"], expected_snapshot=7, con=con)
+    assert table(catalog)["A"]["subtype"] == "S"
+
+
+def test_undo_refuses_a_commit_between_its_check_and_its_transaction(tmp_path, catalog):
+    filled = _filled(tmp_path, catalog)
+    expected = _current(catalog)
+
+    def foreign(sql):
+        if "_undo_now" in sql and sql.lstrip().startswith("CREATE"):
+            proxy.con.execute(f"UPDATE {_table()} SET title = 'etl' WHERE comment_id = 'B'")
+
+    with catalog() as con:
+        proxy = Proxy(con, after=foreign)
+        with pytest.raises(RuntimeError, match="moved"):
+            cfw.undo(tmp_path, filled["batch"], expected_snapshot=expected, con=proxy)
+    assert table(catalog)["A"]["subtype"] == "S"
+
+
+def test_undo_refuses_a_row_changed_since_the_fill(tmp_path, catalog):
+    filled = _filled(tmp_path, catalog)
+    with catalog() as con:
+        con.execute(f"UPDATE {_table()} SET title = 'edited' WHERE comment_id = 'A'")
+    expected = _current(catalog)
+    with catalog() as con, pytest.raises(RuntimeError, match="changed since"):
+        cfw.undo(tmp_path, filled["batch"], expected_snapshot=expected, con=con)
+    assert (table(catalog)["A"]["subtype"], table(catalog)["A"]["title"]) == ("S", "edited")
+
+
+class _Bucket:
+    """The three S3 calls the journal sync and the staged fetch make, over a dict."""
+
+    def __init__(self, objects=None):
+        self.objects = dict(objects or {})
+
+    def upload_file(self, path, bucket, key):
+        self.objects[key] = Path(path).read_bytes()
+
+    def download_file(self, bucket, key, path):
+        Path(path).write_bytes(self.objects[key])
+
+    def get_paginator(self, name):
+        objects = self.objects
+
+        class Pages:
+            def paginate(self, Bucket, Prefix):  # noqa: N803 (boto3's spelling)
+                return [{"Contents": [{"Key": k} for k in sorted(objects) if k.startswith(Prefix)]}]
+
+        return Pages()
+
+
+def test_a_committed_failure_in_an_earlier_runs_journal_blocks_a_fresh_workdir(tmp_path, catalog, monkeypatch):
+    """On a runner every run starts empty; the journals kept beside the staged read carry the failure over."""
+    first, second, bucket = tmp_path / "run1", tmp_path / "run2", _Bucket()
+    seed(catalog, [row("A")])
+    reads(first, [{"key": "a", "comment_id": "A", "subtype": "S"}])
+    cfw.prepare(first)
+    monkeypatch.setattr(cfw, "commit_record", _recorded({"added-records": "9", "added-position-deletes": "9"}))
+    with catalog() as con, pytest.raises(cfw.FillVerificationError):
+        cfw.write(first, con=con)
+    assert cfw.sync_journals(first, "staging/x", push=True, client=bucket)
+    reads(second, [{"key": "a", "comment_id": "A", "subtype": "S"}])
+    cfw.sync_journals(second, "staging/x", push=False, client=bucket)
+    with pytest.raises(RuntimeError, match="undo"):
+        cfw.prepare(second)
+
+
+def test_the_staged_read_is_refused_unless_its_digest_matches(tmp_path):
+    bucket = _Bucket({"staging/x/reads.parquet": b"staged bytes"})
+    good = cfw.hashlib.sha256(b"staged bytes").hexdigest()
+    assert cfw.fetch_staged(tmp_path, "staging/x/reads.parquet", good, client=bucket).read_bytes() == b"staged bytes"
+    with pytest.raises(RuntimeError, match="sha256"):
+        cfw.fetch_staged(tmp_path, "staging/x/reads.parquet", "0" * 64, client=bucket)
+    assert not (tmp_path / "reads.parquet").exists()

@@ -36,7 +36,7 @@ import polars as pl
 from cyclopts import App
 from loguru import logger
 
-from spicy_regs.pipelines.comment_fields_write import BATCH_BYTES, prepare, write
+from spicy_regs.pipelines.comment_fields_write import BATCH_BYTES, fetch_staged, prepare, sync_journals, undo, write
 from spicy_regs.schemas import COMMENT
 
 #: Keys per chunk: the resume unit, about 17 s of reads at the measured rate.
@@ -269,13 +269,18 @@ def read_command(
 
 
 @app.command(name="prepare")
-def prepare_command(*, workdir: Path, docket: str | None = None, agency: str | None = None) -> None:
-    """Compute the fill at the catalog's current snapshot (no write); ``--docket``/``--agency`` scope a pilot."""
+def prepare_command(
+    *, workdir: Path, docket: str | None = None, agency: str | None = None, reads: Path | None = None,
+) -> None:
+    """Compute the fill at the catalog's current snapshot (no write); ``--docket``/``--agency`` scope a pilot.
+
+    ``--reads`` is the staged fill input (runbook); by default the read parts under the workdir.
+    """
     from dotenv import load_dotenv
 
     load_dotenv()
     scope = {k: v for k, v in (("docket_id", docket), ("agency_code", agency)) if v}
-    print(json.dumps(prepare(workdir, scope=scope or None), indent=2))
+    print(json.dumps(prepare(workdir, scope=scope or None, reads=reads), indent=2))
 
 
 @app.command(name="write")
@@ -287,6 +292,33 @@ def write_command(
 
     load_dotenv()
     print(json.dumps(write(workdir, batch_bytes=batch_bytes, by_file=by_file, clear_failure=clear_failure), indent=2))
+
+
+@app.command(name="fetch")
+def fetch_command(*, workdir: Path, key: str, sha256: str) -> None:
+    """Download the staged fill input to ``workdir/reads.parquet``, refusing any other bytes than ``--sha256``'s."""
+    from dotenv import load_dotenv
+
+    load_dotenv()
+    print(fetch_staged(workdir, key, sha256))
+
+
+@app.command(name="journals")
+def journals_command(*, workdir: Path, prefix: str, push: bool = False) -> None:
+    """Pull every run's journal from the data bucket's ``--prefix`` (``--push``: upload this workdir's)."""
+    from dotenv import load_dotenv
+
+    load_dotenv()
+    print(json.dumps(sync_journals(workdir, prefix, push=push)))
+
+
+@app.command(name="undo")
+def undo_command(*, workdir: Path, batch: str, expected_snapshot: int) -> None:
+    """Restore a committed batch from its pre-image as a new checked commit, if the catalog is at ``--expected-snapshot``."""
+    from dotenv import load_dotenv
+
+    load_dotenv()
+    print(json.dumps(undo(workdir, batch, expected_snapshot=expected_snapshot), indent=2))
 
 
 @app.command(name="status")

@@ -161,3 +161,21 @@ def test_shards_split_chunks_so_every_chunk_is_read_exactly_once(tmp_path):
     read = [cf.read(tmp_path, workers=2, resource=_FakeS3Resource(store), shard=(i, 3))["keys"] for i in range(3)]
     assert sum(read) == len(store) and len(_parts(tmp_path)) == len(store)
     assert cf.read(tmp_path, workers=2, resource=_FakeS3Resource(store))["chunks"] == 0
+
+
+def test_the_fill_workflow_is_manual_holds_the_writers_lock_and_always_restores_compaction():
+    import yaml
+
+    workflow = yaml.safe_load((Path(__file__).parents[1] / ".github/workflows/fill-comment-fields.yml").read_text())
+    assert list(workflow[True]) == ["workflow_dispatch"]  # PyYAML reads the key `on` as True: no schedule, no push
+    assert workflow["concurrency"] == {"group": "comments-catalog-write", "cancel-in-progress": False, "queue": "max"}
+    assert workflow["env"]["SPICY_REGS_CATALOG_LOCK"] == "comments-catalog-write"
+    steps = workflow["jobs"]["fill"]["steps"]
+    names = [step["name"] for step in steps]
+    order = [next(i for i, n in enumerate(names) if n.startswith(prefix)) for prefix in (
+        "Download and verify", "Earlier runs' journals", "Disable R2 compaction", "Prepare", "Write", "Keep the journals",
+        "Keep the journal, receipts", "Re-enable R2 compaction")]
+    assert order == sorted(order)
+    for step in steps[order[-3]:]:
+        assert step["if"].startswith("always()"), step["name"]
+    assert "--sha256" in steps[order[0]]["run"] and "fetch" in steps[order[0]]["run"]

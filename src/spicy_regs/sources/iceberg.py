@@ -243,7 +243,7 @@ def _scope_predicate(record_type: RecordType, scope: Mapping[str, str] | None, a
 
 def replace_rows(
     con, record_type: RecordType, source: str, *, expected_prior: str | None = None,
-    scope: Mapping[str, str] | None = None,
+    scope: Mapping[str, str] | None = None, expected_snapshot: "CatalogSnapshot | None" = None,
 ) -> None:
     """Atomically replace selected unique keys, validating values before commit.
 
@@ -253,6 +253,10 @@ def replace_rows(
     Read-modify-write callers pass a self-contained ``expected_prior``; its rows
     and absences must still match inside the write transaction. Direct
     replacements may omit it.
+
+    ``expected_snapshot`` refuses inside the transaction unless the table is still
+    at that snapshot, so nothing committed since the caller looked is overwritten
+    (the comment fill's undo passes the snapshot its operator reviewed).
 
     ``scope`` (column → value, e.g. one ``agency_code``) restricts every catalog
     read and the MERGE match to rows with those values; every source row must
@@ -283,6 +287,8 @@ def replace_rows(
     target = f"_replace_target_{record_type.name}"
     con.execute("BEGIN")
     try:
+        if expected_snapshot is not None and _read_snapshot(con, record_type) != expected_snapshot:
+            raise RuntimeError(f"Catalog moved from snapshot {expected_snapshot.snapshot_id}; review it and rerun")
         # One catalog read inside the write transaction; the checks below use
         # this copy. The temp catalog is exempt from DuckDB's one-database-per-
         # transaction write rule, and ROLLBACK discards it with the write.

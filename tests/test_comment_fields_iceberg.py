@@ -187,3 +187,95 @@ def test_a_foreign_commit_mid_run_stops_it_and_preparing_again_finishes(tmp_path
         assert cfw.write(tmp_path, con=con)["rows_changed"] == 8
     assert rows(lake)["C-2-3"]["title"] == "t2"
 
+
+
+def _same(a: dict, b: dict) -> bool:
+    return {c: a[c] for c in COMMENT.schema} == {c: b[c] for c in COMMENT.schema}
+
+
+def _snapshot(connect) -> int:
+    with connect() as con:
+        return iceberg._read_snapshot(con, COMMENT).snapshot_id
+
+
+def test_an_undo_is_a_forward_commit_that_plain_reads_and_the_etl_write_accept(tmp_path, lake):
+    """The rehearsal the runbook requires before any live write: undo one batch, then read and write as usual."""
+    before = rows(lake)
+    cfw.prepare(tmp_path)
+    with lake() as con:
+        cfw.write(tmp_path, con=con, batch_bytes=1)
+    middle = [line for line in journal(tmp_path) if line["state"] == "verified"][1]
+    undone_ids = {k for k, r in before.items() if r["filename"] in middle["files"]}
+    filled_at = _snapshot(lake)
+    with lake() as con:
+        undone = cfw.undo(tmp_path, middle["batch"], expected_snapshot=filled_at, con=con)
+    assert undone["rows_restored"] == 4 and journal(tmp_path)[-1]["state"] == "undone"
+    after = rows(lake)  # a plain read, on a new connection
+    assert all(_same(after[k], before[k]) for k in undone_ids)
+    assert {after[k]["subtype"] for k in set(before) - undone_ids} == {"Public Comment"}
+    with lake() as con:
+        metadata = cfw._table_metadata(con)
+    (child,) = [s for s in metadata["snapshots"] if s.get("parent-snapshot-id") == filled_at]
+    assert metadata["current-snapshot-id"] == child["snapshot-id"] == undone["snapshot_after"]["snapshot_id"]
+    # The ETL's own write path next: a newer version of an undone row, and a new comment.
+    k = sorted(undone_ids)[0]
+    newer = {**{c: after[k][c] for c in COMMENT.schema}, "modify_date": "2021-01-01T00:00:00Z", "title": "etl"}
+    new = {**dict.fromkeys(COMMENT.schema), "comment_id": "C-9-0", "agency_code": "EPA", "modify_date": T0}
+    staging = tmp_path / "staging.parquet"
+    pl.DataFrame([newer, new], schema=dict.fromkeys(COMMENT.schema, pl.Utf8)).write_parquet(staging)
+    with lake() as con:
+        assert iceberg._merge(con, [staging], COMMENT) == 2
+    final = rows(lake)
+    assert (final[k]["title"], final["C-9-0"]["modify_date"], len(final)) == ("etl", T0, 13)
+
+
+def test_a_damaged_commit_found_on_recovery_is_refused_and_undone_whole(tmp_path, lake):
+    """A check that missed the damage (disabled here) and a crash right after COMMIT: the rerun compares the commit
+    with its pre-image, journals it failed, and the undo restores every column from the pre-image."""
+    before = rows(lake)
+    cfw.prepare(tmp_path)
+
+    def damage(sql):
+        if sql.lstrip().startswith("MERGE"):
+            return sql.replace("UPDATE SET ", 'UPDATE SET "text_content" = NULL, ', 1)
+        return "SELECT 0" if "EXCEPT ALL" in sql else sql
+
+    def crash(sql):
+        if sql == "COMMIT":
+            raise KeyboardInterrupt
+
+    with lake() as con, pytest.raises(KeyboardInterrupt):
+        cfw.write(tmp_path, con=Proxy(con, rewrite=damage, after=crash), batch_bytes=1)
+    with lake() as con, pytest.raises(cfw.FillVerificationError, match="differs"):
+        cfw.write(tmp_path, con=con, batch_bytes=1)
+    failed = journal(tmp_path)[-1]
+    assert (failed["state"], failed["committed"]) == ("failed", True)
+    with pytest.raises(RuntimeError, match="undo"):
+        cfw.prepare(tmp_path)
+    damaged = [k for k, r in rows(lake).items() if r["text_content"] is None]
+    assert len(damaged) == 4
+    with lake() as con:
+        cfw.undo(tmp_path, failed["batch"], expected_snapshot=_snapshot(lake), con=con)
+    after = rows(lake)
+    assert all(_same(after[k], before[k]) for k in before)
+    assert cfw.prepare(tmp_path)["rows_to_fill"] == 12
+
+
+def test_a_commit_by_another_writer_during_the_batch_is_refused_at_commit(tmp_path, lake):
+    """The transaction reads one snapshot from BEGIN on: another writer committing after the snapshot check makes
+    the catalog refuse this COMMIT, so no batch lands on a table its pre-image did not see."""
+    cfw.prepare(tmp_path)
+    seen = {"n": 0}
+
+    def foreign(sql):
+        if "iceberg_load_table_response" in sql and not seen["n"]:
+            seen["n"] += 1
+            with lake() as other:
+                other.execute(f"UPDATE {iceberg._qualified(COMMENT)} SET title = 'etl' WHERE comment_id = 'C-2-3'")
+
+    with lake() as con, pytest.raises(Exception, match="409|Conflict|conflict") as refused:
+        cfw.write(tmp_path, con=Proxy(con, after=foreign), batch_bytes=1)
+    assert not isinstance(refused.value, cfw.FillVerificationError)
+    after = rows(lake)
+    assert after["C-2-3"]["title"] == "etl" and {r["subtype"] for r in after.values()} == {None}
+    assert [line["state"] for line in journal(tmp_path)] == ["pending"]
