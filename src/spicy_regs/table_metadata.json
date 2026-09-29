@@ -283,7 +283,7 @@
       {
         "column_name": "category",
         "column_type": "VARCHAR",
-        "description": "Submitter category as classified on regulations.gov. Often null, and empty for whole agencies: EPA, for one, classifies submitters in regulations.gov's `subtype` (Company/Organization, Government, Mass Mail Campaign, …), which this table does not carry, nor the campaign count `duplicateComments`."
+        "description": "Submitter category as classified on regulations.gov. Often null, and empty for whole agencies: EPA, for one, classifies submitters in `subtype` instead (Company/Organization, Government, Mass Mail Campaign, …) and counts campaigns in `duplicate_comments`."
       },
       {
         "column_name": "title",
@@ -334,6 +334,16 @@
         "column_name": "pdf_extraction_results_json",
         "column_type": "VARCHAR",
         "description": "Provenance of `text_content`. For `derived` rows, a JSON object `{comment_id, tool, available_tools, attachments:[{attachment, tool, key, size, etag, sha256}], only_in_other_tools}`: the primary tool (the first of `pypdf`, `pdfminer` with an object for the comment), every tool with an object for it, each attachment's tool, S3 key, listed size and ETag and the SHA-256 of the bytes read (null when the text was kept without re-reading them), and the attachment numbers taken from a tool other than the primary because the primary has no object for them (decision 41); those are in the text. A primary object that exists is kept even when blank. About 125 bytes plus 330 per attachment (31 KB at 92 attachments, the published maximum). Otherwise an ordered JSON array from the latest PDF attempt: `{url, source_sha256, status, page_count, error}` per distinct selected URL; SHA-256 identifies observed bytes, and no-bytes fetch failures have null digest/page count and a generic error. Null when neither is recorded."
+      },
+      {
+        "column_name": "subtype",
+        "column_type": "VARCHAR",
+        "description": "The agency's own class for the submission (regulations.gov `subtype`), spelled as stated. It is agency-specific. EPA classifies the submitter: `Public Comment` (an individual), `Company/Organization Comment`, `Government Local`, `Government State`, `Government Federal`, `Government Tribal`, `Member of Congress`, `Mass Mail Campaign`, `Late Comment`. Most other agencies that state it put one generic label on every record (`Comment(s)`, `Public Comment`, FDA's `Electronic Regulation from Form`), and many state none. In a 2026-09-28 sample of 5,945 Mirrulations comments across 179 agencies it was stated on 2,041 records in 69 agencies; submitter classes appeared only at EPA, and `Mass Mail Campaign` also at EERE, BSEE, OSHA and TTB. Split organizations from individuals only within an agency that classifies, and not by `organization`: all 1,629 records of EPA-HQ-OW-2022-0114 leave `organization`, `category` and `first_name` NULL, 219 of them `Company/Organization Comment`. NULL where the record states none or the row predates reading this field."
+      },
+      {
+        "column_name": "duplicate_comments",
+        "column_type": "INTEGER",
+        "description": "How many received submissions the agency says this posted record stands for (regulations.gov `duplicateComments`), as stated. Most agencies do not count and state 0 on every record; EPA states 1 for a single comment and the campaign's size on a `Mass Mail Campaign` record (15,851 on EPA-HQ-OW-2022-0114-1811, National Wildlife Federation Action Fund). Rows are posted records. To estimate submissions, sum `GREATEST(duplicate_comments, 1)`, each posted record standing for at least itself, and first count the NULL rows: GREATEST reads NULL as 1. The sum is the agency's posted accounting, not its official total: EPA-HQ-OW-2022-0114's 1,629 records sum to 53,707 (52,086 on 23 campaign records), while EPA's response to comments reports about 122,200 received. The 2026-09-28 sample found it stated on every record: 0 on 5,281, 1 on 660, more than 1 on 4. NULL where the row predates reading this field; 0 is a stated zero."
       }
     ],
     "grain": null,
@@ -389,7 +399,7 @@
       {
         "column_name": "row_count",
         "column_type": "BIGINT",
-        "description": "Number of posted comment records in the group. These are posted comment records, not comments received: an agency posts one record for a mass-mail campaign that can stand for thousands of submissions (EPA-HQ-OW-2022-0114 has 1,629 posted records for about 122,200 comments EPA received)."
+        "description": "Number of posted comment records in the group. These are posted comment records, not comments received: an agency posts one record for a mass-mail campaign that can stand for thousands of submissions (EPA-HQ-OW-2022-0114 has 1,629 posted records for about 122,200 comments EPA received). To estimate submissions received, sum `comments.duplicate_comments` as its description says; this table does not carry it."
       }
     ],
     "grain": null,
@@ -480,7 +490,7 @@
       {
         "column_name": "comment_count",
         "column_type": "BIGINT",
-        "description": "Posted comments on the docket, summed from `comments_index`. 0 when none. These are posted comment records, not comments received: an agency posts one record for a mass-mail campaign that can stand for thousands of submissions (EPA-HQ-OW-2022-0114 has 1,629 posted records for about 122,200 comments EPA received)."
+        "description": "Posted comments on the docket, summed from `comments_index`. 0 when none. These are posted comment records, not comments received: an agency posts one record for a mass-mail campaign that can stand for thousands of submissions (EPA-HQ-OW-2022-0114 has 1,629 posted records for about 122,200 comments EPA received). To estimate submissions received, sum `comments.duplicate_comments` as its description says; this table does not carry it."
       },
       {
         "column_name": "comment_end_date",
@@ -549,7 +559,7 @@
       {
         "column_name": "comment_count",
         "column_type": "BIGINT",
-        "description": "Posted comments on the agency's dockets, summed from `comments_index`. These are posted comment records, not comments received: an agency posts one record for a mass-mail campaign that can stand for thousands of submissions (EPA-HQ-OW-2022-0114 has 1,629 posted records for about 122,200 comments EPA received)."
+        "description": "Posted comments on the agency's dockets, summed from `comments_index`. These are posted comment records, not comments received: an agency posts one record for a mass-mail campaign that can stand for thousands of submissions (EPA-HQ-OW-2022-0114 has 1,629 posted records for about 122,200 comments EPA received). To estimate submissions received, sum `comments.duplicate_comments` as its description says; this table does not carry it."
       }
     ],
     "grain": null,

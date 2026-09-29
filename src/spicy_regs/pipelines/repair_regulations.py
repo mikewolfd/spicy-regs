@@ -171,13 +171,13 @@ def _repair_comments(
             raise RuntimeError(f"catalog is at snapshot {snapshot.snapshot_id}, not the reviewed {expected_snapshot}")
         current_columns = iceberg._column_types(con, record_type)
         missing_write_columns = set(columns) - current_columns.keys()
-        for column in iceberg._COMMENT_REFERENCE_COLUMNS:
+        for column in iceberg._COMMENT_ADDED_COLUMNS:
             if column in current_columns and current_columns[column] != "VARCHAR":
                 raise ValueError(f"comments.{column} must be VARCHAR, found {current_columns[column]}")
         prior_sql = iceberg._snapshot_query(record_type, snapshot)
         prior_columns = {row[0] for row in con.execute(f"DESCRIBE ({prior_sql})").fetchall()}
         missing_columns = set(columns) - prior_columns
-        unsupported_missing = (missing_columns | missing_write_columns) - set(iceberg._COMMENT_REFERENCE_COLUMNS)
+        unsupported_missing = (missing_columns | missing_write_columns) - set(iceberg._COMMENT_ADDED_COLUMNS)
         if unsupported_missing:
             raise ValueError("Unsupported missing comment columns: " + ", ".join(sorted(unsupported_missing)))
         # A dry run must not migrate the catalog. Nullable fields absent from
