@@ -433,6 +433,54 @@ def test_partial_writer_carries_exact_siblings_and_refuses_cold_start(tmp_path, 
     assert artifact.root["spec"]["carriedForward"] == {"b.parquet": index["families"]["test"]["artifactDigest"]}
 
 
+def test_partial_writer_carries_a_split_sibling_member_for_member(tmp_path, monkeypatch):
+    """A family with a split table (the bill family's ``bill_sections``) takes a partial writer too."""
+    from spicy_regs.pipelines.rollups.base import RollupPipeline
+
+    class Partial(RollupPipeline):
+        name = "partial"
+        publication_family = "test"
+        output = "a.parquet"
+
+        def build(self, output_dir):
+            path = output_dir / self.output
+            pq.write_table(pa.table({"id": ["changed"]}), path)
+            return path
+
+    source = tmp_path / "source"
+    (source / "s" / "congress=118").mkdir(parents=True)
+    (source / "s" / "congress=119").mkdir(parents=True)
+    pq.write_table(pa.table({"id": ["one"]}), source / "a.parquet")
+    for congress in ("118", "119"):
+        pq.write_table(pa.table({"id": [congress], "congress": [congress]}),
+                       source / "s" / f"congress={congress}" / "part-000000.parquet")
+    old = tmp_path / "old"
+    build_generation(old, family="test", files=[source / "a.parquet", source / "s"],
+                     expected_keys=("a.parquet", "s.parquet"), partitioned={"s.parquet": ("congress",)})
+    store = Store()
+    index = publish(store, old)
+    monkeypatch.setenv("R2_PUBLIC_URL", "https://example.test")
+    monkeypatch.setattr(pub, "load_index", lambda url: index)
+
+    def download_members(key, directory):
+        paths = []
+        for member in pub.table_members(pub.current_index("https://example.test"), key):
+            path = directory / member.key
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(store.objects[member.path])
+            paths.append(path)
+        return paths
+
+    monkeypatch.setattr(r2, "download_members", download_members)
+    Partial(output_dir=tmp_path / "warm", skip_upload=True).run()
+    artifact = verify_generation(next((tmp_path / "warm" / "generations").iterdir()))
+    assert artifact.root["spec"]["carriedForward"] == {}, "a split table is carried member for member, not whole"
+    assert artifact.root["spec"]["tables"]["s.parquet"]["partitionColumns"] == ["congress"]
+    members = {path.relative_to(old).as_posix(): path.read_bytes() for path in (old / "s").rglob("*.parquet")}
+    generation = next((tmp_path / "warm" / "generations").iterdir())
+    assert {key: (generation / key).read_bytes() for key in members} == members, "each member's bytes, unchanged"
+
+
 @pytest.mark.parametrize("failure", [OSError("interrupted transfer"), error("PreconditionFailed")])
 def test_a_failed_version_1_write_is_logged_and_repaired_by_the_next_publish(tmp_path, failure):
     """Version 2 is the pointer, so the publish stands; version 1 stays behind until any writer derives it again.

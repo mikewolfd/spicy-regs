@@ -13,6 +13,7 @@ from hashlib import sha256
 from importlib.metadata import version as package_version
 from dataclasses import replace
 from pathlib import Path
+from types import SimpleNamespace
 
 import pyarrow.parquet as pq
 import pyarrow as pa
@@ -552,17 +553,110 @@ def test_legacy_archive_stamp_without_completion_evidence_is_rechecked(tmp_path,
     assert body.requested == [], "the verified body/diff rows still qualify a completed bill skip"
 
 
-def test_refused_archive_member_is_not_remembered_as_complete(tmp_path, scoped):
-    class RefusedMember(StubBulkAcquirer):
+def status_refusals(paths):
+    metadata = pq.read_schema(paths[build.ARCHIVES_TABLE]).metadata or {}
+    return json.loads(metadata.get(build.STATUS_REFUSALS_KEY.encode(), b"{}"))
+
+
+class RefusedMember(StubBulkAcquirer):
+    """The folder also holds 119 H.R. 6029, whose document the reader refuses."""
+
+    def acquire(self, *args, **kwargs):
+        result = super().acquire(*args, **kwargs)
+        if result.archive is not None:
+            refused = SimpleNamespace(
+                name="BILLSTATUS-119hr6029.xml",
+                identity=replace(IDENTITY, number=6029),
+                status=None,
+                refusal="BILLSTATUS document is not UTF-8",
+            )
+            result.archive = _Archive([*result.archive.members, refused])
+            result.archive.refused_count = 1
+        return result
+
+
+def test_a_refused_member_is_recorded_and_read_again_only_under_another_reader(tmp_path, scoped, monkeypatch):
+    """A document the reader refuses does not send its folder's zip back to the network every run."""
+    first, _, _ = run(tmp_path / "first", bulk=RefusedMember())
+    assert completed_scopes(first) == [["119", "hr"]], "the refusal is recorded, so the folder is complete"
+    record = status_refusals(first)["119-hr-6029"]
+    assert record["reader"] == build.status_reader() and record["refusal"] == "BILLSTATUS document is not UTF-8"
+    assert record["folder"] == "119-hr" and record["zip"] == "2026-09-18T20:26:00+00:00|31656886"
+    second, bulk, _ = run(tmp_path / "second", prior=tmp_path / "first", bulk=RefusedMember())
+    assert bulk.zip_downloads == [], "the same zip under the same reader would refuse the same document"
+    assert status_refusals(second) == status_refusals(first), "an unread folder's refusals are carried forward"
+    monkeypatch.setattr(build, "status_reader", lambda: "status-v1;code=another")
+    _, bulk, _ = run(tmp_path / "third", prior=tmp_path / "second", bulk=RefusedMember())
+    assert bulk.zip_downloads == [(119, "hr")], "another reader retries the refusal"
+
+
+def test_a_folder_of_refused_documents_is_read_again_under_another_reader(tmp_path, scoped, monkeypatch):
+    """No shaped bill goes stale to reopen such a folder, so the recorded refusal's own reader does."""
+
+    class RefusedOnly(RefusedMember):
         def acquire(self, *args, **kwargs):
             result = super().acquire(*args, **kwargs)
-            result.archive.refused_count = 1
+            if result.archive is not None:
+                result.archive = _Archive([member for member in result.archive.members if member.status is None])
             return result
 
-    first, _, _ = run(tmp_path / "first", bulk=RefusedMember())
-    assert completed_scopes(first) == []
-    _, bulk, _ = run(tmp_path / "second", prior=tmp_path / "first")
+    run(tmp_path / "first", bulk=RefusedOnly())
+    _, bulk, _ = run(tmp_path / "second", prior=tmp_path / "first", bulk=RefusedOnly())
+    assert bulk.zip_downloads == []
+    monkeypatch.setattr(build, "status_reader", lambda: "status-v1;code=another")
+    _, bulk, _ = run(tmp_path / "third", prior=tmp_path / "second", bulk=RefusedOnly())
+    assert bulk.zip_downloads == [(119, "hr")], "another reader retries the refusal"
+
+
+#: The fixture bill with its introduced printing listed twice: 3 text versions, 2 distinct printings, which
+#: leaves the bill pending (``version_count`` against its listed rows) however often its status is read.
+_TWICE_LISTED = (FIXTURES / "status-119hr6028.xml").read_bytes().replace(
+    b"    </textVersions>",
+    b"""      <item>
+        <type>Introduced in House</type>
+        <date>2025-11-12T05:00:00Z</date>
+        <formats>
+          <item>
+            <url>https://www.govinfo.gov/content/pkg/BILLS-119hr6028ih/xml/BILLS-119hr6028ih.xml</url>
+          </item>
+        </formats>
+      </item>
+    </textVersions>""",
+)
+
+
+def test_a_bill_its_read_leaves_in_doubt_does_not_reopen_its_folder_every_run(tmp_path, scoped):
+    """26 live bills of the 108th-111th and 117th reopened their folders every run (2026-09-29): a doubt the same
+    zip and reader cannot settle is recorded, not read again."""
+    first, _, _ = run(tmp_path / "first", bulk=StubBulkAcquirer(status=_TWICE_LISTED))
+    assert status_refusals(first)["119-hr-6028"]["refusal"] == "version_count 3 against 2 distinct printings"
+    _, bulk, _ = run(tmp_path / "second", prior=tmp_path / "first", bulk=StubBulkAcquirer(status=_TWICE_LISTED))
+    assert bulk.zip_downloads == [], "the bill stays pending, and its folder's zip stays unread"
+    moved = StubBulkAcquirer(entry=lambda c, t: zip_entry(c, t, size=31_658_670), status=_TWICE_LISTED)
+    _, bulk, _ = run(tmp_path / "third", prior=tmp_path / "first", bulk=moved)
+    assert bulk.zip_downloads == [(119, "hr")], "a moved zip is read"
+
+
+def test_a_bill_dropped_from_its_zip_does_not_reopen_its_folder_every_run(tmp_path, scoped, monkeypatch):
+    """A bill a BILLSTATUS read published and its zip no longer holds keeps an old reader forever: record the drop."""
+
+    class Both(StubBulkAcquirer):
+        def acquire(self, congress, bill_type, **kwargs):
+            result = super().acquire(congress, bill_type, **kwargs)
+            if result.archive is not None and (congress, bill_type) == (119, "hr"):
+                body = (FIXTURES / "status-119hr6028.xml").read_bytes().replace(b"6028", b"6029")
+                other = _Member(parse_bill_status(body, identity=replace(IDENTITY, number=6029)))
+                result.archive = _Archive([*result.archive.members, other])
+            return result
+
+    run(tmp_path / "first", bulk=Both())
+    monkeypatch.setattr(build, "status_reader", lambda: "status-v1;code=another")
+    moved = lambda c, t: zip_entry(c, t, size=31_658_670)  # noqa: E731 — one stub entry
+    second, bulk, _ = run(tmp_path / "second", prior=tmp_path / "first", bulk=StubBulkAcquirer(entry=moved))
     assert bulk.zip_downloads == [(119, "hr")]
+    assert status_refusals(second)["119-hr-6029"]["refusal"] == build.DROPPED_REFUSAL
+    _, bulk, _ = run(tmp_path / "third", prior=tmp_path / "second", bulk=StubBulkAcquirer(entry=moved))
+    assert bulk.zip_downloads == [], "the dropped bill's old reader does not reopen the unchanged zip"
 
 
 def test_failed_held_neighbour_refresh_preserves_its_complete_row(tmp_path, scoped):
@@ -946,7 +1040,10 @@ def test_a_capped_run_records_the_reader_of_each_bill_it_read(tmp_path, scoped, 
     assert readers(first) == {"119-hr-6028": build.status_reader()}
     status_reads.clear()
     _, bulk, _ = run(tmp_path / "second", prior=tmp_path / "first", budget=1, bulk=TwoBills())
-    assert bulk.zip_downloads == [(119, "hr")], "the refused member left its folder incomplete"
+    assert bulk.zip_downloads == [] and status_reads == [], "the recorded refusal does not reopen the same zip"
+    moved = TwoBills(entry=lambda c, t: zip_entry(c, t, size=31_658_670))
+    _, bulk, _ = run(tmp_path / "third", prior=tmp_path / "first", budget=1, bulk=moved)
+    assert bulk.zip_downloads == [(119, "hr")], "a moved zip is read"
     assert status_reads == ["119-hr-6029"], "the bill the capped run read is not read again"
 
 
@@ -965,11 +1062,15 @@ def test_a_member_shaped_without_a_bill_row_records_no_reader(tmp_path, scoped, 
     first, _, _ = run(tmp_path / "first", prior=tmp_path / "held", bulk=TwoBills())
     assert status_reads == ["119-hr-6028", "119-hr-6029"], "both members are shaped"
     assert readers(first) == {"119-hr-6028": build.status_reader()}, "only the one with a bill row is recorded"
-    monkeypatch.setattr(build, "build_family", shape)
+    assert status_refusals(first)["119-hr-6029"]["refusal"] == "no congress_bills row"
     status_reads.clear()
     _, bulk, _ = run(tmp_path / "second", prior=tmp_path / "first", bulk=TwoBills())
-    assert bulk.zip_downloads == [(119, "hr")], "the member without a row left its folder incomplete"
-    assert status_reads == ["119-hr-6029"], "and it alone is read again"
+    assert bulk.zip_downloads == [] and status_reads == [], "the same zip and reader would shape no row again"
+    monkeypatch.setattr(build, "build_family", shape)
+    moved = TwoBills(entry=lambda c, t: zip_entry(c, t, size=31_658_670))
+    _, bulk, _ = run(tmp_path / "third", prior=tmp_path / "first", bulk=moved)
+    assert bulk.zip_downloads == [(119, "hr")], "a moved zip is read"
+    assert status_reads == ["119-hr-6029"], "and the member without a row alone is read again"
 
 
 def test_a_run_over_another_congress_keeps_the_119th_reader_record(tmp_path, scoped, status_reads, monkeypatch):

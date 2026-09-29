@@ -56,10 +56,10 @@ def test_retained_good_pdf_and_failed_attachment_keep_aggregate_and_each_result(
     assert (row["text_content"], row["text_extraction_status"]) == expected
     assert stats == {"selected": 1, "ok": 1, "empty": 0, "encrypted": 0, "error": 0}
     assert json.loads(row[FIELD]) == [
-        {"url": good_url, "source_sha256": sha256(raw).hexdigest(), "status": "ok", "page_count": 2, "error": None},
+        {"url": good_url, "source_sha256": "sha256:" + sha256(raw).hexdigest(), "status": "ok", "page_count": 2, "error": None},
         {
             "url": bad_url,
-            "source_sha256": sha256(failed).hexdigest() if failed is not None else None,
+            "source_sha256": "sha256:" + sha256(failed).hexdigest() if failed is not None else None,
             "status": "error",
             "page_count": bad_result.page_count if bad_result is not None else None,
             "error": bad_result.error if bad_result is not None else "fetch returned no bytes",
@@ -82,7 +82,7 @@ def test_distinct_equal_byte_urls_keep_source_order_and_individual_diagnostics()
     output, _ = enrich("documents", frame("documents", [*urls, urls[0]]), fetch=lambda _: raw, extract=extract)
     entries = json.loads(output[FIELD][0])
     assert [entry["url"] for entry in entries] == urls
-    assert [entry["source_sha256"] for entry in entries] == [sha256(raw).hexdigest()] * 2
+    assert [entry["source_sha256"] for entry in entries] == ["sha256:" + sha256(raw).hexdigest()] * 2
     assert calls == [raw]  # Sequential workers exercise the existing digest cache.
     assert output["text_content"][0] == "Shared bytes\n\nShared bytes"
 

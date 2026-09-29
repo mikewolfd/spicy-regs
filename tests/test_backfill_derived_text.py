@@ -8,6 +8,7 @@ limit / overwrite semantics — all against the fake in-memory S3 resource.
 from __future__ import annotations
 
 import json
+import re
 
 import duckdb
 import polars as pl
@@ -79,7 +80,7 @@ def test_enrich_fills_from_derived_data_using_agency_column() -> None:
     assert all(r["text_extraction_status"] == "derived" for r in out.iter_rows(named=True))
     provenance = json.loads(by_id["ACF-2025-0038-0015"]["pdf_extraction_results_json"])
     assert [(a["attachment"], a["tool"]) for a in provenance["attachments"]] == [(1, "pypdf"), (2, "pypdf")]
-    assert all(len(a["sha256"]) == 64 for a in provenance["attachments"])
+    assert all(re.fullmatch(r"sha256:[0-9a-f]{64}", a["sha256"]) for a in provenance["attachments"])
 
 
 def test_enrich_with_explicit_agency_override() -> None:

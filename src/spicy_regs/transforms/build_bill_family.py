@@ -32,6 +32,7 @@ from spicy_docs.interpretation.bill_family import (
     installed_engine_stamp,
 )
 from spicy_docs.interpretation.bill_family import build_bill_family as build_family
+from spicy_docs.interpretation.bill_stage import infer_stage
 from spicy_docs.interpretation.bill_summaries import summarize_bill, summarize_diff
 from spicy_docs.interpretation.gemini_call import DEFAULT_MODEL, model_call
 from spicy_docs.interpretation.section_classification import classify_sections
@@ -83,6 +84,12 @@ from spicy_regs.sources.congress_bills import (
     _resolve_api_key,
     bill_detail,
     listing_reader,
+)
+from spicy_regs.transforms.bill_family_cbo import (
+    cost_estimate_publication,
+    law_bills_from,
+    prior_citations,
+    read_cbo_feeds,
 )
 from spicy_regs.transforms.bill_family_bodies import (
     ACQUIRED_SOURCE,
@@ -161,11 +168,29 @@ ARCHIVE_COLUMNS: tuple[str, ...] = (
 ARCHIVE_IDENTITY: tuple[str, ...] = ("congress", "bill_type")
 
 # Qualifies the folder's status: every member parsed and every rebuilt bill
-# shaped. A source listing stamp alone never proves that this work completed.
-# v3 requires the dated cosponsor reader. Earlier completion cannot qualify
-# this output, even when the publisher archive stamp is unchanged.
-ARCHIVE_COMPLETION_KEY = "spicy_regs.bill_family.completed_archive_scopes.v3"
-ARCHIVE_COMPLETION_KEYS_READ = (ARCHIVE_COMPLETION_KEY,)
+# shaped, or its refusal recorded (``STATUS_REFUSALS_KEY``). A source listing
+# stamp alone never proves that this work completed. v3 required the dated
+# cosponsor reader and no refusal at all; v4 admits a recorded refusal, so a
+# folder holding one document no reader can shape is not downloaded every run.
+# A v3 scope is a v4 one too (it had no refusal), so both are read. Earlier
+# completion cannot qualify this output, even when the publisher archive stamp
+# is unchanged.
+ARCHIVE_COMPLETION_KEY = "spicy_regs.bill_family.completed_archive_scopes.v4"
+ARCHIVE_COMPLETION_KEYS_READ = (ARCHIVE_COMPLETION_KEY, "spicy_regs.bill_family.completed_archive_scopes.v3")
+
+#: The status reads that settled nothing, by bill: a document the reader refused, a shaped bill whose rows leave its
+#: status in doubt (its ``version_count`` against its distinct printings, or no ``congress_bills`` row), and a bill a
+#: BILLSTATUS read published that its folder's zip no longer holds. Each is ``{"folder", "zip", "reader",
+#: "refusal"}``: the zip entry it was found in (``modified_at|size``) and the reader that found it. Such a bill does
+#: not reopen its folder while the folder still holds that zip and that reader runs, since reading the same bytes with
+#: the same code settles nothing; a moved zip or another reader reads it again. Before this record, each one reopened
+#: its folder on every run: 26 bills in ten folders of the 108th-111th and 117th (a printing listed twice, or one the
+#: publisher lists without a type), measured on the live generation of 2026-09-29. Parquet metadata on the archives
+#: table, in the shape ``refusal_state`` reads, beside the package refusals it mirrors.
+STATUS_REFUSALS_KEY = "spicy_regs.bill_family.status_refusals.v1"
+
+#: The refusal a status read records for a bill its folder's zip no longer holds.
+DROPPED_REFUSAL = "dropped: the folder's zip holds no document for this bill"
 
 #: Which reader read each bill's status, in the same metadata: ``{reader: {"119-hr": "1-7120,7122"}}``, each
 #: bill's number under the :func:`status_reader` of its last status read. A bill's rows are what that reader
@@ -240,9 +265,10 @@ LIST_WALK_MAX_PAGES = 2_500
 #: per bill the backfill has attempted: filled (``refusal`` NULL, the
 #: ``congress_bills`` row is published) or refused (``refusal`` names the
 #: error class). That is the CRS summaries resume pattern this repository's
-#: AGENTS.md points at — resume skips only a success and retries every
-#: failure — and, per ``(congress, bill_type)`` walked, the route's declared
-#: total against what was walked.
+#: AGENTS.md points at — resume skips a success and retries a failure, except a
+#: settled one (:data:`SETTLED_REFUSALS`: refused under this reader, at this
+#: list stamp) — and, per ``(congress, bill_type)`` walked, the route's
+#: declared total against what was walked.
 BACKFILLS_TABLE = "bill_family_backfills"
 BACKFILL_WALKS_TABLE = "bill_family_backfill_walks"
 
@@ -588,6 +614,7 @@ def _download_prior(output_dir: Path, download_prior: Callable[[str, Path], bool
         name: published_table(output_dir, name, download_prior)
         for name in (
             *SNAPSHOT_TABLES,
+            "bill_actions",
             "section_diffs",
             "section_diff_items",
             "cbo_cost_estimates",
@@ -1120,12 +1147,47 @@ def _retained_entry(acquirer: BulkStatusSource, acquisition: Any, congress: int,
     return _archive_row(entry, congress=congress, bill_type=bill_type, observed_at=capture.observed_at)
 
 
+def rederived_stages(actions: Path | None, bill_ids: Collection[str] | None = None) -> dict[str, str]:
+    """Each bill's stage as the running rule reads its published ``bill_actions``, for ``bill_ids`` (all when None).
+
+    The rows are passed as ``bill_family`` passes a BILLSTATUS list: in publisher order (``action_index``), newest
+    first, so an unchanged bill re-derives the stage this run publishes. Folded over the live generation, this
+    reproduced every published stage under the rule that wrote it (spicy-docs' 0.51.0 stage replay). A bill with
+    no published action is absent: no rule read it.
+    """
+    import duckdb
+
+    if actions is None or not _has_columns(actions, ("bill_id", "action_index", "action_text", "action_date")):
+        return {}
+    wanted = duckdb.sql("SELECT UNNEST(?::VARCHAR[]) AS bill_id", params=[sorted(bill_ids or ())])  # noqa: F841 — read by name below
+    only = "" if bill_ids is None else "SEMI JOIN wanted w ON t.bill_id = w.bill_id"
+    rows = duckdb.sql(
+        "SELECT t.bill_id, t.action_text, t.action_code, t.action_type, t.action_date, t.action_time "
+        f"FROM read_parquet('{actions}') t {only} ORDER BY t.bill_id, TRY_CAST(t.action_index AS INTEGER)"
+    ).fetchall()
+    stages: dict[str, str] = {}
+    current, held = None, []
+    for bill, text_, code, kind, date, time in (*rows, (None, None, None, None, None, None)):
+        if bill != current:
+            if current is not None:
+                stages[current] = infer_stage(held, newest_first=True).stage
+            current, held = bill, []
+        held.append({"text": text_, "actionCode": code, "type": kind, "actionDate": date, "actionTime": time})
+    return stages
+
+
 def _prior_snapshot(paths: Mapping[str, Path | None], bill_ids: Collection[str]) -> Any:
-    """The prior rows for *this run's* bills only, as an event snapshot.
+    """The prior rows for *this run's* bills only, as an event snapshot, each prior stage read by the running rule.
 
     Filtered in DuckDB rather than in Python: activity events only ever compare
     bills this run rebuilt, so pulling the whole published table into a list to
     compare a few thousand of them is work with no answer attached to it.
+
+    A stage rule that changes moves the published stage of bills whose actions did not (spicy-docs 0.51.0 moved
+    154,374), and a ``stage_changed`` event for each would state a rule change as a legislative one. So each prior
+    bill's stage is re-derived from its published actions under the running rule (owner decision 2026-09-28, over a
+    blanket switch): a bill whose actions did not change compares equal, and one whose actions did emits the move
+    the running rule reads. A bill with no published action keeps its published stage.
     """
     import duckdb
 
@@ -1147,6 +1209,15 @@ def _prior_snapshot(paths: Mapping[str, Path | None], bill_ids: Collection[str])
             .to_pylist()
         )
         logger.info("Bill family: prior {} contributes {:,} rows for this run's bills", name, len(rows[name]))
+    stages = rederived_stages(paths.get("bill_actions"), bill_ids)
+    moved = 0
+    for row in rows["congress_bills"]:
+        stage = stages.get(row["bill_id"])
+        if stage is not None and stage != row["stage"]:
+            row["stage"] = stage
+            moved += 1
+    if moved:
+        logger.info("Bill family: {:,} prior stages move under the running rule alone, so emit no event", moved)
     return snapshot_from_rows(**{_SNAPSHOT_ARG[name]: rows[name] for name in SNAPSHOT_TABLES})
 
 
@@ -1277,6 +1348,8 @@ class BackfillState:
 
     filled: dict[BackfillKey, str] = field(default_factory=dict)
     refused: dict[BackfillKey, str] = field(default_factory=dict)
+    #: The error class each refusal recorded (the state table's ``refusal``).
+    reasons: dict[BackfillKey, str] = field(default_factory=dict)
 
     def count(self, congress: str, bill_type: str) -> tuple[int, int]:
         """``(filled, refused)`` for one walk unit."""
@@ -1302,6 +1375,7 @@ def _held_backfills(path: Path | None) -> BackfillState:
             state.filled[key] = stamp
         else:
             state.refused[key] = stamp
+            state.reasons[key] = str(row["refusal"])
     logger.info(
         "Bill family backfill: {:,} filled and {:,} refused bills retained from the last run",
         len(state.filled),
@@ -1365,6 +1439,12 @@ class _BackfillOutcome:
     refused: int
 
 
+#: The refusals a backfilled bill's own record earned: the detail route answered and the record could not be shaped
+#: (no title, no ``congress_bills`` row). Recorded with the reader, they are not asked again every run; every other
+#: class -- a transport failure, a route refusal -- is.
+SETTLED_REFUSALS = frozenset({"ValueError", "TypeError"})
+
+
 class _CapReached(Exception):
     """Internal: the run's shared fetch budget ran out mid-backfill."""
 
@@ -1400,13 +1480,24 @@ class _Backfill:
         classify: SectionClassifier | None,
         summarize: BillSummarizer | None,
         summarize_diff: DiffSummarizer | None,
+        readers: dict[str, str] | None = None,
+        reader: str = "",
+        law_bills: Mapping[str, str] | None = None,
     ) -> None:
         self.source = source
         self.state = state
         self.remaining = remaining
         self.build = functools.partial(
-            build_family, engine=engine, classify=classify, summarize=summarize, summarize_diff=summarize_diff
+            build_family,
+            engine=engine,
+            classify=classify,
+            summarize=summarize,
+            summarize_diff=summarize_diff,
+            law_bills=law_bills,
         )
+        #: Each filled bill's reader (``STATUS_REFUSALS_KEY``'s sibling, ``STATUS_READERS_KEY``), updated in place.
+        self.readers = {} if readers is None else readers
+        self.reader = reader
         self.families: list[BillFamilyTables] = []
         self.touched: set[str] = set()
         self.state_rows: list[dict[str, Any]] = []
@@ -1451,23 +1542,54 @@ class _Backfill:
             )
             self.state.filled.pop(key, None)
             self.state.refused[key] = stamp
+            self.state.reasons[key] = type(error).__name__
+            self.readers[bill_key(identity)] = self.reader
             self.state_rows.append(_state_row(key, stamp, type(error).__name__, _detected_at()))
             return False
         self.families.append(replace(built, bills=(row,)))
         self.touched.add(bill_key(status.identity))
+        self.readers[bill_key(status.identity)] = self.reader
         self.state.refused.pop(key, None)
         self.state.filled[key] = stamp
         self.state_rows.append(_state_row(key, stamp, None, detail_at))
         return True
 
+    def settled_refusal(self, key: BackfillKey, stamp: str | None = None) -> bool:
+        """Whether a retained refusal would recur: this reader shaped the record and refused it, at this stamp.
+
+        The detail route answered, and the reader or the shaper refused what it said (:data:`SETTLED_REFUSALS`), so
+        the same record under the same code refuses again; it is asked again when its list stamp moves or another
+        reader runs. A transport or route failure is not settled: it is retried next run.
+        """
+        return (
+            self.state.reasons.get(key) in SETTLED_REFUSALS
+            and self.readers.get(f"{key[0]}-{key[1]}-{key[2]}") == self.reader
+            and (stamp is None or self.state.refused.get(key) == stamp)
+        )
+
     def retry_refusals(self, congresses: Sequence[int], bill_types: Sequence[str]) -> None:
-        """Every retained refusal in scope, newest Congress first, one request each and no walk."""
+        """Every retained refusal in scope, newest Congress first, one request each and no walk; a settled one waits."""
         in_scope = {str(congress) for congress in congresses}
         for key in sorted(self.state.refused, key=lambda key: (-int(key[0]), key[1], int(key[2]))):
-            if key[0] not in in_scope or key[1] not in bill_types:
+            if key[0] not in in_scope or key[1] not in bill_types or self.settled_refusal(key):
                 continue
             identity = BillIdentity(congress=int(key[0]), bill_type=key[1], number=int(key[2]))
             self.attempt(identity, self.state.refused[key])
+
+    def reread_stale(self, congresses: Sequence[int], bill_types: Sequence[str]) -> None:
+        """Every filled bill in scope another reader, or none, read: one detail request each, newest Congress first.
+
+        A SpicyDocs release that changes the code re-reads each backfilled bill once, as the status pass re-reads a
+        BILLSTATUS one; the shared cap spreads the re-reads over runs, and a bill re-read stops being stale.
+        """
+        in_scope = {str(congress) for congress in congresses}
+        for key in sorted(self.state.filled, key=lambda key: (-int(key[0]), key[1], int(key[2]))):
+            if key[0] not in in_scope or key[1] not in bill_types or key in self.attempted:
+                continue
+            if self.readers.get(f"{key[0]}-{key[1]}-{key[2]}") == self.reader:
+                continue
+            identity = BillIdentity(congress=int(key[0]), bill_type=key[1], number=int(key[2]))
+            self.attempt(identity, self.state.filled[key])
 
     def walk(self, congress: int, bill_type: str) -> bool:
         """One walk unit's pages, each charged, each record filled unless its retained stamp matches.
@@ -1512,7 +1634,7 @@ class _Backfill:
                         repeated += 1
                         continue
                     seen.add(key)
-                    if self.state.filled.get(key) == stamp or key in self.attempted:
+                    if self.state.filled.get(key) == stamp or key in self.attempted or self.settled_refusal(key, stamp):
                         continue
                     self.attempt(identity, stamp)
         finally:
@@ -1555,18 +1677,24 @@ def _run_backfill(
     classify: SectionClassifier | None,
     summarize: BillSummarizer | None,
     summarize_diff: DiffSummarizer | None,
+    readers: dict[str, str] | None = None,
+    reader: str = "",
+    law_bills: Mapping[str, str] | None = None,
 ) -> _BackfillOutcome:
-    """Retry last run's refusals, then walk every unsettled ``(congress, bill_type)``, newest first.
+    """Retry last run's refusals, re-read the bills another reader filled, then walk every unsettled unit.
 
     The budget is the rollup's own per-run cap (``remaining``, shared with the
     bulk printings) and every request — a retried detail, a list page, a
     walked detail — is charged to it. When it runs out the pass stops where
     it stands: the walk row records how far that unit got, and the next run
     resumes on the retained state. Resume is the state table: a retained
-    refusal is retried directly, without a walk; a bill whose state row still
-    matches its list stamp costs no request; a unit walked complete with
-    every record filled, refused or unwalkable is not walked again (a refused
-    bill keeps being retried, one request a run, so a permanently gapped unit
+    refusal is retried directly, without a walk, unless it is settled (the
+    record was shaped and refused by this reader at this list stamp, which
+    would only refuse again); a bill whose state row still matches its list
+    stamp and whose reader is the running one costs no request, and one
+    another reader filled is re-read once, within the cap; a unit walked
+    complete with every record filled, refused or unwalkable is not walked
+    again (a transport refusal is retried, one request a run, so a gapped unit
     costs one request per gap rather than a page walk). Only an unsettled unit
     pays for its pages again, because only a walk can reach the records it
     did not.
@@ -1579,10 +1707,14 @@ def _run_backfill(
         classify=classify,
         summarize=summarize,
         summarize_diff=summarize_diff,
+        readers=readers,
+        reader=reader,
+        law_bills=law_bills,
     )
     with list_source:
         try:
             pass_.retry_refusals(congresses, bill_types)
+            pass_.reread_stale(congresses, bill_types)
             for congress in congresses:
                 for bill_type in bill_types:
                     if _settled(prior_walks.get((str(congress), bill_type)), state, str(congress), bill_type):
@@ -1614,6 +1746,7 @@ def build_bill_family(
     body_acquirer: PackageBodySource | None = None,
     bills_acquirer: BulkBillsSource | None = None,
     list_source: ListBackfillSource | None = None,
+    cbo_acquirer: Any = None,
     max_version_fetches: int = MAX_VERSION_FETCHES,
     download_prior: Callable[[str, Path], bool] = r2.download,
     download_members: Callable[[str, Path], Sequence[Path]] = download_prior_members,
@@ -1710,11 +1843,22 @@ def build_bill_family(
 
     # 1. What the last run already published, so this one can skip it.
     prior_paths = _download_prior(output_dir, download_prior)
+    _require_spelled_digests(prior_paths)
     split_priors = {name: published_members(output_dir, name, download_members) for name in PARTITIONED}
     index = _prior_index(
         prior_paths, split_priors["bill_sections"], in_scope=lambda bill: _in_scope(bill, bulk_congresses, bill_types)
     )
+    # The published ``laws`` table names each public law's bill, best-effort, for the CBO titles led by a law.
+    law_bills = law_bills_from(published_table(output_dir, "laws", download_prior))
+    # Every bill's reader, carried forward, and this run's code for each status it shapes.
+    readers, reader = dict(index.status_readers), status_reader()
     held_archives = _held_archives(prior_paths.get(ARCHIVES_TABLE))
+    status_refusals = _held_refusals(prior_paths.get(ARCHIVES_TABLE), STATUS_REFUSALS_KEY)
+    # A folder whose refusals another reader recorded is read again, so a release retries them.
+    for record in status_refusals.values():
+        if record.get("reader") != reader:
+            congress_, _, bill_type_ = str(record.get("folder", "")).partition("-")
+            held_archives.pop((congress_, bill_type_), None)
     # An unchanged archive still needs a read for a status row in doubt: one a
     # BILLSTATUS read wrote (it states a schema version) before this rollup
     # recorded CBO outcomes, or one the prior index reopens. A row no BILLSTATUS
@@ -1723,8 +1867,13 @@ def build_bill_family(
     # it does not hold -- the 119th's six H.R. numbers reserved for the Speaker
     # and the Minority Leader, listed by the retired list writer with an API
     # URL -- and no read of the zip can qualify it; the zip moves when it starts
-    # to hold the bill. Bodies and comparisons are the body pass's.
+    # to hold the bill. Nor does a bill this reader already found refused in, or
+    # dropped from, the very zip the folder still holds (``STATUS_REFUSALS_KEY``):
+    # reading the same bytes with the same code cannot settle it. Bodies and
+    # comparisons are the body pass's.
     bills_prior = prior_paths.get("congress_bills")
+    # The bills a BILLSTATUS read published, by folder: a read of the folder's zip that holds none of one drops it.
+    status_bills: dict[tuple[str, str], set[str]] = {}
     # A prior without the frozen identity columns names no folder to reopen.
     if bills_prior is not None and _has_columns(bills_prior, ("bill_id", "congress", "bill_type")):
         import duckdb
@@ -1736,7 +1885,13 @@ def build_bill_family(
         for bill_id, congress, bill_type, schema_version in duckdb.sql(
             f"SELECT bill_id, congress, bill_type, {version} FROM read_parquet('{bills_prior}')"
         ).fetchall():
-            if schema_version is not None and (bill_id in index.pending_bills or bill_id not in index.bill_text_dates):
+            if schema_version is not None:
+                status_bills.setdefault((congress, bill_type), set()).add(bill_id)
+            if (
+                schema_version is not None
+                and (bill_id in index.pending_bills or bill_id not in index.bill_text_dates)
+                and not _settled_refusal(status_refusals.get(bill_id), reader, held_archives.get((congress, bill_type)))
+            ):
                 held_archives.pop((congress, bill_type), None)
 
     if prior_paths.get("bill_versions") is None or bills_prior is None:
@@ -1753,8 +1908,8 @@ def build_bill_family(
     retired_versions: set[tuple[str, ...]] = set()
     archive_rows: list[dict] = []
     vote_rows: list[dict] = []
-    # Every bill's reader, carried forward, and this run's code for each status it shapes.
-    readers, reader = dict(index.status_readers), status_reader()
+    # Each parsed bill's own report citations, which its CBO feed rows carry.
+    citations: dict[BillIdentity, tuple[str, ...]] = {}
     bills = unchanged = skipped = archives_skipped = votes_refused = 0
     for congress in bulk_congresses:
         for bill_type in bill_types:
@@ -1784,12 +1939,23 @@ def build_bill_family(
                 archive.refused_count,
             )
             skipped += archive.refused_count
-            archive_complete = archive.refused_count == 0
             completed_archives.discard(scope)
+            folder = f"{congress}-{bill_type}"
+            read_zip = None if retained is None else _zip_stamp(retained["modified_at"], retained["size"])
+            # This read restates every refusal and drop of the folder.
+            for key in [key for key, record in status_refusals.items() if record.get("folder") == folder]:
+                del status_refusals[key]
+            refusal = functools.partial(_status_refusal, folder=folder, zip_stamp=read_zip, reader=reader)
+            held_bills: set[str] = set()
             for member in archive.members:
+                if member.identity is not None:
+                    held_bills.add(bill_key(member.identity))
                 if member.status is None:
+                    name = bill_key(member.identity) if member.identity is not None else f"{folder}/{member.name}"
+                    status_refusals[name] = refusal(scrub_credential(member.refusal or "refused by the reader", ""))
                     continue
                 identifier = bill_key(member.status.identity)
+                citations[member.status.identity] = tuple(member.status.report_citations)
                 # A matching publisher stamp skips the bill: its printings'
                 # bodies and comparisons are the body pass's, not a reason to
                 # read its status again.
@@ -1809,7 +1975,7 @@ def build_bill_family(
                 )
                 # No documents here, so nothing to compare or model: diff=False
                 # keeps the provider from refusing every pair of placeholders.
-                tables = build_family(capture, engine=stamp, diff=False)
+                tables = build_family(capture, engine=stamp, diff=False, law_bills=law_bills)
                 # A row whose package belongs to another listed printing
                 # describes that printing under the wrong key: retire it.
                 retired_versions.update(
@@ -1819,22 +1985,25 @@ def build_bill_family(
                 )
                 if tables.bills:
                     readers[identifier] = reader
-                else:
-                    archive_complete = False
+                if doubt := _status_doubt(tables, codes):
+                    status_refusals[identifier] = refusal(doubt)
                 families.append(tables)
                 rows, refused = vote_reference_rows(member.status, observed_at=observed_at)
                 vote_rows.extend(rows)
                 votes_refused += refused
                 touched.add(identifier)
                 bills += 1
+            for dropped in status_bills.get(scope, set()) - held_bills:
+                status_refusals[dropped] = refusal(DROPPED_REFUSAL)
             # Every visited folder's prior row is replaced, so each is written
             # back: the row records the zip that was read; completion is the
             # metadata list's alone. Gating the row on completion emptied the
-            # table whenever a refusal left every visited folder unfinished.
+            # table whenever a refusal left every visited folder unfinished. A
+            # folder completes with its refusals and drops recorded: they are
+            # read again when the zip moves or another reader runs, not every run.
             if retained is not None:
                 archive_rows.append(retained)
-                if archive_complete:
-                    completed_archives.add(scope)
+                completed_archives.add(scope)
 
     # 2b. Bodies, sections and comparisons, by each printing's own state:
     # the printings this run listed and every earlier run's still pending.
@@ -1878,6 +2047,9 @@ def build_bill_family(
                 classify=classify,
                 summarize=summarize,
                 summarize_diff=summarize_diff_call,
+                readers=readers,
+                reader=reader,
+                law_bills=law_bills,
             )
             families.extend(outcome.families)
             touched.update(outcome.touched)
@@ -1895,7 +2067,16 @@ def build_bill_family(
                 ", ".join(API_KEY_ENV_VARS),
             )
 
+    # 2d. CBO's own feed for each scoped Congress, once, for the estimates BILLSTATUS does not state.
+    feed = read_cbo_feeds(
+        bulk_congresses,
+        citations={**prior_citations(prior_paths.get("cbo_cost_estimates"), bulk_congresses), **citations},
+        law_bills=law_bills,
+        acquirer=cbo_acquirer,
+        evidence=evidence,
+    )
     folded = _refuse_repeated_keys(BillFamilyTables.concat([*families, *body.families]))
+    folded = replace(folded, refusals=(*folded.refusals, *feed.refusals))
     # A placeholder a processed body now stands for goes, whether this run's
     # status pass listed it or an earlier run did: one row per printing.
     superseded = body.superseded
@@ -2001,6 +2182,20 @@ def build_bill_family(
     # A bill whose cosponsor rows were refused keeps its prior rows. One set, so the
     # scope below costs O(bills + refusals) rather than a refusal scan per bill.
     refused_cosponsors = {ref.identity[0] for ref in folded.refusals if ref.table == "bill_cosponsors"}
+    # A bill whose CBO outcome was listed replaces its BILLSTATUS rows; a feed read replaces its Congress's feed rows.
+    estimates, estimate_scope = cost_estimate_publication(
+        folded.cbo_cost_estimates,
+        feed,
+        reread={
+            identifier
+            for row in folded.bills
+            if (identifier := row["bill_id"]) is not None
+            and row.get("cbo_cost_estimates_outcome")
+            in {"populated", "requested-empty:absent", "requested-empty:present-and-empty"}
+        },
+        prior=prior_paths.get("cbo_cost_estimates"),
+    )
+    folded = replace(folded, cbo_cost_estimates=tuple(estimates))
     # Each scope names parents whose prior child rows this run replaces --
     # emptying them where the run publishes none.
     replaced: dict[str, ReplacementScope] = {
@@ -2014,20 +2209,7 @@ def build_bill_family(
                 and identifier not in refused_cosponsors
             },
         ),
-        "cbo_cost_estimates": (
-            "bill_id",
-            {
-                identifier
-                for row in folded.bills
-                if (identifier := row["bill_id"]) is not None
-                and row.get("cbo_cost_estimates_outcome")
-                in {
-                    "populated",
-                    "requested-empty:absent",
-                    "requested-empty:present-and-empty",
-                }
-            },
-        ),
+        "cbo_cost_estimates": estimate_scope,
         "bill_versions": (version_identity, retired_versions | superseded | body.unread),
         "bill_sections": (version_identity, section_scopes | retired_versions | body.unread),
         "section_diffs": (pair_identity, retired_pairs),
@@ -2080,6 +2262,7 @@ def build_bill_family(
                 STATUS_READERS_KEY: _readers_metadata(readers),
                 TEXT_REFUSALS_KEY: refusal_metadata(body.refusals),
                 PACKAGE_REFUSALS_KEY: refusal_metadata(body.package_refusals),
+                STATUS_REFUSALS_KEY: refusal_metadata(status_refusals),
             },
         )
     )
@@ -2136,6 +2319,65 @@ def _held_refusals(path: Path | None, key: str) -> dict[str, dict[str, Any]]:
     import pyarrow.parquet as pq
 
     return refusal_state((pq.read_schema(path).metadata or {}).get(key.encode()))
+
+
+def _zip_stamp(modified_at: object, size: object) -> str:
+    """A folder zip's listed instant and size, as its retained archive row spells them."""
+    return f"{modified_at}|{size}"
+
+
+def _status_refusal(refusal: str, *, folder: str, zip_stamp: str | None, reader: str) -> dict[str, str | None]:
+    """One ``STATUS_REFUSALS_KEY`` record: what a status read found, in which zip, under which reader."""
+    return {"folder": folder, "zip": zip_stamp, "reader": reader, "refusal": refusal}
+
+
+def _settled_refusal(record: Mapping[str, Any] | None, reader: str, held: BulkListingEntry | None) -> bool:
+    """Whether ``record`` says this reader already read the zip its folder still holds, so a read settles nothing."""
+    return (
+        record is not None
+        and held is not None
+        and record.get("reader") == reader
+        and record.get("zip") == _zip_stamp(held.modified_at.isoformat(), held.size)
+    )
+
+
+def _status_doubt(tables: BillFamilyTables, codes: Collection[str]) -> str | None:
+    """Why a shaped bill's status stays in doubt after its read, or ``None``: what the prior index reopens it for.
+
+    No ``congress_bills`` row, or a ``version_count`` its distinct printings do not reach (a printing the publisher
+    lists twice, or without a type), which the next run's ``pending_bills`` would read as rows lost.
+    """
+    if not tables.bills:
+        reasons = sorted({refusal.reason for refusal in tables.refusals if refusal.table == "congress_bills"})
+        return "no congress_bills row" + (f": {reasons[0]}" if reasons else "")
+    count = _int_or_none(tables.bills[0].get("version_count"))
+    if count is not None and count != len(codes):
+        return f"version_count {count} against {len(codes)} distinct printings"
+    return None
+
+
+#: The bill-family digests spicy-docs 0.52.0 spells ``sha256:`` and compares strictly: ``bill_summaries.content_hash``
+#: is what this run's ``summary_generated`` events compare. A prior bare value would emit a regeneration event for
+#: every unchanged summary, so the run refuses until the one-time re-spell has run (``prior_repairs``).
+_BARE_DIGEST = "[0-9a-f]{64}"
+
+
+def _require_spelled_digests(paths: Mapping[str, Path | None]) -> None:
+    """Refuse a prior ``bill_summaries`` holding a bare-hex ``content_hash``: the re-spell runs before any compare."""
+    import duckdb
+
+    path = paths.get("bill_summaries")
+    if path is None or not _has_columns(path, ("content_hash",)):
+        return
+    row = duckdb.sql(
+        f"SELECT count(*) FROM read_parquet('{path}') WHERE regexp_full_match(content_hash, '{_BARE_DIGEST}')"
+    ).fetchone()
+    bare = int(row[0]) if row else 0
+    if bare:
+        raise ValueError(
+            f"bill_summaries holds {bare:,} bare-hex content_hash values, which spicy-docs compares strictly; "
+            "run the one-time re-spell first: python -m spicy_regs.pipelines.prior_repairs respell-bill-family-digests"
+        )
 
 
 def _in_scope(bill_id: str, congresses: Collection[int], bill_types: Collection[str]) -> bool:

@@ -174,6 +174,7 @@ class RollupPipeline(Pipeline):
             ):
                 raise publication.PublicationError("Build outputs differ from its declared complete set")
             carried_forward = {}
+            partitioned = dict(self.partitioned)
             publication_status = "complete-family"
             if self.publication_family:
                 prior = prior_index["families"].get(self.publication_family)
@@ -191,12 +192,21 @@ class RollupPipeline(Pipeline):
                     if not written <= set(expected_keys):
                         raise publication.PublicationError("Partial writer output is outside its existing family")
                     for key in expected_keys:
-                        if key not in written:
-                            path = build_dir / key
-                            if not r2.download(key, path):
-                                raise publication.PublicationError(f"Missing carried-forward member: {key}")
-                            out_paths += (path,)
-                            carried_forward[key] = prior["artifactDigest"]
+                        if key in written:
+                            continue
+                        descriptor = prior["tables"][key]
+                        if "members" in descriptor:
+                            # A split sibling is carried member for member, each checked against its pin, and is
+                            # not declared carried whole: publication copies every unchanged member server-side.
+                            r2.download_members(key, build_dir)
+                            out_paths += (build_dir / key.removesuffix(".parquet"),)
+                            partitioned[key] = tuple(descriptor["partitionColumns"])
+                            continue
+                        path = build_dir / key
+                        if not r2.download(key, path):
+                            raise publication.PublicationError(f"Missing carried-forward member: {key}")
+                        out_paths += (path,)
+                        carried_forward[key] = prior["artifactDigest"]
         generations = output_dir / "generations"
         generations.mkdir(exist_ok=True)
         with TemporaryDirectory(prefix=".generation-", dir=output_dir) as staging:
@@ -207,7 +217,7 @@ class RollupPipeline(Pipeline):
                 read_snapshot=prior_index, carried_forward=carried_forward,
                 publication_status=publication_status,
                 inputs=self.source_evidence.inputs() if self.source_evidence else (),
-                parents=parents, partitioned=self.partitioned,
+                parents=parents, partitioned=partitioned,
             )
             destination = generations / artifact.pin.artifact_digest.removeprefix("sha256:")
             if destination.exists():

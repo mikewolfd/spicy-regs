@@ -1699,6 +1699,41 @@ def test_a_repeated_list_entry_is_requested_once_and_counted_so_the_unit_settles
     assert second.paged == [] and second.requested == []
 
 
+def test_a_backfilled_bill_another_reader_filled_is_read_again_within_the_cap(tmp_path, scoped_92, monkeypatch):
+    """Pre-108th bills get the reader check too: a release re-reads each once, the cap spreading it over runs."""
+    import spicy_regs.transforms.build_bill_family as build
+
+    build_bill_family(tmp_path, list_source=_stub_source(_two_bills()), download_prior=_no_prior)
+    readers = build._held_readers(tmp_path / f"{build.ARCHIVES_TABLE}.parquet")
+    assert readers == {"92-hr-2185": build.status_reader(), "92-hr-2190": build.status_reader()}
+    monkeypatch.setattr(build, "status_reader", lambda: "status-v1;code=another")
+    second = _stub_source(_two_bills())
+    build_bill_family(tmp_path, list_source=second, max_version_fetches=1, **_priors(tmp_path))
+    assert second.paged == [] and _numbers(second.requested) == [2185], "one re-read, the cap's worth"
+    third = _stub_source(_two_bills())
+    build_bill_family(tmp_path, list_source=third, **_priors(tmp_path))
+    assert _numbers(third.requested) == [2190], "the next run resumes where the cap stopped"
+    fourth = _stub_source(_two_bills())
+    build_bill_family(tmp_path, list_source=fourth, **_priors(tmp_path))
+    assert fourth.requested == [], "each bill is read once under the new reader"
+
+
+def test_a_detail_refused_after_it_was_shaped_is_not_asked_for_every_run(tmp_path, scoped_92, monkeypatch):
+    """A record the route answered and the reader refused refuses again under the same reader and list stamp."""
+    import spicy_regs.transforms.build_bill_family as build
+
+    untitled = [{**_DETAIL_92_HR_2185, "title": None}, _two_bills()[1]]
+    build_bill_family(tmp_path, list_source=_stub_source(untitled), download_prior=_no_prior)
+    assert [(row["number"], row["refusal"]) for row in _state(tmp_path)] == [("2185", "ValueError"), ("2190", None)]
+    second = _stub_source(untitled)
+    build_bill_family(tmp_path, list_source=second, **_priors(tmp_path))
+    assert second.requested == [], "the same record under the same reader is not asked for again"
+    monkeypatch.setattr(build, "status_reader", lambda: "status-v1;code=another")
+    third = _stub_source(untitled)
+    build_bill_family(tmp_path, list_source=third, max_version_fetches=1, **_priors(tmp_path))
+    assert _numbers(third.requested) == [2185], "another reader asks for it again"
+
+
 def test_a_refusal_retried_at_the_start_is_not_asked_for_again_by_the_walk(tmp_path, scoped_92):
     """One attempt per bill per run: an unsettled unit's walk reaches a bill the retry pass already tried."""
     always = lambda identity: ConnectionError("still down") if identity.number == 2185 else None  # noqa: E731

@@ -24,7 +24,6 @@ so each has its own URL extractor; both feed the same generic core.
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 from collections.abc import Callable, Mapping
 from concurrent.futures import ThreadPoolExecutor
@@ -202,10 +201,13 @@ def pdf_urls_for_comment(attachments_json: str | None) -> list[str]:
 def _extract_unique(urls: list[str], fetch: FetchFn, extract: ExtractFn, max_workers: int) -> dict[str, _PdfAttempt]:
     """Fetch each URL once and reuse extraction results by source digest.
 
-    Retains each URL's source digest and complete extraction result. Concurrent
+    Retains each URL's source digest, spelled ``sha256:`` as every published digest is (spicy-docs 0.52.0), and
+    complete extraction result. Concurrent
     equal-byte downloads can both extract before the cache is filled; they keep
     the first cached result. The cache lasts one call, so it needs no version key.
     """
+    from spicy_docs.schemas.tables import bytes_digest
+
     by_digest: dict[str, PdfTextResult] = {}
     lock = Lock()
 
@@ -213,7 +215,7 @@ def _extract_unique(urls: list[str], fetch: FetchFn, extract: ExtractFn, max_wor
         data = fetch(url)
         if data is None:
             return url, _PdfAttempt(None, None)
-        digest = hashlib.sha256(data).hexdigest()
+        digest = bytes_digest(data)
         with lock:
             result = by_digest.get(digest)
         if result is None:

@@ -159,7 +159,7 @@ def test_fill_takes_each_attachment_from_the_best_ranked_tool_and_records_proven
         "available_tools": ["pypdf", "pdfminer"],
         "attachments": [
             {"attachment": number, "tool": tool, "key": key, "size": len(store[key]), "etag": f'"etag:{key}"',
-             "sha256": hashlib.sha256(store[key]).hexdigest()}
+             "sha256": "sha256:" + hashlib.sha256(store[key]).hexdigest()}
             for number, tool, key in ((1, "pypdf", first), (3, "pdfminer", third))
         ],
         "only_in_other_tools": [3],

@@ -52,6 +52,28 @@ def no_bulk_bill_text(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("spicy_regs.transforms.build_bill_family.BulkBillsAcquirer", _NoBulkBillText, raising=False)
 
 
+class _NoCboFeed:
+    """The bill family's default CBO feed acquirer, off the network: every feed reads as unavailable.
+
+    So a run keeps its prior feed rows, as it does when cbo.gov refuses; a test of the feed route passes its own
+    ``cbo_acquirer``.
+    """
+
+    def __init__(self, **_arguments) -> None:
+        pass
+
+    def acquire_per_congress_feed(self, congress: int, **_arguments):
+        from spicy_docs.sources.cbo import CboSourceError
+
+        raise CboSourceError(f"no CBO feed in a hermetic test ({congress})")
+
+
+@pytest.fixture(autouse=True)
+def no_cbo_feed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep the bill family's default CBO feed acquirer off the network (see ``_NoCboFeed``)."""
+    monkeypatch.setattr("spicy_regs.transforms.bill_family_cbo.CboAcquirer", _NoCboFeed, raising=False)
+
+
 class _ObjectsListingClient:
     """ListObjectsV2 pages over a fake resource's ``objects.filter``, so its refusals and records still apply."""
 
