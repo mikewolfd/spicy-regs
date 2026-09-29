@@ -239,6 +239,7 @@ TABLES: tuple[str, ...] = (
     "fec_relationships",
     "org_committee_links",
     "gao_reports",
+    "gao_decisions",
     "crs_reports",
     "court_dockets",
     "court_docket_groups",
@@ -299,6 +300,8 @@ MCP_QUERYABLE: frozenset[str] = frozenset(
         "fec_relationships",
         "org_committee_links",
         "gao_reports",
+        "gao_decisions",
+    "gao_decisions",
         "crs_reports",
         "court_dockets",
         "court_docket_groups",
@@ -470,9 +473,9 @@ DERIVED_SCHEMAS: dict[str, list[tuple[str, str]]] = {
         ("last_comment_date", "VARCHAR"),
     ],
     # Ingested from the GAO reports RSS feed (build_gao_reports), explicit
-    # repairs and GovInfo's closed GAOREPORTS collection with its MODS; an
-    # append-only accumulator, `source` naming each row's route. All columns are stored as
-    # VARCHAR. Keyed by report_id.
+    # repairs, GovInfo's closed GAOREPORTS collection with its MODS, and GAO's
+    # own Month in Review listing; an append-only accumulator, `source` naming
+    # each row's route. All columns are stored as VARCHAR. Keyed by report_id.
     "gao_reports": [
         ("report_id", "VARCHAR"),
         ("title", "VARCHAR"),
@@ -485,6 +488,26 @@ DERIVED_SCHEMAS: dict[str, list[tuple[str, str]]] = {
         ("source", "VARCHAR"),
         ("product_type", "VARCHAR"),
         ("report_number", "VARCHAR"),
+        ("requester_type", "VARCHAR"),
+        ("requester_committees_json", "VARCHAR"),
+        ("requester_members_json", "VARCHAR"),
+        ("recommendation_count", "BIGINT"),
+        ("matters_for_congress_count", "BIGINT"),
+        ("page_count", "BIGINT"),
+        ("subject_terms_json", "VARCHAR"),
+    ],
+    # GAO's legal decisions from its own Month in Review listing (build_gao_reports),
+    # one row per decision page; all VARCHAR. Keyed by (decision_number, url).
+    "gao_decisions": [
+        ("decision_number", "VARCHAR"),
+        ("b_numbers_json", "VARCHAR"),
+        ("decision_type", "VARCHAR"),
+        ("title", "VARCHAR"),
+        ("decision_date", "VARCHAR"),
+        ("topics_json", "VARCHAR"),
+        ("url", "VARCHAR"),
+        ("listing_page", "VARCHAR"),
+        ("source", "VARCHAR"),
     ],
     # Ingested from the Congress.gov v3 API (build_crs_reports); list-level
     # fields only, all stored as VARCHAR. Keyed by report_id.

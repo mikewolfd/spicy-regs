@@ -1,4 +1,4 @@
-"""Rollup pipeline: gao_reports.parquet (GAO reports RSS ingest, plus GovInfo's GAO history on request).
+"""Rollup pipeline: gao_reports.parquet (GAO reports RSS ingest, plus GovInfo's and GAO's own listings on request).
 
 Unlike the derived rollups, this one *ingests* an external source rather than
 reading base tables from R2, so ``inputs`` is empty — the fetch + append-only
@@ -6,9 +6,12 @@ merge with the prior published table happens inside ``build_gao_reports``. The
 base class still handles the shrink-guarded R2 upload of the single output.
 ``GAO_GOVINFO_HISTORY=true`` adds the one walk of GovInfo's closed GAOREPORTS
 listing to a run; ``GAO_GOVINFO_MODS=true`` reads the next batch of those rows'
-MODS.
+MODS. ``GAO_LISTING_RUN=<directory>`` adds a finished SpicyDocs walk of GAO's Month
+in Review and Annual Index, made outside the rollup and read from disk; its legal
+decisions go to ``gao_decisions.parquet``, which runs without a walk carry forward.
 """
 
+import os
 from pathlib import Path
 from typing import ClassVar
 
@@ -23,14 +26,17 @@ class GaoReportsRollup(RollupPipeline):
     name: ClassVar[str] = "gao-reports"
     retain_source_evidence: ClassVar[bool] = True
     inputs: ClassVar[tuple[str, ...]] = ()
-    output: ClassVar[str] = "gao_reports.parquet"
+    outputs: ClassVar[tuple[str, ...]] = ("gao_reports.parquet", "gao_decisions.parquet")
+    #: GAO's legal decisions from its own listing join the family as their own table (owner, 2026-09-28).
+    added_tables: ClassVar[tuple[str, ...]] = ("gao_decisions.parquet",)
 
-    def build(self, output_dir: Path) -> Path:
+    def build(self, output_dir: Path) -> tuple[Path, Path]:
         return build_gao_reports(
             output_dir,
             evidence=self.source_evidence,
             govinfo_history=flag_env("GAO_GOVINFO_HISTORY"),
             govinfo_mods=flag_env("GAO_GOVINFO_MODS"),
+            listing_run=Path(listing) if (listing := os.environ.get("GAO_LISTING_RUN", "").strip()) else None,
         )
 
 

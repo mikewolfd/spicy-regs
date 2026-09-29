@@ -82,6 +82,7 @@ TABLES = (
     "fec_relationships",
     "org_committee_links",
     "gao_reports",
+    "gao_decisions",
     "crs_reports",
     "court_dockets",
     "court_docket_groups",

@@ -206,6 +206,16 @@ class CaptureEvidence:
                    content_encoding=content_encoding, method=method, request_body=request, **response)
         return response
 
+    def retain_file(self, path: Path, *, stage: str, **fields) -> dict:
+        """Retain a local file the run read rather than fetched, its exact bytes and digest, and journal it.
+
+        For a one-time input kept outside the repository, such as a converted table, so the generation's evidence
+        holds the bytes its rows came from.
+        """
+        blob = self._blob(path.read_bytes())
+        self.event("retained-file", stage=stage, name=path.name, **blob, **fields)
+        return blob
+
     def transport(self, transport=None, *, stage: str, max_bytes: int):
         """Observe streamed HTTP responses before owner parsing, including retries.
 
