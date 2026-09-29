@@ -1,0 +1,193 @@
+name: Fill comment fields (one-off)
+
+# The comment re-read's catalog write (docs/comment-fields-fill.md), run once by
+# hand: fill the comment columns older catalog rows lack, from the staged read
+# (a fill-only Parquet in the data bucket), one verified batch of data files at
+# a time. Also undoes a committed batch from a run's pre-images. Never scheduled.
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: 'prepare (counts only, no write) | pilot (one docket) | fill | undo'
+        required: true
+        type: choice
+        options: [prepare, pilot, fill, undo]
+      staging_key:
+        description: 'Data-bucket key of the staged reads.parquet (runbook); every operation needs it'
+        required: true
+        type: string
+      reads_sha256:
+        description: 'Its sha256, from the runbook; the run refuses any other bytes'
+        required: false
+        type: string
+      pilot_docket:
+        description: 'pilot: the docket to fill as one batch'
+        required: false
+        default: 'EPA-HQ-OW-2022-0114'
+        type: string
+      undo_run_id:
+        description: 'undo: the run whose artifact holds the batch'
+        required: false
+        type: string
+      undo_batch:
+        description: 'undo: the batch id from that run''s journal'
+        required: false
+        type: string
+      expected_snapshot:
+        description: 'undo: the catalog snapshot id you reviewed; the undo refuses any other'
+        required: false
+        type: string
+
+concurrency:
+  # The catalog writers' group: the ETL, the mirror, the dedupe and the
+  # backfills queue behind this run instead of committing under it.
+  group: comments-catalog-write
+  cancel-in-progress: false
+  queue: max
+
+permissions:
+  contents: read
+  actions: read  # undo downloads an earlier run's artifact
+
+env:
+  # Read by spicy_regs.sources.iceberg and required by fill-comment-fields
+  # write/undo: this run holds comments-catalog-write.
+  SPICY_REGS_CATALOG_LOCK: comments-catalog-write
+  R2_CATALOG_URI: ${{ secrets.R2_CATALOG_URI }}
+  R2_CATALOG_WAREHOUSE: ${{ secrets.R2_CATALOG_WAREHOUSE }}
+  R2_CATALOG_TOKEN: ${{ secrets.R2_CATALOG_TOKEN }}
+  R2_CATALOG_NAMESPACE: ${{ secrets.R2_CATALOG_NAMESPACE }}
+  R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+  R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+  R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+  R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+  # Pre-images take about the table's size; the runner's /mnt disk holds them.
+  WORKDIR: /mnt/comment-fields-fill
+
+jobs:
+  fill:
+    runs-on: ubuntu-latest
+    # Measured projection in the runbook; the ceiling leaves room for the
+    # artifact upload after the last batch.
+    timeout-minutes: 330
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Work directory with room for the pre-images
+        run: |
+          sudo mkdir -p "$WORKDIR" && sudo chown "$(id -u):$(id -g)" "$WORKDIR"
+          df -h "$WORKDIR"
+          free_gb=$(df --output=avail -BG "$WORKDIR" | tail -1 | tr -dc '0-9')
+          # Pre-images ~6.6 GB (the table), written digests ~1.5 GB, the staged read and the fill ~0.3 GB, spill.
+          if [ "$free_gb" -lt 16 ]; then echo "::error::only ${free_gb} GB free under $WORKDIR"; exit 1; fi
+
+      - name: Download and verify the staged read
+        if: inputs.operation != 'undo'
+        env:
+          STAGING_KEY: ${{ inputs.staging_key }}
+          READS_SHA256: ${{ inputs.reads_sha256 }}
+        run: |
+          : "${STAGING_KEY:?staging_key is required}" "${READS_SHA256:?reads_sha256 is required}"
+          uv run fill-comment-fields fetch --workdir "$WORKDIR" --key "$STAGING_KEY" --sha256 "$READS_SHA256"
+
+      - name: Download the pre-images to undo
+        if: inputs.operation == 'undo'
+        uses: actions/download-artifact@v4
+        with:
+          name: comment-fields-fill
+          path: ${{ env.WORKDIR }}/fill
+          run-id: ${{ inputs.undo_run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Earlier runs' journals (a committed failure in any of them stops this run)
+        env:
+          STAGING_KEY: ${{ inputs.staging_key }}
+        run: |
+          : "${STAGING_KEY:?staging_key is required: the journals live beside it}"
+          uv run fill-comment-fields journals --workdir "$WORKDIR" --prefix "$(dirname "$STAGING_KEY")/journals"
+
+      - name: Disable R2 compaction for the table and confirm it
+        if: inputs.operation != 'prepare'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.R2_CATALOG_TOKEN }}
+        run: |
+          # The catalog URI is https://catalog.cloudflarestorage.com/<account>/<bucket>.
+          export CLOUDFLARE_ACCOUNT_ID=$(echo "$R2_CATALOG_URI" | cut -d/ -f4)
+          npx --yes wrangler@4 r2 bucket catalog compaction disable spicy-regs "$R2_CATALOG_NAMESPACE" comments
+          state=$(curl -sf -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/r2-catalog/spicy-regs/namespaces/$R2_CATALOG_NAMESPACE/tables/comments/maintenance-configs" \
+            | jq -r '.result.maintenance_config.compaction.state')
+          echo "table-level compaction: $state"
+          if [ "$state" != "disabled" ]; then echo "::error::compaction is '$state', not disabled"; exit 1; fi
+
+      - name: Prepare (reads the catalog at one snapshot; writes nothing)
+        if: inputs.operation != 'undo'
+        env:
+          OPERATION: ${{ inputs.operation }}
+          PILOT_DOCKET: ${{ inputs.pilot_docket }}
+        run: |
+          SCOPE=""
+          if [ "$OPERATION" = "pilot" ]; then SCOPE="--docket $PILOT_DOCKET"; fi
+          uv run fill-comment-fields prepare --workdir "$WORKDIR" --reads "$WORKDIR/reads.parquet" $SCOPE
+
+      - name: Write, one verified batch at a time
+        if: inputs.operation == 'fill' || inputs.operation == 'pilot'
+        env:
+          OPERATION: ${{ inputs.operation }}
+        run: |
+          BY_FILE=""
+          if [ "$OPERATION" = "pilot" ]; then BY_FILE="--no-by-file"; fi
+          uv run fill-comment-fields write --workdir "$WORKDIR" $BY_FILE
+
+      - name: Undo one committed batch
+        if: inputs.operation == 'undo'
+        env:
+          UNDO_BATCH: ${{ inputs.undo_batch }}
+          EXPECTED_SNAPSHOT: ${{ inputs.expected_snapshot }}
+        run: |
+          : "${UNDO_BATCH:?undo_batch is required}" "${EXPECTED_SNAPSHOT:?expected_snapshot is required}"
+          uv run fill-comment-fields undo --workdir "$WORKDIR" --batch "$UNDO_BATCH" --expected-snapshot "$EXPECTED_SNAPSHOT"
+
+      - name: Keep the journals beside the staged read
+        if: always()
+        env:
+          STAGING_KEY: ${{ inputs.staging_key }}
+        run: uv run fill-comment-fields journals --workdir "$WORKDIR" --prefix "$(dirname "$STAGING_KEY")/journals" --push
+
+      - name: Keep the journal, receipts and pre-images
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: comment-fields-fill${{ inputs.operation == 'undo' && '-undo' || '' }}
+          path: |
+            ${{ env.WORKDIR }}/fill/*.json
+            ${{ env.WORKDIR }}/fill/*.jsonl
+            ${{ env.WORKDIR }}/fill/*.parquet
+            ${{ env.WORKDIR }}/fill/preimage/
+          if-no-files-found: warn
+          compression-level: 0
+          retention-days: 30
+
+      - name: Re-enable R2 compaction for the table
+        if: always() && inputs.operation != 'prepare'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.R2_CATALOG_TOKEN }}
+        run: |
+          export CLOUDFLARE_ACCOUNT_ID=$(echo "$R2_CATALOG_URI" | cut -d/ -f4)
+          npx --yes wrangler@4 r2 bucket catalog compaction enable spicy-regs "$R2_CATALOG_NAMESPACE" comments --target-size 128
+          curl -sf -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/r2-catalog/spicy-regs/namespaces/$R2_CATALOG_NAMESPACE/tables/comments/maintenance-configs" \
+            | jq -c '.result.maintenance_config'
