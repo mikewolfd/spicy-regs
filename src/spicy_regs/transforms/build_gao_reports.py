@@ -66,7 +66,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 from loguru import logger
 
-from spicy_regs.sources import gao_govinfo, gao_listing, r2
+from spicy_regs.sources import gao_govinfo, gao_listing, gao_r_package, r2
 from spicy_regs.sources.gao_reports import GaoReportsReader
 from spicy_regs.transforms.table_merge import merge_local_prior
 
@@ -117,6 +117,9 @@ SOURCE_UPSTREAM = "upstream_copy"
 _FEED_STATED = ("title", "published_date", "abstract", "url")
 #: Routes whose stated cells a later feed read refreshes: the feed's own rows, and upstream's copies of its feed.
 _FEED_REFRESHES = frozenset({SOURCE_FEED, SOURCE_UPSTREAM})
+#: The route every route of ours outranks: the one-time copy of the CetiAlphaFive/gao R package. A later read of
+#: ours takes a package row over, and the package's cells fill only what ours leave NULL.
+_LOWEST = gao_r_package.SOURCE
 
 #: MODS reads per run: at the three-a-second pace, about 37 minutes, so two
 #: runs read the whole history and a failed run loses at most one batch.
@@ -171,10 +174,23 @@ def _fill_only(rows: list[dict], counts: Counter[str], *, prior_file: Path | Non
     """``rows`` for ids no row holds yet, this run's (``held``) or the prior's; counts the rest as ``already_held``."""
     held = set(held)
     if prior_file is not None:
-        held |= set(pq.read_table(prior_file, columns=["report_id"])["report_id"].to_pylist())
+        prior = pq.read_table(prior_file, columns=["report_id", "source"]).to_pylist()
+        held |= {row["report_id"] for row in prior if row["source"] != _LOWEST}
     added = [row for row in rows if row["report_id"] not in held]
     counts["already_held"] = len(rows) - len(added)
     return added
+
+
+def _over_lowest(prior_file: Path | None, rows: list[dict]) -> tuple[list[dict], int]:
+    """Rows of ours for products the lowest route holds, each with its NULL cells filled from that route's row."""
+    if prior_file is None or not rows:
+        return rows, 0
+    ids = {row["report_id"] for row in rows}
+    lowest = {row["report_id"]: row for row in pq.read_table(prior_file).to_pylist()
+              if row["report_id"] in ids and row["source"] == _LOWEST}
+    merged = [{column: (value if value is not None else lowest[row["report_id"]][column])
+               for column, value in row.items()} if row["report_id"] in lowest else row for row in rows]
+    return merged, sum(row["report_id"] in lowest for row in rows)
 
 
 def _feed_over_held(prior_file: Path | None, rows: list[dict]) -> tuple[list[dict], Counter[str]]:
@@ -192,7 +208,7 @@ def _feed_over_held(prior_file: Path | None, rows: list[dict]) -> tuple[list[dic
     merged = []
     for row in rows:
         old = held.get(row["report_id"])
-        if old is None:
+        if old is None or old["source"] == _LOWEST:
             merged.append(row)
             continue
         counts["held"] += 1
@@ -238,6 +254,8 @@ def _listing_rows(
     if prior_file is not None:
         now = {row["report_id"] for row in rows_now}
         for row in pq.read_table(prior_file).to_pylist():
+            if row["source"] == _LOWEST:
+                continue  # the listing's own row takes a package row over; see _over_lowest
             if row["report_id"] in numbers and row["report_id"] not in now and row.get("report_number") is None:
                 filled.append({**row, "report_number": numbers[row["report_id"]]})
         counts["report_number_filled"] += len(filled)
@@ -336,6 +354,9 @@ def build_gao_reports(
     if listing_run is not None:
         listed, decisions = _listing_rows(prior_file if have_prior else None, rows, listing_run, evidence)
         rows += listed
+    rows, taken_over = _over_lowest(prior_file if have_prior else None, rows)
+    if taken_over:
+        logger.info("GAO reports: {:,} rows of ours take over the R package's rows, which fill their NULLs", taken_over)
     new_file = output_dir / "_gao_new.parquet"
     table = pa.Table.from_pylist(rows, schema=_SCHEMA) if rows else _SCHEMA.empty_table()
     pq.write_table(table, new_file, compression="zstd")
