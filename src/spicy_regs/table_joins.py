@@ -271,6 +271,9 @@ JOINS: tuple[Join, ...] = (
     # join check 36360197318, 2026-09-27): every attribute row names a thin-table row.
     _join("document_attributes", "document_id", "documents", "document_id", 2_002_888, 0),
     _join("docket_attributes", "docket_id", "dockets", "docket_id", 279_406, 0),
+    _join("comment_attributes", "comment_id", "comments", "comment_id", 0, 0, "empty",
+          "Unpublished until the comment re-read (fill-comment-fields attributes) seeds it; every row is a comment the "
+          "thin table holds, baselined at the first publication."),
     _join("fec_committee_history", "committee_id", "fec_committees", "committee_id", 89_710, 21, "scope",
           "fec_committees is OpenFEC's registry; the bulk committee master also names 21 committees, newest cycle "
           "2000-2020 (15 in 2014), that the API does not serve (C00428599 and C00317453 answer an empty result). "

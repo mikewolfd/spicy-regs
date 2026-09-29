@@ -76,6 +76,7 @@ TABLES = (
     "fec_committee_history",
     "document_attributes",
     "docket_attributes",
+    "comment_attributes",
     "fec_source_catalog",
     "fec_collections",
     "fec_source_records",

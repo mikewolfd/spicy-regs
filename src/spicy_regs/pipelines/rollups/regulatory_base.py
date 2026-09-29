@@ -1,4 +1,4 @@
-"""Rollup pipelines: the ETL's dockets, documents and their attribute tables as managed families.
+"""Rollup pipelines: the ETL's dockets, documents and the three attribute tables as managed families.
 
 The ETL rewrites the bare ``dockets.parquet`` and ``documents.parquet`` after
 every sweep batch and keeps reading them as its working copies; the same read
@@ -82,7 +82,15 @@ class DocumentAttributesFamily(_AttributesFamily):
     output: ClassVar[str] = "document_attributes.parquet"
 
 
+class CommentAttributesFamily(_AttributesFamily):
+    """Seeded by the comment re-read (``fill-comment-fields attributes``), then kept by the ETL's comment passes."""
+
+    name: ClassVar[str] = "comment-attributes"
+    output: ClassVar[str] = "comment_attributes.parquet"
+
+
 dockets_app = make_rollup_app(DocketsFamily)
 documents_app = make_rollup_app(DocumentsFamily)
 docket_attributes_app = make_rollup_app(DocketAttributesFamily)
 document_attributes_app = make_rollup_app(DocumentAttributesFamily)
+comment_attributes_app = make_rollup_app(CommentAttributesFamily)

@@ -179,3 +179,52 @@ def test_the_fill_workflow_is_manual_holds_the_writers_lock_and_always_restores_
     for step in steps[order[-3]:]:
         assert step["if"].startswith("always()"), step["name"]
     assert "--sha256" in steps[order[0]]["run"] and "fetch" in steps[order[0]]["run"]
+
+
+def test_the_attributes_seed_projects_every_copy_and_keeps_the_newest(tmp_path):
+    store = _store()
+    cf.plan(tmp_path, _manifest(tmp_path, store), chunk_keys=10)
+    cf.read(tmp_path, workers=2, resource=_FakeS3Resource(store))
+    counts = cf.build_attributes(tmp_path)
+    table = pl.read_parquet(tmp_path / "comment_attributes.parquet")
+    assert (counts["rows"], counts["refused"]) == (4, 0)
+    from spicy_docs.schemas import TABLE_CONTRACTS
+
+    assert table.columns == list(TABLE_CONTRACTS["comment_attributes"].columns)
+    campaign = table.filter(pl.col("comment_id") == f"{PFAS}-1811").to_dicts()[0]
+    stated = json.loads(store[_key(f"{PFAS}-1811")])["data"]["attributes"]
+    assert (campaign["tracking_nbr"], campaign["page_count"], campaign["withdrawn"]) == (
+        stated["trackingNbr"], stated["pageCount"], stated["withdrawn"])
+    assert "email" not in table.columns and "phone" not in table.columns
+
+
+def _exclusion(monkeypatch, payload):
+    import hashlib
+
+    from spicy_regs.transforms import reviewed_comments
+
+    digest = hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    real_init = reviewed_comments.ExcludeReviewedComments.__init__
+
+    def init(self, *, keyed=False):
+        real_init(self, keyed=keyed)
+        self.decisions = {payload["data"]["id"]: {"canonical_sha256": digest, "reason": "reviewed"}}
+
+    monkeypatch.setattr(reviewed_comments.ExcludeReviewedComments, "__init__", init)
+
+
+def test_the_seed_excludes_a_reviewed_comment_only_as_reviewed(tmp_path, monkeypatch):
+    """The ETL's check: the reviewed bytes are excluded; a changed reviewed comment refuses the seed."""
+    store = _store()
+    cf.plan(tmp_path, _manifest(tmp_path, store), chunk_keys=10)
+    cf.read(tmp_path, workers=2, resource=_FakeS3Resource(store))
+    reviewed = json.loads(store[_key(f"{PFAS}-0002")])
+    _exclusion(monkeypatch, reviewed)
+    fetched = []
+    fetch = lambda key: fetched.append(key) or json.loads(store[key])  # noqa: E731
+    counts = cf.build_attributes(tmp_path, fetch=fetch)
+    assert counts["rows"] == 3 and fetched == [_key(f"{PFAS}-0002")]
+    changed = {**reviewed, "data": {**reviewed["data"], "attributes": {**reviewed["data"]["attributes"], "title": "x"}}}
+    _exclusion(monkeypatch, changed)
+    with pytest.raises(ValueError, match="changed"):
+        cf.build_attributes(tmp_path, fetch=fetch)

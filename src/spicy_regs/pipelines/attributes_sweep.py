@@ -32,6 +32,10 @@ from spicy_regs.sources import r2
 from spicy_regs.transforms import Chain, ExtractRecords
 from spicy_regs.transforms.regulations_attributes import ATTRIBUTE_TABLES, TeeAttributes, merge_attribute_parts
 
+#: The tables this sweep seeds. comment_attributes is seeded by the comment re-read (fill-comment-fields), which reads
+#: every comment object once for the thin columns as well.
+SWEPT_TABLES = (ATTRIBUTE_TABLES["dockets"], ATTRIBUTE_TABLES["documents"])
+
 #: Mirror reads in flight per agency; 48 measured 559 records a second from a laptop (2026-09-27).
 DOWNLOAD_WORKERS = 48
 #: Passes over the keys a pass failed to read in transport (the full run of 2026-09-27 lost 17 CMS dockets to a
@@ -107,7 +111,7 @@ def sweep(
     }
     (output_dir / "attribute_refusals.json").write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
     rows = {}
-    for table in ATTRIBUTE_TABLES.values():
+    for table in SWEPT_TABLES:
         rows[table] = merge_attribute_parts(table, staging / table, None, output_dir / f"{table}.parquet",
                                             keep_order=keep_order)
         logger.info("{}: {:,} rows", table, rows[table])
@@ -135,7 +139,7 @@ def combine(shard_dirs: list[Path], output_dir: Path) -> dict[str, int]:
 
     output_dir.mkdir(parents=True, exist_ok=True)
     rows = {}
-    for table in ATTRIBUTE_TABLES.values():
+    for table in SWEPT_TABLES:
         files = [str(directory / f"{table}.parquet").replace("'", "''") for directory in shard_dirs]
         source = "read_parquet([" + ", ".join(f"'{f}'" for f in files) + "], filename=true)"
         keys = ", ".join(f'"{column}"' for column in contract(table).identity)
@@ -164,7 +168,7 @@ def combine(shard_dirs: list[Path], output_dir: Path) -> dict[str, int]:
 
 
 def _publish(output_dir: Path) -> None:
-    tables = list(ATTRIBUTE_TABLES.values())
+    tables = list(SWEPT_TABLES)
     r2.preflight_uploads(output_dir, r2.dataset_files(output_dir, tables))
     r2.upload_dataset(output_dir, tables)
 

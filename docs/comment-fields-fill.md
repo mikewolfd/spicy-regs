@@ -17,6 +17,8 @@ reaches rows read before it existed. That is why these are NULL:
   was posted after 2026-03-10. Refetch copies were not the cause: no sampled
   comment has attachments only in a `(n)` copy.
 
+The same read seeds `comment_attributes`.
+
 Receipts: `~/Work/corpora/supply-2026-09-02/receipts/comments-full-reread-2026-09-28/`.
 
 ## Commands
@@ -34,6 +36,7 @@ All run through `uv run --frozen fill-comment-fields …` (locally,
 | Prepare | `prepare --workdir W [--reads F] [--docket D \| --agency A]` | reads one snapshot |
 | Write | `write --workdir W [--no-by-file] [--clear-failure]` | writes, under the lock |
 | Undo | `undo --workdir W --batch B --expected-snapshot S` | writes, under the lock |
+| Seed attributes | `attributes --workdir W` | no |
 
 **Plan** splits the ETL manifest's comment keys into 20,000-key chunks per
 agency. A plan is named by the manifest digest and the record shape, so a
@@ -274,3 +277,26 @@ concurrency group, so it excludes the other writers by hand:
 5. Re-enable compaction
    (`npx wrangler r2 bucket catalog compaction enable spicy-regs default comments --target-size 128`),
    then the workflows.
+
+## Seeding `comment_attributes`
+
+`attributes --workdir W` projects every read copy's `attributes_json` through
+SpicyDocs' `project_comment_attributes`. It keeps one row per comment by the
+ETL's own copy rule: newest `modifyDate`, then the smallest digest, here the
+object's ETag. It skips reviewed exclusions by the ETL's own content check,
+and writes `W/comment_attributes.parquet` and `W/attribute_refusals.json`.
+
+Until the working copy exists, each ETL run drops its comment attribute rows
+with a warning. So seed it while the ETL is paused:
+
+1. `plan` the current manifest; this adds only the keys since the read.
+2. `read` them.
+3. Run `attributes`.
+4. Upload `comment_attributes.parquet` as the working copy.
+5. Run `run-rollup-comment-attributes`.
+6. Add that command to the base families in `_regulations-refresh.yml`.
+
+Only then re-enable the workflows. From then on, the scheduled ETL's comment
+passes merge their rows into the working copy, like `document_attributes`. The
+chunked manual path stages none: a crash between its per-chunk checkpoints
+would lose rows.

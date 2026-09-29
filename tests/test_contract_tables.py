@@ -34,8 +34,8 @@ CONTRACT_NAMES = sorted(TABLE_CONTRACTS)
 #: SpicyDocs 0.42.0 adds ``federal_register``, hosted by its own rollup; 0.43.0 adds ``fec_committee_history``;
 #: 0.44.0 adds the typed attributes; 0.50.0 adds bill cosponsors and member party intervals
 #: (released 0.47.0, ``f549c16``, only adds ``bill_sections.congress``); 0.52.0 adds the two native legal-reference
-#: tables, hosted by their own rollup.
-ADOPTED_CONTRACT_COUNT = 50
+#: tables; 0.53.0 adds comment attributes and GAO recommendations.
+ADOPTED_CONTRACT_COUNT = 52
 
 #: A contract here leaves the set when its owning rollup hosts it.
 UNHOSTED_CONTRACTS = frozenset()

@@ -1436,6 +1436,24 @@
       }
     },
     {
+      "child": "comment_attributes",
+      "child_columns": [
+        "comment_id"
+      ],
+      "parent": "comments",
+      "parent_columns": [
+        "comment_id"
+      ],
+      "kind": "empty",
+      "reason": "Unpublished until the comment re-read (fill-comment-fields attributes) seeds it; every row is a comment the thin table holds, baselined at the first publication.",
+      "measured_via": null,
+      "baseline_keys": 0,
+      "baseline_missing": 0,
+      "floor_pct": null,
+      "expected_cardinality": "unspecified",
+      "measurement": null
+    },
+    {
       "child": "fec_committee_history",
       "child_columns": [
         "committee_id"
@@ -2314,6 +2332,17 @@
         "parent_table": "dockets",
         "parent_columns": [
           "docket_id"
+        ]
+      }
+    ],
+    "comment_attributes": [
+      {
+        "child_columns": [
+          "comment_id"
+        ],
+        "parent_table": "comments",
+        "parent_columns": [
+          "comment_id"
         ]
       }
     ],
