@@ -97,6 +97,64 @@ def test_real_release_and_capture_transfer_build_complete_generation(tmp_path, m
     assert receipt["manifest_sha256"] == _digest(manifest)
     assert "observed_at" not in receipt  # transfer time cannot replace source observations
     assert len(json.loads((tmp_path / "audit/relocations.json").read_text())) == 3
+    artifact = json.loads((generation / "artifact.json").read_text())
+    assert [entry["role"] for entry in artifact["inputs"]] == ["source-evidence"]
+    evidence_root = next((tmp_path / "output/source-evidence").glob("*/artifact"))
+    manifest_digest = _digest(manifest)
+    assert (evidence_root / "blobs/sha256" / manifest_digest).read_bytes() == manifest.read_bytes()
+
+
+def test_transfer_relocates_pinned_context_file_without_changing_coverage_facts(tmp_path):
+    selection = tmp_path / "selection"
+    shutil.copytree(FIXTURE, selection)
+    raw = json.dumps({"version": 1, "selection": {"status": "unresolved"}}).encode()
+    (selection / "coverage.json").write_bytes(raw)
+    portable = json.loads((selection / "manifest.json").read_bytes())
+    original = json.loads((selection / "source-manifest.json").read_bytes())
+    item = {
+        "collection_id": "coverage:missing-original",
+        "source_family": "fec_reports",
+        "disposition": {
+            "status": "unresolved",
+            "reason": "Publisher reference has no retained original",
+            "context": {"path": "coverage.json", "sha256": "sha256:" + hashlib.sha256(raw).hexdigest()},
+        },
+    }
+    portable["collections"].append(item)
+    original["collections"].append(json.loads(json.dumps(item)))
+    original["collections"][-1]["disposition"]["context"]["path"] = "/original/coverage.json"
+    (selection / "manifest.json").write_text(json.dumps(portable))
+    (selection / "source-manifest.json").write_text(json.dumps(original))
+    archive = _archive(tmp_path, selection)
+    manifest = _prepare(tmp_path, archive, manifest_sha256=_digest(selection / "manifest.json"))
+    paths = build_fec_observations(manifest, tmp_path / "tables")
+    rows = pq.read_table(paths[1]).to_pylist()
+    assert rows[-1]["record_outcome"] == "unresolved"
+    context = json.loads(rows[-1]["collection_outcome_json"])["receiverDisposition"]["callerContext"]
+    assert context["pin"] == item["disposition"]["context"]
+    assert context["facts"] == json.loads(raw)
+
+
+def test_manifest_change_during_build_refuses_generation_sealing(tmp_path, monkeypatch):
+    from spicy_regs.pipelines.rollups import fec_observations
+
+    monkeypatch.delenv("R2_PUBLIC_URL", raising=False)
+    manifest = _prepare(tmp_path, _archive(tmp_path))
+    original = manifest.read_bytes()
+
+    def change_after_read(selected, destination):
+        outputs = build_fec_observations(selected, destination)
+        selected.write_bytes(original + b"\n")
+        return outputs
+
+    monkeypatch.setattr(fec_observations, "build_fec_observations", change_after_read)
+    output = tmp_path / "output"
+    with pytest.raises(ValueError, match="input manifest changed"):
+        FecObservationsRollup(manifest=manifest, output_dir=output).run()
+    assert not list(output.glob("generations/*/artifact.json"))
+    evidence = next((output / "source-evidence").glob("*/artifact"))
+    digest = hashlib.sha256(original).hexdigest()
+    assert (evidence / "blobs/sha256" / digest).read_bytes() == original
 
 
 def _load_fixture_rows(tmp_path):

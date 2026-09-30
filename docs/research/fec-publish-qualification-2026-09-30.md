@@ -1,5 +1,11 @@
 # FEC candidate and agency local qualification — September 30, 2026
 
+This is the earlier bounded selection. The subsequent
+[retained-corpus qualification](fec-retained-corpus-qualification-2026-09-30.md)
+reconciles it with the prior observation family, adds native Word and archive
+readers, and records the user's PDF-processing deferral. The measurements below
+preserve this earlier run's exact scope.
+
 The candidate-history rollup and retained agency-report receiver passed local
 source-to-table checks. These results establish the selected local generations;
 no remote publication, hosted MCP availability or deployment was performed.
@@ -45,7 +51,8 @@ including retiring rows that disappear from the selected files.
 
 The installed source wheel processed the retained selection of 17 XML originals
 and 103 Oversight pages. The FEC 2009 XML-named original is Word Flat OPC and
-remains an explicit native-parser refusal. The receiver admitted every successful
+was an explicit native-parser refusal in this run. The later retained-corpus
+selection uses a separate native Word reader. The receiver admitted every successful
 source release: **119 collections and 9,191 records**, covering 16 FOIA XML
 originals and 103 Oversight pages. No candidate or committee relationship was
 inferred. The local generation is:
@@ -61,8 +68,9 @@ manifest, either as a directly selected original or a pinned source release.
 Source-release identity, original digest, acquisition date, ordinal, format,
 native metadata, bodies and declared assets survive in the observation tables.
 The `html` dependency extra is pinned for Oversight parsing. Missing or altered
-bytes, a wrong release pin and the unsupported Word representation refuse the
-whole selected output before installation.
+bytes, a wrong release pin and an unsupported representation refuse the whole selected output before
+installation. The later Word reader preserves package and text/control facts
+without claiming rendered or OCR output.
 
 This agency-only local generation is a qualification selection. Before updating
 the existing public `fec-observations` family, prepare and qualify the intended

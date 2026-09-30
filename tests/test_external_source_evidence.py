@@ -504,7 +504,6 @@ EVIDENCE_EXEMPT = {
     "DocketAttributesFamily": "republishes the ETL's own working copy; the ETL's Mirrulations reads are the source reads",
     "DocumentAttributesFamily": "republishes the ETL's own working copy; the ETL's Mirrulations reads are the source reads",
     "CommentAttributesFamily": "republishes the working copy the comment re-read and the ETL's Mirrulations reads write",
-    "FecObservationsRollup": "builds only from a prepared retained-input archive checked against its stated digests",
     "CfrSectionsRollup": _UNWIRED,
     "CommitteeRostersRollup": _UNWIRED,
     "CourtCitationsRollup": _UNWIRED,

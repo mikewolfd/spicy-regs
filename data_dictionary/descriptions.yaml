@@ -1094,15 +1094,16 @@ tables:
       coverage_note: "Explicit scope limitation: catalogue entries describe routes and do not certify underlying data acquisition or publication."
   fec_collections:
     label: "Retained FEC collection scopes and outcomes"
-    grain: "One row per selected verified input collection."
+    grain: "One row per selected input collection or explicitly declared caller coverage disposition."
     identity_columns: [collection_id]
     coverage: >-
-      Sampled. One row per selected FEC file or API query, including empty
-      results, with its requested scope and outcome: a selected seed, not every
-      official family or complete FEC history. A collection with profile `bulk`
-      lists a zip's files, not their rows. The fec_collection_cycles view gives
-      each collection's election cycle.
-    measured_on: "2026-09-28"
+      Sampled. Selected FEC originals and queries retain their
+      requested scope and outcome. Rows with NULL profile are caller coverage,
+      refusal or context records, not parsed collections or successful empty
+      queries. Profile `bulk` lists files rather than their rows. The
+      fec_collection_cycles view gives cycles stated by bulk directory URLs.
+      This metadata does not establish complete official FEC history.
+    measured_on: "2026-09-30"
     summary: >-
       Collection-level scope, counts and evidence for fec_source_records.
       Join collection_id to that table to distinguish observed records from
@@ -1112,15 +1113,15 @@ tables:
     columns:
       collection_id: "Caller-supplied label unique within the selected manifest. Join to fec_source_records.collection_id."
       source_family: "Caller-selected official FEC source-family identifier, checked against the inventory. Join to fec_source_catalog.source_family; this classification is not independently inferred from source content."
-      profile: "Provider reader profile used for this collection: committee, candidate, filing, legal, audit, bulk, positional or agency-report records."
-      source_system_id: "Provider identifier for the source system represented by this collection."
+      profile: "Provider reader profile: committee, candidate, filing, legal, audit, bulk, positional, agency, agency-document, postgres or document. NULL for caller disposition/context rows, which were not parsed by a provider profile."
+      source_system_id: "Provider identifier for the source system; NULL for caller disposition/context rows."
       source_state_scope: "Provider observation scope, such as observed-crawl; this does not imply a frozen publisher snapshot."
-      record_count: "Number of verified source records emitted for this selected collection, stored as a decimal integer string."
+      record_count: "Emitted source-record count as a decimal integer string. A metadata-only row emits zero; its unknown source population count remains NULL in receiverDisposition.sourceRecordCount."
       relationship_count: "Number of relationship observations emitted from this collection, including explicit absence states rather than only positive edges."
-      record_outcome: "Provider's record outcome, such as no-record-rejections or an empty result, retained without promoting it to population completeness."
+      record_outcome: "Provider record outcome for parsed inputs. Metadata-only rows instead state retained_unparsed, refused, unresolved, inventory_only or selection_context; none means successful empty parsing."
       requested_scope_json: "JSON object preserving the query, source selection or bounds requested for this collection."
       coverage_limits_json: "JSON value preserving provider-stated coverage limits for the selected input."
-      collection_outcome_json: "Complete provider outcome including requested scope, rejections and warnings when supplied. tableFieldMapping records an explicit bulk-field mapping; tableFieldDefinitions retains verified HTML dictionary cells and source coordinates when selected."
+      collection_outcome_json: "Complete provider outcome for parsed inputs, including tableFieldMapping and verified tableFieldDefinitions when selected. Optional callerContext holds separately hash-verified source/coverage facts. Metadata-only rows contain receiverDisposition and providerOutcome:null; they make no source parsing claim."
       artifact_sha256: "Digest of the verified provider source-release artifact; null for direct retained-query input that has no release artifact."
   fec_source_records:
     label: "FEC source records with native metadata and evidence"
@@ -1128,12 +1129,11 @@ tables:
     identity_columns: [collection_id, source_record_id]
     coverage: >-
       Sampled. The records of the selected collections in fec_collections, not
-      complete FEC history. Contributions from individuals are mostly missing:
-      only the 2025-2026 insertion and deletion files are loaded, not the main
-      individual-contributions file of any cycle (gap FG04 in docs/fec-gaps.md).
-      For a candidate's individual donors, use FEC.gov. Overlapping collections
-      can repeat an observation.
-    measured_on: "2026-09-28"
+      complete FEC history. Inspect each collection's retained selection and
+      source coordinates before combining observations. An archive's main file,
+      date partitions and correction files can overlap; physical source rows
+      are not a deduplicated transaction population.
+    measured_on: "2026-09-30"
     data_quality: >-
       Memo lines (MEMO_CD 'X' in metadata_json) repeat money already reported on
       another line; leave them out before summing. Most rows of the 2025-2026
@@ -1158,11 +1158,13 @@ tables:
       inside metadata_json (TRANSACTION_TP, OTHER_ID, CAND_ID, TRANSACTION_AMT,
       MEMO_CD). Native identifiers are lifted only when the provider reports
       them, and committee_id can join fec_committees. metadata_json and
-      source_record_json preserve the complete provider record. Missing IDs
-      remain missing.
+      source_record_json preserve the complete provider record. PostgreSQL
+      metadata additionally exposes named_fields from its verified schema;
+      raw COPY fields, decoded NULLs and array text remain separate. Missing
+      IDs remain missing.
     columns:
       collection_id: "Selected collection label: the file or query the record came from. Together with source_record_id identifies this record; joins fec_collections.collection_id and, for the election cycle, fec_collection_cycles.collection_id."
-      source_family: "Caller-selected official FEC source-family identifier, checked against the inventory. Joins fec_source_catalog.source_family; this classification is not independently inferred from source content. fec_receipts holds only the 2025-2026 insertion and deletion files of individual contributions, not the main file of any cycle."
+      source_family: "Caller-selected official FEC source-family identifier, checked against the inventory. Joins fec_source_catalog.source_family; this classification is not independently inferred from source content."
       profile: "Provider reader profile used to interpret the verified input."
       source_record_id: "Provider source-record identity, native API identity, bulk file key or byte-evidenced positional/agency-report observation ID, scoped to collection_id."
       committee_id: "Committee ID as the source reports it (bulk CMTE_ID or the API's committee_id). In transaction files this is the committee that filed the report, not necessarily the one that received the money: a PAC's contribution to a candidate is filed under the PAC's ID, with the recipient in metadata_json OTHER_ID and CAND_ID, and TRANSACTION_TP says which way the money moved. To find money a committee received from other committees, also search OTHER_ID: in the 2025-2026 file a candidate committee's own filings list no direct PAC contributions, so they appear only under each PAC's committee_id, with the candidate in OTHER_ID and CAND_ID (TRANSACTION_TP 24K). May join fec_committees.committee_id. Blanks remain blank; no identifier is inferred from a name or another entity's ID."

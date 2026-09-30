@@ -9,14 +9,17 @@ All outputs enter a new directory together after every input has been consumed.
 from __future__ import annotations
 
 import importlib
+import hashlib
 import json
 import re
 from contextlib import ExitStack
 from pathlib import Path
 from tempfile import TemporaryDirectory, TemporaryFile
+from time import monotonic
 
 import pyarrow as pa
 import pyarrow.parquet as pq
+from loguru import logger
 
 from spicy_regs.transforms.fec_relationships import SCHEMA as RELATIONSHIP_SCHEMA
 from spicy_regs.transforms.fec_relationships import api_relationships, bulk_relationships, statement_relationships
@@ -66,11 +69,93 @@ _PROFILES = {
     "bulk": ("bulk_profile", "FEC_BULK_FILES_PROFILE", None),
     "positional": ("row_profile", "FEC_POSITIONAL_ROWS_PROFILE", None),
     "agency": ("agency_profile", "FEC_AGENCY_REPORT_PROFILE", None),
+    "agency-document": ("agency_document_profile", "FEC_AGENCY_DOCUMENT_PROFILE", None),
+    "postgres": ("postgres_profile", "FEC_POSTGRES_ROWS_PROFILE", None),
+    "document": ("document_profile", "FEC_DOCUMENT_PROFILE", None),
 }
 _ORIGINAL_ITERATORS = {
     "positional": "iter_retained_positional_rows",
     "agency": "iter_retained_agency_originals",
+    "agency-document": "iter_retained_agency_documents",
+    "postgres": "iter_retained_postgres_rows",
+    "document": "iter_retained_documents",
 }
+_DISPOSITIONS = {"retained_unparsed", "refused", "unresolved", "inventory_only", "selection_context"}
+_CONTEXT_FIELDS = {
+    "version",
+    "source_capture",
+    "source_family",
+    "bulk_group",
+    "object_key",
+    "member",
+    "related_collection_ids",
+    "source_authority",
+    "selection",
+    "parsing",
+    "relationships",
+    "evidence",
+    "coverage_limits",
+}
+MAX_CONTEXT_BYTES = 1024 * 1024
+
+
+def _context_pin(value):
+    if (
+        not isinstance(value, dict)
+        or set(value) != {"path", "sha256"}
+        or not isinstance(value["path"], str)
+        or not value["path"]
+        or re.fullmatch(r"sha256:[0-9a-f]{64}", str(value["sha256"])) is None
+    ):
+        raise ValueError("FEC caller context requires a retained path and SHA-256")
+
+
+def _caller_context(pin, base):
+    """Read bounded, hash-verified source/coverage facts, separately from provider outcomes."""
+    with _path(pin["path"], base).open("rb") as stream:
+        raw = stream.read(MAX_CONTEXT_BYTES + 1)
+    if len(raw) > MAX_CONTEXT_BYTES:
+        raise ValueError("FEC caller context exceeds its byte limit")
+    if "sha256:" + hashlib.sha256(raw).hexdigest() != pin["sha256"]:
+        raise ValueError("FEC caller context SHA-256 differs")
+    value = json.loads(raw)
+    if (
+        not isinstance(value, dict)
+        or set(value) - _CONTEXT_FIELDS
+        or type(value.get("version")) is not int
+        or value["version"] != 1
+    ):
+        raise ValueError("FEC caller context must contain version 1 source/coverage facts only")
+    # Context is public metadata, never an arbitrary log or credential file.
+    from spicy_docs.transport.credentials import scrub_credential
+
+    def check(item):
+        if isinstance(item, dict):
+            if any(
+                re.sub(r"[^a-z]", "", key.lower())
+                in {
+                    "apikey",
+                    "token",
+                    "accesstoken",
+                    "authorization",
+                    "password",
+                    "secret",
+                    "credential",
+                }
+                for key in item
+            ):
+                raise ValueError("FEC caller context cannot contain credential fields")
+            for part in item.values():
+                check(part)
+        elif isinstance(item, list):
+            for part in item:
+                check(part)
+        elif isinstance(item, str) and scrub_credential(item, "") != item:
+            raise ValueError("FEC caller context cannot contain credential-bearing URLs")
+
+    check(value)
+    _json(value)  # Reject non-finite JSON numbers before emitting any row.
+    return {"pin": pin, "facts": value}
 
 
 def _json(value):
@@ -111,6 +196,30 @@ def _load_manifest(path):
     for item in collections:
         if not isinstance(item, dict):
             raise ValueError("FEC collection must be an object")
+        identity = item.get("collection_id")
+        if not isinstance(identity, str) or not identity or identity in seen:
+            raise ValueError("FEC collection_id must be nonempty and unique")
+        seen.add(identity)
+        if item.get("source_family") not in families:
+            raise ValueError("unknown official FEC source family or reader profile")
+        if "disposition" in item:
+            disposition = item["disposition"]
+            if (
+                set(item) != {"collection_id", "source_family", "disposition"}
+                or not isinstance(disposition, dict)
+                or set(disposition) != {"status", "reason", "context"}
+                or not isinstance(disposition["status"], str)
+                or disposition["status"] not in _DISPOSITIONS
+                or not isinstance(disposition["reason"], str)
+                or not disposition["reason"].strip()
+            ):
+                raise ValueError(
+                    "FEC metadata disposition requires explicit status, reason and context; no provider input"
+                )
+            _context_pin(disposition["context"])
+            continue
+        if "context" in item:
+            _context_pin(item["context"])
         mode = (
             {"scope"}
             if "scope" in item
@@ -119,18 +228,14 @@ def _load_manifest(path):
             else {"release_path", "artifact_sha256", "verifier_implementation_id"}
         )
         required = common | mode
-        if set(item) - {"field_mapping"} != required:
+        if set(item) - {"field_mapping", "context"} != required:
             raise ValueError("FEC collection fields differ from the selected input mode")
-        identity = item["collection_id"]
-        if not isinstance(identity, str) or not identity or identity in seen:
-            raise ValueError("FEC collection_id must be nonempty and unique")
-        seen.add(identity)
         if item["source_family"] not in families or item["profile"] not in _PROFILES:
             raise ValueError("unknown official FEC source family or reader profile")
         if "captures" in item and _PROFILES[item["profile"]][2] is None:
             raise ValueError("direct captures support API query profiles only")
         if "scope" in item and item["profile"] not in _ORIGINAL_ITERATORS:
-            raise ValueError("direct scope supports positional and agency profiles only")
+            raise ValueError("direct scope requires a retained-original reader profile")
         if "field_mapping" in item:
             mapping = item["field_mapping"]
             if item["profile"] != "positional" or not isinstance(mapping, dict):
@@ -310,22 +415,36 @@ def _shape(item, wrapped, outcome):
         raise ValueError("FEC record has no source capture")
     locator = {"collection_id": item["collection_id"], "source_record_id": wrapped["sourceRecordId"]}
     metadata = record.get("metadata", record)
-    if item["profile"] == "positional":
+    if item["profile"] in {"positional", "postgres", "document"}:
         metadata = record["record"]
         if "source" in metadata:
             locator.update(metadata["source"])
         else:
             locator["embedded_bodies"] = metadata["embedded_bodies"]
         locator.update(member=record["member"], ordinal=record["ordinal"])
-    elif item["profile"] == "agency":
+    elif item["profile"] in {"agency", "agency-document"}:
         metadata = record["record"]
         locator.update(ordinal=record["ordinal"], format=record["format"])
+        if "member" in record:
+            locator["member"] = record["member"]
     elif "source_pointer" in record:
         locator["json_pointer"] = record["source_pointer"]
     else:
         locator["object_key"] = capture["objectKey"]
     row = dict.fromkeys(RECORD_COLUMNS)
-    agency = item["profile"] == "agency"
+    agency = item["profile"] in {"agency", "agency-document"}
+    named = metadata.get("metadata", metadata) if item["profile"] == "document" else metadata
+    if not isinstance(named, dict):
+        named = {}
+    if item["profile"] == "postgres":
+        # The source has checked the exact pg_restore schema and COPY stream.
+        # Keep both native spellings and decoded values; array text stays text.
+        names = [column["name"] for column in scope["derivation"]["columns"]]
+        named = dict(zip(names, metadata["values"], strict=True))
+        if len(named) != len(names):
+            raise ValueError("FEC PostgreSQL schema repeats a column name")
+        metadata = {**metadata, "named_fields": named}
+        locator["column_schema_sha256"] = scope["derivation"]["outputs"]["schema"]["sha256"]
     row.update(
         collection_id=item["collection_id"],
         source_family=item["source_family"],
@@ -337,10 +456,15 @@ def _shape(item, wrapped, outcome):
         source_locator_json=_json(locator),
         metadata_json=_json(metadata),
         assets_json=_json(
-            [metadata["asset"]] if agency and metadata.get("kind") == "oversight-asset" else record.get("assets", [])
+            [metadata["asset"]]
+            if agency and metadata.get("kind") == "oversight-asset"
+            else metadata.get("assets", [])
+            if item["profile"] == "document"
+            else record.get("assets", [])
         ),
         embedded_bodies_json=_json(
-            [metadata["body"]] if agency and metadata.get("kind") == "oversight-body"
+            [metadata["body"]]
+            if agency and metadata.get("kind") in {"oversight-body", "word-body"}
             else metadata.get("embedded_bodies", record.get("embedded_bodies", []))
         ),
         source_record_json=_json(wrapped),
@@ -352,7 +476,7 @@ def _shape(item, wrapped, outcome):
         ("legal_doc_id", "doc_id"),
         ("audit_case_id", "audit_case_id"),
     ):
-        value = metadata.get(field)
+        value = named.get(field)
         row[column] = value if isinstance(value, str) else None
     return row, locator
 
@@ -460,6 +584,8 @@ def build_fec_observations(manifest: Path, output_dir: Path, *, batch_size: int 
     Relative input paths resolve beside the manifest. No HTTP request, prior-table
     merge, source mutation, or publication occurs. Replays use a new destination.
     """
+    from spicy_docs.sources.fec.delimited import verified_archive_session
+
     if type(batch_size) is not int or batch_size < 1:
         raise ValueError("batch_size must be a positive integer")
     manifest, output_dir = Path(manifest), Path(output_dir)
@@ -472,6 +598,7 @@ def build_fec_observations(manifest: Path, output_dir: Path, *, batch_size: int 
         stage.mkdir()
         schemas = (RECORD_SCHEMA, COLLECTION_SCHEMA, RELATIONSHIP_SCHEMA)
         with ExitStack() as stack:
+            stack.enter_context(verified_archive_session())
             writers = [
                 stack.enter_context(pq.ParquetWriter(stage / name, schema, compression="zstd"))
                 for name, schema in zip(OUTPUTS, schemas, strict=True)
@@ -489,7 +616,36 @@ def build_fec_observations(manifest: Path, output_dir: Path, *, batch_size: int 
                     writers[index].write_table(pa.Table.from_pylist(buffers[index], schema=schemas[index]))
                     buffers[index].clear()
 
-            for item in collections:
+            for number, item in enumerate(collections, 1):
+                started = monotonic()
+                logger.info("FEC collection {}/{}: {}", number, len(collections), item["collection_id"])
+                if "disposition" in item:
+                    disposition = item["disposition"]
+                    context = _caller_context(disposition["context"], manifest.parent)
+                    append(
+                        1,
+                        {
+                            **dict.fromkeys(COLLECTION_COLUMNS),
+                            "collection_id": item["collection_id"],
+                            "source_family": item["source_family"],
+                            "record_count": "0",
+                            "relationship_count": "0",
+                            "record_outcome": disposition["status"],
+                            "collection_outcome_json": _json(
+                                {
+                                    "providerOutcome": None,
+                                    "receiverDisposition": {
+                                        "status": disposition["status"],
+                                        "reason": disposition["reason"],
+                                        "sourceRecordCount": None,
+                                        "callerContext": context,
+                                    },
+                                }
+                            ),
+                        },
+                    )
+                    continue
+                context = _caller_context(item["context"], manifest.parent) if "context" in item else None
                 profile, iterator = _profile(item["profile"])
                 dictionary, definitions = (
                     _dictionary(item, manifest.parent)
@@ -513,6 +669,13 @@ def build_fec_observations(manifest: Path, output_dir: Path, *, batch_size: int 
                     mapped = _named_fields(item, wrapped, row, locator, headers, dictionary)
                     append(0, row)
                     record_count += 1
+                    if record_count % 1_000_000 == 0:
+                        logger.info(
+                            "FEC collection {} progress: {} records in {:.1f}s",
+                            item["collection_id"],
+                            record_count,
+                            monotonic() - started,
+                        )
                     for relationship in _relationships(item, wrapped, row, locator, version, mapped):
                         append(2, relationship)
                         relationship_count += 1
@@ -522,6 +685,8 @@ def build_fec_observations(manifest: Path, output_dir: Path, *, batch_size: int 
                     outcome = {**outcome, "tableFieldMapping": item["field_mapping"]}
                     if definitions is not None:
                         outcome["tableFieldDefinitions"] = definitions
+                if context is not None:
+                    outcome = {**outcome, "callerContext": context}
                 append(
                     1,
                     {
@@ -538,6 +703,13 @@ def build_fec_observations(manifest: Path, output_dir: Path, *, batch_size: int 
                         "collection_outcome_json": _json(outcome),
                         "artifact_sha256": item.get("artifact_sha256"),
                     },
+                )
+                logger.info(
+                    "FEC collection {} complete: {} records, {} relationships in {:.1f}s",
+                    item["collection_id"],
+                    record_count,
+                    relationship_count,
+                    monotonic() - started,
                 )
             for index in range(3):
                 flush(index)

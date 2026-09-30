@@ -5,6 +5,15 @@ The optional `source-readers` extra enables the same readers for package install
 its wheels must be supplied explicitly until they are published in a registry.
 Base CLI and MCP installs do not require them.
 
+- `spicy_docs-0.53.0+fec.14b98e9db916`: retained FEC corpus candidate from source
+  commit `14b98e9db91644728b0fa7f924f22095dc719bf7`, September 30, 2026.
+  SHA-256 `9547ff1d4b010abe0b8af9ad62a24844a44fd27dad9feea5838bfc4f582c1e37`.
+  Two builds from the exact committed archive produced identical bytes. Only
+  archive build metadata sets this local version; the source branch version
+  remains unchanged. Includes retained PostgreSQL, agency archive/Word and API
+  observation readers, plus session-bounded ZIP verification reuse. PDF support
+  is preserved in the source but PDF processing and qualification are deferred
+  by the user for this campaign. See the [retained qualification](../docs/research/fec-retained-corpus-qualification-2026-09-30.md).
 - `spicy_docs-0.53.0+fec.3fc8388b368b`: local FEC candidate build from source commit
   `3fc8388b368b204a57f6ea4029e26eadb132cfad`, September 30, 2026. SHA-256
   `9b1b944f1dce879310d1bf37cbb4c9ae560dceb70d7eb9816d0862eb11b700b8`.

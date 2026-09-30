@@ -1,8 +1,12 @@
 # FEC remaining work and discovered gaps
 
-Reconciled September 21, 2026 against the FEC delivery at SpicyRegs `7b174f1`,
-its pinned SpicyDocs 0.26.0 interface, retained research and the separate source
-repair/runbook updates through `a4930a4`.
+Updated September 30, 2026 for the [retained non-PDF corpus qualification](research/fec-retained-corpus-qualification-2026-09-30.md).
+The dated September 21 delivery at SpicyRegs `7b174f1` and its receipts remain
+the historical publication baseline. The user deferred PDF processing; retained
+PDF originals and pre-deferral native/OCR evidence remain inventoried. Retained
+FEC PDF corpus processing remains paused, and the combined generation
+excludes PDF parsing and ingestion. Filtered test suites inadvertently exercised
+PDF fixtures after the deferral; the dated qualification records those misses.
 This is the canonical remaining-work register. Dated research reports preserve
 what was known at the time; the newer evidence referenced here takes precedence
 over their older open/closed status sentences.
@@ -15,9 +19,9 @@ goal remains one place to discover and use relationships across many sources.
 FEC financial analysis and legislative scorecards are possible consumers of that
 foundation, each with its own inclusion and scoring rules.
 
-## Verified baseline
+## Historical published selection — September 21, 2026
 
-| Measure | Current local result | Limit |
+| Measure | Measured baseline result | Limit |
 | --- | ---: | --- |
 | Broad official source families catalogued | 26 | Discovery metadata, not acquisition completeness |
 | Broad families with selected collection rows | 17 | Nine have no selected collection in this generation; an access category need not produce records |
@@ -65,13 +69,18 @@ indexing separately; a successful test in one stage does not close the others.
 
 ### FG01 — Make coverage and interpretation status queryable
 
-**Open · SpicyRegs.** `fec_collections` exposes provider scope and the selected
-reader's outcome. Caller discovery, publisher authority and earlier refusals
-remain in receipts or labels. For example, Senate `853` has an authority label;
+**Local implementation and retained qualification · SpicyRegs.** `fec_collections`
+now accepts digest-pinned caller context and explicit metadata dispositions,
+separately from provider scope and outcomes. The combined selection binds caller
+discovery, authority, earlier refusals, relationship-mapping selection and the
+bulk map without changing prior provider rows. Metadata-only entries emit zero
+records while retaining an unknown source-record count. `retained_unparsed`
+remains open work. For example, Senate `853` has an authority label;
 `48` has a native-parser refusal followed by a successful physical-line reader.
-Zero relationship rows also do not distinguish “unmapped,” “not selected” and
-“mapped with no observations.” The bulk-group-to-collection mapping lives in an
-external receipt; `source_family` is the broader classification.
+Caller relationship context distinguishes an unselected mapping from a selected
+mapper; its provider outcome still owns emitted counts. Bulk groups and
+`source_family` remain distinct census axes. See the dated retained qualification
+for actual local queries and its exact selection.
 
 **Complete when:** existing metadata structures expose digest-pinned caller
 context, mapping/version status and the bulk selection map. MCP can distinguish
@@ -82,9 +91,11 @@ caller decisions. Evidence: [observation builder](https://github.com/mikewolfd/s
 
 ### FG02 — Distribute recoverable input and audit evidence
 
-**Open · Publication operator, SpicyRegs and SpicyDocs.** Table generations bind
-output bytes, schemas and implementation identity. They do not yet bind the
-complete acquisition campaign, original blobs and manual audit bundle. Many
+**Open distribution · Publication operator, SpicyRegs and SpicyDocs.** Table
+generations bind output bytes, schemas and implementation identity. The retained
+observation generation now also binds its exact selected manifest, including
+source-capture and caller-context pins. The complete acquisition campaign,
+original blobs and manual audit bundle are not distributed with it. Many
 evidence locators are local paths; a current publisher URL cannot guarantee the
 same bytes later. Direct-retained inputs correctly have no invented source-release
 artifact digest.
@@ -102,8 +113,11 @@ the long-term evidence store. Evidence: [generation format](generation-publicati
 
 ### FG03 — Adopt the assessed PostgreSQL committee history
 
-**Open · SpicyDocs reader, then SpicyRegs adoption.** The original dump and README
-are inventoried, but decoded rows are not in the delivered tables. The assessment
+**Retained native reader and local receiving path qualified · SpicyDocs and SpicyRegs.**
+The September 30 selection includes the original dump's native committee-history
+rows and literal README lines through the existing observation tables. The
+source receipt verifies every native cell and regenerated COPY/schema pin.
+Remote publication remains separate. The assessment
 found **262,276 rows, 73 fields and 76,277 committee IDs**, covering cycles
 1976–2022. The README describes 66 fields. A September 2026 object timestamp
 does not make those records current.
@@ -120,20 +134,23 @@ contain later candidate/sponsor/cycle information. Evidence: E3 and the
 
 ### FG04 — Finish adoption of already retained bulk populations
 
-**Open adoption / expansion of selection · SpicyDocs and SpicyRegs.** Remaining
-inputs include the **32,034,987-row individual-contribution main member**;
-retained committee masters, candidate links, candidate/committee
-summaries and leadership PACs; presidential map detail exports; other retained
-communication-cost/electioneering periods; and daily/paper archive populations.
-Individual insert/delete rows are already delivered. Main and `by_date` layouts
-may overlap and cannot be summed without reconciliation.
+**Retained selection qualified locally; unacquired history remains expansion ·
+SpicyDocs and SpicyRegs.** The September 30 manifest combines the previously
+selected bulk populations with all retained native master snapshots, individual
+main/date members, and selected daily/paper filing archive members. The source
+row-hash oracle proves the retained individual main stream and date partitions
+have equal row multiplicities. Both physical observations remain present;
+summing them would double-count their overlap. Exact objects, members, dates,
+source counts and source-limited dispositions are in the dated receipt.
 
 **Bounded local completion, September 30, 2026:** `fec_candidate_history` now
 builds every bulk candidate-master cycle from 1980 through 2026. The exact
 retained-file selection, mixed acquisition dates, complete field comparison and
 local MCP check are recorded in the [qualification receipt](research/fec-publish-qualification-2026-09-30.md#candidate-master).
 Remote publication remains unperformed. This closes the local candidate-master
-receiver path only; the other bulk populations above remain separate work.
+receiver path. The later [retained-corpus receipt](research/fec-retained-corpus-qualification-2026-09-30.md)
+records the combined native adoption; neither selection claims unrelated
+unacquired official history.
 
 **Complete when:** each chosen object/member has bounded native rows, exact
 field/member audits, source coordinates and a delivered selection record. Track
@@ -247,14 +264,17 @@ Exchange Model (NIEM) 1.02/1.03 and Oversight report parsers exist. Selected XML
 history and Oversight records are retained. The September 30 local qualification
 admits all 119 successful selected agency releases through `profile: agency`
 into the existing observation tables, preserving native fields, bodies, assets
-and source positions. The selected 2009 Word Flat OPC original remains an
-explicit refusal. See the [exact selection and receiver receipt](research/fec-publish-qualification-2026-09-30.md#agency-reports).
+and source positions. That earlier profile refused the selected 2009 Word Flat OPC original. The later
+retained-corpus selection uses a separate Word reader, preserving package parts,
+XML elements and literal text/control tokens, and adds retained FOIA.gov ZIP
+members. See the [exact selection and receiver receipt](research/fec-publish-qualification-2026-09-30.md#agency-reports).
 Remote publication remains unperformed; the agency-only qualification generation
 must be combined with the intended existing collection selection before publication.
 PDF-only years, other report types, public FOIA releases, broader Oversight years and current recommendation
-status remain outside the qualified selection. Word Flat OPC is a distinct
-unsupported representation; paired XML creation dates and report/export dates
-must remain separate.
+status remain outside the qualified selection. Word text/control observations do not assert rendered-page or OCR fidelity;
+paired XML creation dates and report/export dates remain separate. PDF processing
+is explicitly deferred by the user. The exact combined selection and its
+remaining source limitations supersede the earlier agency-only selection.
 
 **Complete when:** selected releases are admitted by receivers, enumeration and
 original outcomes reconcile, and native fields/associations survive. Define OCR,
@@ -361,7 +381,9 @@ traversal and its publication before claiming the fork's refresh is operational.
 ### FG17 — Measure and improve bulk scale where needed
 
 **Open capacity qualification / conditional optimization · SpicyDocs and operators.**
-Separate member releases repeat archive-wide verification. The completed selected
+The retained builder now uses session-scoped verified archive inventories.
+Each opened original is still digest/size checked; ZIP member integrity and
+identity are preserved. The completed selected
 audits do not establish throughput or peak memory for full historical schedules,
 all daily archives or large cross-source joins.
 
@@ -549,6 +571,12 @@ completion criterion.
    FG24). Preserve source observations throughout.
 
 ## Evidence index
+
+The current retained-corpus selection, source wheel, receiving manifests,
+source oracles, coverage ledger, resource receipts and local generation checks
+live under [the September 30 evidence root](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930).
+The dated qualification page distinguishes completed local boundaries from
+user-deferred PDF work and unperformed publication.
 
 These local receipts are retained evidence, not portable public downloads.
 Their portability is part of FG02. The links identify exact audit roots; dated

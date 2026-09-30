@@ -28,7 +28,7 @@ This creates a new `fec-observations-<run-id>` directory containing:
 | Table | Row meaning |
 | --- | --- |
 | `fec_source_records` | One selected source observation, identified by `collection_id` and `source_record_id`; complete provider record and native metadata, source digest, URL, observation time and exact source coordinates. |
-| `fec_collections` | One explicitly selected collection, including requested-empty results; requested scope, verified counts, coverage limits and source outcome. |
+| `fec_collections` | One selected collection or explicit caller coverage disposition. Parsed collections preserve requested scope, verified counts, coverage limits and source outcome; metadata-only rows have NULL provider fields. |
 | `fec_relationships` | Source-reported assertions and absence states from supported committee API, original statement and explicitly mapped bulk inputs. |
 
 The manifest is JSON with `version: 1` and a nonempty `collections` list. Each
@@ -51,6 +51,22 @@ resolve beside the manifest. Choose one input mode:
   Every native report record, field, body and asset remains in `source_record_json`
   and `metadata_json`, with its ordinal and format in `source_locator_json`.
   Agency records produce no inferred candidate/committee relationships.
+- **Agency archive or Word original:** `profile` is `agency-document`; `scope`
+  comes from `agency_document_scope`. FOIA.gov ZIP inputs select an exact member
+  ordinal and name. Word Flat OPC inputs retain package parts, XML elements and
+  literal text/control tokens. Their tokens are not rendered pages or OCR.
+- **PostgreSQL committee history:** `profile` is `postgres`; `scope` comes from
+  `postgres_row_scope`. The source reader regenerates the selected COPY text
+  through `pg_restore` and checks the retained tool, arguments, dump, schema and
+  derived-stream pins. Raw COPY fields, decoded SQL NULLs, empty strings and array
+  text stay distinct. `metadata_json.named_fields` uses the verified column names;
+  historical rows do not use the current-committee relationship mapper.
+- **One retained API response:** `profile` is `document`; `scope` comes from
+  `document_scope` with `format: api-json` and an explicit response mode. Complete
+  top-level fields, source row metadata, attachment links and embedded body text
+  remain queryable. Every record states `query_completeness: not-asserted`; this
+  input never establishes a complete API traversal. Scalar, list and NULL source
+  values survive without inventing identity fields.
 - **Existing source release:** `release_path`, `artifact_sha256` and
   `verifier_implementation_id` pin an existing SpicyDocs release. Supported
   profiles additionally include `bulk`; `agency` also accepts a pinned release. The source reader checks artifact
@@ -60,6 +76,43 @@ resolve beside the manifest. Choose one input mode:
 An existing release is optional. No input mode downloads source data. Explicit
 source query scope remains visible; none establishes a complete historical FEC
 population, complete legal case files or a current amendment view.
+
+Caller coverage facts use the same metadata table without inventing a source
+profile or a successful empty result. A metadata-only manifest entry contains
+only `collection_id`, `source_family` and this `disposition`:
+
+```json
+{
+  "status": "unresolved",
+  "reason": "The retained inventory references an original whose bytes are unavailable",
+  "context": {"path": "coverage/object.json", "sha256": "sha256:<64 lowercase hex digits>"}
+}
+```
+
+The allowed statuses are `retained_unparsed`, `refused`, `unresolved`,
+`inventory_only` and `selection_context`. These rows emit zero records; their
+unknown source count remains NULL. They have NULL `profile`, `source_system_id`,
+`source_state_scope`, `requested_scope_json` and release pin. Their
+`collection_outcome_json.receiverDisposition` holds the caller's status, reason
+and verified context; `providerOutcome` is NULL. A normal parsed entry may also
+include an optional `context` pin, stored separately as `callerContext`.
+
+Context is a retained JSON object with `version: 1`, limited to 1 MiB. Its allowed
+facts are `source_capture`, `source_family`, `bulk_group`, `object_key`, `member`,
+`related_collection_ids`, `source_authority`, `selection`, `parsing`,
+`relationships`, `evidence` and `coverage_limits`. Unknown top-level fields,
+named credentials, credential-bearing URLs and changed bytes refuse the build.
+Context rows have their own unique IDs and can refer to prior collection IDs
+without changing those prior rows. `retained_unparsed` remains open work; it is
+not evidence of adoption. A PDF deferred by the user uses `inventory_only` with
+`parsing.status: deferred_by_user` in its context. Already retained output pins
+can remain discoverable without performing another PDF extraction. A parse-requested input still fails the complete build
+on malformed bytes or incomplete traversal.
+
+The rollup retains the exact input manifest in its sealed source-evidence
+artifact. Original capture timestamps remain unchanged. A session-local source
+reader check reuses verified ZIP inventories across selected members while
+hash-checking each opened original; no pathname grants trust.
 
 For positional data, an optional `field_mapping` associates a verified header
 observation with its rows:

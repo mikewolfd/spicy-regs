@@ -2679,9 +2679,9 @@
     "table": "fec_collections",
     "label": "Retained FEC collection scopes and outcomes",
     "summary": "Collection-level scope, counts and evidence for fec_source_records. Join collection_id to that table to distinguish observed records from empty results and uncollected populations. Join source_family to fec_source_catalog for the official access routes. Counts are stored as strings; cast explicitly for arithmetic.",
-    "coverage": "Sampled. One row per selected FEC file or API query, including empty results, with its requested scope and outcome: a selected seed, not every official family or complete FEC history. A collection with profile `bulk` lists a zip's files, not their rows. The fec_collection_cycles view gives each collection's election cycle.",
+    "coverage": "Sampled. Selected FEC originals and queries retain their requested scope and outcome. Rows with NULL profile are caller coverage, refusal or context records, not parsed collections or successful empty queries. Profile `bulk` lists files rather than their rows. The fec_collection_cycles view gives cycles stated by bulk directory URLs. This metadata does not establish complete official FEC history.",
     "kind": "sampled",
-    "measured_on": "2026-09-28",
+    "measured_on": "2026-09-30",
     "data_quality": null,
     "columns": [
       {
@@ -2697,12 +2697,12 @@
       {
         "column_name": "profile",
         "column_type": "VARCHAR",
-        "description": "Provider reader profile used for this collection: committee, candidate, filing, legal, audit, bulk, positional or agency-report records."
+        "description": "Provider reader profile: committee, candidate, filing, legal, audit, bulk, positional, agency, agency-document, postgres or document. NULL for caller disposition/context rows, which were not parsed by a provider profile."
       },
       {
         "column_name": "source_system_id",
         "column_type": "VARCHAR",
-        "description": "Provider identifier for the source system represented by this collection."
+        "description": "Provider identifier for the source system; NULL for caller disposition/context rows."
       },
       {
         "column_name": "source_state_scope",
@@ -2712,7 +2712,7 @@
       {
         "column_name": "record_count",
         "column_type": "VARCHAR",
-        "description": "Number of verified source records emitted for this selected collection, stored as a decimal integer string."
+        "description": "Emitted source-record count as a decimal integer string. A metadata-only row emits zero; its unknown source population count remains NULL in receiverDisposition.sourceRecordCount."
       },
       {
         "column_name": "relationship_count",
@@ -2722,7 +2722,7 @@
       {
         "column_name": "record_outcome",
         "column_type": "VARCHAR",
-        "description": "Provider's record outcome, such as no-record-rejections or an empty result, retained without promoting it to population completeness."
+        "description": "Provider record outcome for parsed inputs. Metadata-only rows instead state retained_unparsed, refused, unresolved, inventory_only or selection_context; none means successful empty parsing."
       },
       {
         "column_name": "requested_scope_json",
@@ -2737,7 +2737,7 @@
       {
         "column_name": "collection_outcome_json",
         "column_type": "VARCHAR",
-        "description": "Complete provider outcome including requested scope, rejections and warnings when supplied. tableFieldMapping records an explicit bulk-field mapping; tableFieldDefinitions retains verified HTML dictionary cells and source coordinates when selected."
+        "description": "Complete provider outcome for parsed inputs, including tableFieldMapping and verified tableFieldDefinitions when selected. Optional callerContext holds separately hash-verified source/coverage facts. Metadata-only rows contain receiverDisposition and providerOutcome:null; they make no source parsing claim."
       },
       {
         "column_name": "artifact_sha256",
@@ -2745,7 +2745,7 @@
         "description": "Digest of the verified provider source-release artifact; null for direct retained-query input that has no release artifact."
       }
     ],
-    "grain": "One row per selected verified input collection.",
+    "grain": "One row per selected input collection or explicitly declared caller coverage disposition.",
     "identity_columns": [
       "collection_id"
     ]
@@ -2753,10 +2753,10 @@
   "fec_source_records": {
     "table": "fec_source_records",
     "label": "FEC source records with native metadata and evidence",
-    "summary": "Joinable metadata and retained source evidence across FEC families. collection_id joins fec_collections; source_family joins fec_source_catalog. Rows from different files and election cycles share this table, which has no cycle column: join collection_id to the fec_collection_cycles view for the cycle (2026 means 2025-2026) before comparing with a cycle's totals. A transaction's type, direction, other party, amount and memo flag are fields inside metadata_json (TRANSACTION_TP, OTHER_ID, CAND_ID, TRANSACTION_AMT, MEMO_CD). Native identifiers are lifted only when the provider reports them, and committee_id can join fec_committees. metadata_json and source_record_json preserve the complete provider record. Missing IDs remain missing.",
-    "coverage": "Sampled. The records of the selected collections in fec_collections, not complete FEC history. Contributions from individuals are mostly missing: only the 2025-2026 insertion and deletion files are loaded, not the main individual-contributions file of any cycle (gap FG04 in docs/fec-gaps.md). For a candidate's individual donors, use FEC.gov. Overlapping collections can repeat an observation.",
+    "summary": "Joinable metadata and retained source evidence across FEC families. collection_id joins fec_collections; source_family joins fec_source_catalog. Rows from different files and election cycles share this table, which has no cycle column: join collection_id to the fec_collection_cycles view for the cycle (2026 means 2025-2026) before comparing with a cycle's totals. A transaction's type, direction, other party, amount and memo flag are fields inside metadata_json (TRANSACTION_TP, OTHER_ID, CAND_ID, TRANSACTION_AMT, MEMO_CD). Native identifiers are lifted only when the provider reports them, and committee_id can join fec_committees. metadata_json and source_record_json preserve the complete provider record. PostgreSQL metadata additionally exposes named_fields from its verified schema; raw COPY fields, decoded NULLs and array text remain separate. Missing IDs remain missing.",
+    "coverage": "Sampled. The records of the selected collections in fec_collections, not complete FEC history. Inspect each collection's retained selection and source coordinates before combining observations. An archive's main file, date partitions and correction files can overlap; physical source rows are not a deduplicated transaction population.",
     "kind": "sampled",
-    "measured_on": "2026-09-28",
+    "measured_on": "2026-09-30",
     "data_quality": "Memo lines (MEMO_CD 'X' in metadata_json) repeat money already reported on another line; leave them out before summing. Most rows of the 2025-2026 committee-to-committee file (collection bulk-2026-oth-base-file) are such memos: contributions from individuals received through joint fundraising committees (TRANSACTION_TP 15J). Contributions from PACs routed through a joint fundraising committee are memos too (18J), already inside the committee's transfer lines (18G). The bulk files carry no link from a memo to its transfer. Native fields retain their source meaning. Monetary values, amendment chains and record inclusion rules differ by family; generic record ingestion does not select a latest amendment or establish a safe sum. Unknown fields stay in native JSON. Original pinned bytes preserve numeric spelling where the provider exposes exact decimal values as strings.",
     "columns": [
       {
@@ -2767,7 +2767,7 @@
       {
         "column_name": "source_family",
         "column_type": "VARCHAR",
-        "description": "Caller-selected official FEC source-family identifier, checked against the inventory. Joins fec_source_catalog.source_family; this classification is not independently inferred from source content. fec_receipts holds only the 2025-2026 insertion and deletion files of individual contributions, not the main file of any cycle."
+        "description": "Caller-selected official FEC source-family identifier, checked against the inventory. Joins fec_source_catalog.source_family; this classification is not independently inferred from source content."
       },
       {
         "column_name": "profile",

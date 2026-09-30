@@ -61,6 +61,12 @@ def _path_fields(value: dict):
         dictionary = item.get("field_mapping", {}).get("dictionary")
         if dictionary is not None:
             yield f"/collections/{ordinal}/field_mapping/dictionary/blob_root", dictionary, "blob_root"
+        context = item.get("context")
+        if context is not None:
+            yield f"/collections/{ordinal}/context/path", context, "path"
+        disposition = item.get("disposition")
+        if disposition is not None:
+            yield f"/collections/{ordinal}/disposition/context/path", disposition["context"], "path"
 
 
 def _relocations(original: dict, portable: dict, root: Path) -> list[dict]:
@@ -72,8 +78,9 @@ def _relocations(original: dict, portable: dict, root: Path) -> list[dict]:
         if pointer not in old_paths:
             raise ValueError("portable manifest changes the selected input modes")
         selected = root / _relative(parent[key])
-        if not selected.is_dir() or not selected.resolve().is_relative_to(root.resolve()):
-            raise ValueError("manifest input roots must be existing directories inside the bundle")
+        exists = selected.is_file() if key == "path" else selected.is_dir()
+        if not exists or not selected.resolve().is_relative_to(root.resolve()):
+            raise ValueError("manifest input paths must exist with their expected kind inside the bundle")
         changes.append({"pointer": pointer, "original": old_paths[pointer], "portable": parent[key]})
         parent[key] = old_paths[pointer]
     if before != after:
