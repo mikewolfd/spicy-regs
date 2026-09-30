@@ -11,6 +11,12 @@ This is the canonical remaining-work register. Dated research reports preserve
 what was known at the time; the newer evidence referenced here takes precedence
 over their older open/closed status sentences.
 
+The later [research correction](research/fec-retained-corpus-qualification-2026-09-30.md#research-correction-after-the-initial-qualification)
+closes omitted retained FEC captures from previously excluded directories and
+adds the loose bulk-download page and retained range evidence. Its receipt owns
+the current local selection and counts. One historical API original remains
+explicitly unavailable; PDF processing and external delivery remain separate.
+
 The reusable path works for the selected inputs: source discovery, retained
 records, reported relationships, verified table generations, CLI downloads and
 local Model Context Protocol (MCP) queries. Remaining work concerns coverage,
@@ -445,7 +451,7 @@ building an FEC search service. Evidence: research T09/T19 and the
 ### FG21 — Publish the selected FEC data and qualify the hosted reader
 
 **Selected data published; hosted-service deployment open · Data/MCP operator.**
-The fork now serves the three complete selected families: `fec-observations`,
+The September 21 fork execution published three complete selected families: `fec-observations`,
 `fec-source-catalog` and `fec-committees`. Full public downloads passed digest,
 size, schema and row-count checks. Actual stdio MCP passed both those downloads
 and direct fork R2 queries, preserving generation pins. All selected relationship
@@ -453,6 +459,9 @@ parents resolve; nine raw-audited witnesses survive unchanged. This establishes
 public selected-data delivery. A matching hosted MCP service, canonical domain
 and documentation deployment remain separate work. Evidence:
 [fork execution receipts](/Users/mikewolfd/Work/corpora/fork-execution-2026-09-21).
+The larger September 30 retained selection and its research correction are
+verified locally and remain unpublished. The earlier publication receipt does
+not establish delivery of those additions.
 
 **Complete when:** publish the chosen `fec-observations` and `fec-source-catalog`
 families through the existing generation path, verify remote bytes and one
@@ -516,6 +525,12 @@ and representation/license/schema conflicts. Court PDFs and underlying FEC
 survey responses cited by the research remain unacquired. Public bytes do not
 by themselves establish redistribution permission; paid or access-restricted
 alternatives remain conditional.
+
+The research correction rechecks those directories by source identity. Official
+FEC captures found there are part of the local FEC selection; explicitly
+FEC-related third-party captures retain reference context with their authority.
+The remaining adjacent-source inventory stays separate. See the correction's
+`inventory.json` and `verification.json` for the complete classified denominator.
 
 **Complete for a selected source when:** its declared population and every
 enumerated object have source, access, acquisition and interpretation dispositions,

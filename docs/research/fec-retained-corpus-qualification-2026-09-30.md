@@ -1,12 +1,15 @@
 # Retained FEC corpus qualification — September 30, 2026
 
-The retained non-PDF FEC corpus is qualified locally and queryable through the
-existing tables and MCP tools. The combined generation contains 80,413,092 native
-source observations, 951,374 relationship observations and 7,915 collection or
-coverage rows. Independent checks matched all selected native fields, prior
-output cells, relationship occurrences and pinned caller facts. PDF corpus
-processing remains deferred by the user; the combined generation contains no PDF
-parsing or ingestion scopes.
+The selected retained non-PDF FEC data is qualified locally and queryable through
+the existing tables and MCP tools. The later research correction below closes
+omissions in the earlier selection; the earlier claim that it covered all
+retained non-PDF research was too broad. The current manifest, counts, source
+package and generation are recorded in the
+[research-closure receipt](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/research-closure-20260930/completion.json).
+Independent checks preserve prior output cells and relationships and verify the
+added source fields and reference contexts. PDF corpus processing remains
+deferred by the user; the combined generation contains no PDF parsing or
+ingestion scopes. One historical API response body remains unavailable.
 
 The selection includes official FEC source families, retained agency reports
 about FEC and their exact archive members. Unacquired official history and
@@ -20,6 +23,56 @@ The durable evidence root is
 Its input manifests, qualification receipts and final verification record own
 changing counts and exact identities. A discovered URL is not a retained file;
 a byte-verified capture is not automatically a parsed or received population.
+
+## Research correction after the initial qualification
+
+The older research audit found official FEC captures under `academic/` and
+`repositories/`, directories the earlier inventory had excluded wholesale.
+The correction examines every research JSON/JSONL metadata file across all
+directories and selects captures by source identity. It closes the originally
+identified 99 missing non-PDF files, adds the loose bulk-download page found
+outside capture folders, and accounts for retained file ranges and an archived
+FEC page. The exact denominator and dispositions live in
+[`inventory.json`](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/research-closure-20260930/inventory.json)
+and the adjacent `capture-ledger.json`. Explicitly FEC-related third-party
+references retain their separate authority; adjacent political-data research
+remains inventoried outside this FEC selection. A directory name does not decide
+whether its contents belong to the official FEC corpus.
+
+Retained API responses become native source observations through the existing
+document profile. Guidance, RSS, dictionaries and other reference bodies become
+literal, digest-pinned collection context. Byte ranges and legacy text without
+a qualified encoding retain reversible bytes and their source limitations.
+These references support source interpretation and coverage queries; they do
+not create financial transactions, inferred relationships or complete API
+histories. The added API observations retain every raw top-level response field.
+
+The source fix preserves integer identifiers outside the artifact JSON safe
+range as exact strings. Original response bytes retain their original numeric
+spelling and type. The installed wheel is now
+`0.53.0+fec.bcdde5431fac`, from source commit
+`bcdde5431fac89799f0f3f76400dfacbc661399f`; see `wheel.json` and
+`wheel-change-scope.json` beside the correction receipt. The shared FEC number
+helper is its only changed Python module relative to the earlier wheel.
+
+The ordinary receiving builder produces the additions. The combined build
+compares every output batch with the earlier verified tables plus those
+additions, preserving every prior cell and occurrence. Its first sealed result
+is retained under `pre-loose-original/`; the final result adds the loose page's
+contexts and reuses the verified native table bytes. Independent checks compare
+original API fields, source hashes, reference text/bytes and every selected
+context with receiving output. Final generation and local MCP checks are in
+[`verification.json`](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/research-closure-20260930/verification.json)
+and adjacent `mcp-check.json`. Source and consumer focused test logs are retained
+there too. These explicitly selected checks perform no PDF processing.
+
+The missing anonymous committee-API response remains
+`unresolved-original-body`. The exact-size/digest search is retained in
+[`missing-body-search.json`](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/research-closure-20260930/missing-body-search.json);
+a new live response cannot substitute for the historical bytes. This correction
+accounts for that exception without claiming recovery. PDF originals and the
+format-guide PDF member remain deferred without opening their bodies. There
+was no new acquisition, push, main merge or remote publication in this correction.
 
 ## Preserved selection and native additions
 
@@ -67,7 +120,7 @@ locations and are verified before reading; the build does not acquire data.
 Original acquisition dates remain distinct from later local-verification times;
 where only an acquisition day is known, context retains that limitation.
 The source wheel and consumer code identities are pinned in the run receipt.
-The installed wheel is an isolated build from source commit
+The initial generation used an isolated wheel build from source commit
 `14b98e9db91644728b0fa7f924f22095dc719bf7`, version
 `0.53.0+fec.14b98e9db916`; its two builds are byte-identical. The wheel digest
 and byte-for-byte comparison against committed package files are retained under
@@ -99,7 +152,11 @@ combined candidate requires the independently verified preservation results and
 the ordinary conditional publication guard. The current remote population was
 not rechecked for this retained-corpus campaign.
 
-## Verification record
+## Initial generation verification record
+
+This section preserves the initial selection's evidence. The research correction
+above owns the current selection and package; these earlier receipts and output
+files remain unchanged.
 
 The frozen input is `consumer/combined-inputs.json`, SHA-256
 `f722e2060f9fbf026b0456e789355b36260c4a2310e4e6943fd4a9cb4be44900`.
