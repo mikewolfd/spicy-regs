@@ -1,0 +1,67 @@
+{
+  "checked_at": "2026-09-30T17:20:42.805865+00:00",
+  "files": {
+    "gao_recommendations": {
+      "path": "generations/gao-recommendations/14761739574984b476d786c78e611fb558661349843822a4e712862662c5bcce/gao_recommendations.parquet",
+      "sha256": "sha256:5e60f59c164a37d7e60199b50916f567139a56abc2ed06f0338afbb0833457ec",
+      "bytes": 1705440,
+      "rows": 5414
+    },
+    "gao_reports": {
+      "path": "generations/gao-reports/b9c9c974f971114ff943157d9217b7a8784cd56f66b936cdbea08ecc60419d3f/gao_reports.parquet",
+      "sha256": "sha256:9bd9e0fb673635be6315b0c0b579b86fdaeb67ad63ed47a0a10bfba5b3d3ef8a",
+      "bytes": 11311194,
+      "rows": 53067
+    },
+    "comment_attributes": {
+      "path": "generations/comment-attributes/46061b9da64f8ac2d4c1a166008711200f2a4bbfd3089085c657ac07542e2873/comment_attributes.parquet",
+      "sha256": "sha256:6ad3fe1e4d6bd1f7ccc474db882a8cbd75f66058ac8380863a1b8b6e900d583c",
+      "bytes": 305646105,
+      "rows": 26381105
+    }
+  },
+  "gao_rows": 5414,
+  "gao_distinct_ids": 5414,
+  "gao_null_ids": 0,
+  "gao_joined_rows": 5414,
+  "gao_orphan_reports": [],
+  "gao_listed_open": [
+    [
+      "true",
+      5414
+    ]
+  ],
+  "comment_attributes_identity": [
+    26381105,
+    26381105,
+    0
+  ],
+  "family_versions_unchanged": true,
+  "public_bytes_and_identity_passed": true,
+  "join_scope": "Measured missing parents retained as source observations, not discarded.",
+  "gao_distinct_report_keys": 1811,
+  "comment_parent_verification": {
+    "checked_at": "2026-09-30T14:17:04.326490+00:00",
+    "rows": 26381105,
+    "distinct_ids": 26381105,
+    "null_ids": 0,
+    "orphan_attribute_ids": 0,
+    "comments_without_attributes": 0,
+    "public_rows": 26381105,
+    "public_comments_version": {
+      "etag": "\"afed95f6fe0887d15e60301592b77353-520\"",
+      "bytes": 4355336138
+    },
+    "bytes": 305646105,
+    "sha256": "6ad3fe1e4d6bd1f7ccc474db882a8cbd75f66058ac8380863a1b8b6e900d583c",
+    "largest_row_group_bytes": 2856507,
+    "schema_matches": true,
+    "passed": true
+  },
+  "source_redaction": {
+    "retained_rows": 5414,
+    "director_phone_empty_in_every_row": true,
+    "retained_sha256": "f854020f6358c76ed737ee5305eaac7da9b7d9e17a2c8c6b02d57b4f7c052c88"
+  },
+  "scope": "First public generations: full byte hashes and identity checks; GAO report membership; comment parent membership from the identical seed and unchanged public comments version. Source interpretation was not independently re-audited."
+}

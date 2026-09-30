@@ -271,24 +271,19 @@ JOINS: tuple[Join, ...] = (
     # join check 36360197318, 2026-09-27): every attribute row names a thin-table row.
     _join("document_attributes", "document_id", "documents", "document_id", 2_002_888, 0),
     _join("docket_attributes", "docket_id", "dockets", "docket_id", 279_406, 0),
-    _join("comment_attributes", "comment_id", "comments", "comment_id", 0, 0, "empty",
-          "Unpublished until the comment re-read (fill-comment-fields attributes) seeds it; every row is a comment the "
-          "thin table holds, baselined at the first publication."),
+    _join("comment_attributes", "comment_id", "comments", "comment_id", 26_381_105, 0,
+          reason="First public generation 46061b9d, measured 2026-09-30: every attribute identity resolves to "
+          "the comments mirror, with no missing or extra identities. Receipt "
+          "docs/evidence/new-source-publication-2026-09-30.json."),
     _join("fec_committee_history", "committee_id", "fec_committees", "committee_id", 89_710, 21, "scope",
           "fec_committees is OpenFEC's registry; the bulk committee master also names 21 committees, newest cycle "
           "2000-2020 (15 in 2014), that the API does not serve (C00428599 and C00317453 answer an empty result). "
           "Every registry committee appears in the history. Receipt join-map-2026-09-26/fec-committee-history-first-run.json."),
     _join("fec_source_records", "collection_id", "fec_collections", "collection_id", 647, 0),
     # GAO.
-    _join("gao_recommendations", "report_id", "gao_reports", "report_id", 0, 0, "empty",
-          "New output, not yet published. Built offline from GAO's export of 2026-09-28: against the live "
-          "gao_reports ac08f37f (GovInfo's 1989-2008 history and the feed's weeks) 89 of 1,802 publications "
-          "resolved; against the offline build with GAO's 2009-2026 listing (Track B, 26,183 rows, 13,437 "
-          "listed; af306786…) 1,798 publications and 5,374 of 5,379 rows. The 4 orphans are plain numbers "
-          "absent from that build under any spelling: gao-02-817, gao-08-956 and gao-09-133 (issued between "
-          "GovInfo's last package and the listing's first year) and gao-21-265. Receipts "
-          "supply-2026-09-02/receipts/gao-recommendations-20260928/offline-build/join-track-b-2026-09-28.json "
-          "and offline-measure-2026-09-28.json."),
+    _join("gao_recommendations", "report_id", "gao_reports", "report_id", 1_811, 0,
+          reason="First public generation 14761739, measured 2026-09-30: every distinct report key resolves "
+          "against gao_reports b9c9c974. Receipt docs/evidence/new-source-publication-2026-09-30.json."),
     # Courts.
     _join("court_opinions", "cluster_id", "court_opinion_clusters", "cluster_id", 10_069_107, 21, "scope",
           "The publisher cuts each export at a different hour, clusters first (2026-06-30: 08:16 UTC, opinions "

@@ -1444,12 +1444,12 @@
       "parent_columns": [
         "comment_id"
       ],
-      "kind": "empty",
-      "reason": "Unpublished until the comment re-read (fill-comment-fields attributes) seeds it; every row is a comment the thin table holds, baselined at the first publication.",
+      "kind": "complete",
+      "reason": "First public generation 46061b9d, measured 2026-09-30: every attribute identity resolves to the comments mirror, with no missing or extra identities. Receipt docs/evidence/new-source-publication-2026-09-30.json.",
       "measured_via": null,
-      "baseline_keys": 0,
+      "baseline_keys": 26381105,
       "baseline_missing": 0,
-      "floor_pct": null,
+      "floor_pct": 100.0,
       "expected_cardinality": "unspecified",
       "measurement": null
     },
@@ -1498,12 +1498,12 @@
       "parent_columns": [
         "report_id"
       ],
-      "kind": "empty",
-      "reason": "New output, not yet published. Built offline from GAO's export of 2026-09-28: against the live gao_reports ac08f37f (GovInfo's 1989-2008 history and the feed's weeks) 89 of 1,802 publications resolved; against the offline build with GAO's 2009-2026 listing (Track B, 26,183 rows, 13,437 listed; af306786…) 1,798 publications and 5,374 of 5,379 rows. The 4 orphans are plain numbers absent from that build under any spelling: gao-02-817, gao-08-956 and gao-09-133 (issued between GovInfo's last package and the listing's first year) and gao-21-265. Receipts supply-2026-09-02/receipts/gao-recommendations-20260928/offline-build/join-track-b-2026-09-28.json and offline-measure-2026-09-28.json.",
+      "kind": "complete",
+      "reason": "First public generation 14761739, measured 2026-09-30: every distinct report key resolves against gao_reports b9c9c974. Receipt docs/evidence/new-source-publication-2026-09-30.json.",
       "measured_via": null,
-      "baseline_keys": 0,
+      "baseline_keys": 1811,
       "baseline_missing": 0,
-      "floor_pct": null,
+      "floor_pct": 100.0,
       "expected_cardinality": "unspecified",
       "measurement": null
     },
