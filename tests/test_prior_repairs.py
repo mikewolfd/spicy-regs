@@ -27,6 +27,66 @@ def _table(path: Path, rows: list[dict], columns=None, metadata=None) -> Path:
     return path
 
 
+class DetailSource:
+    def __init__(self, wrong_identity=False, refuse=False):
+        self.calls = []
+        self.wrong_identity = wrong_identity
+        self.refuse = refuse
+
+    def detail(self, identity):
+        self.calls.append(identity)
+        if self.refuse:
+            raise ConnectionError("source unavailable")
+        return {
+            "congress": identity.congress, "type": identity.bill_type.upper(),
+            "number": identity.number + int(self.wrong_identity), "title": "Source-stated title",
+            "originChamber": "House", "introducedDate": "1991-10-29",
+            "cosponsors": {"count": 3}, "latestAction": {"actionDate": "1992-02-04", "text": "Passed House"},
+        }, "2026-09-30T06:00:00Z"
+
+
+def test_missing_bills_preserves_rows_and_keeps_unread_fields_null(tmp_path):
+    from spicy_regs.transforms.build_bill_family import BACKFILL_UNSUBSTANTIATED
+
+    columns = TABLE_CONTRACTS["congress_bills"].columns
+    prior = _table(tmp_path / "prior.parquet", [{"bill_id": "119-hr-1", "title": "Keep exactly"}],
+                   columns=columns, metadata={b"kept": b"yes"})
+    before = pq.read_table(prior).to_pylist()[0]
+    out = tmp_path / "out.parquet"
+    source = DetailSource()
+    assert repairs.add_missing_bills(prior, out, ["102-hres-258", "119-hr-1", "102-hres-258"], source) == {
+        "rows": 2, "added": 1, "already_present": 1,
+    }
+    rows = pq.read_table(out).to_pylist()
+    assert rows[0] == before
+    assert rows[1]["bill_id"] == "102-hres-258"
+    assert rows[1]["title"] == "Source-stated title"
+    assert rows[1]["cosponsor_count"] == "3"
+    assert all(rows[1][column] is None for column in BACKFILL_UNSUBSTANTIATED)
+    assert pq.read_schema(out).metadata == {b"kept": b"yes"}
+    assert len(source.calls) == 1
+    again = tmp_path / "again.parquet"
+    assert repairs.add_missing_bills(out, again, ["102-hres-258"], source)["added"] == 0
+    assert len(source.calls) == 1, "an existing bill needs no read and cannot be overwritten"
+    assert pq.read_table(again).equals(pq.read_table(out))
+
+
+@pytest.mark.parametrize("source, error", [(DetailSource(wrong_identity=True), ValueError),
+                                         (DetailSource(refuse=True), ConnectionError)])
+def test_missing_bills_refuses_without_writing_output(tmp_path, source, error):
+    prior = _table(tmp_path / "prior.parquet", [], columns=TABLE_CONTRACTS["congress_bills"].columns)
+    out = tmp_path / "out.parquet"
+    with pytest.raises(error):
+        repairs.add_missing_bills(prior, out, ["102-hres-258"], source)
+    assert not out.exists()
+
+
+@pytest.mark.parametrize("ids", [[], ["102-HRES-258"], ["102-hres-0258"], ["bad"]])
+def test_missing_bills_requires_explicit_canonical_ids(tmp_path, ids):
+    with pytest.raises(ValueError):
+        repairs.add_missing_bills(tmp_path / "unused", tmp_path / "out", ids, DetailSource())
+
+
 def test_a_bare_digest_is_prefixed_once_and_nothing_else_moves():
     assert repairs.respell_digest(HEX) == f"sha256:{HEX}"
     assert repairs.respell_digest(f"sha256:{HEX}") == f"sha256:{HEX}"

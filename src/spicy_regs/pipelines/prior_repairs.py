@@ -24,6 +24,9 @@ values it names, and publishes a generation that carries every other table forwa
   is not emitted.
 * ``restore``: the rollback of a table repair or of a dispatched family run. Given the publication index saved before
   it, republishes the named tables' pinned bytes as the family's tables.
+* ``missing-bills BILL_ID ... --output-dir DIR``: add only absent, explicitly named bills from Congress.gov detail
+  records. Existing rows and family siblings stay unchanged. Source responses are retained; unread history stays
+  NULL. It verifies a local generation by default; ``--no-skip-upload`` publishes with the normal stale-base guard.
 
 ``--dry-run`` reads the tables (from the live generation, or ``--prior-dir``), prints the counts, and writes nothing.
 """
@@ -317,6 +320,90 @@ def repair_rollup(name: str, repair: Repair) -> type[RollupPipeline]:
     return PriorRepairRollup
 
 
+def add_missing_bills(prior: Path, out: Path, bill_ids: Sequence[str], source: Any) -> dict[str, int]:
+    """Add only absent, explicitly named bills through the existing detail reader and bill-family shaper.
+
+    Existing rows keep every value. Every requested detail must succeed before an output is written; unread
+    action histories and other sub-routes remain NULL through the ordinary backfill adjustment.
+    """
+    from spicy_docs.schemas import TABLE_CONTRACTS
+    from spicy_docs.sources.congress.bill_status import BillIdentity
+
+    from spicy_regs.transforms import build_bill_family as family
+
+    identities = []
+    for key in dict.fromkeys(bill_ids):
+        parts = key.split("-")
+        if len(parts) != 3:
+            raise ValueError(f"Invalid bill ID: {key}")
+        identity = BillIdentity(int(parts[0]), parts[1], int(parts[2]))
+        if family.bill_key(identity) != key:
+            raise ValueError(f"Noncanonical bill ID: {key}")
+        identities.append(identity)
+    if not identities:
+        raise ValueError("Name at least one bill to repair")
+    columns = TABLE_CONTRACTS["congress_bills"].columns
+    if pq.read_schema(prior).names != list(columns):
+        raise ValueError("The prior congress_bills schema differs; migrate it before this repair")
+    rows = _rows(prior, columns)
+    held = {row["bill_id"] for row in rows}
+    if None in held or len(held) != len(rows):
+        raise ValueError("The prior has missing or duplicate bill IDs")
+    added = 0
+    for identity in identities:
+        if family.bill_key(identity) in held:
+            continue
+        detail, observed_at = source.detail(identity)
+        # The production reader checks route identity; keep the same check for injected/replayed sources.
+        if (str(detail.get("congress")), str(detail.get("type", "")).lower(), str(detail.get("number"))) != (
+            str(identity.congress), identity.bill_type, str(identity.number)
+        ):
+            raise ValueError(f"Detail identity differs from {family.bill_key(identity)}")
+        built = family.build_family(
+            family.BillFamilyCapture(status=family.backfill_status(identity, detail), versions=(), observed_at=observed_at),
+            engine=family.engine_stamp(), classify=None, summarize=None, summarize_diff=None,
+        )
+        if len(built.bills) != 1:
+            raise ValueError("The detail shaper must produce exactly one bill")
+        rows.append(family._backfill_bill_row(built.bills[0], detail))
+        added += 1
+    _write(rows, columns, out, like=prior)
+    return {"rows": len(rows), "added": added, "already_present": len(identities) - added}
+
+
+def missing_bills_rollup(bill_ids: Sequence[str]) -> type[RollupPipeline]:
+    """A bounded partial writer: preserve bill-family siblings and retain every new detail response."""
+    class MissingBillsRollup(RollupPipeline):
+        name: ClassVar[str] = "prior-repair-missing-bills"
+        publication_family: ClassVar[str | None] = "bill-family"
+        output: ClassVar[str] = "congress_bills.parquet"
+        retain_source_evidence: ClassVar[bool] = True
+
+        def build(self, output_dir: Path) -> Path:
+            from spicy_regs.sources import r2
+            from spicy_regs.sources.congress_bills import _resolve_api_key
+            from spicy_regs.transforms.build_bill_family import CongressListBackfill
+
+            key = _resolve_api_key()
+            if not key:
+                raise ValueError("Missing Congress.gov API key")
+            prior = output_dir / ".prior-congress_bills.parquet"
+            if not r2.download(self.output, prior):
+                raise FileNotFoundError("congress_bills.parquet is not published")
+            if self.source_evidence is not None:
+                self.source_evidence.credential = key
+                self.source_evidence.event("selection", bill_ids=list(bill_ids))
+            out = output_dir / self.output
+            with CongressListBackfill(key, evidence=self.source_evidence) as source:
+                counts = add_missing_bills(prior, out, bill_ids, source)
+            if self.source_evidence is not None:
+                self.source_evidence.event("prior-repair", repair="missing-bills", counts=counts)
+            logger.info("Missing bill repair: {}", counts)
+            return out
+
+    return MissingBillsRollup
+
+
 def dry_run(name: str, *, prior_dir: Path | None = None) -> dict[str, dict[str, int]]:
     """``name``'s counts over the live generation (``R2_PUBLIC_URL``) or ``prior_dir``; nothing is written."""
     from spicy_regs.sources import publication, r2
@@ -521,6 +608,16 @@ def _table_repair(name: str):
 
 for _name in REPAIRS:
     app.command(_table_repair(_name), name=_name)
+
+
+@app.command(name="missing-bills")
+def missing_bills_command(
+    *bill_ids: str,
+    output_dir: Path,
+    skip_upload: Annotated[bool, Parameter(help="Build and verify a local generation only")] = True,
+) -> None:
+    """Add explicitly named absent bills from Congress.gov details, preserving existing rows and family siblings."""
+    missing_bills_rollup(bill_ids)(output_dir=output_dir, skip_upload=skip_upload).run()
 
 
 @app.command(name="respell-comment-digests")
