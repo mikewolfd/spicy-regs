@@ -8,6 +8,8 @@ A deduplicating consumer view cannot establish physical catalog integrity.
 from __future__ import annotations
 
 import argparse
+from contextlib import contextmanager
+from time import monotonic
 from urllib.parse import quote
 
 import duckdb
@@ -17,6 +19,15 @@ from spicy_regs.duckdb_settings import load_public_http
 from spicy_regs.public_url import resolve_r2_base_url
 from spicy_regs.schemas.regulations import RECORD_TYPES
 from spicy_regs.sources import iceberg
+
+
+@contextmanager
+def _stage(label: str):
+    """Keep completed stages visible if the runner later times out."""
+    started = monotonic()
+    print(f"START {label}", flush=True)
+    yield
+    print(f"DONE {label}: {monotonic() - started:.1f}s", flush=True)
 
 
 def main() -> int:
@@ -35,7 +46,8 @@ def main() -> int:
     for surface in surfaces:
         con = None
         try:
-            con = iceberg._connect() if surface == "catalog" else duckdb.connect()
+            with _stage(f"{surface}: connect"):
+                con = iceberg._connect() if surface == "catalog" else duckdb.connect()
             # Both surfaces read the public index (and the public surface the 4 GB comments.parquet) over r2.dev,
             # which answers 429 under load: ETL 36389677283's verify step failed on one.
             load_public_http(con)
@@ -46,7 +58,8 @@ def main() -> int:
                 source = iceberg._qualified(RECORD_TYPES["comments"])
             else:
                 source = f"read_parquet('{base}/comments.parquet')"
-            errors = check_comments(con, f"SELECT * FROM {source}{where}", index, limit=args.limit)
+            with _stage(f"{surface}: IDs and index coverage"):
+                errors = check_comments(con, f"SELECT * FROM {source}{where}", index, limit=args.limit)
             if surface == "public":
                 agencies = [row[0] for row in con.execute(f"SELECT DISTINCT agency_code FROM ({index})").fetchall()]
                 if not agencies or any(agency is None for agency in agencies):
@@ -55,15 +68,17 @@ def main() -> int:
                         for agency in agencies]
                 con.from_parquet(urls, hive_partitioning=True).create_view("public_partitions")
                 partitions = "SELECT * FROM public_partitions"
-                errors += check_comments(con, partitions, index, limit=args.limit)
-                errors += check_retained_ids(con, f"SELECT * FROM {source}{where}", partitions)
+                with _stage("public: agency partition IDs and index coverage"):
+                    errors += check_comments(con, partitions, index, limit=args.limit)
+                with _stage("public: retained IDs in agency partitions"):
+                    errors += check_retained_ids(con, f"SELECT * FROM {source}{where}", partitions)
             for error in errors:
-                print(f"FAIL {surface}: {error}")
+                print(f"FAIL {surface}: {error}", flush=True)
             if not errors:
-                print(f"OK {surface}: unique IDs and complete index coverage")
+                print(f"OK {surface}: unique IDs and complete index coverage", flush=True)
             failed |= bool(errors)
         except (duckdb.Error, RuntimeError, OSError) as exc:
-            print(f"FAIL {surface}: verification incomplete: {exc}")
+            print(f"FAIL {surface}: verification incomplete: {exc}", flush=True)
             failed = True
         finally:
             if con is not None:
