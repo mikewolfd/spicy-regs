@@ -5,6 +5,7 @@ from pathlib import Path
 
 import duckdb
 import polars as pl
+import pytest
 
 from spicy_regs.pipelines import comment_fields as cf
 from spicy_regs.schemas import COMMENT
